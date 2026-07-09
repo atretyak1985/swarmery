@@ -1,0 +1,14 @@
+# Framework repo tracks framework only — never work artifacts.
+# Per-project working artifacts live in the sibling agent-workspace/ repo (D-G1).
+claude-workspace/
+agent-workspace/
+
+# Generated indexes are regenerated per consumer, not shipped
+agents-index.json
+skills-index.json
+
+# OS / editor noise
+.DS_Store
+*.log
+node_modules/
+.flavor-tokens*

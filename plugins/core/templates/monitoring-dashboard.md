@@ -1,0 +1,193 @@
+# Agent System Monitoring Dashboard
+
+**Date**: [YYYY-MM-DD]  
+**Period**: [24h / 7d / 30d]  
+**Generated**: [YYYY-MM-DDTHH:MM:SSZ]
+
+---
+
+## 📊 System Health
+
+### Overall Status
+
+| Metric | Current | Target | Status |
+|--------|---------|--------|--------|
+| **Uptime** | [XX.X]% | >99.5% | ✅/⚠️/❌ |
+| **Avg Response Time** | [XXX]ms | <500ms | ✅/⚠️/❌ |
+| **P95 Response Time** | [X.X]s | <2s | ✅/⚠️/❌ |
+| **P99 Response Time** | [X.X]s | <5s | ✅/⚠️/❌ |
+| **Success Rate** | [XX.X]% | >95% | ✅/⚠️/❌ |
+| **Error Rate** | [X.X]% | <5% | ✅/⚠️/❌ |
+
+**Overall Health**: 🟢 Healthy / 🟡 Degraded / 🔴 Critical
+
+---
+
+## ⚡ Performance Metrics
+
+### Top 10 Operations by Volume
+
+| Rank | Operation | Count | Avg (ms) | P95 (ms) | P99 (ms) | Status |
+|------|-----------|-------|----------|----------|----------|--------|
+| 1 | [operation] | [X,XXX] | [XXX] | [XXX] | [XXX] | ✅/⚠️/❌ |
+| 2 | [operation] | [X,XXX] | [XXX] | [XXX] | [XXX] | ✅/⚠️/❌ |
+| 3 | [operation] | [X,XXX] | [XXX] | [XXX] | [XXX] | ✅/⚠️/❌ |
+| 4 | [operation] | [X,XXX] | [XXX] | [XXX] | [XXX] | ✅/⚠️/❌ |
+| 5 | [operation] | [X,XXX] | [XXX] | [XXX] | [XXX] | ✅/⚠️/❌ |
+
+### Top 5 Slowest Operations
+
+| Rank | Operation | Avg (ms) | P95 (ms) | P99 (ms) | SLO | Status |
+|------|-----------|----------|----------|----------|-----|--------|
+| 1 | [operation] | [X,XXX] | [X,XXX] | [X,XXX] | [XXX]ms | ⚠️/❌ |
+| 2 | [operation] | [X,XXX] | [X,XXX] | [X,XXX] | [XXX]ms | ⚠️/❌ |
+| 3 | [operation] | [X,XXX] | [X,XXX] | [X,XXX] | [XXX]ms | ⚠️/❌ |
+| 4 | [operation] | [X,XXX] | [X,XXX] | [X,XXX] | [XXX]ms | ⚠️/❌ |
+| 5 | [operation] | [X,XXX] | [X,XXX] | [X,XXX] | [XXX]ms | ⚠️/❌ |
+
+---
+
+## 🎯 SLO Compliance
+
+### SLO Status
+
+| Operation | SLO (Avg) | Actual (Avg) | Compliance | Trend |
+|-----------|-----------|--------------|------------|-------|
+| task.init | <500ms | [XXX]ms | [XX]% | ↗️/→/↘️ |
+| task.search | <200ms | [XXX]ms | [XX]% | ↗️/→/↘️ |
+| context.gather | <1s | [XXX]ms | [XX]% | ↗️/→/↘️ |
+| quality.check | <5s | [X.X]s | [XX]% | ↗️/→/↘️ |
+| agent.execute | <10s | [X.X]s | [XX]% | ↗️/→/↘️ |
+
+**Overall SLO Compliance**: [XX]%
+
+### SLO Violations
+
+**Total Violations**: [XX]
+
+| Operation | Violations | % of Total | Severity |
+|-----------|------------|------------|----------|
+| [operation] | [XX] | [XX]% | 🔴/🟠/🟡 |
+| [operation] | [XX] | [XX]% | 🔴/🟠/🟡 |
+| [operation] | [XX] | [XX]% | 🔴/🟠/🟡 |
+
+---
+
+## 📈 Trends
+
+### Performance Trends (7-day)
+
+```
+Response Time (ms)
+[XXX] ┤     ╭─╮
+[XXX] ┤   ╭─╯ ╰╮
+[XXX] ┤ ╭─╯    ╰─╮
+[XXX] ┼─╯        ╰─
+      └─┬─┬─┬─┬─┬─┬─┬
+        Mon Tue Wed Thu Fri Sat Sun
+```
+
+### Volume Trends (7-day)
+
+```
+Operations (count)
+[X,XXX] ┤       ╭─╮
+[X,XXX] ┤     ╭─╯ ╰╮
+[X,XXX] ┤   ╭─╯    ╰─╮
+[X,XXX] ┼─╭─╯        ╰─
+        └─┬─┬─┬─┬─┬─┬─┬
+          Mon Tue Wed Thu Fri Sat Sun
+```
+
+---
+
+## 🔍 Event Analysis
+
+### Top Events (by count)
+
+| Event Type | Count | % of Total | Sample Message |
+|------------|-------|------------|----------------|
+| [event] | [X,XXX] | [XX]% | [message] |
+| [event] | [X,XXX] | [XX]% | [message] |
+| [event] | [X,XXX] | [XX]% | [message] |
+| [event] | [X,XXX] | [XX]% | [message] |
+| [event] | [X,XXX] | [XX]% | [message] |
+
+### Error Events
+
+| Event Type | Count | Error Rate | Last Occurrence |
+|------------|-------|------------|-----------------|
+| [error.event] | [XX] | [X.X]% | [YYYY-MM-DD HH:MM] |
+| [error.event] | [XX] | [X.X]% | [YYYY-MM-DD HH:MM] |
+| [error.event] | [XX] | [X.X]% | [YYYY-MM-DD HH:MM] |
+
+---
+
+## 🚨 Alerts & Issues
+
+### Active Alerts
+
+**Total Active**: [X]
+
+| Severity | Alert | Triggered | Duration | Status |
+|----------|-------|-----------|----------|--------|
+| 🔴 Critical | [alert name] | [HH:MM] | [Xh Xm] | ACTIVE |
+| 🟠 High | [alert name] | [HH:MM] | [Xh Xm] | ACTIVE |
+| 🟡 Medium | [alert name] | [HH:MM] | [Xh Xm] | ACTIVE |
+
+### Recent Issues
+
+| Time | Issue | Impact | Resolution |
+|------|-------|--------|------------|
+| [HH:MM] | [issue description] | [impact] | [resolution] |
+| [HH:MM] | [issue description] | [impact] | [resolution] |
+| [HH:MM] | [issue description] | [impact] | [resolution] |
+
+---
+
+## 💡 Recommendations
+
+### High Priority
+
+1. **[Recommendation 1]**
+   - **Issue**: [description]
+   - **Impact**: [High/Medium/Low]
+   - **Effort**: [XS/S/M/L/XL]
+   - **Action**: [what to do]
+
+2. **[Recommendation 2]**
+   - **Issue**: [description]
+   - **Impact**: [High/Medium/Low]
+   - **Effort**: [XS/S/M/L/XL]
+   - **Action**: [what to do]
+
+### Medium Priority
+
+3. **[Recommendation 3]**
+   - **Issue**: [description]
+   - **Impact**: [High/Medium/Low]
+   - **Effort**: [XS/S/M/L/XL]
+   - **Action**: [what to do]
+
+---
+
+## 📝 Notes
+
+[Add any additional notes, observations, or context here]
+
+---
+
+## 🔗 Quick Links
+
+- [Performance Optimization Guide](../docs/PERFORMANCE-OPTIMIZATION.md)
+- [Performance Monitor Agent](../agents/performance-monitor.md)
+- [Trace Logs](./.claude-workspace/logs/)
+- [Metrics](./.claude-workspace/metrics/)
+- [Reports](./.claude-workspace/reports/)
+
+---
+
+**Dashboard Version**: 1.0  
+**Generated by**: @performance-monitor  
+**Next Update**: [YYYY-MM-DD HH:MM]
+

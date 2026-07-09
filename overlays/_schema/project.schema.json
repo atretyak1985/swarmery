@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "agentry project overlay config",
+  "description": "Per-project flavor config read by core agents/skills/hooks at runtime. Replaces the old token-rewrite (adapt) class: framework files reference these values instead of baking in project names.",
+  "type": "object",
+  "required": ["name", "codePath", "enabledPacks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string", "description": "kebab-case slug; also the workspace + AGENT_PROJECT key" },
+    "displayName": { "type": "string" },
+    "codePath": { "type": "string", "description": "absolute path to the project's code repo(s) root" },
+    "monorepo": { "type": "string", "description": "monorepo root dir name, if any" },
+    "mainApp": { "type": "string" },
+    "apps": { "type": "array", "items": { "type": "string" } },
+    "repos": { "type": "array", "items": { "type": "string" }, "description": "workspace-relative code paths agents search" },
+    "device": { "type": "string", "description": "edge/IoT device repo name, if any" },
+    "domainTerms": {
+      "type": "object",
+      "description": "domain nouns used in prompts (product, device, threatModelExample, …)",
+      "additionalProperties": { "type": "string" }
+    },
+    "cloud": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string" },
+        "region": { "type": "string" },
+        "runtime": { "type": "string" },
+        "envAlias": { "type": "string" }
+      }
+    },
+    "stack": { "type": "object", "additionalProperties": { "type": "string" } },
+    "commitScopes": { "type": "array", "items": { "type": "string" } },
+    "enabledPacks": {
+      "type": "array",
+      "items": { "enum": ["uav-pack", "iot-pack", "web-pack"] },
+      "description": "domain packs this project enables (mirrors .claude/settings.json enabledPlugins)"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "../_schema/project.schema.json",
+  "name": "example",
+  "displayName": "Example Project",
+  "codePath": "/path/to/your/project",
+  "monorepo": "apps_root",
+  "mainApp": "web-app",
+  "apps": ["web-app", "marketing-site", "docs"],
+  "repos": ["apps/web-app", "apps/marketing-site", "apps/docs", "infrastructure"],
+  "device": "edge-device",
+  "domainTerms": {
+    "product": "your product domain",
+    "device": "your edge device",
+    "threatModelExample": "your device"
+  },
+  "cloud": { "provider": "gcp", "region": "your-region", "runtime": "cloud-run", "envAlias": "staging" },
+  "stack": { "web": "Next.js + TypeScript", "db": "PostgreSQL + an ORM" },
+  "commitScopes": ["web-app", "marketing-site", "docs", "infra"],
+  "enabledPacks": ["iot-pack", "web-pack"]
+}

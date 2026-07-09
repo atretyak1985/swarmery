@@ -1,0 +1,9 @@
+{
+  "name": "web-pack",
+  "description": "Web/marketing domain pack: SEO optimization, i18n coverage, landing-page CRO, and Figma-to-code styling agents, skills, and commands. Opt-in; requires core.",
+  "version": "1.0.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  }
+}

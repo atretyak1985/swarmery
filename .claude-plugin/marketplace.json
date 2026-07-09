@@ -1,0 +1,33 @@
+{
+  "name": "agentry",
+  "owner": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  },
+  "metadata": {
+    "description": "Vendor-neutral, multi-project Claude Code agent framework. One shared core plus opt-in domain packs; per-project flavor comes from each consumer's project.json overlay.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "core",
+      "source": "./plugins/core",
+      "description": "Vendor-neutral agent-development core: generic agents, skills, commands, hooks, and the project-aware agent-work CLI."
+    },
+    {
+      "name": "uav-pack",
+      "source": "./plugins/uav-pack",
+      "description": "UAV/drone domain pack: MAVLink-style telemetry, mission planning, embedded/edge runtime."
+    },
+    {
+      "name": "iot-pack",
+      "source": "./plugins/iot-pack",
+      "description": "IoT domain pack: BLE communication, device telemetry, health-metrics processing."
+    },
+    {
+      "name": "web-pack",
+      "source": "./plugins/web-pack",
+      "description": "Web/marketing domain pack: SEO, i18n, landing-page CRO, Figma-to-code styling."
+    }
+  ]
+}
