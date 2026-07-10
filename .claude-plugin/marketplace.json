@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Vendor-neutral, multi-project Claude Code agent framework. One shared core plus opt-in domain packs; per-project flavor comes from each consumer's project.json overlay.",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "plugins": [
     {
@@ -28,6 +28,11 @@
       "name": "web-pack",
       "source": "./plugins/web-pack",
       "description": "Web/marketing domain pack: SEO, i18n, landing-page CRO, Figma-to-code styling."
+    },
+    {
+      "name": "lsp-pack",
+      "source": "./plugins/lsp-pack",
+      "description": "Semantic code-navigation pack: Serena LSP MCP server. Opt-in; requires the serena binary (uv) on the machine."
     }
   ]
 }

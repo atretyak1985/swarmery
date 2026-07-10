@@ -17,6 +17,11 @@ fresh session and accept the trust prompt. Idempotent — existing files are nev
 → same `extraKnownMarketplaces` block) so every project on the machine already knows `swarmery`
 and per-project settings shrink to `enabledPlugins` + `env`.
 
+**Packs:** `uav-pack` (drones/telemetry) · `iot-pack` (devices/BLE) · `web-pack` (SEO/i18n/CRO) ·
+`lsp-pack` (Serena semantic code navigation — ⚠️ **requires the `serena` binary on the machine**:
+`uv tool install serena-agent`; without it every session logs a failed MCP launch. See
+`plugins/lsp-pack/README.md` for monorepo `--project` overrides).
+
 The manual steps below describe what init.sh does, for when you need to customize.
 
 ## 1. Create the project's flavor config

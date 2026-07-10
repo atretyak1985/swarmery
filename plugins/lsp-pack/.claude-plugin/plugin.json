@@ -1,0 +1,9 @@
+{
+  "name": "lsp-pack",
+  "description": "Semantic code-navigation pack: Serena LSP MCP server (symbol-level search, references, refactoring context). Opt-in; REQUIRES the serena binary installed on the machine (uv). Complements text search — not a replacement for it.",
+  "version": "1.0.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  }
+}
