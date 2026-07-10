@@ -303,7 +303,9 @@
 <!-- 05 ─────────────────────────── -->
 <section id="s05">
   <div class="sec-head reveal"><span class="sec-num">§ 05</span><h2>Quickstart — connect a new project</h2></div>
-  <p class="reveal">Four steps, ~10 minutes. Model files live in <code>overlays/example/</code>.</p>
+  <p class="reveal"><strong>The one-command way</strong> — from the new project's root:</p>
+<pre class="reveal"><span class="lab">shell</span><b>bash</b> &lt;swarmery-repo&gt;/scripts/init.sh <i>my-project</i> <i>web-pack</i>   <em># scaffolds everything below; idempotent</em></pre>
+  <p class="reveal">It creates <code>.claude/settings.json</code>, a <code>.claude/project.json</code> skeleton (fill the TODOs), and the workspace namespace — then start a fresh session and accept the trust prompt. The four manual steps below are what init.sh does under the hood; model files live in <code>overlays/example/</code>.</p>
 
   <ol class="steps reveal">
     <li>

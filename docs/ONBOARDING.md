@@ -1,5 +1,24 @@
 # Onboarding a project onto swarmery
 
+## The one-command way
+
+From the new project's root:
+
+```bash
+bash <swarmery-repo>/scripts/init.sh <project-slug> [pack ...]
+# e.g.  bash /Volumes/Work/swarmery/scripts/init.sh my-shop web-pack
+```
+
+It scaffolds `.claude/settings.json` (marketplace + core + chosen packs + env + safety denies),
+a `.claude/project.json` skeleton (fill the TODOs), and the workspace namespace. Then start a
+fresh session and accept the trust prompt. Idempotent — existing files are never overwritten.
+
+**Optional, once per machine:** register the marketplace at user level (`~/.claude/settings.json`
+→ same `extraKnownMarketplaces` block) so every project on the machine already knows `swarmery`
+and per-project settings shrink to `enabledPlugins` + `env`.
+
+The manual steps below describe what init.sh does, for when you need to customize.
+
 ## 1. Create the project's flavor config
 Copy `overlays/example/` as a model:
 - `project.json` — flavor config (schema: `overlays/_schema/project.schema.json`): repos, main app,
