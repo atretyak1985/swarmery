@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{%%%PAGE_TITLE%%%}</title>
+  <meta name="description" content="{%%%SUBTITLE%%%}" />
+
+  <!-- Fonts: Inter (sans) + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- svg-pan-zoom: drag, wheel-zoom, programmatic API.  Loaded as UMD
+       global (not ESM) so it exposes window.svgPanZoom. -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"
+    defer
+  ></script>
+
+  <style>
+    /* ======================================================================
+       Dark-terminal design tokens (OKLCH; dark mode is the default:
+       <html class="dark">)
+       ====================================================================== */
+    :root {
+      --radius: 0.625rem;
+      --radius-sm: calc(var(--radius) - 4px);
+      --radius-lg: calc(var(--radius) + 4px);
+
+      --background: oklch(0.10 0.005 220);
+      --foreground: oklch(0.95 0 0);
+      --card: oklch(0.16 0.008 220);
+      --card-foreground: oklch(0.95 0 0);
+      --popover: oklch(0.20 0.008 220);
+
+      --primary: oklch(0.72 0.18 162);
+      --primary-foreground: oklch(0.14 0.02 162);
+
+      --secondary: oklch(0.22 0.006 220);
+      --secondary-foreground: oklch(0.90 0 0);
+      --muted: oklch(0.22 0.006 220);
+      --muted-foreground: oklch(0.60 0.005 220);
+      --accent: oklch(0.18 0.02 162);
+      --accent-foreground: oklch(0.90 0 0);
+
+      --destructive: oklch(0.65 0.22 27);
+      --border: oklch(1 0 0 / 12%);
+      --input: oklch(1 0 0 / 15%);
+      --ring: oklch(0.72 0.18 162);
+
+      --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system,
+        "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
+        Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; border-color: var(--border); }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      background: var(--background);
+      color: var(--foreground);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      line-height: 1.5;
+      background-image:
+        radial-gradient(circle at 20% -10%, oklch(0.72 0.18 162 / 6%) 0, transparent 45%),
+        radial-gradient(circle at 90% 110%, oklch(0.70 0.15 220 / 5%) 0, transparent 40%),
+        linear-gradient(oklch(1 0 0 / 3%) 1px, transparent 1px),
+        linear-gradient(90deg, oklch(1 0 0 / 3%) 1px, transparent 1px);
+      background-size: auto, auto, 32px 32px, 32px 32px;
+    }
+
+    .app-shell { max-width: 1600px; margin: 0 auto; padding: 32px 24px 64px; }
+
+    /* Header */
+    .header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 24px; flex-wrap: wrap; margin-bottom: 24px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+
+    .pulse-dot {
+      width: 10px; height: 10px; border-radius: 9999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 0 var(--primary);
+      animation: pulse-glow 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 4px currentColor, 0 0 0 0 var(--primary); opacity: 1; }
+      50% { box-shadow: 0 0 10px currentColor, 0 0 0 6px oklch(0.72 0.18 162 / 0%); opacity: 0.85; }
+    }
+
+    h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--foreground); }
+    .subtitle {
+      margin: 2px 0 0; font-size: 13px;
+      color: var(--muted-foreground); font-family: var(--font-mono);
+    }
+    .subtitle code {
+      color: var(--primary);
+      background: oklch(0.72 0.18 162 / 10%);
+      padding: 1px 6px; border-radius: var(--radius-sm); font-size: 12px;
+    }
+
+    .meta-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 9999px;
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--muted-foreground);
+      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    }
+    .badge strong { color: var(--foreground); font-weight: 600; }
+    .badge-primary {
+      background: oklch(0.72 0.18 162 / 10%);
+      border-color: oklch(0.72 0.18 162 / 35%);
+      color: var(--primary);
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 1px 0 oklch(1 0 0 / 3%) inset, 0 20px 40px -20px oklch(0 0 0 / 55%);
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      flex-wrap: wrap; gap: 12px;
+    }
+    .card-header h2 {
+      margin: 0; font-size: 13px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted-foreground);
+    }
+    .card-header h2 .accent { color: var(--primary); }
+
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .toolbar-group {
+      display: inline-flex; align-items: center; gap: 4px; padding: 2px;
+      background: oklch(0.12 0.005 220); border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .toolbar-sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+
+    .icon-btn {
+      all: unset; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 30px; height: 30px; padding: 0 8px;
+      border-radius: calc(var(--radius) - 4px);
+      color: var(--foreground);
+      font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+      line-height: 1; user-select: none;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .icon-btn:hover { background: oklch(0.72 0.18 162 / 15%); color: var(--primary); }
+    .icon-btn:active { transform: translateY(1px); }
+    .icon-btn[aria-pressed="true"], .icon-btn.active {
+      background: var(--primary); color: var(--primary-foreground);
+    }
+
+    .zoom-readout {
+      min-width: 52px; text-align: center; padding: 0 4px;
+      color: var(--primary); font-family: var(--font-mono);
+      font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+    }
+
+    .search-wrap { position: relative; display: inline-flex; align-items: center; }
+    .search-input {
+      all: unset; box-sizing: border-box;
+      width: 200px; height: 32px; padding: 0 28px 0 32px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: oklch(0.12 0.005 220);
+      color: var(--foreground); font-family: var(--font-mono); font-size: 12.5px;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .search-input::placeholder { color: var(--muted-foreground); }
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px oklch(0.72 0.18 162 / 20%);
+    }
+    .search-icon {
+      position: absolute; left: 10px; pointer-events: none;
+      color: var(--muted-foreground); font-family: var(--font-mono); font-size: 13px;
+    }
+    .search-clear {
+      position: absolute; right: 6px; width: 20px; height: 20px;
+      display: none; align-items: center; justify-content: center;
+      border: 0; background: transparent; color: var(--muted-foreground);
+      cursor: pointer; border-radius: 4px;
+      font-family: var(--font-mono); font-size: 14px; line-height: 1;
+    }
+    .search-clear:hover { color: var(--primary); }
+    .search-wrap.has-value .search-clear { display: inline-flex; }
+
+    /* Diagram viewport */
+    .diagram-card { margin-bottom: 24px; overflow: hidden; }
+    .diagram-viewport {
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, oklch(0.14 0.006 220) 0, oklch(0.11 0.005 220) 100%);
+      height: 85vh; min-height: 500px; cursor: grab;
+    }
+    .diagram-viewport:active { cursor: grabbing; }
+    .diagram-viewport:fullscreen { background: var(--background); padding: 16px; }
+
+    #diagram-host { width: 100%; height: 100%; }
+    #diagram-host svg {
+      width: 100% !important; height: 100% !important;
+      max-width: none; max-height: none; display: block;
+    }
+
+    #diagram-host .er.entityBox { filter: drop-shadow(0 6px 12px oklch(0 0 0 / 35%)); }
+    #diagram-host .er.entityLabel {
+      fill: var(--foreground) !important;
+      font-family: var(--font-sans) !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.04em !important;
+      font-size: 14px !important;
+    }
+    #diagram-host .er.attributeBoxOdd,
+    #diagram-host .er.attributeBoxEven { stroke: var(--border) !important; }
+    #diagram-host .er.relationshipLine { stroke-width: 1.5 !important; }
+
+    .entity-group { transition: opacity 180ms ease, filter 180ms ease; }
+    .entity-group.dim { opacity: 0.15; filter: saturate(0.4); }
+    .entity-group.match { opacity: 1; filter: drop-shadow(0 0 6px oklch(0.72 0.18 162 / 60%)); }
+
+    .zoom-hint {
+      position: absolute; bottom: 16px; left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 14px;
+      background: oklch(0.10 0.005 220 / 85%);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      color: var(--muted-foreground);
+      font-family: var(--font-mono); font-size: 11.5px;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      pointer-events: none; opacity: 1;
+      transition: opacity 400ms ease;
+      white-space: nowrap;
+    }
+    .zoom-hint.fade-out { opacity: 0; }
+    .zoom-hint kbd {
+      display: inline-block; min-width: 14px; padding: 1px 5px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--foreground);
+      font-family: var(--font-mono); font-size: 10.5px; line-height: 1.3;
+    }
+
+    .error-banner {
+      padding: 20px; margin: 16px;
+      background: oklch(0.65 0.22 27 / 10%);
+      border: 1px solid var(--destructive);
+      border-radius: var(--radius);
+      color: var(--destructive);
+      font-family: var(--font-mono); font-size: 13px;
+    }
+
+    footer {
+      margin-top: 32px; padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--muted-foreground);
+      font-family: var(--font-mono); font-size: 11.5px;
+      text-align: center; line-height: 1.8;
+    }
+    footer code { color: var(--primary); background: transparent; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="header">
+      <div class="brand">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        <div>
+          <h1>{%%%HEADING%%%}</h1>
+          <p class="subtitle">{%%%SUBTITLE%%%}</p>
+        </div>
+      </div>
+      <div class="meta-row">{%%%META_BADGES%%%}</div>
+    </header>
+
+    <section class="card diagram-card" aria-label="Mermaid diagram">
+      <div class="card-header">
+        <h2>Mermaid&nbsp;<span class="accent">Diagram</span></h2>
+        <div class="toolbar" role="toolbar" aria-label="Diagram controls">
+          <div class="search-wrap" id="search-wrap">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input
+              id="search" class="search-input" type="search"
+              placeholder="Filter…  ( / )"
+              autocomplete="off" spellcheck="false"
+            />
+            <button class="search-clear" id="search-clear" type="button" aria-label="Clear search" title="Clear">×</button>
+          </div>
+
+          <div class="toolbar-group" role="group" aria-label="Zoom">
+            <button class="icon-btn" id="zoom-out"  type="button" title="Zoom out (−)">−</button>
+            <span class="zoom-readout" id="zoom-readout">100%</span>
+            <button class="icon-btn" id="zoom-in"   type="button" title="Zoom in (+)">+</button>
+            <span class="toolbar-sep" aria-hidden="true"></span>
+            <button class="icon-btn" id="zoom-fit"  type="button" title="Fit to viewport (0)">Fit</button>
+            <button class="icon-btn" id="fullscreen" type="button" title="Fullscreen (f)">⛶</button>
+          </div>
+
+          <div class="toolbar-group" role="group" aria-label="Downloads">
+            <button class="icon-btn" id="btn-download-svg" type="button" title="Download rendered SVG">SVG</button>
+            <button class="icon-btn" id="btn-download-mmd" type="button" title="Download Mermaid source">.mmd</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="diagram-viewport" id="viewport">
+        <div id="diagram-host" aria-live="polite"></div>
+        <div class="zoom-hint" id="zoom-hint">
+          <kbd>drag</kbd> pan · <kbd>scroll</kbd> zoom · <kbd>0</kbd> reset · <kbd>f</kbd> fullscreen · <kbd>/</kbd> search
+        </div>
+      </div>
+    </section>
+
+    <footer>{%%%FOOTER_HTML%%%}</footer>
+  </div>
+
+  <!-- Mermaid source — preserved as text/plain so it survives render -->
+  <script id="mmd-source" type="text/plain">
+{%%%MERMAID_BODY%%%}
+  </script>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+
+    // 1. Preserve source for downloads.
+    const mmdSource = document.getElementById("mmd-source").textContent.trim();
+
+    // 2. Initialise Mermaid — manual render, no auto-run.
+    //    CRITICAL: Mermaid's khroma color parser does NOT support oklch().
+    //    CSS may use OKLCH, but themeVariables MUST be hex/rgba.
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "loose",
+      theme: "base",
+      fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace',
+      themeVariables: {
+        darkMode: true,
+        background: "transparent",
+        mainBkg: "#1e232b",
+        secondBkg: "#191e26",
+        tertiaryColor: "#252a31",
+        primaryColor: "#1f2e28",
+        primaryTextColor: "#ededed",
+        primaryBorderColor: "#3dd5a5",
+        lineColor: "rgba(61, 213, 165, 0.7)",
+        textColor: "#ededed",
+        attributeBackgroundColorOdd: "#191e26",
+        attributeBackgroundColorEven: "#1e232b",
+        nodeBorder: "#3dd5a5",
+        labelBackground: "#12161c",
+        labelTextColor: "#3dd5a5",
+      },
+      er: {
+        diagramPadding: 24, layoutDirection: "TB",
+        minEntityWidth: 180, minEntityHeight: 80, entityPadding: 18,
+        stroke: "#3dd5a5", fill: "#1e232b", fontSize: 13,
+      },
+      flowchart: { htmlLabels: true, curve: "basis" },
+    });
+
+    // 3. Render.
+    const host = document.getElementById("diagram-host");
+    const viewport = document.getElementById("viewport");
+    let panZoom = null;
+    let entityGroups = [];
+
+    async function renderDiagram() {
+      try {
+        const { svg } = await mermaid.render("mmd-render", mmdSource);
+        host.innerHTML = svg;
+        const svgEl = host.querySelector("svg");
+        if (!svgEl) throw new Error("Mermaid returned no SVG");
+        svgEl.removeAttribute("width");
+        svgEl.removeAttribute("height");
+        svgEl.style.width = "100%";
+        svgEl.style.height = "100%";
+        svgEl.style.maxWidth = "none";
+        svgEl.style.maxHeight = "none";
+        indexEntities(svgEl);
+        initPanZoom(svgEl);
+      } catch (err) {
+        console.error(err);
+        host.innerHTML = `<div class="error-banner">Failed to render diagram: ${err?.message ?? err}</div>`;
+      }
+    }
+
+    // 4. Entity indexing.
+    //    Mermaid 11 ER: <g id="entity-{NAME}-{hash}"> with a title <text id="text-entity-...">.
+    //    Mermaid 11 does NOT emit class="entity-group" itself — WE add it so CSS selectors match.
+    //    For non-ER diagrams this loop simply finds nothing and search gracefully no-ops.
+    function indexEntities(svgEl) {
+      entityGroups = [];
+      const groups = svgEl.querySelectorAll('g[id^="entity-"]');
+      groups.forEach((g) => {
+        const titleText = g.querySelector('text[id^="text-entity-"]');
+        const name = (titleText?.textContent || "").trim().toLowerCase();
+        if (!name) return;
+        g.dataset.entity = name;
+        g.classList.add("entity-group");
+        entityGroups.push({ name, g });
+      });
+      // Hide search if nothing to filter
+      if (entityGroups.length === 0) {
+        document.getElementById("search-wrap").style.display = "none";
+      }
+    }
+
+    function initPanZoom(svgEl) {
+      if (typeof window.svgPanZoom !== "function") {
+        console.warn("svg-pan-zoom unavailable; diagram will be static.");
+        return;
+      }
+      panZoom = window.svgPanZoom(svgEl, {
+        zoomEnabled: true, panEnabled: true,
+        controlIconsEnabled: false, dblClickZoomEnabled: true,
+        mouseWheelZoomEnabled: true, preventMouseEventsDefault: true,
+        fit: true, center: true, contain: false,
+        minZoom: 0.15, maxZoom: 20, zoomScaleSensitivity: 0.3,
+        onZoom: updateReadout,
+      });
+      updateReadout(panZoom.getZoom());
+      const ro = new ResizeObserver(() => {
+        if (!panZoom) return;
+        panZoom.resize(); panZoom.fit(); panZoom.center();
+      });
+      ro.observe(viewport);
+    }
+
+    function updateReadout(zoom) {
+      const pct = Math.round((zoom ?? 1) * 100);
+      document.getElementById("zoom-readout").textContent = `${pct}%`;
+    }
+
+    // Toolbar wiring
+    document.getElementById("zoom-in").addEventListener("click", () => panZoom?.zoomIn());
+    document.getElementById("zoom-out").addEventListener("click", () => panZoom?.zoomOut());
+    document.getElementById("zoom-fit").addEventListener("click", () => {
+      panZoom?.resize(); panZoom?.fit(); panZoom?.center();
+    });
+    document.getElementById("fullscreen").addEventListener("click", toggleFullscreen);
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) viewport.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    }
+    document.addEventListener("fullscreenchange", () => {
+      document.getElementById("fullscreen").classList.toggle("active", !!document.fullscreenElement);
+      setTimeout(() => { panZoom?.resize(); panZoom?.fit(); panZoom?.center(); }, 150);
+    });
+
+    // Downloads — use the preserved source, not post-render DOM text.
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    document.getElementById("btn-download-mmd").addEventListener("click", () => {
+      const blob = new Blob([mmdSource + "\n"], { type: "text/plain;charset=utf-8" });
+      triggerDownload(blob, "{%%%DOWNLOAD_BASENAME%%%}.mmd");
+    });
+    document.getElementById("btn-download-svg").addEventListener("click", () => {
+      const svgEl = host.querySelector("svg");
+      if (!svgEl) { alert("Diagram not ready yet — try again in a moment."); return; }
+      const clone = svgEl.cloneNode(true);
+      const vp = clone.querySelector("g.svg-pan-zoom_viewport");
+      if (vp) vp.removeAttribute("transform");
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("width", "1600");
+      clone.setAttribute("height", "1200");
+      const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
+      const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+      triggerDownload(blob, "{%%%DOWNLOAD_BASENAME%%%}.svg");
+    });
+
+    // Search
+    const searchInput = document.getElementById("search");
+    const searchWrap = document.getElementById("search-wrap");
+    const searchClear = document.getElementById("search-clear");
+
+    function applyFilter(query) {
+      const q = query.trim().toLowerCase();
+      searchWrap.classList.toggle("has-value", q.length > 0);
+      if (!q) {
+        entityGroups.forEach(({ g }) => g.classList.remove("dim", "match"));
+        return;
+      }
+      entityGroups.forEach(({ name, g }) => {
+        const hit = name.includes(q);
+        g.classList.toggle("dim", !hit);
+        g.classList.toggle("match", hit);
+      });
+    }
+    searchInput.addEventListener("input", (e) => applyFilter(e.target.value));
+    searchClear.addEventListener("click", () => {
+      searchInput.value = ""; applyFilter(""); searchInput.focus();
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      const activeTag = document.activeElement?.tagName;
+      const typing = activeTag === "INPUT" || activeTag === "TEXTAREA" || document.activeElement?.isContentEditable;
+      if (e.key === "/" && !typing) {
+        e.preventDefault(); searchInput.focus(); searchInput.select(); return;
+      }
+      if (typing) {
+        if (e.key === "Escape" && activeTag === "INPUT") {
+          searchInput.value = ""; applyFilter(""); searchInput.blur();
+        }
+        return;
+      }
+      if (e.key === "+" || e.key === "=") { panZoom?.zoomIn(); e.preventDefault(); }
+      else if (e.key === "-" || e.key === "_") { panZoom?.zoomOut(); e.preventDefault(); }
+      else if (e.key === "0") { panZoom?.resize(); panZoom?.fit(); panZoom?.center(); e.preventDefault(); }
+      else if (e.key === "f" || e.key === "F") { toggleFullscreen(); e.preventDefault(); }
+    });
+
+    // Hint auto-fade
+    const hint = document.getElementById("zoom-hint");
+    let hintDismissed = false;
+    function dismissHint() {
+      if (hintDismissed) return;
+      hintDismissed = true;
+      hint.classList.add("fade-out");
+      setTimeout(() => hint.remove(), 500);
+    }
+    viewport.addEventListener("pointerdown", dismissHint, { once: true });
+    viewport.addEventListener("wheel", dismissHint, { once: true, passive: true });
+    setTimeout(dismissHint, 6000);
+
+    // Render kickoff — deferred svg-pan-zoom script should already be loaded.
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", renderDiagram);
+    } else {
+      Promise.resolve().then(renderDiagram);
+    }
+  </script>
+</body>
+</html>

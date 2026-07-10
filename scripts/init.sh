@@ -20,14 +20,14 @@ MARKETPLACE_REPO="atretyak1985/swarmery"
 WS_ROOT="${SWARMERY_WORKSPACE_ROOT:-/Volumes/Work/swarmery-workspace}"
 
 if [ -z "$SLUG" ]; then
-  echo "usage: init.sh <project-slug> [pack ...]        packs: uav-pack | iot-pack | web-pack | lsp-pack"
+  echo "usage: init.sh <project-slug> [pack ...]        packs: uav-pack | iot-pack | web-pack | infra-pack | lsp-pack"
   exit 1
 fi
 case "$SLUG" in
   *[!a-z0-9-]*) echo "✗ slug must be kebab-case ([a-z0-9-]): $SLUG"; exit 1;;
 esac
 for p in "${PACKS[@]:-}"; do
-  case "$p" in uav-pack|iot-pack|web-pack|lsp-pack|"") ;; *) echo "✗ unknown pack: $p"; exit 1;; esac
+  case "$p" in uav-pack|iot-pack|web-pack|lsp-pack|infra-pack|"") ;; *) echo "✗ unknown pack: $p"; exit 1;; esac
 done
 
 PROJECT_DIR="$(pwd)"

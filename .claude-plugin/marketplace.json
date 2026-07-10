@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Vendor-neutral, multi-project Claude Code agent framework. One shared core plus opt-in domain packs; per-project flavor comes from each consumer's project.json overlay.",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "plugins": [
     {
@@ -28,6 +28,11 @@
       "name": "web-pack",
       "source": "./plugins/web-pack",
       "description": "Web/marketing domain pack: SEO, i18n, landing-page CRO, Figma-to-code styling."
+    },
+    {
+      "name": "infra-pack",
+      "source": "./plugins/infra-pack",
+      "description": "Infrastructure & delivery domain pack: Kubernetes/Helm, GitOps promotion, IaC, GitLab CI, GCP CI auth, Keycloak. Opt-in; requires core."
     },
     {
       "name": "lsp-pack",

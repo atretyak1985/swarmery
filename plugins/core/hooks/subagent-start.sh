@@ -11,13 +11,19 @@ RED='\033[0;31m'; WHITE='\033[1;37m'; MAGENTA='\033[0;35m'
 
 # ── Read hook JSON ────────────────────────────────────────────────
 input=$(cat)
-agent_type=$(echo "$input" | jq -r '.tool_input.subagent_type // .tool_input.type // "general"' 2>/dev/null)
-description=$(echo "$input" | jq -r '.tool_input.description // ""' 2>/dev/null)
+
+# Malformed/non-JSON stdin: nothing to track — never break the tool call
+# (non-blocking contract; every jq below assumes valid JSON).
+if ! printf '%s' "$input" | jq -e . >/dev/null 2>&1; then
+  exit 0
+fi
+agent_type=$(echo "$input" | jq -r '.tool_input.subagent_type // .tool_input.type // "general"' 2>/dev/null || echo general)
+description=$(echo "$input" | jq -r '.tool_input.description // ""' 2>/dev/null || true)
 # Correlation fields — availability depends on Claude Code version; set CLAUDE_HOOK_DEBUG=1
 # and inspect /tmp/claude-hook-payload-debug.jsonl to confirm which keys the payload carries
-parent_id=$(echo "$input" | jq -r '.parent_tool_use_id // .tool_use_id // empty' 2>/dev/null)
-session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
-model_requested=$(echo "$input" | jq -r '.tool_input.model // empty' 2>/dev/null)
+parent_id=$(echo "$input" | jq -r '.parent_tool_use_id // .tool_use_id // empty' 2>/dev/null || true)
+session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
+model_requested=$(echo "$input" | jq -r '.tool_input.model // empty' 2>/dev/null || true)
 
 if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
   echo "$input" >> /tmp/claude-hook-payload-debug.jsonl

@@ -1,0 +1,39 @@
+%% Sample ER diagram — fixture for mermaid-viewer/scripts/test.sh
+%% Keep this small; its purpose is to exercise the build pipeline
+%% (stats extraction, sentinel substitution, golden diff).
+
+erDiagram
+
+    AUTHOR {
+        serial   id         PK
+        varchar  name       "255, NOT NULL"
+        varchar  email      UK "255, UNIQUE"
+    }
+
+    POST {
+        serial    id          PK
+        varchar   title       "255, NOT NULL"
+        text      body        "nullable"
+        integer   author_id   FK "to AUTHOR.id, CASCADE"
+        timestamp created_at  "DEFAULT NOW()"
+    }
+
+    COMMENT {
+        serial    id         PK
+        integer   post_id    FK "to POST.id, CASCADE"
+        integer   author_id  FK "to AUTHOR.id, CASCADE"
+        text      body       "NOT NULL"
+    }
+
+    USER_CACHE {
+        varchar sub          PK "Keycloak subject"
+        varchar display_name "nullable"
+    }
+
+    %% Hard FKs
+    AUTHOR ||--o{ POST    : "writes"
+    AUTHOR ||--o{ COMMENT : "authors"
+    POST   ||--o{ COMMENT : "has"
+
+    %% Logical link (no DB FK)
+    USER_CACHE ||..o{ AUTHOR : "maps-to"

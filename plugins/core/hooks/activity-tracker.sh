@@ -23,8 +23,14 @@ SESSION_FILE="/tmp/claude-session-$(date +%Y%m%d).jsonl"
 # ── Read hook JSON from stdin ─────────────────────────────────────
 input=$(cat)
 
-tool_name=$(echo "$input" | jq -r '.tool_name // "unknown"')
-file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.path // empty')
+# Malformed/non-JSON stdin: nothing to track — never break the tool call
+# (non-blocking contract; every jq below assumes valid JSON).
+if ! printf '%s' "$input" | jq -e . >/dev/null 2>&1; then
+  exit 0
+fi
+
+tool_name=$(echo "$input" | jq -r '.tool_name // "unknown"' 2>/dev/null || echo unknown)
+file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null || true)
 command=$(echo "$input" | jq -r '.tool_input.command // empty')
 pattern=$(echo "$input" | jq -r '.tool_input.pattern // empty')
 

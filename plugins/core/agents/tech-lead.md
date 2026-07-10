@@ -297,7 +297,7 @@ Non-phase invocations:
 
 Agents that are NOT subordinates (never delegate to from tech-lead):
 - @full-stack-feature (peer orchestrator -- alternative entry point)
-- @idea-auditor (standalone audit -- user invokes directly)
+- @founder-reality-check (standalone audit -- user invokes directly)
 
 # Examples
 

@@ -17,7 +17,7 @@ fresh session and accept the trust prompt. Idempotent — existing files are nev
 → same `extraKnownMarketplaces` block) so every project on the machine already knows `swarmery`
 and per-project settings shrink to `enabledPlugins` + `env`.
 
-**Packs:** `uav-pack` (drones/telemetry) · `iot-pack` (devices/BLE) · `web-pack` (SEO/i18n/CRO) ·
+**Packs:** `uav-pack` (drones/telemetry) · `iot-pack` (devices/BLE) · `web-pack` (SEO/i18n/CRO) · `infra-pack` (k8s/Helm/GitOps/GitLab-CI/Keycloak) ·
 `lsp-pack` (Serena semantic code navigation — ⚠️ **requires the `serena` binary on the machine**:
 `uv tool install serena-agent`; without it every session logs a failed MCP launch. See
 `plugins/lsp-pack/README.md` for monorepo `--project` overrides).

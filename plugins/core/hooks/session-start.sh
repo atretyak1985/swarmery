@@ -54,7 +54,8 @@ branches=""
 while IFS= read -r repo; do
   [ -z "$repo" ] && continue
   repo_path="${PROJECT_DIR}/${repo}"
-  if [ -d "${repo_path}/.git" ]; then
+  # .git is a dir in a normal checkout, a file in a worktree — accept both.
+  if [ -e "${repo_path}/.git" ]; then
     branch=$(git -C "$repo_path" branch --show-current 2>/dev/null || echo "?")
     if [ "$branch" != "main" ] && [ "$branch" != "master" ] && [ -n "$branch" ]; then
       branches="${branches}  ${YELLOW}${repo}${RST} → ${WHITE}${branch}${RST}\n"
@@ -63,6 +64,49 @@ while IFS= read -r repo; do
 done <<EOF
 $(project_repos)
 EOF
+
+# ── In-flight tasks (scan the workspace working/ dir) ────────────
+# Task cards live at the task root README.md in two layouts:
+#   flat legacy  working/<slug>/README.md              (depth 2)
+#   dated        working/<YYYY>/<MM>/<DD>/<slug>/README.md (depth 5)
+# swarmery model first (AGENT_PROJECT → sibling workspace); legacy fallback.
+if [ -n "${AGENT_PROJECT:-}" ]; then
+  working_dir="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/swarmery-workspace}/${AGENT_PROJECT}/workspace/working"
+else
+  working_dir="${PROJECT_DIR}/.claude-workspace/working"
+fi
+inflight=""
+newest_next=""
+if [ -d "$working_dir" ]; then
+  readmes=$(
+    { find "$working_dir" -mindepth 2 -maxdepth 2 -name README.md 2>/dev/null
+      find "$working_dir" -mindepth 5 -maxdepth 5 -name README.md 2>/dev/null
+    } | head -50
+  )
+  while IFS= read -r readme; do
+    [ -n "$readme" ] || continue
+    # Active = the "Status:" line reads active / in-progress.
+    status_line=$(grep -m1 'Status:' "$readme" 2>/dev/null || true)
+    [ -n "$status_line" ] || continue
+    status_val=$(printf '%s' "$status_line" | sed 's/^.*Status:[*]*[[:space:]]*//')
+    case "$status_val" in
+      active*|Active*|ACTIVE*|in-progress*|in_progress*|"in progress"*|IN_PROGRESS*) ;;
+      *) continue ;;
+    esac
+    # First goal line ("Goal:"), truncated to ~70 chars.
+    goal=$(grep -m1 'Goal' "$readme" 2>/dev/null | sed 's/^.*Goal:[*]*[[:space:]]*//')
+    if [ ${#goal} -gt 70 ]; then
+      goal="${goal:0:69}…"
+    fi
+    name=$(basename "$(dirname "$readme")")
+    inflight="${inflight}  ${GREEN}▸${RST} ${WHITE}${name}${RST}  ${DIM}${goal}${RST}\n"
+  done <<EOF
+$readmes
+EOF
+  # Newest NEXT.md pointer anywhere under working/ (any layout).
+  newest_next=$(find "$working_dir" -maxdepth 6 -name NEXT.md \
+    -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+fi
 
 # ── Initialize fresh session file ─────────────────────────────────
 # Don't clear previous — activity-tracker appends to it
@@ -89,6 +133,17 @@ if [ -n "$branches" ]; then
   echo -e "$branches" | while IFS= read -r line; do
     [ -n "$line" ] && echo -e "${CYAN}${BOLD}│${RST}${line}"
   done || true
+  echo -e "${CYAN}${BOLD}│${RST}"
+fi
+
+if [ -n "$inflight" ]; then
+  echo -e "${CYAN}${BOLD}│${RST}  ${DIM}In-flight tasks:${RST}"
+  echo -e "$inflight" | while IFS= read -r line; do
+    [ -n "$line" ] && echo -e "${CYAN}${BOLD}│${RST}${line}"
+  done || true
+  if [ -n "$newest_next" ]; then
+    echo -e "${CYAN}${BOLD}│${RST}    ${DIM}NEXT → ${newest_next#"${PROJECT_DIR}"/}${RST}"
+  fi
   echo -e "${CYAN}${BOLD}│${RST}"
 fi
 
