@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentry — the craft of agents · technical manual</title>
+<meta name="description" content="agentry: a vendor-neutral, multi-project Claude Code agent framework distributed as a plugin marketplace. Architecture, quickstart, and reference.">
+<style>
+  :root{
+    --bg:#101312;
+    --bg-raise:#161a18;
+    --bg-inset:#0b0d0c;
+    --ink:#c9cec7;
+    --ink-dim:#8a918a;
+    --ink-faint:#565d57;
+    --amber:#e8a33d;
+    --amber-dim:#9a6f2e;
+    --phos:#7fd08a;
+    --phos-dim:#4a7a52;
+    --rule:#262b28;
+    --rule-soft:#1d211f;
+    --red:#d97662;
+    --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --disp:"Futura","Avenir Next Condensed","Avenir Next","Trebuchet MS",sans-serif;
+    --body:"Avenir Next","Avenir","Seravek","Gill Sans",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:2rem}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:16.5px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* drafting-table grid atmosphere */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      repeating-linear-gradient(0deg,transparent 0 31px,rgba(127,208,138,.028) 31px 32px),
+      repeating-linear-gradient(90deg,transparent 0 31px,rgba(127,208,138,.028) 31px 32px);
+  }
+  body::after{ /* grain */
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .frame{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* ── layout: fixed toc + content ── */
+  .cols{display:grid;grid-template-columns:225px 1fr;gap:56px}
+  @media(max-width:940px){.cols{grid-template-columns:1fr}.toc{display:none}}
+  .toc{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:44px 0 44px;border-right:1px solid var(--rule-soft)}
+  .toc a{display:block;color:var(--ink-dim);text-decoration:none;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;padding:5px 14px 5px 0;border-left:2px solid transparent;padding-left:12px;margin-left:-14px;transition:color .15s,border-color .15s}
+  .toc a:hover{color:var(--amber)}
+  .toc a.on{color:var(--phos);border-left-color:var(--phos)}
+  .toc .num{color:var(--ink-faint);margin-right:.5em}
+  .toc-cap{font-family:var(--mono);font-size:10px;letter-spacing:.22em;color:var(--ink-faint);text-transform:uppercase;margin:26px 0 8px;padding-left:12px;margin-left:-14px}
+
+  main{padding:44px 0 120px;min-width:0}
+
+  /* ── hero ── */
+  .hero{padding:26px 0 64px;border-bottom:1px solid var(--rule)}
+  .hero .stamp{font-family:var(--mono);font-size:11px;letter-spacing:.28em;color:var(--phos);text-transform:uppercase;display:flex;gap:14px;align-items:center;animation:rise .7s .05s both}
+  .hero .stamp::before{content:"";width:34px;height:1px;background:var(--phos-dim)}
+  h1.wordmark{
+    font-family:var(--disp);font-weight:700;font-size:clamp(64px,11vw,124px);
+    letter-spacing:-.015em;line-height:.95;margin:18px 0 10px;color:#eef1ec;
+    animation:rise .7s .12s both;
+  }
+  h1.wordmark .tick{color:var(--amber)}
+  .hero .sub{max-width:640px;font-size:19px;color:var(--ink-dim);animation:rise .7s .2s both}
+  .hero .sub b{color:var(--ink);font-weight:600}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px;animation:rise .7s .3s both}
+  .chip{font-family:var(--mono);font-size:11.5px;padding:6px 12px;border:1px solid var(--rule);color:var(--ink-dim);background:var(--bg-raise);border-radius:2px}
+  .chip b{color:var(--amber);font-weight:600}
+  .chip.git{border-color:var(--phos-dim);color:var(--phos)}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  /* ── sections ── */
+  section{padding:64px 0 8px;border-bottom:1px solid var(--rule-soft)}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:26px}
+  .sec-num{font-family:var(--mono);font-size:13px;color:var(--amber);letter-spacing:.1em}
+  h2{font-family:var(--disp);font-weight:600;font-size:clamp(26px,3.4vw,34px);letter-spacing:.01em;color:#e8ebe6}
+  h3{font-family:var(--disp);font-weight:600;font-size:19px;color:#dfe3dd;margin:34px 0 12px;letter-spacing:.02em}
+  p{margin:0 0 16px;max-width:74ch}
+  p.lead{font-size:18px;color:#d6dad3}
+  a{color:var(--phos);text-decoration:none;border-bottom:1px solid var(--phos-dim)}
+  a:hover{color:#a8e8b1}
+  ul,ol{margin:0 0 18px 22px;max-width:72ch}
+  li{margin-bottom:7px}
+  li::marker{color:var(--amber)}
+  code{font-family:var(--mono);font-size:.86em;background:var(--bg-inset);border:1px solid var(--rule-soft);padding:1.5px 6px;border-radius:3px;color:#d9c9a8}
+  strong{color:#e4e7e2}
+  .reveal{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  /* ── code blocks ── */
+  pre{
+    background:var(--bg-inset);border:1px solid var(--rule);border-radius:4px;
+    padding:18px 20px;overflow-x:auto;margin:0 0 22px;position:relative;
+    font-family:var(--mono);font-size:13px;line-height:1.7;color:#c4cdc2;
+  }
+  pre .lab{position:absolute;top:0;right:0;font-size:10px;letter-spacing:.14em;color:var(--ink-faint);background:var(--bg-raise);padding:3px 10px;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);border-radius:0 4px 0 4px;text-transform:uppercase}
+  pre em{font-style:normal;color:var(--ink-faint)}       /* comments  */
+  pre b{font-weight:400;color:var(--amber)}              /* keys/cmds */
+  pre i{font-style:normal;color:var(--phos)}             /* values    */
+
+  /* ── tables ── */
+  table{width:100%;border-collapse:collapse;margin:0 0 24px;font-size:14.5px}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule)}
+  td{padding:11px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+  tr:hover td{background:rgba(232,163,61,.03)}
+  td:first-child{white-space:nowrap}
+  td code{white-space:nowrap}
+
+  /* ── diagram ── */
+  .diagram{border:1px solid var(--rule);background:var(--bg-raise);border-radius:4px;padding:30px 26px;margin:6px 0 26px;font-family:var(--mono);font-size:12.5px}
+  .d-tier{display:grid;gap:10px}
+  .d-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .d-box{border:1px solid var(--rule);background:var(--bg);padding:12px 14px;border-radius:3px;position:relative;transition:border-color .2s,transform .2s}
+  .d-box:hover{border-color:var(--amber-dim);transform:translateY(-2px)}
+  .d-box .t{color:var(--amber);font-size:12px;display:block;margin-bottom:3px}
+  .d-box .d{color:var(--ink-dim);font-size:11px;line-height:1.5;display:block}
+  .d-box.ghost{border-style:dashed;opacity:.75}
+  .d-box.win{border-color:var(--phos-dim)}
+  .d-box.win .t{color:var(--phos)}
+  .d-link{color:var(--ink-faint);text-align:center;padding:2px 0;font-size:11px;letter-spacing:.1em}
+  .d-cap{margin-top:14px;color:var(--ink-faint);font-size:11px;border-top:1px dashed var(--rule);padding-top:12px}
+
+  /* ── callouts ── */
+  .callout{border:1px solid var(--rule);border-left:3px solid var(--amber);background:var(--bg-raise);padding:16px 20px;margin:0 0 22px;border-radius:0 4px 4px 0;max-width:78ch}
+  .callout.warn{border-left-color:var(--red)}
+  .callout.ok{border-left-color:var(--phos)}
+  .callout .cap{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:6px;color:var(--amber)}
+  .callout.warn .cap{color:var(--red)}
+  .callout.ok .cap{color:var(--phos)}
+  .callout p:last-child{margin-bottom:0}
+
+  /* ── step list ── */
+  .steps{counter-reset:st;list-style:none;margin:0 0 24px}
+  .steps>li{counter-increment:st;position:relative;padding:0 0 26px 58px;margin:0}
+  .steps>li::before{
+    content:counter(st,decimal-leading-zero);
+    position:absolute;left:0;top:1px;font-family:var(--mono);font-size:13px;color:var(--amber);
+    border:1px solid var(--amber-dim);width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:2px;background:var(--bg-raise);
+  }
+  .steps>li::after{content:"";position:absolute;left:19px;top:44px;bottom:6px;width:1px;background:var(--rule)}
+  .steps>li:last-child::after{display:none}
+  .steps h4{font-family:var(--disp);font-size:16.5px;color:#e2e5e0;margin:8px 0 8px;font-weight:600}
+
+  /* two-col feature cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:0 0 24px}
+  .card{border:1px solid var(--rule);background:var(--bg-raise);padding:18px 20px;border-radius:4px;transition:border-color .2s}
+  .card:hover{border-color:var(--amber-dim)}
+  .card .k{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--phos);margin-bottom:8px}
+  .card p{font-size:14px;color:var(--ink-dim);margin:0}
+  .card p b{color:var(--ink)}
+
+  kbd{font-family:var(--mono);font-size:.82em;border:1px solid var(--rule);border-bottom-width:2px;padding:1px 7px;border-radius:3px;background:var(--bg-raise);color:var(--ink)}
+
+  footer{padding:44px 0;color:var(--ink-faint);font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  ::selection{background:var(--amber);color:#161311}
+</style>
+</head>
+<body>
+<div class="frame">
+<div class="cols">
+
+<!-- ══════════ TOC ══════════ -->
+<nav class="toc" id="toc">
+  <div class="toc-cap">Manual</div>
+  <a href="#s00"><span class="num">00</span>Overview</a>
+  <a href="#s01"><span class="num">01</span>Why it exists</a>
+  <a href="#s02"><span class="num">02</span>Architecture</a>
+  <a href="#s03"><span class="num">03</span>What's inside</a>
+  <a href="#s04"><span class="num">04</span>How resolution works</a>
+  <div class="toc-cap">Operate</div>
+  <a href="#s05"><span class="num">05</span>Quickstart: new project</a>
+  <a href="#s06"><span class="num">06</span>project.json reference</a>
+  <a href="#s07"><span class="num">07</span>Workspace &amp; CLI</a>
+  <div class="toc-cap">Evolve</div>
+  <a href="#s08"><span class="num">08</span>Extending &amp; graduation</a>
+  <a href="#s09"><span class="num">09</span>Vendor neutrality</a>
+  <a href="#s10"><span class="num">10</span>Versioning &amp; updates</a>
+  <a href="#s11"><span class="num">11</span>Troubleshooting</a>
+</nav>
+
+<!-- ══════════ CONTENT ══════════ -->
+<main>
+
+<!-- 00 ─────────────────────────── -->
+<header class="hero" id="s00">
+  <div class="stamp">Technical manual · rev 1.0.0</div>
+  <h1 class="wordmark">agentry<span class="tick">_</span></h1>
+  <p class="sub">The craft of agents. A <b>vendor-neutral, multi-project Claude Code agent framework</b>, distributed as a plugin marketplace: one shared <b>core</b>, opt-in <b>domain packs</b>, and a thin per-project overlay. Publish an improvement once — every project adopts it with <code>/plugin update</code>.</p>
+  <div class="meta-row">
+    <span class="chip git">github.com/atretyak1985/agentry</span>
+    <span class="chip"><b>4</b> plugins</span>
+    <span class="chip"><b>49</b> agents</span>
+    <span class="chip"><b>26</b> skills</span>
+    <span class="chip"><b>15</b> commands</span>
+    <span class="chip"><b>14</b> hooks</span>
+    <span class="chip">MIT</span>
+  </div>
+</header>
+
+<!-- 01 ─────────────────────────── -->
+<section id="s01">
+  <div class="sec-head reveal"><span class="sec-num">§ 01</span><h2>Why it exists</h2></div>
+  <p class="lead reveal">Copying an agent system between projects rots fast. agentry replaces <em>fork-and-sync</em> with a package manager.</p>
+  <p class="reveal">The predecessor model kept one "upstream" agent repo and synced it into each project with token-rewrite scripts (<code>project-a → project-b → …</code>). In practice this produced:</p>
+  <ul class="reveal">
+    <li><strong>Mis-substitution damage</strong> — real cases found during migration: <code>kubectl</code> rewritten into "gcloud run get pods", Keycloak renamed to "Auth.js v5", Drizzle/Flyway collapsed into "Prisma-to-Prisma", <code>helm lint</code> turned into <code>npm run build .</code></li>
+    <li><strong>Drift</strong> — every consumer slowly diverged; fixes had to be re-ported N times.</li>
+    <li><strong>Identity bleed</strong> — one consumer's docs still described it as a "UAV/drone-swarm platform"… while being a flower-delivery marketplace.</li>
+  </ul>
+  <p class="reveal">agentry uses the <strong>native Claude Code plugin/marketplace mechanism</strong> instead: components are <strong>semver-versioned</strong>, <strong>namespaced</strong> (<code>core:tech-lead</code>), and <strong>updatable in place</strong>. Projects pin a known-good version and adopt on bump — controlled blast-radius, zero manual porting.</p>
+</section>
+
+<!-- 02 ─────────────────────────── -->
+<section id="s02">
+  <div class="sec-head reveal"><span class="sec-num">§ 02</span><h2>Architecture</h2></div>
+  <p class="reveal">Two layers meet in every Claude Code session: the <strong>global layer</strong> (plugins served from this marketplace) and the <strong>local layer</strong> (the project's own <code>.claude/</code>). Claude Code merges them natively; on a name collision <strong>the project-local component wins</strong>.</p>
+
+  <div class="diagram reveal">
+    <div class="d-tier">
+      <div class="d-row">
+        <div class="d-box" style="grid-column:1/-1">
+          <span class="t">▣ agentry (GitHub marketplace)</span>
+          <span class="d">.claude-plugin/marketplace.json — registers the four plugins below</span>
+        </div>
+      </div>
+      <div class="d-link">│ enabled per project via settings.json │</div>
+      <div class="d-row">
+        <div class="d-box"><span class="t">core <em>1.0.0</em></span><span class="d">41 agents · 23 skills · 14 commands · 13 hooks · CLI · templates. Always on.</span></div>
+        <div class="d-box"><span class="t">uav-pack <em>1.0.0</em></span><span class="d">drones: MAVLink, telemetry, missions, embedded edge</span></div>
+        <div class="d-box"><span class="t">iot-pack <em>1.0.0</em></span><span class="d">devices: BLE, telemetry ingest, health metrics</span></div>
+        <div class="d-box"><span class="t">web-pack <em>1.0.0</em></span><span class="d">marketing: SEO, i18n, landing CRO, figma-style</span></div>
+      </div>
+      <div class="d-link">▼ merged at session start ▼</div>
+      <div class="d-row">
+        <div class="d-box win"><span class="t">&lt;project&gt;/.claude/ (local overlay — wins on collision)</span>
+        <span class="d">settings.json (which plugins + env) · project.json (flavor) · agents/ skills/ templates/ — only the project-unique few</span></div>
+      </div>
+      <div class="d-link">▼ work artifacts go to ▼</div>
+      <div class="d-row">
+        <div class="d-box ghost"><span class="t">agent-workspace/&lt;project&gt;/ (separate private repo)</span>
+        <span class="d">wiki/ · workspace/{working, archive, plans, specs, sessions*, logs*, metrics*}  — *churn, gitignored</span></div>
+      </div>
+    </div>
+    <div class="d-cap">Framework ≠ workspace: the marketplace repo ships zero work-logs; plans/sessions/wiki live in a sibling private repo, namespaced per project.</div>
+  </div>
+
+  <div class="cards reveal">
+    <div class="card"><div class="k">Vendor-neutral core</div><p>No consumer project is privileged. <b>Zero project tokens</b> in <code>plugins/**</code> — enforced by a scan.</p></div>
+    <div class="card"><div class="k">Runtime flavor</div><p>Agents, skills, and hooks read <code>.claude/project.json</code> at runtime for repos, apps, cloud, and domain nouns. <b>Nothing is baked in.</b></p></div>
+    <div class="card"><div class="k">Explicit semver</div><p>Each plugin carries a version. Consumers adopt on bump via <code>/plugin update</code> — a bad edit can't instantly break every project.</p></div>
+    <div class="card"><div class="k">Opt-in domain packs</div><p>Domain vocabulary is legitimate <b>inside its own pack</b>, forbidden in core. Projects enable only what they need.</p></div>
+  </div>
+</section>
+
+<!-- 03 ─────────────────────────── -->
+<section id="s03">
+  <div class="sec-head reveal"><span class="sec-num">§ 03</span><h2>What's inside</h2></div>
+
+  <h3 class="reveal">core — the shared machine</h3>
+  <table class="reveal">
+    <tr><th>Component</th><th>Count</th><th>Highlights</th></tr>
+    <tr><td><code>agents/</code></td><td>41</td><td><code>tech-lead</code> (9-phase orchestrator) · <code>debugger</code> · <code>task-planner</code> / <code>implementation-planner</code> · <code>test-writer</code> / <code>test-runner</code> · <code>code-auditor</code> · <code>security-auditor</code> · <code>api-designer</code> / <code>database-designer</code> / <code>ui-designer</code> · <code>verification-agent</code> · <code>guardrail-checker</code> · <code>commit-message</code> / <code>pr-generator</code> · …</td></tr>
+    <tr><td><code>skills/</code></td><td>23</td><td>testing · troubleshooting · code-quality · code-search · api-contract/integration · docker-build · security-audit · git-commit · refactor-plan · migration-check · deps/env-check · …</td></tr>
+    <tr><td><code>commands/</code></td><td>14</td><td>/search · /find · /impact · /dashboard · /code-quality · /security-audit · /test-coverage · /new-feature-branch · …</td></tr>
+    <tr><td><code>hooks/</code></td><td>13 + 1</td><td>session banner &amp; summary, activity tracker, formatter, type-checker, sensitive-file guard, pre-commit test gate, compact snapshots (wired via <code>hooks.json</code>) + opt-in <code>memory-drift-check</code></td></tr>
+    <tr><td><code>bin/</code></td><td>1</td><td><code>agent-work.sh</code> — project-aware workspace CLI (§ 07)</td></tr>
+    <tr><td><code>templates/</code></td><td>14&nbsp;+&nbsp;sub</td><td>task/feature/bug-fix/refactoring summaries, PR description, ADR, commit message, agent template, handoffs (+ working/evaluation sets)</td></tr>
+  </table>
+
+  <h3 class="reveal">Domain packs</h3>
+  <table class="reveal">
+    <tr><th>Pack</th><th>Domain</th><th>Ships</th><th>Enable when…</th></tr>
+    <tr><td><code>uav-pack</code></td><td>UAV / drones</td><td>agents: mavlink-specialist, telemetry-processor, embedded-systems, edge-python-specialist · skills: mavlink-integration, mission-creation, embedded-systems</td><td>the product flies</td></tr>
+    <tr><td><code>iot-pack</code></td><td>IoT devices</td><td>agent: iot-data-specialist (BLE, telemetry ingest, health metrics)</td><td>the product ships hardware/wearables</td></tr>
+    <tr><td><code>web-pack</code></td><td>Web marketing</td><td>agents: seo-specialist, i18n-specialist, landing-page-specialist · command: /figma-style</td><td>the product has marketing sites / CRO work</td></tr>
+  </table>
+  <p class="reveal">Repo layout note: every plugin keeps its components at the <strong>plugin root</strong> (<code>agents/</code>, <code>skills/</code>, …); only <code>plugin.json</code> lives under <code>.claude-plugin/</code>. That's the Claude Code plugin contract.</p>
+</section>
+
+<!-- 04 ─────────────────────────── -->
+<section id="s04">
+  <div class="sec-head reveal"><span class="sec-num">§ 04</span><h2>How resolution works</h2></div>
+  <ol class="reveal">
+    <li><strong>Session start.</strong> Claude Code reads the project's <code>.claude/settings.json</code>, fetches known marketplaces, installs/activates <code>enabledPlugins</code> (first time shows a trust prompt).</li>
+    <li><strong>Namespacing.</strong> Plugin components arrive namespaced: agent <code>core:tech-lead</code>, command <code>/core:search</code>, skill <code>core:testing</code>. No collisions between packs.</li>
+    <li><strong>Overlay merge.</strong> Anything in the project's own <code>.claude/agents|skills|commands/</code> loads too. Same name as a plugin component → <strong>local wins</strong>. That's how a project intentionally overrides core behavior without forking the framework.</li>
+    <li><strong>Runtime flavor.</strong> Core components never hard-code project facts. They read <code>.claude/project.json</code> — repo list, main app, device repo, staging alias, cloud region, commit scopes, domain nouns — and the project's <code>CLAUDE.md</code> for everything else.</li>
+    <li><strong>Hooks.</strong> The core plugin wires its lifecycle hooks via <code>hooks/hooks.json</code> using <code>${CLAUDE_PLUGIN_ROOT}</code> paths — the consumer's settings.json carries <em>no</em> hook wiring of its own.</li>
+    <li><strong>Workspace.</strong> Anything that writes work artifacts resolves <code>$AGENT_PROJECT</code> + <code>$AGENT_WORKSPACE_ROOT</code> (set in settings env) → <code>agent-workspace/&lt;project&gt;/workspace/…</code>, with a legacy <code>.claude-workspace</code> fallback.</li>
+  </ol>
+  <div class="callout reveal"><div class="cap">Design rule</div>
+  <p>Flavor is <strong>configuration, not code</strong>. If you're about to write a project name into a framework file — stop, add a field to <code>project.json</code> instead.</p></div>
+</section>
+
+<!-- 05 ─────────────────────────── -->
+<section id="s05">
+  <div class="sec-head reveal"><span class="sec-num">§ 05</span><h2>Quickstart — connect a new project</h2></div>
+  <p class="reveal">Four steps, ~10 minutes. Model files live in <code>overlays/example/</code>.</p>
+
+  <ol class="steps reveal">
+    <li>
+      <h4>Enable the marketplace + plugins</h4>
+      <p>Merge into <code>&lt;project&gt;/.claude/settings.json</code>:</p>
+<pre><span class="lab">settings.json</span>{
+  <b>"extraKnownMarketplaces"</b>: {
+    <b>"agentry"</b>: { "source": { "source": <i>"github"</i>, "repo": <i>"atretyak1985/agentry"</i> } }
+  },
+  <b>"enabledPlugins"</b>: {
+    <b>"core@agentry"</b>: <i>true</i>,
+    <b>"web-pack@agentry"</b>: <i>true</i>          <em>// + iot-pack / uav-pack as needed</em>
+  },
+  <b>"env"</b>: {
+    <b>"AGENT_PROJECT"</b>: <i>"my-project"</i>,      <em>// workspace + overlay key (kebab-case)</em>
+    <b>"AGENT_WORKSPACE_ROOT"</b>: <i>"/path/to/agent-workspace"</i>
+  }
+}</pre>
+    </li>
+    <li>
+      <h4>Describe the project — <code>project.json</code></h4>
+      <p>Copy <code>overlays/example/project.json</code> to <code>&lt;project&gt;/.claude/project.json</code> and fill it (full field reference in § 06):</p>
+<pre><span class="lab">.claude/project.json</span>{
+  <b>"name"</b>: <i>"my-project"</i>,
+  <b>"codePath"</b>: <i>"/path/to/my-project"</i>,
+  <b>"mainApp"</b>: <i>"web-app"</i>,
+  <b>"repos"</b>: [<i>"apps/web-app"</i>, <i>"apps/docs"</i>, <i>"infrastructure"</i>],
+  <b>"cloud"</b>: { "provider": <i>"gcp"</i>, "region": <i>"…"</i>, "envAlias": <i>"staging"</i> },
+  <b>"commitScopes"</b>: [<i>"web-app"</i>, <i>"docs"</i>, <i>"infra"</i>],
+  <b>"enabledPacks"</b>: [<i>"web-pack"</i>]
+}</pre>
+    </li>
+    <li>
+      <h4>Add the workspace namespace</h4>
+<pre><span class="lab">shell</span><b>mkdir -p</b> agent-workspace/my-project/{wiki,workspace/{working,archive,plans,specs,sessions,logs,metrics}}</pre>
+      <p>(Churn dirs — <code>sessions/ logs/ metrics/</code> — are gitignored by the workspace repo.)</p>
+    </li>
+    <li>
+      <h4>Start a fresh session &amp; verify</h4>
+      <ul>
+        <li>Accept the marketplace <strong>trust prompt</strong> → plugins install.</li>
+        <li><code>@core:tech-lead</code> resolves; <kbd>/core:search</kbd> works.</li>
+        <li>The session banner shows your <code>displayName</code>; hooks fire <strong>once</strong>.</li>
+        <li><code>agent-work.sh init "hello" research</code> lands under <code>agent-workspace/my-project/workspace/working/…</code></li>
+      </ul>
+    </li>
+  </ol>
+
+  <div class="callout warn reveal"><div class="cap">Cutover caution — migrating an EXISTING agent setup</div>
+  <p>If the project previously ran a file-based copy of this system with hooks wired in its <code>settings.json</code>, remove that legacy hook wiring <strong>in the same change</strong> that enables the plugins — otherwise every hook fires twice. Do the switch from a terminal, then start a fresh session.</p></div>
+</section>
+
+<!-- 06 ─────────────────────────── -->
+<section id="s06">
+  <div class="sec-head reveal"><span class="sec-num">§ 06</span><h2><code>project.json</code> reference</h2></div>
+  <p class="reveal">Schema: <code>overlays/_schema/project.schema.json</code>. Required fields marked ●.</p>
+  <table class="reveal">
+    <tr><th>Field</th><th>Type</th><th>Meaning / used by</th></tr>
+    <tr><td><code>name</code> ●</td><td>string</td><td>kebab-case slug; the <code>AGENT_PROJECT</code> / workspace key</td></tr>
+    <tr><td><code>codePath</code> ●</td><td>string</td><td>absolute path to the project's code root (search fallbacks, tooling)</td></tr>
+    <tr><td><code>enabledPacks</code> ●</td><td>enum[]</td><td><code>uav-pack | iot-pack | web-pack</code> — mirrors <code>enabledPlugins</code></td></tr>
+    <tr><td><code>displayName</code></td><td>string</td><td>session banner title</td></tr>
+    <tr><td><code>monorepo</code></td><td>string</td><td>monorepo root dir name, if any</td></tr>
+    <tr><td><code>mainApp</code></td><td>string</td><td>default target for web/API work — agents route <code>apps/&lt;mainApp&gt;</code></td></tr>
+    <tr><td><code>apps</code></td><td>string[]</td><td>sub-apps/products (audits, reality checks iterate these)</td></tr>
+    <tr><td><code>repos</code></td><td>string[]</td><td>searchable repo paths — /search, /find, branch banner, deps/env checks</td></tr>
+    <tr><td><code>device</code></td><td>string</td><td>edge/IoT/firmware repo, if the product has one</td></tr>
+    <tr><td><code>domainTerms</code></td><td>map</td><td>domain nouns for prompts: <code>product</code>, <code>device</code>, <code>threatModelExample</code>, …</td></tr>
+    <tr><td><code>cloud</code></td><td>object</td><td><code>provider / region / runtime / envAlias</code> — deploy skills &amp; env naming</td></tr>
+    <tr><td><code>stack</code></td><td>map</td><td>free-form stack notes (web/db/edge/deploy) agents quote instead of guessing</td></tr>
+    <tr><td><code>commitScopes</code></td><td>string[]</td><td>conventional-commit scopes for commit-message / pr-generator</td></tr>
+  </table>
+</section>
+
+<!-- 07 ─────────────────────────── -->
+<section id="s07">
+  <div class="sec-head reveal"><span class="sec-num">§ 07</span><h2>Workspace &amp; CLI</h2></div>
+  <p class="reveal">Work artifacts never live in the framework repo. The CLI (<code>plugins/core/bin/agent-work.sh</code>) resolves <code>$AGENT_WORKSPACE_ROOT/$AGENT_PROJECT/workspace</code> and manages the task lifecycle:</p>
+<pre class="reveal"><span class="lab">agent-work.sh</span><b>setup</b>                       <em># create workspace directories</em>
+<b>init</b> &lt;name&gt; [type]          <em># new task → working/YYYY/MM/DD/&lt;slug&gt;  (audit|feature|refactor|research|incident|infra)</em>
+<b>phase</b> &lt;id|--latest&gt; &lt;NN-x&gt;  <em># scaffold phases/NN-x.md from template</em>
+<b>complete</b> &lt;id|--latest&gt;      <em># README→done + SUMMARY skeleton + move to archive/</em>
+<b>index</b>                       <em># regenerate INDEX.md (also runs from the session-summary hook)</em>
+<b>list</b> [active|done] · <b>search</b> &lt;q&gt; · <b>view</b> &lt;id&gt; · <b>metrics</b> · <b>cleanup</b> [days]</pre>
+  <ul class="reveal">
+    <li><strong>Task id</strong> = <code>yyyy-mm-dd-slug</code>; the folder is <code>working/YYYY/MM/DD/&lt;slug&gt;/</code> with a README card, <code>plan/ specs/ reports/ logs/</code>.</li>
+    <li><strong>Durable vs churn:</strong> <code>wiki/ plans/ specs/ working/ archive/</code> are committed; <code>sessions/ logs/ metrics/</code> are gitignored.</li>
+    <li><strong>Wiki</strong> (<code>agent-workspace/&lt;project&gt;/wiki/</code> + shared <code>_shared/wiki/</code>) holds durable knowledge notes — flat Markdown with frontmatter and <code>[[wikilinks]]</code>; open it as an Obsidian vault for a graph view.</li>
+    <li>The core <code>session-summary</code> hook mirrors session stats into <code>metrics/</code>, links sessions to touched tasks, and regenerates the INDEX — automatically, per project.</li>
+  </ul>
+</section>
+
+<!-- 08 ─────────────────────────── -->
+<section id="s08">
+  <div class="sec-head reveal"><span class="sec-num">§ 08</span><h2>Extending — where new things go</h2></div>
+  <table class="reveal">
+    <tr><th>The thing is…</th><th>It goes to…</th></tr>
+    <tr><td>useful to any project</td><td><code>plugins/core</code> — bump semver, everyone adopts via <kbd>/plugin update</kbd></td></tr>
+    <tr><td>useful to ≥2 projects of one domain</td><td>the domain pack (<code>uav</code> / <code>iot</code> / <code>web</code>)</td></tr>
+    <tr><td>unique to one project</td><td><strong>the project's own <code>.claude/</code></strong> — versioned with the product code</td></tr>
+    <tr><td>configuration, not logic</td><td><code>.claude/project.json</code></td></tr>
+  </table>
+  <div class="callout ok reveal"><div class="cap">The graduation rule — flow goes UP only</div>
+  <p>New things are <strong>born project-local</strong>. When a second project needs the same thing → promote to a pack. When everyone needs it → promote to core (de-flavor first, bump semver, delete the donor's local copy). <strong>Never copy downward</strong> — that recreates the fork-rot this framework exists to kill.</p></div>
+  <ul class="reveal">
+    <li><strong>Overrides:</strong> ship a local component with the same name to replace a core one <em>in that project only</em>.</li>
+    <li><strong>Templates:</strong> agents check <code>&lt;project&gt;/.claude/templates/</code> first, then <code>${CLAUDE_PLUGIN_ROOT}/templates/</code>.</li>
+    <li><strong>Health check:</strong> a consumer's <code>.claude/</code> should stay <em>thin</em>. If it accumulates generic content, something wants promoting.</li>
+  </ul>
+</section>
+
+<!-- 09 ─────────────────────────── -->
+<section id="s09">
+  <div class="sec-head reveal"><span class="sec-num">§ 09</span><h2>Vendor neutrality</h2></div>
+  <p class="reveal">The invariant that makes sharing possible: <code>plugins/**</code> contains <strong>zero project tokens</strong>.</p>
+  <ul class="reveal">
+    <li><strong>Brand tokens</strong> (company/product names, internal repo names, env aliases, regions) — forbidden <em>everywhere</em> in plugins.</li>
+    <li><strong>Domain vocabulary</strong> (drones for uav-pack, wearables for iot-pack) — legitimate <em>inside its own pack</em>, forbidden in core.</li>
+    <li>Prose uses neutral placeholders (<code>apps/&lt;mainApp&gt;</code>, <code>&lt;device&gt;</code>, <code>&lt;envAlias&gt;</code>) and neutral example domains (orders/line-items, pipelines/job-runs).</li>
+  </ul>
+<pre class="reveal"><span class="lab">checker</span><em># your private token regexes (gitignored) drive the scan:</em>
+<b>echo</b> <i>'mycompany|my-app|my-env'</i> &gt; .flavor-tokens
+<b>echo</b> <i>'my-domain-noun'</i>        &gt; .flavor-tokens-domain
+<b>bash</b> scripts/scan-flavor.sh     <em># target: 0 occurrences — run as a CI ratchet</em></pre>
+  <p class="reveal">CI (<code>.github/workflows/ci.yml</code>) validates all plugin JSON, <code>bash -n</code>'s every script, checks agent frontmatter, and runs the neutrality scan (patterns from repo vars). A promptfoo eval suite (<code>evals/</code>) guards agent behavior contracts — routing, commit-scope derivation, guardrail verdicts.</p>
+</section>
+
+<!-- 10 ─────────────────────────── -->
+<section id="s10">
+  <div class="sec-head reveal"><span class="sec-num">§ 10</span><h2>Versioning &amp; updates</h2></div>
+  <ol class="reveal">
+    <li>Change lands in <code>plugins/core</code> → bump <code>version</code> in its <code>plugin.json</code> (semver) → push.</li>
+    <li>Each consumer runs <kbd>/plugin update</kbd> when ready — version pinning means nobody is force-fed HEAD.</li>
+    <li>If a release misbehaves: consumers simply don't update (or re-pin); fix forward in the marketplace.</li>
+  </ol>
+  <div class="callout reveal"><div class="cap">The payoff test</div>
+  <p>Bump core minor → push → <kbd>/plugin update</kbd> in every consumer → confirm one improvement landed in all projects with <strong>zero per-project file copying</strong>. This is the entire reason agentry exists; verify it explicitly once ≥2 consumers are live.</p></div>
+  <p class="reveal"><strong>Version resolution order</strong> (Claude Code): <code>plugin.json version</code> → marketplace entry version → git SHA. If you push changes without bumping the version, consumers keep the cached copy — <em>bump or it didn't happen</em>.</p>
+</section>
+
+<!-- 11 ─────────────────────────── -->
+<section id="s11">
+  <div class="sec-head reveal"><span class="sec-num">§ 11</span><h2>Troubleshooting</h2></div>
+  <table class="reveal">
+    <tr><th>Symptom</th><th>Cause → fix</th></tr>
+    <tr><td>Every hook fires twice</td><td>Legacy hook wiring still present in the project's <code>settings.json</code> alongside the plugin's <code>hooks.json</code> → delete the legacy <code>hooks</code> block; fresh session.</td></tr>
+    <tr><td>Plugins don't load</td><td>Marketplace not trusted yet → fresh session, accept the trust prompt. Check <code>extraKnownMarketplaces</code> spelling and that the repo is reachable.</td></tr>
+    <tr><td><code>/dashboard</code> "not found"</td><td>Plugin commands are namespaced → <kbd>/core:dashboard</kbd>. (Muscle-memory tax of the migration.)</td></tr>
+    <tr><td>Update "doesn't arrive"</td><td>Version wasn't bumped in <code>plugin.json</code> → same version string = cached copy wins. Bump and push.</td></tr>
+    <tr><td>Agent talks about the wrong repos/stack</td><td><code>.claude/project.json</code> missing or stale → deploy/refresh it; agents read it at runtime.</td></tr>
+    <tr><td>Work lands in <code>.claude-workspace/</code></td><td><code>AGENT_PROJECT</code> / <code>AGENT_WORKSPACE_ROOT</code> env not set in settings → add them; the CLI then targets <code>agent-workspace/&lt;project&gt;/</code>.</td></tr>
+    <tr><td>Framework file needs a project fact</td><td>That's flavor → add a <code>project.json</code> field and read it at runtime. Never hard-code (see § 09).</td></tr>
+  </table>
+</section>
+
+<footer>
+  <span>agentry · rev 1.0.0 · MIT</span>
+  <span>manual generated 2026-07-10 · docs/: NEUTRALITY · ONBOARDING · EXTENDING</span>
+</footer>
+
+</main>
+</div>
+</div>
+
+<script>
+/* scroll-reveal + toc highlight — no deps */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const links=[...document.querySelectorAll('.toc a')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+const spy=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){const i=secs.indexOf(e.target);links.forEach(l=>l.classList.remove('on'));if(i>-1)links[i].classList.add('on')}})},{rootMargin:'-20% 0px -70% 0px'});
+secs.forEach(s=>s&&spy.observe(s));
+</script>
+</body>
+</html>
