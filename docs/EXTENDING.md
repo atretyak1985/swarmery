@@ -53,3 +53,18 @@ core agent instead of forking the framework.
 ```
 
 Thin is healthy: if this directory starts growing generic content, something wants promoting.
+
+## Versioning the overlay itself
+
+A single-repo project versions `.claude/` naturally — it lives inside the project repo.
+**Multi-repo workspaces** (no single root repo) should make the overlay its own small repo:
+
+```
+<workspace>/agents/        ← git repo holding ONLY the project-specific overlay
+<workspace>/.claude -> agents   (symlink; sub-repo .claude symlinks point here too)
+```
+
+This keeps rules/, project-specific skills/agents/commands, agent-memory and project.json
+under version control and shareable across machines, while the generic framework still
+arrives via plugins. If the workspace previously hosted a full pre-swarmery agent framework
+repo, reuse it: push the thin overlay as a successor branch — history stays, layout shrinks.
