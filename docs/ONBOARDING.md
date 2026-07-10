@@ -14,7 +14,7 @@ Merge the snippet into the project's `.claude/settings.json`:
 {
   "extraKnownMarketplaces": { "agentry": { "source": { "source": "github", "repo": "atretyak1985/agentry" } } },
   "enabledPlugins": { "core@agentry": true, "<pack>@agentry": true },
-  "env": { "AGENT_PROJECT": "<project>", "AGENT_WORKSPACE_ROOT": "/path/to/agent-workspace" }
+  "env": { "AGENT_PROJECT": "<project>", "AGENT_WORKSPACE_ROOT": "/path/to/agentry-workspace" }
 }
 ```
 Deploy the flavor config to `<project>/.claude/project.json`.

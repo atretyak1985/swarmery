@@ -245,7 +245,7 @@
       </div>
       <div class="d-link">▼ work artifacts go to ▼</div>
       <div class="d-row">
-        <div class="d-box ghost"><span class="t">agent-workspace/&lt;project&gt;/ (separate private repo)</span>
+        <div class="d-box ghost"><span class="t">agentry-workspace/&lt;project&gt;/ (separate private repo)</span>
         <span class="d">wiki/ · workspace/{working, archive, plans, specs, sessions*, logs*, metrics*}  — *churn, gitignored</span></div>
       </div>
     </div>
@@ -294,7 +294,7 @@
     <li><strong>Overlay merge.</strong> Anything in the project's own <code>.claude/agents|skills|commands/</code> loads too. Same name as a plugin component → <strong>local wins</strong>. That's how a project intentionally overrides core behavior without forking the framework.</li>
     <li><strong>Runtime flavor.</strong> Core components never hard-code project facts. They read <code>.claude/project.json</code> — repo list, main app, device repo, staging alias, cloud region, commit scopes, domain nouns — and the project's <code>CLAUDE.md</code> for everything else.</li>
     <li><strong>Hooks.</strong> The core plugin wires its lifecycle hooks via <code>hooks/hooks.json</code> using <code>${CLAUDE_PLUGIN_ROOT}</code> paths — the consumer's settings.json carries <em>no</em> hook wiring of its own.</li>
-    <li><strong>Workspace.</strong> Anything that writes work artifacts resolves <code>$AGENT_PROJECT</code> + <code>$AGENT_WORKSPACE_ROOT</code> (set in settings env) → <code>agent-workspace/&lt;project&gt;/workspace/…</code>, with a legacy <code>.claude-workspace</code> fallback.</li>
+    <li><strong>Workspace.</strong> Anything that writes work artifacts resolves <code>$AGENT_PROJECT</code> + <code>$AGENT_WORKSPACE_ROOT</code> (set in settings env) → <code>agentry-workspace/&lt;project&gt;/workspace/…</code>, with a legacy <code>.claude-workspace</code> fallback.</li>
   </ol>
   <div class="callout reveal"><div class="cap">Design rule</div>
   <p>Flavor is <strong>configuration, not code</strong>. If you're about to write a project name into a framework file — stop, add a field to <code>project.json</code> instead.</p></div>
@@ -319,7 +319,7 @@
   },
   <b>"env"</b>: {
     <b>"AGENT_PROJECT"</b>: <i>"my-project"</i>,      <em>// workspace + overlay key (kebab-case)</em>
-    <b>"AGENT_WORKSPACE_ROOT"</b>: <i>"/path/to/agent-workspace"</i>
+    <b>"AGENT_WORKSPACE_ROOT"</b>: <i>"/path/to/agentry-workspace"</i>
   }
 }</pre>
     </li>
@@ -338,7 +338,7 @@
     </li>
     <li>
       <h4>Add the workspace namespace</h4>
-<pre><span class="lab">shell</span><b>mkdir -p</b> agent-workspace/my-project/{wiki,workspace/{working,archive,plans,specs,sessions,logs,metrics}}</pre>
+<pre><span class="lab">shell</span><b>mkdir -p</b> agentry-workspace/my-project/{wiki,workspace/{working,archive,plans,specs,sessions,logs,metrics}}</pre>
       <p>(Churn dirs — <code>sessions/ logs/ metrics/</code> — are gitignored by the workspace repo.)</p>
     </li>
     <li>
@@ -347,7 +347,7 @@
         <li>Accept the marketplace <strong>trust prompt</strong> → plugins install.</li>
         <li><code>@core:tech-lead</code> resolves; <kbd>/core:search</kbd> works.</li>
         <li>The session banner shows your <code>displayName</code>; hooks fire <strong>once</strong>.</li>
-        <li><code>agent-work.sh init "hello" research</code> lands under <code>agent-workspace/my-project/workspace/working/…</code></li>
+        <li><code>agent-work.sh init "hello" research</code> lands under <code>agentry-workspace/my-project/workspace/working/…</code></li>
       </ul>
     </li>
   </ol>
@@ -391,7 +391,7 @@
   <ul class="reveal">
     <li><strong>Task id</strong> = <code>yyyy-mm-dd-slug</code>; the folder is <code>working/YYYY/MM/DD/&lt;slug&gt;/</code> with a README card, <code>plan/ specs/ reports/ logs/</code>.</li>
     <li><strong>Durable vs churn:</strong> <code>wiki/ plans/ specs/ working/ archive/</code> are committed; <code>sessions/ logs/ metrics/</code> are gitignored.</li>
-    <li><strong>Wiki</strong> (<code>agent-workspace/&lt;project&gt;/wiki/</code> + shared <code>_shared/wiki/</code>) holds durable knowledge notes — flat Markdown with frontmatter and <code>[[wikilinks]]</code>; open it as an Obsidian vault for a graph view.</li>
+    <li><strong>Wiki</strong> (<code>agentry-workspace/&lt;project&gt;/wiki/</code> + shared <code>_shared/wiki/</code>) holds durable knowledge notes — flat Markdown with frontmatter and <code>[[wikilinks]]</code>; open it as an Obsidian vault for a graph view.</li>
     <li>The core <code>session-summary</code> hook mirrors session stats into <code>metrics/</code>, links sessions to touched tasks, and regenerates the INDEX — automatically, per project.</li>
   </ul>
 </section>
@@ -454,7 +454,7 @@
     <tr><td><code>/dashboard</code> "not found"</td><td>Plugin commands are namespaced → <kbd>/core:dashboard</kbd>. (Muscle-memory tax of the migration.)</td></tr>
     <tr><td>Update "doesn't arrive"</td><td>Version wasn't bumped in <code>plugin.json</code> → same version string = cached copy wins. Bump and push.</td></tr>
     <tr><td>Agent talks about the wrong repos/stack</td><td><code>.claude/project.json</code> missing or stale → deploy/refresh it; agents read it at runtime.</td></tr>
-    <tr><td>Work lands in <code>.claude-workspace/</code></td><td><code>AGENT_PROJECT</code> / <code>AGENT_WORKSPACE_ROOT</code> env not set in settings → add them; the CLI then targets <code>agent-workspace/&lt;project&gt;/</code>.</td></tr>
+    <tr><td>Work lands in <code>.claude-workspace/</code></td><td><code>AGENT_PROJECT</code> / <code>AGENT_WORKSPACE_ROOT</code> env not set in settings → add them; the CLI then targets <code>agentry-workspace/&lt;project&gt;/</code>.</td></tr>
     <tr><td>Framework file needs a project fact</td><td>That's flavor → add a <code>project.json</code> field and read it at runtime. Never hard-code (see § 09).</td></tr>
   </table>
 </section>

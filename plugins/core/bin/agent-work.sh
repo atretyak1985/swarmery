@@ -12,13 +12,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Workspace resolution ──────────────────────────────────────────
-# agentry model (preferred): a sibling agent-workspace/ namespaced by project.
-#   AGENT_WORKSPACE_ROOT — path to the workspace repo (default: /Volumes/Work/agent-workspace)
+# agentry model (preferred): a sibling agentry-workspace/ namespaced by project.
+#   AGENT_WORKSPACE_ROOT — path to the workspace repo (default: /Volumes/Work/agentry-workspace)
 #   AGENT_PROJECT        — project slug (set per-project in .claude/settings.json env)
 # → WORKSPACE_DIR = $AGENT_WORKSPACE_ROOT/$AGENT_PROJECT/workspace
 # Legacy fallback: walk up for a project-local .claude-workspace (pre-agentry layout).
 if [ -n "${AGENT_PROJECT:-}" ]; then
-    _ws_root="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agent-workspace}"
+    _ws_root="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agentry-workspace}"
     PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
     WORKSPACE_DIR="${_ws_root}/${AGENT_PROJECT}/workspace"
 else

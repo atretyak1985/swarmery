@@ -4,5 +4,5 @@
     "agentry": { "source": { "source": "github", "repo": "atretyak1985/agentry" } }
   },
   "enabledPlugins": { "core@agentry": true },
-  "env": { "AGENT_PROJECT": "example", "AGENT_WORKSPACE_ROOT": "/path/to/agent-workspace" }
+  "env": { "AGENT_PROJECT": "example", "AGENT_WORKSPACE_ROOT": "/path/to/agentry-workspace" }
 }

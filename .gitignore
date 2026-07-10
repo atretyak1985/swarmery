@@ -1,7 +1,7 @@
 # Framework repo tracks framework only — never work artifacts.
-# Per-project working artifacts live in the sibling agent-workspace/ repo (D-G1).
+# Per-project working artifacts live in the sibling agentry-workspace/ repo (D-G1).
 claude-workspace/
-agent-workspace/
+agentry-workspace/
 
 # Generated indexes are regenerated per consumer, not shipped
 agents-index.json

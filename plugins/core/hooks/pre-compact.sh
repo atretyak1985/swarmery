@@ -12,9 +12,9 @@ SESSION_FILE="/tmp/claude-session-$(date +%Y%m%d).jsonl"
 echo "{\"ts\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",\"tool\":\"_compact_start\",\"file\":\"\",\"cmd\":\"\"}" >> "$SESSION_FILE"
 
 # ── Snapshot newest task checkpoint so post-compaction context can recover it ─
-# agentry model first (AGENT_PROJECT → sibling agent-workspace); legacy fallback.
+# agentry model first (AGENT_PROJECT → sibling agentry-workspace); legacy fallback.
 if [ -n "${AGENT_PROJECT:-}" ]; then
-  WORKING_DIR="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agent-workspace}/${AGENT_PROJECT}/workspace/working"
+  WORKING_DIR="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agentry-workspace}/${AGENT_PROJECT}/workspace/working"
 else
   WORKING_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}/.claude-workspace/working"
 fi
