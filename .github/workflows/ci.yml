@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON manifests
+        run: |
+          set -e
+          for f in .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json \
+                   plugins/core/hooks/hooks.json overlays/_schema/*.json overlays/example/*.json; do
+            [ -f "$f" ] || continue
+            node -e "JSON.parse(require('fs').readFileSync('$f'))" \
+              && echo "ok $f" || { echo "INVALID JSON: $f"; exit 1; }
+          done
+
+      - name: Shell syntax (bash -n)
+        run: |
+          set -e
+          find plugins scripts -name '*.sh' -print0 | while IFS= read -r -d '' f; do
+            bash -n "$f" || { echo "SYNTAX ERROR: $f"; exit 1; }
+            echo "ok $f"
+          done
+
+      - name: Agent frontmatter (name + description)
+        run: |
+          python3 - <<'PY'
+          import glob, sys
+          bad = []
+          for f in glob.glob('plugins/*/agents/*.md'):
+              lines = open(f, encoding='utf-8').read().splitlines()
+              ok = lines and lines[0].strip() == '---' \
+                   and any(l.startswith('name:') for l in lines[:15]) \
+                   and any(l.startswith('description:') for l in lines[:15])
+              if not ok: bad.append(f)
+          print(f"checked={len(glob.glob('plugins/*/agents/*.md'))} problems={len(bad)}")
+          for b in bad: print("PROBLEM:", b)
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Flavor scan (neutrality ratchet)
+        env:
+          FLAVOR_BRAND: ${{ vars.FLAVOR_BRAND }}
+          FLAVOR_DOMAIN: ${{ vars.FLAVOR_DOMAIN }}
+        run: |
+          if [ -z "$FLAVOR_BRAND" ]; then
+            echo "FLAVOR_BRAND repo variable not set — skipping neutrality scan (see docs/NEUTRALITY.md)"
+            exit 0
+          fi
+          out=$(bash scripts/scan-flavor.sh)
+          echo "$out"
+          echo "$out" | grep -q '✓ clean' || { echo "FLAVOR TOKENS FOUND — core must stay vendor-neutral"; exit 1; }

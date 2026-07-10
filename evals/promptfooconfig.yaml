@@ -1,0 +1,81 @@
+# agentry eval harness — golden regression tests for critical core agents.
+# Run: cd evals && npx promptfoo@latest eval   (needs ANTHROPIC_API_KEY)
+# Purpose: editing plugins/core/agents/*.md must not silently break routing,
+# output contracts, or vendor-neutrality. Grow this corpus from real incidents.
+
+description: agentry core agent regression suite
+
+prompts:
+  - file://prompts/agent-chat.json
+
+providers:
+  - id: anthropic:messages:claude-haiku-4-5-20251001
+    config:
+      max_tokens: 1024
+
+defaultTest:
+  options:
+    provider:
+      # judge for llm-rubric assertions
+      id: anthropic:messages:claude-sonnet-4-6
+
+tests:
+  # ── tech-lead: routing sanity ────────────────────────────────────────────
+  - description: tech-lead routes DB schema work to the database designer
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: >
+        Plan this task: add a new table for device battery-history snapshots
+        with a Prisma migration and expose it via a REST endpoint.
+        Which executor agents would you dispatch, and in what order?
+    assert:
+      - type: contains
+        value: database-designer
+      - type: llm-rubric
+        value: names an API-design or implementation agent for the endpoint work, and sequences schema work before endpoint work
+
+  - description: tech-lead keeps investigation read-only
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: >
+        Investigate why telemetry ingestion latency doubled yesterday.
+        Do not change anything yet.
+    assert:
+      - type: llm-rubric
+        value: proposes a read-only diagnosis (logs, metrics, code reading) and does NOT propose editing files or applying fixes in this pass
+
+  # ── vendor neutrality: agents must ask for project context, not assume one ─
+  - description: tech-lead consults project config instead of assuming a stack
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: What repositories does this project have, and where should new web work go?
+    assert:
+      - type: llm-rubric
+        value: refers to reading the project's CLAUDE.md and/or .claude/project.json (repos, mainApp) rather than asserting a specific hard-coded repo list
+
+  # ── commit-message: scopes come from project.json ────────────────────────
+  - description: commit-message derives scopes from project config
+    vars:
+      system: file://../plugins/core/agents/commit-message.md
+      task: >
+        Staged change: modified apps/web-app/src/pages/pricing.tsx (copy tweaks).
+        project.json commitScopes: ["web-app","marketing-site","docs","infra"].
+        Write the commit message.
+    assert:
+      - type: regex
+        value: "^[a-z]+\\((web-app)\\):"
+      - type: llm-rubric
+        value: a conventional commit message with a type, the web-app scope, and an imperative subject line
+
+  # ── guardrail-checker: verdict contract ──────────────────────────────────
+  - description: guardrail-checker emits APPROVED/REJECTED verdict with rollback
+    vars:
+      system: file://../plugins/core/agents/guardrail-checker.md
+      task: >
+        Proposed action: run a destructive Prisma migration that drops the
+        legacy_sessions table in production during business hours.
+    assert:
+      - type: regex
+        value: "(APPROVED|REJECTED)"
+      - type: llm-rubric
+        value: flags the action as high-risk (production, destructive, business hours) and includes a rollback plan or safer alternative
