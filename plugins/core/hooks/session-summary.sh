@@ -156,7 +156,14 @@ echo -e "${CYAN}${BOLD}╚══════════════════
 echo ""
 
 # ── Archive session log to workspace metrics ──────────────────────
-METRICS_DIR="${CLAUDE_PROJECT_DIR:-.}/.claude-workspace/metrics"
+# Workspace resolution: agentry model (AGENT_PROJECT → sibling agent-workspace) with
+# legacy project-local .claude-workspace fallback.
+if [ -n "${AGENT_PROJECT:-}" ]; then
+  _WS="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agent-workspace}/${AGENT_PROJECT}/workspace"
+else
+  _WS="${CLAUDE_PROJECT_DIR:-.}/.claude-workspace"
+fi
+METRICS_DIR="${_WS}/metrics"
 if [ -d "$METRICS_DIR" ] || mkdir -p "$METRICS_DIR" 2>/dev/null; then
   cp "$SESSION_FILE" "${METRICS_DIR}/session-${today}-$$.jsonl" 2>/dev/null || true
 fi
@@ -243,14 +250,18 @@ JSON
 fi
 
 # ── Workspace standard (2026-06-10): session mirror + task linking + INDEX ──
-# Find the workspace root by walking up from CLAUDE_PROJECT_DIR (may be a sub-repo).
+# agentry model first (AGENT_PROJECT → sibling agent-workspace); legacy walk-up fallback.
 WS_ROOT=""
-_p="${CLAUDE_PROJECT_DIR:-$PWD}"
-while [ "$_p" != "/" ]; do
-  # true root carries BOTH dirs — guards against stray .claude-workspace in sub-repos
-  if [ -d "${_p}/.claude-workspace" ] && [ -e "${_p}/.claude" ]; then WS_ROOT="${_p}/.claude-workspace"; break; fi
-  _p="$(dirname "$_p")"
-done
+if [ -n "${AGENT_PROJECT:-}" ] && [ -d "${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agent-workspace}/${AGENT_PROJECT}/workspace" ]; then
+  WS_ROOT="${AGENT_WORKSPACE_ROOT:-/Volumes/Work/agent-workspace}/${AGENT_PROJECT}/workspace"
+else
+  _p="${CLAUDE_PROJECT_DIR:-$PWD}"
+  while [ "$_p" != "/" ]; do
+    # true root carries BOTH dirs — guards against stray .claude-workspace in sub-repos
+    if [ -d "${_p}/.claude-workspace" ] && [ -e "${_p}/.claude" ]; then WS_ROOT="${_p}/.claude-workspace"; break; fi
+    _p="$(dirname "$_p")"
+  done
+fi
 
 if [ -n "$WS_ROOT" ]; then
   human_date=$(date +%Y-%m-%d)
@@ -280,12 +291,14 @@ if [ -n "$WS_ROOT" ]; then
       "$human_date" "$$" "${total:-?}" "${edit_n:-0}" "${bash_n:-0}" "${read_n:-0}" "${write_n:-0}" "${agent_n:-0}" \
       >> "$task_log" 2>/dev/null || true
   done < <(jq -r 'select(.file != "") | .file' "$SESSION_FILE" 2>/dev/null \
-            | grep -oE '\.claude-workspace/working/[0-9]{4}/[0-9]{2}/[0-9]{2}/[a-z0-9][a-z0-9-]*/|\.claude-workspace/working/([0-9]{4}/[0-9]{2}/)?[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+/' \
+            | grep -oE '/working/[0-9]{4}/[0-9]{2}/[0-9]{2}/[a-z0-9][a-z0-9-]*/|/working/([0-9]{4}/[0-9]{2}/)?[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+/' \
             | sed -E -e 's|.*/working/([0-9]{4})/([0-9]{2})/([0-9]{2})/([a-z0-9-]+)/$|\1-\2-\3-\4|' \
                      -e 's|.*/([0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+)/$|\1|' | sort -u)
 
   # 3) Regenerate the workspace INDEX.md from README cards.
-  AW="${WS_ROOT%/.claude-workspace}/.claude/scripts/agent-work.sh"
+  # Prefer the plugin CLI; fall back to the legacy consumer path.
+  AW="${CLAUDE_PLUGIN_ROOT:-}/bin/agent-work.sh"
+  [ -f "$AW" ] || AW="${WS_ROOT%/.claude-workspace}/.claude/scripts/agent-work.sh"
   [ -f "$AW" ] && bash "$AW" index >/dev/null 2>&1 || true
 fi
 

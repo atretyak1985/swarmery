@@ -17,7 +17,6 @@ skills:
   - functional-design
   - nextjs-migration
   - monorepo-coordination
-  - mission-creation
 ---
 
 # Role

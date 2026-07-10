@@ -149,7 +149,7 @@ The pipeline failed and I need to investigate. I should first get the pipeline m
 
 ```
 @debugger diagnose pipeline #12345 failure in the main app repo
-@debugger why did deploy_devnext fail on the last main push?
+@debugger why did deploy_<envAlias> fail on the last main push?
 @debugger forensic timeline for pipeline #67890
 ```
 </example>

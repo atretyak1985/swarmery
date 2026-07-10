@@ -114,7 +114,7 @@
 - [ ] Bundle size checked (if frontend)
 
 **Deployment:**
-- [ ] Target environment identified (`devnext`, `staging`, `production`, or local-only)
+- [ ] Target environment identified (`<envAlias>`, `staging`, `production`, or local-only)
 - [ ] Approval points identified (if any)
 - [ ] Database migrations included (if needed)
 - [ ] Environment variables documented (if new)
@@ -137,7 +137,7 @@
 
 **Target Environment:**
 - [ ] Local-only
-- [ ] `devnext`
+- [ ] `<envAlias>` (staging)
 - [ ] `staging`
 - [ ] `production`
 
@@ -199,7 +199,7 @@
 
 ## 📋 Post-Merge Tasks
 
-- [ ] Deploy to `devnext` (if applicable)
+- [ ] Deploy to `<envAlias>` (if applicable)
 - [ ] Run post-deploy verification
 - [ ] Promote to staging / production only with required approvals
 - [ ] Monitor metrics

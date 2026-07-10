@@ -18,7 +18,6 @@ skills:
   - deployment
   - context-optimization
   - summary-templates
-  - mission-creation
   - browser-verification
 ---
 
@@ -343,13 +342,13 @@ PHASE 2 COMPLETE | Agents: [@context-gatherer, @tech-researcher, @downstream-ana
 
 As orchestrator you normally delegate verification rather than doing it yourself. Follow the **`browser-verification` skill** for mechanics. Role-specific rule: drive the browser yourself ONLY in Micro mode (single-file UI change where one navigate+snapshot beats a delegation round-trip) or as an inline Dynamic-Workflow confirmation gate; otherwise delegate to @react-specialist, @verification-agent, or @ui-designer -- hands-on UI testing violates the "do not execute delegate work inline" anti-pattern. A self-smoke never replaces the Phase 5 quality quartet.
 
-## Mission lifecycle (create / start / verify) -> `mission-creation` skill
+## Domain E2E lifecycle flows -> domain-pack skill
 
-Whenever a task involves **creating, starting, or verifying a mission through the UI** -- whether the user frames it as *"test and verify"* OR as *"do the mission-creation process"* (it is NOT only a verification/testing step) -- load the **`mission-creation`** skill (`general/agents/skills/mission-creation/SKILL.md`). It is the canonical procedure and encodes the parts that are easy to get wrong:
-- localdev login via `make creds` (no hardcoded credentials; cookie-clear to avoid the Auth.js redirect loop),
-- the multi-step BY_ROUTE/REALTIME wizard (incl. the Waypoints step),
-- the **two-step start FSM** (`PLANNED -> READY -> IN_PROGRESS`),
-- per-tab verification (Dashboard / Realtime Control / 3D View / Awareness / Alerts),
-- terminate-with-native-`confirm()` cleanup.
+Whenever a task involves **driving a full domain lifecycle flow through the UI** (creating, starting,
+and verifying a domain entity end-to-end), check whether the project's enabled domain packs provide a
+canonical E2E skill for it (e.g. a UAV project's `mission-creation` skill in `uav-pack`) and load that
+skill instead of improvising with the generic browser-verification loop. Domain E2E skills encode the
+parts that are easy to get wrong: login/credential setup, multi-step wizards, state-machine transitions,
+per-view verification, and cleanup. If no pack skill exists, fall back to `browser-verification`.
 
 Default target is **localdev**; never run it against staging (project.json → cloud.envAlias) or production without explicit human approval. Apply it whether you drive the flow yourself (Micro / Dynamic mode) or hand it to a delegate (@react-specialist / @verification-agent / @full-stack-feature), which also carry this skill.

@@ -142,7 +142,7 @@ CREATE INDEX idx_[field] ON [table]([field]);
 
 ## Deployment Checklist
 
-- [ ] Target environment documented (`devnext`, `staging`, `production`, or local-only)
+- [ ] Target environment documented (`<envAlias>`, `staging`, `production`, or local-only)
 - [ ] Approval points documented
 - [ ] Code merged to main branch
 - [ ] Database migrations prepared

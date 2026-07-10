@@ -233,7 +233,7 @@
 [How to rollback if migration fails]
 
 **Environment / Promotion Notes**:
-- Target environment(s): [local-only / devnext / staging / production]
+- Target environment(s): [local-only / <envAlias> / staging / production]
 - Approval points: [What must be approved]
 - Verification requirements: [How success will be confirmed]
 - Promotion rule: [What must happen before advancing current state]

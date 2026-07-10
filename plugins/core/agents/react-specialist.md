@@ -14,7 +14,6 @@ skills:
   - code-standards
   - functional-design
   - nextjs-migration
-  - mission-creation
   - browser-verification
 ---
 

@@ -12,7 +12,6 @@ version: 1.1.0
 owner: platform-team
 skills:
   - code-quality
-  - mission-creation
   - browser-verification
 ---
 

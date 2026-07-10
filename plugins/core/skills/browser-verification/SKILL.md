@@ -1,6 +1,6 @@
 ---
 name: browser-verification
-description: "Use this skill when an agent needs to verify UI behavior in a live browser via Playwright MCP tools (browser_navigate, browser_snapshot, screenshots, console/network capture) against localdev or the project's staging environment (project.json -> cloud.envAlias). Covers the target-confirmation step, the observe/interact loop, and safety guardrails. NOT for full mission E2E flows (use mission-creation) and never against production."
+description: "Use this skill when an agent needs to verify UI behavior in a live browser via Playwright MCP tools (browser_navigate, browser_snapshot, screenshots, console/network capture) against localdev or the project's staging environment (project.json -> cloud.envAlias). Covers the target-confirmation step, the observe/interact loop, and safety guardrails. NOT for full domain E2E lifecycle flows (use the domain pack's E2E skill if the project ships one) and never against production."
 version: "1.0.0"
 owner: "agentry-core"
 color: cyan
@@ -33,6 +33,6 @@ Read-only verifiers (@verification-agent, @quality-checker) restrict themselves 
 - Always `browser_close` when finished to release the browser session.
 - A browser check confirms behavior; it does not replace the automated test suite or the Phase 5 quality gate.
 
-# Mission flows
+# Domain E2E flows
 
-For creating/starting/verifying a mission through the UI, do NOT improvise with the core loop — load the `mission-creation` skill (canonical wizard + two-step start FSM + cleanup). Default target localdev only.
+For driving a full domain lifecycle flow through the UI (create/start/verify an entity end-to-end), do NOT improvise with the core loop — load the domain pack's E2E skill if the project ships one (canonical wizard + state-machine transitions + cleanup). Default target localdev only.

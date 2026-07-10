@@ -14,7 +14,7 @@
 **Date**: [YYYY-MM-DD]
 **Author**: [Name or "Claude + Team"]
 **Type**: [Documentation / Configuration / Infrastructure / ACL / Deployment / Migration]
-**Environment Target**: [local-only / devnext / staging / production]
+**Environment Target**: [local-only / <envAlias> / staging / production]
 **Approval Points**: [None / Manual approval required at ...]
 **Duration**: [X hours/days]
 **Status**: ✅ Complete | ⏳ In Progress | ❌ Blocked
@@ -169,7 +169,7 @@ cd [directory]
 ### For DevOps
 
 **Target Environment**:
-- [Environment name and whether Terraform uses a different label, e.g. `devnext` vs `dev`]
+- [Environment name and whether Terraform uses a different label, e.g. a staging alias vs `dev`]
 
 **Approval Points**:
 - [Who approved or what gate was required]
