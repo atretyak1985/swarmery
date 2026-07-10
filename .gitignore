@@ -12,3 +12,4 @@ skills-index.json
 *.log
 node_modules/
 .flavor-tokens*
+.idea/

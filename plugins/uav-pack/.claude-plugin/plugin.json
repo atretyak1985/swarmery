@@ -1,7 +1,7 @@
 {
   "name": "uav-pack",
   "description": "UAV/drone domain pack: MAVLink integration, mission planning/creation, embedded and edge-runtime agents and skills. Opt-in; requires core.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"
