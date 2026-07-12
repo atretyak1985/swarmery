@@ -2,7 +2,7 @@
 // live updates over WS. Filters are pushed to the API as query params; WS
 // upserts are re-checked against the active filter client-side.
 // Redesign layout: pill filter chips, sessions grouped by day under mono
-// eyebrow rules, each day one white list card with hairline dividers.
+// eyebrow rules, each day one navy list card with hairline dividers.
 
 import { useCallback, useEffect, useState } from 'react';
 import type { Project, Session, SessionStatus, WSMessage } from '../api/types';
@@ -37,7 +37,7 @@ function FilterChip({
       aria-pressed={selected}
       className={`shrink-0 rounded-full border px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap transition-colors ${
         selected
-          ? 'border-ink-dim/60 bg-surface2 text-ink'
+          ? 'border-ink-dim bg-surface2 text-ink'
           : 'border-line text-ink-dim hover:text-ink'
       }`}
     >
@@ -177,7 +177,7 @@ export function Sessions(): JSX.Element {
             {g.label} · {g.rows.length} {g.rows.length === 1 ? 'session' : 'sessions'}
             <span className="h-px flex-1 bg-line" aria-hidden="true" />
           </div>
-          <div className="divide-y divide-line-soft overflow-hidden rounded-[14px] border border-line bg-surface">
+          <div className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface">
             {g.rows.map((s) => (
               <SessionCard key={s.id} session={s} now={nowById[s.id] ?? null} flat />
             ))}

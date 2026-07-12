@@ -1,6 +1,6 @@
 // App shell: sticky app bar, bottom nav (mobile) / sidebar (≥900px), routed
-// screens in <Outlet>. Bloombum editorial language: cream paper, hairlines,
-// Fraunces wordmark with the burgundy diamond.
+// screens in <Outlet>. Redesign dark editorial language: navy surfaces,
+// slate hairlines, Space Grotesk wordmark with the amber diamond.
 
 import { NavLink, Outlet } from 'react-router-dom';
 import { MOCK } from './api';
@@ -14,8 +14,8 @@ export function App(): JSX.Element {
   return (
     <div className="min-h-dvh pb-[76px] desk:pb-0 desk:pl-[210px]">
       <header className="sticky top-0 z-20 flex items-center gap-2.5 border-b border-line bg-bg/90 px-4 py-3 backdrop-blur-md">
-        <span className="font-display text-[19px] leading-none font-semibold tracking-[-0.02em] lowercase">
-          sw<em className="text-brand not-italic">◆</em>rmery
+        <span className="font-display text-[17px] leading-none font-bold tracking-[0.06em]">
+          SW<em className="text-brand not-italic">◆</em>RMERY
         </span>
         <span className="ml-auto flex items-center gap-1.5 font-mono text-[11px] text-ink-dim">
           {MOCK ? (

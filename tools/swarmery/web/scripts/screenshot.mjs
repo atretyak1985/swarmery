@@ -23,10 +23,22 @@ async function settle(page) {
   await page.waitForTimeout(600); // mock latency + transitions
 }
 
+async function assertNoHorizontalScroll(page, path) {
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  if (scrollWidth > clientWidth) {
+    throw new Error(`horizontal overflow on ${path}: ${scrollWidth} > ${clientWidth}`);
+  }
+  console.log(`✓ no horizontal scroll on ${path} (${scrollWidth} <= ${clientWidth})`);
+}
+
 async function shot(page, path, name, opts = {}) {
   await page.goto(base + path);
   await settle(page);
   await page.screenshot({ path: join(outDir, name), fullPage: opts.fullPage ?? false });
+  await assertNoHorizontalScroll(page, path);
   console.log(`✓ ${name}`);
 }
 

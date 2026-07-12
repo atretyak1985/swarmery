@@ -90,12 +90,12 @@ export function SummaryChips({ events }: { events: Event[] }): JSX.Element | nul
   return (
     <div className="mt-2.5 flex flex-col gap-1.5">
       {agents.length > 0 && (
-        <ChipGroup label="agents" tone="text-blue/80">
+        <ChipGroup label="agents" tone="text-blue/70">
           {agents.map(({ name, count, title }, i) => (
             <span
               key={`${name}-${String(i)}`}
               title={title ?? undefined}
-              className="max-w-[360px] truncate rounded-md border border-blue/25 bg-blue-soft/60 px-2 py-0.5 font-mono text-[11px] text-blue"
+              className="max-w-[360px] truncate rounded-full border border-blue/30 bg-blue/10 px-[9px] py-0.5 font-mono text-[11px] text-blue"
             >
               <span aria-hidden="true">⬡ </span>
               {name}
@@ -105,11 +105,11 @@ export function SummaryChips({ events }: { events: Event[] }): JSX.Element | nul
         </ChipGroup>
       )}
       {skills.length > 0 && (
-        <ChipGroup label="skills" tone="text-amber/90">
+        <ChipGroup label="skills" tone="text-amber/70">
           {skills.map((name) => (
             <span
               key={name}
-              className="rounded-md border border-amber/25 bg-amber-soft/60 px-2 py-0.5 font-mono text-[11px] text-amber"
+              className="rounded-full border border-amber/30 bg-amber/10 px-[9px] py-0.5 font-mono text-[11px] text-amber"
             >
               <span aria-hidden="true">◈ </span>
               {name}

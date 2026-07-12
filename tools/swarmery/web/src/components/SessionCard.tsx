@@ -23,8 +23,8 @@ const NOW_STATUSES = new Set<Session['status']>(['active', 'waiting_approval', '
 
 /* Live sessions get a status-tinted hairline (Redesign "Active now" card). */
 const CARD_BORDERS: Partial<Record<Session['status'], string>> = {
-  active: 'border-green/40 hover:border-green/70',
-  waiting_approval: 'border-amber/40 hover:border-amber/70',
+  active: 'border-green/25 hover:border-green/55',
+  waiting_approval: 'border-amber/35 hover:border-amber/70',
 };
 
 export function SessionCard({
@@ -39,8 +39,8 @@ export function SessionCard({
   flat?: boolean;
 }): JSX.Element {
   const shell = flat
-    ? 'block px-3.5 py-[11px] transition-colors hover:bg-surface2/60'
-    : `mb-2.5 block rounded-[14px] border bg-surface px-3.5 py-[11px] transition-colors ${
+    ? 'block px-3.5 py-[11px] transition-colors hover:bg-surface2'
+    : `mb-2.5 block rounded-xl border bg-surface px-3.5 py-[11px] transition-colors ${
         CARD_BORDERS[session.status] ?? 'border-line hover:border-ink-dim/50'
       }`;
   return (
@@ -50,7 +50,9 @@ export function SessionCard({
     >
       <div className="flex items-center gap-2">
         <LiveDot status={session.status} />
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-brand">
+        <span
+          className={`min-w-0 flex-1 truncate font-mono text-[11px] ${flat ? 'text-ink-3' : 'text-ink'}`}
+        >
           {session.projectSlug}
         </span>
         <StatusChip status={session.status} suffix={chipSuffix(session)} />

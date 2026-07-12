@@ -1,7 +1,7 @@
 // Overview (design §3.1, MVP scope — no approvals block): today's counters
 // from /api/stats/today, live active sessions over WS, recent completed.
-// Redesign layout: display-serif day title, KPI tiles (mono label over a
-// Fraunces numeral), live cards, completed sessions grouped in one list card.
+// Redesign layout: Space Grotesk day title, KPI tiles (mono label over a
+// mono numeral), live cards, completed sessions grouped in one list card.
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -25,13 +25,11 @@ function Stat({
   frame?: string;
 }): JSX.Element {
   return (
-    <div className={`rounded-[14px] border bg-surface px-2 py-2.5 desk:px-3.5 desk:py-3 ${frame}`}>
+    <div className={`rounded-xl border bg-surface px-2 py-2.5 desk:px-3.5 desk:py-3 ${frame}`}>
       <div className="truncate font-mono text-[9px] tracking-[0.08em] text-ink-dim uppercase desk:text-[10.5px]">
         {label}
       </div>
-      <div
-        className={`mt-1 font-display text-[17px] leading-none font-semibold tracking-[-0.02em] desk:text-[24px] ${tone}`}
-      >
+      <div className={`mt-1 font-mono text-[17px] leading-none font-bold desk:text-[24px] ${tone}`}>
         {value}
       </div>
     </div>
@@ -106,7 +104,7 @@ export function Overview(): JSX.Element {
   return (
     <>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
-        <h1 className="font-display text-[22px] leading-tight font-semibold tracking-[-0.02em] desk:text-[26px]">
+        <h1 className="font-display text-[19px] leading-tight font-bold tracking-[0.01em] desk:text-[21px]">
           Today · {fmtTodayHeader()}
         </h1>
         {stats !== null && (
@@ -139,7 +137,7 @@ export function Overview(): JSX.Element {
       <SectionTitle>Recently completed</SectionTitle>
       {sessions !== null && completed.length === 0 && <Empty>nothing completed yet</Empty>}
       {completed.length > 0 && (
-        <div className="divide-y divide-line-soft overflow-hidden rounded-[14px] border border-line bg-surface">
+        <div className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface">
           {completed.map((s) => (
             <SessionCard key={s.id} session={s} flat />
           ))}

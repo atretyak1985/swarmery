@@ -1,67 +1,65 @@
 @import 'tailwindcss';
 
-/* Bloombum editorial design language (Перевірка дизайну swarmery/_ds/tokens/*)
- * mapped onto the Redesign's semantic roles — Tailwind v4 theme.
+/* Swarmery Redesign dark editorial theme (Перевірка дизайну swarmery/
+ * Swarmery Redesign.dc.html) — implemented as drawn. Tailwind v4 theme.
  *
- * Surfaces: warm cream paper, white cards, warm taupe hairlines, no shadows.
- * Ink: near-black warm ink scale (nothing pure black or grey).
- * Brand: wine/burgundy family — links, active nav, tabs, wordmark accent.
+ * Surfaces: deep navy page (#10151d), raised card tone (#171e28), a second
+ * raised tone (#1e2735) for hover fills / prompt bubbles / inline code.
+ * Hairlines: slate (#28374b), softer 60% variant for inner row dividers.
+ * Ink: cool blue-grey scale from #dce6f2 down to #7c8da3.
+ * Brand accent: amber #f5b84a — links, active nav, tabs, wordmark diamond.
  * Status set stays SEMANTIC per the Redesign: green = running/ok,
  * amber = waiting/approval, red = error, blue = subagent/info track.
+ * Tinted fills use alpha modifiers on these bases (e.g. bg-red/10).
  */
 @theme {
-  /* ---- surfaces (bb-paper / bb-surface / bb-surface-2) ---- */
-  --color-bg: #faf7f2; /* warm cream paper — page background */
-  --color-surface: #ffffff; /* cards, sheets */
-  --color-surface2: #f4efe7; /* sunken / hover fill */
+  /* ---- surfaces ---- */
+  --color-bg: #10151d; /* page background — deep navy */
+  --color-surface: #171e28; /* cards, sheets */
+  --color-surface2: #1e2735; /* raised / hover fill, prompt bubbles, code chips */
 
-  /* ---- hairlines (bb-line / bb-line-soft) ---- */
-  --color-line: #e5dccd; /* default warm taupe border */
-  --color-line-soft: #efe8dc; /* softer inner divider */
+  /* ---- hairlines ---- */
+  --color-line: #28374b; /* default slate border */
+  --color-line-soft: rgb(40 55 75 / 0.6); /* softer inner divider */
 
-  /* ---- ink (bb-ink scale) ---- */
-  --color-ink: #1a1413; /* primary text — near-black warm */
-  --color-ink-2: #3e342f; /* secondary body text */
-  --color-ink-dim: #8a7e76; /* muted captions, labels */
+  /* ---- ink scale ---- */
+  --color-ink: #dce6f2; /* primary text */
+  --color-ink-2: #c3cfdd; /* secondary body text */
+  --color-ink-3: #a9b7c9; /* tertiary — row project names, file paths */
+  --color-ink-dim: #7c8da3; /* muted captions, labels */
 
-  /* ---- brand · wine / burgundy family ---- */
-  --color-brand: #8c1042; /* editorial brand — links, accents */
-  --color-burgundy: #7a0d38; /* primary brand ink */
-  --color-wine: #5e0828; /* deepest — hover / pressed */
+  /* ---- brand · amber accent ---- */
+  --color-brand: #f5b84a; /* links, active nav/tabs, cost numerals */
 
-  /* ---- status / semantic (bb-sage / bb-amber / bb-danger / bb-sky) ---- */
-  --color-green: #5c7b5c; /* running / ok (sage) */
-  --color-green-soft: #dde8da;
-  --color-amber: #c57f2a; /* waiting / approval (warning) */
-  --color-amber-soft: #faebd0;
-  --color-red: #c0344d; /* error (danger) */
-  --color-red-soft: #f7dde2;
-  --color-blue: #2f6b8e; /* subagent track / info (sky) */
-  --color-blue-soft: #dceaf2;
+  /* ---- status / semantic ---- */
+  --color-green: #4ade9c; /* running / ok */
+  --color-amber: #f5b84a; /* waiting / approval */
+  --color-red: #f0716f; /* error */
+  --color-blue: #6fb4f0; /* subagent track / info */
 
-  /* ---- type — the DS serif/sans/mono triad ---- */
+  /* ---- type — Redesign triad ---- */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
 
-  /* sidebar breakpoint (Redesign @media min-width:900px) */
+  /* sidebar breakpoint (Redesign fixed 210px sidebar) */
   --breakpoint-desk: 900px;
 
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
   @keyframes pulse-dot {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgb(92 123 92 / 0.45);
+      box-shadow: 0 0 0 0 rgb(74 222 156 / 0.5);
     }
     50% {
-      box-shadow: 0 0 0 6px rgb(92 123 92 / 0);
+      box-shadow: 0 0 0 6px rgb(74 222 156 / 0);
     }
   }
 }
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
   }
   html {
     -webkit-text-size-adjust: 100%;
@@ -72,10 +70,8 @@
   button {
     @apply cursor-pointer;
   }
-  /* Fraunces brand look: high optical size (SOFT axis approximated away — see
-     DS readme "Known substitutions"). */
-  .font-display {
-    font-variation-settings: 'opsz' 144;
+  input::placeholder {
+    color: var(--color-ink-dim);
   }
 }
 

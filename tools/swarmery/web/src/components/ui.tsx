@@ -1,27 +1,28 @@
-// Small design-system primitives shared across screens (Bloombum editorial
-// language: mono eyebrows, soft-tint status badges, white hairline cards).
+// Small design-system primitives shared across screens (Redesign dark
+// editorial language: display eyebrows, hairline pill status chips, navy
+// hairline cards).
 
 import type { ReactNode } from 'react';
 import type { SessionStatus } from '../api/types';
 
-/* ----- section heading — the DS ".bb-eyebrow" mono label ----- */
+/* ----- section heading — the Redesign Space Grotesk eyebrow ----- */
 
 export function SectionTitle({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <h2 className="mt-[26px] mb-2.5 font-mono text-[11px] font-medium tracking-[0.14em] text-ink-dim uppercase first:mt-1">
+    <h2 className="mt-[26px] mb-2.5 font-display text-[13px] font-medium tracking-[0.14em] text-ink-dim uppercase first:mt-1">
       {children}
     </h2>
   );
 }
 
-/* ----- status chip — DS ".bb-badge": soft tint fill + status ink ----- */
+/* ----- status chip — Redesign pill: hairline border + status ink ----- */
 
 const CHIP_STYLES: Record<SessionStatus, string> = {
-  active: 'bg-green-soft text-green',
-  waiting_approval: 'bg-amber-soft text-amber',
-  idle: 'bg-surface2 text-ink-dim',
-  completed: 'bg-surface2 text-ink-dim',
-  killed: 'bg-red-soft text-red',
+  active: 'border-green/40 text-green',
+  waiting_approval: 'border-amber/40 text-amber',
+  idle: 'border-line text-ink-dim',
+  completed: 'border-line text-ink-dim',
+  killed: 'border-red/40 text-red',
 };
 
 const CHIP_LABELS: Record<SessionStatus, string> = {
@@ -41,7 +42,7 @@ export function StatusChip({
 }): JSX.Element {
   return (
     <span
-      className={`rounded-md px-2 py-0.5 font-mono text-[10.5px] font-medium whitespace-nowrap ${CHIP_STYLES[status]}`}
+      className={`rounded-full border px-2 py-0.5 font-mono text-[10.5px] whitespace-nowrap ${CHIP_STYLES[status]}`}
     >
       {CHIP_LABELS[status]}
       {suffix !== undefined ? ` · ${suffix}` : ''}
@@ -64,7 +65,7 @@ export function LiveDot({ status }: { status: SessionStatus }): JSX.Element | nu
   return null;
 }
 
-/* ----- card shell — white on cream, 14px "radius-frame", hairline ----- */
+/* ----- card shell — raised navy on page bg, 12px radius, hairline ----- */
 
 export function Card({
   children,
@@ -74,7 +75,7 @@ export function Card({
   className?: string;
 }): JSX.Element {
   return (
-    <div className={`mb-2.5 rounded-[14px] border border-line bg-surface px-3.5 py-3 ${className}`}>
+    <div className={`mb-2.5 rounded-xl border border-line bg-surface px-3.5 py-3 ${className}`}>
       {children}
     </div>
   );
@@ -99,7 +100,7 @@ export function ErrorBox({
   onRetry?: () => void;
 }): JSX.Element {
   return (
-    <div className="my-3 rounded-lg border border-red/30 bg-red-soft/50 px-3.5 py-3" role="alert">
+    <div className="my-3 rounded-lg border border-red/25 bg-red/5 px-3.5 py-3" role="alert">
       <div className="font-mono text-[12px] text-red">{message}</div>
       {onRetry !== undefined && (
         <button
@@ -116,7 +117,7 @@ export function ErrorBox({
 
 export function Empty({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <div className="my-3 rounded-[14px] border border-dashed border-line px-3.5 py-6 text-center text-[12.5px] text-ink-dim">
+    <div className="my-3 rounded-xl border border-dashed border-line px-3.5 py-6 text-center text-[12.5px] text-ink-dim">
       {children}
     </div>
   );

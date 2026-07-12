@@ -94,7 +94,7 @@ function ClampedProse({ text }: { text: string }): JSX.Element {
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="mt-1 font-mono text-[11px] font-medium text-brand hover:text-wine"
+          className="mt-1 font-mono text-[11px] font-medium text-brand hover:text-ink"
         >
           {expanded ? 'show less' : 'show more'}
         </button>

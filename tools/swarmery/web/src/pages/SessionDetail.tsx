@@ -114,10 +114,10 @@ export function SessionDetailPage(): JSX.Element {
           {detail.gitBranch !== null ? ` · ${detail.gitBranch}` : ''}
         </span>
       </div>
-      <h1 className="mb-2 font-display text-[21px] leading-[1.3] font-semibold tracking-[-0.02em] desk:text-[24px]">
+      <h1 className="mb-2 font-display text-[21px] leading-[1.3] font-bold tracking-[0.01em]">
         {detail.title ?? detail.sessionUuid}
       </h1>
-      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 font-mono text-[11px] text-ink-dim">
+      <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 font-mono text-[11.5px] text-ink-dim">
         <Kv label="status" value={detail.status} tone={STATUS_TONES[detail.status]} />
         {detail.model !== null && <Kv label="model" value={detail.model} />}
         <Kv label="tokens" value={fmtTokens(facts.tokens)} />
