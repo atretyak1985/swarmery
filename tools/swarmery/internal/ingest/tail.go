@@ -25,10 +25,10 @@ type TailResult struct {
 	// Existing events whose duration was refined this pass (async subagent
 	// reconcile) — re-published so live clients replace their stale copies.
 	UpdatedEventIDs []int64
-	StartOffset    int64   // byte offset the pass started reading from
-	NextOffset     int64   // byte offset persisted after the pass
-	Reset          bool    // offset was reset to 0 (recreated/truncated file)
-	LastTS         string  // timestamp of the last ingested record (lag metric)
+	StartOffset     int64  // byte offset the pass started reading from
+	NextOffset      int64  // byte offset persisted after the pass
+	Reset           bool   // offset was reset to 0 (recreated/truncated file)
+	LastTS          string // timestamp of the last ingested record (lag metric)
 }
 
 // Q11 (docs/jsonl-format.md): a live watch experiment confirmed transcripts

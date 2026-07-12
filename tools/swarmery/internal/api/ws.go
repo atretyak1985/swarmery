@@ -73,7 +73,13 @@ func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			c.Close(websocket.StatusNormalClosure, "")
 			return
-		case n := <-ch:
+		case n, ok := <-ch:
+			if !ok {
+				// Bus disconnected us as a laggard (buffer overflow) — end the
+				// socket; the client's reconnect logic refetches full state.
+				c.Close(websocket.StatusGoingAway, "resync")
+				return
+			}
 			frame, err := h.buildWSMessage(n)
 			if err != nil {
 				log.Printf("warn: ws: build %s: %v", n.Type, err)

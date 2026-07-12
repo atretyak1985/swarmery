@@ -501,27 +501,38 @@ func TestStatusRecompute(t *testing.T) {
 	}
 }
 
-// TestBusFanout: subscribers receive published notifications; a full buffer
-// drops instead of blocking; cancel unsubscribes.
+// TestBusFanout: subscribers receive published notifications; overflow
+// disconnects the laggard (closed channel = resync signal) instead of
+// silently dropping — silent drops left dashboards stuck on stale statuses;
+// cancel unsubscribes and is safe after an overflow disconnect.
 func TestBusFanout(t *testing.T) {
 	bus := NewBus()
 	ch, cancel := bus.Subscribe(1)
+	healthy, cancelHealthy := bus.Subscribe(8)
+	defer cancelHealthy()
+
 	bus.Publish(Notification{Type: NoteSessionStarted, SessionID: 1})
-	bus.Publish(Notification{Type: NoteEventAppended, SessionID: 1, EventID: 9}) // dropped: buffer full
+	bus.Publish(Notification{Type: NoteEventAppended, SessionID: 1, EventID: 9}) // overflow → ch closed
 
 	got := <-ch
 	if got.Type != NoteSessionStarted || got.SessionID != 1 {
 		t.Errorf("got %+v", got)
 	}
-	select {
-	case n := <-ch:
-		t.Errorf("expected drop, got %+v", n)
-	default:
-	}
-	cancel()
-	bus.Publish(Notification{Type: NoteSessionUpdated, SessionID: 2}) // must not panic
 	if _, ok := <-ch; ok {
-		t.Error("channel should be closed after cancel")
+		t.Error("laggard channel must be closed on overflow (resync signal)")
+	}
+	cancel() // after overflow-close — must not panic (double close guard)
+
+	// The healthy subscriber is unaffected and keeps receiving.
+	bus.Publish(Notification{Type: NoteSessionUpdated, SessionID: 2})
+	if n := <-healthy; n.SessionID != 1 { // first published frame
+		t.Errorf("healthy subscriber lost frames: %+v", n)
+	}
+	if n := <-healthy; n.EventID != 9 {
+		t.Errorf("healthy subscriber lost frames: %+v", n)
+	}
+	if n := <-healthy; n.SessionID != 2 || n.Type != NoteSessionUpdated {
+		t.Errorf("healthy subscriber lost frames: %+v", n)
 	}
 }
 

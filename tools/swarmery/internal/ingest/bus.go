@@ -20,8 +20,8 @@ type Notification struct {
 }
 
 // Bus is a minimal fan-out pub/sub channel for ingest notifications.
-// Publish never blocks: slow subscribers drop messages once their buffer is
-// full (the dashboard resyncs via REST, WS is a live-update hint stream).
+// Publish never blocks: a subscriber whose buffer fills up is disconnected
+// (channel closed) so its consumer performs a full REST resync.
 type Bus struct {
 	mu   sync.Mutex
 	subs map[chan Notification]struct{}
@@ -31,34 +31,47 @@ func NewBus() *Bus {
 	return &Bus{subs: make(map[chan Notification]struct{})}
 }
 
+// remove unregisters and closes ch if it is still subscribed. Safe to call
+// from both cancel and the Publish overflow path — the map check makes the
+// close happen exactly once. Caller must hold b.mu.
+func (b *Bus) remove(ch chan Notification) {
+	if _, ok := b.subs[ch]; ok {
+		delete(b.subs, ch)
+		close(ch)
+	}
+}
+
 // Subscribe registers a buffered subscriber channel. Call cancel to
-// unsubscribe; the channel is closed by cancel.
+// unsubscribe; the channel is closed by cancel (or by Publish on overflow —
+// consumers must treat a closed channel as "lost sync, resync via REST").
 func (b *Bus) Subscribe(buffer int) (<-chan Notification, func()) {
 	ch := make(chan Notification, buffer)
 	b.mu.Lock()
 	b.subs[ch] = struct{}{}
 	b.mu.Unlock()
 
-	var once sync.Once
 	cancel := func() {
-		once.Do(func() {
-			b.mu.Lock()
-			delete(b.subs, ch)
-			b.mu.Unlock()
-			close(ch)
-		})
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		b.remove(ch)
 	}
 	return ch, cancel
 }
 
-// Publish fans n out to all subscribers, dropping on full buffers.
+// Publish fans n out to all subscribers. A subscriber whose buffer is full
+// has lost sync — silently dropping frames here left dashboards showing
+// stale session statuses forever (sessions stuck "active" after high-traffic
+// bursts overflowed the 256-frame buffer and ate the demotion updates). We
+// close the laggard's channel instead: the WS handler sees the close, ends
+// the connection, and the client's reconnect refetches full state.
 func (b *Bus) Publish(n Notification) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for ch := range b.subs {
 		select {
 		case ch <- n:
-		default: // subscriber too slow — drop, REST resync covers it
+		default: // subscriber too slow — force a resync via disconnect
+			b.remove(ch)
 		}
 	}
 }

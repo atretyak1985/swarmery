@@ -68,9 +68,14 @@ export function useLiveUpdates(
     };
 
     connect();
+    // Convergence net: even if a live-update frame is lost (bus overflow,
+    // tab throttling), a periodic refetch guarantees the UI reaches the API
+    // truth within a minute.
+    const reconcile = setInterval(() => reconnectRef.current(), 60_000);
     return () => {
       disposed = true;
       if (timer !== null) clearTimeout(timer);
+      clearInterval(reconcile);
       ws?.close();
     };
   }, []);
@@ -80,6 +85,9 @@ export function useLiveUpdates(
 export function applySessionMessage(sessions: Session[], msg: WSMessage): Session[] {
   if (msg.type === 'event_appended') return sessions;
   const incoming = msg.payload;
+  // Defensive: a malformed frame (no id / no startedAt) must never become a
+  // ghost "(unknown)" row — the DB guarantees both fields on real sessions.
+  if (!incoming.id || !incoming.startedAt) return sessions;
   const idx = sessions.findIndex((s) => s.id === incoming.id);
   if (idx === -1) return [incoming, ...sessions];
   return sessions.map((s) => (s.id === incoming.id ? incoming : s));
