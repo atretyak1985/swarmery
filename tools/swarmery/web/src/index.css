@@ -1,38 +1,68 @@
 @import 'tailwindcss';
 
-/* Design tokens from docs/design/swarmery-ui-mockup.html — Tailwind v4 theme. */
+/* Bloombum editorial design language (Перевірка дизайну swarmery/_ds/tokens/*)
+ * mapped onto the Redesign's semantic roles — Tailwind v4 theme.
+ *
+ * Surfaces: warm cream paper, white cards, warm taupe hairlines, no shadows.
+ * Ink: near-black warm ink scale (nothing pure black or grey).
+ * Brand: wine/burgundy family — links, active nav, tabs, wordmark accent.
+ * Status set stays SEMANTIC per the Redesign: green = running/ok,
+ * amber = waiting/approval, red = error, blue = subagent/info track.
+ */
 @theme {
-  --color-bg: #10151d; /* slate graphite */
-  --color-surface: #171e28; /* panel */
-  --color-surface2: #1e2735; /* raised */
-  --color-line: #28374b; /* hairline */
-  --color-ink: #dce6f2; /* primary text */
-  --color-ink-dim: #7c8da3; /* secondary */
-  --color-amber: #f5b84a; /* instrumentation accent / waiting */
-  --color-green: #4ade9c; /* active / ok */
-  --color-red: #f0716f; /* error */
-  --color-blue: #6fb4f0; /* subagent track */
+  /* ---- surfaces (bb-paper / bb-surface / bb-surface-2) ---- */
+  --color-bg: #faf7f2; /* warm cream paper — page background */
+  --color-surface: #ffffff; /* cards, sheets */
+  --color-surface2: #f4efe7; /* sunken / hover fill */
 
+  /* ---- hairlines (bb-line / bb-line-soft) ---- */
+  --color-line: #e5dccd; /* default warm taupe border */
+  --color-line-soft: #efe8dc; /* softer inner divider */
+
+  /* ---- ink (bb-ink scale) ---- */
+  --color-ink: #1a1413; /* primary text — near-black warm */
+  --color-ink-2: #3e342f; /* secondary body text */
+  --color-ink-dim: #8a7e76; /* muted captions, labels */
+
+  /* ---- brand · wine / burgundy family ---- */
+  --color-brand: #8c1042; /* editorial brand — links, accents */
+  --color-burgundy: #7a0d38; /* primary brand ink */
+  --color-wine: #5e0828; /* deepest — hover / pressed */
+
+  /* ---- status / semantic (bb-sage / bb-amber / bb-danger / bb-sky) ---- */
+  --color-green: #5c7b5c; /* running / ok (sage) */
+  --color-green-soft: #dde8da;
+  --color-amber: #c57f2a; /* waiting / approval (warning) */
+  --color-amber-soft: #faebd0;
+  --color-red: #c0344d; /* error (danger) */
+  --color-red-soft: #f7dde2;
+  --color-blue: #2f6b8e; /* subagent track / info (sky) */
+  --color-blue-soft: #dceaf2;
+
+  /* ---- type — the DS serif/sans/mono triad ---- */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
-  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
 
-  /* sidebar breakpoint from the mockup (@media min-width:900px) */
+  /* sidebar breakpoint (Redesign @media min-width:900px) */
   --breakpoint-desk: 900px;
 
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
   @keyframes pulse-dot {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgb(74 222 156 / 0.5);
+      box-shadow: 0 0 0 0 rgb(92 123 92 / 0.45);
     }
     50% {
-      box-shadow: 0 0 0 6px rgb(74 222 156 / 0);
+      box-shadow: 0 0 0 6px rgb(92 123 92 / 0);
     }
   }
 }
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
   html {
     -webkit-text-size-adjust: 100%;
   }
@@ -41,6 +71,11 @@
   }
   button {
     @apply cursor-pointer;
+  }
+  /* Fraunces brand look: high optical size (SOFT axis approximated away — see
+     DS readme "Known substitutions"). */
+  .font-display {
+    font-variation-settings: 'opsz' 144;
   }
 }
 

@@ -21,22 +21,36 @@ function chipSuffix(session: Session): string {
 
 const NOW_STATUSES = new Set<Session['status']>(['active', 'waiting_approval', 'idle']);
 
+/* Live sessions get a status-tinted hairline (Redesign "Active now" card). */
+const CARD_BORDERS: Partial<Record<Session['status'], string>> = {
+  active: 'border-green/40 hover:border-green/70',
+  waiting_approval: 'border-amber/40 hover:border-amber/70',
+};
+
 export function SessionCard({
   session,
   now = null,
+  flat = false,
 }: {
   session: Session;
   /** Live "now: <last action>" line, fed by event_appended WS messages. */
   now?: string | null;
+  /** Row inside a grouped list card (no own border — hover fill instead). */
+  flat?: boolean;
 }): JSX.Element {
+  const shell = flat
+    ? 'block px-3.5 py-[11px] transition-colors hover:bg-surface2/60'
+    : `mb-2.5 block rounded-[14px] border bg-surface px-3.5 py-[11px] transition-colors ${
+        CARD_BORDERS[session.status] ?? 'border-line hover:border-ink-dim/50'
+      }`;
   return (
     <Link
       to={`/sessions/${session.id}`}
-      className="mb-2.5 block rounded-[10px] border border-line bg-surface px-3.5 py-[11px] transition-colors hover:border-ink-dim/50 focus-visible:outline-2 focus-visible:outline-amber"
+      className={`${shell} focus-visible:outline-2 focus-visible:outline-brand`}
     >
       <div className="flex items-center gap-2">
         <LiveDot status={session.status} />
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-amber">
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-brand">
           {session.projectSlug}
         </span>
         <StatusChip status={session.status} suffix={chipSuffix(session)} />

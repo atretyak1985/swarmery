@@ -15,13 +15,13 @@ const CHANGE_TONES: Record<FileChangeType, string> = {
 function DiffBlock({ diff }: { diff: string }): JSX.Element {
   const lines = diff.split('\n');
   return (
-    <div className="my-2 overflow-x-auto rounded-lg border border-line bg-bg py-2 font-mono text-[11px] leading-[1.6]">
+    <div className="my-2 overflow-x-auto rounded-lg border border-line bg-surface py-2 font-mono text-[11px] leading-[1.6]">
       {lines.map((line, i) => {
-        let tone = 'text-ink/85';
+        let tone = 'text-ink-2';
         if (line.startsWith('@@')) tone = 'text-blue';
         else if (line.startsWith('+++') || line.startsWith('---')) tone = 'text-ink-dim';
-        else if (line.startsWith('+')) tone = 'bg-green/10 text-green';
-        else if (line.startsWith('-')) tone = 'bg-red/10 text-red';
+        else if (line.startsWith('+')) tone = 'bg-green-soft/60 text-green';
+        else if (line.startsWith('-')) tone = 'bg-red-soft/60 text-red';
         return (
           // eslint-disable-next-line react/no-array-index-key -- static diff text
           <div key={i} className={`px-3 whitespace-pre ${tone}`}>

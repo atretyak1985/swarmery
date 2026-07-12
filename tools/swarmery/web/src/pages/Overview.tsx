@@ -1,7 +1,10 @@
 // Overview (design §3.1, MVP scope — no approvals block): today's counters
 // from /api/stats/today, live active sessions over WS, recent completed.
+// Redesign layout: display-serif day title, KPI tiles (mono label over a
+// Fraunces numeral), live cards, completed sessions grouped in one list card.
 
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Session, StatsToday, WSMessage } from '../api/types';
 import { fetchSessions, fetchStatsToday } from '../api';
 import { fmtCost, fmtTodayHeader, fmtTokens } from '../lib/format';
@@ -14,30 +17,39 @@ function Stat({
   value,
   label,
   tone = '',
+  frame = 'border-line',
 }: {
   value: string;
   label: string;
   tone?: string;
+  frame?: string;
 }): JSX.Element {
   return (
-    <div className="rounded-[10px] border border-line bg-surface px-1 py-2.5 text-center">
-      <div className={`font-mono text-[16px] font-bold ${tone}`}>{value}</div>
-      <div className="mt-0.5 text-[10px] tracking-[0.04em] text-ink-dim">{label}</div>
+    <div className={`rounded-[14px] border bg-surface px-2 py-2.5 desk:px-3.5 desk:py-3 ${frame}`}>
+      <div className="truncate font-mono text-[9px] tracking-[0.08em] text-ink-dim uppercase desk:text-[10.5px]">
+        {label}
+      </div>
+      <div
+        className={`mt-1 font-display text-[17px] leading-none font-semibold tracking-[-0.02em] desk:text-[24px] ${tone}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
 function StatsRow({ stats }: { stats: StatsToday }): JSX.Element {
   return (
-    <div className="grid grid-cols-5 gap-1.5">
+    <div className="mt-3 grid grid-cols-5 gap-1.5 desk:gap-2.5">
       <Stat value={String(stats.sessions)} label="sessions" />
       <Stat value={String(stats.active)} label="active" tone="text-green" />
       <Stat value={fmtTokens(stats.tokens_in + stats.tokens_out)} label="tokens" />
-      <Stat value={fmtCost(stats.cost_usd)} label="cost" tone="text-amber" />
+      <Stat value={fmtCost(stats.cost_usd)} label="cost" tone="text-brand" />
       <Stat
         value={String(stats.errors)}
         label="errors"
         tone={stats.errors > 0 ? 'text-red' : ''}
+        frame={stats.errors > 0 ? 'border-red/35' : 'border-line'}
       />
     </div>
   );
@@ -93,16 +105,25 @@ export function Overview(): JSX.Element {
 
   return (
     <>
-      <SectionTitle>Today · {fmtTodayHeader()}</SectionTitle>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
+        <h1 className="font-display text-[22px] leading-tight font-semibold tracking-[-0.02em] desk:text-[26px]">
+          Today · {fmtTodayHeader()}
+        </h1>
+        {stats !== null && (
+          <span className="font-mono text-[11px] text-ink-dim">
+            {stats.sessions} sessions · {stats.active} active
+          </span>
+        )}
+      </div>
       {stats !== null ? (
         <StatsRow stats={stats} />
       ) : statsError ? (
-        <div className="font-mono text-[11px] text-ink-dim">stats unavailable</div>
+        <div className="mt-3 font-mono text-[11px] text-ink-dim">stats unavailable</div>
       ) : (
         <Loading label="stats…" />
       )}
 
-      <SectionTitle>Active sessions</SectionTitle>
+      <SectionTitle>Active now{live.length > 0 ? ` · ${live.length}` : ''}</SectionTitle>
       {error !== null && <ErrorBox message={error} onRetry={load} />}
       {sessions === null && error === null && <Loading label="sessions…" />}
       {sessions !== null && live.length === 0 && (
@@ -117,9 +138,19 @@ export function Overview(): JSX.Element {
 
       <SectionTitle>Recently completed</SectionTitle>
       {sessions !== null && completed.length === 0 && <Empty>nothing completed yet</Empty>}
-      {completed.map((s) => (
-        <SessionCard key={s.id} session={s} />
-      ))}
+      {completed.length > 0 && (
+        <div className="divide-y divide-line-soft overflow-hidden rounded-[14px] border border-line bg-surface">
+          {completed.map((s) => (
+            <SessionCard key={s.id} session={s} flat />
+          ))}
+          <Link
+            to="/sessions"
+            className="block px-3.5 py-2.5 font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
+          >
+            all sessions →
+          </Link>
+        </div>
+      )}
     </>
   );
 }

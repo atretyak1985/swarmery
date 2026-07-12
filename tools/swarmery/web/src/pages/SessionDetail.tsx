@@ -103,19 +103,24 @@ export function SessionDetailPage(): JSX.Element {
 
   return (
     <>
-      <BackLink />
-      <div className="font-mono text-[11px] text-amber">
-        {detail.projectSlug}
-        {detail.gitBranch !== null ? ` · ${detail.gitBranch}` : ''}
+      <div className="mb-2.5 flex items-center gap-2 pt-0.5 text-[12px] text-ink-dim">
+        <Link to="/sessions" className="shrink-0 transition-colors hover:text-ink">
+          ← Sessions
+        </Link>
+        <span aria-hidden="true">/</span>
+        <span className="truncate font-mono text-[11px] text-brand">
+          {detail.projectSlug}
+          {detail.gitBranch !== null ? ` · ${detail.gitBranch}` : ''}
+        </span>
       </div>
-      <h1 className="mt-0.5 mb-2 font-display text-[17px] leading-[1.3] font-bold">
+      <h1 className="mb-2 font-display text-[21px] leading-[1.3] font-semibold tracking-[-0.02em] desk:text-[24px]">
         {detail.title ?? detail.sessionUuid}
       </h1>
       <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 font-mono text-[11px] text-ink-dim">
         <Kv label="status" value={detail.status} tone={STATUS_TONES[detail.status]} />
         {detail.model !== null && <Kv label="model" value={detail.model} />}
         <Kv label="tokens" value={fmtTokens(facts.tokens)} />
-        <Kv label="cost" value={fmtCost(facts.cost)} tone="text-amber" />
+        <Kv label="cost" value={fmtCost(facts.cost)} tone="text-brand" />
         <Kv label="started" value={fmtDateTime(detail.startedAt)} />
         <Kv
           label={detail.endedAt !== null ? 'duration' : 'running'}
@@ -165,8 +170,8 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`-mb-px border-b-2 px-3.5 py-2 text-[12.5px] font-medium ${
-        active ? 'border-amber text-amber' : 'border-transparent text-ink-dim hover:text-ink'
+      className={`-mb-px border-b-2 px-3.5 py-2 text-[12.5px] font-medium transition-colors ${
+        active ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
       }`}
     >
       {children}
