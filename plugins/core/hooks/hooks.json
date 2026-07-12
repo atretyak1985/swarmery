@@ -30,7 +30,13 @@
       }
     ],
     "SessionStart": [
-      { "matcher": "", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh" } ] }
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/task-session-log.sh" }
+        ]
+      }
     ],
     "SessionEnd": [
       { "matcher": "", "hooks": [ { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-summary.sh" } ] }
