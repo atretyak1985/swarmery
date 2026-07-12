@@ -7,10 +7,13 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/version"
 )
 
-// Version is the CLI version reported by `swarmery status`.
-const Version = "0.1.0"
+// Version is the CLI version reported by `swarmery status` — re-exported from
+// the single shared source in internal/version (also served by /api/health).
+const Version = version.Version
 
 // CmdInstall implements `swarmery install [--port <n>]` (env: SWARMERY_PORT).
 // A port explicitly configured at install time is baked into the plist's
