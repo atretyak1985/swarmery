@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net/http/httptest"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -10,7 +12,9 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
 // Frozen contract (web/src/api/types.ts): exact JSON key sets of the WSMessage
@@ -25,6 +29,11 @@ var (
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",
 		"status", "durationMs", "payload",
+	}
+	// phase 2 — approvals (frozen at gate 2.2): PermissionRequest DTO keys.
+	permissionRequestKeys = []string{
+		"id", "sessionId", "toolName", "requestJson", "status",
+		"requestedAt", "resolvedAt", "resolvedVia", "reason", "expiresAt",
 	}
 )
 
@@ -154,6 +163,141 @@ func TestWSMessageShape(t *testing.T) {
 	}
 	if ev.ID != 1 || ev.Type == "" || ev.TS == "" {
 		t.Errorf("event payload = %+v, want hydrated event row 1", ev)
+	}
+}
+
+// TestWSPermissionMessageShape: golden-key check for the two phase-2 frames —
+// permission_requested / permission_resolved carry the full frozen
+// PermissionRequest DTO (docs/ws-protocol.md).
+func TestWSPermissionMessageShape(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	bus := ingest.NewBus()
+	AttachBus(bus)
+	svc := approvals.New(db, bus, approvals.Options{})
+	AttachApprovals(svc)
+	t.Cleanup(func() { AttachBus(nil); AttachApprovals(nil) })
+
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	// Mint a real permission_requests row through the service.
+	in, err := approvals.ParseHookStdin([]byte(hookBody("ws-shape", "Bash", "ls")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqID, ch, _, err := svc.Open(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		svc.Resolve(reqID, approvals.StatusApproved, "dashboard", "")
+		select {
+		case <-ch:
+		default:
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "/api/ws"
+	c, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial %s: %v", wsURL, err)
+	}
+	defer c.Close(websocket.StatusNormalClosure, "")
+
+	published := false
+	readFrame := func(note ingest.Notification) map[string]json.RawMessage {
+		t.Helper()
+		for {
+			if !published {
+				bus.Publish(note)
+			}
+			readCtx, readCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+			typ, data, err := c.Read(readCtx)
+			readCancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					t.Fatalf("read: %v", err)
+				}
+				continue // handler not subscribed yet — republish and retry
+			}
+			published = true
+			if typ != websocket.MessageText {
+				t.Fatalf("frame type = %v, want text", typ)
+			}
+			var frame map[string]json.RawMessage
+			if err := json.Unmarshal(data, &frame); err != nil {
+				t.Fatalf("frame is not a JSON object: %v\n%s", err, data)
+			}
+			return frame
+		}
+	}
+
+	frame := readFrame(ingest.Notification{Type: ingest.NotePermissionRequested, SessionID: 1, RequestID: reqID})
+	assertEnvelope(t, frame, "permission_requested")
+	assertPayloadKeys(t, frame, permissionRequestKeys)
+	var pr struct {
+		ID          int64  `json:"id"`
+		SessionID   int64  `json:"sessionId"`
+		ToolName    string `json:"toolName"`
+		RequestJSON string `json:"requestJson"`
+		Status      string `json:"status"`
+		ExpiresAt   string `json:"expiresAt"`
+	}
+	if err := json.Unmarshal(frame["payload"], &pr); err != nil {
+		t.Fatal(err)
+	}
+	if pr.ID != reqID || pr.ToolName != "Bash" || pr.Status != "pending" ||
+		pr.SessionID == 0 || pr.ExpiresAt == "" {
+		t.Errorf("permission_requested payload = %+v, want hydrated pending row %d", pr, reqID)
+	}
+	// requestJson is the raw hook stdin as a JSON STRING (frozen contract).
+	var echoed map[string]any
+	if err := json.Unmarshal([]byte(pr.RequestJSON), &echoed); err != nil {
+		t.Fatalf("requestJson is not a JSON string of the stdin: %v", err)
+	}
+	if echoed["session_id"] != "ws-shape" {
+		t.Errorf("requestJson lost the verbatim stdin: %v", echoed)
+	}
+
+	// Resolve → permission_resolved carries the same DTO with resolution fields.
+	if err := svc.Resolve(reqID, approvals.StatusDenied, "dashboard", "nope"); err != nil {
+		t.Fatal(err)
+	}
+	<-ch
+	frame = readFrame(ingest.Notification{Type: ingest.NotePermissionResolved, SessionID: 1, RequestID: reqID})
+	for {
+		var typ string
+		json.Unmarshal(frame["type"], &typ)
+		if typ == "permission_resolved" {
+			break
+		}
+		// Skip the session_updated/event_appended frames the resolve produced.
+		frame = readFrame(ingest.Notification{})
+	}
+	assertPayloadKeys(t, frame, permissionRequestKeys)
+	var resolved struct {
+		Status      string  `json:"status"`
+		ResolvedVia *string `json:"resolvedVia"`
+		Reason      *string `json:"reason"`
+		ResolvedAt  *string `json:"resolvedAt"`
+	}
+	if err := json.Unmarshal(frame["payload"], &resolved); err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Status != "denied" || resolved.ResolvedVia == nil || *resolved.ResolvedVia != "dashboard" ||
+		resolved.Reason == nil || *resolved.Reason != "nope" || resolved.ResolvedAt == nil {
+		t.Errorf("permission_resolved payload = %+v", resolved)
 	}
 }
 

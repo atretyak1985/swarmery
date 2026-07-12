@@ -121,6 +121,17 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 			return nil, nil
 		}
 		payload = wsEventPayload{SessionID: n.SessionID, Event: e}
+	case ingest.NotePermissionRequested, ingest.NotePermissionResolved:
+		// phase 2 — approvals: payload is the full PermissionRequest DTO
+		// (frozen at gate 2.2; see docs/ws-protocol.md).
+		p, err := h.permissionRequestByID(n.RequestID)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, nil
+		}
+		payload = p
 	default:
 		return nil, errors.New("unknown notification type " + n.Type)
 	}
