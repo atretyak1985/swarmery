@@ -75,14 +75,14 @@ byte_offset, inode)` for incremental tail across restarts.
 
 ## Success criteria (MVP done)
 
-- [ ] `make build` produces one binary with embedded SPA; `go vet`, `go test`, `npm run build` green
-- [ ] Full backfill of this machine's history (13 projects) completes with 0 pipeline crashes
-- [ ] New live `claude` session appears in Overview in < 3 s without page reload
-- [ ] Repeated full backfill creates 0 duplicate events (dedup_key)
-- [ ] Session detail shows nested subagent block and unified diffs on a real session
-- [ ] `/api/stats/today` returns tokens + cost; unknown model → cost NULL (never 0)
-- [ ] `swarmery install` → daemon running after `launchctl kickstart`; `uninstall` clean
-- [ ] No secrets in committed fixtures (grep gate clean)
+- [x] `make build` produces one binary with embedded SPA; `go vet`, `go test`, `npm run build` green
+- [x] Full backfill of this machine's history (13 projects) completes with 0 pipeline crashes
+- [x] New live `claude` session appears in Overview in < 3 s without page reload
+- [x] Repeated full backfill creates 0 duplicate events (dedup_key)
+- [x] Session detail shows nested subagent block and unified diffs on a real session
+- [x] `/api/stats/today` returns tokens + cost; unknown model → cost NULL (never 0)
+- [x] `swarmery install` → daemon running after `launchctl kickstart`; `uninstall` clean
+- [x] No secrets in committed fixtures (grep gate clean)
 
 ## Fixes vs the superseded draft (carried R1–R7 + new F1–F8)
 
@@ -114,10 +114,10 @@ R7 `--port`/`SWARMERY_PORT`. New in v2:
 
 ## Progress checklist
 
-- Phase 1: [ ] 01 [ ] 02 [ ] 03-GATE
-- Phase 2: [ ] 04 [ ] 05-GATE
-- Phase 3: [ ] 06 [ ] 07 [ ] 08 [ ] 09-GATE
-- Phase 4: [ ] 10 [ ] 11 [ ] 12-GATE
+- Phase 1: [x] 01 [x] 02 [x] 03-GATE
+- Phase 2: [x] 04 [x] 05-GATE
+- Phase 3: [x] 06 [x] 07 [x] 08 [x] 09-GATE
+- Phase 4: [x] 10 [x] 11 [ ] 12-GATE (verdict pending owner)
 
 ## How to use
 
