@@ -5,7 +5,14 @@
 import { useMemo, useState } from 'react';
 import type { Event, SessionDetail, Turn } from '../../api/types';
 import { fmtDurationMs, fmtSpan, fmtTime } from '../../lib/format';
-import { argSummary, errorText, payloadJson, pickString, subagentName } from '../../lib/payload';
+import {
+  argSummary,
+  errorText,
+  payloadJson,
+  pickString,
+  subagentDescription,
+  subagentName,
+} from '../../lib/payload';
 import { buildTimeline, countEvents, type TimelineNode } from '../../lib/timeline';
 import { Empty } from '../../components/ui';
 
@@ -132,7 +139,10 @@ function SubagentBlock({
   node: Extract<TimelineNode, { kind: 'subagent' }>;
 }): JSX.Element {
   const [open, setOpen] = useState(true);
-  const name = subagentName(node.start);
+  // WHO did WHAT: description is the primary label; agent type is a dimmed
+  // suffix (or the fallback label when the payload has no description).
+  const type = subagentName(node.start);
+  const description = subagentDescription(node.start);
   const events = countEvents(node.children);
   const duration =
     node.stop !== null
@@ -153,8 +163,10 @@ function SubagentBlock({
         >
           ▶
         </span>
-        <span className="font-bold text-blue">⬡ {name}</span>
-        <span className="truncate text-ink-dim">subagent · {events} events</span>
+        <span className="min-w-0 truncate font-bold text-blue">⬡ {description ?? type}</span>
+        <span className="shrink-0 whitespace-nowrap text-ink-dim">
+          {description !== null ? type : 'subagent'} · {events} events
+        </span>
         <span className={`ml-auto shrink-0 ${node.stop === null ? 'text-green' : 'text-ink-dim'}`}>
           {duration}
         </span>

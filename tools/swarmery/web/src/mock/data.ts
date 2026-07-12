@@ -497,6 +497,113 @@ const s1FileChanges: FileChange[] = [
   },
 ];
 
+// --- Session 2 detail: many agents of one type --------------------------------
+// Exercises the aggregated SummaryChips path (>4 agents → "general-purpose ×5"
+// with the task descriptions in the native tooltip) and description-first
+// subagent headers in the timeline.
+
+const s2Turns: Turn[] = [
+  {
+    id: 21,
+    seq: 1,
+    role: 'user',
+    messageId: null,
+    model: null,
+    startedAt: iso(6 * MIN),
+    endedAt: iso(6 * MIN),
+    tokensIn: null,
+    tokensOut: null,
+    tokensCacheRead: null,
+    tokensCacheWrite: null,
+    costUsd: null,
+  },
+  {
+    id: 22,
+    seq: 2,
+    role: 'assistant',
+    model: 'claude-fable-5',
+    messageId: 'msg_01AAAAAAAAAAAAAAAAAAAA0003',
+    startedAt: iso(6 * MIN - 3000),
+    endedAt: null,
+    tokensIn: 122_000,
+    tokensOut: 19_000,
+    tokensCacheRead: 98_000,
+    tokensCacheWrite: 6_000,
+    costUsd: 0.34,
+  },
+];
+
+const S2_AGENT_TASKS: readonly string[] = [
+  'Agent A: live ingest pipeline',
+  'Agent B: session list + filters',
+  'Agent C: timeline rendering',
+  'Gate 09 checks for branches B and C',
+  'Docs sweep: orchestration summary',
+];
+
+const s2Events: Event[] = (() => {
+  const events: Event[] = [
+    {
+      id: 200,
+      turnId: 21,
+      ts: iso(6 * MIN),
+      type: 'user_prompt',
+      toolName: null,
+      parentEventId: null,
+      status: null,
+      durationMs: null,
+      payload: { text: 'Analyze the agent system and summarize orchestration.' },
+    },
+  ];
+  let id = 200;
+  S2_AGENT_TASKS.forEach((description, i) => {
+    const startId = (id += 1);
+    const startedAgo = (5.6 - i * 0.9) * MIN;
+    events.push(
+      {
+        id: startId,
+        turnId: 22,
+        ts: iso(startedAgo),
+        type: 'subagent_start',
+        toolName: 'Agent',
+        parentEventId: null,
+        status: 'ok',
+        durationMs: null,
+        // Real daemon payload keys: description, prompt, subagent_type, tool_use_id.
+        payload: {
+          description,
+          prompt: `${description} — full task brief`,
+          subagent_type: 'general-purpose',
+          tool_use_id: `toolu_mock_${String(startId)}`,
+        },
+      },
+      {
+        id: (id += 1),
+        turnId: 22,
+        ts: iso(startedAgo - 0.2 * MIN),
+        type: 'tool_call',
+        toolName: 'Read',
+        parentEventId: startId,
+        status: 'ok',
+        durationMs: 350,
+        payload: { file_path: `internal/orchestrator/part-${String(i + 1)}.go` },
+      },
+      {
+        id: (id += 1),
+        turnId: 22,
+        ts: iso(startedAgo - 0.7 * MIN),
+        type: 'subagent_stop',
+        toolName: 'Agent',
+        parentEventId: startId,
+        status: 'ok',
+        durationMs: 42_000,
+        payload: { agentType: 'general-purpose', result: 'done' },
+      },
+    );
+  });
+  return events;
+})();
+
 // --- Simpler details for the remaining sessions ------------------------------
 
 function simpleDetail(session: Session, events: Event[], turns: Turn[]): SessionDetail {
@@ -526,8 +633,12 @@ function buildDetails(): Map<number, SessionDetail> {
   if (s1) {
     details.set(1, { ...s1, turns: s1Turns, events: s1Events, fileChanges: s1FileChanges });
   }
+  const s2 = mockSessions[1];
+  if (s2) {
+    details.set(2, { ...s2, turns: s2Turns, events: s2Events, fileChanges: [] });
+  }
   let eventId = 500;
-  for (const session of mockSessions.slice(1)) {
+  for (const session of mockSessions.slice(2)) {
     const t1 = promptTurn(session.id * 10 + 1, 1, session.startedAt);
     const t2 = promptTurn(session.id * 10 + 2, 2, session.startedAt);
     const events: Event[] = [

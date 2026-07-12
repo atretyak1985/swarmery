@@ -5,24 +5,53 @@
 
 import { useMemo } from 'react';
 import type { Event } from '../../api/types';
-import { pickString, skillName } from '../../lib/payload';
+import { pickString, subagentDescription, skillName } from '../../lib/payload';
 
 interface AgentChip {
+  /** Chip label: agent type (aggregated) or task description (small sessions). */
   name: string;
   count: number;
+  /** Native tooltip: the task descriptions hidden behind an aggregated chip. */
+  title: string | null;
 }
 
+/** With this many agents or fewer, label chips by description (WHO did WHAT). */
+const DESCRIBE_ALL_THRESHOLD = 4;
+
 function deriveAgents(events: Event[]): AgentChip[] {
-  const counts = new Map<string, number>();
+  const starts: { type: string; description: string | null }[] = [];
   for (const event of events) {
     if (event.type !== 'subagent_start') continue;
-    // Real daemon payloads carry `subagent_type`; stop rows / older fixtures
-    // use `agentType`. Skip rows where no name can be recovered.
-    const name = pickString(event.payload, ['subagent_type', 'agentType', 'agent_type', 'name']);
-    if (name === null) continue;
-    counts.set(name, (counts.get(name) ?? 0) + 1);
+    // Real daemon payloads carry `subagent_type` (+ `description`); stop rows /
+    // older fixtures use `agentType`. Skip rows where no name can be recovered.
+    const type = pickString(event.payload, ['subagent_type', 'agentType', 'agent_type', 'name']);
+    if (type === null) continue;
+    starts.push({ type, description: subagentDescription(event) });
   }
-  return [...counts.entries()].map(([name, count]) => ({ name, count }));
+
+  // Small sessions: one chip per agent, labeled by its task description.
+  if (starts.length <= DESCRIBE_ALL_THRESHOLD) {
+    return starts.map(({ type, description }) => ({
+      name: description ?? type,
+      count: 1,
+      title: description !== null ? type : null,
+    }));
+  }
+
+  // Larger sessions: keep chips compact by aggregating per type, but expose
+  // the individual task descriptions via a native tooltip.
+  const byType = new Map<string, { count: number; descriptions: string[] }>();
+  for (const { type, description } of starts) {
+    const entry = byType.get(type) ?? { count: 0, descriptions: [] };
+    entry.count += 1;
+    if (description !== null) entry.descriptions.push(description);
+    byType.set(type, entry);
+  }
+  return [...byType.entries()].map(([name, { count, descriptions }]) => ({
+    name,
+    count,
+    title: descriptions.length > 0 ? descriptions.join('\n') : null,
+  }));
 }
 
 function deriveSkills(events: Event[]): string[] {
@@ -62,10 +91,11 @@ export function SummaryChips({ events }: { events: Event[] }): JSX.Element | nul
     <div className="mt-2.5 flex flex-col gap-1.5">
       {agents.length > 0 && (
         <ChipGroup label="агенти" tone="text-blue/70">
-          {agents.map(({ name, count }) => (
+          {agents.map(({ name, count, title }, i) => (
             <span
-              key={name}
-              className="rounded-full border border-blue/30 bg-blue/10 px-2 py-0.5 font-mono text-[11px] text-blue"
+              key={`${name}-${String(i)}`}
+              title={title ?? undefined}
+              className="max-w-[360px] truncate rounded-full border border-blue/30 bg-blue/10 px-2 py-0.5 font-mono text-[11px] text-blue"
             >
               <span aria-hidden="true">⬡ </span>
               {name}

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
@@ -112,4 +113,41 @@ func TestEndpoints(t *testing.T) {
 func jsonNum(f float64) string {
 	b, _ := json.Marshal(int64(f))
 	return string(b)
+}
+
+// TestSPACacheHeaders pins the cache contract: index.html (and the SPA
+// fallback for client-side routes) must never be cached across daemon
+// upgrades, while content-hashed /assets/* may be cached forever.
+func TestSPACacheHeaders(t *testing.T) {
+	dist := fstest.MapFS{
+		"index.html":              {Data: []byte("<!doctype html><title>spa</title>")},
+		"assets/index-abc123.js":  {Data: []byte("console.log('bundle')")},
+		"assets/index-abc123.css": {Data: []byte("body{}")},
+	}
+	srv := httptest.NewServer(spaHandler(dist))
+	t.Cleanup(srv.Close)
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/", "no-cache"},
+		{"/index.html", "no-cache"},
+		{"/sessions/42", "no-cache"}, // SPA fallback for a client-side route
+		{"/assets/index-abc123.js", "public, max-age=31536000, immutable"},
+		{"/assets/index-abc123.css", "public, max-age=31536000, immutable"},
+	}
+	for _, tc := range cases {
+		resp, err := http.Get(srv.URL + tc.path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", tc.path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want 200", tc.path, resp.StatusCode)
+		}
+		if got := resp.Header.Get("Cache-Control"); got != tc.want {
+			t.Errorf("GET %s: Cache-Control = %q, want %q", tc.path, got, tc.want)
+		}
+	}
 }

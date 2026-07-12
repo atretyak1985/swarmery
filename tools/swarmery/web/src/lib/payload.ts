@@ -75,6 +75,15 @@ export function subagentName(event: Event): string {
 }
 
 /**
+ * Human task description from a subagent_start payload (real daemon rows
+ * carry `description` next to `subagent_type`). Null when absent so callers
+ * can fall back to the type.
+ */
+export function subagentDescription(event: Event): string | null {
+  return pickString(event.payload, ['description']);
+}
+
+/**
  * Skill name from a skill_use payload. Real daemon rows nest it under
  * `input.skill` / `result.commandName`; flat `skill`/`name` kept as fallback.
  */

@@ -6,8 +6,18 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/web"
+)
+
+// Cache-Control values for the embedded SPA. Vite content-hashes everything
+// under /assets/, so those may be cached forever; index.html (and any other
+// non-hashed entry point) must be revalidated on every load or browsers keep
+// serving a stale bundle across daemon binary upgrades.
+const (
+	cacheControlNoCache   = "no-cache"
+	cacheControlImmutable = "public, max-age=31536000, immutable"
 )
 
 // NewServer builds the full HTTP handler: API routes + embedded SPA fallback.
@@ -31,6 +41,11 @@ func spaHandler(dist fs.FS) http.Handler {
 		path := r.URL.Path
 		if path != "/" {
 			if _, err := fs.Stat(dist, path[1:]); err == nil {
+				if strings.HasPrefix(path, "/assets/") {
+					w.Header().Set("Cache-Control", cacheControlImmutable)
+				} else {
+					w.Header().Set("Cache-Control", cacheControlNoCache)
+				}
 				fileServer.ServeHTTP(w, r)
 				return
 			}
@@ -41,6 +56,7 @@ func spaHandler(dist fs.FS) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", cacheControlNoCache)
 		w.Write(index)
 	})
 }
