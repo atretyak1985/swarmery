@@ -78,11 +78,11 @@ Completion Report у docs/plan/step-08-agent-c-metrics.md (worktree).
 
 ## Success Criteria
 
-- [ ] `go test ./internal/cost/...` green with table-driven cases incl. cache tokens and unknown-model→NULL
-- [ ] `pricing.json` values match platform.claude.com at implementation time (cite URL in commit body)
-- [ ] `curl ':7777/api/stats/today'` on fixtures returns numbers consistent with fixture usage sums
-- [ ] `swarmery recost` recomputes all turns idempotently
-- [ ] Diff touches only `internal/cost`, `config/`, one `EnrichTurn` call in ingest, routes.go wave-C block, `cmd/`
+- [x] `go test ./internal/cost/...` green with table-driven cases incl. cache tokens and unknown-model→NULL
+- [x] `pricing.json` values match platform.claude.com at implementation time (cite URL in commit body)
+- [x] `curl ':7777/api/stats/today'` on fixtures returns numbers consistent with fixture usage sums
+- [x] `swarmery recost` recomputes all turns idempotently
+- [x] Diff touches only `internal/cost`, `config/`, one `EnrichTurn` call in ingest, routes.go wave-C block, `cmd/` (+ new `internal/api/stats*.go` handler files, allowed)
 
 ## Navigation
 
@@ -91,5 +91,32 @@ Previous: [step-07-agent-b-frontend.md](step-07-agent-b-frontend.md) (parallel) 
 ### Completion Report
 
 ```
-Date/agent: · Branch head SHA: · Pricing source URL: · Models priced: · CONTRACT-REQUESTS entries:
+Date/agent: 2026-07-12 · Agent C (cost & today-stats), Claude Code session
+Branch head SHA: 5adf313 (code; this docs commit follows)
+Pricing source URL: https://platform.claude.com/docs/en/about-claude/pricing (fetched 2026-07-12)
+Models priced: claude-fable-5, claude-mythos-5, claude-opus-4-8, claude-opus-4-7,
+  claude-opus-4-6, claude-opus-4-5, claude-opus-4-1, claude-sonnet-5,
+  claude-sonnet-4-6, claude-sonnet-4-5, claude-haiku-4-5
+  (+ fallback_prefixes for date-suffixed ids, e.g. claude-haiku-4-5-20251001)
+CONTRACT-REQUESTS entries: 1 — add `model: string | null` to Turn (turns.model
+  column) so recost can price per-turn exactly instead of via sessions.model.
+
+Validation evidence:
+- go vet ./... && go test ./... green (cost: 4 test funcs / 12 subtests; api:
+  stats endpoint httptest incl. all-unpriced→null and day-boundary cases).
+- Fixtures re-dated to today, ingested into scratch --db, served, curled:
+  {"sessions":3,"active":0,"tokens_in":25891,"tokens_out":4976,
+   "cost_usd":1.020192,"errors":1}
+  — identical to independently computed fixture sums (dedup by message.id).
+- `swarmery recost` on the scratch db: 18 turns examined, 14 priced,
+  4 no-usage (NULL); values identical to ingest-time costs and stable across
+  repeated runs; daemon-running warning fires when the API port answers.
+
+Notes for integration (step 10):
+- cache_write priced at the 5m-TTL rate; JSONL usage doesn't split 5m/1h.
+- claude-sonnet-5 carries introductory pricing (ends 2026-08-31) — bump
+  pricing.json + `swarmery recost` on 2026-09-01.
+- SWARMERY_PRICING env overrides the embedded table without a rebuild.
+- Sidechain (subagent) usage is not priced: sidechains create no turns rows
+  by design; their tokens are visible via subagent_stop payload totalTokens.
 ```

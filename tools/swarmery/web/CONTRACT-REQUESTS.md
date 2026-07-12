@@ -20,3 +20,19 @@ Request format:
 ---
 
 <!-- Append requests below this line. -->
+
+## 2026-07-12 — feat/swarmery-metrics (wave C) — per-turn model for exact recost
+
+- What: add `model: string | null` to `Turn` (backed by a new `turns.model` column).
+- Why: cost is priced per turn, but the model id lives per API message (JSONL §6),
+  not per session. Ingest prices with the exact per-message model; `swarmery recost`
+  can only fall back to `sessions.model`, which drifts when a session switches
+  models mid-file (rare, but real — e.g. fallback models). Persisting the model on
+  the turn makes recost exact and lets the UI attribute cost per model.
+- Proposed shape:
+  ```ts
+  export interface Turn {
+    // …existing fields…
+    model: string | null; // API message model; NULL for user turns
+  }
+  ```
