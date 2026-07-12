@@ -448,5 +448,17 @@ turn (one per API call) — see contradiction C2.
    simply stops appearing. Duration of `skill_use` events is therefore approximate.
 10. **`toolUseResult` for MCP tools** — shape not examined (low counts in corpus).
 11. **Concurrent writes**: are main-file lines ever rewritten in place (vs append-only)?
-    Checkpoint records suggest occasional rewrites; needs a watch-based experiment before
-    the ingest daemon assumes tail-follow is safe.
+    ~~Checkpoint records suggest occasional rewrites; needs a watch-based experiment before
+    the ingest daemon assumes tail-follow is safe.~~
+    **RESOLVED (2026-07-12, step 06 watch experiment): transcripts are append-only.**
+    Method: the 4 most recently modified transcripts (1 main + 3 sidechain files, all
+    being actively written by live Claude Code sessions) were polled every 5 s for 70 s,
+    recording size, inode, and the SHA-256 of the first *initial-size* bytes. Result
+    across all 14 polls × 4 files: sizes only ever grew (e.g. 198 815 → 242 097 bytes,
+    880 097 → 906 851 bytes), the byte-prefix hash **never changed**, and inodes were
+    stable — no truncation, no in-place rewrite, no rename-replace. Checkpoint records
+    (`last-prompt`, `mode`, …) are *appended* state snapshots, not edits of earlier lines.
+    Consequence for ingest: tail-follow from a persisted byte offset is safe. The daemon
+    still keeps two defensive resets (offset → 0 when the stat inode differs from the
+    stored one, or when the file shrank below the stored offset) to survive file
+    recreation — e.g. a deleted and re-run session — with dedup absorbing the re-read.

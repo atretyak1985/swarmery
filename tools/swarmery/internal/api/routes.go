@@ -13,7 +13,7 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/sessions/{id}", h.getSession)
 
 	// wave A: WS
-	// (live updates via WebSocket — registered by branch A; do not add here)
+	mux.HandleFunc("GET /api/ws", h.ws)
 
 	// wave C: stats
 	// (overview/stats endpoints — registered by branch C; do not add here)

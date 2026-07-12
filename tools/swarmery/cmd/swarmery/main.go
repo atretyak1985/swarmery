@@ -1,16 +1,19 @@
 // Command swarmery is the control-plane daemon CLI:
 //
 //	swarmery ingest <file.jsonl>   parse one transcript into the local DB
-//	swarmery serve                 serve the REST API + embedded SPA
+//	swarmery backfill              one-shot full scan of the projects root
+//	swarmery serve                 serve the API/SPA + live ingest pipeline
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
@@ -29,6 +32,8 @@ func main() {
 	switch os.Args[1] {
 	case "ingest":
 		err = cmdIngest(os.Args[2:])
+	case "backfill":
+		err = cmdBackfill(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
 	case "-h", "--help", "help":
@@ -45,8 +50,36 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  swarmery ingest [--db <path>] <file.jsonl>
-  swarmery serve  [--db <path>] [--port <n>]   (env: SWARMERY_PORT)`)
+  swarmery ingest   [--db <path>] <file.jsonl>
+  swarmery backfill [--db <path>] [--projects-root <dir>]
+  swarmery serve    [--db <path>] [--port <n>] [--projects-root <dir>]
+                    [--rescan <dur>] [--status-tick <dur>]
+                    [--active-window <dur>] [--idle-window <dur>] [--no-ingest]
+  env: SWARMERY_PORT, SWARMERY_PROJECTS_ROOT`)
+}
+
+// defaultProjectsRoot resolves SWARMERY_PROJECTS_ROOT, falling back to
+// ~/.claude/projects.
+func defaultProjectsRoot() string {
+	if v := os.Getenv("SWARMERY_PROJECTS_ROOT"); v != "" {
+		return v
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".claude/projects"
+	}
+	return home + "/.claude/projects"
+}
+
+func pipelineFlags(fs *flag.FlagSet) *ingest.Config {
+	cfg := &ingest.Config{}
+	fs.StringVar(&cfg.ProjectsRoot, "projects-root", defaultProjectsRoot(),
+		"Claude Code projects root to ingest (env: SWARMERY_PROJECTS_ROOT)")
+	fs.DurationVar(&cfg.RescanInterval, "rescan", 2*time.Second, "fallback rescan interval")
+	fs.DurationVar(&cfg.StatusInterval, "status-tick", 10*time.Second, "session-status recompute interval")
+	fs.DurationVar(&cfg.Thresholds.Active, "active-window", 2*time.Minute, "session considered active within this window")
+	fs.DurationVar(&cfg.Thresholds.Idle, "idle-window", 30*time.Minute, "session considered idle within this window")
+	return cfg
 }
 
 func dbFlag(fs *flag.FlagSet) *string {
@@ -80,10 +113,10 @@ func cmdIngest(args []string) error {
 	return nil
 }
 
-func cmdServe(args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+func cmdBackfill(args []string) error {
+	fs := flag.NewFlagSet("backfill", flag.ExitOnError)
 	dbPath := dbFlag(fs)
-	port := fs.Int("port", envPort(), "HTTP port (env: SWARMERY_PORT)")
+	cfg := pipelineFlags(fs)
 	fs.Parse(args)
 
 	db, err := store.Open(*dbPath)
@@ -91,6 +124,39 @@ func cmdServe(args []string) error {
 		return err
 	}
 	defer db.Close()
+
+	if _, err := os.Stat(cfg.ProjectsRoot); err != nil {
+		return fmt.Errorf("projects root: %w", err)
+	}
+	ingest.NewPipeline(db, *cfg, nil).Backfill(context.Background())
+	return nil
+}
+
+func cmdServe(args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	port := fs.Int("port", envPort(), "HTTP port (env: SWARMERY_PORT)")
+	noIngest := fs.Bool("no-ingest", false, "serve the API only, without the live ingest pipeline")
+	cfg := pipelineFlags(fs)
+	fs.Parse(args)
+
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if !*noIngest {
+		bus := ingest.NewBus()
+		api.AttachBus(bus)
+		pipeline := ingest.NewPipeline(db, *cfg, bus)
+		go func() {
+			if err := pipeline.Run(context.Background()); err != nil && err != context.Canceled {
+				log.Printf("error: ingest pipeline stopped: %v", err)
+			}
+		}()
+		log.Printf("swarmery ingest pipeline watching %s (rescan %s)", cfg.ProjectsRoot, cfg.RescanInterval)
+	}
 
 	handler, err := api.NewServer(db)
 	if err != nil {

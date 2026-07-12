@@ -32,7 +32,6 @@ const (
 	maxLineBytes    = 64 << 20 // transcripts embed whole file contents; lines get big
 	payloadStrLimit = 2048     // truncation limit for long strings inside payloads
 	titleLimit      = 120
-	activeWindow    = 10 * time.Minute // mtime heuristic for active vs idle (C5)
 )
 
 // File ingests one main transcript .jsonl and any sidechain transcripts under
@@ -63,8 +62,8 @@ func File(db *sql.DB, path string) (Stats, error) {
 	}
 	defer tx.Rollback()
 
-	ing := &ingester{tx: tx, stats: &stats}
-	if err := ing.upsertProjectAndSession(recs, fi); err != nil {
+	ing := &ingester{tx: tx, stats: &stats, thresholds: DefaultThresholds()}
+	if err := ing.upsertProjectAndSession(recs, fi.ModTime(), false); err != nil {
 		return stats, err
 	}
 	if err := ing.processRecords(recs, absPath, false, "", 0); err != nil {
@@ -128,11 +127,16 @@ func readRecords(path string, stats *Stats) ([]record, int64, error) {
 
 // ingester carries per-run state across main + sidechain files.
 type ingester struct {
-	tx    *sql.Tx
-	stats *Stats
+	tx         *sql.Tx
+	stats      *Stats
+	thresholds Thresholds
 
 	projectID int64
 	sessionID int64
+
+	// live-pipeline bookkeeping (consumed by the event bus after commit).
+	sessionCreated bool
+	newEventIDs    []int64
 
 	// pending tool_use calls awaiting their tool_result (keyed by toolu_… id).
 	pending map[string]*pendingTool
@@ -151,11 +155,14 @@ type pendingTool struct {
 
 // ── session / project bookkeeping ────────────────────────────────────────────
 
-func (in *ingester) upsertProjectAndSession(recs []record, fi os.FileInfo) error {
+// upsertProjectAndSession registers/updates the project and session rows for a
+// batch of records. mtime is the file's mtime fallback for activity when no
+// record carries a timestamp. In sidechain mode title/model are never taken
+// from the batch (the sidechain opener repeats the Agent prompt, §7).
+func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, sidechain bool) error {
 	var (
 		sessionUUID, cwd, branch, model, firstTS, lastTS string
 		title, firstPrompt                               string
-		lastEnvelopeSubtype                              string
 	)
 	for i := range recs {
 		r := &recs[i]
@@ -175,11 +182,9 @@ func (in *ingester) upsertProjectAndSession(recs []record, fi os.FileInfo) error
 			if branch == "" && r.GitBranch != "" {
 				branch = r.GitBranch
 			}
-			if r.Type == "system" {
-				lastEnvelopeSubtype = r.Subtype
-			} else {
-				lastEnvelopeSubtype = ""
-			}
+		}
+		if sidechain {
+			continue
 		}
 		switch r.Type {
 		case "ai-title":
@@ -208,65 +213,78 @@ func (in *ingester) upsertProjectAndSession(recs []record, fi os.FileInfo) error
 	if sessionUUID == "" {
 		return fmt.Errorf("no sessionId found in transcript")
 	}
-	if title == "" {
-		title = firstPrompt
+	// title holds an ai-title here (authoritative, may overwrite on update);
+	// firstPrompt is only an initial fallback — a tail batch's "first" prompt
+	// is NOT the session's first prompt, so it never overwrites (see below).
+	insertTitle := title
+	if insertTitle == "" {
+		insertTitle = firstPrompt
 	}
 
-	// Status heuristic (C5): only active | idle | completed in MVP.
-	status := "active"
-	if lastEnvelopeSubtype == "turn_duration" {
-		status = "completed"
-	} else if time.Since(fi.ModTime()) > activeWindow {
-		status = "idle"
+	// Status heuristic (C5): only active | idle | completed in MVP, purely
+	// time-based so the ingest path and the status ticker agree.
+	lastActivity := parseTS(lastTS)
+	if lastActivity.IsZero() {
+		lastActivity = mtime
 	}
+	status := StatusFor(lastActivity, time.Now(), in.thresholds)
 
-	// Project keyed by cwd path; slug derived as '/' → '-' (§1).
-	if cwd == "" {
-		cwd = "(unknown)"
-	}
-	slug := strings.ReplaceAll(cwd, "/", "-")
-	err := in.tx.QueryRow(`SELECT id FROM projects WHERE path = ?`, cwd).Scan(&in.projectID)
+	// Resolve the session first: mid-file tail batches may carry no cwd, so an
+	// existing session must never depend on batch-derived project fields.
+	err := in.tx.QueryRow(
+		`SELECT id, project_id FROM sessions WHERE session_uuid = ?`,
+		sessionUUID).Scan(&in.sessionID, &in.projectID)
 	switch {
 	case err == sql.ErrNoRows:
-		res, err := in.tx.Exec(
-			`INSERT INTO projects (path, slug, first_seen, last_activity) VALUES (?, ?, ?, ?)`,
-			cwd, slug, firstTS, lastTS)
-		if err != nil {
-			return fmt.Errorf("insert project: %w", err)
+		// Project keyed by cwd path; slug derived as '/' → '-' (§1).
+		if cwd == "" {
+			cwd = "(unknown)"
 		}
-		in.projectID, _ = res.LastInsertId()
-		in.stats.Projects++
-	case err != nil:
-		return err
-	default:
-		if _, err := in.tx.Exec(
-			`UPDATE projects SET last_activity = MAX(COALESCE(last_activity,''), ?) WHERE id = ?`,
-			lastTS, in.projectID); err != nil {
-			return err
+		slug := strings.ReplaceAll(cwd, "/", "-")
+		perr := in.tx.QueryRow(`SELECT id FROM projects WHERE path = ?`, cwd).Scan(&in.projectID)
+		switch {
+		case perr == sql.ErrNoRows:
+			res, err := in.tx.Exec(
+				`INSERT INTO projects (path, slug, first_seen, last_activity) VALUES (?, ?, ?, ?)`,
+				cwd, slug, firstTS, lastTS)
+			if err != nil {
+				return fmt.Errorf("insert project: %w", err)
+			}
+			in.projectID, _ = res.LastInsertId()
+			in.stats.Projects++
+		case perr != nil:
+			return perr
 		}
-	}
 
-	err = in.tx.QueryRow(`SELECT id FROM sessions WHERE session_uuid = ?`, sessionUUID).Scan(&in.sessionID)
-	switch {
-	case err == sql.ErrNoRows:
 		res, err := in.tx.Exec(
 			`INSERT INTO sessions (project_id, session_uuid, model, git_branch, cwd, status,
 			                       started_at, ended_at, title, source)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'jsonl')`,
 			in.projectID, sessionUUID, nullStr(model), nullStr(branch), cwd, status,
-			firstTS, nullStr(lastTS), nullStr(title))
+			firstTS, nullStr(lastTS), nullStr(insertTitle))
 		if err != nil {
 			return fmt.Errorf("insert session: %w", err)
 		}
 		in.sessionID, _ = res.LastInsertId()
 		in.stats.Sessions++
+		in.sessionCreated = true
 	case err != nil:
 		return err
 	default:
 		if _, err := in.tx.Exec(
-			`UPDATE sessions SET model = COALESCE(?, model), status = ?, ended_at = ?,
-			                     title = COALESCE(?, title) WHERE id = ?`,
-			nullStr(model), status, nullStr(lastTS), nullStr(title), in.sessionID); err != nil {
+			`UPDATE sessions SET model = COALESCE(?, model), status = ?,
+			                     ended_at = CASE WHEN ? = '' THEN ended_at
+			                                     ELSE MAX(COALESCE(ended_at,''), ?) END,
+			                     title = COALESCE(?, COALESCE(title, ?)) WHERE id = ?`,
+			nullStr(model), status, lastTS, lastTS,
+			nullStr(title), nullStr(firstPrompt), in.sessionID); err != nil {
+			return err
+		}
+	}
+	if lastTS != "" {
+		if _, err := in.tx.Exec(
+			`UPDATE projects SET last_activity = MAX(COALESCE(last_activity,''), ?) WHERE id = ?`,
+			lastTS, in.projectID); err != nil {
 			return err
 		}
 	}
@@ -482,7 +500,13 @@ func (in *ingester) openToolCall(r *record, b contentBlock, dedup string, turnID
 func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, parentEventID int64) error {
 	p, ok := in.pending[b.ToolUseID]
 	if !ok {
-		return nil // result without an observed tool_use (e.g. partial file) — skip
+		// Incremental tail: the tool_use may have been ingested in an earlier
+		// batch — recover the still-open event from the DB (nil if unknown or
+		// already closed; closed events need no further work).
+		p = in.recoverPending(b.ToolUseID)
+		if p == nil {
+			return nil
+		}
 	}
 	delete(in.pending, b.ToolUseID)
 
@@ -553,6 +577,38 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 		}
 	}
 	return nil
+}
+
+// recoverPending rebuilds a pendingTool from an events row created by an
+// earlier tail batch. Matches on the tool_use_id kept in the payload: open
+// tool_call/skill_use events store it top-level; closed ones nest the input
+// under "input" (so a plain tool_call that is already closed is not matched —
+// nothing left to do for it). subagent_start keeps it top-level for the
+// sidechain join; re-closing it is idempotent (dedup absorbs the stop event).
+func (in *ingester) recoverPending(toolUseID string) *pendingTool {
+	var (
+		id       int64
+		toolName sql.NullString
+		ts       string
+		typ      string
+		payload  sql.NullString
+	)
+	err := in.tx.QueryRow(
+		`SELECT id, tool_name, ts, type, payload FROM events
+		 WHERE session_id = ? AND type IN ('tool_call','subagent_start','skill_use')
+		   AND json_extract(payload, '$.tool_use_id') = ?`,
+		in.sessionID, toolUseID).Scan(&id, &toolName, &ts, &typ, &payload)
+	if err != nil {
+		return nil // sql.ErrNoRows or transient error → treat as unknown tool_use
+	}
+	input := map[string]any{}
+	if payload.Valid {
+		_ = json.Unmarshal([]byte(payload.String), &input)
+	}
+	return &pendingTool{
+		eventID: id, name: toolName.String, ts: parseTS(ts),
+		input: input, isAgent: typ == "subagent_start",
+	}
 }
 
 func (in *ingester) insertFileChange(p *pendingTool, rawResult json.RawMessage) error {
@@ -721,6 +777,7 @@ func (in *ingester) insertEvent(e eventRow) (int64, bool, error) {
 	if n, _ := res.RowsAffected(); n == 1 {
 		id, _ := res.LastInsertId()
 		in.stats.Events++
+		in.newEventIDs = append(in.newEventIDs, id)
 		return id, true, nil
 	}
 	var id int64
