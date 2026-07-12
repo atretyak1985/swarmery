@@ -123,7 +123,7 @@ gate stops the phase; executors append Completion Reports to their step file.
 
 ## Progress checklist
 
-- [ ] 2.1 [ ] 2.2-GATE [ ] 2.3 [ ] 2.4 [ ] 2.5-GATE [ ] 2.6 [ ] 2.7-GATE
+- [x] 2.1 [x] 2.2-GATE [ ] 2.3 [ ] 2.4 [ ] 2.5-GATE [ ] 2.6 [ ] 2.7-GATE
 
 ## Files Analyzed
 

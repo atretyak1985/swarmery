@@ -83,7 +83,9 @@ export function useLiveUpdates(
 
 /** Upsert a WS session payload into a list (newest sessions first). */
 export function applySessionMessage(sessions: Session[], msg: WSMessage): Session[] {
-  if (msg.type === 'event_appended') return sessions;
+  // Only the session messages carry a Session payload (phase-2 permission_*
+  // messages carry a PermissionRequest — handled by the approvals UI, not here).
+  if (msg.type !== 'session_started' && msg.type !== 'session_updated') return sessions;
   const incoming = msg.payload;
   // Defensive: a malformed frame (no id / no startedAt) must never become a
   // ghost "(unknown)" row — the DB guarantees both fields on real sessions.

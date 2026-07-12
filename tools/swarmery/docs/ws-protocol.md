@@ -27,7 +27,10 @@ Every server frame is one **text** frame containing one JSON object:
 type WSMessage =
   | { type: 'session_started'; payload: Session }
   | { type: 'session_updated'; payload: Session }
-  | { type: 'event_appended';  payload: { sessionId: number; event: Event } };
+  | { type: 'event_appended';  payload: { sessionId: number; event: Event } }
+  // phase 2 — approvals (frozen at gate 2.2):
+  | { type: 'permission_requested'; payload: PermissionRequest }
+  | { type: 'permission_resolved';  payload: PermissionRequest };
 ```
 
 `Session` and `Event` are byte-for-byte the same JSON DTOs the REST API
@@ -73,6 +76,47 @@ events to a session card (contract change accepted at step 10 — see
 `payload.event.payload` is the raw event payload JSON (`unknown` client-side),
 exactly as the REST detail endpoint returns it.
 
+### `permission_requested` (phase 2)
+
+Added at gate 2.2 (phase 2 — approvals); the MVP trio above is unchanged and stays
+byte-identical. Emitted by the approvals layer once per **new**
+`permission_requests` row created by `POST /api/hooks/permission-request`
+([`docs/hooks-protocol.md`](hooks-protocol.md)). Deduplicated concurrent requests
+attach to the existing pending row and do **not** re-emit. The payload is the full
+`PermissionRequest` DTO; `requestJson` is the raw hook stdin as a JSON string.
+
+```json
+{"type":"permission_requested","payload":{
+  "id":7,"sessionId":42,"toolName":"Bash",
+  "requestJson":"{\"session_id\":\"9f22596e-…\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"curl -sI https://example.com | head -1\",\"description\":\"Fetch HTTP status line\"},\"permission_suggestions\":[…]}",
+  "status":"pending",
+  "requestedAt":"2026-07-13T10:15:04.000Z",
+  "resolvedAt":null,"resolvedVia":null,"reason":null,
+  "expiresAt":"2026-07-13T10:17:04.000Z"}}
+```
+
+### `permission_resolved` (phase 2)
+
+Emitted by the approvals layer whenever a pending request leaves `pending` — for
+**every** terminal status: `approved`, `denied`, `expired`, and
+`resolved_elsewhere` (expiry and client-disconnect emit it too, so badge counters
+always converge). The payload is the same full `PermissionRequest` DTO with the
+resolution fields populated; clients upsert by `id`.
+
+```json
+{"type":"permission_resolved","payload":{
+  "id":7,"sessionId":42,"toolName":"Bash",
+  "requestJson":"{…verbatim hook stdin…}",
+  "status":"approved",
+  "requestedAt":"2026-07-13T10:15:04.000Z",
+  "resolvedAt":"2026-07-13T10:15:31.000Z",
+  "resolvedVia":"dashboard","reason":null,
+  "expiresAt":"2026-07-13T10:17:04.000Z"}}
+```
+
+Session status changes caused by approvals (`→ waiting_approval` and back) ride the
+existing `session_updated` message, unchanged.
+
 ## Delivery semantics
 
 - **Hint stream, not a source of truth.** Delivery is at-most-once: a slow
@@ -96,3 +140,5 @@ exactly as the REST detail endpoint returns it.
 | Tail of a transcript adding records to a known session | `session_updated` |
 | Every new `events` row from a tail batch | `event_appended` |
 | Status ticker transition (active→idle→completed) | `session_updated` |
+| Approvals: new `permission_requests` row (phase 2) | `permission_requested` |
+| Approvals: request leaves `pending` — any terminal status (phase 2) | `permission_resolved` |

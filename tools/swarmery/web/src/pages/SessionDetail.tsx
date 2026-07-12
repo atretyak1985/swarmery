@@ -100,6 +100,9 @@ export function SessionDetailPage(): JSX.Element {
       if (msg.type === 'session_updated') {
         return msg.payload.id === prev.id ? { ...prev, ...msg.payload } : prev;
       }
+      // Phase-2 permission_* messages are handled by the approvals UI (2.4),
+      // not this detail view.
+      if (msg.type !== 'event_appended') return prev;
       // event_appended: attributed directly via the payload's sessionId
       // (step-10 contract change). A known id is a re-broadcast of a refined
       // row (async subagent duration reconcile) — replace it in place.

@@ -166,6 +166,12 @@ export interface HealthResponse {
   version: string;
   db_size_bytes: number;
   watching: boolean;
+  /**
+   * ISO timestamp of the most recent hook call received on POST /api/hooks/*
+   * (heartbeat, phase 2 — gate 2.2). Additive optional: absent/null until the
+   * hooks backend lands and the first hook checks in.
+   */
+  hooks_last_seen?: string | null;
 }
 
 /** GET /api/docs — list item. */
@@ -206,11 +212,49 @@ export interface StatsOverview {
   projects: { slug: string; name: string | null; sessions: number }[];
 }
 
-/** WS event names — frozen; implemented by Agent A on /api/ws. */
-export type WSMessageType = 'session_started' | 'session_updated' | 'event_appended';
+// --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
+
+/** permission_requests.status */
+export type PermissionRequestStatus =
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'expired'
+  | 'resolved_elsewhere';
+
+/**
+ * One `permission_requests` row — the approval identity minted by the daemon
+ * (the PermissionRequest hook stdin carries no tool_use_id; see
+ * docs/hooks-protocol.md and docs/hooks-format.md E1/E11).
+ */
+export interface PermissionRequest {
+  id: number;
+  sessionId: number;
+  toolName: string;
+  /** The PermissionRequest hook stdin, verbatim (permission_requests.request_json TEXT). */
+  requestJson: string;
+  status: PermissionRequestStatus;
+  requestedAt: string;
+  resolvedAt: string | null;
+  /** dashboard | terminal | mobile — free-form string in the frozen contract. */
+  resolvedVia: string | null;
+  /** Human-entered deny/approve reason; delivered to Claude verbatim on deny. */
+  reason: string | null;
+  expiresAt: string;
+}
+
+/** WS event names — frozen; MVP trio implemented by Agent A, permission_* added at gate 2.2 (phase 2). */
+export type WSMessageType =
+  | 'session_started'
+  | 'session_updated'
+  | 'event_appended'
+  | 'permission_requested'
+  | 'permission_resolved';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
   | { type: 'session_started'; payload: Session }
   | { type: 'session_updated'; payload: Session }
-  | { type: 'event_appended'; payload: { sessionId: number; event: Event } };
+  | { type: 'event_appended'; payload: { sessionId: number; event: Event } }
+  | { type: 'permission_requested'; payload: PermissionRequest }
+  | { type: 'permission_resolved'; payload: PermissionRequest };
