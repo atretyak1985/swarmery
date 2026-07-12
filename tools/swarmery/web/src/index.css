@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+
+/* Design tokens from docs/design/swarmery-ui-mockup.html — Tailwind v4 theme. */
+@theme {
+  --color-bg: #10151d; /* slate graphite */
+  --color-surface: #171e28; /* panel */
+  --color-surface2: #1e2735; /* raised */
+  --color-line: #28374b; /* hairline */
+  --color-ink: #dce6f2; /* primary text */
+  --color-ink-dim: #7c8da3; /* secondary */
+  --color-amber: #f5b84a; /* instrumentation accent / waiting */
+  --color-green: #4ade9c; /* active / ok */
+  --color-red: #f0716f; /* error */
+  --color-blue: #6fb4f0; /* subagent track */
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, sans-serif;
+
+  /* sidebar breakpoint from the mockup (@media min-width:900px) */
+  --breakpoint-desk: 900px;
+
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(74 222 156 / 0.5);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgb(74 222 156 / 0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg font-sans text-[14px] leading-normal text-ink;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-dot {
+    animation: none;
+  }
+}

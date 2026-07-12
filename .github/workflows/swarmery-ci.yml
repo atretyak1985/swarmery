@@ -1,0 +1,46 @@
+name: swarmery-ci
+
+on:
+  push:
+    branches: [main, 'feat/**']
+    paths: ['tools/swarmery/**', '.github/workflows/swarmery-ci.yml']
+  pull_request:
+    branches: [main, 'feat/**']
+    paths: ['tools/swarmery/**', '.github/workflows/swarmery-ci.yml']
+
+defaults:
+  run:
+    working-directory: tools/swarmery
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/swarmery/web/package-lock.json
+
+      - name: Build web
+        working-directory: tools/swarmery/web
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/swarmery/go.mod
+          cache-dependency-path: tools/swarmery/go.sum
+          check-latest: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build binary
+        run: go build -o swarmery ./cmd/swarmery

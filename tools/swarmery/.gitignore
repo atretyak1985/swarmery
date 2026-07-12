@@ -1,0 +1,8 @@
+/swarmery
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+web/dist/*
+!web/dist/.gitkeep
+.DS_Store

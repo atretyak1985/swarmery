@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Swarmery — Ground Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#10151D;          /* slate graphite */
+  --surface:#171E28;     /* panel */
+  --surface2:#1E2735;    /* raised */
+  --line:#28374B;        /* hairline */
+  --ink:#DCE6F2;         /* primary text */
+  --ink-dim:#7C8DA3;     /* secondary */
+  --amber:#F5B84A;       /* instrumentation accent */
+  --green:#4ADE9C;       /* active / ok */
+  --red:#F0716F;         /* error */
+  --blue:#6FB4F0;        /* subagent track */
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Inter',sans-serif;
+  --disp:'Space Grotesk',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;padding-bottom:76px}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* ===== App bar ===== */
+.appbar{position:sticky;top:0;z-index:20;background:rgba(16,21,29,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.logo{font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.06em}
+.logo em{font-style:normal;color:var(--amber)}
+.sys{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-dim);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block}
+.dot.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,156,.5)}50%{box-shadow:0 0 0 6px rgba(74,222,156,0)}}
+@media (prefers-reduced-motion:reduce){.dot.pulse{animation:none}}
+
+/* ===== Bottom nav ===== */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:20;background:rgba(16,21,29,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;color:var(--ink-dim);padding:4px 10px;border-radius:8px;position:relative}
+.nav button.on{color:var(--amber)}
+.nav .ic{font-size:17px;line-height:1}
+.badge{position:absolute;top:-2px;right:2px;background:var(--amber);color:#10151D;font-family:var(--mono);font-weight:700;font-size:10px;border-radius:8px;padding:0 5px}
+
+/* ===== Common ===== */
+.screen{display:none;padding:16px;max-width:760px;margin:0 auto}
+.screen.on{display:block}
+h2{font-family:var(--disp);font-size:13px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin:22px 0 10px}
+h2:first-child{margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.mono{font-family:var(--mono)}
+.dim{color:var(--ink-dim)}
+.row{display:flex;align-items:center;gap:8px}
+.grow{flex:1;min-width:0}
+.chip{font-family:var(--mono);font-size:10.5px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--ink-dim);white-space:nowrap}
+.chip.active{color:var(--green);border-color:rgba(74,222,156,.4)}
+.chip.wait{color:var(--amber);border-color:rgba(245,184,74,.45)}
+.chip.err{color:var(--red);border-color:rgba(240,113,111,.4)}
+.chip.done{color:var(--ink-dim)}
+
+/* ===== Overview ===== */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 8px;text-align:center}
+.stat .v{font-family:var(--mono);font-weight:700;font-size:17px}
+.stat .l{font-size:10px;color:var(--ink-dim);margin-top:2px;letter-spacing:.04em}
+.stat .v.amber{color:var(--amber)}
+
+.approve{border-left:3px solid var(--amber)}
+.approve .cmd{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;margin:8px 0;overflow-x:auto;white-space:nowrap;color:var(--amber)}
+.abtns{display:flex;gap:8px}
+.abtns button{flex:1;font-weight:600;font-size:12.5px;border-radius:8px;padding:8px 0}
+.ok{background:rgba(74,222,156,.14);color:var(--green);border:1px solid rgba(74,222,156,.35)}
+.no{background:rgba(240,113,111,.10);color:var(--red);border:1px solid rgba(240,113,111,.3)}
+.ghost{background:var(--surface2);color:var(--ink-dim);border:1px solid var(--line)}
+
+.sess .proj{font-family:var(--mono);font-size:11px;color:var(--amber)}
+.sess .title{font-weight:600;font-size:13.5px;margin:1px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess .meta{font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+.sess .now{font-size:12px;color:var(--ink-dim);margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.sess .now b{color:var(--ink);font-weight:500}
+.spark{font-family:var(--mono);font-size:11px;color:var(--ink-dim);letter-spacing:2px}
+.spark b{color:var(--amber);font-weight:400}
+
+/* ===== Sessions list ===== */
+.filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch}
+.filters .chip.sel{background:var(--surface2);color:var(--ink);border-color:var(--ink-dim)}
+.slist .card{padding:11px 14px}
+
+/* ===== Session detail / timeline ===== */
+.shead .proj{font-family:var(--mono);font-size:11px;color:var(--amber)}
+.shead h1{font-family:var(--disp);font-size:17px;font-weight:700;margin:2px 0 8px;line-height:1.3}
+.kv{display:flex;flex-wrap:wrap;gap:6px 14px;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+.kv b{color:var(--ink);font-weight:500}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:16px 0 0}
+.tabs button{padding:8px 14px;font-size:12.5px;color:var(--ink-dim);border-bottom:2px solid transparent;font-weight:500}
+.tabs button.on{color:var(--amber);border-color:var(--amber)}
+
+.tl{margin-top:8px}
+.turn{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 6px;display:flex;gap:8px;align-items:center}
+.turn::after{content:"";flex:1;height:1px;background:var(--line)}
+.prompt{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:8px}
+.ev{display:flex;gap:10px;padding:6px 0;border-left:2px solid var(--line);padding-left:12px;margin-left:5px;position:relative}
+.ev::before{content:"";position:absolute;left:-5px;top:12px;width:8px;height:8px;border-radius:50%;background:var(--surface2);border:2px solid var(--ink-dim)}
+.ev.ok::before{border-color:var(--green)}
+.ev.err{border-left-color:rgba(240,113,111,.5)}
+.ev.err::before{border-color:var(--red);background:rgba(240,113,111,.2)}
+.ev .t{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);min-width:44px;padding-top:2px}
+.ev .tool{font-family:var(--mono);font-size:12px;font-weight:500}
+.ev .arg{font-family:var(--mono);font-size:11px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ev .dur{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);margin-left:auto;padding-top:2px}
+.ev.err .tool{color:var(--red)}
+.errbox{font-family:var(--mono);font-size:11px;color:var(--red);background:rgba(240,113,111,.07);border:1px solid rgba(240,113,111,.25);border-radius:6px;padding:6px 9px;margin-top:5px}
+
+/* subagent nested track */
+.sub{border-left:2px solid var(--blue);background:rgba(111,180,240,.05);border-radius:0 8px 8px 0;margin:6px 0 6px 5px;padding:8px 10px 8px 12px}
+.sub .shd{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;cursor:pointer}
+.sub .shd .name{color:var(--blue);font-weight:700}
+.sub .body{margin-top:6px}
+.sub .ev{border-left-color:rgba(111,180,240,.35)}
+.caret{transition:transform .15s;color:var(--ink-dim)}
+.open .caret{transform:rotate(90deg)}
+
+/* diffs */
+.dfile{font-family:var(--mono);font-size:11.5px;display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.plus{color:var(--green)}.minus{color:var(--red)}
+.diff{font-family:var(--mono);font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 0;overflow-x:auto;margin:8px 0}
+.diff div{padding:0 12px;white-space:pre}
+.diff .a{background:rgba(74,222,156,.09);color:var(--green)}
+.diff .d{background:rgba(240,113,111,.08);color:var(--red)}
+.diff .h{color:var(--blue)}
+
+/* ===== Agents ===== */
+.ag .nm{font-family:var(--mono);font-weight:700;font-size:13px}
+.ag .bar{height:4px;background:var(--surface2);border-radius:4px;margin-top:8px;overflow:hidden}
+.ag .bar i{display:block;height:100%;background:var(--green);border-radius:4px}
+.ag .bar i.mid{background:var(--amber)}
+.ag .st{display:flex;gap:14px;font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-top:7px}
+.ag .st b{color:var(--ink);font-weight:500}
+.warn{font-size:11.5px;color:var(--amber);background:rgba(245,184,74,.07);border:1px solid rgba(245,184,74,.25);border-radius:6px;padding:6px 9px;margin-top:8px}
+.dead{opacity:.45}
+
+/* desktop */
+@media(min-width:900px){
+  body{padding-bottom:0;padding-left:190px}
+  .nav{top:53px;bottom:0;left:0;right:auto;width:190px;flex-direction:column;justify-content:flex-start;gap:4px;border-top:none;border-right:1px solid var(--line);padding:16px 10px}
+  .nav button{flex-direction:row;width:100%;justify-content:flex-start;font-size:13px;gap:10px;padding:9px 12px}
+  .nav button.on{background:var(--surface2)}
+  .nav .badge{position:static;margin-left:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <span class="logo">SW<em>◆</em>RMERY</span>
+  <span class="sys"><span class="dot pulse"></span>3 АКТИВНІ · collector ok</span>
+</header>
+
+<nav class="nav">
+  <button class="on" data-s="overview"><span class="ic">◉</span>Огляд</button>
+  <button data-s="approvals"><span class="ic">✋</span>Дозволи<span class="badge">2</span></button>
+  <button data-s="sessions"><span class="ic">☰</span>Сесії</button>
+  <button data-s="agents"><span class="ic">⬡</span>Агенти</button>
+</nav>
+
+<!-- ======================= OVERVIEW ======================= -->
+<main class="screen on" id="overview">
+  <h2>Сьогодні · нд 12 лип</h2>
+  <div class="stats">
+    <div class="stat"><div class="v">14</div><div class="l">сесій</div></div>
+    <div class="stat"><div class="v">9/11</div><div class="l">задач ok</div></div>
+    <div class="stat"><div class="v amber">$4.87</div><div class="l">вартість</div></div>
+    <div class="stat"><div class="v">2.1M</div><div class="l">токенів</div></div>
+  </div>
+  <div class="card" style="margin-top:10px"><div class="spark">7 днів: ▂▄▃▆▅▇<b>▆</b> <span style="letter-spacing:0;margin-left:6px">$31.40 · 68 задач</span></div></div>
+
+  <h2>Чекають дозволу</h2>
+  <div class="card approve">
+    <div class="row"><span class="chip wait">4 хв</span><span class="mono dim" style="font-size:11px">bloomblum · go-backend</span></div>
+    <div class="cmd">Bash: aws ses delete-template --template-name order-v1</div>
+    <div class="abtns"><button class="ok">Дозволити</button><button class="no">Відхилити</button><button class="ghost">Сесія →</button></div>
+  </div>
+  <div class="card approve">
+    <div class="row"><span class="chip wait">40 с</span><span class="mono dim" style="font-size:11px">skygor · оркестратор</span></div>
+    <div class="cmd">Edit: internal/mavlink/commander.go (поза scope задачі)</div>
+    <div class="abtns"><button class="ok">Дозволити</button><button class="no">Відхилити</button><button class="ghost">Сесія →</button></div>
+  </div>
+
+  <h2>Активні сесії</h2>
+  <div class="card sess" onclick="go('detail')">
+    <div class="row"><span class="dot pulse"></span><span class="proj grow">bloomblum</span><span class="chip active">active · 18 хв</span></div>
+    <div class="title">Міграція email-шаблонів на SES v2</div>
+    <div class="meta">fable-5 · 12 tool calls · 2 субагенти · $0.84</div>
+    <div class="now">зараз: <b>go test ./internal/mail/...</b></div>
+  </div>
+  <div class="card sess">
+    <div class="row"><span class="dot pulse"></span><span class="proj grow">skygor</span><span class="chip active">active · 6 хв</span></div>
+    <div class="title">Тести стейт-машини COMEBACK → LANDING</div>
+    <div class="meta">fable-5 · 7 tool calls · $0.31</div>
+    <div class="now">зараз: <b>Read: sworm-control-flow.md</b></div>
+  </div>
+  <div class="card sess">
+    <div class="row"><span class="dot"></span><span class="proj grow">swarmery</span><span class="chip wait">чекає · 4 хв</span></div>
+    <div class="title">Agent A: fsnotify watcher + offsets</div>
+    <div class="meta">fable-5 · 29 tool calls · $1.12 · остання активність 4 хв тому</div>
+  </div>
+
+  <h2>Нещодавно завершені</h2>
+  <div class="card sess">
+    <div class="row"><span class="proj grow">bloomblum</span><span class="chip done">done · 41 хв</span></div>
+    <div class="title">Фікс пагінації у vendor portal</div>
+    <div class="meta">✅ ok без правок · 34 tool calls · $1.60</div>
+  </div>
+  <div class="card sess">
+    <div class="row"><span class="proj grow">nanitor</span><span class="chip err">failed</span></div>
+    <div class="title">Intune: матчінг по serial number</div>
+    <div class="meta">↩ відкат · тести червоні після 3 спроб · $2.05</div>
+  </div>
+</main>
+
+<!-- ======================= APPROVALS ======================= -->
+<main class="screen" id="approvals">
+  <h2>Черга дозволів · 2 pending</h2>
+  <div class="card approve">
+    <div class="row"><span class="chip wait">4 хв</span><span class="mono dim" style="font-size:11px">bloomblum · go-backend · сесія a3f2…</span></div>
+    <div style="font-size:12.5px;margin-top:6px">Хоче видалити SES-шаблон перед створенням нового:</div>
+    <div class="cmd">Bash: aws ses delete-template --template-name order-v1</div>
+    <div class="abtns"><button class="ok">Дозволити</button><button class="no">Відхилити</button><button class="ghost">Сесія →</button></div>
+  </div>
+  <div class="card approve">
+    <div class="row"><span class="chip wait">40 с</span><span class="mono dim" style="font-size:11px">skygor · оркестратор · сесія 9c11…</span></div>
+    <div style="font-size:12.5px;margin-top:6px">Правка файлу <b>поза заявленим scope</b> задачі «тести стейт-машини»:</div>
+    <div class="cmd">Edit: internal/mavlink/commander.go · +14 −2</div>
+    <div class="abtns"><button class="ok">Дозволити</button><button class="no">Відхилити</button><button class="ghost">Сесія →</button></div>
+  </div>
+  <h2>Вирішені сьогодні</h2>
+  <div class="card"><div class="row"><span class="chip active" style="min-width:74px;text-align:center">approved</span><span class="mono dim grow" style="font-size:11px">Bash: git push origin feat/ingest</span><span class="mono dim" style="font-size:10.5px">📱 12:41</span></div></div>
+  <div class="card"><div class="row"><span class="chip err" style="min-width:74px;text-align:center">denied</span><span class="mono dim grow" style="font-size:11px">Bash: rm -rf node_modules && npm i</span><span class="mono dim" style="font-size:10.5px">💻 11:02</span></div></div>
+</main>
+
+<!-- ======================= SESSIONS ======================= -->
+<main class="screen" id="sessions">
+  <div class="filters">
+    <span class="chip sel">Всі проєкти</span><span class="chip">bloomblum</span><span class="chip">skygor</span><span class="chip">swarmery</span><span class="chip sel">active</span><span class="chip">done</span><span class="chip">failed</span>
+  </div>
+  <div class="slist">
+    <div class="card sess" onclick="go('detail')">
+      <div class="row"><span class="dot pulse"></span><span class="proj grow">bloomblum</span><span class="chip active">active</span></div>
+      <div class="title">Міграція email-шаблонів на SES v2</div>
+      <div class="meta">18 хв · 12 calls · 2 субагенти · $0.84</div>
+    </div>
+    <div class="card sess">
+      <div class="row"><span class="dot pulse"></span><span class="proj grow">skygor</span><span class="chip active">active</span></div>
+      <div class="title">Тести стейт-машини COMEBACK → LANDING</div>
+      <div class="meta">6 хв · 7 calls · $0.31</div>
+    </div>
+    <div class="card sess">
+      <div class="row"><span class="proj grow">swarmery</span><span class="chip wait">waiting</span></div>
+      <div class="title">Agent A: fsnotify watcher + offsets</div>
+      <div class="meta">чекає approval 4 хв · 29 calls · $1.12</div>
+    </div>
+    <div class="card sess">
+      <div class="row"><span class="proj grow">bloomblum</span><span class="chip done">done 14:12</span></div>
+      <div class="title">Фікс пагінації у vendor portal</div>
+      <div class="meta">41 хв · ✅ ok · $1.60</div>
+    </div>
+    <div class="card sess">
+      <div class="row"><span class="proj grow">nanitor</span><span class="chip err">failed 12:30</span></div>
+      <div class="title">Intune: матчінг по serial number</div>
+      <div class="meta">↩ відкат · $2.05</div>
+    </div>
+  </div>
+</main>
+
+<!-- ======================= SESSION DETAIL ======================= -->
+<main class="screen" id="detail">
+  <div class="shead">
+    <button class="dim" onclick="go('sessions')" style="font-size:12px;padding:0 0 8px">← Сесії</button>
+    <div class="proj">bloomblum · feat/ses-v2</div>
+    <h1>Міграція email-шаблонів на SES v2</h1>
+    <div class="kv">
+      <span>статус <b style="color:var(--green)">active</b></span>
+      <span>модель <b>fable-5</b></span>
+      <span>токени <b>412K</b></span>
+      <span>вартість <b style="color:var(--amber)">~$0.84</b></span>
+      <span>остання дія <b>9 с тому</b></span>
+    </div>
+    <div class="abtns" style="margin-top:10px"><button class="ghost">💬 Інструкція в сесію</button><button class="no" style="flex:0 0 90px">■ Kill</button></div>
+  </div>
+
+  <div class="tabs">
+    <button class="on">Timeline</button><button>Diffs · 4</button><button>Context</button><button>Tree</button>
+  </div>
+
+  <div class="tl">
+    <div class="turn">turn 3 · 14:52</div>
+    <div class="prompt">Перенеси шаблони order-confirmation і vendor-notify на SES v2 API, збережи сумісність зі старими даними подій.</div>
+
+    <div class="ev ok"><span class="t">14:52</span><div class="grow"><div class="tool">Read</div><div class="arg">internal/mail/templates.go</div></div><span class="dur">0.3s</span></div>
+    <div class="ev ok"><span class="t">14:53</span><div class="grow"><div class="tool">Grep</div><div class="arg">"CreateTemplate" — 7 збігів у 3 файлах</div></div><span class="dur">0.2s</span></div>
+
+    <div class="sub open" onclick="this.classList.toggle('open')">
+      <div class="shd"><span class="caret">▶</span><span class="name">⬡ go-backend</span><span class="dim">субагент · 11 подій · 96K ткн</span><span class="dur" style="margin-left:auto">4м 12с</span></div>
+      <div class="body">
+        <div class="ev ok"><span class="t">14:53</span><div class="grow"><div class="tool">Edit</div><div class="arg">internal/mail/sesv2.go · +64 −0</div></div><span class="dur">1.1s</span></div>
+        <div class="ev ok"><span class="t">14:55</span><div class="grow"><div class="tool">Edit</div><div class="arg">internal/mail/templates.go · +18 −41</div></div><span class="dur">0.9s</span></div>
+        <div class="ev err"><span class="t">14:56</span><div class="grow"><div class="tool">Bash · exit 1</div><div class="arg">go test ./internal/mail/...</div><div class="errbox">FAIL: TestRenderOrderConfirmation — missing field .VendorName</div></div><span class="dur">8.4s</span></div>
+        <div class="ev ok"><span class="t">14:57</span><div class="grow"><div class="tool">Edit</div><div class="arg">internal/mail/sesv2.go · +6 −1</div></div><span class="dur">0.7s</span></div>
+        <div class="ev ok"><span class="t">14:58</span><div class="grow"><div class="tool">Bash</div><div class="arg">go test ./internal/mail/... — PASS (14 tests)</div></div><span class="dur">7.9s</span></div>
+      </div>
+    </div>
+
+    <div class="ev ok"><span class="t">14:58</span><div class="grow"><div class="tool">Skill</div><div class="arg">code-review-checklist → 2 зауваження, виправлено</div></div><span class="dur">31s</span></div>
+    <div class="ev"><span class="t">14:59</span><div class="grow"><div class="tool" style="color:var(--amber)">Permission</div><div class="arg">Bash: aws ses delete-template … — чекає рішення</div></div><span class="dur">4 хв</span></div>
+  </div>
+
+  <h2>Diffs · останній</h2>
+  <div class="dfile">internal/mail/sesv2.go <span class="plus">+70</span> <span class="minus">−1</span></div>
+  <div class="diff"><div class="h">@@ -12,7 +12,11 @@ func (c *Client) Render(</div><div class="d">-	out, err := c.ses.CreateTemplate(ctx, in)</div><div class="a">+	out, err := c.sesv2.CreateEmailTemplate(ctx, &v2in)</div><div class="a">+	if err != nil {</div><div class="a">+		return fmt.Errorf("sesv2 template: %w", err)</div><div class="a">+	}</div></div>
+</main>
+
+<!-- ======================= AGENTS ======================= -->
+<main class="screen" id="agents">
+  <h2>Реєстр · 6 агентів · 4 скіли</h2>
+  <div class="card ag">
+    <div class="row"><span class="nm grow">⬡ go-backend</span><span class="chip">global · v7</span></div>
+    <div class="bar"><i style="width:91%"></i></div>
+    <div class="st"><span>30 дн: <b>47 задач</b></span><span>ok: <b>91%</b></span><span>↩: <b>2%</b></span><span>~<b>$0.71</b>/задача</span></div>
+  </div>
+  <div class="card ag">
+    <div class="row"><span class="nm grow">⬡ code-reviewer</span><span class="chip">global · v4</span></div>
+    <div class="bar"><i style="width:84%"></i></div>
+    <div class="st"><span>30 дн: <b>62 задачі</b></span><span>ok: <b>84%</b></span><span>↩: <b>0%</b></span><span>~<b>$0.22</b>/задача</span></div>
+    <div class="warn">⚠ дрейф: skygor використовує v2 — на 2 версії позаду. <u>Push v4 → усі проєкти</u></div>
+  </div>
+  <div class="card ag">
+    <div class="row"><span class="nm grow">⬡ db-migrator</span><span class="chip">bloomblum · v3</span></div>
+    <div class="bar"><i class="mid" style="width:67%"></i></div>
+    <div class="st"><span>30 дн: <b>9 задач</b></span><span>ok: <b>67%</b></span><span>↩: <b>22%</b></span><span>~<b>$1.94</b>/задача</span></div>
+    <div class="warn">⚠ lint: відсутня секція Boundaries · погіршення після v3 (був 85% на v2) — <u>порівняти версії · rollback</u></div>
+  </div>
+  <div class="card ag dead">
+    <div class="row"><span class="nm grow">⬡ docs-writer</span><span class="chip">global · v1</span></div>
+    <div class="st"><span>0 задач за 30 дн — кандидат на видалення</span></div>
+  </div>
+  <h2>Скіли</h2>
+  <div class="card ag">
+    <div class="row"><span class="nm grow">◈ mavlink-testing</span><span class="chip">skygor</span></div>
+    <div class="st"><span>тригерів: <b>18</b></span><span>у сесіях ok: <b>94%</b></span></div>
+  </div>
+  <div class="card ag">
+    <div class="row"><span class="nm grow">◈ ses-patterns</span><span class="chip">bloomblum</span></div>
+    <div class="st"><span>тригерів: <b>4</b></span><span class="dim">⚠ розмитий description — рідко тригериться</span></div>
+  </div>
+</main>
+
+<script>
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.s===id));
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.s)));
+</script>
+</body>
+</html>
