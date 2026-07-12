@@ -180,6 +180,47 @@ CREATE TABLE tasks (
 );
 CREATE INDEX idx_tasks_queue ON tasks(status, priority, created_at);
 
+-- ============ Наративи, звіти, чеклісти (фаза 2.5: Reporter) ============
+
+CREATE TABLE narratives (
+    id           INTEGER PRIMARY KEY,
+    session_id   INTEGER NOT NULL UNIQUE REFERENCES sessions(id),
+    summary_json TEXT NOT NULL,              -- {done[], decisions[{what,why}],
+                 -- failures[], risks[], followups[]} — ТІЛЬКИ текст від LLM;
+                 -- усі числа звіт бере з БД, числа з LLM ігноруються
+    model        TEXT,                       -- дешева модель Reporter-а (з конфігу)
+    tokens       INTEGER,                    -- вартість роботи самого Reporter-а —
+    cost_usd     REAL,                       -- видна в Analytics
+    created_at   TEXT NOT NULL,
+    trigger      TEXT NOT NULL               -- auto_stop | manual | digest
+);
+
+CREATE TABLE reports (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL,               -- session | task | weekly_digest | incident
+    ref_id      INTEGER,                     -- session_id або task_id (за kind);
+                -- NULL для weekly_digest
+    period      TEXT,                        -- ISO-тиждень для digest: 2026-W28
+    version     INTEGER NOT NULL DEFAULT 1,  -- ++ при регенерації, старі лишаються
+    html        TEXT NOT NULL,               -- самодостатня сторінка: стилі inline,
+                -- дані inline JSON, нуль зовнішніх запитів
+    frozen      INTEGER NOT NULL DEFAULT 0,  -- 1 = снепшот після session_end
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX idx_reports_ref ON reports(kind, ref_id, version);
+
+CREATE TABLE task_checklist_items (
+    id          INTEGER PRIMARY KEY,
+    task_id     INTEGER NOT NULL REFERENCES tasks(id),
+    seq         INTEGER NOT NULL,            -- порядок у Validation-секції промпта
+    text        TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',  -- pending | passed | failed
+    checked_by  TEXT,                        -- heuristic | reporter | human
+    event_id    INTEGER REFERENCES events(id),    -- доказ: клік веде в таймлайн
+    checked_at  TEXT,
+    UNIQUE(task_id, seq)
+);
+
 -- ============ Агенти і скіли (шар 3: менеджмент) ============
 
 CREATE TABLE agents (
@@ -317,10 +358,14 @@ CREATE TABLE eval_results (
 ● Approvals  (3)  — черга дозволів, бейдж
 ● Sessions        — живі і минулі сесії
 ● Tasks           — черга задач
+● Reports         — звіти: session / task / weekly digest / incident (фаза 2.5)
 ● Agents & Skills — реєстр + редактор
 ● Analytics       — cost / quality
 ● Health          — стан самого Swarmery
 ```
+
+Пункт Reports з'являється у фазі 2.5 (див. §3.8); до того звіти доступні лише
+кнопкою "Generate report" на деталі сесії.
 
 ### 3.1 Overview
 - Активні сесії зараз (проєкт, агент, поточна дія, тривалість) — live через WS
@@ -369,6 +414,53 @@ CREATE TABLE eval_results (
 - Проєкти без хуків ("непідключені") + one-click інсталяція hook-конфігу
 - Версія Claude Code на машині, попередження про зміну формату JSONL
 
+### 3.8 Reports (фаза 2.5)
+
+**Звіт = наратив + телеметрія.** Наратив генерує Reporter-агент: по завершенню
+задачі (hook Stop або статус done) headless `claude -p` на дешевій моделі читає
+транскрипт і повертає структурований JSON `{done[], decisions[{what,why}],
+failures[], risks[], followups[]}` → таблиця `narratives`. Тільки для сесій
+> N подій (default 30), з лімітом токенів; для решти — кнопка ручної генерації.
+Reporter — теж агент системи, його робота видна у Swarmery.
+
+- **Session/task report** — самодостатня HTML-сторінка (стилі inline, дані
+  inline JSON, нуль зовнішніх запитів): наратив зверху → checklist (якщо є
+  task) → diffs по файлах → тести (спроби → PASS) → субагенти → вартість/токени
+  → out-of-scope. Зберігається в `reports` з version++ при регенерації.
+  Експорт `.html` — shareable artifact без хмари.
+- **Live view** `GET /live/{session_id}`: та сама сторінка + JS-підписка на
+  `/api/ws` — checklist заповнюється, diffs доїжджають live; по session_end
+  сторінка заморожується у снепшот (`frozen=1`).
+- **Self-filling checklist**: при створенні задачі Validation-секція промпта
+  парситься → `task_checklist_items`; евристики (Bash event з PASS + збіг
+  ключових слів → passed, `checked_by=heuristic`, `event_id`=доказ); решту
+  відмічає Reporter (`checked_by=reporter`); людина може перемкнути вручну.
+  Кожна галочка клікабельна в таймлайн через `event_id`.
+- **Weekly digest**: `swarmery digest [--week 2026-W28]` — другий виклик
+  Reporter по наративах тижня, групування по проєктах (що зашипили, вартість,
+  провали, топ follow-ups); `kind=weekly_digest` + endpoint і кнопка в UI.
+- **Incident-звіт** для failed-задач: хронологія спроб (цикли edit→test→fail),
+  місце зациклення, спалені токени до фейлу; генерується автоматично при
+  `status=failed`.
+- **API**: `GET /api/reports?kind=&ref=`, `GET /api/reports/{id}`,
+  `POST /api/sessions/{id}/report`, експорт з `Content-Disposition: attachment`.
+- **Reporter pipeline**: сесії з >30 подій; `claude -p --model <з конфігу>
+  --output-format json`; retry 1 раз при битому JSON; не більше N авто-звітів
+  на годину; guard від самотригерингу по cwd/маркеру.
+
+#### Reporter: три неочевидні рішення
+
+1. **Жорсткий поділ наратив/телеметрія.** Reporter повертає тільки текст
+   (done/decisions/failures/risks/followups); УСІ числа у звіті (токени,
+   вартість, тривалість, diff-статистика) беруться з БД. Числа з LLM
+   ігноруються — галюцинована цифра гірша за відсутню.
+2. **Guard від самотригерингу.** Сесії самого Reporter-а інджестяться як
+   звичайні (система бачить сама себе), але ніколи не породжують
+   report-of-report (детект по cwd/маркеру); плюс rate limit на авто-звіти
+   і вартість Reporter-а видна в Analytics.
+3. **Редакція секретів** перед тим, як транскрипт потрапляє в API-виклик
+   Reporter-а — той самий фільтр, що й на ingest.
+
 ---
 
 ## 4. Порядок імплементації (маппінг на схему)
@@ -377,6 +469,9 @@ CREATE TABLE eval_results (
    Backfill-scope: лише транскрипти формату Claude Code ≥2.1 (Agent tool, окремі sidechain-файли); pre-2.1 (`Task`, inline sidechains) — out of scope для MVP.
    Перед step 06 (ingest-демон): watch-експеримент — підтвердити, що транскрипти append-only, а не переписуються in place; дизайн tail-follow залежить від цього (Q11).
 2. **Approvals**: permission_requests + hooks (PreToolUse повертає рішення з дашборда). Екран Approvals.
+
+2.5. **Reporter + Reports**: narratives, reports, task_checklist_items; headless `claude -p` на Stop-hook; session/task-звіти, live view, weekly digest. (Agent D)
+
 3. **Agents registry read-only**: agents, skills, *_versions (скан файлової системи + fsnotify). Реєстр без редагування.
 4. **Editor + git**: запис файлів, версіонування, rollback, lint.
 5. **Tasks queue**: tasks + запуск headless-сесій (`claude -p --output-format stream-json`).
