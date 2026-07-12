@@ -1,0 +1,31 @@
+{
+  "extraKnownMarketplaces": {
+    "swarmery": {
+      "source": {
+        "source": "github",
+        "repo": "atretyak1985/swarmery"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "core@swarmery": true
+  },
+  "env": {
+    "AGENT_PROJECT": "swarmery"
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Write(./.env)",
+      "Write(./.env.*)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $CLAUDE_PROJECT_DIR/plugins/core/statusline/statusline.sh"
+  }
+}
