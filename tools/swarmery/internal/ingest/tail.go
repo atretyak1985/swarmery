@@ -105,6 +105,13 @@ func TailFile(db *sql.DB, path string, th Thresholds) (TailResult, error) {
 		if err := ing.processRecords(recs, absPath, sidechain, scope, parentEventID); err != nil {
 			return res, err
 		}
+		if sidechain && parentEventID != 0 {
+			// Refine the duration of background (async) agents from the
+			// batch's last record timestamp.
+			if err := ing.reconcileAsyncSubagent(parentEventID, lastRecordTS(recs)); err != nil {
+				return res, err
+			}
+		}
 	}
 	// Advance the offset even for batches of only-malformed lines: they will
 	// never parse and must not be re-read every pass.

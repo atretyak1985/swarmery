@@ -55,9 +55,12 @@ type contentBlock struct {
 	IsError   bool            `json:"is_error"`    // tool_result
 }
 
-// agentResult is toolUseResult of an Agent completion (§7).
+// agentResult is toolUseResult of an Agent completion (§7). Background
+// (run_in_background) launches carry isAsync + status "async_launched" on the
+// immediate result and never report totalDurationMs.
 type agentResult struct {
 	Status          string          `json:"status"`
+	IsAsync         bool            `json:"isAsync"`
 	AgentID         string          `json:"agentId"`
 	AgentType       string          `json:"agentType"`
 	TotalDurationMs int64           `json:"totalDurationMs"`

@@ -204,6 +204,72 @@ func TestIngestSubagentSession(t *testing.T) {
 	}
 }
 
+// TestIngestBackgroundAgentSession: run_in_background Agent calls get an
+// immediate "async_launched" tool_result (no totalDurationMs) while the
+// sidechain keeps running — duration must come from the sidechain span
+// (subagent_start.ts → last sidechain record ts) and the launch must not be
+// recorded as an error.
+func TestIngestBackgroundAgentSession(t *testing.T) {
+	db := testDB(t)
+	path := filepath.Join(fixtures, "background-agent-session.jsonl")
+	if _, err := File(db, path); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	// Fixture span: Agent tool_use 12:00:05.000 → last sidechain record
+	// 12:20:05.000 = exactly 20 minutes.
+	const wantDuration = 20 * 60 * 1000
+
+	var startID, startDuration int64
+	var startStatus string
+	if err := db.QueryRow(
+		`SELECT id, status, duration_ms FROM events WHERE type='subagent_start'`,
+	).Scan(&startID, &startStatus, &startDuration); err != nil {
+		t.Fatalf("subagent_start: %v", err)
+	}
+	var stopStatus string
+	var stopDuration int64
+	if err := db.QueryRow(
+		`SELECT status, duration_ms FROM events WHERE type='subagent_stop'`,
+	).Scan(&stopStatus, &stopDuration); err != nil {
+		t.Fatalf("subagent_stop: %v", err)
+	}
+	if startStatus != "ok" || stopStatus != "ok" {
+		t.Errorf("statuses = start %q / stop %q, want ok/ok (async launch is not an error)",
+			startStatus, stopStatus)
+	}
+	if startDuration != wantDuration || stopDuration != wantDuration {
+		t.Errorf("duration_ms = start %d / stop %d, want %d (sidechain span, not the launch roundtrip)",
+			startDuration, stopDuration, wantDuration)
+	}
+	// Sidechain tool call is parented to the start event — no orphans.
+	if got := count(t, db,
+		`SELECT COUNT(*) FROM events WHERE type='tool_call' AND parent_event_id=?`, startID); got != 1 {
+		t.Errorf("sidechain tool_calls parented = %d, want 1", got)
+	}
+	if got := count(t, db,
+		`SELECT COUNT(*) FROM events WHERE turn_id IS NULL AND parent_event_id IS NULL`); got != 0 {
+		t.Errorf("orphan events = %d, want 0", got)
+	}
+
+	// Re-ingest converges to the same values (idempotent update).
+	stats2, err := File(db, path)
+	if err != nil {
+		t.Fatalf("re-ingest: %v", err)
+	}
+	if stats2.Events != 0 {
+		t.Errorf("re-ingest created %d events, want 0", stats2.Events)
+	}
+	if err := db.QueryRow(
+		`SELECT status, duration_ms FROM events WHERE type='subagent_stop'`,
+	).Scan(&stopStatus, &stopDuration); err != nil {
+		t.Fatal(err)
+	}
+	if stopStatus != "ok" || stopDuration != wantDuration {
+		t.Errorf("after re-ingest: stop = %q/%d, want ok/%d", stopStatus, stopDuration, wantDuration)
+	}
+}
+
 func TestIngestIsIdempotent(t *testing.T) {
 	db := testDB(t)
 	path := filepath.Join(fixtures, "subagent-session.jsonl")
