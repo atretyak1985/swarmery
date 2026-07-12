@@ -1,20 +1,22 @@
-// Sessions list (design §3.3): project filter (/api/projects), status filter,
-// title search (client-side, debounced), live updates over WS. Project/status
-// filters are pushed to the API as query params; WS upserts are re-checked
-// against the active filter client-side.
-// Redesign layout: mono search input + pill filter chips, sessions grouped by
-// day under mono eyebrow rules, each day one navy list card with hairline
-// dividers.
+// Sessions list (design §3.3): project filter (/api/projects) as a headless
+// dropdown ("● all projects ▾"), status chip row with live counts, title
+// search (client-side, debounced), live updates over WS. The project filter
+// is pushed to the API as a query param; status is filtered CLIENT-side so
+// the chip counts always reflect the searched+project-filtered list.
+// Redesign layout: mono search input + project dropdown + hairline separator
+// + status chips (wrapping row), sessions grouped by day under mono eyebrow
+// rules, each day one navy list card — aligned table columns at ≥900px.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Project, Session, SessionStatus, WSMessage } from '../api/types';
 import { fetchProjects, fetchSessions } from '../api';
+import { projectColor } from '../lib/colors';
 import { projectLabel } from '../lib/format';
 import { liveActionText } from '../lib/payload';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
 import { SessionCard } from '../components/SessionCard';
-import { Empty, ErrorBox, Loading } from '../components/ui';
+import { Empty, ErrorBox, GroupHeader, Loading } from '../components/ui';
 
 const SEARCH_DEBOUNCE_MS = 150;
 
@@ -56,6 +58,161 @@ function FilterChip({
       }`}
     >
       {children}
+    </button>
+  );
+}
+
+/* ----- project dropdown — headless "● all projects ▾" (screenshot 1) ----- */
+
+const ALL_PROJECTS_DOT = '#7c8da3'; // ink-dim — neutral "all projects" dot
+
+function Dot({ color }: { color: string }): JSX.Element {
+  return (
+    <span
+      className="h-1.5 w-1.5 shrink-0 rounded-full"
+      style={{ background: color }}
+      aria-hidden="true"
+    />
+  );
+}
+
+function ProjectDropdown({
+  projects,
+  value,
+  onChange,
+}: {
+  projects: Project[];
+  /** Selected project slug, or null = all projects. */
+  value: string | null;
+  onChange: (slug: string | null) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Escape closes (restoring focus to the trigger); outside click closes.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (e: MouseEvent): void => {
+      if (rootRef.current !== null && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const focusOption = (delta: 1 | -1): void => {
+    const options = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]');
+    if (options === undefined || options.length === 0) return;
+    const list = Array.from(options);
+    const idx = list.indexOf(document.activeElement as HTMLButtonElement);
+    const next = list[(idx + delta + list.length) % list.length];
+    next?.focus();
+  };
+
+  const select = (slug: string | null): void => {
+    onChange(slug);
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const selected = value !== null ? (projects.find((p) => p.slug === value) ?? null) : null;
+  // Deep-linked slug not in /api/projects yet — show the raw slug, keep the filter.
+  const label =
+    value === null ? 'all projects' : selected !== null ? projectLabel(selected.name, selected.slug) : value;
+  const dot = value === null ? ALL_PROJECTS_DOT : projectColor(value);
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="filter by project"
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && open) {
+            e.preventDefault();
+            focusOption(1);
+          }
+        }}
+        className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-line px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-ink-dim aria-expanded:bg-surface2 aria-expanded:text-ink"
+      >
+        <Dot color={dot} />
+        <span className="truncate">{label}</span>
+        <span aria-hidden="true" className="text-[8px]">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div
+          ref={menuRef}
+          role="listbox"
+          aria-label="project"
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              focusOption(e.key === 'ArrowDown' ? 1 : -1);
+            }
+          }}
+          className="absolute top-full left-0 z-20 mt-1 min-w-[180px] overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40"
+        >
+          <DropdownOption
+            selected={value === null}
+            dot={ALL_PROJECTS_DOT}
+            label="all projects"
+            onSelect={() => select(null)}
+          />
+          {projects.map((p) => (
+            <DropdownOption
+              key={p.id}
+              selected={value === p.slug}
+              dot={projectColor(p.slug)}
+              label={projectLabel(p.name, p.slug)}
+              onSelect={() => select(p.slug)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DropdownOption({
+  selected,
+  dot,
+  label,
+  onSelect,
+}: {
+  selected: boolean;
+  dot: string;
+  label: string;
+  onSelect: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      onClick={onSelect}
+      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-[11px] transition-colors hover:bg-surface2 ${
+        selected ? 'text-ink' : 'text-ink-dim'
+      }`}
+    >
+      <Dot color={dot} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {selected && <span aria-hidden="true">✓</span>}
     </button>
   );
 }
@@ -108,30 +265,30 @@ export function Sessions(): JSX.Element {
   useEffect(() => {
     fetchProjects()
       .then(setProjects)
-      .catch(() => setProjects([])); // filter chips degrade gracefully
+      .catch(() => setProjects([])); // dropdown degrades to "all projects"
   }, []);
 
+  // Only the project filter goes to the API — status stays client-side so
+  // the chip counts can be computed over every status of the loaded list.
   const load = useCallback((): void => {
-    const filters: { project?: string; status?: string } = {};
+    const filters: { project?: string } = {};
     if (project !== null) filters.project = project;
-    if (status !== null) filters.status = status;
     fetchSessions(filters)
       .then((list) => {
         setSessions(list);
         setError(null);
       })
       .catch((e: unknown) => setError(String(e)));
-  }, [project, status]);
+  }, [project]);
 
   useEffect(() => {
     setSessions(null);
     load();
   }, [load]);
 
-  const matchesFilter = useCallback(
-    (s: Session): boolean =>
-      (project === null || s.projectSlug === project) && (status === null || s.status === status),
-    [project, status],
+  const matchesProject = useCallback(
+    (s: Session): boolean => project === null || s.projectSlug === project,
+    [project],
   );
 
   const onMessage = useCallback(
@@ -148,24 +305,35 @@ export function Sessions(): JSX.Element {
       setSessions((prev) => {
         if (prev === null) return prev;
         const next = applySessionMessage(prev, msg);
-        return next.filter(matchesFilter);
+        return next.filter(matchesProject);
       });
     },
-    [matchesFilter],
+    [matchesProject],
   );
   useLiveUpdates(onMessage, load);
 
-  const sorted = (sessions ?? [])
-    .slice()
-    .filter((s) => matchesQuery(s, query))
+  // Chip counts come from the searched + project-filtered list (pre-status).
+  const searched = (sessions ?? []).filter((s) => matchesQuery(s, query));
+  const counts: Record<SessionStatus, number> = {
+    active: 0,
+    waiting_approval: 0,
+    idle: 0,
+    completed: 0,
+    killed: 0,
+  };
+  for (const s of searched) counts[s.status] += 1;
+
+  const sorted = searched
+    .filter((s) => status === null || s.status === status)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   const groups = groupByDay(sorted);
 
   return (
     <>
-      {/* Search: full-width above the filters on mobile, 240px inline on desk. */}
-      <div className="flex flex-col gap-1 pt-1 desk:flex-row desk:items-center desk:gap-2">
-        <div className="relative shrink-0 desk:w-[240px]">
+      {/* Filters row (screenshot 1): search · project dropdown │ status chips.
+          Wraps cleanly at 390px — the input takes the first line. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pt-1">
+        <div className="relative w-full desk:w-[240px]">
           <input
             type="text"
             value={search}
@@ -186,30 +354,17 @@ export function Sessions(): JSX.Element {
           )}
         </div>
 
-        <div className="-mx-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-4 py-2.5 [-webkit-overflow-scrolling:touch] desk:mx-0 desk:px-0">
-          <FilterChip selected={project === null} onClick={() => setProject(null)}>
-            all projects
+        <ProjectDropdown projects={projects} value={project} onChange={setProject} />
+        <span className="mx-1 w-px shrink-0 self-stretch bg-line" aria-hidden="true" />
+        {STATUSES.map((s) => (
+          <FilterChip
+            key={s}
+            selected={status === s}
+            onClick={() => setStatus(status === s ? null : s)}
+          >
+            {counts[s] > 0 ? `${STATUS_LABELS[s]} · ${String(counts[s])}` : STATUS_LABELS[s]}
           </FilterChip>
-          {projects.map((p) => (
-            <FilterChip
-              key={p.id}
-              selected={project === p.slug}
-              onClick={() => setProject(project === p.slug ? null : p.slug)}
-            >
-              {projectLabel(p.name, p.slug)}
-            </FilterChip>
-          ))}
-          <span className="mx-1 w-px shrink-0 self-stretch bg-line" aria-hidden="true" />
-          {STATUSES.map((s) => (
-            <FilterChip
-              key={s}
-              selected={status === s}
-              onClick={() => setStatus(status === s ? null : s)}
-            >
-              {STATUS_LABELS[s]}
-            </FilterChip>
-          ))}
-        </div>
+        ))}
       </div>
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
@@ -231,10 +386,9 @@ export function Sessions(): JSX.Element {
       )}
       {groups.map((g) => (
         <section key={g.label}>
-          <div className="mt-4 mb-2 flex items-center gap-2 font-mono text-[10.5px] tracking-[0.1em] text-ink-dim uppercase first-of-type:mt-1">
+          <GroupHeader>
             {g.label} · {g.rows.length} {g.rows.length === 1 ? 'session' : 'sessions'}
-            <span className="h-px flex-1 bg-line" aria-hidden="true" />
-          </div>
+          </GroupHeader>
           <div className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface">
             {g.rows.map((s) => (
               <SessionCard key={s.id} session={s} now={nowById[s.id] ?? null} flat />
