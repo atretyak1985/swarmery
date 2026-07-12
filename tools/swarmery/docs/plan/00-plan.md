@@ -117,7 +117,7 @@ R7 `--port`/`SWARMERY_PORT`. New in v2:
 - Phase 1: [x] 01 [x] 02 [x] 03-GATE
 - Phase 2: [x] 04 [x] 05-GATE
 - Phase 3: [x] 06 [x] 07 [x] 08 [x] 09-GATE
-- Phase 4: [x] 10 [x] 11 [ ] 12-GATE (verdict pending owner)
+- Phase 4: [x] 10 [x] 11 [x] 12-GATE — SHIPPED 2026-07-12
 
 ## How to use
 

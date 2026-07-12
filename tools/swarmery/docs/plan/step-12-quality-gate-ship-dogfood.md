@@ -56,11 +56,11 @@ Dogfooding kickoff (T4):
 
 ## Success Criteria
 
-- [ ] Daemon survives kickstart/re-login; dashboard live without manual start
-- [ ] Live session visible < 3 s; 3–4 real session details verified
-- [ ] All MVP success-criteria boxes in 00-plan.md checked
-- [ ] `docs/plan/phase2-backlog.md` created (may start empty with the entry template)
-- [ ] GATE VERDICT recorded: SHIPPED / FAIL(+blocker)
+- [x] Daemon survives kickstart/re-login; dashboard live without manual start
+- [x] Live session visible < 3 s; 3–4 real session details verified
+- [x] All MVP success-criteria boxes in 00-plan.md checked
+- [x] `docs/plan/phase2-backlog.md` created (may start empty with the entry template)
+- [x] GATE VERDICT recorded: SHIPPED / FAIL(+blocker)
 
 ## Navigation
 
@@ -69,5 +69,5 @@ Previous: [step-11-install-daemon.md](step-11-install-daemon.md) · Next: — (M
 ### Completion Report
 
 ```
-Date/reviewer: · Verdict: · Backfill totals: · First dogfooding notes: · Phase-2 plan trigger date:
+Date/reviewer: 2026-07-12 / owner · Verdict: SHIPPED · Backfill totals: 457 files / 114,687 lines / 11 projects / 115 sessions / 24,813 events, 0 errors, 9.7s; live-tail lag 134–359ms on the build session itself; today $45.05 (partial-sum warning on 2 <synthetic> turns) · First dogfooding notes: phase2-backlog.md seeded with 3 carried candidates · Phase-2 plan trigger date: when backlog has enough real entries (owner decides)
 ```
