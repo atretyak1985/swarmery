@@ -20,3 +20,41 @@ Request format:
 ---
 
 <!-- Append requests below this line. -->
+
+## 2026-07-12 — feat/swarmery-frontend — event_appended has no session attribution
+
+- What: `WSMessage` `event_appended` payload is a bare `Event`, which carries
+  `turnId` but no session id. List views (Overview, Sessions) cannot attribute
+  a live event to a session card (e.g. the "now: <current command>" line from
+  the mockup), and the detail view can only attribute events whose `turnId`
+  already exists in the loaded detail.
+- Why: live "current action" per session is a core mockup element; today the
+  frontend works around it by ignoring `event_appended` in list views and
+  matching via `turnId` in the detail view.
+- Proposed shape:
+
+  ```ts
+  export type WSMessage =
+    | { type: "session_started"; payload: Session }
+    | { type: "session_updated"; payload: Session }
+    | { type: "event_appended"; payload: { sessionId: number; event: Event } };
+  ```
+
+## 2026-07-12 — feat/swarmery-frontend — session list aggregates for cards
+
+- What: optional aggregate fields on `sessionDTO` for list rendering:
+  tool-call count, session cost, and a short "current/last action" summary.
+- Why: mockup session cards show `12 tool calls · 2 subagents · $0.84` and
+  `now: go test ./internal/mail/...`; none of that is derivable from
+  `GET /api/sessions` today (cards currently show model · branch · times).
+  Nice-to-have, not blocking.
+- Proposed shape:
+
+  ```ts
+  export interface Session {
+    // …existing fields…
+    toolCalls?: number; // COUNT(events WHERE type='tool_call')
+    costUsd?: number | null; // SUM(turns.cost_usd)
+    lastAction?: string | null; // toolName + arg summary of latest event
+  }
+  ```
