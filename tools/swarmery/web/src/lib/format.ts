@@ -13,6 +13,14 @@ export function fmtCost(n: number | null): string {
   return `$${n.toFixed(2)}`;
 }
 
+/**
+ * Clean project display label: prefer the project name, fall back to the
+ * slug ("-Volumes-Work-swarmery") only while the name is still unset.
+ */
+export function projectLabel(name: string | null | undefined, slug: string): string {
+  return name != null && name !== '' ? name : slug;
+}
+
 /** Duration in ms → "0.3s" / "8.4s" / "4m 12s". */
 export function fmtDurationMs(ms: number | null): string {
   if (ms === null) return '';

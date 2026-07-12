@@ -36,6 +36,7 @@ type sessionDTO struct {
 	ID          int64   `json:"id"`
 	ProjectID   int64   `json:"projectId"`
 	ProjectSlug string  `json:"projectSlug"`
+	ProjectName *string `json:"projectName"`
 	SessionUUID string  `json:"sessionUuid"`
 	Model       *string `json:"model"`
 	GitBranch   *string `json:"gitBranch"`
@@ -129,7 +130,7 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 // per-session token/cost aggregates (parity contract) computed in ONE
 // aggregate JOIN — never per-row subqueries (no N+1).
 const sessionSelect = `
-	SELECT s.id, s.project_id, p.slug, s.session_uuid, s.model, s.git_branch, s.cwd,
+	SELECT s.id, s.project_id, p.slug, p.name, s.session_uuid, s.model, s.git_branch, s.cwd,
 	       s.status, s.started_at, s.ended_at, s.title, s.source,
 	       agg.tokens, agg.cost_usd
 	FROM sessions s
@@ -271,7 +272,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func scanSession(scan func(...any) error, s *sessionDTO) error {
-	return scan(&s.ID, &s.ProjectID, &s.ProjectSlug, &s.SessionUUID, &s.Model,
+	return scan(&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
 		&s.Tokens, &s.CostUSD)
 }

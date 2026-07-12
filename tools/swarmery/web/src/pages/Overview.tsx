@@ -18,6 +18,7 @@ import {
   fmtTokens,
   isoDay,
   parseDay,
+  projectLabel,
 } from '../lib/format';
 import { liveActionText } from '../lib/payload';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
@@ -185,7 +186,9 @@ function HeroCard({ session, now }: { session: Session; now: string | null }): J
               style={{ background: projectColor(session.projectSlug) }}
               aria-hidden="true"
             />
-            <span className="truncate font-mono text-[11px] text-ink">{session.projectSlug}</span>
+            <span className="truncate font-mono text-[11px] text-ink">
+              {projectLabel(session.projectName, session.projectSlug)}
+            </span>
           </span>
           {meta !== '' && (
             <span className="truncate font-mono text-[11px] text-ink-dim">{meta}</span>
@@ -224,7 +227,9 @@ function CompletedRow({ session }: { session: Session }): JSX.Element {
           style={{ background: projectColor(session.projectSlug) }}
           aria-hidden="true"
         />
-        <span className="truncate font-mono text-[11px] text-ink-3">{session.projectSlug}</span>
+        <span className="truncate font-mono text-[11px] text-ink-3">
+          {projectLabel(session.projectName, session.projectSlug)}
+        </span>
       </span>
       <span
         className={`truncate text-[13px] font-semibold ${session.title === null ? 'font-normal text-ink-dim italic' : ''}`}
@@ -281,7 +286,7 @@ function Rail({ stats, isToday }: { stats: StatsOverview; isToday: boolean }): J
         {stats.errors_by_project.map((row) => (
           <div key={row.slug} className="mt-2.5">
             <div className="flex justify-between font-mono text-[11px]">
-              <span className="truncate text-ink-3">{row.name ?? row.slug}</span>
+              <span className="truncate text-ink-3">{projectLabel(row.name, row.slug)}</span>
               <span className="text-red">{row.errors}</span>
             </div>
             <Bar pct={errTotal > 0 ? row.errors / errTotal : 0} className="bg-red/65" />
@@ -322,7 +327,7 @@ function Rail({ stats, isToday }: { stats: StatsOverview; isToday: boolean }): J
               aria-hidden="true"
             />
             <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink">
-              {row.slug}
+              {projectLabel(row.name, row.slug)}
             </span>
             <span className="font-mono text-[10.5px] whitespace-nowrap text-ink-dim">
               {row.sessions} {isToday ? 'today' : 'this day'}

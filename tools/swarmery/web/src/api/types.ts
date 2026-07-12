@@ -63,6 +63,8 @@ export interface Session {
   id: number;
   projectId: number;
   projectSlug: string;
+  /** Clean project display name (projects.name, base of the path); additive — null until healed. */
+  projectName?: string | null;
   sessionUuid: string;
   model: string | null;
   gitBranch: string | null;

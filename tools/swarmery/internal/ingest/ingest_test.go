@@ -98,6 +98,22 @@ func TestIngestSimpleSession(t *testing.T) {
 	}
 }
 
+// New projects get a clean display name derived from the cwd path base
+// ("/Users/user/work/example-app" → "example-app"), never the slug.
+func TestProjectNameDerivedFromPath(t *testing.T) {
+	db := testDB(t)
+	if _, err := File(db, filepath.Join(fixtures, "simple-session.jsonl")); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	var name string
+	if err := db.QueryRow(`SELECT name FROM projects`).Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if name != "example-app" {
+		t.Errorf("project name = %q, want %q (base of cwd path)", name, "example-app")
+	}
+}
+
 func TestIngestToolHeavySession(t *testing.T) {
 	db := testDB(t)
 	if _, err := File(db, filepath.Join(fixtures, "tool-heavy-session.jsonl")); err != nil {

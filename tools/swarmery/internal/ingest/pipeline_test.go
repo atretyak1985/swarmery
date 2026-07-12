@@ -287,6 +287,47 @@ func TestRepeatedBackfillNoDuplicates(t *testing.T) {
 
 // TestCorruptFileDoesNotStopScanner: a binary-garbage file and an unreadable
 // file must be skipped/counted while every healthy file is still ingested.
+// TestBackfillHealsNullProjectNames: rows written before display names
+// existed (name IS NULL) are healed to base(path) by the next Backfill pass
+// (i.e. within seconds of a daemon restart), while a non-NULL name — a future
+// rename UI — is never overwritten.
+func TestBackfillHealsNullProjectNames(t *testing.T) {
+	db := testDB(t)
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Legacy row: NULL name, real path.
+	mustExec(`INSERT INTO projects (path, slug, first_seen) VALUES (?, ?, ?)`,
+		"/Volumes/Work/swarmery", "-Volumes-Work-swarmery", "2026-07-10T12:00:00Z")
+	// Renamed row: user-chosen name must survive.
+	mustExec(`INSERT INTO projects (path, slug, name, first_seen) VALUES (?, ?, ?, ?)`,
+		"/Users/user/work/orders-api", "-Users-user-work-orders-api", "Orders API", "2026-07-10T12:00:00Z")
+
+	// Empty projects root: no transcripts change, so healing must not depend
+	// on any file being re-ingested.
+	NewPipeline(db, Config{ProjectsRoot: t.TempDir()}, nil).Backfill(context.Background())
+
+	var healed string
+	if err := db.QueryRow(
+		`SELECT name FROM projects WHERE path = '/Volumes/Work/swarmery'`).Scan(&healed); err != nil {
+		t.Fatal(err)
+	}
+	if healed != "swarmery" {
+		t.Errorf("healed name = %q, want %q", healed, "swarmery")
+	}
+	var kept string
+	if err := db.QueryRow(
+		`SELECT name FROM projects WHERE path = '/Users/user/work/orders-api'`).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept != "Orders API" {
+		t.Errorf("non-NULL name overwritten: got %q, want %q", kept, "Orders API")
+	}
+}
+
 func TestCorruptFileDoesNotStopScanner(t *testing.T) {
 	db := testDB(t)
 	root := fixtureRoot(t)

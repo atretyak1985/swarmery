@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { SessionDetail, SessionStatus, WSMessage } from '../api/types';
 import { fetchSession } from '../api';
-import { fmtAgo, fmtCost, fmtDateTime, fmtSpan, fmtTokens } from '../lib/format';
+import { fmtAgo, fmtCost, fmtDateTime, fmtSpan, fmtTokens, projectLabel } from '../lib/format';
 import { useLiveUpdates } from '../lib/ws';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
@@ -120,7 +120,7 @@ export function SessionDetailPage(): JSX.Element {
         </Link>
         <span aria-hidden="true">/</span>
         <span className="truncate font-mono text-[11px] text-brand">
-          {detail.projectSlug}
+          {projectLabel(detail.projectName, detail.projectSlug)}
           {detail.gitBranch !== null ? ` · ${detail.gitBranch}` : ''}
         </span>
       </div>

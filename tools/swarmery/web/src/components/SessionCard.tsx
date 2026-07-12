@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Session } from '../api/types';
-import { fmtSpan, fmtTime } from '../lib/format';
+import { fmtSpan, fmtTime, projectLabel } from '../lib/format';
 import { LiveDot, StatusChip } from './ui';
 
 function meta(session: Session): string {
@@ -53,7 +53,7 @@ export function SessionCard({
         <span
           className={`min-w-0 flex-1 truncate font-mono text-[11px] ${flat ? 'text-ink-3' : 'text-ink'}`}
         >
-          {session.projectSlug}
+          {projectLabel(session.projectName, session.projectSlug)}
         </span>
         <StatusChip status={session.status} suffix={chipSuffix(session)} />
       </div>

@@ -104,6 +104,14 @@ func (p *Pipeline) discover() []string {
 // are logged and counted, never fatal.
 func (p *Pipeline) Backfill(ctx context.Context) Metrics {
 	start := time.Now()
+	// Heal legacy NULL project names first: unchanged transcripts are offset
+	// no-ops (TailFile returns early at size == offset), so pre-existing
+	// projects would otherwise never get their derived display name.
+	if healed, err := HealProjectNames(p.db); err != nil {
+		log.Printf("warn: ingest: heal project names: %v", err)
+	} else if healed > 0 {
+		log.Printf("ingest: healed %d project name(s) from path", healed)
+	}
 	files := p.discover()
 	for _, f := range files {
 		if ctx.Err() != nil {

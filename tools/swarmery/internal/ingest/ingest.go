@@ -243,7 +243,9 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 		sessionUUID).Scan(&in.sessionID, &in.projectID)
 	switch {
 	case err == sql.ErrNoRows:
-		// Project keyed by cwd path; slug derived as '/' → '-' (§1).
+		// Project keyed by cwd path; slug derived as '/' → '-' (§1); display
+		// name is the path base — filled only while NULL so a future rename
+		// UI always wins over the derived default.
 		if cwd == "" {
 			cwd = "(unknown)"
 		}
@@ -252,8 +254,8 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 		switch {
 		case perr == sql.ErrNoRows:
 			res, err := in.tx.Exec(
-				`INSERT INTO projects (path, slug, first_seen, last_activity) VALUES (?, ?, ?, ?)`,
-				cwd, slug, firstTS, lastTS)
+				`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
+				cwd, slug, projectNameFor(cwd), firstTS, lastTS)
 			if err != nil {
 				return fmt.Errorf("insert project: %w", err)
 			}
@@ -261,6 +263,13 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 			in.stats.Projects++
 		case perr != nil:
 			return perr
+		default:
+			// Pre-existing row (older ingests left name NULL) — heal in place.
+			if _, err := in.tx.Exec(
+				`UPDATE projects SET name = ? WHERE id = ? AND name IS NULL`,
+				projectNameFor(cwd), in.projectID); err != nil {
+				return err
+			}
 		}
 
 		res, err := in.tx.Exec(
@@ -1002,6 +1011,51 @@ func (in *ingester) dedupKey(r *record, path, scope string) string {
 	}
 	sum := sha256.Sum256(append([]byte(path+"\n"), r.raw...))
 	return hex.EncodeToString(sum[:])
+}
+
+// ── project display names ────────────────────────────────────────────────────
+
+// projectNameFor derives the default display name of a project from its cwd
+// path: the last path element ("/Volumes/Work/swarmery" → "swarmery").
+func projectNameFor(path string) string {
+	return filepath.Base(path)
+}
+
+// HealProjectNames backfills projects.name = base(path) for rows where the
+// name is still NULL (rows written before names existed). Non-NULL names are
+// NEVER overwritten — a user rename must always win over the derived default.
+// Called from every Backfill pass, so existing databases heal on the first
+// daemon restart (or `swarmery backfill`) after upgrading.
+func HealProjectNames(db *sql.DB) (int, error) {
+	rows, err := db.Query(`SELECT id, path FROM projects WHERE name IS NULL`)
+	if err != nil {
+		return 0, err
+	}
+	type row struct {
+		id   int64
+		path string
+	}
+	var todo []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.path); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		todo = append(todo, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, r := range todo {
+		if _, err := db.Exec(
+			`UPDATE projects SET name = ? WHERE id = ? AND name IS NULL`,
+			projectNameFor(r.path), r.id); err != nil {
+			return 0, err
+		}
+	}
+	return len(todo), nil
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ import (
 // payloads. Any drift between the Go DTOs and types.ts fails this test.
 var (
 	sessionKeys = []string{
-		"id", "projectId", "projectSlug", "sessionUuid", "model", "gitBranch",
+		"id", "projectId", "projectSlug", "projectName", "sessionUuid", "model", "gitBranch",
 		"cwd", "status", "startedAt", "endedAt", "title", "source",
 		// parity wave: additive per-session aggregates (nullable).
 		"tokens", "costUsd",
