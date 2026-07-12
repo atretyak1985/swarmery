@@ -147,6 +147,64 @@ Previous: [step-2.2-quality-gate-contract-freeze.md](step-2.2-quality-gate-contr
 
 ### Completion Report
 
-```
-(заповнюється виконавцем після завершення)
-```
+Status: **DONE** — all success criteria met; branch `feat/swarmery-hooks`,
+committed, not pushed.
+
+**New packages / files**
+
+- `internal/approvals/` — store layer + dedup (frozen D6 `dedup_hash`) +
+  in-memory long-poll waiter registry (fan-out to all attached waiters) +
+  expiry sweeper (5 s ticker; overdue → `expired`, waiters get 204 upstream;
+  self-heals sessions stuck in `waiting_approval`) + heartbeat.
+- `internal/api/approvals.go` — HTTP endpoints + `requireLocalOrigin` (D4).
+- `internal/hookshim/` — `swarmery hook <permission-request|stop>` shim.
+- `internal/hookcfg/` — `swarmery hooks install|uninstall|status`.
+- Touched: `internal/api/{routes,ws,health}.go`, `internal/ingest/{bus,ingest}.go`,
+  `cmd/swarmery/main.go` (`--bind` 127.0.0.1 default, `--approval-timeout`,
+  `hook`/`hooks` subcommands).
+
+**Endpoints** (all writes behind the Origin check; no-Origin/curl/shim pass):
+- `POST /api/hooks/permission-request` — verbatim stdin in; long-poll ≤120 s;
+  200 `{decision, message?}` / 204 (expiry/elsewhere) / 429 (>20 pending) /
+  400 (malformed). Mints request identity (E1/E11); dedup attaches, one
+  decision fans out; emits `session_updated`+`event_appended`+`permission_requested`.
+- `POST /api/hooks/stop` — always 202, heartbeat only.
+- `POST /api/approvals/{id}` `{action:approve|deny, reason?}` — 200 DTO / 404 /
+  409 (repeat resolve); `resolved_via='dashboard'`; restores session status.
+- `GET /api/approvals?status=&limit=` — newest first; pending default;
+  `resolved`/`all` meta-filters.
+- `GET /api/health` — additive `hooks_last_seen`.
+
+**Shim**: 500 ms connect timeout, ≤120 s poll; 200 → exact `hookSpecificOutput`
+JSON (E2/E3); anything else → exit 0 with NO stdout (fail-open D3). Port from
+`SWARMERY_PORT`. Audit line per call in `~/.swarmery/hook.log`.
+
+**Installer**: writes PermissionRequest (matcher `*`, timeout 130) + Stop into
+`.claude/settings.local.json` invoking `~/.swarmery/bin/swarmery hook …`;
+create-if-absent, parse-fail aborts w/o write, `.bak` before first write,
+idempotent, uninstall removes ONLY `swarmery hook` entries (foreign settings
+byte-for-byte), `--all` iterates the daemon DB projects, `status` reports
+installed/stale/not-installed. No `--user` (deferred).
+
+**Tests** (`go test -race ./...` green): dedup fan-out (store + HTTP), long-poll
+approve/deny/timeout-204/client-disconnect, expiry sweeper + stuck-session
+heal, Origin allow/deny, shim allow/deny/204/non-contract/daemon-down-<1.5 s/
+stop, installer idempotency + preserve-foreign + uninstall-only-ours + broken-
+JSON-abort + stale-detect + port-bake, WS golden-key for both `permission_*`
+shapes, ingest source `hook`→`both` + `waiting_approval` non-overwrite.
+
+**Live validation** (scratch daemon `:7799`, scratch DB, throwaway
+`/tmp/p2-live/proj`, real Claude Code 2.1.170 over PTY; real `:7777` daemon
+untouched):
+1. Approve — session `ee1f16cd`, request id=4, dashboard approve → TUI
+   `HTTP/2 200` (curl proceeded).
+2. Deny — session `c9d00d8c`, request id=5, deny+reason → TUI `Denied`, reason
+   stored (`SWARMERY-DENY-MARKER blocked by reviewer`).
+3. Daemon down — native `Do you want to proceed?` dialog appeared (fail-open);
+   shim connect fail-open measured **0.031 s** (≤1 s budget).
+Installer idempotency + Origin 403 + loopback-only bind verified live.
+`/tmp/p2-live` and the throwaway hooks + test `hook.log` cleaned up.
+
+**Contract requests**: none — the frozen contract matched exactly.
+**Deviations**: none material. Heartbeat kept in-memory (a stale value
+surviving a restart would misreport hooks as alive). `--user` deferred per D2.
