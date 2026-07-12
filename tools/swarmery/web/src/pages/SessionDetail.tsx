@@ -12,6 +12,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
+import { SummaryChips } from './detail/SummaryChips';
 
 const STATUS_TONES: Record<SessionStatus, string> = {
   active: 'text-green',
@@ -124,6 +125,8 @@ export function SessionDetailPage(): JSX.Element {
           <Kv label="last event" value={fmtAgo(lastEvent.ts)} />
         )}
       </div>
+
+      <SummaryChips events={detail.events} />
 
       <div className="mt-4 flex gap-0.5 border-b border-line" role="tablist">
         <TabButton active={tab === 'timeline'} onClick={() => setTab('timeline')}>

@@ -277,7 +277,7 @@ const s1Events: Event[] = [
     status: 'ok',
     durationMs: null,
     payload: {
-      agentType: 'backend-tests',
+      subagent_type: 'backend-tests',
       description: 'Port template rendering to provider v2 and make the mail tests pass',
     },
   },
@@ -359,7 +359,10 @@ const s1Events: Event[] = [
     parentEventId: null,
     status: 'ok',
     durationMs: 31_000,
-    payload: { skill: 'code-review-checklist → 2 findings, fixed' },
+    payload: {
+      input: { skill: 'code-review-checklist' },
+      result: { commandName: 'code-review-checklist', success: true },
+    },
   },
   {
     id: 111,

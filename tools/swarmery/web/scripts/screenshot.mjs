@@ -39,6 +39,8 @@ await shot(mobile, '/', 'overview.png');
 await shot(mobile, '/sessions', 'sessions.png');
 // Session 1 is the subagent fixture — full page so the nested track is visible.
 await shot(mobile, '/sessions/1', 'session-detail-timeline.png', { fullPage: true });
+// Viewport-only shot: agents/skills summary chips visible without scrolling.
+await shot(mobile, '/sessions/1', 'session-detail-chips.png');
 await mobile.getByRole('tab', { name: /Diffs/ }).click();
 await mobile.waitForTimeout(300);
 await mobile.screenshot({ path: join(outDir, 'session-detail-diffs.png'), fullPage: true });

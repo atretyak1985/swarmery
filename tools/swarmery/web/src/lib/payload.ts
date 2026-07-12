@@ -74,6 +74,19 @@ export function subagentName(event: Event): string {
   );
 }
 
+/**
+ * Skill name from a skill_use payload. Real daemon rows nest it under
+ * `input.skill` / `result.commandName`; flat `skill`/`name` kept as fallback.
+ */
+export function skillName(event: Event): string | null {
+  if (!isRecord(event.payload)) return null;
+  return (
+    pickString(event.payload['input'], ['skill']) ??
+    pickString(event.payload['result'], ['commandName']) ??
+    pickString(event.payload, ['skill', 'name'])
+  );
+}
+
 /** Pretty-printed payload for the expanded state. */
 export function payloadJson(event: Event): string {
   try {
