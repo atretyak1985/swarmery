@@ -19,6 +19,8 @@ var (
 	sessionKeys = []string{
 		"id", "projectId", "projectSlug", "sessionUuid", "model", "gitBranch",
 		"cwd", "status", "startedAt", "endedAt", "title", "source",
+		// parity wave: additive per-session aggregates (nullable).
+		"tokens", "costUsd",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",

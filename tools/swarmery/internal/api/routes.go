@@ -17,4 +17,10 @@ func Routes(mux *http.ServeMux, h *Handler) {
 
 	// wave C: stats
 	mux.HandleFunc("GET /api/stats/today", h.statsToday)
+
+	// parity: docs/stats/health (design-parity wave — dashboard endpoints)
+	mux.HandleFunc("GET /api/health", h.health)
+	mux.HandleFunc("GET /api/docs", h.listDocs)
+	mux.HandleFunc("GET /api/docs/{slug}", h.getDoc)
+	mux.HandleFunc("GET /api/stats/overview", h.statsOverview)
 }

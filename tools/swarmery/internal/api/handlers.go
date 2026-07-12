@@ -4,14 +4,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"log"
 	"net/http"
 	"strconv"
 )
 
-// Handler bundles the API dependencies (just the DB for the skeleton).
+// Handler bundles the API dependencies.
 type Handler struct {
 	DB *sql.DB
+	// Watching reports whether the live ingest pipeline is attached
+	// (serve without --no-ingest); surfaced by GET /api/health.
+	Watching bool
+	// Docs is the markdown source for /api/docs — the embedded docsfs
+	// snapshot in production, overridable with any fs.FS in tests.
+	Docs fs.FS
 }
 
 type projectDTO struct {
@@ -38,6 +45,11 @@ type sessionDTO struct {
 	EndedAt     *string `json:"endedAt"`
 	Title       *string `json:"title"`
 	Source      string  `json:"source"`
+	// Parity contract: per-session aggregates over deduped turns.
+	// tokens = SUM(tokens_in + tokens_out), null while the session has no
+	// turns; costUsd = SUM(cost_usd), null while no turn is priced.
+	Tokens  *int64   `json:"tokens"`
+	CostUSD *float64 `json:"costUsd"`
 }
 
 type turnDTO struct {
@@ -113,12 +125,25 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, projects, rows.Err())
 }
 
+// sessionSelect is the shared session projection: entity columns plus the
+// per-session token/cost aggregates (parity contract) computed in ONE
+// aggregate JOIN — never per-row subqueries (no N+1).
+const sessionSelect = `
+	SELECT s.id, s.project_id, p.slug, s.session_uuid, s.model, s.git_branch, s.cwd,
+	       s.status, s.started_at, s.ended_at, s.title, s.source,
+	       agg.tokens, agg.cost_usd
+	FROM sessions s
+	JOIN projects p ON p.id = s.project_id
+	LEFT JOIN (
+		SELECT session_id,
+		       SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)) AS tokens,
+		       SUM(cost_usd) AS cost_usd
+		FROM turns GROUP BY session_id
+	) agg ON agg.session_id = s.id`
+
 // GET /api/sessions?project=<slug|id>&status=<status>
 func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
-	query := `
-		SELECT s.id, s.project_id, p.slug, s.session_uuid, s.model, s.git_branch, s.cwd,
-		       s.status, s.started_at, s.ended_at, s.title, s.source
-		FROM sessions s JOIN projects p ON p.id = s.project_id WHERE 1=1`
+	query := sessionSelect + ` WHERE 1=1`
 	args := []any{}
 	if project := r.URL.Query().Get("project"); project != "" {
 		query += ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
@@ -158,10 +183,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var d sessionDetailDTO
-	err := scanSession(h.DB.QueryRow(`
-		SELECT s.id, s.project_id, p.slug, s.session_uuid, s.model, s.git_branch, s.cwd,
-		       s.status, s.started_at, s.ended_at, s.title, s.source
-		FROM sessions s JOIN projects p ON p.id = s.project_id WHERE `+where, idArg).Scan, &d.sessionDTO)
+	err := scanSession(h.DB.QueryRow(sessionSelect+` WHERE `+where, idArg).Scan, &d.sessionDTO)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
 		return
@@ -250,7 +272,8 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 
 func scanSession(scan func(...any) error, s *sessionDTO) error {
 	return scan(&s.ID, &s.ProjectID, &s.ProjectSlug, &s.SessionUUID, &s.Model,
-		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source)
+		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
+		&s.Tokens, &s.CostUSD)
 }
 
 func writeJSON(w http.ResponseWriter, v any, err error) {

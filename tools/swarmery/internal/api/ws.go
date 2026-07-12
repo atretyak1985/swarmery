@@ -123,10 +123,7 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 
 func (h *Handler) sessionByID(id int64) (*sessionDTO, error) {
 	var s sessionDTO
-	err := scanSession(h.DB.QueryRow(`
-		SELECT s.id, s.project_id, p.slug, s.session_uuid, s.model, s.git_branch, s.cwd,
-		       s.status, s.started_at, s.ended_at, s.title, s.source
-		FROM sessions s JOIN projects p ON p.id = s.project_id WHERE s.id = ?`, id).Scan, &s)
+	err := scanSession(h.DB.QueryRow(sessionSelect+` WHERE s.id = ?`, id).Scan, &s)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

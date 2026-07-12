@@ -223,7 +223,7 @@ func cmdServe(args []string) error {
 		log.Printf("swarmery ingest pipeline watching %s (rescan %s)", cfg.ProjectsRoot, cfg.RescanInterval)
 	}
 
-	handler, err := api.NewServer(db)
+	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
 		return err
 	}

@@ -22,7 +22,7 @@ func testServer(t *testing.T) *httptest.Server {
 	if _, err := ingest.File(db, filepath.Join("..", "..", "testdata", "fixtures", "subagent-session.jsonl")); err != nil {
 		t.Fatalf("ingest fixture: %v", err)
 	}
-	h, err := NewServer(db)
+	h, err := NewServer(db, false)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}

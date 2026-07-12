@@ -59,7 +59,7 @@ func statsServer(t *testing.T) *httptest.Server {
 		(1, ?, 'tool_call', 'ok',    'e2'),
 		(2, ?, 'error',     'error', 'e3')`, today, today, old)
 
-	h, err := NewServer(db)
+	h, err := NewServer(db, false)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}
