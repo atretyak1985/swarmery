@@ -540,7 +540,12 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 		if len(r.ToolUseResult) > 0 {
 			_ = json.Unmarshal(r.ToolUseResult, &ar)
 		}
-		if ar.Status != "" && ar.Status != "completed" {
+		// Background (run_in_background) launch: the tool_result arrives
+		// immediately ("Async agent launched") while the sidechain keeps
+		// running — neither an error nor a real duration. The sidechain
+		// ingest refines duration_ms later (reconcileAsyncSubagent).
+		async := ar.IsAsync || ar.Status == "async_launched"
+		if ar.Status != "" && ar.Status != "completed" && !async {
 			status = "error"
 		}
 		if ar.TotalDurationMs > 0 {
@@ -561,10 +566,22 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 			return err
 		}
 		// Also close the start event's status for convenience.
-		_, err := in.tx.Exec(
+		if _, err := in.tx.Exec(
 			`UPDATE events SET status = ?, duration_ms = ? WHERE id = ?`,
-			status, durationMs, p.eventID)
-		return err
+			status, durationMs, p.eventID); err != nil {
+			return err
+		}
+		// Heal the tail race: sidechain events ingested before this Agent
+		// call existed carry a NULL parent — adopt them now that the result
+		// reveals the sidechain agentId, then derive the real duration of a
+		// background agent from whatever sidechain rows are already stored.
+		if err := in.adoptOrphanSidechainEvents(ar.AgentID, p.eventID); err != nil {
+			return err
+		}
+		if async {
+			return in.reconcileAsyncSubagent(p.eventID, "")
+		}
+		return nil
 	}
 
 	// Regular tool: merge structured result into payload (minus originalFile, §11).
@@ -703,7 +720,79 @@ func (in *ingester) ingestSidechain(path string) error {
 	if err := in.processRecords(recs, path, true, scope, parentID); err != nil {
 		return err
 	}
+	if parentID != 0 {
+		if err := in.adoptOrphanSidechainEvents(scope, parentID); err != nil {
+			return err
+		}
+		if err := in.reconcileAsyncSubagent(parentID, lastRecordTS(recs)); err != nil {
+			return err
+		}
+	}
 	return in.recordOffset(path, consumed)
+}
+
+// adoptOrphanSidechainEvents backfills parent_event_id for sidechain events
+// that were ingested before their parent subagent_start row existed (live-tail
+// race: a sidechain batch can be flushed and picked up before the main
+// transcript's Agent tool_use line). Matching is by dedup-key scope — the
+// sidechain agentId prefix. Idempotent: already-parented rows are untouched.
+func (in *ingester) adoptOrphanSidechainEvents(scope string, parentID int64) error {
+	if scope == "" || parentID == 0 {
+		return nil
+	}
+	_, err := in.tx.Exec(
+		`UPDATE events SET parent_event_id = ?
+		 WHERE session_id = ? AND parent_event_id IS NULL AND turn_id IS NULL
+		   AND substr(dedup_key, 1, ?) = ?`,
+		parentID, in.sessionID, len(scope)+1, scope+":")
+	return err
+}
+
+// reconcileAsyncSubagent fixes the duration of background (run_in_background)
+// Agent calls. Their tool_result arrives ~immediately with status
+// "async_launched" and no totalDurationMs, so the subagent_start/stop rows are
+// closed with the launch roundtrip (~0.1s) while the sidechain runs for
+// minutes. Once sidechain records are ingested, the real duration is the span
+// subagent_start.ts → last sidechain record timestamp (lastTS; when empty the
+// latest stored child event ts is used instead). Monotonic and idempotent:
+// the duration only ever grows towards the sidechain's true end, so live tail
+// batches refine it and re-ingest converges to the same value.
+func (in *ingester) reconcileAsyncSubagent(parentID int64, lastTS string) error {
+	if lastTS == "" {
+		var maxTS sql.NullString
+		if err := in.tx.QueryRow(
+			`SELECT MAX(ts) FROM events WHERE parent_event_id = ? AND type != 'subagent_stop'`,
+			parentID).Scan(&maxTS); err != nil {
+			return err
+		}
+		if !maxTS.Valid {
+			return nil // no sidechain rows yet — a later sidechain batch refines it
+		}
+		lastTS = maxTS.String
+	}
+	var stopID int64
+	var startTS string
+	err := in.tx.QueryRow(
+		`SELECT stop.id, start.ts FROM events stop
+		 JOIN events start ON start.id = stop.parent_event_id
+		 WHERE stop.parent_event_id = ? AND stop.type = 'subagent_stop'
+		   AND json_extract(stop.payload, '$.status') = 'async_launched'`,
+		parentID).Scan(&stopID, &startTS)
+	if err == sql.ErrNoRows {
+		return nil // foreground agent (or stop not ingested yet) — nothing to fix
+	}
+	if err != nil {
+		return err
+	}
+	d := parseTS(lastTS).Sub(parseTS(startTS)).Milliseconds()
+	if d <= 0 {
+		return nil
+	}
+	_, err = in.tx.Exec(
+		`UPDATE events SET duration_ms = ?
+		 WHERE id IN (?, ?) AND (duration_ms IS NULL OR duration_ms < ?)`,
+		d, parentID, stopID, d)
+	return err
 }
 
 // ── row helpers ──────────────────────────────────────────────────────────────
@@ -835,6 +924,16 @@ func (in *ingester) dedupKey(r *record, path, scope string) string {
 }
 
 // ── small utilities ──────────────────────────────────────────────────────────
+
+// lastRecordTS returns the timestamp of the last record that carries one.
+func lastRecordTS(recs []record) string {
+	for i := len(recs) - 1; i >= 0; i-- {
+		if recs[i].Timestamp != "" {
+			return recs[i].Timestamp
+		}
+	}
+	return ""
+}
 
 func parseTS(s string) time.Time {
 	t, err := time.Parse(time.RFC3339Nano, s)

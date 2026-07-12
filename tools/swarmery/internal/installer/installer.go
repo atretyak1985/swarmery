@@ -13,15 +13,36 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // System bundles the environment the installer operates on. Tests use a
 // temp Home and a fake Runner; production wires os.UserHomeDir + ExecRunner.
 type System struct {
-	Home string    // user home directory
-	UID  string    // numeric user id, for the gui/<uid> launchd domain
-	Run  Runner    // executes launchctl / ps
-	Out  io.Writer // human-readable progress output
+	Home  string              // user home directory
+	UID   string              // numeric user id, for the gui/<uid> launchd domain
+	Run   Runner              // executes launchctl / ps
+	Out   io.Writer           // human-readable progress output
+	Sleep func(time.Duration) // nil → time.Sleep (tests inject a no-op)
+}
+
+// launchd bootout is asynchronous: the service can linger in the domain for a
+// moment after `launchctl bootout` returns, so an immediate bootstrap fails
+// with exit 5 (Input/output error). Reinstall therefore polls until the old
+// registration disappears and retries bootstrap with a short backoff.
+const (
+	unregisterPolls   = 10
+	unregisterDelay   = 200 * time.Millisecond
+	bootstrapAttempts = 5
+	bootstrapBackoff  = 500 * time.Millisecond
+)
+
+func (s *System) sleep(d time.Duration) {
+	if s.Sleep != nil {
+		s.Sleep(d)
+		return
+	}
+	time.Sleep(d)
 }
 
 // BinPath returns ~/.swarmery/bin/swarmery.
@@ -79,18 +100,47 @@ func (s *System) Install(sourceBin string, port int) error {
 	}
 
 	// Idempotent restart: unload an existing registration before loading the
-	// fresh one so a second install updates rather than duplicates.
+	// fresh one so a second install updates rather than duplicates. bootout is
+	// async — wait until launchd actually forgets the service.
 	if s.registered() {
 		if out, err := s.Run.Run("launchctl", "bootout", s.serviceTarget()); err != nil {
 			return fmt.Errorf("launchctl bootout: %v\n%s", err, out)
 		}
 		fmt.Fprintf(s.Out, "restarting existing service %s\n", Label)
+		s.waitUnregistered()
 	}
-	if out, err := s.Run.Run("launchctl", "bootstrap", s.domain(), s.PlistPath()); err != nil {
-		return fmt.Errorf("launchctl bootstrap: %v\n%s", err, out)
+	if err := s.bootstrapWithRetry(); err != nil {
+		return err
 	}
 	fmt.Fprintf(s.Out, "service %s registered in %s (RunAtLoad + KeepAlive)\n", Label, s.domain())
 	return nil
+}
+
+// waitUnregistered polls `launchctl print` until the service disappears from
+// the domain (bounded); a lingering registration is tolerated because
+// bootstrapWithRetry absorbs the residual race.
+func (s *System) waitUnregistered() {
+	for i := 0; i < unregisterPolls && s.registered(); i++ {
+		s.sleep(unregisterDelay)
+	}
+}
+
+// bootstrapWithRetry runs `launchctl bootstrap`, retrying with a short backoff
+// — right after a bootout the domain can still hold the dying service and
+// bootstrap fails with exit 5 (Input/output error) until launchd catches up.
+func (s *System) bootstrapWithRetry() error {
+	var out string
+	var err error
+	for attempt := 1; attempt <= bootstrapAttempts; attempt++ {
+		if attempt > 1 {
+			s.sleep(bootstrapBackoff)
+			fmt.Fprintf(s.Out, "retrying launchctl bootstrap (attempt %d/%d)\n", attempt, bootstrapAttempts)
+		}
+		if out, err = s.Run.Run("launchctl", "bootstrap", s.domain(), s.PlistPath()); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("launchctl bootstrap failed after %d attempts: %v\n%s", bootstrapAttempts, err, out)
 }
 
 // Uninstall boots the service out of launchd and deletes the plist.

@@ -164,6 +164,67 @@ func TestTailFileRecreated(t *testing.T) {
 	}
 }
 
+// TestTailSidechainBeforeMainAdoptsOrphans: live-tail race — a sidechain file
+// can be flushed and tailed BEFORE the main transcript's Agent tool_use line
+// is ingested. Its events land with a NULL parent (nothing to attach to yet);
+// once the Agent tool_result arrives, they must be adopted by the
+// subagent_start instead of dangling as "unassigned events" forever.
+func TestTailSidechainBeforeMainAdoptsOrphans(t *testing.T) {
+	db := testDB(t)
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "background-agent-session.jsonl")
+	sidePath := filepath.Join(dir, "background-agent-session", "subagents", "agent-ba09fe87dc65ba43a.jsonl")
+	for src, dst := range map[string]string{
+		filepath.Join(fixtures, "background-agent-session.jsonl"):                                             mainPath,
+		filepath.Join(fixtures, "background-agent-session", "subagents", "agent-ba09fe87dc65ba43a.jsonl"):     sidePath,
+		filepath.Join(fixtures, "background-agent-session", "subagents", "agent-ba09fe87dc65ba43a.meta.json"): sidePath[:len(sidePath)-len(".jsonl")] + ".meta.json",
+	} {
+		b, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, dst, string(b))
+	}
+
+	// 1. Sidechain first: the parent subagent_start does not exist yet, so its
+	// events are ingested as orphans.
+	if _, err := TailFile(db, sidePath, Thresholds{}); err != nil {
+		t.Fatalf("tail sidechain: %v", err)
+	}
+	if got := count(t, db,
+		`SELECT COUNT(*) FROM events WHERE turn_id IS NULL AND parent_event_id IS NULL`); got != 1 {
+		t.Fatalf("orphan sidechain events before main = %d, want 1", got)
+	}
+
+	// 2. Main transcript arrives: the Agent tool_result reveals the sidechain
+	// agentId — the orphans must be adopted by the new subagent_start.
+	if _, err := TailFile(db, mainPath, Thresholds{}); err != nil {
+		t.Fatalf("tail main: %v", err)
+	}
+	if got := count(t, db,
+		`SELECT COUNT(*) FROM events WHERE turn_id IS NULL AND parent_event_id IS NULL`); got != 0 {
+		t.Errorf("orphan events after main = %d, want 0 (adopted by subagent_start)", got)
+	}
+	var startID int64
+	if err := db.QueryRow(`SELECT id FROM events WHERE type='subagent_start'`).Scan(&startID); err != nil {
+		t.Fatal(err)
+	}
+	if got := count(t, db,
+		`SELECT COUNT(*) FROM events WHERE type='tool_call' AND parent_event_id=?`, startID); got != 1 {
+		t.Errorf("adopted sidechain tool_calls = %d, want 1", got)
+	}
+	// The async duration is refined from the already-stored sidechain rows:
+	// last stored child event ts 12:05:00 − start 12:00:05 = 295s. (A later
+	// sidechain batch would refine it further towards the true end.)
+	var stopDuration int64
+	if err := db.QueryRow(`SELECT duration_ms FROM events WHERE type='subagent_stop'`).Scan(&stopDuration); err != nil {
+		t.Fatal(err)
+	}
+	if stopDuration != 295_000 {
+		t.Errorf("stop duration_ms = %d, want 295000 (derived from stored sidechain rows)", stopDuration)
+	}
+}
+
 // fixtureRoot builds a temp projects root mirroring ~/.claude/projects layout
 // from the committed fixtures (main transcripts + sidechain companion).
 func fixtureRoot(t *testing.T) string {
