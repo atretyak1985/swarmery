@@ -116,5 +116,48 @@ Previous: [00-phase-2-plan.md](00-phase-2-plan.md) · Next: [step-2.2-quality-ga
 ### Completion Report
 
 ```
-(заповнюється виконавцем після завершення)
+Status: DONE. docs/hooks-format.md published; all E1–E11 verified live.
+Claude Code 2.1.170, macOS 26.3. Branch docs/swarmery-hooks-spike (worktree
+/Volumes/Work/swarmery-wt-spike). Harness /tmp/swarmery-spike cleaned; working tree
+holds only docs/hooks-format.md + this Completion Report.
+
+Verdict: D1 HOLDS and D3 HOLDS. No STOP-fact.
+- D1: E8 (allowlisted Bash(echo *)) fired NO PermissionRequest — only Stop. Confirms
+  PR fires exactly on the calls a human would be prompted about (re-confirmed by E10:
+  acceptEdits auto-approves an Edit → no PR; plan still fires for a gated Bash). No
+  daemon-side allowlist mirror needed. PreToolUse fallback NOT required.
+- D3: E5 (exit 0, no stdout) → native "Do you want to proceed?" dialog appears. E7
+  (exit1 + garbage-json) also fail open to the dialog. Fail-open = no-decision works.
+
+E1–E11 results (all ✅ verified):
+  E1 stdin shapes (Bash+Edit) — has session_id/transcript_path/cwd/permission_mode/
+     effort/tool_name/tool_input/permission_suggestions; NO tool_use_id in PR stdin.
+  E2 allow → tool runs, no dialog.
+  E3 deny → decision.message reaches Claude verbatim.
+  E4 no answerable dialog while a hook runs (spinner only) → terminal race is
+     structurally impossible; only Esc/Ctrl-C interrupt remains (left to human protocol).
+  E5 exit0-silent → native dialog (D3).
+  E6 hook timeout:5 + sleep-30 → hook KILLED at 5s, native dialog, session survived.
+  E7 exit1 + garbage-json → native dialog, non-blocking.
+  E8 allowlisted → NO PR hook (CRITICAL D1 pass).
+  E9 Stop stdin captured (last_assistant_message, stop_hook_active, background_tasks,
+     session_crons); fires once per assistant turn.
+  E10 default fires; acceptEdits suppresses Edit-PR; plan STILL fires for gated Bash;
+      bypassPermissions has a one-time startup danger-accept gate.
+  E11 CONCURRENT — 2 parallel subagents fired 2 PR hooks 0.24s apart, distinct pids,
+      sharing the parent session_id (=> daemon must mint its own request id; concurrent
+      identical requests are the real D6 dedup case).
+
+Bonus: PermissionRequest does NOT fire in headless `claude -p` (no TTY → no dialog →
+auto-deny). Approvals channel is interactive-only.
+
+Q-A (approval_timeout / terminal UX): during the hook the terminal shows only a
+spinner (no dialog, no countdown). The binding limit is Claude Code's per-hook
+`timeout` (E6: it kills the shim and falls to the dialog). Recommendation: set the
+installed hook `timeout` >= approval_timeout + margin (e.g. 120s poll → timeout:130)
+and let the shim own expiry via exit-0-silent, so fallback is a clean fail-open, not a
+hard kill. Documented default per-hook timeout is 60s (not re-measured).
+
+Needs human confirmation (1 item, protocol in doc): E4-interrupt — press Esc during a
+pending hook, confirm clean abort + session-alive (informs D3 resolved_elsewhere).
 ```
