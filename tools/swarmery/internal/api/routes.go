@@ -16,5 +16,5 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// (live updates via WebSocket — registered by branch A; do not add here)
 
 	// wave C: stats
-	// (overview/stats endpoints — registered by branch C; do not add here)
+	mux.HandleFunc("GET /api/stats/today", h.statsToday)
 }
