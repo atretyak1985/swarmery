@@ -93,5 +93,27 @@ Previous: [step-05-quality-gate-contract-freeze.md](step-05-quality-gate-contrac
 ### Completion Report
 
 ```
-Date/agent: · Branch head SHA: · Backfill stats: · Live-tail lag observed: · CONTRACT-REQUESTS entries:
+Date/agent: 2026-07-12 · Agent A (ingest hardening), Claude Code session on feat/swarmery-ingest
+Branch head SHA: ef8a316 (feat: live ingest pipeline; + this report commit on top)
+Backfill stats: full real backfill of ~/.claude/projects into a scratch --db —
+  454 files (main + sidechains), 114 001 lines, 0 skipped, 0 errors, 9.2 s;
+  rows: 11 projects, 115 sessions, 12 196 turns, 24 594 events (24 594 DISTINCT
+  dedup keys), 2 979 file_changes. Forced full replay (offsets wiped): 0 duplicates.
+Live-tail lag observed: 34 ms – 1.0 s from append to ingest log + WS frame
+  (fsnotify path; the 2 s rescan caps worst case well under the 3 s budget).
+CONTRACT-REQUESTS entries: none — WSMessage implemented exactly as frozen.
+Notes:
+  - Q11 RESOLVED: watch experiment (4 hot transcripts, 70 s, size/inode/prefix-hash
+    polling) proved transcripts append-only → offset tail is safe; inode-change and
+    size-shrink offset resets kept as defensive guards (docs/jsonl-format.md #11).
+  - Dedup scheme kept from T1 (record uuid / <agentId>:<uuid> / SHA-256(path+line)),
+    superseding this doc's older session_uuid:line_number wording per gate 03 (C3).
+  - New tests: TestTailOffsetResume, TestTailPartialLine, TestTailFileRecreated,
+    TestRepeatedBackfillNoDuplicates, TestCorruptFileDoesNotStopScanner,
+    TestStatusRecompute, TestBusFanout, TestPipelineLiveTail (ingest);
+    TestWSMessageShape, TestWSWithoutBus (api). go vet + go test ./... green.
+  - Deps added: fsnotify v1.10.1, coder/websocket v1.8.15 (budget 3 → total 3).
+  - Diff scope: internal/ingest, internal/api (ws.go/ws_test.go new + routes.go
+    wave-A block only), cmd/swarmery (flags/commands), docs, go.mod/sum. No table
+    changes needed — file_offsets already existed in 0001; no migration 0002.
 ```
