@@ -571,9 +571,13 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 			status, durationMs, p.eventID); err != nil {
 			return err
 		}
-		// Derive the real duration of a background agent from whatever
-		// sidechain rows are already stored (usually none yet — later
-		// sidechain batches refine it).
+		// Heal the tail race: sidechain events ingested before this Agent
+		// call existed carry a NULL parent — adopt them now that the result
+		// reveals the sidechain agentId, then derive the real duration of a
+		// background agent from whatever sidechain rows are already stored.
+		if err := in.adoptOrphanSidechainEvents(ar.AgentID, p.eventID); err != nil {
+			return err
+		}
 		if async {
 			return in.reconcileAsyncSubagent(p.eventID, "")
 		}
@@ -717,11 +721,31 @@ func (in *ingester) ingestSidechain(path string) error {
 		return err
 	}
 	if parentID != 0 {
+		if err := in.adoptOrphanSidechainEvents(scope, parentID); err != nil {
+			return err
+		}
 		if err := in.reconcileAsyncSubagent(parentID, lastRecordTS(recs)); err != nil {
 			return err
 		}
 	}
 	return in.recordOffset(path, consumed)
+}
+
+// adoptOrphanSidechainEvents backfills parent_event_id for sidechain events
+// that were ingested before their parent subagent_start row existed (live-tail
+// race: a sidechain batch can be flushed and picked up before the main
+// transcript's Agent tool_use line). Matching is by dedup-key scope — the
+// sidechain agentId prefix. Idempotent: already-parented rows are untouched.
+func (in *ingester) adoptOrphanSidechainEvents(scope string, parentID int64) error {
+	if scope == "" || parentID == 0 {
+		return nil
+	}
+	_, err := in.tx.Exec(
+		`UPDATE events SET parent_event_id = ?
+		 WHERE session_id = ? AND parent_event_id IS NULL AND turn_id IS NULL
+		   AND substr(dedup_key, 1, ?) = ?`,
+		parentID, in.sessionID, len(scope)+1, scope+":")
+	return err
 }
 
 // reconcileAsyncSubagent fixes the duration of background (run_in_background)

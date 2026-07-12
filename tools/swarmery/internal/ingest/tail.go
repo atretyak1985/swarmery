@@ -106,8 +106,13 @@ func TailFile(db *sql.DB, path string, th Thresholds) (TailResult, error) {
 			return res, err
 		}
 		if sidechain && parentEventID != 0 {
-			// Refine the duration of background (async) agents from the
+			// Earlier batches of this sidechain may have been ingested before
+			// the parent subagent_start existed — adopt those orphans, then
+			// refine the duration of background (async) agents from the
 			// batch's last record timestamp.
+			if err := ing.adoptOrphanSidechainEvents(scope, parentEventID); err != nil {
+				return res, err
+			}
 			if err := ing.reconcileAsyncSubagent(parentEventID, lastRecordTS(recs)); err != nil {
 				return res, err
 			}
