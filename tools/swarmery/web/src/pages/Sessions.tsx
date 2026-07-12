@@ -1,17 +1,30 @@
 // Sessions list (design §3.3): project filter (/api/projects), status filter,
-// live updates over WS. Filters are pushed to the API as query params; WS
-// upserts are re-checked against the active filter client-side.
-// Redesign layout: pill filter chips, sessions grouped by day under mono
-// eyebrow rules, each day one navy list card with hairline dividers.
+// title search (client-side, debounced), live updates over WS. Project/status
+// filters are pushed to the API as query params; WS upserts are re-checked
+// against the active filter client-side.
+// Redesign layout: mono search input + pill filter chips, sessions grouped by
+// day under mono eyebrow rules, each day one navy list card with hairline
+// dividers.
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Project, Session, SessionStatus, WSMessage } from '../api/types';
 import { fetchProjects, fetchSessions } from '../api';
+import { projectLabel } from '../lib/format';
 import { liveActionText } from '../lib/payload';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
 import { SessionCard } from '../components/SessionCard';
 import { Empty, ErrorBox, Loading } from '../components/ui';
+
+const SEARCH_DEBOUNCE_MS = 150;
+
+/** Case-insensitive substring match over title / project name / slug / branch. */
+function matchesQuery(s: Session, q: string): boolean {
+  if (q === '') return true;
+  return [s.title, s.projectName, s.projectSlug, s.gitBranch].some(
+    (v) => v != null && v.toLowerCase().includes(q),
+  );
+}
 
 const STATUSES: SessionStatus[] = ['active', 'waiting_approval', 'idle', 'completed', 'killed'];
 const STATUS_LABELS: Record<SessionStatus, string> = {
@@ -84,6 +97,14 @@ export function Sessions(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [nowById, setNowById] = useState<Record<number, string>>({});
 
+  // Title search: raw input + a ~150ms-debounced lowercase query.
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim().toLowerCase()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [search]);
+
   useEffect(() => {
     fetchProjects()
       .then(setProjects)
@@ -136,42 +157,76 @@ export function Sessions(): JSX.Element {
 
   const sorted = (sessions ?? [])
     .slice()
+    .filter((s) => matchesQuery(s, query))
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   const groups = groupByDay(sorted);
 
   return (
     <>
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pt-1 pb-2.5 [-webkit-overflow-scrolling:touch]">
-        <FilterChip selected={project === null} onClick={() => setProject(null)}>
-          all projects
-        </FilterChip>
-        {projects.map((p) => (
-          <FilterChip
-            key={p.id}
-            selected={project === p.slug}
-            onClick={() => setProject(project === p.slug ? null : p.slug)}
-          >
-            {p.slug}
+      {/* Search: full-width above the filters on mobile, 240px inline on desk. */}
+      <div className="flex flex-col gap-1 pt-1 desk:flex-row desk:items-center desk:gap-2">
+        <div className="relative shrink-0 desk:w-[240px]">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="filter by title…"
+            aria-label="filter sessions by title"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-[6px] pr-8 font-mono text-[12px] text-ink transition-colors outline-none placeholder:text-ink-dim focus:border-ink-dim"
+          />
+          {search !== '' && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="clear search"
+              className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[13px] leading-none text-ink-dim transition-colors hover:text-ink"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <div className="-mx-4 flex min-w-0 flex-1 gap-1.5 overflow-x-auto px-4 py-2.5 [-webkit-overflow-scrolling:touch] desk:mx-0 desk:px-0">
+          <FilterChip selected={project === null} onClick={() => setProject(null)}>
+            all projects
           </FilterChip>
-        ))}
-        <span className="mx-1 w-px shrink-0 self-stretch bg-line" aria-hidden="true" />
-        {STATUSES.map((s) => (
-          <FilterChip
-            key={s}
-            selected={status === s}
-            onClick={() => setStatus(status === s ? null : s)}
-          >
-            {STATUS_LABELS[s]}
-          </FilterChip>
-        ))}
+          {projects.map((p) => (
+            <FilterChip
+              key={p.id}
+              selected={project === p.slug}
+              onClick={() => setProject(project === p.slug ? null : p.slug)}
+            >
+              {projectLabel(p.name, p.slug)}
+            </FilterChip>
+          ))}
+          <span className="mx-1 w-px shrink-0 self-stretch bg-line" aria-hidden="true" />
+          {STATUSES.map((s) => (
+            <FilterChip
+              key={s}
+              selected={status === s}
+              onClick={() => setStatus(status === s ? null : s)}
+            >
+              {STATUS_LABELS[s]}
+            </FilterChip>
+          ))}
+        </div>
       </div>
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
       {sessions === null && error === null && <Loading label="sessions…" />}
       {sessions !== null && sorted.length === 0 && (
         <Empty>
-          no sessions match — try clearing filters, or run{' '}
-          <span className="font-mono text-ink">swarmery ingest &lt;file.jsonl&gt;</span>
+          {query !== '' ? (
+            <>
+              no sessions match <span className="font-mono text-ink">“{search.trim()}”</span> — try
+              a different search or clear the filters
+            </>
+          ) : (
+            <>
+              no sessions match — try clearing filters, or run{' '}
+              <span className="font-mono text-ink">swarmery ingest &lt;file.jsonl&gt;</span>
+            </>
+          )}
         </Empty>
       )}
       {groups.map((g) => (
