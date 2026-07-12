@@ -4,25 +4,28 @@
 // BELOW the header and <main> as the app's scroll container (so the session
 // detail can pin its header and scroll only the tab panel). Mobile keeps the
 // bottom nav. The Docs nav item appears only when /api/docs has entries; the
-// desktop Sessions item carries a today-count badge (/api/stats/overview) and
-// the sidebar bottom shows the daemon health line.
+// desktop Sessions item carries a today-count badge (/api/stats/overview);
+// the Approvals item carries a LIVE amber pending-count badge (REST resync +
+// WS permission_requested/permission_resolved over the shared connection).
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { fetchDocs, fetchStatsOverview, MOCK } from './api';
+import type { WSMessage } from './api/types';
+import { fetchApprovals, fetchDocs, fetchStatsOverview, MOCK } from './api';
 import { isoDay } from './lib/format';
+import { useLiveUpdates } from './lib/ws';
 import { HealthFooter } from './components/HealthFooter';
 
 interface NavItem {
   to: string;
   icon: string;
   label: string;
+  /** Right-aligned desktop count badge. */
+  badge?: string;
+  badgeClass?: string;
+  /** Amber attention dot on the mobile icon (pending approvals). */
+  alert?: boolean;
 }
-
-const BASE_NAV: NavItem[] = [
-  { to: '/', icon: '◉', label: 'Overview' },
-  { to: '/sessions', icon: '☰', label: 'Sessions' },
-];
 
 const DOCS_NAV: NavItem = { to: '/docs', icon: '❐', label: 'Docs' };
 
@@ -34,6 +37,9 @@ function portLabel(): string {
 export function App(): JSX.Element {
   const [hasDocs, setHasDocs] = useState(false);
   const [sessionsToday, setSessionsToday] = useState<number | null>(null);
+  // Pending approvals as a SET of ids: WS +/- stays idempotent when the same
+  // permission_resolved arrives twice (own action + fan-out) or after resync.
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<number>>(new Set());
 
   useEffect(() => {
     fetchDocs()
@@ -49,7 +55,51 @@ export function App(): JSX.Element {
       .catch(() => setSessionsToday(null));
   }, []);
 
-  const items = hasDocs ? [...BASE_NAV, DOCS_NAV] : BASE_NAV;
+  // Approvals badge: REST is the source of truth (mount + reconnect resync);
+  // the WS stream is the low-latency hint in between (docs/ws-protocol.md).
+  const syncPending = useCallback((): void => {
+    fetchApprovals('pending')
+      .then((list) => setPendingIds(new Set(list.map((r) => r.id))))
+      .catch(() => setPendingIds(new Set())); // approvals API absent → no badge
+  }, []);
+  useEffect(syncPending, [syncPending]);
+
+  const onMessage = useCallback((msg: WSMessage): void => {
+    if (msg.type === 'permission_requested') {
+      setPendingIds((prev) => new Set(prev).add(msg.payload.id));
+    } else if (msg.type === 'permission_resolved') {
+      setPendingIds((prev) => {
+        if (!prev.has(msg.payload.id)) return prev;
+        const next = new Set(prev);
+        next.delete(msg.payload.id);
+        return next;
+      });
+    }
+    // Other message types are the pages' concern — ignore here.
+  }, []);
+  useLiveUpdates(onMessage, syncPending);
+
+  const pendingCount = pendingIds.size;
+  const items: NavItem[] = [
+    { to: '/', icon: '◉', label: 'Overview' },
+    {
+      to: '/approvals',
+      icon: '⧗',
+      label: 'Approvals',
+      ...(pendingCount > 0
+        ? { badge: String(pendingCount), badgeClass: 'bg-amber/15 text-amber', alert: true }
+        : {}),
+    },
+    {
+      to: '/sessions',
+      icon: '☰',
+      label: 'Sessions',
+      ...(sessionsToday !== null && sessionsToday > 0
+        ? { badge: String(sessionsToday), badgeClass: 'bg-surface2 text-ink-dim' }
+        : {}),
+    },
+    ...(hasDocs ? [DOCS_NAV] : []),
+  ];
 
   return (
     <div className="flex h-dvh flex-col">
@@ -85,13 +135,18 @@ export function App(): JSX.Element {
                 }`
               }
             >
-              <span className="text-[17px] leading-none" aria-hidden="true">
+              <span className="relative text-[17px] leading-none" aria-hidden="true">
                 {item.icon}
+                {item.alert === true && (
+                  <span className="absolute -top-0.5 -right-1.5 h-[6px] w-[6px] rounded-full bg-amber desk:hidden" />
+                )}
               </span>
               {item.label}
-              {item.to === '/sessions' && sessionsToday !== null && sessionsToday > 0 && (
-                <span className="ml-auto hidden min-w-[18px] rounded-full bg-surface2 px-1.5 py-px text-center font-mono text-[10px] leading-[14px] text-ink-dim desk:block">
-                  {sessionsToday}
+              {item.badge !== undefined && (
+                <span
+                  className={`ml-auto hidden min-w-[18px] rounded-full px-1.5 py-px text-center font-mono text-[10px] leading-[14px] desk:block ${item.badgeClass ?? 'bg-surface2 text-ink-dim'}`}
+                >
+                  {item.badge}
                 </span>
               )}
             </NavLink>

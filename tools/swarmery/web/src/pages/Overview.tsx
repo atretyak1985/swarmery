@@ -1,15 +1,19 @@
 // Overview (Redesign parity): day-chip navigator over /api/stats/overview,
 // KPI tiles with inline sparklines from the trailing series, live "active
 // now" hero cards with ELAPSED/TOKENS/COST columns, day-scoped completed
-// list, and the desktop right rail (errors / cost by model / projects).
+// list, and the desktop right rail (pending approvals when any / errors /
+// cost by model / projects). The ACTIVE tile's "N waiting approval" subline
+// and the rail's top-3 pending card are live (phase 2 permission_* WS).
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { Session, StatsOverview, WSMessage } from '../api/types';
-import { fetchSessions, fetchStatsOverview } from '../api';
+import type { PermissionRequest, Session, StatsOverview, WSMessage } from '../api/types';
+import { fetchApprovals, fetchSessions, fetchStatsOverview } from '../api';
+import { requestSummary } from '../lib/approvals';
 import { projectColor } from '../lib/colors';
 import {
   addDays,
+  fmtAgo,
   fmtCost,
   fmtDayShort,
   fmtDayTitle,
@@ -21,7 +25,7 @@ import {
   projectLabel,
 } from '../lib/format';
 import { liveActionText } from '../lib/payload';
-import { applySessionMessage, useLiveUpdates } from '../lib/ws';
+import { applyPermissionMessage, applySessionMessage, useLiveUpdates } from '../lib/ws';
 import { Sparkline } from '../components/Sparkline';
 import {
   COMPLETED_ROW_GRID,
@@ -111,7 +115,17 @@ function KpiTile({
   );
 }
 
-function KpiRow({ stats, isToday }: { stats: StatsOverview; isToday: boolean }): JSX.Element {
+function KpiRow({
+  stats,
+  isToday,
+  waitingLive,
+}: {
+  stats: StatsOverview;
+  isToday: boolean;
+  /** Live pending-approvals count (WS-fed); null until loaded → stats value. */
+  waitingLive: number | null;
+}): JSX.Element {
+  const waiting = waitingLive ?? stats.waiting_approval;
   const spark = (values: number[], tone?: 'dim' | 'amber' | 'red'): JSX.Element | null => {
     const highlight = stats.series.findIndex((p) => p.day === stats.day);
     return (
@@ -128,8 +142,12 @@ function KpiRow({ stats, isToday }: { stats: StatsOverview; isToday: boolean }):
         {spark(stats.series.map((p) => p.sessions))}
       </KpiTile>
       <KpiTile value={String(isToday ? stats.active : 0)} label="active" tone="text-green">
-        <div className="mt-3 truncate font-mono text-[9px] text-ink-dim desk:text-[10.5px]">
-          {isToday ? `${String(stats.waiting_approval)} waiting approval` : 'no live sessions'}
+        <div
+          className={`mt-3 truncate font-mono text-[9px] desk:text-[10.5px] ${
+            isToday && waiting > 0 ? 'text-amber' : 'text-ink-dim'
+          }`}
+        >
+          {isToday ? `${String(waiting)} waiting approval` : 'no live sessions'}
         </div>
       </KpiTile>
       <KpiTile value={fmtTokens(stats.tokens_in + stats.tokens_out)} label="tokens">
@@ -281,12 +299,58 @@ function Bar({ pct, className }: { pct: number; className: string }): JSX.Elemen
   );
 }
 
-function Rail({ stats, isToday }: { stats: StatsOverview; isToday: boolean }): JSX.Element {
+/* PENDING APPROVALS rail card (design §3.1): top-3 oldest-first + "all →"
+ * link to /approvals; rendered only while something is actually pending. */
+function ApprovalsRail({ pending }: { pending: PermissionRequest[] }): JSX.Element {
+  const top = [...pending].sort((a, b) => a.requestedAt.localeCompare(b.requestedAt)).slice(0, 3);
+  return (
+    <>
+      <SectionTitle>Pending approvals · {pending.length}</SectionTitle>
+      <div className="overflow-hidden rounded-xl border border-amber/35 bg-surface">
+        {top.map((r) => (
+          <Link
+            key={r.id}
+            to="/approvals"
+            className="block border-b border-line-soft px-3.5 py-[9px] transition-colors last:border-b-0 hover:bg-surface2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-amber" aria-hidden="true" />
+              <span className="font-mono text-[11px] font-semibold text-ink-2">{r.toolName}</span>
+              <span className="ml-auto font-mono text-[10px] whitespace-nowrap text-amber">
+                {fmtAgo(r.requestedAt)}
+              </span>
+            </div>
+            <div className="mt-0.5 truncate font-mono text-[10.5px] text-ink-dim">
+              {requestSummary(r)}
+            </div>
+          </Link>
+        ))}
+        <Link
+          to="/approvals"
+          className="block border-t border-line-soft px-3.5 py-2 font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
+        >
+          all approvals →
+        </Link>
+      </div>
+    </>
+  );
+}
+
+function Rail({
+  stats,
+  isToday,
+  pending,
+}: {
+  stats: StatsOverview;
+  isToday: boolean;
+  pending: PermissionRequest[];
+}): JSX.Element {
   const errTotal = stats.errors_by_project.reduce((a, r) => a + r.errors, 0);
   const costTotal = stats.cost_by_model.reduce((a, r) => a + r.cost_usd, 0);
   const dayName = isToday ? 'today' : fmtDayShort(stats.day);
   return (
     <div className="min-w-0">
+      {isToday && pending.length > 0 && <ApprovalsRail pending={pending} />}
       <SectionTitle>Errors · {dayName}</SectionTitle>
       <RailCard className="px-4 py-3.5">
         <div className="flex items-baseline justify-between">
@@ -371,6 +435,8 @@ export function Overview(): JSX.Element {
   const [statsError, setStatsError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowById, setNowById] = useState<Record<number, string>>({});
+  // Live pending approvals (phase 2) — the rail card + ACTIVE tile subline.
+  const [approvals, setApprovals] = useState<PermissionRequest[] | null>(null);
 
   const isToday = day === isoDay();
 
@@ -383,6 +449,12 @@ export function Overview(): JSX.Element {
       .catch((e: unknown) => setError(String(e)));
   }, []);
 
+  const loadApprovals = useCallback((): void => {
+    fetchApprovals('pending')
+      .then(setApprovals)
+      .catch(() => setApprovals(null)); // approvals API absent → stats fallback
+  }, []);
+
   const loadStats = useCallback((): void => {
     fetchStatsOverview(day)
       .then((s) => {
@@ -393,6 +465,7 @@ export function Overview(): JSX.Element {
   }, [day]);
 
   useEffect(loadSessions, [loadSessions]);
+  useEffect(loadApprovals, [loadApprovals]);
   useEffect(() => {
     setStats(null);
     loadStats();
@@ -401,7 +474,8 @@ export function Overview(): JSX.Element {
   const reload = useCallback((): void => {
     loadSessions();
     loadStats();
-  }, [loadSessions, loadStats]);
+    loadApprovals();
+  }, [loadSessions, loadStats, loadApprovals]);
 
   const onMessage = useCallback((msg: WSMessage): void => {
     if (msg.type === 'event_appended') {
@@ -410,6 +484,16 @@ export function Overview(): JSX.Element {
         const { sessionId } = msg.payload;
         setNowById((prev) => ({ ...prev, [sessionId]: text }));
       }
+      return;
+    }
+    if (msg.type === 'permission_requested' || msg.type === 'permission_resolved') {
+      // Upsert then keep only pendings — this state backs the rail card and
+      // the ACTIVE tile "waiting approval" subline.
+      setApprovals((prev) =>
+        prev === null
+          ? prev
+          : applyPermissionMessage(prev, msg).filter((r) => r.status === 'pending'),
+      );
       return;
     }
     setSessions((prev) => (prev === null ? prev : applySessionMessage(prev, msg)));
@@ -442,7 +526,11 @@ export function Overview(): JSX.Element {
       </div>
 
       {stats !== null ? (
-        <KpiRow stats={stats} isToday={isToday} />
+        <KpiRow
+          stats={stats}
+          isToday={isToday}
+          waitingLive={approvals !== null ? approvals.length : null}
+        />
       ) : statsError ? (
         <div className="mt-3 font-mono text-[11px] text-ink-dim">stats unavailable</div>
       ) : (
@@ -490,7 +578,7 @@ export function Overview(): JSX.Element {
           </div>
         </div>
 
-        {stats !== null && <Rail stats={stats} isToday={isToday} />}
+        {stats !== null && <Rail stats={stats} isToday={isToday} pending={approvals ?? []} />}
       </div>
     </>
   );
