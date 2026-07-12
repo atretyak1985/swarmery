@@ -105,5 +105,20 @@ Previous: [step-06-agent-a-ingest.md](step-06-agent-a-ingest.md) (parallel) · N
 ### Completion Report
 
 ```
-Date/agent: · Branch head SHA: · Screenshots: · CONTRACT-REQUESTS entries:
+Date/agent: 2026-07-12 · Agent B (frontend), Claude Code session on feat/swarmery-frontend
+Branch head SHA: de1566c (code: 9234878, screenshots: ed627b2)
+Status: DONE — npm run build clean (tsc --noEmit strict + vite build, 0 errors/warnings)
+Screenshots (web/screenshots/, mock mode, 390×844 + one 1280×800):
+  overview.png · sessions.png · session-detail-timeline.png (subagent nesting
+  visible, verified collapsible) · session-detail-diffs.png · overview-desktop.png
+Verified via playwright-core + system Chrome: no horizontal scroll at 390px on
+  all three screens; error text visible without expanding; payload rows expand.
+CONTRACT-REQUESTS entries (web/CONTRACT-REQUESTS.md):
+  1. event_appended has no session attribution (payload lacks sessionId) —
+     workaround: list views ignore event_appended; detail attributes via turnId.
+  2. session list aggregates for cards (toolCalls / costUsd / lastAction) —
+     nice-to-have for mockup meta line, not blocking.
+New deps: react-router-dom (runtime); playwright-core (dev, screenshots only).
+Notes: mock mode is an in-app fixture layer (src/mock/) toggled by VITE_MOCK=1 —
+  no MSW dependency; diff highlighting is a custom ~40-line renderer, no diff lib.
 ```

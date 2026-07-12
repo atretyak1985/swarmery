@@ -2,7 +2,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-// Dev proxy targets the Go daemon on its default port.
+// Dev proxy targets the Go daemon on its default port (REST + /api/ws).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
@@ -11,7 +11,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': `http://localhost:${process.env.SWARMERY_PORT ?? '7777'}`,
+      '/api': {
+        target: `http://localhost:${process.env.SWARMERY_PORT ?? '7777'}`,
+        ws: true,
+      },
     },
   },
 });
