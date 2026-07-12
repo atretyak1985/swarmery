@@ -11,6 +11,8 @@ import type {
   SessionsResponse,
   StatsOverview,
   StatsToday,
+  TaskDetail,
+  TasksResponse,
 } from './api/types';
 import { mockApi } from './mock/data';
 
@@ -74,4 +76,18 @@ export function fetchDocs(): Promise<DocMeta[]> {
 export function fetchDoc(slug: string): Promise<DocDetail> {
   if (MOCK) return mockApi.doc(slug);
   return get(`/api/docs/${encodeURIComponent(slug)}`);
+}
+
+// --- phase 3.5: workspaces ----------------------------------------------------
+
+/** Recently active workspace tasks (default window: 14 days). */
+export function fetchTasks(days = 14): Promise<TasksResponse> {
+  if (MOCK) return mockApi.tasks();
+  return get(`/api/tasks?days=${String(days)}`);
+}
+
+/** One workspace task: card metadata + linked sessions + Σ cost. */
+export function fetchTask(id: number | string): Promise<TaskDetail> {
+  if (MOCK) return mockApi.task(id);
+  return get(`/api/tasks/${encodeURIComponent(id)}`);
 }

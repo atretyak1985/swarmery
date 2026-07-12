@@ -28,6 +28,9 @@ export type EventStatus = 'ok' | 'error' | 'denied' | 'timeout';
 /** file_changes.change_type */
 export type FileChangeType = 'create' | 'edit' | 'delete' | 'rename';
 
+/** task_sessions.link_source — phase 3.5 workspaces. */
+export type TaskLinkSource = 'explicit' | 'heuristic';
+
 /** events.type */
 export type EventType =
   | 'tool_call'
@@ -78,6 +81,13 @@ export interface Session {
   tokens?: number | null;
   /** Aggregate SUM(turns.cost_usd) — parity wave; optional until backend lands. */
   costUsd?: number | null;
+  /** phase 3.5 workspaces (additive): best task link — explicit beats heuristic. */
+  taskId?: number | null;
+  /** Card task id (yyyy-mm-dd-slug) of the best-linked workspace task. */
+  taskExternalId?: string | null;
+  taskLinkSource?: TaskLinkSource | null;
+  /** Overlap fraction 0..1 for heuristic links; null for explicit. */
+  taskConfidence?: number | null;
 }
 
 /** Go: turnDTO */
@@ -258,3 +268,49 @@ export type WSMessage =
   | { type: 'event_appended'; payload: { sessionId: number; event: Event } }
   | { type: 'permission_requested'; payload: PermissionRequest }
   | { type: 'permission_resolved'; payload: PermissionRequest };
+
+// --- Phase 3.5: workspaces (E-lite) — additive task contracts -----------------
+
+/** Derived task state: still working / card says done / moved to archive/. */
+export type TaskOutcome = 'active' | 'done' | 'archived';
+
+/** Go: taskSummaryDTO — one row of GET /api/tasks (workspace-ingested cards). */
+export interface TaskSummary {
+  id: number;
+  /** Card task id: yyyy-mm-dd-slug. */
+  externalId: string;
+  workspaceSlug: string;
+  projectSlug: string;
+  projectName: string | null;
+  title: string;
+  status: string;
+  outcome: TaskOutcome;
+  startedAt: string | null;
+  archivedAt: string | null;
+  /** COUNT of linked sessions (task_sessions). */
+  sessions: number;
+  /** Σ cost of linked sessions; null while none is priced. */
+  costUsd: number | null;
+}
+
+/** Go: taskSessionDTO — one linked session inside GET /api/tasks/{id}. */
+export interface TaskSessionLink {
+  sessionId: number;
+  sessionUuid: string;
+  title: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  linkSource: TaskLinkSource;
+  confidence: number | null;
+  costUsd: number | null;
+}
+
+/** Go: taskDetailDTO — GET /api/tasks/{id} (id = row id or externalId). */
+export interface TaskDetail extends TaskSummary {
+  /** Card **Ціль** line, when the README has one. */
+  goal: string | null;
+  sessionLinks: TaskSessionLink[];
+}
+
+/** GET /api/tasks?days=<n> — recently active workspace tasks (default 14 days). */
+export type TasksResponse = TaskSummary[];

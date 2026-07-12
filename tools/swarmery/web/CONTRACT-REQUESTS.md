@@ -94,3 +94,22 @@ Request format:
   aggregate queries (or denormalized counters) on the list endpoint; the live
   `now:` line above covers the most visible gap via WS without any schema or
   list-query cost. Revisit alongside the phase-2 session-card design.
+
+---
+
+## Phase 3.5 resolutions (2026-07-13, feat/swarmery-workspaces — E-lite)
+
+Additive-only, applied on the phase branch (single agent, no parallel wave to
+conflict with):
+
+- **`Session` task attribution** — `taskId` / `taskExternalId` /
+  `taskLinkSource` / `taskConfidence` (all optional-nullable): the best task
+  link per session (explicit beats heuristic, then highest confidence),
+  computed in one window-function JOIN in `sessionSelect`. Renders the task
+  chip in Session Detail and the task badge in Sessions rows.
+- **New endpoints** — `GET /api/tasks?days=<n>` (`TaskSummary[]`, default 14
+  days, drives the Overview "Tasks · 14 days" slice) and
+  `GET /api/tasks/{id}` (`TaskDetail`: card metadata + `sessionLinks[]` with
+  per-session cost + Σ cost; `id` = row id or `externalId`).
+- **New types** — `TaskLinkSource`, `TaskOutcome`, `TaskSummary`,
+  `TaskSessionLink`, `TaskDetail`, `TasksResponse`.

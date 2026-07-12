@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { Session } from '../api/types';
 import { projectColor } from '../lib/colors';
 import { fmtSpan, fmtTime, projectLabel } from '../lib/format';
+import { TaskChip } from './TaskChip';
 import { DurationPill, LiveDot, SESSION_ROW_GRID, StatusChip } from './ui';
 
 function meta(session: Session): string {
@@ -68,6 +69,15 @@ export function SessionCard({
         {session.title ?? session.sessionUuid}
       </div>
       <div className="truncate font-mono text-[11px] text-ink-dim">{meta(session)}</div>
+      {session.taskExternalId != null && (
+        <div className="mt-[3px] flex min-w-0">
+          <TaskChip
+            externalId={session.taskExternalId}
+            linkSource={session.taskLinkSource}
+            confidence={session.taskConfidence}
+          />
+        </div>
+      )}
       {liveNow && (
         <div className="mt-[3px] truncate font-mono text-[10.5px] text-green">now: {now}</div>
       )}
@@ -113,6 +123,15 @@ export function SessionCard({
           >
             {session.title ?? '(no title)'}
           </span>
+          {session.taskExternalId != null && (
+            <span className="mt-[2px] flex min-w-0">
+              <TaskChip
+                externalId={session.taskExternalId}
+                linkSource={session.taskLinkSource}
+                confidence={session.taskConfidence}
+              />
+            </span>
+          )}
           {liveNow && (
             <span className="block truncate font-mono text-[10.5px] text-green">now: {now}</span>
           )}

@@ -12,6 +12,7 @@ import type { SessionDetail, SessionStatus, WSMessage } from '../api/types';
 import { fetchSession } from '../api';
 import { fmtAgo, fmtCost, fmtDateTime, fmtSpan, fmtTokens, projectLabel } from '../lib/format';
 import { useLiveUpdates } from '../lib/ws';
+import { TaskChip } from '../components/TaskChip';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
@@ -184,6 +185,14 @@ export function SessionDetailPage(): JSX.Element {
             />
             {lastEvent !== undefined && detail.endedAt === null && (
               <Kv label="last event" value={fmtAgo(lastEvent.ts)} />
+            )}
+            {detail.taskExternalId != null && (
+              /* phase 3.5: workspaces — which task card this session worked on. */
+              <TaskChip
+                externalId={detail.taskExternalId}
+                linkSource={detail.taskLinkSource}
+                confidence={detail.taskConfidence}
+              />
             )}
           </div>
         </div>

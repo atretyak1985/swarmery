@@ -15,6 +15,8 @@ import type {
   StatsOverview,
   StatsSeriesPoint,
   StatsToday,
+  TaskDetail,
+  TaskSummary,
   Turn,
 } from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
@@ -83,6 +85,10 @@ export const mockSessions: Session[] = [
     source: 'jsonl',
     tokens: 412_000,
     costUsd: 0.84,
+    taskId: 1,
+    taskExternalId: '2026-07-10-email-templates-v2',
+    taskLinkSource: 'explicit',
+    taskConfidence: null,
   },
   {
     id: 2,
@@ -117,6 +123,10 @@ export const mockSessions: Session[] = [
     source: 'both',
     tokens: 96_000,
     costUsd: 0.41,
+    taskId: 2,
+    taskExternalId: '2026-07-08-swarmery-control-plane',
+    taskLinkSource: 'heuristic',
+    taskConfidence: 0.92,
   },
   {
     id: 4,
@@ -151,6 +161,10 @@ export const mockSessions: Session[] = [
     source: 'jsonl',
     tokens: 220_000,
     costUsd: 0.52,
+    taskId: 3,
+    taskExternalId: '2026-07-09-vendor-pagination-fix',
+    taskLinkSource: 'heuristic',
+    taskConfidence: 0.74,
   },
   {
     id: 6,
@@ -936,6 +950,85 @@ function buildDetails(): Map<number, SessionDetail> {
 
 export const mockDetails: Map<number, SessionDetail> = buildDetails();
 
+// --- Phase 3.5: workspaces — tasks (14-day slice + detail) ---------------------
+
+export const mockTasks: TaskSummary[] = [
+  {
+    id: 1,
+    externalId: '2026-07-10-email-templates-v2',
+    workspaceSlug: 'orders-api',
+    projectSlug: 'orders-api',
+    projectName: 'Orders API',
+    title: 'Migrate email templates to the provider v2 API',
+    status: 'running',
+    outcome: 'active',
+    startedAt: iso(3 * 24 * 60 * MIN),
+    archivedAt: null,
+    sessions: 3,
+    costUsd: 2.41,
+  },
+  {
+    id: 2,
+    externalId: '2026-07-08-swarmery-control-plane',
+    workspaceSlug: 'swarmery',
+    projectSlug: 'swarmery',
+    projectName: 'Swarmery',
+    title: 'swarmery control plane MVP',
+    status: 'done',
+    outcome: 'archived',
+    startedAt: iso(5 * 24 * 60 * MIN),
+    archivedAt: iso(1 * 24 * 60 * MIN),
+    sessions: 5,
+    costUsd: 11.06,
+  },
+  {
+    id: 3,
+    externalId: '2026-07-09-vendor-pagination-fix',
+    workspaceSlug: 'orders-api',
+    projectSlug: 'orders-api',
+    projectName: 'Orders API',
+    title: 'Fix pagination in the vendor portal',
+    status: 'done',
+    outcome: 'done',
+    startedAt: iso(4 * 24 * 60 * MIN),
+    archivedAt: null,
+    sessions: 1,
+    costUsd: 0.52,
+  },
+  {
+    id: 4,
+    externalId: '2026-07-11-agent-system-research',
+    workspaceSlug: 'example-app',
+    projectSlug: 'example-app',
+    projectName: 'Example App',
+    title: 'agent system research',
+    status: 'running',
+    outcome: 'active',
+    startedAt: iso(2 * 24 * 60 * MIN),
+    archivedAt: null,
+    sessions: 0,
+    costUsd: null,
+  },
+];
+
+function mockTaskDetail(id: number | string): TaskDetail {
+  const summary = mockTasks.find((t) => t.id === id || t.externalId === id);
+  if (!summary) throw new Error(`mock: task ${String(id)} not found`);
+  const links = mockSessions
+    .filter((s) => s.taskId === summary.id)
+    .map((s) => ({
+      sessionId: s.id,
+      sessionUuid: s.sessionUuid,
+      title: s.title,
+      startedAt: s.startedAt,
+      endedAt: s.endedAt,
+      linkSource: s.taskLinkSource ?? 'heuristic',
+      confidence: s.taskConfidence ?? null,
+      costUsd: s.costUsd ?? null,
+    }));
+  return { ...summary, goal: 'mock goal line from the README card', sessionLinks: links };
+}
+
 // --- Mock API ----------------------------------------------------------------
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -997,5 +1090,17 @@ export const mockApi = {
     const found = mockDocs.find((d) => d.slug === slug);
     if (!found) throw new Error(`mock: doc ${slug} not found`);
     return { ...found };
+  },
+
+  // phase 3.5: workspaces
+  async tasks(): Promise<TaskSummary[]> {
+    await delay(120);
+    return mockTasks.map((t) => ({ ...t }));
+  },
+
+  async task(id: number | string): Promise<TaskDetail> {
+    await delay(140);
+    const numeric = typeof id === 'number' ? id : Number.parseInt(id, 10);
+    return mockTaskDetail(Number.isNaN(numeric) ? id : numeric);
   },
 };
