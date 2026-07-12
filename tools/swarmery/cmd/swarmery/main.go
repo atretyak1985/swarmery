@@ -14,6 +14,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -31,6 +32,12 @@ func main() {
 		err = cmdIngest(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
+	case "install":
+		err = installer.CmdInstall(os.Args[2:])
+	case "uninstall":
+		err = installer.CmdUninstall(os.Args[2:])
+	case "status":
+		err = installer.CmdStatus(os.Args[2:])
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -46,7 +53,10 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   swarmery ingest [--db <path>] <file.jsonl>
-  swarmery serve  [--db <path>] [--port <n>]   (env: SWARMERY_PORT)`)
+  swarmery serve  [--db <path>] [--port <n>]   (env: SWARMERY_PORT)
+  swarmery install [--port <n>]                launchd auto-start (env: SWARMERY_PORT)
+  swarmery uninstall                           remove launchd service (keeps logs+db)
+  swarmery status                              service health, pid, uptime, db size`)
 }
 
 func dbFlag(fs *flag.FlagSet) *string {

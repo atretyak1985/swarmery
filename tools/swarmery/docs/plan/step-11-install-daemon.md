@@ -81,5 +81,28 @@ Previous: [step-10-integration.md](step-10-integration.md) · Next: [step-12-qua
 ### Completion Report
 
 ```
-Date/agent: · Commit SHA: · Live-test output summary: · Notes:
+Date/agent: 2026-07-12 · Claude Code executor (feat/swarmery-install worktree)
+Commit SHA: (this commit)
+Live-test output summary:
+  install #1     → binary at ~/.swarmery/bin/swarmery, plist written,
+                   launchctl print: state = running, pid = 32082;
+                   curl localhost:7777/api/projects → [] (200)
+  status         → "service: running / pid / uptime / db 4.0 KiB / version 0.1.0"
+  install #2     → "restarting existing service" (bootout → bootstrap),
+                   new pid 33133; exactly 1 service in gui/501, 1 plist — idempotent
+  SWARMERY_PORT=7788 install → plist got EnvironmentVariables{SWARMERY_PORT=7788};
+                   daemon log shows "serving on :7788"; curl :7788 → []
+  uninstall      → service gone (launchctl print: Could not find service),
+                   plist deleted; ~/.swarmery/{swarmery.db,logs} preserved
+  System left CLEAN (uninstalled) — real installation happens at Gate 12.
+Notes:
+  • Ran EARLY in parallel with the wave (before step 10 integration), branched
+    from the contract-freeze tag — main.go diff kept to +11/-1 (three subcommand
+    registrations + usage lines) since this branch merges LAST.
+  • New package internal/installer: launchctl behind a Runner interface;
+    tests (go vet + go test green) cover plist golden files (default + port),
+    install idempotency with a fake launchd, uninstall keeping logs/DB, status.
+  • /api/stats/today does not exist on this branch (metrics branch) —
+    /api/projects used for the live check instead.
+  • ~/.claude/settings.json untouched (hooks are Phase 2).
 ```
