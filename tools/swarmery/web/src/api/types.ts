@@ -1,0 +1,152 @@
+// ============================================================================
+// FROZEN API CONTRACT — swarmery control plane
+// ============================================================================
+// Single source of truth for all API response shapes, generated from the Go
+// DTO structs in internal/api/handlers.go (field names match the JSON tags
+// exactly). Frozen at the step-05 quality gate before the parallel wave.
+//
+// DO NOT EDIT on branch agents' worktrees. Contract change requests go to
+// web/CONTRACT-REQUESTS.md and are resolved at integration (step 10).
+// ============================================================================
+
+// --- Enum-like unions (documented value sets from the DB schema) ------------
+
+/** sessions.status — MVP emits active|idle|completed; waiting_approval|killed reserved for hooks. */
+export type SessionStatus = 'active' | 'waiting_approval' | 'idle' | 'completed' | 'killed';
+
+/** sessions.source */
+export type SessionSource = 'jsonl' | 'hook' | 'both';
+
+/** turns.role */
+export type TurnRole = 'user' | 'assistant';
+
+/** events.status */
+export type EventStatus = 'ok' | 'error' | 'denied' | 'timeout';
+
+/** file_changes.change_type */
+export type FileChangeType = 'create' | 'edit' | 'delete' | 'rename';
+
+/** events.type */
+export type EventType =
+  | 'tool_call'
+  | 'subagent_start'
+  | 'subagent_stop'
+  | 'skill_use'
+  | 'file_change'
+  | 'permission_request'
+  | 'permission_resolved'
+  | 'error'
+  | 'test_run'
+  | 'commit'
+  | 'user_prompt'
+  | 'session_end'
+  | 'unknown';
+
+// --- Core entities (mirror the Go DTOs, JSON-tag field names) ---------------
+
+/** Go: projectDTO */
+export interface Project {
+  id: number;
+  path: string;
+  slug: string;
+  name: string | null;
+  firstSeen: string;
+  lastActivity: string | null;
+  archived: boolean;
+  sessions: number;
+}
+
+/** Go: sessionDTO */
+export interface Session {
+  id: number;
+  projectId: number;
+  projectSlug: string;
+  sessionUuid: string;
+  model: string | null;
+  gitBranch: string | null;
+  cwd: string | null;
+  status: SessionStatus;
+  startedAt: string;
+  endedAt: string | null;
+  title: string | null;
+  source: SessionSource;
+}
+
+/** Go: turnDTO */
+export interface Turn {
+  id: number;
+  seq: number;
+  role: TurnRole;
+  messageId: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  tokensCacheRead: number | null;
+  tokensCacheWrite: number | null;
+  costUsd: number | null;
+}
+
+/** Go: eventDTO — payload is raw JSON (json.RawMessage), decoded client-side. */
+export interface Event {
+  id: number;
+  turnId: number | null;
+  ts: string;
+  type: EventType;
+  toolName: string | null;
+  parentEventId: number | null;
+  status: EventStatus | null;
+  durationMs: number | null;
+  payload: unknown;
+}
+
+/** Go: fileChangeDTO */
+export interface FileChange {
+  id: number;
+  eventId: number;
+  filePath: string;
+  changeType: FileChangeType;
+  additions: number | null;
+  deletions: number | null;
+  diff: string | null;
+  outOfScope: boolean;
+}
+
+/** Go: sessionDetailDTO (embeds sessionDTO) */
+export interface SessionDetail extends Session {
+  turns: Turn[];
+  events: Event[];
+  fileChanges: FileChange[];
+}
+
+// --- Endpoint response shapes ------------------------------------------------
+
+/** GET /api/projects */
+export type ProjectsResponse = Project[];
+
+/** GET /api/sessions?project=<slug|id>&status=<status> */
+export type SessionsResponse = Session[];
+
+/** GET /api/sessions/{id} — id is the numeric row id or the session UUID. */
+export type SessionDetailResponse = SessionDetail;
+
+// --- Future contracts (parallel wave — frozen NOW, implemented later) --------
+
+/** GET /api/stats/today — implemented by Agent C (metrics branch). */
+export interface StatsToday {
+  sessions: number;
+  active: number;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: number | null;
+  errors: number;
+}
+
+/** WS event names — frozen; implemented by Agent A on /api/ws. */
+export type WSMessageType = 'session_started' | 'session_updated' | 'event_appended';
+
+/** Messages pushed over /api/ws — implemented by Agent A (ingest branch). */
+export type WSMessage =
+  | { type: 'session_started'; payload: Session }
+  | { type: 'session_updated'; payload: Session }
+  | { type: 'event_appended'; payload: Event };

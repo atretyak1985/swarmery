@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchSession, fetchSessions } from './api';
-import type { Session, SessionDetail } from './api';
+import type { Session, SessionDetail } from './api/types';
 
 // Single skeleton page: sessions list → raw detail view. No design polish yet.
 export function App(): JSX.Element {

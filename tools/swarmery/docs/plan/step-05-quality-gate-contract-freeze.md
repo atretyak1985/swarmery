@@ -79,5 +79,16 @@ Previous: [step-04-vertical-slice.md](step-04-vertical-slice.md) · Next: [step-
 ### Completion Report
 
 ```
-Date: · Tag SHA: · Worktrees created: · Verdict:
+Date: 2026-07-12 · Tag SHA: controller fills · Worktrees created: controller fills · Verdict: agent part done
 ```
+
+Agent part details:
+- `web/src/api/types.ts` created from the Go DTOs in `internal/api/handlers.go`
+  (Project, Session, Turn, Event, FileChange, SessionDetail + endpoint response
+  aliases), plus frozen future contracts `StatsToday` and `WSMessage`
+  (`session_started | session_updated | event_appended`).
+- `web/src/api.ts` and `web/src/App.tsx` refactored to import from `types.ts`
+  (no duplicate type declarations remain).
+- `web/CONTRACT-REQUESTS.md` created — branch agents append change requests
+  there; resolved at integration (step 10).
+- Verified: `npm run build` green; `npx tsc --noEmit` (strict) green.
