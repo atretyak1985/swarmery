@@ -113,3 +113,53 @@ conflict with):
   per-session cost + Σ cost; `id` = row id or `externalId`).
 - **New types** — `TaskLinkSource`, `TaskOutcome`, `TaskSummary`,
   `TaskSessionLink`, `TaskDetail`, `TasksResponse`.
+
+---
+
+<!-- Phase 2 — parallel wave (gate 2.2 freeze). Resolved at step 2.5/integration. -->
+
+## 2026-07-13 — feat/swarmery-approvals-ui (wave B) — GET /api/approvals filter semantics
+
+- What: confirm the `status` query param value set for `GET /api/approvals`:
+  no param → all rows; `status=pending` → pending only; **`status=resolved` →
+  meta-filter for ALL terminal statuses** (approved|denied|expired|
+  resolved_elsewhere), ordered newest-resolved first, `LIMIT 50` server-side.
+- Why: the frozen surface only names "GET /api/approvals?status=" without the
+  value set; the step-2.4 plan prompt says "History (status=resolved, limit
+  50)". The UI codes against exactly two fetches (`pending` + `resolved`) and
+  slices history to 50 client-side as a belt-and-braces. If the backend only
+  supports exact `PermissionRequestStatus` values, history needs four calls
+  (or a no-param fetch) — say which at integration.
+- Proposed shape:
+  ```
+  GET /api/approvals?status=pending|resolved|<exact status>  → PermissionRequest[]
+  ```
+
+## 2026-07-13 — feat/swarmery-approvals-ui (wave B) — POST /api/approvals/{id} conflict status
+
+- What: confirm the non-2xx contract when the row is no longer `pending`
+  (raced by terminal dialog, another dashboard, or the expiry sweeper) —
+  plan says `409` with the usual `{"error": string}` body.
+- Why: the UI resolves optimistically and treats ANY non-2xx as "resolved
+  elsewhere first" → silent refetch, with the WS `permission_resolved` as the
+  authoritative reconciliation. A defined 409 keeps that behavior intentional
+  rather than accidental.
+
+## 2026-07-13 — feat/swarmery-approvals-ui (wave B) — session attribution on PermissionRequest (nice-to-have)
+
+- What: optional denormalized `projectSlug` / `projectName` / `sessionTitle`
+  on the `PermissionRequest` DTO (additive, like `Session.projectName`).
+- Why: approval cards and history rows show "project · session title"; today
+  the UI lazily fetches `GET /api/sessions` once and joins client-side —
+  works, but a server-side join removes a fetch and covers requests whose
+  session is missing from the list response (plain `session #N` fallback).
+  Not blocking.
+- Proposed shape:
+  ```ts
+  export interface PermissionRequest {
+    // …existing fields…
+    projectSlug?: string;
+    projectName?: string | null;
+    sessionTitle?: string | null;
+  }
+  ```

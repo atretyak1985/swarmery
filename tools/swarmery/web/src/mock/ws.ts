@@ -1,8 +1,18 @@
 // Fake /api/ws feed for VITE_MOCK=1 — periodically emits contract-shaped
-// WSMessages so live UI paths (upserts, appends) are exercised offline.
+// WSMessages so live UI paths (upserts, appends, approvals) are exercised
+// offline. There is only ever ONE mock socket (lib/ws.ts shares a single
+// connection app-wide), so it also owns the approvals scenario: a
+// permission_requested pushed ~3 s after load and the expiry sweep.
 
 import type { Event, Session, WSMessage } from '../api/types';
 import { mockSessions } from './data';
+import {
+  injectMockPermissionRequest,
+  setMockPermissionEmitter,
+  sweepMockExpiry,
+} from './approvals';
+
+const INJECT_DELAY_MS = 3_000;
 
 const MOCK_ACTIONS = [
   { toolName: 'Bash', payload: { command: 'go test ./internal/ingest/...' } },
@@ -32,8 +42,14 @@ export interface MockSocket {
 export function createMockSocket(onMessage: (msg: WSMessage) => void): MockSocket {
   let tick = 0;
 
+  // Approvals demo (phase 2): store transitions fan out through this socket;
+  // one new pending request arrives shortly after load (badge appears live).
+  setMockPermissionEmitter(onMessage);
+  const inject = setTimeout(injectMockPermissionRequest, INJECT_DELAY_MS);
+
   const interval = setInterval(() => {
     tick += 1;
+    sweepMockExpiry();
     const active = mockSessions.find((s) => s.status === 'active');
     if (!active) return;
 
@@ -58,6 +74,10 @@ export function createMockSocket(onMessage: (msg: WSMessage) => void): MockSocke
   }, 5000);
 
   return {
-    close: () => clearInterval(interval),
+    close: () => {
+      clearTimeout(inject);
+      clearInterval(interval);
+      setMockPermissionEmitter(null);
+    },
   };
 }

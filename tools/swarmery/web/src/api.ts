@@ -6,6 +6,8 @@ import type {
   DocDetail,
   DocMeta,
   HealthResponse,
+  PermissionRequest,
+  PermissionRequestStatus,
   ProjectsResponse,
   SessionDetailResponse,
   SessionsResponse,
@@ -90,4 +92,46 @@ export function fetchTasks(days = 14): Promise<TasksResponse> {
 export function fetchTask(id: number | string): Promise<TaskDetail> {
   if (MOCK) return mockApi.task(id);
   return get(`/api/tasks/${encodeURIComponent(id)}`);
+}
+
+// --- phase 2 — approvals (docs/hooks-protocol.md; DTO frozen in api/types.ts) ---
+
+/**
+ * `resolved` is a meta-filter covering every terminal status — assumed
+ * server-side (see web/CONTRACT-REQUESTS.md); the UI only ever asks for
+ * `pending` and `resolved`.
+ */
+export type ApprovalStatusFilter = PermissionRequestStatus | 'resolved';
+
+export type ApprovalAction = 'approve' | 'deny';
+
+export function fetchApprovals(status?: ApprovalStatusFilter): Promise<PermissionRequest[]> {
+  if (MOCK) return mockApi.approvals(status);
+  const qs = status !== undefined ? `?status=${encodeURIComponent(status)}` : '';
+  return get(`/api/approvals${qs}`);
+}
+
+/**
+ * POST /api/approvals/{id} → 200 with the updated PermissionRequest.
+ * Non-2xx (e.g. 409 when the row raced to a terminal state via the terminal
+ * dialog or expiry) throws — callers silently refetch; the WS
+ * permission_resolved is the authoritative reconciliation either way.
+ */
+export async function resolveApproval(
+  id: number,
+  action: ApprovalAction,
+  reason?: string,
+): Promise<PermissionRequest> {
+  if (MOCK) return mockApi.resolveApproval(id, action, reason);
+  const body: { action: ApprovalAction; reason?: string } = { action };
+  if (reason !== undefined && reason !== '') body.reason = reason;
+  const res = await fetch(`/api/approvals/${String(id)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`POST /api/approvals/${String(id)}: ${String(res.status)}`);
+  }
+  return (await res.json()) as PermissionRequest;
 }

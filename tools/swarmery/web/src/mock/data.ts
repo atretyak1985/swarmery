@@ -8,6 +8,7 @@ import type {
   Event,
   FileChange,
   HealthResponse,
+  PermissionRequest,
   Project,
   Session,
   SessionDetail,
@@ -20,6 +21,7 @@ import type {
   Turn,
 } from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
+import { mockApprovalsList, mockResolveApproval } from './approvals';
 
 const now = Date.now();
 const iso = (msAgo: number): string => new Date(now - msAgo).toISOString();
@@ -1102,5 +1104,21 @@ export const mockApi = {
     await delay(140);
     const numeric = typeof id === 'number' ? id : Number.parseInt(id, 10);
     return mockTaskDetail(Number.isNaN(numeric) ? id : numeric);
+  },
+
+  // --- phase 2 — approvals (mutable store in ./approvals.ts) ---
+
+  async approvals(status?: string): Promise<PermissionRequest[]> {
+    await delay(110);
+    return mockApprovalsList(status);
+  },
+
+  async resolveApproval(
+    id: number,
+    action: 'approve' | 'deny',
+    reason?: string,
+  ): Promise<PermissionRequest> {
+    await delay(140);
+    return mockResolveApproval(id, action, reason);
   },
 };

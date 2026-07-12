@@ -48,10 +48,15 @@ async function assertNoHorizontalScroll(page, path) {
 async function shot(page, path, name, opts = {}) {
   await page.goto(base + path);
   await settle(page);
+  if (opts.waitMs) await page.waitForTimeout(opts.waitMs);
   await page.screenshot({ path: join(outDir, name), fullPage: opts.fullPage ?? false });
   await assertNoHorizontalScroll(page, path);
   console.log(`✓ ${name}`);
 }
+
+// The approvals mock scenario injects a permission_requested ~3 s after load —
+// wait it out so the WS-pushed pending card is in frame.
+const APPROVALS_WAIT_MS = 3200;
 
 // Scrolls the session-detail tab panel (its own scroller — the header stays pinned).
 async function scrollTabPanel(page, px) {
@@ -69,6 +74,8 @@ const mobile = await browser.newPage({
 await shot(mobile, '/', 'overview.png');
 await shot(mobile, '/docs', 'docs-mobile.png');
 await shot(mobile, '/sessions', 'sessions.png');
+// Approvals (phase 2): pending cards + history, incl. the WS-injected request.
+await shot(mobile, '/approvals', 'approvals.png', { waitMs: APPROVALS_WAIT_MS });
 // Session 1 is the subagent fixture. Chat is the default tab now.
 await shot(mobile, '/sessions/1', 'session-detail-chat.png');
 // Timeline via ?tab= deep-link; the panel scrolls under the pinned header.
@@ -84,6 +91,7 @@ const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } }
 await shot(desktop, '/', 'overview-desktop.png');
 // Sessions table (≥900px): dropdown + status-count chips + aligned columns.
 await shot(desktop, '/sessions', 'sessions-desktop.png');
+await shot(desktop, '/approvals', 'approvals-desktop.png', { waitMs: APPROVALS_WAIT_MS });
 // Detail with the timeline scrolled — header block and rail stay pinned.
 await desktop.goto(`${base}/sessions/1?tab=timeline`);
 await settle(desktop);

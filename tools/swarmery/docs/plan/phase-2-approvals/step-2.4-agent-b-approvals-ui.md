@@ -112,5 +112,62 @@ Previous: [step-2.3-agent-a-hooks-backend.md](step-2.3-agent-a-hooks-backend.md)
 ### Completion Report
 
 ```
-(заповнюється виконавцем після завершення)
+Status: DONE (2026-07-13, branch feat/swarmery-approvals-ui — worktree, not pushed)
+
+Built (web/** + docs only; types.ts untouched, zero new npm deps):
+- pages/Approvals.tsx (route /approvals): PENDING cards — tool name (mono),
+  collapsed tool_input essential (Bash→command, Edit/Write→file_path, generic
+  key fallback → compact JSON → raw string; type-guarded via lib/payload
+  pickString, malformed stdin never crashes a card), expandable full hook-stdin
+  JSON (<pre>), session link (project · title via lazy /api/sessions join,
+  "session #N" fallback), live "hangs Ns" age + "expires in Ns" countdown
+  (ONE shared 1 s ticker for the page), Approve (sage) / Deny (danger, inline
+  optional-reason input — no modal) / Open session. HISTORY below: status chips
+  (approved sage / denied danger / expired + elsewhere dim), via-chip
+  (resolvedVia), relative time, reason line; limit 50, newest first.
+  Optimistic resolve reconciles with the authoritative WS permission_resolved
+  (idempotent upsert by id); any POST failure (409 race) → silent refetch.
+- lib/approvals.ts: requestJson parsing/summary/pretty helpers + fmtClock.
+- lib/ws.ts: ONE shared /api/ws connection app-wide (shell badge + page
+  subscribe to the same socket — no second socket), same reconnect/backoff +
+  60 s reconcile; new applyPermissionMessage upsert reducer next to
+  applySessionMessage. Unknown WS types still ignored by MVP views.
+- App.tsx: Approvals nav item (between Overview and Sessions) with live amber
+  pending-count badge — REST resync on mount/reconnect (source of truth),
+  WS permission_* as the hint stream; count kept as a Set<id> so duplicate
+  resolves stay idempotent. Mobile: amber alert dot on the icon.
+- Overview.tsx: PENDING APPROVALS rail card (top-3 oldest-first + "all
+  approvals →" link, only when count > 0); ACTIVE tile "N waiting approval"
+  subline now live from pending approvals (amber when > 0), stats fallback.
+- waiting_approval visibility: verified already handled (ui.tsx StatusChip/
+  LiveDot amber, SessionCard amber border, Sessions "waiting" filter chip,
+  Overview HeroCard) — no changes needed.
+- Mocks: mock/approvals.ts mutable store (2 pending of different ages, one of
+  each terminal status in history incl. expired + resolved_elsewhere);
+  approve/deny transitions locally + emits permission_resolved; WS scenario:
+  permission_requested injected ~3 s after load, live expiry sweep resolves
+  overdue pendings as expired. mockApi.approvals/resolveApproval in data.ts.
+- api.ts: fetchApprovals(status?) + resolveApproval(id, action, reason?).
+
+Contract requests appended (web/CONTRACT-REQUESTS.md):
+1) GET /api/approvals `status=resolved` meta-filter + no-param + limit/order
+   semantics (UI codes against pending+resolved, slices 50 client-side);
+2) POST /api/approvals/{id} 409 contract confirmation (UI: silent refetch);
+3) nice-to-have: denormalized projectSlug/projectName/sessionTitle on the DTO.
+
+Validation:
+- npx tsc --noEmit + npm run build: green (TS strict, zero new deps).
+- Playwright smoke (mock, port 5199): badge 3 after 3 s injection → 2 after
+  approve → 1 after deny-with-reason; expanded JSON shows tool_input; history
+  gains the rows; reload resyncs from the (fresh) mock store.
+- Screenshots: approvals.png (390×844) + approvals-desktop.png (1440) ADDED to
+  scripts/screenshot.mjs (waits out the 3 s injection); overview{,-desktop}.png
+  regenerated (rail card + amber subline); all other shots restored (timestamp
+  noise only). No-horizontal-scroll assertions pass on every page incl.
+  /approvals at 390 px.
+
+Skipped per plan: swipe actions (Q-C stretch, deferred).
+Known mock limitation: the mock store lives in-page, so a reload resets it —
+"survives reload" is a REST-resync property that only fully shows against the
+real daemon (step 2.5 integration).
 ```
