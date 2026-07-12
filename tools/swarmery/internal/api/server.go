@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/docsfs"
 	"github.com/atretyak1985/swarmery/tools/swarmery/web"
 )
 
@@ -21,9 +22,15 @@ const (
 )
 
 // NewServer builds the full HTTP handler: API routes + embedded SPA fallback.
-func NewServer(db *sql.DB) (http.Handler, error) {
+// watching reports whether the live ingest pipeline is attached (serve
+// without --no-ingest); /api/health surfaces it to the dashboard.
+func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
+	docs, err := docsfs.Content()
+	if err != nil {
+		return nil, fmt.Errorf("embedded docs: %w", err)
+	}
 	mux := http.NewServeMux()
-	Routes(mux, &Handler{DB: db})
+	Routes(mux, &Handler{DB: db, Watching: watching, Docs: docs})
 
 	dist, err := web.Dist()
 	if err != nil {

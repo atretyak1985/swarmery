@@ -5,6 +5,10 @@ package api
 // Response shape is FROZEN by web/src/api/types.ts → StatsToday:
 //   {sessions, active, tokens_in, tokens_out, cost_usd, errors}
 // (snake_case, unlike the camelCase entity DTOs — do not "fix" this).
+//
+// The day-window aggregation helpers below are shared with the parity-wave
+// /api/stats/overview endpoint (overview.go) — same window semantics, same
+// cost NULL rule.
 
 import (
 	"database/sql"
@@ -22,66 +26,56 @@ type statsTodayDTO struct {
 	Errors    int64    `json:"errors"`
 }
 
-// GET /api/stats/today?project=<slug|id>
-//
-// "Today" is the LOCAL calendar day, converted to UTC bounds and compared
+// dayBounds converts a LOCAL-midnight day start into UTC bounds compared
 // against the stored ISO-8601 UTC timestamps (lexicographic compare is safe
 // for same-format RFC 3339 strings; bounds are rendered without a zone suffix
 // so they sort correctly against both "…Z" and fractional-second forms).
+func dayBounds(dayStart time.Time) (start, end string) {
+	// Zone-suffix-free UTC bounds: "2026-07-12T00:00:00".
+	const bound = "2006-01-02T15:04:05"
+	return dayStart.UTC().Format(bound), dayStart.AddDate(0, 0, 1).UTC().Format(bound)
+}
+
+// windowAgg holds the aggregates for one [start, end) window.
+type windowAgg struct {
+	Sessions    int64
+	TokensIn    int64
+	TokensOut   int64
+	CostUSD     *float64
+	PricedTurns int64
+	UsageTurns  int64
+	Errors      int64
+}
+
+// windowAggregates computes the day-window aggregates shared by
+// /api/stats/today and /api/stats/overview:
 //
-// Semantics:
-//   - sessions: sessions STARTED today.
-//   - active:   sessions currently active (regardless of start day) — a
-//     session started yesterday that is still running counts here.
-//   - tokens_in/tokens_out: SUM over turns started today (usage is already
-//     deduplicated per API message at ingest, C1).
-//   - cost_usd: SUM over today's PRICED turns; NULL only if today has
-//     usage-bearing turns and none of them are priced (honesty rule — a
-//     partial sum is reported and the skipped count is logged).
-//   - errors: events with status='error' today (covers both api_error events
-//     and failed tool calls).
+//   - Sessions: sessions STARTED inside the window.
+//   - TokensIn/TokensOut: SUM over turns started inside the window (usage is
+//     already deduplicated per API message at ingest, C1).
+//   - CostUSD: SUM over the window's PRICED turns; NULL only if the window
+//     has usage-bearing turns and none of them are priced (honesty rule — a
+//     partial sum is still reported; callers may log the skipped count from
+//     PricedTurns/UsageTurns).
+//   - Errors: events with status='error' inside the window (covers both
+//     api_error events and failed tool calls).
 //
 // Direct queries, no rollup tables — fine at MVP volumes (daily_rollups is
 // Phase 6).
-func (h *Handler) statsToday(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	// Zone-suffix-free UTC bounds: "2026-07-12T00:00:00".
-	const bound = "2006-01-02T15:04:05"
-	start := dayStart.UTC().Format(bound)
-	end := dayStart.AddDate(0, 0, 1).UTC().Format(bound)
+func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any) (windowAgg, error) {
+	var a windowAgg
+	args := append([]any{start, end}, projArgs...)
 
-	projFilter := ""
-	projArgs := []any{}
-	if project := r.URL.Query().Get("project"); project != "" {
-		projFilter = ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
-		projArgs = []any{project, project}
-	}
-
-	var s statsTodayDTO
-
-	// Sessions started today.
+	// Sessions started inside the window.
 	err := h.DB.QueryRow(`
 		SELECT COUNT(*) FROM sessions s JOIN projects p ON p.id = s.project_id
-		WHERE s.started_at >= ? AND s.started_at < ?`+projFilter,
-		append([]any{start, end}, projArgs...)...).Scan(&s.Sessions)
+		WHERE s.started_at >= ? AND s.started_at < ?`+projFilter, args...).Scan(&a.Sessions)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return a, err
 	}
 
-	// Currently active sessions (not day-scoped: still-running counts).
-	err = h.DB.QueryRow(`
-		SELECT COUNT(*) FROM sessions s JOIN projects p ON p.id = s.project_id
-		WHERE s.status = 'active'`+projFilter, projArgs...).Scan(&s.Active)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-
-	// Token and cost aggregates over today's turns.
+	// Token and cost aggregates over the window's turns.
 	var costSum sql.NullFloat64
-	var pricedTurns, usageTurns int64
 	err = h.DB.QueryRow(`
 		SELECT COALESCE(SUM(t.tokens_in), 0),
 		       COALESCE(SUM(t.tokens_out), 0),
@@ -93,39 +87,79 @@ func (h *Handler) statsToday(w http.ResponseWriter, r *http.Request) {
 		FROM turns t
 		JOIN sessions s ON s.id = t.session_id
 		JOIN projects p ON p.id = s.project_id
-		WHERE t.started_at >= ? AND t.started_at < ?`+projFilter,
-		append([]any{start, end}, projArgs...)...).Scan(
-		&s.TokensIn, &s.TokensOut, &costSum, &pricedTurns, &usageTurns)
+		WHERE t.started_at >= ? AND t.started_at < ?`+projFilter, args...).Scan(
+		&a.TokensIn, &a.TokensOut, &costSum, &a.PricedTurns, &a.UsageTurns)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return a, err
 	}
 	// SUM rule: NULL only if ALL usage-bearing turns are unpriced; otherwise
-	// sum the priced ones and log how many were skipped.
-	if usageTurns > 0 && pricedTurns == 0 {
-		s.CostUSD = nil
+	// sum the priced ones (a partial sum beats lying with zero).
+	if a.UsageTurns > 0 && a.PricedTurns == 0 {
+		a.CostUSD = nil
 	} else {
 		v := 0.0
 		if costSum.Valid {
 			v = costSum.Float64
 		}
-		s.CostUSD = &v
-		if skipped := usageTurns - pricedTurns; skipped > 0 {
-			log.Printf("warn: stats/today: %d of %d usage-bearing turns unpriced (unknown model) — cost_usd is a partial sum", skipped, usageTurns)
-		}
+		a.CostUSD = &v
 	}
 
-	// Errors today: api_error events and failed tool calls both carry status='error'.
+	// Errors: api_error events and failed tool calls both carry status='error'.
 	err = h.DB.QueryRow(`
 		SELECT COUNT(*) FROM events e
 		JOIN sessions s ON s.id = e.session_id
 		JOIN projects p ON p.id = s.project_id
-		WHERE e.status = 'error' AND e.ts >= ? AND e.ts < ?`+projFilter,
-		append([]any{start, end}, projArgs...)...).Scan(&s.Errors)
+		WHERE e.status = 'error' AND e.ts >= ? AND e.ts < ?`+projFilter, args...).Scan(&a.Errors)
+	return a, err
+}
+
+// activeSessions counts currently-active sessions (not day-scoped: a session
+// started yesterday that is still running counts here).
+func (h *Handler) activeSessions(projFilter string, projArgs []any) (int64, error) {
+	var n int64
+	err := h.DB.QueryRow(`
+		SELECT COUNT(*) FROM sessions s JOIN projects p ON p.id = s.project_id
+		WHERE s.status = 'active'`+projFilter, projArgs...).Scan(&n)
+	return n, err
+}
+
+// GET /api/stats/today?project=<slug|id>
+//
+// "Today" is the LOCAL calendar day (see dayBounds). Aggregate semantics are
+// documented on windowAggregates; "active" is documented on activeSessions.
+func (h *Handler) statsToday(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	start, end := dayBounds(dayStart)
+
+	projFilter := ""
+	projArgs := []any{}
+	if project := r.URL.Query().Get("project"); project != "" {
+		projFilter = ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
+		projArgs = []any{project, project}
+	}
+
+	agg, err := h.windowAggregates(start, end, projFilter, projArgs)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if skipped := agg.UsageTurns - agg.PricedTurns; agg.CostUSD != nil && skipped > 0 {
+		log.Printf("warn: stats/today: %d of %d usage-bearing turns unpriced (unknown model) — cost_usd is a partial sum", skipped, agg.UsageTurns)
+	}
+
+	active, err := h.activeSessions(projFilter, projArgs)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 
-	writeJSON(w, s, nil)
+	writeJSON(w, statsTodayDTO{
+		Sessions:  agg.Sessions,
+		Active:    active,
+		TokensIn:  agg.TokensIn,
+		TokensOut: agg.TokensOut,
+		CostUSD:   agg.CostUSD,
+		Errors:    agg.Errors,
+	}, nil)
 }
