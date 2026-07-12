@@ -89,6 +89,12 @@ export interface Turn {
   tokensCacheRead: number | null;
   tokensCacheWrite: number | null;
   costUsd: number | null;
+  /**
+   * Turn prose (Chat tab, migration 0005): the user prompt, or the joined
+   * assistant `text` content blocks (thinking/tool_use excluded). Never
+   * truncated; null for pre-0005 rows until `swarmery backfill --rebuild-text`.
+   */
+  text: string | null;
 }
 
 /** Go: eventDTO — payload is raw JSON (json.RawMessage), decoded client-side. */
