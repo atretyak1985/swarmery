@@ -50,4 +50,12 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/system/hooks", h.listSystemHooks)
 	mux.HandleFunc("GET /api/system/commands", h.listSystemCommands)
 	mux.HandleFunc("GET /api/system/overlays", h.listSystemOverlays)
+
+	// phase 4: system, Stage 2 write surface (step-09) — agents/skills PUT +
+	// rollback through internal/sysedit. Same D4 origin hardening as the
+	// approvals write endpoints. Deletes are step-11, hooks are step-10.
+	mux.HandleFunc("PUT /api/system/agents/{id}", requireLocalOrigin(h.putSystemAgent))
+	mux.HandleFunc("POST /api/system/agents/{id}/rollback", requireLocalOrigin(h.rollbackSystemAgent))
+	mux.HandleFunc("PUT /api/system/skills/{id}", requireLocalOrigin(h.putSystemSkill))
+	mux.HandleFunc("POST /api/system/skills/{id}/rollback", requireLocalOrigin(h.rollbackSystemSkill))
 }
