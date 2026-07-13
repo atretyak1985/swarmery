@@ -1,7 +1,7 @@
 ---
 name: quality-checker
 description: LLM-as-Judge quality evaluation + non-blocking browser smoke in Phase 5; report-only. Deterministic build/typecheck/lint/test verdicts are @verification-agent's job — this agent's deterministic re-runs are input to the LLM score, not the gate.
-model: claude-fable-5
+model: claude-opus-4-8
 # Rationale: deterministic checks are cheap either way; the LLM-as-Judge benefits from Opus 4.8's honesty gains (~4x fewer unremarked code flaws). Adaptive thinking avoids token waste on check-only runs.
 effort: medium
 permissionMode: plan

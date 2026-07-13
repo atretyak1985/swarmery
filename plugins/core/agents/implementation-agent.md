@@ -1,7 +1,7 @@
 ---
 name: implementation-agent
 description: Execute Phase 4 code changes across the project's repos (web app, device/edge, infrastructure config), reading before every edit.
-model: claude-fable-5
+model: claude-opus-4-8
 # Rationale: required for complex multi-file reasoning across TypeScript/Python/infra config; justifies top-tier (Opus 4.8) cost. Opus 4.8 brings improved tool triggering (fewer skipped codebase-retrieval calls), compaction recovery, and reliable long-context edits, with adaptive thinking keeping single-file Micro edits cheap.
 effort: xhigh
 # Session-level guidance: run at xhigh for multi-file/cross-stack changes; high for single-file Micro edits. As a workflow subagent, effort is inherited from the run.

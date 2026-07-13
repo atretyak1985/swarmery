@@ -1,7 +1,7 @@
 ---
 name: tech-lead
 description: Orchestrate executor agents through the 9-phase workflow with gap analysis, pre-mortem, mode routing, and structured phase transition logging.
-model: claude-fable-5
+model: claude-opus-4-8
 # Rationale: T0 architect tier. Opus 4.8 sustains long autonomous orchestration sessions, investigates before acting, and self-verifies -- the orchestrator profile. Adaptive thinking (no fixed token budget) plus Dynamic Workflows back codebase-scale fan-out. Supports effort max (verified: code.claude.com/docs/en/model-config).
 effort: max
 # Session-level guidance: run this orchestrator at max (or ultracode for auto workflow planning) for Full-mode and monorepo tasks; high is sufficient for Micro/Sprint.

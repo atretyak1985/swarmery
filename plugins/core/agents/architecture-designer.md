@@ -1,7 +1,7 @@
 ---
 name: architecture-designer
 description: Design system architecture with component diagrams, trade-off analysis, and rollout plans when orchestrator needs multi-component coordination design.
-model: claude-fable-5
+model: claude-opus-4-8
 effort: high
 # Rationale: T0 architect tier. Multi-component coordination design and trade-off analysis are exactly the ambiguous, investigation-heavy problems Opus 4.8's adaptive thinking is built for; read-only design output.
 permissionMode: plan

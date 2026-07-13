@@ -3,8 +3,8 @@ name: sre-orchestrator
 description: Orchestrate SRE tasks (SLO definition, incident response, capacity planning, toil reduction) with human gates on all destructive operations.
 model: claude-sonnet-5
 effort: high
-# Rationale: Operational analysis and incident reasoning within Sonnet capability; the top tier (claude-fable-5) is reserved for primary orchestration. Sonnet 5 is current; do not change this ID.
-# Note: incident response with destructive operations is high-stakes -- if escalated as a dynamic-workflow stage, route the orchestration to claude-fable-5 and keep human gates; the deepest reasoning is reserved for the top tier.
+# Rationale: Operational analysis and incident reasoning within Sonnet capability; the top tier (claude-opus-4-8) is reserved for primary orchestration. Sonnet 5 is current; do not change this ID.
+# Note: incident response with destructive operations is high-stakes -- if escalated as a dynamic-workflow stage, route the orchestration to claude-opus-4-8 and keep human gates; the deepest reasoning is reserved for the top tier.
 permissionMode: plan
 # Re-restricted 2026-06-03: production-ops orchestrator runs read-only by default.
 # Any Edit/Write/destructive Bash must be explicitly approved per turn — see rules/NEVER.md

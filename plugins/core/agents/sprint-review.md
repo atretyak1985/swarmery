@@ -1,7 +1,7 @@
 ---
 name: sprint-review
 description: Orchestrate end-of-sprint read-only audit by scoping recent changes, fanning out audit subagents, running check-only suites, and producing a PASS/FAIL report.
-model: claude-fable-5
+model: claude-opus-4-8
 # Rationale: Orchestrator fanning out multiple audit subagents requires the top-tier model (Opus 4.8) for monorepo coordination and subagent management. Canonical Dynamic Workflows use case and natural fit for a saved /sprint-review: parallel search + per-finding independent verification + adversarial refutation across monorepo scope, read-only with cross-checked findings.
 effort: max
 permissionMode: plan

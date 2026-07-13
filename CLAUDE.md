@@ -8,7 +8,7 @@ swarmery is a **Claude Code plugin marketplace** (`.claude-plugin/marketplace.js
 
 There is no build step for the marketplace itself. "Source code" here is agent/skill/command markdown, bash hooks and CLI scripts, and JSON manifests.
 
-**Exception — `tools/swarmery/`**: a Go + React control plane for monitoring Claude Code agent sessions (own module `github.com/atretyak1985/swarmery/tools/swarmery`, own build via `make build`, dedicated CI `.github/workflows/swarmery-ci.yml`). It is NOT a plugin and is excluded from marketplace rules (neutrality scan covers `plugins/**` only). Plan: `tools/swarmery/docs/plan/00-plan.md`.
+**Exception — `tools/swarmery/`**: a Go + React control plane for monitoring Claude Code agent sessions (own module `github.com/atretyak1985/swarmery/tools/swarmery`, own build via `make build`, dedicated CI `.github/workflows/swarmery-ci.yml`). It is NOT a plugin and is excluded from marketplace rules (neutrality scan covers `plugins/**` only). The committed `tools/swarmery/docs/plan/` tree is the **historical record of already-shipped phases only** — NEW plans, specs, and design docs go to the private workspace (see "Work artifacts" below), never into this repo.
 
 ## Commands
 
@@ -45,6 +45,10 @@ CI also enforces that every `plugins/*/agents/*.md` has `name:` and `description
 - `overlays/_schema/project.schema.json` — schema for consumers' `.claude/project.json`; `overlays/example/` is the reference overlay.
 - `scripts/init.sh` — one-command consumer bootstrap (settings.json + project.json skeleton + workspace namespace).
 - `plugins/core/bin/agent-work.sh` — project-aware workspace CLI (`setup|init|phase|complete|index|list|search|view|metrics|cleanup`). Resolves the workspace via `AGENT_WORKSPACE_ROOT` + `AGENT_PROJECT` env; work artifacts (plans/sessions/tasks) live in a separate private workspace repo, **never here**.
+
+### Work artifacts (hard rule)
+
+ALL new plans, specs, and design docs — including ones for `tools/swarmery` — are written to the private workspace repo, **date-grouped** like `working/`: `<workspace>/swarmery/workspace/plans/{YYYY}/{MM}/{DD}/{slug}/` (for this self-hosted repo the workspace is `/Volumes/Work/swarmery-workspace`). Never create planning artifacts under `tools/swarmery/docs/plan/` or anywhere else in this repo; the in-repo plan tree is a frozen record of shipped phases.
 - `tools/swarmery/` — Go + React session-monitoring control plane (see exception note above): `cmd/`, `internal/{store,ingest,api}`, `web/`, `testdata/fixtures/`, `docs/{jsonl-format.md,plan/}`.
 
 ## Hard rules
