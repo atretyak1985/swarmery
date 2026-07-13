@@ -58,6 +58,11 @@ type hookOutput struct {
 type hookDecision struct {
 	Behavior string  `json:"behavior"`
 	Message  *string `json:"message,omitempty"`
+	// UpdatedInput carries dashboard-entered AskUserQuestion answers
+	// ({questions, answers}) verbatim from the daemon's 200 body to Claude
+	// (hooks-protocol amendment 1, spike E12a). Empty → key omitted, stdout
+	// byte-identical to the frozen gate-2.2 form.
+	UpdatedInput json.RawMessage `json:"updatedInput,omitempty"`
 }
 
 // Run executes one hook invocation and returns the process exit code —
@@ -131,6 +136,12 @@ func runPermissionRequest(body []byte, cfg Config) string {
 		msg := decided.Message
 		out.HookSpecificOutput.Decision.Message = &msg
 	}
+	if decided.Decision == "allow" && len(decided.UpdatedInput) > 0 && string(decided.UpdatedInput) != "null" {
+		// updatedInput accompanies allow only (hooks-protocol amendment 1):
+		// forwarded verbatim, never inspected — the daemon builds and
+		// validates it (E12a/b: answers injected, no terminal dialog).
+		out.HookSpecificOutput.Decision.UpdatedInput = decided.UpdatedInput
+	}
 	enc, err := json.Marshal(out)
 	if err != nil {
 		return "marshal-error"
@@ -139,10 +150,13 @@ func runPermissionRequest(body []byte, cfg Config) string {
 	return outcome
 }
 
-// hookDecisionBody is the daemon's 200 body (docs/hooks-protocol.md).
+// hookDecisionBody is the daemon's 200 body (docs/hooks-protocol.md,
+// updatedInput per amendment 1 — absent everywhere except answered
+// AskUserQuestion requests).
 type hookDecisionBody struct {
-	Decision string `json:"decision"`
-	Message  string `json:"message"`
+	Decision     string          `json:"decision"`
+	Message      string          `json:"message"`
+	UpdatedInput json.RawMessage `json:"updatedInput"`
 }
 
 // post sends the hook stdin to the daemon. onResp (may be nil) classifies a

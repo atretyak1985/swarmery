@@ -154,3 +154,46 @@ func TestWaitingNotice(t *testing.T) {
 		t.Errorf("stderr = %q, want the waiting notice", stderr)
 	}
 }
+
+// ── updatedInput passthrough (hooks-protocol amendment 1, spike E12) ─────────
+
+// TestAllowWithUpdatedInput: the 200 body's updatedInput rides VERBATIM as
+// hookSpecificOutput.decision.updatedInput (E12a — answers injected, no
+// terminal dialog).
+func TestAllowWithUpdatedInput(t *testing.T) {
+	updated := `{"questions":[{"question":"Pick a color","options":[{"label":"Red"}],"multiSelect":false}],"answers":{"Pick a color":"Red"}}`
+	srv, _ := daemonStub(t, 200, `{"decision":"allow","updatedInput":`+updated+`}`)
+	stdout, _, code := runShim(t, EventPermissionRequest, srv.URL, stdinFixture)
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	want := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","updatedInput":` + updated + `}}}` + "\n"
+	if stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+}
+
+// TestAllowUpdatedInputAbsent: no updatedInput (or a literal null) keeps the
+// stdout byte-identical to the frozen gate-2.2 allow form — old daemons and
+// new shims stay compatible in both directions.
+func TestAllowUpdatedInputAbsent(t *testing.T) {
+	want := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}` + "\n"
+	for _, body := range []string{`{"decision":"allow"}`, `{"decision":"allow","updatedInput":null}`} {
+		srv, _ := daemonStub(t, 200, body)
+		stdout, _, code := runShim(t, EventPermissionRequest, srv.URL, stdinFixture)
+		if code != 0 || stdout != want {
+			t.Errorf("body %s: exit=%d stdout=%q, want the frozen allow form", body, code, stdout)
+		}
+	}
+}
+
+// TestDenyIgnoresUpdatedInput: updatedInput accompanies allow only — a deny
+// carrying one (non-contract) must not forward it.
+func TestDenyIgnoresUpdatedInput(t *testing.T) {
+	srv, _ := daemonStub(t, 200, `{"decision":"deny","message":"m","updatedInput":{"x":1}}`)
+	stdout, _, code := runShim(t, EventPermissionRequest, srv.URL, stdinFixture)
+	want := `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"m"}}}` + "\n"
+	if code != 0 || stdout != want {
+		t.Errorf("exit=%d stdout=%q, want deny without updatedInput", code, stdout)
+	}
+}
