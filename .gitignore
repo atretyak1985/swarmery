@@ -7,6 +7,9 @@ swarmery-workspace/
 agents-index.json
 skills-index.json
 
+# Temporary / scratch files
+temp/
+
 # OS / editor noise
 .DS_Store
 *.log

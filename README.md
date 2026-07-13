@@ -164,4 +164,4 @@ Core agents, skills, and hooks read `project.json` at runtime for repos, the mai
 
 ## License
 
-MIT
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal, educational, and open-source use; commercial use prohibited.
