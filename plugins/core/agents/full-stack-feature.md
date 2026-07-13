@@ -1,7 +1,7 @@
 ---
 name: full-stack-feature
 description: Coordinate feature implementation across database, API, UI, deploy, and promotion layers.
-model: claude-fable-5
+model: claude-opus-4-8
 # Rationale: Multi-step cross-repo sequencing and contract consistency checking exceed Sonnet's reasoning depth. Opus 4.8 brings Dynamic Workflows and adaptive thinking for long-horizon cross-repo coordination, sustaining longer autonomous runs across the DB->API->UI->deploy chain.
 effort: max
 # Session-level guidance: cross-repo features benefit from max; consider /effort ultracode to let Claude auto-plan a dynamic workflow for the full chain.
