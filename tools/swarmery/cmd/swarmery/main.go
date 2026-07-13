@@ -28,6 +28,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
@@ -366,6 +367,22 @@ func cmdServe(args []string) error {
 		}()
 		log.Printf("swarmery system scanner watching %s (rescan %s)", sysCfg.ClaudeDir, sysscan.DefaultRescanInterval)
 	}
+
+	// process liveness — checks active/idle sessions every 30 s, fast-forwards
+	// dead ones to status='completed', publishes session_updated when proc_state
+	// changes so the UI picks up orphan/dead badges in real time.
+	pw := &procwatch.Ticker{
+		DB:       db,
+		Provider: procwatch.OsProvider{},
+		Interval: 30 * time.Second,
+		OnStateChange: func(id int64) {
+			if bus != nil {
+				bus.Publish(ingest.Notification{Type: ingest.NoteSessionUpdated, SessionID: id})
+			}
+		},
+	}
+	go pw.Run(context.Background())
+	log.Printf("swarmery procwatch ticker started (interval 30s)")
 
 	// phase 2: approvals — long-poll registry + expiry sweeper + heartbeat.
 	svc := approvals.New(db, bus, approvals.Options{

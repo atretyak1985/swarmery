@@ -57,6 +57,9 @@ type sessionDTO struct {
 	TaskExternalID *string  `json:"taskExternalId"`
 	TaskLinkSource *string  `json:"taskLinkSource"` // explicit | heuristic
 	TaskConfidence *float64 `json:"taskConfidence"`
+	// process liveness (migration 0009): proc_state and pid, null when untracked.
+	ProcState *string `json:"procState"`
+	ProcPID   *int64  `json:"procPid"`
 }
 
 type turnDTO struct {
@@ -139,7 +142,8 @@ const sessionSelect = `
 	SELECT s.id, s.project_id, p.slug, p.name, s.session_uuid, s.model, s.git_branch, s.cwd,
 	       s.status, s.started_at, s.ended_at, s.title, s.source,
 	       agg.tokens, agg.cost_usd,
-	       tl.task_id, tl.external_id, tl.link_source, tl.confidence
+	       tl.task_id, tl.external_id, tl.link_source, tl.confidence,
+	       s.proc_state, s.pid
 	FROM sessions s
 	JOIN projects p ON p.id = s.project_id
 	LEFT JOIN (
@@ -293,7 +297,8 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	return scan(&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
 		&s.Tokens, &s.CostUSD,
-		&s.TaskID, &s.TaskExternalID, &s.TaskLinkSource, &s.TaskConfidence)
+		&s.TaskID, &s.TaskExternalID, &s.TaskLinkSource, &s.TaskConfidence,
+		&s.ProcState, &s.ProcPID)
 }
 
 func writeJSON(w http.ResponseWriter, v any, err error) {

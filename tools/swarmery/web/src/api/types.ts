@@ -16,6 +16,9 @@
 /** sessions.status — MVP emits active|idle|completed; waiting_approval|killed reserved for hooks. */
 export type SessionStatus = 'active' | 'waiting_approval' | 'idle' | 'completed' | 'killed';
 
+/** sessions.proc_state — null when PID is unknown (remote machine / no hook). */
+export type ProcState = 'running' | 'orphaned' | 'dead' | 'unknown';
+
 /** sessions.source */
 export type SessionSource = 'jsonl' | 'hook' | 'both';
 
@@ -88,6 +91,10 @@ export interface Session {
   taskLinkSource?: TaskLinkSource | null;
   /** Overlap fraction 0..1 for heuristic links; null for explicit. */
   taskConfidence?: number | null;
+  /** Process state from procwatch; null when PID is not tracked. */
+  procState?: ProcState | null;
+  /** OS PID of the claude process; null when not tracked or remote session. */
+  procPid?: number | null;
 }
 
 /** Go: turnDTO */

@@ -589,6 +589,9 @@ export function Overview(): JSX.Element {
     .sort((a, b) => (b.endedAt ?? b.startedAt).localeCompare(a.endedAt ?? a.startedAt))
     .slice(0, 6);
 
+  const orphaned = live.filter((s) => s.procState === 'orphaned');
+  const orphanedCostUsd = orphaned.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
+
   const headSub =
     stats === null
       ? null
@@ -630,6 +633,20 @@ export function Overview(): JSX.Element {
                   no live sessions — run <span className="font-mono text-ink">swarmery ingest</span>{' '}
                   or start a Claude Code session
                 </Empty>
+              )}
+              {orphaned.length > 0 && (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-[12.5px] text-amber-600">
+                  <span className="font-semibold">
+                    {orphaned.length} lost session{orphaned.length !== 1 ? 's' : ''}
+                    {orphanedCostUsd > 0 ? ` · $${orphanedCostUsd.toFixed(2)} today` : ''}
+                  </span>
+                  <Link
+                    to="/sessions?status=active"
+                    className="ml-auto font-mono text-[11px] underline hover:no-underline"
+                  >
+                    view →
+                  </Link>
+                </div>
               )}
               {live.map((s) => (
                 <HeroCard key={s.id} session={s} now={nowById[s.id] ?? null} />

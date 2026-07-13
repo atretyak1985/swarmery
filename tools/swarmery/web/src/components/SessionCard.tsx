@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import type { Session } from '../api/types';
 import { projectColor } from '../lib/colors';
 import { fmtSpan, fmtTime, projectLabel } from '../lib/format';
+import { KillButton } from './KillButton';
+import { ProcBadge } from './ProcBadge';
 import { TaskChip } from './TaskChip';
 import { DurationPill, LiveDot, SESSION_ROW_GRID, StatusChip } from './ui';
 
@@ -63,6 +65,7 @@ export function SessionCard({
         >
           {projectLabel(session.projectName, session.projectSlug)}
         </span>
+        <ProcBadge session={session} />
         <StatusChip status={session.status} suffix={chipSuffix(session)} />
       </div>
       <div className="mt-px mb-[3px] truncate text-[13.5px] font-semibold">
@@ -80,6 +83,11 @@ export function SessionCard({
       )}
       {liveNow && (
         <div className="mt-[3px] truncate font-mono text-[10.5px] text-green">now: {now}</div>
+      )}
+      {session.procPid != null && (
+        <div className="mt-[3px] flex">
+          <KillButton session={session} />
+        </div>
       )}
     </>
   );
@@ -135,13 +143,19 @@ export function SessionCard({
           {liveNow && (
             <span className="block truncate font-mono text-[10.5px] text-green">now: {now}</span>
           )}
+          {session.procPid != null && (
+            <span className="mt-[2px] flex">
+              <KillButton session={session} />
+            </span>
+          )}
         </span>
         <span className="truncate font-mono text-[11px] text-ink-dim">{session.model ?? '—'}</span>
         <span className="truncate font-mono text-[11px] text-ink-dim">
           {session.gitBranch ?? '—'}
         </span>
         <span className="font-mono text-[11px] text-ink-3">{fmtTime(session.startedAt)}</span>
-        <span className="justify-self-end">
+        <span className="flex items-center justify-end gap-1.5">
+          <ProcBadge session={session} />
           <DurationPill status={session.status} startedAt={session.startedAt} endedAt={session.endedAt} />
         </span>
       </div>

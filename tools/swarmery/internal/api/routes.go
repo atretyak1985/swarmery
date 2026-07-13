@@ -36,6 +36,10 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/approvals/{id}", requireLocalOrigin(h.resolveApproval))
 	mux.HandleFunc("GET /api/approvals", h.listApprovals)
 
+	// process liveness + kill (phase 4 step-07+)
+	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
+	mux.HandleFunc("POST /api/sessions/{id}/kill", requireLocalOrigin(h.KillSession))
+
 	// phase 4: system — read-only registry surface over the sysscan tables
 	// (step-05). GET only; every write flow is Stage 2.
 	mux.HandleFunc("GET /api/system/summary", h.systemSummary)

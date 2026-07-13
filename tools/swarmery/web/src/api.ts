@@ -135,3 +135,17 @@ export async function resolveApproval(
   }
   return (await res.json()) as PermissionRequest;
 }
+
+/** POST /api/sessions/{id}/kill — send SIGTERM (force=false) or SIGKILL (force=true). */
+export async function killSession(id: number, force = false): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/sessions/${String(id)}/kill`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error ?? `kill failed: ${String(res.status)}`);
+  }
+}

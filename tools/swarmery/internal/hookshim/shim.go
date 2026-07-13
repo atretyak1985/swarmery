@@ -26,6 +26,7 @@ import (
 const (
 	EventPermissionRequest = "permission-request"
 	EventStop              = "stop"
+	EventSessionStart      = "session-start"
 )
 
 // Timing knobs, frozen by docs/hooks-protocol.md §Timing (Q-A/E6).
@@ -33,6 +34,7 @@ const (
 	DefaultConnectTimeout = 500 * time.Millisecond
 	DefaultPollTimeout    = 120 * time.Second
 	stopTimeout           = 5 * time.Second
+	sessionStartTimeout   = 2 * time.Second
 	maxStdin              = 4 << 20
 )
 
@@ -91,6 +93,14 @@ func Run(event string, stdin io.Reader, cfg Config) int {
 	case EventStop:
 		outcome := post(cfg, EventStop, body, stopTimeout, nil)
 		logLine(cfg.LogPath, event, tool, outcome)
+	case EventSessionStart:
+		injected, err := injectPPID(body)
+		if err != nil {
+			logLine(cfg.LogPath, event, "", "ppid-inject-error")
+			return 0
+		}
+		outcome := post(cfg, EventSessionStart, injected, sessionStartTimeout, nil)
+		logLine(cfg.LogPath, event, "", outcome)
 	default:
 		fmt.Fprintf(cfg.Stderr, "swarmery hook: unknown event %q\n", event)
 		logLine(cfg.LogPath, event, tool, "unknown-event")
@@ -178,6 +188,18 @@ func toolNameOf(body []byte) string {
 	}
 	_ = json.Unmarshal(body, &p)
 	return p.ToolName
+}
+
+// injectPPID merges the hookshim's PPID (the parent claude process) into the
+// hook payload JSON before forwarding to the daemon. The daemon verifies
+// command identity before binding the PID.
+func injectPPID(body []byte) ([]byte, error) {
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		m = map[string]any{}
+	}
+	m["pid"] = os.Getppid()
+	return json.Marshal(m)
 }
 
 // logLine appends one audit line (ts, event, tool, outcome) — best-effort,

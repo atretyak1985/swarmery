@@ -27,6 +27,8 @@ var (
 		"tokens", "costUsd",
 		// phase 3.5: workspaces — additive best-task-link fields (nullable).
 		"taskId", "taskExternalId", "taskLinkSource", "taskConfidence",
+		// phase 4 step-07+: process liveness (nullable).
+		"procState", "procPid",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",
