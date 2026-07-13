@@ -7,7 +7,8 @@ package api
 // pre-write validation (parse → name-uniqueness → lint), the sysedit error
 // mapping, and rollback-as-ordinary-write.
 //
-// Deletes are step-11; hooks/settings.json writes are step-10 (hookcfg).
+// Create/delete/restore live in system_create.go (step-11); hooks/
+// settings.json writes are step-10 (hookcfg).
 
 import (
 	"database/sql"
@@ -261,9 +262,16 @@ func (h *Handler) checkSystemNameFree(w http.ResponseWriter, k systemKind, id in
 // writeSyseditError maps the sysedit typed errors onto the step-09 HTTP
 // contract: ErrConflict → 409 {disk_hash, base_hash, diff}, ErrPluginManaged
 // and ErrReadOnly → 403, ErrPathOutsideRoots → 400, ErrNotFound → 404.
+// Step-11 adds the create/restore tier: ErrExists and ErrNotDeleted → 409.
 func writeSyseditError(w http.ResponseWriter, k systemKind, err error) {
 	var ce *sysedit.ConflictError
 	switch {
+	case errors.Is(err, sysedit.ErrExists):
+		writeJSONStatus(w, http.StatusConflict, map[string]string{
+			"error": "a file already exists at the target path but is not in the registry — run a rescan and retry"})
+	case errors.Is(err, sysedit.ErrNotDeleted):
+		writeJSONStatus(w, http.StatusConflict, map[string]string{
+			"error": k.kind + " is not deleted — nothing to restore"})
 	case errors.As(err, &ce):
 		// Redact BEFORE serving — the disk drift may embed a secret.
 		writeJSONStatus(w, http.StatusConflict, systemConflictDTO{

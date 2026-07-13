@@ -61,4 +61,9 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// step-10: hooks toggle/edit — the only settings.json write surface.
 	mux.HandleFunc("POST /api/system/hooks/{id}/toggle", requireLocalOrigin(h.toggleSystemHook))
 	mux.HandleFunc("PUT /api/system/hooks/{id}", requireLocalOrigin(h.updateSystemHook))
+	// step-11: agent create (canonical template, O_EXCL through sysedit) +
+	// soft delete (file → config-backups, deleted=1) + restore.
+	mux.HandleFunc("POST /api/system/agents", requireLocalOrigin(h.createSystemAgent))
+	mux.HandleFunc("DELETE /api/system/agents/{id}", requireLocalOrigin(h.deleteSystemAgent))
+	mux.HandleFunc("POST /api/system/agents/{id}/restore", requireLocalOrigin(h.restoreSystemAgent))
 }
