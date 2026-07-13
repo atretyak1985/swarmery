@@ -259,7 +259,8 @@ export type WSMessageType =
   | 'session_updated'
   | 'event_appended'
   | 'permission_requested'
-  | 'permission_resolved';
+  | 'permission_resolved'
+  | 'system_item_updated';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -267,7 +268,30 @@ export type WSMessage =
   | { type: 'session_updated'; payload: Session }
   | { type: 'event_appended'; payload: { sessionId: number; event: Event } }
   | { type: 'permission_requested'; payload: PermissionRequest }
-  | { type: 'permission_resolved'; payload: PermissionRequest };
+  | { type: 'permission_resolved'; payload: PermissionRequest }
+  | { type: 'system_item_updated'; payload: SystemItemUpdate };
+
+// --- Phase 4: system registry (Stage 1) — additive contracts ------------------
+
+/**
+ * system_item_updated payload kind — which registry table itemId points into
+ * (agents / skills / hooks / commands). Mirrors the Kind constants in
+ * internal/sysscan.
+ */
+export type SystemItemKind = 'agent' | 'skill' | 'hook' | 'command';
+
+/**
+ * Payload of `system_item_updated` (phase 4 — system registry, frozen at
+ * step-03): a cache-invalidation hint that one config item was created,
+ * changed content (new version), or was soft-deleted. Carries ids only —
+ * clients refetch the item via the /api/system endpoints (step-05). The
+ * WS-side emission lands with those endpoints; the bus contract
+ * (ingest.NoteSystemItemUpdated + Kind/ItemID) is frozen now.
+ */
+export interface SystemItemUpdate {
+  kind: SystemItemKind;
+  itemId: number;
+}
 
 // --- Phase 3.5: workspaces (E-lite) — additive task contracts -----------------
 
@@ -314,3 +338,129 @@ export interface TaskDetail extends TaskSummary {
 
 /** GET /api/tasks?days=<n> — recently active workspace tasks (default 14 days). */
 export type TasksResponse = TaskSummary[];
+
+// --- Phase 4: system — read-only registry surface (step-05, contract for the
+// --- System UI in step-06). Go DTOs live in internal/api/system.go. All
+// --- served content (hook commands, frontmatter, bodies, version contents)
+// --- is redacted at the response layer: secret-shaped values become "•••".
+
+/** config_lint_findings.severity */
+export type LintSeverity = 'info' | 'warn' | 'error';
+
+/** Go: systemSummaryDTO — GET /api/system/summary (deleted=0 counters). */
+export interface SystemSummary {
+  agents: number;
+  skills: number;
+  hooks: number;
+  commands: number;
+  overlays: number;
+  /** Active findings (resolved_at IS NULL) split by severity. */
+  lint: { error: number; warn: number; info: number };
+}
+
+/** Go: systemItemDTO — one row of GET /api/system/{agents|skills}?scope=&project=. */
+export interface SystemItem {
+  id: number;
+  name: string;
+  scope: 'global' | 'project';
+  projectSlug: string | null;
+  origin: 'local' | 'plugin';
+  pluginName: string | null;
+  /** Agents only; always null for skills. */
+  model: string | null;
+  description: string | null;
+  /** agents.file_path / skills.dir_path. */
+  path: string;
+  /** Worst ACTIVE lint finding severity; null = clean. */
+  lintMax: LintSeverity | null;
+  /** Active agent_dead finding (advisory — sparse events attribution). */
+  dead: boolean;
+  /** MAX(events.ts) by agent_id/skill_id; null while never referenced. */
+  lastUsed: string | null;
+  /** COUNT(DISTINCT session_id) over the last 30 days. */
+  tasks30d: number;
+}
+
+/** Go: systemVersionDTO — one history row inside a detail response. */
+export interface SystemVersion {
+  id: number;
+  createdAt: string;
+  changeNote: string | null;
+  contentHash: string;
+}
+
+/** Go: systemItemDetailDTO — GET /api/system/{agents|skills}/{id} (numeric row id). */
+export interface SystemItemDetail extends SystemItem {
+  deleted: boolean;
+  currentVersionId: number | null;
+  /** Raw YAML frontmatter block of the current version (redacted). */
+  frontmatter: string;
+  /** Markdown body of the current version (redacted). */
+  body: string;
+  /** Version history, newest first. */
+  versions: SystemVersion[];
+}
+
+/** Go: systemVersionContentDTO — GET .../{id}/versions/{v}: one full snapshot (redacted). */
+export interface SystemVersionContent extends SystemVersion {
+  content: string;
+}
+
+/** Go: systemDiffDTO — GET .../{id}/diff?from=&to=: backend unified diff ("" = identical). */
+export interface SystemDiff {
+  from: number;
+  to: number;
+  diff: string;
+}
+
+/** Go: systemHookDTO — one row of GET /api/system/hooks?scope=&project=. */
+export interface SystemHook {
+  id: number;
+  scope: 'global' | 'project';
+  projectSlug: string | null;
+  event: string;
+  matcher: string | null;
+  /** Redacted: secret-shaped values are masked with "•••". */
+  command: string;
+  /** Seconds; null when absent in settings JSON. */
+  timeout: number | null;
+  statusMessage: string | null;
+  sourceFile: string;
+  seq: number;
+  enabled: boolean;
+  /** 'swarmery' for installer-owned entries, else null. */
+  managed: string | null;
+}
+
+/** Go: systemCommandDTO — one row of GET /api/system/commands?scope=&project=. */
+export interface SystemCommand {
+  id: number;
+  name: string;
+  scope: 'global' | 'project';
+  projectSlug: string | null;
+  origin: 'local' | 'plugin';
+  pluginName: string | null;
+  description: string | null;
+  path: string;
+}
+
+/** Go: systemOverlayDTO — one overlays/<dir>/ entry (safe project.json fields only). */
+export interface SystemOverlay {
+  dir: string;
+  path: string;
+  /** true when project.json exists but is not valid JSON; parsed fields stay null. */
+  parseError: boolean;
+  name: string | null;
+  displayName: string | null;
+  codePath: string | null;
+  mainApp: string | null;
+  repos: string[];
+  enabledPacks: string[];
+}
+
+/** Go: systemOverlaysDTO — GET /api/system/overlays (read live from disk). */
+export interface SystemOverlays {
+  /** overlays/_schema/project.schema.json presence check. */
+  schemaPresent: boolean;
+  overlays: SystemOverlay[];
+}

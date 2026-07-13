@@ -30,7 +30,9 @@ type WSMessage =
   | { type: 'event_appended';  payload: { sessionId: number; event: Event } }
   // phase 2 — approvals (frozen at gate 2.2):
   | { type: 'permission_requested'; payload: PermissionRequest }
-  | { type: 'permission_resolved';  payload: PermissionRequest };
+  | { type: 'permission_resolved';  payload: PermissionRequest }
+  // phase 4 — system registry (frozen at step-03):
+  | { type: 'system_item_updated'; payload: SystemItemUpdate };
 ```
 
 `Session` and `Event` are byte-for-byte the same JSON DTOs the REST API
@@ -117,6 +119,25 @@ resolution fields populated; clients upsert by `id`.
 Session status changes caused by approvals (`→ waiting_approval` and back) ride the
 existing `session_updated` message, unchanged.
 
+### `system_item_updated` (phase 4)
+
+Added at step-03 (phase 4 — system registry); everything above is unchanged.
+Published on the internal bus by `internal/sysscan` whenever one config item —
+agent, skill, hook entry, or command — is created, changes content (a new
+`*_versions` row for agents/skills), or is soft-deleted. The payload carries
+ids only: it is a **cache-invalidation hint**, not data — clients refetch the
+item from the `/api/system/*` endpoints. `kind` names the registry table the
+id points into.
+
+```json
+{"type":"system_item_updated","payload":{"kind":"agent","itemId":42}}
+```
+
+Emission note: the bus constant (`ingest.NoteSystemItemUpdated`) and the
+payload contract are frozen at step-03; the WS-side hydration of this frame is
+wired together with the `/api/system/*` endpoints at step-05. Until then the
+note exists on the internal bus only.
+
 ## Delivery semantics
 
 - **Hint stream, not a source of truth.** Delivery is at-most-once: a slow
@@ -142,3 +163,4 @@ existing `session_updated` message, unchanged.
 | Status ticker transition (active→idle→completed) | `session_updated` |
 | Approvals: new `permission_requests` row (phase 2) | `permission_requested` |
 | Approvals: request leaves `pending` — any terminal status (phase 2) | `permission_resolved` |
+| sysscan: config item created / new content version / soft-deleted (phase 4, WS wiring at step-05) | `system_item_updated` |

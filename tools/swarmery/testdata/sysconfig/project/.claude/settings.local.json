@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/fake/.swarmery/bin/swarmery hook permission-request",
+            "timeout": 130
+          }
+        ]
+      }
+    ]
+  }
+}

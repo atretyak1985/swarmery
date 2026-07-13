@@ -11,6 +11,10 @@ const (
 	// phase 2 — approvals (frozen at gate 2.2): published by internal/approvals.
 	NotePermissionRequested = "permission_requested"
 	NotePermissionResolved  = "permission_resolved"
+	// phase 4 — system registry (Stage 1): published by internal/sysscan when a
+	// config item (agent/skill/hook/command) is created, changes content, or is
+	// soft-deleted. Additive — nothing above this line may change.
+	NoteSystemItemUpdated = "system_item_updated"
 )
 
 // Notification is one ingest event on the internal bus. It carries row ids
@@ -21,6 +25,9 @@ type Notification struct {
 	SessionID int64  // sessions.id — always set
 	EventID   int64  // events.id — set for event_appended only
 	RequestID int64  // permission_requests.id — set for permission_* only
+	// phase 4 — system registry (additive): set for system_item_updated only.
+	Kind   string // agent | skill | hook | command
+	ItemID int64  // row id in the corresponding registry table
 }
 
 // Bus is a minimal fan-out pub/sub channel for ingest notifications.

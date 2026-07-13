@@ -29,6 +29,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -52,6 +53,8 @@ func main() {
 		err = cmdRecost(os.Args[2:])
 	case "wscan":
 		err = cmdWscan(os.Args[2:])
+	case "sysscan":
+		err = cmdSysscan(os.Args[2:])
 	case "install":
 		err = installer.CmdInstall(os.Args[2:])
 	case "uninstall":
@@ -85,6 +88,8 @@ func usage() {
                     [--exclude-projects <globs>]  (default '/tmp/*,/private/tmp/*')
   swarmery recost   [--db <path>]
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
+  swarmery sysscan  [--db <path>] [--claude-dir <dir>] [--overlays-dir <dir>]
+                                   one-shot system-config scan (agents/skills/hooks/commands)
   swarmery install  [--port <n>]   launchd auto-start
   swarmery uninstall               remove launchd service (keeps logs+db)
   swarmery status                  service health, pid, uptime, db size
@@ -260,6 +265,53 @@ func cmdWscan(args []string) error {
 	return nil
 }
 
+// sysscanFlags registers the phase-4 system-config scanner flags.
+func sysscanFlags(fs *flag.FlagSet) *sysscan.Config {
+	cfg := &sysscan.Config{}
+	fs.StringVar(&cfg.ClaudeDir, "claude-dir", sysscan.DefaultClaudeDir(),
+		"Claude Code config dir to scan (agents/skills/commands/settings + plugin cache)")
+	fs.StringVar(&cfg.OverlaysDir, "overlays-dir", "",
+		"overlays/ dir listed in the scan report (optional)")
+	return cfg
+}
+
+// cmdSysscan runs one system-config scan pass — the CLI twin of the periodic
+// scanner inside serve (phase 4: system registry). READ-ONLY on ~/.claude
+// and every project's .claude/.
+func cmdSysscan(args []string) error {
+	fs := flag.NewFlagSet("sysscan", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	sysCfg := sysscanFlags(fs)
+	fs.Parse(args)
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: swarmery sysscan [--db <path>] [--claude-dir <dir>] [--overlays-dir <dir>]")
+	}
+
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stats, err := sysscan.New(db, *sysCfg, nil).Scan()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("sysscan %s\n  %s\n", sysCfg.ClaudeDir, stats)
+	for _, p := range stats.Overlays {
+		fmt.Printf("  overlay: %s\n", p)
+	}
+
+	// Step-04 post-pass: re-evaluate the config lint rules against the
+	// registry this scan just converged (writes config_lint_findings only).
+	lint, err := sysscan.Lint(db, *sysCfg)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  lint: %s\n", lint)
+	return nil
+}
+
 func cmdServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	dbPath := dbFlag(fs)
@@ -271,6 +323,7 @@ func cmdServe(args []string) error {
 		"how long a permission request stays pending before fail-open expiry")
 	cfg := pipelineFlags(fs)
 	wsCfg := wsingestFlags(fs)
+	sysCfg := sysscanFlags(fs)
 	fs.Parse(args)
 
 	db, err := store.Open(*dbPath)
@@ -301,6 +354,17 @@ func cmdServe(args []string) error {
 			}
 		}()
 		log.Printf("swarmery workspace scanner watching %s (rescan %s)", wsCfg.WorkspaceRoot, wsingest.DefaultRescanInterval)
+
+		// phase 4: system registry — read-only scanner of the agent-system
+		// config (agents/skills/hooks/commands) with fsnotify + periodic
+		// rescan. Never writes to ~/.claude or any project's .claude/.
+		sys := sysscan.New(db, *sysCfg, bus)
+		go func() {
+			if err := sys.Run(context.Background()); err != nil && err != context.Canceled {
+				log.Printf("error: sysscan scanner stopped: %v", err)
+			}
+		}()
+		log.Printf("swarmery system scanner watching %s (rescan %s)", sysCfg.ClaudeDir, sysscan.DefaultRescanInterval)
 	}
 
 	// phase 2: approvals — long-poll registry + expiry sweeper + heartbeat.
@@ -311,6 +375,10 @@ func cmdServe(args []string) error {
 	})
 	api.AttachApprovals(svc)
 	go svc.RunSweeper(context.Background())
+
+	// phase 4: system — GET /api/system/overlays reads overlays/*/project.json
+	// live from this dir on every request (empty disables the listing).
+	api.AttachOverlaysDir(sysCfg.OverlaysDir)
 
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {

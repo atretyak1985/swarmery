@@ -98,6 +98,9 @@ export function App(): JSX.Element {
         ? { badge: String(sessionsToday), badgeClass: 'bg-surface2 text-ink-dim' }
         : {}),
     },
+    // System registry (phase 4): the /api/system endpoints ship with the
+    // daemon, so the item is always present (empty states live on the page).
+    { to: '/system', icon: '⚙', label: 'System' },
     ...(hasDocs ? [DOCS_NAV] : []),
   ];
 

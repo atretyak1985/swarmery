@@ -35,4 +35,19 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/hooks/stop", requireLocalOrigin(h.hookStop))
 	mux.HandleFunc("POST /api/approvals/{id}", requireLocalOrigin(h.resolveApproval))
 	mux.HandleFunc("GET /api/approvals", h.listApprovals)
+
+	// phase 4: system — read-only registry surface over the sysscan tables
+	// (step-05). GET only; every write flow is Stage 2.
+	mux.HandleFunc("GET /api/system/summary", h.systemSummary)
+	mux.HandleFunc("GET /api/system/agents", h.listSystemAgents)
+	mux.HandleFunc("GET /api/system/agents/{id}", h.getSystemAgent)
+	mux.HandleFunc("GET /api/system/agents/{id}/versions/{v}", h.getSystemAgentVersion)
+	mux.HandleFunc("GET /api/system/agents/{id}/diff", h.diffSystemAgent)
+	mux.HandleFunc("GET /api/system/skills", h.listSystemSkills)
+	mux.HandleFunc("GET /api/system/skills/{id}", h.getSystemSkill)
+	mux.HandleFunc("GET /api/system/skills/{id}/versions/{v}", h.getSystemSkillVersion)
+	mux.HandleFunc("GET /api/system/skills/{id}/diff", h.diffSystemSkill)
+	mux.HandleFunc("GET /api/system/hooks", h.listSystemHooks)
+	mux.HandleFunc("GET /api/system/commands", h.listSystemCommands)
+	mux.HandleFunc("GET /api/system/overlays", h.listSystemOverlays)
 }

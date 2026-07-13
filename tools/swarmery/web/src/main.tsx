@@ -7,6 +7,7 @@ import { Overview } from './pages/Overview';
 import { Sessions } from './pages/Sessions';
 import { SessionDetailPage } from './pages/SessionDetail';
 import { Docs } from './pages/Docs';
+import { System } from './pages/System';
 import './index.css';
 
 const router = createBrowserRouter([
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { path: 'approvals', element: <Approvals /> },
       { path: 'sessions', element: <Sessions /> },
       { path: 'sessions/:id', element: <SessionDetailPage /> },
+      { path: 'system', element: <System /> },
       { path: 'docs', element: <Docs /> },
       { path: 'docs/:slug', element: <Docs /> },
     ],

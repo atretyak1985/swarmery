@@ -8,3 +8,6 @@ web/dist/*
 internal/docsfs/content/*
 !internal/docsfs/content/.gitkeep
 .DS_Store
+
+# sysscan fixture: re-include the settings.local.json that user-global gitignore excludes
+!testdata/sysconfig/**/settings.local.json
