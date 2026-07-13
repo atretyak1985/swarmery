@@ -506,6 +506,43 @@ Observed on: 2026-07-13, machine-local.
 
 ---
 
+## 9. Stage 2 write safety (`internal/sysedit`, step-08)
+
+Every config write goes through **one** code path — `sysedit.Editor.WriteFile` /
+`DeleteFile`. Guarantees, in pipeline order: kill-switch → DB-resolved path fenced
+into known roots → plugin-managed refusal → sha256 conflict detection (409, no
+overwrite) → verified backup **before** any change → atomic tmp+fsync+rename →
+forced rescan (new `*_versions` row).
+
+### 9.1 Kill-switch — `SWARMERY_SYSTEM_READONLY`
+
+Set `SWARMERY_SYSTEM_READONLY=1` (or `true`) in the daemon's environment to refuse
+**every** write with `ErrReadOnly` (API: `403` "readonly mode"). Read per call —
+flipping it on a live daemon takes effect on the next write, no restart needed.
+Same env-override pattern as `SWARMERY_PRICING` / `SWARMERY_LINT_*`.
+
+### 9.2 Backups
+
+Before any modification the original is copied (byte-verified) to
+`~/.swarmery/config-backups/<timestamp>/<full original path>`, e.g.
+`…/config-backups/2026-07-14T10-22-33Z/Users/me/.claude/agents/x.md`
+(RFC3339 UTC, `-` instead of `:` in the time part — colons break some tools).
+Rotation keeps the newest **50** timestamp directories; deletion is fenced with a
+prefix assertion so `RemoveAll` can never escape `config-backups`. Soft deletes
+**move** the file into the same layout — originals are never destroyed.
+
+### 9.3 Optional: git history in `~/.claude` (user opt-in only)
+
+swarmery never initializes or touches a git repo in `~/.claude` — the
+`*_versions` tables plus `config-backups` already cover rollback. If you want
+full history with your own tooling, you can `git init ~/.claude` yourself
+(mind secrets in `settings.local.json` — add a `.gitignore` first); sysedit's
+atomic renames are ordinary file replacements, so external git tracking works
+unchanged. This stays a user decision; no swarmery component will ever create
+commits there.
+
+---
+
 ## Open questions
 
 1. **Plugin-shipped `hooks/hooks.json`** (§5.4): active-but-not-in-settings hooks are
