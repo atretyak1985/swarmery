@@ -1,19 +1,32 @@
-// Offline fixtures for the phase-4 /api/system/* read endpoints (VITE_MOCK=1)
-// — mirror the step-05 DTO shapes frozen in ../api/types.ts so the System UI
-// develops without the daemon. Same pattern as ./data.ts: plain fixture
-// arrays + a mockSystemApi object with per-call delay and the scope/project
-// query-param filtering the Go handlers implement.
+// Offline fixtures for the phase-4 /api/system/* endpoints (VITE_MOCK=1) —
+// mirror the step-05 read DTOs plus the Stage 2 write surface (steps 09–12)
+// frozen in ../api/types.ts so the System UI develops without the daemon.
+// Same pattern as ./data.ts: plain fixture arrays + a mockSystemApi object
+// with per-call delay and the scope/project query-param filtering the Go
+// handlers implement. Write calls mutate in-memory state and reproduce the
+// full 409/403/422 error contract — see the demo-trigger table below.
 
 import type {
   SystemCommand,
+  SystemCreateAgentRequest,
+  SystemCreateResponse,
   SystemDiff,
   SystemHook,
   SystemItem,
   SystemItemDetail,
+  SystemLintFinding,
   SystemOverlays,
+  SystemRestoreResponse,
+  SystemRollbackRequest,
   SystemSummary,
   SystemVersion,
+  SystemWriteRequest,
+  SystemWriteResponse,
 } from '../api/types';
+// Runtime-only use inside async methods — the module cycle with ../api/system
+// (it imports mockSystemApi) is safe: the class binding is live by call time.
+import { SystemWriteError } from '../api/system';
+import { mockProjects } from './data';
 
 const now = Date.now();
 const iso = (msAgo: number): string => new Date(now - msAgo).toISOString();
@@ -263,16 +276,140 @@ function versionsFor(item: SystemItem): SystemVersion[] {
   return item.tasks30d <= 2 ? versions.slice(0, 1) : versions;
 }
 
-function detailFor(item: SystemItem): SystemItemDetail {
-  const versions = versionsFor(item);
+// --- Stage 2 write state (step-12) --------------------------------------------
+//
+// Demo triggers — prove every error state without a live daemon:
+//   · PUT content containing 'demo-conflict'  → 409 {disk_hash, base_hash, diff}
+//   · PUT content containing 'demo-readonly'  → 403 readonly (global banner)
+//   · PUT content without a leading --- block → 422 parse error
+//   · any write on an origin=plugin item      → 403 plugin-managed
+//   · save on a stale base_hash               → real 409 (open Edit twice, save both)
+//   · create with an existing name            → 409 (+restore_id when soft-deleted)
+//   · create with 'demo-readonly' description → 403 readonly (global banner)
+//   · toggle/edit of a managed=swarmery hook  → 403 installer-managed
+//   · hook edit: command w/ 'demo-readonly'   → 403 readonly (global banner)
+//   · hook edit: command w/ 'demo-conflict'   → 409 hook conflict (refetch path)
+
+interface MockItemState {
+  frontmatter: string;
+  body: string;
+  versions: SystemVersion[];
+  currentVersionId: number | null;
+  deleted: boolean;
+}
+
+const itemState = new Map<string, MockItemState>();
+let nextVersionId = 9000;
+let nextAgentId = 900;
+let hashSeq = 0;
+
+const fakeHash = (): string => `w${String(hashSeq++).padStart(4, '0')}deadbeef42`;
+
+function stateOf(kind: 'agents' | 'skills', item: SystemItem): MockItemState {
+  const key = `${kind}:${String(item.id)}`;
+  let st = itemState.get(key);
+  if (st === undefined) {
+    const versions = versionsFor(item);
+    st = {
+      frontmatter: frontmatterFor(item),
+      body: item.name === 'tech-lead' ? TECH_LEAD_BODY : GENERIC_BODY,
+      versions,
+      currentVersionId: versions[0]?.id ?? null,
+      deleted: false,
+    };
+    itemState.set(key, st);
+  }
+  return st;
+}
+
+function isDeleted(kind: 'agents' | 'skills', item: SystemItem): boolean {
+  return itemState.get(`${kind}:${String(item.id)}`)?.deleted ?? false;
+}
+
+function detailFor(kind: 'agents' | 'skills', item: SystemItem): SystemItemDetail {
+  const st = stateOf(kind, item);
   return {
     ...item,
-    deleted: false,
-    currentVersionId: versions[0]?.id ?? null,
-    frontmatter: frontmatterFor(item),
-    body: item.name === 'tech-lead' ? TECH_LEAD_BODY : GENERIC_BODY,
-    versions,
+    deleted: st.deleted,
+    currentVersionId: st.currentVersionId,
+    frontmatter: st.frontmatter,
+    body: st.body,
+    versions: st.versions.map((v) => ({ ...v })),
   };
+}
+
+function currentHashOf(st: MockItemState): string {
+  return st.versions.find((v) => v.id === st.currentVersionId)?.contentHash ?? '';
+}
+
+/** Split raw md into frontmatter + body; null = unparseable (the 422 tier). */
+function splitContent(content: string): { frontmatter: string; body: string } | null {
+  if (!content.startsWith('---\n')) return null;
+  const end = content.indexOf('\n---', 4);
+  if (end === -1) return null;
+  return {
+    frontmatter: content.slice(4, end),
+    body: content.slice(end + 4).replace(/^\n+/, ''),
+  };
+}
+
+/** Deterministic ride-along lint (never blocks) — mirrors sysscan.LintContent. */
+function lintOf(content: string): SystemLintFinding[] {
+  const lint: SystemLintFinding[] = [];
+  if (!/boundaries/i.test(content)) {
+    lint.push({
+      rule: 'no_boundaries',
+      severity: 'warn',
+      message: 'no Boundaries section — agents without limits drift out of scope',
+    });
+  }
+  if (content.length < 400) {
+    lint.push({
+      rule: 'short_body',
+      severity: 'info',
+      message: 'body is under 400 chars — consider documenting process and outputs',
+    });
+  }
+  return lint;
+}
+
+function throwConflict(baseHash: string, name: string): never {
+  throw new SystemWriteError(
+    409,
+    {
+      error: 'content changed on disk since base_hash',
+      disk_hash: fakeHash(),
+      base_hash: baseHash,
+      diff: [
+        `--- ${name} (your base)`,
+        `+++ ${name} (on disk)`,
+        '@@ -1,4 +1,4 @@',
+        ' ---',
+        ` name: ${name}`,
+        '-description: the content your edit is based on',
+        '+description: edited outside the dashboard while you were typing',
+        ' ---',
+      ].join('\n'),
+    },
+    'mock',
+  );
+}
+
+function guardWritable(item: SystemItem, content?: string): void {
+  if (item.origin === 'plugin') {
+    throw new SystemWriteError(
+      403,
+      { error: "item is plugin-managed — edit it in the plugin's repo" },
+      'mock',
+    );
+  }
+  if (content !== undefined && content.includes('demo-readonly')) {
+    throw new SystemWriteError(
+      403,
+      { error: 'system editor is in readonly mode (SWARMERY_SYSTEM_READONLY)' },
+      'mock',
+    );
+  }
 }
 
 // --- GET .../{id}/diff?from=&to= ---------------------------------------------------
@@ -471,6 +608,13 @@ export const mockSystemHooks: SystemHook[] = [
   },
 ];
 
+// Every hook write (toggle/edit) needs the row content_hash as base_hash —
+// give each fixture a stable pseudo-hash; mock writes rotate it (the real
+// nodeHash covers command/timeout/enabled, sysscan/hooknodes.go).
+for (const h of mockSystemHooks) {
+  h.contentHash = `hk${String(h.id).padStart(2, '0')}c0ffee42`;
+}
+
 // --- GET /api/system/commands ---------------------------------------------------------
 
 export const mockSystemCommands: SystemCommand[] = [
@@ -601,14 +745,18 @@ export const mockSystemApi = {
 
   async items(kind: 'agents' | 'skills', filters: SystemMockFilters = {}): Promise<SystemItem[]> {
     await delay(130);
-    return applyFilters(itemsOf(kind), filters);
+    // Soft-deleted rows disappear from lists (the Go handlers filter deleted=0).
+    return applyFilters(
+      itemsOf(kind).filter((i) => !isDeleted(kind, i)),
+      filters,
+    );
   },
 
   async itemDetail(kind: 'agents' | 'skills', id: number): Promise<SystemItemDetail> {
     await delay(150);
     const item = itemsOf(kind).find((i) => i.id === id);
     if (!item) throw new Error(`mock: system ${kind} ${String(id)} not found`);
-    return detailFor(item);
+    return detailFor(kind, item);
   },
 
   async diff(kind: 'agents' | 'skills', id: number, from: number, to: number): Promise<SystemDiff> {
@@ -639,4 +787,230 @@ export const mockSystemApi = {
       })),
     };
   },
+
+  // --- Stage 2 write surface (step-12) — mutates the in-memory state above ----
+
+  async putItem(
+    kind: 'agents' | 'skills',
+    id: number,
+    req: SystemWriteRequest,
+  ): Promise<SystemWriteResponse> {
+    await delay(160);
+    const item = itemsOf(kind).find((i) => i.id === id);
+    if (!item) throw new SystemWriteError(404, { error: `${kind} not found` }, 'mock');
+    guardWritable(item, req.content);
+    const st = stateOf(kind, item);
+    if (req.base_hash !== currentHashOf(st) || req.content.includes('demo-conflict')) {
+      throwConflict(req.base_hash, item.name);
+    }
+    const split = splitContent(req.content);
+    if (split === null) {
+      throw new SystemWriteError(
+        422,
+        { error: 'frontmatter parse error: missing leading --- block' },
+        'mock',
+      );
+    }
+    st.frontmatter = split.frontmatter;
+    st.body = split.body;
+    const v: SystemVersion = {
+      id: nextVersionId++,
+      createdAt: new Date().toISOString(),
+      changeNote: req.change_note !== undefined && req.change_note !== '' ? req.change_note : null,
+      contentHash: fakeHash(),
+    };
+    st.versions.unshift(v);
+    st.currentVersionId = v.id;
+    return { version_id: v.id, lint: lintOf(req.content) };
+  },
+
+  async rollbackItem(
+    kind: 'agents' | 'skills',
+    id: number,
+    req: SystemRollbackRequest,
+  ): Promise<SystemWriteResponse> {
+    await delay(160);
+    const item = itemsOf(kind).find((i) => i.id === id);
+    if (!item) throw new SystemWriteError(404, { error: `${kind} not found` }, 'mock');
+    guardWritable(item);
+    const st = stateOf(kind, item);
+    const target = st.versions.find((v) => v.id === req.version_id);
+    if (target === undefined) {
+      throw new SystemWriteError(404, { error: 'version not found' }, 'mock');
+    }
+    if (req.base_hash !== currentHashOf(st)) throwConflict(req.base_hash, item.name);
+    // Content-addressed history (system_write.go): restoring byte-identical
+    // old content re-points current_version_id at the EXISTING row.
+    st.currentVersionId = target.id;
+    return { version_id: target.id, lint: [] };
+  },
+
+  async createAgent(req: SystemCreateAgentRequest): Promise<SystemCreateResponse> {
+    await delay(170);
+    if (req.description.includes('demo-readonly')) {
+      throw new SystemWriteError(
+        403,
+        { error: 'system editor is in readonly mode (SWARMERY_SYSTEM_READONLY)' },
+        'mock',
+      );
+    }
+    const projectSlug =
+      req.scope === 'project'
+        ? (mockProjects.find((p) => p.id === req.project_id)?.slug ?? null)
+        : null;
+    const existing = mockSystemAgents.find(
+      (a) => a.name === req.name && a.scope === req.scope && a.projectSlug === projectSlug,
+    );
+    if (existing !== undefined) {
+      if (isDeleted('agents', existing)) {
+        throw new SystemWriteError(
+          409,
+          {
+            error: `agent "${req.name}" exists soft-deleted in this scope — restore it instead of creating a new one`,
+            restore_id: existing.id,
+          },
+          'mock',
+        );
+      }
+      throw new SystemWriteError(
+        409,
+        { error: `agent "${req.name}" already exists in this scope`, id: existing.id },
+        'mock',
+      );
+    }
+    const item: SystemItem = {
+      id: nextAgentId++,
+      name: req.name,
+      scope: req.scope,
+      projectSlug,
+      origin: 'local',
+      pluginName: null,
+      model: req.model !== undefined && req.model !== '' ? req.model : null,
+      description: req.description,
+      path:
+        req.scope === 'global'
+          ? `~/.claude/agents/${req.name}.md`
+          : `/Users/user/work/${projectSlug ?? 'project'}/.claude/agents/${req.name}.md`,
+      lintMax: null,
+      dead: false,
+      lastUsed: null,
+      tasks30d: 0,
+    };
+    mockSystemAgents.push(item);
+    const v: SystemVersion = {
+      id: nextVersionId++,
+      createdAt: new Date().toISOString(),
+      changeNote: 'created in dashboard',
+      contentHash: fakeHash(),
+    };
+    const fmLines = [`name: ${req.name}`, `description: ${req.description}`];
+    if (item.model !== null) fmLines.push(`model: ${item.model}`);
+    if (req.tools !== undefined && req.tools.length > 0) fmLines.push(`tools: ${req.tools.join(', ')}`);
+    const boundaries =
+      req.boundaries !== undefined && req.boundaries.trim() !== ''
+        ? req.boundaries
+        : '- stay within the task scope';
+    itemState.set(`agents:${String(item.id)}`, {
+      frontmatter: fmLines.join('\n'),
+      body: `# Role\n\n${req.description}\n\n## Boundaries\n\n${boundaries}`,
+      versions: [v],
+      currentVersionId: v.id,
+      deleted: false,
+    });
+    const lint: SystemLintFinding[] =
+      req.boundaries === undefined || req.boundaries.trim() === ''
+        ? [{ rule: 'no_boundaries', severity: 'warn', message: 'boundaries left empty — the template stub applies' }]
+        : [];
+    return { id: item.id, version_id: v.id, lint };
+  },
+
+  async deleteAgent(id: number): Promise<{ deleted: boolean }> {
+    await delay(140);
+    const item = mockSystemAgents.find((a) => a.id === id);
+    if (!item) throw new SystemWriteError(404, { error: 'agent not found' }, 'mock');
+    guardWritable(item);
+    stateOf('agents', item).deleted = true;
+    return { deleted: true };
+  },
+
+  async restoreAgent(id: number): Promise<SystemRestoreResponse> {
+    await delay(140);
+    const item = mockSystemAgents.find((a) => a.id === id);
+    if (!item) throw new SystemWriteError(404, { error: 'agent not found' }, 'mock');
+    const st = stateOf('agents', item);
+    if (!st.deleted) {
+      throw new SystemWriteError(409, { error: 'agent is not deleted — nothing to restore' }, 'mock');
+    }
+    st.deleted = false;
+    return { id, version_id: st.currentVersionId ?? 0 };
+  },
+
+  async toggleHook(id: number, enabled: boolean, baseHash: string): Promise<{ status: string }> {
+    await delay(130);
+    const hook = guardHookWrite(id, baseHash);
+    if (hook.enabled !== enabled) {
+      hook.enabled = enabled;
+      hook.contentHash = fakeHash(); // nodeHash covers the enabled state
+    }
+    return { status: 'ok' };
+  },
+
+  async updateHook(
+    id: number,
+    command: string,
+    timeout: number | null,
+    baseHash: string,
+  ): Promise<{ status: string }> {
+    await delay(130);
+    if (command.includes('demo-readonly')) {
+      throw new SystemWriteError(
+        403,
+        { error: 'system editor is in readonly mode (SWARMERY_SYSTEM_READONLY)' },
+        'mock',
+      );
+    }
+    if (command.includes('demo-conflict')) {
+      throw new SystemWriteError(
+        409,
+        {
+          error: 'content changed on disk since base_hash',
+          disk_hash: fakeHash(),
+          base_hash: baseHash,
+          diff: '--- your base\n+++ on disk\n- (your command)\n+ (entry changed outside the dashboard)',
+        },
+        'mock',
+      );
+    }
+    const hook = guardHookWrite(id, baseHash);
+    hook.command = command;
+    hook.timeout = timeout;
+    hook.contentHash = fakeHash();
+    return { status: 'ok' };
+  },
 };
+
+/** Shared hook-write guards: 404, managed=swarmery → 403, hash drift → 409. */
+function guardHookWrite(id: number, baseHash: string): SystemHook {
+  const hook = mockSystemHooks.find((h) => h.id === id);
+  if (!hook) throw new SystemWriteError(404, { error: 'hook not found' }, 'mock');
+  if (hook.managed === 'swarmery') {
+    throw new SystemWriteError(
+      403,
+      { error: 'hook is managed by the swarmery installer — manage it via `swarmery hooks`' },
+      'mock',
+    );
+  }
+  if (baseHash !== hook.contentHash) {
+    throw new SystemWriteError(
+      409,
+      {
+        error: 'content changed on disk since base_hash',
+        disk_hash: hook.contentHash ?? '',
+        base_hash: baseHash,
+        diff: `--- your base\n+++ on disk\n- command: ${hook.command}\n+ (entry changed outside the dashboard)`,
+      },
+      'mock',
+    );
+  }
+  return hook;
+}

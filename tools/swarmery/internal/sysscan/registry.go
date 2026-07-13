@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 )
 
@@ -427,6 +426,7 @@ type hookEntry struct {
 	timeout       sql.NullInt64
 	statusMessage sql.NullString
 	seq           int
+	enabled       bool           // false = a "_swarmery_disabled_hooks" record (step-10)
 	managed       sql.NullString // 'swarmery' on the "swarmery hook" marker (hookcfg)
 	hash          string
 }
@@ -435,80 +435,32 @@ type hookEntry struct {
 // string internal/hookcfg uses.
 const hookcfgMarker = "swarmery hook"
 
-// parseSettingsHooks extracts hook entries from one settings file. The walk
-// is hookcfg-style defensive map traversal: odd shapes degrade to skipped
-// entries, only invalid JSON is an error. Unknown event names are data, not
-// errors (§3.5). seq is the entry's position within its event's flattened
-// group arrays at scan time.
+// parseSettingsHooks extracts hook entries from one settings file — a thin
+// adapter over ParseHookNodes (hooknodes.go), which owns the walk, the
+// (event, seq) identity, and the "_swarmery_disabled_hooks" section (step-10).
 func parseSettingsHooks(raw []byte, warn warnFn, path string) ([]hookEntry, error) {
-	var root map[string]any
-	if err := json.Unmarshal(raw, &root); err != nil {
+	nodes, err := ParseHookNodes(raw, warn, path)
+	if err != nil {
 		return nil, err
 	}
-	hooks, _ := root["hooks"].(map[string]any)
-	events := make([]string, 0, len(hooks))
-	for ev := range hooks {
-		events = append(events, ev)
-	}
-	sort.Strings(events)
-
-	var out []hookEntry
-	for _, ev := range events {
-		seq := 0
-		for _, g := range sliceOf(hooks[ev]) {
-			group, ok := g.(map[string]any)
-			if !ok {
-				continue
-			}
-			var matcher sql.NullString
-			if mv, ok := group["matcher"].(string); ok {
-				matcher = sql.NullString{String: mv, Valid: true}
-			}
-			for _, h := range sliceOf(group["hooks"]) {
-				entry, ok := h.(map[string]any)
-				if !ok {
-					continue
-				}
-				cmd, _ := entry["command"].(string)
-				if cmd == "" {
-					warn("hooks %s: %s entry without a command — skipped", path, ev)
-					continue
-				}
-				e := hookEntry{event: ev, matcher: matcher, command: cmd, seq: seq}
-				if tv, ok := entry["timeout"].(float64); ok {
-					e.timeout = sql.NullInt64{Int64: int64(tv), Valid: true}
-				}
-				if sm, ok := entry["statusMessage"].(string); ok {
-					e.statusMessage = sql.NullString{String: sm, Valid: true}
-				}
-				if strings.Contains(cmd, hookcfgMarker) {
-					e.managed = sql.NullString{String: "swarmery", Valid: true}
-				}
-				e.hash = hookHash(e)
-				out = append(out, e)
-				seq++
-			}
+	out := make([]hookEntry, 0, len(nodes))
+	for _, n := range nodes {
+		e := hookEntry{event: n.Event, command: n.Command, seq: n.Seq, enabled: n.Enabled, hash: n.Hash}
+		if n.Matcher != nil {
+			e.matcher = sql.NullString{String: *n.Matcher, Valid: true}
 		}
+		if n.Timeout != nil {
+			e.timeout = sql.NullInt64{Int64: *n.Timeout, Valid: true}
+		}
+		if n.StatusMessage != nil {
+			e.statusMessage = sql.NullString{String: *n.StatusMessage, Valid: true}
+		}
+		if n.Managed {
+			e.managed = sql.NullString{String: "swarmery", Valid: true}
+		}
+		out = append(out, e)
 	}
 	return out, nil
-}
-
-// hookHash renders one entry's identity hash (row-level content_hash).
-func hookHash(e hookEntry) string {
-	matcher := "\x00absent"
-	if e.matcher.Valid {
-		matcher = e.matcher.String
-	}
-	timeout := "\x00absent"
-	if e.timeout.Valid {
-		timeout = fmt.Sprint(e.timeout.Int64)
-	}
-	status := "\x00absent"
-	if e.statusMessage.Valid {
-		status = e.statusMessage.String
-	}
-	return sha256Hex([]byte(strings.Join(
-		[]string{e.event, fmt.Sprint(e.seq), matcher, e.command, timeout, status}, "\n")))
 }
 
 func sliceOf(v any) []any {
@@ -585,12 +537,16 @@ func (s *Scanner) scanHooksFile(f settingsFile, st *Stats, warn warnFn) {
 	}
 	var newIDs []int64
 	for _, e := range entries {
+		enabled := 0
+		if e.enabled {
+			enabled = 1
+		}
 		res, err := tx.Exec(
 			`INSERT INTO hooks (scope, project_id, event, matcher, command, timeout, status_message,
 			                    source_file, seq, enabled, managed, content_hash)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			f.src.scope, f.src.projectID, e.event, e.matcher, e.command, e.timeout, e.statusMessage,
-			f.path, e.seq, e.managed, e.hash)
+			f.path, e.seq, enabled, e.managed, e.hash)
 		if err != nil {
 			warn("hooks %s: insert: %v", f.path, err)
 			return

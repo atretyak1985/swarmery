@@ -196,3 +196,71 @@ export function Empty({ children }: { children: ReactNode }): JSX.Element {
     </div>
   );
 }
+
+/* ----- confirmation dialog (phase 4 step-12) -----
+ * Destructive actions (hook disable, rollback, delete, conflict reload) must
+ * be deliberate: a fixed overlay + hairline card. The destructive confirm
+ * button follows the Approvals deny-button style; cancel is the plain
+ * hairline secondary. Render null while closed. */
+
+export function ConfirmDialog({
+  open,
+  title,
+  children,
+  confirmLabel,
+  danger = false,
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  /** Approvals deny-button tones for destructive confirms. */
+  danger?: boolean;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): JSX.Element | null {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-line bg-surface px-4 py-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="font-display text-[14px] font-bold text-ink">{title}</div>
+        <div className="mt-2 text-[12.5px] leading-relaxed text-ink-2">{children}</div>
+        <div className="mt-3.5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
+          >
+            cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className={`rounded-lg border px-3.5 py-1.5 font-mono text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
+              danger
+                ? 'border-red/40 bg-red/10 text-red hover:bg-red/20'
+                : 'border-green/40 bg-green/10 text-green hover:bg-green/20'
+            }`}
+          >
+            {busy ? '…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

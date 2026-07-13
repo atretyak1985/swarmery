@@ -30,6 +30,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -341,6 +342,7 @@ func cmdServe(args []string) error {
 	defer db.Close()
 
 	var bus *ingest.Bus
+	var sys *sysscan.Scanner
 	if !*noIngest {
 		bus = ingest.NewBus()
 		api.AttachBus(bus)
@@ -366,13 +368,19 @@ func cmdServe(args []string) error {
 		// phase 4: system registry — read-only scanner of the agent-system
 		// config (agents/skills/hooks/commands) with fsnotify + periodic
 		// rescan. Never writes to ~/.claude or any project's .claude/.
-		sys := sysscan.New(db, *sysCfg, bus)
+		sys = sysscan.New(db, *sysCfg, bus)
 		go func() {
 			if err := sys.Run(context.Background()); err != nil && err != context.Canceled {
 				log.Printf("error: sysscan scanner stopped: %v", err)
 			}
 		}()
 		log.Printf("swarmery system scanner watching %s (rescan %s)", sysCfg.ClaudeDir, sysscan.DefaultRescanInterval)
+
+		// phase 4 Stage 2 (step-10): hooks toggle/edit go through the sysedit
+		// pipeline against the same scanner instance (the post-write rescan
+		// converges the registry). Without ingest there is no scanner, so the
+		// endpoints stay detached and serve 503.
+		api.AttachHookEditor(sysedit.New(db, sys, sysedit.Config{ClaudeDir: sysCfg.ClaudeDir}))
 	}
 
 	// process liveness — checks active/idle sessions every 30 s, fast-forwards
@@ -404,6 +412,15 @@ func cmdServe(args []string) error {
 	// phase 4: system — GET /api/system/overlays reads overlays/*/project.json
 	// live from this dir on every request (empty disables the listing).
 	api.AttachOverlaysDir(sysCfg.OverlaysDir)
+
+	// phase 4: system, Stage 2 (step-09) — the write surface for agents and
+	// skills. Every write goes through the sysedit pipeline; the editor reuses
+	// the live scanner for its post-write rescan (under --no-ingest a private
+	// scanner instance converges the registry on demand instead).
+	if sys == nil {
+		sys = sysscan.New(db, *sysCfg, nil)
+	}
+	api.AttachSysEditor(sysedit.New(db, sys, sysedit.Config{ClaudeDir: sysCfg.ClaudeDir}))
 
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {

@@ -21,6 +21,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { FiltersRow, LINT_TONES, LintDot, OriginBadge, ScopeBadge, useSystemList } from './system/shared';
 import { SystemItemPanel } from './system/ItemDetail';
+import { CreateAgentForm } from './system/CreateAgentForm';
 import { HooksTab } from './system/HooksTab';
 import { TemplatesTab } from './system/TemplatesTab';
 
@@ -184,6 +185,9 @@ function ItemsTab({
   onScope,
   onProject,
   onSelect,
+  onMutated,
+  onDeleted,
+  onReadonly,
 }: {
   kind: SystemItemsKind | 'commands';
   /** Agents/skills open the detail panel; commands are list-only (no detail DTO). */
@@ -196,7 +200,15 @@ function ItemsTab({
   onScope: (scope: 'global' | 'project' | null) => void;
   onProject: (slug: string | null) => void;
   onSelect: (id: number | null) => void;
+  /** A write landed in the panel/form — refetch list + summary + detail. */
+  onMutated: () => void;
+  /** Soft delete landed — close the panel and refetch. */
+  onDeleted: () => void;
+  /** A write hit the global readonly kill-switch — page-level banner. */
+  onReadonly: () => void;
 }): JSX.Element {
+  // "+ new agent" (step-12) — the form collapses back into the button.
+  const [creating, setCreating] = useState(false);
   const fetcher = useCallback(
     (filters: SystemListFilters): Promise<SystemItem[]> =>
       kind === 'commands'
@@ -230,6 +242,29 @@ function ItemsTab({
         onScope={onScope}
         onProject={onProject}
       />
+      {kind === 'agents' && (
+        <div className="mt-3">
+          {creating ? (
+            <CreateAgentForm
+              onCancel={() => setCreating(false)}
+              onCreated={(id) => {
+                setCreating(false);
+                onMutated();
+                onSelect(id);
+              }}
+              onReadonly={onReadonly}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
+            >
+              + new agent
+            </button>
+          )}
+        </div>
+      )}
       {filtered === null && <Loading label={`${kind}…`} />}
       {filtered !== null && filtered.length === 0 && (
         <Empty>
@@ -264,6 +299,9 @@ function ItemsTab({
           id={selectedId}
           refreshKey={refreshKey}
           onClose={() => onSelect(null)}
+          onMutated={onMutated}
+          onDeleted={onDeleted}
+          onReadonly={onReadonly}
         />
       </div>
     </div>
@@ -284,6 +322,9 @@ export function System(): JSX.Element {
   const [summary, setSummary] = useState<SystemSummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Step-12: any write that hits the SWARMERY_SYSTEM_READONLY kill-switch
+  // (403 readonly) raises this page-level banner; it stays for the session.
+  const [readonly, setReadonly] = useState(false);
 
   const patchParams = useCallback(
     (patch: Record<string, string | null>): void => {
@@ -343,6 +384,11 @@ export function System(): JSX.Element {
   const onSelect = (id: number | null): void => {
     patchParams({ item: id === null ? null : String(id) });
   };
+  const onReadonly = useCallback((): void => setReadonly(true), []);
+  const onDeleted = useCallback((): void => {
+    patchParams({ item: null });
+    refresh();
+  }, [patchParams, refresh]);
 
   const listProps = {
     scope,
@@ -357,6 +403,16 @@ export function System(): JSX.Element {
     <div>
       <SummaryHeader summary={summary} lint={lint} onLint={onLint} />
       {summaryError !== null && <ErrorBox message={summaryError} onRetry={loadSummary} />}
+      {readonly && (
+        <div
+          className="mt-3 rounded-lg border border-amber/40 bg-amber/10 px-3.5 py-2.5 font-mono text-[12px] text-amber"
+          role="alert"
+        >
+          ▲ System is in readonly mode — the daemon rejected a write
+          (SWARMERY_SYSTEM_READONLY). Edits, toggles, rollbacks and deletes stay off until the
+          kill-switch is lifted.
+        </div>
+      )}
 
       <div
         className="mt-4 flex gap-0.5 overflow-x-auto border-b border-line [-webkit-overflow-scrolling:touch]"
@@ -380,18 +436,39 @@ export function System(): JSX.Element {
 
       <div role="tabpanel">
         {tab === 'agents' && (
-          <ItemsTab kind="agents" selectable selectedId={selectedId} onSelect={onSelect} {...listProps} />
+          <ItemsTab
+            kind="agents"
+            selectable
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onMutated={refresh}
+            onDeleted={onDeleted}
+            onReadonly={onReadonly}
+            {...listProps}
+          />
         )}
         {tab === 'skills' && (
-          <ItemsTab kind="skills" selectable selectedId={selectedId} onSelect={onSelect} {...listProps} />
+          <ItemsTab
+            kind="skills"
+            selectable
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onMutated={refresh}
+            onDeleted={onDeleted}
+            onReadonly={onReadonly}
+            {...listProps}
+          />
         )}
-        {tab === 'hooks' && <HooksTab {...listProps} />}
+        {tab === 'hooks' && <HooksTab onReadonly={onReadonly} {...listProps} />}
         {tab === 'commands' && (
           <ItemsTab
             kind="commands"
             selectable={false}
             selectedId={null}
             onSelect={onSelect}
+            onMutated={refresh}
+            onDeleted={onDeleted}
+            onReadonly={onReadonly}
             {...listProps}
           />
         )}
