@@ -22,8 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -304,24 +302,19 @@ func (s *Service) resolveSessionLocked(in HookInput) (int64, error) {
 		return 0, err
 	}
 
+	// The hook stdin carries the real cwd (docs/hooks-format.md E1) — attribute
+	// the stub to the real project via the SAME derivation as the JSONL ingest
+	// (path → slug '/'→'-', name = path base). '(unknown)' remains only for a
+	// genuinely absent cwd; the ingest upsert / HealStubSessions re-attribute
+	// such stubs once the transcript reveals the cwd.
 	cwd := in.CWD
 	if cwd == "" {
-		cwd = "(unknown)"
+		cwd = ingest.UnknownProjectPath
 	}
 	now := s.opt.Now().UTC().Format(tsFormat)
-	var projectID int64
-	perr := s.db.QueryRow(`SELECT id FROM projects WHERE path = ?`, cwd).Scan(&projectID)
-	switch {
-	case errors.Is(perr, sql.ErrNoRows):
-		res, err := s.db.Exec(
-			`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
-			cwd, strings.ReplaceAll(cwd, "/", "-"), filepath.Base(cwd), now, now)
-		if err != nil {
-			return 0, fmt.Errorf("insert project: %w", err)
-		}
-		projectID, _ = res.LastInsertId()
-	case perr != nil:
-		return 0, perr
+	projectID, _, err := ingest.UpsertProject(s.db, cwd, now, now)
+	if err != nil {
+		return 0, err
 	}
 
 	res, err := s.db.Exec(

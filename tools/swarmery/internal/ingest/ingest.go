@@ -36,6 +36,14 @@ const (
 	titleLimit      = 120
 )
 
+// UnknownProjectPath is the placeholder projects.path used when a session's
+// cwd is not (yet) known: a hook POST that beats the JSONL tail, or a first
+// tail batch that only contains header records (last-prompt / mode /
+// permission-mode carry no cwd). Sessions attached to it are stubs — the
+// ingest upsert and HealStubSessions re-attribute them as soon as the real
+// cwd is learned.
+const UnknownProjectPath = "(unknown)"
+
 // File ingests one main transcript .jsonl and any sidechain transcripts under
 // its companion dir (<file-without-ext>/subagents/agent-*.jsonl, §1/§7).
 func File(db *sql.DB, path string) (Stats, error) {
@@ -252,29 +260,15 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 		// name is the path base — filled only while NULL so a future rename
 		// UI always wins over the derived default.
 		if cwd == "" {
-			cwd = "(unknown)"
+			cwd = UnknownProjectPath
 		}
-		slug := strings.ReplaceAll(cwd, "/", "-")
-		perr := in.tx.QueryRow(`SELECT id FROM projects WHERE path = ?`, cwd).Scan(&in.projectID)
-		switch {
-		case perr == sql.ErrNoRows:
-			res, err := in.tx.Exec(
-				`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
-				cwd, slug, projectNameFor(cwd), firstTS, lastTS)
-			if err != nil {
-				return fmt.Errorf("insert project: %w", err)
-			}
-			in.projectID, _ = res.LastInsertId()
-			in.stats.Projects++
-		case perr != nil:
+		projectID, created, perr := UpsertProject(in.tx, cwd, firstTS, lastTS)
+		if perr != nil {
 			return perr
-		default:
-			// Pre-existing row (older ingests left name NULL) — heal in place.
-			if _, err := in.tx.Exec(
-				`UPDATE projects SET name = ? WHERE id = ? AND name IS NULL`,
-				projectNameFor(cwd), in.projectID); err != nil {
-				return err
-			}
+		}
+		in.projectID = projectID
+		if created {
+			in.stats.Projects++
 		}
 
 		res, err := in.tx.Exec(
@@ -292,21 +286,62 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 	case err != nil:
 		return err
 	default:
+		// Stub heal: a session row minted before its cwd was known (a hook POST
+		// that beat the JSONL tail, or a header-records-only first tail batch)
+		// sits on the '(unknown)' project with empty cwd/started_at. As soon as
+		// a batch knows better, backfill — never overwrite good values.
+		if cwd != "" {
+			var curCwd sql.NullString
+			var curPath string
+			if err := in.tx.QueryRow(
+				`SELECT s.cwd, p.path FROM sessions s
+				 JOIN projects p ON p.id = s.project_id WHERE s.id = ?`,
+				in.sessionID).Scan(&curCwd, &curPath); err != nil {
+				return err
+			}
+			if curPath == UnknownProjectPath {
+				projectID, created, perr := UpsertProject(in.tx, cwd, firstTS, lastTS)
+				if perr != nil {
+					return perr
+				}
+				if created {
+					in.stats.Projects++
+				}
+				if _, err := in.tx.Exec(
+					`UPDATE sessions SET project_id = ? WHERE id = ?`,
+					projectID, in.sessionID); err != nil {
+					return err
+				}
+				in.projectID = projectID
+			}
+			if !curCwd.Valid || curCwd.String == "" || curCwd.String == UnknownProjectPath {
+				if _, err := in.tx.Exec(
+					`UPDATE sessions SET cwd = ? WHERE id = ?`, cwd, in.sessionID); err != nil {
+					return err
+				}
+			}
+		}
 		// Phase 2 (approvals) interplay:
 		//   - a session first created by the hooks channel (source='hook') that
 		//     now shows up in a JSONL transcript is promoted to source='both';
 		//   - status='waiting_approval' is owned exclusively by the approvals
 		//     layer (entry AND exit) — the heuristic never overwrites it here;
 		//     the approvals resolution/sweeper restores the heuristic status.
+		// started_at / git_branch only backfill stub rows (empty / NULL) —
+		// a mid-file tail batch's first timestamp is NOT the session start, so
+		// good values are never overwritten.
 		if _, err := in.tx.Exec(
 			`UPDATE sessions SET model = COALESCE(?, model),
+			                     git_branch = COALESCE(git_branch, ?),
+			                     started_at = CASE WHEN (started_at IS NULL OR started_at = '') AND ? != ''
+			                                       THEN ? ELSE started_at END,
 			                     status = CASE WHEN status = 'waiting_approval'
 			                                   THEN status ELSE ? END,
 			                     source = CASE WHEN source = 'hook' THEN 'both' ELSE source END,
 			                     ended_at = CASE WHEN ? = '' THEN ended_at
 			                                     ELSE MAX(COALESCE(ended_at,''), ?) END,
 			                     title = COALESCE(?, COALESCE(title, ?)) WHERE id = ?`,
-			nullStr(model), status, lastTS, lastTS,
+			nullStr(model), nullStr(branch), firstTS, firstTS, status, lastTS, lastTS,
 			nullStr(title), nullStr(firstPrompt), in.sessionID); err != nil {
 			return err
 		}
@@ -1036,12 +1071,52 @@ func (in *ingester) dedupKey(r *record, path, scope string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ── project display names ────────────────────────────────────────────────────
+// ── project registry (shared with the approvals hook path) ──────────────────
 
 // projectNameFor derives the default display name of a project from its cwd
 // path: the last path element ("/Volumes/Work/swarmery" → "swarmery").
 func projectNameFor(path string) string {
 	return filepath.Base(path)
+}
+
+// SlugForPath derives the project slug from its cwd path: '/' → '-' (§1).
+func SlugForPath(path string) string {
+	return strings.ReplaceAll(path, "/", "-")
+}
+
+// dbtx is the common surface of *sql.DB and *sql.Tx the project upsert needs.
+type dbtx interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// UpsertProject resolves or creates the projects row for a cwd path with the
+// canonical derivation (slug '/'→'-', display name = path base, name filled
+// only while NULL so a future rename UI always wins). It is THE single place
+// project rows are minted — the JSONL ingester, the approvals hook path, and
+// the stub heal all share it so every channel attributes identically.
+func UpsertProject(q dbtx, path, firstSeen, lastActivity string) (id int64, created bool, err error) {
+	err = q.QueryRow(`SELECT id FROM projects WHERE path = ?`, path).Scan(&id)
+	switch {
+	case err == sql.ErrNoRows:
+		res, ierr := q.Exec(
+			`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
+			path, SlugForPath(path), projectNameFor(path), firstSeen, lastActivity)
+		if ierr != nil {
+			return 0, false, fmt.Errorf("insert project: %w", ierr)
+		}
+		id, _ = res.LastInsertId()
+		return id, true, nil
+	case err != nil:
+		return 0, false, err
+	}
+	// Pre-existing row (older ingests left name NULL) — heal in place.
+	if _, err := q.Exec(
+		`UPDATE projects SET name = ? WHERE id = ? AND name IS NULL`,
+		projectNameFor(path), id); err != nil {
+		return 0, false, err
+	}
+	return id, false, nil
 }
 
 // HealProjectNames backfills projects.name = base(path) for rows where the

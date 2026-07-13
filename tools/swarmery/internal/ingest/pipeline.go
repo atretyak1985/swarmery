@@ -112,6 +112,20 @@ func (p *Pipeline) Backfill(ctx context.Context) Metrics {
 	} else if healed > 0 {
 		log.Printf("ingest: healed %d project name(s) from path", healed)
 	}
+	// Heal stub sessions ('(unknown)' project / empty cwd / empty started_at):
+	// unchanged transcripts are offset no-ops, so the per-batch upsert heal
+	// would never see them again — re-attribute from the transcript files and
+	// emit session_updated so open dashboards converge.
+	if ids, err := HealStubSessions(p.db, p.cfg.ProjectsRoot); err != nil {
+		log.Printf("warn: ingest: heal stub sessions: %v", err)
+	} else if len(ids) > 0 {
+		log.Printf("ingest: healed %d stub session(s) from transcripts", len(ids))
+		if p.bus != nil {
+			for _, id := range ids {
+				p.bus.Publish(Notification{Type: NoteSessionUpdated, SessionID: id})
+			}
+		}
+	}
 	files := p.discover()
 	for _, f := range files {
 		if ctx.Err() != nil {

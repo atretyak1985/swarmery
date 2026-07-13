@@ -326,12 +326,49 @@ func TestUnknownSessionCreatesHookRow(t *testing.T) {
 	if source != "hook" || status != "waiting_approval" || cwd != "/tmp/proj" {
 		t.Errorf("session = %s/%s/%s, want hook/waiting_approval//tmp/proj", source, status, cwd)
 	}
-	var path string
-	if err := db.QueryRow(`SELECT path FROM projects LIMIT 1`).Scan(&path); err != nil {
+	var path, slug, name string
+	if err := db.QueryRow(`SELECT path, slug, name FROM projects LIMIT 1`).Scan(&path, &slug, &name); err != nil {
 		t.Fatal(err)
 	}
 	if path != "/tmp/proj" {
 		t.Errorf("project path = %q, want /tmp/proj", path)
+	}
+	// Attribution must use the SAME derivation as the JSONL ingest — a later
+	// tail must find (not duplicate) this project.
+	if slug != "-tmp-proj" || name != "proj" {
+		t.Errorf("project slug/name = %q/%q, want -tmp-proj/proj", slug, name)
+	}
+	var startedAt string
+	if err := db.QueryRow(
+		`SELECT started_at FROM sessions WHERE session_uuid = 'uuid-fresh'`).Scan(&startedAt); err != nil {
+		t.Fatal(err)
+	}
+	if startedAt == "" {
+		t.Error("hook stub started_at empty — dashboards would show 'started —'")
+	}
+}
+
+// TestHookWithoutCwdFallsBackToUnknown: only a genuinely absent cwd may mint
+// the '(unknown)' placeholder (healed later by the ingest upsert).
+func TestHookWithoutCwdFallsBackToUnknown(t *testing.T) {
+	db := testDB(t)
+	svc := New(db, nil, Options{})
+	raw := `{"session_id":"uuid-nocwd","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}`
+	in, err := ParseHookStdin([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.Open(in); err != nil {
+		t.Fatal(err)
+	}
+	var path string
+	if err := db.QueryRow(
+		`SELECT p.path FROM projects p JOIN sessions s ON s.project_id = p.id
+		 WHERE s.session_uuid = 'uuid-nocwd'`).Scan(&path); err != nil {
+		t.Fatal(err)
+	}
+	if path != ingest.UnknownProjectPath {
+		t.Errorf("project path = %q, want the '(unknown)' placeholder", path)
 	}
 }
 
