@@ -71,8 +71,13 @@ export function KillButton({ session }: { session: Session }): JSX.Element | nul
     }
   };
 
-  // After 10 s: offer force kill only if the session is still alive
-  const stop = (e: MouseEvent) => e.stopPropagation();
+  // Prevent the enclosing <Link> from navigating when Kill is clicked.
+  // stopImmediatePropagation blocks native DOM handlers; stopPropagation
+  // blocks React's synthetic bubbling — both are needed inside a <Link>.
+  const stop = (e: MouseEvent): void => {
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+  };
 
   if (forceReady && session.procState && KILLABLE.has(session.procState)) {
     return (

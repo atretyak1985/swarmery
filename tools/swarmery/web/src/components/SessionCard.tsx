@@ -85,7 +85,8 @@ export function SessionCard({
         <div className="mt-[3px] truncate font-mono text-[10.5px] text-green">now: {now}</div>
       )}
       {session.procPid != null && (
-        <div className="mt-[3px] flex">
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+        <div className="mt-[3px] flex" onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}>
           <KillButton session={session} />
         </div>
       )}
@@ -144,7 +145,8 @@ export function SessionCard({
             <span className="block truncate font-mono text-[10.5px] text-green">now: {now}</span>
           )}
           {session.procPid != null && (
-            <span className="mt-[2px] flex">
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+            <span className="mt-[2px] flex" onClick={(e) => { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); }}>
               <KillButton session={session} />
             </span>
           )}
