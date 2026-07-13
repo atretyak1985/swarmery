@@ -430,6 +430,14 @@ export interface SystemHook {
   enabled: boolean;
   /** 'swarmery' for installer-owned entries, else null. */
   managed: string | null;
+  /**
+   * hooks.content_hash — the base_hash every hook write (toggle/edit) must
+   * carry (step-10 contract; the hash covers the UNredacted command, so the
+   * client cannot compute it). Additive optional: the GET /api/system/hooks
+   * handler does not serve it yet (see web/CONTRACT-REQUESTS.md) — while
+   * absent, the UI disables hook write actions.
+   */
+  contentHash?: string;
 }
 
 /** Go: systemCommandDTO — one row of GET /api/system/commands?scope=&project=. */
@@ -442,6 +450,94 @@ export interface SystemCommand {
   pluginName: string | null;
   description: string | null;
   path: string;
+}
+
+// --- Phase 4: system — Stage 2 write surface (steps 09–12). Request/response
+// --- shapes of the sysedit-backed write endpoints; Go DTOs live in
+// --- internal/api/system_write.go, system_create.go, system_hooks.go. Field
+// --- names match the Go JSON tags exactly (snake_case on this surface).
+
+/** Go: sysscan.ContentFinding — ride-along lint of a write (never blocks). */
+export interface SystemLintFinding {
+  rule: string;
+  /** info | warn — never error (that is the 422 parse_error tier). */
+  severity: 'info' | 'warn';
+  message: string;
+}
+
+/** Go: systemWriteRequest — PUT /api/system/{agents|skills}/{id} body. */
+export interface SystemWriteRequest {
+  /** Raw markdown, frontmatter included. */
+  content: string;
+  /** sha256 of the content the edit is based on (current version contentHash). */
+  base_hash: string;
+  change_note?: string;
+}
+
+/** Go: systemRollbackRequest — POST .../{id}/rollback body. */
+export interface SystemRollbackRequest {
+  version_id: number;
+  base_hash: string;
+}
+
+/** Go: systemWriteResponse — 200 body of both PUT and rollback. */
+export interface SystemWriteResponse {
+  version_id: number;
+  lint: SystemLintFinding[];
+}
+
+/**
+ * Go: systemConflictDTO — the 409 body of every content write: enough for the
+ * UI to show both versions and resolve by an EXPLICIT refetch (no force mode
+ * exists in the API, intentionally).
+ */
+export interface SystemConflict {
+  error: string;
+  disk_hash: string;
+  base_hash: string;
+  /** base→disk unified diff, redacted. */
+  diff: string;
+}
+
+/** Go: systemCreateAgentRequest — POST /api/system/agents body (step-11). */
+export interface SystemCreateAgentRequest {
+  /** kebab-case: lowercase letters, digits, single dashes. */
+  name: string;
+  scope: 'global' | 'project';
+  /** Required when scope=project; must be absent for global. */
+  project_id?: number;
+  description: string;
+  model?: string;
+  tools?: string[];
+  boundaries?: string;
+}
+
+/** Go: systemCreateResponse — 201 body of POST /api/system/agents. */
+export interface SystemCreateResponse {
+  id: number;
+  version_id: number;
+  lint: SystemLintFinding[];
+}
+
+/** POST /api/system/agents/{id}/restore — 200 body. */
+export interface SystemRestoreResponse {
+  id: number;
+  version_id: number;
+}
+
+/** Go: hookToggleRequest — POST /api/system/hooks/{id}/toggle body. */
+export interface SystemHookToggleRequest {
+  enabled: boolean;
+  /** The hook row contentHash loaded from GET /api/system/hooks. */
+  base_hash: string;
+}
+
+/** Go: hookUpdateRequest — PUT /api/system/hooks/{id} body. */
+export interface SystemHookUpdateRequest {
+  command: string;
+  /** Seconds; omit to remove the key (full-replace semantics). */
+  timeout?: number;
+  base_hash: string;
 }
 
 /** Go: systemOverlayDTO — one overlays/<dir>/ entry (safe project.json fields only). */
