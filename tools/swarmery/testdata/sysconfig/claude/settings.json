@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/fake/.swarmery/bin/swarmery hook stop"
+            "command": "/Users/fake/.swarmery/bin/swarmery hook stop || true"
           }
         ]
       }

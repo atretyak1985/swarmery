@@ -301,6 +301,14 @@ func cmdSysscan(args []string) error {
 	for _, p := range stats.Overlays {
 		fmt.Printf("  overlay: %s\n", p)
 	}
+
+	// Step-04 post-pass: re-evaluate the config lint rules against the
+	// registry this scan just converged (writes config_lint_findings only).
+	lint, err := sysscan.Lint(db, *sysCfg)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  lint: %s\n", lint)
 	return nil
 }
 

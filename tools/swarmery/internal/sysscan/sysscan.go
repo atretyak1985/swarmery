@@ -62,6 +62,11 @@ type Config struct {
 	ClaudeDir      string        // user tier + plugin cache root (default ~/.claude)
 	OverlaysDir    string        // overlays/ dir listed in the scan report (optional)
 	RescanInterval time.Duration // fallback full-rescan cadence (default 30s)
+
+	// Lint thresholds (step-04). Precedence: explicit config value > the
+	// SWARMERY_LINT_* env override > the package default (lint.go).
+	MinSkillDescription int // skill_short_description: min description runes (default 40; env SWARMERY_LINT_MIN_SKILL_DESC)
+	MaxClaudeMDTokens   int // claude_md_oversized: max estimated tokens, len/4 (default 2500; env SWARMERY_LINT_MAX_CLAUDE_MD_TOKENS)
 }
 
 func (c Config) withDefaults() Config {
@@ -70,6 +75,12 @@ func (c Config) withDefaults() Config {
 	}
 	if c.RescanInterval <= 0 {
 		c.RescanInterval = DefaultRescanInterval
+	}
+	if c.MinSkillDescription <= 0 {
+		c.MinSkillDescription = envInt(EnvMinSkillDescription, DefaultMinSkillDescription)
+	}
+	if c.MaxClaudeMDTokens <= 0 {
+		c.MaxClaudeMDTokens = envInt(EnvMaxClaudeMDTokens, DefaultMaxClaudeMDTokens)
 	}
 	return c
 }
@@ -248,6 +259,14 @@ func (s *Scanner) Run(ctx context.Context) error {
 			return
 		}
 		log.Printf("sysscan: %s", st)
+		// Lint is the step-04 post-pass: it re-evaluates every rule against
+		// the registry the scan just converged (design §3.5).
+		ls, err := s.Lint()
+		if err != nil {
+			log.Printf("error: sysscan lint: %v", err)
+			return
+		}
+		log.Printf("sysscan lint: %s", ls)
 	}
 	scan()
 

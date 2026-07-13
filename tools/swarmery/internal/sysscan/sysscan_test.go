@@ -88,12 +88,14 @@ func TestScanCounts(t *testing.T) {
 	}
 
 	// Per-source counts. Global agents: global-agent, x, broken-agent,
-	// nested/deep-agent (README.md skipped — no frontmatter).
-	if st.Agents != (SourceCounts{Global: 4, Project: 1, Plugin: 1}) {
-		t.Errorf("agents counts = %+v, want {4 1 1}", st.Agents)
+	// nested/deep-agent, lint-poor (README.md skipped — no frontmatter).
+	// Project agents: proj-agent + x (the agent_name_duplicate fixture).
+	if st.Agents != (SourceCounts{Global: 5, Project: 2, Plugin: 1}) {
+		t.Errorf("agents counts = %+v, want {5 2 1}", st.Agents)
 	}
-	if st.Skills != (SourceCounts{Global: 1, Project: 0, Plugin: 1}) {
-		t.Errorf("skills counts = %+v, want {1 0 1}", st.Skills)
+	// Global skills: global-skill + short-desc (the lint fixture).
+	if st.Skills != (SourceCounts{Global: 2, Project: 0, Plugin: 1}) {
+		t.Errorf("skills counts = %+v, want {2 0 1}", st.Skills)
 	}
 	if st.Commands != (SourceCounts{Global: 1}) {
 		t.Errorf("commands counts = %+v, want {1 0 0}", st.Commands)
@@ -106,8 +108,8 @@ func TestScanCounts(t *testing.T) {
 		t.Errorf("parse errors = %d, want 1 (broken-agent)", st.ParseErrors)
 	}
 
-	if n := count(t, db, `SELECT COUNT(*) FROM agents WHERE deleted = 0`); n != 6 {
-		t.Errorf("agents rows = %d, want 6", n)
+	if n := count(t, db, `SELECT COUNT(*) FROM agents WHERE deleted = 0`); n != 8 {
+		t.Errorf("agents rows = %d, want 8", n)
 	}
 	// README.md never registers.
 	if n := count(t, db, `SELECT COUNT(*) FROM agents WHERE name = 'README'`); n != 0 {
@@ -117,8 +119,8 @@ func TestScanCounts(t *testing.T) {
 	if n := count(t, db, `SELECT COUNT(*) FROM agents WHERE current_version_id IS NULL`); n != 0 {
 		t.Errorf("%d agents without current_version_id", n)
 	}
-	if n := count(t, db, `SELECT COUNT(*) FROM agent_versions`); n != 6 {
-		t.Errorf("agent_versions rows = %d, want 6 (one per agent)", n)
+	if n := count(t, db, `SELECT COUNT(*) FROM agent_versions`); n != 8 {
+		t.Errorf("agent_versions rows = %d, want 8 (one per agent)", n)
 	}
 }
 
@@ -143,13 +145,14 @@ func TestPluginOriginAndCollision(t *testing.T) {
 		t.Errorf("toolpack:x file_path = %q, want the 1.0.0 version dir", filePath)
 	}
 
-	// Collision regression: local agent `x` coexists with `toolpack:x`.
-	if n := count(t, db, `SELECT COUNT(*) FROM agents WHERE name IN ('x', 'toolpack:x') AND deleted = 0`); n != 2 {
-		t.Errorf("x + toolpack:x rows = %d, want 2 (coexisting)", n)
+	// Collision regression: local agents `x` (global + project scope) coexist
+	// with the plugin's `toolpack:x`.
+	if n := count(t, db, `SELECT COUNT(*) FROM agents WHERE name IN ('x', 'toolpack:x') AND deleted = 0`); n != 3 {
+		t.Errorf("x + toolpack:x rows = %d, want 3 (coexisting)", n)
 	}
 	var localOrigin string
-	if err := db.QueryRow(`SELECT origin FROM agents WHERE name = 'x'`).Scan(&localOrigin); err != nil || localOrigin != "local" {
-		t.Errorf("local x origin = %q (%v), want local", localOrigin, err)
+	if err := db.QueryRow(`SELECT origin FROM agents WHERE name = 'x' AND scope = 'global'`).Scan(&localOrigin); err != nil || localOrigin != "local" {
+		t.Errorf("global x origin = %q (%v), want local", localOrigin, err)
 	}
 
 	// Plugin skill: composite name; workflow-skills/ is never scanned (§2.2).
@@ -493,7 +496,7 @@ func TestRunWatchPicksUpEdit(t *testing.T) {
 	}
 
 	waitFor("initial scan", func() bool {
-		return count(t, db, `SELECT COUNT(*) FROM agents WHERE deleted = 0`) == 6
+		return count(t, db, `SELECT COUNT(*) FROM agents WHERE deleted = 0`) == 8
 	})
 
 	agentPath := filepath.Join(cfg.ClaudeDir, "agents", "x.md")

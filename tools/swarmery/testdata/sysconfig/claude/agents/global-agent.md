@@ -16,3 +16,7 @@ skills:
 # global-agent
 
 Fixture body of the valid global agent.
+
+## Boundaries
+
+- Fixture boundary — keeps the agent_no_boundaries lint rule quiet.

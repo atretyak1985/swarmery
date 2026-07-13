@@ -28,20 +28,35 @@ var errNoFrontmatter = errors.New("first line is not ---")
 //   - every field is optional; type mismatches are the caller's problem
 //     (use strField for tolerant extraction).
 func parseFrontmatter(content []byte) (map[string]any, error) {
+	block, _, err := splitFrontmatter(content)
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]any{}
+	if err := yaml.Unmarshal(block, &fields); err != nil {
+		return nil, fmt.Errorf("invalid YAML frontmatter: %v", err)
+	}
+	return fields, nil
+}
+
+// splitFrontmatter locates the raw YAML frontmatter block and the markdown
+// body after the closing delimiter. Shared by parseFrontmatter (fields) and
+// the step-04 linter (body rules, e.g. agent_no_boundaries). The error
+// contract mirrors parseFrontmatter's: errNoFrontmatter for helper files,
+// a described error for an unterminated block.
+func splitFrontmatter(content []byte) (block, body []byte, err error) {
 	content = bytes.TrimPrefix(content, []byte("\xef\xbb\xbf")) // strip UTF-8 BOM
 	if !isFrontmatterStart(content) {
-		return nil, errNoFrontmatter
+		return nil, nil, errNoFrontmatter
 	}
 	// Skip the opening `---` line.
 	nl := bytes.IndexByte(content, '\n')
 	if nl < 0 {
-		return nil, fmt.Errorf("frontmatter opened but file ends on the first line")
+		return nil, nil, fmt.Errorf("frontmatter opened but file ends on the first line")
 	}
 	rest := content[nl+1:]
 
 	// Find the closing delimiter line: `---` (or the YAML document-end `...`).
-	var block []byte
-	found := false
 	for off := 0; off <= len(rest); {
 		end := bytes.IndexByte(rest[off:], '\n')
 		var line []byte
@@ -53,24 +68,18 @@ func parseFrontmatter(content []byte) (map[string]any, error) {
 		}
 		t := strings.TrimRight(string(line), "\r \t")
 		if t == "---" || t == "..." {
-			block = rest[:off]
-			found = true
-			break
+			bodyStart := off + end + 1
+			if bodyStart > len(rest) {
+				bodyStart = len(rest) // delimiter is the last line, no trailing newline
+			}
+			return rest[:off], rest[bodyStart:], nil
 		}
 		off += end + 1
 		if off > len(rest) {
 			break
 		}
 	}
-	if !found {
-		return nil, fmt.Errorf("unterminated frontmatter (no closing ---)")
-	}
-
-	fields := map[string]any{}
-	if err := yaml.Unmarshal(block, &fields); err != nil {
-		return nil, fmt.Errorf("invalid YAML frontmatter: %v", err)
-	}
-	return fields, nil
+	return nil, nil, fmt.Errorf("unterminated frontmatter (no closing ---)")
 }
 
 // isFrontmatterStart reports whether the first line of content is exactly
