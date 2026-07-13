@@ -137,6 +137,9 @@ type systemHookDTO struct {
 	Seq           int64   `json:"seq"`
 	Enabled       bool    `json:"enabled"`
 	Managed       *string `json:"managed"` // 'swarmery' for installer-owned rows
+	// ContentHash is the write-guard token: every step-10 toggle/edit call
+	// must echo it as base_hash. It hashes the raw entry (pre-redaction).
+	ContentHash string `json:"contentHash"`
 }
 
 type systemCommandDTO struct {
@@ -546,7 +549,8 @@ func (h *Handler) diffSystemItem(w http.ResponseWriter, r *http.Request, k syste
 func (h *Handler) listSystemHooks(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT t.id, t.scope, p.slug, t.event, t.matcher, t.command, t.timeout,
-		       t.status_message, t.source_file, t.seq, t.enabled, t.managed
+		       t.status_message, t.source_file, t.seq, t.enabled, t.managed,
+		       t.content_hash
 		FROM hooks t
 		LEFT JOIN projects p ON p.id = t.project_id
 		WHERE 1=1`
@@ -567,7 +571,7 @@ func (h *Handler) listSystemHooks(w http.ResponseWriter, r *http.Request) {
 		var enabled int64
 		if err := rows.Scan(&hk.ID, &hk.Scope, &hk.ProjectSlug, &hk.Event, &hk.Matcher,
 			&hk.Command, &hk.Timeout, &hk.StatusMessage, &hk.SourceFile, &hk.Seq,
-			&enabled, &hk.Managed); err != nil {
+			&enabled, &hk.Managed, &hk.ContentHash); err != nil {
 			writeErr(w, err)
 			return
 		}
