@@ -103,7 +103,15 @@ export function fetchTask(id: number | string): Promise<TaskDetail> {
  */
 export type ApprovalStatusFilter = PermissionRequestStatus | 'resolved';
 
-export type ApprovalAction = 'approve' | 'deny';
+/**
+ * `answer` resolves an AskUserQuestion with per-question answers; `terminal`
+ * is the no-decision handoff to the native terminal selector (E12d/E12e —
+ * a plain approve would resolve the questions unanswered).
+ */
+export type ApprovalAction = 'approve' | 'deny' | 'answer' | 'terminal';
+
+/** {action:"answer"} answers: string, or an array of labels for multiSelect. */
+export type ApprovalAnswers = Record<string, string | string[]>;
 
 export function fetchApprovals(status?: ApprovalStatusFilter): Promise<PermissionRequest[]> {
   if (MOCK) return mockApi.approvals(status);
@@ -121,10 +129,12 @@ export async function resolveApproval(
   id: number,
   action: ApprovalAction,
   reason?: string,
+  answers?: ApprovalAnswers,
 ): Promise<PermissionRequest> {
-  if (MOCK) return mockApi.resolveApproval(id, action, reason);
-  const body: { action: ApprovalAction; reason?: string } = { action };
+  if (MOCK) return mockApi.resolveApproval(id, action, reason, answers);
+  const body: { action: ApprovalAction; reason?: string; answers?: ApprovalAnswers } = { action };
   if (reason !== undefined && reason !== '') body.reason = reason;
+  if (answers !== undefined) body.answers = answers;
   const res = await fetch(`/api/approvals/${String(id)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

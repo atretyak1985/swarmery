@@ -6,12 +6,29 @@
 // chips, resolved_via, relative time. Fed by GET /api/approvals?status= +
 // WS permission_requested/permission_resolved (upsert by id — the client's
 // own decision comes back over WS too; refetch reconciles races/409s).
+//
+// AskUserQuestion pending cards (hooks-protocol amendment 1, spike E12) swap
+// the approve button for an answer form: per question a radio (single) /
+// checkbox (multiSelect) option list plus an «own answer» free-text input;
+// submit → {action:"answer"}. «answer in terminal →» is the {action:"terminal"}
+// no-decision handoff — NOT a plain approve, which would resolve the questions
+// unanswered (E12d). Unparseable questions fall back to the generic card.
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { PermissionRequest, PermissionRequestStatus, Session, WSMessage } from '../api/types';
 import { fetchApprovals, fetchSessions, resolveApproval, type ApprovalAction } from '../api';
-import { fmtClock, requestJsonPretty, requestSummary } from '../lib/approvals';
+import {
+  buildAnswers,
+  EMPTY_DRAFT,
+  fmtClock,
+  questionsOf,
+  requestJsonPretty,
+  requestSummary,
+  type AnswerDraft,
+  type AnswerMap,
+  type ParsedQuestion,
+} from '../lib/approvals';
 import { projectColor } from '../lib/colors';
 import { fmtAgo, projectLabel } from '../lib/format';
 import { applyPermissionMessage, useLiveUpdates } from '../lib/ws';
@@ -37,6 +54,15 @@ const APPROVAL_LABEL: Record<PermissionRequestStatus, string> = {
   resolved_elsewhere: 'elsewhere',
 };
 
+/* ----- optimistic status per action (the WS/200 row is authoritative) ----- */
+
+const OPTIMISTIC_STATUS: Record<ApprovalAction, PermissionRequestStatus> = {
+  approve: 'approved',
+  deny: 'denied',
+  answer: 'approved', // the daemon approves the row with the answer summary as reason
+  terminal: 'resolved_elsewhere', // no-decision handoff — the shim fails open (E12d/E12e)
+};
+
 /* ----- session attribution (project + title when resolvable) ----- */
 
 function sessionLabel(sessionId: number, session: Session | null): string {
@@ -50,6 +76,71 @@ function sessionLabel(sessionId: number, session: Session | null): string {
 const ACTION_BTN =
   'flex-1 rounded-lg border px-3.5 py-1.5 text-center font-mono text-[11.5px] font-semibold transition-colors disabled:opacity-50 desk:flex-none';
 
+/* ----- one AskUserQuestion question: options + «own answer» free text ----- */
+
+function QuestionBlock({
+  question,
+  index,
+  draft,
+  group,
+  onToggle,
+  onFreeText,
+}: {
+  question: ParsedQuestion;
+  index: number;
+  draft: AnswerDraft;
+  /** Radio/checkbox group namespace — unique per card and question. */
+  group: string;
+  onToggle: (label: string) => void;
+  onFreeText: (text: string) => void;
+}): JSX.Element {
+  return (
+    <fieldset className="rounded-lg border border-line bg-surface2/50 px-3 pt-1.5 pb-2.5">
+      <legend className="px-1 font-mono text-[10px] text-ink-dim">
+        {question.header !== '' ? question.header : `question ${String(index + 1)}`}
+        {question.multiSelect ? ' · multi' : ''}
+      </legend>
+      <div className="text-[12.5px] leading-snug text-ink">{question.question}</div>
+      <div className="mt-1.5 flex flex-col gap-0.5">
+        {question.options.map((opt) => (
+          <label
+            key={opt.label}
+            className="flex cursor-pointer items-baseline gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface2"
+          >
+            <input
+              type={question.multiSelect ? 'checkbox' : 'radio'}
+              name={group}
+              checked={draft.selected.includes(opt.label)}
+              onChange={() => onToggle(opt.label)}
+              className="translate-y-px accent-green"
+            />
+            <span className="font-mono text-[11.5px] whitespace-nowrap text-ink-2">
+              {opt.label}
+            </span>
+            {opt.description !== '' && (
+              <span className="min-w-0 flex-1 text-[11px] leading-snug text-ink-dim">
+                {opt.description}
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+      <input
+        type="text"
+        value={draft.freeText}
+        onChange={(e) => onFreeText(e.target.value)}
+        placeholder={
+          question.multiSelect
+            ? 'own answer — added to the selection'
+            : 'own answer — overrides the selection'
+        }
+        aria-label={`own answer for “${question.question}”`}
+        className="mt-1.5 w-full rounded-lg border border-line bg-surface2 px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-dim focus:border-green/40"
+      />
+    </fieldset>
+  );
+}
+
 function PendingCard({
   request,
   session,
@@ -62,11 +153,35 @@ function PendingCard({
   /** Shared 1 s page ticker — one interval for all cards, not per-card timers. */
   nowMs: number;
   busy: boolean;
-  onResolve: (action: ApprovalAction, reason?: string) => void;
+  onResolve: (action: ApprovalAction, reason?: string, answers?: AnswerMap) => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState('');
+
+  // AskUserQuestion (hooks-protocol amendment 1): parseable questions swap the
+  // approve button for the answer form; null falls back to the generic card.
+  const questions = request.toolName === 'AskUserQuestion' ? questionsOf(request) : null;
+  const [drafts, setDrafts] = useState<readonly AnswerDraft[]>(() =>
+    (questions ?? []).map(() => EMPTY_DRAFT),
+  );
+  const answers = questions !== null ? buildAnswers(questions, drafts) : null;
+
+  const updateDraft = (i: number, patch: Partial<AnswerDraft>): void => {
+    setDrafts((prev) => prev.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+  };
+  const toggleOption = (i: number, q: ParsedQuestion, label: string): void => {
+    const draft = drafts[i] ?? EMPTY_DRAFT;
+    if (!q.multiSelect) {
+      updateDraft(i, { selected: [label] });
+      return;
+    }
+    updateDraft(i, {
+      selected: draft.selected.includes(label)
+        ? draft.selected.filter((l) => l !== label)
+        : [...draft.selected, label],
+    });
+  };
 
   const hangSec = (nowMs - new Date(request.requestedAt).getTime()) / 1000;
   const expireSec = (new Date(request.expiresAt).getTime() - nowMs) / 1000;
@@ -126,15 +241,44 @@ function PendingCard({
         <span className="truncate">{sessionLabel(request.sessionId, session)}</span>
       </Link>
 
+      {questions !== null && (
+        <div className="mt-2.5 flex flex-col gap-2">
+          {questions.map((q, i) => (
+            <QuestionBlock
+              key={q.question}
+              question={q}
+              index={i}
+              draft={drafts[i] ?? EMPTY_DRAFT}
+              group={`ask-${String(request.id)}-${String(i)}`}
+              onToggle={(label) => toggleOption(i, q, label)}
+              onFreeText={(text) => updateDraft(i, { freeText: text })}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onResolve('approve')}
-          className={`${ACTION_BTN} border-green/40 bg-green/10 text-green hover:bg-green/20`}
-        >
-          approve
-        </button>
+        {questions !== null ? (
+          <button
+            type="button"
+            disabled={busy || answers === null}
+            onClick={() => {
+              if (answers !== null) onResolve('answer', undefined, answers);
+            }}
+            className={`${ACTION_BTN} border-green/40 bg-green/10 text-green hover:bg-green/20`}
+          >
+            submit answers
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onResolve('approve')}
+            className={`${ACTION_BTN} border-green/40 bg-green/10 text-green hover:bg-green/20`}
+          >
+            approve
+          </button>
+        )}
         <button
           type="button"
           disabled={busy}
@@ -144,6 +288,17 @@ function PendingCard({
         >
           deny{denying ? ' ▴' : ''}
         </button>
+        {questions !== null && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onResolve('terminal')}
+            title="release with no decision — the native selector renders in the terminal (E12d/E12e)"
+            className={`${ACTION_BTN} border-line font-normal text-ink-2 hover:bg-surface2`}
+          >
+            answer in terminal →
+          </button>
+        )}
         <Link
           to={sessionTo}
           className={`${ACTION_BTN} border-line font-normal text-ink-2 hover:bg-surface2`}
@@ -286,13 +441,18 @@ export function Approvals(): JSX.Element {
   const sessionOf = (id: number): Session | null =>
     sessions?.find((s) => s.id === id) ?? null;
 
-  const resolve = (request: PermissionRequest, action: ApprovalAction, reason?: string): void => {
+  const resolve = (
+    request: PermissionRequest,
+    action: ApprovalAction,
+    reason?: string,
+    answers?: AnswerMap,
+  ): void => {
     setBusyId(request.id);
     // Optimistic transfer to history; the WS permission_resolved for our own
     // decision (and the 200 body) upsert the authoritative row by id.
     const optimistic: PermissionRequest = {
       ...request,
-      status: action === 'approve' ? 'approved' : 'denied',
+      status: OPTIMISTIC_STATUS[action],
       resolvedAt: new Date().toISOString(),
       resolvedVia: 'dashboard',
       reason: reason ?? null,
@@ -300,7 +460,7 @@ export function Approvals(): JSX.Element {
     setRequests((prev) =>
       prev === null ? prev : prev.map((r) => (r.id === request.id ? optimistic : r)),
     );
-    resolveApproval(request.id, action, reason)
+    resolveApproval(request.id, action, reason, answers)
       .then((updated) => {
         setRequests((prev) =>
           prev === null ? prev : prev.map((r) => (r.id === updated.id ? updated : r)),
@@ -349,7 +509,7 @@ export function Approvals(): JSX.Element {
               session={sessionOf(r.sessionId)}
               nowMs={nowMs}
               busy={busyId === r.id}
-              onResolve={(action, reason) => resolve(r, action, reason)}
+              onResolve={(action, reason, answers) => resolve(r, action, reason, answers)}
             />
           ))}
 

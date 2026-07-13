@@ -67,6 +67,46 @@ const store: PermissionRequest[] = [
     reason: null,
     expiresAt: iso(95 * SEC - APPROVAL_TIMEOUT_MS),
   },
+  {
+    id: 40,
+    sessionId: 2,
+    toolName: 'AskUserQuestion',
+    requestJson: stdin(
+      'e1f2a3b4-c5d6-4e7f-8091-a2b3c4d5e6f7',
+      '/Users/user/work/example-app',
+      'AskUserQuestion',
+      {
+        questions: [
+          {
+            question: 'Which migration strategy should the orders backfill use?',
+            header: 'Strategy',
+            options: [
+              { label: 'Dual-write', description: 'Write old + new tables until cutover' },
+              { label: 'Backfill job', description: 'One-shot batch copy, then switch reads' },
+              { label: 'On-read migration', description: 'Lazily migrate rows as they are touched' },
+            ],
+            multiSelect: false,
+          },
+          {
+            question: 'Which environments should the dry-run cover?',
+            header: 'Environments',
+            options: [
+              { label: 'dev', description: 'Shared dev cluster' },
+              { label: 'staging', description: 'Pre-prod, production-like data' },
+              { label: 'prod (read-only)', description: 'Report-only pass against prod' },
+            ],
+            multiSelect: true,
+          },
+        ],
+      },
+    ),
+    status: 'pending',
+    requestedAt: iso(15 * SEC),
+    resolvedAt: null,
+    resolvedVia: null,
+    reason: null,
+    expiresAt: iso(15 * SEC - APPROVAL_TIMEOUT_MS),
+  },
   // --- history (one of each terminal status)
   {
     id: 38,
@@ -162,21 +202,48 @@ export function mockApprovalsList(status?: string): PermissionRequest[] {
     .map((r) => ({ ...r }));
 }
 
+/** The daemon's reason summary for an answered request: «Q» → A · «Q2» → B, C. */
+function answerSummary(answers: Record<string, string | string[]>): string {
+  return Object.entries(answers)
+    .map(([q, v]) => `«${q}» → ${Array.isArray(v) ? v.join(', ') : v}`)
+    .join(' · ');
+}
+
 /** POST /api/approvals/{id} — resolves a pending row, emits permission_resolved. */
 export function mockResolveApproval(
   id: number,
-  action: 'approve' | 'deny',
+  action: 'approve' | 'deny' | 'answer' | 'terminal',
   reason?: string,
+  answers?: Record<string, string | string[]>,
 ): PermissionRequest {
   const row = store.find((r) => r.id === id);
   if (row === undefined) throw new Error(`mock: approval ${String(id)} not found (404)`);
   if (row.status !== 'pending') {
     throw new Error(`mock: approval ${String(id)} already ${row.status} (409)`);
   }
-  row.status = action === 'approve' ? 'approved' : 'denied';
+  switch (action) {
+    case 'approve':
+      row.status = 'approved';
+      row.reason = reason !== undefined && reason.trim() !== '' ? reason.trim() : null;
+      break;
+    case 'deny':
+      row.status = 'denied';
+      row.reason = reason !== undefined && reason.trim() !== '' ? reason.trim() : null;
+      break;
+    case 'answer':
+      // Mirrors the daemon: approved + the human summary as the reason.
+      row.status = 'approved';
+      row.reason = answers !== undefined ? answerSummary(answers) : null;
+      break;
+    case 'terminal':
+      // No-decision handoff (E12d/E12e): the shim fails open to the native
+      // selector; the row records the deliberate hand-off.
+      row.status = 'resolved_elsewhere';
+      row.reason = 'handed off to terminal';
+      break;
+  }
   row.resolvedAt = new Date().toISOString();
   row.resolvedVia = 'dashboard';
-  row.reason = reason !== undefined && reason.trim() !== '' ? reason.trim() : null;
   const resolved = { ...row };
   emit({ type: 'permission_resolved', payload: resolved });
   return resolved;

@@ -1115,10 +1115,11 @@ export const mockApi = {
 
   async resolveApproval(
     id: number,
-    action: 'approve' | 'deny',
+    action: 'approve' | 'deny' | 'answer' | 'terminal',
     reason?: string,
+    answers?: Record<string, string | string[]>,
   ): Promise<PermissionRequest> {
     await delay(140);
-    return mockResolveApproval(id, action, reason);
+    return mockResolveApproval(id, action, reason, answers);
   },
 };

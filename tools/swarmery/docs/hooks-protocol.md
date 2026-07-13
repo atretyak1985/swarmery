@@ -6,6 +6,11 @@ Claude Code `PermissionRequest` / `Stop` hook) and the swarmery daemon. Both sid
 are implemented against this text at steps 2.3/2.4; changes go through
 `web/CONTRACT-REQUESTS.md`, never directly to this file while the parallel wave runs.
 
+> **Amendment 1** (2026-07-13, additive — see the section at the end): optional
+> `updatedInput` on the long-poll 200 body and in the shim stdout, the
+> `{action:"answer"}` / `{action:"terminal"}` dashboard actions, and the
+> `--answer-delivery` fallback flag. The gate-2.2 text below is unchanged.
+
 Every behavior below is grounded in the live spike
 [`hooks-format.md`](hooks-format.md) (Claude Code `2.1.170`) — experiment numbers
 (E1…E11, Q-A) refer to that document. Design decisions D3/D6 come from
@@ -147,3 +152,89 @@ The entire `PermissionRequest` contract is undocumented upstream and verified on
 on Claude Code `2.1.170` (see [`hooks-format.md`](hooks-format.md) §Version-fragility).
 Re-run the spike harness on Claude Code minor bumps before trusting the approvals
 path.
+
+---
+
+## Amendment 1 — `AskUserQuestion` dashboard answers (2026-07-13, additive)
+
+The gate-2.2 contract above is unchanged; this amendment extends it **additively**
+so `AskUserQuestion` permission requests can be answered from the dashboard.
+Every behavior is grounded in spike **E12** ([`hooks-format.md`](hooks-format.md),
+Claude Code `2.1.170`).
+
+### Long-poll 200 body — optional `updatedInput`
+
+```json
+{"decision": "allow" | "deny", "message"?: string, "updatedInput"?: object}
+```
+
+`updatedInput` accompanies `allow` only, and only when the request was resolved
+via `{action:"answer"}` (below) in the default `updated-input` delivery mode.
+Its value is `{"questions": […], "answers": {…}}`, built **server-side** from
+the stored `request_json`: the request's `tool_input.questions` echoed
+**verbatim** (the daemon never trusts dashboard-echoed questions), plus the
+operator's answers keyed by the exact `question` field text. Single-select and
+free-text values are strings; `multiSelect` values are **arrays of labels**
+(E12c). An old shim ignores the extra key — backward compatible in both
+directions. The D6 dedup hash is untouched (still computed over the original
+hook stdin).
+
+### Shim stdout — `updatedInput` passthrough
+
+When the 200 body carries `updatedInput` on an `allow`, the shim forwards it
+**verbatim** as `hookSpecificOutput.decision.updatedInput`:
+
+```json
+{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow","updatedInput":{"questions":[…],"answers":{…}}}}}
+```
+
+Claude Code `2.1.170` injects the answers as the tool result and never renders
+the terminal selector (E12a/E12b). An absent or literal-`null` `updatedInput`
+keeps the stdout **byte-identical** to the frozen gate-2.2 forms; a `deny`
+carrying `updatedInput` (non-contract) is never forwarded. Everything else —
+fail-open, timings, deny message — is unchanged.
+
+### `POST /api/approvals/{id}` — new actions
+
+Dashboard-facing, listed here because their wire effects land on the hook
+channel:
+
+- `{"action":"answer", "answers":{"<question text>": "<string>" | ["<label>", …]}}`
+  — valid only while the row is pending and its `tool_name` is
+  `AskUserQuestion`. Validation (`400` with the specific reason on violation):
+  the stored `tool_input.questions` must parse; every question must be
+  answered; no unknown question keys; an array value only for a
+  `multiSelect: true` question; any non-empty string is legal (options are
+  suggestions — free text is first-class, same as the native dialog). On
+  success the row resolves `approved` / `resolved_via = 'dashboard'` with
+  `reason` = the human summary `«Q» → A · «Q2» → B, C`, and the decision fans
+  out to **all** attached dedup waiters (D6) carrying the server-built
+  `updatedInput`.
+- `{"action":"terminal"}` — the «answer in terminal →» handoff. **Deliberately
+  NOT a plain approve**: E12d showed a plain `allow` suppresses the dialog AND
+  resolves the questions **unanswered** (`answers: {}`). Instead the row
+  resolves `resolved_elsewhere` (`reason: "handed off to terminal"`) and the
+  long-poll answers **`204`** — the shim exits silent (fail-open) and the
+  native selector renders in the terminal (E12e).
+
+`404` / `409` semantics are unchanged from the frozen contract.
+
+### Daemon flag — `--answer-delivery=updated-input|deny-message`
+
+Default `updated-input` (spike-verified, E12a/b/c). `deny-message` is the
+fallback for runtimes whose `updatedInput` support regresses: it flips **only
+the wire form** of answered rows — the long-poll answers
+
+```json
+{"decision":"deny","message":"User answered via dashboard: «Q» → A · «Q2» → B, C"}
+```
+
+Deny messages reach Claude verbatim as the tool result (E3), so the agent still
+continues with the answers. The DB row stays `approved` with the same reason —
+the human genuinely answered; the audit trail is honest in both modes, only the
+delivery differs.
+
+### Version fragility
+
+All E12 behaviors join the spike re-run checklist for Claude Code minor bumps
+(verified only on `2.1.170`) — see `hooks-format.md` §E12.
