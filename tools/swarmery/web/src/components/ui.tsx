@@ -1,19 +1,19 @@
-// Small design-system primitives shared across screens (Redesign dark
-// editorial language: display eyebrows, hairline pill status chips, navy
-// hairline cards).
+// Small design-system primitives shared across screens (Canvas dark editorial
+// language: JetBrains Mono uppercase eyebrows, hairline pill status chips,
+// warm near-black hairline cards).
 
 import type { ReactNode } from 'react';
 import type { SessionStatus } from '../api/types';
 import { fmtSpan } from '../lib/format';
 
 /* ----- shared eyebrow rhythm — one token for every section heading -----
- * Redesign h2 spec: margin 26px 0 10px. The SAME vertical rhythm applies to
- * the display eyebrows ("Active now · 1", rail headers) and the mono
- * day-group rules on Sessions, so all screens breathe identically. */
+ * Canvas section rhythm: the SAME vertical breathing applies to the mono
+ * eyebrows ("The spine · today", rail headers) and the mono day-group rules
+ * on Sessions, so all screens breathe identically. */
 
 export const EYEBROW_SPACING = 'mt-[26px] mb-2.5';
 
-/* ----- section heading — the Redesign Space Grotesk eyebrow ----- */
+/* ----- section heading — the Canvas JetBrains Mono uppercase eyebrow ----- */
 
 export function SectionTitle({
   children,
@@ -26,7 +26,7 @@ export function SectionTitle({
 }): JSX.Element {
   return (
     <h2
-      className={`${flush ? 'mt-1 mb-2.5' : EYEBROW_SPACING} font-display text-[13px] font-medium tracking-[0.14em] text-ink-dim uppercase`}
+      className={`${flush ? 'mt-1 mb-2.5' : EYEBROW_SPACING} font-mono text-[11px] font-medium tracking-[0.16em] text-ink-dim uppercase`}
     >
       {children}
     </h2>
@@ -39,7 +39,7 @@ export function SectionTitle({
 export function GroupHeader({ children }: { children: ReactNode }): JSX.Element {
   return (
     <div
-      className={`${EYEBROW_SPACING} flex items-center gap-2 font-mono text-[10.5px] tracking-[0.1em] text-ink-dim uppercase`}
+      className={`${EYEBROW_SPACING} flex items-center gap-2 font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase`}
     >
       {children}
       <span className="h-px flex-1 bg-line" aria-hidden="true" />

@@ -187,3 +187,26 @@ conflict with):
   DTO golden key-set in `ws_test.go`, mock fixtures, and a multi-prop refactor
   of `Approvals.tsx`/`Overview` attribution; the existing lazy `/api/sessions`
   join already covers the UX with a `session #N` fallback.
+
+---
+
+## Canvas wave (2026-07-14, full-stack — landed together)
+
+Three additive fields, implemented back-and-front in one change (not a parallel
+branch), so `types.ts` was updated at the same time as the Go DTOs.
+
+- **`Session.why`** (`why?: string \| null`, `omitempty`) — one-line intent
+  summarised server-side from the first user turn's prose (first non-empty line,
+  whitespace collapsed, capped at 160 chars). Source: `sessionSelect` window
+  join in `handlers.go` + `summarizeWhy`. Feeds the Sessions row subtitle and
+  the Command-deck spine why-line. Present in the WS session frame (golden
+  key-set in `ws_test.go` updated).
+- **`SessionDetail.recovered`** (`recovered: number`, always present) — count of
+  tool errors a later same-tool success cleared (query-time heuristic in
+  `getSession`). Feeds the session-detail header "recovered" stat.
+- **`StatsToday` / `StatsOverview` `tests_passed|tests_failed|tests_skipped`**
+  (`*int64`, `omitempty`) — summed from `test_run` event payloads. `test_run`
+  events are emitted at ingest for recognised test-runner Bash calls
+  (`internal/ingest/testrun.go`), parsing pytest/jest/vitest/go-`-v` summaries.
+  Null when the window has no test signal → the Quality tile degrades instead of
+  showing a misleading zero. Feeds the Command-deck Quality tri-stat.

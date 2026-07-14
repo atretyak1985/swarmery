@@ -74,8 +74,10 @@ function SummaryHeader({
   onLint: (severity: LintSeverity | null) => void;
 }): JSX.Element {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <h1 className="font-display text-[20px] leading-tight font-bold">System</h1>
+    <div className="flex flex-wrap items-baseline gap-x-[14px] gap-y-[10px]">
+      <h1 className="font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
+        System
+      </h1>
       {summary !== null && (
         <>
           <span className="font-mono text-[11px] text-ink-dim">
@@ -96,7 +98,7 @@ function SummaryHeader({
                   title={`filter lists by worst active lint finding: ${severity}`}
                   onClick={() => onLint(active ? null : severity)}
                   className={`rounded-full border px-2 py-px font-mono text-[10px] whitespace-nowrap transition-colors ${LINT_TONES[severity]} ${
-                    active ? 'border-current bg-surface2' : 'border-line hover:border-current'
+                    active ? 'border-current bg-surface2' : 'border-current/50 hover:border-current'
                   }`}
                 >
                   {severity === 'info' ? '●' : '▲'} {String(count)} {severity}
@@ -129,11 +131,11 @@ function ItemRow({
     <>
       <div className="flex flex-wrap items-center gap-2">
         <LintDot severity={item.lintMax} />
-        <span className={`text-[13px] font-semibold ${selected ? 'text-brand' : 'text-ink'}`}>
+        <span className={`text-[13.5px] font-semibold ${selected ? 'text-brand' : 'text-ink'}`}>
           {item.name}
         </span>
         {item.model !== null && (
-          <span className="font-mono text-[10.5px] text-ink-dim">{item.model}</span>
+          <span className="font-mono text-[10px] text-ink-faint">{item.model}</span>
         )}
         <span className="ml-auto flex items-center gap-1.5">
           <ScopeBadge scope={item.scope} projectSlug={item.projectSlug} projectName={projectName} />
@@ -141,9 +143,9 @@ function ItemRow({
         </span>
       </div>
       {item.description !== null && (
-        <div className="mt-0.5 truncate text-[12px] text-ink-dim">{item.description}</div>
+        <div className="mt-[3px] truncate text-[12.5px] text-ink-dim">{item.description}</div>
       )}
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 font-mono text-[10.5px] text-ink-dim/80">
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 font-mono text-[10px] text-ink-faint">
         <span className="whitespace-nowrap">tasks 30d {String(item.tasks30d)}</span>
         <span className="whitespace-nowrap">
           {item.lastUsed !== null ? `used ${fmtAgo(item.lastUsed)}` : 'never used'}
@@ -152,7 +154,7 @@ function ItemRow({
       </div>
     </>
   );
-  const deadClass = item.dead ? 'opacity-45' : '';
+  const deadClass = item.dead ? 'opacity-70' : '';
   if (!selectable) {
     return (
       <div
@@ -170,7 +172,7 @@ function ItemRow({
       aria-current={selected ? 'true' : undefined}
       title={item.dead ? DEAD_TOOLTIP : `open ${item.name}`}
       className={`block w-full border-b border-line-soft px-3.5 py-2.5 text-left transition-colors last:border-b-0 ${
-        selected ? 'bg-surface2' : 'hover:bg-surface2/50'
+        selected ? 'bg-surface2' : 'hover:bg-surface'
       } ${deadClass}`}
     >
       {body}
@@ -288,7 +290,7 @@ function ItemsTab({
         </Empty>
       )}
       {filtered !== null && filtered.length > 0 && (
-        <div className="mt-3 overflow-hidden rounded-xl border border-line bg-surface">
+        <div className="overflow-hidden">
           {filtered.map((item) => (
             <ItemRow
               key={item.id}
@@ -307,7 +309,7 @@ function ItemsTab({
   return (
     <div className="flex h-full flex-col">
       {/* filters + new agent — never scroll */}
-      <div className="shrink-0 pt-3 pb-2">
+      <div className="shrink-0 pt-0 pb-3">
         <FiltersRow
           scope={scope}
           project={project}
@@ -320,7 +322,7 @@ function ItemsTab({
           onSort={onSort}
         />
         {kind === 'agents' && (
-          <div className="mt-3">
+          <div className="mt-[14px]">
             {creating ? (
               <CreateAgentForm
                 onCancel={() => setCreating(false)}
@@ -335,7 +337,7 @@ function ItemsTab({
               <button
                 type="button"
                 onClick={() => setCreating(true)}
-                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
+                className="rounded-lg border border-line-strong bg-field px-3 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
               >
                 + new agent
               </button>
@@ -346,15 +348,19 @@ function ItemsTab({
 
       {/* scrollable area — list only (no detail) or 2-col grid with independent scrolls */}
       {!detailOpen || kind === 'commands' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto pb-4 [-webkit-overflow-scrolling:touch]">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-line [-webkit-overflow-scrolling:touch]">
           {listContent}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 wide:grid wide:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] wide:gap-6 wide:overflow-hidden">
-          <div className="overflow-y-auto pb-4 [-webkit-overflow-scrolling:touch]">
+        <div className="min-h-0 flex-1 wide:grid wide:grid-cols-[minmax(320px,400px)_minmax(0,1fr)] wide:gap-6 wide:overflow-hidden">
+          {/* Border framed on the scroll container too, so list + detail align
+              top & bottom and the rows scroll inside a fixed perimeter. */}
+          <div className="overflow-y-auto rounded-xl border border-line [-webkit-overflow-scrolling:touch]">
             {listContent}
           </div>
-          <div className="overflow-y-auto pb-4 [-webkit-overflow-scrolling:touch]">
+          {/* Border is a fixed frame on the scroll container — the panel
+              scrolls INSIDE it, so the perimeter stays visible while scrolling. */}
+          <div className="overflow-y-auto rounded-xl border border-line bg-surface px-[18px] py-4 [-webkit-overflow-scrolling:touch]">
             <SystemItemPanel
               kind={kind}
               id={selectedId}
@@ -477,7 +483,7 @@ export function System(): JSX.Element {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col px-4 pt-6 pb-6 desk:px-10 desk:pt-[34px] desk:pb-[34px]">
       {/* sticky header: title + summary + lint badges + readonly banner + tabs */}
       <div className="shrink-0">
         <SummaryHeader summary={summary} lint={lint} onLint={onLint} />
@@ -493,7 +499,7 @@ export function System(): JSX.Element {
           </div>
         )}
         <div
-          className="mt-4 flex gap-0.5 overflow-x-auto border-b border-line [-webkit-overflow-scrolling:touch]"
+          className="mt-[18px] flex gap-1 overflow-x-auto border-b border-line [-webkit-overflow-scrolling:touch]"
           role="tablist"
         >
           {TABS.map((t) => (
@@ -503,7 +509,7 @@ export function System(): JSX.Element {
               role="tab"
               aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className={`-mb-px shrink-0 border-b-2 px-3.5 py-2 text-[12.5px] font-medium whitespace-nowrap transition-colors ${
+              className={`-mb-px shrink-0 border-b-2 px-3.5 py-[7px] text-[12.5px] font-medium whitespace-nowrap transition-colors ${
                 tab === t ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
               }`}
             >

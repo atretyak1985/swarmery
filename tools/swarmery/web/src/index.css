@@ -1,60 +1,80 @@
 @import 'tailwindcss';
 
-/* Swarmery Redesign dark editorial theme (Перевірка дизайну swarmery/
- * Swarmery Redesign.dc.html) — implemented as drawn. Tailwind v4 theme.
+/* Swarmery Canvas dark editorial theme (Swarmery-handoff/Canvas.dc.html) —
+ * implemented as drawn. Tailwind v4 theme.
  *
- * Surfaces: deep navy page (#10151d), raised card tone (#171e28), a second
- * raised tone (#1e2735) for hover fills / prompt bubbles / inline code.
- * Hairlines: slate (#28374b), softer 60% variant for inner row dividers.
- * Ink: cool blue-grey scale from #dce6f2 down to #7c8da3.
- * Brand accent: amber #f5b84a — links, active nav, tabs, wordmark diamond.
- * Status set stays SEMANTIC per the Redesign: green = running/ok,
- * amber = waiting/approval, red = error, blue = subagent/info track.
+ * Surfaces: warm near-black page (#0E0F12) under a faint amber corner glow;
+ * card tone (#131519), a field tone (#15171C) for inputs / idle nav / bare
+ * buttons, and a raised tone (#1B1E24) for hover fills, active nav, prompt
+ * bubbles and inline code.
+ * Hairlines: graphite (#23262E) default, a stronger interactive variant
+ * (#2A2E37) for chips/menus/fields, and a soft inner divider (#1C1F26).
+ * Ink: WARM cream scale from #ECE7DF down to a faint #5C616B for mono labels.
+ * Brand accent: amber #E8A13A — links, active nav, tabs, wordmark mark, cost.
+ * Status set stays SEMANTIC: green = running/ok, amber = waiting/approval,
+ * red = error, blue = subagent/info track, purple = a 4th project hue.
  * Tinted fills use alpha modifiers on these bases (e.g. bg-red/10).
  */
 @theme {
   /* ---- surfaces ---- */
-  --color-bg: #10151d; /* page background — deep navy */
-  --color-surface: #171e28; /* cards, sheets */
-  --color-surface2: #1e2735; /* raised / hover fill, prompt bubbles, code chips */
+  --color-bg: #0e0f12; /* page background — warm near-black */
+  --color-surface: #131519; /* cards, panels, sheets */
+  --color-field: #15171c; /* inputs, idle nav pill, bare buttons */
+  --color-surface2: #1b1e24; /* raised / hover fill, active nav, prompt bubbles, code chips */
 
   /* ---- hairlines ---- */
-  --color-line: #28374b; /* default slate border */
-  --color-line-soft: rgb(40 55 75 / 0.6); /* softer inner divider */
+  --color-line: #23262e; /* default graphite border */
+  --color-line-strong: #2a2e37; /* stronger — chips, menus, field borders */
+  --color-line-soft: #1c1f26; /* softer inner row divider */
 
-  /* ---- ink scale ---- */
-  --color-ink: #dce6f2; /* primary text */
-  --color-ink-2: #c3cfdd; /* secondary body text */
-  --color-ink-3: #a9b7c9; /* tertiary — row project names, file paths */
-  --color-ink-dim: #7c8da3; /* muted captions, labels */
+  /* ---- ink scale (warm cream) ---- */
+  --color-ink: #ece7df; /* primary text */
+  --color-ink-2: #c9cdd4; /* secondary body text */
+  --color-ink-3: #9ba0aa; /* tertiary — row why-lines, descriptions */
+  --color-ink-dim: #8b8f99; /* muted captions, project labels */
+  --color-ink-faint: #5c616b; /* faint mono micro-labels, timestamps, arrows */
 
   /* ---- brand · amber accent ---- */
-  --color-brand: #f5b84a; /* links, active nav/tabs, cost numerals */
+  --color-brand: #e8a13a; /* links, active nav/tabs, cost numerals, wordmark mark */
 
   /* ---- status / semantic ---- */
-  --color-green: #4ade9c; /* running / ok */
-  --color-amber: #f5b84a; /* waiting / approval */
-  --color-red: #f0716f; /* error */
-  --color-blue: #6fb4f0; /* subagent track / info */
+  --color-green: #58c08a; /* running / ok / approve */
+  --color-amber: #e8a13a; /* waiting / approval */
+  --color-red: #e5675f; /* error / deny */
+  --color-blue: #6fb4f0; /* subagent track / info — kept from stored palette */
+  --color-purple: #c58be0; /* a 4th project hue */
 
-  /* ---- type — Redesign triad ---- */
+  /* ---- type — Canvas triad ---- */
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
-  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
 
-  /* sidebar breakpoint (Redesign fixed 210px sidebar) */
+  /* sidebar breakpoint (Canvas fixed 66px icon rail) */
   --breakpoint-desk: 900px;
-  /* right-rail breakpoint (Redesign: rails collapse under 1280px) */
+  /* right-rail breakpoint (Canvas: deck rail collapses under 1280px) */
   --breakpoint-wide: 1280px;
 
+  /* running/ok node — soft expanding pulse (Canvas deckPulse) */
   --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
   @keyframes pulse-dot {
     0%,
     100% {
-      box-shadow: 0 0 0 0 rgb(74 222 156 / 0.5);
+      box-shadow: 0 0 0 0 rgb(88 192 138 / 0.5);
     }
     50% {
-      box-shadow: 0 0 0 6px rgb(74 222 156 / 0);
+      box-shadow: 0 0 0 7px rgb(88 192 138 / 0);
+    }
+  }
+
+  /* waiting/attention dot — opacity blink (Canvas deckBlink) */
+  --animate-blink-dot: blink-dot 1.8s ease-in-out infinite;
+  @keyframes blink-dot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
     }
   }
 }
@@ -67,18 +87,58 @@
     -webkit-text-size-adjust: 100%;
   }
   body {
+    /* Base fill only — the amber wash lives on .app-shell (the outermost app
+       container) so it sits under the whole app without repeating per route. */
     @apply bg-bg font-sans text-[14px] leading-normal text-ink;
+    -webkit-font-smoothing: antialiased;
   }
   button {
     @apply cursor-pointer;
   }
   input::placeholder {
-    color: var(--color-ink-dim);
+    color: var(--color-ink-faint);
+  }
+  ::selection {
+    background: rgb(232 161 58 / 0.25);
+  }
+}
+
+@layer components {
+  /* Top header hairline: a 1px bottom border that fades from transparent at
+     both edges to the amber accent at the centre (brightest in the middle,
+     invisible at the sides). Header-only — sidebar/card borders stay solid.
+     border-image is safe here because the header is opaque (no backdrop-blur). */
+  .header-hairline {
+    border-bottom: 1px solid transparent;
+    border-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        color-mix(in srgb, var(--color-amber) 55%, transparent) 30%,
+        var(--color-amber) 50%,
+        color-mix(in srgb, var(--color-amber) 55%, transparent) 70%,
+        transparent 100%
+      )
+      1;
+  }
+
+  /* App shell base: warm near-black fill (#0E0F12) with a single soft amber
+     wash anchored off the top-right corner — barely perceptible (~5%), just
+     warming the area near the wordmark, fading to transparent with no hard
+     edge. Set once on the outermost shell so it never scrolls or repeats per
+     route; panels/cards keep their own flat fills over this base. */
+  .app-shell {
+    background-color: var(--color-bg);
+    background-image: radial-gradient(
+      circle at 78% -5%,
+      color-mix(in srgb, var(--color-amber) 5%, transparent),
+      transparent 45%
+    );
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse-dot {
+  .animate-pulse-dot,
+  .animate-blink-dot {
     animation: none;
   }
 }

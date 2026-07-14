@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { SessionDetail, SessionStatus, WSMessage } from '../api/types';
 import { fetchSession } from '../api';
-import { fmtAgo, fmtCost, fmtDateTime, fmtSpan, fmtTokens, projectLabel } from '../lib/format';
+import { fmtAgo, fmtCost, fmtSpan, fmtTokens, projectLabel } from '../lib/format';
 import { useLiveUpdates } from '../lib/ws';
 import { TaskChip } from '../components/TaskChip';
 import { ErrorBox, Loading } from '../components/ui';
@@ -160,86 +160,89 @@ export function SessionDetailPage(): JSX.Element {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-2.5 flex items-center gap-2 pt-0.5 text-[12px] text-ink-dim">
-        <Link to="/sessions" className="shrink-0 transition-colors hover:text-ink">
-          ← Sessions
-        </Link>
-        <span aria-hidden="true">/</span>
-        <span className="truncate font-mono text-[11px] text-brand">
-          {projectLabel(detail.projectName, detail.projectSlug)}
-          {detail.gitBranch !== null ? ` · ${detail.gitBranch}` : ''}
-        </span>
-      </div>
-      <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="mb-2 font-display text-[21px] leading-[1.3] font-bold tracking-[0.01em]">
-            {detail.title ?? detail.sessionUuid}
-          </h1>
-          <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 font-mono text-[11.5px] text-ink-dim">
-            <Kv label="status" value={detail.status} tone={STATUS_TONES[detail.status]} />
-            {detail.model !== null && <Kv label="model" value={detail.model} />}
-            <Kv label="started" value={fmtDateTime(detail.startedAt)} />
-            <Kv
-              label={detail.endedAt !== null ? 'duration' : 'running'}
-              value={fmtSpan(detail.startedAt, detail.endedAt)}
-            />
-            {lastEvent !== undefined && detail.endedAt === null && (
-              <Kv label="last event" value={fmtAgo(lastEvent.ts)} />
-            )}
-            {detail.taskExternalId != null && (
-              /* phase 3.5: workspaces — which task card this session worked on. */
-              <TaskChip
-                externalId={detail.taskExternalId}
-                linkSource={detail.taskLinkSource}
-                confidence={detail.taskConfidence}
+      <div className="shrink-0 border-b border-line px-4 pt-4 pb-4 desk:px-10 desk:pt-6">
+        <div className="flex items-center gap-2 font-mono text-[11px] text-ink-faint">
+          <Link to="/sessions" className="shrink-0 transition-colors hover:text-ink">
+            ← sessions
+          </Link>
+          <span aria-hidden="true">/</span>
+          <span className="truncate text-brand">
+            {projectLabel(detail.projectName, detail.projectSlug)}
+            {detail.gitBranch !== null ? ` · ${detail.gitBranch}` : ''}
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-start gap-x-6 gap-y-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-[22px] leading-[1.2] font-medium tracking-[-0.01em] desk:text-[27px]">
+              {detail.title ?? '(untitled session)'}
+            </h1>
+            <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-[5px] font-mono text-[11px] text-ink-dim">
+              <Kv label="status" value={detail.status} tone={STATUS_TONES[detail.status]} />
+              {detail.model !== null && <Kv label="model" value={detail.model} />}
+              <Kv
+                label={detail.endedAt !== null ? 'duration' : 'running'}
+                value={fmtSpan(detail.startedAt, detail.endedAt)}
               />
+              {lastEvent !== undefined && detail.endedAt === null && (
+                <Kv label="last event" value={fmtAgo(lastEvent.ts)} />
+              )}
+              {detail.taskExternalId != null && (
+                /* phase 3.5: workspaces — which task card this session worked on. */
+                <TaskChip
+                  externalId={detail.taskExternalId}
+                  linkSource={detail.taskLinkSource}
+                  confidence={detail.taskConfidence}
+                />
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-[22px]">
+            <HeadStat value={fmtTokens(facts.tokens)} label="tokens" />
+            <HeadStat value={fmtCost(facts.cost)} label="cost" tone="text-brand" />
+            <HeadStat
+              value={String(facts.errors)}
+              label="errors"
+              tone={facts.errors > 0 ? 'text-red' : 'text-ink-dim'}
+            />
+            {detail.recovered > 0 && (
+              /* errors a later same-tool success cleared (backend heuristic). */
+              <HeadStat value={String(detail.recovered)} label="recovered" tone="text-green" />
             )}
           </div>
         </div>
-        <div className="flex shrink-0 gap-[22px] text-right">
-          <HeadStat value={fmtTokens(facts.tokens)} label="tokens" />
-          <HeadStat value={fmtCost(facts.cost)} label="cost" tone="text-brand" />
-          <HeadStat
-            value={String(facts.errors)}
-            label="errors"
-            tone={facts.errors > 0 ? 'text-red' : 'text-ink-dim'}
-          />
-        </div>
-      </div>
 
-      {/* Mobile at-a-glance strip; the desktop rail replaces it at ≥1280px. */}
-      <div className="shrink-0 wide:hidden">
-        <SummaryChips events={detail.events} />
+        {/* Mobile at-a-glance strip; the desktop rail replaces it at ≥1280px. */}
+        <div className="wide:hidden">
+          <SummaryChips events={detail.events} />
+        </div>
+
+        <div className="mt-4 flex gap-1">
+          <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
+            Chat
+          </TabButton>
+          <TabButton active={tab === 'timeline'} onClick={() => setTab('timeline')}>
+            Timeline
+          </TabButton>
+          <TabButton active={tab === 'diffs'} onClick={() => setTab('diffs')}>
+            {`Diffs${diffCount > 0 ? ` · ${diffCount}` : ''}`}
+          </TabButton>
+        </div>
       </div>
 
       {/* Only this region scrolls: the tab panel (and, ≥1280px, the rail in
           its own column) — breadcrumb/title/facts/tab strip stay pinned. */}
-      <div className="mt-4 flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(0,1fr)_300px] wide:grid-rows-[minmax(0,1fr)] wide:gap-6">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 gap-0.5 border-b border-line" role="tablist">
-            <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
-              Chat
-            </TabButton>
-            <TabButton active={tab === 'timeline'} onClick={() => setTab('timeline')}>
-              Timeline
-            </TabButton>
-            <TabButton active={tab === 'diffs'} onClick={() => setTab('diffs')}>
-              {`Diffs${diffCount > 0 ? ` · ${diffCount}` : ''}`}
-            </TabButton>
-          </div>
-
-          <div
-            role="tabpanel"
-            ref={panelRef}
-            className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]"
-          >
-            {tab === 'chat' && <Chat detail={detail} onShowTimeline={() => setTab('timeline')} />}
-            {tab === 'timeline' && <Timeline detail={detail} />}
-            {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(0,1fr)_300px] wide:grid-rows-[minmax(0,1fr)] wide:gap-6 wide:px-10">
+        <div
+          role="tabpanel"
+          ref={panelRef}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-6 desk:px-10 wide:px-0 [-webkit-overflow-scrolling:touch]"
+        >
+          {tab === 'chat' && <Chat detail={detail} onShowTimeline={() => setTab('timeline')} />}
+          {tab === 'timeline' && <Timeline detail={detail} />}
+          {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}
         </div>
 
-        <div className="hidden min-h-0 wide:block wide:overflow-y-auto">
+        <div className="hidden min-h-0 wide:block wide:overflow-y-auto wide:py-6">
           <DetailRail
             events={detail.events}
             fileChanges={detail.fileChanges}
@@ -262,8 +265,8 @@ function HeadStat({
 }): JSX.Element {
   return (
     <div>
-      <div className={`font-mono text-[18px] leading-none font-bold ${tone}`}>{value}</div>
-      <div className="mt-1 font-mono text-[10px] tracking-[0.06em] text-ink-dim uppercase">
+      <div className={`font-display text-[20px] leading-none font-semibold ${tone}`}>{value}</div>
+      <div className="mt-0.5 font-mono text-[9.5px] tracking-[0.06em] text-ink-faint uppercase">
         {label}
       </div>
     </div>
@@ -272,8 +275,11 @@ function HeadStat({
 
 function BackLink(): JSX.Element {
   return (
-    <Link to="/sessions" className="mb-2 block pt-0.5 text-[12px] text-ink-dim hover:text-ink">
-      ← Sessions
+    <Link
+      to="/sessions"
+      className="mb-2 block pt-0.5 font-mono text-[11px] text-ink-faint hover:text-ink"
+    >
+      ← sessions
     </Link>
   );
 }
@@ -293,7 +299,7 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`-mb-px border-b-2 px-3.5 py-2 text-[12.5px] font-medium transition-colors ${
+      className={`-mb-px min-h-11 border-b-2 px-3.5 py-[7px] text-[12.5px] font-medium transition-colors focus-visible:rounded-t-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
         active ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
       }`}
     >
