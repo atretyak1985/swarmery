@@ -322,8 +322,8 @@ func cmdServe(args []string) error {
 	// D4 hardening: loopback by default; --bind is the conscious override.
 	bind := fs.String("bind", "127.0.0.1", "listen address (default loopback; set explicitly to expose beyond this machine)")
 	noIngest := fs.Bool("no-ingest", false, "serve the API only, without the live ingest pipeline")
-	approvalTimeout := fs.Duration("approval-timeout", approvals.DefaultTimeout,
-		"how long a permission request stays pending before fail-open expiry")
+	approvalTimeout := fs.Duration("approval-timeout", envApprovalTimeout(),
+		"how long a permission request stays answerable from the dashboard before fail-open to the terminal prompt (env: SWARMERY_APPROVAL_TIMEOUT)")
 	answerDelivery := fs.String("answer-delivery", approvals.DeliveryUpdatedInput,
 		"AskUserQuestion dashboard-answer wire form: updated-input (hook updatedInput injection, spike-verified default) or deny-message (fallback: deny carrying the answers as the message)")
 	cfg := pipelineFlags(fs)
@@ -448,7 +448,24 @@ func cmdHook(args []string) int {
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
 		LogPath: logPath,
+		// Keep the shim's long-poll in sync with the daemon's approval window
+		// (both read SWARMERY_APPROVAL_TIMEOUT, else the shared baked default).
+		PollTimeout: envApprovalTimeout(),
 	})
+}
+
+// envApprovalTimeout resolves the approval window from SWARMERY_APPROVAL_TIMEOUT
+// (a Go duration, e.g. "10m"), falling back to the baked default. Read by both
+// the shim (poll wall clock) and serve (--approval-timeout default) so the two
+// never drift.
+func envApprovalTimeout() time.Duration {
+	if v := os.Getenv("SWARMERY_APPROVAL_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+		log.Printf("warn: ignoring invalid SWARMERY_APPROVAL_TIMEOUT=%q", v)
+	}
+	return approvals.DefaultTimeout
 }
 
 func envPort() int {
