@@ -41,16 +41,22 @@ type systemKind struct {
 	table    string // agents | skills
 	verTable string // agent_versions | skill_versions
 	fkCol    string // *_versions FK: agent_id | skill_id
-	eventFK  string // events attribution column: agent_id | skill_id
 	pathCol  string // file_path | dir_path
 	hasModel bool   // agents carry a model column
+	// Usage attribution: the ingester leaves events.agent_id / skill_id
+	// unpopulated (see system_history.go), so usage is folded by the component
+	// NAME pulled from the event payload and normalised via normAgentType.
+	usageType     string // event type carrying a run: subagent_start | skill_use
+	usageNameExpr string // SQL: extract the raw (possibly qualified) name
 }
 
 var (
 	agentKind = systemKind{kind: "agent", table: "agents", verTable: "agent_versions",
-		fkCol: "agent_id", eventFK: "agent_id", pathCol: "file_path", hasModel: true}
+		fkCol: "agent_id", pathCol: "file_path", hasModel: true,
+		usageType: "subagent_start", usageNameExpr: `json_extract(payload, '$.subagent_type')`}
 	skillKind = systemKind{kind: "skill", table: "skills", verTable: "skill_versions",
-		fkCol: "skill_id", eventFK: "skill_id", pathCol: "dir_path"}
+		fkCol: "skill_id", pathCol: "dir_path",
+		usageType: "skill_use", usageNameExpr: `json_extract(payload, '$.input.skill')`}
 )
 
 // ---- DTOs (mirrored in web/src/api/types.ts, "phase 4: system") -----------
@@ -84,11 +90,12 @@ type systemItemDTO struct {
 	// Worst ACTIVE lint finding severity (resolved_at IS NULL): error beats
 	// warn beats info; null = clean.
 	LintMax *string `json:"lintMax"`
-	// Active agent_dead finding (agents only; advisory — sparse events.agent_id).
+	// Active agent_dead finding (agents only; advisory).
 	Dead bool `json:"dead"`
-	// Usage metrics straight from events by agent_id (no heuristics):
-	// lastUsed = MAX(ts), tasks30d = COUNT(DISTINCT session_id) in 30 days.
-	// Agents never referenced by events (and all skills) serve null/0.
+	// Usage metrics folded by normalised component name (usageByName), since
+	// events carry no populated agent_id/skill_id: lastUsed = newest run,
+	// tasks30d = distinct sessions in the last 30 days. Never-run items serve
+	// null/0. Name-grain means same-named rows across projects share totals.
 	LastUsed *string `json:"lastUsed"`
 	Tasks30d int64   `json:"tasks30d"`
 }
@@ -238,8 +245,10 @@ func (h *Handler) listSystemSkills(w http.ResponseWriter, r *http.Request) {
 }
 
 // systemItemSelect builds the shared agents/skills projection: entity columns
-// plus worst-active-lint / dead flags and (agents) usage metrics, each in ONE
-// aggregate JOIN — never per-row subqueries (no N+1; pattern: sessionSelect).
+// plus the worst-active-lint / dead flags in ONE aggregate JOIN — never per-row
+// subqueries (no N+1; pattern: sessionSelect). Usage metrics (lastUsed /
+// tasks30d) are NOT joined here: events carry no populated agent_id/skill_id, so
+// they are folded by normalised name in Go and overlaid post-query (usageByName).
 func systemItemSelect(k systemKind) string {
 	model := `NULL`
 	if k.hasModel {
@@ -247,8 +256,7 @@ func systemItemSelect(k systemKind) string {
 	}
 	return `
 		SELECT t.id, t.name, t.scope, p.slug, t.origin, t.plugin_name, ` + model + `,
-		       t.description, t.` + k.pathCol + `, lf.sev, COALESCE(lf.dead, 0),
-		       u.last_used, u.tasks_30d
+		       t.description, t.` + k.pathCol + `, lf.sev, COALESCE(lf.dead, 0)
 		FROM ` + k.table + ` t
 		LEFT JOIN projects p ON p.id = t.project_id
 		LEFT JOIN (
@@ -256,12 +264,69 @@ func systemItemSelect(k systemKind) string {
 			       MAX(CASE severity WHEN 'error' THEN 3 WHEN 'warn' THEN 2 ELSE 1 END) AS sev,
 			       MAX(CASE WHEN rule = 'agent_dead' THEN 1 ELSE 0 END) AS dead
 			FROM config_lint_findings WHERE resolved_at IS NULL GROUP BY target
-		) lf ON lf.target = '` + k.kind + `:' || t.id
-		LEFT JOIN (
-			SELECT ` + k.eventFK + ` AS item_id, MAX(ts) AS last_used,
-			       COUNT(DISTINCT CASE WHEN ts >= ? THEN session_id END) AS tasks_30d
-			FROM events WHERE ` + k.eventFK + ` IS NOT NULL GROUP BY ` + k.eventFK + `
-		) u ON u.item_id = t.id`
+		) lf ON lf.target = '` + k.kind + `:' || t.id`
+}
+
+// nameUsage is the folded per-normalised-name usage overlay.
+type nameUsage struct {
+	lastUsed string
+	tasks30d int64
+}
+
+// usageByName folds run events into per-normalised-name usage, mirroring the
+// name-grain attribution of the agent-history endpoint. events.<fk> is never
+// populated by the ingester (see system_history.go), so usage is keyed off the
+// component NAME in the event payload, normalised via normAgentType — folding
+// every notation ("core:x", "x") of one component together. tasks30d counts
+// distinct sessions within the window; lastUsed is the newest run overall.
+func (h *Handler) usageByName(k systemKind, cutoff string) (map[string]nameUsage, error) {
+	if k.usageType == "" {
+		return map[string]nameUsage{}, nil
+	}
+	rows, err := h.DB.Query(
+		`SELECT `+k.usageNameExpr+` AS n, ts, session_id
+		   FROM events
+		  WHERE type = ? AND `+k.usageNameExpr+` IS NOT NULL`, k.usageType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type agg struct {
+		lastUsed string
+		sessions map[int64]struct{}
+	}
+	acc := map[string]*agg{}
+	for rows.Next() {
+		var name, ts sql.NullString
+		var sessID sql.NullInt64
+		if err := rows.Scan(&name, &ts, &sessID); err != nil {
+			return nil, err
+		}
+		key := normAgentType(name.String)
+		if key == "" {
+			continue
+		}
+		a := acc[key]
+		if a == nil {
+			a = &agg{sessions: map[int64]struct{}{}}
+			acc[key] = a
+		}
+		if ts.Valid && ts.String > a.lastUsed {
+			a.lastUsed = ts.String
+		}
+		if sessID.Valid && ts.Valid && ts.String >= cutoff {
+			a.sessions[sessID.Int64] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]nameUsage, len(acc))
+	for key, a := range acc {
+		out[key] = nameUsage{lastUsed: a.lastUsed, tasks30d: int64(len(a.sessions))}
+	}
+	return out, nil
 }
 
 // severityName maps the numeric lint rank back to its wire word.
@@ -282,7 +347,7 @@ func usageCutoff() string {
 
 func (h *Handler) listSystemItems(w http.ResponseWriter, r *http.Request, k systemKind) {
 	query := systemItemSelect(k) + ` WHERE t.deleted = 0`
-	args := []any{usageCutoff()}
+	args := []any{}
 	query, args = systemFilters(query, args, r)
 	query += ` ORDER BY t.name, t.scope, t.id`
 
@@ -296,13 +361,11 @@ func (h *Handler) listSystemItems(w http.ResponseWriter, r *http.Request, k syst
 	items := []systemItemDTO{}
 	for rows.Next() {
 		var it systemItemDTO
-		var tasks30d sql.NullInt64
-		var lastUsed sql.NullString
 		var sev sql.NullInt64
 		var dead int64
 		if err := rows.Scan(&it.ID, &it.Name, &it.Scope, &it.ProjectSlug, &it.Origin,
 			&it.PluginName, &it.Model, &it.Description, &it.Path,
-			&sev, &dead, &lastUsed, &tasks30d); err != nil {
+			&sev, &dead); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -311,13 +374,28 @@ func (h *Handler) listSystemItems(w http.ResponseWriter, r *http.Request, k syst
 			it.LintMax = &name
 		}
 		it.Dead = dead != 0
-		if lastUsed.Valid {
-			it.LastUsed = &lastUsed.String
-		}
-		it.Tasks30d = tasks30d.Int64
 		items = append(items, it)
 	}
-	writeJSON(w, items, rows.Err())
+	if err := rows.Err(); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	usage, err := h.usageByName(k, usageCutoff())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	for i := range items {
+		if u, ok := usage[normAgentType(items[i].Name)]; ok {
+			if u.lastUsed != "" {
+				lu := u.lastUsed
+				items[i].LastUsed = &lu
+			}
+			items[i].Tasks30d = u.tasks30d
+		}
+	}
+	writeJSON(w, items, nil)
 }
 
 // systemFilters appends the shared ?scope=&project= WHERE clauses.
@@ -356,15 +434,12 @@ func (h *Handler) getSystemItem(w http.ResponseWriter, r *http.Request, k system
 	var d systemItemDetailDTO
 	var deleted int64
 	sel := systemItemSelectDetail(k)
-	args := []any{usageCutoff(), id}
 
-	var tasks30d sql.NullInt64
-	var lastUsed sql.NullString
 	var sev sql.NullInt64
 	var dead int64
-	err := h.DB.QueryRow(sel, args...).Scan(
+	err := h.DB.QueryRow(sel, id).Scan(
 		&d.ID, &d.Name, &d.Scope, &d.ProjectSlug, &d.Origin, &d.PluginName,
-		&d.Model, &d.Description, &d.Path, &sev, &dead, &lastUsed, &tasks30d,
+		&d.Model, &d.Description, &d.Path, &sev, &dead,
 		&deleted, &d.CurrentVersionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, `{"error":"`+k.kind+` not found"}`, http.StatusNotFound)
@@ -379,11 +454,20 @@ func (h *Handler) getSystemItem(w http.ResponseWriter, r *http.Request, k system
 		d.LintMax = &name
 	}
 	d.Dead = dead != 0
-	if lastUsed.Valid {
-		d.LastUsed = &lastUsed.String
-	}
-	d.Tasks30d = tasks30d.Int64
 	d.Deleted = deleted != 0
+
+	usage, err := h.usageByName(k, usageCutoff())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if u, ok := usage[normAgentType(d.Name)]; ok {
+		if u.lastUsed != "" {
+			lu := u.lastUsed
+			d.LastUsed = &lu
+		}
+		d.Tasks30d = u.tasks30d
+	}
 
 	// Current content → redacted frontmatter/body split.
 	if d.CurrentVersionID != nil {

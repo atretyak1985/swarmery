@@ -123,14 +123,19 @@ proj body
 	      ('agent:1', 'agent_oversized', 'warn', 'was too big', '2026-07-01T00:00:00Z', '2026-07-05T00:00:00Z'),
 	      ('agent:2', 'agent_dead', 'info', '0 mentions in 30 days', '2026-07-10T00:00:00Z', NULL)`)
 
-	// Usage: agent 1 — 2 distinct sessions inside 30d + 1 outside the
-	// window (counts for last_used ordering, not for tasks_30d); the skill
-	// gets one skill_use event (metrics mirror via events.skill_id).
-	exec(`INSERT INTO events (session_id, ts, type, agent_id) VALUES
-	      (1, ?, 'subagent_start', 1),
-	      (2, ?, 'subagent_start', 1),
-	      (1, ?, 'subagent_start', 1)`, sysTS(1), sysTS(2), sysTS(40))
-	exec(`INSERT INTO events (session_id, ts, type, skill_id) VALUES (3, ?, 'skill_use', 1)`, sysTS(3))
+	// Usage: agent "reviewer" — 2 distinct sessions inside 30d + 1 outside the
+	// window (counts for lastUsed ordering, not tasks30d). events.agent_id is
+	// unpopulated in production, so usage is attributed by the payload's
+	// subagent_type name (usageByName); the out-of-window event uses the
+	// plugin-qualified notation to prove name-grain folding. The skill gets one
+	// skill_use event, attributed by payload.input.skill.
+	exec(`INSERT INTO events (session_id, ts, type, payload) VALUES
+	      (1, ?, 'subagent_start', json_object('subagent_type', 'reviewer')),
+	      (2, ?, 'subagent_start', json_object('subagent_type', 'reviewer')),
+	      (1, ?, 'subagent_start', json_object('subagent_type', 'core:reviewer'))`,
+		sysTS(1), sysTS(2), sysTS(40))
+	exec(`INSERT INTO events (session_id, ts, type, payload) VALUES
+	      (3, ?, 'skill_use', json_object('input', json_object('skill', 'deploy-helper')))`, sysTS(3))
 
 	// Overlays on disk: a valid one, a broken one, plus the schema file.
 	overlays := t.TempDir()
@@ -245,7 +250,7 @@ func TestSystemSkillsList(t *testing.T) {
 		t.Errorf("skill = %v", sk)
 	}
 	if sk["tasks30d"].(float64) != 1 || sk["lastUsed"] == nil {
-		t.Errorf("skill usage = %v/%v, want 1 task + lastUsed (events.skill_id mirror)",
+		t.Errorf("skill usage = %v/%v, want 1 task + lastUsed (folded by payload.input.skill)",
 			sk["tasks30d"], sk["lastUsed"])
 	}
 }
