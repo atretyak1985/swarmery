@@ -7,6 +7,7 @@
 // full 409/403/422 error contract — see the demo-trigger table below.
 
 import type {
+  AgentHistory,
   SystemCommand,
   SystemCreateAgentRequest,
   SystemCreateResponse,
@@ -757,6 +758,31 @@ export const mockSystemApi = {
     const item = itemsOf(kind).find((i) => i.id === id);
     if (!item) throw new Error(`mock: system ${kind} ${String(id)} not found`);
     return detailFor(kind, item);
+  },
+
+  async agentHistory(id: number, days = 90): Promise<AgentHistory> {
+    await delay(140);
+    const item = itemsOf('agents').find((i) => i.id === id);
+    const name = item?.name ?? 'agent';
+    return {
+      agentName: name,
+      windowDays: days,
+      totals: { runs: 12, sessions: 9, projects: 2, okRuns: 11, errorRuns: 1, errorRate: 1 / 12 },
+      duration: { avgMs: 184000, p50Ms: 150000, p95Ms: 420000, totalMs: 2208000 },
+      byProject: [
+        { slug: 'alpha', name: 'Alpha', runs: 8, avgMs: 165000, errorRate: 0, lastUsed: iso(DAY) },
+        { slug: 'beta', name: 'Beta', runs: 4, avgMs: 220000, errorRate: 0.25, lastUsed: iso(4 * DAY) },
+      ],
+      byDay: [
+        { day: '2026-07-10', runs: 3 },
+        { day: '2026-07-11', runs: 5 },
+        { day: '2026-07-12', runs: 4 },
+      ],
+      recentRuns: [
+        { ts: iso(DAY), projectSlug: 'alpha', sessionUuid: 'aaaa-1', sessionTitle: 'Refactor auth', description: 'Orchestrate refactor', status: 'ok', durationMs: 152000 },
+        { ts: iso(4 * DAY), projectSlug: 'beta', sessionUuid: 'bbbb-1', sessionTitle: 'Fix payments', description: 'Root-cause bug', status: 'error', durationMs: 421000 },
+      ],
+    };
   },
 
   async diff(kind: 'agents' | 'skills', id: number, from: number, to: number): Promise<SystemDiff> {

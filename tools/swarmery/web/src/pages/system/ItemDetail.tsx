@@ -10,7 +10,9 @@
 // preview, soft delete/restore (agents), and plugin/readonly guards.
 
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type {
+  AgentHistory,
   SystemConflict,
   SystemDiff,
   SystemItemDetail,
@@ -20,6 +22,7 @@ import type {
 import {
   currentContentHash,
   deleteSystemAgent,
+  fetchAgentHistory,
   fetchSystemDiff,
   fetchSystemItemDetail,
   putSystemItem,
@@ -28,7 +31,7 @@ import {
   SystemWriteError,
   type SystemItemsKind,
 } from '../../api/system';
-import { fmtAgo, fmtDateTime } from '../../lib/format';
+import { fmtAgo, fmtDateTime, fmtDurationMs, projectLabel } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { ConfirmDialog, ErrorBox, Loading, SectionTitle } from '../../components/ui';
 import { LINT_TONES, LintDot, OriginBadge, ScopeBadge } from './shared';
@@ -356,6 +359,173 @@ function Versions({
           <DiffBlock diff={diff.diff} />
         ))}
     </div>
+  );
+}
+
+/* ----- run history & statistics (agents only) -----
+   Runs are folded across every notation of the agent name (core:x + x) and
+   across all projects — see GET /api/system/agents/{id}/history. */
+
+const HISTORY_WINDOWS = [30, 90, 365] as const;
+
+function StatCard({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="rounded-lg border border-line bg-surface px-3 py-2">
+      <div className="font-mono text-[10px] uppercase tracking-wide text-ink-dim">{label}</div>
+      <div className="mt-0.5 text-[15px] font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
+
+/** Dependency-free activity bars — one column per day that had ≥1 run. */
+function DaySparkline({ days }: { days: AgentHistory['byDay'] }): JSX.Element | null {
+  if (days.length === 0) return null;
+  const max = Math.max(...days.map((d) => d.runs), 1);
+  return (
+    <div className="mt-3 flex items-end gap-0.5" style={{ height: 40 }} aria-hidden>
+      {days.map((d) => (
+        <div
+          key={d.day}
+          title={`${d.day}: ${String(d.runs)} run${d.runs === 1 ? '' : 's'}`}
+          className="min-w-[3px] flex-1 rounded-sm bg-brand/60"
+          style={{ height: `${String(Math.max(6, (d.runs / max) * 40))}px` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
+  const [hist, setHist] = useState<AgentHistory | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [days, setDays] = useState<number>(90);
+
+  useEffect(() => {
+    let live = true;
+    setHist(null);
+    setError(null);
+    fetchAgentHistory(agentId, days)
+      .then((h) => {
+        if (live) setHist(h);
+      })
+      .catch((e: unknown) => {
+        if (live) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [agentId, days]);
+
+  const windowPicker = (
+    <div className="flex gap-1 font-mono text-[11px]">
+      {HISTORY_WINDOWS.map((d) => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => setDays(d)}
+          className={`rounded px-2 py-0.5 transition-colors ${
+            days === d ? 'bg-brand/15 text-brand' : 'text-ink-dim hover:text-ink'
+          }`}
+        >
+          {d}d
+        </button>
+      ))}
+    </div>
+  );
+
+  let body: JSX.Element;
+  if (error !== null) {
+    body = <ErrorBox message={error} />;
+  } else if (hist === null) {
+    body = <Loading />;
+  } else if (hist.totals.runs === 0) {
+    body = (
+      <div className="text-[12px] text-ink-dim">no runs recorded in the last {String(days)} days</div>
+    );
+  } else {
+    const { totals, duration } = hist;
+    body = (
+      <>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatCard label="runs" value={String(totals.runs)} />
+          <StatCard label="error rate" value={`${(totals.errorRate * 100).toFixed(0)}%`} />
+          <StatCard label="avg" value={fmtDurationMs(duration.avgMs)} />
+          <StatCard label="p95" value={fmtDurationMs(duration.p95Ms)} />
+        </div>
+        <div className="mt-1 font-mono text-[10.5px] text-ink-dim">
+          {totals.okRuns} ok · {totals.errorRuns} error · {totals.sessions} sessions ·{' '}
+          {totals.projects} project{totals.projects === 1 ? '' : 's'}
+        </div>
+
+        <DaySparkline days={hist.byDay} />
+
+        <div className="mt-4 font-mono text-[10px] uppercase tracking-wide text-ink-dim">
+          by project
+        </div>
+        <div className="mt-1 overflow-hidden rounded-lg border border-line">
+          <table className="w-full text-[12px]">
+            <tbody>
+              {hist.byProject.map((p) => (
+                <tr key={p.slug} className="border-b border-line last:border-0">
+                  <td className="px-3 py-1.5 text-ink-2">{projectLabel(p.name, p.slug)}</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-ink-dim">{p.runs}×</td>
+                  <td className="px-2 py-1.5 text-right font-mono text-ink-dim">
+                    {fmtDurationMs(p.avgMs)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-mono text-ink-dim">
+                    {p.errorRate > 0 ? (
+                      <span className="text-red">{(p.errorRate * 100).toFixed(0)}% err</span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 font-mono text-[10px] uppercase tracking-wide text-ink-dim">
+          recent runs
+        </div>
+        <ul className="mt-1 space-y-1">
+          {hist.recentRuns.map((run, i) => (
+            <li key={`${run.sessionUuid}-${String(i)}`}>
+              <Link
+                to={`/sessions/${run.sessionUuid}`}
+                className="flex items-baseline gap-2 rounded-md px-2 py-1 text-[12px] transition-colors hover:bg-surface2"
+                title={run.description}
+              >
+                <span
+                  className={`mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                    run.status === 'error' ? 'bg-red' : 'bg-green'
+                  }`}
+                />
+                <span className="min-w-0 flex-1 truncate text-ink-2">
+                  {run.sessionTitle !== '' ? run.sessionTitle : run.description || run.projectSlug}
+                </span>
+                <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">
+                  {run.durationMs > 0 ? fmtDurationMs(run.durationMs) : '—'}
+                </span>
+                <span className="shrink-0 font-mono text-[10.5px] text-ink-dim">
+                  {fmtAgo(run.ts)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="mt-4 flex items-center justify-between">
+        <SectionTitle>History</SectionTitle>
+        {windowPicker}
+      </div>
+      {body}
+    </>
   );
 }
 
@@ -796,6 +966,8 @@ export function SystemItemPanel({
           </div>
         </>
       )}
+
+      {kind === 'agents' && <AgentHistoryPanel agentId={detail.id} />}
 
       <SectionTitle>Versions</SectionTitle>
       <Versions

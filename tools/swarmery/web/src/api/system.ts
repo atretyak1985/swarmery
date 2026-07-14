@@ -10,6 +10,7 @@
 // force-overwrite parameter exists in the API, intentionally.
 
 import type {
+  AgentHistory,
   SystemCommand,
   SystemConflict,
   SystemCreateAgentRequest,
@@ -71,6 +72,12 @@ export function fetchSystemItemDetail(
 ): Promise<SystemItemDetail> {
   if (MOCK) return mockSystemApi.itemDetail(kind, id);
   return get(`/api/system/${kind}/${String(id)}`);
+}
+
+/** Per-agent run history & statistics (folded by name, across all projects). */
+export function fetchAgentHistory(id: number, days = 90): Promise<AgentHistory> {
+  if (MOCK) return mockSystemApi.agentHistory(id, days);
+  return get(`/api/system/agents/${String(id)}/history?days=${String(days)}`);
 }
 
 /** Backend unified diff between two version row ids ("" = identical). */

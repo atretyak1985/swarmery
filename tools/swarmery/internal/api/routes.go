@@ -45,6 +45,7 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/system/summary", h.systemSummary)
 	mux.HandleFunc("GET /api/system/agents", h.listSystemAgents)
 	mux.HandleFunc("GET /api/system/agents/{id}", h.getSystemAgent)
+	mux.HandleFunc("GET /api/system/agents/{id}/history", h.getSystemAgentHistory)
 	mux.HandleFunc("GET /api/system/agents/{id}/versions/{v}", h.getSystemAgentVersion)
 	mux.HandleFunc("GET /api/system/agents/{id}/diff", h.diffSystemAgent)
 	mux.HandleFunc("GET /api/system/skills", h.listSystemSkills)

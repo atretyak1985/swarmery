@@ -420,6 +420,50 @@ export interface SystemDiff {
   diff: string;
 }
 
+/**
+ * Go: agentHistoryDTO — GET /api/system/agents/{id}/history?days=N.
+ * Runs are folded across every notation of the agent name (core:x + x) and
+ * across all projects; built-in agent types with no registry row are excluded.
+ */
+export interface AgentHistory {
+  agentName: string;
+  windowDays: number;
+  totals: {
+    runs: number;
+    sessions: number;
+    projects: number;
+    okRuns: number;
+    errorRuns: number;
+    /** 0..1 over runs with a known status. */
+    errorRate: number;
+  };
+  duration: { avgMs: number; p50Ms: number; p95Ms: number; totalMs: number };
+  byProject: AgentHistoryProject[];
+  /** Ascending by day; one entry per day that had ≥1 run. */
+  byDay: { day: string; runs: number }[];
+  /** Newest first, capped at 50. */
+  recentRuns: AgentHistoryRun[];
+}
+
+export interface AgentHistoryProject {
+  slug: string;
+  name: string;
+  runs: number;
+  avgMs: number;
+  errorRate: number;
+  lastUsed: string;
+}
+
+export interface AgentHistoryRun {
+  ts: string;
+  projectSlug: string;
+  sessionUuid: string;
+  sessionTitle: string;
+  description: string;
+  status: string;
+  durationMs: number;
+}
+
 /** Go: systemHookDTO — one row of GET /api/system/hooks?scope=&project=. */
 export interface SystemHook {
   id: number;
