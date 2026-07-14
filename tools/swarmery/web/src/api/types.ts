@@ -95,6 +95,11 @@ export interface Session {
   procState?: ProcState | null;
   /** OS PID of the claude process; null when not tracked or remote session. */
   procPid?: number | null;
+  /**
+   * One-line intent summarised from the first user turn's prose (additive
+   * optional): absent until the session has a user turn with text.
+   */
+  why?: string | null;
 }
 
 /** Go: turnDTO */
@@ -150,6 +155,11 @@ export interface SessionDetail extends Session {
   turns: Turn[];
   events: Event[];
   fileChanges: FileChange[];
+  /**
+   * Count of tool errors this session later cleared with a same-tool success
+   * (the "auto-recovered" header stat). Always present; 0 when none.
+   */
+  recovered: number;
 }
 
 // --- Endpoint response shapes ------------------------------------------------
@@ -173,6 +183,14 @@ export interface StatsToday {
   tokens_out: number;
   cost_usd: number | null;
   errors: number;
+  /**
+   * Test-run aggregates over the window (additive optional): absent when the
+   * window has NO test_run events, so the Quality tile degrades instead of
+   * showing a misleading zero.
+   */
+  tests_passed?: number | null;
+  tests_failed?: number | null;
+  tests_skipped?: number | null;
 }
 
 // --- Parity wave (design parity pass — frozen contract) ----------------------
@@ -227,6 +245,67 @@ export interface StatsOverview {
   errors_by_project: { slug: string; name: string | null; errors: number }[];
   cost_by_model: { model: string; cost_usd: number }[];
   projects: { slug: string; name: string | null; sessions: number }[];
+  /** Test-run aggregates over the day (additive optional); absent with no test signal. */
+  tests_passed?: number | null;
+  tests_failed?: number | null;
+  tests_skipped?: number | null;
+}
+
+// --- Analytics (GET /api/stats/{timeseries,breakdown,matrix}) ----------------
+
+/** $/tokens come from turns (project|model); runs come from events (agent|skill). */
+export type AnalyticsMetric = 'cost' | 'tokens' | 'runs';
+export type AnalyticsDimension = 'project' | 'model' | 'agent' | 'skill';
+
+/** One toggleable series of the main chart; `values` aligns to `buckets`. */
+export interface TimeseriesSeries {
+  key: string;
+  name: string;
+  total: number;
+  values: number[];
+}
+
+/** GET /api/stats/timeseries?from&to&metric&group */
+export interface TimeseriesResp {
+  from: string;
+  to: string;
+  metric: AnalyticsMetric;
+  group: AnalyticsDimension;
+  /** Daily buckets, ascending, zero-filled across the range. */
+  buckets: string[];
+  series: TimeseriesSeries[];
+  /** Always false in Phase 1 (no per-agent $); reserved for the Phase 2 badge. */
+  approx: boolean;
+}
+
+/**
+ * One ranked row of GET /api/stats/breakdown?by=…. project|model rows carry
+ * cost/tokens; agent|skill rows carry runs/last_used (cost/tokens null in
+ * Phase 1). Every consumer must treat the null fields as "not available".
+ */
+export interface BreakdownRow {
+  key: string;
+  name: string;
+  cost_usd: number | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  runs: number | null;
+  sessions: number;
+  last_used: string | null;
+}
+export type BreakdownResp = BreakdownRow[];
+
+/**
+ * GET /api/stats/matrix?rows=agent|skill&cols=project&metric=runs|cost — a
+ * cross-tab. metric=runs counts events; metric=cost (rows=agent only, phase 2)
+ * sums turn cost. Cells carry `runs` for the runs metric and `cost` for the
+ * cost metric.
+ */
+export interface MatrixResp {
+  metric: 'runs' | 'cost';
+  rows: { key: string; name: string }[];
+  cols: { key: string; name: string }[];
+  cells: { row: string; col: string; runs: number; cost?: number | null }[];
 }
 
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------

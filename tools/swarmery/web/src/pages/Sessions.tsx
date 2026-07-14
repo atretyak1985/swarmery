@@ -51,10 +51,10 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`shrink-0 rounded-full border px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap transition-colors ${
+      className={`shrink-0 rounded-full border px-[11px] py-1 font-mono text-[10.5px] whitespace-nowrap transition-colors ${
         selected
-          ? 'border-ink-dim bg-surface2 text-ink'
-          : 'border-line text-ink-dim hover:text-ink'
+          ? 'border-[#4a4e58] bg-surface2 text-ink'
+          : 'border-line-strong text-ink-dim hover:text-ink'
       }`}
     >
       {children}
@@ -64,7 +64,7 @@ function FilterChip({
 
 /* ----- project dropdown — headless "● all projects ▾" (screenshot 1) ----- */
 
-const ALL_PROJECTS_DOT = '#7c8da3'; // ink-dim — neutral "all projects" dot
+const ALL_PROJECTS_DOT = '#8b8f99'; // ink-dim — neutral "all projects" dot
 
 function Dot({ color }: { color: string }): JSX.Element {
   return (
@@ -147,11 +147,11 @@ function ProjectDropdown({
             focusOption(1);
           }
         }}
-        className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-line px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-ink-dim aria-expanded:bg-surface2 aria-expanded:text-ink"
+        className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-line-strong px-[11px] py-[5px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-[#4a4e58] aria-expanded:bg-surface2 aria-expanded:text-ink"
       >
         <Dot color={dot} />
         <span className="truncate">{label}</span>
-        <span aria-hidden="true" className="text-[8px]">
+        <span aria-hidden="true" className="text-[9px] text-ink-faint">
           ▾
         </span>
       </button>
@@ -166,7 +166,7 @@ function ProjectDropdown({
               focusOption(e.key === 'ArrowDown' ? 1 : -1);
             }
           }}
-          className="absolute top-full left-0 z-20 mt-1 min-w-[180px] overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl shadow-black/40"
+          className="absolute top-full left-0 z-20 mt-1.5 min-w-[210px] overflow-hidden rounded-[11px] border border-line-strong bg-field shadow-[0_16px_34px_rgba(0,0,0,0.5)]"
         >
           <DropdownOption
             selected={value === null}
@@ -206,8 +206,8 @@ function DropdownOption({
       role="option"
       aria-selected={selected}
       onClick={onSelect}
-      className={`flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-[11px] transition-colors hover:bg-surface2 ${
-        selected ? 'text-ink' : 'text-ink-dim'
+      className={`flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[11px] transition-colors hover:bg-surface2 ${
+        selected ? 'bg-surface2 text-ink' : 'text-ink-3'
       }`}
     >
       <Dot color={dot} />
@@ -329,18 +329,25 @@ export function Sessions(): JSX.Element {
   const groups = groupByDay(sorted);
 
   return (
-    <>
-      {/* Filters row (screenshot 1): search · project dropdown │ status chips.
+    <div className="px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px] desk:pb-28">
+      <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
+        Sessions
+      </h1>
+      <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
+        {sorted.length} match · newest first
+      </div>
+
+      {/* Filters row (Canvas §Sessions): search · project dropdown │ status chips.
           Wraps cleanly at 390px — the input takes the first line. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pt-1">
-        <div className="relative w-full desk:w-[240px]">
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <div className="relative w-full desk:w-[260px]">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="filter by title…"
             aria-label="filter sessions by title"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-[6px] pr-8 font-mono text-[12px] text-ink transition-colors outline-none placeholder:text-ink-dim focus:border-ink-dim"
+            className="w-full rounded-[9px] border border-line-strong bg-field px-3 py-[7px] pr-8 font-mono text-[12px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-ink-dim"
           />
           {search !== '' && (
             <button
@@ -355,7 +362,7 @@ export function Sessions(): JSX.Element {
         </div>
 
         <ProjectDropdown projects={projects} value={project} onChange={setProject} />
-        <span className="mx-1 w-px shrink-0 self-stretch bg-line" aria-hidden="true" />
+        <span className="mx-1 w-px shrink-0 self-stretch bg-line-strong" aria-hidden="true" />
         {STATUSES.map((s) => (
           <FilterChip
             key={s}
@@ -378,7 +385,7 @@ export function Sessions(): JSX.Element {
             </>
           ) : (
             <>
-              no sessions match — try clearing filters, or run{' '}
+              no sessions match — clear filters, or run{' '}
               <span className="font-mono text-ink">swarmery ingest &lt;file.jsonl&gt;</span>
             </>
           )}
@@ -386,16 +393,14 @@ export function Sessions(): JSX.Element {
       )}
       {groups.map((g) => (
         <section key={g.label}>
-          <GroupHeader>
-            {g.label} · {g.rows.length} {g.rows.length === 1 ? 'session' : 'sessions'}
-          </GroupHeader>
-          <div className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface">
+          <GroupHeader>{g.label}</GroupHeader>
+          <div className="divide-y divide-line-soft">
             {g.rows.map((s) => (
               <SessionCard key={s.id} session={s} now={nowById[s.id] ?? null} flat />
             ))}
           </div>
         </section>
       ))}
-    </>
+    </div>
   );
 }

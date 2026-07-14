@@ -7,7 +7,7 @@ import { Empty } from '../../components/ui';
 
 const CHANGE_TONES: Record<FileChangeType, string> = {
   create: 'text-green border-green/40',
-  edit: 'text-ink-dim border-line',
+  edit: 'text-ink-dim border-line-strong',
   delete: 'text-red border-red/40',
   rename: 'text-blue border-blue/40',
 };
@@ -15,16 +15,16 @@ const CHANGE_TONES: Record<FileChangeType, string> = {
 function DiffBlock({ diff }: { diff: string }): JSX.Element {
   const lines = diff.split('\n');
   return (
-    <div className="my-2 overflow-x-auto rounded-lg border border-line bg-bg py-2 font-mono text-[11px] leading-[1.6]">
+    <div className="overflow-x-auto py-2 font-mono text-[11px] leading-[1.6]">
       {lines.map((line, i) => {
-        let tone = 'text-ink/85';
+        let tone = 'text-ink/80';
         if (line.startsWith('@@')) tone = 'text-blue';
         else if (line.startsWith('+++') || line.startsWith('---')) tone = 'text-ink-dim';
         else if (line.startsWith('+')) tone = 'bg-green/10 text-green';
         else if (line.startsWith('-')) tone = 'bg-red/10 text-red';
         return (
           // eslint-disable-next-line react/no-array-index-key -- static diff text
-          <div key={i} className={`px-3 whitespace-pre ${tone}`}>
+          <div key={i} className={`px-3.5 whitespace-pre ${tone}`}>
             {line === '' ? ' ' : line}
           </div>
         );
@@ -67,7 +67,7 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
     return <Empty>no file changes in this session</Empty>;
   }
   return (
-    <div className="mt-2">
+    <div className="mt-[26px]">
       {groups.map((group) => {
         const first = group.changes[0];
         const outOfScope = group.changes.some((c) => c.outOfScope);
@@ -75,10 +75,10 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
           <div
             key={group.filePath}
             data-diff-path={group.filePath}
-            className="border-b border-line py-2 last:border-b-0"
+            className="mb-4 overflow-hidden rounded-[12px] border border-line"
           >
-            <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px]">
-              <span className="min-w-0 flex-1 truncate">{group.filePath}</span>
+            <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-3.5 py-2.5 font-mono text-[11.5px]">
+              <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{group.filePath}</span>
               {first !== undefined && (
                 <span
                   className={`rounded-full border px-2 py-px text-[10px] ${CHANGE_TONES[first.changeType]}`}
@@ -91,8 +91,8 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
                   out of scope
                 </span>
               )}
-              <span className="text-green">+{group.additions}</span>
-              <span className="text-red">−{group.deletions}</span>
+              <span className="text-[11px] text-green">+{group.additions}</span>
+              <span className="text-[11px] text-red">−{group.deletions}</span>
             </div>
             {group.changes.map((change) =>
               change.diff !== null ? (

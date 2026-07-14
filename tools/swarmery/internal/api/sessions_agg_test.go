@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -96,10 +97,11 @@ func TestSessionAggregates(t *testing.T) {
 	}
 }
 
-// TestSessionAggregatesOnFixture cross-checks the one-JOIN aggregates
-// against the per-turn rows of a real ingested transcript fixture.
+// TestSessionAggregatesOnFixture cross-checks the one-JOIN session total
+// against ALL of the session's turns (main + subagents, phase 2), and asserts
+// the Chat/transcript turns array deliberately excludes subagent turns.
 func TestSessionAggregatesOnFixture(t *testing.T) {
-	srv := testServer(t) // ingests testdata/fixtures/subagent-session.jsonl
+	srv, db := testServerWithDB(t) // ingests testdata/fixtures/subagent-session.jsonl
 
 	var sessions []sessionAgg
 	getJSON(t, srv.URL+"/api/sessions", &sessions)
@@ -107,40 +109,41 @@ func TestSessionAggregatesOnFixture(t *testing.T) {
 		t.Fatalf("sessions = %d, want 1", len(sessions))
 	}
 
-	var detail struct {
-		sessionAgg
-		Turns []struct {
-			TokensIn  *int64   `json:"tokensIn"`
-			TokensOut *int64   `json:"tokensOut"`
-			CostUSD   *float64 `json:"costUsd"`
-		} `json:"turns"`
-	}
-	getJSON(t, srv.URL+"/api/sessions/"+sessions[0].SessionUUID, &detail)
-
+	// Session total = SUM over EVERY turn (orchestrator + subagents).
 	var wantTokens int64
-	var wantCost float64
-	priced := false
-	for _, turn := range detail.Turns {
-		if turn.TokensIn != nil {
-			wantTokens += *turn.TokensIn
-		}
-		if turn.TokensOut != nil {
-			wantTokens += *turn.TokensOut
-		}
-		if turn.CostUSD != nil {
-			wantCost += *turn.CostUSD
-			priced = true
-		}
+	var wantCost sql.NullFloat64
+	var priced int
+	if err := db.QueryRow(`
+		SELECT COALESCE(SUM(COALESCE(tokens_in,0)+COALESCE(tokens_out,0)), 0),
+		       SUM(cost_usd), COUNT(cost_usd)
+		FROM turns WHERE session_id = ?`, sessions[0].ID).Scan(&wantTokens, &wantCost, &priced); err != nil {
+		t.Fatalf("sum turns: %v", err)
 	}
 
 	if sessions[0].Tokens == nil || *sessions[0].Tokens != wantTokens {
-		t.Errorf("fixture tokens = %v, want %d (sum over turns)", sessions[0].Tokens, wantTokens)
+		t.Errorf("fixture tokens = %v, want %d (sum over ALL turns)", sessions[0].Tokens, wantTokens)
 	}
-	if priced {
-		if sessions[0].CostUSD == nil || *sessions[0].CostUSD != wantCost {
-			t.Errorf("fixture costUsd = %v, want %v (sum over priced turns)", sessions[0].CostUSD, wantCost)
+	if priced > 0 {
+		if sessions[0].CostUSD == nil || *sessions[0].CostUSD != wantCost.Float64 {
+			t.Errorf("fixture costUsd = %v, want %v (sum over priced turns)", sessions[0].CostUSD, wantCost.Float64)
 		}
 	} else if sessions[0].CostUSD != nil {
 		t.Errorf("fixture costUsd = %v, want null (no priced turns)", *sessions[0].CostUSD)
+	}
+
+	// The Chat transcript excludes subagent turns: the detail turns array must
+	// match the count of orchestrator (agent_name IS NULL) turns, not all turns.
+	var detail struct {
+		Turns []struct{} `json:"turns"`
+	}
+	getJSON(t, srv.URL+"/api/sessions/"+sessions[0].SessionUUID, &detail)
+	var mainTurns, allTurns int
+	db.QueryRow(`SELECT COUNT(*) FROM turns WHERE session_id = ? AND agent_name IS NULL`, sessions[0].ID).Scan(&mainTurns)
+	db.QueryRow(`SELECT COUNT(*) FROM turns WHERE session_id = ?`, sessions[0].ID).Scan(&allTurns)
+	if len(detail.Turns) != mainTurns {
+		t.Errorf("detail turns = %d, want %d (orchestrator only)", len(detail.Turns), mainTurns)
+	}
+	if allTurns <= mainTurns {
+		t.Errorf("fixture has no subagent turns (all=%d main=%d) — test no longer exercises phase 2", allTurns, mainTurns)
 	}
 }

@@ -24,6 +24,12 @@ type statsTodayDTO struct {
 	TokensOut int64    `json:"tokens_out"`
 	CostUSD   *float64 `json:"cost_usd"`
 	Errors    int64    `json:"errors"`
+	// Test-run aggregates over the window (additive optional): null when the
+	// window has NO test_run events, so the client can degrade the "Quality"
+	// tile instead of showing a misleading zero.
+	TestsPassed  *int64 `json:"tests_passed,omitempty"`
+	TestsFailed  *int64 `json:"tests_failed,omitempty"`
+	TestsSkipped *int64 `json:"tests_skipped,omitempty"`
 }
 
 // dayBounds converts a LOCAL-midnight day start into UTC bounds compared
@@ -45,6 +51,23 @@ type windowAgg struct {
 	PricedTurns int64
 	UsageTurns  int64
 	Errors      int64
+	// Test-run aggregates (summed from test_run event payloads). TestRuns is
+	// the count of test_run events in the window — zero means "no test signal",
+	// which callers map to a null Quality tile rather than a zero.
+	TestRuns     int64
+	TestsPassed  int64
+	TestsFailed  int64
+	TestsSkipped int64
+}
+
+// tests returns the test aggregates as nullable pointers: all nil when the
+// window saw no test_run events (degrade signal), values otherwise.
+func (a windowAgg) tests() (passed, failed, skipped *int64) {
+	if a.TestRuns == 0 {
+		return nil, nil, nil
+	}
+	p, f, s := a.TestsPassed, a.TestsFailed, a.TestsSkipped
+	return &p, &f, &s
 }
 
 // windowAggregates computes the day-window aggregates shared by
@@ -110,6 +133,22 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 		JOIN sessions s ON s.id = e.session_id
 		JOIN projects p ON p.id = s.project_id
 		WHERE e.status = 'error' AND e.ts >= ? AND e.ts < ?`+projFilter, args...).Scan(&a.Errors)
+	if err != nil {
+		return a, err
+	}
+
+	// Test runs: sum passed/failed/skipped from test_run event payloads (emitted
+	// at ingest for recognised test-runner Bash calls). TestRuns==0 → no signal.
+	err = h.DB.QueryRow(`
+		SELECT COUNT(*),
+		       COALESCE(SUM(json_extract(e.payload, '$.passed')), 0),
+		       COALESCE(SUM(json_extract(e.payload, '$.failed')), 0),
+		       COALESCE(SUM(json_extract(e.payload, '$.skipped')), 0)
+		FROM events e
+		JOIN sessions s ON s.id = e.session_id
+		JOIN projects p ON p.id = s.project_id
+		WHERE e.type = 'test_run' AND e.ts >= ? AND e.ts < ?`+projFilter, args...).Scan(
+		&a.TestRuns, &a.TestsPassed, &a.TestsFailed, &a.TestsSkipped)
 	return a, err
 }
 
@@ -154,12 +193,16 @@ func (h *Handler) statsToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	passed, failed, skipped := agg.tests()
 	writeJSON(w, statsTodayDTO{
-		Sessions:  agg.Sessions,
-		Active:    active,
-		TokensIn:  agg.TokensIn,
-		TokensOut: agg.TokensOut,
-		CostUSD:   agg.CostUSD,
-		Errors:    agg.Errors,
+		Sessions:     agg.Sessions,
+		Active:       active,
+		TokensIn:     agg.TokensIn,
+		TokensOut:    agg.TokensOut,
+		CostUSD:      agg.CostUSD,
+		Errors:       agg.Errors,
+		TestsPassed:  passed,
+		TestsFailed:  failed,
+		TestsSkipped: skipped,
 	}, nil)
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,15 @@ import (
 )
 
 func testServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv, _ := testServerWithDB(t)
+	return srv
+}
+
+// testServerWithDB is testServer plus the underlying DB handle, for tests that
+// need to assert against storage directly (e.g. total-cost invariants that span
+// turns the API deliberately does not expose one-by-one).
+func testServerWithDB(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -28,7 +38,7 @@ func testServer(t *testing.T) *httptest.Server {
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, db
 }
 
 func getJSON(t *testing.T, url string, out any) {

@@ -20,8 +20,21 @@ import type {
   TaskSummary,
   Turn,
 } from '../api/types';
+import type {
+  AnalyticsDimension,
+  AnalyticsMetric,
+  BreakdownResp,
+  MatrixResp,
+  TimeseriesResp,
+} from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
 import { mockApprovalsList, mockResolveApproval } from './approvals';
+import { mockBreakdown, mockMatrix, mockTimeseries } from './analytics';
+
+interface AnalyticsRangeArg {
+  from?: string;
+  to?: string;
+}
 
 const now = Date.now();
 const iso = (msAgo: number): string => new Date(now - msAgo).toISOString();
@@ -211,6 +224,9 @@ export const mockStatsToday: StatsToday = {
   tokens_out: 860_000,
   cost_usd: 4.87,
   errors: 3,
+  tests_passed: 212,
+  tests_failed: 0,
+  tests_skipped: 0,
 };
 
 // --- /api/health --------------------------------------------------------------
@@ -313,6 +329,8 @@ export function mockStatsOverview(day: string): StatsOverview {
     errors_by_project: errorRows,
     cost_by_model: costRows,
     projects: projectRows,
+    // Test signal only for "today" so past days demo the degraded Quality tile.
+    ...(isToday ? { tests_passed: 212, tests_failed: 0, tests_skipped: 0 } : {}),
   };
 }
 
@@ -864,8 +882,18 @@ const s2Events: Event[] = (() => {
 
 // --- Simpler details for the remaining sessions ------------------------------
 
+/** Mirror of the backend heuristic: errors a later same-tool success cleared. */
+function recoveredOf(events: Event[]): number {
+  let n = 0;
+  events.forEach((e, i) => {
+    if (e.status !== 'error' || e.toolName === null) return;
+    if (events.slice(i + 1).some((o) => o.toolName === e.toolName && o.status === 'ok')) n += 1;
+  });
+  return n;
+}
+
 function simpleDetail(session: Session, events: Event[], turns: Turn[]): SessionDetail {
-  return { ...session, turns, events, fileChanges: [] };
+  return { ...session, turns, events, fileChanges: [], recovered: recoveredOf(events) };
 }
 
 function promptTurn(id: number, seq: number, ts: string, text: string | null): Turn {
@@ -890,11 +918,23 @@ function buildDetails(): Map<number, SessionDetail> {
   const details = new Map<number, SessionDetail>();
   const s1 = mockSessions[0];
   if (s1) {
-    details.set(1, { ...s1, turns: s1Turns, events: s1Events, fileChanges: s1FileChanges });
+    details.set(1, {
+      ...s1,
+      turns: s1Turns,
+      events: s1Events,
+      fileChanges: s1FileChanges,
+      recovered: recoveredOf(s1Events),
+    });
   }
   const s2 = mockSessions[1];
   if (s2) {
-    details.set(2, { ...s2, turns: s2Turns, events: s2Events, fileChanges: [] });
+    details.set(2, {
+      ...s2,
+      turns: s2Turns,
+      events: s2Events,
+      fileChanges: [],
+      recovered: recoveredOf(s2Events),
+    });
   }
   let eventId = 500;
   for (const session of mockSessions.slice(2)) {
@@ -1080,6 +1120,30 @@ export const mockApi = {
   async health(): Promise<HealthResponse> {
     await delay(60);
     return { ...mockHealth };
+  },
+
+  // analytics
+  async timeseries(
+    metric: AnalyticsMetric,
+    group: AnalyticsDimension,
+    range: AnalyticsRangeArg = {},
+  ): Promise<TimeseriesResp> {
+    await delay(140);
+    return mockTimeseries(metric, group, range);
+  },
+
+  async breakdown(by: AnalyticsDimension, range: AnalyticsRangeArg = {}): Promise<BreakdownResp> {
+    await delay(120);
+    return mockBreakdown(by, range);
+  },
+
+  async matrix(
+    rows: 'agent' | 'skill',
+    metric: 'runs' | 'cost' = 'runs',
+    range: AnalyticsRangeArg = {},
+  ): Promise<MatrixResp> {
+    await delay(120);
+    return mockMatrix(rows, metric, range);
   },
 
   async docs(): Promise<DocMeta[]> {

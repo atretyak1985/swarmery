@@ -52,6 +52,11 @@ type statsOverviewDTO struct {
 	ErrorsByProject []projectErrorsDTO   `json:"errors_by_project"`
 	CostByModel     []modelCostDTO       `json:"cost_by_model"`
 	Projects        []projectSessionsDTO `json:"projects"`
+	// Test-run aggregates over the day (additive optional): null when the day
+	// has no test_run events, mirroring stats/today's Quality-tile degradation.
+	TestsPassed  *int64 `json:"tests_passed,omitempty"`
+	TestsFailed  *int64 `json:"tests_failed,omitempty"`
+	TestsSkipped *int64 `json:"tests_skipped,omitempty"`
 }
 
 // GET /api/stats/overview?day=YYYY-MM-DD (local timezone; default today)
@@ -89,6 +94,7 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 		CostByModel:     []modelCostDTO{},
 		Projects:        []projectSessionsDTO{},
 	}
+	o.TestsPassed, o.TestsFailed, o.TestsSkipped = agg.tests()
 
 	// "active" is a now-property, meaningful only for the current day.
 	if dayStart.Equal(todayStart) {

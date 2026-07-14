@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // Handler bundles the API dependencies.
@@ -60,6 +61,9 @@ type sessionDTO struct {
 	// process liveness (migration 0009): proc_state and pid, null when untracked.
 	ProcState *string `json:"procState"`
 	ProcPID   *int64  `json:"procPid"`
+	// why: a one-line intent summary derived from the first user turn's prose
+	// (additive optional — absent until the session has a user turn with text).
+	Why *string `json:"why,omitempty"`
 }
 
 type turnDTO struct {
@@ -106,6 +110,10 @@ type sessionDetailDTO struct {
 	Turns       []turnDTO       `json:"turns"`
 	Events      []eventDTO      `json:"events"`
 	FileChanges []fileChangeDTO `json:"fileChanges"`
+	// recovered: count of tool errors in this session that a later same-tool
+	// success cleared — the "auto-recovered" count in the detail header.
+	// Always present (0 when nothing errored or nothing recovered).
+	Recovered int64 `json:"recovered"`
 }
 
 // GET /api/projects
@@ -143,10 +151,15 @@ const sessionSelect = `
 	       s.status, s.started_at, s.ended_at, s.title, s.source,
 	       agg.tokens, agg.cost_usd,
 	       tl.task_id, tl.external_id, tl.link_source, tl.confidence,
-	       s.proc_state, s.pid
+	       s.proc_state, s.pid,
+	       why.text
 	FROM sessions s
 	JOIN projects p ON p.id = s.project_id
 	LEFT JOIN (
+		-- Session totals are the TRUE cost: every turn including subagents
+		-- (phase 2). The Chat tab still shows the orchestrator turns only, but
+		-- the card's cost/tokens reflect the whole session — consistent with
+		-- the overview/today and analytics aggregates.
 		SELECT session_id,
 		       SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)) AS tokens,
 		       SUM(cost_usd) AS cost_usd
@@ -162,7 +175,14 @@ const sessionSelect = `
 		       ) AS rn
 		FROM task_sessions ts
 		JOIN tasks t ON t.id = ts.task_id
-	) tl ON tl.session_id = s.id AND tl.rn = 1`
+	) tl ON tl.session_id = s.id AND tl.rn = 1
+	LEFT JOIN (
+		-- "why": the first user turn's prose per session, in one window pass.
+		SELECT session_id, text,
+		       ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY seq) AS rn
+		FROM turns
+		WHERE role = 'user' AND text IS NOT NULL AND TRIM(text) != ''
+	) why ON why.session_id = s.id AND why.rn = 1`
 
 // GET /api/sessions?project=<slug|id>&status=<status>
 func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
@@ -217,10 +237,14 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.Turns = []turnDTO{}
+	// Chat/transcript is the ORCHESTRATOR conversation only: subagent turns
+	// (agent_name set, no prose — phase 2) exist for aggregate analytics and
+	// the session's total cost, but would render as empty rows here. Subagent
+	// activity is surfaced via the subagent_start/stop events in the timeline.
 	rows, err := h.DB.Query(`
 		SELECT id, seq, role, message_id, model, started_at, ended_at,
 		       tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, text
-		FROM turns WHERE session_id = ? ORDER BY seq`, d.ID)
+		FROM turns WHERE session_id = ? AND agent_name IS NULL ORDER BY seq`, d.ID)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -290,16 +314,70 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		d.FileChanges = append(d.FileChanges, fc)
 	}
 	rows.Close()
-	writeJSON(w, d, rows.Err())
+	if err := rows.Err(); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	// recovered: tool errors this session later cleared with a same-tool
+	// success (the "auto-recovered" header stat). A best-effort heuristic —
+	// each errored tool that has any later ok call on the same tool counts once.
+	if err := h.DB.QueryRow(`
+		SELECT COUNT(*) FROM events e
+		WHERE e.session_id = ? AND e.status = 'error' AND e.tool_name IS NOT NULL
+		  AND EXISTS (
+		      SELECT 1 FROM events e2
+		      WHERE e2.session_id = e.session_id AND e2.tool_name = e.tool_name
+		        AND e2.status = 'ok' AND (e2.ts > e.ts OR (e2.ts = e.ts AND e2.id > e.id))
+		  )`, d.ID).Scan(&d.Recovered); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	writeJSON(w, d, nil)
 }
 
 func scanSession(scan func(...any) error, s *sessionDTO) error {
-	return scan(&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
+	var whyRaw sql.NullString
+	if err := scan(&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
 		&s.Tokens, &s.CostUSD,
 		&s.TaskID, &s.TaskExternalID, &s.TaskLinkSource, &s.TaskConfidence,
-		&s.ProcState, &s.ProcPID)
+		&s.ProcState, &s.ProcPID,
+		&whyRaw); err != nil {
+		return err
+	}
+	if whyRaw.Valid {
+		if w := summarizeWhy(whyRaw.String); w != "" {
+			s.Why = &w
+		}
+	}
+	return nil
 }
+
+// summarizeWhy condenses a first user turn into a one-line intent: the first
+// non-empty line, inner whitespace collapsed, capped at whyMaxLen with an
+// ellipsis. Returns "" when nothing usable remains.
+func summarizeWhy(text string) string {
+	line := ""
+	for _, raw := range strings.Split(text, "\n") {
+		if t := strings.TrimSpace(raw); t != "" {
+			line = t
+			break
+		}
+	}
+	line = strings.Join(strings.Fields(line), " ")
+	if line == "" {
+		return ""
+	}
+	runes := []rune(line)
+	if len(runes) > whyMaxLen {
+		return strings.TrimSpace(string(runes[:whyMaxLen])) + "…"
+	}
+	return line
+}
+
+const whyMaxLen = 160
 
 func writeJSON(w http.ResponseWriter, v any, err error) {
 	if err != nil {

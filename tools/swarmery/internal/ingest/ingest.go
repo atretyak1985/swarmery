@@ -76,7 +76,7 @@ func File(db *sql.DB, path string) (Stats, error) {
 	if err := ing.upsertProjectAndSession(recs, fi.ModTime(), false); err != nil {
 		return stats, err
 	}
-	if err := ing.processRecords(recs, absPath, false, "", 0); err != nil {
+	if err := ing.processRecords(recs, absPath, false, "", 0, ""); err != nil {
 		return stats, err
 	}
 	if err := ing.recordOffset(absPath, consumed); err != nil {
@@ -152,6 +152,11 @@ type ingester struct {
 	// roundtrip (~0.1s) — the pipeline re-publishes them so live clients can
 	// replace their copies.
 	updatedEventIDs []int64
+
+	// agentName tags turns created in the CURRENT processRecords call: the
+	// subagent whose sidechain is being processed (analytics phase 2), or ""
+	// for the main orchestrator transcript. Set at the top of processRecords.
+	agentName string
 
 	// pending tool_use calls awaiting their tool_result (keyed by toolu_… id).
 	pending map[string]*pendingTool
@@ -361,7 +366,10 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 // processRecords walks records in file order. In sidechain mode no turns are
 // created and every produced event is parented to parentEventID (§7 mapping);
 // dedup keys are scoped by scope (sidechain agentId — uuid space restarts per file, C3).
-func (in *ingester) processRecords(recs []record, path string, sidechain bool, scope string, parentEventID int64) error {
+func (in *ingester) processRecords(recs []record, path string, sidechain bool, scope string, parentEventID int64, agentName string) error {
+	// Tag turns created in this call with their agent (phase 2). Main
+	// transcript passes "" (NULL agent_name = orchestrator).
+	in.agentName = agentName
 	if in.pending == nil {
 		in.pending = map[string]*pendingTool{}
 		in.subagentStarts = map[string]int64{}
@@ -457,39 +465,42 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 				in.stats.SkippedLines++
 				continue
 			}
-			if !sidechain {
-				if m.ID != curMsgID {
-					// New API message → new assistant turn; usage counted ONCE (C1).
-					turnID, created, err := in.upsertTurn(seq, "assistant", m.ID, m.Model, r.Timestamp, m.Usage)
-					if err != nil {
-						return err
-					}
-					if created {
-						seq++
-						// metrics hook (wave C): price the turn from its usage +
-						// per-message model — the single cost integration point.
-						if u := m.Usage; u != nil {
-							if c := cost.EnrichTurn(cost.Turn{
-								Model:            m.Model,
-								TokensIn:         &u.InputTokens,
-								TokensOut:        &u.OutputTokens,
-								TokensCacheRead:  &u.CacheReadInputTokens,
-								TokensCacheWrite: &u.CacheCreationInputTokens,
-							}); c != nil {
-								if _, err := in.tx.Exec(
-									`UPDATE turns SET cost_usd = ? WHERE id = ?`, *c, turnID); err != nil {
-									return err
-								}
+			// Assistant turns are recorded for BOTH the main transcript and
+			// subagent sidechains (phase 2): in.agentName (set by
+			// processRecords) tags sidechain turns; usage is priced the same
+			// way regardless. Only turn PROSE (addTurnText below) stays
+			// main-only.
+			if m.ID != curMsgID {
+				// New API message → new assistant turn; usage counted ONCE (C1).
+				turnID, created, err := in.upsertTurn(seq, "assistant", m.ID, m.Model, r.Timestamp, m.Usage)
+				if err != nil {
+					return err
+				}
+				if created {
+					seq++
+					// metrics hook (wave C): price the turn from its usage +
+					// per-message model — the single cost integration point.
+					if u := m.Usage; u != nil {
+						if c := cost.EnrichTurn(cost.Turn{
+							Model:            m.Model,
+							TokensIn:         &u.InputTokens,
+							TokensOut:        &u.OutputTokens,
+							TokensCacheRead:  &u.CacheReadInputTokens,
+							TokensCacheWrite: &u.CacheCreationInputTokens,
+						}); c != nil {
+							if _, err := in.tx.Exec(
+								`UPDATE turns SET cost_usd = ? WHERE id = ?`, *c, turnID); err != nil {
+								return err
 							}
 						}
 					}
-					curTurnID, curMsgID = turnID, m.ID
-				} else if curTurnID != 0 {
-					// Later split line of the same message → extend the turn.
-					if _, err := in.tx.Exec(
-						`UPDATE turns SET ended_at = ? WHERE id = ?`, r.Timestamp, curTurnID); err != nil {
-						return err
-					}
+				}
+				curTurnID, curMsgID = turnID, m.ID
+			} else if curTurnID != 0 {
+				// Later split line of the same message → extend the turn.
+				if _, err := in.tx.Exec(
+					`UPDATE turns SET ended_at = ? WHERE id = ?`, r.Timestamp, curTurnID); err != nil {
+					return err
 				}
 			}
 			var blocks []contentBlock
@@ -750,6 +761,28 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 			return err
 		}
 	}
+
+	// Bash test-runner calls also emit a test_run event with parsed counts
+	// (the only source of the "Quality" aggregate). Best-effort — counts are 0
+	// when the runner's summary line can't be parsed; the run's ok/error status
+	// mirrors the Bash exit.
+	if p.name == "Bash" {
+		if cmd, _ := p.input["command"].(string); isTestCommand(cmd) {
+			passed, failed, skipped, parsed := parseTestCounts(testResultText(r.ToolUseResult))
+			if _, _, err := in.insertEvent(eventRow{
+				ts: r.Timestamp, typ: "test_run", toolName: "Bash",
+				parentEventID: p.eventID, status: status, durationMs: durationMs,
+				payload: map[string]any{
+					"framework": testFramework(cmd),
+					"passed":    passed, "failed": failed, "skipped": skipped,
+					"parsed": parsed, "command": truncate(cmd, 200),
+				},
+				dedup: dedup + "#testrun#" + b.ToolUseID,
+			}); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -829,6 +862,23 @@ func (in *ingester) insertFileChange(p *pendingTool, rawResult json.RawMessage) 
 
 // ── sidechains ───────────────────────────────────────────────────────────────
 
+// agentNameFor resolves the agent that owns a sidechain's turns (phase 2): the
+// parent subagent_start's subagent_type — the SAME value analytics folds run
+// counts by, so $ and counts share a key — falling back to the meta.json
+// agentType. Returns "" when neither is available; the turns are still
+// recorded, just left unattributed.
+func (in *ingester) agentNameFor(parentEventID int64, fallback string) string {
+	if parentEventID != 0 {
+		var s sql.NullString
+		if err := in.tx.QueryRow(
+			`SELECT json_extract(payload, '$.subagent_type') FROM events WHERE id = ?`,
+			parentEventID).Scan(&s); err == nil && s.Valid && s.String != "" {
+			return s.String
+		}
+	}
+	return fallback
+}
+
 func (in *ingester) ingestSidechain(path string) error {
 	metaPath := strings.TrimSuffix(path, ".jsonl") + ".meta.json"
 	var meta sidechainMeta
@@ -856,7 +906,7 @@ func (in *ingester) ingestSidechain(path string) error {
 	if scope == "" {
 		scope = filepath.Base(path)
 	}
-	if err := in.processRecords(recs, path, true, scope, parentID); err != nil {
+	if err := in.processRecords(recs, path, true, scope, parentID, in.agentNameFor(parentID, meta.AgentType)); err != nil {
 		return err
 	}
 	if parentID != 0 {
@@ -986,9 +1036,9 @@ func (in *ingester) upsertTurn(seq int, role, messageID, model, ts string, u *us
 	}
 	res, err := in.tx.Exec(
 		`INSERT INTO turns (session_id, seq, role, message_id, model, started_at, ended_at,
-		                    tokens_in, tokens_out, tokens_cache_read, tokens_cache_write)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.sessionID, seq, role, nullStr(messageID), nullStr(model), ts, ts, tin, tout, tcr, tcw)
+		                    tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, agent_name)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.sessionID, seq, role, nullStr(messageID), nullStr(model), ts, ts, tin, tout, tcr, tcw, nullStr(in.agentName))
 	if err != nil {
 		return 0, false, fmt.Errorf("insert turn seq=%d: %w", seq, err)
 	}

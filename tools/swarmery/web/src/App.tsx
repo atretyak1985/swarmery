@@ -1,37 +1,43 @@
-// App shell (Redesign frame): a full-width top header bar — SW◆RMERY wordmark
-// at the far left (over the sidebar column), "● control plane · :<port>" at
-// the right, border-b spanning the full width — with the sidebar starting
-// BELOW the header and <main> as the app's scroll container (so the session
-// detail can pin its header and scroll only the tab panel). Mobile keeps the
-// bottom nav. The Docs nav item appears only when /api/docs has entries; the
-// desktop Sessions item carries a today-count badge (/api/stats/overview);
-// the Approvals item carries a LIVE amber pending-count badge (REST resync +
-// WS permission_requested/permission_resolved over the shared connection).
+// App shell: a full-width top header (SW◆RMERY wordmark at left, a mono
+// breadcrumb for the current screen, and a live control-plane/daemon status at
+// right) with a bottom border. Below it, a static labelled sidebar (248px,
+// desktop only) carries the glyph nav items and a live daemon-health footer;
+// <main> owns the scroll. Mobile drops the sidebar for a fixed bottom nav.
+//
+// The Docs nav item appears only when /api/docs has entries; the Sessions item
+// carries a today-count badge (/api/stats/overview); the Approvals item carries
+// a LIVE amber pending-count badge (REST resync + WS permission_requested/
+// permission_resolved over the shared connection).
 
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { WSMessage } from './api/types';
 import { fetchApprovals, fetchDocs, fetchStatsOverview, MOCK } from './api';
 import { isoDay } from './lib/format';
+import { useHealth, shortVersion } from './lib/health';
 import { useLiveUpdates } from './lib/ws';
-import { HealthFooter } from './components/HealthFooter';
 
 interface NavItem {
   to: string;
-  icon: string;
+  glyph: string;
   label: string;
-  /** Right-aligned desktop count badge. */
+  /** Count badge (approvals pending, sessions today). */
   badge?: string;
-  badgeClass?: string;
-  /** Amber attention dot on the mobile icon (pending approvals). */
+  /** Amber attention styling on the badge (pending approvals). */
   alert?: boolean;
 }
 
-const DOCS_NAV: NavItem = { to: '/docs', icon: '❐', label: 'Docs' };
+const DOCS_NAV: NavItem = { to: '/docs', glyph: '❐', label: 'Docs' };
 
-/** The dashboard's own port for the header line (":7777" default). */
-function portLabel(): string {
-  return window.location.port !== '' ? window.location.port : '7777';
+/** Current route → mono breadcrumb (Canvas crumbMap). */
+function crumbFor(pathname: string): string {
+  if (pathname === '/') return 'control plane';
+  if (pathname.startsWith('/sessions/')) return 'session';
+  if (pathname.startsWith('/sessions')) return 'sessions';
+  if (pathname.startsWith('/approvals')) return 'approvals';
+  if (pathname.startsWith('/system')) return 'system';
+  if (pathname.startsWith('/docs')) return 'docs';
+  return '';
 }
 
 export function App(): JSX.Element {
@@ -40,6 +46,8 @@ export function App(): JSX.Element {
   // Pending approvals as a SET of ids: WS +/- stays idempotent when the same
   // permission_resolved arrives twice (own action + fan-out) or after resync.
   const [pendingIds, setPendingIds] = useState<ReadonlySet<number>>(new Set());
+  const { health, unreachable } = useHealth();
+  const crumb = crumbFor(useLocation().pathname);
 
   useEffect(() => {
     fetchDocs()
@@ -81,90 +89,122 @@ export function App(): JSX.Element {
 
   const pendingCount = pendingIds.size;
   const items: NavItem[] = [
-    { to: '/', icon: '◉', label: 'Overview' },
+    { to: '/', glyph: '◉', label: 'Command deck' },
+    { to: '/sessions', glyph: '❯', label: 'Sessions', ...badgeFor(sessionsToday) },
+    { to: '/analytics', glyph: '▦', label: 'Analytics' },
     {
       to: '/approvals',
-      icon: '⧗',
+      glyph: '⧗',
       label: 'Approvals',
-      ...(pendingCount > 0
-        ? { badge: String(pendingCount), badgeClass: 'bg-amber/15 text-amber', alert: true }
-        : {}),
+      ...(pendingCount > 0 ? { badge: String(pendingCount), alert: true } : {}),
     },
-    {
-      to: '/sessions',
-      icon: '☰',
-      label: 'Sessions',
-      ...(sessionsToday !== null && sessionsToday > 0
-        ? { badge: String(sessionsToday), badgeClass: 'bg-surface2 text-ink-dim' }
-        : {}),
-    },
-    // System registry (phase 4): the /api/system endpoints ship with the
-    // daemon, so the item is always present (empty states live on the page).
-    { to: '/system', icon: '⚙', label: 'System' },
+    { to: '/system', glyph: '⚙', label: 'System' },
     ...(hasDocs ? [DOCS_NAV] : []),
   ];
 
+  const daemonOk = !unreachable;
+
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="z-20 flex h-12 shrink-0 items-center gap-2.5 border-b border-line bg-bg px-4 desk:px-5">
-        <span className="font-display text-[17px] leading-none font-bold tracking-[0.06em]">
-          SW<em className="text-brand not-italic">◆</em>RMERY
+    <div className="app-shell flex h-dvh flex-col">
+      {/* Full-width top header: wordmark left, breadcrumb, live status right. */}
+      <header className="header-hairline z-20 flex h-14 shrink-0 items-center gap-4 bg-bg px-4 desk:px-6">
+        <span className="font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase">
+          SW<span className="text-brand">◆</span>RMERY
         </span>
-        <span className="ml-auto flex items-center gap-1.5 font-mono text-[11px] text-ink-dim">
+        {crumb !== '' && (
+          <span className="hidden font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase sm:inline">
+            {crumb}
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim">
           {MOCK ? (
             <>
               <span className="inline-block h-[7px] w-[7px] rounded-full bg-amber" />
-              {`mock data · :${portLabel()}`}
+              mock data
             </>
           ) : (
             <>
-              <span className="inline-block h-[7px] w-[7px] animate-pulse-dot rounded-full bg-green" />
-              {`control plane · :${portLabel()}`}
+              <span
+                className={`inline-block h-[7px] w-[7px] rounded-full ${daemonOk ? 'animate-pulse-dot bg-green' : 'bg-red'}`}
+              />
+              {daemonOk ? 'daemon healthy' : 'daemon unreachable'}
+              {health !== null ? ` · ${shortVersion(health.version)}` : ''}
             </>
           )}
         </span>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-bg/95 px-1 pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] backdrop-blur-md desk:static desk:inset-auto desk:z-auto desk:w-[210px] desk:shrink-0 desk:flex-col desk:justify-start desk:gap-1 desk:overflow-y-auto desk:border-t-0 desk:border-r desk:bg-bg desk:px-3 desk:py-4 desk:backdrop-blur-none">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-[3px] rounded-lg px-2.5 py-1 text-[10.5px] transition-colors desk:w-full desk:flex-row desk:justify-start desk:gap-2.5 desk:px-3 desk:py-2 desk:text-[13px] ${
-                  isActive ? 'font-medium text-brand desk:bg-surface2' : 'text-ink-dim hover:text-ink'
-                }`
-              }
-            >
-              <span className="relative text-[17px] leading-none" aria-hidden="true">
-                {item.icon}
-                {item.alert === true && (
-                  <span className="absolute -top-0.5 -right-1.5 h-[6px] w-[6px] rounded-full bg-amber desk:hidden" />
-                )}
-              </span>
-              {item.label}
-              {item.badge !== undefined && (
+        {/* Desktop sidebar — static labelled panel (248px), no collapse. */}
+        <nav className="hidden w-[248px] shrink-0 flex-col gap-0.5 border-r border-line px-3 py-4 desk:flex">
+          <div className="flex flex-col gap-0.5">
+            {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  `flex h-[38px] items-center gap-3 rounded-[10px] border px-3 transition-colors ${
+                    isActive
+                      ? 'border-line-strong bg-surface2 text-brand'
+                      : 'border-transparent text-ink-dim hover:bg-surface2/50 hover:text-ink'
+                  }`
+                }
+              >
                 <span
-                  className={`ml-auto hidden min-w-[18px] rounded-full px-1.5 py-px text-center font-mono text-[10px] leading-[14px] desk:block ${item.badgeClass ?? 'bg-surface2 text-ink-dim'}`}
+                  className="w-[16px] shrink-0 text-center text-[16px] leading-none"
+                  aria-hidden="true"
                 >
-                  {item.badge}
+                  {item.glyph}
                 </span>
-              )}
-            </NavLink>
-          ))}
-          <span className="hidden desk:contents">
-            <HealthFooter />
-          </span>
+                <span className="truncate text-[13.5px] font-medium">{item.label}</span>
+                {item.badge !== undefined && (
+                  <span
+                    className={`ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] font-mono text-[10px] font-bold ${
+                      item.alert === true ? 'bg-amber text-bg' : 'bg-line-strong text-ink-dim'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </nav>
 
-        <main className="min-w-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
-          <div className="mx-auto h-full max-w-[1360px] p-4 pb-[88px] desk:px-7 desk:py-6">
-            <Outlet />
-          </div>
+        <main className="min-w-0 flex-1 overflow-y-auto pb-[72px] [-webkit-overflow-scrolling:touch] desk:pb-0">
+          <Outlet />
         </main>
       </div>
+
+      {/* Mobile bottom nav */}
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-bg/95 px-1 pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] backdrop-blur-md desk:hidden">
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-[3px] rounded-lg px-2.5 py-1 text-[10.5px] transition-colors ${
+                isActive ? 'font-medium text-brand' : 'text-ink-faint hover:text-ink'
+              }`
+            }
+          >
+            <span className="relative text-[17px] leading-none" aria-hidden="true">
+              {item.glyph}
+              {item.alert === true && (
+                <span className="absolute -top-0.5 -right-1.5 h-[6px] w-[6px] rounded-full bg-amber" />
+              )}
+            </span>
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
+}
+
+/** Neutral (non-alert) count badge when a positive number is available. */
+function badgeFor(n: number | null): { badge?: string } {
+  return n !== null && n > 0 ? { badge: String(n) } : {};
 }

@@ -127,12 +127,26 @@ func TestIngestToolHeavySession(t *testing.T) {
 	if got := count(t, db, `SELECT COUNT(*) FROM turns`); got != 8 {
 		t.Errorf("turns = %d, want 8", got)
 	}
-	// Events: user_prompt + 6 tool_calls (Read, Edit, Write, Bash, Edit, Bash) → 7.
-	if got := count(t, db, `SELECT COUNT(*) FROM events`); got != 7 {
-		t.Errorf("events = %d, want 7", got)
+	// Events: user_prompt + 6 tool_calls (Read, Edit, Write, Bash, Edit, Bash)
+	// + 2 test_run (both `npm test` Bash calls emit one) → 9.
+	if got := count(t, db, `SELECT COUNT(*) FROM events`); got != 9 {
+		t.Errorf("events = %d, want 9", got)
 	}
 	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='tool_call'`); got != 6 {
 		t.Errorf("tool_call events = %d, want 6", got)
+	}
+	// The two `npm test` Bash calls each emit a test_run event (the Quality
+	// aggregate source): one failing (status='error'), one passing.
+	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='test_run'`); got != 2 {
+		t.Errorf("test_run events = %d, want 2", got)
+	}
+	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='test_run' AND status='error'`); got != 1 {
+		t.Errorf("errored test_run = %d, want 1", got)
+	}
+	// The passing run's "N passed"-style summary parses into counts.
+	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='test_run'
+		AND json_extract(payload,'$.parsed')=1 AND json_extract(payload,'$.passed')=4`); got != 1 {
+		t.Errorf("parsed test_run with 4 passed = %d, want 1", got)
 	}
 	// The failing npm test Bash call carries is_error → status='error'.
 	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='tool_call' AND tool_name='Bash' AND status='error'`); got != 1 {
@@ -170,10 +184,20 @@ func TestIngestSubagentSession(t *testing.T) {
 	if got := count(t, db, `SELECT COUNT(*) FROM sessions`); got != 1 {
 		t.Errorf("sessions = %d, want 1", got)
 	}
-	// Turns (main file only; sidechain lines do not open turns):
-	// user, asst 0001 (3 lines), asst 0002, asst 0003 (2 lines), asst 0004 (2 lines) → 5.
-	if got := count(t, db, `SELECT COUNT(*) FROM turns`); got != 5 {
-		t.Errorf("turns = %d, want 5", got)
+	// Turns: main = user + asst 0001 (3 lines) + asst 0002 + asst 0003 (2 lines)
+	// + asst 0004 (2 lines) → 5; sidechain assistant turns 0101–0104 are now
+	// recorded too (phase 2), tagged with the subagent → 9 total.
+	if got := count(t, db, `SELECT COUNT(*) FROM turns`); got != 9 {
+		t.Errorf("turns = %d, want 9", got)
+	}
+	// Phase 2 attribution: the 4 sidechain turns carry agent_name from the
+	// parent subagent_start's subagent_type ("Explore"); the 5 main turns are
+	// left NULL (orchestrator).
+	if got := count(t, db, `SELECT COUNT(*) FROM turns WHERE agent_name = 'Explore'`); got != 4 {
+		t.Errorf("Explore-tagged turns = %d, want 4", got)
+	}
+	if got := count(t, db, `SELECT COUNT(*) FROM turns WHERE agent_name IS NULL`); got != 5 {
+		t.Errorf("untagged (main) turns = %d, want 5", got)
 	}
 	// Events: main = user_prompt, tool_call(Bash), skill_use, subagent_start,
 	// subagent_stop; sidechain = tool_call(Bash), tool_call(Read) → 7.
@@ -303,8 +327,8 @@ func TestIngestIsIdempotent(t *testing.T) {
 	if got := count(t, db, `SELECT COUNT(*) FROM events`); got != 7 {
 		t.Errorf("events after re-ingest = %d, want 7", got)
 	}
-	if got := count(t, db, `SELECT COUNT(*) FROM turns`); got != 5 {
-		t.Errorf("turns after re-ingest = %d, want 5", got)
+	if got := count(t, db, `SELECT COUNT(*) FROM turns`); got != 9 {
+		t.Errorf("turns after re-ingest = %d, want 9", got)
 	}
 }
 

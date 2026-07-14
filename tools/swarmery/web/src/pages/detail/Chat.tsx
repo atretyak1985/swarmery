@@ -5,8 +5,9 @@
 // assistant texts clamp to ~20 lines with a show-more expander.
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Event, SessionDetail, Turn } from '../../api/types';
-import { fmtTime } from '../../lib/format';
+import { fmtAgo, fmtTime } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { pickString } from '../../lib/payload';
 import { Empty } from '../../components/ui';
@@ -49,7 +50,7 @@ function toolSummary(c: ToolCounts): string | null {
   if (c.agents > 0) parts.push(plural(c.agents, 'agent'));
   if (c.skills > 0) parts.push(plural(c.skills, 'skill'));
   if (parts.length === 0) return null;
-  const s = parts.join(', ');
+  const s = parts.join(' · ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -59,7 +60,7 @@ function ToolLine({ summary, onClick }: { summary: string; onClick: () => void }
       type="button"
       onClick={onClick}
       title="Show in Timeline"
-      className="my-1.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
+      className="my-1.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[11px] text-ink-faint transition-colors hover:text-brand"
     >
       <span aria-hidden="true">⚙</span>
       <span>{summary}</span>
@@ -133,16 +134,18 @@ function ChatTurn({
 
   if (turn.role === 'user') {
     return (
-      <div className="my-3 flex flex-col items-end">
-        <div className="max-w-[88%] rounded-[14px] rounded-br-[4px] border border-line bg-surface2 px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-ink">
+      <div className="my-[7px] flex flex-col items-end">
+        <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink">
           {text ?? '(empty prompt)'}
         </div>
-        <span className="mt-1 pr-1 font-mono text-[10px] text-ink-dim">{fmtTime(turn.startedAt)}</span>
+        <span className="mt-1 pr-1 font-mono text-[10px] text-ink-faint">
+          {fmtTime(turn.startedAt)}
+        </span>
       </div>
     );
   }
   return (
-    <div className="my-3 text-[13.5px] text-ink-2">
+    <div className="my-[7px] text-[14px] leading-[1.7] text-ink-2">
       {text !== null && <ClampedProse text={text} />}
       {summary !== null && <ToolLine summary={summary} onClick={onShowTimeline} />}
     </div>
@@ -150,6 +153,25 @@ function ChatTurn({
 }
 
 /* ----- the tab ----- */
+
+/** Amber "awaiting approval" pill — shown when the session's live status says
+ * so; links to the Approvals screen since this tab has no request id to
+ * resolve inline (that identity lives on the permission_requests row, which
+ * this detail payload does not carry). */
+function AwaitingApprovalPill({ since }: { since: string | null }): JSX.Element {
+  return (
+    <Link
+      to="/approvals"
+      className="mt-4 inline-flex min-h-11 items-center gap-2.5 rounded-[9px] border border-amber/32 bg-amber/6 px-[13px] py-[9px] font-mono text-[11px] text-amber transition-colors hover:bg-amber/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+    >
+      <span className="h-[7px] w-[7px] shrink-0 animate-blink-dot rounded-full bg-amber" aria-hidden="true" />
+      <span>
+        awaiting approval{since !== null ? ` · ${since}` : ''} — respond in the terminal or
+        Approvals
+      </span>
+    </Link>
+  );
+}
 
 export function Chat({
   detail,
@@ -182,8 +204,9 @@ export function Chat({
     assistantTurns.every((t) => t.text === null) &&
     detail.status !== 'active' &&
     detail.status !== 'idle';
+  const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : undefined;
   return (
-    <div className="mt-3">
+    <div className="mt-[26px]">
       {turns.map((turn) => (
         <ChatTurn
           key={turn.id}
@@ -192,6 +215,9 @@ export function Chat({
           onShowTimeline={onShowTimeline}
         />
       ))}
+      {detail.status === 'waiting_approval' && (
+        <AwaitingApprovalPill since={lastEvent !== undefined ? fmtAgo(lastEvent.ts) : null} />
+      )}
       {needsBackfill && (
         <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
           some assistant prose is not ingested yet — run{' '}

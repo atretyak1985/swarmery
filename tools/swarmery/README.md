@@ -1,15 +1,29 @@
-# Swarmery
+# Swarmery — control plane
 
-Local control plane for Claude Code agent systems: Go daemon + embedded React SPA.
-Parses session transcripts from `~/.claude/projects/` into SQLite and serves a
-dashboard at `http://localhost:7777`.
+Local control plane for Claude Code agent systems: a single Go daemon + embedded
+React SPA. It indexes session transcripts from `~/.claude/projects/` into local
+SQLite and serves a live dashboard at `http://localhost:7777`. Fully local — no
+cloud, no account, no telemetry.
 
-- Design doc: [swarmery-design.md](swarmery-design.md)
-- Implementation plan: [docs/plan/00-plan.md](docs/plan/00-plan.md)
-- UI reference: [docs/design/swarmery-ui-mockup.html](docs/design/swarmery-ui-mockup.html)
+**Dashboard** (see the repo-root [README](../../README.md#control-plane) for screenshots):
 
-## Status
-Pre-MVP. Phase 1 (observation) in progress — see plan.
+- **Command deck** — triage view: what's working vs. waiting, availability/cost/quality headlines, today's activity feed, and an approvals rail.
+- **Sessions** — every session across all projects, filterable by project and status; each opens to **Chat · Timeline · Diffs**.
+- **Analytics** — cost/tokens/runs over time by project or model, with a per-project breakdown and an agent × project cross-tab.
+- **Approvals** — pending `AskUserQuestion` and permission requests with inline approve/deny and expiry timers.
+- **System** — the full Claude config graph (agents · skills · hooks · commands · overlays) across global and project scopes, with lint badges and version history.
+- **Docs** — the framework docs (onboarding · extending · neutrality) rendered in-app.
+
+Design reference: [swarmery-design.md](swarmery-design.md) ·
+[UI mockup](docs/design/swarmery-ui-mockup.html).
+
+## Build & run
+
+```bash
+make build          # snapshot docs → vite bundle → go:embed → single ./swarmery binary
+./swarmery serve    # listens on :7777 (override with SWARMERY_PORT)
+# or: make install  # deploy + launchd auto-start (see repo-root README)
+```
 
 ## Excluding throwaway projects
 

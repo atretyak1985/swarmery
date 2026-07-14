@@ -24,6 +24,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/docs/{slug}", h.getDoc)
 	mux.HandleFunc("GET /api/stats/overview", h.statsOverview)
 
+	// analytics wave: interactive range analytics (analytics.go).
+	mux.HandleFunc("GET /api/stats/timeseries", h.statsTimeseries)
+	mux.HandleFunc("GET /api/stats/breakdown", h.statsBreakdown)
+	mux.HandleFunc("GET /api/stats/matrix", h.statsMatrix)
+
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
 	mux.HandleFunc("GET /api/tasks/{id}", h.getTask)

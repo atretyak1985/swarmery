@@ -5,7 +5,7 @@ import { fmtSpan, fmtTime, projectLabel } from '../lib/format';
 import { KillButton } from './KillButton';
 import { ProcBadge } from './ProcBadge';
 import { TaskChip } from './TaskChip';
-import { DurationPill, LiveDot, SESSION_ROW_GRID, StatusChip } from './ui';
+import { LiveDot, StatusChip } from './ui';
 
 function meta(session: Session): string {
   const parts: string[] = [];
@@ -39,6 +39,61 @@ function ProjectDot({ slug }: { slug: string }): JSX.Element {
       style={{ background: projectColor(slug) }}
       aria-hidden="true"
     />
+  );
+}
+
+/* ----- Canvas visual bucket (Canvas.dc.html §Sessions: active/done/error) —
+ * the real SessionStatus keeps 5 values; the flat-row dot/chip only draw from
+ * 3 tones (+ a 4th "waiting" amber kept from the existing product surface,
+ * since collapsing it into "done" would hide a session mid-approval). ----- */
+type CanvasTone = 'active' | 'waiting' | 'error' | 'done';
+
+const CANVAS_TONE: Record<Session['status'], CanvasTone> = {
+  active: 'active',
+  waiting_approval: 'waiting',
+  killed: 'error',
+  idle: 'done',
+  completed: 'done',
+};
+
+const CANVAS_LABEL: Record<CanvasTone, string> = {
+  active: 'working',
+  waiting: 'waiting',
+  error: 'error',
+  done: 'done',
+};
+
+const CANVAS_CHIP_STYLE: Record<CanvasTone, string> = {
+  active: 'border-green/40 text-green',
+  waiting: 'border-amber/40 text-amber',
+  error: 'border-red/40 text-red',
+  done: 'border-line-strong text-ink-dim',
+};
+
+/** Row status dot (Canvas §3a): only LIVE sessions carry a marker — a hollow
+ * colour ring for active/error/waiting. done/idle render an empty span so the
+ * grid column stays aligned without a resting-state dot. */
+function RowDot({ tone }: { tone: CanvasTone }): JSX.Element {
+  if (tone === 'active') {
+    return <span className="inline-block h-2 w-2 shrink-0 animate-pulse-dot rounded-full border-2 border-green" />;
+  }
+  if (tone === 'error') {
+    return <span className="inline-block h-2 w-2 shrink-0 rounded-full border-2 border-red" />;
+  }
+  if (tone === 'waiting') {
+    return <span className="inline-block h-2 w-2 shrink-0 rounded-full border-2 border-amber" />;
+  }
+  return <span className="inline-block h-2 w-2 shrink-0" />;
+}
+
+/** Right-justified status chip (Canvas §3e): "working · 3h43m" / "error · 31s" / plain span. */
+function RowChip({ tone, suffix }: { tone: CanvasTone; suffix: string }): JSX.Element {
+  return (
+    <span
+      className={`justify-self-end rounded-full border px-[9px] py-0.5 font-mono text-[10.5px] whitespace-nowrap ${CANVAS_CHIP_STYLE[tone]}`}
+    >
+      {tone === 'active' || tone === 'error' ? `${CANVAS_LABEL[tone]} · ${suffix}` : suffix}
+    </span>
   );
 }
 
@@ -113,20 +168,24 @@ export function SessionCard({
     );
   }
 
-  /* Flat rows: mobile keeps the stacked card; ≥900px renders the aligned
-   * table row (Redesign sessions grid — one column template per day group). */
+  /* Flat rows: mobile keeps the stacked card; ≥900px renders the Canvas
+   * 5-column row (Canvas.dc.html §Sessions: dot / project / title+why /
+   * model / status chip). Branch + start-time drop from their own columns
+   * on desktop — they fold into the meta line under the title, same as the
+   * stacked mobile card, so no data is lost, only re-laid-out. */
+  const tone = CANVAS_TONE[session.status];
   return (
     <div
       role="link"
       tabIndex={0}
       onClick={goToDetail}
       onKeyDown={(e) => { if (e.key === 'Enter') goToDetail(); }}
-      className="block cursor-pointer transition-colors hover:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+      className="block cursor-pointer transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
     >
       <div className="px-3.5 py-[11px] desk:hidden">{card}</div>
-      <div className={`hidden items-center gap-3 px-3.5 py-[9px] desk:grid ${SESSION_ROW_GRID}`}>
+      <div className="hidden grid-cols-[15px_130px_minmax(0,1fr)_150px_90px] items-center gap-3.5 px-1 py-3 desk:grid">
         <span className="flex justify-center">
-          <LiveDot status={session.status} />
+          <RowDot tone={tone} />
         </span>
         <span className="flex min-w-0 items-center gap-[7px]">
           <ProjectDot slug={session.projectSlug} />
@@ -136,39 +195,37 @@ export function SessionCard({
         </span>
         <span className="min-w-0">
           <span
-            className={`block truncate text-[13px] ${
-              session.title === null ? 'font-normal text-ink-dim italic' : 'font-semibold text-ink'
+            className={`block truncate text-[14px] font-semibold ${
+              session.title === null ? 'font-normal text-ink-faint italic' : 'text-ink'
             }`}
           >
-            {session.title ?? '(no title)'}
+            {session.title ?? '(untitled session)'}
           </span>
-          {session.taskExternalId != null && (
-            <span className="mt-[2px] flex min-w-0">
-              <TaskChip
-                externalId={session.taskExternalId}
-                linkSource={session.taskLinkSource}
-                confidence={session.taskConfidence}
-              />
+          <span className="mt-0.5 block truncate text-[12px] text-[#6c7178]">
+            {liveNow ? `now: ${now}` : (session.why ?? meta(session))}
+          </span>
+          {(session.taskExternalId != null || session.procPid != null) && (
+            <span className="mt-[3px] flex min-w-0 items-center gap-1.5">
+              {session.taskExternalId != null && (
+                <TaskChip
+                  externalId={session.taskExternalId}
+                  linkSource={session.taskLinkSource}
+                  confidence={session.taskConfidence}
+                />
+              )}
+              <ProcBadge session={session} />
+              {session.procPid != null && (
+                <span onClick={(e) => e.stopPropagation()}>
+                  <KillButton session={session} />
+                </span>
+              )}
             </span>
           )}
-          {liveNow && (
-            <span className="block truncate font-mono text-[10.5px] text-green">now: {now}</span>
-          )}
-          {session.procPid != null && (
-            <span className="mt-[2px] flex" onClick={(e) => e.stopPropagation()}>
-              <KillButton session={session} />
-            </span>
-          )}
         </span>
-        <span className="truncate font-mono text-[11px] text-ink-dim">{session.model ?? '—'}</span>
-        <span className="truncate font-mono text-[11px] text-ink-dim">
-          {session.gitBranch ?? '—'}
+        <span className="truncate font-mono text-[11px] text-ink-faint">
+          {session.model ?? '—'}
         </span>
-        <span className="font-mono text-[11px] text-ink-3">{fmtTime(session.startedAt)}</span>
-        <span className="flex items-center justify-end gap-1.5">
-          <ProcBadge session={session} />
-          <DurationPill status={session.status} startedAt={session.startedAt} endedAt={session.endedAt} />
-        </span>
+        <RowChip tone={tone} suffix={chipSuffix(session)} />
       </div>
     </div>
   );

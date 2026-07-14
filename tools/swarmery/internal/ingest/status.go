@@ -3,6 +3,8 @@ package ingest
 import (
 	"database/sql"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 )
 
 // Thresholds configure the time-based session status heuristic (C5).
@@ -46,13 +48,25 @@ func StatusFor(lastActivity, now time.Time, t Thresholds) string {
 	}
 }
 
+// procAlive reports whether procwatch currently believes the backing process
+// exists. Orphaned counts as alive — the process is reparented, not gone.
+func procAlive(state string) bool {
+	return state == procwatch.StateRunning || state == procwatch.StateOrphaned
+}
+
 // RecomputeStatuses moves stale sessions forward (active → idle → completed)
 // based on their last record timestamp, returning the ids of changed sessions
 // so the caller can emit session_updated for each. Reactivation happens on the
 // ingest path (new records re-upsert the session), never here.
+//
+// Liveness override: a session is never fast-forwarded to "completed" while
+// procwatch believes its process is still alive — it caps at "idle" so a
+// live-but-quiet session stops reporting "Done". Sessions with no liveness
+// signal (proc_state NULL/dead/unknown) keep the pure time-based fallback;
+// procwatch itself already flips genuinely dead ones to "completed".
 func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]int64, error) {
 	rows, err := db.Query(
-		`SELECT id, status, COALESCE(ended_at, started_at) FROM sessions
+		`SELECT id, status, COALESCE(ended_at, started_at), proc_state FROM sessions
 		 WHERE status IN ('active','idle')`)
 	if err != nil {
 		return nil, err
@@ -65,7 +79,8 @@ func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]int64, error)
 	for rows.Next() {
 		var id int64
 		var status, lastTS string
-		if err := rows.Scan(&id, &status, &lastTS); err != nil {
+		var procState sql.NullString
+		if err := rows.Scan(&id, &status, &lastTS, &procState); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -73,7 +88,11 @@ func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]int64, error)
 		if last.IsZero() {
 			continue // unparseable timestamp — leave the session as-is
 		}
-		if want := StatusFor(last, now, t); want != status {
+		want := StatusFor(last, now, t)
+		if want == "completed" && procAlive(procState.String) {
+			want = "idle" // alive but quiet — don't claim it finished
+		}
+		if want != status {
 			changes = append(changes, change{id, want})
 		}
 	}

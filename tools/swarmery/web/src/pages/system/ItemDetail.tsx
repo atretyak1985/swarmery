@@ -727,14 +727,14 @@ export function SystemItemPanel({
   };
 
   return (
-    <div className="rounded-xl border border-line bg-surface px-4 py-4 desk:px-5">
+    <div>
       <div className="flex flex-wrap items-center gap-2">
         <LintDot severity={detail.lintMax} />
-        <h1 className={`font-display text-[17px] leading-tight font-bold ${detail.dead ? 'opacity-45' : ''}`}>
+        <h1 className={`font-display text-[18px] leading-tight font-semibold ${detail.dead ? 'opacity-70' : ''}`}>
           {detail.name}
         </h1>
         {detail.model !== null && (
-          <span className="font-mono text-[10.5px] text-ink-dim">{detail.model}</span>
+          <span className="font-mono text-[10px] text-ink-faint">{detail.model}</span>
         )}
         <span className="ml-auto flex items-center gap-1.5">
           <ScopeBadge
@@ -756,16 +756,16 @@ export function SystemItemPanel({
             type="button"
             onClick={onClose}
             aria-label="close detail"
-            className="ml-1 rounded-lg border border-line px-2 py-0.5 text-[12px] text-ink-dim transition-colors hover:text-ink"
+            className="ml-1 rounded-[7px] border border-line-strong px-2 py-px text-[12px] text-ink-faint transition-colors hover:text-ink"
           >
             ✕
           </button>
         </span>
       </div>
-      <div className="mt-1 font-mono text-[10.5px] break-all text-ink-dim">{detail.path}</div>
+      <div className="mt-1 font-mono text-[10px] break-all text-ink-faint">{detail.path}</div>
 
       {/* usage metrics (30-day window, per the registry aggregates) */}
-      <div className="mt-3 flex gap-6 border-b border-line pb-3 font-mono text-[11px] text-ink-dim">
+      <div className="mt-3 flex gap-[22px] border-b border-line pb-3 font-mono text-[11px] text-ink-dim">
         <span>
           tasks 30d <b className="font-medium text-ink">{String(detail.tasks30d)}</b>
         </span>
@@ -787,7 +787,7 @@ export function SystemItemPanel({
             <button
               type="button"
               onClick={openEdit}
-              className="rounded-lg border border-line bg-surface px-3.5 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
+              className="rounded-lg border border-line-strong bg-field px-3.5 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
             >
               Edit
             </button>
@@ -797,7 +797,7 @@ export function SystemItemPanel({
               type="button"
               onClick={() => setConfirmDelete(true)}
               disabled={actionBusy}
-              className="rounded-lg border border-red/40 px-3 py-1.5 font-mono text-[11.5px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
+              className="rounded-lg border border-red/40 px-3 py-1.5 font-mono text-[11px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
             >
               delete…
             </button>
@@ -958,20 +958,22 @@ export function SystemItemPanel({
         <>
           <SectionTitle>Frontmatter</SectionTitle>
           {fmRows !== null ? (
-            <table className="w-full border-collapse">
-              <tbody>
-                {fmRows.map((row) => (
-                  <tr key={row.key}>
-                    <td className="w-[120px] border-b border-line-soft px-2 py-1.5 align-top font-mono text-[10.5px] tracking-[0.06em] text-ink-dim uppercase">
-                      {row.key}
-                    </td>
-                    <td className="border-b border-line-soft px-2 py-1.5 align-top font-mono text-[11.5px] whitespace-pre-wrap text-ink-2">
-                      {row.value === '' ? '—' : row.value}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-hidden rounded-lg border border-line">
+              <table className="w-full border-collapse">
+                <tbody>
+                  {fmRows.map((row) => (
+                    <tr key={row.key}>
+                      <td className="w-[120px] border-b border-line-soft px-2.5 py-1.5 align-top font-mono text-[10px] tracking-[0.06em] text-ink-faint uppercase">
+                        {row.key}
+                      </td>
+                      <td className="border-b border-line-soft px-2.5 py-1.5 align-top font-mono text-[11.5px] whitespace-pre-wrap text-ink-2">
+                        {row.value === '' ? '—' : row.value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <pre className="overflow-x-auto rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-[11px] leading-relaxed text-ink-2">
               {detail.frontmatter}
@@ -979,7 +981,7 @@ export function SystemItemPanel({
           )}
 
           <SectionTitle>Body</SectionTitle>
-          <div className="text-[13px] leading-[1.65] text-ink-2">
+          <div className="text-[13px] leading-[1.6] text-ink-2">
             <Markdown text={detail.body} />
           </div>
         </>

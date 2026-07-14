@@ -32,7 +32,7 @@ export function ScopeBadge({
     );
   }
   return (
-    <span className="rounded-full border border-line px-2 py-px font-mono text-[10px] whitespace-nowrap text-ink-dim">
+    <span className="rounded-full border border-line-strong px-2 py-px font-mono text-[10px] whitespace-nowrap text-ink-dim">
       global
     </span>
   );
@@ -53,7 +53,7 @@ export function OriginBadge({
     );
   }
   return (
-    <span className="rounded-full border border-line px-2 py-px font-mono text-[10px] whitespace-nowrap text-ink-dim">
+    <span className="rounded-full border border-line-strong px-2 py-px font-mono text-[10px] whitespace-nowrap text-ink-dim">
       local
     </span>
   );
@@ -76,7 +76,7 @@ export function LintDot({
   if (severity === null) return null;
   return (
     <span
-      className={`shrink-0 font-mono text-[12px] leading-none ${LINT_TONES[severity]}`}
+      className={`shrink-0 font-mono text-[11px] leading-none ${LINT_TONES[severity]}`}
       title={message ?? `worst active lint finding: ${severity}`}
       aria-label={`lint ${severity}`}
     >
@@ -101,8 +101,8 @@ export function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`shrink-0 rounded-full border px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap transition-colors ${
-        selected ? 'border-ink-dim bg-surface2 text-ink' : 'border-line text-ink-dim hover:text-ink'
+      className={`shrink-0 rounded-full border px-[11px] py-1 font-mono text-[10.5px] whitespace-nowrap transition-colors ${
+        selected ? 'border-ink-faint bg-surface2 text-ink' : 'border-line-strong text-ink-dim hover:text-ink'
       }`}
     >
       {children}
@@ -395,15 +395,15 @@ export function FiltersRow({
   onSort?: (sort: SystemSort) => void;
 }): JSX.Element {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2">
-      <div className="relative w-full desk:w-[240px]">
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="relative w-[240px] max-w-full">
         <input
           type="text"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="filter by name…"
           aria-label="filter by name"
-          className="w-full rounded-lg border border-line bg-surface px-3 py-[6px] pr-8 font-mono text-[12px] text-ink transition-colors outline-none placeholder:text-ink-dim focus:border-ink-dim"
+          className="w-full rounded-[9px] border border-line-strong bg-field px-3 py-[6px] pr-8 font-mono text-[12px] text-ink transition-colors outline-none placeholder:text-ink-dim focus:border-ink-dim"
         />
         {search !== '' && (
           <button
@@ -417,7 +417,7 @@ export function FiltersRow({
         )}
       </div>
       <ProjectDropdown projects={projects} value={project} onChange={onProject} />
-      <span className="mx-1 w-px shrink-0 self-stretch bg-line" aria-hidden="true" />
+      <span className="mx-1 w-px shrink-0 self-stretch bg-line-strong" aria-hidden="true" />
       <FilterChip selected={scope === null} onClick={() => onScope(null)}>all scopes</FilterChip>
       <FilterChip selected={scope === 'global'} onClick={() => onScope('global')}>global</FilterChip>
       <FilterChip selected={scope === 'project'} onClick={() => onScope('project')}>project</FilterChip>

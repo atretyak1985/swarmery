@@ -3,9 +3,13 @@
 // declare API types here.
 
 import type {
+  AnalyticsDimension,
+  AnalyticsMetric,
+  BreakdownResp,
   DocDetail,
   DocMeta,
   HealthResponse,
+  MatrixResp,
   PermissionRequest,
   PermissionRequestStatus,
   ProjectsResponse,
@@ -15,6 +19,7 @@ import type {
   StatsToday,
   TaskDetail,
   TasksResponse,
+  TimeseriesResp,
 } from './api/types';
 import { mockApi } from './mock/data';
 
@@ -68,6 +73,50 @@ export function fetchStatsOverview(day: string): Promise<StatsOverview> {
 export function fetchHealth(): Promise<HealthResponse> {
   if (MOCK) return mockApi.health();
   return get('/api/health');
+}
+
+// --- analytics ----------------------------------------------------------------
+
+/** Optional local-day range; the server defaults to the last 14 days. */
+export interface AnalyticsRange {
+  from?: string;
+  to?: string;
+}
+
+function rangeQuery(range: AnalyticsRange, extra: Record<string, string>): string {
+  const qs = new URLSearchParams(extra);
+  if (range.from !== undefined) qs.set('from', range.from);
+  if (range.to !== undefined) qs.set('to', range.to);
+  return qs.toString();
+}
+
+/** Daily series for the main chart (one series per group member). */
+export function fetchTimeseries(
+  metric: AnalyticsMetric,
+  group: AnalyticsDimension,
+  range: AnalyticsRange = {},
+): Promise<TimeseriesResp> {
+  if (MOCK) return mockApi.timeseries(metric, group, range);
+  return get(`/api/stats/timeseries?${rangeQuery(range, { metric, group })}`);
+}
+
+/** Ranked totals for the current pivot dimension. */
+export function fetchBreakdown(
+  by: AnalyticsDimension,
+  range: AnalyticsRange = {},
+): Promise<BreakdownResp> {
+  if (MOCK) return mockApi.breakdown(by, range);
+  return get(`/api/stats/breakdown?${rangeQuery(range, { by })}`);
+}
+
+/** Agents|skills × projects cross-tab (metric=runs, or cost for agents). */
+export function fetchMatrix(
+  rows: 'agent' | 'skill',
+  metric: 'runs' | 'cost' = 'runs',
+  range: AnalyticsRange = {},
+): Promise<MatrixResp> {
+  if (MOCK) return mockApi.matrix(rows, metric, range);
+  return get(`/api/stats/matrix?${rangeQuery(range, { rows, cols: 'project', metric })}`);
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {

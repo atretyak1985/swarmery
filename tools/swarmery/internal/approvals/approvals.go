@@ -59,8 +59,13 @@ var (
 // (HTTP 429 → the shim fails open to the native dialog).
 const maxPendingPerSession = 20
 
-// DefaultTimeout is the frozen approval_timeout (docs/hooks-protocol.md Q-A).
-const DefaultTimeout = 120 * time.Second
+// DefaultTimeout is the approval window: how long a pending request stays
+// answerable from the dashboard before the shim's long-poll gives up and the
+// row falls back to the native terminal prompt (resolved_elsewhere). MUST stay
+// in sync with hookshim.DefaultPollTimeout — the daemon holds the connection
+// this long, the shim waits exactly this long. Override both via
+// SWARMERY_APPROVAL_TIMEOUT.
+const DefaultTimeout = 10 * time.Minute
 
 // DefaultSweepInterval is the expiry sweeper cadence.
 const DefaultSweepInterval = 5 * time.Second

@@ -37,7 +37,7 @@ install: build
 # The copies are gitignored (.gitkeep keeps the embed pattern valid without
 # them, e.g. in CI — /api/docs then serves an empty list).
 copy-docs:
-	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_DST)/
+	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_DST)/
 
 # dev: run the API daemon and the vite dev server (proxying /api to :7777)
 dev: copy-docs

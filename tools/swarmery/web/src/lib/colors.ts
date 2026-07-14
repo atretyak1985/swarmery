@@ -2,11 +2,12 @@
 // hashed by slug so a project keeps its color across screens and reloads.
 
 // No red in the palette — a red dot would read as "failing project".
+// Canvas project hues (Canvas.dc.html PC map).
 const PROJECT_PALETTE = [
-  '#f5b84a', // amber
+  '#e8a13a', // amber
   '#6fb4f0', // blue
-  '#4ade9c', // green
-  '#c893e8', // purple (Redesign fourth-project tone)
+  '#58c08a', // green
+  '#c58be0', // purple (Canvas fourth-project tone)
 ] as const;
 
 export function projectColor(slug: string): string {
@@ -14,5 +15,5 @@ export function projectColor(slug: string): string {
   for (let i = 0; i < slug.length; i += 1) {
     hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
   }
-  return PROJECT_PALETTE[hash % PROJECT_PALETTE.length] ?? '#7c8da3';
+  return PROJECT_PALETTE[hash % PROJECT_PALETTE.length] ?? '#8b8f99';
 }

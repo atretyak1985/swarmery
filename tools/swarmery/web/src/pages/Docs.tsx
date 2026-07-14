@@ -1,15 +1,15 @@
-// Docs screen (Redesign): left DOCUMENTATION list (title + FILE.md subline,
-// active item amber-tinted), right pane rendering the doc's markdown with a
-// "swarmery/docs/<FILE>" mono subline. Routes: /docs (first doc) and
-// /docs/{slug}. The markdown body's own leading H1 is stripped — the pane
-// title comes from the doc meta.
+// Docs screen (Canvas): left DOCUMENTATION rail (mono eyebrow + title/FILE.md
+// buttons, active item amber-tinted with a raised fill), right pane rendering
+// the doc's markdown under a serif H1 and a "swarmery/docs/<FILE>" mono
+// subline. Routes: /docs (first doc) and /docs/{slug}. The markdown body's
+// own leading H1 is stripped — the pane title comes from the doc meta.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { DocDetail, DocMeta } from '../api/types';
 import { fetchDoc, fetchDocs } from '../api';
 import { Markdown } from '../lib/markdown';
-import { Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
+import { Empty, ErrorBox, Loading } from '../components/ui';
 
 /** Drop a leading `# Title` line — the pane renders its own heading. */
 function stripLeadingH1(markdown: string): { title: string | null; body: string } {
@@ -55,50 +55,54 @@ export function Docs(): JSX.Element {
   if (docs.length === 0) return <Empty>no docs published by the daemon</Empty>;
 
   return (
-    <div className="wide:grid wide:grid-cols-[230px_minmax(0,1fr)] wide:items-start wide:gap-6">
-      {/* Sticky offset is relative to the <main> scroller (frame layout). */}
-      <div className="min-w-0 wide:sticky wide:top-0">
-        <SectionTitle flush>Documentation</SectionTitle>
-        <div className="overflow-hidden rounded-xl border border-line bg-surface">
-          {docs.map((d) => {
-            const active = d.slug === activeSlug;
-            return (
-              <Link
-                key={d.slug}
-                to={`/docs/${d.slug}`}
-                aria-current={active ? 'page' : undefined}
-                className={`block border-b border-line-soft px-3.5 py-2.5 transition-colors last:border-b-0 ${
-                  active ? 'bg-surface2' : 'hover:bg-surface2/50'
-                }`}
-              >
-                <span
-                  className={`block text-[13px] font-semibold ${active ? 'text-brand' : 'text-ink'}`}
+    <div className="min-w-0 px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]">
+      <div className="desk:grid desk:grid-cols-[220px_minmax(0,1fr)] desk:items-start desk:gap-7">
+        {/* Sticky offset is relative to the <main> scroller (frame layout). */}
+        <div className="min-w-0 desk:sticky desk:top-[85px]">
+          <div className="mb-2.5 font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
+            Documentation
+          </div>
+          <nav className="flex flex-col gap-0.5" aria-label="Documentation pages">
+            {docs.map((d) => {
+              const active = d.slug === activeSlug;
+              return (
+                <Link
+                  key={d.slug}
+                  to={`/docs/${d.slug}`}
+                  aria-current={active ? 'page' : undefined}
+                  className={`min-h-[44px] rounded-lg px-3 py-[9px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 ${
+                    active ? 'bg-surface2' : 'hover:bg-surface2/50'
+                  }`}
                 >
-                  {d.title}
-                </span>
-                <span className="mt-0.5 block font-mono text-[10.5px] text-ink-dim">{d.file}</span>
-              </Link>
-            );
-          })}
+                  <span
+                    className={`block text-[13px] font-semibold ${active ? 'text-brand' : 'text-ink'}`}
+                  >
+                    {d.title}
+                  </span>
+                  <span className="mt-px block font-mono text-[10px] text-ink-faint">{d.file}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
-      </div>
 
-      <div className="mt-5 min-w-0 rounded-xl border border-line bg-surface px-4 py-4 desk:px-7 desk:py-6 wide:mt-0">
-        {docError !== null && <ErrorBox message={docError} />}
-        {doc === null && docError === null && <Loading label="doc…" />}
-        {doc !== null && rendered !== null && (
-          <>
-            <h1 className="mb-1 font-display text-[20px] leading-tight font-bold">
-              {rendered.title ?? doc.title}
-            </h1>
-            <div className="mb-5 font-mono text-[10.5px] text-ink-dim">
-              swarmery/docs/{doc.file}
-            </div>
-            <div className="text-[13.5px] leading-[1.65] text-ink-2">
-              <Markdown text={rendered.body} />
-            </div>
-          </>
-        )}
+        <div className="mt-6 min-w-0 desk:mt-0">
+          {docError !== null && <ErrorBox message={docError} />}
+          {doc === null && docError === null && <Loading label="doc…" />}
+          {doc !== null && rendered !== null && (
+            <>
+              <h1 className="font-display text-[22px] font-medium tracking-[-0.01em] desk:text-[26px]">
+                {rendered.title ?? doc.title}
+              </h1>
+              <div className="mt-1 font-mono text-[10.5px] text-ink-faint">
+                swarmery/docs/{doc.file}
+              </div>
+              <div className="mt-5 text-[14px] leading-[1.75] text-ink-2">
+                <Markdown text={rendered.body} />
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

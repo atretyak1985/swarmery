@@ -32,8 +32,12 @@ const (
 // Timing knobs, frozen by docs/hooks-protocol.md §Timing (Q-A/E6).
 const (
 	DefaultConnectTimeout = 500 * time.Millisecond
-	DefaultPollTimeout    = 120 * time.Second
-	stopTimeout           = 5 * time.Second
+	// DefaultPollTimeout is the long-poll wall clock: how long the shim keeps
+	// the permission-request connection open so the dashboard can answer it.
+	// MUST match approvals.DefaultTimeout (daemon side). Override via
+	// SWARMERY_APPROVAL_TIMEOUT (read in cmdHook).
+	DefaultPollTimeout = 10 * time.Minute
+	stopTimeout        = 5 * time.Second
 	sessionStartTimeout   = 2 * time.Second
 	maxStdin              = 4 << 20
 )

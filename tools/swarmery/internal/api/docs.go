@@ -31,9 +31,9 @@ type docDetailDTO struct {
 }
 
 // docOrder pins the dashboard nav order for the well-known docs (the
-// onboarding → extending → neutrality reading order); anything else sorts
-// alphabetically after them.
-var docOrder = map[string]int{"onboarding": 0, "extending": 1, "neutrality": 2}
+// onboarding → workflow → extending → neutrality reading order); anything else
+// sorts alphabetically after them.
+var docOrder = map[string]int{"onboarding": 0, "workflow": 1, "extending": 2, "neutrality": 3}
 
 // GET /api/docs
 func (h *Handler) listDocs(w http.ResponseWriter, r *http.Request) {
