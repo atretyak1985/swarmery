@@ -2,45 +2,50 @@
 
 > **A vendor-neutral Claude Code agent framework + session-monitoring control plane.**
 > One shared plugin marketplace for every project. One dashboard to watch them all.
+> **Fully local — your transcripts, cost, and config never leave the machine.**
 
 Swarmery is two things in one repo:
 
-1. **Plugin marketplace** — a versioned, namespaced Claude Code agent framework (`core` + domain packs) that any project enables in a single `settings.json` line and updates with `/plugin update`.
+1. **Plugin marketplace** — a versioned, namespaced Claude Code agent framework (`core` + domain packs) that any project enables in a single `settings.json` line and updates with `/plugin update`. Stop copying agents between projects; ship the fix once and every project adopts it on bump.
 2. **Control plane** (`tools/swarmery`) — a Go + React web dashboard that streams every Claude Code session in real time: tool calls, cost, approvals, diffs, and the full Claude config graph.
+
+It's built for people who run **many projects — often for different clients — on one machine**: each project keeps its own isolated workspace and config, while shared agents live in one place. Everything is local: a single Go daemon, an embedded SPA, and a local SQLite index — no cloud, no account, no telemetry.
 
 ---
 
 ## Control plane
 
-`swarmery serve` runs a lightweight daemon on `:7777` that indexes Claude Code sessions from their `.jsonl` transcripts and exposes a live web UI.
+`swarmery serve` runs a lightweight daemon on `:7777` that indexes Claude Code sessions from their `.jsonl` transcripts into local SQLite and exposes a live web UI.
 
-### Overview
+### Command deck
 
-At-a-glance summary across all monitored projects: active sessions with their current action, cost breakdown by model, and session history by day.
+The landing view — a triage-first read on everything running right now: a one-line status of what's working versus waiting, headline **availability / cost / quality** metrics, a live feed of today's session activity ("the spike"), plus side rails for approvals *waiting on you* and the noisiest error threads by project.
 
-![Overview dashboard](docs/screenshots/overview.png)
+![Command deck](docs/screenshots/command-deck.png)
 
 ### Sessions
 
-All Claude Code sessions across every project — searchable by name, filterable by project (colored dots) and status. Each row shows the model, cost, tool-call count, and elapsed time.
+All Claude Code sessions across every project — searchable by name, filterable by project (colored dots) and status (`working` / `done` / `error`). Each row shows the model, status, and elapsed time.
 
 ![Sessions list](docs/screenshots/sessions.png)
 
-### Session detail — Approvals
+### Session detail — Chat · Timeline · Diffs
 
-When a session contains a `AskUserQuestion` tool call, the dashboard shows the full context: what Claude is proposing, the diff it produced, and the question it is waiting on.
+Every session opens to three views. **Chat** replays the conversation with inline tool-call summaries and any pending approval banner. **Timeline** logs each tool call — reads, writes, bash, API calls, sub-agents — with durations and pass/fail status, so you see where time actually goes. **Diffs** aggregates every file change in the session as unified diffs with per-file create/edit badges and line counts. The header carries live token, cost, and approvals-resolved totals.
 
-![Session approvals diff view](docs/screenshots/session-approvals.png)
+![Session detail — Chat](docs/screenshots/session-chat.png)
+![Session detail — Timeline](docs/screenshots/session-timeline.png)
+![Session detail — Diffs](docs/screenshots/session-diffs.png)
 
-### Session detail — Timeline
+### Analytics
 
-Every tool call is logged to a timeline: file reads, writes, bash commands, API calls — with precise durations, so you can see where time actually goes.
+Cost, tokens, and runs over time, grouped by project or model across selectable ranges (7d–90d): a headline summary with top driver and projection, a stacked-area trend, a per-project breakdown, and an agent × project (or skill × project) cross-tab heatmap.
 
-![Session timeline](docs/screenshots/session-timeline.png)
+![Analytics](docs/screenshots/analytics.png)
 
 ### Approvals queue
 
-All pending `AskUserQuestion` calls across every session in one place — with the full conversation context and the proposed change already expanded.
+All pending `AskUserQuestion` and permission requests across every session in one place — with the full context expanded, per-request expiry timers, and inline approve / deny / open-session actions. Multi-question and multi-select prompts render as native option groups; resolved requests drop into a history log.
 
 ![Approvals queue](docs/screenshots/approvals.png)
 
@@ -117,6 +122,8 @@ plugins/
   uav-pack/                       # UAV/drone domain: telemetry protocols, mission planning
   iot-pack/                       # IoT domain: BLE, device telemetry, health metrics
   web-pack/                       # marketing: SEO, i18n, landing CRO
+  infra-pack/                     # k8s/Helm, GitOps, CI/CD, cloud auth, Keycloak
+  lsp-pack/                       # Serena LSP: semantic code navigation (needs serena binary)
 overlays/
   _schema/project.schema.json     # per-project flavor config schema
   example/                        # sample overlay (project.json + settings snippet)
@@ -154,9 +161,17 @@ Then deploy your flavor config to `.claude/project.json` (schema in `overlays/_s
 
 Core agents, skills, and hooks read `project.json` at runtime for repos, the main app, device/edge repo, cloud settings, and domain terms — nothing is baked in (policy: `docs/NEUTRALITY.md`, checker: `scripts/scan-flavor.sh`).
 
+### Cross-project isolation (built for multi-client machines)
+
+One machine, many clients — without leaking one project's context into another. Enabling swarmery on a project is additive: your existing project-local `.claude/agents` still win by name, and each project picks only the packs it needs. Shared agents are maintained once in the marketplace; per-project specifics stay in that project's `project.json` and workspace.
+
+- **Global vs project-local agents.** Plugins supply global agents (`plugin · core`); a project's own `.claude/agents/` supplies local ones. On a name collision the **local one wins in that project only** — the intended override mechanism, not a fork.
+- **Isolated workspaces.** Work artifacts (plans/sessions/wiki) live in a per-project namespace under a shared workspace root (`AGENT_WORKSPACE_ROOT` + `AGENT_PROJECT`), so clients never share context.
+- **Local-first.** The control plane indexes transcripts into local SQLite and serves them from a local daemon — nothing is uploaded.
+
 ### Design decisions
 
-- **Framework ≠ workspace.** Work artifacts (plans/sessions/wiki) live in a separate private workspace repo, never here. The CLI (`plugins/core/bin/agent-work.sh`) resolves the workspace via `AGENT_PROJECT` + `AGENT_WORKSPACE_ROOT`.
+- **Framework ≠ workspace.** Work artifacts live in a separate private workspace repo, never here. The CLI (`plugins/core/bin/agent-work.sh`) resolves the workspace via `AGENT_PROJECT` + `AGENT_WORKSPACE_ROOT`.
 - **Vendor-neutral core.** No consumer project is privileged; flavor is runtime config.
 - **Explicit semver** in each `plugin.json`; consumers adopt on bump.
 - **`core` + opt-in domain packs**; projects enable only the packs they need.

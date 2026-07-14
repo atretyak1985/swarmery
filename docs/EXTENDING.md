@@ -10,7 +10,7 @@ ones; **on a name collision the project-local component wins** (native base + ov
 | The thing is… | It goes to… |
 |---|---|
 | useful to any project | `plugins/core` (bump semver → consumers adopt via `/plugin update`) |
-| useful to ≥2 projects of one domain | the domain pack (`uav-pack` / `iot-pack` / `web-pack`) |
+| useful to ≥2 projects of one domain or capability | the matching pack — domain (`uav-pack` / `iot-pack` / `web-pack`) or capability (`infra-pack` / `lsp-pack`) |
 | unique to one project | **the project's own `.claude/{agents,skills,commands,templates}/`** — versioned with the project's code, because it evolves with the product |
 | configuration, not logic (repo lists, env names, commit scopes, domain nouns) | the project's `.claude/project.json` |
 
