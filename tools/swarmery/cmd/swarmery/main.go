@@ -8,6 +8,7 @@
 //	swarmery install               launchd auto-start (uninstall / status)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
+//	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
 package main
 
 import (
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
@@ -29,6 +31,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
@@ -71,6 +74,8 @@ func main() {
 		os.Exit(cmdHook(os.Args[2:]))
 	case "hooks":
 		err = hookcfg.Cmd(os.Args[2:])
+	case "onboard":
+		err = cmdOnboard(os.Args[2:])
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -102,7 +107,10 @@ func usage() {
   swarmery status                  service health, pid, uptime, db size
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
-  env: SWARMERY_PORT, SWARMERY_PROJECTS_ROOT, SWARMERY_PRICING, SWARMERY_EXCLUDE`)
+  swarmery onboard <slug> [pack ...] [--dir <path>] [--workspace-root <path>] [--statusline-src <path>]
+                                   bootstrap a consumer project: .claude/settings.json +
+                                   project.json skeleton + workspace namespace (idempotent)
+  env: SWARMERY_PORT, SWARMERY_PROJECTS_ROOT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT`)
 }
 
 // defaultProjectsRoot resolves SWARMERY_PROJECTS_ROOT, falling back to
@@ -345,6 +353,79 @@ func cmdSysscan(args []string) error {
 	}
 	fmt.Printf("  lint: %s\n", lint)
 	return nil
+}
+
+// defaultWorkspaceRoot resolves SWARMERY_WORKSPACE_ROOT (the same env
+// scripts/init.sh reads), falling back to the self-hosted default so the CLI
+// and the script stay behaviourally identical.
+func defaultWorkspaceRoot() string {
+	if v := os.Getenv("SWARMERY_WORKSPACE_ROOT"); v != "" {
+		return v
+	}
+	return "/Volumes/Work/swarmery-workspace"
+}
+
+// cmdOnboard bootstraps a new consumer project via the shared onboard package —
+// the CLI twin of the control-plane onboarding endpoint and the delegation
+// target of scripts/init.sh when this binary is on PATH.
+func cmdOnboard(args []string) error {
+	fs := flag.NewFlagSet("onboard", flag.ExitOnError)
+	dir := fs.String("dir", "", "project root to bootstrap (default: current directory)")
+	wsRoot := fs.String("workspace-root", defaultWorkspaceRoot(),
+		"shared workspace repo root (env: SWARMERY_WORKSPACE_ROOT)")
+	statuslineSrc := fs.String("statusline-src", "",
+		"plugins/core/statusline dir to copy statusline scripts from (optional)")
+
+	// The natural invocation is `onboard <slug> [packs...] [flags...]`, but the
+	// flag package stops at the first positional. Split leading positionals
+	// (never dash-prefixed) from the flag tail so both orderings work.
+	positional, flagArgs := splitPositional(args)
+	fs.Parse(flagArgs)
+	if len(positional) < 1 {
+		return fmt.Errorf("usage: swarmery onboard <slug> [pack ...] [--dir <path>] [--workspace-root <path>] [--statusline-src <path>]\n  packs: %v", onboard.KnownPacks)
+	}
+
+	projectDir := *dir
+	if projectDir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("resolve working directory: %w", err)
+		}
+		projectDir = cwd
+	}
+	abs, err := filepath.Abs(projectDir)
+	if err != nil {
+		return fmt.Errorf("resolve project dir: %w", err)
+	}
+
+	res, err := onboard.Run(onboard.Config{
+		Slug:          positional[0],
+		ProjectDir:    abs,
+		Packs:         positional[1:],
+		WorkspaceRoot: *wsRoot,
+		StatuslineSrc: *statuslineSrc,
+	})
+	if err != nil {
+		return err
+	}
+	for _, s := range res.Steps {
+		fmt.Println(s)
+	}
+	fmt.Printf("\nNext: open a FRESH Claude Code session in %s\n", abs)
+	fmt.Println("      → accept the 'swarmery' marketplace trust prompt → plugins install.")
+	fmt.Println("      Fill in .claude/project.json TODOs so agents know your repos/stack.")
+	return nil
+}
+
+// splitPositional partitions args into the leading run of positional tokens and
+// the remaining flag tail (everything from the first dash-prefixed token on).
+func splitPositional(args []string) (positional, flags []string) {
+	for i, a := range args {
+		if strings.HasPrefix(a, "-") {
+			return args[:i], args[i:]
+		}
+	}
+	return args, nil
 }
 
 func cmdServe(args []string) error {

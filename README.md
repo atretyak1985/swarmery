@@ -13,6 +13,38 @@ It's built for people who run **many projects — often for different clients �
 
 ---
 
+## Quickstart
+
+**Prerequisites:** git, Go ≥ 1.25 (older Go auto-downloads the pinned toolchain), Node ≥ 22.
+
+**1 — install & run the control plane.** One command clones (if needed), builds the single embedded binary, and prints how to serve it:
+
+```bash
+git clone https://github.com/atretyak1985/swarmery.git
+cd swarmery
+bash scripts/install-swarmery.sh          # build only — prints next steps
+# or: bash scripts/install-swarmery.sh --serve   # build + serve in the foreground
+```
+
+Then serve it and open the dashboard:
+
+```bash
+./tools/swarmery/swarmery serve                     # listens on :7777
+curl -s http://localhost:7777/api/health            # → {"status":"ok",…}
+open http://localhost:7777
+```
+
+**2 — onboard a project.** From any project's root, one command writes its `.claude/` config and carves the workspace namespace (idempotent — safe to re-run):
+
+```bash
+cd /path/to/your/project
+swarmery onboard <project-slug> [pack ...]          # packs: web-pack | iot-pack | uav-pack | infra-pack | lsp-pack
+```
+
+`swarmery onboard` is the binary twin of `scripts/init.sh` (the script delegates to it when the binary is on `PATH`, and falls back to pure bash otherwise). Open a fresh Claude Code session in the project, accept the `swarmery` marketplace trust prompt, and the project shows up in the dashboard as soon as its first session runs.
+
+---
+
 ## Control plane
 
 `swarmery serve` runs a lightweight daemon on `:7777` that indexes Claude Code sessions from their `.jsonl` transcripts into local SQLite and exposes a live web UI.
