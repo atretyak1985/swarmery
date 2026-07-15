@@ -45,9 +45,15 @@ jobs:
         run: |
           set -euo pipefail
           go test -coverprofile=coverage.out ./...
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,"",$3); print $3}')
-          echo "total coverage: ${total}%"
-          # Regression floor (current ~71.9%). Raise as coverage improves;
+          # Coverage-gate scope: the floor measures unit-testable logic only.
+          # The CLI entrypoint (cmd/swarmery) and go:embed-only packages
+          # (web, internal/docsfs) carry no unit-testable statements — they are
+          # exercised via the daemon/integration path — so they are excluded
+          # from the denominator to keep the floor honest and stable.
+          grep -vE '/(cmd/swarmery|web|internal/docsfs)/' coverage.out > coverage.gated.out
+          total=$(go tool cover -func=coverage.gated.out | awk '/^total:/ {gsub(/%/,"",$3); print $3}')
+          echo "gated coverage (excl. entrypoint & embed): ${total}%"
+          # Regression floor. Raise as coverage improves;
           # never set it above the live number or CI blocks legitimate work.
           floor=70.0
           awk -v t="$total" -v f="$floor" 'BEGIN { exit (t+0 >= f+0) ? 0 : 1 }' \

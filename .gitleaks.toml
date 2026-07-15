@@ -1,0 +1,14 @@
+# gitleaks config for the swarmery repo.
+# The CI secret-scan job runs `gitleaks detect --log-opts=--all`, i.e. over the
+# FULL history, so it re-scans historical blobs that predate any in-place fix.
+# `[extend] useDefault = true` keeps the entire built-in ruleset; the allowlists
+# below only carve out known-safe, non-secret test fixtures.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Redaction unit-test fixtures — deliberately fake/example secrets used to prove the log redactor scrubs them. Path-scoped so real secrets elsewhere are still caught."
+paths = [
+  '''tools/swarmery/internal/api/system_test\.go''',
+]
