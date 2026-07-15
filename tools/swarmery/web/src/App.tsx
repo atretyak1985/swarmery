@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { WSMessage } from './api/types';
 import { fetchApprovals, fetchDocs, fetchStatsOverview, MOCK } from './api';
+import { NewProjectButton } from './components/NewProjectButton';
 import { isoDay } from './lib/format';
 import { useHealth, shortVersion } from './lib/health';
 import { useLiveUpdates } from './lib/ws';
@@ -116,7 +117,14 @@ export function App(): JSX.Element {
             {crumb}
           </span>
         )}
-        <span className="ml-auto flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim">
+        {!MOCK && (
+          <span className="ml-auto">
+            <NewProjectButton />
+          </span>
+        )}
+        <span
+          className={`flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim ${MOCK ? 'ml-auto' : 'ml-3'}`}
+        >
           {MOCK ? (
             <>
               <span className="inline-block h-[7px] w-[7px] rounded-full bg-amber" />

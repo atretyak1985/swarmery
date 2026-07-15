@@ -10,6 +10,7 @@ import type {
   DocMeta,
   HealthResponse,
   MatrixResp,
+  OnboardResponse,
   PermissionRequest,
   PermissionRequestStatus,
   ProjectsResponse,
@@ -43,6 +44,29 @@ export interface SessionFilters {
 export function fetchProjects(): Promise<ProjectsResponse> {
   if (MOCK) return mockApi.projects();
   return get('/api/projects');
+}
+
+/**
+ * POST /api/projects/onboard — bootstrap a new consumer project (.claude/
+ * settings.json + project.json + workspace namespace). The endpoint is fenced
+ * to an allow-list and returns 403 when disabled; non-2xx throws the server's
+ * error text so the form can surface it inline.
+ */
+export async function onboardProject(
+  slug: string,
+  path: string,
+  packs: string[],
+): Promise<OnboardResponse> {
+  const res = await fetch('/api/projects/onboard', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug, path, packs }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `onboard failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as OnboardResponse;
 }
 
 export function fetchSessions(filters: SessionFilters = {}): Promise<SessionsResponse> {

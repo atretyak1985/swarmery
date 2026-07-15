@@ -698,3 +698,17 @@ export interface SystemOverlays {
   schemaPresent: boolean;
   overlays: SystemOverlay[];
 }
+
+/** POST /api/projects/onboard body — bootstrap a new consumer project. */
+export interface OnboardRequest {
+  slug: string;
+  path: string;
+  packs: string[];
+}
+
+/** Go: onboardResponse — 201 body, one human-readable line per step done. */
+export interface OnboardResponse {
+  slug: string;
+  path: string;
+  steps: string[];
+}
