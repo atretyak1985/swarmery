@@ -45,6 +45,12 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
 	mux.HandleFunc("POST /api/sessions/{id}/kill", requireLocalOrigin(h.KillSession))
 
+	// session message: resume an idle/completed conversation headlessly
+	// (`claude -r <uuid> -p`) — see internal/api/session_message.go. Same D4
+	// origin hardening as the other write endpoints; live sessions are rejected.
+	mux.HandleFunc("POST /api/sessions/{id}/message", requireLocalOrigin(h.PostSessionMessage))
+	mux.HandleFunc("POST /api/sessions/{id}/message/cancel", requireLocalOrigin(h.CancelSessionMessage))
+
 	// phase 4: system — read-only registry surface over the sysscan tables
 	// (step-05). GET only; every write flow is Stage 2.
 	mux.HandleFunc("GET /api/system/summary", h.systemSummary)

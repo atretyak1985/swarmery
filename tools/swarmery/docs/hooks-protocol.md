@@ -238,3 +238,78 @@ delivery differs.
 
 All E12 behaviors join the spike re-run checklist for Claude Code minor bumps
 (verified only on `2.1.170`) — see `hooks-format.md` §E12.
+
+---
+
+## Amendment 2 — dashboard message → headless resume (2026-07-15, additive)
+
+Send a message to a session's conversation from the detail page
+(`/sessions/:id`) via `POST /api/sessions/{id}/message`. This is the mirror image
+of the approvals channel: instead of the shim calling **in**, the daemon spawns
+a Claude Code run **out**.
+
+### Mechanism
+
+There is **no supported way to inject text into an already-running interactive
+TUI session** (upstream FR anthropics/claude-code#27441). Instead the handler
+runs a fresh print-mode process that *resumes* the conversation:
+
+```
+claude -r <session_uuid> -p <text> --output-format json      # cmd.Dir = session.cwd
+```
+
+Spike-verified (2026-07-15, Claude Code on this machine): `-r <uuid> -p` returns
+the **same** `session_id` and appends **both** the user prompt and the assistant
+reply to the **same** `<uuid>.jsonl` transcript — no fork, no new file. The live
+ingest watcher (`internal/ingest/tail.go`) tails those appended lines and
+publishes `session_updated` / `event_appended` on the WS bus, so the new turns
+render on the open detail with **no synthetic event** and no ingest change.
+
+### Request / response
+
+```
+POST /api/sessions/{id}/message   Body: {"text": string}
+202 Accepted  {"status":"started"}         # resume runs detached; turns arrive via WS
+```
+
+Reject paths (all evaluated before the spawn, so guards are testable without the
+binary):
+
+| Code | When |
+|------|------|
+| 400  | empty/whitespace `text`, or `text` > 16 000 chars, or malformed body/id |
+| 404  | no session with that id |
+| 409  | session has a **live process** (`proc_state` `running` or `orphaned`) — a real terminal owns the transcript; a parallel resume would race on the JSONL. Stop it first (see below). |
+| 409  | session has no `cwd` to resume in, or a resume is already in flight for this uuid (single-flight) |
+| 403  | cross-origin browser POST (D4 `requireLocalOrigin`, same as every write endpoint) |
+| 503  | `claude` executable not found (override with `SWARMERY_CLAUDE_BIN`; the daemon also probes `/opt/homebrew/bin`, `/usr/local/bin`, `~/.claude/local`, `~/.local/bin`, npm-global, `~/bin` because launchd runs with a minimal PATH) |
+
+The guard is on the **live process**, not the time-based `status`: a session that
+reads `active` only because our own resume just appended to it has `proc_state`
+dead/null, so it stays writable — no false lockout after each send.
+
+### Stop-to-take-over
+
+When a session *does* have a live process, the composer shows **Stop** instead
+of Send. Stop is the existing `POST /api/sessions/{id}/kill` (SIGTERM;
+`{"force":true}` = SIGKILL). On a successful signal the handler now **eagerly**
+sets `status='killed'`, `proc_state='dead'`, `ended_at` and publishes
+`session_updated`, so the composer unblocks in real time rather than after the
+next 30 s procwatch tick. The user then types and Send resumes the (now
+process-free) conversation.
+
+### Boundaries
+
+- Targets **idle/completed/killed** sessions — the "reopen an old conversation
+  and continue it" case. Live sessions are intentionally out of scope.
+- Per the *Known boundary* above, the resumed `-p` run does **not** fire the
+  `PermissionRequest` hook, so tool-using continuations fall back to the headless
+  default; the composer is best for conversational follow-ups.
+- The spawn is fire-and-forget (15 min ctx timeout); stdout is not parsed — the
+  ingest tail is the single source of truth for the resulting turns.
+
+### Version fragility
+
+The `-r … -p` "append to same transcript" behavior is an observed property, not a
+documented contract — re-run the spike on Claude Code minor bumps alongside the
+approvals harness.

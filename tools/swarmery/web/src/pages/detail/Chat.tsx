@@ -11,6 +11,7 @@ import { fmtAgo, fmtTime } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { pickString } from '../../lib/payload';
 import { Empty } from '../../components/ui';
+import { LiveActivity } from './LiveActivity';
 
 /* ----- tool activity one-liner ----- */
 
@@ -173,11 +174,29 @@ function AwaitingApprovalPill({ since }: { since: string | null }): JSX.Element 
   );
 }
 
+/** Optimistic bubble for a message the user just sent, before its real turn is
+ * ingested — visually identical to a user turn but dimmed with a pending dot. */
+function PendingTurn({ text }: { text: string }): JSX.Element {
+  return (
+    <div className="my-[7px] flex flex-col items-end">
+      <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink opacity-60">
+        {text}
+      </div>
+      <span className="mt-1 flex items-center gap-1.5 pr-1 font-mono text-[10px] text-ink-faint">
+        <span className="h-[6px] w-[6px] animate-blink-dot rounded-full bg-brand" aria-hidden="true" />
+        sending…
+      </span>
+    </div>
+  );
+}
+
 export function Chat({
   detail,
+  pending = [],
   onShowTimeline,
 }: {
   detail: SessionDetail;
+  pending?: readonly string[];
   onShowTimeline: () => void;
 }): JSX.Element {
   const turns = useMemo(() => detail.turns.slice().sort((a, b) => a.seq - b.seq), [detail.turns]);
@@ -192,7 +211,7 @@ export function Chat({
     return map;
   }, [detail.events]);
 
-  if (turns.length === 0) {
+  if (turns.length === 0 && pending.length === 0) {
     return <Empty>no conversation in this session yet</Empty>;
   }
   const assistantTurns = turns.filter((t) => t.role === 'assistant');
@@ -215,6 +234,10 @@ export function Chat({
           onShowTimeline={onShowTimeline}
         />
       ))}
+      {pending.map((text, i) => (
+        <PendingTurn key={`pending-${String(i)}`} text={text} />
+      ))}
+      <LiveActivity detail={detail} />
       {detail.status === 'waiting_approval' && (
         <AwaitingApprovalPill since={lastEvent !== undefined ? fmtAgo(lastEvent.ts) : null} />
       )}

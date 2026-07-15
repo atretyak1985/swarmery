@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -14,6 +15,44 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 )
+
+// killEscalationDelay is how long a graceful SIGTERM is given to work before the
+// process is escalated to SIGKILL. Override with SWARMERY_KILL_ESCALATION (a Go
+// duration, e.g. "8s"); default 5s, and "0" disables escalation entirely.
+func killEscalationDelay() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("SWARMERY_KILL_ESCALATION")); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return 5 * time.Second
+}
+
+// escalateKill waits delay, then SIGKILLs pid if it is still the same live
+// claude process. It re-runs the full identity guard (command name +
+// start-time) so a PID recycled to another process after SIGTERM is never
+// signalled. Best-effort: the session is already marked killed by the caller.
+func escalateKill(pid int, procStartedAt, sessionUUID string, delay time.Duration) {
+	if delay <= 0 {
+		return
+	}
+	time.Sleep(delay)
+	info, err := procwatch.OsProvider{}.Info(pid)
+	if err != nil || info == nil {
+		return // SIGTERM worked — nothing left to kill
+	}
+	if !strings.Contains(strings.ToLower(info.Command), "claude") {
+		return // PID recycled to a non-claude process — refuse to signal
+	}
+	if procStartedAt != "" && info.StartTime != procStartedAt {
+		return // PID reused — refuse to signal
+	}
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+		log.Printf("prockill: escalate SIGKILL pid %d (session %s): %v", pid, sessionUUID, err)
+		return
+	}
+	log.Printf("prockill: escalated to SIGKILL pid %d (session %s survived SIGTERM for %s)", pid, sessionUUID, delay)
+}
 
 // POST /api/hooks/session-start — called by the hookshim when a new Claude
 // Code session starts. Binds the reported PID to the session after verifying
@@ -110,5 +149,27 @@ func (h *Handler) KillSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("prockill: sent sig %d to pid %d (session %s, force=%v)", sig, pid.Int64, sessionUUID, req.Force)
+
+	// A graceful SIGTERM may be ignored by a wedged process — escalate to
+	// SIGKILL after a grace period if it is still the same live claude process.
+	// Force kills are already SIGKILL, so they need no escalation.
+	if !req.Force {
+		go escalateKill(int(pid.Int64), procStartedAt.String, sessionUUID, killEscalationDelay())
+	}
+
+	// Eagerly reflect the kill so the UI unblocks immediately instead of waiting
+	// up to one procwatch tick (30s): mark the session finished and its process
+	// dead, then push a session_updated so the detail view (and its message
+	// composer) re-enable in real time. procwatch/ingest never revert a 'killed'
+	// row, and gating the composer on proc_state means it becomes writable at once.
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := h.DB.Exec(
+		`UPDATE sessions SET status = 'killed', proc_state = ?, proc_checked_at = ?,
+		 ended_at = COALESCE(ended_at, ?) WHERE id = ?`,
+		procwatch.StateDead, now, now, id); err != nil {
+		log.Printf("prockill: mark session %d killed after signal: %v", id, err)
+	}
+	publishSessionUpdated(id)
+
 	w.WriteHeader(http.StatusAccepted)
 }

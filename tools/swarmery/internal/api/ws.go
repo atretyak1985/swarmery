@@ -24,6 +24,15 @@ var wsBus *ingest.Bus
 // AttachBus wires the ingest event bus into the /api/ws endpoint.
 func AttachBus(b *ingest.Bus) { wsBus = b }
 
+// publishSessionUpdated notifies WS subscribers that a session row changed so
+// the dashboard reflects it without waiting for the next procwatch tick. A
+// no-op when the bus is not attached (e.g. serve --no-ingest).
+func publishSessionUpdated(id int64) {
+	if wsBus != nil {
+		wsBus.Publish(ingest.Notification{Type: ingest.NoteSessionUpdated, SessionID: id})
+	}
+}
+
 const (
 	wsSubscriberBuffer = 256
 	wsWriteTimeout     = 5 * time.Second
@@ -147,6 +156,7 @@ func (h *Handler) sessionByID(id int64) (*sessionDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	setResumeState(&s)
 	return &s, nil
 }
 

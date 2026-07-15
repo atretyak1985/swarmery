@@ -17,6 +17,7 @@ import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
 import { Chat } from './detail/Chat';
+import { CommandInput } from './detail/CommandInput';
 import { SummaryChips } from './detail/SummaryChips';
 import { DetailRail } from './detail/DetailRail';
 
@@ -47,6 +48,9 @@ export function SessionDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Optimistic echo of messages sent via the composer — shown immediately as
+  // pending user bubbles until the real turn is ingested (dropped on match).
+  const [pending, setPending] = useState<string[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
   const setTab = (next: Tab): void => {
@@ -63,10 +67,47 @@ export function SessionDetailPage(): JSX.Element {
       .catch((e: unknown) => setError(String(e)));
   }, [id]);
 
+  // New turns (chat bubbles) are NOT carried on the WS bus — only session_updated
+  // (header fields) and event_appended (timeline events) are. So a coalesced
+  // refetch on any activity for THIS session pulls fresh turns within ~0.5s
+  // instead of waiting for the 60s reconcile net.
+  const detailIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    detailIdRef.current = detail?.id ?? null;
+  }, [detail]);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLoad = useCallback((): void => {
+    if (reloadTimer.current !== null) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => {
+      reloadTimer.current = null;
+      load();
+    }, 500);
+  }, [load]);
+  useEffect(
+    () => () => {
+      if (reloadTimer.current !== null) clearTimeout(reloadTimer.current);
+    },
+    [],
+  );
+
   useEffect(() => {
     setDetail(null);
+    setPending([]);
     load();
   }, [load]);
+
+  // Reconcile: drop any optimistic bubble once its real user turn is ingested.
+  useEffect(() => {
+    if (detail === null) return;
+    setPending((prev) =>
+      prev.filter(
+        (t) =>
+          !detail.turns.some(
+            (turn) => turn.role === 'user' && (turn.text ?? '').trim() === t.trim(),
+          ),
+      ),
+    );
+  }, [detail]);
 
   // The newest activity lives at the bottom — on tab switch (and first data
   // load) jump the panel to the end so live sessions open on "now". When a
@@ -117,8 +158,18 @@ export function SessionDetailPage(): JSX.Element {
       }
       return { ...prev, events: [...prev.events, event] };
     });
-  }, []);
+    // Either message type signals activity on a session — refetch turns for the
+    // open one so new chat bubbles (ours and the agent's replies) appear live.
+    const forThis =
+      (msg.type === 'event_appended' && msg.payload.sessionId === detailIdRef.current) ||
+      (msg.type === 'session_updated' && msg.payload.id === detailIdRef.current);
+    if (forThis) scheduleLoad();
+  }, [scheduleLoad]);
   useLiveUpdates(onMessage, load);
+
+  const onSent = useCallback((text: string): void => {
+    setPending((p) => [...p, text]);
+  }, []);
 
   const facts = useMemo(() => {
     if (detail === null) return null;
@@ -232,14 +283,32 @@ export function SessionDetailPage(): JSX.Element {
       {/* Only this region scrolls: the tab panel (and, ≥1280px, the rail in
           its own column) — breadcrumb/title/facts/tab strip stay pinned. */}
       <div className="flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(0,1fr)_300px] wide:grid-rows-[minmax(0,1fr)] wide:gap-6 wide:px-10">
-        <div
-          role="tabpanel"
-          ref={panelRef}
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 pb-6 desk:px-10 wide:px-0 [-webkit-overflow-scrolling:touch]"
-        >
-          {tab === 'chat' && <Chat detail={detail} onShowTimeline={() => setTab('timeline')} />}
-          {tab === 'timeline' && <Timeline detail={detail} />}
-          {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}
+        {/* Left column: the scrolling tab panel with, on the Chat tab, a pinned
+            composer footer below it (the panel scrolls, the composer stays). */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            role="tabpanel"
+            ref={panelRef}
+            className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 desk:px-10 wide:px-0 [-webkit-overflow-scrolling:touch]"
+          >
+            {tab === 'chat' && (
+              <Chat
+                detail={detail}
+                pending={pending}
+                onShowTimeline={() => setTab('timeline')}
+              />
+            )}
+            {tab === 'timeline' && <Timeline detail={detail} />}
+            {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}
+          </div>
+          {tab === 'chat' && (
+            <CommandInput
+              sessionId={detail.id}
+              procState={detail.procState}
+              resumeInFlight={detail.resumeInFlight ?? false}
+              onSent={onSent}
+            />
+          )}
         </div>
 
         <div className="hidden min-h-0 wide:block wide:overflow-y-auto wide:py-6">

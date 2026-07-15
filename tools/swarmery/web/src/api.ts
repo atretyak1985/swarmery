@@ -208,3 +208,37 @@ export async function killSession(id: number, force = false): Promise<void> {
     throw new Error(data.error ?? `kill failed: ${String(res.status)}`);
   }
 }
+
+/**
+ * POST /api/sessions/{id}/message — resume an idle/completed conversation
+ * headlessly (`claude -r <uuid> -p <text>`). Returns 202 immediately; the
+ * resulting user + assistant turns arrive on the open detail via the WS bus
+ * once the ingest watcher tails the transcript. Non-2xx (409 for a live
+ * session, 503 when the claude binary is missing) throws with the server's
+ * error text so the composer can surface it inline.
+ */
+export async function sendSessionMessage(id: number, text: string): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/sessions/${String(id)}/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error ?? `send failed: ${String(res.status)}`);
+  }
+}
+
+/**
+ * POST /api/sessions/{id}/message/cancel — abort the in-flight headless resume
+ * run (kills the child claude process). 409 when nothing is in flight.
+ */
+export async function cancelSessionMessage(id: number): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/sessions/${String(id)}/message/cancel`, { method: 'POST' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error ?? `cancel failed: ${String(res.status)}`);
+  }
+}

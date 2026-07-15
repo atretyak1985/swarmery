@@ -32,6 +32,8 @@ var (
 		// canvas wave: one-line intent from the first user turn (omitempty —
 		// present here because the fixture session has a user prompt).
 		"why",
+		// session composer: dashboard-initiated resume run flag (in-memory).
+		"resumeInFlight",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",
