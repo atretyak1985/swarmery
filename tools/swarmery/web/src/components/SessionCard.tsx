@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import type { Session } from '../api/types';
-import { projectColor } from '../lib/colors';
 import { fmtSpan, fmtTime } from '../lib/format';
 import { KillButton } from './KillButton';
 import { ProjectName } from './ProjectName';
@@ -31,17 +30,6 @@ const CARD_BORDERS: Partial<Record<Session['status'], string>> = {
   active: 'border-green/25 hover:border-green/55',
   waiting_approval: 'border-amber/35 hover:border-amber/70',
 };
-
-/** Small project accent dot (stable color by slug). */
-function ProjectDot({ slug }: { slug: string }): JSX.Element {
-  return (
-    <span
-      className="h-1.5 w-1.5 shrink-0 rounded-full"
-      style={{ background: projectColor(slug) }}
-      aria-hidden="true"
-    />
-  );
-}
 
 /* ----- Canvas visual bucket (Canvas.dc.html §Sessions: active/done/error) —
  * the real SessionStatus keeps 5 values; the flat-row dot/chip only draw from
@@ -188,8 +176,7 @@ export function SessionCard({
         <span className="flex justify-center">
           <RowDot tone={tone} />
         </span>
-        <span className="flex min-w-0 items-center gap-[7px]">
-          <ProjectDot slug={session.projectSlug} />
+        <span className="flex min-w-0 items-center">
           <ProjectName
             name={session.projectName}
             slug={session.projectSlug}

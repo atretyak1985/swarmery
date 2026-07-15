@@ -305,18 +305,11 @@ function SpineRow({
           className="block w-full min-w-0 rounded-md text-left focus-visible:outline-2 focus-visible:outline-brand"
         >
           <div className="flex flex-wrap items-center gap-[9px]">
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ background: projectColor(session.projectSlug) }}
-                aria-hidden="true"
-              />
-              <ProjectName
-                name={session.projectName}
-                slug={session.projectSlug}
-                className="font-mono text-[10.5px]"
-              />
-            </span>
+            <ProjectName
+              name={session.projectName}
+              slug={session.projectSlug}
+              className="font-mono text-[10.5px]"
+            />
             <span
               className={`rounded-full border px-[9px] py-px font-mono text-[10px] whitespace-nowrap ${chipTone}`}
             >

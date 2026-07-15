@@ -29,7 +29,6 @@ import {
   type AnswerMap,
   type ParsedQuestion,
 } from '../lib/approvals';
-import { projectColor } from '../lib/colors';
 import { fmtAgo } from '../lib/format';
 import { applyPermissionMessage, useLiveUpdates } from '../lib/ws';
 import { Empty, ErrorBox, Loading } from '../components/ui';
@@ -242,13 +241,6 @@ function PendingCard({
         to={sessionTo}
         className="mt-2.5 flex items-center gap-[7px] font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
       >
-        {session !== null && (
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ background: projectColor(session.projectSlug) }}
-            aria-hidden="true"
-          />
-        )}
         <span className="truncate"><SessionLabel sessionId={request.sessionId} session={session} /></span>
       </Link>
 
