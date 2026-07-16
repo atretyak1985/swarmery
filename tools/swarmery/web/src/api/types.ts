@@ -252,8 +252,17 @@ export interface SessionDetail extends Session {
 /** GET /api/projects */
 export type ProjectsResponse = Project[];
 
-/** GET /api/sessions?project=<slug|id>&status=<status> */
-export type SessionsResponse = Session[];
+/**
+ * GET /api/sessions?project=&status=&limit=&cursor= — keyset-paginated
+ * envelope (ops-hygiene wave; additive contract change resolved at
+ * integration: the bare array became this envelope, all consumers updated).
+ */
+export interface SessionsPage {
+  sessions: Session[];
+  /** Opaque keyset cursor for the next page; null on the last page. */
+  nextCursor: string | null;
+}
+export type SessionsResponse = SessionsPage;
 
 /** GET /api/sessions/{id} — id is the numeric row id or the session UUID. */
 export type SessionDetailResponse = SessionDetail;

@@ -641,7 +641,7 @@ export function Approvals(): JSX.Element {
   useEffect(() => {
     if (requests === null || requests.length === 0 || sessions !== null) return;
     fetchSessions()
-      .then(setSessions)
+      .then((page) => setSessions(page.sessions))
       .catch(() => setSessions([]));
   }, [requests, sessions]);
 

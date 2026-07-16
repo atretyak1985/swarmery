@@ -19,6 +19,7 @@ import { SessionCard } from '../components/SessionCard';
 import { Empty, ErrorBox, GroupHeader, Loading } from '../components/ui';
 
 const SEARCH_DEBOUNCE_MS = 150;
+const PAGE_LIMIT = 100;
 
 /** Case-insensitive substring match over title / project name / slug / branch. */
 function matchesQuery(s: Session, q: string): boolean {
@@ -242,8 +243,11 @@ export function Sessions(): JSX.Element {
   const [project, setProject] = useState<string | null>(searchParams.get('project'));
   const [status, setStatus] = useState<SessionStatus | null>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowById, setNowById] = useState<Record<number, string>>({});
+  const loadingMoreRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Title search: raw input + a ~150ms-debounced lowercase query.
   const [search, setSearch] = useState('');
@@ -259,14 +263,18 @@ export function Sessions(): JSX.Element {
       .catch(() => setProjects([])); // dropdown degrades to "all projects"
   }, []);
 
+  // First page — also the WS-reconnect refetch: the live socket keeps the
+  // loaded window fresh in between, so resetting to page 1 on reconnect is
+  // the simplest correct behaviour (older pages reload on scroll).
   // Only the project filter goes to the API — status stays client-side so
   // the chip counts can be computed over every status of the loaded list.
   const load = useCallback((): void => {
     const filters: { project?: string } = {};
     if (project !== null) filters.project = project;
-    fetchSessions(filters)
-      .then((list) => {
-        setSessions(list);
+    fetchSessions(filters, { limit: PAGE_LIMIT })
+      .then((page) => {
+        setSessions(page.sessions);
+        setNextCursor(page.nextCursor);
         setError(null);
       })
       .catch((e: unknown) => setError(String(e)));
@@ -274,8 +282,44 @@ export function Sessions(): JSX.Element {
 
   useEffect(() => {
     setSessions(null);
+    setNextCursor(null);
     load();
   }, [load]);
+
+  // Next page: append, dedup by id (a WS prepend may already hold a row).
+  const loadMore = useCallback((): void => {
+    if (nextCursor === null || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    const filters: { project?: string } = {};
+    if (project !== null) filters.project = project;
+    fetchSessions(filters, { limit: PAGE_LIMIT, cursor: nextCursor })
+      .then((page) => {
+        setSessions((prev) => {
+          const seen = new Set((prev ?? []).map((s) => s.id));
+          return [...(prev ?? []), ...page.sessions.filter((s) => !seen.has(s.id))];
+        });
+        setNextCursor(page.nextCursor);
+      })
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => {
+        loadingMoreRef.current = false;
+      });
+  }, [nextCursor, project]);
+
+  // Infinite scroll: a sentinel row after the last day group fetches the next
+  // page while one exists (rootMargin prefetches before it is visible).
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (el === null || nextCursor === null) return undefined;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      },
+      { rootMargin: '400px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [nextCursor, loadMore]);
 
   const matchesProject = useCallback(
     (s: Session): boolean => project === null || s.projectSlug === project,
@@ -303,7 +347,8 @@ export function Sessions(): JSX.Element {
   );
   useLiveUpdates(onMessage, load);
 
-  // Chip counts come from the searched + project-filtered list (pre-status).
+  // Chip counts come from the searched + project-filtered list (pre-status),
+  // over the LOADED pages only — deeper history loads on scroll.
   const searched = (sessions ?? []).filter((s) => matchesQuery(s, query));
   const counts: Record<SessionStatus, number> = {
     active: 0,
@@ -392,6 +437,11 @@ export function Sessions(): JSX.Element {
           </div>
         </section>
       ))}
+      {nextCursor !== null && (
+        <div ref={sentinelRef} className="py-6 text-center font-mono text-[11px] text-ink-faint">
+          loading more…
+        </div>
+      )}
     </div>
   );
 }

@@ -1143,13 +1143,14 @@ export const mockApi = {
 
   async sessions(filters: MockFilters = {}): Promise<SessionsResponse> {
     await delay(150);
-    return mockSessions
+    const sessions = mockSessions
       .filter((s) => {
         if (filters.project !== undefined && filters.project !== s.projectSlug) return false;
         if (filters.status !== undefined && filters.status !== s.status) return false;
         return true;
       })
       .map((s) => ({ ...s }));
+    return { sessions, nextCursor: null };
   },
 
   async session(id: number | string): Promise<SessionDetail> {

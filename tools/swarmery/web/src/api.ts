@@ -136,11 +136,23 @@ export async function onboardProject(
   return (await res.json()) as OnboardResponse;
 }
 
-export function fetchSessions(filters: SessionFilters = {}): Promise<SessionsResponse> {
+export interface SessionPageOpts {
+  /** Server default 100, max 500. */
+  limit?: number;
+  /** nextCursor of the previous page. */
+  cursor?: string;
+}
+
+export function fetchSessions(
+  filters: SessionFilters = {},
+  page: SessionPageOpts = {},
+): Promise<SessionsResponse> {
   if (MOCK) return mockApi.sessions(filters);
   const qs = new URLSearchParams();
   if (filters.project !== undefined) qs.set('project', filters.project);
   if (filters.status !== undefined) qs.set('status', filters.status);
+  if (page.limit !== undefined) qs.set('limit', String(page.limit));
+  if (page.cursor !== undefined) qs.set('cursor', page.cursor);
   const query = qs.toString();
   return get(`/api/sessions${query === '' ? '' : `?${query}`}`);
 }

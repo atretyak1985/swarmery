@@ -540,8 +540,8 @@ export function Overview(): JSX.Element {
 
   const loadSessions = useCallback((): void => {
     fetchSessions()
-      .then((list) => {
-        setSessions(list);
+      .then((page) => {
+        setSessions(page.sessions);
         setError(null);
       })
       .catch((e: unknown) => setError(String(e)));
