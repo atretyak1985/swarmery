@@ -439,7 +439,8 @@ function MainChart({
   }
 
   return (
-    <div className="h-[240px] w-full">
+    <div className="w-full">
+      <div className="h-[240px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
@@ -477,6 +478,8 @@ function MainChart({
           })}
         </AreaChart>
       </ResponsiveContainer>
+      </div>
+      {data.approx && <ApproxHint />}
     </div>
   );
 }
