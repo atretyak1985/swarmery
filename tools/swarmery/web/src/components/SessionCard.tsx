@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Session } from '../api/types';
 import { fmtSpan, fmtTime } from '../lib/format';
 import { KillButton } from './KillButton';
+import { OUTCOME_GLYPH } from './OutcomePicker';
 import { ProjectName } from './ProjectName';
 import { ProcBadge } from './ProcBadge';
 import { TaskChip } from './TaskChip';
@@ -112,6 +113,14 @@ export function SessionCard({
           className="min-w-0 flex-1 truncate font-mono text-[11px]"
         />
         <ProcBadge session={session} />
+        {session.outcome != null && (
+          <span
+            title={session.outcome}
+            className={`font-mono text-[11px] ${OUTCOME_GLYPH[session.outcome].className}`}
+          >
+            {OUTCOME_GLYPH[session.outcome].glyph}
+          </span>
+        )}
         <StatusChip status={session.status} suffix={chipSuffix(session)} />
       </div>
       <div className="mt-px mb-[3px] truncate text-[13.5px] font-semibold">
@@ -184,12 +193,22 @@ export function SessionCard({
           />
         </span>
         <span className="min-w-0">
-          <span
-            className={`block truncate text-[14px] font-semibold ${
-              session.title === null ? 'font-normal text-ink-faint italic' : 'text-ink'
-            }`}
-          >
-            {session.title ?? '(untitled session)'}
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span
+              className={`min-w-0 truncate text-[14px] font-semibold ${
+                session.title === null ? 'font-normal text-ink-faint italic' : 'text-ink'
+              }`}
+            >
+              {session.title ?? '(untitled session)'}
+            </span>
+            {session.outcome != null && (
+              <span
+                title={session.outcome}
+                className={`shrink-0 font-mono text-[11px] ${OUTCOME_GLYPH[session.outcome].className}`}
+              >
+                {OUTCOME_GLYPH[session.outcome].glyph}
+              </span>
+            )}
           </span>
           <span className="mt-0.5 block truncate text-[12px] text-[#6c7178]">
             {liveNow ? `now: ${now}` : (session.why ?? meta(session))}

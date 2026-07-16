@@ -8,10 +8,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import type { SessionDetail, SessionStatus, WSMessage } from '../api/types';
-import { fetchSession } from '../api';
+import type { SessionDetail, SessionOutcome, SessionStatus, WSMessage } from '../api/types';
+import { fetchSession, patchSessionOutcome } from '../api';
 import { fmtAgo, fmtCost, fmtSpan, fmtTokens } from '../lib/format';
 import { useLiveUpdates } from '../lib/ws';
+import { OutcomePicker } from '../components/OutcomePicker';
 import { TaskChip } from '../components/TaskChip';
 import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
@@ -172,6 +173,16 @@ export function SessionDetailPage(): JSX.Element {
     setPending((p) => [...p, text]);
   }, []);
 
+  // Optimistic outcome toggle; revert on API failure.
+  const setOutcome = (next: SessionOutcome | null): void => {
+    if (detail === null) return;
+    const prev = detail.outcome ?? null;
+    setDetail({ ...detail, outcome: next });
+    patchSessionOutcome(detail.id, next).catch(() => {
+      setDetail((d) => (d === null ? d : { ...d, outcome: prev }));
+    });
+  };
+
   const facts = useMemo(() => {
     if (detail === null) return null;
     let tokens = 0;
@@ -246,6 +257,7 @@ export function SessionDetailPage(): JSX.Element {
                   confidence={detail.taskConfidence}
                 />
               )}
+              <OutcomePicker value={detail.outcome ?? null} onChange={setOutcome} />
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-[22px]">

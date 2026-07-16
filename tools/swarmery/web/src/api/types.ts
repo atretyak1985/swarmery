@@ -141,6 +141,9 @@ export interface DetachResponse {
   backup?: string;
 }
 
+/** sessions.outcome (migration 0014) — manual verdict; null = not judged. */
+export type SessionOutcome = 'success' | 'fail' | 'abandoned';
+
 /** Go: sessionDTO */
 export interface Session {
   id: number;
@@ -172,6 +175,8 @@ export interface Session {
   procState?: ProcState | null;
   /** OS PID of the claude process; null when not tracked or remote session. */
   procPid?: number | null;
+  /** Manual verdict set from the dashboard (additive optional). */
+  outcome?: SessionOutcome | null;
   /**
    * One-line intent summarised from the first user turn's prose (additive
    * optional): absent until the session has a user turn with text.

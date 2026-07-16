@@ -22,6 +22,7 @@ import type {
   ProjectsResponse,
   SearchResponse,
   SessionDetailResponse,
+  SessionOutcome,
   SessionsResponse,
   StatsOverview,
   StatsToday,
@@ -384,6 +385,25 @@ export async function cancelSessionMessage(id: number): Promise<void> {
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error ?? `cancel failed: ${String(res.status)}`);
+  }
+}
+
+/**
+ * PATCH /api/sessions/{id} — set or clear (null) the manual session outcome.
+ */
+export async function patchSessionOutcome(
+  id: number,
+  outcome: SessionOutcome | null,
+): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/sessions/${String(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ outcome }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `outcome failed: ${String(res.status)}`);
   }
 }
 
