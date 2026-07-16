@@ -25,10 +25,19 @@ import type {
   BreakdownRow,
   MatrixResp,
   TimeseriesResp,
+  ToolsResp,
 } from '../api/types';
-import { fetchBreakdown, fetchMatrix, fetchTimeseries } from '../api';
+import { fetchBreakdown, fetchMatrix, fetchTimeseries, fetchToolStats } from '../api';
 import { projectColor } from '../lib/colors';
-import { addDays, fmtAgo, fmtCost, fmtDayShort, fmtTokens, isoDay } from '../lib/format';
+import {
+  addDays,
+  fmtAgo,
+  fmtCost,
+  fmtDayShort,
+  fmtDurationMs,
+  fmtTokens,
+  isoDay,
+} from '../lib/format';
 import { useScope } from '../lib/scope';
 import { Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 
@@ -651,6 +660,73 @@ function MatrixPanel({
   );
 }
 
+/* ----- tools panel ----- */
+
+function ToolsPanel({ data }: { data: ToolsResp }): JSX.Element {
+  const [open, setOpen] = useState<string | null>(null);
+  const max = data.tools.reduce((m, t) => Math.max(m, t.calls), 0);
+
+  if (data.tools.length === 0) return <Empty>no tool calls in this range</Empty>;
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-baseline gap-2 pr-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+        <span className="min-w-0 flex-1">tool</span>
+        <span className="w-16 text-right">calls</span>
+        <span className="w-14 text-right">errors</span>
+        <span className="w-14 text-right">denied</span>
+        <span className="w-16 text-right">avg</span>
+        <span className="w-16 text-right">p95</span>
+      </div>
+      {data.tools.map((t) => (
+        <div key={t.tool}>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => (o === t.tool ? null : t.tool))}
+            className="block w-full text-left"
+            aria-expanded={open === t.tool}
+          >
+            <div className="flex items-baseline gap-2 font-mono text-[11.5px]">
+              <span className="min-w-0 flex-1 truncate text-ink-3">
+                {open === t.tool ? '▾ ' : '▸ '}
+                {t.tool}
+              </span>
+              <span className="w-16 text-right text-ink">{t.calls}</span>
+              <span className={`w-14 text-right ${t.errors > 0 ? 'text-red' : 'text-ink-faint'}`}>
+                {t.errors}
+              </span>
+              <span className={`w-14 text-right ${t.denied > 0 ? 'text-brand' : 'text-ink-faint'}`}>
+                {t.denied}
+              </span>
+              <span className="w-16 text-right text-ink-dim">
+                {fmtDurationMs(t.avg_ms !== null ? Math.round(t.avg_ms) : null)}
+              </span>
+              <span className="w-16 text-right text-ink-dim">{fmtDurationMs(t.p95_ms)}</span>
+            </div>
+            <Bar pct={max > 0 ? t.calls / max : 0} color="#6fb4f0" />
+          </button>
+          {open === t.tool && (
+            <div className="mt-1.5 mb-1 ml-4 flex flex-col gap-1 border-l border-line pl-3">
+              {t.agents.map((a) => (
+                <div
+                  key={a.agent}
+                  className="flex items-baseline gap-2 font-mono text-[10.5px] text-ink-dim"
+                >
+                  <span className="min-w-0 flex-1 truncate">{a.agent}</span>
+                  <span className="w-16 text-right">{a.calls} calls</span>
+                  <span className={`w-14 text-right ${a.errors > 0 ? 'text-red' : ''}`}>
+                    {a.errors} err
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ----- screen ----- */
 
 export function Analytics(): JSX.Element {
@@ -671,6 +747,7 @@ export function Analytics(): JSX.Element {
   const [matrixMetric, setMatrixMetric] = useState<'runs' | 'cost'>('runs');
   const [transposed, setTransposed] = useState(false);
   const [matrix, setMatrix] = useState<MatrixResp | null>(null);
+  const [tools, setTools] = useState<ToolsResp | null>(null);
   // cost is agent-only (skills own no turns); force runs when viewing skills.
   const effMatrixMetric: 'runs' | 'cost' = matrixRows === 'skill' ? 'runs' : matrixMetric;
 
@@ -712,6 +789,13 @@ export function Analytics(): JSX.Element {
       .then(setMatrix)
       .catch(() => setMatrix(null));
   }, [matrixRows, effMatrixMetric, from, to, scope]);
+
+  useEffect(() => {
+    const range = { from, to, ...(scope !== null ? { project: scope } : {}) };
+    fetchToolStats(range)
+      .then(setTools)
+      .catch(() => setTools(null));
+  }, [from, to, scope]);
 
   const toggleSeries = useCallback((key: string): void => {
     setHidden((prev) => {
@@ -865,6 +949,13 @@ export function Analytics(): JSX.Element {
           </div>
         </section>
       </div>
+
+      <section className="mt-5">
+        <SectionTitle>Tools</SectionTitle>
+        <div className="rounded-[14px] border border-line px-3.5 py-3.5">
+          {tools === null ? <Loading label="tools…" /> : <ToolsPanel data={tools} />}
+        </div>
+      </section>
     </div>
   );
 }

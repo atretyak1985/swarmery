@@ -10,6 +10,7 @@ import type {
   BreakdownRow,
   MatrixResp,
   TimeseriesResp,
+  ToolsResp,
 } from '../api/types';
 import { addDays, isoDay } from '../lib/format';
 import { mockProjects } from './data';
@@ -190,4 +191,33 @@ export function mockMatrix(
     cols: colMembers.filter((m) => (colTotals.get(m.key) ?? 0) > 0).sort(rank(colTotals)),
     cells,
   };
+}
+
+const TOOLS = ['Bash', 'Read', 'Edit', 'Grep', 'Write', 'Agent', 'Skill', 'WebFetch'];
+
+export function mockToolStats(range: Range): ToolsResp {
+  const days = resolveDays(range);
+  const tools = TOOLS.map((tool) => {
+    const calls = days.reduce((a, d) => a + Math.round(rand(`${tool}|${d}|c`) * 40), 0);
+    const errors = Math.round(calls * rand(`${tool}|err`) * 0.06);
+    const denied = tool === 'Bash' ? Math.round(calls * 0.01) : 0;
+    const avg = 120 + rand(`${tool}|avg`) * 3000;
+    const agents = ['main', ...AGENTS.slice(0, 3)].map((agent, i) => ({
+      agent,
+      calls: Math.max(1, Math.round(calls * (i === 0 ? 0.6 : 0.13))),
+      errors: i === 1 ? errors : 0,
+    }));
+    return {
+      tool,
+      calls,
+      errors,
+      denied,
+      avg_ms: Math.round(avg),
+      p95_ms: Math.round(avg * 3.2),
+      agents,
+    };
+  })
+    .filter((t) => t.calls > 0)
+    .sort((a, b) => b.calls - a.calls);
+  return { from: days[0] ?? isoDay(), to: days[days.length - 1] ?? isoDay(), tools };
 }

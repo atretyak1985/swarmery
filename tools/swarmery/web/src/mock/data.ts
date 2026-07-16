@@ -29,10 +29,11 @@ import type {
   BreakdownResp,
   MatrixResp,
   TimeseriesResp,
+  ToolsResp,
 } from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
 import { mockApprovalsList, mockResolveApproval } from './approvals';
-import { mockBreakdown, mockMatrix, mockTimeseries } from './analytics';
+import { mockBreakdown, mockMatrix, mockTimeseries, mockToolStats } from './analytics';
 
 interface AnalyticsRangeArg {
   from?: string;
@@ -1227,6 +1228,11 @@ export const mockApi = {
   ): Promise<MatrixResp> {
     await delay(120);
     return mockMatrix(rows, metric, range);
+  },
+
+  async toolStats(range: AnalyticsRangeArg = {}): Promise<ToolsResp> {
+    await delay(120);
+    return mockToolStats(range);
   },
 
   async docs(): Promise<DocMeta[]> {

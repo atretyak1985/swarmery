@@ -431,6 +431,32 @@ export interface MatrixResp {
   cells: { row: string; col: string; runs: number; cost?: number | null }[];
 }
 
+// --- Analytics uplift (GET /api/stats/{tools,durations,errors}) --------------
+
+/** Per-agent share of one tool's calls; agent keys are normAgentType-folded, "main" = orchestrator. */
+export interface ToolAgentSplit {
+  agent: string;
+  calls: number;
+  errors: number;
+}
+
+/** One row of GET /api/stats/tools. avg/p95 are null when no call carried a duration. */
+export interface ToolStatRow {
+  tool: string;
+  calls: number;
+  errors: number;
+  denied: number;
+  avg_ms: number | null;
+  p95_ms: number | null;
+  agents: ToolAgentSplit[];
+}
+
+export interface ToolsResp {
+  from: string;
+  to: string;
+  tools: ToolStatRow[];
+}
+
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
 
 /** permission_requests.status */

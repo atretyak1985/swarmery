@@ -32,6 +32,7 @@ import type {
   TaskDetail,
   TasksResponse,
   TimeseriesResp,
+  ToolsResp,
 } from './api/types';
 import { mockApi } from './mock/data';
 
@@ -250,6 +251,12 @@ export function fetchMatrix(
 ): Promise<MatrixResp> {
   if (MOCK) return mockApi.matrix(rows, metric, range);
   return get(`/api/stats/matrix?${rangeQuery(range, { rows, cols: 'project', metric })}`);
+}
+
+/** Per-tool call/error/denied counts + duration stats (analytics uplift). */
+export function fetchToolStats(range: AnalyticsRange = {}): Promise<ToolsResp> {
+  if (MOCK) return mockApi.toolStats(range);
+  return get(`/api/stats/tools?${rangeQuery(range, {})}`);
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {
