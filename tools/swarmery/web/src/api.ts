@@ -19,6 +19,9 @@ import type {
   PermissionRequest,
   PermissionRequestStatus,
   ProjectDetail,
+  ProjectMeta,
+  ProjectMetaPatch,
+  ProjectsHealthResponse,
   ProjectsResponse,
   SearchResponse,
   SessionDetailResponse,
@@ -78,6 +81,27 @@ export async function restoreProject(id: number): Promise<void> {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? `restore failed: ${String(res.status)}`);
   }
+}
+
+/** GET /api/projects/health — per-project week-over-week health rows. */
+export function fetchProjectsHealth(): Promise<ProjectsHealthResponse> {
+  if (MOCK) return mockApi.projectsHealth();
+  return get('/api/projects/health');
+}
+
+/** PATCH /api/projects/{id} — update pinned / tags (dashboard-only meta). */
+export async function patchProject(id: number, patch: ProjectMetaPatch): Promise<ProjectMeta> {
+  if (MOCK) return { pinned: patch.pinned ?? false, tags: patch.tags ?? [] };
+  const res = await fetch(`/api/projects/${String(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `update failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as ProjectMeta;
 }
 
 /**
@@ -169,9 +193,11 @@ export function fetchStatsToday(): Promise<StatsToday> {
 }
 
 /** Day-scoped overview stats + trailing series (parity contract). */
-export function fetchStatsOverview(day: string): Promise<StatsOverview> {
+export function fetchStatsOverview(day: string, project?: string): Promise<StatsOverview> {
   if (MOCK) return mockApi.statsOverview(day);
-  return get(`/api/stats/overview?day=${encodeURIComponent(day)}`);
+  const qs = new URLSearchParams({ day });
+  if (project !== undefined) qs.set('project', project);
+  return get(`/api/stats/overview?${qs.toString()}`);
 }
 
 export function fetchHealth(): Promise<HealthResponse> {
@@ -185,12 +211,15 @@ export function fetchHealth(): Promise<HealthResponse> {
 export interface AnalyticsRange {
   from?: string;
   to?: string;
+  /** Global project scope — slug or id (server matches either). */
+  project?: string;
 }
 
 function rangeQuery(range: AnalyticsRange, extra: Record<string, string>): string {
   const qs = new URLSearchParams(extra);
   if (range.from !== undefined) qs.set('from', range.from);
   if (range.to !== undefined) qs.set('to', range.to);
+  if (range.project !== undefined) qs.set('project', range.project);
   return qs.toString();
 }
 

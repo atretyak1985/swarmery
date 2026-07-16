@@ -77,6 +77,10 @@ export interface Project {
   /** Lifetime token/cost totals across the project's sessions; null when unpriced. */
   tokens: number | null;
   costUsd: number | null;
+  /** Dashboard meta (migration 0015): pinned floats the project in lists. */
+  pinned: boolean;
+  /** Decoded projects.tags JSON array — [] when untagged, never null. */
+  tags: string[];
   /** Null for telemetry-only projects (no readable .claude/settings.json). */
   plugin: PluginState | null;
 }
@@ -906,4 +910,39 @@ export interface FileSession {
 export interface FileSessionsResponse {
   path: string;
   sessions: FileSession[];
+}
+
+// --- Multi-project UX: global scope + health + pin/tags ----------------------
+
+/** Go: projectHealthDTO — one row of GET /api/projects/health (camelCase). */
+export interface ProjectHealth {
+  id: number;
+  slug: string;
+  name: string | null;
+  pinned: boolean;
+  tags: string[];
+  /** Σ turn cost over the rolling last 7 days; null when no priced turn. */
+  costWeekUsd: number | null;
+  /** Σ turn cost over days 8–14 back; null when no priced turn. */
+  costPrevWeekUsd: number | null;
+  /** error tool_calls / total tool_calls over 7d; null with no tool calls. */
+  errorRate: number | null;
+  /** Mean duration (ms) of sessions started in the last 7d that ended; null with none. */
+  avgSessionMs: number | null;
+  lastActivity: string | null;
+}
+
+/** GET /api/projects/health */
+export type ProjectsHealthResponse = ProjectHealth[];
+
+/** PATCH /api/projects/{id} body — both optional, at least one required. */
+export interface ProjectMetaPatch {
+  pinned?: boolean;
+  tags?: string[];
+}
+
+/** Go: projectMetaDTO — PATCH /api/projects/{id} 200 body (the stored state). */
+export interface ProjectMeta {
+  pinned: boolean;
+  tags: string[];
 }

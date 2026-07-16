@@ -12,6 +12,7 @@ import type {
   Project,
   ProjectComponents,
   ProjectDetail,
+  ProjectHealth,
   Session,
   SessionDetail,
   SessionsResponse,
@@ -53,6 +54,8 @@ export const mockProjects: Project[] = [
     firstSeen: iso(30 * 24 * 60 * MIN),
     lastActivity: iso(2 * MIN),
     archived: false,
+    pinned: true,
+    tags: ['backend', 'billing'],
     sessions: 41,
     tokens: 4_820_000,
     costUsd: 18.42,
@@ -66,6 +69,8 @@ export const mockProjects: Project[] = [
     firstSeen: iso(21 * 24 * 60 * MIN),
     lastActivity: iso(6 * MIN),
     archived: false,
+    pinned: false,
+    tags: ['frontend'],
     sessions: 27,
     tokens: 2_310_000,
     costUsd: 9.07,
@@ -79,6 +84,8 @@ export const mockProjects: Project[] = [
     firstSeen: iso(9 * 24 * 60 * MIN),
     lastActivity: iso(4 * MIN),
     archived: false,
+    pinned: false,
+    tags: [],
     sessions: 18,
     tokens: 1_540_000,
     costUsd: 6.13,
@@ -92,6 +99,8 @@ export const mockProjects: Project[] = [
     firstSeen: iso(60 * 24 * 60 * MIN),
     lastActivity: iso(26 * 60 * MIN),
     archived: false,
+    pinned: false,
+    tags: ['frontend'],
     sessions: 6,
     tokens: null,
     costUsd: null,
@@ -1139,6 +1148,24 @@ export const mockApi = {
           })),
       },
     };
+  },
+
+  async projectsHealth(): Promise<ProjectHealth[]> {
+    await delay(130);
+    return mockProjects
+      .filter((p) => !p.archived)
+      .map((p, i) => ({
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        pinned: p.pinned,
+        tags: p.tags,
+        costWeekUsd: p.costUsd !== null ? Number((p.costUsd / 4).toFixed(2)) : null,
+        costPrevWeekUsd: p.costUsd !== null ? Number((p.costUsd / 5).toFixed(2)) : null,
+        errorRate: i % 2 === 0 ? 0.042 : null,
+        avgSessionMs: 22 * 60_000 + i * 5 * 60_000,
+        lastActivity: p.lastActivity,
+      }));
   },
 
   async sessions(filters: MockFilters = {}): Promise<SessionsResponse> {
