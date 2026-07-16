@@ -314,6 +314,10 @@ type breakdownRow struct {
 	Runs      *int64   `json:"runs"`
 	Sessions  int64    `json:"sessions"`
 	LastUsed  *string  `json:"last_used"`
+	// success/(success+fail) over outcome-carrying sessions that contain this
+	// agent's turns in range (agent pivot only; 'abandoned' excluded). Null
+	// for the other pivots and for agents with no judged sessions.
+	SuccessRate *float64 `json:"success_rate"`
 }
 
 // GET /api/stats/breakdown?from&to&by=project|model|agent|skill
@@ -507,6 +511,57 @@ func (h *Handler) agentTurnTotals(dr dateRange) (map[string]*agentTot, error) {
 	return acc, rows.Err()
 }
 
+// agentOutcomeRates computes per-agent success/(success+fail) over sessions
+// that carry a manual outcome AND contain turns of that agent within the
+// range. Attribution uses turns.agent_name folded by agentKey — the same
+// grain as agentTurnTotals, so the rate column lines up with the $ column.
+// 'abandoned' is excluded from the denominator by the WHERE clause.
+func (h *Handler) agentOutcomeRates(dr dateRange) (map[string]float64, error) {
+	rows, err := h.DB.Query(`
+		SELECT DISTINCT t.agent_name, t.session_id, s.outcome
+		  FROM turns t
+		  JOIN sessions s ON s.id = t.session_id
+		  JOIN projects p ON p.id = s.project_id
+		 WHERE s.outcome IN ('success','fail')
+		   AND t.started_at >= ? AND t.started_at < ? AND p.archived = 0`, dr.start, dr.end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type sf struct{ success, fail map[int64]struct{} }
+	acc := map[string]*sf{}
+	for rows.Next() {
+		var an, outcome sql.NullString
+		var sess int64
+		if err := rows.Scan(&an, &sess, &outcome); err != nil {
+			return nil, err
+		}
+		key := agentKey(an)
+		a := acc[key]
+		if a == nil {
+			a = &sf{success: map[int64]struct{}{}, fail: map[int64]struct{}{}}
+			acc[key] = a
+		}
+		if outcome.String == "success" {
+			a.success[sess] = struct{}{}
+		} else {
+			a.fail[sess] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := map[string]float64{}
+	for key, a := range acc {
+		if n := len(a.success) + len(a.fail); n > 0 {
+			out[key] = float64(len(a.success)) / float64(n)
+		}
+	}
+	return out, nil
+}
+
 // breakdownAgent ranks agents with EXACT $ (phase 2): run counts from events
 // (subagents that ran) merged with cost/tokens from their turns, plus the
 // orchestrator ("main") which has turns but no subagent_start event.
@@ -536,6 +591,16 @@ func (h *Handler) breakdownAgent(dr dateRange) ([]breakdownRow, error) {
 			// "main" orchestrator (no subagent_start) or an agent with turns
 			// but no counted run — surface it with $ and no runs.
 			rows = append(rows, breakdownRow{Key: key, Name: key, CostUSD: cost, TokensIn: &tin, TokensOut: &tout})
+		}
+	}
+	rates, err := h.agentOutcomeRates(dr)
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		if rate, ok := rates[rows[i].Key]; ok {
+			r := rate
+			rows[i].SuccessRate = &r
 		}
 	}
 	costOf := func(r breakdownRow) float64 {

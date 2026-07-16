@@ -391,6 +391,8 @@ export interface BreakdownRow {
   runs: number | null;
   sessions: number;
   last_used: string | null;
+  /** Agent pivot only: success/(success+fail) over judged sessions; else null. */
+  success_rate?: number | null;
 }
 export type BreakdownResp = BreakdownRow[];
 

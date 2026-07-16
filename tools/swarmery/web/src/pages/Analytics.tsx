@@ -463,6 +463,7 @@ function BreakdownPanel({
   // Any $ in this pivot? project/model/agent carry cost; skill never does.
   const hasCost = rows.some((r) => r.cost_usd !== null);
   const hasRuns = rows.some((r) => r.runs !== null);
+  const hasRate = rows.some((r) => r.success_rate != null);
   // Rank/bar by the dominant measure: cost when present, else runs.
   const primary = (r: BreakdownRow): number => (hasCost ? (r.cost_usd ?? 0) : (r.runs ?? 0));
   const max = rows.reduce((m, r) => Math.max(m, primary(r)), 0);
@@ -481,6 +482,13 @@ function BreakdownPanel({
               {hasCost && <span className="text-ink">{fmtCost(r.cost_usd)}</span>}
               {hasRuns && (
                 <span className="w-14 text-right text-ink-dim">{r.runs ?? 0} runs</span>
+              )}
+              {hasRate && (
+                <span className="w-10 text-right text-ink-dim">
+                  {r.success_rate != null
+                    ? `${String(Math.round(r.success_rate * 100))}%`
+                    : '—'}
+                </span>
               )}
               <span className="w-16 text-right text-ink-faint">
                 {hasCost
