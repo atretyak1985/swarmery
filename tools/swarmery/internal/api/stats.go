@@ -173,12 +173,7 @@ func (h *Handler) statsToday(w http.ResponseWriter, r *http.Request) {
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	start, end := dayBounds(dayStart)
 
-	projFilter := ""
-	projArgs := []any{}
-	if project := r.URL.Query().Get("project"); project != "" {
-		projFilter = ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
-		projArgs = []any{project, project}
-	}
+	projFilter, projArgs := scopeFilter(r)
 
 	agg, err := h.windowAggregates(start, end, projFilter, projArgs)
 	if err != nil {

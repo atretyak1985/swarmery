@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -11,8 +12,9 @@ import (
 
 // rollupAnalyticsServer plants one project with a LIVE priced turn today plus
 // a daily_rollups row 5 days ago (as `swarmery prune` would have written it:
-// per-project, agent_id NULL) and the pruned session's bare header.
-func rollupAnalyticsServer(t *testing.T) (*httptest.Server, string) {
+// per-project, agent_id NULL) and the pruned session's bare header. The db is
+// returned so scope tests can seed extra projects.
+func rollupAnalyticsServer(t *testing.T) (*httptest.Server, string, *sql.DB) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "rollup.db"))
 	if err != nil {
@@ -49,11 +51,11 @@ func rollupAnalyticsServer(t *testing.T) (*httptest.Server, string) {
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return srv, prunedDay
+	return srv, prunedDay, db
 }
 
 func TestTimeseriesUnionsRollups(t *testing.T) {
-	srv, prunedDay := rollupAnalyticsServer(t)
+	srv, prunedDay, _ := rollupAnalyticsServer(t)
 	var ts timeseriesDTO
 	getJSON(t, srv.URL+"/api/stats/timeseries?metric=cost&group=project", &ts)
 	if ts.Approx {
@@ -80,7 +82,7 @@ func TestTimeseriesUnionsRollups(t *testing.T) {
 }
 
 func TestTimeseriesApproxForNonProjectGroups(t *testing.T) {
-	srv, _ := rollupAnalyticsServer(t)
+	srv, _, _ := rollupAnalyticsServer(t)
 	var ts timeseriesDTO
 	getJSON(t, srv.URL+"/api/stats/timeseries?metric=cost&group=model", &ts)
 	if !ts.Approx {
@@ -93,7 +95,7 @@ func TestTimeseriesApproxForNonProjectGroups(t *testing.T) {
 }
 
 func TestBreakdownUnionsRollups(t *testing.T) {
-	srv, _ := rollupAnalyticsServer(t)
+	srv, _, _ := rollupAnalyticsServer(t)
 	var rows []breakdownRow
 	getJSON(t, srv.URL+"/api/stats/breakdown?by=project", &rows)
 	if len(rows) != 1 || rows[0].Key != "-work-alpha" {

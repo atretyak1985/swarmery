@@ -76,12 +76,7 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 
 	// Global project scope (?project=<slug|id>) — same match rule as
 	// /api/stats/today and /api/sessions.
-	projFilter := ""
-	projArgs := []any{}
-	if project := r.URL.Query().Get("project"); project != "" {
-		projFilter = ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
-		projArgs = []any{project, project}
-	}
+	projFilter, projArgs := scopeFilter(r)
 
 	agg, err := h.windowAggregates(start, end, projFilter, projArgs)
 	if err != nil {

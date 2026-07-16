@@ -60,16 +60,16 @@ func normalizeTags(in []string) ([]string, string) {
 func (h *Handler) patchProject(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
+		writeClientErr(w, http.StatusBadRequest, "invalid project id")
 		return
 	}
 	var patch projectMetaPatch
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	if patch.Pinned == nil && patch.Tags == nil {
-		http.Error(w, `{"error":"nothing to update — provide pinned and/or tags"}`, http.StatusBadRequest)
+		writeClientErr(w, http.StatusBadRequest, "nothing to update — provide pinned and/or tags")
 		return
 	}
 
@@ -86,7 +86,7 @@ func (h *Handler) patchProject(w http.ResponseWriter, r *http.Request) {
 	if patch.Tags != nil {
 		tags, msg := normalizeTags(*patch.Tags)
 		if msg != "" {
-			http.Error(w, `{"error":"`+msg+`"}`, http.StatusBadRequest)
+			writeClientErr(w, http.StatusBadRequest, msg)
 			return
 		}
 		encoded, err := json.Marshal(tags)
@@ -105,7 +105,7 @@ func (h *Handler) patchProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+		writeClientErr(w, http.StatusNotFound, "project not found")
 		return
 	}
 

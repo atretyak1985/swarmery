@@ -83,10 +83,26 @@ func TestAnalyticsProjectScope(t *testing.T) {
 }
 
 // Drift guard (ops-hygiene union): the daily_rollups union and the approx
-// flag must respect ?project= too — a scope on a different project must not
-// leak rolled-up history or flag the scoped range as approximate.
+// flag must respect ?project= too. Beyond the never-matching scope, a SECOND
+// project with its own rollup history is seeded so scoping to alpha proves
+// beta's rolled-up series/costs are excluded while alpha's survive.
 func TestRollupUnionProjectScope(t *testing.T) {
-	srv, prunedDay := rollupAnalyticsServer(t)
+	srv, prunedDay, db := rollupAnalyticsServer(t)
+
+	// Second project with its own pruned history on the same day: rollup cost
+	// 7.0 — distinctive, so any leak into an alpha-scoped sum is unmissable.
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+	mustExec(`INSERT INTO projects (id, path, slug, name, first_seen)
+		SELECT 2, '/work/beta', '-work-beta', 'Beta', first_seen FROM projects WHERE id = 1`)
+	mustExec(`INSERT INTO daily_rollups
+		(day, project_id, agent_id, sessions, tasks_done, tasks_reverted,
+		 tool_calls, errors, tokens_in, tokens_out, cost_usd, wait_minutes)
+		VALUES (?, 2, NULL, 5, 0, 0, 10, 1, 9000, 3000, 7.0, 0)`, prunedDay)
 
 	t.Run("scoped-out project sees no rollup series", func(t *testing.T) {
 		var ts timeseriesDTO
@@ -99,8 +115,8 @@ func TestRollupUnionProjectScope(t *testing.T) {
 	t.Run("scoped-in project keeps the rollup union", func(t *testing.T) {
 		var ts timeseriesDTO
 		getJSON(t, srv.URL+"/api/stats/timeseries?metric=cost&group=project&project=-work-alpha", &ts)
-		if len(ts.Series) != 1 || ts.Series[0].Total != 2.5 {
-			t.Fatalf("series = %+v, want alpha 0.5 live + 2.0 rollup", ts.Series)
+		if len(ts.Series) != 1 || ts.Series[0].Key != "-work-alpha" || ts.Series[0].Total != 2.5 {
+			t.Fatalf("series = %+v, want alpha only, 0.5 live + 2.0 rollup (beta's 7.0 excluded)", ts.Series)
 		}
 		idx := -1
 		for i, d := range ts.Buckets {
@@ -108,8 +124,18 @@ func TestRollupUnionProjectScope(t *testing.T) {
 				idx = i
 			}
 		}
+		// Both projects have a rollup on prunedDay — the scoped bucket must hold
+		// alpha's 2.0 alone, not 9.0.
 		if idx == -1 || ts.Series[0].Values[idx] != 2.0 {
-			t.Errorf("pruned-day value = %v, want 2.0 from the rollup", ts.Series)
+			t.Errorf("pruned-day value = %v, want 2.0 from alpha's rollup only", ts.Series)
+		}
+	})
+
+	t.Run("sibling project's rollups stay scoped to it", func(t *testing.T) {
+		var ts timeseriesDTO
+		getJSON(t, srv.URL+"/api/stats/timeseries?metric=cost&group=project&project=-work-beta", &ts)
+		if len(ts.Series) != 1 || ts.Series[0].Key != "-work-beta" || ts.Series[0].Total != 7.0 {
+			t.Fatalf("series = %+v, want beta only with its 7.0 rollup", ts.Series)
 		}
 	})
 
@@ -130,6 +156,13 @@ func TestRollupUnionProjectScope(t *testing.T) {
 		getJSON(t, srv.URL+"/api/stats/breakdown?by=project&project=no-such-project", &rows)
 		if len(rows) != 0 {
 			t.Errorf("rows = %+v, want none (scope excludes the rolled-up project)", rows)
+		}
+		getJSON(t, srv.URL+"/api/stats/breakdown?by=project&project=-work-alpha", &rows)
+		if len(rows) != 1 || rows[0].Key != "-work-alpha" {
+			t.Fatalf("rows = %+v, want alpha only", rows)
+		}
+		if rows[0].CostUSD == nil || *rows[0].CostUSD != 2.5 {
+			t.Errorf("alpha cost = %v, want 2.5 (beta's 7.0 rollup excluded)", rows[0].CostUSD)
 		}
 	})
 }

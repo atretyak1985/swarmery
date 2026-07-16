@@ -405,7 +405,7 @@ func systemFilters(query string, args []any, r *http.Request) (string, []any) {
 		args = append(args, scope)
 	}
 	if project := r.URL.Query().Get("project"); project != "" {
-		query += ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
+		query += projectScopePredicate
 		args = append(args, project, project)
 	}
 	return query, args

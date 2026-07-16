@@ -8,6 +8,12 @@ package api
 // zone-suffix-free UTC bound format as dayBounds (stats.go) so they compare
 // lexicographically against the stored ISO timestamps. All aggregates are
 // single grouped passes merged in Go — no per-project queries (no N+1).
+//
+// Retention assumption: this endpoint reads LIVE tables only (turns, events,
+// sessions), never daily_rollups, so it silently assumes prune retention is
+// at least 14 days. With a shorter retention the prev-week window is empty
+// and costPrevWeekUsd goes null here while Analytics still shows that week's
+// cost from rollups.
 
 import (
 	"database/sql"

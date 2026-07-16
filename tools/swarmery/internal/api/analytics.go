@@ -117,17 +117,6 @@ func agentKey(agentName sql.NullString) string {
 	return "main"
 }
 
-// scopeFilter resolves ?project=<slug|id> into a SQL predicate appended to an
-// analytics query (every one of them joins projects p) — the same match rule
-// as /api/sessions and /api/stats/today. Empty when unscoped.
-func scopeFilter(r *http.Request) (string, []any) {
-	project := r.URL.Query().Get("project")
-	if project == "" {
-		return "", nil
-	}
-	return ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`, []any{project, project}
-}
-
 // runKind maps an events-based dimension to its event type + payload NAME
 // expression — identical to system.go's systemKind usage attribution so
 // counts agree across pages (folded by normAgentType in Go).

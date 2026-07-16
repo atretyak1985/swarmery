@@ -577,18 +577,31 @@ export function Overview(): JSX.Element {
     loadApprovals();
   }, [loadSessions, loadStats, loadApprovals]);
 
-  const onMessage = useCallback((msg: WSMessage): void => {
-    if (msg.type === 'event_appended') return; // spine reads live counts, not per-event text
-    if (msg.type === 'permission_requested' || msg.type === 'permission_resolved') {
-      setApprovals((prev) =>
-        prev === null
-          ? prev
-          : applyPermissionMessage(prev, msg).filter((r) => r.status === 'pending'),
+  // Mirrors Sessions.tsx: loadSessions is server-scoped, so WS-applied
+  // sessions must pass the same scope filter or an out-of-scope
+  // session_created/session_updated pollutes the list until reload.
+  const matchesProject = useCallback(
+    (s: Session): boolean => scope === null || s.projectSlug === scope,
+    [scope],
+  );
+
+  const onMessage = useCallback(
+    (msg: WSMessage): void => {
+      if (msg.type === 'event_appended') return; // spine reads live counts, not per-event text
+      if (msg.type === 'permission_requested' || msg.type === 'permission_resolved') {
+        setApprovals((prev) =>
+          prev === null
+            ? prev
+            : applyPermissionMessage(prev, msg).filter((r) => r.status === 'pending'),
+        );
+        return;
+      }
+      setSessions((prev) =>
+        prev === null ? prev : applySessionMessage(prev, msg).filter(matchesProject),
       );
-      return;
-    }
-    setSessions((prev) => (prev === null ? prev : applySessionMessage(prev, msg)));
-  }, []);
+    },
+    [matchesProject],
+  );
   useLiveUpdates(onMessage, reload);
 
   const activeCount = (sessions ?? []).filter((s) => LIVE_STATUSES.has(s.status)).length;

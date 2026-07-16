@@ -249,6 +249,7 @@ export function Projects(): JSX.Element {
 
   useEffect(() => {
     setProjects(null);
+    setHealth(null); // both refetch in load(); keeping stale health would desync the table
     load();
   }, [load]);
 

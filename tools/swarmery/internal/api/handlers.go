@@ -456,7 +456,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	query := sessionSelect + ` WHERE s.hidden = 0 AND p.archived = 0`
 	args := []any{}
 	if project := r.URL.Query().Get("project"); project != "" {
-		query += ` AND (p.slug = ? OR CAST(p.id AS TEXT) = ?)`
+		query += projectScopePredicate
 		args = append(args, project, project)
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
@@ -677,6 +677,17 @@ func writeJSON(w http.ResponseWriter, v any, err error) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("warn: encode response: %v", err)
+	}
+}
+
+// writeClientErr replies {"error": msg} with the given 4xx status. Unlike the
+// hand-written `{"error":"…"}` literals it JSON-encodes msg, so messages built
+// from user input cannot break the JSON framing.
+func writeClientErr(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
 		log.Printf("warn: encode response: %v", err)
 	}
 }
