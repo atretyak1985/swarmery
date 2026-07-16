@@ -114,8 +114,11 @@ func TestGetTask(t *testing.T) {
 func TestSessionTaskAttribution(t *testing.T) {
 	srv := taskServer(t)
 
-	var sessions []map[string]any
-	getJSON(t, srv.URL+"/api/sessions", &sessions)
+	var page struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
+	getJSON(t, srv.URL+"/api/sessions", &page)
+	sessions := page.Sessions
 	byID := map[float64]map[string]any{}
 	for _, s := range sessions {
 		byID[s["id"].(float64)] = s

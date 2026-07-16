@@ -75,8 +75,11 @@ func getRaw(t *testing.T, url string, out any) {
 
 func TestArchivedProjectExcludedFromSessionsList(t *testing.T) {
 	srv := archiveScopeServer(t)
-	var list []map[string]any
-	getRaw(t, srv.URL+"/api/sessions", &list)
+	var page struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
+	getRaw(t, srv.URL+"/api/sessions", &page)
+	list := page.Sessions
 	if len(list) != 1 {
 		t.Fatalf("sessions list len = %d, want 1 (archived project's session hidden)", len(list))
 	}

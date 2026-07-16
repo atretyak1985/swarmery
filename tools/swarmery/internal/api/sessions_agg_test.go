@@ -55,8 +55,11 @@ func TestSessionAggregates(t *testing.T) {
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 
-	var sessions []sessionAgg
-	getJSON(t, srv.URL+"/api/sessions", &sessions)
+	var page struct {
+		Sessions []sessionAgg `json:"sessions"`
+	}
+	getJSON(t, srv.URL+"/api/sessions", &page)
+	sessions := page.Sessions
 	if len(sessions) != 3 {
 		t.Fatalf("sessions = %d, want 3", len(sessions))
 	}
@@ -103,8 +106,11 @@ func TestSessionAggregates(t *testing.T) {
 func TestSessionAggregatesOnFixture(t *testing.T) {
 	srv, db := testServerWithDB(t) // ingests testdata/fixtures/subagent-session.jsonl
 
-	var sessions []sessionAgg
-	getJSON(t, srv.URL+"/api/sessions", &sessions)
+	var page struct {
+		Sessions []sessionAgg `json:"sessions"`
+	}
+	getJSON(t, srv.URL+"/api/sessions", &page)
+	sessions := page.Sessions
 	if len(sessions) != 1 {
 		t.Fatalf("sessions = %d, want 1", len(sessions))
 	}

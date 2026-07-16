@@ -42,7 +42,7 @@ func hideTestServer(t *testing.T) (*httptest.Server, *sql.DB, int64) {
 	return srv, db, id
 }
 
-// sessionsListLen GETs /api/sessions (a bare array) and returns its length.
+// sessionsListLen GETs /api/sessions and returns the envelope's list length.
 func sessionsListLen(t *testing.T, base string) int {
 	t.Helper()
 	resp, err := http.Get(base + "/api/sessions")
@@ -50,11 +50,13 @@ func sessionsListLen(t *testing.T, base string) int {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	var list []map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+	var page struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatalf("decode sessions: %v", err)
 	}
-	return len(list)
+	return len(page.Sessions)
 }
 
 func TestHideSessionRemovesFromListKeepsById(t *testing.T) {

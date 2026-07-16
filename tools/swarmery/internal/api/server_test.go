@@ -68,21 +68,26 @@ func TestEndpoints(t *testing.T) {
 		t.Fatalf("projects = %d, want 1", len(projects))
 	}
 
-	var sessions []map[string]any
-	getJSON(t, srv.URL+"/api/sessions", &sessions)
+	var page struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
+	getJSON(t, srv.URL+"/api/sessions", &page)
+	sessions := page.Sessions
 	if len(sessions) != 1 {
 		t.Fatalf("sessions = %d, want 1", len(sessions))
 	}
 
 	// Filters narrow correctly.
-	var filtered []map[string]any
+	var filtered struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
 	getJSON(t, srv.URL+"/api/sessions?status=active", &filtered)
-	if len(filtered) != 0 {
-		t.Errorf("active sessions = %d, want 0 (fixture is completed)", len(filtered))
+	if len(filtered.Sessions) != 0 {
+		t.Errorf("active sessions = %d, want 0 (fixture is completed)", len(filtered.Sessions))
 	}
 	getJSON(t, srv.URL+"/api/sessions?status=completed", &filtered)
-	if len(filtered) != 1 {
-		t.Errorf("completed sessions = %d, want 1", len(filtered))
+	if len(filtered.Sessions) != 1 {
+		t.Errorf("completed sessions = %d, want 1", len(filtered.Sessions))
 	}
 
 	// Detail by numeric id and by session UUID, with turns/events/fileChanges.
