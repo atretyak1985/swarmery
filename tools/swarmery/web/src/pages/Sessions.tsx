@@ -11,10 +11,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Project, Session, SessionStatus, WSMessage } from '../api/types';
 import { fetchProjects, fetchSessions } from '../api';
-import { projectColor } from '../lib/colors';
-import { projectLabel } from '../lib/format';
 import { liveActionText } from '../lib/payload';
+import { useScope } from '../lib/scope';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
+import { ProjectDropdown } from '../components/ProjectDropdown';
 import { SessionCard } from '../components/SessionCard';
 import { Empty, ErrorBox, GroupHeader, Loading } from '../components/ui';
 
@@ -63,152 +63,6 @@ function FilterChip({
   );
 }
 
-/* ----- project dropdown — headless "all projects ▾" (screenshot 1) ----- */
-
-function ProjectDropdown({
-  projects,
-  value,
-  onChange,
-}: {
-  projects: Project[];
-  /** Selected project slug, or null = all projects. */
-  value: string | null;
-  onChange: (slug: string | null) => void;
-}): JSX.Element {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Escape closes (restoring focus to the trigger); outside click closes.
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPointerDown = (e: MouseEvent): void => {
-      if (rootRef.current !== null && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  const focusOption = (delta: 1 | -1): void => {
-    const options = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]');
-    if (options === undefined || options.length === 0) return;
-    const list = Array.from(options);
-    const idx = list.indexOf(document.activeElement as HTMLButtonElement);
-    const next = list[(idx + delta + list.length) % list.length];
-    next?.focus();
-  };
-
-  const select = (slug: string | null): void => {
-    onChange(slug);
-    setOpen(false);
-    buttonRef.current?.focus();
-  };
-
-  const selected = value !== null ? (projects.find((p) => p.slug === value) ?? null) : null;
-  // Deep-linked slug not in /api/projects yet — show the raw slug, keep the filter.
-  const label =
-    value === null ? 'all projects' : selected !== null ? projectLabel(selected.name, selected.slug) : value;
-  return (
-    <div ref={rootRef} className="relative shrink-0">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="filter by project"
-        onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' && open) {
-            e.preventDefault();
-            focusOption(1);
-          }
-        }}
-        className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-line-strong px-[11px] py-[5px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-[#4a4e58] aria-expanded:bg-surface2 aria-expanded:text-ink"
-      >
-        <span className="truncate" style={value !== null ? { color: projectColor(value) } : undefined}>
-          {label}
-        </span>
-        <span aria-hidden="true" className="text-[9px] text-ink-faint">
-          ▾
-        </span>
-      </button>
-      {open && (
-        <div
-          ref={menuRef}
-          role="listbox"
-          aria-label="project"
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-              e.preventDefault();
-              focusOption(e.key === 'ArrowDown' ? 1 : -1);
-            }
-          }}
-          className="absolute top-full left-0 z-20 mt-1.5 min-w-[210px] overflow-hidden rounded-[11px] border border-line-strong bg-field shadow-[0_16px_34px_rgba(0,0,0,0.5)]"
-        >
-          <DropdownOption
-            selected={value === null}
-            label="all projects"
-            onSelect={() => select(null)}
-          />
-          {projects.map((p) => (
-            <DropdownOption
-              key={p.id}
-              selected={value === p.slug}
-              label={projectLabel(p.name, p.slug)}
-              labelColor={projectColor(p.slug)}
-              onSelect={() => select(p.slug)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DropdownOption({
-  selected,
-  label,
-  labelColor,
-  onSelect,
-}: {
-  selected: boolean;
-  label: string;
-  /** Color the option label (project rows); omit for "all projects". */
-  labelColor?: string;
-  onSelect: () => void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      role="option"
-      aria-selected={selected}
-      onClick={onSelect}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-left font-mono text-[11px] transition-colors hover:bg-surface2 ${
-        selected ? 'bg-surface2 text-ink' : 'text-ink-3'
-      }`}
-    >
-      <span
-        className="min-w-0 flex-1 truncate"
-        style={labelColor !== undefined ? { color: labelColor } : undefined}
-      >
-        {label}
-      </span>
-      {selected && <span aria-hidden="true">✓</span>}
-    </button>
-  );
-}
-
 /* ----- day grouping (presentation only — Redesign "today · sun, jul 6") ----- */
 
 interface DayGroup {
@@ -237,10 +91,21 @@ function groupByDay(sorted: Session[]): DayGroup[] {
 }
 
 export function Sessions(): JSX.Element {
-  // Deep-linkable project filter (?project=<slug> — Overview rail rows).
+  // Deep-linkable project filter (?project=<slug> — Overview rail rows) wins
+  // over the global scope on first render; scope changes re-seed it after.
   const [searchParams] = useSearchParams();
+  const { scope } = useScope();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [project, setProject] = useState<string | null>(searchParams.get('project'));
+  const [project, setProject] = useState<string | null>(searchParams.get('project') ?? scope);
+  // The header switcher re-seeds the local filter (spec: local filters still
+  // work, but initialize from — and follow — the global scope). Guarded by the
+  // previous scope so the mount run cannot clobber a ?project= deep link.
+  const prevScopeRef = useRef(scope);
+  useEffect(() => {
+    if (prevScopeRef.current === scope) return;
+    prevScopeRef.current = scope;
+    setProject(scope);
+  }, [scope]);
   const [status, setStatus] = useState<SessionStatus | null>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);

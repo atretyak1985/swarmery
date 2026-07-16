@@ -383,7 +383,7 @@ function ItemsTab({
 export function System(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
-  const scope = parseScope(searchParams.get('scope'));
+  const scope = parseScope(searchParams.get('level'));
   const project = searchParams.get('project');
   const lint = parseLint(searchParams.get('lint'));
   const sort = parseSort(searchParams.get('sort'));
@@ -451,7 +451,7 @@ export function System(): JSX.Element {
     patchParams({ tab: next === 'agents' ? null : next, item: null });
   };
   const onScope = (next: 'global' | 'project' | null): void => {
-    patchParams({ scope: next, item: null });
+    patchParams({ level: next, item: null });
   };
   const onProject = (slug: string | null): void => {
     patchParams({ project: slug, item: null });

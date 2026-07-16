@@ -11,14 +11,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import type { WSMessage } from './api/types';
-import { fetchApprovals, fetchDocs, fetchStatsOverview, MOCK } from './api';
+import type { Project, WSMessage } from './api/types';
+import { fetchApprovals, fetchDocs, fetchProjects, fetchStatsOverview, MOCK } from './api';
 import { CommandPalette } from './components/CommandPalette';
 import { NewProjectButton } from './components/NewProjectButton';
 import { NotifySettings } from './components/NotifySettings';
+import { ProjectDropdown } from './components/ProjectDropdown';
 import { isoDay } from './lib/format';
 import { useHealth, shortVersion } from './lib/health';
 import { loadPrefs, useBrowserNotifications, type NotifyPrefs } from './lib/notifications';
+import { ScopeProvider, useScope } from './lib/scope';
 import { useLiveUpdates } from './lib/ws';
 
 interface NavItem {
@@ -46,7 +48,35 @@ function crumbFor(pathname: string): string {
   return '';
 }
 
+/** Global project scope switcher (header) — GitHub-org-switcher pattern. */
+function ScopeSwitcher(): JSX.Element {
+  const { scope, setScope } = useScope();
+  const [projects, setProjects] = useState<Project[]>([]);
+  useEffect(() => {
+    fetchProjects()
+      .then(setProjects)
+      .catch(() => setProjects([])); // degrades to "All projects"
+  }, []);
+  return (
+    <ProjectDropdown
+      projects={projects}
+      value={scope}
+      onChange={setScope}
+      allLabel="All projects"
+      groupByTag
+    />
+  );
+}
+
 export function App(): JSX.Element {
+  return (
+    <ScopeProvider>
+      <AppShell />
+    </ScopeProvider>
+  );
+}
+
+function AppShell(): JSX.Element {
   const [hasDocs, setHasDocs] = useState(false);
   const [sessionsToday, setSessionsToday] = useState<number | null>(null);
   // Pending approvals as a SET of ids: WS +/- stays idempotent when the same
@@ -142,6 +172,7 @@ export function App(): JSX.Element {
             {crumb}
           </span>
         )}
+        <ScopeSwitcher />
         <button
           type="button"
           onClick={() => setPaletteOpen(true)}
