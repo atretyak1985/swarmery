@@ -462,6 +462,7 @@ func TestSystemRedactionSweep(t *testing.T) {
 		"/api/system/hooks",
 		"/api/system/commands",
 		"/api/system/overlays",
+		"/api/system/insights",
 	} {
 		resp, err := http.Get(srv.URL + path)
 		if err != nil {

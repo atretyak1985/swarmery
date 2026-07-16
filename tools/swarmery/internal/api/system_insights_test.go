@@ -9,6 +9,9 @@ package api
 
 import (
 	"database/sql"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -293,6 +296,81 @@ func TestComputeInsightsDead(t *testing.T) {
 	}
 	if !strings.Contains(d.Message, "0 event mentions") {
 		t.Errorf("dead message = %q", d.Message)
+	}
+}
+
+// insightsServer wraps the fixture DB in a real HTTP server.
+func insightsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	db := insightsDB(t)
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestSystemInsightsEndpoint(t *testing.T) {
+	srv := insightsServer(t)
+
+	var resp map[string]any
+	getJSON(t, srv.URL+"/api/system/insights", &resp)
+	if n := len(resp["promotionCandidates"].([]any)); n != 3 {
+		t.Errorf("promotionCandidates = %d, want 3", n)
+	}
+	if n := len(resp["staleOverrides"].([]any)); n != 2 {
+		t.Errorf("staleOverrides = %d, want 2", n)
+	}
+	if n := len(resp["dead"].([]any)); n != 1 {
+		t.Errorf("dead = %d, want 1", n)
+	}
+
+	// Wire-shape spot check on the first candidate (camelCase JSON keys).
+	first := resp["promotionCandidates"].([]any)[0].(map[string]any)
+	if first["kind"] != "agent" || first["name"] != "drifter" || first["similarity"] != "diverged" {
+		t.Errorf("candidate[0] = %v", first)
+	}
+	stat := first["diffStat"].(map[string]any)
+	if stat["added"].(float64) != 2 || stat["removed"].(float64) != 1 {
+		t.Errorf("candidate[0].diffStat = %v, want added=2 removed=1", stat)
+	}
+	if !strings.Contains(first["hint"].(string), "de-flavor") {
+		t.Errorf("candidate[0].hint = %v", first["hint"])
+	}
+
+	// Full-body redaction sweep: the seeded token never leaves the daemon.
+	raw, err := http.Get(srv.URL + "/api/system/insights")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(raw.Body)
+	raw.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "abc123") {
+		t.Errorf("insights response leaked the seeded token")
+	}
+}
+
+// TestSystemInsightsQuietWorld: the step-05 fixture has no promotion pairs
+// and no plugin-name collisions — lists must be EMPTY ARRAYS (never null),
+// and its active agent_dead finding must surface as the one dead entry.
+func TestSystemInsightsQuietWorld(t *testing.T) {
+	srv := systemServer(t)
+
+	var resp map[string]any
+	getJSON(t, srv.URL+"/api/system/insights", &resp)
+	for key, want := range map[string]int{"promotionCandidates": 0, "staleOverrides": 0, "dead": 1} {
+		list, ok := resp[key].([]any)
+		if !ok {
+			t.Fatalf("%s = %v (%T), want a JSON array (never null)", key, resp[key], resp[key])
+		}
+		if len(list) != want {
+			t.Errorf("%s = %d, want %d", key, len(list), want)
+		}
 	}
 }
 
