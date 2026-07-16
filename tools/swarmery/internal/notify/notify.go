@@ -69,15 +69,17 @@ func (c Config) withDefaults() Config {
 	if c.Template == "" {
 		c.Template = TemplateGeneric
 	}
-	if len(c.Events) == 0 {
-		c.Events = []string{EventApprovalRequested}
-	}
-	// Tolerate "a, b" flag input: trim entries, drop empties.
+	// Tolerate "a, b" flag input: trim entries, drop empties. The default set
+	// applies AFTER trimming so whitespace-only input (`--notify-events " , "`)
+	// falls back to the default instead of silently disabling everything.
 	events := make([]string, 0, len(c.Events))
 	for _, e := range c.Events {
 		if e = strings.TrimSpace(e); e != "" {
 			events = append(events, e)
 		}
+	}
+	if len(events) == 0 {
+		events = []string{EventApprovalRequested}
 	}
 	c.Events = events
 	if c.Timeout <= 0 {

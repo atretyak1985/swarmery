@@ -105,7 +105,8 @@ func (s *Service) matchRuleLocked(sessionID int64, in HookInput) int64 {
 	var projectID int64
 	if err := s.db.QueryRow(
 		`SELECT project_id FROM sessions WHERE id = ?`, sessionID).Scan(&projectID); err != nil {
-		return 0
+		log.Printf("warn: approvals: project lookup for session %d: %v", sessionID, err)
+		return 0 // deny-by-default
 	}
 	rows, err := s.db.Query(
 		`SELECT id, tool_pattern FROM approval_rules
@@ -121,7 +122,8 @@ func (s *Service) matchRuleLocked(sessionID int64, in HookInput) int64 {
 		var id int64
 		var pattern string
 		if err := rows.Scan(&id, &pattern); err != nil {
-			return 0
+			log.Printf("warn: approvals: rule scan: %v", err)
+			return 0 // deny-by-default
 		}
 		p, err := ParseRulePattern(pattern)
 		if err != nil {
@@ -131,6 +133,9 @@ func (s *Service) matchRuleLocked(sessionID int64, in HookInput) int64 {
 		if p.Matches(in.ToolName, in.ToolInput) {
 			return id
 		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("warn: approvals: rule iteration: %v", err)
 	}
 	return 0
 }

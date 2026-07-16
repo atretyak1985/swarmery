@@ -33,6 +33,26 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestWithDefaultsEvents(t *testing.T) {
+	cases := []struct {
+		name   string
+		events []string
+		want   []string
+	}{
+		{"nil → default", nil, []string{EventApprovalRequested}},
+		{"whitespace-only → default", []string{" ", "\t", ""}, []string{EventApprovalRequested}},
+		{"entries trimmed, empties dropped",
+			[]string{" session_error ", "", "approval_expired"},
+			[]string{EventSessionError, EventApprovalExpired}},
+	}
+	for _, c := range cases {
+		got := Config{URL: "http://x", Events: c.events}.withDefaults().Events
+		if strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("%s: Events = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestBuildRequestGeneric(t *testing.T) {
 	cfg := Config{URL: "http://receiver.local/hook"}.withDefaults()
 	e := Event{Type: EventApprovalRequested, TS: "2026-07-16T10:00:00.000Z",

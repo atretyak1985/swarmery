@@ -598,7 +598,7 @@ export function Approvals(): JSX.Element {
         setRuleDraft(EMPTY_RULE_DRAFT);
         setRuleFormOpen(false);
       })
-      .catch((e: unknown) => setRuleError(String(e)))
+      .catch((e: unknown) => setRuleError(e instanceof Error ? e.message : String(e)))
       .finally(() => setRuleBusy(false));
   };
 

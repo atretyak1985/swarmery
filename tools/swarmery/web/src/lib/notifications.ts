@@ -73,7 +73,9 @@ function fire(title: string, body: string, tag: string, onClick: () => void): vo
  * browser notifications per prefs:
  *  - permission_requested                       → "Approval needed" → /approvals
  *  - session_updated, active → completed|killed → "Session finished" → /sessions/:id
- *  - event_appended with event.type === 'error' → "Session error"   → /sessions/:id
+ *  - event_appended, event.status === 'error'   → "Session error"   → /sessions/:id
+ *    (status, not type: matches the webhook's session_error semantics —
+ *    failed tool calls count, not just api_error records)
  */
 export function useBrowserNotifications(prefs: NotifyPrefs): void {
   const navigate = useNavigate();
@@ -113,7 +115,7 @@ export function useBrowserNotifications(prefs: NotifyPrefs): void {
         }
         return;
       }
-      if (msg.type === 'event_appended' && msg.payload.event.type === 'error' && p.sessionError) {
+      if (msg.type === 'event_appended' && msg.payload.event.status === 'error' && p.sessionError) {
         fire(
           'Session error',
           `an error event in session #${String(msg.payload.sessionId)}`,
