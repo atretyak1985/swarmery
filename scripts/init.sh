@@ -85,8 +85,7 @@ ${plugins}
   "permissions": {
     "deny": [
       "Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)",
-      "Edit(./.env)", "Edit(./.env.*)",
-      "Write(./.env)", "Write(./.env.*)"
+      "Edit(./.env)", "Edit(./.env.*)"
     ],
     "additionalDirectories": ["${WS_ROOT}"]
   }
