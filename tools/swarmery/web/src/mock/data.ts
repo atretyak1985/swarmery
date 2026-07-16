@@ -27,13 +27,20 @@ import type {
   AnalyticsDimension,
   AnalyticsMetric,
   BreakdownResp,
+  DurationsResp,
   MatrixResp,
   TimeseriesResp,
   ToolsResp,
 } from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
 import { mockApprovalsList, mockResolveApproval } from './approvals';
-import { mockBreakdown, mockMatrix, mockTimeseries, mockToolStats } from './analytics';
+import {
+  mockBreakdown,
+  mockDurations,
+  mockMatrix,
+  mockTimeseries,
+  mockToolStats,
+} from './analytics';
 
 interface AnalyticsRangeArg {
   from?: string;
@@ -1233,6 +1240,11 @@ export const mockApi = {
   async toolStats(range: AnalyticsRangeArg = {}): Promise<ToolsResp> {
     await delay(120);
     return mockToolStats(range);
+  },
+
+  async durations(range: AnalyticsRangeArg = {}): Promise<DurationsResp> {
+    await delay(100);
+    return mockDurations(range);
   },
 
   async docs(): Promise<DocMeta[]> {

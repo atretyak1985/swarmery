@@ -23,11 +23,18 @@ import type {
   AnalyticsDimension,
   AnalyticsMetric,
   BreakdownRow,
+  DurationsResp,
   MatrixResp,
   TimeseriesResp,
   ToolsResp,
 } from '../api/types';
-import { fetchBreakdown, fetchMatrix, fetchTimeseries, fetchToolStats } from '../api';
+import {
+  fetchBreakdown,
+  fetchDurations,
+  fetchMatrix,
+  fetchTimeseries,
+  fetchToolStats,
+} from '../api';
 import { projectColor } from '../lib/colors';
 import {
   addDays,
@@ -243,6 +250,22 @@ function CacheHero({ series }: { series: TimeseriesResp }): JSX.Element | null {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ----- duration stat cards ----- */
+
+function fmtSec(s: number | null): string {
+  return s === null ? '—' : fmtDurationMs(Math.round(s * 1000));
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }): JSX.Element {
+  return (
+    <div className="rounded-[14px] border border-line bg-surface px-5 py-4">
+      <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">{label}</div>
+      <div className="mt-1 font-display text-[18px] font-semibold text-ink">{value}</div>
+      {sub !== undefined && <div className="mt-0.5 font-mono text-[10.5px] text-ink-dim">{sub}</div>}
     </div>
   );
 }
@@ -748,6 +771,7 @@ export function Analytics(): JSX.Element {
   const [transposed, setTransposed] = useState(false);
   const [matrix, setMatrix] = useState<MatrixResp | null>(null);
   const [tools, setTools] = useState<ToolsResp | null>(null);
+  const [durations, setDurations] = useState<DurationsResp | null>(null);
   // cost is agent-only (skills own no turns); force runs when viewing skills.
   const effMatrixMetric: 'runs' | 'cost' = matrixRows === 'skill' ? 'runs' : matrixMetric;
 
@@ -795,6 +819,13 @@ export function Analytics(): JSX.Element {
     fetchToolStats(range)
       .then(setTools)
       .catch(() => setTools(null));
+  }, [from, to, scope]);
+
+  useEffect(() => {
+    const range = { from, to, ...(scope !== null ? { project: scope } : {}) };
+    fetchDurations(range)
+      .then(setDurations)
+      .catch(() => setDurations(null));
   }, [from, to, scope]);
 
   const toggleSeries = useCallback((key: string): void => {
@@ -879,6 +910,22 @@ export function Analytics(): JSX.Element {
         ) : (
           <HeroInsight series={series} metric={metric} />
         ))}
+
+      {durations !== null && (
+        <div className="mt-3.5 grid gap-3.5 sm:grid-cols-3">
+          <StatCard
+            label="Avg session"
+            value={fmtSec(durations.avg_session_sec)}
+            sub={`${String(durations.session_count)} completed sessions`}
+          />
+          <StatCard label="Median session" value={fmtSec(durations.median_session_sec)} />
+          <StatCard
+            label="Approval wait"
+            value={fmtSec(durations.avg_resolve_sec)}
+            sub={`${durations.wait_total_min.toFixed(1)} min total · ${String(durations.approvals_resolved)} resolved`}
+          />
+        </div>
+      )}
 
       <div className="mt-3.5 rounded-[14px] border border-line bg-surface px-5 py-[18px]">
         {series === null && error === null ? (

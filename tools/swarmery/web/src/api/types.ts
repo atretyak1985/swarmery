@@ -457,6 +457,18 @@ export interface ToolsResp {
   tools: ToolStatRow[];
 }
 
+/** GET /api/stats/durations — session-length + approval-wait aggregates. */
+export interface DurationsResp {
+  from: string;
+  to: string;
+  session_count: number;
+  avg_session_sec: number | null;
+  median_session_sec: number | null;
+  approvals_resolved: number;
+  avg_resolve_sec: number | null;
+  wait_total_min: number;
+}
+
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
 
 /** permission_requests.status */

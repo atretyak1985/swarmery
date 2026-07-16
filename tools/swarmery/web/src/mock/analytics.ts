@@ -8,6 +8,7 @@ import type {
   AnalyticsMetric,
   BreakdownResp,
   BreakdownRow,
+  DurationsResp,
   MatrixResp,
   TimeseriesResp,
   ToolsResp,
@@ -220,4 +221,19 @@ export function mockToolStats(range: Range): ToolsResp {
     .filter((t) => t.calls > 0)
     .sort((a, b) => b.calls - a.calls);
   return { from: days[0] ?? isoDay(), to: days[days.length - 1] ?? isoDay(), tools };
+}
+
+export function mockDurations(range: Range): DurationsResp {
+  const days = resolveDays(range);
+  const resolved = days.length * 2;
+  return {
+    from: days[0] ?? isoDay(),
+    to: days[days.length - 1] ?? isoDay(),
+    session_count: days.length * 3,
+    avg_session_sec: 1860,
+    median_session_sec: 1240,
+    approvals_resolved: resolved,
+    avg_resolve_sec: 47,
+    wait_total_min: Number(((resolved * 47) / 60).toFixed(1)),
+  };
 }

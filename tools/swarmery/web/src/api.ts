@@ -10,6 +10,7 @@ import type {
   DetachResponse,
   DocDetail,
   DocMeta,
+  DurationsResp,
   FileSessionsResponse,
   HealthResponse,
   MatrixResp,
@@ -257,6 +258,12 @@ export function fetchMatrix(
 export function fetchToolStats(range: AnalyticsRange = {}): Promise<ToolsResp> {
   if (MOCK) return mockApi.toolStats(range);
   return get(`/api/stats/tools?${rangeQuery(range, {})}`);
+}
+
+/** Session-duration + approval-wait aggregates (analytics uplift). */
+export function fetchDurations(range: AnalyticsRange = {}): Promise<DurationsResp> {
+  if (MOCK) return mockApi.durations(range);
+  return get(`/api/stats/durations?${rangeQuery(range, {})}`);
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {
