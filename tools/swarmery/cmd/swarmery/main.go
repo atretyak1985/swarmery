@@ -31,6 +31,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/notify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
@@ -99,6 +100,8 @@ func usage() {
                     [--active-window <dur>] [--idle-window <dur>] [--no-ingest]
                     [--exclude-projects <globs>]  (default '/tmp/*,/private/tmp/*')
                     [--answer-delivery <updated-input|deny-message>]
+                    [--notify-url <url>] [--notify-events <list>] [--notify-template <generic|ntfy|telegram>]
+                    [--notify-telegram-chat <id>]
   swarmery recost   [--db <path>]
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
@@ -118,7 +121,8 @@ func usage() {
                                    detach swarmery from a project: prune the swarmery-owned
                                    entries from .claude/settings.json (backs up to .bak; idempotent)
   env: SWARMERY_PORT, SWARMERY_PROJECTS_ROOT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
-       SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC`)
+       SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC
+       SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT`)
 }
 
 // defaultProjectsRoot resolves SWARMERY_PROJECTS_ROOT, falling back to
@@ -514,6 +518,14 @@ func cmdServe(args []string) error {
 		"how long a permission request stays answerable from the dashboard before fail-open to the terminal prompt (env: SWARMERY_APPROVAL_TIMEOUT)")
 	answerDelivery := fs.String("answer-delivery", approvals.DeliveryUpdatedInput,
 		"AskUserQuestion dashboard-answer wire form: updated-input (hook updatedInput injection, spike-verified default) or deny-message (fallback: deny carrying the answers as the message)")
+	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
+		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
+	notifyEvents := fs.String("notify-events", envOr("SWARMERY_NOTIFY_EVENTS", notify.EventApprovalRequested),
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error (env: SWARMERY_NOTIFY_EVENTS)")
+	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
+		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
+	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
+		"Telegram chat_id, required with --notify-template=telegram (env: SWARMERY_NOTIFY_TELEGRAM_CHAT)")
 	cfg := pipelineFlags(fs)
 	wsCfg := wsingestFlags(fs)
 	sysCfg := sysscanFlags(fs)
@@ -528,6 +540,32 @@ func cmdServe(args []string) error {
 		return err
 	}
 	defer db.Close()
+
+	// control-plane v2: outbound webhook notifier (nil = disabled; Emit is
+	// nil-receiver-safe everywhere it is wired). Built before the pipeline so
+	// cfg.OnSessionTerminal is set when NewPipeline copies the config.
+	var notifier *notify.Notifier
+	if *notifyURL != "" {
+		notifier, err = notify.New(notify.Config{
+			URL:          *notifyURL,
+			Events:       strings.Split(*notifyEvents, ","),
+			Template:     *notifyTemplate,
+			TelegramChat: *notifyTelegramChat,
+		})
+		if err != nil {
+			return fmt.Errorf("notify config: %w", err)
+		}
+		log.Printf("swarmery notifier posting [%s] to %s (template %s)",
+			*notifyEvents, *notifyURL, *notifyTemplate)
+		cfg.OnSessionTerminal = func(sessionID int64, errorCount int) {
+			evt, err := notify.SessionEvent(db, sessionID, errorCount)
+			if err != nil {
+				log.Printf("warn: notify: session event %d: %v", sessionID, err)
+				return
+			}
+			notifier.Emit(evt)
+		}
+	}
 
 	var bus *ingest.Bus
 	var sys *sysscan.Scanner
@@ -593,6 +631,7 @@ func cmdServe(args []string) error {
 		Thresholds:     cfg.Thresholds,
 		Exclude:        cfg.Exclude,
 		AnswerDelivery: *answerDelivery,
+		Notifier:       notifier,
 	})
 	api.AttachApprovals(svc)
 	go svc.RunSweeper(context.Background())
@@ -663,6 +702,14 @@ func envApprovalTimeout() time.Duration {
 		log.Printf("warn: ignoring invalid SWARMERY_APPROVAL_TIMEOUT=%q", v)
 	}
 	return approvals.DefaultTimeout
+}
+
+// envOr returns the env value when set and non-empty, else def.
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 func envPort() int {
