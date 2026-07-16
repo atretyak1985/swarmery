@@ -13,6 +13,7 @@ import type {
   SystemCreateResponse,
   SystemDiff,
   SystemHook,
+  SystemInsights,
   SystemItem,
   SystemItemDetail,
   SystemLintFinding,
@@ -46,6 +47,9 @@ export const mockSystemSummary: SystemSummary = {
   // implementation-agent + release-notes + one hook_no_timeout warn;
   // legacy-deploy-bot agent_dead info.
   lint: { error: 1, warn: 3, info: 1 },
+  // Consistent with mockSystemInsights below: 1 promotion candidate + 1 stale
+  // override.
+  insights: { promotions: 1, staleOverrides: 1 },
 };
 
 // --- GET /api/system/agents ------------------------------------------------------
@@ -712,6 +716,83 @@ export const mockSystemOverlays: SystemOverlays = {
   ],
 };
 
+// --- GET /api/system/insights ---------------------------------------------------
+
+export const mockSystemInsights: SystemInsights = {
+  promotionCandidates: [
+    {
+      kind: 'agent',
+      name: 'release-notes',
+      copies: [
+        {
+          itemId: 4,
+          projectSlug: 'nova',
+          scope: 'project',
+          path: '/work/nova/.claude/agents/release-notes.md',
+          contentHash: 'rn-nova',
+        },
+        {
+          itemId: 9,
+          projectSlug: 'atlas',
+          scope: 'project',
+          path: '/work/atlas/.claude/agents/release-notes.md',
+          contentHash: 'rn-atlas',
+        },
+      ],
+      similarity: 'diverged',
+      diffStat: { added: 3, removed: 1 },
+      diff: [
+        '--- /work/nova/.claude/agents/release-notes.md',
+        '+++ /work/atlas/.claude/agents/release-notes.md',
+        '@@ -4,3 +4,5 @@',
+        ' Collect merged PRs since the last tag.',
+        '-Group by scope.',
+        '+Group by conventional-commit scope.',
+        '+Put breaking changes first.',
+        '+Link every PR.',
+      ].join('\n'),
+      hint:
+        "promote: de-flavor → move to a domain pack (2 projects) or core (all projects) → bump that plugin's semver → delete the donor copies (docs/EXTENDING.md)",
+    },
+  ],
+  staleOverrides: [
+    {
+      kind: 'skill',
+      name: 'code-quality',
+      pluginName: 'core',
+      local: {
+        itemId: 12,
+        projectSlug: 'nova',
+        scope: 'project',
+        path: '/work/nova/.claude/skills/code-quality',
+        contentHash: 'cq-1',
+      },
+      plugin: {
+        itemId: 3,
+        projectSlug: null,
+        scope: 'global',
+        path: '/u/.claude/plugins/cache/swarmery/core/1.7.2/skills/code-quality',
+        contentHash: 'cq-1',
+      },
+      identical: true,
+      diffStat: null,
+      diff: '',
+      hint: 'identical to the plugin copy — the local override is pointless; delete the local file and rely on the plugin',
+    },
+  ],
+  dead: [
+    {
+      kind: 'agent',
+      id: 6,
+      name: 'legacy-deploy-bot',
+      scope: 'global',
+      projectSlug: null,
+      message: 'agent "legacy-deploy-bot": 0 event mentions in the last 30 days by available telemetry',
+      hint: '0 telemetry mentions in 30 days (advisory — events.agent_id is only partially attributed); consider deleting or archiving',
+    },
+  ],
+};
+
 // --- Mock API (the fetchers in ../api/system.ts dispatch here when MOCK) ----------
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -812,6 +893,11 @@ export const mockSystemApi = {
         enabledPacks: [...o.enabledPacks],
       })),
     };
+  },
+
+  async insights(): Promise<SystemInsights> {
+    await delay(110);
+    return structuredClone(mockSystemInsights);
   },
 
   // --- Stage 2 write surface (step-12) — mutates the in-memory state above ----

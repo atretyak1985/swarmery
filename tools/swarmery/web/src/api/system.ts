@@ -17,6 +17,7 @@ import type {
   SystemCreateResponse,
   SystemDiff,
   SystemHook,
+  SystemInsights,
   SystemItem,
   SystemItemDetail,
   SystemOverlays,
@@ -104,6 +105,12 @@ export function fetchSystemCommands(filters: SystemListFilters = {}): Promise<Sy
 export function fetchSystemOverlays(): Promise<SystemOverlays> {
   if (MOCK) return mockSystemApi.overlays();
   return get('/api/system/overlays');
+}
+
+/** Promotion & drift detector — read-only insight lists (display-only UI). */
+export function fetchSystemInsights(): Promise<SystemInsights> {
+  if (MOCK) return mockSystemApi.insights();
+  return get('/api/system/insights');
 }
 
 // --- Stage 2 write surface (steps 09–12) --------------------------------------

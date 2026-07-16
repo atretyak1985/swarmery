@@ -646,6 +646,8 @@ export interface SystemSummary {
   overlays: number;
   /** Active findings (resolved_at IS NULL) split by severity. */
   lint: { error: number; warn: number; info: number };
+  /** Go: systemInsightCountsDTO — promotion/drift badge counters. */
+  insights: { promotions: number; staleOverrides: number };
 }
 
 /** Go: systemItemDTO — one row of GET /api/system/{agents|skills}?scope=&project=. */
@@ -701,6 +703,74 @@ export interface SystemDiff {
   from: number;
   to: number;
   diff: string;
+}
+
+// --- Phase 4+: insights — promotion & drift detector (GET /api/system/insights).
+// --- Go DTOs live in internal/api/system_insights.go. Diffs are computed over
+// --- redacted contents server-side; everything here is display-only.
+
+/** Go: insightCopyDTO — one concrete copy of a component inside an insight. */
+export interface SystemInsightCopy {
+  itemId: number;
+  projectSlug: string | null;
+  scope: 'global' | 'project';
+  path: string;
+  /** null when no version is stored yet. */
+  contentHash: string | null;
+}
+
+/** Go: insightDiffStatDTO — line churn between two copies. */
+export interface SystemInsightDiffStat {
+  added: number;
+  removed: number;
+}
+
+/** Go: promotionCandidateDTO — one name, scope=project origin=local, ≥2 projects. */
+export interface SystemPromotionCandidate {
+  kind: 'agent' | 'skill' | 'command';
+  name: string;
+  copies: SystemInsightCopy[];
+  similarity: 'identical' | 'diverged';
+  /** Diverged only; null when contents are unavailable (unreadable command file). */
+  diffStat: SystemInsightDiffStat | null;
+  /** Redacted unified diff of the two most-diverged copies ("" when identical). */
+  diff: string;
+  /** Copyable next-step recipe (docs/EXTENDING.md graduation rule). */
+  hint: string;
+}
+
+/** Go: staleOverrideDTO — a local name colliding with a plugin-shipped item. */
+export interface SystemStaleOverride {
+  kind: 'agent' | 'skill' | 'command';
+  /** Base name — the plugin row is stored as "plugin:name". */
+  name: string;
+  pluginName: string;
+  local: SystemInsightCopy;
+  plugin: SystemInsightCopy;
+  /** true → pointless override, safe to delete the local copy. */
+  identical: boolean;
+  diffStat: SystemInsightDiffStat | null;
+  diff: string;
+  hint: string;
+}
+
+/** Go: deadComponentDTO — an active agent_dead lint finding, insight framing. */
+export interface SystemDeadComponent {
+  /** Always 'agent' today — agent_dead is the only telemetry-dead rule. */
+  kind: 'agent';
+  id: number;
+  name: string;
+  scope: 'global' | 'project';
+  projectSlug: string | null;
+  message: string;
+  hint: string;
+}
+
+/** Go: systemInsightsDTO — GET /api/system/insights. */
+export interface SystemInsights {
+  promotionCandidates: SystemPromotionCandidate[];
+  staleOverrides: SystemStaleOverride[];
+  dead: SystemDeadComponent[];
 }
 
 /**
