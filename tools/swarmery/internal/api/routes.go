@@ -97,4 +97,8 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/system/agents", requireLocalOrigin(h.createSystemAgent))
 	mux.HandleFunc("DELETE /api/system/agents/{id}", requireLocalOrigin(h.deleteSystemAgent))
 	mux.HandleFunc("POST /api/system/agents/{id}/restore", requireLocalOrigin(h.restoreSystemAgent))
+
+	// global search: FTS5 over turns.text (migration 0012) + LIKE groups for
+	// sessions/files/projects — powers the Cmd+K command palette.
+	mux.HandleFunc("GET /api/search", h.search)
 }
