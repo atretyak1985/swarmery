@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Project, Session, SessionStatus, WSMessage } from '../api/types';
 import { fetchProjects, fetchSessions } from '../api';
-import { projectColor } from '../lib/colors';
+import { useProjectColor } from '../lib/projectColors';
 import { projectLabel } from '../lib/format';
 import { liveActionText } from '../lib/payload';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
@@ -79,6 +79,11 @@ function ProjectDropdown({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // App-wide map: evenly-spaced, guaranteed-distinct colors across the whole
+  // project list, so no two rows share a hue (deep-linked slugs fall back to
+  // the per-slug hash).
+  const colorFor = useProjectColor();
+
   // Escape closes (restoring focus to the trigger); outside click closes.
   useEffect(() => {
     if (!open) return undefined;
@@ -135,7 +140,7 @@ function ProjectDropdown({
         }}
         className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-line-strong px-[11px] py-[5px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-[#4a4e58] aria-expanded:bg-surface2 aria-expanded:text-ink"
       >
-        <span className="truncate" style={value !== null ? { color: projectColor(value) } : undefined}>
+        <span className="truncate" style={value !== null ? { color: colorFor(value) } : undefined}>
           {label}
         </span>
         <span aria-hidden="true" className="text-[9px] text-ink-faint">
@@ -165,7 +170,7 @@ function ProjectDropdown({
               key={p.id}
               selected={value === p.slug}
               label={projectLabel(p.name, p.slug)}
-              labelColor={projectColor(p.slug)}
+              labelColor={colorFor(p.slug)}
               onSelect={() => select(p.slug)}
             />
           ))}

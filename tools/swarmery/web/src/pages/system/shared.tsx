@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { LintSeverity, Project } from '../../api/types';
 import type { SystemListFilters } from '../../api/system';
-import { projectColor } from '../../lib/colors';
+import { useProjectColor } from '../../lib/projectColors';
 
 /* ----- badges ----- */
 
@@ -20,9 +20,10 @@ export function ScopeBadge({
   projectSlug: string | null;
   projectName?: string | null | undefined;
 }): JSX.Element {
+  const colorFor = useProjectColor();
   if (scope === 'project') {
     const label = projectName ?? projectSlug;
-    const color = projectSlug !== null ? projectColor(projectSlug) : undefined;
+    const color = projectSlug !== null ? colorFor(projectSlug) : undefined;
     return (
       <span
         className="rounded-full border border-blue/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-blue"
@@ -204,6 +205,7 @@ export function ProjectDropdown({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useDropdownDismiss(open, setOpen, rootRef, buttonRef);
+  const colorFor = useProjectColor();
 
   const select = (slug: string | null): void => {
     onChange(slug);
@@ -226,7 +228,7 @@ export function ProjectDropdown({
         onKeyDown={(e) => { if (e.key === 'ArrowDown' && open) { e.preventDefault(); focusOption(menuRef, 1); } }}
         className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-line px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-ink-dim aria-expanded:bg-surface2 aria-expanded:text-ink"
       >
-        <span className="truncate" style={value !== null ? { color: projectColor(value) } : undefined}>{label}</span>
+        <span className="truncate" style={value !== null ? { color: colorFor(value) } : undefined}>{label}</span>
         <span aria-hidden="true" className="text-[8px]">▾</span>
       </button>
       {open && (
@@ -245,7 +247,7 @@ export function ProjectDropdown({
               key={p.id}
               selected={value === p.slug}
               label={p.name ?? p.slug}
-              labelColor={projectColor(p.slug)}
+              labelColor={colorFor(p.slug)}
               onSelect={() => select(p.slug)}
             />
           ))}
