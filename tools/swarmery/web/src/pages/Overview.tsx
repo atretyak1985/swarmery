@@ -28,6 +28,7 @@ import {
   isoDay,
 } from '../lib/format';
 import { argSummary } from '../lib/payload';
+import { useScope } from '../lib/scope';
 import { applyPermissionMessage, applySessionMessage, useLiveUpdates } from '../lib/ws';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
@@ -531,6 +532,7 @@ function TriageRail({ stats }: { stats: StatsOverview }): JSX.Element {
 
 export function Overview(): JSX.Element {
   const day = isoDay();
+  const { scope } = useScope();
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<StatsOverview | null>(null);
@@ -539,22 +541,23 @@ export function Overview(): JSX.Element {
   const [approvals, setApprovals] = useState<PermissionRequest[] | null>(null);
 
   const loadSessions = useCallback((): void => {
-    fetchSessions()
+    fetchSessions(scope !== null ? { project: scope } : {})
       .then((page) => {
         setSessions(page.sessions);
         setError(null);
       })
       .catch((e: unknown) => setError(String(e)));
-  }, []);
+  }, [scope]);
 
   const loadApprovals = useCallback((): void => {
+    // Deliberately unscoped: a pending approval must never be invisible.
     fetchApprovals('pending')
       .then(setApprovals)
       .catch(() => setApprovals(null)); // approvals API absent → rail card hidden
   }, []);
 
   const loadStats = useCallback((): void => {
-    fetchStatsOverview(day)
+    fetchStatsOverview(day, scope ?? undefined)
       .then((s) => {
         setStats(s);
         setStatsError(false);
@@ -562,7 +565,7 @@ export function Overview(): JSX.Element {
         setPrevStats(prevIdx >= 0 ? { ...s, errors: s.series[prevIdx]?.errors ?? 0 } : null);
       })
       .catch(() => setStatsError(true));
-  }, [day]);
+  }, [day, scope]);
 
   useEffect(loadSessions, [loadSessions]);
   useEffect(loadApprovals, [loadApprovals]);

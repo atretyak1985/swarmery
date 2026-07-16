@@ -18,6 +18,7 @@ import {
   type SystemListFilters,
 } from '../api/system';
 import { fmtAgo } from '../lib/format';
+import { useScope } from '../lib/scope';
 import { useLiveUpdates } from '../lib/ws';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import {
@@ -384,7 +385,11 @@ export function System(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
   const scope = parseScope(searchParams.get('level'));
-  const project = searchParams.get('project');
+  const { scope: globalScope } = useScope();
+  // Explicit ?project= (local filter) wins; otherwise the global scope seeds
+  // it. Clearing the local filter falls back to the global scope — clear the
+  // header switcher to see everything.
+  const project = searchParams.get('project') ?? globalScope;
   const lint = parseLint(searchParams.get('lint'));
   const sort = parseSort(searchParams.get('sort'));
   const itemParam = searchParams.get('item');

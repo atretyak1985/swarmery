@@ -41,6 +41,7 @@ import {
   type ParsedQuestion,
 } from '../lib/approvals';
 import { fmtAgo } from '../lib/format';
+import { useScope } from '../lib/scope';
 import { applyPermissionMessage, useLiveUpdates } from '../lib/ws';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
@@ -561,6 +562,19 @@ export function Approvals(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const { scope } = useScope();
+
+  // Global scope, applied client-side over the lazy sessions join. A request
+  // whose session is not resolvable stays VISIBLE (safety: a pending approval
+  // must never be silently hidden by a stale scope).
+  const inScope = useCallback(
+    (r: PermissionRequest): boolean => {
+      if (scope === null) return true;
+      const s = sessions?.find((x) => x.id === r.sessionId);
+      return s === undefined || s.projectSlug === scope;
+    },
+    [scope, sessions],
+  );
 
   // Auto-approve rules (control-plane v2).
   const [rules, setRules] = useState<ApprovalRule[] | null>(null);
@@ -653,9 +667,11 @@ export function Approvals(): JSX.Element {
 
   const pending = (requests ?? [])
     .filter((r) => r.status === 'pending')
+    .filter(inScope)
     .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt)); // oldest (most urgent) first
   const history = (requests ?? [])
     .filter((r) => r.status !== 'pending')
+    .filter(inScope)
     .sort((a, b) =>
       (b.resolvedAt ?? b.requestedAt).localeCompare(a.resolvedAt ?? a.requestedAt),
     )

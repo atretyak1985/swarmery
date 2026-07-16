@@ -29,6 +29,7 @@ import type {
 import { fetchBreakdown, fetchMatrix, fetchTimeseries } from '../api';
 import { projectColor } from '../lib/colors';
 import { addDays, fmtAgo, fmtCost, fmtDayShort, fmtTokens, isoDay } from '../lib/format';
+import { useScope } from '../lib/scope';
 import { Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 
 /* ----- metric / pivot vocabulary ----- */
@@ -601,6 +602,7 @@ export function Analytics(): JSX.Element {
   const [preset, setPreset] = useState<number | null>(14);
   const [from, setFrom] = useState<string>(addDays(today, -13));
   const [to, setTo] = useState<string>(today);
+  const { scope } = useScope();
 
   const [series, setSeries] = useState<TimeseriesResp | null>(null);
   const [breakdown, setBreakdown] = useState<BreakdownRow[] | null>(null);
@@ -631,7 +633,7 @@ export function Analytics(): JSX.Element {
   );
 
   const load = useCallback((): void => {
-    const range = { from, to };
+    const range = { from, to, ...(scope !== null ? { project: scope } : {}) };
     setError(null);
     fetchTimeseries(metric, pivot, range)
       .then((r) => {
@@ -642,15 +644,16 @@ export function Analytics(): JSX.Element {
     fetchBreakdown(pivot, range)
       .then(setBreakdown)
       .catch(() => setBreakdown(null));
-  }, [metric, pivot, from, to]);
+  }, [metric, pivot, from, to, scope]);
 
   useEffect(load, [load]);
 
   useEffect(() => {
-    fetchMatrix(matrixRows, effMatrixMetric, { from, to })
+    const range = { from, to, ...(scope !== null ? { project: scope } : {}) };
+    fetchMatrix(matrixRows, effMatrixMetric, range)
       .then(setMatrix)
       .catch(() => setMatrix(null));
-  }, [matrixRows, effMatrixMetric, from, to]);
+  }, [matrixRows, effMatrixMetric, from, to, scope]);
 
   const toggleSeries = useCallback((key: string): void => {
     setHidden((prev) => {
@@ -663,9 +666,16 @@ export function Analytics(): JSX.Element {
 
   const rangeLabel = `${fmtDayShort(from)} → ${fmtDayShort(to)}`;
 
-  // Export links mirror the exact query the page is showing.
+  // Export links mirror the exact query the page is showing — including the
+  // global project scope, so a scoped page exports scoped CSVs.
   const csvQuery = (extra: Record<string, string>): string =>
-    new URLSearchParams({ from, to, format: 'csv', ...extra }).toString();
+    new URLSearchParams({
+      from,
+      to,
+      format: 'csv',
+      ...(scope !== null ? { project: scope } : {}),
+      ...extra,
+    }).toString();
 
   return (
     <div className="px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]">
