@@ -102,4 +102,12 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// sessions/files/projects — powers the Cmd+K command palette.
 	mux.HandleFunc("GET /api/search", h.search)
 	mux.HandleFunc("GET /api/files/sessions", h.fileSessions)
+
+	// control-plane v2: notifications & auto-approve rules. Writes carry the
+	// same D4 origin hardening as every other mutating endpoint; evaluation
+	// happens inside approvals.Service.Open, never here.
+	mux.HandleFunc("GET /api/approval-rules", h.listApprovalRules)
+	mux.HandleFunc("POST /api/approval-rules", requireLocalOrigin(h.createApprovalRule))
+	mux.HandleFunc("PATCH /api/approval-rules/{id}", requireLocalOrigin(h.patchApprovalRule))
+	mux.HandleFunc("DELETE /api/approval-rules/{id}", requireLocalOrigin(h.deleteApprovalRule))
 }
