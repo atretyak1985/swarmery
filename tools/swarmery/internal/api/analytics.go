@@ -352,7 +352,9 @@ func (h *Handler) statsTimeseries(w http.ResponseWriter, r *http.Request) {
 	if !rolledUp {
 		var n int
 		if err := h.DB.QueryRow(
-			`SELECT COUNT(*) FROM daily_rollups WHERE day >= ? AND day <= ?`,
+			`SELECT COUNT(*) FROM daily_rollups r
+			  JOIN projects p ON p.id = r.project_id
+			 WHERE r.day >= ? AND r.day <= ? AND r.agent_id IS NULL AND p.archived = 0`,
 			dr.days[0], dr.days[len(dr.days)-1]).Scan(&n); err != nil {
 			writeErr(w, err)
 			return

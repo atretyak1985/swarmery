@@ -296,6 +296,11 @@ func cmdPrune(args []string) error {
 	}
 	fmt.Printf("prune %s (cutoff %s)\n  %s:\n  sessions marked: %d\n  turns: %d\n  events: %d\n  file_changes: %d\n  daily_rollups rows written: %d\n",
 		*dbPath, st.Cutoff, mode, st.Sessions, st.Turns, st.Events, st.FileChanges, st.RollupRows)
+	// A post-commit VACUUM failure (e.g. SQLITE_BUSY from a live daemon) is
+	// only about disk space — the prune itself committed. Warn, exit 0.
+	if st.VacuumErr != nil {
+		log.Printf("warn: vacuum failed (space not reclaimed, data pruned OK): %v", st.VacuumErr)
+	}
 	return nil
 }
 

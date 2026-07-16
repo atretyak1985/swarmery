@@ -8,18 +8,30 @@ package api
 import (
 	"encoding/csv"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 )
 
 // csvStart sets the download headers (text/csv + a dated attachment filename
-// like swarmery-breakdown-project-2026-07-16.csv) and returns the writer.
+// like swarmery-breakdown-project-2026-07-16.csv), emits a UTF-8 BOM so Excel
+// detects the encoding, and returns the writer.
 func csvStart(w http.ResponseWriter, kind string) *csv.Writer {
 	filename := fmt.Sprintf("swarmery-%s-%s.csv", kind, time.Now().Format("2006-01-02"))
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	_, _ = w.Write([]byte("\xef\xbb\xbf")) // Excel needs the BOM to read UTF-8
 	return csv.NewWriter(w)
+}
+
+// csvFinish flushes and surfaces any accumulated write error the same way
+// writeJSON logs encode failures — headers are long gone, log is all we have.
+func csvFinish(cw *csv.Writer) {
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		log.Printf("warn: write csv response: %v", err)
+	}
 }
 
 // fmtCSVFloat renders a float without artificial padding ("0.75", not "0.750000").
@@ -41,7 +53,7 @@ func writeTimeseriesCSV(w http.ResponseWriter, ts timeseriesDTO) {
 		}
 		_ = cw.Write(row)
 	}
-	cw.Flush()
+	csvFinish(cw)
 }
 
 // writeBreakdownCSV renders the ranked rows; nullable measures become empty
@@ -73,5 +85,5 @@ func writeBreakdownCSV(w http.ResponseWriter, by string, rows []breakdownRow) {
 		}
 		_ = cw.Write(row)
 	}
-	cw.Flush()
+	csvFinish(cw)
 }

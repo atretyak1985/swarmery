@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const utf8BOM = "\xef\xbb\xbf"
+
 func TestBreakdownCSV(t *testing.T) {
 	srv := analyticsServer(t)
 	resp, err := http.Get(srv.URL + "/api/stats/breakdown?by=project&format=csv")
@@ -29,7 +31,10 @@ func TestBreakdownCSV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if !strings.HasPrefix(string(body), utf8BOM) {
+		t.Error("body missing UTF-8 BOM (Excel compatibility)")
+	}
+	lines := strings.Split(strings.TrimSpace(strings.TrimPrefix(string(body), utf8BOM)), "\n")
 	if lines[0] != "key,name,cost_usd,tokens_in,tokens_out,runs,sessions,last_used,success_rate" {
 		t.Errorf("header = %q", lines[0])
 	}
@@ -53,7 +58,10 @@ func TestTimeseriesCSV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if !strings.HasPrefix(string(body), utf8BOM) {
+		t.Error("body missing UTF-8 BOM (Excel compatibility)")
+	}
+	lines := strings.Split(strings.TrimSpace(strings.TrimPrefix(string(body), utf8BOM)), "\n")
 	if lines[0] != "day,-work-alpha" {
 		t.Errorf("header = %q, want day,-work-alpha", lines[0])
 	}

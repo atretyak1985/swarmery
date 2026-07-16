@@ -115,6 +115,8 @@ export function SessionCard({
         <ProcBadge session={session} />
         {session.outcome != null && (
           <span
+            role="img"
+            aria-label={session.outcome}
             title={session.outcome}
             className={`font-mono text-[11px] ${OUTCOME_GLYPH[session.outcome].className}`}
           >
@@ -203,6 +205,8 @@ export function SessionCard({
             </span>
             {session.outcome != null && (
               <span
+                role="img"
+                aria-label={session.outcome}
                 title={session.outcome}
                 className={`shrink-0 font-mono text-[11px] ${OUTCOME_GLYPH[session.outcome].className}`}
               >

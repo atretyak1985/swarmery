@@ -248,6 +248,11 @@ export function Sessions(): JSX.Element {
   const [nowById, setNowById] = useState<Record<number, string>>({});
   const loadingMoreRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // Request generation: bumped whenever the project filter resets the list so
+  // stale in-flight page responses (old project) are dropped, not appended —
+  // otherwise a slow page-2 fetch would leak old-project rows and resurrect
+  // the old cursor (project filtering is server-side, not re-checked here).
+  const genRef = useRef(0);
 
   // Title search: raw input + a ~150ms-debounced lowercase query.
   const [search, setSearch] = useState('');
@@ -269,18 +274,24 @@ export function Sessions(): JSX.Element {
   // Only the project filter goes to the API — status stays client-side so
   // the chip counts can be computed over every status of the loaded list.
   const load = useCallback((): void => {
+    const gen = genRef.current;
     const filters: { project?: string } = {};
     if (project !== null) filters.project = project;
     fetchSessions(filters, { limit: PAGE_LIMIT })
       .then((page) => {
+        if (gen !== genRef.current) return; // stale — filter changed mid-flight
         setSessions(page.sessions);
         setNextCursor(page.nextCursor);
         setError(null);
       })
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => {
+        if (gen !== genRef.current) return;
+        setError(String(e));
+      });
   }, [project]);
 
   useEffect(() => {
+    genRef.current += 1; // invalidate in-flight responses for the old filter
     setSessions(null);
     setNextCursor(null);
     load();
@@ -290,17 +301,22 @@ export function Sessions(): JSX.Element {
   const loadMore = useCallback((): void => {
     if (nextCursor === null || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
+    const gen = genRef.current;
     const filters: { project?: string } = {};
     if (project !== null) filters.project = project;
     fetchSessions(filters, { limit: PAGE_LIMIT, cursor: nextCursor })
       .then((page) => {
+        if (gen !== genRef.current) return; // stale — would leak old-project rows
         setSessions((prev) => {
           const seen = new Set((prev ?? []).map((s) => s.id));
           return [...(prev ?? []), ...page.sessions.filter((s) => !seen.has(s.id))];
         });
         setNextCursor(page.nextCursor);
       })
-      .catch((e: unknown) => setError(String(e)))
+      .catch((e: unknown) => {
+        if (gen !== genRef.current) return;
+        setError(String(e));
+      })
       .finally(() => {
         loadingMoreRef.current = false;
       });

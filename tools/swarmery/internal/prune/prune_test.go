@@ -2,6 +2,7 @@ package prune
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -95,6 +96,14 @@ func TestPruneRun(t *testing.T) {
 	if st.Sessions != 1 || st.RollupRows == 0 {
 		t.Fatalf("stats = %+v, want 1 session pruned with rollup rows", st)
 	}
+	// Non-dry-run counts come from RowsAffected of the in-tx deletes.
+	if st.Turns != 2 || st.Events != 3 || st.FileChanges != 1 {
+		t.Errorf("deleted counts = turns %d / events %d / fc %d, want 2/3/1",
+			st.Turns, st.Events, st.FileChanges)
+	}
+	if st.VacuumErr != nil {
+		t.Errorf("VacuumErr = %v, want nil", st.VacuumErr)
+	}
 
 	// The rollup carries the pruned session's aggregates on its local day.
 	day := localDayOf(t, oldTS)
@@ -139,6 +148,35 @@ func TestPruneRun(t *testing.T) {
 	}
 	if evID.Valid {
 		t.Errorf("permission_requests.event_id = %v, want NULL", evID.Int64)
+	}
+}
+
+// A post-commit VACUUM failure (e.g. SQLITE_BUSY from a live daemon) must not
+// make a committed prune look failed: Run returns the full stats with err nil
+// and carries the vacuum error separately on Stats.VacuumErr.
+func TestPruneVacuumFailureIsWarning(t *testing.T) {
+	db := seedDB(t)
+	orig := vacuum
+	t.Cleanup(func() { vacuum = orig })
+	vacuum = func(*sql.DB) error { return errors.New("database is locked (SQLITE_BUSY)") }
+
+	st, err := Run(db, cutoff, false)
+	if err != nil {
+		t.Fatalf("Run must succeed when only VACUUM fails, got %v", err)
+	}
+	if st.VacuumErr == nil {
+		t.Fatal("st.VacuumErr = nil, want the injected vacuum error")
+	}
+	if st.Sessions != 1 || st.Turns != 2 || st.Events != 3 || st.FileChanges != 1 || st.RollupRows == 0 {
+		t.Errorf("stats = %+v, want full prune counts despite vacuum failure", st)
+	}
+	// The prune really committed: session 1's raw rows are gone.
+	var turns int64
+	if err := db.QueryRow(`SELECT COUNT(*) FROM turns WHERE session_id = 1`).Scan(&turns); err != nil {
+		t.Fatal(err)
+	}
+	if turns != 0 {
+		t.Errorf("turns for pruned session = %d, want 0", turns)
 	}
 }
 

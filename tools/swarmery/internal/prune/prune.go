@@ -32,6 +32,11 @@ type Stats struct {
 	Events      int64
 	FileChanges int64
 	RollupRows  int64 // daily_rollups rows inserted (0 under DryRun)
+	// VacuumErr carries a post-commit VACUUM failure (e.g. SQLITE_BUSY).
+	// The destructive transaction has already committed by then, so the
+	// prune itself succeeded — callers should report this as a warning
+	// ("space not reclaimed"), never as a failed prune.
+	VacuumErr error
 }
 
 // candidateSet is the single source of truth for "what gets pruned": ended
@@ -88,21 +93,30 @@ SELECT k.day, k.project_id, NULL,
 // one transaction; dryRun stops after counting.
 func Run(db *sql.DB, cutoff string, dryRun bool) (Stats, error) {
 	st := Stats{Cutoff: cutoff, DryRun: dryRun}
-	counts := []struct {
-		q   string
-		dst *int64
-	}{
-		{`SELECT COUNT(*) FROM (` + candidateSet + `)`, &st.Sessions},
-		{`SELECT COUNT(*) FROM turns t JOIN (` + candidateSet + `) pr ON pr.id = t.session_id`, &st.Turns},
-		{`SELECT COUNT(*) FROM events e JOIN (` + candidateSet + `) pr ON pr.id = e.session_id`, &st.Events},
-		{`SELECT COUNT(*) FROM file_changes fc JOIN (` + candidateSet + `) pr ON pr.id = fc.session_id`, &st.FileChanges},
+	// The session count gates the destructive path; under DryRun the child
+	// tables are pre-counted too. A real run reports Turns/Events/FileChanges
+	// from RowsAffected() of the deletes inside the transaction instead, so
+	// the printed numbers are exactly what was removed.
+	if err := db.QueryRow(`SELECT COUNT(*) FROM (`+candidateSet+`)`, cutoff).Scan(&st.Sessions); err != nil {
+		return st, fmt.Errorf("count candidates: %w", err)
 	}
-	for _, c := range counts {
-		if err := db.QueryRow(c.q, cutoff).Scan(c.dst); err != nil {
-			return st, fmt.Errorf("count candidates: %w", err)
+	if dryRun {
+		counts := []struct {
+			q   string
+			dst *int64
+		}{
+			{`SELECT COUNT(*) FROM turns t JOIN (` + candidateSet + `) pr ON pr.id = t.session_id`, &st.Turns},
+			{`SELECT COUNT(*) FROM events e JOIN (` + candidateSet + `) pr ON pr.id = e.session_id`, &st.Events},
+			{`SELECT COUNT(*) FROM file_changes fc JOIN (` + candidateSet + `) pr ON pr.id = fc.session_id`, &st.FileChanges},
 		}
+		for _, c := range counts {
+			if err := db.QueryRow(c.q, cutoff).Scan(c.dst); err != nil {
+				return st, fmt.Errorf("count candidates: %w", err)
+			}
+		}
+		return st, nil
 	}
-	if dryRun || st.Sessions == 0 {
+	if st.Sessions == 0 {
 		return st, nil
 	}
 
@@ -121,17 +135,28 @@ func Run(db *sql.DB, cutoff string, dryRun bool) (Stats, error) {
 	// FK-safe order: permission_requests.event_id references events — keep
 	// the approval history rows, drop the edge to the rows being deleted.
 	// file_changes references events; both reference sessions (kept).
-	steps := []string{
-		`UPDATE permission_requests SET event_id = NULL
-		  WHERE event_id IS NOT NULL AND session_id IN (SELECT id FROM (` + candidateSet + `))`,
-		`DELETE FROM file_changes WHERE session_id IN (SELECT id FROM (` + candidateSet + `))`,
-		`DELETE FROM events       WHERE session_id IN (SELECT id FROM (` + candidateSet + `))`,
-		`DELETE FROM turns        WHERE session_id IN (SELECT id FROM (` + candidateSet + `))`,
-		`UPDATE sessions SET pruned = 1 WHERE id IN (SELECT id FROM (` + candidateSet + `))`,
+	steps := []struct {
+		q   string
+		dst *int64 // reported count, from RowsAffected (nil = not reported)
+	}{
+		{`UPDATE permission_requests SET event_id = NULL
+		  WHERE event_id IS NOT NULL AND session_id IN (SELECT id FROM (` + candidateSet + `))`, nil},
+		{`DELETE FROM file_changes WHERE session_id IN (SELECT id FROM (` + candidateSet + `))`, &st.FileChanges},
+		{`DELETE FROM events       WHERE session_id IN (SELECT id FROM (` + candidateSet + `))`, &st.Events},
+		{`DELETE FROM turns        WHERE session_id IN (SELECT id FROM (` + candidateSet + `))`, &st.Turns},
+		{`UPDATE sessions SET pruned = 1 WHERE id IN (SELECT id FROM (` + candidateSet + `))`, nil},
 	}
-	for _, q := range steps {
-		if _, err := tx.Exec(q, cutoff); err != nil {
+	for _, s := range steps {
+		res, err := tx.Exec(s.q, cutoff)
+		if err != nil {
 			return st, fmt.Errorf("prune step: %w", err)
+		}
+		if s.dst != nil {
+			n, err := res.RowsAffected()
+			if err != nil {
+				return st, fmt.Errorf("prune step rows affected: %w", err)
+			}
+			*s.dst = n
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -140,8 +165,17 @@ func Run(db *sql.DB, cutoff string, dryRun bool) (Stats, error) {
 
 	// Reclaim the freed pages. VACUUM cannot run inside a transaction; the
 	// store's single-connection pool serialises it against other writers.
-	if _, err := db.Exec(`VACUUM`); err != nil {
-		return st, fmt.Errorf("vacuum: %w", err)
+	// The prune has already committed, so a busy VACUUM must not make the
+	// pass look failed — carry it on the stats as a warning instead.
+	if err := vacuum(db); err != nil {
+		st.VacuumErr = fmt.Errorf("vacuum: %w", err)
 	}
 	return st, nil
+}
+
+// vacuum is a seam for tests: injecting a real SQLITE_BUSY needs a second
+// connection racing the 5s busy_timeout, which would be slow and flaky.
+var vacuum = func(db *sql.DB) error {
+	_, err := db.Exec(`VACUUM`)
+	return err
 }
