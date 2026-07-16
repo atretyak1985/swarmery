@@ -318,6 +318,22 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 	s.publish(ingest.Notification{Type: ingest.NoteEventAppended, SessionID: sessionID, EventID: eventID})
 	s.publish(ingest.Notification{Type: ingest.NotePermissionRequested, SessionID: sessionID, RequestID: id})
 
+	// control-plane v2 — auto-approve rules: a matching enabled rule resolves
+	// the row immediately (resolved_via='rule'). The pending row above is
+	// KEPT as the audit trail; resolveLocked inserts permission_resolved,
+	// restores the session status, publishes the WS frame, and fans the
+	// decision into the waiter channel just attached — the long-poll caller
+	// answers {"decision":"allow"} without any human in the loop. The
+	// approval_requested webhook is intentionally skipped for auto-approvals.
+	if ruleID := s.matchRuleLocked(sessionID, in); ruleID != 0 {
+		reason := fmt.Sprintf("auto-approved by rule #%d", ruleID)
+		if err := s.resolveLocked(id, StatusApproved, "rule", reason, nil); err != nil {
+			log.Printf("warn: approvals: rule %d auto-approve of request %d: %v", ruleID, id, err)
+		} else {
+			return id, ch, true, nil
+		}
+	}
+
 	s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput)
 	return id, ch, true, nil
 }

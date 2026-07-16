@@ -654,3 +654,36 @@ func TestTerminalHandoffNoDecision(t *testing.T) {
 		t.Errorf("row status = %q, want resolved_elsewhere", status)
 	}
 }
+
+// TestLongPollAutoApprovedByRule: with a matching rule in place the hook
+// long-poll returns allow without any dashboard action, and the row is
+// audit-visible as resolved_via='rule'.
+func TestLongPollAutoApprovedByRule(t *testing.T) {
+	srv, db, _ := approvalsTestServer(t, approvals.Options{})
+	if _, err := db.Exec(
+		`INSERT INTO approval_rules (project_id, tool_pattern, created_at)
+		 VALUES (NULL, 'Bash(ls*)', '2026-07-16T00:00:00.000Z')`); err != nil {
+		t.Fatal(err)
+	}
+
+	r := <-postHook(srv, context.Background(), hookBody("lp-rule", "Bash", "ls -la"))
+	if r.err != nil || r.status != 200 {
+		t.Fatalf("long-poll result: %d %v", r.status, r.err)
+	}
+	var d struct {
+		Decision string `json:"decision"`
+	}
+	if err := json.Unmarshal(r.body, &d); err != nil || d.Decision != "allow" {
+		t.Fatalf("long-poll body = %s (%v)", r.body, err)
+	}
+
+	var status, via string
+	if err := db.QueryRow(
+		`SELECT status, resolved_via FROM permission_requests ORDER BY id DESC LIMIT 1`).
+		Scan(&status, &via); err != nil {
+		t.Fatal(err)
+	}
+	if status != "approved" || via != "rule" {
+		t.Errorf("audit row = (%s, %s), want (approved, rule)", status, via)
+	}
+}
