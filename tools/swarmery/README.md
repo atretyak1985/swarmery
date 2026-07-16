@@ -41,6 +41,20 @@ serving** (brief read lock, no downtime) and yields a single self-contained file
 with no `-wal`/`-shm` sidecars. Schedule it from cron/launchd for a rolling
 history.
 
+## Retention (prune)
+
+Old sessions' raw rows (turns/events/file_changes) can be rolled up into
+`daily_rollups` and deleted — session headers stay browsable (`pruned=1`) and
+analytics keeps counting the pruned days from the rollups:
+
+```bash
+swarmery prune --older-than 90d --dry-run   # count what would be pruned per table (recommended first)
+swarmery prune --older-than 90d             # roll up + delete + VACUUM
+```
+
+`--older-than <Nd>` is required; prefer stopping the daemon first (prune
+deletes rows and VACUUMs the same WAL).
+
 **Restore** is stop-copy-start (SQLite has no live in-place restore):
 
 ```bash

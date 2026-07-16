@@ -5,6 +5,7 @@
 //	swarmery serve                 serve the API/SPA + live ingest pipeline
 //	swarmery recost                recompute cost_usd for all turns
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
+//	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery install               launchd auto-start (uninstall / status)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
@@ -34,6 +35,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/notify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
@@ -60,6 +62,8 @@ func main() {
 		err = cmdRecost(os.Args[2:])
 	case "backup":
 		err = cmdBackup(os.Args[2:])
+	case "prune":
+		err = cmdPrune(os.Args[2:])
 	case "wscan":
 		err = cmdWscan(os.Args[2:])
 	case "sysscan":
@@ -104,6 +108,10 @@ func usage() {
                     [--notify-telegram-chat <id>]
   swarmery recost   [--db <path>]
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
+  swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
+                                   retention: write daily_rollups for sessions ended > Nd ago,
+                                   delete their events/file_changes/turns (headers kept, pruned=1),
+                                   VACUUM at the end; --dry-run prints per-table counts only
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
   swarmery sysscan  [--db <path>] [--claude-dir <dir>] [--overlays-dir <dir>]
                                    one-shot system-config scan (agents/skills/hooks/commands)
@@ -247,6 +255,62 @@ func cmdBackup(args []string) error {
 	}
 	fmt.Printf("backup %s -> %s (%d bytes)\n", *dbPath, dest, size)
 	return nil
+}
+
+// cmdPrune implements retention — see internal/prune. --older-than is
+// REQUIRED (a destructive default would be a foot-gun); --dry-run prints the
+// per-table candidate counts and writes nothing.
+func cmdPrune(args []string) error {
+	fs := flag.NewFlagSet("prune", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	olderThan := fs.String("older-than", "",
+		"retention window, e.g. 90d — prune sessions that ENDED more than this long ago (required)")
+	dryRun := fs.Bool("dry-run", false, "count what would be pruned per table; write nothing")
+	fs.Parse(args)
+	if fs.NArg() != 0 || *olderThan == "" {
+		return fmt.Errorf("usage: swarmery prune [--db <path>] --older-than <Nd> [--dry-run]")
+	}
+	days, err := parseRetentionDays(*olderThan)
+	if err != nil {
+		return err
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02T15:04:05.000Z")
+
+	if port := envPort(); daemonRunning(port) {
+		log.Printf("warn: a swarmery daemon appears to be running on port %d — prune deletes rows and VACUUMs the same WAL; prefer stopping the daemon first", port)
+	}
+
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	st, err := prune.Run(db, cutoff, *dryRun)
+	if err != nil {
+		return err
+	}
+	mode := "pruned"
+	if st.DryRun {
+		mode = "would prune (dry-run)"
+	}
+	fmt.Printf("prune %s (cutoff %s)\n  %s:\n  sessions marked: %d\n  turns: %d\n  events: %d\n  file_changes: %d\n  daily_rollups rows written: %d\n",
+		*dbPath, st.Cutoff, mode, st.Sessions, st.Turns, st.Events, st.FileChanges, st.RollupRows)
+	return nil
+}
+
+// parseRetentionDays parses "90d" → 90. Days are the only supported unit:
+// retention is a calendar policy, not duration arithmetic.
+func parseRetentionDays(s string) (int, error) {
+	v, ok := strings.CutSuffix(s, "d")
+	if !ok {
+		return 0, fmt.Errorf("--older-than wants <N>d (e.g. 90d), got %q", s)
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("--older-than wants a positive day count, got %q", s)
+	}
+	return n, nil
 }
 
 // daemonRunning probes the local API port to detect a live daemon.
