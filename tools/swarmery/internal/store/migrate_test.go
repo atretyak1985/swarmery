@@ -348,3 +348,33 @@ func TestMigrate0012Backfill(t *testing.T) {
 		t.Fatalf("re-run migrate: %v", err)
 	}
 }
+
+// TestMigration0013ApprovalRules: the auto-approve rules table exists with
+// its defaults and the action CHECK.
+func TestMigration0013ApprovalRules(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "rules.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(
+		`INSERT INTO approval_rules (tool_pattern, created_at)
+		 VALUES ('Read', '2026-07-16T00:00:00.000Z')`); err != nil {
+		t.Fatalf("insert minimal rule: %v", err)
+	}
+	var action string
+	var enabled int
+	if err := db.QueryRow(
+		`SELECT action, enabled FROM approval_rules WHERE id = 1`).Scan(&action, &enabled); err != nil {
+		t.Fatal(err)
+	}
+	if action != "approve" || enabled != 1 {
+		t.Errorf("defaults = (%q, %d), want ('approve', 1)", action, enabled)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO approval_rules (tool_pattern, action, created_at)
+		 VALUES ('Read', 'deny', '2026-07-16T00:00:00.000Z')`); err == nil {
+		t.Error("action CHECK must reject 'deny'")
+	}
+}
