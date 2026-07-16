@@ -157,8 +157,8 @@ function DropdownOption({
 function useDropdownDismiss(
   open: boolean,
   setOpen: (open: boolean) => void,
-  rootRef: RefObject<HTMLDivElement>,
-  buttonRef: RefObject<HTMLButtonElement>,
+  rootRef: RefObject<HTMLDivElement | null>,
+  buttonRef: RefObject<HTMLButtonElement | null>,
 ): void {
   useEffect(() => {
     if (!open) return undefined;
@@ -181,7 +181,7 @@ function useDropdownDismiss(
 }
 
 /** Roving focus over a listbox's [role=option] children (wraps around). */
-function focusOption(menuRef: RefObject<HTMLDivElement>, delta: 1 | -1): void {
+function focusOption(menuRef: RefObject<HTMLDivElement | null>, delta: 1 | -1): void {
   const opts = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]');
   if (!opts?.length) return;
   const list = Array.from(opts);
