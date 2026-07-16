@@ -38,14 +38,18 @@ const METRICS: { v: AnalyticsMetric; label: string }[] = [
   { v: 'cost', label: '$ Cost' },
   { v: 'tokens', label: 'Tokens' },
   { v: 'runs', label: 'Runs' },
+  { v: 'cache', label: 'Cache %' },
 ];
 
 /**
  * $/tokens pivot on turns dimensions — project/model, and agent now that
  * subagent turns are recorded (phase 2); runs pivots on event dimensions.
+ * cache pivots on project/model only (agent ratios would mislead).
  */
 function pivotsFor(metric: AnalyticsMetric): AnalyticsDimension[] {
-  return metric === 'runs' ? ['agent', 'skill'] : ['project', 'model', 'agent'];
+  if (metric === 'runs') return ['agent', 'skill'];
+  if (metric === 'cache') return ['project', 'model'];
+  return ['project', 'model', 'agent'];
 }
 
 const PRESETS = [7, 14, 30, 90] as const;
@@ -76,6 +80,7 @@ function seriesColor(group: AnalyticsDimension, key: string): string {
 function fmtValue(metric: AnalyticsMetric, n: number): string {
   if (metric === 'cost') return `$${n.toFixed(2)}`;
   if (metric === 'tokens') return fmtTokens(n);
+  if (metric === 'cache') return `${(n * 100).toFixed(1)}%`;
   return String(Math.round(n));
 }
 
@@ -192,6 +197,40 @@ function HeroInsight({
           </div>
           <div className="mt-1 font-display text-[18px] font-semibold text-brand">
             {metric === 'runs' ? peakLabel : fmtValue(metric, dailyAvg * 30)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ----- cache hero card (analytics uplift) ----- */
+
+function CacheHero({ series }: { series: TimeseriesResp }): JSX.Element | null {
+  const c = series.cache;
+  if (c === undefined) return null;
+  const pct = (c.hit_rate * 100).toFixed(1);
+  return (
+    <div className="mt-[18px] flex flex-wrap items-center gap-x-7 gap-y-4 rounded-[14px] border border-line bg-surface px-5 py-4">
+      <div className="min-w-0 flex-[1_1_300px]">
+        <div className="font-display text-[20px] font-medium leading-[1.3] tracking-[-0.01em] text-ink text-balance">
+          Cache served {pct}% of prompt tokens this range
+          {c.saved_usd !== null ? ` — saving ~${fmtCost(c.saved_usd)} vs full-price input.` : '.'}
+        </div>
+        <div className="mt-[7px] font-mono text-[10.5px] text-ink-dim">
+          {fmtTokens(c.cache_read_tokens)} cache reads · {fmtTokens(c.input_tokens)} uncached input
+          {c.saved_usd === null && ' — no cached model has a pricing entry, so no $ estimate'}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-[22px]">
+        <div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">Hit rate</div>
+          <div className="mt-1 font-display text-[18px] font-semibold text-ink">{pct}%</div>
+        </div>
+        <div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">Est. saved</div>
+          <div className="mt-1 font-display text-[18px] font-semibold text-green">
+            {c.saved_usd !== null ? fmtCost(c.saved_usd) : '—'}
           </div>
         </div>
       </div>
@@ -389,12 +428,12 @@ function MainChart({
               <Area
                 key={s.key}
                 type="monotone"
-                stackId="1"
+                stackId={metric === 'cache' ? s.key : '1'}
                 dataKey={s.key}
                 name={s.name}
                 stroke={color}
                 fill={color}
-                fillOpacity={0.22}
+                fillOpacity={metric === 'cache' ? 0.08 : 0.22}
                 strokeWidth={1.5}
                 isAnimationActive={idx < 8}
               />
@@ -457,16 +496,20 @@ function Bar({ pct, color }: { pct: number; color: string }): JSX.Element {
 function BreakdownPanel({
   rows,
   pivot,
+  metric,
 }: {
   rows: BreakdownRow[];
   pivot: AnalyticsDimension;
+  metric: AnalyticsMetric;
 }): JSX.Element {
+  const cacheView = metric === 'cache';
   // Any $ in this pivot? project/model/agent carry cost; skill never does.
   const hasCost = rows.some((r) => r.cost_usd !== null);
   const hasRuns = rows.some((r) => r.runs !== null);
   const hasRate = rows.some((r) => r.success_rate != null);
-  // Rank/bar by the dominant measure: cost when present, else runs.
-  const primary = (r: BreakdownRow): number => (hasCost ? (r.cost_usd ?? 0) : (r.runs ?? 0));
+  // Rank/bar by the dominant measure: hit rate in cache view, else cost, else runs.
+  const primary = (r: BreakdownRow): number =>
+    cacheView ? (r.cache_hit_rate ?? 0) : hasCost ? (r.cost_usd ?? 0) : (r.runs ?? 0);
   const max = rows.reduce((m, r) => Math.max(m, primary(r)), 0);
 
   if (rows.length === 0) return <Empty>no {pivot} activity in this range</Empty>;
@@ -480,24 +523,39 @@ function BreakdownPanel({
             <div className="flex items-baseline gap-2 font-mono text-[11.5px]">
               <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: color }} />
               <span className="min-w-0 flex-1 truncate text-ink-3">{r.name}</span>
-              {hasCost && <span className="text-ink">{fmtCost(r.cost_usd)}</span>}
-              {hasRuns && (
-                <span className="w-14 text-right text-ink-dim">{r.runs ?? 0} runs</span>
+              {cacheView ? (
+                <>
+                  <span className="text-ink">
+                    {r.cache_hit_rate !== null && r.cache_hit_rate !== undefined
+                      ? `${(r.cache_hit_rate * 100).toFixed(1)}%`
+                      : '—'}
+                  </span>
+                  <span className="w-16 text-right text-ink-faint">
+                    {fmtTokens(r.tokens_cache_read ?? 0)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  {hasCost && <span className="text-ink">{fmtCost(r.cost_usd)}</span>}
+                  {hasRuns && (
+                    <span className="w-14 text-right text-ink-dim">{r.runs ?? 0} runs</span>
+                  )}
+                  {hasRate && (
+                    <span className="w-10 text-right text-ink-dim">
+                      {r.success_rate != null
+                        ? `${String(Math.round(r.success_rate * 100))}%`
+                        : '—'}
+                    </span>
+                  )}
+                  <span className="w-16 text-right text-ink-faint">
+                    {hasCost
+                      ? fmtTokens((r.tokens_in ?? 0) + (r.tokens_out ?? 0))
+                      : r.last_used !== null
+                        ? fmtAgo(r.last_used)
+                        : '—'}
+                  </span>
+                </>
               )}
-              {hasRate && (
-                <span className="w-10 text-right text-ink-dim">
-                  {r.success_rate != null
-                    ? `${String(Math.round(r.success_rate * 100))}%`
-                    : '—'}
-                </span>
-              )}
-              <span className="w-16 text-right text-ink-faint">
-                {hasCost
-                  ? fmtTokens((r.tokens_in ?? 0) + (r.tokens_out ?? 0))
-                  : r.last_used !== null
-                    ? fmtAgo(r.last_used)
-                    : '—'}
-              </span>
             </div>
             <Bar pct={max > 0 ? primary(r) / max : 0} color={color} />
           </div>
@@ -731,9 +789,12 @@ export function Analytics(): JSX.Element {
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
 
-      {series !== null && series.series.length > 0 && (
-        <HeroInsight series={series} metric={metric} />
-      )}
+      {series !== null && series.series.length > 0 &&
+        (metric === 'cache' ? (
+          <CacheHero series={series} />
+        ) : (
+          <HeroInsight series={series} metric={metric} />
+        ))}
 
       <div className="mt-3.5 rounded-[14px] border border-line bg-surface px-5 py-[18px]">
         {series === null && error === null ? (
@@ -755,7 +816,7 @@ export function Analytics(): JSX.Element {
             {breakdown === null ? (
               <Loading label="breakdown…" />
             ) : (
-              <BreakdownPanel rows={breakdown} pivot={pivot} />
+              <BreakdownPanel rows={breakdown} pivot={pivot} metric={metric} />
             )}
           </div>
         </section>

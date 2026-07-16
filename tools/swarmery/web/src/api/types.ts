@@ -357,8 +357,21 @@ export interface StatsOverview {
 // --- Analytics (GET /api/stats/{timeseries,breakdown,matrix}) ----------------
 
 /** $/tokens come from turns (project|model); runs come from events (agent|skill). */
-export type AnalyticsMetric = 'cost' | 'tokens' | 'runs';
+export type AnalyticsMetric = 'cost' | 'tokens' | 'runs' | 'cache';
 export type AnalyticsDimension = 'project' | 'model' | 'agent' | 'skill';
+
+/** Range-total cache economics for metric=cache (analytics uplift). */
+export interface CacheSummary {
+  /** SUM(cache_read) / (SUM(cache_read) + SUM(tokens_in)) over the range, 0..1. */
+  hit_rate: number;
+  cache_read_tokens: number;
+  input_tokens: number;
+  /**
+   * Estimated $ saved from REAL per-model cache_read pricing
+   * (config/pricing.json); null when no cached model is in the pricing table.
+   */
+  saved_usd: number | null;
+}
 
 /** One toggleable series of the main chart; `values` aligns to `buckets`. */
 export interface TimeseriesSeries {
@@ -379,6 +392,8 @@ export interface TimeseriesResp {
   series: TimeseriesSeries[];
   /** Always false in Phase 1 (no per-agent $); reserved for the Phase 2 badge. */
   approx: boolean;
+  /** Present only for metric=cache. Series values are 0..1 fractions — do not stack. */
+  cache?: CacheSummary;
 }
 
 /**
@@ -392,6 +407,9 @@ export interface BreakdownRow {
   cost_usd: number | null;
   tokens_in: number | null;
   tokens_out: number | null;
+  /** Cache columns (analytics uplift): set on project|model rows, null on agent|skill. */
+  tokens_cache_read?: number | null;
+  cache_hit_rate?: number | null;
   runs: number | null;
   sessions: number;
   last_used: string | null;

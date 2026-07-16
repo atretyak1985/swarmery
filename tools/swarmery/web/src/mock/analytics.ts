@@ -69,6 +69,7 @@ function magnitude(metric: AnalyticsMetric, key: string, day: string): number {
   const active = rand(`${key}|${day}|on`);
   if (active < 0.35) return 0; // quiet day
   const base = rand(`${key}|${day}|v`);
+  if (metric === 'cache') return Number((0.55 + base * 0.42).toFixed(3));
   if (metric === 'cost') return Number((base * 3.2).toFixed(2));
   if (metric === 'tokens') return Math.round(base * 380_000);
   return Math.round(base * 6); // runs
@@ -83,8 +84,16 @@ export function mockTimeseries(
   const series = membersOf(group)
     .map(({ key, name }) => {
       const values = buckets.map((day) => magnitude(metric, key, day));
-      const total = values.reduce((a, v) => a + v, 0);
-      return { key, name, total: Number(total.toFixed(2)), values };
+      const total =
+        metric === 'cache'
+          ? Number(
+              (
+                values.reduce((a, v) => a + v, 0) /
+                Math.max(1, values.filter((v) => v > 0).length)
+              ).toFixed(3),
+            )
+          : Number(values.reduce((a, v) => a + v, 0).toFixed(2));
+      return { key, name, total, values };
     })
     .filter((s) => s.total > 0)
     .sort((a, b) => b.total - a.total || a.key.localeCompare(b.key));
@@ -97,6 +106,16 @@ export function mockTimeseries(
     buckets,
     series,
     approx: false,
+    ...(metric === 'cache'
+      ? {
+          cache: {
+            hit_rate: 0.872,
+            cache_read_tokens: 41_200_000,
+            input_tokens: 6_050_000,
+            saved_usd: 312.4,
+          },
+        }
+      : {}),
   };
 }
 
@@ -120,6 +139,8 @@ export function mockBreakdown(by: AnalyticsDimension, range: Range): BreakdownRe
       cost_usd: hasCost && cost > 0 ? cost : null,
       tokens_in: hasCost ? tokensIn : null,
       tokens_out: hasCost ? tokens - tokensIn : null,
+      tokens_cache_read: hasCost ? Math.round(tokens * 6.4) : null,
+      cache_hit_rate: hasCost ? Number((0.6 + rand(`${key}|hr`) * 0.35).toFixed(3)) : null,
       runs: hasRuns ? runs : null,
       sessions: hasRuns ? Math.max(1, Math.round(runs * 0.5)) : Math.round(rand(`${key}|sess`) * 12) + 1,
       last_used: hasRuns && runs > 0 ? `${days[days.length - 1] ?? isoDay()}T14:20:00.000Z` : null,
