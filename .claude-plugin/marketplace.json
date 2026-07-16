@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Vendor-neutral, multi-project Claude Code agent framework. One shared core plus opt-in domain packs; per-project flavor comes from each consumer's project.json overlay.",
-    "version": "1.8.1"
+    "version": "1.8.2"
   },
   "plugins": [
     {

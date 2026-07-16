@@ -70,10 +70,12 @@ files_touched=$(jq -r 'select(.file != "") | .file' "$SESSION_FILE" 2>/dev/null 
 
 # Unique projects
 # Component label = the `apps/<name>` segment, else "agents" — generic, no hard-coded repos.
+# Case patterns need the leading "(" — bash 3.2 (macOS /bin/bash) misparses a bare
+# "pattern)" inside $(...) as the end of the command substitution.
 projects=$(jq -r 'select(.file != "") | .file' "$SESSION_FILE" 2>/dev/null | while read -r fp; do
   case "$fp" in
-    */apps/*) rest="${fp##*/apps/}"; echo "${rest%%/*}";;
-    */.claude/*) echo "agents";;
+    (*/apps/*) rest="${fp##*/apps/}"; echo "${rest%%/*}";;
+    (*/.claude/*) echo "agents";;
   esac
 done | sort -u | tr '\n' ', ' | sed 's/,$//')
 
