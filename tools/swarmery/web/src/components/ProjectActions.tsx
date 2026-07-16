@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import type { Project } from '../api/types';
-import { archiveProject, restoreProject } from '../api';
+import { archiveProject, patchProject, restoreProject } from '../api';
 import { ConfirmDialog } from './ui';
 import { DetachModal } from './DetachModal';
 
@@ -43,6 +43,76 @@ export function PluginBadge({ project }: { project: Project }): JSX.Element {
   );
 }
 
+/** Inline tag editor — comma-separated input persisted via PATCH {tags}. */
+function TagEditor({
+  project,
+  onChanged,
+  onClose,
+}: {
+  project: Project;
+  onChanged: () => void;
+  onClose: () => void;
+}): JSX.Element {
+  const [value, setValue] = useState(project.tags.join(', '));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = (): void => {
+    const tags = value
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t !== '');
+    setBusy(true);
+    setError(null);
+    patchProject(project.id, { tags })
+      .then(() => {
+        onChanged();
+        onClose();
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="absolute top-full right-0 z-20 mt-1.5 w-[260px] rounded-[11px] border border-line-strong bg-field p-3 shadow-[0_16px_34px_rgba(0,0,0,0.5)]">
+      <div className="font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
+        tags · comma-separated
+      </div>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save();
+          if (e.key === 'Escape') onClose();
+        }}
+        placeholder="billing, infra"
+        aria-label={`tags for ${project.slug}`}
+        autoFocus
+        className="mt-2 w-full rounded-[9px] border border-line-strong bg-surface px-2.5 py-[6px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-ink-dim"
+      />
+      {error !== null && <div className="mt-1.5 font-mono text-[10px] text-red">{error}</div>}
+      <div className="mt-2.5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2"
+        >
+          cancel
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="rounded-lg border border-brand/40 bg-brand/10 px-2.5 py-1 font-mono text-[10.5px] text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
+        >
+          save
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ProjectActions({
   project,
   onChanged,
@@ -53,6 +123,7 @@ export function ProjectActions({
 }): JSX.Element {
   const [confirm, setConfirm] = useState<'archive' | 'restore' | null>(null);
   const [showDetach, setShowDetach] = useState(false);
+  const [showTags, setShowTags] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const blocked = detachBlockReason(project);
@@ -72,7 +143,7 @@ export function ProjectActions({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative flex items-center gap-2">
       {error !== null && <span className="font-mono text-[10px] text-red">{error}</span>}
 
       {project.archived ? (
@@ -85,6 +156,15 @@ export function ProjectActions({
         </button>
       ) : (
         <>
+          <button
+            type="button"
+            onClick={() => setShowTags((v) => !v)}
+            aria-expanded={showTags}
+            title="edit project tags"
+            className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2"
+          >
+            tags
+          </button>
           <button
             type="button"
             onClick={() => setShowDetach(true)}
@@ -103,6 +183,14 @@ export function ProjectActions({
             archive
           </button>
         </>
+      )}
+
+      {showTags && (
+        <TagEditor
+          project={project}
+          onChanged={onChanged}
+          onClose={() => setShowTags(false)}
+        />
       )}
 
       <ConfirmDialog
