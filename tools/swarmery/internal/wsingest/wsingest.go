@@ -30,8 +30,9 @@ import (
 const DefaultRescanInterval = 60 * time.Second
 
 // DefaultWorkspaceRoot is the machine-neutral fallback workspace repo location
-// (~/swarmery-workspace) used when $AGENT_WORKSPACE_ROOT / --workspace-root is
-// unset. Per-user by construction — nothing host-specific is baked in.
+// (~/swarmery-workspace) used when neither workspace-root env var nor
+// --workspace-root is set. Per-user by construction — nothing host-specific is
+// baked in.
 func DefaultWorkspaceRoot() string {
 	if home, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(home, "swarmery-workspace")
@@ -39,9 +40,15 @@ func DefaultWorkspaceRoot() string {
 	return "swarmery-workspace"
 }
 
-// Root resolves the workspace root: $AGENT_WORKSPACE_ROOT, else the default.
+// Root resolves the workspace root: $AGENT_WORKSPACE_ROOT (the per-project
+// runtime var consumer settings carry), else $SWARMERY_WORKSPACE_ROOT (the
+// machine-level var scripts/init.sh reads and `swarmery install
+// --workspace-root` bakes into the launchd plist), else the default.
 func Root() string {
 	if v := os.Getenv("AGENT_WORKSPACE_ROOT"); v != "" {
+		return v
+	}
+	if v := os.Getenv("SWARMERY_WORKSPACE_ROOT"); v != "" {
 		return v
 	}
 	return DefaultWorkspaceRoot()

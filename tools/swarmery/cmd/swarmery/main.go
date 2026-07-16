@@ -293,7 +293,7 @@ func cmdBackfill(args []string) error {
 func wsingestFlags(fs *flag.FlagSet) *wsingest.Config {
 	cfg := &wsingest.Config{}
 	fs.StringVar(&cfg.WorkspaceRoot, "workspace-root", wsingest.Root(),
-		"agent-work.sh workspace repo to index (env: AGENT_WORKSPACE_ROOT)")
+		"agent-work.sh workspace repo to index (env: AGENT_WORKSPACE_ROOT, SWARMERY_WORKSPACE_ROOT)")
 	return cfg
 }
 

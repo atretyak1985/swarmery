@@ -34,7 +34,7 @@
     "commitScopes": { "type": "array", "items": { "type": "string" } },
     "enabledPacks": {
       "type": "array",
-      "items": { "enum": ["uav-pack", "iot-pack", "web-pack"] },
+      "items": { "enum": ["uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack"] },
       "description": "domain packs this project enables (mirrors .claude/settings.json enabledPlugins)"
     }
   }

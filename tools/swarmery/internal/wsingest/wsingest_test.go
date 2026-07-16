@@ -12,6 +12,30 @@ import (
 
 const fixtureRoot = "../../testdata/workspace"
 
+// TestRoot covers the env fallback chain: AGENT_WORKSPACE_ROOT (per-project
+// runtime var) wins over SWARMERY_WORKSPACE_ROOT (machine-level var init.sh
+// reads and the launchd installer bakes into the plist), which wins over the
+// home default. Empty string counts as unset — Root() checks != "".
+func TestRoot(t *testing.T) {
+	cases := []struct {
+		name, agent, swarmery, want string
+	}{
+		{"agent wins over swarmery", "/agent-root", "/swarmery-root", "/agent-root"},
+		{"agent only", "/agent-root", "", "/agent-root"},
+		{"swarmery only", "", "/swarmery-root", "/swarmery-root"},
+		{"neither set falls back to default", "", "", DefaultWorkspaceRoot()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("AGENT_WORKSPACE_ROOT", tc.agent)
+			t.Setenv("SWARMERY_WORKSPACE_ROOT", tc.swarmery)
+			if got := Root(); got != tc.want {
+				t.Errorf("Root() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
