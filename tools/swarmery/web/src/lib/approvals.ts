@@ -176,3 +176,20 @@ export function buildAnswers(
   }
   return answers;
 }
+
+/**
+ * Pre-fill for the "always allow…" shortcut: Bash narrows to the command's
+ * first word as a prefix rule (`Bash(git *)` — NOTE: prefix matching also
+ * covers chained `&& …` commands); every other tool suggests the bare tool
+ * name (any input).
+ */
+export function suggestRulePattern(request: PermissionRequest): string {
+  if (request.toolName !== 'Bash') return request.toolName;
+  try {
+    const parsed = JSON.parse(request.requestJson) as { tool_input?: { command?: string } };
+    const first = parsed.tool_input?.command?.trim().split(/\s+/)[0];
+    return first !== undefined && first !== '' ? `Bash(${first} *)` : 'Bash';
+  } catch {
+    return 'Bash';
+  }
+}

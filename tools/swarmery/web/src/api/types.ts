@@ -424,6 +424,28 @@ export interface PermissionRequest {
   expiresAt: string;
 }
 
+/**
+ * One auto-approve rule (control-plane v2 — approval_rules row). A matching
+ * enabled rule resolves incoming permission requests as approved with
+ * resolvedVia 'rule'; the request row stays in History as the audit trail.
+ */
+export interface ApprovalRule {
+  id: number;
+  /** null = applies to every project. */
+  projectId: number | null;
+  projectSlug: string | null;
+  /**
+   * `Tool` (exact tool, any input) or `Tool(argGlob)` — `*` matches any run
+   * of characters in the tool's argument (Bash → command PREFIX, Read/Write/
+   * Edit → file_path, WebFetch → url, Glob/Grep → pattern).
+   */
+  toolPattern: string;
+  action: 'approve';
+  enabled: boolean;
+  note: string | null;
+  createdAt: string;
+}
+
 /** WS event names — frozen; MVP trio implemented by Agent A, permission_* added at gate 2.2 (phase 2). */
 export type WSMessageType =
   | 'session_started'

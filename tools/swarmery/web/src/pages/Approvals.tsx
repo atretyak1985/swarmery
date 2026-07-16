@@ -16,8 +16,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { PermissionRequest, PermissionRequestStatus, Session, WSMessage } from '../api/types';
-import { fetchApprovals, fetchSessions, resolveApproval, type ApprovalAction } from '../api';
+import type { ApprovalRule, PermissionRequest, PermissionRequestStatus, Project, Session, WSMessage } from '../api/types';
+import {
+  createApprovalRule,
+  deleteApprovalRule,
+  fetchApprovalRules,
+  fetchApprovals,
+  fetchProjects,
+  fetchSessions,
+  resolveApproval,
+  toggleApprovalRule,
+  type ApprovalAction,
+} from '../api';
 import {
   buildAnswers,
   EMPTY_DRAFT,
@@ -25,6 +35,7 @@ import {
   questionsOf,
   requestJsonPretty,
   requestSummary,
+  suggestRulePattern,
   type AnswerDraft,
   type AnswerMap,
   type ParsedQuestion,
@@ -78,6 +89,152 @@ function SessionLabel({
       <ProjectName name={session.projectName} slug={session.projectSlug} />
       {session.title !== null ? ` · ${session.title}` : ''}
     </>
+  );
+}
+
+/* ----- auto-approve rules (control-plane v2) ----- */
+
+interface RuleDraft {
+  projectId: number | null;
+  toolPattern: string;
+  note: string;
+}
+
+const EMPTY_RULE_DRAFT: RuleDraft = { projectId: null, toolPattern: '', note: '' };
+
+function RuleRow({
+  rule,
+  busy,
+  onToggle,
+  onDelete,
+}: {
+  rule: ApprovalRule;
+  busy: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+}): JSX.Element {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-[15px] py-[9px]">
+      <code
+        className={`font-mono text-[12px] font-semibold ${
+          rule.enabled ? 'text-ink' : 'text-ink-faint line-through'
+        }`}
+      >
+        {rule.toolPattern}
+      </code>
+      <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-dim">
+        {rule.projectSlug ?? 'all projects'}
+      </span>
+      {rule.note !== null && rule.note !== '' && (
+        <span className="min-w-0 flex-1 basis-[140px] truncate text-[11.5px] text-ink-dim">
+          {rule.note}
+        </span>
+      )}
+      <span className="ml-auto font-mono text-[10px] whitespace-nowrap text-ink-faint">
+        {fmtAgo(rule.createdAt)}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onToggle}
+        aria-pressed={rule.enabled}
+        className={`rounded-lg border px-2.5 py-0.5 font-mono text-[10.5px] transition-colors disabled:opacity-50 ${
+          rule.enabled
+            ? 'border-green/40 text-green hover:bg-green/10'
+            : 'border-line-strong text-ink-dim hover:bg-surface2'
+        }`}
+      >
+        {rule.enabled ? 'on' : 'off'}
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onDelete}
+        aria-label={`delete rule ${rule.toolPattern}`}
+        className="rounded-lg border border-red/40 px-2.5 py-0.5 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
+      >
+        delete
+      </button>
+    </div>
+  );
+}
+
+function AddRuleForm({
+  projects,
+  draft,
+  busy,
+  error,
+  onChange,
+  onSubmit,
+  onCancel,
+}: {
+  projects: Project[];
+  draft: RuleDraft;
+  busy: boolean;
+  error: string | null;
+  onChange: (next: RuleDraft) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}): JSX.Element {
+  return (
+    <form
+      className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+    >
+      <select
+        value={draft.projectId === null ? '' : String(draft.projectId)}
+        onChange={(e) =>
+          onChange({ ...draft, projectId: e.target.value === '' ? null : Number(e.target.value) })
+        }
+        aria-label="rule project scope"
+        className="rounded-lg border border-line bg-field px-2 py-[5px] font-mono text-[11.5px] text-ink outline-none focus:border-green/40"
+      >
+        <option value="">all projects</option>
+        {projects.map((p) => (
+          <option key={p.id} value={String(p.id)}>
+            {p.name ?? p.slug}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={draft.toolPattern}
+        onChange={(e) => onChange({ ...draft, toolPattern: e.target.value })}
+        placeholder="Tool or Tool(arg glob) — e.g. Read, Bash(git *)"
+        aria-label="tool pattern"
+        className="min-w-0 flex-1 basis-[180px] rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-green/40"
+      />
+      <input
+        type="text"
+        value={draft.note}
+        onChange={(e) => onChange({ ...draft, note: e.target.value })}
+        placeholder="note (optional)"
+        aria-label="rule note"
+        className="min-w-0 flex-1 basis-[120px] rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-green/40"
+      />
+      <button
+        type="submit"
+        disabled={busy || draft.toolPattern.trim() === ''}
+        className="rounded-lg border border-green/45 bg-green/12 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
+      >
+        add rule
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-lg border border-line-strong px-3 py-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:bg-surface2"
+      >
+        cancel
+      </button>
+      <div className="basis-full font-mono text-[10px] leading-snug text-ink-faint">
+        Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status &amp;&amp;
+        rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule).
+      </div>
+      {error !== null && <div className="basis-full text-[11.5px] text-red">{error}</div>}
+    </form>
   );
 }
 
@@ -155,6 +312,7 @@ function PendingCard({
   nowMs,
   busy,
   onResolve,
+  onAlwaysAllow,
 }: {
   request: PermissionRequest;
   session: Session | null;
@@ -162,6 +320,7 @@ function PendingCard({
   nowMs: number;
   busy: boolean;
   onResolve: (action: ApprovalAction, reason?: string, answers?: AnswerMap) => void;
+  onAlwaysAllow: () => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [denying, setDenying] = useState(false);
@@ -291,6 +450,17 @@ function PendingCard({
         >
           deny{denying ? ' ▴' : ''}
         </button>
+        {questions === null && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onAlwaysAllow}
+            title="pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
+            className={`${ACTION_BTN} border-line-strong font-normal text-ink-3 hover:bg-surface2`}
+          >
+            always allow…
+          </button>
+        )}
         {questions !== null && (
           <button
             type="button"
@@ -392,6 +562,64 @@ export function Approvals(): JSX.Element {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  // Auto-approve rules (control-plane v2).
+  const [rules, setRules] = useState<ApprovalRule[] | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [ruleFormOpen, setRuleFormOpen] = useState(false);
+  const [ruleDraft, setRuleDraft] = useState<RuleDraft>(EMPTY_RULE_DRAFT);
+  const [ruleError, setRuleError] = useState<string | null>(null);
+  const [ruleBusy, setRuleBusy] = useState(false);
+
+  const loadRules = useCallback((): void => {
+    fetchApprovalRules()
+      .then(setRules)
+      .catch(() => setRules([])); // rules API absent → empty section
+  }, []);
+  useEffect(loadRules, [loadRules]);
+
+  // Project dropdown data — fetched once, when the form first opens.
+  useEffect(() => {
+    if (!ruleFormOpen || projects.length > 0) return;
+    fetchProjects()
+      .then(setProjects)
+      .catch(() => setProjects([]));
+  }, [ruleFormOpen, projects.length]);
+
+  const submitRule = (): void => {
+    setRuleBusy(true);
+    setRuleError(null);
+    createApprovalRule({
+      projectId: ruleDraft.projectId,
+      toolPattern: ruleDraft.toolPattern.trim(),
+      ...(ruleDraft.note.trim() !== '' ? { note: ruleDraft.note.trim() } : {}),
+    })
+      .then((rule) => {
+        setRules((prev) => [rule, ...(prev ?? [])]);
+        setRuleDraft(EMPTY_RULE_DRAFT);
+        setRuleFormOpen(false);
+      })
+      .catch((e: unknown) => setRuleError(String(e)))
+      .finally(() => setRuleBusy(false));
+  };
+
+  const toggleRule = (rule: ApprovalRule): void => {
+    setRuleBusy(true);
+    toggleApprovalRule(rule.id, !rule.enabled)
+      .then((updated) =>
+        setRules((prev) => (prev ?? []).map((r) => (r.id === updated.id ? updated : r))),
+      )
+      .catch(loadRules)
+      .finally(() => setRuleBusy(false));
+  };
+
+  const removeRule = (rule: ApprovalRule): void => {
+    setRuleBusy(true);
+    deleteApprovalRule(rule.id)
+      .then(() => setRules((prev) => (prev ?? []).filter((r) => r.id !== rule.id)))
+      .catch(loadRules)
+      .finally(() => setRuleBusy(false));
+  };
+
   const load = useCallback((): void => {
     // Pending + history in one page state; `resolved` is the terminal-status
     // meta-filter (limit 50 server-side — see web/CONTRACT-REQUESTS.md).
@@ -443,6 +671,16 @@ export function Approvals(): JSX.Element {
 
   const sessionOf = (id: number): Session | null =>
     sessions?.find((s) => s.id === id) ?? null;
+
+  const alwaysAllow = (request: PermissionRequest): void => {
+    setRuleDraft({
+      projectId: sessionOf(request.sessionId)?.projectId ?? null,
+      toolPattern: suggestRulePattern(request),
+      note: `always allow — from request #${String(request.id)}`,
+    });
+    setRuleError(null);
+    setRuleFormOpen(true);
+  };
 
   // "resolved today" for the subline — local calendar day, derived from the
   // same `history` list (no extra fetch).
@@ -518,8 +756,56 @@ export function Approvals(): JSX.Element {
               nowMs={nowMs}
               busy={busyId === r.id}
               onResolve={(action, reason, answers) => resolve(r, action, reason, answers)}
+              onAlwaysAllow={() => alwaysAllow(r)}
             />
           ))}
+
+          <div className="mt-[30px] flex items-center gap-3">
+            <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
+              Auto-approve rules
+            </span>
+            <span className="h-px flex-1 bg-line" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => {
+                setRuleFormOpen((v) => !v);
+                setRuleError(null);
+              }}
+              className="rounded-lg border border-line px-2.5 py-0.5 font-mono text-[10.5px] text-ink-3 transition-colors hover:bg-surface2"
+            >
+              {ruleFormOpen ? 'close' : '+ add rule'}
+            </button>
+          </div>
+          {ruleFormOpen && (
+            <AddRuleForm
+              projects={projects}
+              draft={ruleDraft}
+              busy={ruleBusy}
+              error={ruleError}
+              onChange={setRuleDraft}
+              onSubmit={submitRule}
+              onCancel={() => setRuleFormOpen(false)}
+            />
+          )}
+          {rules !== null && rules.length > 0 && (
+            <div className="mt-2 divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
+              {rules.map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  busy={ruleBusy}
+                  onToggle={() => toggleRule(rule)}
+                  onDelete={() => removeRule(rule)}
+                />
+              ))}
+            </div>
+          )}
+          {rules !== null && rules.length === 0 && !ruleFormOpen && (
+            <Empty>
+              no rules — matching requests auto-approve with{' '}
+              <span className="font-mono text-ink">via rule</span> and stay in History for audit
+            </Empty>
+          )}
 
           <div className="mt-[30px] flex items-center gap-3">
             <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">

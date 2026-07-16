@@ -5,6 +5,7 @@
 import type {
   AnalyticsDimension,
   AnalyticsMetric,
+  ApprovalRule,
   BreakdownResp,
   DetachResponse,
   DocDetail,
@@ -283,6 +284,47 @@ export async function resolveApproval(
     throw new Error(`POST /api/approvals/${String(id)}: ${String(res.status)}`);
   }
   return (await res.json()) as PermissionRequest;
+}
+
+// --- control-plane v2 — auto-approve rules ------------------------------------
+
+export interface ApprovalRuleInput {
+  projectId: number | null;
+  toolPattern: string;
+  note?: string;
+}
+
+export function fetchApprovalRules(): Promise<ApprovalRule[]> {
+  if (MOCK) return Promise.resolve([]);
+  return get('/api/approval-rules');
+}
+
+export async function createApprovalRule(input: ApprovalRuleInput): Promise<ApprovalRule> {
+  const res = await fetch('/api/approval-rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `create rule failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as ApprovalRule;
+}
+
+export async function toggleApprovalRule(id: number, enabled: boolean): Promise<ApprovalRule> {
+  const res = await fetch(`/api/approval-rules/${String(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) throw new Error(`toggle rule failed: ${String(res.status)}`);
+  return (await res.json()) as ApprovalRule;
+}
+
+export async function deleteApprovalRule(id: number): Promise<void> {
+  const res = await fetch(`/api/approval-rules/${String(id)}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`delete rule failed: ${String(res.status)}`);
 }
 
 /** POST /api/sessions/{id}/kill — send SIGTERM (force=false) or SIGKILL (force=true). */
