@@ -49,6 +49,7 @@ func Routes(mux *http.ServeMux, h *Handler) {
 
 	// analytics uplift: tools / durations / errors (tools.go, durations.go, errors.go).
 	mux.HandleFunc("GET /api/stats/tools", h.statsTools)
+	mux.HandleFunc("GET /api/stats/durations", h.statsDurations)
 
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
