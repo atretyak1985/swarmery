@@ -101,4 +101,5 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// global search: FTS5 over turns.text (migration 0012) + LIKE groups for
 	// sessions/files/projects — powers the Cmd+K command palette.
 	mux.HandleFunc("GET /api/search", h.search)
+	mux.HandleFunc("GET /api/files/sessions", h.fileSessions)
 }
