@@ -349,6 +349,42 @@ func TestMigrate0012Backfill(t *testing.T) {
 	}
 }
 
+// TestMigrate0015ProjectMeta verifies 0015 applies on a database populated
+// under the 0014 schema: projects gains pinned/tags with safe defaults, and
+// the runner stays idempotent.
+func TestMigrate0015ProjectMeta(t *testing.T) {
+	db := openRaw(t)
+	migrateUpTo(t, db, 14)
+
+	// Pre-0015 sanity: the meta columns must not exist yet.
+	if cols := columnSet(t, db, "projects"); cols["pinned"] || cols["tags"] {
+		t.Fatal("projects.pinned/tags exist before 0015 — migrateUpTo applied too much")
+	}
+	if _, err := db.Exec(`INSERT INTO projects (path, slug, first_seen) VALUES ('/tmp/p', 'p', '2026-07-16T00:00:00Z')`); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+
+	if err := Migrate(db); err != nil {
+		t.Fatalf("migrate populated db: %v", err)
+	}
+	mustHaveColumns(t, db, "projects", "pinned", "tags")
+
+	// Existing rows are backfilled with the defaults (unpinned, empty array).
+	var pinned int
+	var tags string
+	if err := db.QueryRow(`SELECT pinned, tags FROM projects WHERE slug = 'p'`).Scan(&pinned, &tags); err != nil {
+		t.Fatalf("read migrated project: %v", err)
+	}
+	if pinned != 0 || tags != "[]" {
+		t.Errorf("backfill: want (0, []), got (%d, %s)", pinned, tags)
+	}
+
+	// Idempotency: a second Migrate run is a no-op.
+	if err := Migrate(db); err != nil {
+		t.Fatalf("re-run migrate: %v", err)
+	}
+}
+
 // TestMigration0013ApprovalRules: the auto-approve rules table exists with
 // its defaults and the action CHECK.
 func TestMigration0013ApprovalRules(t *testing.T) {
