@@ -15,8 +15,10 @@ import type { WSMessage } from './api/types';
 import { fetchApprovals, fetchDocs, fetchStatsOverview, MOCK } from './api';
 import { CommandPalette } from './components/CommandPalette';
 import { NewProjectButton } from './components/NewProjectButton';
+import { NotifySettings } from './components/NotifySettings';
 import { isoDay } from './lib/format';
 import { useHealth, shortVersion } from './lib/health';
+import { loadPrefs, useBrowserNotifications, type NotifyPrefs } from './lib/notifications';
 import { useLiveUpdates } from './lib/ws';
 
 interface NavItem {
@@ -51,6 +53,10 @@ export function App(): JSX.Element {
   // permission_resolved arrives twice (own action + fan-out) or after resync.
   const [pendingIds, setPendingIds] = useState<ReadonlySet<number>>(new Set());
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Browser notifications (control-plane v2): prefs from localStorage, the
+  // hook rides the same shared WS connection as the badge below.
+  const [notifyPrefs, setNotifyPrefs] = useState<NotifyPrefs>(loadPrefs);
+  useBrowserNotifications(notifyPrefs);
   const { health, unreachable } = useHealth();
   const crumb = crumbFor(useLocation().pathname);
 
@@ -144,7 +150,8 @@ export function App(): JSX.Element {
           search <span className="rounded-[4px] border border-line-strong px-1">⌘K</span>
         </button>
         {!MOCK && (
-          <span className="ml-3">
+          <span className="ml-3 flex items-center gap-2">
+            <NotifySettings prefs={notifyPrefs} onChange={setNotifyPrefs} />
             <NewProjectButton />
           </span>
         )}
