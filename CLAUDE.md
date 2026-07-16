@@ -4,27 +4,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-swarmery is a **Claude Code plugin marketplace** (`.claude-plugin/marketplace.json`), not an application. It ships one vendor-neutral **`core`** plugin plus opt-in domain packs (`uav-pack`, `iot-pack`, `web-pack`). Consumer projects enable plugins via their own `.claude/settings.json` and supply per-project flavor at runtime through `.claude/project.json` — nothing project-specific is ever baked into this repo.
+swarmery is a **Claude Code plugin marketplace** (`.claude-plugin/marketplace.json`), not an application. It ships one vendor-neutral **`core`** plugin plus opt-in domain packs (`uav-pack`, `iot-pack`, `web-pack`, `infra-pack`, `lsp-pack`). Consumer projects enable plugins via their own `.claude/settings.json` and supply per-project flavor at runtime through `.claude/project.json` — nothing project-specific is ever baked into this repo.
 
 There is no build step for the marketplace itself. "Source code" here is agent/skill/command markdown, bash hooks and CLI scripts, and JSON manifests.
 
-**Exception — `tools/swarmery/`**: a Go + React control plane for monitoring Claude Code agent sessions (own module `github.com/atretyak1985/swarmery/tools/swarmery`, own build via `make build`, dedicated CI `.github/workflows/swarmery-ci.yml`). It is NOT a plugin and is excluded from marketplace rules (neutrality scan covers `plugins/**` only). The committed `tools/swarmery/docs/plan/` tree is the **historical record of already-shipped phases only** — NEW plans, specs, and design docs go to the private workspace (see "Work artifacts" below), never into this repo.
+**Exception — `tools/swarmery/`**: a Go + React control plane for monitoring Claude Code agent sessions — a single Go daemon with an embedded React SPA (go:embed) that indexes session transcripts from `~/.claude/projects/` into local SQLite and serves a dashboard on `:7777`. Own module (`github.com/atretyak1985/swarmery/tools/swarmery`), own build (`make build`), dedicated CI (`.github/workflows/swarmery-ci.yml`). It is NOT a plugin and is excluded from marketplace rules (neutrality scan covers `plugins/**` only). The committed `tools/swarmery/docs/plan/` tree is the **historical record of already-shipped phases only** — NEW plans, specs, and design docs go to the private workspace (see "Work artifacts" below), never into this repo.
 
 ## Commands
 
-Local equivalents of CI (`.github/workflows/ci.yml`):
+Local equivalents of marketplace CI (`.github/workflows/ci.yml`):
 
 ```bash
 # Validate all JSON manifests
 node -e "JSON.parse(require('fs').readFileSync('<file>'))"   # marketplace.json, plugin.json, hooks.json, overlays/*.json
 
-# Shell syntax check on all scripts
+# Shell syntax + lint on all scripts (CI floor is -S error; default severity is the stricter local signal)
 find plugins scripts -name '*.sh' -exec bash -n {} \;
+find plugins scripts -name '*.sh' -print0 | xargs -0 shellcheck -S error
+
+# Hook behavioral tests
+bash scripts/tests/protect-sensitive-files.test.sh
 
 # Neutrality scan — must report "✓ clean" (token patterns come from gitignored
 # .flavor-tokens / .flavor-tokens-domain files or FLAVOR_BRAND / FLAVOR_DOMAIN env vars)
 bash scripts/scan-flavor.sh
 ```
+
+CI also runs a gitleaks secret scan over full git history (`.gitleaks.toml`).
+
+`tools/swarmery` (CI: `swarmery-ci.yml` enforces a **gated Go coverage floor of 70%**, excluding `cmd/swarmery`, `web`, `internal/docsfs`):
+
+```bash
+cd tools/swarmery
+make build          # snapshot docs → vite bundle → go:embed → single ./swarmery binary
+make test           # go vet ./... && go test ./...
+go test ./internal/store -run TestName   # single test
+make dev            # go daemon + vite dev server (proxies /api to :7777)
+make install        # rebuild + swap the launchd-managed binary (macOS)
+
+cd web && npm run build   # includes tsc --noEmit (React 19 + Vite 8 + Tailwind 4)
+```
+
+Releases of the control plane are cut by pushing a `swarmery-v*` tag (`swarmery-release.yml`).
 
 Agent evals (promptfoo golden tests for `tech-lead`, `commit-message`, `guardrail-checker` — not in CI, costs API tokens):
 
@@ -45,11 +66,11 @@ CI also enforces that every `plugins/*/agents/*.md` has `name:` and `description
 - `overlays/_schema/project.schema.json` — schema for consumers' `.claude/project.json`; `overlays/example/` is the reference overlay.
 - `scripts/init.sh` — one-command consumer bootstrap (settings.json + project.json skeleton + workspace namespace).
 - `plugins/core/bin/agent-work.sh` — project-aware workspace CLI (`setup|init|phase|complete|index|list|search|view|metrics|cleanup`). Resolves the workspace via `AGENT_WORKSPACE_ROOT` + `AGENT_PROJECT` env; work artifacts (plans/sessions/tasks) live in a separate private workspace repo, **never here**.
+- `tools/swarmery/` — Go + React session-monitoring control plane (see exception note above): `cmd/swarmery/`, `config/`, `internal/` (focused packages — `store`, `ingest`, `api`, `approvals`, `cost`, `sysscan`, `wsingest`, …), `web/` (React SPA), `testdata/fixtures/`, `docs/{jsonl-format.md,plan/}`.
 
 ### Work artifacts (hard rule)
 
 ALL new plans, specs, and design docs — including ones for `tools/swarmery` — are written to the private workspace repo inside the task dir: `<workspace>/swarmery/workspace/working/{YYYY}/{MM}/{DD}/{slug}/plan/` (the workspace root defaults to `$HOME/swarmery-workspace`, overridable per machine via `AGENT_WORKSPACE_ROOT` / `SWARMERY_WORKSPACE_ROOT`; date = task start, leaf folder = kebab slug, canonical task-id = `yyyy-mm-dd-slug`). Plan structure: `plan/README.md` (objective, architecture decisions with real file paths, phase sequencing table + critical path, risks, Definition of Done) + `phase-N-<slug>.md` / `step-NN-<name>.md` docs, each with a self-contained copy-paste agent prompt and measurable acceptance criteria. The old `workspace/plans/{YYYY}/…` tree is frozen history — do not add to it. Never create planning artifacts under `tools/swarmery/docs/plan/` or anywhere else in this repo; the in-repo plan tree is a frozen record of shipped phases.
-- `tools/swarmery/` — Go + React session-monitoring control plane (see exception note above): `cmd/`, `internal/{store,ingest,api}`, `web/`, `testdata/fixtures/`, `docs/{jsonl-format.md,plan/}`.
 
 ## Hard rules
 
@@ -88,6 +109,10 @@ load them live for one session:
 ```bash
 claude --plugin-dir plugins/core                 # repeatable: --plugin-dir plugins/infra-pack …
 ```
+
+`scripts/sync-cache.sh` rsyncs local `plugins/**` into the installed cache (designed
+to run from a `.git/hooks/post-commit` hook; can also be run manually) — useful after
+committing, but `--plugin-dir` remains the way to test uncommitted work.
 
 Never re-register the local checkout as a marketplace: `marketplace.json` `name` is
 `swarmery`, and a local-path registration would **replace** the GitHub source globally,
