@@ -1,0 +1,9 @@
+{
+  "name": "claude-eng-pack",
+  "description": "Claude-engineering domain pack: best-practice skills for building and auditing Claude agent systems — agent architecture, tool/MCP design, prompt engineering, Claude Code configuration, and context reliability. Opt-in; requires core.",
+  "version": "1.0.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  }
+}

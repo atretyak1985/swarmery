@@ -38,6 +38,11 @@
       "name": "lsp-pack",
       "source": "./plugins/lsp-pack",
       "description": "Semantic code-navigation pack: Serena LSP MCP server. Opt-in; requires the serena binary (uv) on the machine."
+    },
+    {
+      "name": "claude-eng-pack",
+      "source": "./plugins/claude-eng-pack",
+      "description": "Claude-engineering pack: skills for building/auditing Claude agent systems — agent architecture, tool/MCP design, prompt engineering, Claude Code config, context reliability. Opt-in; requires core."
     }
   ]
 }
