@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { SessionDetail, SessionOutcome, SessionStatus, WSMessage } from '../api/types';
-import { fetchSession, patchSessionOutcome } from '../api';
+import { fetchSession, patchSessionOutcome, renameSession } from '../api';
 import { fmtAgo, fmtCost, fmtSpan, fmtTokens } from '../lib/format';
 import { useLiveUpdates } from '../lib/ws';
 import { OutcomePicker } from '../components/OutcomePicker';
@@ -43,6 +43,78 @@ function Kv({ label, value, tone = 'text-ink' }: { label: string; value: string;
     <span>
       {label} <b className={`font-medium ${tone}`}>{value}</b>
     </span>
+  );
+}
+
+const TITLE_CLASS =
+  'font-display text-[22px] leading-[1.2] font-medium tracking-[-0.01em] desk:text-[27px]';
+
+/** Inline-editable session title. Click the ✎ (or the placeholder) to rename;
+ * Enter/blur saves, Escape cancels. A blank value reverts to the ingested
+ * title. */
+function TitleEditor({
+  title,
+  onRename,
+}: {
+  title: string | null;
+  onRename: (raw: string) => void;
+}): JSX.Element {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const begin = (): void => {
+    setDraft(title ?? '');
+    setEditing(true);
+  };
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const commit = (): void => {
+    setEditing(false);
+    if (draft.trim() !== (title ?? '')) onRename(draft);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            setEditing(false);
+          }
+        }}
+        placeholder="session title…"
+        aria-label="session title"
+        maxLength={120}
+        className={`w-full rounded-[8px] border border-line-strong bg-field px-2 py-1 text-ink outline-none focus:border-ink-dim ${TITLE_CLASS}`}
+      />
+    );
+  }
+  return (
+    <div className="group flex items-start gap-2">
+      <h1 className={`${TITLE_CLASS} ${title === null ? 'text-ink-faint italic' : ''}`}>
+        {title ?? '(untitled session)'}
+      </h1>
+      <button
+        type="button"
+        onClick={begin}
+        aria-label="rename session"
+        title="rename session"
+        className="mt-1.5 shrink-0 rounded-[6px] px-1 font-mono text-[14px] leading-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        ✎
+      </button>
+    </div>
   );
 }
 
@@ -183,6 +255,19 @@ export function SessionDetailPage(): JSX.Element {
     });
   };
 
+  // Rename: blank clears the override (reverts to the ingested title). The
+  // server's session_updated frame reconciles the effective title (incl. a
+  // clear back to the ingested name, which the client can't compute); a
+  // failure refetches the authoritative row.
+  const rename = (raw: string): void => {
+    if (detail === null) return;
+    const next = raw.trim() === '' ? null : raw.trim();
+    if (next !== null) setDetail({ ...detail, title: next });
+    renameSession(detail.id, next).catch(() => {
+      void load();
+    });
+  };
+
   const facts = useMemo(() => {
     if (detail === null) return null;
     let tokens = 0;
@@ -236,9 +321,7 @@ export function SessionDetailPage(): JSX.Element {
         </div>
         <div className="mt-2 flex flex-wrap items-start gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[22px] leading-[1.2] font-medium tracking-[-0.01em] desk:text-[27px]">
-              {detail.title ?? '(untitled session)'}
-            </h1>
+            <TitleEditor title={detail.title} onRename={rename} />
             <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-[5px] font-mono text-[11px] text-ink-dim">
               <Kv label="status" value={detail.status} tone={STATUS_TONES[detail.status]} />
               {detail.model !== null && <Kv label="model" value={detail.model} />}

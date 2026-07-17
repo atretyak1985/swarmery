@@ -91,6 +91,85 @@ func TestPatchSessionOutcomeValidation(t *testing.T) {
 		map[string]any{"outcome": "success"}, http.StatusNotFound)
 }
 
+func sessionDetailTitle(t *testing.T, url string) *string {
+	t.Helper()
+	var detail struct {
+		Title *string `json:"title"`
+	}
+	getJSON(t, url, &detail)
+	return detail.Title
+}
+
+func TestPatchSessionTitle(t *testing.T) {
+	srv, db, id := patchTestServer(t)
+	url := srv.URL + "/api/sessions/" + strconv.FormatInt(id, 10)
+
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": "Deploy hotfix"}, http.StatusOK)
+
+	var custom sql.NullString
+	if err := db.QueryRow(`SELECT custom_title FROM sessions WHERE id = ?`, id).Scan(&custom); err != nil {
+		t.Fatal(err)
+	}
+	if !custom.Valid || custom.String != "Deploy hotfix" {
+		t.Errorf("custom_title = %v, want 'Deploy hotfix'", custom)
+	}
+	if got := sessionDetailTitle(t, url); got == nil || *got != "Deploy hotfix" {
+		t.Errorf("detail title = %v, want 'Deploy hotfix'", got)
+	}
+}
+
+func TestPatchSessionTitleClearRevertsToIngested(t *testing.T) {
+	srv, db, id := patchTestServer(t)
+	url := srv.URL + "/api/sessions/" + strconv.FormatInt(id, 10)
+	if _, err := db.Exec(`UPDATE sessions SET title = 'ingested name' WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+
+	// A custom title wins over the ingested one.
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": "manual name"}, http.StatusOK)
+	if got := sessionDetailTitle(t, url); got == nil || *got != "manual name" {
+		t.Errorf("title = %v, want custom 'manual name'", got)
+	}
+
+	// Clearing (null) reverts to the ingested title, not empty.
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": nil}, http.StatusOK)
+	if got := sessionDetailTitle(t, url); got == nil || *got != "ingested name" {
+		t.Errorf("after clear title = %v, want 'ingested name'", got)
+	}
+	// Blank string clears too.
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": "x"}, http.StatusOK)
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": "   "}, http.StatusOK)
+	if got := sessionDetailTitle(t, url); got == nil || *got != "ingested name" {
+		t.Errorf("after blank-clear title = %v, want 'ingested name'", got)
+	}
+}
+
+func TestPatchSessionTitleTrimAndCap(t *testing.T) {
+	srv, db, id := patchTestServer(t)
+	url := srv.URL + "/api/sessions/" + strconv.FormatInt(id, 10)
+
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": "  padded  "}, http.StatusOK)
+	var custom string
+	if err := db.QueryRow(`SELECT custom_title FROM sessions WHERE id = ?`, id).Scan(&custom); err != nil {
+		t.Fatal(err)
+	}
+	if custom != "padded" {
+		t.Errorf("custom_title = %q, want trimmed 'padded'", custom)
+	}
+
+	long := make([]byte, sessionTitleLimit+50)
+	for i := range long {
+		long[i] = 'a'
+	}
+	doJSON(t, http.MethodPatch, url, map[string]any{"title": string(long)}, http.StatusOK)
+	if err := db.QueryRow(`SELECT custom_title FROM sessions WHERE id = ?`, id).Scan(&custom); err != nil {
+		t.Fatal(err)
+	}
+	if len(custom) != sessionTitleLimit {
+		t.Errorf("custom_title len = %d, want capped %d", len(custom), sessionTitleLimit)
+	}
+}
+
 // The DELETE soft-hide contract must survive the PATCH addition untouched.
 func TestPatchDoesNotBreakSoftHide(t *testing.T) {
 	srv, _, id := patchTestServer(t)

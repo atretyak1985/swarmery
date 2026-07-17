@@ -315,7 +315,7 @@ const recentProjectSessionsLimit = 10
 // their per-session token/cost totals (one grouped pass, no N+1).
 func (h *Handler) recentSessions(projectID int64) ([]projectRecentSessionDTO, error) {
 	rows, err := h.DB.Query(`
-		SELECT s.id, s.session_uuid, s.title, s.status, s.started_at, s.model,
+		SELECT s.id, s.session_uuid, COALESCE(s.custom_title, s.title), s.status, s.started_at, s.model,
 		       SUM(CASE WHEN t.id IS NOT NULL
 		                THEN COALESCE(t.tokens_in, 0) + COALESCE(t.tokens_out, 0) END) AS tokens,
 		       SUM(t.cost_usd) AS cost_usd
@@ -355,7 +355,7 @@ func (h *Handler) recentSessions(projectID int64) ([]projectRecentSessionDTO, er
 // aggregate JOIN — never per-row subqueries (no N+1).
 const sessionSelect = `
 	SELECT s.id, s.project_id, p.slug, p.name, s.session_uuid, s.model, s.git_branch, s.cwd,
-	       s.status, s.started_at, s.ended_at, s.title, s.source,
+	       s.status, s.started_at, s.ended_at, COALESCE(s.custom_title, s.title), s.source,
 	       agg.tokens, agg.cost_usd,
 	       tl.task_id, tl.external_id, tl.link_source, tl.confidence,
 	       s.proc_state, s.pid, s.outcome,

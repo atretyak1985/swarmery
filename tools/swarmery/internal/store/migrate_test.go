@@ -385,6 +385,42 @@ func TestMigrate0015ProjectMeta(t *testing.T) {
 	}
 }
 
+func TestMigrate0016SessionCustomTitle(t *testing.T) {
+	db := openRaw(t)
+	migrateUpTo(t, db, 15)
+
+	if cols := columnSet(t, db, "sessions"); cols["custom_title"] {
+		t.Fatal("sessions.custom_title exists before 0016 — migrateUpTo applied too much")
+	}
+	if _, err := db.Exec(
+		`INSERT INTO projects (id, path, slug, first_seen) VALUES (1, '/tmp/p', 'p', '2026-07-16T00:00:00Z')`); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO sessions (project_id, session_uuid, status, started_at, title, source)
+		 VALUES (1, 'u-1', 'completed', '2026-07-16T00:00:00Z', 'ingested', 'jsonl')`); err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	if err := Migrate(db); err != nil {
+		t.Fatalf("migrate populated db: %v", err)
+	}
+	mustHaveColumns(t, db, "sessions", "custom_title")
+
+	// Existing rows default to NULL (no override → ingested title still wins).
+	var custom sql.NullString
+	if err := db.QueryRow(`SELECT custom_title FROM sessions WHERE session_uuid = 'u-1'`).Scan(&custom); err != nil {
+		t.Fatalf("read migrated session: %v", err)
+	}
+	if custom.Valid {
+		t.Errorf("custom_title = %q, want NULL default", custom.String)
+	}
+
+	if err := Migrate(db); err != nil {
+		t.Fatalf("re-run migrate: %v", err)
+	}
+}
+
 // TestMigration0013ApprovalRules: the auto-approve rules table exists with
 // its defaults and the action CHECK.
 func TestMigration0013ApprovalRules(t *testing.T) {

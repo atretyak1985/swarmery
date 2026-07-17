@@ -495,6 +495,23 @@ export async function patchSessionOutcome(
   }
 }
 
+/**
+ * PATCH /api/sessions/{id} — rename a session. A blank/null title clears the
+ * override and reverts to the ingested ai-title.
+ */
+export async function renameSession(id: number, title: string | null): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/sessions/${String(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `rename failed: ${String(res.status)}`);
+  }
+}
+
 // --- global search (Cmd+K palette) ---------------------------------------------
 
 /**
