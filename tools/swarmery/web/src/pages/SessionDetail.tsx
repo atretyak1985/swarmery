@@ -101,8 +101,20 @@ function TitleEditor({
     );
   }
   return (
-    <div className="group flex items-start gap-2">
-      <h1 className={`${TITLE_CLASS} ${title === null ? 'text-ink-faint italic' : ''}`}>
+    <div className="group flex items-start gap-2.5">
+      <h1
+        role="button"
+        tabIndex={0}
+        onClick={begin}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            begin();
+          }
+        }}
+        title="click to rename"
+        className={`cursor-text rounded-[6px] transition-colors hover:text-ink ${TITLE_CLASS} ${title === null ? 'text-ink-faint italic' : ''}`}
+      >
         {title ?? '(untitled session)'}
       </h1>
       <button
@@ -110,7 +122,7 @@ function TitleEditor({
         onClick={begin}
         aria-label="rename session"
         title="rename session"
-        className="mt-1.5 shrink-0 rounded-[6px] px-1 font-mono text-[14px] leading-none text-ink-faint opacity-0 transition-opacity hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
+        className="mt-[7px] shrink-0 rounded-md border border-line px-1.5 py-0.5 font-mono text-[16px] leading-none text-ink-dim opacity-60 transition-all hover:border-line-strong hover:text-ink hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
       >
         ✎
       </button>
