@@ -41,7 +41,7 @@ cd /path/to/your/project
 # the built binary lives at <swarmery>/tools/swarmery/swarmery — add it to PATH,
 # run `swarmery install` (launchd, macOS), or call it by path:
 /path/to/swarmery/tools/swarmery/swarmery onboard <project-slug> [pack ...]
-#   packs: web-pack | iot-pack | uav-pack | infra-pack | lsp-pack
+#   packs: web-pack | iot-pack | uav-pack | infra-pack | lsp-pack | claude-eng-pack
 ```
 
 `swarmery onboard` is the binary twin of `scripts/init.sh` (the script delegates to it when the binary is on `PATH`, and falls back to pure bash otherwise). Open a fresh Claude Code session in the project, accept the `swarmery` marketplace trust prompt, and the project shows up in the dashboard as soon as its first session runs.
@@ -171,6 +171,7 @@ plugins/
   web-pack/                       # marketing: SEO, i18n, landing CRO
   infra-pack/                     # k8s/Helm, GitOps, CI/CD, cloud auth, Keycloak
   lsp-pack/                       # Serena LSP: semantic code navigation (needs serena binary)
+  claude-eng-pack/                # Claude-engineering: agent architecture, tool/MCP design, prompting, CC config
 overlays/
   _schema/project.schema.json     # per-project flavor config schema
   example/                        # sample overlay (project.json + settings snippet)
