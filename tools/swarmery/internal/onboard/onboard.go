@@ -55,8 +55,10 @@ type Config struct {
 	// MarketplaceRepo overrides DefaultMarketplaceRepo when non-empty.
 	MarketplaceRepo string
 	// StatuslineSrc, when non-empty and pointing at a readable directory, is the
-	// plugins/core/statusline source whose *.sh are copied into the project.
-	// Empty skips the statusline step (it is opt-in).
+	// plugins/core/statusline source whose *.sh are copied into the project, and
+	// it also wires settings.json statusLine at the deployed copy. Empty (the
+	// default — scripts/init.sh never passes it) skips both: the statusline is
+	// strictly opt-in via --statusline-src / SWARMERY_STATUSLINE_SRC.
 	StatuslineSrc string
 }
 
@@ -156,10 +158,6 @@ func writeSettings(claudeDir string, cfg Config, repo string, packs []string, re
 			"AGENT_PROJECT":        cfg.Slug,
 			"AGENT_WORKSPACE_ROOT": cfg.WorkspaceRoot,
 		},
-		"statusLine": map[string]any{
-			"type":    "command",
-			"command": "bash $CLAUDE_PROJECT_DIR/.claude/statusline/statusline.sh",
-		},
 		"permissions": map[string]any{
 			"deny": []string{
 				"Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)",
@@ -168,6 +166,15 @@ func writeSettings(claudeDir string, cfg Config, repo string, packs []string, re
 			},
 			"additionalDirectories": []string{cfg.WorkspaceRoot},
 		},
+	}
+	// statusLine wiring rides with the deployed scripts: only an explicit
+	// --statusline-src opts in, so a default onboard never points settings at a
+	// script that was not installed.
+	if statuslineSrcDir(cfg.StatuslineSrc) {
+		settings["statusLine"] = map[string]any{
+			"type":    "command",
+			"command": "bash $CLAUDE_PROJECT_DIR/.claude/statusline/statusline.sh",
+		}
 	}
 	if err := writeJSON(path, settings); err != nil {
 		return err
@@ -211,15 +218,13 @@ func writeProject(claudeDir string, cfg Config, packs []string, res *Result) err
 	return nil
 }
 
-// deployStatusline copies statusline.sh + fetch-fable-usage.sh from src into the
-// project's .claude/statusline/, matching scripts/init.sh: opt-in, skipped when
-// src is unset/absent or the destination script already exists.
+// deployStatusline copies statusline.sh + fetch-fable-usage.sh from src into
+// the project's .claude/statusline/. Strictly opt-in (scripts/init.sh no longer
+// requests it): skipped when src is unset/absent or the destination script
+// already exists.
 func deployStatusline(claudeDir, src string, res *Result) error {
-	if src == "" {
-		return nil
-	}
-	if info, err := os.Stat(src); err != nil || !info.IsDir() {
-		return nil // absent source is not an error — statusline is optional
+	if !statuslineSrcDir(src) {
+		return nil // absent source is not an error — statusline is opt-in
 	}
 	dstDir := filepath.Join(claudeDir, "statusline")
 	if _, err := os.Stat(filepath.Join(dstDir, "statusline.sh")); err == nil {
@@ -237,8 +242,18 @@ func deployStatusline(claudeDir, src string, res *Result) error {
 			return fmt.Errorf("write %s: %w", name, err)
 		}
 	}
-	res.step("✓ .claude/statusline/ (opt-in Fable usage: export SWARMERY_STATUSLINE_FABLE=1)")
+	res.step("✓ .claude/statusline/ (opt-in Fable usage: export SWARMERY_STATUSLINE_FABLE=1; header = account email: export SWARMERY_STATUSLINE_USER=1)")
 	return nil
+}
+
+// statuslineSrcDir reports whether src names a readable statusline source dir —
+// the opt-in signal shared by writeSettings, deployStatusline, and Attach.
+func statuslineSrcDir(src string) bool {
+	if src == "" {
+		return false
+	}
+	info, err := os.Stat(src)
+	return err == nil && info.IsDir()
 }
 
 func carveWorkspace(wsRoot, slug string, res *Result) error {

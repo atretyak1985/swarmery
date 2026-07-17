@@ -4,8 +4,10 @@ package onboard
 // never-onboarded — project back to managed state. Unlike Run, which refuses to
 // touch an existing settings.json, Attach MERGES the swarmery-owned entries
 // into it, adding only what is missing and never overwriting a foreign value
-// (a conflicting env.AGENT_PROJECT or a custom statusLine is kept and flagged
-// with a "!" warning step). project.json is restored from project.json.bak when
+// (a conflicting env.AGENT_PROJECT — or a custom statusLine where swarmery's
+// would go — is kept and flagged with a "!" warning step). The opt-in
+// statusline is touched only when its scripts are already deployed or
+// StatuslineSrc is passed. project.json is restored from project.json.bak when
 // the file itself is gone; an existing file always wins over the backup. Both
 // the CLI (`swarmery attach`) and the control-plane API reuse this.
 
@@ -29,8 +31,10 @@ type AttachConfig struct {
 	WorkspaceRoot string
 	// MarketplaceRepo overrides DefaultMarketplaceRepo when non-empty.
 	MarketplaceRepo string
-	// StatuslineSrc, when non-empty, is the statusline source dir to redeploy
-	// from (skipped when the project already has statusline.sh, or when empty).
+	// StatuslineSrc, when non-empty, is the statusline source dir to deploy
+	// from — the explicit opt-in. Without it attach only rewires a statusline
+	// whose scripts are already deployed; it never installs one from scratch
+	// (the statusline is opt-in, see deployStatusline).
 	StatuslineSrc string
 	// DryRun reports the plan (Steps) without touching the filesystem.
 	DryRun bool
@@ -138,6 +142,16 @@ func Attach(cfg AttachConfig) (*Result, error) {
 		return nil, fmt.Errorf("read %s: %w", sPath, err)
 	}
 
+	// Statusline evidence, computed up front because it drives both the
+	// settings key and the redeploy: attach touches the statusline only when
+	// the project shows a prior install (deployed script) or the caller opted
+	// in via StatuslineSrc. A never-opted-in project stays statusline-free.
+	slDeployed := false
+	if _, err := os.Stat(filepath.Join(claudeDir, "statusline", "statusline.sh")); err == nil {
+		slDeployed = true
+	}
+	statuslinePending := !slDeployed && statuslineSrcDir(cfg.StatuslineSrc)
+
 	settingsChanged := false
 	add := func(step string) {
 		res.step("+ " + step)
@@ -195,13 +209,15 @@ func Attach(cfg AttachConfig) (*Result, error) {
 			add("env.AGENT_WORKSPACE_ROOT")
 		}
 	}
-	// 4) statusLine — only when absent; a foreign statusline is never replaced.
+	// 4) statusLine — only when the scripts are deployed (or about to be); a
+	// foreign statusline is never replaced, and a project that never opted in
+	// gets no wiring at all.
 	if v, present := settings["statusLine"]; present {
 		sl, _ := v.(map[string]any)
-		if cmd, _ := sl["command"].(string); !strings.Contains(cmd, statuslineMarker) {
+		if cmd, _ := sl["command"].(string); (slDeployed || statuslinePending) && !strings.Contains(cmd, statuslineMarker) {
 			res.step("! statusLine is not swarmery's — left untouched")
 		}
-	} else {
+	} else if slDeployed || statuslinePending {
 		settings["statusLine"] = map[string]any{
 			"type":    "command",
 			"command": "bash $CLAUDE_PROJECT_DIR/.claude/statusline/statusline.sh",
@@ -244,16 +260,10 @@ func Attach(cfg AttachConfig) (*Result, error) {
 	}
 
 	// ── statusline redeploy (planned; executed below) ─────────────────────────
-	statuslinePending := false
-	if cfg.StatuslineSrc != "" {
-		if info, err := os.Stat(cfg.StatuslineSrc); err == nil && info.IsDir() {
-			if _, err := os.Stat(filepath.Join(claudeDir, "statusline", "statusline.sh")); os.IsNotExist(err) {
-				statuslinePending = true
-				res.Attached = true
-				if cfg.DryRun {
-					res.step("+ .claude/statusline/ (redeploy)")
-				}
-			}
+	if statuslinePending {
+		res.Attached = true
+		if cfg.DryRun {
+			res.step("+ .claude/statusline/ (redeploy)")
 		}
 	}
 

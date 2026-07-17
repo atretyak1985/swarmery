@@ -9,7 +9,8 @@ allowed-tools:
 
 Print a clear reference for the custom statusline rendered at the bottom of the
 terminal. Script: `.claude/statusline/statusline.sh` in consumer projects
-(deployed there by `scripts/init.sh`, wired via the `statusLine` key in
+(an **opt-in** deploy — `swarmery onboard/attach --statusline-src …` or a manual
+copy, see `docs/ONBOARDING.md` "Statusline"; wired via the `statusLine` key in
 `.claude/settings.json`); source of truth lives at `plugins/core/statusline/`.
 
 ## Steps

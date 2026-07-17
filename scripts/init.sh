@@ -15,6 +15,8 @@
 #   .claude/settings.json   — marketplace + enabled plugins + env (skipped if it exists)
 #   .claude/project.json    — flavor config skeleton to fill in (skipped if it exists)
 #   <workspace>/<slug>/…    — the workspace namespace
+# The statusline is NOT installed here — it is opt-in (see docs/ONBOARDING.md
+# "Statusline"), so re-running init never re-adds wiring you removed.
 # Then: start a fresh Claude Code session and accept the marketplace trust prompt.
 set -euo pipefail
 
@@ -36,20 +38,15 @@ for p in "${PACKS[@]:-}"; do
   case "$p" in uav-pack|iot-pack|web-pack|lsp-pack|infra-pack|"") ;; *) echo "✗ unknown pack: $p"; exit 1;; esac
 done
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-SL_SRC="${SCRIPT_DIR}/../plugins/core/statusline"
-
 # ── delegate to the control-plane binary when present ──────────────
 # `swarmery onboard` is the Go port of everything below; it is the single
 # source of truth shared with the control-plane onboarding endpoint. When the
-# binary is on PATH we hand off to it (passing the repo-relative statusline
-# source it can't otherwise locate) and skip the inline bash fallback, which
+# binary is on PATH we hand off to it and skip the inline bash fallback, which
 # stays only for machines that haven't installed the control plane yet.
 if command -v swarmery >/dev/null 2>&1; then
   exec swarmery onboard "$SLUG" "${PACKS[@]:-}" \
     --dir "$(pwd)" \
-    --workspace-root "$WS_ROOT" \
-    --statusline-src "$SL_SRC"
+    --workspace-root "$WS_ROOT"
 fi
 
 PROJECT_DIR="$(pwd)"
@@ -77,10 +74,6 @@ ${plugins}
   "env": {
     "AGENT_PROJECT": "${SLUG}",
     "AGENT_WORKSPACE_ROOT": "${WS_ROOT}"
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "bash \$CLAUDE_PROJECT_DIR/.claude/statusline/statusline.sh"
   },
   "permissions": {
     "deny": [
@@ -117,14 +110,6 @@ else
 }
 EOF
   echo "✓ .claude/project.json — FILL IN the TODO fields (agents read this at runtime)"
-fi
-
-# ── statusline (framework asset, deployed per project) ────────────
-if [ -d "$SL_SRC" ] && [ ! -f .claude/statusline/statusline.sh ]; then
-  mkdir -p .claude/statusline
-  cp "$SL_SRC"/statusline.sh "$SL_SRC"/fetch-fable-usage.sh .claude/statusline/ 2>/dev/null || true
-  chmod +x .claude/statusline/*.sh 2>/dev/null || true
-  echo "✓ .claude/statusline/ (opt-in Fable usage: export SWARMERY_STATUSLINE_FABLE=1; header = account name: export SWARMERY_STATUSLINE_USER=1)"
 fi
 
 # ── workspace namespace ────────────────────────────────────────────

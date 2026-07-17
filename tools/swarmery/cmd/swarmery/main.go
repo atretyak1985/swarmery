@@ -126,7 +126,8 @@ func usage() {
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery onboard <slug> [pack ...] [--dir <path>] [--workspace-root <path>] [--statusline-src <path>]
                                    bootstrap a consumer project: .claude/settings.json +
-                                   project.json skeleton + workspace namespace (idempotent)
+                                   project.json skeleton + workspace namespace (idempotent;
+                                   the statusline is opt-in — deployed + wired only with --statusline-src)
   swarmery offboard [slug] [--dir <path>] [--dry-run]
                                    detach swarmery from a project: prune the swarmery-owned
                                    entries from .claude/settings.json (backs up to .bak; idempotent)
@@ -481,7 +482,7 @@ func cmdOnboard(args []string) error {
 	wsRoot := fs.String("workspace-root", defaultWorkspaceRoot(),
 		"shared workspace repo root (env: SWARMERY_WORKSPACE_ROOT)")
 	statuslineSrc := fs.String("statusline-src", "",
-		"plugins/core/statusline dir to copy statusline scripts from (optional)")
+		"plugins/core/statusline dir to deploy the statusline from (opt-in: also wires statusLine in settings.json; off by default)")
 
 	// The natural invocation is `onboard <slug> [packs...] [flags...]`, but the
 	// flag package stops at the first positional. Split leading positionals

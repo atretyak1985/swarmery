@@ -22,6 +22,47 @@ and per-project settings shrink to `enabledPlugins` + `env`.
 `uv tool install serena-agent`; without it every session logs a failed MCP launch. See
 `plugins/lsp-pack/README.md` for monorepo `--project` overrides).
 
+## Statusline (optional add-on)
+
+`init.sh` / `swarmery onboard` do **not** install the statusline — it is strictly
+opt-in, so a re-run of init never re-adds wiring or a deployed copy you removed.
+To enable it in a project:
+
+```bash
+# fresh project, control-plane binary on PATH — deploys the scripts AND wires settings.json:
+swarmery onboard <project-slug> --statusline-src <swarmery-repo>/plugins/core/statusline
+
+# already-onboarded project (merges only what is missing, idempotent):
+swarmery attach --statusline-src <swarmery-repo>/plugins/core/statusline
+
+# or fully manual:
+mkdir -p .claude/statusline
+cp <swarmery-repo>/plugins/core/statusline/{statusline.sh,fetch-fable-usage.sh} .claude/statusline/
+chmod +x .claude/statusline/*.sh
+```
+
+For the manual route also add to `.claude/settings.json`:
+
+```jsonc
+{ "statusLine": { "type": "command", "command": "bash $CLAUDE_PROJECT_DIR/.claude/statusline/statusline.sh" } }
+```
+
+Env knobs (all optional — run `/statusline-help` in a session for the full
+field-by-field reference):
+
+- `SWARMERY_STATUSLINE_LOC` — weather city (empty = auto-by-IP).
+- `SWARMERY_STATUSLINE_USER=1` — replace the header title with the email of the
+  Claude subscription the session runs under. Pure local read of
+  `$CLAUDE_CONFIG_DIR/.claude.json` (multi-account setups switch subscriptions
+  via that var), else `~/.claude.json` — no network.
+- `SWARMERY_STATUSLINE_FABLE=1` — opt-in Fable-5 weekly usage segment (OAuth
+  token from the macOS Keychain, per-account cache; TTL via
+  `SWARMERY_STATUSLINE_FABLE_TTL` seconds, default 300).
+
+To remove the statusline later, delete `.claude/statusline/` and the
+`statusLine` key from settings — nothing re-adds them behind your back
+(`swarmery offboard --full` also removes both as part of a full detach).
+
 The manual steps below describe what init.sh does, for when you need to customize.
 
 ## 1. Create the project's flavor config

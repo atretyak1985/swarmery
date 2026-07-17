@@ -61,6 +61,15 @@ func TestRunCreatesSettingsProjectAndWorkspace(t *testing.T) {
 		t.Errorf("AGENT_WORKSPACE_ROOT = %v, want %v", env["AGENT_WORKSPACE_ROOT"], cfg.WorkspaceRoot)
 	}
 
+	// The statusline is opt-in: a default onboard must neither wire the
+	// settings key nor deploy the scripts.
+	if _, ok := settings["statusLine"]; ok {
+		t.Error("statusLine wired without --statusline-src (must be opt-in)")
+	}
+	if _, err := os.Stat(filepath.Join(cfg.ProjectDir, ".claude", "statusline")); !os.IsNotExist(err) {
+		t.Error(".claude/statusline deployed without --statusline-src (must be opt-in)")
+	}
+
 	project := readJSON(t, filepath.Join(cfg.ProjectDir, ".claude", "project.json"))
 	if project["name"] != "acme-app" {
 		t.Errorf("project name = %v, want acme-app", project["name"])
@@ -129,6 +138,31 @@ func TestValidateRejectsBadInput(t *testing.T) {
 				t.Errorf("expected error for %s", tc.name)
 			}
 		})
+	}
+}
+
+// Passing StatuslineSrc is the explicit opt-in: the scripts are deployed AND
+// settings.json gains the statusLine wiring pointing at the deployed copy.
+func TestRunStatuslineOptIn(t *testing.T) {
+	cfg := baseConfig(t)
+	cfg.StatuslineSrc = statuslineSrc(t)
+
+	if _, err := Run(cfg); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for _, name := range []string{"statusline.sh", "fetch-fable-usage.sh"} {
+		if _, err := os.Stat(filepath.Join(cfg.ProjectDir, ".claude", "statusline", name)); err != nil {
+			t.Errorf("%s not deployed: %v", name, err)
+		}
+	}
+	settings := readJSON(t, filepath.Join(cfg.ProjectDir, ".claude", "settings.json"))
+	sl, ok := settings["statusLine"].(map[string]any)
+	if !ok {
+		t.Fatalf("statusLine not wired: %#v", settings["statusLine"])
+	}
+	if cmd, _ := sl["command"].(string); !contains(cmd, "statusline/statusline.sh") {
+		t.Errorf("statusLine.command = %v, want the deployed script", sl["command"])
 	}
 }
 

@@ -190,8 +190,9 @@ func TestAttachIdempotent(t *testing.T) {
 	}
 }
 
-// Foreign values are never clobbered: a different AGENT_PROJECT and a custom
-// statusLine survive, each flagged with a "!" warning step.
+// Foreign values are never clobbered: a different AGENT_PROJECT survives with a
+// "!" warning step, and a custom statusLine survives silently — with no
+// swarmery statusline deployed or requested there is no conflict to flag.
 func TestAttachPreservesForeignValues(t *testing.T) {
 	dir := t.TempDir()
 	writeTestSettings(t, dir, `{
@@ -215,19 +216,88 @@ func TestAttachPreservesForeignValues(t *testing.T) {
 	if s["statusLine"].(map[string]any)["command"] != "my-own-statusline" {
 		t.Error("foreign statusLine must be preserved")
 	}
-	warns := 0
+	envWarned, slWarned := false, false
 	for _, st := range res.Steps {
 		if strings.HasPrefix(st, "! ") {
-			warns++
+			if strings.Contains(st, "AGENT_PROJECT") {
+				envWarned = true
+			}
+			if strings.Contains(st, "statusLine") {
+				slWarned = true
+			}
 		}
 	}
-	if warns < 2 {
-		t.Errorf("want warning steps for both conflicts, got %d (steps: %v)", warns, res.Steps)
+	if !envWarned {
+		t.Errorf("want a warning step for the AGENT_PROJECT conflict (steps: %v)", res.Steps)
+	}
+	if slWarned {
+		t.Errorf("statusLine warning without a swarmery statusline in play (steps: %v)", res.Steps)
 	}
 	// The rest is still merged in.
 	if v, _ := s["enabledPlugins"].(map[string]any)["core@swarmery"].(bool); !v {
 		t.Error("core@swarmery must still be enabled despite conflicts elsewhere")
 	}
+}
+
+// The statusline stays opt-in through attach: no wiring is added from scratch,
+// deployed scripts get their missing key back, and a foreign statusLine that
+// blocks a requested deploy is flagged.
+func TestAttachStatuslineOptIn(t *testing.T) {
+	t.Run("never installed: no wiring added", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestSettings(t, dir, `{"env": {"AGENT_PROJECT": "demo"}}`)
+		if _, err := Attach(AttachConfig{ProjectDir: dir, WorkspaceRoot: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+		s := readSettings(t, filepath.Join(dir, ".claude", "settings.json"))
+		if _, ok := s["statusLine"]; ok {
+			t.Error("statusLine wired for a project that never opted in")
+		}
+		if _, err := os.Stat(filepath.Join(dir, ".claude", "statusline")); !os.IsNotExist(err) {
+			t.Error("statusline scripts deployed without opt-in")
+		}
+	})
+
+	t.Run("scripts deployed: missing key restored", func(t *testing.T) {
+		dir := buildManagedProject(t) // deployed scripts + managed settings
+		// Simulate a half-detached state: key gone, scripts still there.
+		if _, err := Detach(DetachConfig{ProjectDir: dir, Slug: "demo", WorkspaceRoot: "/ws"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Attach(AttachConfig{ProjectDir: dir, WorkspaceRoot: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+		s := readSettings(t, filepath.Join(dir, ".claude", "settings.json"))
+		sl, ok := s["statusLine"].(map[string]any)
+		if !ok {
+			t.Fatal("statusLine key not restored for deployed scripts")
+		}
+		if cmd, _ := sl["command"].(string); !strings.Contains(cmd, "statusline/statusline.sh") {
+			t.Errorf("statusLine.command = %v, want the deployed script", sl["command"])
+		}
+	})
+
+	t.Run("requested deploy blocked by foreign key: warned", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestSettings(t, dir, `{"statusLine": {"type": "command", "command": "my-own-statusline"}}`)
+		res, err := Attach(AttachConfig{ProjectDir: dir, WorkspaceRoot: t.TempDir(), StatuslineSrc: statuslineSrc(t)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		warned := false
+		for _, st := range res.Steps {
+			if strings.HasPrefix(st, "! ") && strings.Contains(st, "statusLine") {
+				warned = true
+			}
+		}
+		if !warned {
+			t.Errorf("want a statusLine conflict warning (steps: %v)", res.Steps)
+		}
+		s := readSettings(t, filepath.Join(dir, ".claude", "settings.json"))
+		if s["statusLine"].(map[string]any)["command"] != "my-own-statusline" {
+			t.Error("foreign statusLine must be preserved")
+		}
+	})
 }
 
 // An existing project.json always wins over a stale backup — attach must not
