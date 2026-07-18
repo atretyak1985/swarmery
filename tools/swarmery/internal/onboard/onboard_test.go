@@ -181,6 +181,20 @@ func TestRunEmptyPacksProducesEmptyArray(t *testing.T) {
 	}
 }
 
+// carveWorkspace is the only onboarding sink that joins the (per-caller) slug
+// onto the workspace root, so it re-fences the result even though Validate
+// already rejects bad slugs. A slug that tries to escape must never MkdirAll
+// outside the workspace root.
+func TestCarveWorkspaceRefusesSlugEscape(t *testing.T) {
+	wsRoot := t.TempDir()
+	if err := carveWorkspace(wsRoot, "../evil", &Result{}); err == nil {
+		t.Fatal("expected carveWorkspace to refuse a traversal slug")
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(wsRoot), "evil")); err == nil {
+		t.Fatal("traversal slug carved a directory outside the workspace root")
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
 }

@@ -150,6 +150,15 @@ func resolveUnderRoots(target string, roots []string) (string, error) {
 	}
 	abs = filepath.Clean(abs)
 
+	// Lexical pre-fence (path-injection barrier): reject any target that is not
+	// textually nested under an allowed root before touching the filesystem.
+	// filepath.Clean has already collapsed every ".." in the absolute path, so
+	// this prefix test is a sound guard; the symlink-safe re-check below remains
+	// the authoritative gate against symlink escapes on the existing ancestor.
+	if !lexicallyUnderRoots(abs, roots) {
+		return "", fmt.Errorf("path %s is not under any allowed onboarding root", abs)
+	}
+
 	anc := abs
 	for {
 		if _, err := os.Lstat(anc); err == nil {
@@ -180,6 +189,26 @@ func resolveUnderRoots(target string, roots []string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("path %s is not under any allowed onboarding root", abs)
+}
+
+// lexicallyUnderRoots reports whether the cleaned absolute path abs is textually
+// nested under any root — matched against both the root as configured and its
+// symlink-resolved form, so a caller may reference a root through either. It is a
+// pre-filter only: the symlink-safe containment check in resolveUnderRoots stays
+// authoritative for the accept decision.
+func lexicallyUnderRoots(abs string, roots []string) bool {
+	for _, root := range roots {
+		bases := []string{filepath.Clean(root)}
+		if real, err := filepath.EvalSymlinks(root); err == nil {
+			bases = append(bases, real)
+		}
+		for _, base := range bases {
+			if abs == base || strings.HasPrefix(abs, base+string(filepath.Separator)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // underDir reports whether path is dir itself or nested inside it.

@@ -257,12 +257,21 @@ func statuslineSrcDir(src string) bool {
 }
 
 func carveWorkspace(wsRoot, slug string, res *Result) error {
-	base := filepath.Join(wsRoot, slug)
+	// wsRoot is the trusted base; slug is validated to [a-z0-9-]+ by Validate (and
+	// on the attach path), so it carries no path separators. Re-fence every carved
+	// dir under a cleaned wsRoot anyway as defense-in-depth: a malformed slug from
+	// any future caller can then never MkdirAll outside the workspace root. The
+	// HasPrefix guard is also the sanitizing barrier for the path-injection sink.
+	cleanRoot := filepath.Clean(wsRoot)
+	base := filepath.Join(cleanRoot, slug)
 	dirs := []string{filepath.Join(base, "wiki")}
 	for _, sub := range []string{"working", "archive", "plans", "specs", "sessions", "logs", "metrics"} {
 		dirs = append(dirs, filepath.Join(base, "workspace", sub))
 	}
 	for _, d := range dirs {
+		if d != cleanRoot && !strings.HasPrefix(d, cleanRoot+string(filepath.Separator)) {
+			return fmt.Errorf("refusing to carve workspace outside %s: %s", cleanRoot, d)
+		}
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			return fmt.Errorf("mkdir %s: %w", d, err)
 		}
