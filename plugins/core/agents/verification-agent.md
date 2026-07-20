@@ -8,7 +8,7 @@ background: true
 maxTurns: 15
 color: green
 autonomy: highly-auto
-version: 1.1.0
+version: 1.2.0
 owner: platform-team
 skills:
   - code-quality
@@ -38,6 +38,7 @@ Verification Agent for the project (consult `CLAUDE.md` + `project.json` for rep
 
 ## Inputs (from upstream)
 - `scope: string` -- which repos/files to check (or "auto-detect from changed files")
+- `screenshots_dir: string` (optional) -- task workspace dir (`{task-id}/screenshots/`); when provided, save browser-smoke screenshots there as `NN-phase5-{slug}.png` and list the saved paths in the verdict artifact
 
 ## Outputs (to downstream)
 - Format: structured verdict block in chat + Markdown artifact at `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/phases/05-verification.md`
@@ -216,4 +217,4 @@ Diff:      1 file, +8 -2 lines
 
 # Browser verification (Playwright MCP)
 
-After the deterministic checks (build / typecheck / lint / tests / security) complete, optionally smoke the running app in a browser -- fold the result into the verdict block as an extra observation. Follow the **`browser-verification` skill** (observation-only variant). Role-specific invariants: observe and report, never fix (route fixes via the triage matrix above); a browser smoke is an optional add-on line in the verdict, never a blocking check.
+After the deterministic checks (build / typecheck / lint / tests / security) complete, optionally smoke the running app in a browser -- fold the result into the verdict block as an extra observation. Follow the **`browser-verification` skill** (observation-only variant). Role-specific invariants: observe and report, never fix (route fixes via the triage matrix above); a browser smoke is an optional add-on line in the verdict, never a blocking check. When the brief includes `screenshots_dir`, save every captured screenshot to that directory using `NN-phase5-{slug}.png` numbering and reference the file paths in `05-verification.md`; if the directory does not exist, create it.
