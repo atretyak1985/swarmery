@@ -1,7 +1,7 @@
 {
   "name": "core",
   "description": "Vendor-neutral agent-development core: generic orchestration, planning, quality, and specialist agents plus reusable skills, commands, hooks, and the project-aware agent-work CLI.",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"

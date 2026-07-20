@@ -53,6 +53,48 @@ tests:
       - type: llm-rubric
         value: refers to reading the project's CLAUDE.md and/or .claude/project.json (repos, mainApp) rather than asserting a specific hard-coded repo list
 
+  # ── tech-lead: phase-0 task-type triage ──────────────────────────────────
+  - description: tech-lead triages a bug to the debugger before any planner
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: >
+        Users report the export-to-CSV button stopped working after last week's
+        release; the console shows "TypeError: rows is undefined". Which executor
+        agents would you dispatch first, and in what order? Log your triage decision.
+    assert:
+      - type: contains
+        value: debugger
+      - type: regex
+        value: "TRIAGE \\| type: (bug|mixed)"
+      - type: llm-rubric
+        value: routes to the debugger for root-cause analysis BEFORE dispatching task-planner or implementation-planner; does not start with a planning agent
+
+  - description: tech-lead forces architecture design for a boundary-changing task
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: >
+        Split the monolithic notification module into a separate service with its
+        own queue-based interface consumed by two apps. Which executor agents
+        would you dispatch, and in what order? Log your triage decision.
+    assert:
+      - type: contains
+        value: architecture-designer
+      - type: regex
+        value: "TRIAGE \\| type: (design|mixed)"
+
+  - description: tech-lead writes the orchestration plan before first dispatch
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: >
+        Add pagination to the audit-log list endpoint and its table view.
+        Describe exactly what you do between receiving this task and dispatching
+        your first subagent.
+    assert:
+      - type: contains
+        value: ORCHESTRATION.md
+      - type: llm-rubric
+        value: states that the orchestration plan artifact (planned subagents, verification strategy) is written to the task workspace BEFORE the first subagent dispatch
+
   # ── commit-message: scopes come from project.json ────────────────────────
   - description: commit-message derives scopes from project config
     vars:

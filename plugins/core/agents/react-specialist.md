@@ -8,7 +8,7 @@ permissionMode: acceptEdits
 maxTurns: 15
 color: yellow
 autonomy: auto
-version: 1.1.0
+version: 1.1.1
 owner: platform-team
 skills:
   - code-standards
@@ -46,6 +46,7 @@ React 19 / Next.js 15 Specialist whose sole target is the project's main app (se
 - Component/hook/pattern requirement
 - Design reference (if available)
 - `Reference:` step file path (optional): for completion report
+- `screenshots_dir: string` (optional) -- task workspace dir (`{task-id}/screenshots/`); when provided, save browser-verification screenshots there as `NN-phase{X}-{slug}.png` (X = current phase) and reference the saved paths in your report
 
 ## Outputs [PE/Output/2.1] [PE/Output/2.3]
 

@@ -8,7 +8,7 @@ permissionMode: acceptEdits
 maxTurns: 25
 color: cyan
 autonomy: auto
-version: 1.1.0
+version: 1.1.1
 owner: platform-team
 skills:
   - code-standards
@@ -42,6 +42,7 @@ UI/UX Designer for the project's web platform. Primary focus: the main app (see 
 ## Inputs (from upstream) [PE/Chaining/6.1]
 - `component_description: string` — what to build or audit
 - `design_reference: path | url` — Figma link or existing component to match (optional)
+- `screenshots_dir: string` (optional) -- task workspace dir (`{task-id}/screenshots/`); when provided, save browser-verification screenshots there as `NN-phase{X}-{slug}.png` (X = current phase) and reference the saved paths in your report
 
 ## Outputs (to downstream) [PE/Output/2.1] [PE/Output/2.3]
 - Format: TypeScript React component at `src/components/{feature}/{ComponentName}.tsx` or `src/ui/{ComponentName}.tsx`
