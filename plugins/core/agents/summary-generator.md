@@ -69,7 +69,7 @@ Summary Generator is a Phase 8 executor that creates professional, structured HT
   (deviations from plan/ AND from ORCHESTRATION.md — planned vs actual subagents and re-dispatch loops — with rationale; "None" if followed)
 
   ## Скріншоти
-  (each file in screenshots/ with a one-line caption; "None captured" if absent)
+  (each file in `{task-id}/screenshots/` with a one-line caption; "None captured" if absent)
 
   ## Follow-ups
   | Action | Owner | Timeline |
@@ -102,7 +102,7 @@ Before generating, reason about:
 4. Who is the audience and what level of detail do they need?
 </thinking>
 
-1. **Create artifact skeleton** -- write `{task-id}/SUMMARY.md` with the section structure (Результат, Змінені файли, Агенти, Сесії, Відхилення від плану, Follow-ups).
+1. **Create artifact skeleton** -- write `{task-id}/SUMMARY.md` with the section structure (Результат, Змінені файли, Агенти, Сесії, Відхилення від плану, Скріншоти, Follow-ups).
 2. **Analyze input** -- extract work type, files, metrics, audience from inputs.
 3. **Gather data sources** -- run `git log --oneline {range}` and `git diff --stat {range}` in parallel to get quantified change data. Note the exact git range inspected. [PE/Tool-Use/4.2]
 4. **Quantify metrics** -- replace every vague description with a number: "8 files removed, 1 created" not "Many files changed".
@@ -114,7 +114,9 @@ Context compaction: not typically needed for 20-turn summary generation. If cont
 
 # Self-check [PE/Reliability/5.1]
 
-- [ ] `{task-id}/SUMMARY.md` exists on disk (verified via `test -s`) with all 6 sections (Результат, Змінені файли, Агенти, Сесії, Відхилення від плану, Follow-ups)
+- [ ] `{task-id}/SUMMARY.md` exists on disk (verified via `test -s`) with all 7 sections (Результат, Змінені файли, Агенти, Сесії, Відхилення від плану, Скріншоти, Follow-ups)
+- [ ] Скріншоти lists every file in `{task-id}/screenshots/` with a one-line caption, or "None captured"
+- [ ] Відхилення від плану checked against `{task-id}/ORCHESTRATION.md` (planned-subagents table + Loop sections), not only `plan/`
 - [ ] Mirror `phases/08-summary.md` exists when the 9-phase flow is active
 - [ ] All metrics use numbers, not vague words ("8 files" not "many files")
 - [ ] Status indicator is exactly one of: COMPLETE, PARTIAL, FAILED
