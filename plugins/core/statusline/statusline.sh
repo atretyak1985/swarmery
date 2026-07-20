@@ -74,6 +74,11 @@
 #                      OPT-IN: shown only when  export SWARMERY_STATUSLINE_FABLE=1 .
 #                      Sourced from .limits[] where .scope.model.display_name=="Fable"
 #                      (.percent 0-100; .resets_at is an ISO-8601 string → fmt_reset_any).
+#                      Accounts WITHOUT a Fable window (org/Team plans expose only
+#                      session + weekly_all) get the helper's "none|" marker cached
+#                      instead → the FB segment is hidden, no per-render re-fetching.
+#                      A cache older than SWARMERY_STATUSLINE_FABLE_MAX_AGE (default
+#                      24h) is never rendered — stale numbers vanish rather than freeze.
 #
 #  6) SESSION:  <$cost> │ +<added>/-<removed> │ ⏱ <duration>
 #       All FREE from stdin JSON .cost.* — instant, no external calls:
@@ -109,6 +114,9 @@
 #                                                CC's OAuth token from the macOS Keychain)
 #         export SWARMERY_STATUSLINE_FABLE_TTL=300 (FB cache freshness window in seconds;
 #                                                default 300 = 5 min)
+#         export SWARMERY_STATUSLINE_FABLE_MAX_AGE=86400 (FB display cutoff in seconds —
+#                                                a cache older than this is hidden, not
+#                                                rendered; default 86400 = 24h)
 # ============================================================================
 
 set -uo pipefail
@@ -257,13 +265,22 @@ if [ "${SWARMERY_STATUSLINE_FABLE:-0}" = "1" ]; then
   # Keychain credential item (and that fetch-fable-usage.sh uses to pick the token).
   FB_SLUG="$(printf '%s' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" | shasum -a 256 2>/dev/null | cut -c1-8)"
   FB_CACHE="${TMPDIR:-/tmp}/agents-statusline-fable-${FB_SLUG:-default}.txt"
-  FB_TTL="${SWARMERY_STATUSLINE_FABLE_TTL:-300}"   # cache freshness window in seconds (default 5 min)
-  fb_fresh() { [ -f "$FB_CACHE" ] && [ "$(( $(date +%s) - $(stat -f %m "$FB_CACHE" 2>/dev/null || echo 0) ))" -lt "$FB_TTL" ]; }
-  if ! fb_fresh; then
+  FB_TTL="${SWARMERY_STATUSLINE_FABLE_TTL:-300}"        # refresh cadence in seconds (default 5 min)
+  FB_MAX_AGE="${SWARMERY_STATUSLINE_FABLE_MAX_AGE:-86400}"  # display cutoff: never render a cache older than this (default 24h)
+  FB_AGE=""
+  [ -f "$FB_CACHE" ] && FB_AGE=$(( $(date +%s) - $(stat -f %m "$FB_CACHE" 2>/dev/null || echo 0) ))
+  if [ -z "$FB_AGE" ] || [ "$FB_AGE" -ge "$FB_TTL" ]; then
     FB_HELPER="$(dirname "${BASH_SOURCE[0]}")/fetch-fable-usage.sh"
     [ -x "$FB_HELPER" ] && ( o="$("$FB_HELPER" 2>/dev/null)"; [ -n "$o" ] && printf '%s\n' "$o" > "$FB_CACHE.tmp" && mv "$FB_CACHE.tmp" "$FB_CACHE" ) >/dev/null 2>&1 &
   fi
-  [ -f "$FB_CACHE" ] && IFS='|' read -r FB_PCT FB_RESET < "$FB_CACHE"
+  # Display only a cache younger than FB_MAX_AGE: a value the helper can no longer
+  # refresh (endpoint drift, revoked token) must eventually disappear, not freeze.
+  # The cache may also hold the helper's "none|" marker (account has no Fable window
+  # — org/Team plans); the render guard below drops any non-numeric FB_PCT, so the
+  # marker hides the segment while still suppressing per-render re-fetches.
+  if [ -n "$FB_AGE" ] && [ "$FB_AGE" -lt "$FB_MAX_AGE" ]; then
+    IFS='|' read -r FB_PCT FB_RESET < "$FB_CACHE"
+  fi
 fi
 
 # ----- header title: subscription account email (OPT-IN) -------------------
@@ -369,7 +386,7 @@ printf '%b\n' "${PURPLE}${C_B}CONTEXT:${C_RST} ${BAR} ${PCT_COLOR}${C_B}${CTX_PC
 if [ -n "$U5_PCT" ] || [ -n "$UWK_PCT" ]; then
   c5="$(pct_color "$U5_PCT")"; c7="$(pct_color "$UWK_PCT")"
   fb_part=""
-  if [ -n "$FB_PCT" ]; then
+  if [[ "$FB_PCT" =~ ^[0-9]+$ ]]; then
     cfb="$(pct_color "$FB_PCT")"
     fb_reset_part=""
     [ -n "$FB_RESET" ] && fb_reset_part=" ${GREY}⟳$(fmt_reset_any "$FB_RESET")${C_RST}"

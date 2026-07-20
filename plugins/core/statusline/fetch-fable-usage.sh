@@ -21,12 +21,22 @@
 #
 # OUTPUT (stdout, non-secret):
 #   "<pct>|<reset>"   e.g. "27|1783594740"  or  "27|2026-07-08T12:59:00Z"
-#   Empty line on any failure (no token, network error, no Fable window) → the statusline
-#   simply omits the FB segment, same graceful degradation as "weather warming up…".
+#   "none|"           the call SUCCEEDED but the account has no Fable-scoped window
+#                     (org/Team plans expose only session + weekly_all in .limits[]).
+#                     A valid negative answer, distinct from failure: the statusline
+#                     caches it and hides the FB segment instead of re-fetching every
+#                     render or freezing a long-dead number.
+#   Empty line on any FAILURE (no token, network error, non-JSON response) → the statusline
+#   keeps its last cache (bounded by its max-age), same graceful degradation as weather.
 #
 # USAGE:
-#   fetch-fable-usage.sh            # prints PCT|RESET (or empty)
+#   fetch-fable-usage.sh            # prints PCT|RESET / "none|" (or empty)
 #   fetch-fable-usage.sh --debug    # prints the raw usage JSON with any token redacted
+#
+# KNOBS: SWARMERY_FABLE_TOKEN            — bypass the Keychain and use this OAuth token
+#                                          directly (tests / non-macOS environments)
+#        SWARMERY_FABLE_KEYCHAIN_SERVICE — override the Keychain item name
+#        SWARMERY_FABLE_USAGE_URL        — override the usage endpoint (tests use file://)
 #
 # CAVEAT: /api/oauth/usage is an INTERNAL, undocumented Claude Code endpoint. It may
 # change or break on a CC update. This helper is best-effort and fails silent by design.
@@ -67,35 +77,45 @@ else
   SERVICES=("Claude Code-credentials" "Claude Code-credentials-${CFG_SUFFIX}")
 fi
 
+fetch_usage() {
+  curl -fsS --max-time "$TIMEOUT" "$USAGE_URL" \
+    -H "Authorization: Bearer $1" \
+    -H "Content-Type: application/json" \
+    -H "anthropic-beta: $OAUTH_BETA" 2>/dev/null
+}
+
 RESP=""
-for svc in "${SERVICES[@]}"; do
-  CRED_JSON="$(security find-generic-password -s "$svc" -w 2>/dev/null)"
-  [ -n "$CRED_JSON" ] || continue
+if [ -n "${SWARMERY_FABLE_TOKEN:-}" ]; then
+  # Explicit token override (tests / non-macOS): bypass the Keychain entirely and
+  # never fall back to other credential sources.
+  RESP="$(fetch_usage "$SWARMERY_FABLE_TOKEN")"
+else
+  for svc in "${SERVICES[@]}"; do
+    CRED_JSON="$(security find-generic-password -s "$svc" -w 2>/dev/null)"
+    [ -n "$CRED_JSON" ] || continue
 
-  # Try the known credential shapes; never print the token.
-  TOKEN="$(printf '%s' "$CRED_JSON" | jq -r '
-    .claudeAiOauth.accessToken
-    // .claudeAiOauth.access_token
-    // .accessToken
-    // .access_token
-    // .token
-    // empty
-  ' 2>/dev/null)"
-  # If the blob is not JSON, some installs store the raw token string directly.
-  if [ -z "$TOKEN" ]; then
-    case "$CRED_JSON" in
-      sk-ant-oat*|sk-ant-*) TOKEN="$CRED_JSON" ;;
-    esac
-  fi
-  [ -n "$TOKEN" ] || continue
+    # Try the known credential shapes; never print the token.
+    TOKEN="$(printf '%s' "$CRED_JSON" | jq -r '
+      .claudeAiOauth.accessToken
+      // .claudeAiOauth.access_token
+      // .accessToken
+      // .access_token
+      // .token
+      // empty
+    ' 2>/dev/null)"
+    # If the blob is not JSON, some installs store the raw token string directly.
+    if [ -z "$TOKEN" ]; then
+      case "$CRED_JSON" in
+        sk-ant-oat*|sk-ant-*) TOKEN="$CRED_JSON" ;;
+      esac
+    fi
+    [ -n "$TOKEN" ] || continue
 
-  RESP="$(curl -fsS --max-time "$TIMEOUT" "$USAGE_URL" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -H "anthropic-beta: $OAUTH_BETA" 2>/dev/null)"
-  [ -n "$RESP" ] && break
-  RESP=""
-done
+    RESP="$(fetch_usage "$TOKEN")"
+    [ -n "$RESP" ] && break
+    RESP=""
+  done
+fi
 [ -n "$RESP" ] || fail
 
 if [ "$DEBUG" = "1" ]; then
@@ -127,5 +147,15 @@ OUT="$(printf '%s' "$RESP" | jq -r '
     else empty end
 ' 2>/dev/null)"
 
-[ -n "$OUT" ] || fail
+if [ -z "$OUT" ]; then
+  # The call succeeded but no Fable window matched. If the response still has the
+  # expected shape (a JSON object with a .limits array), that is a VALID negative
+  # answer — org/Team accounts simply have no Fable-scoped weekly limit — so emit
+  # the "none|" marker: the statusline caches it and hides the FB segment instead
+  # of re-fetching every render or freezing a stale number forever. Anything else
+  # (non-JSON, unknown shape) stays a silent failure → empty output.
+  printf '%s' "$RESP" | jq -e '(.limits? | type) == "array"' >/dev/null 2>&1 \
+    && { printf 'none|\n'; exit 0; }
+  fail
+fi
 printf '%s\n' "$OUT"
