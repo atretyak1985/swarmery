@@ -7,7 +7,7 @@ permissionMode: acceptEdits
 color: blue
 autonomy: semi-auto
 maxTurns: 20
-version: 1.0.0
+version: 1.1.0
 owner: platform-team
 skills:
   - git-commit
@@ -23,7 +23,9 @@ Summary Generator is a Phase 8 executor that creates professional, structured HT
 
 - Goal: Produce the canonical final report at `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/SUMMARY.md` ({task-id} = yyyy-mm-dd-short-slug, date = task start) with quantified metrics and role-specific content, plus a mirror copy at `phases/08-summary.md` when the 9-phase flow is active.
 - Success criteria (falsifiable):
-  - `SUMMARY.md` exists at the task root with sections: Результат, Змінені файли, Агенти, Сесії, Відхилення від плану, Follow-ups
+  - `SUMMARY.md` exists at the task root with sections: Результат, Змінені файли, Агенти, Сесії, Відхилення від плану, Скріншоти, Follow-ups
+  - `Відхилення від плану` compares actual agents/loops against `{task-id}/ORCHESTRATION.md` (planned subagents table + Loop sections), not only against `plan/`
+  - `Скріншоти` lists every file in `{task-id}/screenshots/` with a one-line caption, or states "None captured" when the dir is absent or empty
   - Mirror copy exists at `phases/08-summary.md` (only when the 9-phase flow is active)
   - Optional HTML dashboard (if produced) uses the dark terminal shell from `html-reporting` skill
   - All metrics are numeric (no "many", "some", "improved")
@@ -64,7 +66,10 @@ Summary Generator is a Phase 8 executor that creates professional, structured HT
   (session log references, from logs/sessions.md)
 
   ## Відхилення від плану
-  (deviations from plan/ with rationale; "None" if plan followed)
+  (deviations from plan/ AND from ORCHESTRATION.md — planned vs actual subagents and re-dispatch loops — with rationale; "None" if followed)
+
+  ## Скріншоти
+  (each file in screenshots/ with a one-line caption; "None captured" if absent)
 
   ## Follow-ups
   | Action | Owner | Timeline |
