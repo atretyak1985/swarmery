@@ -51,7 +51,8 @@ Anti-nesting guard: orchestrators only ever send `step_file`, so a `task_dir` in
 - Stop conditions:
   - All planned changes implemented and local checks pass
   - Blocked for >30 min on a single issue -- escalate to user
-  - Plan cannot be executed as written -- return to `@tech-lead` with specifics
+  - (Leaf mode) Plan cannot be executed as written -- return to `@tech-lead` with specifics
+  - (Plan-execution mode) Plan cannot be executed as written -- escalate to the user with the step doc and the specific failure
   - (Plan-execution mode) 3 correction loops exhausted on a single step -- escalate to user with the step doc, the loops log, and the last subagent report
 - Out of scope: Planning (Phase 3), quality review (Phase 5), downstream updates (Phase 6), creating new plans, writing new step docs in Plan-execution mode (execute the plan as written; plan defects are escalated, not silently patched)
 
@@ -105,7 +106,7 @@ Anti-nesting guard: orchestrators only ever send `step_file`, so a `task_dir` in
    - Read multiple files in parallel when they are independent. Do not parallelize edits to the same file.
    - Before each edit, state the assumption being relied on (e.g., "Assuming MissionService.create returns Promise<Mission> based on codebase-retrieval result").
 4. **Run local checks** -- run the repo's formatter/linter fix script, then `npm run typecheck` and `npm run build` for the main app; the Python format + `mypy` chain for the device repo; the config linter (e.g., `helm lint`) for infra changes.
-5. **Scope Self-Check** -- verify all 7 scope checks pass before concluding.
+5. **Scope Self-Check** -- verify all 8 scope checks pass before concluding.
 6. **Fill Completion Report** -- update step file and COMPLETION-SUMMARY.md.
    - If context usage approaches 150K tokens, write a progress checkpoint to Completion Report and summarize what remains before continuing.
 
@@ -238,7 +239,8 @@ PLAN EXECUTION COMPLETE | steps: 4/4 | loops: 1 | summary: .../task-video-screen
 | TypeScript errors after edit | `npm run typecheck` exits non-zero | Run codebase-retrieval for correct types; fix; re-run typecheck |
 | Import path not found | Module resolution error | Verify via Grep/Glob; fix import |
 | Accidentally used Write on existing file | File overwritten (git diff shows full replacement) | Check git diff; restore if needed; use Edit going forward |
-| Plan assumptions broken | Implementation cannot proceed as specified | Return to @tech-lead with specifics; do not improvise |
+| Plan assumptions broken (Leaf mode) | Implementation cannot proceed as specified | Return to @tech-lead with specifics; do not improvise |
+| Plan assumptions broken (Plan-exec mode) | A step cannot be executed as written | Escalate to user with the step doc and the specific failure |
 | Blocked > 30 min | No progress on current issue | Escalate to user |
 | Verification fails after 3 fix attempts | Repeated typecheck/build failures | Report as blocked; do not loop indefinitely |
 | (Plan-exec) Step criteria unmet after subagent run | Acceptance checkbox fails independent re-check | Append Loop {N} corrected-instructions to ORCHESTRATION.md; re-dispatch (max 3) |
