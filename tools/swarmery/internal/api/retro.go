@@ -9,7 +9,7 @@ package api
 //   - /api/retro/agents   — per-agent runs/cost/errors/durations + prev window
 //   - /api/retro/friction — denied tools, top error groups, approval waits
 //
-// Phase 2 adds the workspace-artifact surfaces (migration 0017, parsed by
+// Phase 2 adds the workspace-artifact surfaces (migration 0018, parsed by
 // internal/wsingest/artifacts.go) and the evals importer (internal/evals):
 //
 //   - /api/retro/lessons  — the retro_lessons feed joined through tasks
