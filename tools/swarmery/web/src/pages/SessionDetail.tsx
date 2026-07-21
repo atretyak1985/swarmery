@@ -400,11 +400,7 @@ export function SessionDetailPage(): JSX.Element {
             className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 desk:px-10 wide:px-0 [-webkit-overflow-scrolling:touch]"
           >
             {tab === 'chat' && (
-              <Chat
-                detail={detail}
-                pending={pending}
-                onShowTimeline={() => setTab('timeline')}
-              />
+              <Chat detail={detail} pending={pending} />
             )}
             {tab === 'timeline' && <Timeline detail={detail} />}
             {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}

@@ -15,21 +15,8 @@ import {
   subagentName,
 } from '../../lib/payload';
 import { buildTimeline, countEvents, type TimelineNode } from '../../lib/timeline';
+import { TOOL_GLYPHS } from '../../lib/glyphs';
 import { Empty } from '../../components/ui';
-
-const TOOL_GLYPHS: Record<string, string> = {
-  Read: '▤',
-  Grep: '⌕',
-  Glob: '⌕',
-  Edit: '✎',
-  Write: '✎',
-  Bash: '❯',
-  Agent: '⬡',
-  Task: '⬡',
-  Skill: '◈',
-  WebFetch: '↯',
-  WebSearch: '↯',
-};
 
 const TYPE_LABELS: Partial<Record<Event['type'], string>> = {
   permission_request: 'Permission',
@@ -236,7 +223,8 @@ function AwaitingApprovalNode({ event }: { event: Event }): JSX.Element {
   );
 }
 
-function Nodes({
+// Exported for the Chat tab's expandable tool groups — same rows, same nesting.
+export function Nodes({
   nodes,
   inSubagent = false,
 }: {

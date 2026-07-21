@@ -1,0 +1,15 @@
+-- 0017_attribution_backfill: skill→tool attribution in event payloads.
+--
+-- The ingester now copies the transcript's `attributionSkill` field into the
+-- payload of every tool_call / subagent_start / skill_use event it opens
+-- (docs/jsonl-format.md §9) — the skill→tool edge of the session call tree.
+-- No schema change: payload is JSON.
+--
+-- Backfill: existing events were ingested before the field was read. Clearing
+-- all file offsets makes the next `serve` backfill re-read every transcript;
+-- closeToolCall unconditionally rewrites the payload of re-seen tool calls, so
+-- historical rows pick up the attribution. Safe/idempotent — turns dedup by
+-- (session_id, message_id) and events by dedup_key (same pattern as 0010).
+-- Best effort: sessions whose transcripts have since been deleted keep their
+-- unattributed payloads (tools simply stay under their agent in the tree).
+DELETE FROM file_offsets;

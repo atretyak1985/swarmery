@@ -49,6 +49,25 @@ export function countEvents(nodes: TimelineNode[]): number {
   return n;
 }
 
+/** Build a timeline tree from an arbitrary subset of events (e.g. one chat
+ * group's), folding subagent spans exactly like the full session build. */
+export function buildSubtree(events: readonly Event[]): TimelineNode[] {
+  const sorted = events.slice().sort(byTime);
+  const ids = new Set(sorted.map((e) => e.id));
+  const childrenOf = new Map<number, Event[]>();
+  const roots: Event[] = [];
+  for (const event of sorted) {
+    if (event.parentEventId !== null && ids.has(event.parentEventId)) {
+      const list = childrenOf.get(event.parentEventId);
+      if (list) list.push(event);
+      else childrenOf.set(event.parentEventId, [event]);
+    } else {
+      roots.push(event);
+    }
+  }
+  return buildNodes(roots, childrenOf);
+}
+
 export function buildTimeline(detail: SessionDetail): TurnGroup[] {
   const events = detail.events.slice().sort(byTime);
   const ids = new Set(events.map((e) => e.id));

@@ -203,9 +203,11 @@ function ItemsTab({
   sort,
   selectedId,
   refreshKey,
+  find,
   onScope,
   onSort,
   onSelect,
+  onFindResolved,
   onMutated,
   onDeleted,
   onReadonly,
@@ -220,9 +222,12 @@ function ItemsTab({
   sort: SystemSort;
   selectedId: number | null;
   refreshKey: number;
+  /** ?find= deep-link by item name (from session detail chips) — resolved to ?item= once rows load. */
+  find: string | null;
   onScope: (scope: 'global' | 'project' | null) => void;
   onSort: (sort: SystemSort) => void;
   onSelect: (id: number | null) => void;
+  onFindResolved: (id: number | null) => void;
   /** A write landed in the panel/form — refetch list + summary + detail. */
   onMutated: () => void;
   /** Soft delete landed — close the panel and refetch. */
@@ -253,6 +258,15 @@ function ItemsTab({
     [kind],
   );
   const { rows, error, retry } = useSystemList(fetcher, scope, project, refreshKey);
+
+  // ?find= deep-link (session detail chips): once the list is loaded, resolve
+  // the exact name to a row id and swap ?find= for ?item=. Unknown names (e.g.
+  // built-in agent types the registry never scans) just clear the param.
+  useEffect(() => {
+    if (find === null || rows === null) return;
+    const match = rows.find((r) => r.name === find);
+    onFindResolved(selectable && match !== undefined ? match.id : null);
+  }, [find, rows, selectable, onFindResolved]);
 
   if (error !== null) return <ErrorBox message={error} onRetry={retry} />;
 
@@ -379,6 +393,7 @@ export function System(): JSX.Element {
   const sort = parseSort(searchParams.get('sort'));
   const itemParam = searchParams.get('item');
   const selectedId = itemParam !== null && /^\d+$/.test(itemParam) ? Number(itemParam) : null;
+  const find = searchParams.get('find');
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [summary, setSummary] = useState<SystemSummary | null>(null);
@@ -454,6 +469,12 @@ export function System(): JSX.Element {
   const onSelect = (id: number | null): void => {
     patchParams({ item: id === null ? null : String(id) });
   };
+  const onFindResolved = useCallback(
+    (id: number | null): void => {
+      patchParams({ find: null, item: id === null ? null : String(id) });
+    },
+    [patchParams],
+  );
   const onReadonly = useCallback((): void => setReadonly(true), []);
   const onDeleted = useCallback((): void => {
     patchParams({ item: null });
@@ -465,7 +486,9 @@ export function System(): JSX.Element {
     project,
     lint,
     refreshKey,
+    find,
     onScope,
+    onFindResolved,
   };
 
   // Insights tab-label badge: promotion + stale-override counters from the

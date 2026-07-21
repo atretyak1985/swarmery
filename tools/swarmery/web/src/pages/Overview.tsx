@@ -28,6 +28,7 @@ import {
 import { requestSummary } from '../lib/approvals';
 import { projectColor } from '../lib/colors';
 import {
+  addDays,
   fmtAgo,
   fmtCost,
   fmtDayShort,
@@ -44,9 +45,8 @@ import { ApproxHint, Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
 
 const MAX_SPINE_ROWS = 8;
-
 function sessionDay(s: Session): string {
-  return isoDay(new Date(s.endedAt ?? s.startedAt));
+  return isoDay(new Date(s.startedAt));
 }
 
 /* ----- eyebrow date/time ----- */
@@ -299,8 +299,18 @@ function SpineRow({
       .catch(() => setTraceError(true));
   }, [open, session.id, trace, traceError]);
 
-  const time = fmtTime(session.startedAt);
-  const rel = fmtAgo(session.startedAt);
+  // Finished sessions are anchored on the spine by when they ended (that is the
+  // today-relevant moment and the sort key); live ones by when they started.
+  const anchor = session.endedAt ?? session.startedAt;
+  const time = fmtTime(anchor);
+  const rel = fmtAgo(anchor);
+  const startedDay = sessionDay(session);
+  const startedLabel =
+    startedDay === isoDay()
+      ? null
+      : startedDay === addDays(isoDay(), -1)
+        ? 'started yesterday'
+        : `started ${fmtDayShort(startedDay)}`;
   const costTokens = [
     session.costUsd != null ? fmtCost(session.costUsd) : null,
     session.tokens != null ? fmtTokens(session.tokens) : null,
@@ -342,6 +352,11 @@ function SpineRow({
             >
               {statusLabel(session, nowMs)}
             </span>
+            {startedLabel !== null && (
+              <span className="rounded-full border border-line-strong px-[9px] py-px font-mono text-[10px] whitespace-nowrap text-ink-faint">
+                {startedLabel}
+              </span>
+            )}
             {costTokens !== '' && (
               <span className="ml-auto font-mono text-[10.5px] whitespace-nowrap text-ink-faint">
                 {costTokens}
