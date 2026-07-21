@@ -1,0 +1,32 @@
+{
+  "evalId": "tech-lead-routing",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-07-20T10:00:00.000Z",
+    "results": [
+      {
+        "id": "r1",
+        "prompt": { "raw": "Route: fix a flaky unit test in the orders module", "label": "routing: flaky test" },
+        "vars": { "task": "fix a flaky unit test" },
+        "success": true,
+        "score": 1,
+        "latencyMs": 1200,
+        "gradingResult": { "pass": true, "score": 1, "reason": "All assertions passed" }
+      },
+      {
+        "id": "r2",
+        "prompt": { "raw": "Route: deploy the release to production" },
+        "success": false,
+        "score": 0,
+        "gradingResult": { "pass": false, "score": 0, "reason": "Expected output to contain \"guardrail-checker\" but it routed straight to deployment" }
+      },
+      {
+        "id": "r3",
+        "prompt": { "raw": "Route: summarize the sprint retrospective" },
+        "success": false,
+        "error": "API call error: 529 overloaded"
+      }
+    ],
+    "stats": { "successes": 1, "failures": 2, "tokenUsage": { "total": 4200 } }
+  }
+}

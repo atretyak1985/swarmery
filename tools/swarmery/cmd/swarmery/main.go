@@ -28,6 +28,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/evals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
@@ -66,6 +67,8 @@ func main() {
 		err = cmdPrune(os.Args[2:])
 	case "wscan":
 		err = cmdWscan(os.Args[2:])
+	case "evals-import":
+		err = cmdEvalsImport(os.Args[2:])
 	case "sysscan":
 		err = cmdSysscan(os.Args[2:])
 	case "install":
@@ -115,6 +118,9 @@ func usage() {
                                    delete their events/file_changes/turns (headers kept, pruned=1),
                                    VACUUM at the end; --dry-run prints per-table counts only
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
+  swarmery evals-import [--db <path>] --agent <name> <results.json>
+                                   import a promptfoo results.json as an eval run for a
+                                   registry agent (idempotent per suite + started_at)
   swarmery sysscan  [--db <path>] [--claude-dir <dir>] [--overlays-dir <dir>]
                                    one-shot system-config scan (agents/skills/hooks/commands)
   swarmery install  [--port <n>] [--onboard-roots <dirs>] [--workspace-root <dir>] [--statusline-src <dir>]
@@ -393,6 +399,38 @@ func cmdWscan(args []string) error {
 		return err
 	}
 	fmt.Printf("wscan %s\n  %s\n", wsCfg.WorkspaceRoot, stats)
+	return nil
+}
+
+// cmdEvalsImport imports one promptfoo results.json as an eval run for a
+// registry agent — see internal/evals. Unknown agents are a hard error;
+// re-importing the same run is a friendly skip.
+func cmdEvalsImport(args []string) error {
+	fs := flag.NewFlagSet("evals-import", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	agent := fs.String("agent", "", "registry agent name the results belong to (required)")
+	fs.Parse(args)
+	if fs.NArg() != 1 || *agent == "" {
+		return fmt.Errorf("usage: swarmery evals-import [--db <path>] --agent <name> <results.json>")
+	}
+
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	res, err := evals.Import(db, *agent, fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	if res.Skipped {
+		fmt.Printf("skipped: run already imported (agent %s, suite %q, started %s — run #%d)\n",
+			res.Agent, res.Suite, res.StartedAt, res.RunID)
+		return nil
+	}
+	fmt.Printf("evals-import %s\n  agent: %s\n  suite: %s\n  run: #%d (started %s)\n  cases: %d (passed %d, failed %d)\n",
+		fs.Arg(0), res.Agent, res.Suite, res.RunID, res.StartedAt, res.Cases, res.Passed, res.Failed)
 	return nil
 }
 
