@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
@@ -798,6 +799,28 @@ func cmdServe(args []string) error {
 	}
 	go pw.Run(context.Background())
 	log.Printf("swarmery procwatch ticker started (interval 30s)")
+
+	// retro phase 3: the advisor rule engine — deterministic recommendations
+	// (R1..R6) refreshed once at startup and every 24h, plus on demand via
+	// POST /api/retro/advise. Works purely off the DB, so it runs with or
+	// without ingest; failures are logged, never fatal.
+	go func() {
+		runAdvisor := func() {
+			stats, err := advisor.Run(db, time.Now())
+			if err != nil {
+				log.Printf("error: advisor: %v", err)
+				return
+			}
+			log.Printf("swarmery advisor: %s", stats)
+		}
+		runAdvisor()
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			runAdvisor()
+		}
+	}()
+	log.Printf("swarmery advisor started (interval 24h)")
 
 	// phase 2: approvals — long-poll registry + expiry sweeper + heartbeat.
 	svc := approvals.New(db, bus, approvals.Options{
