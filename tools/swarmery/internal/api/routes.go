@@ -71,6 +71,9 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
 	mux.HandleFunc("POST /api/sessions/{id}/kill", requireLocalOrigin(h.KillSession))
+	// graceful stop — ends the session as 'completed', not 'killed'; also the
+	// only way to close a zombie row with no known PID.
+	mux.HandleFunc("POST /api/sessions/{id}/stop", requireLocalOrigin(h.StopSession))
 	// soft-hide a session from the list (reversible; row + transcript kept).
 	mux.HandleFunc("DELETE /api/sessions/{id}", requireLocalOrigin(h.hideSession))
 	// partial update (ops-hygiene): today only {outcome} — see session_patch.go.
