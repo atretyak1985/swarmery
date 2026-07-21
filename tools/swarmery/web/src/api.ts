@@ -26,6 +26,8 @@ import type {
   ProjectMetaPatch,
   ProjectsHealthResponse,
   ProjectsResponse,
+  RetroAgentsResp,
+  RetroFrictionResp,
   SearchResponse,
   SessionDetailResponse,
   SessionOutcome,
@@ -318,6 +320,20 @@ export function fetchDurations(range: AnalyticsRange = {}): Promise<DurationsRes
 export function fetchErrorGroups(range: AnalyticsRange = {}): Promise<ErrorsResp> {
   if (MOCK) return mockApi.errorGroups(range);
   return get(`/api/stats/errors?${rangeQuery(range, {})}`);
+}
+
+// --- retro loop (per-agent scorecards + friction board) -----------------------
+
+/** Per-agent health scorecards + previous-window comparison (retro loop). */
+export function fetchRetroAgents(range: AnalyticsRange = {}): Promise<RetroAgentsResp> {
+  if (MOCK) return mockApi.retroAgents();
+  return get(`/api/retro/agents?${rangeQuery(range, {})}`);
+}
+
+/** Friction board: denied tools, top error groups, approval waits (retro loop). */
+export function fetchRetroFriction(range: AnalyticsRange = {}): Promise<RetroFrictionResp> {
+  if (MOCK) return mockApi.retroFriction();
+  return get(`/api/retro/friction?${rangeQuery(range, {})}`);
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {

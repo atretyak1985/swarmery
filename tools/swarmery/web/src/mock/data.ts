@@ -30,6 +30,8 @@ import type {
   DurationsResp,
   ErrorsResp,
   MatrixResp,
+  RetroAgentsResp,
+  RetroFrictionResp,
   SkillsResp,
   TimeseriesResp,
   ToolsResp,
@@ -1259,6 +1261,28 @@ export const mockApi = {
   async errorGroups(range: AnalyticsRangeArg = {}): Promise<ErrorsResp> {
     await delay(110);
     return mockErrorGroups(range);
+  },
+
+  // retro loop — empty shells (no retro fixtures yet)
+  async retroAgents(): Promise<RetroAgentsResp> {
+    await delay(120);
+    return {
+      from: '',
+      to: '',
+      approx: false,
+      main: { cost_usd: 0, tokens_out: 0, errors: 0 },
+      agents: [],
+    };
+  },
+
+  async retroFriction(): Promise<RetroFrictionResp> {
+    await delay(120);
+    return {
+      denied_tools: [],
+      error_groups: [],
+      approvals: { resolved: 0, avg_resolve_sec: null, wait_total_min: 0, pending: 0 },
+      approx: false,
+    };
   },
 
   async docs(): Promise<DocMeta[]> {

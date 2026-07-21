@@ -218,6 +218,7 @@ function AppShell(): JSX.Element {
     { to: '/sessions', glyph: '❯', label: 'Sessions', ...badgeFor(sessionsToday) },
     { to: '/projects', glyph: '▤', label: 'Projects' },
     { to: '/analytics', glyph: '▦', label: 'Analytics' },
+    { to: '/retro', glyph: '↺', label: 'Retro' },
     {
       to: '/approvals',
       glyph: '⧗',

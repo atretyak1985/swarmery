@@ -527,6 +527,83 @@ export interface ErrorsResp {
   approx: boolean;
 }
 
+// --- Retro loop (GET /api/retro/{agents,friction}) ---------------------------
+
+/** Same aggregates over the preceding window of equal length. */
+export interface RetroPrev {
+  runs: number;
+  errors: number;
+  error_rate: number;
+  cost_usd: number;
+}
+
+/** One per-agent scorecard row of GET /api/retro/agents. */
+export interface RetroAgentRow {
+  agent: string;
+  runs: number;
+  sessions: number;
+  cost_usd: number;
+  tokens_out: number;
+  errors: number;
+  /** errors/runs; 0 when the agent had no counted run. */
+  error_rate: number;
+  /** avg/p95 over subagent run durations; null when no run carried one. */
+  avg_ms: number | null;
+  p95_ms: number | null;
+  /** success/(success+fail) over judged sessions; null when none judged. */
+  success_rate: number | null;
+  prev: RetroPrev;
+}
+
+/** The orchestrator ("main" fold key) — excluded from agents[]. */
+export interface RetroMain {
+  cost_usd: number;
+  tokens_out: number;
+  errors: number;
+}
+
+export interface RetroAgentsResp {
+  from: string;
+  to: string;
+  /** True when the range overlaps pruned (rolled-up) days — counts undercount there. */
+  approx: boolean;
+  main: RetroMain;
+  agents: RetroAgentRow[];
+}
+
+/** One denied-tool row of the friction board. */
+export interface RetroDeniedTool {
+  tool: string;
+  denied: number;
+  calls: number;
+  /** An enabled approval rule (`Tool` or `Tool(argGlob)`) already covers this tool. */
+  has_rule: boolean;
+}
+
+/** One error group of the friction board; sessions are sample session uuids. */
+export interface RetroErrorGroup {
+  key: string;
+  example: string;
+  count: number;
+  last_ts: string;
+  sessions: string[];
+}
+
+export interface RetroApprovals {
+  resolved: number;
+  avg_resolve_sec: number | null;
+  wait_total_min: number;
+  pending: number;
+}
+
+export interface RetroFrictionResp {
+  denied_tools: RetroDeniedTool[];
+  error_groups: RetroErrorGroup[];
+  approvals: RetroApprovals;
+  /** True when the range overlaps pruned (rolled-up) days — the board undercounts there. */
+  approx: boolean;
+}
+
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
 
 /** permission_requests.status */

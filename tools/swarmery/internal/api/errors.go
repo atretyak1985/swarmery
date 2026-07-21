@@ -111,15 +111,30 @@ func extractErrMsg(typ string, toolName sql.NullString, payload sql.NullString) 
 	return "error"
 }
 
-// GET /api/stats/errors?from&to&project — project is the optional global
-// scope (slug or id, resolved by scopeFilter).
-func (h *Handler) statsErrors(w http.ResponseWriter, r *http.Request) {
-	dr, err := parseRange(r)
-	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
-		return
-	}
-	pf, pargs := scopeFilter(r)
+// errGroupSample is one distinct sample session inside an error group — both
+// identity forms travel along so each consumer picks its own (statsErrors
+// exposes the numeric row id + title; retroFriction the session uuid).
+type errGroupSample struct {
+	SessionID   int64
+	SessionUUID string
+	Title       *string
+}
+
+// errGroup is one normalized-message error group as accumulated by
+// errorGroups, before shaping into an endpoint-specific DTO.
+type errGroup struct {
+	Key     string
+	Example string // newest raw message, ≤160 runes
+	Count   int64
+	LastTs  string
+	Samples []errGroupSample // up to 3 distinct sessions, newest first
+}
+
+// errorGroups fetches the range's status='error' events and folds them by
+// normalized message key — the grouping engine shared by /api/stats/errors
+// and /api/retro/friction. Groups come back count desc (first-seen = newest
+// as the stable tie-break).
+func (h *Handler) errorGroups(dr dateRange, pf string, pargs []any) ([]errGroup, error) {
 	// The type IN (…) predicate is semantics-preserving — these six are the
 	// only event types ingest.go ever marks status='error' ('error' from
 	// system api_error; tool_call/skill_use/subagent_start via closeToolCall's
@@ -129,7 +144,7 @@ func (h *Handler) statsErrors(w http.ResponseWriter, r *http.Request) {
 	// "SCAN e"; with it: "SEARCH e USING INDEX idx_events_type
 	// (type=? AND ts>? AND ts<?)".
 	rows, err := h.DB.Query(`
-		SELECT e.type, e.tool_name, e.payload, e.ts, s.id, s.title
+		SELECT e.type, e.tool_name, e.payload, e.ts, s.id, s.session_uuid, s.title
 		  FROM events e
 		  JOIN sessions s ON s.id = e.session_id
 		  JOIN projects p ON p.id = s.project_id
@@ -139,24 +154,22 @@ func (h *Handler) statsErrors(w http.ResponseWriter, r *http.Request) {
 		 ORDER BY e.ts DESC`,
 		append([]any{dr.start, dr.end}, pargs...)...)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
 	type agg struct {
-		group    errorGroupDTO
+		group    errGroup
 		sessions map[int64]struct{}
 	}
 	acc := map[string]*agg{}
 	var order []string // first-seen (= newest-first) for stable tie-breaking
 	for rows.Next() {
-		var typ, ts string
+		var typ, ts, sessUUID string
 		var toolName, payload, title sql.NullString
 		var sessID int64
-		if err := rows.Scan(&typ, &toolName, &payload, &ts, &sessID, &title); err != nil {
-			writeErr(w, err)
-			return
+		if err := rows.Scan(&typ, &toolName, &payload, &ts, &sessID, &sessUUID, &title); err != nil {
+			return nil, err
 		}
 		msg := extractErrMsg(typ, toolName, payload)
 		key := normalizeErrKey(msg)
@@ -167,7 +180,7 @@ func (h *Handler) statsErrors(w http.ResponseWriter, r *http.Request) {
 				example = string(rn[:160])
 			}
 			// Rows arrive ts DESC, so the first row of a group is its newest.
-			a = &agg{group: errorGroupDTO{Key: key, Example: example, LastTs: ts}, sessions: map[int64]struct{}{}}
+			a = &agg{group: errGroup{Key: key, Example: example, LastTs: ts}, sessions: map[int64]struct{}{}}
 			acc[key] = a
 			order = append(order, key)
 		}
@@ -179,19 +192,45 @@ func (h *Handler) statsErrors(w http.ResponseWriter, r *http.Request) {
 				tt := title.String
 				tp = &tt
 			}
-			a.group.Samples = append(a.group.Samples, errorSampleDTO{SessionID: sessID, Title: tp})
+			a.group.Samples = append(a.group.Samples, errGroupSample{SessionID: sessID, SessionUUID: sessUUID, Title: tp})
 		}
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]errGroup, 0, len(acc))
+	for _, key := range order {
+		out = append(out, acc[key].group)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Count > out[j].Count })
+	return out, nil
+}
+
+// GET /api/stats/errors?from&to&project — project is the optional global
+// scope (slug or id, resolved by scopeFilter).
+func (h *Handler) statsErrors(w http.ResponseWriter, r *http.Request) {
+	dr, err := parseRange(r)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	pf, pargs := scopeFilter(r)
+	groups, err := h.errorGroups(dr, pf, pargs)
+	if err != nil {
 		writeErr(w, err)
 		return
 	}
 
-	out := errorsDTO{From: dr.days[0], To: dr.days[len(dr.days)-1], Groups: make([]errorGroupDTO, 0, len(acc))}
-	for _, key := range order {
-		out.Groups = append(out.Groups, acc[key].group)
+	out := errorsDTO{From: dr.days[0], To: dr.days[len(dr.days)-1], Groups: make([]errorGroupDTO, 0, len(groups))}
+	for _, g := range groups {
+		dto := errorGroupDTO{Key: g.Key, Example: g.Example, Count: g.Count, LastTs: g.LastTs,
+			Samples: make([]errorSampleDTO, 0, len(g.Samples))}
+		for _, s := range g.Samples {
+			dto.Samples = append(dto.Samples, errorSampleDTO{SessionID: s.SessionID, Title: s.Title})
+		}
+		out.Groups = append(out.Groups, dto)
 	}
-	sort.SliceStable(out.Groups, func(i, j int) bool { return out.Groups[i].Count > out.Groups[j].Count })
 	rolled, err := h.hasRolledUpDays(dr.days[0], dr.days[len(dr.days)-1], pf, pargs)
 	if err != nil {
 		writeErr(w, err)

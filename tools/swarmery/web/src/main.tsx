@@ -19,6 +19,9 @@ import './index.css';
 // initial bundle (only fetched when the route is visited).
 const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
 
+// Retro follows the same lazy pattern — fetched only when visited.
+const Retro = lazy(() => import('./pages/Retro').then((m) => ({ default: m.Retro })));
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -35,6 +38,14 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<Loading label="analytics…" />}>
             <Analytics />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'retro',
+        element: (
+          <Suspense fallback={<Loading label="retro…" />}>
+            <Retro />
           </Suspense>
         ),
       },

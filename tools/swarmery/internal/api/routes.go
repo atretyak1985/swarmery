@@ -56,6 +56,10 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/stats/durations", h.statsDurations)
 	mux.HandleFunc("GET /api/stats/errors", h.statsErrors)
 
+	// retro improvement loop: per-agent scorecards + friction board (retro.go).
+	mux.HandleFunc("GET /api/retro/agents", h.retroAgents)
+	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
+
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
 	mux.HandleFunc("GET /api/tasks/{id}", h.getTask)
