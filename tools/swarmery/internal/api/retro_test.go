@@ -769,9 +769,9 @@ func TestPatchRecommendation(t *testing.T) {
 			t.Fatalf("baseline %q: %v", base.String, err)
 		}
 		// The seeded rec targets "Toolproposed" — 0 denied events carry that
-		// tool name, so the snapshot is denied_count 0 with accepted_at set.
-		if b.Metric != "denied_count" || b.AcceptedAt == "" {
-			t.Errorf("baseline = %+v, want a denied_count snapshot with accepted_at", b)
+		// tool name, so the snapshot is denied_per_day 0 with accepted_at set.
+		if b.Metric != "denied_per_day" || b.AcceptedAt == "" {
+			t.Errorf("baseline = %+v, want a denied_per_day snapshot with accepted_at", b)
 		}
 	})
 
@@ -800,6 +800,57 @@ func TestPatchRecommendation(t *testing.T) {
 		doJSON(t, http.MethodPatch, url(424242), map[string]any{"status": "accepted"},
 			http.StatusNotFound)
 	})
+}
+
+// TestPatchRecommendationConflict drives the guarded-write 409 path: the
+// recPatchHook test seam mutates the row between the handler's status read
+// and its guarded UPDATE (a concurrent dismiss winning the race), so the
+// UPDATE affects 0 rows and the handler answers 409 with the current status.
+func TestPatchRecommendationConflict(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "conflict.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.Exec(`INSERT INTO recommendations
+		(id, rule, target_kind, target, title, detail, evidence, status, dedup_key, created_at, updated_at)
+		VALUES (1, 'R1', 'tool', 'Bash', 'Title', 'Detail', '{}', 'proposed', 'R1:Bash', ?, ?)`,
+		retroDay(t, 0), retroDay(t, 0)); err != nil {
+		t.Fatalf("seed rec: %v", err)
+	}
+
+	h := &Handler{DB: db}
+	h.recPatchHook = func() {
+		if _, err := db.Exec(`UPDATE recommendations SET status = 'dismissed' WHERE id = 1`); err != nil {
+			t.Fatalf("hook update: %v", err)
+		}
+	}
+	req := httptest.NewRequest(http.MethodPatch, "/api/retro/recommendations/1",
+		strings.NewReader(`{"status":"accepted"}`))
+	req.SetPathValue("id", "1")
+	rec := httptest.NewRecorder()
+	h.patchRecommendation(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d (%s), want 409", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Error  string `json:"error"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %q: %v", rec.Body.String(), err)
+	}
+	if body.Status != "dismissed" || body.Error == "" {
+		t.Errorf("body = %+v, want the current status (dismissed) and an error message", body)
+	}
+	var cur string
+	if err := db.QueryRow(`SELECT status FROM recommendations WHERE id = 1`).Scan(&cur); err != nil {
+		t.Fatal(err)
+	}
+	if cur != "dismissed" {
+		t.Errorf("db status = %q, want the concurrent dismissed kept", cur)
+	}
 }
 
 func TestRetroAdvise(t *testing.T) {

@@ -114,12 +114,22 @@ function ruleHue(rule: string): string {
   return RULE_HUES[rule] ?? 'border-line-strong text-ink-dim';
 }
 
-/** Lifecycle chip for in-flight statuses (accepted/adopted). */
-function RecStatusChip({ status }: { status: Recommendation['status'] }): JSX.Element | null {
+/** Lifecycle chip for in-flight statuses (accepted/adopted). The accepted
+ * copy is per target kind: agent/tool/process recs have a detectable adoption
+ * signal to wait for; error_group/config verify straight from accepted, so
+ * "waiting for adoption" would promise a step that never happens. */
+function RecStatusChip({
+  status,
+  kind,
+}: {
+  status: Recommendation['status'];
+  kind: Recommendation['target_kind'];
+}): JSX.Element | null {
   if (status === 'accepted') {
+    const adoptable = kind === 'agent' || kind === 'tool' || kind === 'process';
     return (
       <span className="rounded-[7px] border border-amber/40 bg-amber/10 px-1.5 py-[2px] font-mono text-[10px] text-amber">
-        accepted — waiting for adoption
+        {adoptable ? 'accepted — waiting for adoption' : 'accepted'}
       </span>
     );
   }
@@ -158,7 +168,7 @@ function RecCard({
       </div>
       <p className="mt-1.5 font-mono text-[10.5px] leading-relaxed text-ink-3">{rec.detail}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <RecStatusChip status={rec.status} />
+        <RecStatusChip status={rec.status} kind={rec.target_kind} />
         {rec.status === 'proposed' && (
           <button
             type="button"

@@ -6,10 +6,33 @@
 //
 // Run() evaluates the six rules (rules.go) over the trailing 14-day window,
 // upserts recommendations under the dedup contract, auto-detects adoption
-// (a NEW agent_versions row after acceptance) and verification (the rule's
-// metric improved ≥ VerifyImprovement vs the baseline snapshot ≥
-// VerifyAfterDays after adoption). The daemon calls Run at startup and on a
-// 24h ticker; POST /api/retro/advise calls it on demand.
+// and verification. The daemon calls Run at startup and on a 24h ticker;
+// POST /api/retro/advise calls it on demand.
+//
+// Per-kind lifecycle matrix (adoption signal + verification anchor):
+//
+//	kind        rules  adoption signal                  verification
+//	agent       R2 R4  the target agent's CURRENT       metric ≥ VerifyImprovement
+//	                   registry version was created     better over [adopted_at, now),
+//	                   after accepted_at                ≥ VerifyAfterDays after adoption
+//	tool        R1     an enabled approval_rules row    same, anchored on adopted_at
+//	                   covering the tool was created
+//	                   after accepted_at
+//	process     R5     the referenced retro_improve-    ≥ VerifyAfterDays after adoption
+//	                   ments row's status flipped to    with the status STILL done →
+//	                   done/closed/виконано             verified (no metric math)
+//	error_group R3     none detectable — the rec        metric ≥ VerifyImprovement
+//	config      R6     stays accepted                   better over [accepted_at, now),
+//	                                                    ≥ VerifyAfterDays after
+//	                                                    acceptance (skips adopted)
+//
+// Verification never fires on absence of data: each metric carries an
+// activity floor (R1 ≥1 tool call, R2 ≥R2MinRuns runs, R4 ≥R4MinRows ledger
+// rows, R6 >0 input tokens); a post window under the floor records the
+// "insufficient post-adoption traffic" evidence note and the status stays
+// put. Count metrics (R1 denied, R3 distinct error days) are normalized to
+// per-day rates so baseline and post windows of different lengths compare
+// fairly; ratio metrics (R2, R4, R6) need no normalization.
 //
 // Dedup contract (dedup_key = rule + ':' + target, numeric ':2'/':3' suffix
 // only for re-raising after verified):
@@ -25,9 +48,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 )
 
 // Lifecycle thresholds.
@@ -62,13 +88,31 @@ func (s Stats) String() string {
 
 // baseline is the JSON snapshot stored in recommendations.baseline: written
 // at accept time (BaselineFor), extended with adopted_at when adoption is
-// detected, and compared against during verification.
+// detected, and compared against during verification. PerDay marks count
+// metrics normalized to per-day rates (R1, R3); WindowDays is the explicit
+// snapshot-window length the value was computed over.
 type baseline struct {
 	Metric     string  `json:"metric"`
 	Value      float64 `json:"value"`
+	PerDay     bool    `json:"per_day"`
+	WindowDays float64 `json:"window_days"`
 	Window     window  `json:"window"`
 	AcceptedAt string  `json:"accepted_at,omitempty"`
 	AdoptedAt  string  `json:"adopted_at,omitempty"`
+}
+
+// windowDaysOf is the window length in (fractional) days, 0 when unreadable.
+func windowDaysOf(win window) float64 {
+	from, err1 := time.Parse(time.RFC3339, win.From)
+	to, err2 := time.Parse(time.RFC3339, win.To)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	d := to.Sub(from).Hours() / 24
+	if d < 0 {
+		return 0
+	}
+	return d
 }
 
 // Run evaluates all rules over the WindowDays window ending now, upserts
@@ -133,10 +177,13 @@ func upsert(db *sql.DB, f finding, now time.Time, stats *Stats) error {
 	switch status {
 	case "proposed", "accepted", "adopted":
 		// Open recommendation → keep the numbers fresh, never touch status.
+		// The status predicate re-checks what we just read so a concurrent
+		// dismiss/verify between the SELECT and this UPDATE wins the race.
 		if _, err := db.Exec(`
 			UPDATE recommendations
 			   SET title = ?, detail = ?, evidence = ?, updated_at = ?
-			 WHERE id = ?`, f.title, f.detail, string(ev), nowS, id); err != nil {
+			 WHERE id = ? AND status IN ('proposed', 'accepted', 'adopted')`,
+			f.title, f.detail, string(ev), nowS, id); err != nil {
 			return err
 		}
 		stats.Updated++
@@ -185,11 +232,103 @@ func insertProposed(db *sql.DB, f finding, dedupKey, evidence, nowS string, stat
 
 // ── adoption detection ────────────────────────────────────────────────────
 
-// detectAdoption flips accepted → adopted for agent-kind recommendations
-// whose target agent's CURRENT registry version was created after the
-// acceptance (accepted_at inside the baseline JSON, written by the PATCH
-// handler) — i.e. someone actually changed the agent definition.
+// accRec is one accepted recommendation with its parsed baseline snapshot.
+type accRec struct {
+	id     int64
+	target string
+	b      baseline
+}
+
+// acceptedRecs loads the accepted recommendations of one target kind whose
+// baseline parses and carries accepted_at. Malformed baseline JSON is logged
+// (never silently swallowed); rows without a snapshot are skipped.
+func acceptedRecs(db *sql.DB, kind string) ([]accRec, error) {
+	rows, err := db.Query(`
+		SELECT id, target, baseline FROM recommendations
+		 WHERE status = 'accepted' AND target_kind = ?`, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []accRec
+	for rows.Next() {
+		var id int64
+		var target string
+		var base sql.NullString
+		if err := rows.Scan(&id, &target, &base); err != nil {
+			return nil, err
+		}
+		if !base.Valid {
+			continue // accepted without a baseline snapshot — nothing to compare
+		}
+		var b baseline
+		if err := json.Unmarshal([]byte(base.String), &b); err != nil {
+			log.Printf("warn: advisor: rec %d: malformed baseline json: %v", id, err)
+			continue
+		}
+		if b.AcceptedAt == "" {
+			continue
+		}
+		out = append(out, accRec{id: id, target: target, b: b})
+	}
+	return out, rows.Err()
+}
+
+// markAdopted is the guarded accepted → adopted transition. The prior-status
+// predicate makes a concurrent dismiss (or any other writer) win the race:
+// 0 rows affected → the flip silently does not happen.
+func markAdopted(db *sql.DB, id int64, baselineJSON, nowS string) (bool, error) {
+	res, err := db.Exec(`
+		UPDATE recommendations SET status = 'adopted', baseline = ?, updated_at = ?
+		 WHERE id = ? AND status = 'accepted'`, baselineJSON, nowS, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// adoptRec stamps adopted_at into the baseline and performs the guarded flip.
+func adoptRec(db *sql.DB, r accRec, now time.Time, stats *Stats) error {
+	b := r.b
+	b.AdoptedAt = fmtTS(now)
+	nb, err := json.Marshal(b)
+	if err != nil {
+		return err
+	}
+	flipped, err := markAdopted(db, r.id, string(nb), fmtTS(now))
+	if err != nil {
+		return err
+	}
+	if flipped {
+		stats.Adopted++
+	}
+	return nil
+}
+
+// detectAdoption advances accepted → adopted per the kind matrix at the top
+// of this file (agent: registry version, tool: covering approval rule,
+// process: improvement flipped to done). error_group/config have no
+// detectable adoption signal — verify() picks them up directly from accepted.
 func detectAdoption(db *sql.DB, now time.Time, stats *Stats) error {
+	if err := detectAgentAdoption(db, now, stats); err != nil {
+		return err
+	}
+	if err := detectToolAdoption(db, now, stats); err != nil {
+		return err
+	}
+	return detectProcessAdoption(db, now, stats)
+}
+
+// detectAgentAdoption flips accepted → adopted for agent-kind
+// recommendations whose target agent's CURRENT registry version was created
+// after the acceptance (accepted_at inside the baseline JSON, written by the
+// PATCH handler) — i.e. someone actually changed the agent definition.
+func detectAgentAdoption(db *sql.DB, now time.Time, stats *Stats) error {
+	recs, err := acceptedRecs(db, "agent")
+	if err != nil || len(recs) == 0 {
+		return err
+	}
 	// Current version created_at per folded registry agent name.
 	versions := map[string]time.Time{}
 	vrows, err := db.Query(`
@@ -217,87 +356,196 @@ func detectAdoption(db *sql.DB, now time.Time, stats *Stats) error {
 		return err
 	}
 
-	rows, err := db.Query(`
-		SELECT id, target, baseline FROM recommendations
-		 WHERE status = 'accepted' AND target_kind = 'agent'`)
+	for _, r := range recs {
+		acceptedAt, perr := time.Parse(time.RFC3339, r.b.AcceptedAt)
+		if perr != nil {
+			continue
+		}
+		ver, ok := versions[r.target]
+		if !ok || !ver.After(acceptedAt) {
+			continue
+		}
+		if err := adoptRec(db, r, now, stats); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// detectToolAdoption flips accepted → adopted for tool-kind (R1)
+// recommendations once an ENABLED approval rule covering the tool exists with
+// created_at after the acceptance — the friction the rec flagged was actually
+// addressed with a rule (whether via the one-click board button or manually).
+func detectToolAdoption(db *sql.DB, now time.Time, stats *Stats) error {
+	recs, err := acceptedRecs(db, "tool")
+	if err != nil || len(recs) == 0 {
+		return err
+	}
+	rows, err := db.Query(`SELECT tool_pattern, created_at FROM approval_rules WHERE enabled = 1`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	type adopt struct {
-		id       int64
-		baseline string
+	type ruleRow struct {
+		rp      approvals.RulePattern
+		created time.Time
 	}
-	var adopts []adopt
+	var rules []ruleRow
 	for rows.Next() {
-		var id int64
-		var target string
-		var base sql.NullString
-		if err := rows.Scan(&id, &target, &base); err != nil {
+		var pat, createdAt string
+		if err := rows.Scan(&pat, &createdAt); err != nil {
 			return err
 		}
-		if !base.Valid {
-			continue // accepted without a baseline snapshot — nothing to compare
+		rp, perr := approvals.ParseRulePattern(pat)
+		if perr != nil {
+			continue // unparseable rows are skipped, mirroring the evaluator
 		}
-		var b baseline
-		if err := json.Unmarshal([]byte(base.String), &b); err != nil || b.AcceptedAt == "" {
+		t, terr := time.Parse(time.RFC3339, createdAt)
+		if terr != nil {
 			continue
 		}
-		acceptedAt, err := time.Parse(time.RFC3339, b.AcceptedAt)
-		if err != nil {
-			continue
-		}
-		ver, ok := versions[target]
-		if !ok || !ver.After(acceptedAt) {
-			continue
-		}
-		b.AdoptedAt = fmtTS(now)
-		nb, err := json.Marshal(b)
-		if err != nil {
-			return err
-		}
-		adopts = append(adopts, adopt{id, string(nb)})
+		rules = append(rules, ruleRow{rp: rp, created: t})
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for _, a := range adopts {
-		if _, err := db.Exec(`
-			UPDATE recommendations SET status = 'adopted', baseline = ?, updated_at = ?
-			 WHERE id = ?`, a.baseline, fmtTS(now), a.id); err != nil {
+
+	for _, r := range recs {
+		acceptedAt, perr := time.Parse(time.RFC3339, r.b.AcceptedAt)
+		if perr != nil {
+			continue
+		}
+		// Coverage check reuses the ruleCoversTool twin over ONLY the rules
+		// created after acceptance — a pre-existing rule is not adoption.
+		var newer []approvals.RulePattern
+		for _, rr := range rules {
+			if rr.created.After(acceptedAt) {
+				newer = append(newer, rr.rp)
+			}
+		}
+		if !ruleCoversTool(newer, r.target) {
+			continue
+		}
+		if err := adoptRec(db, r, now, stats); err != nil {
 			return err
 		}
-		stats.Adopted++
+	}
+	return nil
+}
+
+// improvementDone reports whether the R5 target's retro_improvements row now
+// carries a done-family status (the adoption AND verification signal for
+// process recommendations). A vanished row is NOT done — absence of the row
+// is absence of evidence.
+func improvementDone(db *sql.DB, target string) (bool, error) {
+	idx := strings.LastIndexByte(target, '#')
+	if idx < 0 {
+		return false, fmt.Errorf("malformed R5 target %q", target)
+	}
+	rowid, err := strconv.ParseInt(target[idx+1:], 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("malformed R5 target %q: %w", target, err)
+	}
+	var status sql.NullString
+	err = db.QueryRow(`SELECT status FROM retro_improvements WHERE id = ?`, rowid).Scan(&status)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return r5DoneRe.MatchString(status.String), nil
+}
+
+// detectProcessAdoption flips accepted → adopted for process-kind (R5)
+// recommendations whose referenced improvement's status now matches the
+// done-family vocabulary — the stale improvement was actually acted on.
+func detectProcessAdoption(db *sql.DB, now time.Time, stats *Stats) error {
+	recs, err := acceptedRecs(db, "process")
+	if err != nil {
+		return err
+	}
+	for _, r := range recs {
+		done, derr := improvementDone(db, r.target)
+		if derr != nil {
+			return derr
+		}
+		if !done {
+			continue
+		}
+		if err := adoptRec(db, r, now, stats); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // ── verification ──────────────────────────────────────────────────────────
 
-// verify recomputes each adopted recommendation's metric over the
-// post-adoption window once VerifyAfterDays have passed: a relative
-// improvement ≥ VerifyImprovement vs the baseline value flips it to
-// verified; otherwise a note is recorded in the evidence JSON and it stays
-// adopted for the next Run.
+// markVerified is the guarded terminal transition. The status predicate
+// covers BOTH verification entry points of the kind matrix — adopted
+// (agent/tool/process) and accepted (error_group/config, which have no
+// adoption signal) — and makes a concurrent dismiss win the race.
+func markVerified(db *sql.DB, id int64, nowS string) (bool, error) {
+	res, err := db.Exec(`
+		UPDATE recommendations SET status = 'verified', updated_at = ?
+		 WHERE id = ? AND status IN ('adopted', 'accepted')`, nowS, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// noteEvidence folds a verification observation into the rec's evidence JSON
+// (note + optional post_adoption payload) without touching its status.
+func noteEvidence(db *sql.DB, id int64, evidence, note string, post map[string]any, nowS string) error {
+	var ev map[string]any
+	if err := json.Unmarshal([]byte(evidence), &ev); err != nil || ev == nil {
+		ev = map[string]any{}
+	}
+	ev["note"] = note
+	if post != nil {
+		ev["post_adoption"] = post
+	}
+	nb, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`UPDATE recommendations SET evidence = ?, updated_at = ? WHERE id = ?`,
+		string(nb), nowS, id)
+	return err
+}
+
+// verify advances the lifecycle's last hop per the kind matrix at the top of
+// this file. Metric kinds (agent/tool from adopted, error_group/config
+// directly from accepted) recompute the metric over the post window once
+// VerifyAfterDays have passed since their anchor: an improvement ≥
+// VerifyImprovement vs the baseline flips them to verified. Process (R5)
+// recommendations verify without metric math once the improvement stays done
+// VerifyAfterDays after adoption. A post window under the metric's activity
+// floor never verifies — absence of data is not improvement; it records the
+// "insufficient post-adoption traffic" note and the status stays put.
 func verify(db *sql.DB, now time.Time, stats *Stats) error {
 	rows, err := db.Query(`
-		SELECT id, rule, target, baseline, evidence FROM recommendations
-		 WHERE status = 'adopted'`)
+		SELECT id, rule, target_kind, target, baseline, evidence, status
+		  FROM recommendations
+		 WHERE (status = 'adopted' AND target_kind IN ('agent', 'tool', 'process'))
+		    OR (status = 'accepted' AND target_kind IN ('error_group', 'config'))`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	type rec struct {
-		id           int64
-		rule, target string
-		baseline     string
-		evidence     string
+		id                               int64
+		rule, targetKind, target, status string
+		baseline, evidence               string
 	}
 	var recs []rec
 	for rows.Next() {
 		var r rec
 		var base sql.NullString
-		if err := rows.Scan(&r.id, &r.rule, &r.target, &base, &r.evidence); err != nil {
+		if err := rows.Scan(&r.id, &r.rule, &r.targetKind, &r.target, &base, &r.evidence, &r.status); err != nil {
 			return err
 		}
 		if !base.Valid {
@@ -310,43 +558,76 @@ func verify(db *sql.DB, now time.Time, stats *Stats) error {
 		return err
 	}
 
+	nowS := fmtTS(now)
 	for _, r := range recs {
 		var b baseline
-		if err := json.Unmarshal([]byte(r.baseline), &b); err != nil || b.AdoptedAt == "" {
+		if err := json.Unmarshal([]byte(r.baseline), &b); err != nil {
+			log.Printf("warn: advisor: rec %d: malformed baseline json: %v", r.id, err)
 			continue
 		}
-		adoptedAt, err := time.Parse(time.RFC3339, b.AdoptedAt)
-		if err != nil || now.Sub(adoptedAt) < VerifyAfterDays*24*time.Hour {
+		// Anchor: adopted_at for adoption-capable kinds, accepted_at for the
+		// direct-verify kinds (error_group/config skip adopted entirely).
+		anchor := b.AdoptedAt
+		if r.status == "accepted" {
+			anchor = b.AcceptedAt
+		}
+		if anchor == "" {
 			continue
 		}
-		post := window{From: fmtTS(adoptedAt), To: fmtTS(now)}
-		_, cur, err := metricValue(db, r.rule, r.target, post)
-		if err != nil {
-			return err
+		anchorT, perr := time.Parse(time.RFC3339, anchor)
+		if perr != nil || now.Sub(anchorT) < VerifyAfterDays*24*time.Hour {
+			continue
 		}
-		if relImprovement(r.rule, b.Value, cur) >= VerifyImprovement {
-			if _, err := db.Exec(`
-				UPDATE recommendations SET status = 'verified', updated_at = ?
-				 WHERE id = ?`, fmtTS(now), r.id); err != nil {
+
+		if r.targetKind == "process" {
+			// R5: no metric math — verified iff the improvement is STILL done.
+			done, derr := improvementDone(db, r.target)
+			if derr != nil {
+				return derr
+			}
+			if !done {
+				continue // re-opened — stay adopted until it settles
+			}
+			if err := noteEvidence(db, r.id, r.evidence, "improvement marked done", nil, nowS); err != nil {
 				return err
 			}
-			stats.Verified++
+			flipped, verr := markVerified(db, r.id, nowS)
+			if verr != nil {
+				return verr
+			}
+			if flipped {
+				stats.Verified++
+			}
 			continue
 		}
-		// Not there yet — record the observation, stay adopted.
-		var ev map[string]any
-		if err := json.Unmarshal([]byte(r.evidence), &ev); err != nil || ev == nil {
-			ev = map[string]any{}
-		}
-		ev["note"] = "no measurable improvement yet"
-		ev["post_adoption"] = map[string]any{"window": post, "metric": b.Metric, "value": cur}
-		nb, err := json.Marshal(ev)
+
+		post := window{From: fmtTS(anchorT), To: nowS}
+		_, cur, ok, err := metricValue(db, r.rule, r.target, post)
 		if err != nil {
 			return err
 		}
-		if _, err := db.Exec(`
-			UPDATE recommendations SET evidence = ?, updated_at = ? WHERE id = ?`,
-			string(nb), fmtTS(now), r.id); err != nil {
+		if !ok {
+			// I1: the post window lacks the metric's activity floor — never
+			// verify on absence of data; record the observation and stay put.
+			if err := noteEvidence(db, r.id, r.evidence, "insufficient post-adoption traffic",
+				map[string]any{"window": post, "metric": b.Metric}, nowS); err != nil {
+				return err
+			}
+			continue
+		}
+		if relImprovement(r.rule, b.Value, cur) >= VerifyImprovement {
+			flipped, verr := markVerified(db, r.id, nowS)
+			if verr != nil {
+				return verr
+			}
+			if flipped {
+				stats.Verified++
+			}
+			continue
+		}
+		// Not there yet — record the observation, status untouched.
+		if err := noteEvidence(db, r.id, r.evidence, "no measurable improvement yet",
+			map[string]any{"window": post, "metric": b.Metric, "value": cur}, nowS); err != nil {
 			return err
 		}
 	}
@@ -371,18 +652,27 @@ func relImprovement(rule string, base, cur float64) float64 {
 
 // ── metric snapshots ──────────────────────────────────────────────────────
 
+// perDayRule reports whether the rule's metric is a per-day rate — count
+// metrics normalized by window length so windows of different lengths
+// compare fairly. Ratio metrics (R2/R4/R6) and the R5 flag are not.
+func perDayRule(rule string) bool { return rule == "R1" || rule == "R3" }
+
 // BaselineFor computes the rule's metric snapshot over the trailing
 // WindowDays window ending now and returns the baseline JSON (metric name +
-// value + window + accepted_at=now). The PATCH handler calls this when a
-// recommendation flips to accepted; adoption detection later compares
-// agent-version timestamps against accepted_at.
+// value + per_day/window_days + window + accepted_at=now). The PATCH handler
+// calls this when a recommendation flips to accepted; adoption detection
+// later compares adoption signals against accepted_at.
 func BaselineFor(db *sql.DB, rule, target string, now time.Time) (string, error) {
 	win := window{From: fmtTS(now.AddDate(0, 0, -WindowDays)), To: fmtTS(now)}
-	name, value, err := metricValue(db, rule, target, win)
+	name, value, _, err := metricValue(db, rule, target, win)
 	if err != nil {
 		return "", err
 	}
-	b := baseline{Metric: name, Value: value, Window: win, AcceptedAt: fmtTS(now)}
+	b := baseline{
+		Metric: name, Value: value,
+		PerDay: perDayRule(rule), WindowDays: windowDaysOf(win),
+		Window: win, AcceptedAt: fmtTS(now),
+	}
 	j, err := json.Marshal(b)
 	if err != nil {
 		return "", err
@@ -392,57 +682,71 @@ func BaselineFor(db *sql.DB, rule, target string, now time.Time) (string, error)
 
 // metricValue computes one rule's scalar metric for a target over a window —
 // shared by BaselineFor (accept-time snapshot) and verify (post-adoption
-// recompute), so both sides of the comparison use identical math.
-func metricValue(db *sql.DB, rule, target string, win window) (name string, value float64, err error) {
+// recompute), so both sides of the comparison use identical math. Count
+// metrics (R1, R3) are normalized to per-day rates. ok=false means the
+// window lacks the rule's activity floor (R1: no tool calls at all, R2: runs
+// < R2MinRuns, R4: ledger rows < R4MinRows, R6: no input tokens) — the value
+// then carries no signal and verification must not act on it.
+func metricValue(db *sql.DB, rule, target string, win window) (name string, value float64, ok bool, err error) {
+	wd := windowDaysOf(win)
 	switch rule {
 	case "R1":
-		var n int64
+		var calls, denied int64
 		err = db.QueryRow(`
-			SELECT COUNT(*)
+			SELECT COUNT(*),
+			       COALESCE(SUM(CASE WHEN e.status = 'denied' THEN 1 ELSE 0 END), 0)
 			  FROM events e
 			  JOIN sessions s ON s.id = e.session_id
 			  JOIN projects p ON p.id = s.project_id
-			 WHERE e.tool_name = ? AND e.status = 'denied'
+			 WHERE e.tool_name = ?
 			   AND e.type IN ('tool_call', 'skill_use', 'subagent_start')
 			   AND e.ts >= ? AND e.ts < ? AND p.archived = 0`,
-			target, win.From, win.To).Scan(&n)
-		return "denied_count", float64(n), err
+			target, win.From, win.To).Scan(&calls, &denied)
+		if err != nil || calls < 1 || wd <= 0 {
+			return "denied_per_day", 0, false, err
+		}
+		return "denied_per_day", float64(denied) / wd, true, nil
 	case "R2":
 		acc, aerr := agentErrorWindow(db, win)
 		if aerr != nil {
-			return "", 0, aerr
+			return "error_rate", 0, false, aerr
 		}
-		if a, ok := acc[target]; ok && a.runs > 0 {
-			return "error_rate", float64(a.errors) / float64(a.runs), nil
+		if a, hit := acc[target]; hit && a.runs >= R2MinRuns {
+			return "error_rate", float64(a.errors) / float64(a.runs), true, nil
 		}
-		return "error_rate", 0, nil
+		return "error_rate", 0, false, nil
 	case "R3":
 		days, derr := errGroupDays(db, target, win)
-		return "distinct_error_days", float64(days), derr
+		if derr != nil || wd <= 0 {
+			return "error_days_per_day", 0, false, derr
+		}
+		// No activity floor here on purpose: for a recurring-error group the
+		// error simply no longer occurring IS the improvement.
+		return "error_days_per_day", float64(days) / wd, true, nil
 	case "R4":
 		shares, serr := delegationShares(db, win)
 		if serr != nil {
-			return "", 0, serr
+			return "redispatch_share", 0, false, serr
 		}
-		if c, ok := shares[target]; ok && c[1] > 0 {
-			return "redispatch_share", float64(c[0]) / float64(c[1]), nil
+		if c, hit := shares[target]; hit && c[1] >= R4MinRows {
+			return "redispatch_share", float64(c[0]) / float64(c[1]), true, nil
 		}
-		return "redispatch_share", 0, nil
+		return "redispatch_share", 0, false, nil
 	case "R5":
 		open, oerr := improvementStillOpen(db, target)
 		if oerr != nil {
-			return "", 0, oerr
+			return "open_stale_improvements", 0, false, oerr
 		}
 		v := 0.0
 		if open {
 			v = 1
 		}
-		return "open_stale_improvements", v, nil
+		return "open_stale_improvements", v, true, nil
 	case "R6":
-		rate, _, rerr := cacheHitRate(db, win)
-		return "cache_hit_rate", rate, rerr
+		rate, hasTraffic, rerr := cacheHitRate(db, win)
+		return "cache_hit_rate", rate, hasTraffic && rerr == nil, rerr
 	default:
-		return "", 0, fmt.Errorf("unknown rule %q", rule)
+		return "", 0, false, fmt.Errorf("unknown rule %q", rule)
 	}
 }
 

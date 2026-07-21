@@ -266,6 +266,8 @@ var redispatchRe = regexp.MustCompile(`(?i)(re-?dispatch|redo|\bfail(ed|ure)?\b|
 const redispatchVerdictMaxRunes = 40
 
 // isRedispatch reports whether a ledger verdict cell records a re-dispatch.
+// twin: internal/advisor/rules.go — keep in lockstep (incl. redispatchRe and
+// redispatchVerdictMaxRunes above).
 func isRedispatch(verdict string) bool {
 	v := strings.TrimSpace(verdict)
 	if len([]rune(v)) > redispatchVerdictMaxRunes {
@@ -1002,25 +1004,47 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	nowS := now.UTC().Format("2006-01-02T15:04:05.000Z")
+	if h.recPatchHook != nil {
+		h.recPatchHook() // test seam: mutate between the read and the guarded write
+	}
+	// Guarded write: the status predicate re-checks the status we validated
+	// the transition against, so a concurrent writer (advisor Run flipping to
+	// adopted/verified, another PATCH) can't be silently overwritten.
+	var res sql.Result
 	if body.Status == "accepted" {
-		base, err := advisor.BaselineFor(h.DB, rule, target, now)
-		if err != nil {
-			writeErr(w, err)
+		base, berr := advisor.BaselineFor(h.DB, rule, target, now)
+		if berr != nil {
+			writeErr(w, berr)
 			return
 		}
-		_, err = h.DB.Exec(`UPDATE recommendations
-			SET status = 'accepted', baseline = ?, updated_at = ? WHERE id = ?`,
-			base, nowS, id)
-		if err != nil {
-			writeErr(w, err)
-			return
-		}
+		res, err = h.DB.Exec(`UPDATE recommendations
+			SET status = 'accepted', baseline = ?, updated_at = ?
+			WHERE id = ? AND status = ?`, base, nowS, id, status)
 	} else {
-		if _, err := h.DB.Exec(`UPDATE recommendations
-			SET status = 'dismissed', updated_at = ? WHERE id = ?`, nowS, id); err != nil {
-			writeErr(w, err)
+		res, err = h.DB.Exec(`UPDATE recommendations
+			SET status = 'dismissed', updated_at = ?
+			WHERE id = ? AND status = ?`, nowS, id, status)
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if n, aerr := res.RowsAffected(); aerr != nil {
+		writeErr(w, aerr)
+		return
+	} else if n == 0 {
+		// Lost the race — surface the CURRENT status so the client can resync.
+		var cur string
+		if rerr := h.DB.QueryRow(
+			`SELECT status FROM recommendations WHERE id = ?`, id).Scan(&cur); rerr != nil {
+			writeErr(w, rerr)
 			return
 		}
+		writeJSONStatus(w, http.StatusConflict, map[string]string{
+			"error":  "status changed concurrently: now " + cur,
+			"status": cur,
+		})
+		return
 	}
 
 	var d recommendationDTO

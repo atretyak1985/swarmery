@@ -43,6 +43,12 @@ const (
 	R2MinRuns = 10
 	// R2MedianFactor: flag an agent when error_rate > factor × median.
 	R2MedianFactor = 2.0
+	// R2MinErrors: absolute error floor — an agent with fewer errors than this
+	// in the window is never flagged, however badly its rate beats the median
+	// test (1–2 errors over 10 runs is statistical noise, not a pattern). The
+	// floor applies to CANDIDATES only; the median is still computed over all
+	// agents with ≥ R2MinRuns runs so it stays representative.
+	R2MinErrors = 3
 	// R3MinDays: an error group must recur on at least this many distinct
 	// local days.
 	R3MinDays = 3
@@ -177,11 +183,15 @@ func capRunes(s string, n int) string {
 }
 
 // localDay converts a stored UTC timestamp to its local YYYY-MM-DD day.
-// Twin of internal/api/analytics.go localDay.
+// Twin of internal/api/analytics.go localDay — keep in lockstep.
 func localDay(ts string) (string, bool) {
 	t, err := time.Parse(time.RFC3339, ts)
 	if err != nil {
-		return "", false
+		// zone-suffix-free bound form ("2006-01-02T15:04:05").
+		t, err = time.Parse("2006-01-02T15:04:05", ts)
+		if err != nil {
+			return "", false
+		}
 	}
 	return t.Local().Format("2006-01-02"), true
 }
@@ -397,9 +407,9 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 	return acc, erows.Err()
 }
 
-// r2AgentErrorRate flags agents with ≥ R2MinRuns runs whose error rate
-// exceeds R2MedianFactor × the median error rate among all agents with
-// ≥ R2MinRuns runs in the window.
+// r2AgentErrorRate flags agents with ≥ R2MinRuns runs AND ≥ R2MinErrors
+// errors whose error rate exceeds R2MedianFactor × the median error rate
+// among all agents with ≥ R2MinRuns runs in the window.
 func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 	acc, err := agentErrorWindow(db, win)
 	if err != nil {
@@ -431,7 +441,7 @@ func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 
 	var out []finding
 	for _, c := range cands {
-		if c.rate <= R2MedianFactor*median {
+		if c.rate <= R2MedianFactor*median || c.stats.errors < R2MinErrors {
 			continue
 		}
 		topKey, topCount := "", int64(0)

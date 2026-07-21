@@ -9,7 +9,7 @@
 // a LIVE amber pending-count badge (REST resync + WS permission_requested/
 // permission_resolved over the shared connection).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { WSMessage } from './api/types';
 import { fetchApprovals, fetchDocs, fetchRecommendations, fetchStatsOverview, MOCK } from './api';
@@ -165,13 +165,24 @@ function AppShell(): JSX.Element {
 
   // Retro nav badge: count of proposed advisor recommendations — one-shot
   // fetch on mount, same pattern as the sessions badge (hidden when the
-  // endpoint is unavailable).
+  // endpoint is unavailable), plus a refetch whenever navigation crosses the
+  // /retro boundary so Accept/Dismiss/Analyze on the page refresh the badge
+  // on the way out (and a stale count refreshes on the way in).
   const [proposedRecs, setProposedRecs] = useState<number | null>(null);
-  useEffect(() => {
+  const syncProposed = useCallback((): void => {
     fetchRecommendations('proposed')
       .then((r) => setProposedRecs(r.recommendations.length))
       .catch(() => setProposedRecs(null));
   }, []);
+  useEffect(syncProposed, [syncProposed]); // one-shot mount fetch
+  const { pathname } = useLocation();
+  const onRetro = pathname.startsWith('/retro');
+  const prevOnRetro = useRef(onRetro);
+  useEffect(() => {
+    if (prevOnRetro.current === onRetro) return;
+    prevOnRetro.current = onRetro;
+    syncProposed();
+  }, [onRetro, syncProposed]);
 
   // System nav badge: promotion + stale-override insight count, fetched on
   // mount and refetched on WS system_item_updated (hidden when the summary is

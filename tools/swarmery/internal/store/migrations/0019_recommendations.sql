@@ -7,11 +7,28 @@
 --   * accepted   — user intent (PATCH); baseline holds the metric snapshot
 --                  (+ accepted_at) that verification compares against
 --   * dismissed  — suppressed from re-proposal for 30 days
---   * adopted    — auto-detected: the target agent's registry version changed
---                  after acceptance (agents.current_version_id → agent_versions)
---   * verified   — the rule's metric improved ≥ 20% vs the baseline snapshot
---                  ≥ 7 days after adoption; terminal (a re-fire inserts a fresh
---                  row with a numeric dedup_key suffix)
+--   * adopted    — auto-detected, per target_kind:
+--                    agent (R2/R4)  — the target agent's registry version
+--                                     changed after acceptance
+--                                     (agents.current_version_id → agent_versions)
+--                    tool (R1)      — an enabled approval_rules row covering
+--                                     the tool was created after acceptance
+--                    process (R5)   — the referenced retro_improvements row's
+--                                     status flipped to done/closed/виконано
+--                    error_group (R3) / config (R6) — NO detectable adoption
+--                                     signal; these never reach adopted
+--   * verified   — terminal (a re-fire inserts a fresh row with a numeric
+--                  dedup_key suffix), reached per target_kind:
+--                    agent/tool     — metric ≥ 20% better than the baseline
+--                                     ≥ 7 days after adoption
+--                    process        — improvement still done ≥ 7 days after
+--                                     adoption (no metric math)
+--                    error_group/config — metric ≥ 20% better ≥ 7 days after
+--                                     ACCEPTANCE (verifies straight from
+--                                     accepted, skipping adopted)
+--                  a post window under the metric's activity floor never
+--                  verifies (absence of data is not improvement); count
+--                  metrics are per-day rates so unequal windows compare fairly
 
 CREATE TABLE recommendations (
   id          INTEGER PRIMARY KEY,
