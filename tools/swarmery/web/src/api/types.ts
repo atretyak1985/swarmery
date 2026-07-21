@@ -654,6 +654,48 @@ export interface RetroTasksResp {
   tasks: RetroTaskRow[];
 }
 
+// --- Retro phase 3 — advisor recommendations ---------------------------------
+
+/** recommendations.status lifecycle: proposed → accepted|dismissed → adopted → verified. */
+export type RecommendationStatus =
+  | 'proposed'
+  | 'accepted'
+  | 'dismissed'
+  | 'adopted'
+  | 'verified';
+
+/** recommendations.target_kind — what the recommendation is about. */
+export type RecommendationTargetKind = 'tool' | 'agent' | 'error_group' | 'process' | 'config';
+
+/** One advisor recommendation (deterministic rule engine, R1..R6). */
+export interface Recommendation {
+  id: number;
+  /** 'R1'..'R6'. */
+  rule: string;
+  target_kind: RecommendationTargetKind;
+  target: string;
+  title: string;
+  /** Human-readable rationale with the numbers baked in. */
+  detail: string;
+  /** Raw evidence JSON passthrough: {window:{from,to}, counts, session_ids[], …}. */
+  evidence: unknown;
+  status: RecommendationStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecommendationsResp {
+  recommendations: Recommendation[];
+}
+
+/** POST /api/retro/advise outcome tally. */
+export interface AdviseStats {
+  proposed: number;
+  updated: number;
+  adopted: number;
+  verified: number;
+}
+
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
 
 /** permission_requests.status */

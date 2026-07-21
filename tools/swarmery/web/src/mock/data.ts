@@ -24,12 +24,15 @@ import type {
   Turn,
 } from '../api/types';
 import type {
+  AdviseStats,
   AnalyticsDimension,
   AnalyticsMetric,
   BreakdownResp,
   DurationsResp,
   ErrorsResp,
   MatrixResp,
+  Recommendation,
+  RecommendationsResp,
   RetroAgentsResp,
   RetroFrictionResp,
   RetroLessonsResp,
@@ -1295,6 +1298,36 @@ export const mockApi = {
   async retroTasks(): Promise<RetroTasksResp> {
     await delay(120);
     return { tasks: [] };
+  },
+
+  // retro phase 3 — advisor recommendations (empty shell, like the retro mocks)
+  async retroRecommendations(): Promise<RecommendationsResp> {
+    await delay(120);
+    return { recommendations: [] };
+  },
+
+  async patchRecommendation(
+    id: number,
+    status: 'accepted' | 'dismissed',
+  ): Promise<Recommendation> {
+    await delay(80);
+    return {
+      id,
+      rule: 'R1',
+      target_kind: 'tool',
+      target: 'Bash',
+      title: 'Add auto-approve rule for Bash',
+      detail: 'mock recommendation',
+      evidence: {},
+      status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  },
+
+  async advise(): Promise<AdviseStats> {
+    await delay(150);
+    return { proposed: 0, updated: 0, adopted: 0, verified: 0 };
   },
 
   async docs(): Promise<DocMeta[]> {
