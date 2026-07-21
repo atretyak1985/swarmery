@@ -111,6 +111,26 @@ func retroAgentsServer(t *testing.T) (*httptest.Server, *sql.DB) {
 		(3, 5,    ?, 'subagent_stop', 'Agent', 'error', '{"status":"failed"}', 'e4')`,
 		today, today, today, day10)
 
+	// Phase-2 chips. Ledger: tech-lead has 1 OK + 1 RE-DISPATCH on an in-range
+	// task → rate 0.5; the out-of-range task's redispatch row must NOT count.
+	// Evals: two runs for the tech-lead registry agent — the NEWEST (3/1) wins.
+	mustExec(`INSERT INTO tasks (id, project_id, title, prompt, status, created_at, started_at, source, external_id) VALUES
+		(1, 1, 'In-range task',  'goal', 'done', ?, ?, 'workspace', 'task-in-range'),
+		(2, 1, 'Ancient task',   'goal', 'done', '1999-06-01T00:00:00Z', '1999-06-01T00:00:00Z', 'workspace', 'task-ancient')`,
+		today, today)
+	mustExec(`INSERT INTO task_delegations (task_id, seq, agent, verdict) VALUES
+		(1, 1, 'tech-lead', 'OK'),
+		(1, 2, 'tech-lead', 'RE-DISPATCH'),
+		(2, 1, 'tech-lead', 'RE-DISPATCH')`)
+	mustExec(`INSERT INTO agents (id, name, scope, file_path, current_version_id) VALUES
+		(1, 'tech-lead', 'global', '/agents/tech-lead.md', NULL)`)
+	mustExec(`INSERT INTO eval_suites (id, agent_id, name, created_at) VALUES (1, 1, 'routing', ?)`, today)
+	mustExec(`INSERT INTO agent_versions (id, agent_id, content_hash, content, created_at) VALUES
+		(1, 1, 'h1', 'v1', ?)`, today)
+	mustExec(`INSERT INTO eval_runs (suite_id, agent_version_id, started_at, finished_at, passed, failed) VALUES
+		(1, 1, '2026-07-01T00:00:00Z', '2026-07-01T00:05:00Z', 1, 3),
+		(1, 1, '2026-07-10T00:00:00Z', '2026-07-10T00:05:00Z', 3, 1)`)
+
 	h, err := NewServer(db, false)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -175,6 +195,22 @@ func TestRetroAgents(t *testing.T) {
 		}
 		if dbg.CostUSD != 0 || dbg.AvgMs != nil || dbg.P95Ms != nil || dbg.SuccessRate != nil {
 			t.Errorf("debugger = %+v, want no cost/durations/rate", dbg)
+		}
+	})
+
+	t.Run("re-dispatch rate and eval chip", func(t *testing.T) {
+		tl := out.Agents[0]
+		// 2 in-range ledger rows, 1 redispatch — the ancient task's row is out.
+		if tl.ReDispatchRate == nil || !almostEq(*tl.ReDispatchRate, 0.5) {
+			t.Errorf("tech-lead re_dispatch_rate = %v, want 0.5", tl.ReDispatchRate)
+		}
+		// Latest run wins (3/1, started 07-10) over the older 1/3.
+		if tl.Eval == nil || tl.Eval.Passed != 3 || tl.Eval.Failed != 1 {
+			t.Errorf("tech-lead eval = %+v, want passed 3 failed 1 (latest run)", tl.Eval)
+		}
+		dbg := out.Agents[1]
+		if dbg.ReDispatchRate != nil || dbg.Eval != nil {
+			t.Errorf("debugger = rate %v eval %+v, want nil/nil (no ledger rows, no runs)", dbg.ReDispatchRate, dbg.Eval)
 		}
 	})
 
@@ -425,5 +461,137 @@ func TestRetroEmptyRange(t *testing.T) {
 		if !strings.Contains(friction, want) {
 			t.Errorf("friction body = %s, want %s", friction, want)
 		}
+	}
+
+	lessons := fetchBody("/api/retro/lessons?" + past)
+	if !strings.Contains(lessons, `"lessons":[]`) {
+		t.Errorf("lessons body = %s, want \"lessons\":[]", lessons)
+	}
+	tasks := fetchBody("/api/retro/tasks?" + past)
+	if !strings.Contains(tasks, `"tasks":[]`) {
+		t.Errorf("tasks body = %s, want \"tasks\":[]", tasks)
+	}
+}
+
+// retroArtifactsServer seeds the phase-2 artifact tables directly (the parse
+// path is covered in internal/wsingest): two in-range tasks — one with a full
+// retro + loops + ledger, one with loops only — plus an out-of-range task
+// whose lesson/loops must never surface.
+func retroArtifactsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "artifacts.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	today := retroDay(t, 0)
+	day1 := retroDay(t, 1)
+	day30 := retroDay(t, 30)
+
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+
+	mustExec(`INSERT INTO projects (id, path, slug, name, first_seen) VALUES
+		(1, '/work/alpha', '-work-alpha', 'Alpha', ?)`, day30)
+	mustExec(`INSERT INTO tasks (id, project_id, title, prompt, status, created_at, started_at, source, external_id) VALUES
+		(1, 1, 'Ship retro phase 2', 'goal', 'done',    ?, ?, 'workspace', 'task-new'),
+		(2, 1, 'Loops-only task',    'goal', 'running', ?, ?, 'workspace', 'task-loops'),
+		(3, 1, 'No artifacts',       'goal', 'running', ?, ?, 'workspace', 'task-bare'),
+		(4, 1, 'Ancient task',       'goal', 'done',    ?, ?, 'workspace', 'task-old')`,
+		today, today, day1, day1, today, today, day30, day30)
+
+	mustExec(`INSERT INTO task_retros (id, task_id, estimated_hours, actual_hours, variance_pct, ingested_at) VALUES
+		(1, 1, 6, 8, 33, ?),
+		(2, 4, 1, 1, 0,  ?)`, today, today)
+	mustExec(`INSERT INTO retro_lessons (retro_id, seq, title, body, action) VALUES
+		(1, 1, 'Pin fixture mtimes', 'git drops mtimes', 'add pinMtime helpers'),
+		(1, 2, 'Check templates early', NULL, NULL),
+		(2, 1, 'Ancient lesson', NULL, NULL)`)
+	mustExec(`INSERT INTO task_loops (task_id, loop_n, failed, brief_delta) VALUES
+		(1, 1, 'go test', 'fix fixture'),
+		(1, 2, 'tsc',     'extend types'),
+		(2, 1, 'lint',    'imports')`)
+	mustExec(`INSERT INTO task_delegations (task_id, seq, agent, verdict) VALUES
+		(1, 1, 'context-gatherer',     'OK'),
+		(1, 2, 'implementation-agent', 'RE-DISPATCH'),
+		(1, 3, 'implementation-agent', 'ok'),
+		(4, 1, 'implementation-agent', 'RE-DISPATCH')`)
+
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestRetroLessons(t *testing.T) {
+	srv := retroArtifactsServer(t)
+	var out retroLessonsDTO
+	getJSON(t, srv.URL+"/api/retro/lessons?"+retroRange(7), &out)
+
+	if len(out.Lessons) != 2 {
+		t.Fatalf("lessons = %+v, want 2 (the ancient task is out of range)", out.Lessons)
+	}
+	l1 := out.Lessons[0]
+	if l1.TaskExternalID != "task-new" || l1.Title != "Pin fixture mtimes" {
+		t.Errorf("lesson[0] = %+v, want task-new / 'Pin fixture mtimes' (seq order)", l1)
+	}
+	if l1.Action == nil || *l1.Action != "add pinMtime helpers" ||
+		l1.Body == nil || *l1.Body != "git drops mtimes" {
+		t.Errorf("lesson[0] action/body = %v/%v, want the seeded values", l1.Action, l1.Body)
+	}
+	if l1.Date == "" || l1.TaskTitle != "Ship retro phase 2" {
+		t.Errorf("lesson[0] date/title = %q/%q, want a YYYY-MM-DD date + the task title", l1.Date, l1.TaskTitle)
+	}
+	l2 := out.Lessons[1]
+	if l2.Title != "Check templates early" || l2.Action != nil || l2.Body != nil {
+		t.Errorf("lesson[1] = %+v, want the action-less lesson with nil action/body", l2)
+	}
+}
+
+func TestRetroTasks(t *testing.T) {
+	srv := retroArtifactsServer(t)
+	var out retroTasksDTO
+	getJSON(t, srv.URL+"/api/retro/tasks?"+retroRange(7), &out)
+
+	// task-bare has no artifacts, task-old is out of range → 2 rows,
+	// newest task first.
+	if len(out.Tasks) != 2 {
+		t.Fatalf("tasks = %+v, want 2", out.Tasks)
+	}
+	full := out.Tasks[0]
+	if full.ExternalID != "task-new" {
+		t.Fatalf("tasks[0] = %+v, want task-new (newest first)", full)
+	}
+	if full.EstimatedHours == nil || *full.EstimatedHours != 6 ||
+		full.ActualHours == nil || *full.ActualHours != 8 ||
+		full.VariancePct == nil || *full.VariancePct != 33 {
+		t.Errorf("task-new hours = %+v, want 6/8/33", full)
+	}
+	if full.Loops != 2 || full.Delegations != 3 {
+		t.Errorf("task-new loops/delegations = %d/%d, want 2/3", full.Loops, full.Delegations)
+	}
+	// 'OK' + 'ok' accept, 'RE-DISPATCH' redispatches.
+	if full.Verdicts.OK != 2 || full.Verdicts.Redispatch != 1 {
+		t.Errorf("task-new verdicts = %+v, want ok 2 redispatch 1", full.Verdicts)
+	}
+
+	loopsOnly := out.Tasks[1]
+	if loopsOnly.ExternalID != "task-loops" {
+		t.Fatalf("tasks[1] = %+v, want task-loops", loopsOnly)
+	}
+	if loopsOnly.EstimatedHours != nil || loopsOnly.ActualHours != nil || loopsOnly.VariancePct != nil {
+		t.Errorf("task-loops hours = %+v, want all nil (no retro doc)", loopsOnly)
+	}
+	if loopsOnly.Loops != 1 || loopsOnly.Delegations != 0 ||
+		loopsOnly.Verdicts.OK != 0 || loopsOnly.Verdicts.Redispatch != 0 {
+		t.Errorf("task-loops = %+v, want loops 1 and zero delegations/verdicts", loopsOnly)
 	}
 }

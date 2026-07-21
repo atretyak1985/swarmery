@@ -9,6 +9,14 @@ package api
 //   - /api/retro/agents   — per-agent runs/cost/errors/durations + prev window
 //   - /api/retro/friction — denied tools, top error groups, approval waits
 //
+// Phase 2 adds the workspace-artifact surfaces (migration 0017, parsed by
+// internal/wsingest/artifacts.go) and the evals importer (internal/evals):
+//
+//   - /api/retro/lessons  — the retro_lessons feed joined through tasks
+//   - /api/retro/tasks    — estimation accuracy + loop/delegation counts
+//   - retroAgents rows gain re_dispatch_rate (task_delegations ledger) and
+//     eval (latest eval_runs row for the registry agent)
+//
 // Aggregation grains deliberately reuse the analytics helpers so numbers agree
 // across pages: runs come from subagent_start events folded by normAgentType
 // (breakdownRuns), $/tokens from turns folded by agentKey (agentTurnTotals),
@@ -19,7 +27,9 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
@@ -40,6 +50,14 @@ type retroPrevDTO struct {
 	CostUSD   float64 `json:"cost_usd"`
 }
 
+// retroEvalDTO is the latest imported eval run for a registry agent
+// (swarmery evals-import).
+type retroEvalDTO struct {
+	Passed     int64  `json:"passed"`
+	Failed     int64  `json:"failed"`
+	FinishedAt string `json:"finished_at"`
+}
+
 type retroAgentDTO struct {
 	Agent     string  `json:"agent"`
 	Runs      int64   `json:"runs"`
@@ -53,8 +71,13 @@ type retroAgentDTO struct {
 	P95Ms *int64   `json:"p95_ms"`
 	// success/(success+fail) over judged sessions (agentOutcomeRates grain);
 	// nil when the agent has no judged session in range.
-	SuccessRate *float64     `json:"success_rate"`
-	Prev        retroPrevDTO `json:"prev"`
+	SuccessRate *float64 `json:"success_rate"`
+	// redispatch-classified ledger rows / total ledger rows (task_delegations
+	// via tasks in range); nil when the agent has no ledger row there.
+	ReDispatchRate *float64 `json:"re_dispatch_rate"`
+	// latest imported eval run for the registry agent; nil when none.
+	Eval *retroEvalDTO `json:"eval"`
+	Prev retroPrevDTO  `json:"prev"`
 }
 
 type retroAgentsDTO struct {
@@ -212,6 +235,74 @@ func errRate(errors, runs int64) float64 {
 	return float64(errors) / float64(runs)
 }
 
+// redispatchRe classifies a ledger verdict as a re-dispatch (vs an accept).
+var redispatchRe = regexp.MustCompile(`(?i)re-?dispatch|fail|reject`)
+
+// delegationRates aggregates the task_delegations ledger over tasks STARTED in
+// the range: per normalized agent, (redispatch rows, total rows). The ledger
+// lives on workspace tasks, so the range rides tasks.started_at — the card's
+// calendar date — not event timestamps.
+func (h *Handler) delegationRates(dr dateRange, pf string, pargs []any) (map[string][2]int64, error) {
+	rows, err := h.DB.Query(`
+		SELECT td.agent, COALESCE(td.verdict, '')
+		  FROM task_delegations td
+		  JOIN tasks t ON t.id = td.task_id
+		  JOIN projects p ON p.id = t.project_id
+		 WHERE t.started_at >= ? AND t.started_at < ? AND p.archived = 0`+pf,
+		append([]any{dr.start, dr.end}, pargs...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][2]int64{}
+	for rows.Next() {
+		var agent, verdict string
+		if err := rows.Scan(&agent, &verdict); err != nil {
+			return nil, err
+		}
+		key := normAgentType(agent)
+		c := out[key]
+		c[1]++
+		if redispatchRe.MatchString(verdict) {
+			c[0]++
+		}
+		out[key] = c
+	}
+	return out, rows.Err()
+}
+
+// latestEvals returns the newest imported eval run per registry agent (folded
+// by normAgentType so registry names line up with scorecard keys). Not
+// range-filtered on purpose: the chip answers "how does the CURRENT prompt
+// score", whatever day the suite last ran.
+func (h *Handler) latestEvals() (map[string]retroEvalDTO, error) {
+	rows, err := h.DB.Query(`
+		SELECT a.name, COALESCE(r.passed, 0), COALESCE(r.failed, 0),
+		       COALESCE(r.finished_at, r.started_at)
+		  FROM eval_runs r
+		  JOIN eval_suites s ON s.id = r.suite_id
+		  JOIN agents a ON a.id = s.agent_id
+		 WHERE a.deleted = 0
+		 ORDER BY r.started_at DESC, r.id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]retroEvalDTO{}
+	for rows.Next() {
+		var name string
+		var e retroEvalDTO
+		if err := rows.Scan(&name, &e.Passed, &e.Failed, &e.FinishedAt); err != nil {
+			return nil, err
+		}
+		key := normAgentType(name)
+		if _, seen := out[key]; !seen { // rows are newest-first
+			out[key] = e
+		}
+	}
+	return out, rows.Err()
+}
+
 // GET /api/retro/agents?from&to&project — per-agent health scorecards. The
 // "main" fold key (orchestrator) is excluded from agents[] and surfaced as
 // the top-level main object.
@@ -234,6 +325,16 @@ func (h *Handler) retroAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rates, err := h.agentOutcomeRates(dr, pf, pargs)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	delRates, err := h.delegationRates(dr, pf, pargs)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	evalByAgent, err := h.latestEvals()
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -271,6 +372,14 @@ func (h *Handler) retroAgents(w http.ResponseWriter, r *http.Request) {
 		if rate, ok := rates[key]; ok {
 			rr := rate
 			row.SuccessRate = &rr
+		}
+		if c, ok := delRates[key]; ok && c[1] >= 1 {
+			rr := float64(c[0]) / float64(c[1])
+			row.ReDispatchRate = &rr
+		}
+		if e, ok := evalByAgent[key]; ok {
+			ee := e
+			row.Eval = &ee
 		}
 		if p, ok := prev[key]; ok {
 			row.Prev = retroPrevDTO{Runs: p.runs, Errors: p.errors, ErrorRate: errRate(p.errors, p.runs), CostUSD: p.cost}
@@ -475,6 +584,197 @@ func (h *Handler) retroFriction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Approx = rolled
+	writeJSON(w, out, nil)
+}
+
+// ── /api/retro/lessons ────────────────────────────────────────────────────
+
+type retroLessonDTO struct {
+	TaskExternalID string  `json:"task_external_id"`
+	TaskTitle      string  `json:"task_title"`
+	Date           string  `json:"date"` // task card calendar day, YYYY-MM-DD
+	Title          string  `json:"title"`
+	Action         *string `json:"action"`
+	Body           *string `json:"body"`
+}
+
+type retroLessonsDTO struct {
+	Lessons []retroLessonDTO `json:"lessons"`
+}
+
+const retroLessonsLimit = 100
+
+// GET /api/retro/lessons?from&to&project — the lessons-learned feed parsed
+// from 09-retrospective.md docs (wsingest artifacts), joined through tasks and
+// filtered on the task's start date. Newest tasks first, capped at 100.
+func (h *Handler) retroLessons(w http.ResponseWriter, r *http.Request) {
+	dr, err := parseRange(r)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	pf, pargs := scopeFilter(r)
+
+	rows, err := h.DB.Query(`
+		SELECT t.external_id, t.title, t.started_at, l.title, l.action, l.body
+		  FROM retro_lessons l
+		  JOIN task_retros r ON r.id = l.retro_id
+		  JOIN tasks t ON t.id = r.task_id
+		  JOIN projects p ON p.id = t.project_id
+		 WHERE t.started_at >= ? AND t.started_at < ? AND p.archived = 0`+pf+`
+		 ORDER BY t.started_at DESC, t.external_id DESC, l.seq ASC
+		 LIMIT ?`,
+		append(append([]any{dr.start, dr.end}, pargs...), retroLessonsLimit)...)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	defer rows.Close()
+
+	out := retroLessonsDTO{Lessons: []retroLessonDTO{}}
+	for rows.Next() {
+		var d retroLessonDTO
+		var startedAt string
+		var action, body sql.NullString
+		if err := rows.Scan(&d.TaskExternalID, &d.TaskTitle, &startedAt, &d.Title, &action, &body); err != nil {
+			writeErr(w, err)
+			return
+		}
+		// tasks.started_at is the card's calendar date at UTC midnight — the
+		// date IS its first 10 chars (a tz conversion could shift the day).
+		if len(startedAt) >= 10 {
+			d.Date = startedAt[:10]
+		}
+		if action.Valid {
+			d.Action = &action.String
+		}
+		if body.Valid {
+			d.Body = &body.String
+		}
+		out.Lessons = append(out.Lessons, d)
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, out, nil)
+}
+
+// ── /api/retro/tasks ──────────────────────────────────────────────────────
+
+type retroVerdictsDTO struct {
+	OK         int64 `json:"ok"`
+	Redispatch int64 `json:"redispatch"`
+}
+
+type retroTaskDTO struct {
+	ExternalID     string           `json:"external_id"`
+	Title          string           `json:"title"`
+	EstimatedHours *float64         `json:"estimated_hours"`
+	ActualHours    *float64         `json:"actual_hours"`
+	VariancePct    *float64         `json:"variance_pct"`
+	Loops          int64            `json:"loops"`
+	Delegations    int64            `json:"delegations"`
+	Verdicts       retroVerdictsDTO `json:"verdicts"`
+}
+
+type retroTasksDTO struct {
+	Tasks []retroTaskDTO `json:"tasks"`
+}
+
+// GET /api/retro/tasks?from&to&project — estimation accuracy + orchestration
+// churn per workspace task in range. Only tasks with at least one parsed
+// artifact (retro doc, loop journal, or ledger) appear; newest first.
+func (h *Handler) retroTasks(w http.ResponseWriter, r *http.Request) {
+	dr, err := parseRange(r)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	pf, pargs := scopeFilter(r)
+
+	rows, err := h.DB.Query(`
+		SELECT t.id, t.external_id, t.title,
+		       r.estimated_hours, r.actual_hours, r.variance_pct,
+		       (SELECT COUNT(*) FROM task_loops tl WHERE tl.task_id = t.id)
+		  FROM tasks t
+		  JOIN projects p ON p.id = t.project_id
+		  LEFT JOIN task_retros r ON r.task_id = t.id
+		 WHERE t.started_at >= ? AND t.started_at < ? AND p.archived = 0`+pf+`
+		   AND (r.id IS NOT NULL
+		        OR EXISTS (SELECT 1 FROM task_loops tl WHERE tl.task_id = t.id)
+		        OR EXISTS (SELECT 1 FROM task_delegations td WHERE td.task_id = t.id))
+		 ORDER BY t.started_at DESC, t.external_id DESC`,
+		append([]any{dr.start, dr.end}, pargs...)...)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	defer rows.Close()
+
+	out := retroTasksDTO{Tasks: []retroTaskDTO{}}
+	index := map[int64]int{} // task id → out.Tasks slot, for the verdict pass
+	var ids []any
+	for rows.Next() {
+		var d retroTaskDTO
+		var id int64
+		var est, act, variance sql.NullFloat64
+		if err := rows.Scan(&id, &d.ExternalID, &d.Title, &est, &act, &variance, &d.Loops); err != nil {
+			writeErr(w, err)
+			return
+		}
+		if est.Valid {
+			d.EstimatedHours = &est.Float64
+		}
+		if act.Valid {
+			d.ActualHours = &act.Float64
+		}
+		if variance.Valid {
+			d.VariancePct = &variance.Float64
+		}
+		index[id] = len(out.Tasks)
+		ids = append(ids, id)
+		out.Tasks = append(out.Tasks, d)
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	// Verdict split: classify every ledger row of the selected tasks in Go
+	// (the same redispatchRe as the per-agent rate).
+	if len(ids) > 0 {
+		q := `SELECT task_id, COALESCE(verdict, '') FROM task_delegations WHERE task_id IN (?` +
+			strings.Repeat(",?", len(ids)-1) + `)`
+		vrows, err := h.DB.Query(q, ids...)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		defer vrows.Close()
+		for vrows.Next() {
+			var id int64
+			var verdict string
+			if err := vrows.Scan(&id, &verdict); err != nil {
+				writeErr(w, err)
+				return
+			}
+			slot, ok := index[id]
+			if !ok {
+				continue
+			}
+			out.Tasks[slot].Delegations++
+			if redispatchRe.MatchString(verdict) {
+				out.Tasks[slot].Verdicts.Redispatch++
+			} else {
+				out.Tasks[slot].Verdicts.OK++
+			}
+		}
+		if err := vrows.Err(); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 	writeJSON(w, out, nil)
 }
 

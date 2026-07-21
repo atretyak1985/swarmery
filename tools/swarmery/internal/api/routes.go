@@ -56,9 +56,12 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/stats/durations", h.statsDurations)
 	mux.HandleFunc("GET /api/stats/errors", h.statsErrors)
 
-	// retro improvement loop: per-agent scorecards + friction board (retro.go).
+	// retro improvement loop: per-agent scorecards + friction board (retro.go);
+	// phase 2 adds the artifact-backed lessons feed + estimation table.
 	mux.HandleFunc("GET /api/retro/agents", h.retroAgents)
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
+	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
+	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)
 
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
