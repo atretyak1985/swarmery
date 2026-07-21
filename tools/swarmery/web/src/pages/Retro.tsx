@@ -279,9 +279,9 @@ function LessonsFeed({ lessons }: { lessons: RetroLesson[] }): JSX.Element {
       ) : visible.length === 0 ? (
         <Empty>no lessons match “{filter}”</Empty>
       ) : (
-        visible.map((l, i) => (
+        visible.map((l) => (
           <div
-            key={`${l.task_external_id}-${String(i)}`}
+            key={`${l.task_external_id}-${String(l.seq)}`}
             className="rounded-[10px] border border-line px-3.5 py-2.5"
           >
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

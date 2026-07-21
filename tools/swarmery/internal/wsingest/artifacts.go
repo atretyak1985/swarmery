@@ -38,7 +38,12 @@ var (
 	// Learned`) by matching anywhere after the hashes.
 	lessonsHeadRe = regexp.MustCompile(`(?i)^#{2,3}.*lessons learned`)
 	improveHeadRe = regexp.MustCompile(`(?i)^#{2,3}.*process improvements`)
-	lessonRe      = regexp.MustCompile(`(?i)^#{2,3}\s*lesson\s+(\d+)\s*:\s*(.+?)\s*$`)
+	// Lesson entries are h3-only by contract (`### Lesson N: …`, per the retro
+	// template): sectionEndRe below terminates the section on any h1/h2 first,
+	// so an h2 lesson head could never be reached anyway — the pattern encodes
+	// that. (The improvements section has no per-row headings — table rows only
+	// — so the same concern does not apply there.)
+	lessonRe = regexp.MustCompile(`(?i)^#{3}\s*lesson\s+(\d+)\s*:\s*(.+?)\s*$`)
 	actionRe      = regexp.MustCompile(`(?i)^\*\*action\*\*\s*:\s*(.*)$`)
 	// h1/h2 ends a section; any heading or hr ends a lesson body.
 	sectionEndRe = regexp.MustCompile(`^#{1,2}\s`)
@@ -73,13 +78,23 @@ func (s *Scanner) artifactPass(taskID int64, kind, path string,
 	sum := sha256.Sum256(raw)
 	hash := hex.EncodeToString(sum[:])
 
-	var prev string
+	var prev, prevPath string
 	err = s.db.QueryRow(
-		`SELECT content_hash FROM task_artifacts WHERE task_id = ? AND kind = ?`,
-		taskID, kind).Scan(&prev)
+		`SELECT content_hash, path FROM task_artifacts WHERE task_id = ? AND kind = ?`,
+		taskID, kind).Scan(&prev, &prevPath)
 	switch {
 	case err == nil && prev == hash:
-		return // unchanged — skip the parse entirely
+		// Unchanged content — skip the parse entirely. The stored path can
+		// still be stale: agent-work.sh complete moves the task dir working →
+		// archive without touching file contents, so refresh it when it moved.
+		if prevPath != path {
+			if _, uerr := s.db.Exec(
+				`UPDATE task_artifacts SET path = ? WHERE task_id = ? AND kind = ?`,
+				path, taskID, kind); uerr != nil {
+				warn("artifact %s task#%d: path refresh: %v", kind, taskID, uerr)
+			}
+		}
+		return
 	case err != nil && err != sql.ErrNoRows:
 		warn("artifact %s task#%d: hash lookup: %v", kind, taskID, err)
 		return
@@ -199,7 +214,7 @@ func parseRetroDoc(text string) retroDoc {
 				continue
 			}
 			seq, _ := strconv.Atoi(m[1])
-			l := retroLesson{seq: seq, title: strings.TrimSpace(m[2])}
+			l := retroLesson{seq: seq, title: capText(m[2])}
 			if placeholderRe.MatchString(l.title) {
 				continue // unfilled template entry
 			}
@@ -234,13 +249,13 @@ func parseRetroDoc(text string) retroDoc {
 			if len(cells) < 4 {
 				continue // malformed row — tolerated, skipped
 			}
-			text := cells[0]
+			text := capText(cells[0])
 			if text == "" || placeholderRe.MatchString(text) ||
 				tableDividerRe.MatchString(text) || strings.EqualFold(text, "improvement") {
 				continue
 			}
 			doc.improvements = append(doc.improvements, retroImprovement{
-				text: text, priority: cells[1], owner: cells[2], status: cells[3],
+				text: text, priority: capText(cells[1]), owner: capText(cells[2]), status: capText(cells[3]),
 			})
 		}
 		break
@@ -315,8 +330,8 @@ func parseLoops(text string) []loopEntry {
 		if cur == nil {
 			continue
 		}
-		if strings.HasPrefix(line, "## ") {
-			cur = nil // some other section — stop attributing lines
+		if anyHeadRe.MatchString(line) {
+			cur = nil // any other heading — stop attributing lines
 			continue
 		}
 		trimmed := strings.TrimSpace(line)
@@ -389,7 +404,7 @@ func parseLedger(text string) []delegation {
 		}
 		out = append(out, delegation{
 			seq: len(out) + 1, agent: agent,
-			phase: cells[1], verdict: cells[2], artifact: cells[3],
+			phase: capText(cells[1]), verdict: capText(cells[2]), artifact: capText(cells[3]),
 		})
 	}
 	return out

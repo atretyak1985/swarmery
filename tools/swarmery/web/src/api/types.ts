@@ -621,6 +621,8 @@ export interface RetroLesson {
   task_title: string;
   /** Task card calendar day, YYYY-MM-DD. */
   date: string;
+  /** 1-based lesson order within the task's retro doc — stable render key with task_external_id. */
+  seq: number;
   title: string;
   action: string | null;
   body: string | null;
@@ -630,7 +632,7 @@ export interface RetroLessonsResp {
   lessons: RetroLesson[];
 }
 
-/** Ledger verdict split of one task (redispatch = re-dispatch/fail/reject). */
+/** Ledger verdict split of one task (redispatch = re-dispatch/redo/fail/reject + Ukrainian повтор/відхил/провал/фейл). */
 export interface RetroTaskVerdicts {
   ok: number;
   redispatch: number;

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -219,6 +220,84 @@ func artifactState(t *testing.T, db *sql.DB) (lessonIDs []int64, hashes map[stri
 		hashes[kind], parsedAt[kind] = hash, at
 	}
 	return lessonIDs, hashes, parsedAt
+}
+
+// TestArtifactGatePathRefreshOnMove pins the M1 contract: when a task dir
+// moves working → archive with unchanged content (agent-work.sh complete), the
+// hash gate still short-circuits the parse — same hashes, same parsed_at, same
+// child row ids — but the gate rows' PATH must follow the file to its new
+// location.
+func TestArtifactGatePathRefreshOnMove(t *testing.T) {
+	db := testDB(t)
+	root, taskDir := tempTaskWorkspace(t)
+
+	scanRoot := func() Stats {
+		t.Helper()
+		stats, err := New(db, Config{WorkspaceRoot: root}).Scan()
+		if err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		return stats
+	}
+
+	first := scanRoot()
+	if first.Retros != 1 || first.Loops != 1 || first.Delegations != 1 {
+		t.Fatalf("first scan = %+v, want retros/loops/delegations 1/1/1", first)
+	}
+	ids1, hashes1, at1 := artifactState(t, db)
+
+	gatePaths := func() map[string]string {
+		t.Helper()
+		rows, err := db.Query(`SELECT kind, path FROM task_artifacts`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		out := map[string]string{}
+		for rows.Next() {
+			var kind, path string
+			if err := rows.Scan(&kind, &path); err != nil {
+				t.Fatal(err)
+			}
+			out[kind] = path
+		}
+		return out
+	}
+	paths1 := gatePaths()
+
+	// Move the whole task dir working → archive, contents untouched.
+	archDir := filepath.Join(root, "tempproj", "workspace", "archive", "2026", "07", "10", "gate-task")
+	if err := os.MkdirAll(filepath.Dir(archDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(taskDir, archDir); err != nil {
+		t.Fatal(err)
+	}
+
+	second := scanRoot()
+	if second.Retros != 1 || second.Loops != 1 || second.Delegations != 1 {
+		t.Errorf("post-move scan = %+v, want same totals", second)
+	}
+	ids2, hashes2, at2 := artifactState(t, db)
+	if len(ids2) != len(ids1) || (len(ids1) == 1 && ids2[0] != ids1[0]) {
+		t.Errorf("lesson ids changed on a content-unchanged move: %v → %v", ids1, ids2)
+	}
+	paths2 := gatePaths()
+	for kind, old := range paths1 {
+		if hashes2[kind] != hashes1[kind] {
+			t.Errorf("gate hash for %s changed on a content-unchanged move", kind)
+		}
+		if at2[kind] != at1[kind] {
+			t.Errorf("parsed_at for %s changed on a content-unchanged move (file was reparsed)", kind)
+		}
+		got := paths2[kind]
+		if got == old {
+			t.Errorf("gate path for %s not refreshed after the move: still %q", kind, got)
+		}
+		if !strings.Contains(got, filepath.Join("workspace", "archive")) {
+			t.Errorf("gate path for %s = %q, want the archive location", kind, got)
+		}
+	}
 }
 
 func TestArtifactsHashGateAndReparse(t *testing.T) {

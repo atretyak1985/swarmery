@@ -236,7 +236,35 @@ func errRate(errors, runs int64) float64 {
 }
 
 // redispatchRe classifies a ledger verdict as a re-dispatch (vs an accept).
-var redispatchRe = regexp.MustCompile(`(?i)re-?dispatch|fail|reject`)
+// Ledger verdicts are bilingual — agent-work.sh writes a Ukrainian header
+// (`| Агент | Фаза | Вердикт | Артефакт |`) and verdict cells appear in either
+// language — so both vocabularies are covered:
+//
+//	re-?dispatch      — the canonical tech-lead verdict (RE-DISPATCH / redispatch)
+//	redo              — "redo the phase"
+//	\bfail(ed|ure)?\b — fail / failed / failure, word-anchored so benign
+//	                    substrings ("failsafe") don't hit
+//	\breject(ed)?\b   — reject / rejected, word-anchored
+//	повтор            — "повтор" / "повторити" / "повторно" (redo)
+//	відхил            — "відхилено" / "відхилити" (rejected)
+//	провал            — "провал" / "провалено" (failed)
+//	фейл              — transliterated "fail"
+var redispatchRe = regexp.MustCompile(`(?i)(re-?dispatch|redo|\bfail(ed|ure)?\b|\breject(ed)?\b|повтор|відхил|провал|фейл)`)
+
+// redispatchVerdictMaxRunes caps how long a verdict cell may be and still be
+// classified: a real verdict is a short token ("OK", "RE-DISPATCH",
+// "відхилено"); a long prose cell that merely MENTIONS a failure ("OK, flaky
+// test failure noted …") is commentary, not a re-dispatch verdict.
+const redispatchVerdictMaxRunes = 40
+
+// isRedispatch reports whether a ledger verdict cell records a re-dispatch.
+func isRedispatch(verdict string) bool {
+	v := strings.TrimSpace(verdict)
+	if len([]rune(v)) > redispatchVerdictMaxRunes {
+		return false
+	}
+	return redispatchRe.MatchString(v)
+}
 
 // delegationRates aggregates the task_delegations ledger over tasks STARTED in
 // the range: per normalized agent, (redispatch rows, total rows). The ledger
@@ -260,10 +288,14 @@ func (h *Handler) delegationRates(dr dateRange, pf string, pargs []any) (map[str
 		if err := rows.Scan(&agent, &verdict); err != nil {
 			return nil, err
 		}
-		key := normAgentType(agent)
+		// The ledger stores agents lowercased (wsingest normalizeLedgerAgent);
+		// lowercase the fold here too so mixed-case scorecard keys still line
+		// up. Deliberately NOT baked into normAgentType — other call sites
+		// depend on its case-preserving behavior.
+		key := strings.ToLower(normAgentType(agent))
 		c := out[key]
 		c[1]++
-		if redispatchRe.MatchString(verdict) {
+		if isRedispatch(verdict) {
 			c[0]++
 		}
 		out[key] = c
@@ -295,7 +327,10 @@ func (h *Handler) latestEvals() (map[string]retroEvalDTO, error) {
 		if err := rows.Scan(&name, &e.Passed, &e.Failed, &e.FinishedAt); err != nil {
 			return nil, err
 		}
-		key := normAgentType(name)
+		// Same lowercase fold as delegationRates: registry names are free-form,
+		// scorecard keys are lowercase in practice (normAgentType itself stays
+		// case-preserving for its other call sites).
+		key := strings.ToLower(normAgentType(name))
 		if _, seen := out[key]; !seen { // rows are newest-first
 			out[key] = e
 		}
@@ -590,12 +625,15 @@ func (h *Handler) retroFriction(w http.ResponseWriter, r *http.Request) {
 // ── /api/retro/lessons ────────────────────────────────────────────────────
 
 type retroLessonDTO struct {
-	TaskExternalID string  `json:"task_external_id"`
-	TaskTitle      string  `json:"task_title"`
-	Date           string  `json:"date"` // task card calendar day, YYYY-MM-DD
-	Title          string  `json:"title"`
-	Action         *string `json:"action"`
-	Body           *string `json:"body"`
+	TaskExternalID string `json:"task_external_id"`
+	TaskTitle      string `json:"task_title"`
+	Date           string `json:"date"` // task card calendar day, YYYY-MM-DD
+	// 1-based lesson order within the task's retro doc — with the task
+	// external id it forms a stable render key for the UI.
+	Seq    int64   `json:"seq"`
+	Title  string  `json:"title"`
+	Action *string `json:"action"`
+	Body   *string `json:"body"`
 }
 
 type retroLessonsDTO struct {
@@ -616,7 +654,7 @@ func (h *Handler) retroLessons(w http.ResponseWriter, r *http.Request) {
 	pf, pargs := scopeFilter(r)
 
 	rows, err := h.DB.Query(`
-		SELECT t.external_id, t.title, t.started_at, l.title, l.action, l.body
+		SELECT t.external_id, t.title, t.started_at, l.seq, l.title, l.action, l.body
 		  FROM retro_lessons l
 		  JOIN task_retros r ON r.id = l.retro_id
 		  JOIN tasks t ON t.id = r.task_id
@@ -636,7 +674,7 @@ func (h *Handler) retroLessons(w http.ResponseWriter, r *http.Request) {
 		var d retroLessonDTO
 		var startedAt string
 		var action, body sql.NullString
-		if err := rows.Scan(&d.TaskExternalID, &d.TaskTitle, &startedAt, &d.Title, &action, &body); err != nil {
+		if err := rows.Scan(&d.TaskExternalID, &d.TaskTitle, &startedAt, &d.Seq, &d.Title, &action, &body); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -682,6 +720,11 @@ type retroTasksDTO struct {
 	Tasks []retroTaskDTO `json:"tasks"`
 }
 
+// retroTasksLimit caps the estimation table — one row per workspace task in
+// range, newest first; 200 covers months of tasks while bounding the response
+// (same idea as retroLessonsLimit).
+const retroTasksLimit = 200
+
 // GET /api/retro/tasks?from&to&project — estimation accuracy + orchestration
 // churn per workspace task in range. Only tasks with at least one parsed
 // artifact (retro doc, loop journal, or ledger) appear; newest first.
@@ -704,8 +747,9 @@ func (h *Handler) retroTasks(w http.ResponseWriter, r *http.Request) {
 		   AND (r.id IS NOT NULL
 		        OR EXISTS (SELECT 1 FROM task_loops tl WHERE tl.task_id = t.id)
 		        OR EXISTS (SELECT 1 FROM task_delegations td WHERE td.task_id = t.id))
-		 ORDER BY t.started_at DESC, t.external_id DESC`,
-		append([]any{dr.start, dr.end}, pargs...)...)
+		 ORDER BY t.started_at DESC, t.external_id DESC
+		 LIMIT ?`,
+		append(append([]any{dr.start, dr.end}, pargs...), retroTasksLimit)...)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -742,7 +786,7 @@ func (h *Handler) retroTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verdict split: classify every ledger row of the selected tasks in Go
-	// (the same redispatchRe as the per-agent rate).
+	// (the same isRedispatch as the per-agent rate).
 	if len(ids) > 0 {
 		q := `SELECT task_id, COALESCE(verdict, '') FROM task_delegations WHERE task_id IN (?` +
 			strings.Repeat(",?", len(ids)-1) + `)`
@@ -764,7 +808,7 @@ func (h *Handler) retroTasks(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			out.Tasks[slot].Delegations++
-			if redispatchRe.MatchString(verdict) {
+			if isRedispatch(verdict) {
 				out.Tasks[slot].Verdicts.Redispatch++
 			} else {
 				out.Tasks[slot].Verdicts.OK++

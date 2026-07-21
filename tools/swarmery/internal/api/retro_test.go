@@ -531,6 +531,39 @@ func retroArtifactsServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
+// TestIsRedispatch pins the bilingual verdict classifier: canonical English
+// and Ukrainian re-dispatch verdicts hit, accepts don't, and a long prose cell
+// that merely mentions a failure is commentary — never a verdict.
+func TestIsRedispatch(t *testing.T) {
+	cases := []struct {
+		verdict string
+		want    bool
+	}{
+		{"RE-DISPATCH", true},
+		{"redispatch", true},
+		{"redo", true},
+		{"FAILED", true},
+		{"rejected", true},
+		{"відхилено", true},
+		{"провалено", true},
+		{"повторити", true},
+		{"фейл", true},
+		{"OK", false},
+		{"ok", false},
+		{"ACCEPT", false},
+		{"прийнято", false},
+		// Word anchors: benign substrings must not hit.
+		{"failsafe verified", false},
+		// > 40 runes → prose commentary, not a verdict cell.
+		{"OK, but flaky test failure noted across three independent reruns", false},
+	}
+	for _, c := range cases {
+		if got := isRedispatch(c.verdict); got != c.want {
+			t.Errorf("isRedispatch(%q) = %v, want %v", c.verdict, got, c.want)
+		}
+	}
+}
+
 func TestRetroLessons(t *testing.T) {
 	srv := retroArtifactsServer(t)
 	var out retroLessonsDTO
@@ -540,8 +573,8 @@ func TestRetroLessons(t *testing.T) {
 		t.Fatalf("lessons = %+v, want 2 (the ancient task is out of range)", out.Lessons)
 	}
 	l1 := out.Lessons[0]
-	if l1.TaskExternalID != "task-new" || l1.Title != "Pin fixture mtimes" {
-		t.Errorf("lesson[0] = %+v, want task-new / 'Pin fixture mtimes' (seq order)", l1)
+	if l1.TaskExternalID != "task-new" || l1.Title != "Pin fixture mtimes" || l1.Seq != 1 {
+		t.Errorf("lesson[0] = %+v, want task-new / 'Pin fixture mtimes' / seq 1", l1)
 	}
 	if l1.Action == nil || *l1.Action != "add pinMtime helpers" ||
 		l1.Body == nil || *l1.Body != "git drops mtimes" {
@@ -551,8 +584,8 @@ func TestRetroLessons(t *testing.T) {
 		t.Errorf("lesson[0] date/title = %q/%q, want a YYYY-MM-DD date + the task title", l1.Date, l1.TaskTitle)
 	}
 	l2 := out.Lessons[1]
-	if l2.Title != "Check templates early" || l2.Action != nil || l2.Body != nil {
-		t.Errorf("lesson[1] = %+v, want the action-less lesson with nil action/body", l2)
+	if l2.Title != "Check templates early" || l2.Seq != 2 || l2.Action != nil || l2.Body != nil {
+		t.Errorf("lesson[1] = %+v, want the seq-2 action-less lesson with nil action/body", l2)
 	}
 }
 
