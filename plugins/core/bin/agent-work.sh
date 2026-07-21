@@ -165,13 +165,18 @@ cmd_complete() {
     local task_id; task_id=$(_id_from_dir "$task_dir")
     local today; today=$(date +%Y-%m-%d)
 
-    # README: status + completion date (gsed-free, BSD-sed compatible)
-    sed -i '' -e "s/\*\*Статус\*\*: active/\*\*Статус\*\*: done/" \
-              -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
-              "${task_dir}/README.md" 2>/dev/null \
-    || sed -i -e "s/\*\*Статус\*\*: active/\*\*Статус\*\*: done/" \
-              -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
-              "${task_dir}/README.md"
+    # README: status + completion date (gsed-free, BSD-sed compatible).
+    # Guard: a task dir without a README card (e.g. hand-made plans) must still archive.
+    if [ -f "${task_dir}/README.md" ]; then
+        sed -i '' -e "s/\*\*Статус\*\*: active/\*\*Статус\*\*: done/" \
+                  -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
+                  "${task_dir}/README.md" 2>/dev/null \
+        || sed -i -e "s/\*\*Статус\*\*: active/\*\*Статус\*\*: done/" \
+                  -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
+                  "${task_dir}/README.md"
+    else
+        log_info "README.md відсутній у ${task_dir} — архівую без статус-картки"
+    fi
 
     if [ ! -f "${task_dir}/SUMMARY.md" ]; then
         cat > "${task_dir}/SUMMARY.md" <<EOF

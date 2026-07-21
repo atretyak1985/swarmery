@@ -95,6 +95,35 @@ tests:
       - type: llm-rubric
         value: states that the orchestration plan artifact (planned subagents, verification strategy) is written to the task workspace BEFORE the first subagent dispatch
 
+  # ── implementation-agent: dual-mode contract ─────────────────────────────
+  - description: implementation-agent orchestrates a ready plan in plan-execution mode
+    vars:
+      system: file://../plugins/core/agents/implementation-agent.md
+      task: >
+        The user invokes you directly with
+        task_dir=<workspace>/working/2026/07/21/task-video-screenshots containing
+        plan/README.md and plan/step-01..step-04 docs (each with a copy-paste agent
+        prompt and acceptance criteria). Describe exactly how you will proceed,
+        step by step, including artifacts you write and when.
+    assert:
+      - type: contains
+        value: ORCHESTRATION.md
+      - type: contains
+        value: SUMMARY.md
+      - type: llm-rubric
+        value: describes dispatching a subagent per step using the step doc's copy-paste agent prompt, independently verifying each step's acceptance criteria, looping with corrected instructions on failure (bounded, ~3 max), and archiving the task dir via the workspace CLI after SUMMARY — and does NOT propose writing the code itself
+
+  - description: implementation-agent stays a leaf when handed a single step_file
+    vars:
+      system: file://../plugins/core/agents/implementation-agent.md
+      task: >
+        @tech-lead dispatched you with
+        step_file=plan/step-02-frame-extraction-module.md and a Phase 2 context
+        artifact. Do you spawn any subagents for this work? Describe how you proceed.
+    assert:
+      - type: llm-rubric
+        value: states it implements the code itself in this mode and does NOT spawn subagents; mentions verifying signatures/types before editing and running local checks (typecheck/build or equivalent)
+
   # ── commit-message: scopes come from project.json ────────────────────────
   - description: commit-message derives scopes from project config
     vars:
