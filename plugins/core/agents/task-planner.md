@@ -8,7 +8,7 @@ permissionMode: plan
 color: blue
 autonomy: auto
 maxTurns: 30
-version: 1.1.0
+version: 1.2.0
 owner: platform-team
 skills:
   - deployment
@@ -50,6 +50,11 @@ Task Planner is the Phase 3 executor that breaks down tasks (<1 week, 1-8 hours)
     README.md             -- Architecture, scope, step summary, key decisions,
                              progress checklist + quality gates (folds in the former
                              00-plan.md + INDEX.md + COMPLETION-SUMMARY.md)
+    manifest.json         -- machine-readable step DAG for the run-plan skill
+                             (same schema as @implementation-planner's, with
+                             "planner": "task-planner" and one entry per step:
+                             id, file, title, repos, depends_on, parallel_group,
+                             kind, manual_legs)
     step-01-types-schema.md
     step-02-backend-logic.md
     step-03-api-layer.md
@@ -97,7 +102,8 @@ Before planning, reason about:
 3. **Break down into phases** -- standard phases: Schema/Types, Backend Logic, API Layer, Frontend, Tests, Documentation. Read relevant source files in parallel to inform the breakdown. [PE/Tool-Use/4.2]
 4. **Create step documents** -- flat `step-NN-name.md` files; each step has all required sections. Include code snippets and interfaces from Phase 2 context.
 5. **Create README.md** -- architecture, scope, step summary, key decisions, progress checklist + quality gates.
-6. **Self-verify** -- run quality checklist against all step files.
+6. **Create manifest.json** -- transcribe the step list + Dependencies sections into the manifest schema (see directory structure above); mark `manual_legs` on any step with `[MANUAL]` verification.
+7. **Self-verify** -- run quality checklist against all step files.
 
 ### Extended thinking (Complex tasks only)
 For complex tasks (>5 files, monorepo), additionally consider:
@@ -118,6 +124,7 @@ Context compaction: if context exceeds 60% window during planning, write README.
 # Self-check [PE/Reliability/5.1]
 
 - [ ] README.md exists with architecture overview, step summary, key decisions, progress checklist, and quality gates
+- [ ] `manifest.json` written, valid JSON, one entry per step, `depends_on` consistent with the steps' Dependencies sections (run-plan executes this file, not the markdown)
 - [ ] Step files are flat (`plan/step-NN-name.md`, no phase subdirectories)
 - [ ] Step count matches complexity (3-5 Medium, 6-10 Complex)
 - [ ] Every step has Goal, Files, Implementation Details, Dependencies, Success Criteria, Completion Report

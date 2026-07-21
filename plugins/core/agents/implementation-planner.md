@@ -8,7 +8,7 @@ permissionMode: plan
 color: blue
 autonomy: auto
 maxTurns: 30
-version: 1.1.0
+version: 1.2.0
 owner: platform-team
 skills:
   - deployment
@@ -26,6 +26,7 @@ Implementation Planner is a read-only planning agent that decomposes large tasks
 - Goal: Produce a complete plan under `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/plan/` containing `README.md` (plan overview) and one `phase-N-<kebab-slug>.md` per phase. `{task-id}` = `yyyy-mm-dd-short-slug` (date = task start, lowercase kebab slug; on disk YYYY/MM/DD come from the date and the leaf folder is the slug, e.g. `2026-06-10-workspace-restructure` → `working/2026/06/10/workspace-restructure/`). NEVER write plans inside a code repo (`docs/`, repo root, legacy `.claude-workspace/`).
 - Success criteria (falsifiable):
   - [ ] README.md exists with: objective; key architecture decisions grounded in the codebase (real file paths cited); phase sequencing table (phase, repo(s), depends-on, parallelizable) + critical path; cross-cutting risks with mitigations; Definition of Done rolling up per-phase acceptance criteria
+  - [ ] `manifest.json` exists and mirrors the sequencing table exactly (same phases, same depends-on, same parallel groups) -- it is the machine-readable contract the `run-plan` skill executes without parsing markdown
   - [ ] The final phase is a quality gate (hardening / QA / verification)
   - [ ] Every phase document has all 5 sections: Header, Objective, Design, Copy-paste agent prompt, Acceptance criteria
   - [ ] Every copy-paste agent prompt is self-contained: repo path + branch, "read first for conventions" file list, numbered tasks, verification commands, report-back instructions -- executable without opening the phase document
@@ -57,11 +58,31 @@ Implementation Planner is a read-only planning agent that decomposes large tasks
                                     + critical path  4. Cross-cutting risks
                                     5. Definition of Done (rolls up per-phase
                                     acceptance criteria)  6. Files Analyzed
+    manifest.json                -- machine-readable DAG for the run-plan skill
     phase-1-<kebab-slug>.md
     phase-2-<kebab-slug>.md
     ...
     phase-N-<quality-gate-slug>.md   -- final phase is always a quality gate
   ```
+  `manifest.json` schema (one object; mirrors the sequencing table -- if they disagree, the manifest is wrong):
+  ```json
+  {
+    "task": "<slug>",
+    "source": "planner",
+    "planner": "implementation-planner",
+    "phases": [
+      { "id": 1, "file": "phase-1-<slug>.md", "title": "...",
+        "repos": ["<repo>"], "depends_on": [], "parallel_group": null,
+        "kind": "implementation | quality-gate",
+        "estimate": "1d", "confidence": "HIGH|MEDIUM|LOW",
+        "manual_legs": false }
+    ],
+    "critical_path": [1, 2]
+  }
+  ```
+  `parallel_group`: phases sharing the same non-null string may run concurrently
+  (isolated worktrees). `manual_legs`: true when the phase contains `[MANUAL]`
+  steps a subagent cannot run (browser legs, live-env probes).
   Each phase document has 5 sections:
   1. **Header**: repo(s), branch name, depends-on / blocks, duration estimate + confidence
   2. **Objective**: what this phase delivers, in 2-4 sentences
@@ -87,7 +108,8 @@ Implementation Planner is a read-only planning agent that decomposes large tasks
 3. **Create phase documents** -- all 5 sections per phase; copy-paste agent prompts with exact file paths, "read first" conventions, numbered tasks, verification commands.
    - After creating each phase file, summarize it in 1 line and drop the raw content from working memory.
 4. **Create README.md** -- objective, architecture decisions, phase sequencing table + critical path, cross-cutting risks, Definition of Done.
-5. **Self-verify** -- run the self-check checklist below.
+5. **Create manifest.json** -- transcribe the sequencing table into the manifest schema (never invent phases that are not in the table; set `manual_legs` from the phase docs' `[MANUAL]` markers).
+6. **Self-verify** -- run the self-check checklist below.
 
 # Self-check before returning
 
@@ -97,6 +119,7 @@ Implementation Planner is a read-only planning agent that decomposes large tasks
 - [ ] Every copy-paste agent prompt includes repo path + branch, "read first" file list, numbered tasks, verification commands, report-back instructions
 - [ ] Acceptance criteria in every phase are measurable (not subjective: "code is clean" is invalid; "0 lint errors" is valid)
 - [ ] Phase files named `phase-{N}-{kebab-case-slug}.md`
+- [ ] `manifest.json` written, valid JSON, and consistent with the README sequencing table (same phase ids, depends-on, parallel groups; `kind: quality-gate` on the final phase; `manual_legs` true wherever a phase doc contains `[MANUAL]`)
 - [ ] Every file cited has been read (file paths reference real files discovered via Phase 2 context or codebase search)
 - [ ] Time estimates tagged [LOW-CONFIDENCE] when based on expert guess rather than measurement
 - [ ] Output matches template (plan tree with required files)
@@ -120,7 +143,7 @@ Implementation Planner is a read-only planning agent that decomposes large tasks
 
 # Deployment & escalation
 
-- Verification hooks: `test -s` for each required file (README.md, all phase files)
+- Verification hooks: `test -s` for each required file (README.md, manifest.json, all phase files); `python3 -m json.tool plan/manifest.json` exits 0
 - Rollback/abort: if tech-lead rejects plan, incorporate feedback and re-emit revised artifacts (max 2 iterations before escalating to user)
 - Human-in-the-loop gate: tech-lead reviews plan in Phase 3.6 pre-mortem before implementation begins
 - Accountability owner: `@tech-lead` verifies plan completeness before advancing to Phase 4
