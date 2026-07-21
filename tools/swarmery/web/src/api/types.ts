@@ -537,6 +537,13 @@ export interface RetroPrev {
   cost_usd: number;
 }
 
+/** Latest imported eval run for a registry agent (swarmery evals-import). */
+export interface RetroAgentEval {
+  passed: number;
+  failed: number;
+  finished_at: string;
+}
+
 /** One per-agent scorecard row of GET /api/retro/agents. */
 export interface RetroAgentRow {
   agent: string;
@@ -552,6 +559,10 @@ export interface RetroAgentRow {
   p95_ms: number | null;
   /** success/(success+fail) over judged sessions; null when none judged. */
   success_rate: number | null;
+  /** redispatch ledger rows / total ledger rows in range; null without rows. */
+  re_dispatch_rate: number | null;
+  /** latest eval run for the agent; null when none imported. */
+  eval: RetroAgentEval | null;
   prev: RetroPrev;
 }
 
@@ -602,6 +613,43 @@ export interface RetroFrictionResp {
   approvals: RetroApprovals;
   /** True when the range overlaps pruned (rolled-up) days — the board undercounts there. */
   approx: boolean;
+}
+
+/** One lessons-learned entry of GET /api/retro/lessons (09-retrospective.md). */
+export interface RetroLesson {
+  task_external_id: string;
+  task_title: string;
+  /** Task card calendar day, YYYY-MM-DD. */
+  date: string;
+  title: string;
+  action: string | null;
+  body: string | null;
+}
+
+export interface RetroLessonsResp {
+  lessons: RetroLesson[];
+}
+
+/** Ledger verdict split of one task (redispatch = re-dispatch/fail/reject). */
+export interface RetroTaskVerdicts {
+  ok: number;
+  redispatch: number;
+}
+
+/** One estimation-accuracy row of GET /api/retro/tasks. */
+export interface RetroTaskRow {
+  external_id: string;
+  title: string;
+  estimated_hours: number | null;
+  actual_hours: number | null;
+  variance_pct: number | null;
+  loops: number;
+  delegations: number;
+  verdicts: RetroTaskVerdicts;
+}
+
+export interface RetroTasksResp {
+  tasks: RetroTaskRow[];
 }
 
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------

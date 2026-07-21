@@ -32,6 +32,8 @@ import type {
   MatrixResp,
   RetroAgentsResp,
   RetroFrictionResp,
+  RetroLessonsResp,
+  RetroTasksResp,
   SkillsResp,
   TimeseriesResp,
   ToolsResp,
@@ -1283,6 +1285,16 @@ export const mockApi = {
       approvals: { resolved: 0, avg_resolve_sec: null, wait_total_min: 0, pending: 0 },
       approx: false,
     };
+  },
+
+  async retroLessons(): Promise<RetroLessonsResp> {
+    await delay(120);
+    return { lessons: [] };
+  },
+
+  async retroTasks(): Promise<RetroTasksResp> {
+    await delay(120);
+    return { tasks: [] };
   },
 
   async docs(): Promise<DocMeta[]> {

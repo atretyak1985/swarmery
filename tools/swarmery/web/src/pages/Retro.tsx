@@ -5,14 +5,22 @@
 // approval-wait stats. Data comes from /api/retro/{agents,friction}; range
 // presets and project scope mirror Analytics.tsx.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   RetroAgentRow,
   RetroAgentsResp,
   RetroErrorGroup,
   RetroFrictionResp,
+  RetroLesson,
+  RetroTaskRow,
 } from '../api/types';
-import { createApprovalRule, fetchRetroAgents, fetchRetroFriction } from '../api';
+import {
+  createApprovalRule,
+  fetchRetroAgents,
+  fetchRetroFriction,
+  fetchRetroLessons,
+  fetchRetroTasks,
+} from '../api';
 import {
   addDays,
   fmtAgo,
@@ -213,6 +221,146 @@ function Scorecard({ row }: { row: RetroAgentRow }): JSX.Element {
           sessions <b className="font-medium text-ink-2">{row.sessions}</b>
         </span>
       </div>
+      {(row.re_dispatch_rate !== null || row.eval !== null) && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {row.re_dispatch_rate !== null && (
+            <span
+              title="redispatch-classified ledger rows / total delegations in range"
+              className={`rounded-[7px] border px-1.5 py-[2px] font-mono text-[10px] ${
+                row.re_dispatch_rate > 0.25
+                  ? 'border-red/40 text-red'
+                  : 'border-line-strong text-ink-dim'
+              }`}
+            >
+              re-dispatch {String(Math.round(row.re_dispatch_rate * 100))}%
+            </span>
+          )}
+          {row.eval !== null && (
+            <span
+              title={`latest eval run, finished ${row.eval.finished_at}`}
+              className="rounded-[7px] border border-line-strong px-1.5 py-[2px] font-mono text-[10px] text-ink-dim"
+            >
+              evals {String(row.eval.passed)}/{String(row.eval.passed + row.eval.failed)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ----- lessons feed (retro phase 2) ----- */
+
+function LessonsFeed({ lessons }: { lessons: RetroLesson[] }): JSX.Element {
+  const [filter, setFilter] = useState('');
+  const visible = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (q === '') return lessons;
+    return lessons.filter((l) =>
+      [l.title, l.action ?? '', l.body ?? '', l.task_external_id, l.task_title]
+        .join('\n')
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [lessons, filter]);
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <input
+        type="search"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="filter lessons…"
+        aria-label="filter lessons"
+        className="w-full max-w-xs rounded-md border border-line bg-surface px-2.5 py-1.5 font-mono text-[11px] text-ink placeholder:text-ink-faint"
+      />
+      {lessons.length === 0 ? (
+        <Empty>no retrospective lessons in this range</Empty>
+      ) : visible.length === 0 ? (
+        <Empty>no lessons match “{filter}”</Empty>
+      ) : (
+        visible.map((l, i) => (
+          <div
+            key={`${l.task_external_id}-${String(i)}`}
+            className="rounded-[10px] border border-line px-3.5 py-2.5"
+          >
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="font-mono text-[12px] font-medium text-ink">{l.title}</span>
+              {l.action !== null && (
+                <span className="rounded-[7px] border border-brand/40 bg-brand/10 px-1.5 py-[2px] font-mono text-[10px] text-brand">
+                  action: {l.action}
+                </span>
+              )}
+            </div>
+            {l.body !== null && (
+              <p className="mt-1 font-mono text-[10.5px] whitespace-pre-wrap text-ink-dim">{l.body}</p>
+            )}
+            <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
+              {l.task_external_id} · {l.date}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/* ----- estimation accuracy table (retro phase 2) ----- */
+
+function VarianceBadge({ pct }: { pct: number | null }): JSX.Element {
+  if (pct === null) {
+    return <span className="font-mono text-[11px] text-ink-faint">—</span>;
+  }
+  const abs = Math.abs(pct);
+  const cls = abs <= 20 ? 'text-green' : abs <= 50 ? 'text-amber' : 'text-red';
+  return (
+    <span className={`font-mono text-[11px] ${cls}`}>
+      {pct > 0 ? '+' : ''}
+      {String(Math.round(pct))}%
+    </span>
+  );
+}
+
+function fmtHours(h: number | null): string {
+  return h === null ? '—' : `${String(h)}h`;
+}
+
+function EstimationTable({ tasks }: { tasks: RetroTaskRow[] }): JSX.Element {
+  if (tasks.length === 0) {
+    return <Empty>no tasks with retro artifacts in this range</Empty>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+        <span className="min-w-0 flex-1">task</span>
+        <span className="w-20 text-right">est / act</span>
+        <span className="w-14 text-right">variance</span>
+        <span className="w-12 text-right">loops</span>
+        <span className="w-24 text-right">verdicts</span>
+      </div>
+      {tasks.map((t) => (
+        <div key={t.external_id} className="flex items-baseline gap-2 font-mono text-[11.5px]">
+          <span className="min-w-0 flex-1 truncate text-ink-3" title={t.external_id}>
+            {t.title}
+          </span>
+          <span className="w-20 text-right text-ink-dim">
+            {fmtHours(t.estimated_hours)} / {fmtHours(t.actual_hours)}
+          </span>
+          <span className="w-14 text-right">
+            <VarianceBadge pct={t.variance_pct} />
+          </span>
+          <span className="w-12 text-right text-ink-dim">{t.loops}</span>
+          <span
+            className="w-24 text-right"
+            title={`${String(t.delegations)} delegations: ${String(t.verdicts.ok)} ok, ${String(t.verdicts.redispatch)} re-dispatched`}
+          >
+            <span className="text-green">{t.verdicts.ok} ok</span>
+            {t.verdicts.redispatch > 0 && (
+              <span className="text-red"> · {t.verdicts.redispatch} re</span>
+            )}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -356,6 +504,8 @@ export function Retro(): JSX.Element {
 
   const [agents, setAgents] = useState<RetroAgentsResp | null>(null);
   const [friction, setFriction] = useState<RetroFrictionResp | null>(null);
+  const [lessons, setLessons] = useState<RetroLesson[] | null>(null);
+  const [taskRows, setTaskRows] = useState<RetroTaskRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const applyPreset = useCallback(
@@ -376,6 +526,12 @@ export function Retro(): JSX.Element {
     fetchRetroFriction(range)
       .then(setFriction)
       .catch(() => setFriction(null));
+    fetchRetroLessons(range)
+      .then((r) => setLessons(r.lessons))
+      .catch(() => setLessons(null));
+    fetchRetroTasks(range)
+      .then((r) => setTaskRows(r.tasks))
+      .catch(() => setTaskRows(null));
   }, [from, to, scope]);
 
   useEffect(load, [load]);
@@ -429,6 +585,22 @@ export function Retro(): JSX.Element {
           )}
         </>
       ) : null}
+
+      {lessons !== null && (
+        <>
+          <SectionTitle>Lessons learned</SectionTitle>
+          <LessonsFeed lessons={lessons} />
+        </>
+      )}
+
+      {taskRows !== null && (
+        <>
+          <SectionTitle>Estimation accuracy</SectionTitle>
+          <div className="rounded-[14px] border border-line px-3.5 py-3.5">
+            <EstimationTable tasks={taskRows} />
+          </div>
+        </>
+      )}
 
       {friction !== null && (
         <>

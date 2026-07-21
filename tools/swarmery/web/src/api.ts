@@ -28,6 +28,8 @@ import type {
   ProjectsResponse,
   RetroAgentsResp,
   RetroFrictionResp,
+  RetroLessonsResp,
+  RetroTasksResp,
   SearchResponse,
   SessionDetailResponse,
   SessionOutcome,
@@ -334,6 +336,18 @@ export function fetchRetroAgents(range: AnalyticsRange = {}): Promise<RetroAgent
 export function fetchRetroFriction(range: AnalyticsRange = {}): Promise<RetroFrictionResp> {
   if (MOCK) return mockApi.retroFriction();
   return get(`/api/retro/friction?${rangeQuery(range, {})}`);
+}
+
+/** Lessons-learned feed parsed from 09-retrospective.md docs (retro phase 2). */
+export function fetchRetroLessons(range: AnalyticsRange = {}): Promise<RetroLessonsResp> {
+  if (MOCK) return mockApi.retroLessons();
+  return get(`/api/retro/lessons?${rangeQuery(range, {})}`);
+}
+
+/** Estimation accuracy + loop/delegation counts per task (retro phase 2). */
+export function fetchRetroTasks(range: AnalyticsRange = {}): Promise<RetroTasksResp> {
+  if (MOCK) return mockApi.retroTasks();
+  return get(`/api/retro/tasks?${rangeQuery(range, {})}`);
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {
