@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -57,9 +56,7 @@ func (h *Handler) StopSession(w http.ResponseWriter, r *http.Request) {
 	if pid.Valid && pid.Int64 > 0 &&
 		(procState.String == procwatch.StateRunning || procState.String == procwatch.StateOrphaned) {
 		info, infoErr := procwatch.OsProvider{}.Info(int(pid.Int64))
-		alive := infoErr == nil && info != nil &&
-			strings.Contains(strings.ToLower(info.Command), "claude") &&
-			(procStartedAt.String == "" || info.StartTime == procStartedAt.String)
+		alive := infoErr == nil && isSameClaudeProc(info, procStartedAt.String)
 		if alive {
 			if killErr := syscall.Kill(int(pid.Int64), syscall.SIGTERM); killErr != nil {
 				log.Printf("procstop: SIGTERM pid %d (session %s): %v", pid.Int64, sessionUUID, killErr)
@@ -70,12 +67,24 @@ func (h *Handler) StopSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Unlike KillSession (which log-and-202s a failed UPDATE because the signal
+	// already went out), Stop surfaces UPDATE failures as 500: marking the row
+	// IS the endpoint's core job, and a retry is safe — the process, if it died
+	// meanwhile, simply fails the alive check and the retry becomes mark-only.
 	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := h.DB.Exec(
+	res, err := h.DB.Exec(
 		`UPDATE sessions SET status = 'completed', proc_state = ?, proc_checked_at = ?,
-		 ended_at = COALESCE(ended_at, ?) WHERE id = ?`,
-		procwatch.StateDead, now, now, id); err != nil {
+		 ended_at = COALESCE(ended_at, ?)
+		 WHERE id = ? AND status NOT IN ('completed','killed')`,
+		procwatch.StateDead, now, now, id)
+	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// Lost a race with a concurrent Stop/Kill that finished the row after our
+		// SELECT — report the truth instead of overwriting 'killed' with 'completed'.
+		http.Error(w, `{"error":"session already finished"}`, http.StatusConflict)
 		return
 	}
 	log.Printf("procstop: session %s stopped (signalled=%v)", sessionUUID, signalled)

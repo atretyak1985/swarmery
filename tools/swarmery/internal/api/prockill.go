@@ -28,6 +28,20 @@ func killEscalationDelay() time.Duration {
 	return 5 * time.Second
 }
 
+// isSameClaudeProc reports whether info still describes the claude process we
+// originally recorded: command matches and, when a start time was captured,
+// it is unchanged (PID-reuse guard). Security-relevant — every signal path
+// must go through this exact predicate.
+func isSameClaudeProc(info *procwatch.ProcInfo, procStartedAt string) bool {
+	if info == nil {
+		return false
+	}
+	if !strings.Contains(strings.ToLower(info.Command), "claude") {
+		return false
+	}
+	return procStartedAt == "" || info.StartTime == procStartedAt
+}
+
 // escalateKill waits delay, then SIGKILLs pid if it is still the same live
 // claude process. It re-runs the full identity guard (command name +
 // start-time) so a PID recycled to another process after SIGTERM is never
@@ -38,14 +52,8 @@ func escalateKill(pid int, procStartedAt, sessionUUID string, delay time.Duratio
 	}
 	time.Sleep(delay)
 	info, err := procwatch.OsProvider{}.Info(pid)
-	if err != nil || info == nil {
-		return // SIGTERM worked — nothing left to kill
-	}
-	if !strings.Contains(strings.ToLower(info.Command), "claude") {
-		return // PID recycled to a non-claude process — refuse to signal
-	}
-	if procStartedAt != "" && info.StartTime != procStartedAt {
-		return // PID reused — refuse to signal
+	if err != nil || !isSameClaudeProc(info, procStartedAt) {
+		return // SIGTERM worked, or PID recycled — nothing left to kill
 	}
 	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
 		log.Printf("prockill: escalate SIGKILL pid %d (session %s): %v", pid, sessionUUID, err)

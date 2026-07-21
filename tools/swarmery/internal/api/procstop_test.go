@@ -5,11 +5,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 )
 
-func postStop(t *testing.T, h interface {
-	StopSession(w http.ResponseWriter, r *http.Request)
-}, id string) *httptest.ResponseRecorder {
+func postStop(t *testing.T, h *api.Handler, id string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/api/sessions/"+id+"/stop", strings.NewReader(``))
 	req.SetPathValue("id", id)
@@ -85,5 +85,23 @@ func TestStopSession_InvalidID(t *testing.T) {
 	h := openKillTestDB(t)
 	if w := postStop(t, h, "abc"); w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+// proc_state says running but the PID no longer exists — the identity guard
+// must downgrade to mark-only and still 202. (PID 2147483000 is outside any
+// realistic pid_max; Info returns nil for a nonexistent process.)
+func TestStopSession_VanishedProc_MarksCompleted(t *testing.T) {
+	h := openKillTestDB(t)
+	h.DB.Exec(`INSERT INTO sessions (id, project_id, session_uuid, status, started_at, source, pid, proc_state)
+		VALUES (5, 1, 'vanished-uuid', 'active', '2024-01-01T00:00:00Z', 'jsonl', 2147483000, 'running')`)
+
+	if w := postStop(t, h, "5"); w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d; body: %s", w.Code, w.Body.String())
+	}
+	var status string
+	h.DB.QueryRow(`SELECT status FROM sessions WHERE id = 5`).Scan(&status)
+	if status != "completed" {
+		t.Errorf("status = %q, want completed", status)
 	}
 }
