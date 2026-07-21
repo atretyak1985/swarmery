@@ -21,6 +21,7 @@ type record struct {
 	Subtype          string          `json:"subtype"` // system records
 	DurationMs       int64           `json:"durationMs"`
 	AITitle          string          `json:"aiTitle"` // ai-title records
+	AttributionSkill string          `json:"attributionSkill"` // skill active on this assistant line (§9)
 	Message          json.RawMessage `json:"message"`
 	ToolUseResult    json.RawMessage `json:"toolUseResult"`
 	Error            json.RawMessage `json:"error"` // system api_error

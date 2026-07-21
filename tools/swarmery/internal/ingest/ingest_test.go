@@ -243,6 +243,14 @@ func TestIngestSubagentSession(t *testing.T) {
 	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='skill_use'`); got != 1 {
 		t.Errorf("skill_use events = %d, want 1", got)
 	}
+
+	// Skill attribution (call tree, migration 0017): the Agent tool_use line
+	// carries attributionSkill — the subagent_start payload must keep it (the
+	// skill→subagent edge). Agent closes do not rebuild the start payload.
+	if got := count(t, db, `SELECT COUNT(*) FROM events WHERE type='subagent_start'
+		AND json_extract(payload,'$.attributionSkill')='example-skill'`); got != 1 {
+		t.Errorf("subagent_start with attributionSkill = %d, want 1", got)
+	}
 }
 
 // TestIngestBackgroundAgentSession: run_in_background Agent calls get an

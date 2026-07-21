@@ -96,6 +96,42 @@ export function skillName(event: Event): string | null {
   );
 }
 
+/**
+ * Skill active when the tool call was issued (the skill→tool edge of the call
+ * tree). The ingester stores the transcript's `attributionSkill` inside the
+ * input map, so it sits at payload top level on open events / subagent_start
+ * and under `input` once closeToolCall rebuilds the payload as {input, result}.
+ */
+export function attributedSkill(event: Event): string | null {
+  if (!isRecord(event.payload)) return null;
+  return (
+    pickString(event.payload, ['attributionSkill']) ??
+    pickString(event.payload['input'], ['attributionSkill'])
+  );
+}
+
+/**
+ * One-line argument of a tool call for the call-tree tooltip samples: reads
+ * the tool input whether the payload is still open (flat input map) or closed
+ * (rebuilt as {input, result}).
+ */
+export function toolArg(event: Event): string | null {
+  if (!isRecord(event.payload)) return null;
+  const input = isRecord(event.payload['input']) ? event.payload['input'] : event.payload;
+  return pickString(input, [
+    'command',
+    'file_path',
+    'filePath',
+    'path',
+    'pattern',
+    'query',
+    'url',
+    'description',
+    'prompt',
+    'skill',
+  ]);
+}
+
 /** Pretty-printed payload for the expanded state. */
 export function payloadJson(event: Event): string {
   try {

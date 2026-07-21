@@ -27,6 +27,7 @@ import {
 import { requestSummary } from '../lib/approvals';
 import { projectColor } from '../lib/colors';
 import {
+  addDays,
   fmtAgo,
   fmtCost,
   fmtDayShort,
@@ -43,9 +44,21 @@ import { ProjectName } from '../components/ProjectName';
 
 const LIVE_STATUSES = new Set<Session['status']>(['active', 'waiting_approval', 'idle']);
 const MAX_SPINE_ROWS = 8;
+// The session DTO carries no last-activity timestamp, so startedAt is the only
+// freshness proxy: a "live" session older than this that didn't start today is
+// treated as an abandoned zombie (never got its Stop hook) and hidden.
+const LIVE_STALE_MS = 12 * 60 * 60 * 1000;
 
 function sessionDay(s: Session): string {
-  return isoDay(new Date(s.endedAt ?? s.startedAt));
+  return isoDay(new Date(s.startedAt));
+}
+
+/** Live right now for "today" purposes: started today, or carried over midnight recently. */
+function isLiveNow(s: Session): boolean {
+  return (
+    LIVE_STATUSES.has(s.status) &&
+    (sessionDay(s) === isoDay() || Date.now() - new Date(s.startedAt).getTime() < LIVE_STALE_MS)
+  );
 }
 
 /* ----- eyebrow date/time ----- */
@@ -287,8 +300,18 @@ function SpineRow({
       .catch(() => setTraceError(true));
   }, [open, session.id, trace, traceError]);
 
-  const time = fmtTime(session.startedAt);
-  const rel = fmtAgo(session.startedAt);
+  // Finished sessions are anchored on the spine by when they ended (that is the
+  // today-relevant moment and the sort key); live ones by when they started.
+  const anchor = session.endedAt ?? session.startedAt;
+  const time = fmtTime(anchor);
+  const rel = fmtAgo(anchor);
+  const startedDay = sessionDay(session);
+  const startedLabel =
+    startedDay === isoDay()
+      ? null
+      : startedDay === addDays(isoDay(), -1)
+        ? 'started yesterday'
+        : `started ${fmtDayShort(startedDay)}`;
   const costTokens = [
     session.costUsd != null ? fmtCost(session.costUsd) : null,
     session.tokens != null ? fmtTokens(session.tokens) : null,
@@ -324,6 +347,11 @@ function SpineRow({
             >
               {statusLabel(session)}
             </span>
+            {startedLabel !== null && (
+              <span className="rounded-full border border-line-strong px-[9px] py-px font-mono text-[10px] whitespace-nowrap text-ink-faint">
+                {startedLabel}
+              </span>
+            )}
             {costTokens !== '' && (
               <span className="ml-auto font-mono text-[10.5px] whitespace-nowrap text-ink-faint">
                 {costTokens}
@@ -395,7 +423,7 @@ function Spine({ sessions, query }: { sessions: Session[]; query: string }): JSX
       (v) => v != null && v.toLowerCase().includes(query),
     );
   const rows = sessions
-    .filter((s) => (LIVE_STATUSES.has(s.status) || sessionDay(s) === today) && matchesQuery(s))
+    .filter((s) => (isLiveNow(s) || sessionDay(s) === today) && matchesQuery(s))
     .sort((a, b) => (b.endedAt ?? b.startedAt).localeCompare(a.endedAt ?? a.startedAt))
     .slice(0, MAX_SPINE_ROWS);
 
@@ -736,7 +764,7 @@ export function Overview(): JSX.Element {
   );
   useLiveUpdates(onMessage, reload);
 
-  const activeCount = (sessions ?? []).filter((s) => LIVE_STATUSES.has(s.status)).length;
+  const activeCount = (sessions ?? []).filter(isLiveNow).length;
   const pendingCount = approvals?.length ?? 0;
 
   return (

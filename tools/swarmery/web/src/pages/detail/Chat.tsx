@@ -1,8 +1,10 @@
 // Chat tab: the session as a human-readable conversation (Claude-app style).
 // User turns render as right-aligned tinted bubbles, assistant turns as
-// markdown prose; each turn's tool activity collapses into a subtle one-liner
-// ("Ran 5 commands, used 2 tools") that jumps to the Timeline tab. Long
-// assistant texts clamp to ~20 lines with a show-more expander.
+// markdown prose; tool activity from consecutive assistant turns merges into a
+// single subtle one-liner ("Ran 2 agents, ran 4 commands, used a tool") placed
+// before the prose that follows it. Clicking the line expands the group
+// inline, rendered with the Timeline tab's own rows (nested subagent blocks
+// included). Long assistant texts clamp to ~20 lines with a show-more expander.
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,8 +12,10 @@ import type { Event, SessionDetail, Turn } from '../../api/types';
 import { fmtAgo, fmtTime } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { pickString } from '../../lib/payload';
+import { buildSubtree } from '../../lib/timeline';
 import { Empty } from '../../components/ui';
 import { LiveActivity } from './LiveActivity';
+import { Nodes } from './Timeline';
 
 /* ----- tool activity one-liner ----- */
 
@@ -46,27 +50,42 @@ function plural(n: number, word: string): string {
 
 function toolSummary(c: ToolCounts): string | null {
   const parts: string[] = [];
+  if (c.agents > 0) parts.push(`ran ${plural(c.agents, 'agent')}`);
   if (c.commands > 0) parts.push(`ran ${plural(c.commands, 'command')}`);
   if (c.tools > 0) parts.push(`used ${plural(c.tools, 'tool')}`);
-  if (c.agents > 0) parts.push(plural(c.agents, 'agent'));
-  if (c.skills > 0) parts.push(plural(c.skills, 'skill'));
+  if (c.skills > 0) parts.push(`used ${plural(c.skills, 'skill')}`);
   if (parts.length === 0) return null;
-  const s = parts.join(' · ');
+  const s = parts.join(', ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function ToolLine({ summary, onClick }: { summary: string; onClick: () => void }): JSX.Element {
+function ToolGroup({ summary, events }: { summary: string; events: readonly Event[] }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const nodes = useMemo(() => buildSubtree(events), [events]);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title="Show in Timeline"
-      className="my-1.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[11px] text-ink-faint transition-colors hover:text-brand"
-    >
-      <span aria-hidden="true">⚙</span>
-      <span>{summary}</span>
-      <span aria-hidden="true">›</span>
-    </button>
+    <div className="my-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        title={open ? 'Collapse activity' : 'Expand activity'}
+        className={`flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[11px] transition-colors hover:text-brand ${open ? 'text-ink-2' : 'text-ink-faint'}`}
+      >
+        <span aria-hidden="true">⚙</span>
+        <span>{summary}</span>
+        <span
+          aria-hidden="true"
+          className={`transition-transform ${open ? 'rotate-90' : ''}`}
+        >
+          ›
+        </span>
+      </button>
+      {open && (
+        <div className="mt-1 mb-2">
+          <Nodes nodes={nodes} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -105,7 +124,7 @@ function ClampedProse({ text }: { text: string }): JSX.Element {
   );
 }
 
-/* ----- one turn ----- */
+/* ----- chat items: turns flattened with consecutive tool activity merged ----- */
 
 function turnText(turn: Turn, events: readonly Event[]): string | null {
   if (turn.text !== null && turn.text.trim() !== '') return turn.text;
@@ -120,35 +139,61 @@ function turnText(turn: Turn, events: readonly Event[]): string | null {
   return null;
 }
 
-function ChatTurn({
-  turn,
-  events,
-  onShowTimeline,
-}: {
-  turn: Turn;
-  events: readonly Event[];
-  onShowTimeline: () => void;
-}): JSX.Element | null {
-  const text = turnText(turn, events);
-  const summary = toolSummary(countTools(events));
-  if (text === null && summary === null) return null;
+type ChatItem =
+  | { key: string; kind: 'user'; turn: Turn; text: string | null }
+  | { key: string; kind: 'assistant'; text: string }
+  | { key: string; kind: 'tools'; summary: string; events: Event[] };
 
-  if (turn.role === 'user') {
-    return (
-      <div className="my-[7px] flex flex-col items-end">
-        <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink">
-          {text ?? '(empty prompt)'}
-        </div>
-        <span className="mt-1 pr-1 font-mono text-[10px] text-ink-faint">
-          {fmtTime(turn.startedAt)}
-        </span>
-      </div>
-    );
+/** Flatten sorted turns into renderable items. Tool activity accumulates across
+ * consecutive assistant turns and flushes as ONE summary line right before the
+ * next piece of prose (assistant text or user bubble) — mirroring the Claude
+ * app's "Ran 2 agents, ran 4 commands, used a tool ›" collapsed groups instead
+ * of one chip per turn. The group keeps its events so the chip can expand
+ * inline. */
+function buildItems(turns: readonly Turn[], eventsByTurn: ReadonlyMap<number, Event[]>): ChatItem[] {
+  const items: ChatItem[] = [];
+  let accEvents: Event[] = [];
+  let accKey: number | null = null;
+
+  const flush = (): void => {
+    const summary = toolSummary(countTools(accEvents));
+    if (summary !== null && accKey !== null) {
+      items.push({ key: `tools-${String(accKey)}`, kind: 'tools', summary, events: accEvents });
+    }
+    accEvents = [];
+    accKey = null;
+  };
+
+  for (const turn of turns) {
+    const events = eventsByTurn.get(turn.id) ?? [];
+    if (turn.role === 'user') {
+      flush();
+      items.push({ key: `turn-${String(turn.id)}`, kind: 'user', turn, text: turnText(turn, events) });
+      continue;
+    }
+    if (events.length > 0) {
+      accEvents = accEvents.concat(events);
+      accKey ??= turn.id;
+    }
+    const text = turnText(turn, events);
+    if (text !== null) {
+      flush();
+      items.push({ key: `turn-${String(turn.id)}`, kind: 'assistant', text });
+    }
   }
+  flush();
+  return items;
+}
+
+function UserBubble({ turn, text }: { turn: Turn; text: string | null }): JSX.Element {
   return (
-    <div className="my-[7px] text-[14px] leading-[1.7] text-ink-2">
-      {text !== null && <ClampedProse text={text} />}
-      {summary !== null && <ToolLine summary={summary} onClick={onShowTimeline} />}
+    <div className="my-[7px] flex flex-col items-end">
+      <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink">
+        {text ?? '(empty prompt)'}
+      </div>
+      <span className="mt-1 pr-1 font-mono text-[10px] text-ink-faint">
+        {fmtTime(turn.startedAt)}
+      </span>
     </div>
   );
 }
@@ -193,11 +238,9 @@ function PendingTurn({ text }: { text: string }): JSX.Element {
 export function Chat({
   detail,
   pending = [],
-  onShowTimeline,
 }: {
   detail: SessionDetail;
   pending?: readonly string[];
-  onShowTimeline: () => void;
 }): JSX.Element {
   const turns = useMemo(() => detail.turns.slice().sort((a, b) => a.seq - b.seq), [detail.turns]);
   const eventsByTurn = useMemo(() => {
@@ -210,6 +253,7 @@ export function Chat({
     }
     return map;
   }, [detail.events]);
+  const items = useMemo(() => buildItems(turns, eventsByTurn), [turns, eventsByTurn]);
 
   if (turns.length === 0 && pending.length === 0) {
     return <Empty>no conversation in this session yet</Empty>;
@@ -226,14 +270,17 @@ export function Chat({
   const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : undefined;
   return (
     <div className="mt-[26px]">
-      {turns.map((turn) => (
-        <ChatTurn
-          key={turn.id}
-          turn={turn}
-          events={eventsByTurn.get(turn.id) ?? []}
-          onShowTimeline={onShowTimeline}
-        />
-      ))}
+      {items.map((item) =>
+        item.kind === 'tools' ? (
+          <ToolGroup key={item.key} summary={item.summary} events={item.events} />
+        ) : item.kind === 'user' ? (
+          <UserBubble key={item.key} turn={item.turn} text={item.text} />
+        ) : (
+          <div key={item.key} className="my-[7px] text-[14px] leading-[1.7] text-ink-2">
+            <ClampedProse text={item.text} />
+          </div>
+        ),
+      )}
       {pending.map((text, i) => (
         <PendingTurn key={`pending-${String(i)}`} text={text} />
       ))}

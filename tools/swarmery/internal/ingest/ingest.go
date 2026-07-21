@@ -644,6 +644,15 @@ func (in *ingester) openToolCall(r *record, b contentBlock, dedup string, turnID
 	}
 	truncateStrings(input)
 	input["tool_use_id"] = b.ID
+	// Skill attribution (§9): tool calls issued while a skill is active carry
+	// attributionSkill on the assistant line — stored in the input map so it
+	// survives closeToolCall's payload rebuild ({input, result}). This is the
+	// skill→tool / skill→subagent edge of the session call tree. Attribution,
+	// not strict causality: there is no "skill ended" marker, so the tag can
+	// outlive the skill's actual work.
+	if r.AttributionSkill != "" {
+		input["attributionSkill"] = r.AttributionSkill
+	}
 
 	typ := "tool_call"
 	switch b.Name {

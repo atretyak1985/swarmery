@@ -4,12 +4,15 @@
 // the session has neither.
 
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import type { Event } from '../../api/types';
 import { pickString, subagentDescription, skillName } from '../../lib/payload';
 
 interface AgentChip {
   /** Chip label: agent type (aggregated) or task description (small sessions). */
   name: string;
+  /** Agent type — the registry name the chip links to (label may be a description). */
+  type: string;
   count: number;
   /** Native tooltip: the task descriptions hidden behind an aggregated chip. */
   title: string | null;
@@ -33,6 +36,7 @@ function deriveAgents(events: Event[]): AgentChip[] {
   if (starts.length <= DESCRIBE_ALL_THRESHOLD) {
     return starts.map(({ type, description }) => ({
       name: description ?? type,
+      type,
       count: 1,
       title: description !== null ? type : null,
     }));
@@ -49,6 +53,7 @@ function deriveAgents(events: Event[]): AgentChip[] {
   }
   return [...byType.entries()].map(([name, { count, descriptions }]) => ({
     name,
+    type: name,
     count,
     title: descriptions.length > 0 ? descriptions.join('\n') : null,
   }));
@@ -92,29 +97,32 @@ export function SummaryChips({ events }: { events: Event[] }): JSX.Element | nul
     <div className="mt-2.5 flex flex-col gap-1.5">
       {agents.length > 0 && (
         <ChipGroup label="agents" tone="text-blue/70">
-          {agents.map(({ name, count, title }, i) => (
-            <span
+          {agents.map(({ name, type, count, title }, i) => (
+            <Link
               key={`${name}-${String(i)}`}
-              title={title ?? undefined}
-              className="max-w-[360px] truncate rounded-full border border-blue/30 bg-blue/10 px-[9px] py-0.5 font-mono text-[11px] text-blue"
+              to={`/system?tab=agents&find=${encodeURIComponent(type)}`}
+              title={title ?? `open ${type} in System`}
+              className="max-w-[360px] truncate rounded-full border border-blue/30 bg-blue/10 px-[9px] py-0.5 font-mono text-[11px] text-blue transition-colors hover:border-blue/60 hover:bg-blue/15"
             >
               <span aria-hidden="true">⬡ </span>
               {name}
               {count > 1 ? ` ×${count}` : ''}
-            </span>
+            </Link>
           ))}
         </ChipGroup>
       )}
       {skills.length > 0 && (
         <ChipGroup label="skills" tone="text-amber/70">
           {skills.map((name) => (
-            <span
+            <Link
               key={name}
-              className="rounded-full border border-amber/30 bg-amber/10 px-[9px] py-0.5 font-mono text-[11px] text-amber"
+              to={`/system?tab=skills&find=${encodeURIComponent(name)}`}
+              title={`open ${name} in System`}
+              className="rounded-full border border-amber/30 bg-amber/10 px-[9px] py-0.5 font-mono text-[11px] text-amber transition-colors hover:border-amber/60 hover:bg-amber/15"
             >
               <span aria-hidden="true">◈ </span>
               {name}
-            </span>
+            </Link>
           ))}
         </ChipGroup>
       )}
