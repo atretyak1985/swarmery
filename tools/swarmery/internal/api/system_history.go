@@ -83,6 +83,7 @@ type agentHistoryDTO struct {
 // normAgentType folds "core:tech-lead" and "tech-lead" to the same key: the
 // segment after the last ':'. Built-ins ("Explore", "general-purpose") pass
 // through unchanged and simply never match a registry name.
+// twin: internal/advisor/rules.go (normAgent, lowercased) — keep in lockstep.
 func normAgentType(t string) string {
 	if i := strings.LastIndexByte(t, ':'); i >= 0 {
 		return t[i+1:]

@@ -2,10 +2,12 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -626,5 +628,246 @@ func TestRetroTasks(t *testing.T) {
 	if loopsOnly.Loops != 1 || loopsOnly.Delegations != 0 ||
 		loopsOnly.Verdicts.OK != 0 || loopsOnly.Verdicts.Redispatch != 0 {
 		t.Errorf("task-loops = %+v, want loops 1 and zero delegations/verdicts", loopsOnly)
+	}
+}
+
+// ── phase 3: advisor recommendations ──────────────────────────────────────
+
+// retroRecServer seeds one recommendation per lifecycle status plus enough
+// denied Bash events that POST /api/retro/advise has something to propose
+// and PATCH-accept has a metric to snapshot.
+func retroRecServer(t *testing.T) (*httptest.Server, *sql.DB) {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "recs.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	today := retroDay(t, 0)
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+	mustExec(`INSERT INTO projects (id, path, slug, name, first_seen) VALUES
+		(1, '/work/alpha', '-work-alpha', 'Alpha', ?)`, today)
+	mustExec(`INSERT INTO sessions (id, project_id, session_uuid, status, started_at) VALUES
+		(1, 1, 'uuid-one', 'completed', ?)`, today)
+	for i := 0; i < 6; i++ {
+		mustExec(`INSERT INTO events (session_id, ts, type, tool_name, status, payload, dedup_key)
+			VALUES (1, ?, 'tool_call', 'Bash', 'denied', '{}', ?)`,
+			today, "den-"+string(rune('a'+i)))
+	}
+	for i, st := range []string{"proposed", "accepted", "dismissed", "adopted", "verified"} {
+		mustExec(`INSERT INTO recommendations
+			(id, rule, target_kind, target, title, detail, evidence, status, dedup_key, created_at, updated_at)
+			VALUES (?, 'R1', 'tool', ?, 'Title', 'Detail', '{"counts":{"denied":6}}', ?, ?, ?, ?)`,
+			i+1, "Tool"+st, st, "R1:Tool"+st, today, today)
+	}
+
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv, db
+}
+
+type recsResp struct {
+	Recommendations []struct {
+		ID       int64           `json:"id"`
+		Rule     string          `json:"rule"`
+		Target   string          `json:"target"`
+		Status   string          `json:"status"`
+		Evidence json.RawMessage `json:"evidence"`
+	} `json:"recommendations"`
+}
+
+func TestRetroRecommendationsList(t *testing.T) {
+	srv, _ := retroRecServer(t)
+
+	statuses := func(path string) map[string]bool {
+		t.Helper()
+		var out recsResp
+		getJSON(t, srv.URL+path, &out)
+		got := map[string]bool{}
+		for _, r := range out.Recommendations {
+			got[r.Status] = true
+		}
+		return got
+	}
+
+	t.Run("default filter is the actionable set", func(t *testing.T) {
+		got := statuses("/api/retro/recommendations")
+		want := map[string]bool{"proposed": true, "accepted": true, "adopted": true}
+		if len(got) != len(want) || !got["proposed"] || !got["accepted"] || !got["adopted"] {
+			t.Errorf("statuses = %v, want exactly %v", got, want)
+		}
+	})
+
+	t.Run("explicit CSV filter", func(t *testing.T) {
+		got := statuses("/api/retro/recommendations?status=verified,dismissed")
+		if len(got) != 2 || !got["verified"] || !got["dismissed"] {
+			t.Errorf("statuses = %v, want verified+dismissed", got)
+		}
+	})
+
+	t.Run("status=all returns everything", func(t *testing.T) {
+		var out recsResp
+		getJSON(t, srv.URL+"/api/retro/recommendations?status=all", &out)
+		if len(out.Recommendations) != 5 {
+			t.Errorf("rows = %d, want all 5", len(out.Recommendations))
+		}
+		// Evidence must be raw JSON passthrough, not a re-encoded string.
+		var ev struct {
+			Counts map[string]int64 `json:"counts"`
+		}
+		if err := json.Unmarshal(out.Recommendations[0].Evidence, &ev); err != nil || ev.Counts["denied"] != 6 {
+			t.Errorf("evidence = %s, want the raw counts object", out.Recommendations[0].Evidence)
+		}
+	})
+
+	t.Run("unknown status is 400", func(t *testing.T) {
+		res, err := http.Get(srv.URL + "/api/retro/recommendations?status=bogus")
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", res.StatusCode)
+		}
+	})
+}
+
+func TestPatchRecommendation(t *testing.T) {
+	srv, db := retroRecServer(t)
+	url := func(id int) string {
+		return srv.URL + "/api/retro/recommendations/" + strconv.Itoa(id)
+	}
+
+	t.Run("accept writes the baseline snapshot", func(t *testing.T) {
+		out := doJSON(t, http.MethodPatch, url(1), map[string]any{"status": "accepted"}, http.StatusOK)
+		if out["status"] != "accepted" {
+			t.Errorf("status = %v, want accepted", out["status"])
+		}
+		var base sql.NullString
+		if err := db.QueryRow(`SELECT baseline FROM recommendations WHERE id = 1`).Scan(&base); err != nil {
+			t.Fatal(err)
+		}
+		if !base.Valid {
+			t.Fatal("baseline not written on accept")
+		}
+		var b struct {
+			Metric     string  `json:"metric"`
+			Value      float64 `json:"value"`
+			AcceptedAt string  `json:"accepted_at"`
+		}
+		if err := json.Unmarshal([]byte(base.String), &b); err != nil {
+			t.Fatalf("baseline %q: %v", base.String, err)
+		}
+		// The seeded rec targets "Toolproposed" — 0 denied events carry that
+		// tool name, so the snapshot is denied_per_day 0 with accepted_at set.
+		if b.Metric != "denied_per_day" || b.AcceptedAt == "" {
+			t.Errorf("baseline = %+v, want a denied_per_day snapshot with accepted_at", b)
+		}
+	})
+
+	t.Run("accepted can still be dismissed", func(t *testing.T) {
+		out := doJSON(t, http.MethodPatch, url(1), map[string]any{"status": "dismissed"}, http.StatusOK)
+		if out["status"] != "dismissed" {
+			t.Errorf("status = %v, want dismissed", out["status"])
+		}
+	})
+
+	t.Run("illegal transitions are 422", func(t *testing.T) {
+		// dismissed (id 3), adopted (4), verified (5) can't be re-accepted;
+		// nothing accepts a dismissal twice either.
+		for _, id := range []int{3, 4, 5} {
+			doJSON(t, http.MethodPatch, url(id), map[string]any{"status": "accepted"},
+				http.StatusUnprocessableEntity)
+		}
+		doJSON(t, http.MethodPatch, url(3), map[string]any{"status": "dismissed"},
+			http.StatusUnprocessableEntity)
+		// Lifecycle statuses are never PATCHable, even from proposed.
+		doJSON(t, http.MethodPatch, url(2), map[string]any{"status": "verified"},
+			http.StatusUnprocessableEntity)
+	})
+
+	t.Run("unknown id is 404", func(t *testing.T) {
+		doJSON(t, http.MethodPatch, url(424242), map[string]any{"status": "accepted"},
+			http.StatusNotFound)
+	})
+}
+
+// TestPatchRecommendationConflict drives the guarded-write 409 path: the
+// recPatchHook test seam mutates the row between the handler's status read
+// and its guarded UPDATE (a concurrent dismiss winning the race), so the
+// UPDATE affects 0 rows and the handler answers 409 with the current status.
+func TestPatchRecommendationConflict(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "conflict.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.Exec(`INSERT INTO recommendations
+		(id, rule, target_kind, target, title, detail, evidence, status, dedup_key, created_at, updated_at)
+		VALUES (1, 'R1', 'tool', 'Bash', 'Title', 'Detail', '{}', 'proposed', 'R1:Bash', ?, ?)`,
+		retroDay(t, 0), retroDay(t, 0)); err != nil {
+		t.Fatalf("seed rec: %v", err)
+	}
+
+	h := &Handler{DB: db}
+	h.recPatchHook = func() {
+		if _, err := db.Exec(`UPDATE recommendations SET status = 'dismissed' WHERE id = 1`); err != nil {
+			t.Fatalf("hook update: %v", err)
+		}
+	}
+	req := httptest.NewRequest(http.MethodPatch, "/api/retro/recommendations/1",
+		strings.NewReader(`{"status":"accepted"}`))
+	req.SetPathValue("id", "1")
+	rec := httptest.NewRecorder()
+	h.patchRecommendation(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d (%s), want 409", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Error  string `json:"error"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %q: %v", rec.Body.String(), err)
+	}
+	if body.Status != "dismissed" || body.Error == "" {
+		t.Errorf("body = %+v, want the current status (dismissed) and an error message", body)
+	}
+	var cur string
+	if err := db.QueryRow(`SELECT status FROM recommendations WHERE id = 1`).Scan(&cur); err != nil {
+		t.Fatal(err)
+	}
+	if cur != "dismissed" {
+		t.Errorf("db status = %q, want the concurrent dismissed kept", cur)
+	}
+}
+
+func TestRetroAdvise(t *testing.T) {
+	srv, db := retroRecServer(t)
+
+	out := doJSON(t, http.MethodPost, srv.URL+"/api/retro/advise", map[string]any{}, http.StatusOK)
+	// 6 denied Bash events + no covering rule → R1 proposes a Bash rec.
+	if p, ok := out["proposed"].(float64); !ok || p < 1 {
+		t.Errorf("advise stats = %v, want proposed >= 1", out)
+	}
+	var status string
+	if err := db.QueryRow(
+		`SELECT status FROM recommendations WHERE rule = 'R1' AND target = 'Bash'`).
+		Scan(&status); err != nil {
+		t.Fatalf("Bash rec after advise: %v", err)
+	}
+	if status != "proposed" {
+		t.Errorf("Bash rec status = %q, want proposed", status)
 	}
 }

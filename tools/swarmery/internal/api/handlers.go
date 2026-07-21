@@ -24,6 +24,10 @@ type Handler struct {
 	// Docs is the markdown source for /api/docs — the embedded docsfs
 	// snapshot in production, overridable with any fs.FS in tests.
 	Docs fs.FS
+	// recPatchHook, when non-nil, runs between patchRecommendation's status
+	// read and its guarded status write — a test seam for the 409 conflict
+	// path (nil in production).
+	recPatchHook func()
 }
 
 type projectDTO struct {

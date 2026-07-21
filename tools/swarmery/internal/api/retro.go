@@ -17,6 +17,12 @@ package api
 //   - retroAgents rows gain re_dispatch_rate (task_delegations ledger) and
 //     eval (latest eval_runs row for the registry agent)
 //
+// Phase 3 surfaces the internal/advisor rule engine (migration 0019):
+//
+//   - /api/retro/recommendations       — list, ?status= CSV filter
+//   - PATCH /api/retro/recommendations/{id} — accept/dismiss (422 otherwise)
+//   - POST /api/retro/advise           — run the engine on demand
+//
 // Aggregation grains deliberately reuse the analytics helpers so numbers agree
 // across pages: runs come from subagent_start events folded by normAgentType
 // (breakdownRuns), $/tokens from turns folded by agentKey (agentTurnTotals),
@@ -26,12 +32,14 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 )
 
@@ -258,6 +266,8 @@ var redispatchRe = regexp.MustCompile(`(?i)(re-?dispatch|redo|\bfail(ed|ure)?\b|
 const redispatchVerdictMaxRunes = 40
 
 // isRedispatch reports whether a ledger verdict cell records a re-dispatch.
+// twin: internal/advisor/rules.go — keep in lockstep (incl. redispatchRe and
+// redispatchVerdictMaxRunes above).
 func isRedispatch(verdict string) bool {
 	v := strings.TrimSpace(verdict)
 	if len([]rune(v)) > redispatchVerdictMaxRunes {
@@ -862,4 +872,199 @@ func (h *Handler) enabledRulePatterns(project string) ([]approvals.RulePattern, 
 		out = append(out, rp)
 	}
 	return out, rows.Err()
+}
+
+// ── /api/retro/recommendations (phase 3 — internal/advisor) ───────────────
+
+type recommendationDTO struct {
+	ID         int64  `json:"id"`
+	Rule       string `json:"rule"`
+	TargetKind string `json:"target_kind"`
+	Target     string `json:"target"`
+	Title      string `json:"title"`
+	Detail     string `json:"detail"`
+	// Evidence is the advisor's evidence JSON passed through verbatim.
+	Evidence  json.RawMessage `json:"evidence"`
+	Status    string          `json:"status"`
+	CreatedAt string          `json:"created_at"`
+	UpdatedAt string          `json:"updated_at"`
+}
+
+type recommendationsDTO struct {
+	Recommendations []recommendationDTO `json:"recommendations"`
+}
+
+// recStatuses is the closed status vocabulary of migration 0019.
+var recStatuses = map[string]bool{
+	"proposed": true, "accepted": true, "dismissed": true,
+	"adopted": true, "verified": true,
+}
+
+// GET /api/retro/recommendations?status=proposed,accepted — advisor
+// recommendations, newest activity first. Default filter is the "actionable
+// rail" set (proposed,accepted,adopted); status=all disables filtering (the
+// UI fetches status=verified lazily for its history section).
+func (h *Handler) retroRecommendations(w http.ResponseWriter, r *http.Request) {
+	q := `SELECT id, rule, target_kind, target, title, detail, evidence, status,
+	             created_at, updated_at
+	        FROM recommendations`
+	var args []any
+
+	filter := r.URL.Query().Get("status")
+	if filter == "" {
+		filter = "proposed,accepted,adopted"
+	}
+	if filter != "all" {
+		parts := strings.Split(filter, ",")
+		ph := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if !recStatuses[p] {
+				writeClientErr(w, http.StatusBadRequest, "unknown status "+p)
+				return
+			}
+			ph = append(ph, "?")
+			args = append(args, p)
+		}
+		q += ` WHERE status IN (` + strings.Join(ph, ",") + `)`
+	}
+	q += ` ORDER BY updated_at DESC, id DESC`
+
+	rows, err := h.DB.Query(q, args...)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	defer rows.Close()
+	out := recommendationsDTO{Recommendations: []recommendationDTO{}}
+	for rows.Next() {
+		var d recommendationDTO
+		var evidence string
+		if err := rows.Scan(&d.ID, &d.Rule, &d.TargetKind, &d.Target, &d.Title,
+			&d.Detail, &evidence, &d.Status, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			writeErr(w, err)
+			return
+		}
+		d.Evidence = json.RawMessage(evidence)
+		out.Recommendations = append(out.Recommendations, d)
+	}
+	writeJSON(w, out, rows.Err())
+}
+
+// legalRecTransition guards the user-driven part of the lifecycle: accept or
+// dismiss a proposal, dismiss an already-accepted one (changed your mind
+// before adoption). Everything else — adopted/verified — is the advisor's
+// automation, never a PATCH.
+func legalRecTransition(from, to string) bool {
+	switch {
+	case from == "proposed" && (to == "accepted" || to == "dismissed"):
+		return true
+	case from == "accepted" && to == "dismissed":
+		return true
+	}
+	return false
+}
+
+// PATCH /api/retro/recommendations/{id} — body {"status":"accepted"|"dismissed"}.
+// Illegal transitions are 422. Accepting snapshots the rule's current metric
+// as the verification baseline (advisor.BaselineFor, with accepted_at baked
+// into the JSON for the adoption detector).
+func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if body.Status != "accepted" && body.Status != "dismissed" {
+		writeClientErr(w, http.StatusUnprocessableEntity,
+			"status must be accepted or dismissed")
+		return
+	}
+
+	var rule, target, status string
+	err := h.DB.QueryRow(
+		`SELECT rule, target, status FROM recommendations WHERE id = ?`, id).
+		Scan(&rule, &target, &status)
+	if err == sql.ErrNoRows {
+		writeClientErr(w, http.StatusNotFound, "recommendation not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !legalRecTransition(status, body.Status) {
+		writeClientErr(w, http.StatusUnprocessableEntity,
+			"illegal transition "+status+" -> "+body.Status)
+		return
+	}
+
+	now := time.Now()
+	nowS := now.UTC().Format("2006-01-02T15:04:05.000Z")
+	if h.recPatchHook != nil {
+		h.recPatchHook() // test seam: mutate between the read and the guarded write
+	}
+	// Guarded write: the status predicate re-checks the status we validated
+	// the transition against, so a concurrent writer (advisor Run flipping to
+	// adopted/verified, another PATCH) can't be silently overwritten.
+	var res sql.Result
+	if body.Status == "accepted" {
+		base, berr := advisor.BaselineFor(h.DB, rule, target, now)
+		if berr != nil {
+			writeErr(w, berr)
+			return
+		}
+		res, err = h.DB.Exec(`UPDATE recommendations
+			SET status = 'accepted', baseline = ?, updated_at = ?
+			WHERE id = ? AND status = ?`, base, nowS, id, status)
+	} else {
+		res, err = h.DB.Exec(`UPDATE recommendations
+			SET status = 'dismissed', updated_at = ?
+			WHERE id = ? AND status = ?`, nowS, id, status)
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if n, aerr := res.RowsAffected(); aerr != nil {
+		writeErr(w, aerr)
+		return
+	} else if n == 0 {
+		// Lost the race — surface the CURRENT status so the client can resync.
+		var cur string
+		if rerr := h.DB.QueryRow(
+			`SELECT status FROM recommendations WHERE id = ?`, id).Scan(&cur); rerr != nil {
+			writeErr(w, rerr)
+			return
+		}
+		writeJSONStatus(w, http.StatusConflict, map[string]string{
+			"error":  "status changed concurrently: now " + cur,
+			"status": cur,
+		})
+		return
+	}
+
+	var d recommendationDTO
+	var evidence string
+	err = h.DB.QueryRow(`SELECT id, rule, target_kind, target, title, detail,
+			evidence, status, created_at, updated_at
+		 FROM recommendations WHERE id = ?`, id).
+		Scan(&d.ID, &d.Rule, &d.TargetKind, &d.Target, &d.Title, &d.Detail,
+			&evidence, &d.Status, &d.CreatedAt, &d.UpdatedAt)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	d.Evidence = json.RawMessage(evidence)
+	writeJSON(w, d, nil)
+}
+
+// POST /api/retro/advise — run the advisor engine now ("Analyze now") and
+// return its Stats tally.
+func (h *Handler) retroAdvise(w http.ResponseWriter, r *http.Request) {
+	stats, err := advisor.Run(h.DB, time.Now())
+	writeJSON(w, stats, err)
 }

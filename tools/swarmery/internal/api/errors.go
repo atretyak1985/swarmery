@@ -53,6 +53,7 @@ var (
 )
 
 // normalizeErrKey folds one raw error message to its group key.
+// twin: internal/advisor/rules.go — keep in lockstep.
 func normalizeErrKey(msg string) string {
 	k := strings.ToLower(msg)
 	k = reErrIDToken.ReplaceAllString(k, "#")
@@ -65,6 +66,7 @@ func normalizeErrKey(msg string) string {
 }
 
 // extractErrMsg pulls a human-readable message out of one error event payload.
+// twin: internal/advisor/rules.go — keep in lockstep.
 func extractErrMsg(typ string, toolName sql.NullString, payload sql.NullString) string {
 	var p map[string]any
 	if payload.Valid {

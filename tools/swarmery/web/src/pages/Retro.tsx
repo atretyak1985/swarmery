@@ -4,9 +4,15 @@
 // tools (with a one-click auto-approve rule), top error groups, and
 // approval-wait stats. Data comes from /api/retro/{agents,friction}; range
 // presets and project scope mirror Analytics.tsx.
+//
+// Phase 3 adds the advisor recommendations rail at the top: evidenced
+// R1–R6 rule-engine proposals with Accept/Dismiss, lifecycle status chips
+// (accepted → adopted → verified), an "Analyze now" trigger, and a lazily
+// fetched Verified history section.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  Recommendation,
   RetroAgentRow,
   RetroAgentsResp,
   RetroErrorGroup,
@@ -16,10 +22,13 @@ import type {
 } from '../api/types';
 import {
   createApprovalRule,
+  fetchRecommendations,
   fetchRetroAgents,
   fetchRetroFriction,
   fetchRetroLessons,
   fetchRetroTasks,
+  patchRecommendation,
+  runAdvise,
 } from '../api';
 import {
   addDays,
@@ -86,6 +95,247 @@ function RangeControls({
         className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-[11px] text-ink-dim"
       />
     </div>
+  );
+}
+
+/* ----- recommendations rail (retro phase 3) ----- */
+
+/** Distinct chip hue per rule, drawn from the existing palette. */
+const RULE_HUES: Record<string, string> = {
+  R1: 'border-blue/40 text-blue',
+  R2: 'border-red/40 text-red',
+  R3: 'border-amber/40 text-amber',
+  R4: 'border-purple/40 text-purple',
+  R5: 'border-green/40 text-green',
+  R6: 'border-line-strong text-ink-2',
+};
+
+function ruleHue(rule: string): string {
+  return RULE_HUES[rule] ?? 'border-line-strong text-ink-dim';
+}
+
+/** Lifecycle chip for in-flight statuses (accepted/adopted). The accepted
+ * copy is per target kind: agent/tool/process recs have a detectable adoption
+ * signal to wait for; error_group/config verify straight from accepted, so
+ * "waiting for adoption" would promise a step that never happens. */
+function RecStatusChip({
+  status,
+  kind,
+}: {
+  status: Recommendation['status'];
+  kind: Recommendation['target_kind'];
+}): JSX.Element | null {
+  if (status === 'accepted') {
+    const adoptable = kind === 'agent' || kind === 'tool' || kind === 'process';
+    return (
+      <span className="rounded-[7px] border border-amber/40 bg-amber/10 px-1.5 py-[2px] font-mono text-[10px] text-amber">
+        {adoptable ? 'accepted — waiting for adoption' : 'accepted'}
+      </span>
+    );
+  }
+  if (status === 'adopted') {
+    return (
+      <span className="rounded-[7px] border border-blue/40 bg-blue/10 px-1.5 py-[2px] font-mono text-[10px] text-blue">
+        change detected — verifying
+      </span>
+    );
+  }
+  return null;
+}
+
+function RecCard({
+  rec,
+  busy,
+  onAction,
+}: {
+  rec: Recommendation;
+  busy: boolean;
+  onAction: (id: number, status: 'accepted' | 'dismissed') => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-[14px] border border-line bg-surface px-4 py-3.5">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span
+          className={`rounded-[7px] border px-1.5 py-[2px] font-mono text-[10px] font-medium ${ruleHue(rec.rule)}`}
+        >
+          {rec.rule}
+        </span>
+        <span className="min-w-0 flex-1 font-mono text-[12.5px] font-medium text-ink">
+          {rec.title}
+        </span>
+        <span className="font-mono text-[10px] text-ink-faint">{fmtAgo(rec.updated_at)}</span>
+      </div>
+      <p className="mt-1.5 font-mono text-[10.5px] leading-relaxed text-ink-3">{rec.detail}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <RecStatusChip status={rec.status} kind={rec.target_kind} />
+        {rec.status === 'proposed' && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onAction(rec.id, 'accepted')}
+            className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-green/40 hover:text-green disabled:opacity-50"
+          >
+            {busy ? '…' : 'Accept'}
+          </button>
+        )}
+        {(rec.status === 'proposed' || rec.status === 'accepted') && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onAction(rec.id, 'dismissed')}
+            className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-red/40 hover:text-red disabled:opacity-50"
+          >
+            {busy ? '…' : 'Dismiss'}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="ml-auto font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
+        >
+          {open ? '▾ evidence' : '▸ evidence'}
+        </button>
+      </div>
+      {open && (
+        <pre className="mt-2 overflow-x-auto rounded-[10px] border border-line bg-field px-3 py-2 font-mono text-[10px] whitespace-pre-wrap text-ink-dim">
+          {JSON.stringify(rec.evidence, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function RecommendationsRail(): JSX.Element | null {
+  const [recs, setRecs] = useState<Recommendation[] | null>(null);
+  const [verified, setVerified] = useState<Recommendation[] | null>(null);
+  const [verifiedOpen, setVerifiedOpen] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  // In-flight rec ids: the ref is the synchronous double-submit guard, the
+  // state mirror drives rendering (the friction board's +rule Set pattern).
+  const inflight = useRef<Set<number>>(new Set());
+  const [busy, setBusy] = useState<ReadonlySet<number>>(new Set());
+
+  const load = useCallback((): void => {
+    fetchRecommendations()
+      .then((r) => setRecs(r.recommendations))
+      .catch(() => setRecs(null)); // endpoint unavailable → hide the rail
+  }, []);
+  useEffect(load, [load]);
+
+  const loadVerified = useCallback((): void => {
+    fetchRecommendations('verified')
+      .then((r) => setVerified(r.recommendations))
+      .catch(() => setVerified([]));
+  }, []);
+
+  const onAction = useCallback(
+    (id: number, status: 'accepted' | 'dismissed'): void => {
+      if (inflight.current.has(id)) return;
+      inflight.current.add(id);
+      setBusy(new Set(inflight.current));
+      setFailed(null);
+      patchRecommendation(id, status)
+        .then((updated) => {
+          setRecs((prev) => {
+            if (prev === null) return prev;
+            if (updated.status === 'dismissed') return prev.filter((r) => r.id !== id);
+            return prev.map((r) => (r.id === id ? updated : r));
+          });
+        })
+        .catch((e: unknown) => {
+          setFailed(String(e));
+        })
+        .finally(() => {
+          inflight.current.delete(id);
+          setBusy(new Set(inflight.current));
+        });
+    },
+    [],
+  );
+
+  const analyze = useCallback((): void => {
+    setAnalyzing(true);
+    setFailed(null);
+    runAdvise()
+      .then(() => {
+        load();
+        if (verifiedOpen) loadVerified();
+      })
+      .catch((e: unknown) => {
+        setFailed(String(e));
+      })
+      .finally(() => setAnalyzing(false));
+  }, [load, loadVerified, verifiedOpen]);
+
+  if (recs === null) return null;
+
+  return (
+    <section className="mt-[18px]">
+      <div className="flex items-baseline gap-2">
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+          Recommendations
+        </div>
+        <button
+          type="button"
+          disabled={analyzing}
+          onClick={analyze}
+          title="run the advisor rule engine now"
+          className="ml-auto rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
+        >
+          {analyzing ? 'analyzing…' : 'Analyze now'}
+        </button>
+      </div>
+      <div className="mt-2 flex flex-col gap-2.5">
+        {recs.length === 0 ? (
+          <Empty>no open recommendations — the advisor found nothing to flag</Empty>
+        ) : (
+          recs.map((rec) => (
+            <RecCard key={rec.id} rec={rec} busy={busy.has(rec.id)} onAction={onAction} />
+          ))
+        )}
+        {failed !== null && <div className="font-mono text-[10.5px] text-red">{failed}</div>}
+        <div>
+          <button
+            type="button"
+            aria-expanded={verifiedOpen}
+            onClick={() => {
+              setVerifiedOpen((o) => !o);
+              if (verified === null) loadVerified();
+            }}
+            className="font-mono text-[10.5px] text-ink-faint transition-colors hover:text-ink"
+          >
+            {verifiedOpen ? '▾' : '▸'} Verified
+            {verified !== null ? ` (${String(verified.length)})` : ''}
+          </button>
+          {verifiedOpen && verified !== null && (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {verified.length === 0 ? (
+                <Empty>nothing verified yet</Empty>
+              ) : (
+                verified.map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="flex items-baseline gap-2 rounded-[10px] border border-line px-3.5 py-2 font-mono text-[11px]"
+                  >
+                    <span
+                      className={`rounded-[7px] border px-1.5 py-[2px] text-[10px] ${ruleHue(rec.rule)}`}
+                    >
+                      {rec.rule}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-ink-3">{rec.title}</span>
+                    <span className="text-green">✓ verified</span>
+                    <span className="text-ink-faint">{fmtAgo(rec.updated_at)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -563,6 +813,8 @@ export function Retro(): JSX.Element {
           }}
         />
       </div>
+
+      <RecommendationsRail />
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
 

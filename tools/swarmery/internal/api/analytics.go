@@ -88,6 +88,7 @@ func parseRange(r *http.Request) (dateRange, error) {
 }
 
 // localDay maps a stored UTC timestamp string to its local YYYY-MM-DD.
+// twin: internal/advisor/rules.go — keep in lockstep.
 func localDay(utcTS string) (string, bool) {
 	t, err := time.Parse(time.RFC3339, utcTS)
 	if err != nil {

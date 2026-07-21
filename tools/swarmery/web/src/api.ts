@@ -3,6 +3,7 @@
 // declare API types here.
 
 import type {
+  AdviseStats,
   AnalyticsDimension,
   AnalyticsMetric,
   ApprovalRule,
@@ -26,6 +27,9 @@ import type {
   ProjectMetaPatch,
   ProjectsHealthResponse,
   ProjectsResponse,
+  Recommendation,
+  RecommendationsResp,
+  RecommendationStatus,
   RetroAgentsResp,
   RetroFrictionResp,
   RetroLessonsResp,
@@ -348,6 +352,45 @@ export function fetchRetroLessons(range: AnalyticsRange = {}): Promise<RetroLess
 export function fetchRetroTasks(range: AnalyticsRange = {}): Promise<RetroTasksResp> {
   if (MOCK) return mockApi.retroTasks();
   return get(`/api/retro/tasks?${rangeQuery(range, {})}`);
+}
+
+/**
+ * Advisor recommendations (retro phase 3). `status` is a CSV filter or 'all';
+ * the server defaults to the actionable set (proposed,accepted,adopted).
+ */
+export function fetchRecommendations(status?: string): Promise<RecommendationsResp> {
+  if (MOCK) return mockApi.retroRecommendations();
+  const qs = status !== undefined ? `?status=${encodeURIComponent(status)}` : '';
+  return get(`/api/retro/recommendations${qs}`);
+}
+
+/**
+ * PATCH /api/retro/recommendations/{id} — accept or dismiss one proposal.
+ * Illegal transitions come back 422 with an {error} body.
+ */
+export async function patchRecommendation(
+  id: number,
+  status: Extract<RecommendationStatus, 'accepted' | 'dismissed'>,
+): Promise<Recommendation> {
+  if (MOCK) return mockApi.patchRecommendation(id, status);
+  const res = await fetch(`/api/retro/recommendations/${String(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `patch recommendation failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as Recommendation;
+}
+
+/** POST /api/retro/advise — run the advisor rule engine now ("Analyze now"). */
+export async function runAdvise(): Promise<AdviseStats> {
+  if (MOCK) return mockApi.advise();
+  const res = await fetch('/api/retro/advise', { method: 'POST' });
+  if (!res.ok) throw new Error(`advise failed: ${String(res.status)}`);
+  return (await res.json()) as AdviseStats;
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {

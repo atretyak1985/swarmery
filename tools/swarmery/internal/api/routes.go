@@ -62,6 +62,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)
+	// phase 3: internal/advisor recommendations. The writes carry the same D4
+	// origin hardening as every other mutating endpoint.
+	mux.HandleFunc("GET /api/retro/recommendations", h.retroRecommendations)
+	mux.HandleFunc("PATCH /api/retro/recommendations/{id}", requireLocalOrigin(h.patchRecommendation))
+	mux.HandleFunc("POST /api/retro/advise", requireLocalOrigin(h.retroAdvise))
 
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
