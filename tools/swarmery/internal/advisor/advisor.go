@@ -198,7 +198,7 @@ func upsert(db *sql.DB, f finding, now time.Time, stats *Stats) error {
 			UPDATE recommendations
 			   SET status = 'proposed', title = ?, detail = ?, evidence = ?,
 			       baseline = NULL, updated_at = ?
-			 WHERE id = ?`, f.title, f.detail, string(ev), nowS, id); err != nil {
+			 WHERE id = ? AND status = 'dismissed'`, f.title, f.detail, string(ev), nowS, id); err != nil {
 			return err
 		}
 		stats.Proposed++
