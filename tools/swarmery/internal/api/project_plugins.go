@@ -165,6 +165,8 @@ func (h *Handler) putProjectPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
+	// onboard.TogglePlugin has its own ErrCoreLocked guard; this check exists to
+	// answer 400 before any I/O — neither is redundant, keep both.
 	if name == "core" {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]string{"error": "core is managed via attach/detach"})
 		return
