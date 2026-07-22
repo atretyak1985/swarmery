@@ -48,5 +48,10 @@ func Read(claudeDir, name string) (*Catalog, error) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	if m.Plugins == nil {
+		// Guarantee [] over null once the catalog reaches a JSON response,
+		// matching the projectscan convention.
+		m.Plugins = []Plugin{}
+	}
 	return &Catalog{Version: m.Metadata.Version, Plugins: m.Plugins}, nil
 }
