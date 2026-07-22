@@ -8,6 +8,7 @@ package advisor
 //
 //	R1 denied tools        — the /api/retro/friction denied-tools skeleton
 //	R2 agent error rate    — the retroAgentWindow parent_event_id attribution
+//	                         (rate = failed-run share, not error events / runs)
 //	R3 recurring errors    — the errorGroups normalizeErrKey fold
 //	R4 re-dispatch share   — the delegationRates isRedispatch classifier
 //	R5 stale improvements  — retro_improvements via task_retros/tasks
@@ -43,11 +44,12 @@ const (
 	R2MinRuns = 10
 	// R2MedianFactor: flag an agent when error_rate > factor × median.
 	R2MedianFactor = 2.0
-	// R2MinErrors: absolute error floor — an agent with fewer errors than this
-	// in the window is never flagged, however badly its rate beats the median
-	// test (1–2 errors over 10 runs is statistical noise, not a pattern). The
-	// floor applies to CANDIDATES only; the median is still computed over all
-	// agents with ≥ R2MinRuns runs so it stays representative.
+	// R2MinErrors: absolute floor on RAW ERROR EVENTS (not failed runs) — an
+	// agent with fewer error events than this in the window is never flagged,
+	// however badly its failed-run share beats the median test (1–2 errors
+	// over 10 runs is statistical noise, not a pattern). The floor applies to
+	// CANDIDATES only; the median is still computed over all agents with
+	// ≥ R2MinRuns runs so it stays representative.
 	R2MinErrors = 3
 	// R3MinDays: an error group must recur on at least this many distinct
 	// local days.
@@ -313,25 +315,38 @@ func ruleCoversTool(rules []approvals.RulePattern, tool string) bool {
 
 // agentErrStats is one agent's window aggregates for R2 / the R2 metric.
 type agentErrStats struct {
-	runs     int64
-	errors   int64
-	errKeys  map[string]int64
-	sessions []string
-	seen     map[string]struct{}
+	runs   int64
+	errors int64
+	// failedRunKeys dedupes the runs with ≥1 error: keyed by the parent
+	// subagent_start event id when the error row is parented to one, else by
+	// the (unparented) subagent_stop's own event id — twin of internal/api
+	// retroAgentWin.failedRunKeys. len() = failed runs.
+	failedRunKeys map[int64]struct{}
+	errKeys       map[string]int64
+	sessions      []string
+	seen          map[string]struct{}
 }
+
+// failedRuns is the number of distinct runs with at least one error.
+func (a *agentErrStats) failedRuns() int64 { return int64(len(a.failedRunKeys)) }
 
 // agentErrorWindow computes per-agent runs (subagent_start fold) and errors
 // (status='error' events attributed through the parent_event_id chain — the
 // SAME grain as internal/api retroAgentWindow, duplicated with the identical
 // classification if/else so numbers agree with the Retro scorecards; see
-// that function for the full rationale of the type set and the
-// subagent_start exclusion). The "main" bucket (orchestrator) is dropped.
+// that function for the full rationale of the type set, the subagent_start
+// exclusion, and the failed-run dedupe backing the failed-run share). The
+// "main" bucket (orchestrator) is dropped.
 func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error) {
 	acc := map[string]*agentErrStats{}
 	get := func(key string) *agentErrStats {
 		a := acc[key]
 		if a == nil {
-			a = &agentErrStats{errKeys: map[string]int64{}, seen: map[string]struct{}{}}
+			a = &agentErrStats{
+				failedRunKeys: map[int64]struct{}{},
+				errKeys:       map[string]int64{},
+				seen:          map[string]struct{}{},
+			}
 			acc[key] = a
 		}
 		return a
@@ -364,7 +379,7 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 	}
 
 	erows, err := db.Query(`
-		SELECT e.type,
+		SELECT e.id, e.parent_event_id, e.type,
 		       json_extract(e.payload, '$.agentType'),
 		       COALESCE(pe.type, ''),
 		       json_extract(pe.payload, '$.subagent_type'),
@@ -382,9 +397,11 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 	}
 	defer erows.Close()
 	for erows.Next() {
+		var id int64
+		var parentID sql.NullInt64
 		var typ, parentType, uuid string
 		var ownType, subType, toolName, payload sql.NullString
-		if err := erows.Scan(&typ, &ownType, &parentType, &subType, &toolName, &payload, &uuid); err != nil {
+		if err := erows.Scan(&id, &parentID, &typ, &ownType, &parentType, &subType, &toolName, &payload, &uuid); err != nil {
 			return nil, err
 		}
 		key := ""
@@ -398,6 +415,11 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 		}
 		a := get(key)
 		a.errors++
+		runKey := id // unparented subagent_stop: the stop IS the run's proxy
+		if parentType == "subagent_start" && parentID.Valid {
+			runKey = parentID.Int64
+		}
+		a.failedRunKeys[runKey] = struct{}{}
 		a.errKeys[normalizeErrKey(extractErrMsg(typ, toolName, payload))]++
 		if _, ok := a.seen[uuid]; !ok && len(a.sessions) < 3 {
 			a.seen[uuid] = struct{}{}
@@ -407,9 +429,10 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 	return acc, erows.Err()
 }
 
-// r2AgentErrorRate flags agents with ≥ R2MinRuns runs AND ≥ R2MinErrors
-// errors whose error rate exceeds R2MedianFactor × the median error rate
-// among all agents with ≥ R2MinRuns runs in the window.
+// r2AgentErrorRate flags agents with ≥ R2MinRuns runs AND ≥ R2MinErrors raw
+// error events whose failed-run share (distinct runs with ≥1 error / runs —
+// the same grain as the Retro scorecards' error_rate) exceeds R2MedianFactor
+// × the median share among all agents with ≥ R2MinRuns runs in the window.
 func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 	acc, err := agentErrorWindow(db, win)
 	if err != nil {
@@ -426,7 +449,10 @@ func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 		if a.runs < R2MinRuns {
 			continue
 		}
-		rate := float64(a.errors) / float64(a.runs)
+		// Clamped to ≤1 — a run spanning the window start can contribute a
+		// failed run without contributing to the run count (twin of the
+		// internal/api errRate clamp and the R2 metricValue clamp).
+		rate := min(1, float64(a.failedRuns())/float64(a.runs))
 		cands = append(cands, cand{agent, a, rate})
 		rates = append(rates, rate)
 	}
@@ -454,13 +480,15 @@ func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 			rule: "R2", targetKind: "agent", target: c.agent,
 			title: "Review error rate of agent " + c.agent,
 			detail: fmt.Sprintf(
-				"Agent %s has a %.0f%% error rate (%d errors over %d runs) in the last %d days — more than %.0f× the %.0f%% median among agents with ≥%d runs. Top error group: %q.",
-				c.agent, c.rate*100, c.stats.errors, c.stats.runs, WindowDays,
+				"Agent %s failed on %d of %d runs (%.0f%%; %d error events) in the last %d days — more than %.0f× the %.0f%% median failed-run share among agents with ≥%d runs. Top error group: %q.",
+				c.agent, c.stats.failedRuns(), c.stats.runs, c.rate*100,
+				c.stats.errors, WindowDays,
 				R2MedianFactor, median*100, R2MinRuns, topKey),
 			evidence: map[string]any{
 				"window": win,
 				"counts": map[string]any{
-					"runs": c.stats.runs, "errors": c.stats.errors,
+					"runs": c.stats.runs, "failed_runs": c.stats.failedRuns(),
+					"errors":     c.stats.errors,
 					"error_rate": c.rate, "median_error_rate": median,
 				},
 				"top_error_group": topKey,

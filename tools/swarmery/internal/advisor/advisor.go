@@ -602,9 +602,25 @@ func verify(db *sql.DB, now time.Time, stats *Stats) error {
 		}
 
 		post := window{From: fmtTS(anchorT), To: nowS}
-		_, cur, ok, err := metricValue(db, r.rule, r.target, post)
+		curName, cur, ok, err := metricValue(db, r.rule, r.target, post)
 		if err != nil {
 			return err
+		}
+		// Metric-version self-healing: when a rule's metric is redefined (its
+		// metricValue name changes), baselines snapshotted under the OLD
+		// definition are numerically incompatible with the recomputed value.
+		// Instead of comparing incompatible numbers, re-snapshot the baseline
+		// under the current definition (preserving the accepted_at/adopted_at
+		// lifecycle anchors) and skip comparison this cycle — verification
+		// resumes next Run against the fresh baseline. Any future metric
+		// redefinition re-baselines in-flight recs for free.
+		if curName != b.Metric {
+			if rerr := rebaseline(db, r.id, r.rule, r.target, b, now); rerr != nil {
+				return rerr
+			}
+			log.Printf("advisor: rec %d: baseline metric changed (%s -> %s), re-baselined",
+				r.id, b.Metric, curName)
+			continue
 		}
 		if !ok {
 			// I1: the post window lacks the metric's activity floor — never
@@ -632,6 +648,30 @@ func verify(db *sql.DB, now time.Time, stats *Stats) error {
 		}
 	}
 	return nil
+}
+
+// rebaseline rewrites a rec's baseline as a fresh BaselineFor-style snapshot
+// over the trailing WindowDays window ending now, preserving the lifecycle
+// anchors (accepted_at/adopted_at) of the stale baseline it replaces — the
+// verify() self-healing path for metric redefinitions.
+func rebaseline(db *sql.DB, id int64, rule, target string, old baseline, now time.Time) error {
+	win := window{From: fmtTS(now.AddDate(0, 0, -WindowDays)), To: fmtTS(now)}
+	name, value, _, err := metricValue(db, rule, target, win)
+	if err != nil {
+		return err
+	}
+	b := baseline{
+		Metric: name, Value: value,
+		PerDay: perDayRule(rule), WindowDays: windowDaysOf(win),
+		Window: win, AcceptedAt: old.AcceptedAt, AdoptedAt: old.AdoptedAt,
+	}
+	j, err := json.Marshal(b)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`UPDATE recommendations SET baseline = ?, updated_at = ? WHERE id = ?`,
+		string(j), fmtTS(now), id)
+	return err
 }
 
 // relImprovement is the relative metric improvement vs the baseline value,
@@ -707,14 +747,18 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 		}
 		return "denied_per_day", float64(denied) / wd, true, nil
 	case "R2":
+		// failed_run_share is the failed-run share (distinct runs with ≥1
+		// error / runs) — the same grain as r2AgentErrorRate and the Retro
+		// scorecards. Clamped to ≤1: a run spanning the window start can
+		// contribute a failed run without contributing to the run count.
 		acc, aerr := agentErrorWindow(db, win)
 		if aerr != nil {
-			return "error_rate", 0, false, aerr
+			return "failed_run_share", 0, false, aerr
 		}
 		if a, hit := acc[target]; hit && a.runs >= R2MinRuns {
-			return "error_rate", float64(a.errors) / float64(a.runs), true, nil
+			return "failed_run_share", min(1, float64(a.failedRuns())/float64(a.runs)), true, nil
 		}
-		return "error_rate", 0, false, nil
+		return "failed_run_share", 0, false, nil
 	case "R3":
 		days, derr := errGroupDays(db, target, win)
 		if derr != nil || wd <= 0 {

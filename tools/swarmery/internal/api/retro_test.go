@@ -100,18 +100,22 @@ func retroAgentsServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	//       payload (agentType)                                  → tech-lead
 	//   e4  prev-window subagent_stop error with an empty own
 	//       agentType, falling back to a5's subagent_type        → tech-lead
+	//   e5  SECOND sidechain tool error parented to a1           → tech-lead
 	// The old events.turn_id → turns.agent_name join counts NONE of these
 	// (turn_id is NULL on every row) — the per-agent error assertions below
 	// pin the parent-event attribution against that regression. e3/e4 pair
 	// with the mirrored status='error' on their parent starts a2/a5 (see
 	// above): if subagent_start errors were counted too, main would report 2
-	// errors today and the assertions below would fail.
+	// errors today and the assertions below would fail. e1+e5 share the run
+	// a1, so error_rate (failed-run share) must dedupe them: 3 error events
+	// today but only 2 failed runs (a1, a2) out of 3.
 	mustExec(`INSERT INTO events (session_id, parent_event_id, ts, type, tool_name, status, payload, dedup_key) VALUES
 		(1, 1,    ?, 'tool_call',     'Bash',  'error', '{"result":"boom"}', 'e1'),
 		(2, NULL, ?, 'error',         NULL,    'error', '{"error":"api"}',   'e2'),
 		(1, 2,    ?, 'subagent_stop', 'Agent', 'error', '{"agentType":"core:tech-lead","status":"failed"}', 'e3'),
-		(3, 5,    ?, 'subagent_stop', 'Agent', 'error', '{"status":"failed"}', 'e4')`,
-		today, today, today, day10)
+		(3, 5,    ?, 'subagent_stop', 'Agent', 'error', '{"status":"failed"}', 'e4'),
+		(1, 1,    ?, 'tool_call',     'Bash',  'error', '{"result":"boom again"}', 'e5')`,
+		today, today, today, day10, today)
 
 	// Phase-2 chips. Ledger: tech-lead has 1 OK + 1 RE-DISPATCH on an in-range
 	// task → rate 0.5; the out-of-range task's redispatch row must NOT count.
@@ -175,10 +179,12 @@ func TestRetroAgents(t *testing.T) {
 		if tl.CostUSD != 4.0 || tl.TokensOut != 200 {
 			t.Errorf("tech-lead = %+v, want cost 4.0 tokens_out 200", tl)
 		}
-		// e1 (sidechain tool error via parent a1) + e3 (subagent_stop naming
-		// its own agentType) — a turn_id join would report 0 here.
-		if tl.Errors != 2 || !almostEq(tl.ErrorRate, 2.0/3.0) {
-			t.Errorf("tech-lead = %+v, want errors 2 rate 2/3", tl)
+		// e1+e5 (sidechain tool errors via parent a1) + e3 (subagent_stop
+		// naming its own agentType) — a turn_id join would report 0 here.
+		// error_rate is the failed-run share: e1 and e5 belong to the SAME run
+		// (a1), so 3 error events fold to 2 failed runs of 3 — 2/3, not 3/3.
+		if tl.Errors != 3 || !almostEq(tl.ErrorRate, 2.0/3.0) {
+			t.Errorf("tech-lead = %+v, want errors 3 rate 2/3 (failed-run share)", tl)
 		}
 		if tl.AvgMs == nil || *tl.AvgMs != 2000 {
 			t.Errorf("tech-lead avg_ms = %v, want 2000", tl.AvgMs)
@@ -219,7 +225,8 @@ func TestRetroAgents(t *testing.T) {
 	t.Run("prev window math", func(t *testing.T) {
 		// 7-day range → prev is days -13…-7; day10 sits inside it. The prev
 		// error is e4 — a subagent_stop with an empty own agentType that must
-		// fall back to its parent a5's subagent_type.
+		// fall back to its parent a5's subagent_type. Rate 0.5 = failed-run
+		// share: 1 failed run (a5) of 2.
 		tl := out.Agents[0]
 		if tl.Prev.Runs != 2 || tl.Prev.Errors != 1 || !almostEq(tl.Prev.ErrorRate, 0.5) || tl.Prev.CostUSD != 1.0 {
 			t.Errorf("tech-lead prev = %+v, want runs 2 errors 1 rate 0.5 cost 1.0", tl.Prev)

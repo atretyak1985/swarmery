@@ -28,7 +28,11 @@ package api
 // (breakdownRuns), $/tokens from turns folded by agentKey (agentTurnTotals),
 // success rates from agentOutcomeRates, per-agent errors from the
 // parent_event_id attribution (statsTools grain — see tools.go), error
-// grouping from errorGroups (shared with /api/stats/errors).
+// grouping from errorGroups (shared with /api/stats/errors). error_rate is
+// the FAILED-RUN share (distinct runs with ≥1 error / runs, clamped to ≤1 — a
+// run spanning the window start can contribute a failed run without
+// contributing to the run count), not raw error events per run — one run
+// spraying many tool errors counts once.
 
 import (
 	"database/sql"
@@ -72,6 +76,8 @@ type retroAgentDTO struct {
 	Sessions  int64   `json:"sessions"`
 	CostUSD   float64 `json:"cost_usd"`
 	TokensOut int64   `json:"tokens_out"`
+	// Errors is the raw error-event count; ErrorRate is the failed-run share
+	// (distinct runs with ≥1 error / runs) — see retroAgentWindow.
 	Errors    int64   `json:"errors"`
 	ErrorRate float64 `json:"error_rate"`
 	// avg/p95 over subagent_start durations; nil when no run carried one.
@@ -104,19 +110,30 @@ type retroAgentWin struct {
 	cost      float64
 	tokensOut int64
 	errors    int64
-	durations []int64
+	// failedRunKeys dedupes the runs that carried ≥1 error: keyed by the run's
+	// subagent_start event id when the error row is parented to one, else by
+	// the (unparented) subagent_stop's own event id. len() = failed runs.
+	failedRunKeys map[int64]struct{}
+	durations     []int64
 }
+
+// failedRuns is the number of distinct runs with at least one error.
+func (a *retroAgentWin) failedRuns() int64 { return int64(len(a.failedRunKeys)) }
 
 // retroAgentWindow computes one [dr.start, dr.end) window's per-agent map:
 // runs/sessions/durations from subagent_start events (breakdownRuns grain),
 // cost/tokens_out from turns (agentTurnTotals), errors from status='error'
-// events attributed through parent_event_id (the statsTools grain).
+// events attributed through parent_event_id (the statsTools grain). Errors
+// are additionally folded into failedRunKeys — the DISTINCT runs with ≥1
+// error — which backs error_rate as a failed-run share (clamped to ≤1 — a run
+// spanning the window start can contribute a failed run without contributing
+// to the run count) instead of raw error events per run.
 func (h *Handler) retroAgentWindow(dr dateRange, pf string, pargs []any) (map[string]*retroAgentWin, error) {
 	acc := map[string]*retroAgentWin{}
 	get := func(key string) *retroAgentWin {
 		a := acc[key]
 		if a == nil {
-			a = &retroAgentWin{sessions: map[int64]struct{}{}}
+			a = &retroAgentWin{sessions: map[int64]struct{}{}, failedRunKeys: map[int64]struct{}{}}
 			acc[key] = a
 		}
 		return a
@@ -186,8 +203,16 @@ func (h *Handler) retroAgentWindow(dr dateRange, pf string, pargs []any) (map[st
 	// parent subagent_start (ingest.go closeToolCall) — and the start row has
 	// no parent, so counting it too would double-count every failed run and
 	// add a phantom "main" error.
+	//
+	// On top of the raw count, each agent-attributed error row marks its RUN
+	// as failed: a row parented to a subagent_start dedupes on that start's
+	// event id (many sidechain errors in one run → one failed run); an
+	// unparented subagent_stop has no reachable start, so it stands in for its
+	// own run and dedupes on its own event id (ingest writes one stop per run).
+	// Unparented "main" errors are excluded — the orchestrator has no runs, so
+	// main keeps only the raw error count, never a rate.
 	erows, err := h.DB.Query(`
-		SELECT e.type,
+		SELECT e.id, e.parent_event_id, e.type,
 		       json_extract(e.payload, '$.agentType'),
 		       COALESCE(pe.type, ''),
 		       json_extract(pe.payload, '$.subagent_type')
@@ -204,9 +229,11 @@ func (h *Handler) retroAgentWindow(dr dateRange, pf string, pargs []any) (map[st
 	}
 	defer erows.Close()
 	for erows.Next() {
+		var id int64
+		var parentID sql.NullInt64
 		var typ, parentType string
 		var ownType, subType sql.NullString
-		if err := erows.Scan(&typ, &ownType, &parentType, &subType); err != nil {
+		if err := erows.Scan(&id, &parentID, &typ, &ownType, &parentType, &subType); err != nil {
 			return nil, err
 		}
 		key := "main"
@@ -218,7 +245,15 @@ func (h *Handler) retroAgentWindow(dr dateRange, pf string, pargs []any) (map[st
 		if key == "" {
 			key = "main"
 		}
-		get(key).errors++
+		a := get(key)
+		a.errors++
+		if key != "main" {
+			runKey := id // unparented subagent_stop: the stop IS the run's proxy
+			if parentType == "subagent_start" && parentID.Valid {
+				runKey = parentID.Int64
+			}
+			a.failedRunKeys[runKey] = struct{}{}
+		}
 	}
 	return acc, erows.Err()
 }
@@ -235,12 +270,15 @@ func prevWindow(dr dateRange) dateRange {
 	return dateRange{start: start, end: dr.start}
 }
 
-// errRate is errors/runs, 0 when the agent had no counted run.
-func errRate(errors, runs int64) float64 {
+// errRate is failedRuns/runs — the failed-run share — 0 when the agent had no
+// counted run. Clamped to ≤1: an error inside the window whose parent run
+// STARTED before the window adds a failed-run key absent from the in-window
+// run count.
+func errRate(failedRuns, runs int64) float64 {
 	if runs == 0 {
 		return 0
 	}
-	return float64(errors) / float64(runs)
+	return min(1, float64(failedRuns)/float64(runs))
 }
 
 // redispatchRe classifies a ledger verdict as a re-dispatch (vs an accept).
@@ -399,7 +437,7 @@ func (h *Handler) retroAgents(w http.ResponseWriter, r *http.Request) {
 		row := retroAgentDTO{
 			Agent: key, Runs: a.runs, Sessions: int64(len(a.sessions)),
 			CostUSD: a.cost, TokensOut: a.tokensOut,
-			Errors: a.errors, ErrorRate: errRate(a.errors, a.runs),
+			Errors: a.errors, ErrorRate: errRate(a.failedRuns(), a.runs),
 		}
 		if n := len(a.durations); n > 0 {
 			// Same avg/p95 aggregation as statsTools.
@@ -427,7 +465,7 @@ func (h *Handler) retroAgents(w http.ResponseWriter, r *http.Request) {
 			row.Eval = &ee
 		}
 		if p, ok := prev[key]; ok {
-			row.Prev = retroPrevDTO{Runs: p.runs, Errors: p.errors, ErrorRate: errRate(p.errors, p.runs), CostUSD: p.cost}
+			row.Prev = retroPrevDTO{Runs: p.runs, Errors: p.errors, ErrorRate: errRate(p.failedRuns(), p.runs), CostUSD: p.cost}
 		}
 		out.Agents = append(out.Agents, row)
 	}

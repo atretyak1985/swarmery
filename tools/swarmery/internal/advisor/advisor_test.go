@@ -114,7 +114,8 @@ func TestR1DeniedTools(t *testing.T) {
 // seedAgentRuns inserts `runs` subagent_start events and `errs` failed
 // subagent_stop events (own-payload agentType — the same classification leg
 // retroAgentWindow uses) for an agent, all on ≤2 distinct days so the same
-// fixture never trips R3.
+// fixture never trips R3. The stops are UNPARENTED, so each one counts as
+// exactly one failed run — the failed-run share stays errs/runs here.
 func seedAgentRuns(t *testing.T, db *sql.DB, agent string, runs, errs int) {
 	t.Helper()
 	for i := 0; i < runs; i++ {
@@ -148,8 +149,8 @@ func TestR2AgentErrorRate(t *testing.T) {
 	if f.target != "flaky" || f.targetKind != "agent" {
 		t.Errorf("finding = %+v, want agent flaky", f)
 	}
-	if !strings.Contains(f.detail, "50% error rate (5 errors over 10 runs)") {
-		t.Errorf("detail %q must bake rate + counts in", f.detail)
+	if !strings.Contains(f.detail, "failed on 5 of 10 runs (50%; 5 error events)") {
+		t.Errorf("detail %q must bake failed runs + rate + event count in", f.detail)
 	}
 	// Top error group cited: "agent flaky boom" folds digitless → itself.
 	if top := f.evidence["top_error_group"].(string); !strings.Contains(top, "boom") {
@@ -168,6 +169,101 @@ func TestR2AbsoluteErrorFloor(t *testing.T) {
 	}
 	if len(fs) != 0 {
 		t.Fatalf("findings = %+v, want none under the %d-error absolute floor", fs, R2MinErrors)
+	}
+}
+
+// seedRunWithErrors inserts ONE failed subagent_start run for an agent plus
+// `errs` sidechain tool errors parented to it — however many error events the
+// run sprays, it is exactly one failed run.
+func seedRunWithErrors(t *testing.T, db *sql.DB, agent string, errs int) {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO events (session_id, ts, type, status, payload, dedup_key)
+		VALUES (1, ?, 'subagent_start', 'error', ?, ?)`,
+		ago(1), `{"subagent_type":"`+agent+`"}`, "runerr-"+agent)
+	if err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+	startID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	for i := 0; i < errs; i++ {
+		mustExec(t, db, `INSERT INTO events (session_id, parent_event_id, ts, type, tool_name, status, payload, dedup_key)
+			VALUES (1, ?, ?, 'tool_call', 'Bash', 'error', '{"result":"burst boom"}', ?)`,
+			startID, ago(1), fmt.Sprintf("perr-%s-%d", agent, i))
+	}
+}
+
+// TestR2FailedRunShare pins the failed-run-share semantics: one run carrying
+// 3 parented errors is ONE failed run (rate 1/runs), not 3 — under the old
+// errors/runs math burst's 0.3 would beat 2× the 0.1 median and misfire.
+func TestR2FailedRunShare(t *testing.T) {
+	db := testDB(t)
+	seedAgentRuns(t, db, "burst", 9, 0)   // 9 clean runs …
+	seedRunWithErrors(t, db, "burst", 3)  // … + 1 run with 3 errors → share 0.1
+	seedAgentRuns(t, db, "steady", 10, 1) // share 0.1
+	seedAgentRuns(t, db, "calm", 10, 1)   // share 0.1 — median 0.1
+
+	acc, err := agentErrorWindow(db, evalWindow())
+	if err != nil {
+		t.Fatalf("window: %v", err)
+	}
+	b := acc["burst"]
+	if b == nil || b.runs != 10 || b.errors != 3 || b.failedRuns() != 1 {
+		t.Fatalf("burst = %+v, want runs 10 errors 3 failed_runs 1", b)
+	}
+
+	fs, err := r2AgentErrorRate(db, evalWindow())
+	if err != nil {
+		t.Fatalf("r2: %v", err)
+	}
+	if len(fs) != 0 {
+		t.Fatalf("findings = %+v, want none — burst's failed-run share is 0.1, at the median", fs)
+	}
+
+	// The verification metric (BaselineFor / verify recompute) must use the
+	// same failed-run share.
+	name, v, ok, err := metricValue(db, "R2", "burst", evalWindow())
+	if err != nil || !ok {
+		t.Fatalf("metricValue: ok=%v err=%v", ok, err)
+	}
+	if name != "failed_run_share" || v != 0.1 {
+		t.Errorf("metric = %q %g, want failed_run_share 0.1 (1 failed run of 10)", name, v)
+	}
+}
+
+// TestR2FailedRunDedupStopPlusToolErrors pins the failed-run dedupe across
+// BOTH error legs: a run whose subagent_stop reports status='error' AND whose
+// two child tool errors are parented to the same subagent_start folds to ONE
+// failed run — the stop's runKey resolves to its parent start id, the same
+// key the tool errors carry.
+func TestR2FailedRunDedupStopPlusToolErrors(t *testing.T) {
+	db := testDB(t)
+	res, err := db.Exec(`INSERT INTO events (session_id, ts, type, status, payload, dedup_key)
+		VALUES (1, ?, 'subagent_start', 'ok', '{"subagent_type":"dedup"}', 'dedup-start')`, ago(1))
+	if err != nil {
+		t.Fatalf("seed start: %v", err)
+	}
+	startID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	mustExec(t, db, `INSERT INTO events (session_id, parent_event_id, ts, type, status, payload, dedup_key)
+		VALUES (1, ?, ?, 'subagent_stop', 'error', '{"agentType":"dedup","result":"dedup boom"}', 'dedup-stop')`,
+		startID, ago(1))
+	for i := 0; i < 2; i++ {
+		mustExec(t, db, `INSERT INTO events (session_id, parent_event_id, ts, type, tool_name, status, payload, dedup_key)
+			VALUES (1, ?, ?, 'tool_call', 'Bash', 'error', '{"result":"dedup boom"}', ?)`,
+			startID, ago(1), fmt.Sprintf("dedup-toolerr-%d", i))
+	}
+
+	acc, err := agentErrorWindow(db, evalWindow())
+	if err != nil {
+		t.Fatalf("window: %v", err)
+	}
+	a := acc["dedup"]
+	if a == nil || a.runs != 1 || a.errors != 3 || a.failedRuns() != 1 {
+		t.Fatalf("dedup = %+v, want runs 1 errors 3 failed_runs 1 (stop + tool errors fold to one run)", a)
 	}
 }
 
@@ -470,7 +566,7 @@ func TestVerifiedReRaiseGetsSuffix(t *testing.T) {
 
 func seedAcceptedAgentRec(t *testing.T, db *sql.DB, agent string, acceptedDaysAgo int) {
 	t.Helper()
-	b := fmt.Sprintf(`{"metric":"error_rate","value":0.5,"window":{"from":%q,"to":%q},"accepted_at":%q}`,
+	b := fmt.Sprintf(`{"metric":"failed_run_share","value":0.5,"window":{"from":%q,"to":%q},"accepted_at":%q}`,
 		ago(acceptedDaysAgo+WindowDays), ago(acceptedDaysAgo), ago(acceptedDaysAgo))
 	mustExec(t, db, `INSERT INTO recommendations
 		(rule, target_kind, target, title, detail, evidence, status, dedup_key, baseline, created_at, updated_at)
@@ -596,6 +692,78 @@ func TestVerificationWaitsSevenDays(t *testing.T) {
 	}
 	if _, status, _, _ := recRow(t, db, "Bash"); status != "adopted" {
 		t.Errorf("status = %q, want adopted untouched", status)
+	}
+}
+
+// TestVerificationRebaselinesOnMetricRename pins the metric-version
+// self-healing: an adopted R2 rec still carrying an old-style baseline
+// (metric "error_rate", snapshotted before the failed_run_share rename) must
+// NOT be compared against the recomputed metric. verify() re-snapshots the
+// baseline under the current definition (preserving accepted_at/adopted_at),
+// skips the comparison that cycle, and a later Run with genuinely improved
+// data still verifies against the fresh baseline.
+func TestVerificationRebaselinesOnMetricRename(t *testing.T) {
+	db := testDB(t)
+	// Trailing-window truth at testNow: 10 runs, 5 failed → share 0.5.
+	seedAgentRuns(t, db, "flaky", 10, 5)
+	oldBase := fmt.Sprintf(`{"metric":"error_rate","value":0.9,"per_day":false,"window_days":14,"window":{"from":%q,"to":%q},"accepted_at":%q,"adopted_at":%q}`,
+		ago(8+WindowDays), ago(8), ago(9), ago(8))
+	mustExec(t, db, `INSERT INTO recommendations
+		(rule, target_kind, target, title, detail, evidence, status, dedup_key, baseline, created_at, updated_at)
+		VALUES ('R2', 'agent', 'flaky', 't', 'd', '{}', 'adopted', 'R2:flaky', ?, ?, ?)`,
+		oldBase, ago(8), ago(8))
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	// Past the 7-day gate with a mismatched metric name → re-baseline, no flip.
+	s, err := Run(db, testNow)
+	if err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+	if s.Verified != 0 {
+		t.Fatalf("stats = %+v, want no verification on a metric-name mismatch", s)
+	}
+	if _, status, _, _ := recRow(t, db, "flaky"); status != "adopted" {
+		t.Errorf("status = %q, want still adopted", status)
+	}
+	if !strings.Contains(buf.String(), "baseline metric changed (error_rate -> failed_run_share), re-baselined") {
+		t.Errorf("log = %q, want the re-baseline line", buf.String())
+	}
+	var base string
+	if err := db.QueryRow(`SELECT baseline FROM recommendations WHERE target = 'flaky'`).Scan(&base); err != nil {
+		t.Fatal(err)
+	}
+	var b baseline
+	if err := json.Unmarshal([]byte(base), &b); err != nil {
+		t.Fatalf("unmarshal %q: %v", base, err)
+	}
+	if b.Metric != "failed_run_share" || b.Value != 0.5 {
+		t.Errorf("baseline = %+v, want failed_run_share 0.5 (fresh trailing-window snapshot)", b)
+	}
+	if b.AcceptedAt != ago(9) || b.AdoptedAt != ago(8) {
+		t.Errorf("baseline anchors = %q/%q, want accepted_at %q / adopted_at %q preserved",
+			b.AcceptedAt, b.AdoptedAt, ago(9), ago(8))
+	}
+
+	// Genuinely improved traffic after the re-baseline: 40 clean runs → the
+	// post window (anchored on the preserved adopted_at) folds to 5 failed of
+	// 50 runs = 0.1, an 80% improvement over the re-baselined 0.5 → verified.
+	for i := 0; i < 40; i++ {
+		mustExec(t, db, `INSERT INTO events (session_id, ts, type, status, payload, dedup_key)
+			VALUES (1, ?, 'subagent_start', 'ok', '{"subagent_type":"flaky"}', ?)`,
+			fmtTS(testNow.AddDate(0, 0, 2)), fmt.Sprintf("post-run-flaky-%d", i))
+	}
+	s, err = Run(db, testNow.AddDate(0, 0, 8))
+	if err != nil {
+		t.Fatalf("run 2: %v", err)
+	}
+	if s.Verified != 1 {
+		t.Fatalf("stats = %+v, want 1 verified against the fresh baseline", s)
+	}
+	if _, status, _, _ := recRow(t, db, "flaky"); status != "verified" {
+		t.Errorf("status = %q, want verified", status)
 	}
 }
 

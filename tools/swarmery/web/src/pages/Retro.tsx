@@ -441,7 +441,10 @@ function Scorecard({ row }: { row: RetroAgentRow }): JSX.Element {
         <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] font-medium text-ink">
           {row.agent}
         </span>
-        <span className={`font-mono text-[11px] ${errRateClass(row.error_rate)}`}>
+        <span
+          className={`font-mono text-[11px] ${errRateClass(row.error_rate)}`}
+          title={`share of runs with ≥1 error (${String(row.errors)} error events)`}
+        >
           {(row.error_rate * 100).toFixed(1)}% err
         </span>
       </div>
