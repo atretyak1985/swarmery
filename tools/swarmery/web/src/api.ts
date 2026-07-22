@@ -25,6 +25,8 @@ import type {
   ProjectDetail,
   ProjectMeta,
   ProjectMetaPatch,
+  ProjectPluginsResponse,
+  ProjectPluginToggleResponse,
   ProjectsHealthResponse,
   ProjectsResponse,
   Recommendation,
@@ -177,6 +179,36 @@ export async function attachProject(id: number, dryRun: boolean): Promise<Attach
     throw new Error(data.error ?? `attach failed: ${String(res.status)}`);
   }
   return (await res.json()) as AttachResponse;
+}
+
+/** GET /api/projects/{id}/plugins — marketplace catalog × enabledPlugins. */
+export function fetchProjectPlugins(id: number | string): Promise<ProjectPluginsResponse> {
+  if (MOCK) return mockApi.projectPlugins();
+  return get(`/api/projects/${encodeURIComponent(id)}/plugins`);
+}
+
+/**
+ * PUT /api/projects/{id}/plugins/{name} — flip a pack in the project's
+ * .claude/settings.json (merge-only, .bak backup on the daemon side). Takes
+ * effect in the NEXT Claude Code session. 403 when the daemon write fence is
+ * closed; 409 when settings.json is missing/malformed — surfaced inline.
+ */
+export async function toggleProjectPlugin(
+  id: number,
+  name: string,
+  enabled: boolean,
+): Promise<ProjectPluginToggleResponse> {
+  if (MOCK) return { name, enabled, changed: true, backup: '.claude/settings.json.bak' };
+  const res = await fetch(`/api/projects/${String(id)}/plugins/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `toggle failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as ProjectPluginToggleResponse;
 }
 
 /** GET /api/projects/onboard/config — defaults + enabled state for the modal. */

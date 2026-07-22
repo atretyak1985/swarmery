@@ -163,6 +163,39 @@ func TestPutPluginNoFence(t *testing.T) {
 	}
 }
 
+func TestPutPluginOutsideRoots(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	seedPluginCatalog(t, threePackManifest)
+
+	// Project 2's path (/tmp/telemetry-only-nonexistent) is NOT under the
+	// onboarding root → the symlink-safe fence rejects it before any write
+	// (mirrors TestDetachProjectOutsideRoots).
+	doJSON(t, "PUT", srv.URL+"/api/projects/2/plugins/lsp-pack",
+		map[string]any{"enabled": true}, 403)
+}
+
+func TestPutPluginNoSettings(t *testing.T) {
+	srv, db := projectsTestServer(t)
+	seedPluginCatalog(t, threePackManifest)
+
+	// A real directory under the onboarding root, but with no .claude/settings.json:
+	// the fence admits it, then TogglePlugin's ErrNoSettings maps to 409.
+	root := filepath.Dir(projectPath(t, srv.URL, "1"))
+	barePath := filepath.Join(root, "bare")
+	if err := os.MkdirAll(barePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	execSQL(t, db, `INSERT INTO projects (id, path, slug, name, first_seen, last_activity, archived)
+		VALUES (4, ?, 'bare', 'Bare', '2026-07-10T00:00:00Z', '2026-07-14T00:00:00Z', 0)`, barePath)
+
+	out := doJSON(t, "PUT", srv.URL+"/api/projects/4/plugins/lsp-pack",
+		map[string]any{"enabled": true}, 409)
+	msg, _ := out["error"].(string)
+	if !strings.Contains(msg, "attach the project first") {
+		t.Errorf("error = %q, want the attach-the-project-first message", msg)
+	}
+}
+
 func TestPutPluginCoreLocked(t *testing.T) {
 	srv, _ := projectsTestServer(t) // roots are wired by the harness
 	seedPluginCatalog(t, threePackManifest)
@@ -245,6 +278,16 @@ func TestPutPluginEnableDisable(t *testing.T) {
 	}
 	if body := readDisk(t, settings); strings.Contains(body, "lsp-pack@swarmery") {
 		t.Errorf("settings.json still mentions lsp-pack@swarmery after disable:\n%s", body)
+	}
+
+	// Foreign-key survival: the enable+disable round-trip must not clobber the
+	// keys the harness seeded — other enabledPlugins entries and top-level
+	// settings outside enabledPlugins.
+	body := readDisk(t, settings)
+	for _, key := range []string{"extraKnownMarketplaces", "core@swarmery", "iot-pack@swarmery"} {
+		if !strings.Contains(body, key) {
+			t.Errorf("settings.json lost foreign key %q after enable+disable round-trip:\n%s", key, body)
+		}
 	}
 }
 

@@ -13,6 +13,7 @@ import type {
   ProjectComponents,
   ProjectDetail,
   ProjectHealth,
+  ProjectPluginsResponse,
   Session,
   SessionDetail,
   SessionsResponse,
@@ -1185,6 +1186,29 @@ export const mockApi = {
         avgSessionMs: 22 * 60_000 + i * 5 * 60_000,
         lastActivity: p.lastActivity,
       }));
+  },
+
+  async projectPlugins(): Promise<ProjectPluginsResponse> {
+    await delay(120);
+    return {
+      marketplaceVersion: '1.13.0',
+      canWrite: true,
+      plugins: [
+        {
+          name: 'core',
+          description: 'Vendor-neutral agent-development core.',
+          enabled: true,
+          locked: true,
+        },
+        { name: 'uav-pack', description: 'UAV/drone domain pack.', enabled: false, locked: false },
+        {
+          name: 'lsp-pack',
+          description: 'Semantic code-navigation pack: Serena LSP MCP server.',
+          enabled: true,
+          locked: false,
+        },
+      ],
+    };
   },
 
   async sessions(filters: MockFilters = {}): Promise<SessionsResponse> {

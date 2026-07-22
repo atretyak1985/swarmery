@@ -1305,3 +1305,29 @@ export interface ProjectMeta {
   pinned: boolean;
   tags: string[];
 }
+
+// --- Project plugin toggles ---------------------------------------------------
+
+/** One row of GET /api/projects/{id}/plugins (marketplace catalog × project state). */
+export interface ProjectPluginRow {
+  name: string;
+  description: string;
+  enabled: boolean;
+  /** core: toggled via attach/detach, never through the plugins endpoint. */
+  locked: boolean;
+}
+
+export interface ProjectPluginsResponse {
+  marketplaceVersion: string;
+  /** Mirrors the PUT fence: SWARMERY_ONBOARD_ROOTS set + path inside the allow-list. */
+  canWrite: boolean;
+  plugins: ProjectPluginRow[];
+}
+
+/** PUT /api/projects/{id}/plugins/{name} result. */
+export interface ProjectPluginToggleResponse {
+  name: string;
+  enabled: boolean;
+  changed: boolean;
+  backup?: string;
+}

@@ -12,6 +12,7 @@ import { fetchProject } from '../api';
 import { fmtAgo, fmtCost, fmtDateTime, fmtTokens } from '../lib/format';
 import { ProjectName } from '../components/ProjectName';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
+import { ProjectPlugins } from '../components/ProjectPlugins';
 import { Card, ErrorBox, Loading, SectionTitle } from '../components/ui';
 
 function BackLink(): JSX.Element {
@@ -161,6 +162,7 @@ export function ProjectDetail(): JSX.Element {
             <ComponentList title="commands" items={components.commands} />
             <ComponentList title="hooks" items={components.hooks} />
           </div>
+          <ProjectPlugins projectId={project.id} />
         </>
       ) : (
         <>
