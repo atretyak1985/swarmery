@@ -141,6 +141,13 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/search", h.search)
 	mux.HandleFunc("GET /api/files/sessions", h.fileSessions)
 
+	// tool dashboards (step 02): sidebar feed + fenced serena process control
+	// (tools_dash.go). The POSTs carry the same D4 origin hardening as every
+	// other mutating endpoint; the roots fence lives in the handler.
+	mux.HandleFunc("GET /api/tools", h.toolsDash)
+	mux.HandleFunc("POST /api/projects/{id}/serena/start", requireLocalOrigin(h.serenaStart))
+	mux.HandleFunc("POST /api/projects/{id}/serena/stop", requireLocalOrigin(h.serenaStop))
+
 	// control-plane v2: notifications & auto-approve rules. Writes carry the
 	// same D4 origin hardening as every other mutating endpoint; evaluation
 	// happens inside approvals.Service.Open, never here.

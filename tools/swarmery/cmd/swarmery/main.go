@@ -20,9 +20,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
@@ -41,6 +43,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -860,13 +863,37 @@ func cmdServe(args []string) error {
 	}
 	api.AttachSysEditor(sysedit.New(db, sys, sysedit.Config{ClaudeDir: sysCfg.ClaudeDir}))
 
+	// tool dashboards (step 02): the daemon-owned serena process manager. The
+	// signal handler below guarantees StopAll on shutdown, so no serena child
+	// outlives the daemon.
+	toolMgr := toolproc.NewManager(toolproc.Config{Command: toolproc.DefaultCommand})
+	api.AttachToolManager(toolMgr)
+
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
 		return err
 	}
 	addr := net.JoinHostPort(*bind, strconv.Itoa(*port))
 	log.Printf("swarmery serving on http://%s (db: %s)", addr, *dbPath)
-	return http.ListenAndServe(addr, handler)
+
+	// Graceful shutdown: SIGINT/SIGTERM → stop tool children, drain HTTP, exit.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	srv := &http.Server{Addr: addr, Handler: handler}
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe() }()
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		stop() // restore default signal handling so a second signal kills immediately
+		log.Printf("swarmery shutting down: stopping tool processes")
+		toolMgr.StopAll()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(shutCtx) //nolint:errcheck // best-effort drain on the way out
+		return nil
+	}
 }
 
 // cmdHook runs the `swarmery hook <event>` shim. It ALWAYS exits 0 (fail-open
