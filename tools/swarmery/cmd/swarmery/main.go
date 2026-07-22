@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -888,10 +889,20 @@ func cmdServe(args []string) error {
 	case <-ctx.Done():
 		stop() // restore default signal handling so a second signal kills immediately
 		log.Printf("swarmery shutting down: stopping tool processes")
-		toolMgr.StopAll()
+		// Drain HTTP first so no in-flight handler (e.g. POST serena/start) can
+		// register a child after StopAll — then stop every tool process.
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(shutCtx) //nolint:errcheck // best-effort drain on the way out
+		toolMgr.StopAll()
+		// If ctx.Done won a race against a real ListenAndServe failure, surface it.
+		select {
+		case err := <-errCh:
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+		default:
+		}
 		return nil
 	}
 }

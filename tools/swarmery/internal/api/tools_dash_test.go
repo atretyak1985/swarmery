@@ -3,7 +3,7 @@ package api
 // Step 02 tests — GET /api/tools sidebar feed + fenced serena start/stop.
 // A stub bash script (prints serena's dashboard line, then sleeps) stands in
 // for the real binary; lookPathFn is overridden per test to control
-// serena.available and the missing-binary 409.
+// serena.available and the missing-binary 503.
 
 import (
 	"errors"
@@ -219,10 +219,10 @@ func TestSerenaStartFences(t *testing.T) {
 	// Non-numeric id → 400.
 	doJSON(t, "POST", srv.URL+"/api/projects/bad/serena/start", nil, 400)
 
-	// Missing binary → 409, before any process is spawned.
+	// Missing binary → 503, before any process is spawned.
 	prev := lookPathFn
 	lookPathFn = func(string) (string, error) { return "", errors.New("not found") }
-	out := doJSON(t, "POST", srv.URL+"/api/projects/1/serena/start", nil, 409)
+	out := doJSON(t, "POST", srv.URL+"/api/projects/1/serena/start", nil, 503)
 	lookPathFn = prev
 	if msg, _ := out["error"].(string); !strings.Contains(msg, "serena binary not found") {
 		t.Errorf("missing-binary error = %q, want the install-serena message", msg)

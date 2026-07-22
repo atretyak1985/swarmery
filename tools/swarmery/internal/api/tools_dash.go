@@ -227,7 +227,7 @@ func (h *Handler) serenaStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := lookPathFn("serena"); err != nil {
-		writeJSONStatus(w, http.StatusConflict, map[string]string{"error": "serena binary not found — install serena first"})
+		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"error": "serena binary not found — install serena first"})
 		return
 	}
 	err := toolMgr.Start(id, dir)
