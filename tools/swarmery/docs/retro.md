@@ -105,6 +105,9 @@ proposed ──Accept──▶ accepted ──(auto)──▶ adopted ──(aut
   baseline. Otherwise the card stays `adopted` with a "no measurable improvement yet"
   note. Baselines are metric-versioned: if a metric is ever redefined, the comparer
   re-baselines instead of comparing incompatible numbers.
+- While the clock runs, the card's status chip counts down to the check ("verify
+  check in N d", then "awaiting ≥20 % improvement") and shows the metric's baseline
+  value, its latest observed value, and the target it must reach.
 - All transitions are predicate-guarded — a dismiss racing the 24 h run cannot be
   resurrected, and the API returns 409 on conflicting PATCHes.
 

@@ -922,10 +922,25 @@ type recommendationDTO struct {
 	Title      string `json:"title"`
 	Detail     string `json:"detail"`
 	// Evidence is the advisor's evidence JSON passed through verbatim.
-	Evidence  json.RawMessage `json:"evidence"`
+	Evidence json.RawMessage `json:"evidence"`
+	// Baseline is the advisor's metric snapshot (written on accept, extended
+	// with adopted_at on adoption) passed through verbatim; null before accept.
+	// The UI derives the "verifying in N days" countdown and the metric-vs-
+	// baseline progress from it.
+	Baseline  json.RawMessage `json:"baseline"`
 	Status    string          `json:"status"`
 	CreatedAt string          `json:"created_at"`
 	UpdatedAt string          `json:"updated_at"`
+}
+
+// scanBaseline folds a nullable recommendations.baseline column into the DTO:
+// NULL stays a JSON null, anything else passes through verbatim.
+func (d *recommendationDTO) scanBaseline(base sql.NullString) {
+	if base.Valid {
+		d.Baseline = json.RawMessage(base.String)
+	} else {
+		d.Baseline = json.RawMessage("null")
+	}
 }
 
 type recommendationsDTO struct {
@@ -943,8 +958,8 @@ var recStatuses = map[string]bool{
 // rail" set (proposed,accepted,adopted); status=all disables filtering (the
 // UI fetches status=verified lazily for its history section).
 func (h *Handler) retroRecommendations(w http.ResponseWriter, r *http.Request) {
-	q := `SELECT id, rule, target_kind, target, title, detail, evidence, status,
-	             created_at, updated_at
+	q := `SELECT id, rule, target_kind, target, title, detail, evidence, baseline,
+	             status, created_at, updated_at
 	        FROM recommendations`
 	var args []any
 
@@ -978,12 +993,14 @@ func (h *Handler) retroRecommendations(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d recommendationDTO
 		var evidence string
+		var base sql.NullString
 		if err := rows.Scan(&d.ID, &d.Rule, &d.TargetKind, &d.Target, &d.Title,
-			&d.Detail, &evidence, &d.Status, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			&d.Detail, &evidence, &base, &d.Status, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			writeErr(w, err)
 			return
 		}
 		d.Evidence = json.RawMessage(evidence)
+		d.scanBaseline(base)
 		out.Recommendations = append(out.Recommendations, d)
 	}
 	writeJSON(w, out, rows.Err())
@@ -1087,16 +1104,18 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 
 	var d recommendationDTO
 	var evidence string
+	var base sql.NullString
 	err = h.DB.QueryRow(`SELECT id, rule, target_kind, target, title, detail,
-			evidence, status, created_at, updated_at
+			evidence, baseline, status, created_at, updated_at
 		 FROM recommendations WHERE id = ?`, id).
 		Scan(&d.ID, &d.Rule, &d.TargetKind, &d.Target, &d.Title, &d.Detail,
-			&evidence, &d.Status, &d.CreatedAt, &d.UpdatedAt)
+			&evidence, &base, &d.Status, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	d.Evidence = json.RawMessage(evidence)
+	d.scanBaseline(base)
 	writeJSON(w, d, nil)
 }
 

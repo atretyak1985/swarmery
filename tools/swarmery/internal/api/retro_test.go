@@ -695,6 +695,7 @@ type recsResp struct {
 		Target   string          `json:"target"`
 		Status   string          `json:"status"`
 		Evidence json.RawMessage `json:"evidence"`
+		Baseline json.RawMessage `json:"baseline"`
 	} `json:"recommendations"`
 }
 
@@ -740,6 +741,10 @@ func TestRetroRecommendationsList(t *testing.T) {
 		if err := json.Unmarshal(out.Recommendations[0].Evidence, &ev); err != nil || ev.Counts["denied"] != 6 {
 			t.Errorf("evidence = %s, want the raw counts object", out.Recommendations[0].Evidence)
 		}
+		// Seeded rows carry no baseline snapshot — the DTO folds NULL to null.
+		if string(out.Recommendations[0].Baseline) != "null" {
+			t.Errorf("baseline = %s, want null for a never-accepted row", out.Recommendations[0].Baseline)
+		}
 	})
 
 	t.Run("unknown status is 400", func(t *testing.T) {
@@ -764,6 +769,11 @@ func TestPatchRecommendation(t *testing.T) {
 		out := doJSON(t, http.MethodPatch, url(1), map[string]any{"status": "accepted"}, http.StatusOK)
 		if out["status"] != "accepted" {
 			t.Errorf("status = %v, want accepted", out["status"])
+		}
+		// The fresh snapshot must ride back on the PATCH response itself (the
+		// UI derives its verification countdown from it without a refetch).
+		if bm, ok := out["baseline"].(map[string]any); !ok || bm["accepted_at"] == "" {
+			t.Errorf("response baseline = %v, want the snapshot object with accepted_at", out["baseline"])
 		}
 		var base sql.NullString
 		if err := db.QueryRow(`SELECT baseline FROM recommendations WHERE id = 1`).Scan(&base); err != nil {
