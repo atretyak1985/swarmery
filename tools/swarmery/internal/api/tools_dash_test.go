@@ -195,6 +195,15 @@ func TestSerenaStartStopLifecycle(t *testing.T) {
 	if len(sp.LogTail) == 0 {
 		t.Error("logTail empty for a running project, want the dashboard line")
 	}
+	// The iframe targets the raw serena origin (root-absolute ajax in serena's
+	// dashboard.js escapes the path-prefix proxy), so a running project must
+	// expose a loopback dashboardUrl.
+	if sp.DashboardURL == "" {
+		t.Error("dashboardUrl empty for a running project, want the raw serena origin")
+	} else if !strings.HasPrefix(sp.DashboardURL, "http://127.0.0.1:") &&
+		!strings.HasPrefix(sp.DashboardURL, "http://localhost:") {
+		t.Errorf("dashboardUrl = %q, want a loopback http origin", sp.DashboardURL)
+	}
 
 	out = doJSON(t, "POST", srv.URL+"/api/projects/1/serena/start", nil, 409)
 	if msg, _ := out["error"].(string); msg != "serena is already running for this project" {
@@ -207,6 +216,15 @@ func TestSerenaStartStopLifecycle(t *testing.T) {
 	}
 
 	doJSON(t, "POST", srv.URL+"/api/projects/1/serena/stop", nil, 409)
+
+	// Stopped → the raw origin must not leak: dashboardUrl resets to "".
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Serena.Projects) != 1 {
+		t.Fatalf("serena.projects len = %d after stop, want 1", len(resp.Serena.Projects))
+	}
+	if sp = resp.Serena.Projects[0]; sp.DashboardURL != "" {
+		t.Errorf("dashboardUrl = %q after stop, want empty", sp.DashboardURL)
+	}
 }
 
 func TestSerenaStartFences(t *testing.T) {

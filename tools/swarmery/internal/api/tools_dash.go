@@ -48,14 +48,25 @@ const (
 )
 
 type serenaProjectDTO struct {
-	ID            int64    `json:"id"`
-	Slug          string   `json:"slug"`
-	Name          *string  `json:"name"`
-	State         string   `json:"state"`
-	DashboardPath string   `json:"dashboardPath"`
-	StartedAt     *string  `json:"startedAt"`
-	LogTail       []string `json:"logTail"`
-	Error         string   `json:"error"`
+	ID            int64   `json:"id"`
+	Slug          string  `json:"slug"`
+	Name          *string `json:"name"`
+	State         string  `json:"state"`
+	DashboardPath string  `json:"dashboardPath"`
+	// DashboardURL is serena's RAW dashboard origin (e.g.
+	// "http://127.0.0.1:24282/dashboard/index.html"), non-empty only while
+	// state==running and the URL has been parsed from serena's log. The web UI
+	// iframes THIS, not the dashboardPath reverse proxy: serena's dashboard.js
+	// issues root-absolute ajax calls (/get_config_overview, /get_tool_stats, …)
+	// that escape any path-prefix proxy and land on the daemon's SPA catch-all.
+	// Serena sends no X-Frame-Options/CSP, and both daemon and serena are
+	// loopback-only, so framing serena's own origin directly is safe. The proxy
+	// path is kept for diagnostics. No omitempty — the zero value is "" so the
+	// TS type stays a plain string.
+	DashboardURL string   `json:"dashboardUrl"`
+	StartedAt    *string  `json:"startedAt"`
+	LogTail      []string `json:"logTail"`
+	Error        string   `json:"error"`
 }
 
 type graphifyProjectDTO struct {
@@ -150,12 +161,19 @@ func serenaDTO(id int64, slug string, name *string, s toolproc.Status) serenaPro
 		v := s.StartedAt.UTC().Format(time.RFC3339)
 		startedAt = &v
 	}
+	// Raw origin only while running (see the DTO comment for why the iframe
+	// needs it); "" otherwise so stale URLs never leak past a stop/failure.
+	var dashURL string
+	if s.State == toolproc.StateRunning {
+		dashURL = s.DashboardURL
+	}
 	return serenaProjectDTO{
 		ID:            id,
 		Slug:          slug,
 		Name:          name,
 		State:         string(s.State),
 		DashboardPath: fmt.Sprintf("/api/projects/%d/serena/", id),
+		DashboardURL:  dashURL,
 		StartedAt:     startedAt,
 		LogTail:       tail,
 		Error:         s.Err,

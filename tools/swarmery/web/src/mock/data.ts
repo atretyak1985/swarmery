@@ -1412,6 +1412,7 @@ export const mockApi = {
             name: 'Orders API',
             state: 'stopped',
             dashboardPath: '/tools/serena/orders-api/dashboard/',
+            dashboardUrl: '',
             startedAt: null,
             logTail: [
               'INFO  serena.dashboard: dashboard stopped',
@@ -1425,6 +1426,7 @@ export const mockApi = {
             name: 'Swarmery',
             state: 'running',
             dashboardPath: '/tools/serena/swarmery/dashboard/',
+            dashboardUrl: 'http://127.0.0.1:24282/dashboard/index.html',
             startedAt: iso(12 * MIN),
             logTail: [],
             error: '',

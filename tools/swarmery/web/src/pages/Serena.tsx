@@ -1,7 +1,9 @@
 // Serena page (/serena): daemon-managed serena LSP dashboards for lsp-pack
 // projects. A project dropdown, a state pill (stopped/starting/running/failed),
 // start/stop with 2s settle-polling (max 30s), a collapsible log tail while
-// not running, and a same-origin iframe of the dashboard when running.
+// not running, and an iframe of serena's own dashboard origin when running
+// (dashboardUrl — the daemon proxy can't host it: serena's dashboard.js makes
+// root-absolute ajax calls that escape any path prefix).
 // The route exists only while the sidebar item does (serena.projects > 0),
 // but the page still renders honest empty states on direct navigation.
 
@@ -205,11 +207,11 @@ export function Serena(): JSX.Element {
                 </details>
               )}
             </Card>
-            {project.state === 'running' && (
+            {project.state === 'running' && project.dashboardUrl !== '' && (
               <div className="mt-3">
                 <iframe
                   key={project.id}
-                  src={project.dashboardPath}
+                  src={project.dashboardUrl}
                   title="Serena dashboard"
                   className="h-[calc(100vh-220px)] w-full rounded-xl border border-line bg-surface"
                 />

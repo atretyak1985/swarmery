@@ -1358,6 +1358,12 @@ export interface ToolsSerenaProject {
   name: string | null;
   state: 'stopped' | 'starting' | 'running' | 'failed';
   dashboardPath: string;
+  /**
+   * Raw serena dashboard origin (e.g. "http://127.0.0.1:24282/dashboard/index.html").
+   * "" unless state === 'running'. The iframe uses this, not dashboardPath:
+   * serena's dashboard.js makes root-absolute ajax calls that escape the proxy.
+   */
+  dashboardUrl: string;
   startedAt: string | null;
   logTail: string[];
   error: string;
