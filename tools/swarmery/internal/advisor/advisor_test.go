@@ -78,6 +78,11 @@ func TestR1DeniedTools(t *testing.T) {
 	seedDenied(t, db, "Bash", R1MinDenied, 3)   // triggers
 	seedDenied(t, db, "Read", R1MinDenied, 0)   // covered by an enabled rule
 	seedDenied(t, db, "Grep", R1MinDenied-1, 0) // below threshold
+	// Real ingest leaves status NULL on open tool_call events — the scan must
+	// tolerate it (regression: R1 crashed on production data with a NULL-to-
+	// string Scan error). Counts as a call, not a denial.
+	mustExec(t, db, `INSERT INTO events (session_id, ts, type, tool_name, status, payload, dedup_key)
+		VALUES (1, ?, 'tool_call', 'Bash', NULL, '{}', 'null-status-bash')`, ago(1))
 	mustExec(t, db, `INSERT INTO approval_rules (project_id, tool_pattern, action, enabled, created_at)
 		VALUES (NULL, 'Read(/tmp/*)', 'approve', 1, ?)`, ago(1))
 
@@ -92,12 +97,12 @@ func TestR1DeniedTools(t *testing.T) {
 	if f.target != "Bash" || f.targetKind != "tool" || f.title != "Add auto-approve rule for Bash" {
 		t.Errorf("finding = %+v, want tool Bash", f)
 	}
-	if !strings.Contains(f.detail, "denied 5 times across 8 calls") {
+	if !strings.Contains(f.detail, "denied 5 times across 9 calls") {
 		t.Errorf("detail %q must bake the counts in", f.detail)
 	}
 	counts := f.evidence["counts"].(map[string]int64)
-	if counts["denied"] != 5 || counts["calls"] != 8 {
-		t.Errorf("evidence counts = %+v, want denied 5 calls 8", counts)
+	if counts["denied"] != 5 || counts["calls"] != 9 {
+		t.Errorf("evidence counts = %+v, want denied 5 calls 9", counts)
 	}
 	if ids := f.evidence["session_ids"].([]string); len(ids) == 0 {
 		t.Errorf("evidence must carry sample session ids")

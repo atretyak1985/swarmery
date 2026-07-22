@@ -211,7 +211,7 @@ func r1DeniedTools(db *sql.DB, win window) ([]finding, error) {
 		return nil, err
 	}
 	rows, err := db.Query(`
-		SELECT e.tool_name, e.status, s.session_uuid
+		SELECT e.tool_name, COALESCE(e.status, ''), s.session_uuid
 		  FROM events e
 		  JOIN sessions s ON s.id = e.session_id
 		  JOIN projects p ON p.id = s.project_id
