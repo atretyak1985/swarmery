@@ -80,7 +80,7 @@ Update `COMPLETION-SUMMARY.md`: change `- [ ] Step N.M` to `- [x] Step N.M {YYYY
 # Platform
 
 - Model: claude-opus-4-8 -- multi-step cross-repo sequencing and contract consistency checking require top-tier reasoning depth; adaptive thinking (no fixed token budget), effort `max` [PE/Tool-Use/4.5]
-- Tools: inherits all available tools (no `tools:`/`disallowedTools:` in frontmatter); actions bounded by `permissionMode: acceptEdits`. Primarily uses: Task (subagent dispatch), Read/Edit/Write/Bash, MCP tools (auggie, gitnexus), and Playwright MCP browser tools (end-to-end smoke of the running feature — see Browser verification section)
+- Tools: inherits all available tools (no `tools:`/`disallowedTools:` in frontmatter); actions bounded by `permissionMode: acceptEdits`. Primarily uses: Task (subagent dispatch), Read/Edit/Write/Bash, MCP tools (auggie), the `graphify` CLI for graph-aware impact queries, and Playwright MCP browser tools (end-to-end smoke of the running feature — see Browser verification section)
 - Limitations: when invoked as a subagent, cannot spawn other subagents (execute inline instead)
 - Reversibility: rollback path is reverse merge order (UI, then API, then schema)
 - Stacks (verify against `.claude/project.json` → `stack` and the project's `CLAUDE.md`):

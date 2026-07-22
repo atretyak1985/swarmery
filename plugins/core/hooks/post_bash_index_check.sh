@@ -1,38 +1,36 @@
 #!/bin/bash
-# post_bash_index_check.sh — GitNexus index staleness check after Bash tool calls.
+# post_bash_index_check.sh — Graphify graph staleness check after Bash tool calls.
 #
-# Compares each GitNexus-indexed repo's current git HEAD against the commit recorded
-# in ~/.gitnexus/registry.json. If they differ, the on-disk index is stale, so it
-# nudges the agent to re-run `gitnexus analyze`. Otherwise silent.
+# Compares the project's graphify-out/graph.json `built_at_commit` against the
+# repo's current git HEAD. If they differ, the on-disk graph is stale, so it
+# nudges the agent to run `graphify update .`. Otherwise silent.
 #
 # Contract: ALWAYS emits valid JSON and exits 0 (fails open — never blocks a tool call).
 
-REG="$HOME/.gitnexus/registry.json"
+ROOT="${CLAUDE_PROJECT_DIR:-.}"
+GRAPH="$ROOT/graphify-out/graph.json"
 
-# No registry or no node → nothing to check; pass through.
-if [ ! -f "$REG" ] || ! command -v node >/dev/null 2>&1; then
+# No graph or no git → nothing to check; pass through.
+if [ ! -f "$GRAPH" ] || ! command -v git >/dev/null 2>&1; then
   echo '{"continue": true}'
   exit 0
 fi
 
-node -e '
-const out = { continue: true };
-try {
-  const fs = require("fs"), cp = require("child_process");
-  const reg = JSON.parse(fs.readFileSync(process.env.HOME + "/.gitnexus/registry.json", "utf8"));
-  const stale = [];
-  for (const r of (Array.isArray(reg) ? reg : [])) {
-    try {
-      const head = cp.execSync("git -C " + JSON.stringify(r.path) + " rev-parse HEAD",
-        { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-      if (r.lastCommit && head && head !== r.lastCommit) stale.push(r.name);
-    } catch (e) { /* not a git repo / git missing — skip */ }
-  }
-  if (stale.length) {
-    out.systemMessage = "GitNexus index is stale for: " + stale.join(", ") +
-      ". Run `gitnexus analyze <repo-path>` to refresh before trusting impact/query results.";
-  }
-} catch (e) { /* fail open */ }
-process.stdout.write(JSON.stringify(out));
-' 2>/dev/null || echo '{"continue": true}'
+built=$(grep -m1 -o '"built_at_commit": *"[0-9a-f]*"' "$GRAPH" 2>/dev/null | grep -o '[0-9a-f]\{7,\}')
+head_sha=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)
+
+# Stale only when both SHAs resolved and HEAD does not start with the recorded
+# commit (built_at_commit may be abbreviated).
+if [ -n "$built" ] && [ -n "$head_sha" ]; then
+  case "$head_sha" in
+    "$built"*) : ;; # fresh
+    *)
+      printf '{"continue": true, "systemMessage": "Graphify graph is stale (built at %s, HEAD is %s). Run graphify update . to refresh before trusting impact/query results."}\n' \
+        "${built:0:8}" "${head_sha:0:8}"
+      exit 0
+      ;;
+  esac
+fi
+
+echo '{"continue": true}'
 exit 0
