@@ -5,18 +5,20 @@ package api
 // project's live serena dashboard origin (incl. websocket upgrade passthrough
 // via httputil.ReverseProxy), and graphifyStatic serves the repo's
 // graphify-out/ build artifacts read-only behind a traversal jail. Neither is
-// origin-fenced: the daemon is loopback-only and the proxy only ever targets
-// 127.0.0.1 addresses produced by our own toolproc manager.
+// origin-fenced: the daemon is loopback-only, and the proxy enforces that the
+// parsed DashboardURL targets a loopback address before dialing.
 
 import (
 	"database/sql"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
 )
@@ -71,6 +73,20 @@ func (h *Handler) serenaProxy(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/projects/"+strconv.FormatInt(id, 10)+"/serena/dashboard/index.html", http.StatusFound)
 		return
 	}
+	// The redirect above never dials, so the loopback fence sits right before
+	// the only path that does: refuse to proxy to anything but a loopback
+	// target, even if a compromised serena process prints a rogue URL.
+	host := target.Hostname()
+	ip := net.ParseIP(host)
+	if (ip == nil || !ip.IsLoopback()) && !strings.EqualFold(host, "localhost") {
+		writeJSONStatus(w, http.StatusBadGateway,
+			map[string]string{"error": "serena dashboard URL is not a loopback address"})
+		return
+	}
+	// Error semantics are the deliberate stdlib defaults: a backend that dies
+	// before sending headers yields ReverseProxy's default 502 (its default
+	// ErrorHandler logs the dial/roundtrip error); a backend dying mid-stream
+	// yields an aborted connection to the client.
 	proxy := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
 		pr.Out.URL.Scheme = target.Scheme
 		pr.Out.URL.Host = target.Host
@@ -114,5 +130,7 @@ func (h *Handler) graphifyStatic(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// A request for ".../index.html" gets stdlib ServeFile's 301-to-directory
+	// behavior; harmless here since the default document is graph.html.
 	http.ServeFile(w, r, full)
 }

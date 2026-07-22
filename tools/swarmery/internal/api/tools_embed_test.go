@@ -220,6 +220,19 @@ func TestSerenaProxyNotRunning(t *testing.T) {
 	}
 }
 
+func TestSerenaProxyNonLoopbackBlocked(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	// A rogue serena announcing a non-loopback dashboard origin must be
+	// refused before any dial — no backend exists, and none is needed: the
+	// 502 body alone proves the guard fired instead of a proxy attempt.
+	startProxyStub(t, "http://93.184.216.34:8080")
+
+	out := doJSON(t, "GET", srv.URL+"/api/projects/1/serena/dashboard/index.html", nil, http.StatusBadGateway)
+	if msg, _ := out["error"].(string); msg != "serena dashboard URL is not a loopback address" {
+		t.Errorf("error = %q, want the non-loopback message", msg)
+	}
+}
+
 func TestSerenaRootRedirect(t *testing.T) {
 	srv, _ := projectsTestServer(t)
 	backend := httptest.NewServer(http.NotFoundHandler())
