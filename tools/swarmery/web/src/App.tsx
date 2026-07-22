@@ -12,7 +12,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import type { WSMessage } from './api/types';
-import { fetchApprovals, fetchDocs, fetchRecommendations, fetchStatsOverview, MOCK } from './api';
+import {
+  fetchApprovals,
+  fetchDocs,
+  fetchRecommendations,
+  fetchStatsOverview,
+  fetchTools,
+  MOCK,
+} from './api';
 import { fetchSystemSummary } from './api/system';
 import { CommandPalette } from './components/CommandPalette';
 import { NewProjectButton } from './components/NewProjectButton';
@@ -41,6 +48,8 @@ interface NavItem {
 }
 
 const DOCS_NAV: NavItem = { to: '/docs', glyph: '❐', label: 'Docs' };
+const SERENA_NAV: NavItem = { to: '/serena', glyph: '◎', label: 'Serena' };
+const GRAPHIFY_NAV: NavItem = { to: '/graphify', glyph: '⬡', label: 'Graphify' };
 
 /** Global project scope switcher (header) — GitHub-org-switcher pattern.
  * Projects come from the ScopeProvider's shared fetch. */
@@ -135,6 +144,36 @@ function AppShell(): JSX.Element {
   const [notifyPrefs, setNotifyPrefs] = useState<NotifyPrefs>(loadPrefs);
   useBrowserNotifications(notifyPrefs);
   const { health, unreachable } = useHealth();
+
+  // Tool-dashboard nav items (serena / graphify): each is visible only while
+  // /api/tools reports at least one project for that tool. Polled on the same
+  // 60s cadence as daemon health (lib/health.ts) so items appear/disappear as
+  // lsp-pack gets toggled or graphify builds land, without a reload.
+  const [hasSerena, setHasSerena] = useState(false);
+  const [hasGraphify, setHasGraphify] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    const poll = (): void => {
+      fetchTools()
+        .then((t) => {
+          if (disposed) return;
+          setHasSerena(t.serena.projects.length > 0);
+          setHasGraphify(t.graphify.projects.length > 0);
+        })
+        .catch(() => {
+          // endpoint absent / daemon unreachable → hide both items
+          if (disposed) return;
+          setHasSerena(false);
+          setHasGraphify(false);
+        });
+    };
+    poll();
+    const timer = setInterval(poll, 60_000);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+  }, []);
   useEffect(() => {
     fetchDocs()
       .then((docs) => setHasDocs(docs.length > 0))
@@ -247,6 +286,8 @@ function AppShell(): JSX.Element {
       ...(pendingCount > 0 ? { badge: String(pendingCount), alert: true } : {}),
     },
     { to: '/system', glyph: '⚙', label: 'System', ...badgeFor(insightCount) },
+    ...(hasSerena ? [SERENA_NAV] : []),
+    ...(hasGraphify ? [GRAPHIFY_NAV] : []),
     ...(hasDocs ? [DOCS_NAV] : []),
   ];
 

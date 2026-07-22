@@ -1348,3 +1348,32 @@ export interface ProjectPluginToggleResponse {
   changed: boolean;
   backup?: string;
 }
+
+// --- Tool dashboards (GET /api/tools) -----------------------------------------
+
+/** GET /api/tools — sidebar feed for daemon-managed tool dashboards. */
+export interface ToolsSerenaProject {
+  id: number;
+  slug: string;
+  name: string | null;
+  state: 'stopped' | 'starting' | 'running' | 'failed';
+  dashboardPath: string;
+  startedAt: string | null;
+  logTail: string[];
+  error: string;
+}
+
+export interface ToolsGraphifyProject {
+  id: number;
+  slug: string;
+  name: string | null;
+  hasViz: boolean;
+  hasGraph: boolean;
+  builtAt: string | null;
+  vizPath: string;
+}
+
+export interface ToolsResponse {
+  serena: { available: boolean; projects: ToolsSerenaProject[] };
+  graphify: { projects: ToolsGraphifyProject[] };
+}

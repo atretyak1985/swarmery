@@ -12,6 +12,8 @@ import { ProjectDetail } from './pages/ProjectDetail';
 import { Sessions } from './pages/Sessions';
 import { SessionDetailPage } from './pages/SessionDetail';
 import { Docs } from './pages/Docs';
+import { Serena } from './pages/Serena';
+import { Graphify } from './pages/Graphify';
 import { System } from './pages/System';
 import './index.css';
 
@@ -50,6 +52,8 @@ const router = createBrowserRouter([
         ),
       },
       { path: 'system', element: <System /> },
+      { path: 'serena', element: <Serena /> },
+      { path: 'graphify', element: <Graphify /> },
       { path: 'docs', element: <Docs /> },
       { path: 'docs/:slug', element: <Docs /> },
     ],

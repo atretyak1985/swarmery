@@ -47,6 +47,7 @@ import type {
   TasksResponse,
   TimeseriesResp,
   ToolsResp,
+  ToolsResponse,
 } from './api/types';
 import { mockApi } from './mock/data';
 
@@ -634,6 +635,38 @@ export async function renameSession(id: number, title: string | null): Promise<v
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? `rename failed: ${String(res.status)}`);
+  }
+}
+
+// --- tool dashboards (serena LSP dashboard + graphify viz) ----------------------
+
+/** GET /api/tools — sidebar feed for daemon-managed tool dashboards. */
+export function fetchTools(): Promise<ToolsResponse> {
+  if (MOCK) return mockApi.tools();
+  return get('/api/tools');
+}
+
+/**
+ * POST /api/projects/{id}/serena/start — launch the project's serena dashboard
+ * process. Non-2xx (403 fence closed, 404 no lsp-pack, 409 already running,
+ * 503 binary missing) throws the server's {error} text for inline display.
+ */
+export async function serenaStart(id: number): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/projects/${String(id)}/serena/start`, { method: 'POST' });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `serena start failed: ${String(res.status)}`);
+  }
+}
+
+/** POST /api/projects/{id}/serena/stop — stop the dashboard process. */
+export async function serenaStop(id: number): Promise<void> {
+  if (MOCK) return; // no-op in mock mode
+  const res = await fetch(`/api/projects/${String(id)}/serena/stop`, { method: 'POST' });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `serena stop failed: ${String(res.status)}`);
   }
 }
 

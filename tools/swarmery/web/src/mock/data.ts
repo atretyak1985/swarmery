@@ -41,6 +41,7 @@ import type {
   SkillsResp,
   TimeseriesResp,
   ToolsResp,
+  ToolsResponse,
 } from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
 import { mockApprovalsList, mockResolveApproval } from './approvals';
@@ -1394,5 +1395,64 @@ export const mockApi = {
   ): Promise<PermissionRequest> {
     await delay(140);
     return mockResolveApproval(id, action, reason, answers);
+  },
+
+  // --- tool dashboards (GET /api/tools) ---
+
+  /** Serena available (one stopped, one running); graphify one viz + one without. */
+  async tools(): Promise<ToolsResponse> {
+    await delay(90);
+    return {
+      serena: {
+        available: true,
+        projects: [
+          {
+            id: 1,
+            slug: 'orders-api',
+            name: 'Orders API',
+            state: 'stopped',
+            dashboardPath: '/tools/serena/orders-api/dashboard/',
+            startedAt: null,
+            logTail: [
+              'INFO  serena.dashboard: dashboard stopped',
+              'INFO  serena.agent: language server shut down',
+            ],
+            error: '',
+          },
+          {
+            id: 3,
+            slug: 'swarmery',
+            name: 'Swarmery',
+            state: 'running',
+            dashboardPath: '/tools/serena/swarmery/dashboard/',
+            startedAt: iso(12 * MIN),
+            logTail: [],
+            error: '',
+          },
+        ],
+      },
+      graphify: {
+        projects: [
+          {
+            id: 3,
+            slug: 'swarmery',
+            name: 'Swarmery',
+            hasViz: true,
+            hasGraph: true,
+            builtAt: iso(3 * 60 * MIN),
+            vizPath: '/tools/graphify/swarmery/',
+          },
+          {
+            id: 1,
+            slug: 'orders-api',
+            name: 'Orders API',
+            hasViz: false,
+            hasGraph: true,
+            builtAt: null,
+            vizPath: '',
+          },
+        ],
+      },
+    };
   },
 };
