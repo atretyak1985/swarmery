@@ -43,6 +43,11 @@
       "name": "claude-eng-pack",
       "source": "./plugins/claude-eng-pack",
       "description": "Claude-engineering pack: skills for building/auditing Claude agent systems — agent architecture, tool/MCP design, prompt engineering, Claude Code config, context reliability. Opt-in; requires core."
+    },
+    {
+      "name": "graphify-pack",
+      "source": "./plugins/graphify-pack",
+      "description": "Knowledge-graph pack: the /graphify skill — repo/folder → persistent knowledge graph with query/path/affected tools and HTML/JSON/Neo4j exports. Opt-in; requires the graphify CLI on the machine."
     }
   ]
 }

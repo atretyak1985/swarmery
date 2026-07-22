@@ -1,0 +1,9 @@
+{
+  "name": "graphify-pack",
+  "description": "Knowledge-graph pack: the /graphify skill — turn any repo or folder (code, docs, media) into a persistent knowledge graph with community detection, query/path/affected tools, and HTML/JSON/Neo4j exports. Opt-in; REQUIRES the graphify CLI installed on the machine. Core's impact/refactor-plan commands use the graph when present and fall back to ripgrep without it.",
+  "version": "1.0.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  }
+}
