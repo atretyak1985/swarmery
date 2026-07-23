@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 )
 
@@ -28,6 +29,12 @@ type Handler struct {
 	// read and its guarded status write — a test seam for the 409 conflict
 	// path (nil in production).
 	recPatchHook func()
+	// Improve is the agent-rewriter service behind the /api/retro/proposals
+	// endpoints (self-improvement phase 3).
+	Improve *improve.Service
+	// improveGo, when non-nil, replaces the `go fn()` dispatch of the async
+	// generation pipeline — a test seam for deterministic httptest runs.
+	improveGo func(func())
 }
 
 type projectDTO struct {

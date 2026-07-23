@@ -149,12 +149,72 @@ func TestR2AgentErrorRate(t *testing.T) {
 	if f.target != "flaky" || f.targetKind != "agent" {
 		t.Errorf("finding = %+v, want agent flaky", f)
 	}
-	if !strings.Contains(f.detail, "failed on 5 of 10 runs (50%; 5 error events)") {
-		t.Errorf("detail %q must bake failed runs + rate + event count in", f.detail)
+	if !strings.Contains(f.detail, "failed on 5 of 10 runs (50%; 5 behavior-fixable of 5 error events)") {
+		t.Errorf("detail %q must bake behavior-fixable failed runs + rate + event count in", f.detail)
 	}
 	// Top error group cited: "agent flaky boom" folds digitless → itself.
 	if top := f.evidence["top_error_group"].(string); !strings.Contains(top, "boom") {
 		t.Errorf("top_error_group = %q, want the boom group", top)
+	}
+	// Evidence carries the per-class error breakdown.
+	byClass, ok := f.evidence["errors_by_class"].(map[ErrClass]int64)
+	if !ok || byClass[BehaviorFixable] != 5 {
+		t.Errorf("errors_by_class = %v, want behavior_fixable 5", f.evidence["errors_by_class"])
+	}
+}
+
+// seedAgentInfraErrors inserts `errs` failed unparented subagent_stop events
+// whose message classifies as infra_noise ("Connection error." — not the
+// agent's fault) for an agent that already has runs seeded.
+func seedAgentInfraErrors(t *testing.T, db *sql.DB, agent string, errs int) {
+	t.Helper()
+	for i := 0; i < errs; i++ {
+		mustExec(t, db, `INSERT INTO events (session_id, ts, type, status, payload, dedup_key)
+			VALUES (1, ?, 'subagent_stop', 'error', ?, ?)`,
+			ago(1), `{"agentType":"`+agent+`","result":"Connection error. Please retry."}`,
+			fmt.Sprintf("infra-%s-%d", agent, i))
+	}
+}
+
+// TestR2IgnoresInfraNoise pins the phase-1 de-noising: an agent whose ONLY
+// errors are connection errors (infra_noise) has a behavior-failed-run share
+// of 0 — R2 must stay silent even though its raw failed-run share (0.5) beats
+// 2× the median, while a behavior-fixable twin with the same shape fires.
+func TestR2IgnoresInfraNoise(t *testing.T) {
+	db := testDB(t)
+	seedAgentRuns(t, db, "netty", 10, 0) // 10 clean runs …
+	seedAgentInfraErrors(t, db, "netty", 5)
+	seedAgentRuns(t, db, "flaky", 10, 5)  // behavior-fixable ("boom") — fires
+	seedAgentRuns(t, db, "steady", 10, 1) // share 0.1
+	seedAgentRuns(t, db, "calm", 10, 1)   // share 0.1 — median anchors
+
+	acc, err := agentErrorWindow(db, evalWindow())
+	if err != nil {
+		t.Fatalf("window: %v", err)
+	}
+	n := acc["netty"]
+	if n == nil || n.errors != 5 || n.byClass[InfraNoise] != 5 || n.byClass[BehaviorFixable] != 0 {
+		t.Fatalf("netty = %+v, want 5 errors all infra_noise", n)
+	}
+	if n.failedRuns() != 5 || n.behaviorFailedRuns() != 0 {
+		t.Fatalf("netty failed runs = %d/%d (raw/behavior), want 5/0", n.failedRuns(), n.behaviorFailedRuns())
+	}
+
+	fs, err := r2AgentErrorRate(db, evalWindow())
+	if err != nil {
+		t.Fatalf("r2: %v", err)
+	}
+	if len(fs) != 1 || fs[0].target != "flaky" {
+		t.Fatalf("findings = %+v, want only flaky (netty's errors are all infra noise)", fs)
+	}
+
+	// The verification metric follows the same behavior-only share.
+	name, v, ok, err := metricValue(db, "R2", "netty", evalWindow())
+	if err != nil || !ok {
+		t.Fatalf("metricValue: ok=%v err=%v", ok, err)
+	}
+	if name != "behavior_failed_run_share" || v != 0 {
+		t.Errorf("metric = %q %g, want behavior_failed_run_share 0", name, v)
 	}
 }
 
@@ -227,8 +287,8 @@ func TestR2FailedRunShare(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("metricValue: ok=%v err=%v", ok, err)
 	}
-	if name != "failed_run_share" || v != 0.1 {
-		t.Errorf("metric = %q %g, want failed_run_share 0.1 (1 failed run of 10)", name, v)
+	if name != "behavior_failed_run_share" || v != 0.1 {
+		t.Errorf("metric = %q %g, want behavior_failed_run_share 0.1 (1 failed run of 10)", name, v)
 	}
 }
 
@@ -566,7 +626,7 @@ func TestVerifiedReRaiseGetsSuffix(t *testing.T) {
 
 func seedAcceptedAgentRec(t *testing.T, db *sql.DB, agent string, acceptedDaysAgo int) {
 	t.Helper()
-	b := fmt.Sprintf(`{"metric":"failed_run_share","value":0.5,"window":{"from":%q,"to":%q},"accepted_at":%q}`,
+	b := fmt.Sprintf(`{"metric":"behavior_failed_run_share","value":0.5,"window":{"from":%q,"to":%q},"accepted_at":%q}`,
 		ago(acceptedDaysAgo+WindowDays), ago(acceptedDaysAgo), ago(acceptedDaysAgo))
 	mustExec(t, db, `INSERT INTO recommendations
 		(rule, target_kind, target, title, detail, evidence, status, dedup_key, baseline, created_at, updated_at)
@@ -697,7 +757,8 @@ func TestVerificationWaitsSevenDays(t *testing.T) {
 
 // TestVerificationRebaselinesOnMetricRename pins the metric-version
 // self-healing: an adopted R2 rec still carrying an old-style baseline
-// (metric "error_rate", snapshotted before the failed_run_share rename) must
+// (metric "error_rate", snapshotted before the behavior_failed_run_share
+// renames) must
 // NOT be compared against the recomputed metric. verify() re-snapshots the
 // baseline under the current definition (preserving accepted_at/adopted_at),
 // skips the comparison that cycle, and a later Run with genuinely improved
@@ -728,7 +789,7 @@ func TestVerificationRebaselinesOnMetricRename(t *testing.T) {
 	if _, status, _, _ := recRow(t, db, "flaky"); status != "adopted" {
 		t.Errorf("status = %q, want still adopted", status)
 	}
-	if !strings.Contains(buf.String(), "baseline metric changed (error_rate -> failed_run_share), re-baselined") {
+	if !strings.Contains(buf.String(), "baseline metric changed (error_rate -> behavior_failed_run_share), re-baselined") {
 		t.Errorf("log = %q, want the re-baseline line", buf.String())
 	}
 	var base string
@@ -739,8 +800,8 @@ func TestVerificationRebaselinesOnMetricRename(t *testing.T) {
 	if err := json.Unmarshal([]byte(base), &b); err != nil {
 		t.Fatalf("unmarshal %q: %v", base, err)
 	}
-	if b.Metric != "failed_run_share" || b.Value != 0.5 {
-		t.Errorf("baseline = %+v, want failed_run_share 0.5 (fresh trailing-window snapshot)", b)
+	if b.Metric != "behavior_failed_run_share" || b.Value != 0.5 {
+		t.Errorf("baseline = %+v, want behavior_failed_run_share 0.5 (fresh trailing-window snapshot)", b)
 	}
 	if b.AcceptedAt != ago(9) || b.AdoptedAt != ago(8) {
 		t.Errorf("baseline anchors = %q/%q, want accepted_at %q / adopted_at %q preserved",

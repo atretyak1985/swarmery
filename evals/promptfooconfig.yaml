@@ -95,6 +95,23 @@ tests:
       - type: llm-rubric
         value: states that the orchestration plan artifact (planned subagents, verification strategy) is written to the task workspace BEFORE the first subagent dispatch
 
+  # ── tech-lead: 7-cell assessment ledger contract ─────────────────────────
+  - description: tech-lead logs a 7-cell assessment ledger row after a delegation
+    vars:
+      system: file://../plugins/core/agents/tech-lead.md
+      task: >
+        @implementation-agent just completed its Phase 4 delegation: the step
+        artifact exists on disk and you accepted the work after one re-dispatch
+        round (it initially ignored acceptance criterion #3). Write the exact
+        row you now append to {task-id}/logs/agents.md.
+    assert:
+      # 7 pipe-separated cells: agent | phase | verdict | loops | quality | mistakes | artifact
+      - type: regex
+        value: "[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+"
+      # cell 5 (quality) is a bare 1-5 score
+      - type: regex
+        value: "[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|\\s*[1-5]\\s*\\|"
+
   # ── implementation-agent: dual-mode contract ─────────────────────────────
   - description: implementation-agent orchestrates a ready plan in plan-execution mode
     vars:

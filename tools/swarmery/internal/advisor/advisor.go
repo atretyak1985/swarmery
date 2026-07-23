@@ -769,18 +769,21 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 		}
 		return "denied_per_day", float64(denied) / wd, true, nil
 	case "R2":
-		// failed_run_share is the failed-run share (distinct runs with ≥1
-		// error / runs) — the same grain as r2AgentErrorRate and the Retro
-		// scorecards. Clamped to ≤1: a run spanning the window start can
-		// contribute a failed run without contributing to the run count.
+		// behavior_failed_run_share is the behavior-failed-run share (distinct
+		// runs with ≥1 BehaviorFixable error / runs) — the same grain as
+		// r2AgentErrorRate and the Retro scorecards; infra noise and harness
+		// mechanics are excluded (Classify). Clamped to ≤1: a run spanning the
+		// window start can contribute a failed run without contributing to the
+		// run count. The rename from failed_run_share makes pre-classification
+		// baselines auto-rebaseline on the metric-name mismatch.
 		acc, aerr := agentErrorWindow(db, win)
 		if aerr != nil {
-			return "failed_run_share", 0, false, aerr
+			return "behavior_failed_run_share", 0, false, aerr
 		}
 		if a, hit := acc[target]; hit && a.runs >= R2MinRuns {
-			return "failed_run_share", min(1, float64(a.failedRuns())/float64(a.runs)), true, nil
+			return "behavior_failed_run_share", min(1, float64(a.behaviorFailedRuns())/float64(a.runs)), true, nil
 		}
-		return "failed_run_share", 0, false, nil
+		return "behavior_failed_run_share", 0, false, nil
 	case "R3":
 		days, derr := errGroupDays(db, target, win)
 		if derr != nil || wd <= 0 {

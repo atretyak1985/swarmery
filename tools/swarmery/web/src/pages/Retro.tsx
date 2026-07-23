@@ -499,6 +499,19 @@ function errRateClass(rate: number): string {
   return 'text-ink-dim';
 }
 
+/** Fold errors_by_class into the three rendered buckets (absent → zeroes). */
+function errClassSplit(byClass: Record<string, number> | undefined): {
+  behavior: number;
+  harness: number;
+  infra: number;
+} {
+  return {
+    behavior: byClass?.['behavior_fixable'] ?? 0,
+    harness: byClass?.['harness_recoverable'] ?? 0,
+    infra: byClass?.['infra_noise'] ?? 0,
+  };
+}
+
 function runsDelta(row: RetroAgentRow): string {
   const d = row.runs - row.prev.runs;
   if (d === 0) return '';
@@ -506,6 +519,7 @@ function runsDelta(row: RetroAgentRow): string {
 }
 
 function Scorecard({ row }: { row: RetroAgentRow }): JSX.Element {
+  const split = errClassSplit(row.errors_by_class);
   return (
     <div className="rounded-[14px] border border-line bg-surface px-4 py-3.5">
       <div className="flex items-baseline gap-2">
@@ -514,11 +528,23 @@ function Scorecard({ row }: { row: RetroAgentRow }): JSX.Element {
         </span>
         <span
           className={`font-mono text-[11px] ${errRateClass(row.error_rate)}`}
-          title={`share of runs with ≥1 error (${String(row.errors)} error events)`}
+          title={`share of runs with ≥1 behavior-fixable error (${String(row.errors)} error events total)`}
         >
           {(row.error_rate * 100).toFixed(1)}% err
         </span>
       </div>
+      {row.errors > 0 && row.errors_by_class && (
+        <div
+          className="mt-1 font-mono text-[10px] text-ink-faint"
+          title="error events by class — behavior: prompt-fixable agent behavior · harness: harness rule hit, self-recovered · infra: network/API noise (not the agent's fault)"
+        >
+          <span className={split.behavior > 0 ? 'text-amber' : ''}>behavior {split.behavior}</span>
+          {' · '}
+          <span>harness {split.harness}</span>
+          {' · '}
+          <span>infra {split.infra}</span>
+        </div>
+      )}
       <div className="mt-2 flex items-baseline gap-1.5">
         <span className="font-display text-[20px] font-semibold text-ink">{row.runs}</span>
         <span className="font-mono text-[10.5px] text-ink-dim">

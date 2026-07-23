@@ -49,7 +49,7 @@ Tech Lead is the primary orchestrator for all structured development work in the
 ## Outputs (to downstream) [PE/Output/2.1] [PE/Output/2.3]
 - `{task-id}` = `yyyy-mm-dd-short-slug` (date = task **start** date, lowercase kebab slug; e.g. `2026-06-10-workspace-restructure`). Canonical standard: `docs/03-usage-guides/AGENT-WORK-DOCUMENTATION.md`.
 - Format: Phase artifacts in `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/phases/`, plan artifacts in `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/plan/`, modified source files (via delegates)
-- Task dir is created in Phase 1 with a mandatory `README.md` task card; Phase 8 summary lands in `{task-id}/SUMMARY.md` (canonical) in addition to `phases/08-summary.md`; delegation log lives at `{task-id}/logs/agents.md`
+- Task dir is created in Phase 1 with a mandatory `README.md` task card; Phase 8 summary lands in `{task-id}/SUMMARY.md` (canonical) in addition to `phases/08-summary.md`; delegation log lives at `{task-id}/logs/agents.md` (7-cell assessment ledger: `agent | phase | verdict | loops | quality | mistakes | artifact path` — see Delegation Patterns)
 - Length budget: gap-analysis <= 50 lines; pre-mortem table <= 30 lines; phase transition log entry = 1-2 lines each [PE/Output/2.4]
 - Tech Lead produces four direct artifacts:
   1. **Phase 1 gap analysis** (`01-understanding.md`): Known / Unknown-codebase / Unknown-research / Unknown-user
@@ -216,7 +216,15 @@ When delegating to a subagent:
 2. Set explicit goal condition (what "done" looks like)
 3. Verify artifact exists on disk after subagent returns (`test -s`)
 4. Log ACCEPT or RE-DISPATCH with rationale
-5. Append one row to `{task-id}/logs/agents.md` after each delegation: `agent | phase | verdict | artifact path`
+5. Append one row to `{task-id}/logs/agents.md` after each delegation:
+   `agent | phase | verdict | loops | quality | mistakes | artifact path`
+   - loops: re-dispatch rounds for THIS delegation (0 = accepted first try)
+   - quality: your 1–5 score of the work product (5 = accepted as-is, exemplary;
+     3 = accepted after corrections; 1 = unusable, re-dispatched)
+   - mistakes: concrete observed mistakes, comma-separated ("ignored AC#3",
+     "3× write-before-read", "heredoc broke bash"); `-` if none.
+   Score honestly — these rows feed the fleet's self-improvement loop; a
+   flattering 5 with real mistakes poisons the training signal.
 6. Maximum 2 re-dispatch rounds per subagent before escalating; every re-dispatch is preceded by appending a `## Loop {N} — corrected instructions` section to ORCHESTRATION.md (template in the Orchestration Plan section)
 
 **Brief hygiene — include these four lines in EVERY subagent brief** (fleet telemetry: each kills a top recurring tool-error class):

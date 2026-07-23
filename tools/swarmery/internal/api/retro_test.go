@@ -101,21 +101,25 @@ func retroAgentsServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	//   e4  prev-window subagent_stop error with an empty own
 	//       agentType, falling back to a5's subagent_type        → tech-lead
 	//   e5  SECOND sidechain tool error parented to a1           → tech-lead
+	//   e6  infra-noise tool error ("Connection error.")
+	//       parented to a3                                      → tech-lead
 	// The old events.turn_id → turns.agent_name join counts NONE of these
 	// (turn_id is NULL on every row) — the per-agent error assertions below
 	// pin the parent-event attribution against that regression. e3/e4 pair
 	// with the mirrored status='error' on their parent starts a2/a5 (see
 	// above): if subagent_start errors were counted too, main would report 2
 	// errors today and the assertions below would fail. e1+e5 share the run
-	// a1, so error_rate (failed-run share) must dedupe them: 3 error events
-	// today but only 2 failed runs (a1, a2) out of 3.
+	// a1, so error_rate (behavior-failed-run share) must dedupe them; e6 is
+	// infra_noise, so its run a3 must NOT count as behavior-failed: 4 error
+	// events today fold to 2 behavior-failed runs (a1, a2) out of 3.
 	mustExec(`INSERT INTO events (session_id, parent_event_id, ts, type, tool_name, status, payload, dedup_key) VALUES
 		(1, 1,    ?, 'tool_call',     'Bash',  'error', '{"result":"boom"}', 'e1'),
 		(2, NULL, ?, 'error',         NULL,    'error', '{"error":"api"}',   'e2'),
 		(1, 2,    ?, 'subagent_stop', 'Agent', 'error', '{"agentType":"core:tech-lead","status":"failed"}', 'e3'),
 		(3, 5,    ?, 'subagent_stop', 'Agent', 'error', '{"status":"failed"}', 'e4'),
-		(1, 1,    ?, 'tool_call',     'Bash',  'error', '{"result":"boom again"}', 'e5')`,
-		today, today, today, day10, today)
+		(1, 1,    ?, 'tool_call',     'Bash',  'error', '{"result":"boom again"}', 'e5'),
+		(2, 3,    ?, 'tool_call',     'Bash',  'error', '{"result":"Connection error. Please retry."}', 'e6')`,
+		today, today, today, day10, today, today)
 
 	// Phase-2 chips. Ledger: tech-lead has 1 OK + 1 RE-DISPATCH on an in-range
 	// task → rate 0.5; the out-of-range task's redispatch row must NOT count.
@@ -158,6 +162,10 @@ func TestRetroAgents(t *testing.T) {
 		if out.Main.Errors != 1 {
 			t.Errorf("main = %+v, want errors 1 (the unparented api_error)", out.Main)
 		}
+		// The "api" message has no classifying prefix → behavior_fixable.
+		if out.Main.ErrorsByClass["behavior_fixable"] != 1 {
+			t.Errorf("main errors_by_class = %v, want behavior_fixable 1", out.Main.ErrorsByClass)
+		}
 		for _, a := range out.Agents {
 			if a.Agent == "main" {
 				t.Errorf("agents[] contains the main fold key")
@@ -180,11 +188,18 @@ func TestRetroAgents(t *testing.T) {
 			t.Errorf("tech-lead = %+v, want cost 4.0 tokens_out 200", tl)
 		}
 		// e1+e5 (sidechain tool errors via parent a1) + e3 (subagent_stop
-		// naming its own agentType) — a turn_id join would report 0 here.
-		// error_rate is the failed-run share: e1 and e5 belong to the SAME run
-		// (a1), so 3 error events fold to 2 failed runs of 3 — 2/3, not 3/3.
-		if tl.Errors != 3 || !almostEq(tl.ErrorRate, 2.0/3.0) {
-			t.Errorf("tech-lead = %+v, want errors 3 rate 2/3 (failed-run share)", tl)
+		// naming its own agentType) + e6 (infra noise via parent a3) — a
+		// turn_id join would report 0 here. error_rate is the BEHAVIOR-failed-
+		// run share: e1 and e5 belong to the SAME run (a1) and e6 is
+		// infra_noise (its run a3 never counts), so 4 error events fold to 2
+		// behavior-failed runs of 3 — 2/3, not 3/3.
+		if tl.Errors != 4 || !almostEq(tl.ErrorRate, 2.0/3.0) {
+			t.Errorf("tech-lead = %+v, want errors 4 rate 2/3 (behavior-failed-run share)", tl)
+		}
+		// Per-class breakdown: e1/e5 fold to "boom"-style behavior keys, e3's
+		// "Agent error" defaults to behavior_fixable, e6 is infra_noise.
+		if tl.ErrorsByClass["behavior_fixable"] != 3 || tl.ErrorsByClass["infra_noise"] != 1 {
+			t.Errorf("tech-lead errors_by_class = %v, want behavior_fixable 3 infra_noise 1", tl.ErrorsByClass)
 		}
 		if tl.AvgMs == nil || *tl.AvgMs != 2000 {
 			t.Errorf("tech-lead avg_ms = %v, want 2000", tl.AvgMs)
@@ -203,6 +218,29 @@ func TestRetroAgents(t *testing.T) {
 		}
 		if dbg.CostUSD != 0 || dbg.AvgMs != nil || dbg.P95Ms != nil || dbg.SuccessRate != nil {
 			t.Errorf("debugger = %+v, want no cost/durations/rate", dbg)
+		}
+	})
+
+	t.Run("errors_by_class JSON shape", func(t *testing.T) {
+		// Raw-body assertion: the field must serialize under the contract name
+		// with string class keys (Go sorts map keys — deterministic order).
+		res, err := http.Get(srv.URL + "/api/retro/agents?" + retroRange(7))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(b)
+		for _, want := range []string{
+			`"errors_by_class":{"behavior_fixable":3,"infra_noise":1}`, // tech-lead
+			`"errors_by_class":{"behavior_fixable":1}`,                 // main
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("body %s\nmust contain %s", body, want)
+			}
 		}
 	})
 

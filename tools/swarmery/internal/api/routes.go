@@ -71,6 +71,12 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/retro/recommendations", h.retroRecommendations)
 	mux.HandleFunc("PATCH /api/retro/recommendations/{id}", requireLocalOrigin(h.patchRecommendation))
 	mux.HandleFunc("POST /api/retro/advise", requireLocalOrigin(h.retroAdvise))
+	// self-improvement phase 3: internal/improve agent-rewriter proposals
+	// (improve.go). Validation is synchronous, generation async (202).
+	mux.HandleFunc("POST /api/retro/recommendations/{id}/improve", requireLocalOrigin(h.improveRecommendation))
+	mux.HandleFunc("POST /api/retro/agents/{agent}/improve", requireLocalOrigin(h.improveAgent))
+	mux.HandleFunc("GET /api/retro/proposals", h.listProposals)
+	mux.HandleFunc("POST /api/retro/proposals/{id}/retry", requireLocalOrigin(h.retryProposal))
 
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)

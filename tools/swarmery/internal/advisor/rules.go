@@ -331,13 +331,24 @@ type agentErrStats struct {
 	// the (unparented) subagent_stop's own event id — twin of internal/api
 	// retroAgentWin.failedRunKeys. len() = failed runs.
 	failedRunKeys map[int64]struct{}
-	errKeys       map[string]int64
-	sessions      []string
-	seen          map[string]struct{}
+	// behaviorFailedRunKeys is the same dedupe restricted to errors whose
+	// group key classifies as BehaviorFixable — the R2 signal after the
+	// phase-1 de-noising (infra noise and harness mechanics don't count).
+	behaviorFailedRunKeys map[int64]struct{}
+	// byClass tallies raw error events per ErrClass (Classify over the
+	// normalizeErrKey fold).
+	byClass  map[ErrClass]int64
+	errKeys  map[string]int64
+	sessions []string
+	seen     map[string]struct{}
 }
 
 // failedRuns is the number of distinct runs with at least one error.
 func (a *agentErrStats) failedRuns() int64 { return int64(len(a.failedRunKeys)) }
+
+// behaviorFailedRuns is the number of distinct runs with at least one
+// behavior-fixable error.
+func (a *agentErrStats) behaviorFailedRuns() int64 { return int64(len(a.behaviorFailedRunKeys)) }
 
 // agentErrorWindow computes per-agent runs (subagent_start fold) and errors
 // (status='error' events attributed through the parent_event_id chain — the
@@ -352,9 +363,11 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 		a := acc[key]
 		if a == nil {
 			a = &agentErrStats{
-				failedRunKeys: map[int64]struct{}{},
-				errKeys:       map[string]int64{},
-				seen:          map[string]struct{}{},
+				failedRunKeys:         map[int64]struct{}{},
+				behaviorFailedRunKeys: map[int64]struct{}{},
+				byClass:               map[ErrClass]int64{},
+				errKeys:               map[string]int64{},
+				seen:                  map[string]struct{}{},
 			}
 			acc[key] = a
 		}
@@ -429,7 +442,13 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 			runKey = parentID.Int64
 		}
 		a.failedRunKeys[runKey] = struct{}{}
-		a.errKeys[normalizeErrKey(extractErrMsg(typ, toolName, payload))]++
+		errKey := normalizeErrKey(extractErrMsg(typ, toolName, payload))
+		class := Classify(errKey)
+		a.byClass[class]++
+		if class == BehaviorFixable {
+			a.behaviorFailedRunKeys[runKey] = struct{}{}
+		}
+		a.errKeys[errKey]++
 		if _, ok := a.seen[uuid]; !ok && len(a.sessions) < 3 {
 			a.seen[uuid] = struct{}{}
 			a.sessions = append(a.sessions, uuid)
@@ -438,10 +457,12 @@ func agentErrorWindow(db *sql.DB, win window) (map[string]*agentErrStats, error)
 	return acc, erows.Err()
 }
 
-// r2AgentErrorRate flags agents with ≥ R2MinRuns runs AND ≥ R2MinErrors raw
-// error events whose failed-run share (distinct runs with ≥1 error / runs —
-// the same grain as the Retro scorecards' error_rate) exceeds R2MedianFactor
-// × the median share among all agents with ≥ R2MinRuns runs in the window.
+// r2AgentErrorRate flags agents with ≥ R2MinRuns runs AND ≥ R2MinErrors
+// behavior-fixable error events whose behavior-failed-run share (distinct
+// runs with ≥1 BehaviorFixable error / runs — the same grain as the Retro
+// scorecards' error_rate) exceeds R2MedianFactor × the median share among all
+// agents with ≥ R2MinRuns runs in the window. Infra noise (connection errors,
+// API overloads) and harness mechanics never fire R2.
 func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 	acc, err := agentErrorWindow(db, win)
 	if err != nil {
@@ -461,7 +482,7 @@ func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 		// Clamped to ≤1 — a run spanning the window start can contribute a
 		// failed run without contributing to the run count (twin of the
 		// internal/api errRate clamp and the R2 metricValue clamp).
-		rate := min(1, float64(a.failedRuns())/float64(a.runs))
+		rate := min(1, float64(a.behaviorFailedRuns())/float64(a.runs))
 		cands = append(cands, cand{agent, a, rate})
 		rates = append(rates, rate)
 	}
@@ -476,7 +497,7 @@ func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 
 	var out []finding
 	for _, c := range cands {
-		if c.rate <= R2MedianFactor*median || c.stats.errors < R2MinErrors {
+		if c.rate <= R2MedianFactor*median || c.stats.byClass[BehaviorFixable] < R2MinErrors {
 			continue
 		}
 		topKey, topCount := "", int64(0)
@@ -489,17 +510,18 @@ func r2AgentErrorRate(db *sql.DB, win window) ([]finding, error) {
 			rule: "R2", targetKind: "agent", target: c.agent,
 			title: "Review error rate of agent " + c.agent,
 			detail: fmt.Sprintf(
-				"Agent %s failed on %d of %d runs (%.0f%%; %d error events) in the last %d days — more than %.0f× the %.0f%% median failed-run share among agents with ≥%d runs. Top error group: %q.",
-				c.agent, c.stats.failedRuns(), c.stats.runs, c.rate*100,
-				c.stats.errors, WindowDays,
+				"Agent %s failed on %d of %d runs (%.0f%%; %d behavior-fixable of %d error events) in the last %d days — more than %.0f× the %.0f%% median behavior-failed-run share among agents with ≥%d runs. Top error group: %q.",
+				c.agent, c.stats.behaviorFailedRuns(), c.stats.runs, c.rate*100,
+				c.stats.byClass[BehaviorFixable], c.stats.errors, WindowDays,
 				R2MedianFactor, median*100, R2MinRuns, topKey),
 			evidence: map[string]any{
 				"window": win,
 				"counts": map[string]any{
-					"runs": c.stats.runs, "failed_runs": c.stats.failedRuns(),
+					"runs": c.stats.runs, "behavior_failed_runs": c.stats.behaviorFailedRuns(),
 					"errors":     c.stats.errors,
 					"error_rate": c.rate, "median_error_rate": median,
 				},
+				"errors_by_class": c.stats.byClass,
 				"top_error_group": topKey,
 				"session_ids":     c.stats.sessions,
 			},

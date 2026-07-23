@@ -554,11 +554,15 @@ export interface RetroAgentRow {
   /** Raw error-event count (a single run can carry many). */
   errors: number;
   /**
-   * Failed-run share: runs with ≥1 error / runs (clamped to ≤1 — a run
-   * spanning the window start can contribute a failed run without
-   * contributing to the run count); 0 when no counted run.
+   * Behavior-failed-run share: runs with ≥1 behavior-fixable error / runs
+   * (clamped to ≤1 — a run spanning the window start can contribute a failed
+   * run without contributing to the run count); 0 when no counted run.
+   * Infra noise and harness mechanics are excluded — the same grain the
+   * advisor's R2 (behavior_failed_run_share) fires on.
    */
   error_rate: number;
+  /** Raw error events per class: behavior_fixable / harness_recoverable / infra_noise. */
+  errors_by_class?: Record<string, number>;
   /** avg/p95 over subagent run durations; null when no run carried one. */
   avg_ms: number | null;
   p95_ms: number | null;
@@ -576,6 +580,8 @@ export interface RetroMain {
   cost_usd: number;
   tokens_out: number;
   errors: number;
+  /** Raw error events per class: behavior_fixable / harness_recoverable / infra_noise. */
+  errors_by_class?: Record<string, number>;
 }
 
 export interface RetroAgentsResp {

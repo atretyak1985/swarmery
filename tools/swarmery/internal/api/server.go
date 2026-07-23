@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/docsfs"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
 	"github.com/atretyak1985/swarmery/tools/swarmery/web"
 )
 
@@ -30,7 +31,8 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 		return nil, fmt.Errorf("embedded docs: %w", err)
 	}
 	mux := http.NewServeMux()
-	Routes(mux, &Handler{DB: db, Watching: watching, Docs: docs})
+	Routes(mux, &Handler{DB: db, Watching: watching, Docs: docs,
+		Improve: &improve.Service{DB: db, Runner: improve.ClaudeRunner{}}})
 
 	dist, err := web.Dist()
 	if err != nil {
