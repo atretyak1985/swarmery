@@ -150,3 +150,18 @@ tests:
         value: "(APPROVED|REJECTED)"
       - type: llm-rubric
         value: flags the action as high-risk (production, destructive, business hours) and includes a rollback plan or safer alternative
+
+  # ── context-gatherer: architecture-map consultation ───────────────────────
+  - description: context-gatherer consults architecture-map.json before broad discovery when present
+    vars:
+      system: file://../plugins/core/agents/context-gatherer.md
+      task: >
+        Gather context for this task: add CSV export to the orders list page.
+        The repo root contains architecture-out/architecture-map.json (analyzed
+        at the current HEAD). Describe, step by step, how you will gather
+        context and which sources you consult first.
+    assert:
+      - type: contains
+        value: architecture-map.json
+      - type: llm-rubric
+        value: consults the architecture map before (or instead of) broad semantic discovery queries, mentions checking its freshness via analyzedAtCommit against HEAD, and does not invent modules absent from the task description
