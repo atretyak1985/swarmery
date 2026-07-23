@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "analyzedAt": "2026-07-23",
+  "analyzedAtCommit": "0000000fixture",
+  "project": {
+    "name": "fixture",
+    "description": "Tiny synthetic project for renderer smoke tests.",
+    "techStack": ["Go", "React", "SQLite"],
+    "entryPoints": ["cmd/app/main.go"]
+  },
+  "layers": [
+    { "id": "client", "name": "Client", "description": "User-facing surfaces", "order": 1 },
+    { "id": "service", "name": "Service", "description": "HTTP + business logic", "order": 2 },
+    { "id": "storage", "name": "Storage", "description": "Persistence", "order": 3 }
+  ],
+  "modules": [
+    { "id": "spa", "name": "SPA", "path": "web/src", "layer": "client", "responsibility": "React dashboard shell.", "dependencies": ["api"], "exports": ["App"], "keyFiles": ["web/src/App.tsx"] },
+    { "id": "cli", "name": "CLI", "path": "cmd/app", "layer": "client", "responsibility": "Operator command line.", "dependencies": ["api"], "exports": ["main"], "keyFiles": ["cmd/app/main.go"] },
+    { "id": "api", "name": "API", "path": "internal/api", "layer": "service", "responsibility": "HTTP handlers and routing.", "dependencies": ["store"], "exports": ["Routes"], "keyFiles": ["internal/api/routes.go"] },
+    { "id": "ingest", "name": "Ingest", "path": "internal/ingest", "layer": "service", "responsibility": "File watcher feeding the store.", "dependencies": ["store"], "exports": ["Run"], "keyFiles": ["internal/ingest/run.go"] },
+    { "id": "store", "name": "Store", "path": "internal/store", "layer": "storage", "responsibility": "SQLite access layer.", "dependencies": [], "exports": ["Open", "Query"], "keyFiles": ["internal/store/store.go"] }
+  ],
+  "flows": [
+    { "id": "page-load", "name": "Dashboard page load", "description": "SPA fetches session data.", "steps": [
+      { "from": "spa", "to": "api", "action": "GET /api/sessions", "file": "web/src/App.tsx", "payload": "query params" },
+      { "from": "api", "to": "store", "action": "Query sessions", "file": "internal/api/routes.go", "payload": "SQL rows" }
+    ] },
+    { "id": "ingest-tick", "name": "Ingest tick", "description": "Watcher indexes a new transcript.", "steps": [
+      { "from": "ingest", "to": "store", "action": "Upsert parsed rows", "file": "internal/ingest/run.go" },
+      { "from": "store", "to": "api", "action": "Rows visible to next query", "payload": "committed txn" }
+    ] },
+    { "id": "cli-query", "name": "CLI query", "description": "Operator lists sessions from the terminal.", "steps": [
+      { "from": "cli", "to": "api", "action": "GET /api/sessions", "file": "cmd/app/main.go" },
+      { "from": "api", "to": "store", "action": "Query sessions", "file": "internal/api/routes.go" }
+    ] }
+  ],
+  "apis": [ { "method": "GET", "path": "/api/sessions", "handlerFile": "internal/api/routes.go", "description": "List sessions" } ],
+  "database": { "engine": "SQLite", "migrationsPath": "internal/store/migrations", "tables": [ { "name": "sessions", "purpose": "one row per session" } ] },
+  "externalServices": [],
+  "conventions": { "naming": "Go stdlib style", "folderStructure": "cmd/ + internal/ + web/", "patternsUsed": ["embedded SPA"] },
+  "importantNotes": ["Synthetic fixture — not a real project."]
+}
