@@ -114,6 +114,69 @@ func TestParseLedgerMalformedAssessmentCells(t *testing.T) {
 	}
 }
 
+// TestParseLedgerLastCellArtifact: the artifact is always the LAST cell —
+// 8+-cell rows (a literal `|` inside mistakes) re-join the extra cells into
+// mistakes and still yield the real artifact; 5/6-cell rows fall back to the
+// legacy layout with the artifact taken from the last cell.
+func TestParseLedgerLastCellArtifact(t *testing.T) {
+	const doc = `| Agent | Phase | Verdict | Loops | Quality | Mistakes | Artifact |
+|---|---|---|---|---|---|---|
+| code-auditor | 5 | RE-DISPATCH | 2 | 2 | ignored AC#3 | retried "a | b" blind | phases/05-audit.md |
+| @core:context-gatherer | 2 | OK | extra | note | phases/02-context.md |
+`
+	got := parseLedger(doc)
+	if len(got) != 2 {
+		t.Fatalf("parseLedger = %+v, want 2 rows", got)
+	}
+	r := got[0]
+	if r.artifact != "phases/05-audit.md" {
+		t.Errorf("8-cell row artifact = %q, want the LAST cell", r.artifact)
+	}
+	if r.mistakes != `ignored AC#3 | retried "a | b" blind` {
+		t.Errorf("8-cell row mistakes = %q, want cells 6..7 re-joined with ' | '", r.mistakes)
+	}
+	if !intPtrEq(r.loops, 2) || !intPtrEq(r.quality, 2) {
+		t.Errorf("8-cell row = loops %v quality %v, want 2/2", r.loops, r.quality)
+	}
+	r = got[1]
+	if r.artifact != "phases/02-context.md" {
+		t.Errorf("6-cell row artifact = %q, want legacy fallback to the last cell", r.artifact)
+	}
+	if r.loops != nil || r.quality != nil || r.mistakes != "" {
+		t.Errorf("6-cell row assessment = loops %v quality %v mistakes %q, want nil/nil/empty (legacy fallback)",
+			r.loops, r.quality, r.mistakes)
+	}
+}
+
+// TestParseLedgerLoopsBounds: loops accepts only 0..99 — negatives and
+// 3-digit counts degrade to nil; strconv.Atoi tolerates a leading '+', so
+// "+3" parses as an in-bound 3.
+func TestParseLedgerLoopsBounds(t *testing.T) {
+	const doc = `| Agent | Phase | Verdict | Loops | Quality | Mistakes | Artifact |
+|---|---|---|---|---|---|---|
+| debugger | 3 | OK | -3 | 4 | - | phases/03-debug.md |
+| tester | 4 | OK | +3 | 4 | - | logs/test.md |
+| reviewer | 5 | OK | 100 | 4 | - | — |
+| auditor | 6 | OK | 99 | 4 | - | — |
+`
+	got := parseLedger(doc)
+	if len(got) != 4 {
+		t.Fatalf("parseLedger = %+v, want 4 rows", got)
+	}
+	if got[0].loops != nil {
+		t.Errorf("loops '-3' = %v, want nil (negatives rejected)", got[0].loops)
+	}
+	if !intPtrEq(got[1].loops, 3) {
+		t.Errorf("loops '+3' = %v, want 3 (Atoi accepts a leading '+')", got[1].loops)
+	}
+	if got[2].loops != nil {
+		t.Errorf("loops '100' = %v, want nil (above 99)", got[2].loops)
+	}
+	if !intPtrEq(got[3].loops, 99) {
+		t.Errorf("loops '99' = %v, want 99 (upper bound inclusive)", got[3].loops)
+	}
+}
+
 // TestParseLedgerMixed4And7Cell: one doc mixing legacy and assessment rows —
 // both parse; legacy rows keep nil assessment fields.
 func TestParseLedgerMixed4And7Cell(t *testing.T) {

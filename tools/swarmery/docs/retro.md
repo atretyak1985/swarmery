@@ -28,8 +28,12 @@ warn-and-skip, never a scan failure):
 - `phases/09-retrospective.md` — the Duration metrics row, `### Lesson N:` entries
   (with their `**Action**:` lines), and the Process Improvements table.
 - `ORCHESTRATION.md` — `## Loop {N}` re-dispatch journal sections.
-- `logs/agents.md` — the delegation ledger (`| Агент | Фаза | Вердикт | Артефакт |`,
-  English header accepted too).
+- `logs/agents.md` — the delegation ledger (Ukrainian or English header). Two row
+  layouts are accepted: the legacy 4-cell `agent | phase | verdict | artifact`
+  and the assessment 7-cell `agent | phase | verdict | loops | quality | mistakes | artifact`
+  (tech-lead ≥ core 2.2.0). The artifact is always the last cell; a literal `|`
+  inside mistakes is re-joined. Out-of-range loops (outside 0..99) and quality
+  (outside 1..5) degrade to NULL without dropping the row.
 
 ## 2. Page tour
 

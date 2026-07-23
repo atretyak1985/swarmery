@@ -399,7 +399,10 @@ func ledgerInt(cell string) *int {
 //   - assessment 7-cell (tech-lead ≥ core 2.2.0):
 //     agent | phase | verdict | loops | quality | mistakes | artifact
 //
-// Malformed loops/quality cells and out-of-range quality (<1 or >5) degrade to
+// The artifact is always the LAST cell, so rows whose mistakes text contains a
+// literal `|` (8+ cells) still yield the real artifact; the extra cells are
+// joined back into mistakes with " | ". Malformed loops/quality cells and
+// out-of-range values (loops outside 0..99, quality outside 1..5) degrade to
 // nil without dropping the row; mistakes of `-`/`—`/empty fold to "".
 func parseLedger(text string) []delegation {
 	var out []delegation
@@ -424,17 +427,17 @@ func parseLedger(text string) []delegation {
 			seq: len(out) + 1, agent: agent,
 			phase: capText(cells[1]), verdict: capText(cells[2]),
 		}
+		d.artifact = capText(cells[len(cells)-1])
 		if len(cells) >= 7 {
-			d.loops = ledgerInt(cells[3])
+			if l := ledgerInt(cells[3]); l != nil && *l >= 0 && *l <= 99 {
+				d.loops = l
+			}
 			if q := ledgerInt(cells[4]); q != nil && *q >= 1 && *q <= 5 {
 				d.quality = q
 			}
-			if m := capText(cells[5]); m != "-" && m != "—" {
+			if m := capText(strings.Join(cells[5:len(cells)-1], " | ")); m != "-" && m != "—" {
 				d.mistakes = m
 			}
-			d.artifact = capText(cells[6])
-		} else {
-			d.artifact = capText(cells[3])
 		}
 		out = append(out, d)
 	}
