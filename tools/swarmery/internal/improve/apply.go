@@ -149,12 +149,26 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 	}
 	_ = s.Exec.RemoveAll(patch)
 
-	// Step 3b: HARD path-scope gate. git apply already blocks ../ traversal and
-	// symlink escape, but a diff can still create/modify sibling top-level paths
+	// Step 3b: STAGE-BEFORE-GATE. The gate must reflect exactly what WILL be
+	// committed — including files the model's diff CREATED. A create is UNTRACKED
+	// after `git apply`, so `git diff HEAD` (worktree vs HEAD, tracked-only) omits
+	// it; the gate would pass and the later `git add -A` would sneak
+	// .github/workflows/evil.yml into the committed+pushed PR (the P0 bypass), and
+	// the injected file's lines would also dodge the ≤120 cap. Staging the full
+	// content NOW (`git add -A`) puts every create/edit/rename into the index, and
+	// the gate then reads the STAGED diff (`--cached`) — the exact tree that will
+	// be committed.
+	if out, err := s.Exec.Run(ctx, tmp, "git", "add", "-A"); err != nil {
+		return s.failWrap(id, fmt.Errorf("git add: %v (%s)", err, out))
+	}
+
+	// HARD path-scope gate. git apply already blocks ../ traversal and symlink
+	// escape, but a diff can still create/modify sibling top-level paths
 	// (.github/workflows/*, scripts/*, .gitleaks.toml) that every downstream gate
-	// misses. Compute the changed-path list and reject if ANYTHING outside the
-	// target agent file was touched. The semver bump happens AFTER this gate, so
-	// at apply-check time the ONLY allowed changed path is the agent file itself.
+	// misses. Compute the changed-path list from the STAGED diff and reject if
+	// ANYTHING outside the target agent file was touched. The semver bump happens
+	// AFTER this gate and re-stages its two manifests just before commit, so at
+	// gate time the ONLY allowed changed path is the agent file itself.
 	changed, total, err := s.changedPaths(ctx, tmp)
 	if err != nil {
 		return s.failWrap(id, err)
@@ -169,14 +183,20 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 	}
 
 	// Step 5: core-only ⇒ patch-bump the core plugin + marketplace in lockstep.
+	// This writes the two manifest files AFTER the gate; the re-stage below adds
+	// them to the index so they land in the commit but were absent at gate time.
 	if coreOnly(changed) {
 		if err := s.bumpCoreSemver(tmp); err != nil {
 			return s.failWrap(id, err)
 		}
 	}
 
-	// Step 6: commit + push (force-with-lease tolerates an idempotent re-run on
-	// the same generated branch after a gh outage).
+	// Step 6: re-stage so the post-gate manifest bump is included, then commit +
+	// push (force-with-lease tolerates an idempotent re-run on the same generated
+	// branch after a gh outage). The scope gate already ran against the staged
+	// tree; this second `git add -A` can only add the two manifests bumpCoreSemver
+	// wrote (the agent file is already staged, and the gate proved nothing else
+	// was touched).
 	if out, err := s.Exec.Run(ctx, tmp, "git", "add", "-A"); err != nil {
 		return s.failWrap(id, fmt.Errorf("git add: %v (%s)", err, out))
 	}
@@ -214,13 +234,25 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 	return nil
 }
 
-// changedPaths runs `git diff --numstat HEAD` in the worktree and parses it into
-// the changed-path list + total (added+deleted) line count. It is called once,
-// right after apply, so both the path-scope gate and the guardrails reuse the
-// same file list (a single git invocation).
+// changedPaths runs the numstat diff of the STAGED tree in the worktree and
+// parses it into the changed-path list + total (added+deleted) line count. It is
+// called once, right after `git add -N .`, so both the path-scope gate and the
+// guardrails reuse the same file list (a single git invocation).
+//
+// The command is the single source of truth for BOTH the scope gate and the
+// ≤120-line cap. Three flags close the P0 bypass and its rename/quoting cousins:
+//   - --cached surfaces staged untracked CREATES (with `git add -N .` beforehand),
+//     so a newly created evil file is an add row the scope gate catches instead of
+//     an invisible untracked file that `git add -A` later sneaks into the commit.
+//   - --no-renames forces a rename to split into a delete row + an add row, so the
+//     created DESTINATION path is its own entry the allowed-set check sees (never
+//     an `old => new` token that would parse to an ambiguous path).
+//   - core.quotepath=false keeps non-ASCII paths verbatim instead of arriving as
+//     "\303\251…" quoted strings that would dodge the exact string compare.
 func (s *Service) changedPaths(ctx context.Context, tmp string) ([]string, int, error) {
-	// git diff --numstat HEAD lists "add\tdel\tpath" per file.
-	numstat, err := s.Exec.Run(ctx, tmp, "git", "diff", "--numstat", "HEAD")
+	// "add\tdel\tpath" per file, one path column per row under --no-renames.
+	numstat, err := s.Exec.Run(ctx, tmp,
+		"git", "-c", "core.quotepath=false", "diff", "--cached", "--numstat", "--no-renames", "HEAD")
 	if err != nil {
 		return nil, 0, &gateErr{gate: "changed lines", msg: fmt.Sprintf("git diff: %v (%s)", err, numstat)}
 	}
@@ -231,20 +263,17 @@ func (s *Service) changedPaths(ctx context.Context, tmp string) ([]string, int, 
 	return changed, total, nil
 }
 
-// checkPathScope is the HARD apply-scope gate. It rejects (gate "path scope")
-// if any changed path is outside the target agent file. The two manifest files
-// the semver bump may touch (plugins/core/.claude-plugin/plugin.json and
-// .claude-plugin/marketplace.json) are in the allowed set for defence in depth,
-// but they are bumped by our own code AFTER this gate, so at apply-check time
-// the model's diff must have touched the agent file and nothing else.
+// checkPathScope is the HARD apply-scope gate. It rejects (gate "path scope") if
+// any changed path is outside the target agent file. The gate runs against the
+// STAGED (intent-to-add) tree BEFORE the semver bump writes-and-stages its two
+// manifests, so the ONLY path the model's diff is allowed to have touched is the
+// agent file itself — anything else (a sibling CI workflow, a renamed-away
+// destination, a manifest the model tried to edit directly) is a bypass attempt
+// and must be rejected. The bump's own manifest writes are added to the commit
+// afterward by our code, never present at gate time.
 func checkPathScope(changed []string, agentPath string) error {
-	allowed := map[string]bool{
-		agentPath: true,
-		"plugins/core/.claude-plugin/plugin.json": true,
-		".claude-plugin/marketplace.json":         true,
-	}
 	for _, p := range changed {
-		if !allowed[p] {
+		if p != agentPath {
 			return &gateErr{gate: "path scope",
 				msg: fmt.Sprintf("diff touches %s outside the target agent file %s", p, agentPath)}
 		}
@@ -378,7 +407,11 @@ func isAgentFile(p string) bool {
 
 // parseNumstat parses `git diff --numstat` output into (paths, totalChanged).
 // Binary files report "-\t-\tpath"; those add 0 to the total but still count as
-// changed paths.
+// changed paths. Callers pass --no-renames, so every row is exactly
+// "added\tdeleted\tpath" with a single path column (no `old => new` rename
+// token), and core.quotepath=false keeps that path verbatim rather than quoting
+// non-ASCII bytes. It is fail-CLOSED: any row with fewer than three
+// tab-separated columns is a hard error, not a silent skip.
 func parseNumstat(out string) (paths []string, total int, err error) {
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		line = strings.TrimSpace(line)

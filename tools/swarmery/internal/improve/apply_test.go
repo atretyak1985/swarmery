@@ -47,14 +47,17 @@ func sig(name string, args []string) string {
 	if len(args) == 0 {
 		return name
 	}
-	// git commands: key on the subcommand (skip a leading -C <dir>).
+	// git commands: key on the subcommand, skipping leading -C <dir> and any
+	// `-c key=val` config flags (e.g. `git -c core.quotepath=false diff …`).
 	if name == "git" {
 		i := 0
-		if len(args) >= 2 && args[0] == "-C" {
-			i = 2
-		}
-		if i < len(args) {
-			return "git " + args[i]
+		for i < len(args) {
+			switch {
+			case args[i] == "-C" || args[i] == "-c":
+				i += 2
+			default:
+				return "git " + args[i]
+			}
 		}
 		return "git"
 	}

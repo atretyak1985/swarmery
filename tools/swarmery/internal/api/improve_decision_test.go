@@ -75,11 +75,23 @@ func (e *noopExec) Run(_ context.Context, _ string, name string, args ...string)
 	if name == "gh" {
 		return "https://github.com/x/y/pull/1\n", nil
 	}
-	if name == "git" && len(args) > 0 && args[0] == "diff" {
+	// The numstat gate now runs as `git -c core.quotepath=false diff --cached
+	// --numstat --no-renames HEAD`; match on the presence of a "diff" arg so the
+	// config-flag prefix doesn't dodge the stub.
+	if name == "git" && hasArg(args, "diff") {
 		return "1\t0\t" + noopChangedPath + "\n", nil // non-core → no semver bump
 	}
 	return "", nil
 }
+func hasArg(args []string, want string) bool {
+	for _, a := range args {
+		if a == want {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *noopExec) ReadFile(string) ([]byte, error) {
 	return []byte("---\nname: x\ndescription: y\n---\n"), nil
 }
