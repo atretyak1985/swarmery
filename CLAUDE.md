@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-swarmery is a **Claude Code plugin marketplace** (`.claude-plugin/marketplace.json`), not an application. It ships one vendor-neutral **`core`** plugin plus opt-in domain packs (`uav-pack`, `iot-pack`, `web-pack`, `infra-pack`, `lsp-pack`, `claude-eng-pack`). Consumer projects enable plugins via their own `.claude/settings.json` and supply per-project flavor at runtime through `.claude/project.json` — nothing project-specific is ever baked into this repo.
+swarmery is a **Claude Code plugin marketplace** (`.claude-plugin/marketplace.json`), not an application. It ships one vendor-neutral **`core`** plugin plus opt-in domain packs (`uav-pack`, `iot-pack`, `web-pack`, `infra-pack`, `lsp-pack`, `claude-eng-pack`, `graphify-pack`, `architecture-pack`). Consumer projects enable plugins via their own `.claude/settings.json` and supply per-project flavor at runtime through `.claude/project.json` — nothing project-specific is ever baked into this repo.
 
 There is no build step for the marketplace itself. "Source code" here is agent/skill/command markdown, bash hooks and CLI scripts, and JSON manifests.
 

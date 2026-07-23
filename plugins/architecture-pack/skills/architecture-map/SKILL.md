@@ -59,10 +59,12 @@ one per flow), `payload` where meaningful. Prefer flows crossing ≥ 3 modules.
 Assemble the full JSON (`schemaVersion: 1`, `analyzedAt` = today,
 `analyzedAtCommit` = HEAD). Then:
 
+Bundled files (schema, validator, renderer) live under ${CLAUDE_PLUGIN_ROOT}/skills/architecture-map/ — never copy them into the project.
+
 ```bash
 mkdir -p architecture-out
-node .claude/skills/architecture-map/scripts/validate.mjs architecture-out/architecture-map.json
-bash .claude/skills/architecture-map/scripts/build.sh \
+node "${CLAUDE_PLUGIN_ROOT}/skills/architecture-map/scripts/validate.mjs" architecture-out/architecture-map.json
+bash "${CLAUDE_PLUGIN_ROOT}/skills/architecture-map/scripts/build.sh" \
   --json architecture-out/architecture-map.json \
   --out  architecture-out/architecture-map.html
 ```

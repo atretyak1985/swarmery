@@ -1,0 +1,6 @@
+{
+  "name": "architecture-pack",
+  "description": "Architecture-map pack: the /architecture-map skill — generate a repo-wide architecture map as architecture-out/architecture-map.json (machine contract with layers, modules, and file-anchored flows for AI agents) plus a self-contained architecture-map.html viewer. Freshness-stamped per commit with incremental refresh; grounded in the graphify knowledge graph when present, falls back to direct exploration without it. Opt-in; the swarmery dashboard serves the artifacts on its Architecture page.",
+  "version": "1.0.0",
+  "author": {"name": "atretyak", "email": "atretiak.work@gmail.com"}
+}

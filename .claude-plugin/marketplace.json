@@ -48,6 +48,11 @@
       "name": "graphify-pack",
       "source": "./plugins/graphify-pack",
       "description": "Knowledge-graph pack: the /graphify skill — repo/folder → persistent knowledge graph with query/path/affected tools and HTML/JSON/Neo4j exports. Opt-in; requires the graphify CLI on the machine."
+    },
+    {
+      "name": "architecture-pack",
+      "source": "./plugins/architecture-pack",
+      "description": "Repo-wide architecture map: /architecture-map generates a machine-readable JSON contract (layers, modules, file-anchored flows) + self-contained HTML viewer, freshness-stamped per commit; the swarmery dashboard serves both on its Architecture page."
     }
   ]
 }
