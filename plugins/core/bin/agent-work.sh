@@ -134,7 +134,7 @@ cmd_init() {
 - **Артефакти**:
 EOF
 
-    printf '| Агент | Фаза | Вердикт | Артефакт |\n|---|---|---|---|\n' > "${task_dir}/logs/agents.md"
+    printf '| Агент | Фаза | Вердикт | Loops | Quality | Mistakes | Артефакт |\n|---|---|---|---|---|---|---|\n' > "${task_dir}/logs/agents.md"
     printf '| Дата | Сесія | Тривалість | Активність |\n|---|---|---|---|\n' > "${task_dir}/logs/sessions.md"
 
     cmd_index >/dev/null 2>&1 || true
