@@ -342,3 +342,156 @@ func TestToolsDashArchitecture(t *testing.T) {
 		t.Error("project 2 (unreadable settings.json but has artifact) missing from architecture.projects")
 	}
 }
+
+// TestToolsDashArchitectureUnion covers the pack∪artifact union logic added
+// in the v2 iteration: pack-enabled projects appear even without an artifact,
+// artifact projects with bad JSON still appear, and commit fields are populated
+// from the map JSON + a seeded .git directory.
+func TestToolsDashArchitectureUnion(t *testing.T) {
+	const fakesha = "aabbccddee112233445566778899001122334455"
+
+	t.Run("pack enabled no artifact — listed hasMap=false", func(t *testing.T) {
+		srv, _ := projectsTestServer(t)
+		attachStubToolManager(t)
+		stubLookPath(t, nil)
+
+		path := projectPath(t, srv.URL, "1")
+		// Enable architecture-pack — no artifact on disk.
+		writeProjectSettings(t, path, `{
+			"enabledPlugins": {"core@swarmery": true, "architecture-pack@swarmery": true}
+		}`)
+
+		resp := getToolsResponse(t, srv.URL)
+		found := false
+		for _, p := range resp.Architecture.Projects {
+			if p.ID == 1 {
+				found = true
+				if p.HasMap {
+					t.Error("hasMap = true, want false for pack-enabled project with no artifact")
+				}
+				if p.MapPath == "" {
+					t.Error("mapPath is empty, want the canonical path even without an artifact")
+				}
+			}
+		}
+		if !found {
+			t.Error("pack-enabled project (id 1) not in architecture.projects, want listed")
+		}
+	})
+
+	t.Run("telemetry-only artifact regression", func(t *testing.T) {
+		// Project 2 has no settings.json (telemetry-only) — but with an artifact
+		// it must still appear. This is the regression guard from the original test.
+		srv, _ := projectsTestServer(t)
+		attachStubToolManager(t)
+		stubLookPath(t, nil)
+
+		path2 := projectPath(t, srv.URL, "2")
+		archOut2 := filepath.Join(path2, "architecture-out")
+		os.RemoveAll(archOut2)
+		t.Cleanup(func() { os.RemoveAll(archOut2) })
+		if err := os.MkdirAll(archOut2, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(archOut2, "architecture-map.html"), []byte("<html>arch2</html>"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		resp := getToolsResponse(t, srv.URL)
+		found := false
+		for _, p := range resp.Architecture.Projects {
+			if p.ID == 2 {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("telemetry-only artifact project (id 2) missing from architecture.projects")
+		}
+	})
+
+	t.Run("commit fields populated from map JSON and .git", func(t *testing.T) {
+		srv, _ := projectsTestServer(t)
+		attachStubToolManager(t)
+		stubLookPath(t, nil)
+
+		path := projectPath(t, srv.URL, "1")
+		archOut := filepath.Join(path, "architecture-out")
+		if err := os.MkdirAll(archOut, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(archOut, "architecture-map.html"), []byte("<html>arch</html>"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// Seed analyzedAtCommit into the map JSON.
+		mapJSON := `{"analyzedAtCommit":"` + fakesha + `","nodes":[]}`
+		if err := os.WriteFile(filepath.Join(archOut, "architecture-map.json"), []byte(mapJSON), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// Seed a fake .git (loose-ref layout) so headCommit is resolvable.
+		gitDir := filepath.Join(path, ".git")
+		if err := os.MkdirAll(filepath.Join(gitDir, "refs", "heads"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(gitDir, "refs", "heads", "main"), []byte(fakesha+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		resp := getToolsResponse(t, srv.URL)
+		var ap *architectureProjectDTO
+		for i := range resp.Architecture.Projects {
+			if resp.Architecture.Projects[i].ID == 1 {
+				ap = &resp.Architecture.Projects[i]
+				break
+			}
+		}
+		if ap == nil {
+			t.Fatal("project 1 not found in architecture.projects")
+		}
+		if ap.AnalyzedAtCommit == nil {
+			t.Error("analyzedAtCommit = null, want the sha from the map JSON")
+		} else if *ap.AnalyzedAtCommit != fakesha {
+			t.Errorf("analyzedAtCommit = %q, want %q", *ap.AnalyzedAtCommit, fakesha)
+		}
+		if ap.HeadCommit == nil {
+			t.Error("headCommit = null, want the sha resolved from .git")
+		} else if *ap.HeadCommit != fakesha {
+			t.Errorf("headCommit = %q, want %q", *ap.HeadCommit, fakesha)
+		}
+	})
+
+	t.Run("unparseable map JSON — analyzedAtCommit null but project listed", func(t *testing.T) {
+		srv, _ := projectsTestServer(t)
+		attachStubToolManager(t)
+		stubLookPath(t, nil)
+
+		path := projectPath(t, srv.URL, "1")
+		archOut := filepath.Join(path, "architecture-out")
+		if err := os.MkdirAll(archOut, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(archOut, "architecture-map.html"), []byte("<html>arch</html>"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(archOut, "architecture-map.json"), []byte(`not valid JSON!!!`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		resp := getToolsResponse(t, srv.URL)
+		var ap *architectureProjectDTO
+		for i := range resp.Architecture.Projects {
+			if resp.Architecture.Projects[i].ID == 1 {
+				ap = &resp.Architecture.Projects[i]
+				break
+			}
+		}
+		if ap == nil {
+			t.Fatal("project 1 not found — should appear even with bad JSON")
+		}
+		if ap.AnalyzedAtCommit != nil {
+			t.Errorf("analyzedAtCommit = %q, want null for unparseable JSON", *ap.AnalyzedAtCommit)
+		}
+	})
+}

@@ -11,6 +11,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/githead"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
 )
@@ -38,10 +40,12 @@ func AttachToolManager(m *toolproc.Manager) { toolMgr = m }
 var lookPathFn = exec.LookPath
 
 const (
-	// serenaPack / graphifyPack are the marketplace pack names whose presence in
-	// a project's enabledPlugins puts it on the respective sidebar list.
-	serenaPack   = "lsp-pack"
-	graphifyPack = "graphify-pack"
+	// serenaPack / graphifyPack / architecturePack are the marketplace pack names
+	// whose presence in a project's enabledPlugins puts it on the respective
+	// sidebar list.
+	serenaPack       = "lsp-pack"
+	graphifyPack     = "graphify-pack"
+	architecturePack = "architecture-pack"
 	// sidebarLogTailCap bounds logTail in the GET /api/tools feed (toolproc
 	// keeps up to 40 lines; the sidebar only ever shows the last few).
 	sidebarLogTailCap = 10
@@ -89,12 +93,14 @@ type toolsGraphifySection struct {
 }
 
 type architectureProjectDTO struct {
-	ID      int64   `json:"id"`
-	Slug    string  `json:"slug"`
-	Name    *string `json:"name"`
-	HasMap  bool    `json:"hasMap"`
-	BuiltAt *string `json:"builtAt"`
-	MapPath string  `json:"mapPath"`
+	ID               int64   `json:"id"`
+	Slug             string  `json:"slug"`
+	Name             *string `json:"name"`
+	HasMap           bool    `json:"hasMap"`
+	BuiltAt          *string `json:"builtAt"`
+	MapPath          string  `json:"mapPath"`
+	AnalyzedAtCommit *string `json:"analyzedAtCommit"`
+	HeadCommit       *string `json:"headCommit"`
 }
 
 type toolsArchitectureSection struct {
@@ -138,25 +144,23 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err)
 			return
 		}
-		// Architecture section: artifact-gated (not pack-gated) — runs before
-		// the plugin-state continue so telemetry-only projects with maps appear.
-		var scanName *string
-		if name.Valid {
-			n := name.String
-			scanName = &n
-		}
-		if d, ok := architectureDTO(id, slug, scanName, path); ok {
-			resp.Architecture.Projects = append(resp.Architecture.Projects, d)
-		}
-		// nil state = telemetry-only / unreadable settings → on neither list.
-		st, serr := projectscan.ReadPluginState(path, nil)
-		if serr != nil || st == nil {
-			continue
-		}
 		var namePtr *string
 		if name.Valid {
 			n := name.String
 			namePtr = &n
+		}
+		// Read plugin state first so we can compute packEnabled for the
+		// architecture union (pack∪artifact). State nil = telemetry-only /
+		// unreadable settings — those still appear in the architecture list if
+		// they have an artifact (artifact-only gating for telemetry projects).
+		st, serr := projectscan.ReadPluginState(path, nil)
+		packEnabled := serr == nil && st != nil && slices.Contains(st.Packs, architecturePack)
+		if d, ok := architectureDTO(id, slug, namePtr, path, packEnabled); ok {
+			resp.Architecture.Projects = append(resp.Architecture.Projects, d)
+		}
+		// nil state = telemetry-only / unreadable settings → off the serena/graphify lists.
+		if serr != nil || st == nil {
+			continue
 		}
 		if slices.Contains(st.Packs, serenaPack) {
 			resp.Serena.Projects = append(resp.Serena.Projects, serenaDTO(id, slug, namePtr, toolMgr.Status(id)))
@@ -206,23 +210,49 @@ func serenaDTO(id int64, slug string, name *string, s toolproc.Status) serenaPro
 }
 
 // architectureDTO reports <project>/architecture-out artifacts (produced by
-// the project-local /architecture-map skill). ok=false → project has no map
-// and stays off the list entirely (artifact-gated, not pack-gated).
-func architectureDTO(id int64, slug string, name *string, projectPath string) (architectureProjectDTO, bool) {
+// the project-local /architecture-map skill). ok = packEnabled || artifact
+// exists — the union makes pack-enabled projects appear even before a map is
+// built. Both AnalyzedAtCommit and HeadCommit degrade to nil on any failure.
+func architectureDTO(id int64, slug string, name *string, projectPath string, packEnabled bool) (architectureProjectDTO, bool) {
 	out := filepath.Join(projectPath, "architecture-out")
-	fi, err := os.Stat(filepath.Join(out, "architecture-map.html"))
-	if err != nil || fi.IsDir() {
+	mapPath := fmt.Sprintf("/api/projects/%d/architecture/architecture-map.html", id)
+
+	fi, statErr := os.Stat(filepath.Join(out, "architecture-map.html"))
+	hasMap := statErr == nil && !fi.IsDir()
+
+	if !packEnabled && !hasMap {
 		return architectureProjectDTO{}, false
 	}
-	v := fi.ModTime().UTC().Format(time.RFC3339)
-	return architectureProjectDTO{
+
+	d := architectureProjectDTO{
 		ID:      id,
 		Slug:    slug,
 		Name:    name,
-		HasMap:  true,
-		BuiltAt: &v,
-		MapPath: fmt.Sprintf("/api/projects/%d/architecture/architecture-map.html", id),
-	}, true
+		HasMap:  hasMap,
+		MapPath: mapPath,
+	}
+
+	if hasMap {
+		v := fi.ModTime().UTC().Format(time.RFC3339)
+		d.BuiltAt = &v
+
+		// Parse analyzedAtCommit from architecture-map.json (best-effort).
+		if raw, err := os.ReadFile(filepath.Join(out, "architecture-map.json")); err == nil {
+			var meta struct {
+				AnalyzedAtCommit string `json:"analyzedAtCommit"`
+			}
+			if err := json.Unmarshal(raw, &meta); err == nil && meta.AnalyzedAtCommit != "" {
+				d.AnalyzedAtCommit = &meta.AnalyzedAtCommit
+			}
+		}
+	}
+
+	// Resolve the current HEAD commit from the project's .git — nil on any failure.
+	if sha, ok := githead.Resolve(projectPath); ok {
+		d.HeadCommit = &sha
+	}
+
+	return d, true
 }
 
 // graphifyDTO reports the on-disk build artifacts under <project>/graphify-out.
