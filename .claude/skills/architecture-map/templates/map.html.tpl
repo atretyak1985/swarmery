@@ -186,7 +186,7 @@ function inspect(m) {
     list('Key files', m.keyFiles) + list('Exports', m.exports) +
     list('Depends on', (m.dependencies || []).map(name));
   box.hidden = false;
-  $('insx').addEventListener('click', () => { box.hidden = true; });
+  $('insx').addEventListener('click', (e) => { e.stopPropagation(); box.hidden = true; });
 }
 document.body.addEventListener('click', () => { $('inspector').hidden = true; });
 
