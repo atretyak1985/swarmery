@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -40,16 +41,19 @@ func AttachImproveRepo(claudeDir string) {
 	improveRepoRoot = filepath.Join(claudeDir, "plugins", "marketplaces", pluginMarketplace)
 }
 
-// spawnImprove runs one generation pipeline asynchronously; the improveGo
-// seam (nil in production) lets tests run it inline for determinism.
-func (h *Handler) spawnImprove(fn func()) {
+// spawnImprove runs one pipeline asynchronously; the improveGo seam (nil in
+// production) lets tests run it inline for determinism. label names the
+// proposal/agent the closure operates on, so a recovered panic can be
+// correlated to the (possibly wedged) row.
+func (h *Handler) spawnImprove(label string, fn func()) {
 	// A panic in the long-running Generate/Apply pipeline must never take the
-	// daemon down — recover, log, and let the row stay in whatever state it
-	// reached (a stuck 'approved'/'proposed' is re-runnable from the dashboard).
+	// daemon down — recover, log (with the row label so the wedged proposal is
+	// identifiable), and let the row stay in whatever state it reached (a stuck
+	// 'approved'/'proposed' is re-runnable from the dashboard).
 	wrapped := func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("error: improve: async pipeline panic recovered: %v", r)
+				log.Printf("error: improve: async pipeline panic recovered (%s): %v", label, r)
 			}
 		}()
 		fn()
@@ -76,7 +80,7 @@ func (h *Handler) improveAccepted(w http.ResponseWriter, agent string, recID *in
 		})
 		return
 	}
-	h.spawnImprove(func() {
+	h.spawnImprove("generate agent "+agent, func() {
 		if _, err := h.Improve.Generate(context.Background(), improve.GenerateReq{
 			Agent: agent, RecommendationID: recID,
 		}); err != nil {
@@ -244,7 +248,7 @@ func (h *Handler) retryProposal(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	h.spawnImprove(func() {
+	h.spawnImprove(fmt.Sprintf("retry proposal %d (agent %s)", rowID, agent), func() {
 		if err := h.Improve.Retry(context.Background(), rowID); err != nil {
 			log.Printf("error: improve: retry %d: %v", rowID, err)
 		}
@@ -264,7 +268,7 @@ func legalProposalTransition(from, to string) bool {
 // spawnApply fires the async apply/PR pipeline for an approved proposal,
 // reusing the improveGo test seam so httptest runs it inline.
 func (h *Handler) spawnApply(id int64) {
-	h.spawnImprove(func() {
+	h.spawnImprove(fmt.Sprintf("apply proposal %d", id), func() {
 		if err := h.Improve.Apply(context.Background(), id); err != nil {
 			log.Printf("error: improve: apply %d: %v", id, err)
 		}

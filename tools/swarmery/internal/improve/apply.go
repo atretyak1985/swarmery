@@ -88,7 +88,14 @@ func (s *Service) Apply(ctx context.Context, proposalID int64) error {
 		return s.markFailed(proposalID, err)
 	}
 
-	if ghErr := s.runApply(ctx, proposalID, agent, diff, branch); ghErr != nil {
+	// The apply-scope gate needs the agent file as a repo-relative path; the
+	// stored agent_path is absolute (…/plugins/core/agents/x.md under Repo).
+	relAgentPath, err := repoRel(s.Repo, agentPath)
+	if err != nil {
+		return s.markFailed(proposalID, err)
+	}
+
+	if ghErr := s.runApply(ctx, proposalID, agent, relAgentPath, diff, branch); ghErr != nil {
 		// gh outage: leave the proposal approved so the dashboard can re-run.
 		log.Printf("warn: improve: apply %d (agent %s): PR step failed, left approved: %v",
 			proposalID, agent, ghErr)
@@ -102,8 +109,10 @@ func (s *Service) Apply(ctx context.Context, proposalID int64) error {
 
 // runApply performs the worktree-scoped part of the pipeline. A *gateErr or
 // sha/git failure is converted to a failed row here and returns nil; a PR-step
-// (gh) failure is returned so Apply can keep the proposal approved.
-func (s *Service) runApply(ctx context.Context, id int64, agent, diff, branch string) (ghErr error) {
+// (gh) failure is returned so Apply can keep the proposal approved. agentPath is
+// the repo-relative path of the target agent file — the only path the model's
+// diff is permitted to touch (the path-scope gate).
+func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff, branch string) (ghErr error) {
 	tmp, err := s.Exec.MkdirTemp()
 	if err != nil {
 		return s.failWrap(id, err)
@@ -140,9 +149,22 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, diff, branch st
 	}
 	_ = s.Exec.RemoveAll(patch)
 
-	// Step 4: guardrails, in order.
-	changed, err := s.guardrails(ctx, tmp)
+	// Step 3b: HARD path-scope gate. git apply already blocks ../ traversal and
+	// symlink escape, but a diff can still create/modify sibling top-level paths
+	// (.github/workflows/*, scripts/*, .gitleaks.toml) that every downstream gate
+	// misses. Compute the changed-path list and reject if ANYTHING outside the
+	// target agent file was touched. The semver bump happens AFTER this gate, so
+	// at apply-check time the ONLY allowed changed path is the agent file itself.
+	changed, total, err := s.changedPaths(ctx, tmp)
 	if err != nil {
+		return s.failWrap(id, err)
+	}
+	if err := checkPathScope(changed, agentPath); err != nil {
+		return s.failWrap(id, err)
+	}
+
+	// Step 4: guardrails, in order (reusing the changed-path list from above).
+	if err := s.guardrails(ctx, tmp, changed, total); err != nil {
 		return s.failWrap(id, err)
 	}
 
@@ -192,27 +214,67 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, diff, branch st
 	return nil
 }
 
-// guardrails runs the three gates in order and returns the list of changed
-// paths (from numstat) on success. Any gate failure is a *gateErr naming it.
-func (s *Service) guardrails(ctx context.Context, tmp string) ([]string, error) {
-	// 1) neutrality scan.
-	out, err := s.Exec.Run(ctx, tmp, "bash", "scripts/scan-flavor.sh")
-	if err != nil {
-		return nil, &gateErr{gate: "scan-flavor", msg: fmt.Sprintf("scan errored: %v (%s)", err, out)}
-	}
-	if !strings.Contains(out, "✓ clean") {
-		return nil, &gateErr{gate: "scan-flavor", msg: "neutrality scan not clean"}
-	}
-
-	// 3) diff numstat (computed before the frontmatter loop so we get the file
-	// list once). git diff --numstat HEAD lists "add\tdel\tpath" per file.
+// changedPaths runs `git diff --numstat HEAD` in the worktree and parses it into
+// the changed-path list + total (added+deleted) line count. It is called once,
+// right after apply, so both the path-scope gate and the guardrails reuse the
+// same file list (a single git invocation).
+func (s *Service) changedPaths(ctx context.Context, tmp string) ([]string, int, error) {
+	// git diff --numstat HEAD lists "add\tdel\tpath" per file.
 	numstat, err := s.Exec.Run(ctx, tmp, "git", "diff", "--numstat", "HEAD")
 	if err != nil {
-		return nil, &gateErr{gate: "changed lines", msg: fmt.Sprintf("git diff: %v (%s)", err, numstat)}
+		return nil, 0, &gateErr{gate: "changed lines", msg: fmt.Sprintf("git diff: %v (%s)", err, numstat)}
 	}
 	changed, total, err := parseNumstat(numstat)
 	if err != nil {
-		return nil, &gateErr{gate: "changed lines", msg: err.Error()}
+		return nil, 0, &gateErr{gate: "changed lines", msg: err.Error()}
+	}
+	return changed, total, nil
+}
+
+// checkPathScope is the HARD apply-scope gate. It rejects (gate "path scope")
+// if any changed path is outside the target agent file. The two manifest files
+// the semver bump may touch (plugins/core/.claude-plugin/plugin.json and
+// .claude-plugin/marketplace.json) are in the allowed set for defence in depth,
+// but they are bumped by our own code AFTER this gate, so at apply-check time
+// the model's diff must have touched the agent file and nothing else.
+func checkPathScope(changed []string, agentPath string) error {
+	allowed := map[string]bool{
+		agentPath: true,
+		"plugins/core/.claude-plugin/plugin.json": true,
+		".claude-plugin/marketplace.json":         true,
+	}
+	for _, p := range changed {
+		if !allowed[p] {
+			return &gateErr{gate: "path scope",
+				msg: fmt.Sprintf("diff touches %s outside the target agent file %s", p, agentPath)}
+		}
+	}
+	return nil
+}
+
+// repoRel makes an absolute agent path relative to the repo root, so the
+// path-scope gate compares it against numstat's repo-relative paths.
+func repoRel(repo, agentPath string) (string, error) {
+	rel, err := filepath.Rel(repo, agentPath)
+	if err != nil {
+		return "", fmt.Errorf("agent path %q not under repo %q: %w", agentPath, repo, err)
+	}
+	if strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("agent path %q escapes repo %q", agentPath, repo)
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+// guardrails runs the three gates in order over the pre-computed changed-path
+// list (from changedPaths). Any gate failure is a *gateErr naming it.
+func (s *Service) guardrails(ctx context.Context, tmp string, changed []string, total int) error {
+	// 1) neutrality scan.
+	out, err := s.Exec.Run(ctx, tmp, "bash", "scripts/scan-flavor.sh")
+	if err != nil {
+		return &gateErr{gate: "scan-flavor", msg: fmt.Sprintf("scan errored: %v (%s)", err, out)}
+	}
+	if !strings.Contains(out, "✓ clean") {
+		return &gateErr{gate: "scan-flavor", msg: "neutrality scan not clean"}
 	}
 
 	// 2) frontmatter on every changed agent definition file.
@@ -222,18 +284,19 @@ func (s *Service) guardrails(ctx context.Context, tmp string) ([]string, error) 
 		}
 		content, rerr := s.Exec.ReadFile(filepath.Join(tmp, p))
 		if rerr != nil {
-			return nil, &gateErr{gate: "frontmatter", msg: fmt.Sprintf("cannot read %s: %v", p, rerr)}
+			return &gateErr{gate: "frontmatter", msg: fmt.Sprintf("cannot read %s: %v", p, rerr)}
 		}
 		if !frontmatterOK(string(content)) {
-			return nil, &gateErr{gate: "frontmatter", msg: fmt.Sprintf("%s missing name/description in the first 15 lines", p)}
+			return &gateErr{gate: "frontmatter", msg: fmt.Sprintf("%s missing name/description in the first 15 lines", p)}
 		}
 	}
 
+	// 3) diff-size cap.
 	if total > maxChangedLines {
-		return nil, &gateErr{gate: "changed lines",
+		return &gateErr{gate: "changed lines",
 			msg: fmt.Sprintf("%d changed lines exceeds the %d-line cap", total, maxChangedLines)}
 	}
-	return changed, nil
+	return nil
 }
 
 // bumpCoreSemver patch-bumps plugins/core/.claude-plugin/plugin.json and keeps

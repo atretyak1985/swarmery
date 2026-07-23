@@ -15,7 +15,8 @@ const errNoChangeRow = "model found no justified change"
 
 // OpenProposalID returns the id of the agent's open (proposed|approved)
 // proposal, or 0 when none exists — the code-level half of the
-// one-open-proposal invariant (migration 0021 keeps no partial index).
+// one-open-proposal invariant (migration 0022 adds the partial unique index
+// that enforces the DB-level half).
 func (s *Service) OpenProposalID(agent string) (int64, error) {
 	var id int64
 	err := s.DB.QueryRow(`
@@ -72,11 +73,38 @@ func (s *Service) Generate(ctx context.Context, req GenerateReq) (int64, error) 
 		return 0, err
 	}
 
+	// If the (minutes-long) model run panics, finishProposal never executes and
+	// the placeholder stays 'proposed' — the migration-0022 partial unique index
+	// would then wedge every future Generate for this agent (409) with Retry
+	// refusing it (only 'failed' is retriable). Flip the placeholder to 'failed'
+	// (releasing the one-open slot, enabling Retry) and re-panic so the outer
+	// spawnImprove recover still logs it.
+	defer s.releaseOnPanic(id)
+
 	diff, rationale, runErr := s.run(ctx, ev)
 	if err := s.finishProposal(id, ev, diff, rationale, runErr); err != nil {
 		return 0, err
 	}
 	return id, nil
+}
+
+// releaseOnPanic is deferred around the model run: on a panic it flips the still
+// 'proposed' placeholder row to 'failed' (guarded on status so it only touches
+// the placeholder, never a row a concurrent decision moved on), then re-panics
+// so the caller's recover logs the crash.
+func (s *Service) releaseOnPanic(id int64) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	if _, err := s.DB.Exec(`
+		UPDATE agent_change_proposals
+		   SET status = 'failed', diff = '', rationale = '', error = ?
+		 WHERE id = ? AND status = 'proposed'`,
+		fmt.Sprintf("pipeline panic: %v", r), id); err != nil {
+		log.Printf("error: improve: release placeholder %d after panic: %v", id, err)
+	}
+	panic(r)
 }
 
 // insertPlaceholder reserves the agent's single open slot with an empty

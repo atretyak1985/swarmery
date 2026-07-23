@@ -338,6 +338,43 @@ func TestApplyGuardrailFailures(t *testing.T) {
 	}
 }
 
+// A diff that touches a sibling top-level path (e.g. a CI workflow) in addition
+// to the target agent file must be rejected by the HARD path-scope gate BEFORE
+// any commit/push/gh — the row lands failed with gate "path scope" and the
+// worktree is still pruned.
+func TestApplyPathScopeGate(t *testing.T) {
+	db := applyDB(t)
+	seedApprovedProposal(t, db, 1, "tech-lead", coreAgentPath, "body\n", coreDiff)
+	f := baseExec("/repo", "/tmp/wtps")
+	// numstat reports the agent file AND a sibling CI workflow the diff sneaked in.
+	f.runResp["git diff"] = struct {
+		out string
+		err error
+	}{out: "1\t1\tplugins/core/agents/tech-lead.md\n1\t0\t.github/workflows/evil.yml\n"}
+	svc := &Service{DB: db, Repo: "/repo", Exec: f}
+
+	if err := svc.Apply(context.Background(), 1); err != nil {
+		t.Fatalf("Apply returns nil on a path-scope rejection: %v", err)
+	}
+	status, prURL, errCol := applyRow(t, db, 1)
+	if status != "failed" {
+		t.Fatalf("status = %q, want failed", status)
+	}
+	if errCol == nil || !strings.Contains(*errCol, "path scope") {
+		t.Errorf("error = %v, want gate %q named", deref(errCol), "path scope")
+	}
+	if prURL != nil {
+		t.Errorf("pr_url set despite path-scope rejection: %v", prURL)
+	}
+	// No commit/push/gh may run once the scope gate rejects.
+	if f.ranSig("git commit") || f.ranSig("git push") || f.ranSig("gh pr") {
+		t.Errorf("commit/push/gh ran despite a path-scope rejection; runs=%v", f.runs)
+	}
+	if len(f.removed) == 0 {
+		t.Error("worktree not pruned on a path-scope rejection")
+	}
+}
+
 // gh missing/unauthenticated leaves the proposal approved + stores the error,
 // so the dashboard can re-run Apply.
 func TestApplyGhErrorStaysApproved(t *testing.T) {

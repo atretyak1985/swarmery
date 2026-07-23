@@ -240,6 +240,54 @@ func TestGenerateConcurrentSerializesToOneOpen(t *testing.T) {
 	}
 }
 
+// panicRunner panics on Run, simulating a Runner/pipeline blow-up mid-flight.
+type panicRunner struct{}
+
+func (panicRunner) Run(context.Context, string) (string, error) { panic("kaboom") }
+
+// If the model run panics, the placeholder row must NOT stay 'proposed' (which
+// the migration-0022 partial index would then wedge forever). Generate flips it
+// to 'failed' via a deferred recover, re-panics so the outer recover still
+// logs, and a subsequent Generate for the same agent is allowed (no 409).
+func TestGeneratePanicReleasesSlot(t *testing.T) {
+	db := openDB(t)
+	seedAgent(t, db, 1, "tech-lead", "local", "/x/tech-lead.md", "body")
+	svc := newService(t, db, panicRunner{})
+
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("Generate must re-panic so the outer recover logs it")
+			}
+		}()
+		_, _ = svc.Generate(context.Background(), GenerateReq{Agent: "tech-lead"})
+	}()
+
+	// The placeholder must be released to 'failed', not stuck 'proposed'.
+	var status string
+	var errCol sql.NullString
+	if err := db.QueryRow(
+		`SELECT status, error FROM agent_change_proposals WHERE agent = 'tech-lead'`).
+		Scan(&status, &errCol); err != nil {
+		t.Fatalf("read placeholder: %v", err)
+	}
+	if status != "failed" {
+		t.Fatalf("status = %q, want failed (slot released after panic)", status)
+	}
+	if !errCol.Valid || !strings.Contains(errCol.String, "pipeline panic") {
+		t.Errorf("error = %+v, want the pipeline-panic text", errCol)
+	}
+
+	// A fresh Generate for the same agent must be allowed (no open row).
+	if open, err := svc.OpenProposalID("tech-lead"); err != nil || open != 0 {
+		t.Fatalf("OpenProposalID = %d (err %v), want 0 — panic must release the slot", open, err)
+	}
+	svc.Runner = &mockRunner{out: validOut}
+	if _, err := svc.Generate(context.Background(), GenerateReq{Agent: "tech-lead"}); err != nil {
+		t.Fatalf("Generate after a panicked run must be allowed, got %v", err)
+	}
+}
+
 func TestGenerateUnknownAgent(t *testing.T) {
 	db := openDB(t)
 	svc := newService(t, db, &mockRunner{out: validOut})

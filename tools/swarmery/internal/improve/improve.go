@@ -8,8 +8,8 @@
 //
 // Proposal lifecycle: proposed → approved → applied | rejected; failed is
 // terminal-retriable (POST /api/retro/proposals/{id}/retry). "One open
-// proposal per agent" (status proposed|approved) is enforced here in code,
-// not by the schema.
+// proposal per agent" (status proposed|approved) is enforced both in code
+// (OpenProposalID) and by the schema (migration 0022's partial unique index).
 package improve
 
 import (

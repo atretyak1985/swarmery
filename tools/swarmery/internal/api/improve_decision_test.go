@@ -26,15 +26,19 @@ func seedProposal(t *testing.T, db *sql.DB, id int64, agent, status string) {
 	const content = "agent body"
 	sum := sha256.Sum256([]byte(content))
 	base := hex.EncodeToString(sum[:])
+	// agent_path is absolute under the pipeline's Repo (/repo) and, made
+	// repo-relative, matches the single path noopExec's numstat reports — so the
+	// apply-scope gate (path scope) sees only the target agent file.
+	agentPath := "/repo/" + noopChangedPath
 	improveExec(t, db, `INSERT INTO agents (id, name, scope, file_path, origin)
-		VALUES (?, ?, 'global', ?, 'local')`, id, agent, "/x/"+agent+".md")
+		VALUES (?, ?, 'global', ?, 'local')`, id, agent, agentPath)
 	improveExec(t, db, `INSERT INTO agent_versions (id, agent_id, content_hash, content, created_at)
 		VALUES (?, ?, ?, ?, '2026-07-20T00:00:00Z')`, id, id, "h"+agent, content)
 	improveExec(t, db, `UPDATE agents SET current_version_id = ? WHERE id = ?`, id, id)
 	improveExec(t, db, `INSERT INTO agent_change_proposals
 		(id, agent, agent_path, base_sha256, diff, rationale, status, created_at)
 		VALUES (?, ?, ?, ?, 'd', 'r', ?, '2026-07-20T00:00:00.000Z')`,
-		id, agent, "/x/"+agent+".md", base, status)
+		id, agent, agentPath, base, status)
 }
 
 // patchProposalReq fires PATCH /api/retro/proposals/{id} with the status body.
@@ -54,6 +58,11 @@ func patchProposalReq(t *testing.T, url string, status string, wantCode int) {
 	}
 }
 
+// noopChangedPath is the single repo-relative path noopExec's numstat reports;
+// seedProposal stores the matching /repo/<noopChangedPath> as agent_path so the
+// apply-scope gate passes. Non-core → no semver bump on the happy path.
+const noopChangedPath = "plugins/uav-pack/agents/x.md"
+
 // noopExec is an Exec whose apply pipeline never fails: git/gh succeed, scan is
 // clean, numstat is tiny, gh returns a PR url. It lets an approve→apply chain
 // run inline in the httptest without shelling out.
@@ -67,7 +76,7 @@ func (e *noopExec) Run(_ context.Context, _ string, name string, args ...string)
 		return "https://github.com/x/y/pull/1\n", nil
 	}
 	if name == "git" && len(args) > 0 && args[0] == "diff" {
-		return "1\t0\tplugins/uav-pack/agents/x.md\n", nil // non-core → no semver bump
+		return "1\t0\t" + noopChangedPath + "\n", nil // non-core → no semver bump
 	}
 	return "", nil
 }
@@ -154,7 +163,7 @@ func TestSpawnImproveRecoversPanic(t *testing.T) {
 			t.Fatalf("spawnImprove let a panic escape: %v", r)
 		}
 	}()
-	h.spawnImprove(func() { panic("boom in generate") })
+	h.spawnImprove("generate agent test", func() { panic("boom in generate") })
 }
 
 func TestApplyProposalManualRerun(t *testing.T) {
