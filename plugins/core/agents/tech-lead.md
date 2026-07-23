@@ -146,7 +146,7 @@ Mode routing has a fourth option above "Full" -- **Dynamic** -- for codebase-wid
 ### Phase 2: Context (parallel trio -- launch in single message)
 Agents: @context-gatherer + @tech-researcher + @downstream-analyzer (phase=2, read-only impact mapping)
 
-Brief each subagent with clean context: task description, specific gap to investigate, expected output format. Do not pass full conversation state. [PE/Context/7.2]
+Brief each subagent with clean context: task description, specific gap to investigate, expected output format. Do not pass full conversation state. If the repo contains `architecture-out/architecture-map.json`, tell @context-gatherer and @downstream-analyzer to consult it first (module topology, dependencies, flows) before broad discovery. [PE/Context/7.2]
 
 ### Phase 3: Planning
 Delegate to @task-planner (<1 week) or @implementation-planner (>1 week, >3 phases)
