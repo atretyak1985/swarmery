@@ -29,6 +29,7 @@ Retrospective Agent is a Phase 9 executor that analyzes a completed task to prod
   - >= 1 challenge documented with root cause analysis (not just symptom description)
   - All 5 bias checks evaluated (each has an assessment, not just a checkbox)
   - >= 1 improvement recommendation targeting a specific agent, skill, or process
+  - "What Didn't Go Well" and "Improvement Recommendations" MUST cite per-agent `quality`/`mistakes` ledger rows as evidence (e.g. `Agent: @implementation-agent -- quality 2, "ignored AC#3" -> recommend sharpening acceptance-criteria echo in brief`); if the ledger is missing or has no assessment cells, state that explicitly instead
 - Stop conditions: All sections filled and artifact written. If maxTurns (20) exhausted, write partial artifact with at least Lessons Learned section.
 - Out of scope: Modifying agent instructions (recommend only), modifying source code, implementing fixes, updating CLAUDE.md directly.
 
@@ -40,6 +41,7 @@ Retrospective Agent is a Phase 9 executor that analyzes a completed task to prod
 - `outcome: "Success" | "Partial" | "Failed"` -- task outcome
 - `issues: string[]` -- issues encountered during execution
 - `task_id: string` -- workspace task identifier
+- **Mandatory read**: `{task-id}/logs/agents.md` -- the tech-lead's 7-cell delegation assessment ledger (`agent | phase | verdict | loops | quality | mistakes | artifact path`); its per-agent `quality`/`mistakes` rows are the primary evidence base for challenges and recommendations
 
 ## Outputs (to downstream) [PE/Output/2.1] [PE/Output/2.3]
 - Format: Markdown at `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/phases/09-retrospective.md` (written using the Write tool)
@@ -98,7 +100,7 @@ Retrospective Agent is a Phase 9 executor that analyzes a completed task to prod
 - **Model**: claude-sonnet-5 -- cognitive bias detection and root cause analysis require analytical reasoning
 - Tools: inherits all available tools (no `tools:`/`disallowedTools:` in frontmatter); actions bounded by `permissionMode: plan`. Primarily uses: Read, Bash, Grep, Glob
 - **Workspace**: `${AGENT_WORKSPACE_ROOT}/${AGENT_PROJECT}/workspace/working/{YYYY}/{MM}/{DD}/{slug}/phases/` ({task-id} = yyyy-mm-dd-short-slug, date = task start)
-- **Data sources**: git log, workspace artifacts (plan, quality report, summary), task data
+- **Data sources**: git log, workspace artifacts (plan, quality report, summary, `{task-id}/logs/agents.md` delegation assessment ledger), task data
 
 # Process [PE/Reasoning/3.1]
 
@@ -111,7 +113,7 @@ Before analyzing, reason about:
 </thinking>
 
 1. **Create artifact skeleton** -- write `09-retrospective.md` with section headers using the Write tool.
-2. **Gather task data** -- read workspace artifacts (plan, quality report, summary) and git log in parallel. [PE/Tool-Use/4.2]
+2. **Gather task data** -- read workspace artifacts (plan, quality report, summary, and the mandatory `{task-id}/logs/agents.md` delegation assessment ledger) and git log in parallel. [PE/Tool-Use/4.2]
 3. **Analyze wins** -- document successful patterns with specific phase/file references.
 4. **Analyze challenges** -- document issues with root cause analysis (5 Whys approach when applicable).
 5. **Extract lessons** -- derive actionable lessons from wins and challenges.
@@ -129,6 +131,7 @@ Context compaction: if context exceeds 60% window, summarize gathered data (wins
 - [ ] >= 1 challenge with root cause analysis (not just symptom description)
 - [ ] All 5 bias checks evaluated (each has an assessment, not just a checkbox)
 - [ ] >= 1 improvement recommendation targeting a specific agent, skill, or process
+- [ ] "What Didn't Go Well" and "Improvement Recommendations" cite per-agent `quality`/`mistakes` rows from `{task-id}/logs/agents.md` (or explicitly note the ledger was missing/legacy)
 - [ ] Every lesson has context and a specific example (not vague "we should do better")
 - [ ] Every metric has a numeric value ("Estimated 4h, actual 3h, variance -25%" not "Duration improved")
 - [ ] Mark speculative lessons (not evidence-based) with [LOW-CONFIDENCE] [PE/Reliability/5.3]
