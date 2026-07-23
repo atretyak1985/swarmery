@@ -58,6 +58,7 @@ interface NavSection {
 const DOCS_NAV: NavItem = { to: '/docs', glyph: '❐', label: 'Docs' };
 const SERENA_NAV: NavItem = { to: '/serena', glyph: '◎', label: 'Serena' };
 const GRAPHIFY_NAV: NavItem = { to: '/graphify', glyph: '⬡', label: 'Graphify' };
+const ARCHITECTURE_NAV: NavItem = { to: '/architecture', glyph: '▦', label: 'Architecture' };
 
 /** Global project scope switcher (header) — GitHub-org-switcher pattern.
  * Projects come from the ScopeProvider's shared fetch. */
@@ -159,6 +160,7 @@ function AppShell(): JSX.Element {
   // lsp-pack gets toggled or graphify builds land, without a reload.
   const [hasSerena, setHasSerena] = useState(false);
   const [hasGraphify, setHasGraphify] = useState(false);
+  const [hasArchitecture, setHasArchitecture] = useState(false);
   useEffect(() => {
     let disposed = false;
     const poll = (): void => {
@@ -167,12 +169,14 @@ function AppShell(): JSX.Element {
           if (disposed) return;
           setHasSerena(t.serena.projects.length > 0);
           setHasGraphify(t.graphify.projects.length > 0);
+          setHasArchitecture(t.architecture.projects.length > 0);
         })
         .catch(() => {
-          // endpoint absent / daemon unreachable → hide both items
+          // endpoint absent / daemon unreachable → hide all tool items
           if (disposed) return;
           setHasSerena(false);
           setHasGraphify(false);
+          setHasArchitecture(false);
         });
     };
     poll();
@@ -304,10 +308,14 @@ function AppShell(): JSX.Element {
       ],
     },
     {
-      // Both tool dashboards are conditional — when neither is available the
-      // section has no items and the label is skipped with it.
+      // Tool dashboards are conditional — when none is available the section
+      // has no items and the label is skipped with it.
       label: 'Tools',
-      items: [...(hasSerena ? [SERENA_NAV] : []), ...(hasGraphify ? [GRAPHIFY_NAV] : [])],
+      items: [
+        ...(hasSerena ? [SERENA_NAV] : []),
+        ...(hasGraphify ? [GRAPHIFY_NAV] : []),
+        ...(hasArchitecture ? [ARCHITECTURE_NAV] : []),
+      ],
     },
     {
       label: 'System',

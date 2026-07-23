@@ -88,9 +88,23 @@ type toolsGraphifySection struct {
 	Projects []graphifyProjectDTO `json:"projects"`
 }
 
+type architectureProjectDTO struct {
+	ID      int64   `json:"id"`
+	Slug    string  `json:"slug"`
+	Name    *string `json:"name"`
+	HasMap  bool    `json:"hasMap"`
+	BuiltAt *string `json:"builtAt"`
+	MapPath string  `json:"mapPath"`
+}
+
+type toolsArchitectureSection struct {
+	Projects []architectureProjectDTO `json:"projects"`
+}
+
 type toolsResponse struct {
-	Serena   toolsSerenaSection   `json:"serena"`
-	Graphify toolsGraphifySection `json:"graphify"`
+	Serena       toolsSerenaSection       `json:"serena"`
+	Graphify     toolsGraphifySection     `json:"graphify"`
+	Architecture toolsArchitectureSection `json:"architecture"`
 }
 
 // toolsDash handles GET /api/tools — the read-only, unfenced sidebar feed.
@@ -100,8 +114,9 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := toolsResponse{
-		Serena:   toolsSerenaSection{Projects: []serenaProjectDTO{}},
-		Graphify: toolsGraphifySection{Projects: []graphifyProjectDTO{}},
+		Serena:       toolsSerenaSection{Projects: []serenaProjectDTO{}},
+		Graphify:     toolsGraphifySection{Projects: []graphifyProjectDTO{}},
+		Architecture: toolsArchitectureSection{Projects: []architectureProjectDTO{}},
 	}
 	if _, err := lookPathFn("serena"); err == nil {
 		resp.Serena.Available = true
@@ -122,6 +137,16 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&id, &path, &slug, &name); err != nil {
 			writeErr(w, err)
 			return
+		}
+		// Architecture section: artifact-gated (not pack-gated) — runs before
+		// the plugin-state continue so telemetry-only projects with maps appear.
+		var scanName *string
+		if name.Valid {
+			n := name.String
+			scanName = &n
+		}
+		if d, ok := architectureDTO(id, slug, scanName, path); ok {
+			resp.Architecture.Projects = append(resp.Architecture.Projects, d)
 		}
 		// nil state = telemetry-only / unreadable settings → on neither list.
 		st, serr := projectscan.ReadPluginState(path, nil)
@@ -178,6 +203,26 @@ func serenaDTO(id int64, slug string, name *string, s toolproc.Status) serenaPro
 		LogTail:       tail,
 		Error:         s.Err,
 	}
+}
+
+// architectureDTO reports <project>/architecture-out artifacts (produced by
+// the project-local /architecture-map skill). ok=false → project has no map
+// and stays off the list entirely (artifact-gated, not pack-gated).
+func architectureDTO(id int64, slug string, name *string, projectPath string) (architectureProjectDTO, bool) {
+	out := filepath.Join(projectPath, "architecture-out")
+	fi, err := os.Stat(filepath.Join(out, "architecture-map.html"))
+	if err != nil || fi.IsDir() {
+		return architectureProjectDTO{}, false
+	}
+	v := fi.ModTime().UTC().Format(time.RFC3339)
+	return architectureProjectDTO{
+		ID:      id,
+		Slug:    slug,
+		Name:    name,
+		HasMap:  true,
+		BuiltAt: &v,
+		MapPath: fmt.Sprintf("/api/projects/%d/architecture/architecture-map.html", id),
+	}, true
 }
 
 // graphifyDTO reports the on-disk build artifacts under <project>/graphify-out.

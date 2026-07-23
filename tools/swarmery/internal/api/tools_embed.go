@@ -3,10 +3,11 @@ package api
 // Step 03 — same-origin embedding surfaces for the tool dashboards sidebar:
 // serenaProxy reverse-proxies /api/projects/{id}/serena/{rest...} to the
 // project's live serena dashboard origin (incl. websocket upgrade passthrough
-// via httputil.ReverseProxy), and graphifyStatic serves the repo's
-// graphify-out/ build artifacts read-only behind a traversal jail. Neither is
-// origin-fenced: the daemon is loopback-only, and the proxy enforces that the
-// parsed DashboardURL targets a loopback address before dialing.
+// via httputil.ReverseProxy), graphifyStatic serves the repo's graphify-out/
+// build artifacts read-only behind a traversal jail, and architectureStatic
+// serves architecture-out/ artifacts via the same shared jail helper. Neither
+// is origin-fenced: the daemon is loopback-only, and the proxy enforces that
+// the parsed DashboardURL targets a loopback address before dialing.
 
 import (
 	"database/sql"
@@ -98,15 +99,12 @@ func (h *Handler) serenaProxy(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-// graphifyStatic handles GET|HEAD /api/projects/{id}/graphify/{rest...} — a
-// read-only jail over <projectPath>/graphify-out (default document
-// graph.html). The method guard lives here, not in the route pattern: the "/"
-// SPA catch-all would otherwise swallow non-GET methods instead of 405ing.
-// Jail: the mux 301-cleans literal "../" segments away, but an encoded ..%2F
-// arrives decoded in rest — filepath.IsLocal rejects every escaping, rooted,
-// or empty path outright with 403. Symlinks inside graphify-out are trusted:
-// the dir is produced by the graphify CLI in the user's own repo.
-func (h *Handler) graphifyStatic(w http.ResponseWriter, r *http.Request) {
+// jailedProjectStatic serves <projectPath>/<subdir> read-only. Jail contract
+// identical to the original graphifyStatic: method guard here (the "/" SPA
+// catch-all would swallow non-GET otherwise), filepath.IsLocal rejects every
+// escaping/rooted/empty rest, symlinks inside the artifact dir are trusted
+// (produced by tooling in the user's own repo).
+func (h *Handler) jailedProjectStatic(w http.ResponseWriter, r *http.Request, subdir, defaultDoc string) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -118,19 +116,35 @@ func (h *Handler) graphifyStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	rest := r.PathValue("rest")
 	if rest == "" {
-		rest = "graph.html"
+		rest = defaultDoc
 	}
 	if !filepath.IsLocal(filepath.FromSlash(rest)) {
-		http.Error(w, `{"error":"path escapes graphify-out"}`, http.StatusForbidden)
+		http.Error(w, `{"error":"path escapes `+subdir+`"}`, http.StatusForbidden)
 		return
 	}
-	full := filepath.Join(projectPath, "graphify-out", filepath.FromSlash(rest))
+	full := filepath.Join(projectPath, subdir, filepath.FromSlash(rest))
 	fi, err := os.Stat(full)
 	if err != nil || fi.IsDir() {
 		http.NotFound(w, r)
 		return
 	}
-	// A request for ".../index.html" gets stdlib ServeFile's 301-to-directory
-	// behavior; harmless here since the default document is graph.html.
 	http.ServeFile(w, r, full)
+}
+
+// graphifyStatic handles GET|HEAD /api/projects/{id}/graphify/{rest...} — a
+// read-only jail over <projectPath>/graphify-out (default document graph.html).
+// The method guard lives in jailedProjectStatic. Jail: the mux 301-cleans
+// literal "../" segments away, but an encoded ..%2F arrives decoded in rest —
+// filepath.IsLocal rejects every escaping, rooted, or empty path outright with
+// 403. Symlinks inside graphify-out are trusted: the dir is produced by the
+// graphify CLI in the user's own repo.
+func (h *Handler) graphifyStatic(w http.ResponseWriter, r *http.Request) {
+	h.jailedProjectStatic(w, r, "graphify-out", "graph.html")
+}
+
+// architectureStatic handles GET|HEAD /api/projects/{id}/architecture/{rest...}
+// — same jail over <projectPath>/architecture-out (default document
+// architecture-map.html, produced by the project-local /architecture-map skill).
+func (h *Handler) architectureStatic(w http.ResponseWriter, r *http.Request) {
+	h.jailedProjectStatic(w, r, "architecture-out", "architecture-map.html")
 }

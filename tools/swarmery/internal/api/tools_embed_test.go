@@ -371,3 +371,69 @@ func TestGraphifyStaticMethodGuard(t *testing.T) {
 		t.Errorf("HEAD = %d, want 200", res.StatusCode)
 	}
 }
+
+// seedArchitectureOut writes architecture-map.html + architecture-map.json
+// under project 1's dir and returns the project path.
+func seedArchitectureOut(t *testing.T, srvURL string) string {
+	t.Helper()
+	path := projectPath(t, srvURL, "1")
+	out := filepath.Join(path, "architecture-out")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "architecture-map.html"), []byte("<html>arch</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "architecture-map.json"), []byte(`{"nodes":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestArchitectureStatic(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	seedArchitectureOut(t, srv.URL)
+
+	// 200 on the explicit file, body contains "arch".
+	if code, body := getBody(t, srv.URL+"/api/projects/1/architecture/architecture-map.html"); code != 200 || !strings.Contains(body, "arch") {
+		t.Errorf("architecture-map.html = %d %q, want 200 + arch", code, body)
+	}
+
+	// Empty rest → default document architecture-map.html.
+	if code, body := getBody(t, srv.URL+"/api/projects/1/architecture/"); code != 200 || !strings.Contains(body, "arch") {
+		t.Errorf("default doc = %d %q, want 200 + arch content", code, body)
+	}
+
+	// Encoded traversal → 403.
+	code, _ := getBody(t, srv.URL+"/api/projects/1/architecture/..%2Fsecret")
+	if code != http.StatusForbidden {
+		t.Errorf("encoded traversal = %d, want 403", code)
+	}
+
+	// Missing file → 404.
+	if code, _ := getBody(t, srv.URL+"/api/projects/1/architecture/missing.css"); code != 404 {
+		t.Errorf("missing file = %d, want 404", code)
+	}
+
+	// POST → 405 with Allow header.
+	req, err := http.NewRequest("POST", srv.URL+"/api/projects/1/architecture/architecture-map.html", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("POST = %d, want 405", res.StatusCode)
+	}
+	if allow := res.Header.Get("Allow"); allow != "GET, HEAD" {
+		t.Errorf("Allow = %q, want \"GET, HEAD\"", allow)
+	}
+
+	// Unknown project → 404.
+	if code, _ := getBody(t, srv.URL+"/api/projects/9999/architecture/architecture-map.html"); code != 404 {
+		t.Errorf("unknown project = %d, want 404", code)
+	}
+}

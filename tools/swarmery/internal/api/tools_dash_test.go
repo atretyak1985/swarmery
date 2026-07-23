@@ -132,7 +132,8 @@ func TestToolsDashSerenaUnavailable(t *testing.T) {
 	attachStubToolManager(t)
 	stubLookPath(t, errors.New("exec: \"serena\": executable file not found in $PATH"))
 
-	// Raw body: available=false, and both empty lists render [] — never null.
+	// Raw body: available=false, and all empty lists render [] — never null.
+	// Three sections carry "projects": serena, graphify, architecture.
 	res, err := http.Get(srv.URL + "/api/tools")
 	if err != nil {
 		t.Fatal(err)
@@ -149,8 +150,8 @@ func TestToolsDashSerenaUnavailable(t *testing.T) {
 	if !strings.Contains(body, `"available":false`) {
 		t.Errorf("body missing \"available\":false:\n%s", body)
 	}
-	if strings.Count(body, `"projects":[]`) != 2 {
-		t.Errorf("empty lists must serialize as [] for both tools:\n%s", body)
+	if strings.Count(body, `"projects":[]`) != 3 {
+		t.Errorf("empty lists must serialize as [] for all three tools (serena, graphify, architecture):\n%s", body)
 	}
 	if strings.Contains(body, "null") {
 		t.Errorf("empty response must not contain null:\n%s", body)
@@ -267,4 +268,77 @@ func TestToolsDashNilManager(t *testing.T) {
 	}
 	doJSON(t, "POST", srv.URL+"/api/projects/1/serena/start", nil, 503)
 	doJSON(t, "POST", srv.URL+"/api/projects/1/serena/stop", nil, 503)
+}
+
+func TestToolsDashArchitecture(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	// Project 1 has architecture-out/architecture-map.html → listed.
+	path := projectPath(t, srv.URL, "1")
+	archOut := filepath.Join(path, "architecture-out")
+	if err := os.MkdirAll(archOut, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(archOut, "architecture-map.html"), []byte("<html>arch</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(archOut, "architecture-map.json"), []byte(`{"nodes":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Architecture.Projects) != 1 {
+		t.Fatalf("architecture.projects len = %d, want 1 (%+v)", len(resp.Architecture.Projects), resp.Architecture.Projects)
+	}
+	ap := resp.Architecture.Projects[0]
+	if ap.ID != 1 || ap.Slug != "managed" {
+		t.Errorf("architecture project = id %d slug %q, want id 1 slug managed", ap.ID, ap.Slug)
+	}
+	if !ap.HasMap {
+		t.Error("hasMap = false, want true")
+	}
+	if ap.BuiltAt == nil {
+		t.Error("builtAt = null with architecture-map.html present, want its mtime")
+	} else if _, err := time.Parse(time.RFC3339, *ap.BuiltAt); err != nil {
+		t.Errorf("builtAt = %q is not RFC3339: %v", *ap.BuiltAt, err)
+	}
+	if ap.MapPath != "/api/projects/1/architecture/architecture-map.html" {
+		t.Errorf("mapPath = %q, want /api/projects/1/architecture/architecture-map.html", ap.MapPath)
+	}
+
+	// Project 2 (no architecture-out) → not in the list.
+	for _, p := range resp.Architecture.Projects {
+		if p.ID == 2 {
+			t.Error("project 2 (no artifact) appeared in architecture.projects, want absent")
+		}
+	}
+
+	// A project with unreadable plugin state (settings.json absent) but WITH the
+	// artifact still appears. Project 2 has no settings.json in the test fixture;
+	// add architecture-out to its dir directly. Pre-clean + register cleanup to
+	// avoid leaking state to other tests (project 2's path is a fixed /tmp dir
+	// shared across test runs in the same binary).
+	path2 := projectPath(t, srv.URL, "2")
+	archOut2 := filepath.Join(path2, "architecture-out")
+	os.RemoveAll(archOut2) // pre-clean any stale state from prior runs
+	t.Cleanup(func() { os.RemoveAll(archOut2) })
+	if err := os.MkdirAll(archOut2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(archOut2, "architecture-map.html"), []byte("<html>arch2</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resp2 := getToolsResponse(t, srv.URL)
+	found2 := false
+	for _, p := range resp2.Architecture.Projects {
+		if p.ID == 2 {
+			found2 = true
+		}
+	}
+	if !found2 {
+		t.Error("project 2 (unreadable settings.json but has artifact) missing from architecture.projects")
+	}
 }

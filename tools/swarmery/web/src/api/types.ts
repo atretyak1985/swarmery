@@ -1379,7 +1379,17 @@ export interface ToolsGraphifyProject {
   vizPath: string;
 }
 
+export interface ArchitectureProject {
+  id: number;
+  slug: string;
+  name: string | null;
+  hasMap: boolean;
+  builtAt: string | null;
+  mapPath: string;
+}
+
 export interface ToolsResponse {
   serena: { available: boolean; projects: ToolsSerenaProject[] };
   graphify: { projects: ToolsGraphifyProject[] };
+  architecture: { projects: ArchitectureProject[] };
 }

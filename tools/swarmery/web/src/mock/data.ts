@@ -28,6 +28,7 @@ import type {
   AdviseStats,
   AnalyticsDimension,
   AnalyticsMetric,
+  ArchitectureProject,
   BreakdownResp,
   DurationsResp,
   ErrorsResp,
@@ -1399,9 +1400,20 @@ export const mockApi = {
 
   // --- tool dashboards (GET /api/tools) ---
 
-  /** Serena available (one stopped, one running); graphify one viz + one without. */
+  /** Serena available (one stopped, one running); graphify one viz + one without;
+   * architecture one project with a built map. */
   async tools(): Promise<ToolsResponse> {
     await delay(90);
+    const archProjects: ArchitectureProject[] = [
+      {
+        id: 3,
+        slug: 'swarmery',
+        name: 'Swarmery',
+        hasMap: true,
+        builtAt: iso(2 * 60 * MIN),
+        mapPath: '/api/projects/3/architecture/architecture-map.html',
+      },
+    ];
     return {
       serena: {
         available: true,
@@ -1454,6 +1466,9 @@ export const mockApi = {
             vizPath: '',
           },
         ],
+      },
+      architecture: {
+        projects: archProjects,
       },
     };
   },
