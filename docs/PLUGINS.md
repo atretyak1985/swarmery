@@ -63,6 +63,25 @@ Changes take effect in the **next Claude Code session**: on startup Claude Code 
 
 ---
 
+## architecture-pack — repo-wide architecture map
+
+**What it is.** The `/architecture-map` skill: produces `architecture-out/architecture-map.json` — a machine-readable contract with named layers, modules, and file-anchored end-to-end flows — plus a self-contained `architecture-map.html` viewer.
+
+**Requires.** No extra CLI. Works standalone; when `graphify-out/graph.json` is present the skill uses it as a curated grouping source and falls back to direct repo exploration if it trails HEAD.
+
+**What it can do.**
+- **Freshness-stamped, incremental refresh** — stores `analyzedAtCommit`; on re-run it re-describes only the modules touched since the last commit, keeping everything else.
+- **Machine contract** — `architecture-map.json` (schema v1) is consumed by agents that need a repo-wide mental model: layers, modules with `keyFiles`/`exports`/`dependencies`, and 5–10 named flows.
+- **Self-contained viewer** — `architecture-map.html` is rendered by the bundled `scripts/build.sh`; never write HTML by hand.
+- **Artifacts** land in `architecture-out/` (git-ignored by convention).
+
+**How to work with it.**
+1. Enable `architecture-pack` for the project (plugins card or `settings.json`).
+2. Run `/architecture-map` — or let any orchestration agent trigger it when a fresh map is needed.
+3. **Dashboard sidebar → Architecture**: the swarmery daemon serves `architecture-map.json` and `architecture-map.html` read-only; the page embeds the viewer or shows a "run /architecture-map first" hint when the artifacts are absent.
+
+---
+
 ## uav-pack — UAV / drones
 
 **What it is.** Domain pack for drone platforms: MAVLink integration, mission planning, embedded and edge runtimes.
@@ -120,6 +139,7 @@ Changes take effect in the **next Claude Code session**: on startup Claude Code 
 | core | mandatory baseline | — | everything (sessions, plugins card, …) |
 | lsp-pack | tool (Serena MCP) | `serena` (uv) | sidebar **Serena** page: start/stop + embedded dashboard |
 | graphify-pack | tool (knowledge graph) | `graphify` CLI (uv) | sidebar **Graphify** page: embedded `graph.html` |
+| architecture-pack | tool (architecture map) | — | sidebar **Architecture** page: embedded `architecture-map.html` |
 | uav-pack | domain | — | — |
 | iot-pack | domain | — | — |
 | web-pack | domain | — | — |
