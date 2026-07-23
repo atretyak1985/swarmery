@@ -1386,6 +1386,10 @@ export interface ArchitectureProject {
   hasMap: boolean;
   builtAt: string | null;
   mapPath: string;
+  /** Commit sha from architecture-map.json at build time; null when absent or unparseable. */
+  analyzedAtCommit: string | null;
+  /** Current HEAD commit of the project repo resolved without exec; null when unresolvable. */
+  headCommit: string | null;
 }
 
 export interface ToolsResponse {

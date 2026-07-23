@@ -1401,7 +1401,7 @@ export const mockApi = {
   // --- tool dashboards (GET /api/tools) ---
 
   /** Serena available (one stopped, one running); graphify one viz + one without;
-   * architecture one project with a built map. */
+   * architecture: one project with a built map (current), one enabled-but-unbuilt. */
   async tools(): Promise<ToolsResponse> {
     await delay(90);
     const archProjects: ArchitectureProject[] = [
@@ -1412,6 +1412,18 @@ export const mockApi = {
         hasMap: true,
         builtAt: iso(2 * 60 * MIN),
         mapPath: '/api/projects/3/architecture/architecture-map.html',
+        analyzedAtCommit: 'aabbccddee112233445566778899001122334455',
+        headCommit: 'aabbccddee112233445566778899001122334455',
+      },
+      {
+        id: 1,
+        slug: 'orders-api',
+        name: 'Orders API',
+        hasMap: false,
+        builtAt: null,
+        mapPath: '/api/projects/1/architecture/architecture-map.html',
+        analyzedAtCommit: null,
+        headCommit: null,
       },
     ];
     return {

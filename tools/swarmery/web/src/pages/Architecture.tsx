@@ -1,8 +1,11 @@
 // Architecture page (/architecture): per-project architecture-map.html served
-// through the daemon's jailed static route (architecture-out/). Artifact-gated:
-// the feed lists only projects that have a built map, so the page's own empty
-// state covers direct navigation. Clone of the Graphify page idioms — single
-// load with ErrorBox retry, project selection by id, same-origin iframe.
+// through the daemon's jailed static route (architecture-out/). Union-gated:
+// the feed lists projects with architecture-pack enabled OR an existing artifact,
+// so the dropdown also shows pack-enabled projects that have not yet run
+// /architecture-map (hasMap=false). Staleness badge compares analyzedAtCommit
+// (baked into the map JSON) against headCommit (current HEAD, no exec).
+// Clone of the Graphify page idioms — single load with ErrorBox retry, project
+// selection by id, same-origin iframe.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ToolsResponse } from '../api/types';
@@ -38,7 +41,11 @@ export function Architecture(): JSX.Element {
   }, [load]);
 
   const projects = data?.architecture.projects ?? [];
-  const project = projects.find((p) => p.id === selectedId) ?? projects[0];
+  // Selection prefers hasMap (a built project) over an unbuilt one.
+  const project =
+    projects.find((p) => p.id === selectedId) ??
+    projects.find((p) => p.hasMap) ??
+    projects[0];
 
   return (
     <div className="min-w-0 px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]">
@@ -71,19 +78,37 @@ export function Architecture(): JSX.Element {
                 </select>
                 {project.builtAt !== null && (
                   <span className="font-mono text-[10.5px] text-ink-faint">
-                    map built {fmtAgo(project.builtAt)} — commit stamp inside the map header
+                    map built {fmtAgo(project.builtAt)}
+                    {project.analyzedAtCommit !== null && (
+                      <> · @ {project.analyzedAtCommit.slice(0, 7)}</>
+                    )}
+                    {project.analyzedAtCommit !== null && project.headCommit !== null &&
+                      (project.headCommit === project.analyzedAtCommit ? (
+                        <span className="ml-1 text-green"> · current</span>
+                      ) : (
+                        <span className="ml-1 text-amber">
+                          {' '}
+                          · stale (HEAD {project.headCommit.slice(0, 7)})
+                        </span>
+                      ))}
                   </span>
                 )}
               </div>
             </Card>
-            <div className="mt-3">
-              <iframe
-                key={project.id}
-                src={project.mapPath}
-                title="Architecture map"
-                className="h-[calc(100vh-180px)] w-full rounded-xl border border-line bg-surface"
-              />
-            </div>
+            {project.hasMap ? (
+              <div className="mt-3">
+                <iframe
+                  key={project.id}
+                  src={project.mapPath}
+                  title="Architecture map"
+                  className="h-[calc(100vh-180px)] w-full rounded-xl border border-line bg-surface"
+                />
+              </div>
+            ) : (
+              <div className="mt-3">
+                <Empty>no map yet — run /architecture-map in this repo</Empty>
+              </div>
+            )}
           </>
         )
       ) : null}
