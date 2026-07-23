@@ -44,7 +44,7 @@ var (
 	// that. (The improvements section has no per-row headings — table rows only
 	// — so the same concern does not apply there.)
 	lessonRe = regexp.MustCompile(`(?i)^#{3}\s*lesson\s+(\d+)\s*:\s*(.+?)\s*$`)
-	actionRe      = regexp.MustCompile(`(?i)^\*\*action\*\*\s*:\s*(.*)$`)
+	actionRe = regexp.MustCompile(`(?i)^\*\*action\*\*\s*:\s*(.*)$`)
 	// h1/h2 ends a section; any heading or hr ends a lesson body.
 	sectionEndRe = regexp.MustCompile(`^#{1,2}\s`)
 	anyHeadRe    = regexp.MustCompile(`^#{1,6}\s`)
@@ -368,6 +368,8 @@ func (s *Scanner) applyLoops(tx *sql.Tx, taskID int64, text string) error {
 type delegation struct {
 	seq                             int
 	agent, phase, verdict, artifact string
+	loops, quality                  *int // NULL for legacy 4-cell rows / malformed cells
+	mistakes                        string
 }
 
 // normalizeLedgerAgent folds ledger agent notations to the registry key:
@@ -381,8 +383,24 @@ func normalizeLedgerAgent(a string) string {
 	return strings.ToLower(strings.TrimSpace(a))
 }
 
-// parseLedger extracts the 4-column delegation rows, tolerating both the
-// Ukrainian (`| Агент | Фаза | Вердикт | Артефакт |`) and English headers.
+// ledgerInt parses an assessment cell as an int; nil for anything non-numeric
+// (`-`, "high", empty) — each cell is independently nullable.
+func ledgerInt(cell string) *int {
+	v, err := strconv.Atoi(strings.TrimSpace(cell))
+	if err != nil {
+		return nil
+	}
+	return &v
+}
+
+// parseLedger extracts delegation rows, tolerating both the Ukrainian
+// (`| Агент | Фаза | Вердикт | Артефакт |`) and English headers. Two layouts:
+//   - legacy 4-cell: agent | phase | verdict | artifact
+//   - assessment 7-cell (tech-lead ≥ core 2.2.0):
+//     agent | phase | verdict | loops | quality | mistakes | artifact
+//
+// Malformed loops/quality cells and out-of-range quality (<1 or >5) degrade to
+// nil without dropping the row; mistakes of `-`/`—`/empty fold to "".
 func parseLedger(text string) []delegation {
 	var out []delegation
 	for _, line := range strings.Split(text, "\n") {
@@ -402,10 +420,23 @@ func parseLedger(text string) []delegation {
 		if agent == "" {
 			continue
 		}
-		out = append(out, delegation{
+		d := delegation{
 			seq: len(out) + 1, agent: agent,
-			phase: capText(cells[1]), verdict: capText(cells[2]), artifact: capText(cells[3]),
-		})
+			phase: capText(cells[1]), verdict: capText(cells[2]),
+		}
+		if len(cells) >= 7 {
+			d.loops = ledgerInt(cells[3])
+			if q := ledgerInt(cells[4]); q != nil && *q >= 1 && *q <= 5 {
+				d.quality = q
+			}
+			if m := capText(cells[5]); m != "-" && m != "—" {
+				d.mistakes = m
+			}
+			d.artifact = capText(cells[6])
+		} else {
+			d.artifact = capText(cells[3])
+		}
+		out = append(out, d)
 	}
 	return out
 }
@@ -416,9 +447,10 @@ func (s *Scanner) applyDelegations(tx *sql.Tx, taskID int64, text string) error 
 	}
 	for _, d := range parseLedger(text) {
 		if _, err := tx.Exec(`
-			INSERT INTO task_delegations (task_id, seq, agent, phase, verdict, artifact)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			taskID, d.seq, d.agent, nullStr(d.phase), nullStr(d.verdict), nullStr(d.artifact)); err != nil {
+			INSERT INTO task_delegations (task_id, seq, agent, phase, verdict, artifact, loops, quality, mistakes)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			taskID, d.seq, d.agent, nullStr(d.phase), nullStr(d.verdict), nullStr(d.artifact),
+			nullInt(d.loops), nullInt(d.quality), nullStr(d.mistakes)); err != nil {
 			return err
 		}
 	}
@@ -430,4 +462,11 @@ func nullFloat(f *float64) any {
 		return nil
 	}
 	return *f
+}
+
+func nullInt(i *int) any {
+	if i == nil {
+		return nil
+	}
+	return *i
 }
