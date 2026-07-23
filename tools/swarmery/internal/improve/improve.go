@@ -39,10 +39,13 @@ func fmtTS(t time.Time) string { return t.UTC().Format(tsFmt) }
 // Service generates agent change proposals.
 type Service struct {
 	DB *sql.DB
-	// Repo is the marketplace repo root — reserved for the phase-4 apply/PR
-	// pipeline (unused by generation).
+	// Repo is the marketplace repo root — the git checkout the phase-4 apply/PR
+	// pipeline fetches and worktrees from (unused by generation).
 	Repo   string
 	Runner Runner
+	// Exec is the git/gh + filesystem boundary of the apply pipeline; nil is
+	// fine for a generation-only Service. Production wires OSExec; tests fake it.
+	Exec Exec
 }
 
 // GenerateReq parameterizes one proposal generation.
