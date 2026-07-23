@@ -13,7 +13,7 @@ HTML by hand.
 
 ```bash
 HEAD=$(git rev-parse HEAD)
-LAST=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('architecture-out/architecture-map.json')).analyzedAtCommit)}catch{console.log('')}")
+LAST=$(node -e "try{const v=JSON.parse(require('fs').readFileSync('architecture-out/architecture-map.json')).analyzedAtCommit;console.log(typeof v==='string'&&v.length>=7?v:'')}catch{console.log('')}")
 ```
 
 - `LAST == HEAD` → report "architecture map is up to date (commit <short>)" and STOP.

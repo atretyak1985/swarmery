@@ -17,6 +17,11 @@ try {
   process.exit(1);
 }
 
+if (map === null || typeof map !== 'object' || Array.isArray(map)) {
+  console.error('invalid JSON: top-level value must be an object');
+  process.exit(1);
+}
+
 const errors = [];
 const isStr = (v) => typeof v === 'string' && v.length > 0;
 const isArr = Array.isArray;
@@ -55,6 +60,10 @@ const layerIds = dupes(map.layers, 'layers');
 const moduleIds = dupes(map.modules, 'modules');
 dupes(map.flows, 'flows');
 
+// --- layers: order must be an integer ---
+for (const l of map.layers)
+  if (!Number.isInteger(l.order)) errors.push(`layer "${l.id}": order must be an integer`);
+
 // --- modules: required fields + refs ---
 for (const m of map.modules) {
   const ctx = `module "${m.id}"`;
@@ -62,9 +71,11 @@ for (const m of map.modules) {
   if (!isStr(m.path)) errors.push(`${ctx}: path missing`);
   if (!isStr(m.responsibility)) errors.push(`${ctx}: responsibility missing`);
   if (!layerIds.has(m.layer)) errors.push(`${ctx}: unknown layer "${m.layer}"`);
-  for (const d of m.dependencies ?? [])
+  if (m.dependencies !== undefined && !isArr(m.dependencies)) errors.push(`${ctx}: dependencies must be an array`);
+  else for (const d of m.dependencies ?? [])
     if (!moduleIds.has(d)) errors.push(`${ctx}: unknown dependency "${d}"`);
-  for (const r of m.relatedModules ?? [])
+  if (m.relatedModules !== undefined && !isArr(m.relatedModules)) errors.push(`${ctx}: relatedModules must be an array`);
+  else for (const r of m.relatedModules ?? [])
     if (!moduleIds.has(r)) errors.push(`${ctx}: unknown relatedModule "${r}"`);
 }
 
@@ -87,9 +98,11 @@ for (const f of map.flows) {
 }
 
 // --- externalServices.usedBy refs ---
-for (const svc of map.externalServices ?? [])
-  for (const u of svc.usedBy ?? [])
+for (const svc of map.externalServices ?? []) {
+  if (svc.usedBy !== undefined && !isArr(svc.usedBy)) errors.push(`externalService "${svc.name}": usedBy must be an array`);
+  else for (const u of svc.usedBy ?? [])
     if (!moduleIds.has(u)) errors.push(`externalService "${svc.name}": unknown usedBy "${u}"`);
+}
 
 if (errors.length) {
   errors.forEach((e) => console.error(`✗ ${e}`));
