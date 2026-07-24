@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/docsfs"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 	"github.com/atretyak1985/swarmery/tools/swarmery/web"
 )
 
@@ -31,7 +33,7 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 		return nil, fmt.Errorf("embedded docs: %w", err)
 	}
 	mux := http.NewServeMux()
-	Routes(mux, &Handler{DB: db, Watching: watching, Docs: docs,
+	h := &Handler{DB: db, Watching: watching, Docs: docs,
 		Improve: &improve.Service{
 			DB:     db,
 			Runner: improve.ClaudeRunner{},
@@ -40,7 +42,15 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 			// generation works regardless; apply's git ops need it).
 			Repo: improveRepoRoot,
 			Exec: improve.OSExec{},
-		}})
+		}}
+	// Provision runs "enable pack → install + generate" jobs behind the plugin
+	// toggle. Heal in-flight rows a prior daemon left behind (restart/crash) to
+	// 'failed' so they don't dangle — best-effort, never blocks startup.
+	h.Provision = provision.NewService(db, provision.ClaudeRunner{})
+	if err := h.Provision.HealStale(); err != nil {
+		log.Printf("warning: provision heal on startup: %v", err)
+	}
+	Routes(mux, h)
 
 	dist, err := web.Dist()
 	if err != nil {
