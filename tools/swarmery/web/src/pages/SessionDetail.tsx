@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { SessionDetail, SessionOutcome, SessionStatus, WSMessage } from '../api/types';
-import { fetchSession, patchSessionOutcome, renameSession } from '../api';
+import { MOCK, fetchSession, patchSessionOutcome, renameSession, sendSessionMessage } from '../api';
 import { fmtAgo, fmtCost, fmtSpan, fmtTokens } from '../lib/format';
 import { useLiveUpdates } from '../lib/ws';
 import { OutcomePicker } from '../components/OutcomePicker';
@@ -18,7 +18,7 @@ import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
-import { Chat } from './detail/Chat';
+import { Chat, type PendingSend } from './detail/Chat';
 import { CommandInput } from './detail/CommandInput';
 import { SummaryChips } from './detail/SummaryChips';
 import { DetailRail } from './detail/DetailRail';
@@ -130,13 +130,30 @@ function TitleEditor({
   );
 }
 
+/** A pending bubble is abandoned to `failed` if no matching turn arrives within
+ * this window (also the spec's reconcile horizon). */
+const PENDING_STALE_MS = 120_000;
+
+/** Demo-only (VITE_MOCK=1) seed so the offline Chat tab shows the two optimistic
+ * states — one still sending, one failed with a retry affordance. `sentAt: now`
+ * keeps the pending one from immediately going stale; the failed one is seeded
+ * directly. Never used when MOCK is false (real sessions start with []). */
+function mockPending(): PendingSend[] {
+  const now = Date.now();
+  return [
+    { key: 'mock-pending', text: 'Also add a --dry-run flag to the backfill command.', state: 'pending', sentAt: now },
+    { key: 'mock-failed', text: 'Re-run the migration against the staging snapshot.', state: 'failed', sentAt: now },
+  ];
+}
+
 export function SessionDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Optimistic echo of messages sent via the composer — shown immediately as
-  // pending user bubbles until the real turn is ingested (dropped on match).
-  const [pending, setPending] = useState<string[]>([]);
+  // pending user bubbles until the real turn is ingested (dropped on match) or
+  // the send fails (flipped to a retry affordance).
+  const [pending, setPending] = useState<PendingSend[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = parseTab(searchParams.get('tab'));
   const setTab = (next: Tab): void => {
@@ -178,22 +195,62 @@ export function SessionDetailPage(): JSX.Element {
 
   useEffect(() => {
     setDetail(null);
-    setPending([]);
+    // Real sessions always start clean; demo mode seeds two optimistic bubbles
+    // (one sending, one failed) so the offline Chat tab shows both states.
+    setPending(MOCK ? mockPending() : []);
     load();
   }, [load]);
 
-  // Reconcile: drop any optimistic bubble once its real user turn is ingested.
+  // Reconcile: drop any optimistic bubble once its real user turn is ingested —
+  // matching role+text within a 2-minute window (Fusion reconcile-on-fetch). An
+  // entry still unmatched past that window is flipped to `failed` (its retry
+  // affordance re-sends): a resume that returned 202 but then died leaves no
+  // turn to match, so the window is the only signal it never landed.
   useEffect(() => {
     if (detail === null) return;
-    setPending((prev) =>
-      prev.filter(
-        (t) =>
-          !detail.turns.some(
-            (turn) => turn.role === 'user' && (turn.text ?? '').trim() === t.trim(),
-          ),
-      ),
+    const userTexts = new Set(
+      detail.turns
+        .filter((turn) => turn.role === 'user' && turn.text !== null)
+        .map((turn) => turn.text!.trim()),
     );
+    setPending((prev) => {
+      const now = Date.now();
+      let changed = false;
+      const next: PendingSend[] = [];
+      for (const p of prev) {
+        const matched = now - p.sentAt < PENDING_STALE_MS && userTexts.has(p.text.trim());
+        if (matched) {
+          changed = true; // reconciled away
+          continue;
+        }
+        if (p.state === 'pending' && now - p.sentAt >= PENDING_STALE_MS) {
+          changed = true;
+          next.push({ ...p, state: 'failed' });
+          continue;
+        }
+        next.push(p);
+      }
+      return changed ? next : prev;
+    });
   }, [detail]);
+
+  // Drive the stale→failed transition even without new detail frames (an idle
+  // failed resume produces no WS activity), re-evaluating once a pending bubble
+  // could cross the window. Cheap: only runs while something is pending.
+  useEffect(() => {
+    if (!pending.some((p) => p.state === 'pending')) return;
+    const t = setTimeout(() => {
+      const now = Date.now();
+      setPending((prev) =>
+        prev.map((p) =>
+          p.state === 'pending' && now - p.sentAt >= PENDING_STALE_MS
+            ? { ...p, state: 'failed' }
+            : p,
+        ),
+      );
+    }, PENDING_STALE_MS + 500);
+    return () => clearTimeout(t);
+  }, [pending]);
 
   // The newest activity lives at the bottom — on tab switch (and first data
   // load) jump the panel to the end so live sessions open on "now". When a
@@ -215,6 +272,34 @@ export function SessionDetailPage(): JSX.Element {
     }
     panel.scrollTop = panel.scrollHeight;
   }, [tab, loaded]);
+
+  // Jump-to-latest (Chat tab): auto-FOLLOW new content only while the reader is
+  // already parked near the bottom (<48px), so scrolling up to read history is
+  // never yanked back. `atBottom` is the sole state; the "↓ Latest" pill shows
+  // its inverse. This is additive to the tab-switch jump above — it reads
+  // scroll position and only scrolls on NEW content, so the two never fight.
+  const [atBottom, setAtBottom] = useState(true);
+  const scrollToLatest = useCallback((): void => {
+    const panel = panelRef.current;
+    if (panel !== null) panel.scrollTo({ top: panel.scrollHeight, behavior: 'smooth' });
+  }, []);
+  const onPanelScroll = useCallback((): void => {
+    const panel = panelRef.current;
+    if (panel === null) return;
+    setAtBottom(panel.scrollHeight - panel.scrollTop - panel.clientHeight < 48);
+  }, []);
+  // Follow on new turns/events/pending — but only when parked at the bottom.
+  const turnCount = detail?.turns.length ?? 0;
+  const eventCount = detail?.events.length ?? 0;
+  const pendingCount = pending.length;
+  useEffect(() => {
+    if (tab !== 'chat' || !atBottom) return;
+    const panel = panelRef.current;
+    if (panel !== null) panel.scrollTop = panel.scrollHeight;
+    // `atBottom` intentionally omitted from deps: follow fires on CONTENT change,
+    // reading the latest atBottom via closure would re-run on every scroll tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, turnCount, eventCount, pendingCount]);
 
   const showDiffs = (path?: string): void => {
     diffTargetRef.current = path ?? null;
@@ -254,8 +339,45 @@ export function SessionDetailPage(): JSX.Element {
   useLiveUpdates(onMessage, load);
 
   const onSent = useCallback((text: string): void => {
-    setPending((p) => [...p, text]);
+    setPending((p) => [
+      ...p,
+      { key: crypto.randomUUID(), text, state: 'pending', sentAt: Date.now() },
+    ]);
   }, []);
+
+  // POST rejected: flip the most recent still-pending bubble with this text to
+  // `failed` (match by text — the composer just created exactly one).
+  const onSendFailed = useCallback((text: string): void => {
+    setPending((p) => {
+      const idx = p.map((e) => e.text === text && e.state === 'pending').lastIndexOf(true);
+      const target = idx === -1 ? undefined : p[idx];
+      if (target === undefined) return p;
+      const next = p.slice();
+      next[idx] = { ...target, state: 'failed' };
+      return next;
+    });
+  }, []);
+
+  // Retry a failed bubble: reuse the SAME entry (reset to pending + fresh
+  // window), re-POST, and re-fail it if the retry also rejects. Never appends a
+  // second bubble.
+  const onRetry = useCallback(
+    (key: string): void => {
+      let text: string | null = null;
+      setPending((p) =>
+        p.map((e) => {
+          if (e.key !== key) return e;
+          text = e.text;
+          return { ...e, state: 'pending', sentAt: Date.now() };
+        }),
+      );
+      if (text === null || detail === null) return;
+      sendSessionMessage(detail.id, text).catch(() => {
+        setPending((p) => p.map((e) => (e.key === key ? { ...e, state: 'failed' } : e)));
+      });
+    },
+    [detail],
+  );
 
   // Optimistic outcome toggle; revert on API failure.
   const setOutcome = (next: SessionOutcome | null): void => {
@@ -393,24 +515,37 @@ export function SessionDetailPage(): JSX.Element {
       <div className="flex min-h-0 flex-1 flex-col wide:grid wide:grid-cols-[minmax(0,1fr)_300px] wide:grid-rows-[minmax(0,1fr)] wide:gap-6 wide:px-10">
         {/* Left column: the scrolling tab panel with, on the Chat tab, a pinned
             composer footer below it (the panel scrolls, the composer stays). */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div
             role="tabpanel"
             ref={panelRef}
+            onScroll={tab === 'chat' ? onPanelScroll : undefined}
             className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 desk:px-10 wide:px-0 [-webkit-overflow-scrolling:touch]"
           >
             {tab === 'chat' && (
-              <Chat detail={detail} pending={pending} />
+              <Chat detail={detail} pending={pending} onRetry={onRetry} />
             )}
             {tab === 'timeline' && <Timeline detail={detail} />}
             {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}
           </div>
+          {tab === 'chat' && !atBottom && (
+            <button
+              type="button"
+              onClick={scrollToLatest}
+              aria-label="Jump to latest"
+              className="absolute inset-x-0 bottom-3 mx-auto flex w-max items-center gap-1.5 rounded-full border border-line-strong bg-surface2/95 px-3.5 py-1.5 font-mono text-[11px] text-ink shadow-lg backdrop-blur transition-colors hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              <span aria-hidden="true">↓</span>
+              Latest
+            </button>
+          )}
           {tab === 'chat' && (
             <CommandInput
               sessionId={detail.id}
               procState={detail.procState}
               resumeInFlight={detail.resumeInFlight ?? false}
               onSent={onSent}
+              onSendFailed={onSendFailed}
             />
           )}
         </div>
