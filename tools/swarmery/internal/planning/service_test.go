@@ -143,8 +143,12 @@ func TestStart_SingleFlight_409(t *testing.T) {
 	if _, err := s.Start(1, "first idea"); err != nil {
 		t.Fatalf("first Start: %v", err)
 	}
-	// Wait until the run is observably active (the goroutine reached the runner).
-	waitFor(t, func() bool { return s.Snapshot(1).Active })
+	// Wait until the run's goroutine has actually ENTERED the runner (count==1),
+	// not merely until Active is set — Start marks active synchronously but spawns
+	// the runner call on a goroutine, so a slower scheduler (CI under -race) can
+	// leave the runner un-entered while Active is already true, racing the count
+	// assertion below.
+	waitFor(t, func() bool { return r.count() == 1 })
 
 	_, err := s.Start(1, "second idea")
 	if !errors.Is(err, ErrActive) {
