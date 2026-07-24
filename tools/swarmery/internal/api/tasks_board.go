@@ -357,6 +357,10 @@ func (h *Handler) createBoardTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	publishTaskUpdated(id)
+	// A task created directly into todo is immediately dispatchable — trigger the
+	// event fast path (Poke is a no-op when created into triage or when the
+	// dispatcher is not attached).
+	pokeDispatch()
 	writeJSONStatus(w, http.StatusCreated, d)
 }
 
@@ -498,6 +502,15 @@ func (h *Handler) patchBoardTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	publishTaskUpdated(id)
+	// Dispatcher hooks (fusion phase 3): a terminal move reclaims the worktree;
+	// then poke so the scheduler reacts to the fast path — a move to todo, an
+	// unpause, or a dependency reaching done/archived (FN-3895: unblocking
+	// dependents must be an event, not the 15s sweep). Both are no-ops when the
+	// dispatcher is not attached.
+	if dispatchSvc != nil && columnChanged && (d.BoardColumn == "done" || d.BoardColumn == "archived") {
+		dispatchSvc.RemoveWorktreeFor(id)
+	}
+	pokeDispatch()
 	writeJSON(w, d, nil)
 }
 
