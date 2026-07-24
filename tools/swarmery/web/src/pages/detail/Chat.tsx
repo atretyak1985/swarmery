@@ -17,6 +17,21 @@ import { Empty } from '../../components/ui';
 import { LiveActivity } from './LiveActivity';
 import { Nodes } from './Timeline';
 
+/**
+ * One optimistic user message sent from the composer, before its real turn is
+ * ingested. Modeled as an object (not a bare string) so a failed send can flip
+ * IN PLACE to a retry affordance and a retry reuses the SAME entry — two
+ * identical pending bubbles would both reconcile against one ingested turn and
+ * orphan. `sentAt` drives the 2-minute reconcile window: unmatched after that,
+ * the resume most likely died after its 202, so the bubble goes `failed`.
+ */
+export interface PendingSend {
+  key: string;
+  text: string;
+  state: 'pending' | 'failed';
+  sentAt: number;
+}
+
 /* ----- tool activity one-liner ----- */
 
 interface ToolCounts {
@@ -219,18 +234,44 @@ function AwaitingApprovalPill({ since }: { since: string | null }): JSX.Element 
   );
 }
 
-/** Optimistic bubble for a message the user just sent, before its real turn is
- * ingested — visually identical to a user turn but dimmed with a pending dot. */
-function PendingTurn({ text }: { text: string }): JSX.Element {
+/** Optimistic bubble for a message the user just sent. While `pending` it is a
+ * dimmed user bubble with a "sending…" dot; on `failed` it gains a red tint and
+ * a keyboard-focusable "failed — retry" button that re-sends the SAME entry
+ * (the parent flips it back to pending — never a duplicate bubble). */
+function PendingTurn({
+  entry,
+  onRetry,
+}: {
+  entry: PendingSend;
+  onRetry?: ((key: string) => void) | undefined;
+}): JSX.Element {
+  const failed = entry.state === 'failed';
   return (
     <div className="my-[7px] flex flex-col items-end">
-      <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink opacity-60">
-        {text}
+      <div
+        className={`max-w-[88%] rounded-[14px_14px_4px_14px] border px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap ${
+          failed
+            ? 'border-red/40 bg-red/6 text-ink'
+            : 'border-line-strong bg-surface2 text-ink opacity-60'
+        }`}
+      >
+        {entry.text}
       </div>
-      <span className="mt-1 flex items-center gap-1.5 pr-1 font-mono text-[10px] text-ink-faint">
-        <span className="h-[6px] w-[6px] animate-blink-dot rounded-full bg-brand" aria-hidden="true" />
-        sending…
-      </span>
+      {failed ? (
+        <button
+          type="button"
+          onClick={() => onRetry?.(entry.key)}
+          className="mt-1 flex items-center gap-1.5 rounded-md px-1 pr-1 font-mono text-[10px] text-red transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red"
+        >
+          <span aria-hidden="true">⚠</span>
+          failed — retry
+        </button>
+      ) : (
+        <span className="mt-1 flex items-center gap-1.5 pr-1 font-mono text-[10px] text-ink-faint">
+          <span className="h-[6px] w-[6px] animate-blink-dot rounded-full bg-brand" aria-hidden="true" />
+          sending…
+        </span>
+      )}
     </div>
   );
 }
@@ -238,9 +279,11 @@ function PendingTurn({ text }: { text: string }): JSX.Element {
 export function Chat({
   detail,
   pending = [],
+  onRetry,
 }: {
   detail: SessionDetail;
-  pending?: readonly string[];
+  pending?: readonly PendingSend[];
+  onRetry?: (key: string) => void;
 }): JSX.Element {
   const turns = useMemo(() => detail.turns.slice().sort((a, b) => a.seq - b.seq), [detail.turns]);
   const eventsByTurn = useMemo(() => {
@@ -281,8 +324,8 @@ export function Chat({
           </div>
         ),
       )}
-      {pending.map((text, i) => (
-        <PendingTurn key={`pending-${String(i)}`} text={text} />
+      {pending.map((entry) => (
+        <PendingTurn key={entry.key} entry={entry} onRetry={onRetry} />
       ))}
       <LiveActivity detail={detail} />
       {detail.status === 'waiting_approval' && (

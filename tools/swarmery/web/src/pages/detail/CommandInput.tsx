@@ -11,6 +11,11 @@
 // headlessly (`claude -r <uuid> -p`), whose new turns arrive via the WS bus.
 // Gating on the live PROCESS (not the time-based status) means a session that
 // merely reads "active" because we just appended to it stays writable.
+//
+// Send is optimistic: onSent(text) fires SYNCHRONOUSLY on submit so the parent
+// paints a pending user bubble immediately; if the POST rejects, onSendFailed
+// marks that bubble failed (its retry affordance re-sends). Sending on
+// Cmd/Ctrl+Enter; a bare Enter inserts a newline (multi-line prompts).
 
 import { useEffect, useState } from 'react';
 import type { ProcState } from '../../api/types';
@@ -25,12 +30,17 @@ export function CommandInput({
   procState,
   resumeInFlight = false,
   onSent,
+  onSendFailed,
 }: {
   sessionId: number;
   procState: ProcState | null | undefined;
   resumeInFlight?: boolean;
-  /** Called with the sent text so the parent can echo it optimistically. */
+  /** Called synchronously on submit with the sent text — the parent echoes it
+   * as a pending bubble immediately (before the POST resolves). */
   onSent?: (text: string) => void;
+  /** Called with the same text if the POST rejects, so the parent can flip that
+   * optimistic bubble to a failed/retry state. */
+  onSendFailed?: (text: string) => void;
 }): JSX.Element {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -50,12 +60,17 @@ export function CommandInput({
     if (trimmed === '' || sending || busy) return;
     setSending(true);
     setError(null);
+    // Optimistic: paint the bubble now, clear the box now — the failure path
+    // (below) flips the bubble to retry rather than blocking the composer.
+    onSent?.(trimmed);
+    setText('');
     sendSessionMessage(sessionId, trimmed)
-      .then(() => {
-        setText('');
-        onSent?.(trimmed);
+      .catch((e: unknown) => {
+        // The pending bubble carries the failure now; keep the composer clean
+        // (no duplicate inline error for a send — cancel errors still show).
+        onSendFailed?.(trimmed);
+        if (e instanceof Error) console.warn('session message send failed:', e.message);
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setSending(false));
   };
 
@@ -72,7 +87,8 @@ export function CommandInput({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Cmd/Ctrl+Enter sends; a bare Enter inserts a newline.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       submit();
     }
@@ -100,7 +116,7 @@ export function CommandInput({
           onKeyDown={onKeyDown}
           disabled={busy || sending}
           rows={1}
-          placeholder={busy ? 'session in progress…' : 'Reply to this session…'}
+          placeholder={busy ? 'session in progress…' : 'Reply to this session…  (⌘/Ctrl+Enter to send)'}
           aria-label="Message this session"
           className="max-h-40 min-h-11 flex-1 resize-y rounded-[11px] border border-line-strong bg-surface2 px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-ink placeholder:text-ink-faint focus-visible:border-brand focus-visible:outline-none disabled:opacity-50"
         />
