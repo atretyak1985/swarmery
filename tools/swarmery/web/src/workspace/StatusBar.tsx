@@ -20,9 +20,16 @@ function Dot({ className }: { className: string }): JSX.Element {
 export function StatusBar({
   counts,
   projectId,
+  terminalOpen = false,
+  onToggleTerminal,
 }: {
   counts: BoardCounts;
   projectId: number | null;
+  /** Whether the terminal dock is currently visible (drives the chevron). */
+  terminalOpen?: boolean;
+  /** Toggles the bottom terminal dock; omitted (button hidden) until the
+   * project path resolves. */
+  onToggleTerminal?: (() => void) | undefined;
 }): JSX.Element {
   const { health } = useHealth();
   const [dispatch, setDispatch] = useState<DispatchStatus | null>(null);
@@ -84,6 +91,23 @@ export function StatusBar({
       </span>
 
       <span className="ml-auto flex items-center gap-3">
+        {onToggleTerminal !== undefined && (
+          <button
+            type="button"
+            onClick={onToggleTerminal}
+            aria-label={terminalOpen ? 'hide terminal' : 'show terminal'}
+            aria-pressed={terminalOpen}
+            className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] transition-colors ${
+              terminalOpen
+                ? 'border-line-strong bg-surface2 text-ink'
+                : 'border-line text-ink-dim hover:border-line-strong hover:text-ink'
+            }`}
+          >
+            <span aria-hidden="true">❯_</span>
+            Terminal
+            <span aria-hidden="true">{terminalOpen ? '▾' : '▸'}</span>
+          </button>
+        )}
         {dispatch !== null && (
           <>
             <span

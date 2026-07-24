@@ -275,4 +275,12 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// write surface (/api/system/agents/{id} + rollback) — the Hub UI calls it.
 	mux.HandleFunc("GET /api/agents/hub", h.agentsHub)
 	mux.HandleFunc("GET /api/agents/{id}/hub", h.agentHub)
+
+	// fusion phase 15: embedded terminal — a PTY bridged over a WebSocket
+	// (internal/term). NOT part of the frozen event bus (/api/ws): a separate
+	// PTY socket, no new bus message types. The origin gate is STRICTER than
+	// requireLocalOrigin (an absent Origin is rejected — browser-only), and the
+	// ?cwd allow-list (registered project path OR live worktree_path) lives in
+	// term.go; both run before the upgrade.
+	mux.HandleFunc("GET /api/term/ws", h.term)
 }

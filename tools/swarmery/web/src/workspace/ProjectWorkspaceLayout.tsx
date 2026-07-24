@@ -11,10 +11,17 @@
 // drawer never diverge. Wrapped fleet pages scope to the project via the global
 // ScopeContext, which ProjectContext drives from the :slug — no page is forked.
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { fetchTools } from '../api';
 import { useScope } from '../lib/scope';
+import {
+  TerminalDock,
+  emptyDock,
+  openProjectTerminal,
+  openWorktreeTerminal,
+  type DockState,
+} from '../terminal/TerminalDock';
 import { ProjectWorkspaceProvider, useProjectWorkspace } from './ProjectContext';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { StatusBar } from './StatusBar';
@@ -29,6 +36,32 @@ export function useWorkspaceBoard(): BoardState {
   const ctx = useContext(WorkspaceBoardContext);
   if (ctx === null) throw new Error('useWorkspaceBoard must be used inside ProjectWorkspaceLayout');
   return ctx;
+}
+
+/** Lets deep children (TaskDrawer) open a terminal in a task's worktree. Null
+ * outside a workspace layout — callers guard on it before rendering the action. */
+const WorkspaceTerminalContext = createContext<((taskLabel: string, worktreePath: string) => void) | null>(null);
+
+/** The "open a worktree terminal" callback, or null when unavailable. */
+export function useWorkspaceTerminal(): ((taskLabel: string, worktreePath: string) => void) | null {
+  return useContext(WorkspaceTerminalContext);
+}
+
+// Per-project persistence of the dock (open + tabs + active). Height/font live
+// in TerminalDock's own keys; this stores the tab set so a reload restores it.
+function dockKey(slug: string): string {
+  return `swarmery.term.dock.${slug}`;
+}
+function loadDock(slug: string): DockState {
+  try {
+    const raw = localStorage.getItem(dockKey(slug));
+    if (raw === null) return emptyDock();
+    const parsed = JSON.parse(raw) as DockState;
+    if (!Array.isArray(parsed.tabs)) return emptyDock();
+    return parsed;
+  } catch {
+    return emptyDock();
+  }
 }
 
 interface WorkspaceNavItem {
@@ -108,8 +141,35 @@ function WorkspaceInner(): JSX.Element {
     ...(hasGraphify ? [GRAPHIFY_NAV] : []),
   ];
 
+  // Terminal dock state — restored per project from localStorage and re-seeded
+  // when the selected project changes.
+  const [dock, setDock] = useState<DockState>(() => loadDock(slug));
+  useEffect(() => {
+    setDock(loadDock(slug));
+  }, [slug]);
+  useEffect(() => {
+    localStorage.setItem(dockKey(slug), JSON.stringify(dock));
+  }, [slug, dock]);
+
+  const projectPath = project?.path ?? '';
+  // StatusBar toggle: opens a first project-root terminal if none exist, else
+  // just flips the dock's visibility.
+  const toggleTerminal = useCallback(() => {
+    setDock((prev) => {
+      if (prev.tabs.length === 0) {
+        if (projectPath === '') return prev; // project not resolved yet
+        return openProjectTerminal(prev, projectPath);
+      }
+      return { ...prev, open: !prev.open };
+    });
+  }, [projectPath]);
+  const openWorktree = useCallback((taskLabel: string, worktreePath: string) => {
+    setDock((prev) => openWorktreeTerminal(prev, taskLabel, worktreePath));
+  }, []);
+
   return (
     <WorkspaceBoardContext.Provider value={board}>
+    <WorkspaceTerminalContext.Provider value={openWorktree}>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
           <nav className="hidden w-[228px] shrink-0 flex-col border-r border-line px-3 py-3 desk:flex">
@@ -152,8 +212,15 @@ function WorkspaceInner(): JSX.Element {
             </div>
           </main>
         </div>
-        <StatusBar counts={counts} projectId={project?.id ?? null} />
+        <TerminalDock projectSlug={slug} projectPath={projectPath} state={dock} onChange={setDock} />
+        <StatusBar
+          counts={counts}
+          projectId={project?.id ?? null}
+          terminalOpen={dock.open && dock.tabs.length > 0}
+          onToggleTerminal={projectPath === '' ? undefined : toggleTerminal}
+        />
       </div>
+    </WorkspaceTerminalContext.Provider>
     </WorkspaceBoardContext.Provider>
   );
 }

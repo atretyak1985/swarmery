@@ -10,6 +10,7 @@ import type { BoardTask, TaskPriority } from '../api/types';
 import type { PatchBoardTaskInput } from '../api';
 import { fmtAgo } from '../lib/format';
 import { PlaybookHint, PlaybookSelect, usePlaybooks } from './PlaybookPicker';
+import { useWorkspaceTerminal } from './ProjectWorkspaceLayout';
 
 const PRIORITIES: TaskPriority[] = ['urgent', 'high', 'normal', 'low'];
 // Model tokens the dispatcher passes to `claude --model`; default = inherit.
@@ -113,6 +114,7 @@ export function TaskDrawer({
   const [busy, setBusy] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const { playbooks } = usePlaybooks(task.projectId);
+  const openTerminal = useWorkspaceTerminal();
 
   // Re-seed local edit state when a different task is opened into the drawer.
   useEffect(() => {
@@ -321,6 +323,16 @@ export function TaskDrawer({
             {blocked && <ReadOnlyRow label="paused" value={task.userPaused ? 'by user' : 'by system'} />}
             <ReadOnlyRow label="branch" value={task.branch ?? '—'} />
             <ReadOnlyRow label="worktree" value={task.worktreePath ?? '—'} />
+            {openTerminal !== null && task.worktreePath !== null && (
+              <button
+                type="button"
+                onClick={() => openTerminal(task.externalId, task.worktreePath as string)}
+                className="mt-1 flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:border-line-strong hover:bg-surface2 hover:text-ink"
+              >
+                <span aria-hidden="true">❯_</span>
+                Open terminal in worktree
+              </button>
+            )}
             {task.retryCount > 0 && <ReadOnlyRow label="retries" value={String(task.retryCount)} />}
             {task.dispatchError !== null && (
               <div className="mt-1 rounded-md border border-red/30 bg-red/5 px-2 py-1.5 font-mono text-[10.5px] text-red">

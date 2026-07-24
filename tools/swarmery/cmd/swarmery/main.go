@@ -50,6 +50,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/term"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -915,6 +916,12 @@ func cmdServe(args []string) error {
 	toolMgr := toolproc.NewManager(toolproc.Config{Command: toolproc.DefaultCommand})
 	api.AttachToolManager(toolMgr)
 
+	// fusion phase 15: the embedded-terminal PTY manager. Owns every live PTY
+	// behind GET /api/term/ws; the shutdown path below runs CloseAll so no shell
+	// (or child of one) outlives the daemon. Its idle reaper starts under ctx.
+	termMgr := term.NewManager(term.Config{})
+	api.AttachTermManager(termMgr)
+
 	// fusion phase 3: the task dispatcher. Picks Todo board tasks and runs each
 	// as a headless `claude -p --session-id <uuid>` inside a swarm/<id> worktree
 	// (default root <home>/.swarmery/worktrees). Conservative caps + kill-switch
@@ -1053,6 +1060,10 @@ func cmdServe(args []string) error {
 	// TaskCreator), so the two schedulers never contend on a lock.
 	go routinesSvc.StartScheduler(ctx)
 
+	// fusion phase 15: reap PTYs idle past the timeout (4h) on a 1-minute ticker
+	// under the shutdown context.
+	go termMgr.Reap(ctx.Done())
+
 	srv := &http.Server{Addr: addr, Handler: handler}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
@@ -1068,6 +1079,9 @@ func cmdServe(args []string) error {
 		defer cancel()
 		srv.Shutdown(shutCtx) //nolint:errcheck // best-effort drain on the way out
 		toolMgr.StopAll()
+		// Drain done ⇒ no new /api/term/ws upgrade can register a PTY; tear down
+		// every live terminal (SIGHUP→SIGKILL its process group) so none survive.
+		termMgr.CloseAll()
 		// If ctx.Done won a race against a real ListenAndServe failure, surface it.
 		select {
 		case err := <-errCh:
