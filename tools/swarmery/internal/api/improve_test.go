@@ -177,6 +177,50 @@ func TestImproveRunnerFailureLandsFailedRow(t *testing.T) {
 	}
 }
 
+func TestAgentEvidencePreview(t *testing.T) {
+	srv, db := improveServer(t, &improveMockRunner{out: improveValidOut})
+	seedRegistryAgent(t, db, 1, "tech-lead")
+
+	getEvidence := func(agent string) map[string]any {
+		t.Helper()
+		resp, err := http.Get(srv.URL + "/api/retro/agents/" + agent + "/evidence")
+		if err != nil {
+			t.Fatalf("GET evidence: %v", err)
+		}
+		defer resp.Body.Close()
+		raw, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET evidence = %d (%s), want 200", resp.StatusCode, raw)
+		}
+		var out map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("decode: %v\n%s", err, raw)
+		}
+		return out
+	}
+
+	// Built-in / unknown agent → in_registry:false, no bundle.
+	ghost := getEvidence("ghost")
+	if ghost["in_registry"] != false {
+		t.Errorf("ghost in_registry = %v, want false", ghost["in_registry"])
+	}
+	if _, ok := ghost["bundle"]; ok {
+		t.Errorf("ghost response leaked a bundle: %v", ghost)
+	}
+
+	// Registered agent (folds the core: notation) → in_registry:true + bundle.
+	tl := getEvidence("core:tech-lead")
+	if tl["in_registry"] != true {
+		t.Errorf("tech-lead in_registry = %v, want true", tl["in_registry"])
+	}
+	if b, _ := tl["bundle"].(string); b == "" {
+		t.Errorf("tech-lead response has empty bundle: %v", tl)
+	}
+	if _, leaked := tl["agent_content"]; leaked {
+		t.Errorf("response leaked agent_content: %v", tl)
+	}
+}
+
 func TestListProposals(t *testing.T) {
 	srv, db := improveServer(t, &improveMockRunner{out: improveValidOut})
 	improveExec(t, db, `INSERT INTO agent_change_proposals

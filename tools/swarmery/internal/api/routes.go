@@ -75,6 +75,9 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// (improve.go). Validation is synchronous, generation async (202).
 	mux.HandleFunc("POST /api/retro/recommendations/{id}/improve", requireLocalOrigin(h.improveRecommendation))
 	mux.HandleFunc("POST /api/retro/agents/{agent}/improve", requireLocalOrigin(h.improveAgent))
+	// read-only preview of the evidence bundle the rewriter would send the model
+	// — no origin fence, it mutates nothing.
+	mux.HandleFunc("GET /api/retro/agents/{agent}/evidence", h.agentEvidence)
 	mux.HandleFunc("GET /api/retro/proposals", h.listProposals)
 	mux.HandleFunc("POST /api/retro/proposals/{id}/retry", requireLocalOrigin(h.retryProposal))
 	// self-improvement phase 4: human gate + apply/PR pipeline (apply.go).

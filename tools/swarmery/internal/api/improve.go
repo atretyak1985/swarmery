@@ -145,6 +145,32 @@ func (h *Handler) improveAgent(w http.ResponseWriter, r *http.Request) {
 	h.improveAccepted(w, agent, nil)
 }
 
+// GET /api/retro/agents/{agent}/evidence — READ-ONLY preview of the evidence
+// bundle the rewriter would feed the model, so the dashboard can show it before
+// the user triggers a (minutes-long) generation. No requireLocalOrigin — it
+// mutates nothing. A built-in agent (no editable registry row) answers 200
+// {"in_registry":false}; a registered one returns the path, base SHA and the
+// full bundle (never AgentContent).
+func (h *Handler) agentEvidence(w http.ResponseWriter, r *http.Request) {
+	agent := advisor.NormAgent(r.PathValue("agent"))
+	ev, err := h.Improve.Evidence(agent)
+	if errors.Is(err, improve.ErrAgentNotFound) {
+		writeJSON(w, map[string]any{"agent": agent, "in_registry": false}, nil)
+		return
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"agent":       agent,
+		"in_registry": true,
+		"agent_path":  ev.AgentPath,
+		"base_sha256": ev.BaseSHA256,
+		"bundle":      ev.Bundle,
+	}, nil)
+}
+
 type proposalDTO struct {
 	ID               int64   `json:"id"`
 	RecommendationID *int64  `json:"recommendation_id"`
