@@ -39,12 +39,16 @@ import type {
   AnalyticsDimension,
   AnalyticsMetric,
   ArchitectureProject,
+  AutonomyResp,
   BreakdownResp,
   DurationsResp,
   ErrorsResp,
+  FunnelResp,
   MatrixResp,
   MemoryFileContent,
   MemoryListResp,
+  PlaybookRollup,
+  ProductivityResp,
   ProposalsResp,
   Recommendation,
   RecommendationsResp,
@@ -59,17 +63,23 @@ import type {
   TimeseriesResp,
   ToolsResp,
   ToolsResponse,
+  UsageResp,
 } from '../api/types';
 import { addDays, isoDay, parseDay } from '../lib/format';
 import { mockApprovalsList, mockResolveApproval } from './approvals';
 import {
+  mockAutonomy,
   mockBreakdown,
   mockDurations,
   mockErrorGroups,
+  mockFunnel,
   mockMatrix,
+  mockPlaybookStats,
+  mockProductivity,
   mockSkillStats,
   mockTimeseries,
   mockToolStats,
+  mockUsage,
 } from './analytics';
 
 interface AnalyticsRangeArg {
@@ -1550,6 +1560,32 @@ export const mockApi = {
   async errorGroups(range: AnalyticsRangeArg = {}): Promise<ErrorsResp> {
     await delay(110);
     return mockErrorGroups(range);
+  },
+
+  // analytics uplift (fusion phase 14)
+  async autonomy(range: AnalyticsRangeArg = {}): Promise<AutonomyResp> {
+    await delay(90);
+    return mockAutonomy(range);
+  },
+
+  async productivity(range: AnalyticsRangeArg = {}): Promise<ProductivityResp> {
+    await delay(120);
+    return mockProductivity(range);
+  },
+
+  async funnel(range: AnalyticsRangeArg = {}): Promise<FunnelResp> {
+    await delay(90);
+    return mockFunnel(range);
+  },
+
+  async playbookStats(range: AnalyticsRangeArg = {}): Promise<PlaybookRollup[]> {
+    await delay(90);
+    return mockPlaybookStats(range);
+  },
+
+  async usage(): Promise<UsageResp> {
+    await delay(80);
+    return mockUsage();
   },
 
   // retro loop — empty shells (no retro fixtures yet)

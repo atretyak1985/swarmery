@@ -527,6 +527,116 @@ export interface ErrorsResp {
   approx: boolean;
 }
 
+// --- Analytics uplift (fusion phase 14) --------------------------------------
+// These mirror the daemon DTOs in internal/api/stats_uplift.go + usage.go, which
+// serialize as camelCase — do not snake_case them.
+
+/** GET /api/stats/autonomy — tool-calls per human intervention. */
+export interface AutonomyResp {
+  from: string;
+  to: string;
+  toolCalls: number;
+  interventions: {
+    approvals: number;
+    userPrompts: number;
+    total: number;
+  };
+  /** toolCalls / max(1, interventions); when fullyAutonomous, this IS toolCalls. */
+  ratio: number;
+  /** True when there were zero human interventions in the range. */
+  fullyAutonomous: boolean;
+}
+
+/** One language bucket for the productivity chart (top 12 by LOC). */
+export interface LanguageStat {
+  ext: string;
+  files: number;
+  loc: number;
+}
+
+/** Completed-task duration aggregates (nearest-rank percentiles). Null when none. */
+export interface TaskDurationsStat {
+  completed: number;
+  avgSec: number | null;
+  medianSec: number | null;
+  p90Sec: number | null;
+  totalActiveMs: number;
+}
+
+/** Human-hours saved — ALWAYS an estimate; the UI must label it so. */
+export interface HoursSaved {
+  value: number;
+  formula: string;
+  estimate: boolean;
+}
+
+/** GET /api/stats/productivity — LOC / languages / durations / hours-saved. */
+export interface ProductivityResp {
+  from: string;
+  to: string;
+  commits: number;
+  filesModified: number;
+  loc: number;
+  languages: LanguageStat[];
+  taskDurations: TaskDurationsStat;
+  humanHoursSaved: HoursSaved;
+}
+
+/** One board column in the SDLC funnel snapshot. */
+export interface FunnelColumn {
+  column: string;
+  /** Current occupancy. */
+  count: number;
+  /** Reached-in-range for terminal columns; current count for intake columns. */
+  entered: number;
+}
+
+/** GET /api/stats/funnel — board SDLC funnel. `snapshot` is always true (honesty). */
+export interface FunnelResp {
+  from: string;
+  to: string;
+  columns: FunnelColumn[];
+  enteredInRange: number;
+  doneInRange: number;
+  completionRate: number;
+  perDay: number;
+  snapshot: boolean;
+}
+
+/** GET /api/stats/playbooks — per-playbook rollup (empty pre-Phase-13). */
+export interface PlaybookRollup {
+  playbook: string;
+  tasksDone: number;
+  inProgress: number;
+  costUsd: number | null;
+  tokens: number;
+}
+
+/** One subscription-usage window with a pace indicator. */
+export interface UsageWindow {
+  key: string;
+  label: string;
+  used: number;
+  limit: number;
+  /** used/limit as a fraction (may exceed 1). */
+  usedPct: number;
+  /** usedPct/elapsedPct - 1; positive = over pace. */
+  pace: number;
+  /** RFC3339 timestamp when the rolling window resets. */
+  resetsAt: string;
+  /** "estimate" (telemetry) | "oauth" (future). */
+  source: string;
+}
+
+/** GET /api/usage — subscription windows. `configured` false → set SWARMERY_USAGE_LIMITS. */
+export interface UsageResp {
+  configured: boolean;
+  /** "estimate" — never presented as exact (see usage.go OAuth spike note). */
+  source: string;
+  generatedAt: string;
+  windows: UsageWindow[];
+}
+
 // --- Retro loop (GET /api/retro/{agents,friction}) ---------------------------
 
 /** Same aggregates over the preceding window of equal length. */

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -186,20 +185,7 @@ func upliftServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func getJSON(t *testing.T, url string, out any) {
-	t.Helper()
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatalf("GET %s: %v", url, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET %s: status %d", url, resp.StatusCode)
-	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		t.Fatalf("decode %s: %v", url, err)
-	}
-}
+// getJSON lives in server_test.go (same package) — reused here, not redeclared.
 
 func TestStatsAutonomyHTTP(t *testing.T) {
 	srv := upliftServer(t)
@@ -386,5 +372,40 @@ func TestStatsPlaybooksWithColumn(t *testing.T) {
 	}
 	if got[0].CostUSD == nil || *got[0].CostUSD != 0.5 {
 		t.Errorf("rollup cost = %v, want 0.5", got[0].CostUSD)
+	}
+}
+
+// TestStatsUpliftDBErrorPaths proves each uplift handler surfaces a 500 (not a
+// panic or a partial 200 body) when its underlying query fails — forced by
+// closing the DB before the request. This exercises the writeErr rails that the
+// happy-path tests can't reach.
+func TestStatsUpliftDBErrorPaths(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "err.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	db.Close() // every query now fails
+
+	for _, path := range []string{
+		"/api/stats/autonomy",
+		"/api/stats/productivity",
+		"/api/stats/funnel",
+		"/api/stats/playbooks",
+	} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		body := resp.StatusCode
+		resp.Body.Close()
+		if body != http.StatusInternalServerError {
+			t.Errorf("%s on closed DB: status = %d, want 500", path, body)
+		}
 	}
 }

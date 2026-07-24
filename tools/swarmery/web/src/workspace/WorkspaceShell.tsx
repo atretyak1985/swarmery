@@ -8,6 +8,7 @@
 
 import { Link } from 'react-router-dom';
 import { MOCK } from '../api';
+import { UsagePopover } from '../components/UsagePopover';
 import { useHealth, shortVersion } from '../lib/health';
 import { useTheme } from '../lib/theme';
 import { ProjectWorkspaceLayout } from './ProjectWorkspaceLayout';
@@ -50,6 +51,7 @@ export function WorkspaceShell(): JSX.Element {
         </Link>
         <span className="ml-auto flex items-center gap-3">
           <ThemeToggle />
+          <UsagePopover />
           <span className="flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim">
             {MOCK ? (
               <>

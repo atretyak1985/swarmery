@@ -135,6 +135,15 @@ var (
 
 const usageCacheTTL = 60 * time.Second
 
+// resetUsageCache clears the process-wide 60s usage cache. Used by tests to make
+// assertions independent of a prior computed body (the ?fresh=1 query bypasses
+// the cache read but still repopulates it).
+func resetUsageCache() {
+	usageCacheMu.Lock()
+	usageCache = nil
+	usageCacheMu.Unlock()
+}
+
 // usedTokensSince sums indexed input+output tokens across ALL projects since
 // the given UTC bound (quota is billed regardless of project archival, so no
 // archived filter here — unlike the cost analytics). start is the zone-suffix

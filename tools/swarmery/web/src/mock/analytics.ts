@@ -6,14 +6,19 @@
 import type {
   AnalyticsDimension,
   AnalyticsMetric,
+  AutonomyResp,
   BreakdownResp,
   BreakdownRow,
   DurationsResp,
   ErrorsResp,
+  FunnelResp,
   MatrixResp,
+  PlaybookRollup,
+  ProductivityResp,
   SkillsResp,
   TimeseriesResp,
   ToolsResp,
+  UsageResp,
 } from '../api/types';
 import { addDays, isoDay } from '../lib/format';
 import { mockProjects } from './data';
@@ -305,5 +310,126 @@ export function mockDurations(range: Range): DurationsResp {
     approvals_resolved: resolved,
     avg_resolve_sec: 47,
     wait_total_min: Number(((resolved * 47) / 60).toFixed(1)),
+  };
+}
+
+// --- Analytics uplift fixtures (fusion phase 14) -----------------------------
+
+function rangeBounds(range: Range): { from: string; to: string; days: number } {
+  const days = resolveDays(range);
+  return { from: days[0] ?? isoDay(), to: days[days.length - 1] ?? isoDay(), days: days.length };
+}
+
+export function mockAutonomy(range: Range): AutonomyResp {
+  const b = rangeBounds(range);
+  const toolCalls = 120 + b.days * 18;
+  const approvals = 6 + b.days;
+  const userPrompts = 4 + Math.round(b.days / 2);
+  const total = approvals + userPrompts;
+  return {
+    from: b.from,
+    to: b.to,
+    toolCalls,
+    interventions: { approvals, userPrompts, total },
+    ratio: Number((toolCalls / Math.max(1, total)).toFixed(2)),
+    fullyAutonomous: false,
+  };
+}
+
+export function mockProductivity(range: Range): ProductivityResp {
+  const b = rangeBounds(range);
+  const languages = [
+    { ext: 'ts', files: 42, loc: 3820 },
+    { ext: 'tsx', files: 28, loc: 2610 },
+    { ext: 'go', files: 19, loc: 2140 },
+    { ext: 'css', files: 7, loc: 540 },
+    { ext: 'md', files: 11, loc: 430 },
+    { ext: 'other', files: 5, loc: 120 },
+  ];
+  const loc = languages.reduce((a, l) => a + l.loc, 0);
+  const filesModified = languages.reduce((a, l) => a + l.files, 0);
+  return {
+    from: b.from,
+    to: b.to,
+    commits: 34 + b.days,
+    filesModified,
+    loc,
+    languages,
+    taskDurations: {
+      completed: 12 + b.days,
+      avgSec: 742,
+      medianSec: 610,
+      p90Sec: 1580,
+      totalActiveMs: (12 + b.days) * 742 * 1000,
+    },
+    humanHoursSaved: { value: Number((loc / 15).toFixed(1)), formula: 'loc/15', estimate: true },
+  };
+}
+
+export function mockFunnel(range: Range): FunnelResp {
+  const b = rangeBounds(range);
+  const columns = [
+    { column: 'triage', count: 3, entered: 3 },
+    { column: 'todo', count: 5, entered: 5 },
+    { column: 'in_progress', count: 4, entered: 4 },
+    { column: 'in_review', count: 2, entered: 2 },
+    { column: 'done', count: 18, entered: 9 + b.days },
+    { column: 'archived', count: 6, entered: 2 },
+  ];
+  const doneInRange = (9 + b.days) + 2;
+  const enteredInRange = doneInRange + 7;
+  return {
+    from: b.from,
+    to: b.to,
+    columns,
+    enteredInRange,
+    doneInRange,
+    completionRate: Number((doneInRange / Math.max(1, enteredInRange)).toFixed(2)),
+    perDay: Number((doneInRange / Math.max(1, b.days)).toFixed(2)),
+    snapshot: true,
+  };
+}
+
+export function mockPlaybookStats(range: Range): PlaybookRollup[] {
+  // Non-empty so the card demos; pre-Phase-13 the real endpoint returns [].
+  void range;
+  return [
+    { playbook: 'standard', tasksDone: 14, inProgress: 3, costUsd: 4.82, tokens: 1_240_000 },
+    { playbook: 'bugfix', tasksDone: 8, inProgress: 1, costUsd: 2.15, tokens: 560_000 },
+    { playbook: 'research', tasksDone: 3, inProgress: 0, costUsd: 0.94, tokens: 210_000 },
+  ];
+}
+
+export function mockUsage(): UsageResp {
+  const now = Date.now();
+  const hr = 3_600_000;
+  return {
+    configured: true,
+    source: 'estimate',
+    generatedAt: new Date(now).toISOString(),
+    windows: [
+      {
+        key: 'session5h',
+        label: '5-hour session',
+        used: 32_500_000,
+        limit: 50_000_000,
+        usedPct: 0.65,
+        // Over pace (Fusion's canonical red state): 65% used at ~55% elapsed.
+        pace: 0.65 / 0.55 - 1,
+        resetsAt: new Date(now + 2.2 * hr).toISOString(),
+        source: 'estimate',
+      },
+      {
+        key: 'weekly',
+        label: 'Weekly',
+        used: 118_000_000,
+        limit: 300_000_000,
+        usedPct: 118 / 300,
+        // Under pace: ~39% used at ~50% elapsed.
+        pace: (118 / 300) / 0.5 - 1,
+        resetsAt: new Date(now + 84 * hr).toISOString(),
+        source: 'estimate',
+      },
+    ],
   };
 }

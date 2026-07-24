@@ -26,6 +26,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { NewProjectButton } from './components/NewProjectButton';
 import { NotifySettings } from './components/NotifySettings';
 import { ProjectDropdown } from './components/ProjectDropdown';
+import { UsagePopover } from './components/UsagePopover';
 import { isoDay } from './lib/format';
 import { useHealth, shortVersion } from './lib/health';
 import { loadPrefs, useBrowserNotifications, type NotifyPrefs } from './lib/notifications';
@@ -350,6 +351,7 @@ function AppShell(): JSX.Element {
         <HeaderSearch />
         <span className="ml-auto flex items-center gap-3">
         <ThemeToggle />
+        <UsagePopover />
         {!MOCK && (
           <span className="flex items-center gap-2">
             <NotifySettings prefs={notifyPrefs} onChange={setNotifyPrefs} />

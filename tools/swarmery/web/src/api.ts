@@ -14,18 +14,23 @@ import type {
   BreakdownResp,
   DetachResponse,
   DispatchStatus,
+  AutonomyResp,
   DocDetail,
   DocMeta,
   DurationsResp,
   Epic,
   ErrorsResp,
   FileSessionsResponse,
+  FunnelResp,
   HealthResponse,
   MatrixResp,
   DuplicatePlaybookResponse,
   MemoryFileContent,
   MemoryListResp,
   OnboardConfig,
+  PlaybookRollup,
+  ProductivityResp,
+  UsageResp,
   OnboardRequest,
   OnboardResponse,
   Playbook,
@@ -378,6 +383,39 @@ export function fetchDurations(range: AnalyticsRange = {}): Promise<DurationsRes
 export function fetchErrorGroups(range: AnalyticsRange = {}): Promise<ErrorsResp> {
   if (MOCK) return mockApi.errorGroups(range);
   return get(`/api/stats/errors?${rangeQuery(range, {})}`);
+}
+
+// --- analytics uplift (fusion phase 14) ---------------------------------------
+
+/** Autonomy ratio — tool-calls per human intervention (fusion phase 14). */
+export function fetchAutonomy(range: AnalyticsRange = {}): Promise<AutonomyResp> {
+  if (MOCK) return mockApi.autonomy(range);
+  return get(`/api/stats/autonomy?${rangeQuery(range, {})}`);
+}
+
+/** Productivity — commits/LOC/languages/durations + hours-saved ESTIMATE. */
+export function fetchProductivity(range: AnalyticsRange = {}): Promise<ProductivityResp> {
+  if (MOCK) return mockApi.productivity(range);
+  return get(`/api/stats/productivity?${rangeQuery(range, {})}`);
+}
+
+/** SDLC funnel snapshot over the board columns (fusion phase 14). */
+export function fetchFunnel(range: AnalyticsRange = {}): Promise<FunnelResp> {
+  if (MOCK) return mockApi.funnel(range);
+  return get(`/api/stats/funnel?${rangeQuery(range, {})}`);
+}
+
+/** Per-playbook rollup — empty list pre-Phase-13 (fusion phase 14). */
+export function fetchPlaybookStats(range: AnalyticsRange = {}): Promise<PlaybookRollup[]> {
+  if (MOCK) return mockApi.playbookStats(range);
+  return get(`/api/stats/playbooks?${rangeQuery(range, {})}`);
+}
+
+/** Subscription-usage windows with pace (telemetry ESTIMATE). Unscoped — quota
+ * is global. `fresh` bypasses the daemon's 60s cache (the popover Refresh btn). */
+export function fetchUsage(fresh = false): Promise<UsageResp> {
+  if (MOCK) return mockApi.usage();
+  return get(`/api/usage${fresh ? '?fresh=1' : ''}`);
 }
 
 // --- retro loop (per-agent scorecards + friction board) -----------------------

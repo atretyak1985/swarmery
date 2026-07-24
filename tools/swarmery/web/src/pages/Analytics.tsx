@@ -22,18 +22,27 @@ import {
 import type {
   AnalyticsDimension,
   AnalyticsMetric,
+  AutonomyResp,
   BreakdownRow,
   DurationsResp,
+  FunnelResp,
+  LanguageStat,
   MatrixResp,
+  PlaybookRollup,
+  ProductivityResp,
   SkillsResp,
   TimeseriesResp,
   ToolAgentSplit,
   ToolsResp,
 } from '../api/types';
 import {
+  fetchAutonomy,
   fetchBreakdown,
   fetchDurations,
+  fetchFunnel,
   fetchMatrix,
+  fetchPlaybookStats,
+  fetchProductivity,
   fetchSkillStats,
   fetchTimeseries,
   fetchToolStats,
@@ -274,6 +283,299 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
       <div className="mt-1 font-display text-[18px] font-semibold text-ink">{value}</div>
       {sub !== undefined && <div className="mt-0.5 font-mono text-[10.5px] text-ink-dim">{sub}</div>}
     </div>
+  );
+}
+
+/* ----- command-center uplift (fusion phase 14) -----
+ * Overview stat cards + the SDLC funnel + a productivity strip, adopted from
+ * Fusion's Command Center. Autonomy / productivity / funnel / playbooks come
+ * from the phase-14 uplift endpoints; cost-per-task and cache-hit are DERIVED
+ * from the existing breakdown/timeseries endpoints (no new backend). Every
+ * derived-precision figure that is an estimate is labeled as one. */
+
+/** A stat card with an optional formula-disclosure tip on the label. The tip is
+ * exposed via native title (pointer) + aria-label (assistive tech) — no custom
+ * tooltip wiring, fully keyboard/SR accessible. */
+function TipStatCard({
+  label,
+  value,
+  sub,
+  tip,
+}: {
+  label: string;
+  value: string;
+  sub?: string | undefined;
+  tip?: string | undefined;
+}): JSX.Element {
+  return (
+    <div className="rounded-[14px] border border-line bg-surface px-5 py-4">
+      <div className="flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+        <span>{label}</span>
+        {tip !== undefined && (
+          <span
+            className="cursor-help text-ink-faint/70"
+            title={tip}
+            aria-label={`${label}: ${tip}`}
+            tabIndex={0}
+          >
+            ⓘ
+          </span>
+        )}
+      </div>
+      <div className="mt-1 font-display text-[18px] font-semibold text-ink">{value}</div>
+      {sub !== undefined && <div className="mt-0.5 font-mono text-[10.5px] text-ink-dim">{sub}</div>}
+    </div>
+  );
+}
+
+const FUNNEL_LABELS: Record<string, string> = {
+  triage: 'Triage',
+  todo: 'To do',
+  in_progress: 'In progress',
+  in_review: 'In review',
+  done: 'Done',
+  archived: 'Archived',
+};
+
+/** Horizontal SDLC funnel bar: entered→done per column with a completion gauge. */
+function FunnelBar({ funnel }: { funnel: FunnelResp }): JSX.Element {
+  const maxEntered = Math.max(1, ...funnel.columns.map((c) => c.entered));
+  return (
+    <div className="rounded-[14px] border border-line bg-surface px-5 py-4">
+      <div className="flex items-baseline justify-between">
+        <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+          SDLC funnel
+        </div>
+        <div className="font-mono text-[10.5px] text-ink-dim">
+          {(funnel.completionRate * 100).toFixed(0)}% completion · {funnel.perDay.toFixed(1)}/day
+        </div>
+      </div>
+      <div className="mt-3 flex flex-col gap-1.5">
+        {funnel.columns.map((c) => (
+          <div key={c.column} className="flex items-center gap-2">
+            <div className="w-[74px] shrink-0 font-mono text-[10px] text-ink-dim">
+              {FUNNEL_LABELS[c.column] ?? c.column}
+            </div>
+            <div className="relative h-[14px] flex-1 overflow-hidden rounded-[5px] bg-field">
+              <div
+                className="h-full rounded-[5px] bg-brand/70"
+                style={{ width: `${Math.max(2, (c.entered / maxEntered) * 100).toFixed(1)}%` }}
+              />
+            </div>
+            <div className="w-[52px] shrink-0 text-right font-mono text-[10.5px] tabular-nums text-ink-2">
+              {c.count}
+              <span className="text-ink-faint"> / {c.entered}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2.5 font-mono text-[10px] text-ink-faint">
+        occupancy / reached-in-range · snapshot (board keeps last move only, not full history)
+      </p>
+    </div>
+  );
+}
+
+/** Top-N language bars for the productivity strip. */
+function LanguageBars({ languages }: { languages: LanguageStat[] }): JSX.Element {
+  const top = languages.slice(0, 8);
+  const maxLoc = Math.max(1, ...top.map((l) => l.loc));
+  if (top.length === 0) return <Empty>No file changes in range.</Empty>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {top.map((l) => (
+        <div key={l.ext} className="flex items-center gap-2">
+          <div className="w-[44px] shrink-0 font-mono text-[10px] text-ink-dim">.{l.ext}</div>
+          <div className="relative h-[12px] flex-1 overflow-hidden rounded-[4px] bg-field">
+            <div
+              className="h-full rounded-[4px] bg-green/60"
+              style={{ width: `${Math.max(2, (l.loc / maxLoc) * 100).toFixed(1)}%` }}
+            />
+          </div>
+          <div className="w-[92px] shrink-0 text-right font-mono text-[10px] tabular-nums text-ink-2">
+            {fmtTokens(l.loc)} loc · {l.files}f
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The Command-Center section: reads the shared range + scope, fetches the four
+ * uplift endpoints, and derives cost-per-task / cache-hit from breakdown +
+ * timeseries. Renders nothing until at least one source resolves (so it never
+ * flashes a skeleton over the existing page).
+ */
+function CommandCenter({
+  from,
+  to,
+  scope,
+}: {
+  from: string;
+  to: string;
+  scope: string | null;
+}): JSX.Element | null {
+  const [autonomy, setAutonomy] = useState<AutonomyResp | null>(null);
+  const [productivity, setProductivity] = useState<ProductivityResp | null>(null);
+  const [funnel, setFunnel] = useState<FunnelResp | null>(null);
+  const [playbooks, setPlaybooks] = useState<PlaybookRollup[] | null>(null);
+  const [rangeCost, setRangeCost] = useState<number | null>(null);
+  const [cacheHit, setCacheHit] = useState<number | null>(null);
+
+  useEffect(() => {
+    const range = { from, to, ...(scope !== null ? { project: scope } : {}) };
+    let live = true;
+    fetchAutonomy(range).then((r) => live && setAutonomy(r)).catch(() => live && setAutonomy(null));
+    fetchProductivity(range)
+      .then((r) => live && setProductivity(r))
+      .catch(() => live && setProductivity(null));
+    fetchFunnel(range).then((r) => live && setFunnel(r)).catch(() => live && setFunnel(null));
+    fetchPlaybookStats(range)
+      .then((r) => live && setPlaybooks(r))
+      .catch(() => live && setPlaybooks(null));
+    // Derived: range total cost (sum of project breakdown) + cache-hit summary.
+    fetchBreakdown('project', range)
+      .then((rows) => {
+        if (!live) return;
+        const total = rows.reduce((a, r) => a + (r.cost_usd ?? 0), 0);
+        setRangeCost(total);
+      })
+      .catch(() => live && setRangeCost(null));
+    fetchTimeseries('cache', 'project', range)
+      .then((r) => live && setCacheHit(r.cache?.hit_rate ?? null))
+      .catch(() => live && setCacheHit(null));
+    return () => {
+      live = false;
+    };
+  }, [from, to, scope]);
+
+  // Nothing resolved yet → render nothing (the page below still shows).
+  if (autonomy === null && productivity === null && funnel === null) return null;
+
+  const tasksDone = funnel?.doneInRange ?? 0;
+  const costPerTask =
+    rangeCost !== null && tasksDone > 0 ? rangeCost / tasksDone : null;
+
+  return (
+    <section aria-label="Command center" className="mt-3.5">
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        {autonomy !== null && (
+          <TipStatCard
+            label="Autonomy"
+            value={
+              autonomy.fullyAutonomous
+                ? `${String(autonomy.toolCalls)} calls`
+                : `${autonomy.ratio.toFixed(1)}×`
+            }
+            sub={
+              autonomy.fullyAutonomous
+                ? 'no human interventions'
+                : `${String(autonomy.toolCalls)} calls · ${String(autonomy.interventions.total)} interventions`
+            }
+            tip="Tool calls per human intervention (approvals a human resolved + mid-run prompts). Higher = more autonomous."
+          />
+        )}
+        <TipStatCard
+          label="Tasks done"
+          value={String(tasksDone)}
+          sub={funnel !== null ? `${(funnel.completionRate * 100).toFixed(0)}% completion` : undefined}
+          tip="Board tasks that reached done/archived in this range."
+        />
+        <TipStatCard
+          label="Cost / task"
+          value={costPerTask !== null ? fmtCost(costPerTask) : '—'}
+          sub={rangeCost !== null ? `${fmtCost(rangeCost)} over ${String(tasksDone)} tasks` : 'no priced tasks'}
+          tip="Range total cost ÷ tasks done. Cost comes from priced turns; unpriced work is excluded."
+        />
+        <TipStatCard
+          label="Cache hit"
+          value={cacheHit !== null ? `${(cacheHit * 100).toFixed(1)}%` : '—'}
+          sub="cache_read / (cache_read + in)"
+          tip="Prompt-cache read ratio over the range. Higher = cheaper reads served from cache."
+        />
+      </div>
+
+      <div className="mt-3.5 grid gap-3.5 lg:grid-cols-2">
+        {funnel !== null && <FunnelBar funnel={funnel} />}
+        {productivity !== null && (
+          <div className="rounded-[14px] border border-line bg-surface px-5 py-4">
+            <div className="flex items-baseline justify-between">
+              <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+                Productivity
+              </div>
+              <div className="font-mono text-[10.5px] text-ink-dim">
+                {String(productivity.commits)} commits · {String(productivity.filesModified)} files
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              <div>
+                <span className="font-display text-[18px] font-semibold text-ink">
+                  {fmtTokens(productivity.loc)}
+                </span>
+                <span className="ml-1 font-mono text-[10px] text-ink-dim">LOC changed</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-display text-[18px] font-semibold text-green">
+                  {productivity.humanHoursSaved.value.toFixed(1)}h
+                </span>
+                <span
+                  className="rounded-[4px] bg-amber/15 px-1 py-px font-mono text-[8.5px] uppercase tracking-[0.08em] text-amber cursor-help"
+                  title={`Estimate only — ${productivity.humanHoursSaved.formula} (Fusion's constant). Not a measured figure.`}
+                  aria-label={`Human-hours saved is an estimate: ${productivity.humanHoursSaved.formula}`}
+                  tabIndex={0}
+                >
+                  est
+                </span>
+                <span className="font-mono text-[10px] text-ink-dim">saved</span>
+              </div>
+            </div>
+            <div className="mt-3">
+              <LanguageBars languages={productivity.languages} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-2.5 font-mono text-[10.5px] text-ink-dim">
+              <span>
+                avg{' '}
+                <span className="text-ink-2">{fmtSec(productivity.taskDurations.avgSec)}</span>
+              </span>
+              <span>
+                median{' '}
+                <span className="text-ink-2">{fmtSec(productivity.taskDurations.medianSec)}</span>
+              </span>
+              <span>
+                p90 <span className="text-ink-2">{fmtSec(productivity.taskDurations.p90Sec)}</span>
+              </span>
+              <span>
+                <span className="text-ink-2">{String(productivity.taskDurations.completed)}</span>{' '}
+                completed
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {playbooks !== null && playbooks.length > 0 && (
+        <div className="mt-3.5 rounded-[14px] border border-line bg-surface px-5 py-4">
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+            Playbooks
+          </div>
+          <div className="mt-2 flex flex-col gap-1">
+            {playbooks.map((p) => (
+              <div
+                key={p.playbook}
+                className="flex items-center justify-between gap-3 font-mono text-[11px]"
+              >
+                <span className="truncate text-ink-2">{p.playbook}</span>
+                <span className="shrink-0 tabular-nums text-ink-dim">
+                  {String(p.tasksDone)} done · {String(p.inProgress)} wip · {fmtTokens(p.tokens)} tok ·{' '}
+                  {fmtCost(p.costUsd)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1004,6 +1306,10 @@ export function Analytics(): JSX.Element {
           }}
         />
       </div>
+
+      {/* Command Center (fusion phase 14): autonomy / cost-per-task / cache-hit /
+          SDLC funnel / productivity / playbooks — scoped to the same range. */}
+      <CommandCenter from={from} to={to} scope={scope} />
 
       {/* Export CSV (ops-hygiene): same range + pivot as the panels above. */}
       <div className="mt-2.5 flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-ink-dim">
