@@ -305,6 +305,57 @@ func TestRetroAgents(t *testing.T) {
 	})
 }
 
+// TestRetroAgentsImprovable pins the Improve-button gate: an agent with a live
+// registry row (current_version_id set) is improvable; an agent that only shows
+// up as a subagent run — no editable definition file — is not.
+func TestRetroAgentsImprovable(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "improvable.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	today := retroDay(t, 0)
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+	mustExec(`INSERT INTO projects (id, path, slug, name, first_seen) VALUES (1, '/w/a', '-w-a', 'A', ?)`, today)
+	mustExec(`INSERT INTO sessions (id, project_id, session_uuid, status, started_at) VALUES (1, 1, 'u1', 'completed', ?)`, today)
+	// Two subagent runs: tech-lead (registry-backed) and debugger (built-in only).
+	mustExec(`INSERT INTO events (session_id, ts, type, status, payload, dedup_key) VALUES
+		(1, ?, 'subagent_start', 'ok', '{"subagent_type":"tech-lead"}', 'a1'),
+		(1, ?, 'subagent_start', 'ok', '{"subagent_type":"debugger"}',  'a2')`, today, today)
+	// Register tech-lead with a current version so RegistryAgentSet includes it;
+	// debugger gets no registry row.
+	mustExec(`INSERT INTO agents (id, name, scope, file_path, origin) VALUES (1, 'tech-lead', 'global', '/a/tech-lead.md', 'local')`)
+	mustExec(`INSERT INTO agent_versions (id, agent_id, content_hash, content, created_at) VALUES (1, 1, 'h1', 'body', ?)`, today)
+	mustExec(`UPDATE agents SET current_version_id = 1 WHERE id = 1`)
+
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	var out retroAgentsDTO
+	getJSON(t, srv.URL+"/api/retro/agents?"+retroRange(7), &out)
+
+	got := map[string]bool{}
+	for _, a := range out.Agents {
+		got[a.Agent] = a.Improvable
+	}
+	if !got["tech-lead"] {
+		t.Errorf("tech-lead improvable = false, want true (registry-backed agent)")
+	}
+	if got["debugger"] {
+		t.Errorf("debugger improvable = true, want false (built-in, no registry row)")
+	}
+}
+
 // retroFrictionServer seeds denied tool calls (Bash covered by an exact
 // global rule, Read by a paren pattern, WebFetch only by a DISABLED rule,
 // Grep only by a rule scoped to ANOTHER project), two same-key error events,

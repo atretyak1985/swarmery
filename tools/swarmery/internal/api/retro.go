@@ -98,7 +98,12 @@ type retroAgentDTO struct {
 	ReDispatchRate *float64 `json:"re_dispatch_rate"`
 	// latest imported eval run for the registry agent; nil when none.
 	Eval *retroEvalDTO `json:"eval"`
-	Prev retroPrevDTO  `json:"prev"`
+	// Improvable is true when the agent resolves to a live registry row with an
+	// editable definition file — the agents the rewriter (internal/improve) can
+	// act on. Built-in agents (Explore, general-purpose, debugger) are false, so
+	// the UI hides their "Improve" button.
+	Improvable bool         `json:"improvable"`
+	Prev       retroPrevDTO `json:"prev"`
 }
 
 type retroAgentsDTO struct {
@@ -455,6 +460,17 @@ func (h *Handler) retroAgents(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	// One registry lookup for the whole table: the set of agents the rewriter
+	// can act on, keyed by the same normalized name as the scorecard rows. A nil
+	// Improve service (generation disabled) leaves every row improvable=false.
+	var registrySet map[string]struct{}
+	if h.Improve != nil {
+		registrySet, err = h.Improve.RegistryAgentSet()
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 
 	out := retroAgentsDTO{
 		From: dr.days[0], To: dr.days[len(dr.days)-1],
@@ -498,6 +514,12 @@ func (h *Handler) retroAgents(w http.ResponseWriter, r *http.Request) {
 		if e, ok := evalByAgent[key]; ok {
 			ee := e
 			row.Eval = &ee
+		}
+		// Gate the Improve button: fold the scorecard key the same way
+		// RegistryAgentSet folds registry names (advisor.NormAgent lowercases;
+		// the scorecard key is only prefix-stripped) so the lookup lines up.
+		if _, ok := registrySet[advisor.NormAgent(key)]; ok {
+			row.Improvable = true
 		}
 		if p, ok := prev[key]; ok {
 			row.Prev = retroPrevDTO{Runs: p.runs, Errors: p.errors, ErrorRate: errRate(p.behaviorFailedRuns(), p.runs), CostUSD: p.cost}
