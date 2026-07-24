@@ -10,6 +10,7 @@
     "screenshots": "node scripts/screenshot.mjs"
   },
   "dependencies": {
+    "@xyflow/react": "^12.11.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",
@@ -22,7 +23,6 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "playwright-core": "^1.61.1",
-
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
     "vite": "^8.1.4"

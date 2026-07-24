@@ -39,9 +39,7 @@ const ProjectOverview = lazy(() =>
 const ProjectSettings = lazy(() =>
   import('./pages/ProjectSettings').then((m) => ({ default: m.ProjectSettings })),
 );
-const PlansPlaceholder = lazy(() =>
-  import('./pages/PlansPlaceholder').then((m) => ({ default: m.PlansPlaceholder })),
-);
+const Plans = lazy(() => import('./pages/Plans').then((m) => ({ default: m.Plans })));
 const PlanningMode = lazy(() =>
   import('./pages/PlanningMode').then((m) => ({ default: m.PlanningMode })),
 );
@@ -120,7 +118,7 @@ const router = createBrowserRouter([
           { index: true, element: ws(<ProjectOverview />) },
           { path: 'board', element: ws(<Board />) },
           { path: 'planning', element: ws(<PlanningMode />) },
-          { path: 'plans', element: ws(<PlansPlaceholder />) },
+          { path: 'plans', element: ws(<Plans />) },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
           {

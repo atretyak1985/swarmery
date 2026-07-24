@@ -1676,3 +1676,55 @@ export interface RoutineInput {
   timeoutSec?: number;
   webhook?: boolean;
 }
+
+// --- fusion phase 10: epic rollups + plan-doc editor --------------------------
+
+/** One epic phase — mirrors epicPhaseDTO in internal/api/epics.go. */
+export interface EpicPhase {
+  id: number;
+  seq: number;
+  name: string;
+  /** Absolute doc path on disk (informational). */
+  docPath: string;
+  /** Path relative to the plan/ dir — the value the docs endpoints accept. */
+  docRelPath: string;
+  dependsOn: number[];
+  checkboxesDone: number;
+  checkboxesTotal: number;
+  activatedAt: string | null;
+  /** external_id of the board task this phase was activated into (null until). */
+  boardTaskExternalId: string | null;
+  boardTaskId: number | null;
+  /** The current board column of that board task (null until activated). */
+  boardColumn: BoardColumn | null;
+}
+
+/** Checkbox rollup across an epic's phases. */
+export interface EpicRollup {
+  done: number;
+  total: number;
+  /** 0..100; 0 when total===0. */
+  pct: number;
+}
+
+/** One epic (a workspace plan) — mirrors epicDTO in internal/api/epics.go. */
+export interface Epic {
+  taskId: number;
+  externalId: string;
+  projectId: number;
+  projectSlug: string;
+  title: string;
+  status: string;
+  startedAt: string | null;
+  planDir: string;
+  phases: EpicPhase[];
+  rollup: EpicRollup;
+}
+
+/** GET/PUT/PATCH /api/epics/{taskId}/docs response body. */
+export interface PlanDoc {
+  path: string;
+  content: string;
+  /** On-disk backup path a write created (absent on GET). */
+  backup?: string;
+}

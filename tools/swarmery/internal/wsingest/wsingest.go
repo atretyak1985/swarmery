@@ -80,12 +80,13 @@ type Stats struct {
 	Retros      int // task_retros rows (parsed 09-retrospective.md docs)
 	Loops       int // task_loops rows (ORCHESTRATION.md re-dispatch journal)
 	Delegations int // task_delegations rows (logs/agents.md ledger)
+	EpicPhases  int // epic_phases rows (plan/ README table + phase docs)
 	Warnings    int // tolerated parse/mapping stumbles this pass
 }
 
 func (s Stats) String() string {
-	return fmt.Sprintf("workspaces=%d tasks=%d links(explicit=%d heuristic=%d) artifacts(retros=%d loops=%d delegations=%d) warnings=%d",
-		s.Workspaces, s.Tasks, s.Explicit, s.Heuristic, s.Retros, s.Loops, s.Delegations, s.Warnings)
+	return fmt.Sprintf("workspaces=%d tasks=%d links(explicit=%d heuristic=%d) artifacts(retros=%d loops=%d delegations=%d epic_phases=%d) warnings=%d",
+		s.Workspaces, s.Tasks, s.Explicit, s.Heuristic, s.Retros, s.Loops, s.Delegations, s.EpicPhases, s.Warnings)
 }
 
 // Scanner runs idempotent scan passes against one DB.
@@ -424,6 +425,10 @@ func (s *Scanner) Scan() (Stats, error) {
 				// phase 2: retro artifacts (09-retrospective / ORCHESTRATION /
 				// agents.md ledger) — hash-gated, tolerant, never fails the scan.
 				s.scanArtifacts(taskID, dir, warn)
+				// fusion phase 10: a plan/ dir makes this task an epic — parse its
+				// README phase table + phase docs into epic_phases (same hash-gated,
+				// tolerant contract).
+				s.scanEpics(taskID, dir, warn)
 			}
 		}
 	}
@@ -503,6 +508,9 @@ func (s *Scanner) Scan() (Stats, error) {
 		return stats, err
 	}
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM task_delegations`).Scan(&stats.Delegations); err != nil {
+		return stats, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM epic_phases`).Scan(&stats.EpicPhases); err != nil {
 		return stats, err
 	}
 	return stats, nil

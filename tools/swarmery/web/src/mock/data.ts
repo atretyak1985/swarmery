@@ -8,10 +8,13 @@ import type {
   DispatchStatus,
   DocDetail,
   DocMeta,
+  Epic,
+  EpicPhase,
   Event,
   FileChange,
   HealthResponse,
   PermissionRequest,
+  PlanDoc,
   PlanningStart,
   PlanningStatus,
   Project,
@@ -1197,6 +1200,50 @@ let mockBoard: BoardTask[] = [
 const MOCK_PRIORITIES = new Set(['urgent', 'high', 'normal', 'low']);
 let mockBoardSeq = 9200;
 
+// fusion phase 10: one demo epic for project 3 (swarmery) with a diamond
+// dependency shape (1 → 2,3 → 4) so the phase timeline + rollup render offline.
+const mockEpicPhase = (
+  id: number,
+  seq: number,
+  name: string,
+  dependsOn: number[],
+  done: number,
+  total: number,
+): EpicPhase => ({
+  id,
+  seq,
+  name,
+  docPath: `/ws/plan/phase-${String(seq)}.md`,
+  docRelPath: `phase-${String(seq)}.md`,
+  dependsOn,
+  checkboxesDone: done,
+  checkboxesTotal: total,
+  activatedAt: null,
+  boardTaskExternalId: null,
+  boardTaskId: null,
+  boardColumn: null,
+});
+
+const mockEpics: Epic[] = [
+  {
+    taskId: 7010,
+    externalId: '2026-07-24-fusion-orchestration',
+    projectId: 3,
+    projectSlug: 'swarmery',
+    title: 'Fusion-inspired orchestration',
+    status: 'running',
+    startedAt: iso(-3 * 86400),
+    planDir: '/ws/plan',
+    phases: [
+      mockEpicPhase(1, 1, 'Task queue: schema + write API', [], 5, 5),
+      mockEpicPhase(2, 2, 'Dispatcher', [1], 3, 6),
+      mockEpicPhase(3, 3, 'Board UI', [1], 2, 8),
+      mockEpicPhase(4, 4, 'Epics rollup + graph', [2, 3], 0, 6),
+    ],
+    rollup: { done: 10, total: 25, pct: 40 },
+  },
+];
+
 // fusion phase 8: planner state per project id — startPlanning flips a project
 // to active so the demo shows the running-planner panel.
 const mockPlanning: Record<number, PlanningStatus> = {};
@@ -1478,6 +1525,65 @@ export const mockApi = {
       .filter((t) => (projectId === undefined || t.projectId === projectId))
       .filter((t) => (boardColumn === undefined || t.boardColumn === boardColumn))
       .map((t) => ({ ...t }));
+  },
+
+  // --- fusion phase 10: epics + plan-doc editor ---
+  async epics(projectId?: number): Promise<Epic[]> {
+    await delay(90);
+    return mockEpics
+      .filter((e) => projectId === undefined || e.projectId === projectId)
+      .map((e) => ({ ...e, phases: e.phases.map((p) => ({ ...p })) }));
+  },
+
+  async activateEpicPhase(taskId: number, phaseId: number): Promise<BoardTask> {
+    await delay(120);
+    const epic = mockEpics.find((e) => e.taskId === taskId);
+    const phase = epic?.phases.find((p) => p.id === phaseId);
+    if (!epic || !phase) throw new Error('mock: phase not found');
+    mockBoardSeq += 1;
+    const ext = `T-${mockBoardSeq.toString(36)}`;
+    const created = boardTask({
+      id: mockBoardSeq,
+      externalId: ext,
+      projectId: epic.projectId,
+      title: phase.name,
+      prompt: `# ${phase.name}\n\n(mock activation)`,
+      boardColumn: 'todo',
+      columnMovedAt: iso(0),
+      createdAt: iso(0),
+    });
+    mockBoard = [created, ...mockBoard];
+    phase.activatedAt = iso(0);
+    phase.boardTaskId = created.id;
+    phase.boardTaskExternalId = ext;
+    phase.boardColumn = 'todo';
+    return { ...created };
+  },
+
+  async planDoc(_taskId: number, path: string): Promise<PlanDoc> {
+    await delay(60);
+    return {
+      path,
+      content: `# ${path}\n\nMock plan document.\n\n## Acceptance criteria\n- [x] first\n- [ ] second\n`,
+    };
+  },
+
+  async togglePlanCheckbox(_taskId: number, path: string, line: number, done: boolean): Promise<PlanDoc> {
+    await delay(60);
+    const lines = [
+      `# ${path}`,
+      '',
+      'Mock plan document.',
+      '',
+      '## Acceptance criteria',
+      '- [x] first',
+      '- [ ] second',
+    ];
+    const cur = lines[line];
+    if (cur !== undefined) {
+      lines[line] = cur.replace(/\[.\]/, done ? '[x]' : '[ ]');
+    }
+    return { path, content: lines.join('\n') + '\n', backup: '.backups/mock/doc.md' };
   },
 
   async createBoardTask(input: {

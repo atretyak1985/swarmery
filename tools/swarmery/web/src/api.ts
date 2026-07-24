@@ -17,6 +17,7 @@ import type {
   DocDetail,
   DocMeta,
   DurationsResp,
+  Epic,
   ErrorsResp,
   FileSessionsResponse,
   HealthResponse,
@@ -29,6 +30,7 @@ import type {
   PermissionPresetView,
   PermissionRequest,
   PermissionRequestStatus,
+  PlanDoc,
   PlanningStart,
   PlanningStatus,
   ProjectDetail,
@@ -1026,4 +1028,88 @@ export async function runRoutine(id: string): Promise<{ status: string }> {
     throw new Error(data.error ?? `run routine failed: ${String(res.status)}`);
   }
   return (await res.json()) as { status: string };
+}
+
+// ── Epics (fusion phase 10) ─────────────────────────────────────────────────
+
+/** GET /api/epics?projectId= — epics (workspace plans) with phases + rollups. */
+export function fetchEpics(projectId?: number): Promise<Epic[]> {
+  if (MOCK) return mockApi.epics(projectId);
+  const qs = projectId !== undefined ? `?projectId=${String(projectId)}` : '';
+  return get(`/api/epics${qs}`);
+}
+
+/**
+ * POST /api/epics/{taskId}/phases/{phaseId}/activate → 201 BoardTask. A second
+ * call for an already-activated phase throws {@link PhaseAlreadyActivatedError}
+ * (409) carrying the existing board task.
+ */
+export async function activateEpicPhase(taskId: number, phaseId: number): Promise<BoardTask> {
+  if (MOCK) return mockApi.activateEpicPhase(taskId, phaseId);
+  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/activate`, {
+    method: 'POST',
+  });
+  if (res.status === 409) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string; task?: BoardTask };
+    throw new PhaseAlreadyActivatedError(payload.error ?? 'phase already activated', payload.task);
+  }
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `activate failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as BoardTask;
+}
+
+/** Thrown on a 409 from activateEpicPhase — carries the existing board task. */
+export class PhaseAlreadyActivatedError extends Error {
+  readonly task: BoardTask | undefined;
+  constructor(message: string, task: BoardTask | undefined) {
+    super(message);
+    this.name = 'PhaseAlreadyActivatedError';
+    this.task = task;
+  }
+}
+
+/** GET /api/epics/{taskId}/docs?path= — read a plan doc (path-confined). */
+export function fetchPlanDoc(taskId: number, path: string): Promise<PlanDoc> {
+  if (MOCK) return mockApi.planDoc(taskId, path);
+  return get(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`);
+}
+
+/** PUT /api/epics/{taskId}/docs?path= {content} — overwrite a plan doc (backup). */
+export async function savePlanDoc(taskId: number, path: string, content: string): Promise<PlanDoc> {
+  if (MOCK) return { path, content, backup: '.backups/mock/doc.md' };
+  const res = await fetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `save doc failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as PlanDoc;
+}
+
+/**
+ * PATCH /api/epics/{taskId}/docs?path= {line, done} — flip one checkbox by
+ * 0-based line index (the exact `- [ ]`↔`- [x]` line).
+ */
+export async function togglePlanCheckbox(
+  taskId: number,
+  path: string,
+  line: number,
+  done: boolean,
+): Promise<PlanDoc> {
+  if (MOCK) return mockApi.togglePlanCheckbox(taskId, path, line, done);
+  const res = await fetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ line, done }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `toggle checkbox failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as PlanDoc;
 }

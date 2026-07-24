@@ -20,7 +20,11 @@ import { BOARD_COLUMNS, COLUMN_LABELS } from '../workspace/boardModel';
 import { QuickEntry } from '../workspace/QuickEntry';
 import { TaskCard } from '../workspace/TaskCard';
 import { TaskDrawer } from '../workspace/TaskDrawer';
+import { TaskGraph } from '../workspace/TaskGraph';
 import { Empty, ErrorBox, Loading } from '../components/ui';
+
+/** Board header view mode: the kanban columns or the dependency graph. */
+type BoardView = 'board' | 'graph';
 
 /** Live columns render immediately; Archived is fetched only when expanded. */
 const EAGER_COLUMNS: BoardColumn[] = ['triage', 'todo', 'in_progress', 'in_review', 'done'];
@@ -29,6 +33,7 @@ export function Board(): JSX.Element {
   const { project, projectId, loading: projLoading } = useProjectWorkspace();
   const board = useWorkspaceBoard();
   const [openId, setOpenId] = useState<number | null>(null);
+  const [view, setView] = useState<BoardView>('board');
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropCol, setDropCol] = useState<BoardColumn | null>(null);
 
@@ -92,8 +97,29 @@ export function Board(): JSX.Element {
         </div>
       )}
 
+      {/* Board ⇄ Graph toggle. */}
+      <div className="mb-3 flex items-center gap-1" role="group" aria-label="board view">
+        {(['board', 'graph'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            aria-pressed={view === v}
+            className={`rounded-lg border px-2.5 py-1 font-mono text-[11px] capitalize transition-colors ${
+              view === v
+                ? 'border-line-strong bg-surface2 text-brand'
+                : 'border-transparent text-ink-dim hover:bg-surface2/50 hover:text-ink'
+            }`}
+          >
+            {v === 'board' ? '▤ Board' : '⋈ Graph'}
+          </button>
+        ))}
+      </div>
+
       {board.loading ? (
         <Loading label="board…" />
+      ) : view === 'graph' ? (
+        <TaskGraph tasks={board.tasks} onOpen={setOpenId} />
       ) : (
         <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
           {EAGER_COLUMNS.map((col) => {
