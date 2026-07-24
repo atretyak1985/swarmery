@@ -95,6 +95,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/board/tasks", requireLocalOrigin(h.createBoardTask))
 	mux.HandleFunc("PATCH /api/board/tasks/{id}", requireLocalOrigin(h.patchBoardTask))
 
+	// fusion phase 3: dispatcher control — status + pause/resume (global or
+	// per-project). The pause write carries the same D4 origin hardening.
+	mux.HandleFunc("GET /api/dispatch", h.getDispatch)
+	mux.HandleFunc("POST /api/dispatch/pause", requireLocalOrigin(h.pauseDispatch))
+
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
 	// All write endpoints reject foreign browser Origins (D4); requests
 	// without an Origin (the swarmery hook shim, curl) pass.

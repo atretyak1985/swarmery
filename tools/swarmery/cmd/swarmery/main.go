@@ -32,6 +32,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/evals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
@@ -45,6 +46,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -875,6 +877,22 @@ func cmdServe(args []string) error {
 	toolMgr := toolproc.NewManager(toolproc.Config{Command: toolproc.DefaultCommand})
 	api.AttachToolManager(toolMgr)
 
+	// fusion phase 3: the task dispatcher. Picks Todo board tasks and runs each
+	// as a headless `claude -p --session-id <uuid>` inside a swarm/<id> worktree
+	// (default root <home>/.swarmery/worktrees). Conservative caps + kill-switch
+	// from env (SWARMERY_DISPATCH=0 disables). Heal in_progress rows a crashed
+	// daemon left behind back to todo, then attach — the scheduler ticker starts
+	// below under the shutdown context. The worktree Manager is Git-mockable but
+	// runs the real git here.
+	dispatchSvc := dispatch.NewService(
+		db, dispatch.ConfigFromEnv(), dispatch.ClaudeRunner{},
+		&worktree.Manager{Git: worktree.ExecGit{}},
+	)
+	if err := dispatchSvc.HealStale(); err != nil {
+		log.Printf("warning: dispatch heal on startup: %v", err)
+	}
+	api.AttachDispatch(dispatchSvc)
+
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
 		return err
@@ -885,6 +903,13 @@ func cmdServe(args []string) error {
 	// Graceful shutdown: SIGINT/SIGTERM → stop tool children, drain HTTP, exit.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// fusion phase 3: run the dispatcher poll-fallback ticker under the shutdown
+	// context. It runs an initial Schedule immediately (drains any Todo backlog
+	// on restart) then sweeps every PollInterval; the event fast path is the
+	// board handlers' pokeDispatch(). Exits when ctx is cancelled.
+	go dispatchSvc.StartScheduler(ctx)
+
 	srv := &http.Server{Addr: addr, Handler: handler}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
