@@ -744,6 +744,46 @@ export interface AdviseStats {
   verified: number;
 }
 
+// --- fusion phase 12 — project memory surface --------------------------------
+
+/** memory file kind: which of a project's three memory roots it comes from. */
+export type MemoryKind = 'claude-md' | 'auto-memory' | 'serena';
+
+/** One listed memory file (GET /api/projects/{id}/memory). */
+export interface MemoryFile {
+  kind: MemoryKind;
+  /** Absolute on-disk path — the opaque ?path= handle for read/write. */
+  path: string;
+  /** Display basename. */
+  name: string;
+  sizeBytes: number;
+  /** RFC3339 file mtime. */
+  updatedAt: string;
+  /** False in readonly mode — the editor shows a read-only badge. */
+  writable: boolean;
+}
+
+export interface MemoryListResp {
+  files: MemoryFile[];
+}
+
+/** GET /api/projects/{id}/memory/file?path= — one file's content + hash. */
+export interface MemoryFileContent {
+  path: string;
+  kind: MemoryKind;
+  content: string;
+  /** sha256 of content — the base_hash handle for the next versioned PUT. */
+  hash: string;
+  writable: boolean;
+}
+
+/** 409 body of a PUT whose base_hash no longer matches disk. */
+export interface MemoryConflict {
+  error: string;
+  disk_hash: string;
+  base_hash: string;
+}
+
 // --- self-improvement phase 4 — agent change proposals -----------------------
 
 /** agent_change_proposals.status lifecycle (migration 0021). */

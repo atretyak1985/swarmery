@@ -44,6 +44,7 @@ const PlanningMode = lazy(() =>
   import('./pages/PlanningMode').then((m) => ({ default: m.PlanningMode })),
 );
 const Playbooks = lazy(() => import('./pages/Playbooks').then((m) => ({ default: m.Playbooks })));
+const Memory = lazy(() => import('./pages/Memory').then((m) => ({ default: m.Memory })));
 const ScopedSerena = lazy(() =>
   import('./workspace/ScopedPages').then((m) => ({ default: m.ScopedSerena })),
 );
@@ -143,6 +144,7 @@ const router = createBrowserRouter([
           { path: 'serena', element: ws(<ScopedSerena />) },
           { path: 'graphify', element: ws(<ScopedGraphify />) },
           { path: 'settings', element: ws(<ProjectSettings />) },
+          { path: 'memory', element: ws(<Memory />) },
         ],
       },
     ],

@@ -46,6 +46,7 @@ const BASE_NAV: WorkspaceNavItem[] = [
   { path: 'playbooks', glyph: '▤', label: 'Playbooks' },
   { path: 'sessions', glyph: '❯', label: 'Sessions' },
   { path: 'architecture', glyph: '▦', label: 'Architecture' },
+  { path: 'memory', glyph: '❖', label: 'Memory' },
 ];
 const INSIGHT_NAV: WorkspaceNavItem[] = [
   { path: 'retro', glyph: '↺', label: 'Retro' },

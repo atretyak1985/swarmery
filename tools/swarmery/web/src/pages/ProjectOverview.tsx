@@ -5,10 +5,14 @@
 // this page is the read-first landing tab. Telemetry-only projects hide the
 // component sections, same as before.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { ProjectComponent, ProjectDetail as ProjectDetailData } from '../api/types';
-import { fetchProject } from '../api';
+import type {
+  ProjectComponent,
+  ProjectDetail as ProjectDetailData,
+  Recommendation,
+} from '../api/types';
+import { fetchProject, fetchProjectRecommendations, runProjectAdvise } from '../api';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { fmtAgo, fmtCost, fmtDateTime, fmtTokens } from '../lib/format';
 import { ProjectName } from '../components/ProjectName';
@@ -46,6 +50,123 @@ function ComponentList({ title, items }: { title: string; items: ProjectComponen
         </div>
       )}
     </div>
+  );
+}
+
+/** Lifecycle status chip for a recommendation, matching the Retro rail palette
+ * (gray proposed, amber accepted, blue adopted, green verified). */
+function InsightStatusChip({ status }: { status: Recommendation['status'] }): JSX.Element {
+  const tone: Record<Recommendation['status'], string> = {
+    proposed: 'border-line text-ink-dim',
+    accepted: 'border-amber/40 bg-amber/10 text-amber',
+    adopted: 'border-blue/40 bg-blue/10 text-blue',
+    verified: 'border-green/40 bg-green/10 text-green',
+    dismissed: 'border-line text-ink-faint',
+  };
+  return (
+    <span
+      className={`shrink-0 rounded-[6px] border px-1.5 py-[2px] font-mono text-[10px] ${tone[status]}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+/** Per-project Insights (fusion phase 12): the top project-scoped advisor
+ * recommendations with a Generate button that runs the advisor and settle-polls
+ * the list. Recommendations are global by identity; the daemon post-filters to
+ * this project's evidence sessions, so fleet-level rules (R5/R6/R7) never show. */
+function InsightsCard({ slug }: { slug: string }): JSX.Element {
+  const [recs, setRecs] = useState<Recommendation[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const disposed = useRef(false);
+
+  useEffect(() => {
+    disposed.current = false;
+    return () => {
+      disposed.current = true;
+    };
+  }, []);
+
+  const load = useCallback((): Promise<void> => {
+    return fetchProjectRecommendations(slug)
+      .then((r) => {
+        if (disposed.current) return;
+        setRecs(r.recommendations);
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if (disposed.current) return;
+        setError(e instanceof Error ? e.message : String(e));
+      });
+  }, [slug]);
+
+  useEffect(() => {
+    setRecs(null);
+    void load();
+  }, [load]);
+
+  const generate = useCallback((): void => {
+    setGenerating(true);
+    setError(null);
+    runProjectAdvise(slug)
+      .then(() => load()) // settle-poll: the advise run is synchronous server-side
+      .catch((e: unknown) => {
+        if (!disposed.current) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!disposed.current) setGenerating(false);
+      });
+  }, [slug, load]);
+
+  const top = (recs ?? []).slice(0, 3);
+
+  return (
+    <>
+      <div className="mt-[26px] mb-2.5 flex items-center justify-between">
+        <SectionTitle>insights</SectionTitle>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={generating}
+          className="rounded-lg border border-line bg-surface px-3 py-1 font-mono text-[11px] font-semibold text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
+        >
+          {generating ? 'analyzing…' : 'generate insights'}
+        </button>
+      </div>
+      {error !== null ? (
+        <ErrorBox message={error} onRetry={() => void load()} />
+      ) : recs === null ? (
+        <Loading label="insights…" />
+      ) : top.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
+          no recommendations for this project yet — Generate insights runs the advisor now
+        </div>
+      ) : (
+        <Card>
+          <div className="divide-y divide-line-soft">
+            {top.map((rec) => (
+              <div key={rec.id} className="flex items-start gap-2 py-2 first:pt-0 last:pb-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] text-ink-faint">{rec.rule}</span>
+                    <span className="truncate text-[12.5px] text-ink-2">{rec.title}</span>
+                  </div>
+                  <div className="mt-0.5 line-clamp-2 text-[11px] text-ink-dim">{rec.detail}</div>
+                </div>
+                <InsightStatusChip status={rec.status} />
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 font-mono text-[11px]">
+            <Link to={`/p/${slug}/retro`} className="text-ink-dim underline hover:text-ink">
+              all recommendations in Retro →
+            </Link>
+          </div>
+        </Card>
+      )}
+    </>
   );
 }
 
@@ -121,6 +242,8 @@ export function ProjectOverview(): JSX.Element {
           value={stats.lastActivity !== null ? fmtAgo(stats.lastActivity) : '—'}
         />
       </div>
+
+      <InsightsCard slug={project.slug} />
 
       {managed ? (
         <>

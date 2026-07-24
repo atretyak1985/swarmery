@@ -23,6 +23,8 @@ import type {
   HealthResponse,
   MatrixResp,
   DuplicatePlaybookResponse,
+  MemoryFileContent,
+  MemoryListResp,
   OnboardConfig,
   OnboardRequest,
   OnboardResponse,
@@ -441,6 +443,79 @@ export async function runAdvise(): Promise<AdviseStats> {
   const res = await fetch('/api/retro/advise', { method: 'POST' });
   if (!res.ok) throw new Error(`advise failed: ${String(res.status)}`);
   return (await res.json()) as AdviseStats;
+}
+
+// --- fusion phase 12 — project-scoped insights + memory ----------------------
+
+/**
+ * GET /api/retro/recommendations?projectId= — the advisor recs attributable to
+ * one project (post-filtered on evidence session). `project` is a slug or id.
+ */
+export function fetchProjectRecommendations(
+  project: string | number,
+  status?: string,
+): Promise<RecommendationsResp> {
+  if (MOCK) return mockApi.projectRecommendations(project);
+  const qs = new URLSearchParams({ projectId: String(project) });
+  if (status !== undefined) qs.set('status', status);
+  return get(`/api/retro/recommendations?${qs.toString()}`);
+}
+
+/**
+ * POST /api/retro/advise?projectId= — run the advisor now for the project's
+ * Insights card. The engine still runs fleet-wide (cross-project rates); the
+ * projectId is accepted for API symmetry and the READ side does the narrowing.
+ */
+export async function runProjectAdvise(project: string | number): Promise<AdviseStats> {
+  if (MOCK) return mockApi.advise();
+  const qs = new URLSearchParams({ projectId: String(project) });
+  const res = await fetch(`/api/retro/advise?${qs.toString()}`, { method: 'POST' });
+  if (!res.ok) throw new Error(`advise failed: ${String(res.status)}`);
+  return (await res.json()) as AdviseStats;
+}
+
+/** GET /api/projects/{id}/memory — the project's memory files across 3 roots. */
+export function fetchMemoryList(project: string | number): Promise<MemoryListResp> {
+  if (MOCK) return mockApi.memoryList(project);
+  return get(`/api/projects/${encodeURIComponent(String(project))}/memory`);
+}
+
+/** GET /api/projects/{id}/memory/file?path= — one memory file's content+hash. */
+export function fetchMemoryFile(
+  project: string | number,
+  path: string,
+): Promise<MemoryFileContent> {
+  if (MOCK) return mockApi.memoryFile(project, path);
+  const qs = new URLSearchParams({ path });
+  return get(`/api/projects/${encodeURIComponent(String(project))}/memory/file?${qs.toString()}`);
+}
+
+/**
+ * PUT /api/projects/{id}/memory/file?path= — versioned write. A 409 (base_hash
+ * drifted from disk) throws with the disk-side message so the editor can prompt
+ * a reload; 403 means the readonly kill-switch is on.
+ */
+export async function putMemoryFile(
+  project: string | number,
+  path: string,
+  content: string,
+  baseHash: string,
+): Promise<MemoryFileContent> {
+  if (MOCK) return mockApi.putMemoryFile(project, path, content);
+  const qs = new URLSearchParams({ path });
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(String(project))}/memory/file?${qs.toString()}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, base_hash: baseHash }),
+    },
+  );
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `save failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as MemoryFileContent;
 }
 
 // --- self-improvement phase 4 — agent change proposals -----------------------

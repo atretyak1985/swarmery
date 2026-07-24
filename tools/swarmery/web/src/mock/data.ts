@@ -43,6 +43,8 @@ import type {
   DurationsResp,
   ErrorsResp,
   MatrixResp,
+  MemoryFileContent,
+  MemoryListResp,
   ProposalsResp,
   Recommendation,
   RecommendationsResp,
@@ -1288,6 +1290,92 @@ const mockPlaybooks: Playbook[] = [
 // to active so the demo shows the running-planner panel.
 const mockPlanning: Record<number, PlanningStatus> = {};
 
+// fusion phase 12: project memory fixtures — one file per kind, backed by a
+// mutable store so an edit→save→reread round-trips in VITE_MOCK.
+interface MockMemoryMeta {
+  kind: 'claude-md' | 'auto-memory' | 'serena';
+  path: string;
+  updatedAt: string;
+  writable: boolean;
+}
+
+const mockMemoryFiles: MockMemoryMeta[] = [
+  { kind: 'claude-md', path: '/work/demo/CLAUDE.md', updatedAt: '2026-07-20T10:00:00Z', writable: true },
+  {
+    kind: 'auto-memory',
+    path: '/home/dev/.claude/projects/-work-demo/memory/MEMORY.md',
+    updatedAt: '2026-07-22T14:30:00Z',
+    writable: true,
+  },
+  {
+    kind: 'serena',
+    path: '/work/demo/.serena/memories/architecture.md',
+    updatedAt: '2026-07-18T09:15:00Z',
+    writable: false, // demonstrates the read-only badge
+  },
+];
+
+const mockMemoryStore = new Map<string, string>([
+  [
+    '/work/demo/CLAUDE.md',
+    '# CLAUDE.md\n\nProject instructions for the demo app.\n\n- Strict TypeScript.\n- Conventional commits.\n',
+  ],
+  [
+    '/home/dev/.claude/projects/-work-demo/memory/MEMORY.md',
+    '- [User role](user_role.md) — senior full-stack engineer\n- [Deploy notes](deploy.md) — staging alias is d16\n',
+  ],
+  [
+    '/work/demo/.serena/memories/architecture.md',
+    '# Architecture\n\nSingle Go daemon + embedded React SPA.\n',
+  ],
+]);
+
+/** Deterministic non-crypto content hash for mock base_hash round-trips. */
+function mockHash(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+const mockProjectRecs: Recommendation[] = [
+  {
+    id: 501,
+    rule: 'R1',
+    target_kind: 'tool',
+    target: 'Bash',
+    title: 'Auto-approve Bash(git *) for this project',
+    detail: 'Bash was requested 34× and approved every time over the last 14 days.',
+    evidence: { window: { from: '2026-07-10', to: '2026-07-24' }, counts: { requested: 34 } },
+    baseline: null,
+    status: 'proposed',
+    created_at: '2026-07-23T12:00:00Z',
+    updated_at: '2026-07-23T12:00:00Z',
+  },
+  {
+    id: 502,
+    rule: 'R2',
+    target_kind: 'agent',
+    target: 'implementation-agent',
+    title: 'implementation-agent shows a rising failed-run share',
+    detail: 'Behavior-failed-run share rose to 41% (prev window 22%).',
+    evidence: { window: { from: '2026-07-10', to: '2026-07-24' }, counts: { failed: 9, runs: 22 } },
+    baseline: {
+      metric: 'behavior_failed_run_share',
+      value: 0.41,
+      per_day: false,
+      window_days: 14,
+      window: { from: '2026-07-10', to: '2026-07-24' },
+      accepted_at: '2026-07-24T08:00:00Z',
+    },
+    status: 'accepted',
+    created_at: '2026-07-22T09:00:00Z',
+    updated_at: '2026-07-24T08:00:00Z',
+  },
+];
+
 // --- Mock API ----------------------------------------------------------------
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -1525,6 +1613,57 @@ export const mockApi = {
   async advise(): Promise<AdviseStats> {
     await delay(150);
     return { proposed: 0, updated: 0, adopted: 0, verified: 0 };
+  },
+
+  // fusion phase 12 — project memory surface + project-scoped insights.
+  async projectRecommendations(_project: string | number): Promise<RecommendationsResp> {
+    await delay(120);
+    return { recommendations: mockProjectRecs };
+  },
+
+  async memoryList(_project: string | number): Promise<MemoryListResp> {
+    await delay(110);
+    return {
+      files: mockMemoryFiles.map((f) => ({
+        kind: f.kind,
+        path: f.path,
+        name: f.path.split('/').pop() ?? f.path,
+        sizeBytes: new TextEncoder().encode(mockMemoryStore.get(f.path) ?? '').length,
+        updatedAt: f.updatedAt,
+        writable: f.writable,
+      })),
+    };
+  },
+
+  async memoryFile(_project: string | number, path: string): Promise<MemoryFileContent> {
+    await delay(80);
+    const meta = mockMemoryFiles.find((f) => f.path === path);
+    const content = mockMemoryStore.get(path) ?? '';
+    return {
+      path,
+      kind: meta?.kind ?? 'claude-md',
+      content,
+      hash: mockHash(content),
+      writable: meta?.writable ?? true,
+    };
+  },
+
+  async putMemoryFile(
+    _project: string | number,
+    path: string,
+    content: string,
+  ): Promise<MemoryFileContent> {
+    await delay(140);
+    mockMemoryStore.set(path, content);
+    const meta = mockMemoryFiles.find((f) => f.path === path);
+    if (meta) meta.updatedAt = new Date().toISOString();
+    return {
+      path,
+      kind: meta?.kind ?? 'claude-md',
+      content,
+      hash: mockHash(content),
+      writable: true,
+    };
   },
 
   // self-improvement phase 4 — agent change proposals (empty shell).
