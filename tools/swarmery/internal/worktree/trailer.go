@@ -33,6 +33,20 @@ func (m *Manager) CommitsForTask(repoRoot, taskID string) ([]string, error) {
 	return shas, nil
 }
 
+// TreeHash returns the git tree object id of a worktree's HEAD commit
+// (`git -C <worktree> rev-parse HEAD^{tree}`) — the content fingerprint used by
+// the auto-verification cache (fusion phase 6) to skip re-grading an unchanged
+// tree. It is the TREE, not the commit, so two commits with identical content
+// (e.g. an amend that only touched the message) share a cache entry. Run against
+// the WORKTREE path (not the repo root) so it reflects the task branch's tip.
+func (m *Manager) TreeHash(worktreePath string) (string, error) {
+	out, err := m.Git.Run(worktreePath, "rev-parse", "HEAD^{tree}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // regexpEscape escapes the ERE metacharacters that can appear in a task id or
 // the fixed trailer text, so `git log --grep` matches the literal line. Task
 // ids are "T-"+base36 in practice, but the fixed "Swarm-Task-Id:" contains a
