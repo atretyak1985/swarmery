@@ -55,6 +55,14 @@ func (s *Service) Enqueue(projectID int64, pack string) (id int64, started bool,
 		`INSERT INTO provision_jobs(project_id, pack, status, started_at) VALUES(?,?,'pending',?)`,
 		projectID, pack, s.ts())
 	if e != nil {
+		// A concurrent enable won the race between our SELECT and INSERT: the
+		// partial unique index (idx_provision_jobs_inflight) rejects the second
+		// in-flight row. Treat it as "already in flight" — re-read the winner.
+		if again := s.DB.QueryRow(
+			`SELECT id FROM provision_jobs WHERE project_id=? AND pack=? AND status IN ('pending','installing','generating') LIMIT 1`,
+			projectID, pack).Scan(&existing); again == nil {
+			return existing, false, nil
+		}
 		return 0, false, e
 	}
 	id, _ = res.LastInsertId()

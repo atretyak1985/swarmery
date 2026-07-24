@@ -76,6 +76,29 @@ func TestEnqueueSingleFlight(t *testing.T) {
 	}
 }
 
+// TestInflightUniqueIndex proves the migration's partial unique index rejects a
+// second in-flight row for the same (project, pack) — the DB-level backstop for
+// Enqueue's TOCTOU window.
+func TestInflightUniqueIndex(t *testing.T) {
+	s := newSvc(t, &stubRunner{}, map[string]GenerateAction{})
+	ins := func() error {
+		_, err := s.DB.Exec(
+			`INSERT INTO provision_jobs(project_id, pack, status, started_at) VALUES(1,'architecture-pack','pending','2026-01-01T00:00:00Z')`)
+		return err
+	}
+	if err := ins(); err != nil {
+		t.Fatalf("first in-flight insert: %v", err)
+	}
+	if err := ins(); err == nil {
+		t.Fatal("second in-flight insert must violate the partial unique index")
+	}
+	// A terminal row for the same key is allowed (the index only covers in-flight).
+	if _, err := s.DB.Exec(
+		`INSERT INTO provision_jobs(project_id, pack, status, started_at, finished_at) VALUES(1,'architecture-pack','done','2026-01-01T00:00:00Z','2026-01-01T00:00:01Z')`); err != nil {
+		t.Fatalf("terminal row for same key must be allowed: %v", err)
+	}
+}
+
 func TestRunInstallOnlyPack(t *testing.T) {
 	r := &stubRunner{}
 	s := newSvc(t, r, map[string]GenerateAction{}) // no action for any pack
