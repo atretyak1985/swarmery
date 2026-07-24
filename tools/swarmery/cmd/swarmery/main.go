@@ -42,6 +42,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
@@ -913,6 +914,21 @@ func cmdServe(args []string) error {
 	api.AttachVerify(verifySvc)
 	dispatchSvc.Verifier = verifySvc
 
+	// fusion phase 7: routines (scheduled automation). A 60s scheduler ticks due
+	// cron routines and runs their typed steps (command / ai-prompt / create-task)
+	// as headless `claude -p` runs (ai-prompt) or board-task inserts (create-task,
+	// via the api-layer TaskCreator adapter so board semantics + WS publish + poke
+	// stay in one place). Kill-switch SWARMERY_ROUTINES=0 disables the ticker; heal
+	// any 'running' run rows a crashed daemon left behind to 'failed' before the
+	// ticker starts below under the shutdown context.
+	routinesSvc := routines.NewService(
+		db, routines.ClaudeRunner{}, api.NewRoutinesTaskCreator(db), routines.Enabled(),
+	)
+	if err := routinesSvc.HealStale(); err != nil {
+		log.Printf("warning: routines heal on startup: %v", err)
+	}
+	api.AttachRoutines(routinesSvc)
+
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
 		return err
@@ -954,6 +970,13 @@ func cmdServe(args []string) error {
 		}
 	}()
 	log.Printf("swarmery verify reaper started (interval 10m)")
+
+	// fusion phase 7: run the routines scheduler (60s cron ticker) under the same
+	// shutdown context, in its own goroutine independent of the dispatcher's. It
+	// touches disjoint tables (routines/routine_runs); a create-task step hands
+	// off to the dispatcher through the shared board (pokeDispatch inside the
+	// TaskCreator), so the two schedulers never contend on a lock.
+	go routinesSvc.StartScheduler(ctx)
 
 	srv := &http.Server{Addr: addr, Handler: handler}
 	errCh := make(chan error, 1)

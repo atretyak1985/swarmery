@@ -41,6 +41,9 @@ import type {
   RetroFrictionResp,
   RetroLessonsResp,
   RetroTasksResp,
+  Routine,
+  RoutineInput,
+  RoutineRun,
   SearchResponse,
   SessionDetailResponse,
   SessionOutcome,
@@ -861,4 +864,72 @@ export function fetchFileSessions(path: string, project?: string): Promise<FileS
   const qs = new URLSearchParams({ path });
   if (project !== undefined && project !== '') qs.set('project', project);
   return get(`/api/files/sessions?${qs.toString()}`);
+}
+
+// ── Routines (fusion phase 7) ───────────────────────────────────────────────
+
+/** GET /api/routines — all routines (optionally project-scoped), newest first. */
+export function fetchRoutines(projectId?: number): Promise<Routine[]> {
+  if (MOCK) return mockApi.routines();
+  const qs = projectId ? `?projectId=${String(projectId)}` : '';
+  return get(`/api/routines${qs}`);
+}
+
+/** GET /api/routines/{id}/runs — run history (newest first). */
+export function fetchRoutineRuns(id: string): Promise<RoutineRun[]> {
+  if (MOCK) return mockApi.routineRuns(id);
+  return get(`/api/routines/${encodeURIComponent(id)}/runs`);
+}
+
+/** POST /api/routines — create. Returns the routine (with webhookToken when
+ * webhook:true was requested). */
+export async function createRoutine(input: RoutineInput): Promise<Routine> {
+  if (MOCK) return mockApi.createRoutine(input);
+  const res = await fetch('/api/routines', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `create routine failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as Routine;
+}
+
+/** PATCH /api/routines/{id} — partial update. */
+export async function patchRoutine(id: string, input: Partial<RoutineInput>): Promise<Routine> {
+  if (MOCK) return mockApi.patchRoutine(id, input);
+  const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `update routine failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as Routine;
+}
+
+/** DELETE /api/routines/{id}. */
+export async function deleteRoutine(id: string): Promise<void> {
+  if (MOCK) return;
+  const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `delete routine failed: ${String(res.status)}`);
+  }
+}
+
+/** POST /api/routines/{id}/run — manual trigger. Returns whether a run started
+ * (false when the routine is already running / the global cap is full). */
+export async function runRoutine(id: string): Promise<{ status: string }> {
+  if (MOCK) return { status: 'started' };
+  const res = await fetch(`/api/routines/${encodeURIComponent(id)}/run`, { method: 'POST' });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `run routine failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as { status: string };
 }

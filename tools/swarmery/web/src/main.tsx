@@ -17,6 +17,7 @@ import { Serena } from './pages/Serena';
 import { Graphify } from './pages/Graphify';
 import { System } from './pages/System';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
+import { Routines } from './pages/Routines';
 import './index.css';
 
 // Analytics pulls in Recharts — lazy-load it so that weight stays out of the
@@ -98,6 +99,7 @@ const router = createBrowserRouter([
             ),
           },
           { path: 'system', element: <System /> },
+          { path: 'routines', element: <Routines /> },
           { path: 'serena', element: <Serena /> },
           { path: 'graphify', element: <Graphify /> },
           { path: 'architecture', element: <Architecture /> },

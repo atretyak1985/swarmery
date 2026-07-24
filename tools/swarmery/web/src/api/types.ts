@@ -1539,3 +1539,72 @@ export interface ToolsResponse {
   graphify: { projects: ToolsGraphifyProject[] };
   architecture: { projects: ArchitectureProject[] };
 }
+
+// ── Routines (fusion phase 7 — scheduled automation) ────────────────────────
+
+/** routines step kind (mirrors internal/routines/step.go). */
+export type RoutineStepType = 'command' | 'ai-prompt' | 'create-task';
+
+/** One typed routine step. Only the fields relevant to `type` are set. */
+export interface RoutineStep {
+  type: RoutineStepType;
+  name: string;
+  // command
+  command?: string;
+  timeoutSec?: number;
+  continueOnFailure?: boolean;
+  // ai-prompt
+  prompt?: string;
+  model?: string;
+  // create-task
+  taskTitle?: string;
+  taskPrompt?: string;
+  boardColumn?: string;
+}
+
+/** routines.catch_up policy. */
+export type RoutineCatchUp = 'skip' | 'run_one';
+
+/** A routine (GET/POST/PATCH response, list item). webhookToken is present ONLY
+ * on the create/rotate response; list/get expose hasWebhook instead. */
+export interface Routine {
+  id: string;
+  projectId: number | null;
+  name: string;
+  cronExpr: string;
+  enabled: boolean;
+  catchUp: RoutineCatchUp;
+  steps: RoutineStep[];
+  hasWebhook: boolean;
+  webhookToken?: string;
+  timeoutSec: number;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+}
+
+/** routine_runs row status. */
+export type RoutineRunStatus = 'running' | 'ok' | 'failed' | 'timeout';
+
+/** One run-history entry. detail is the per-step results JSON (string). */
+export interface RoutineRun {
+  id: number;
+  trigger: 'cron' | 'manual' | 'webhook';
+  status: RoutineRunStatus;
+  detail: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/** POST/PATCH /api/routines request body. */
+export interface RoutineInput {
+  projectId?: number | null;
+  name: string;
+  cronExpr?: string;
+  enabled?: boolean;
+  catchUp?: RoutineCatchUp;
+  steps?: RoutineStep[];
+  timeoutSec?: number;
+  webhook?: boolean;
+}

@@ -299,6 +299,7 @@ function AppShell(): JSX.Element {
           label: 'Approvals',
           ...(pendingCount > 0 ? { badge: String(pendingCount), alert: true } : {}),
         },
+        { to: '/routines', glyph: '⟳', label: 'Routines' },
       ],
     },
     {

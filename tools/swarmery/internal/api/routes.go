@@ -193,4 +193,17 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/approval-rules", requireLocalOrigin(h.createApprovalRule))
 	mux.HandleFunc("PATCH /api/approval-rules/{id}", requireLocalOrigin(h.patchApprovalRule))
 	mux.HandleFunc("DELETE /api/approval-rules/{id}", requireLocalOrigin(h.deleteApprovalRule))
+
+	// fusion phase 7: routines (scheduled automation). CRUD + manual run +
+	// run history carry the same D4 origin hardening as every other mutating
+	// endpoint; the WEBHOOK trigger is the sole exception — it is meant for
+	// external callers, so it is token-gated (constant-time compare, 404 on any
+	// miss) instead of origin-fenced.
+	mux.HandleFunc("GET /api/routines", h.listRoutines)
+	mux.HandleFunc("POST /api/routines", requireLocalOrigin(h.createRoutine))
+	mux.HandleFunc("PATCH /api/routines/{id}", requireLocalOrigin(h.patchRoutine))
+	mux.HandleFunc("DELETE /api/routines/{id}", requireLocalOrigin(h.deleteRoutine))
+	mux.HandleFunc("POST /api/routines/{id}/run", requireLocalOrigin(h.runRoutine))
+	mux.HandleFunc("GET /api/routines/{id}/runs", h.listRoutineRuns)
+	mux.HandleFunc("POST /api/hooks/routine/{id}/{token}", h.hookRoutine)
 }

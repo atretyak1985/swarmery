@@ -43,6 +43,9 @@ import type {
   RetroFrictionResp,
   RetroLessonsResp,
   RetroTasksResp,
+  Routine,
+  RoutineInput,
+  RoutineRun,
   SkillsResp,
   TimeseriesResp,
   ToolsResp,
@@ -1676,4 +1679,109 @@ export const mockApi = {
       },
     };
   },
+
+  // ── Routines (fusion phase 7) ──
+  async routines(): Promise<Routine[]> {
+    await delay(120);
+    return mockRoutines.map((r) => ({ ...r, steps: [...r.steps] }));
+  },
+  async routineRuns(id: string): Promise<RoutineRun[]> {
+    await delay(100);
+    return (mockRoutineRuns[id] ?? []).map((r) => ({ ...r }));
+  },
+  async createRoutine(input: RoutineInput): Promise<Routine> {
+    await delay(120);
+    const id = `R-${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+    const r: Routine = {
+      id,
+      projectId: input.projectId ?? null,
+      name: input.name,
+      cronExpr: input.cronExpr ?? '',
+      enabled: input.enabled ?? true,
+      catchUp: input.catchUp ?? 'skip',
+      steps: input.steps ?? [],
+      hasWebhook: input.webhook ?? false,
+      ...(input.webhook ? { webhookToken: 'mocktoken00000000000000000000000' } : {}),
+      timeoutSec: input.timeoutSec ?? 900,
+      createdAt: now,
+      updatedAt: now,
+      lastRunAt: null,
+      nextRunAt: input.cronExpr && (input.enabled ?? true) ? now : null,
+    };
+    mockRoutines.unshift(r);
+    return { ...r };
+  },
+  async patchRoutine(id: string, input: Partial<RoutineInput>): Promise<Routine> {
+    await delay(100);
+    const r = mockRoutines.find((x) => x.id === id);
+    if (!r) throw new Error(`mock: routine ${id} not found`);
+    if (input.name !== undefined) r.name = input.name;
+    if (input.cronExpr !== undefined) r.cronExpr = input.cronExpr;
+    if (input.enabled !== undefined) r.enabled = input.enabled;
+    if (input.catchUp !== undefined) r.catchUp = input.catchUp;
+    if (input.steps !== undefined) r.steps = input.steps;
+    if (input.timeoutSec !== undefined) r.timeoutSec = input.timeoutSec;
+    r.nextRunAt = r.cronExpr && r.enabled ? new Date().toISOString() : null;
+    r.updatedAt = new Date().toISOString();
+    return { ...r };
+  },
+};
+
+// In-memory routines fixtures (VITE_MOCK): seeded with the three canonical
+// routines so the page renders offline.
+const mockRoutines: Routine[] = [
+  {
+    id: 'R-nightl',
+    projectId: null,
+    name: 'nightly advisor re-run',
+    cronExpr: '0 3 * * *',
+    enabled: true,
+    catchUp: 'skip',
+    steps: [
+      { type: 'command', name: 'advise', command: 'curl -fsS -X POST http://localhost:7777/api/retro/advise' },
+    ],
+    hasWebhook: false,
+    timeoutSec: 900,
+    createdAt: '2026-07-24T00:00:00.000Z',
+    updatedAt: '2026-07-24T00:00:00.000Z',
+    lastRunAt: '2026-07-24T03:00:00.000Z',
+    nextRunAt: '2026-07-25T03:00:00.000Z',
+  },
+  {
+    id: 'R-weekly',
+    projectId: null,
+    name: 'weekly deps-check',
+    cronExpr: '0 6 * * 1',
+    enabled: true,
+    catchUp: 'run_one',
+    steps: [{ type: 'ai-prompt', name: 'deps', prompt: 'Run /deps-check and summarize outdated packages.' }],
+    hasWebhook: true,
+    timeoutSec: 1800,
+    createdAt: '2026-07-24T00:00:00.000Z',
+    updatedAt: '2026-07-24T00:00:00.000Z',
+    lastRunAt: null,
+    nextRunAt: '2026-07-27T06:00:00.000Z',
+  },
+];
+
+const mockRoutineRuns: Record<string, RoutineRun[]> = {
+  'R-nightl': [
+    {
+      id: 2,
+      trigger: 'cron',
+      status: 'ok',
+      detail: '[{"name":"advise","type":"command","status":"ok","output":"advisor: 3 new"}]',
+      startedAt: '2026-07-24T03:00:00.000Z',
+      finishedAt: '2026-07-24T03:00:04.000Z',
+    },
+    {
+      id: 1,
+      trigger: 'manual',
+      status: 'failed',
+      detail: '[{"name":"advise","type":"command","status":"failed","error":"curl: (7) connection refused"}]',
+      startedAt: '2026-07-23T03:00:00.000Z',
+      finishedAt: '2026-07-23T03:00:01.000Z',
+    },
+  ],
 };
