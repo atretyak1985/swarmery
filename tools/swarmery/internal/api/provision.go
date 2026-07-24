@@ -9,6 +9,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -22,13 +23,25 @@ func autoProvisionEnabled() bool {
 }
 
 // spawnProvision runs a provision pipeline asynchronously; the provisionGo seam
-// (nil in production) lets tests run it inline for determinism.
-func (h *Handler) spawnProvision(fn func()) {
+// (nil in production) lets tests run it inline for determinism. A panic in the
+// long-running install→generate pipeline (40-min `claude -p`, external process,
+// Runner) must never take the daemon down — recover, log with the label, and
+// leave the row wherever it reached (HealStale sweeps a wedged in-flight row on
+// the next restart). Mirrors spawnImprove.
+func (h *Handler) spawnProvision(label string, fn func()) {
+	wrapped := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("error: provision: async pipeline panic recovered (%s): %v", label, r)
+			}
+		}()
+		fn()
+	}
 	if h.provisionGo != nil {
-		h.provisionGo(fn)
+		h.provisionGo(wrapped)
 		return
 	}
-	go fn()
+	go wrapped()
 }
 
 // enqueueProvision is the post-enable hook: single-flight enqueue + async run.
@@ -46,7 +59,7 @@ func (h *Handler) enqueueProvision(projectID int64, projectPath, pack string) {
 	if !started {
 		return // a job is already in flight
 	}
-	h.spawnProvision(func() {
+	h.spawnProvision(fmt.Sprintf("project %d, %s", projectID, pack), func() {
 		if err := h.Provision.Run(context.Background(), id, projectPath, pack); err != nil {
 			log.Printf("error: provision run (project %d, %s): %v", projectID, pack, err)
 		}
