@@ -52,6 +52,10 @@ const INSIGHT_NAV: WorkspaceNavItem[] = [
   { path: 'retro', glyph: '↺', label: 'Retro' },
   { path: 'analytics', glyph: '▦', label: 'Analytics' },
 ];
+// System Hub (fusion phase 18), project-scoped — the EFFECTIVE catalog for this
+// project (enabled packs + overrides). Its in-page role nav fans out to
+// Toolkit/Hooks/Insights, so one sidebar entry is enough.
+const SYSTEM_NAV: WorkspaceNavItem = { path: 'system-hub', glyph: '⚙', label: 'System' };
 const SETTINGS_NAV: WorkspaceNavItem = { path: 'settings', glyph: '⚙', label: 'Settings' };
 const SERENA_NAV: WorkspaceNavItem = { path: 'serena', glyph: '◎', label: 'Serena' };
 const GRAPHIFY_NAV: WorkspaceNavItem = { path: 'graphify', glyph: '⬡', label: 'Graphify' };
@@ -135,7 +139,8 @@ function WorkspaceInner(): JSX.Element {
                 <WorkspaceLink key={item.path} slug={slug} item={item} />
               ))}
             </div>
-            <div className="mt-auto pt-3">
+            <div className="mt-auto flex flex-col gap-0.5 pt-3">
+              <WorkspaceLink slug={slug} item={SYSTEM_NAV} />
               <WorkspaceLink slug={slug} item={SETTINGS_NAV} />
             </div>
           </nav>
@@ -143,7 +148,7 @@ function WorkspaceInner(): JSX.Element {
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Mobile tab strip (the desktop rail is hidden < desk). */}
             <div className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 desk:hidden">
-              {[...BASE_NAV, ...toolNav, ...INSIGHT_NAV, SETTINGS_NAV].map((item) => (
+              {[...BASE_NAV, ...toolNav, ...INSIGHT_NAV, SYSTEM_NAV, SETTINGS_NAV].map((item) => (
                 <WorkspaceLink key={item.path} slug={slug} item={item} compact />
               ))}
             </div>

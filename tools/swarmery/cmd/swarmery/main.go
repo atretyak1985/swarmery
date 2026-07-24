@@ -895,6 +895,11 @@ func cmdServe(args []string) error {
 	// dir the sys scanner/editor uses so --claude-dir overrides apply here too.
 	api.AttachPluginCatalog(sysCfg.ClaudeDir)
 
+	// fusion phase 18: System Hub — GET /api/system/templates scans the plugin
+	// cache (<claude-dir>/plugins/cache) + each project's .claude/templates on
+	// demand. Wire the same resolved dir so --claude-dir applies here too.
+	api.AttachSystemHubDir(sysCfg.ClaudeDir)
+
 	// self-improvement phase 4: the apply/PR pipeline fetches + worktrees from
 	// the marketplace clone under <claude-dir>/plugins/marketplaces/swarmery.
 	// Wire the same resolved dir so --claude-dir applies here too.

@@ -324,7 +324,12 @@ function AppShell(): JSX.Element {
       label: 'System',
       items: [
         { to: '/agents', glyph: '☰', label: 'Agents' },
-        { to: '/system', glyph: '⚙', label: 'System', ...badgeFor(insightCount) },
+        // System Hub (fusion phase 18) — the catalog grouped by ROLE. Toolkit
+        // (skills/commands/templates) + Hooks land on the hub; Insights carries
+        // the promotion/drift/lint inbox badge.
+        { to: '/system-hub', glyph: '⚙', label: 'Toolkit' },
+        { to: '/system-hub/hooks', glyph: '⎇', label: 'Hooks' },
+        { to: '/system-hub/insights', glyph: '◇', label: 'Insights', ...badgeFor(insightCount) },
         ...(hasDocs ? [DOCS_NAV] : []),
       ],
     },

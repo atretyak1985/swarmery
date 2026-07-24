@@ -31,6 +31,10 @@ const Retro = lazy(() => import('./pages/Retro').then((m) => ({ default: m.Retro
 // bundle stays unchanged. Serves both /agents (fleet) and /p/:slug/agents.
 const AgentHub = lazy(() => import('./pages/AgentHub').then((m) => ({ default: m.AgentHub })));
 
+// System Hub (fusion phase 18) — the catalog grouped by ROLE on the same
+// HubShell. Lazy like the Agent Hub; serves /system-hub and /p/:slug/system-hub.
+const SystemHub = lazy(() => import('./pages/SystemHub').then((m) => ({ default: m.SystemHub })));
+
 // Project-workspace mode (/p/:slug/…) is a whole subtree — lazy-load it so the
 // fleet-mode initial bundle is unchanged (board/drawer weight loads on demand).
 const WorkspaceShell = lazy(() =>
@@ -123,6 +127,33 @@ const router = createBrowserRouter([
               </Suspense>
             ),
           },
+          // System Hub — catalog roster (/system-hub), a category
+          // (/system-hub/:category) and a selected item
+          // (/system-hub/:category/:id). One component serves all three.
+          {
+            path: 'system-hub',
+            element: (
+              <Suspense fallback={<Loading label="system…" />}>
+                <SystemHub />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'system-hub/:category',
+            element: (
+              <Suspense fallback={<Loading label="system…" />}>
+                <SystemHub />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'system-hub/:category/:id',
+            element: (
+              <Suspense fallback={<Loading label="system…" />}>
+                <SystemHub />
+              </Suspense>
+            ),
+          },
           { path: 'system', element: <System /> },
           { path: 'routines', element: <Routines /> },
           { path: 'serena', element: <Serena /> },
@@ -165,6 +196,11 @@ const router = createBrowserRouter([
           // Agent Hub, project-scoped (rollups narrowed to :slug via the route).
           { path: 'agents', element: ws(<AgentHub />) },
           { path: 'agents/:id', element: ws(<AgentHub />) },
+          // System Hub, project-scoped (EFFECTIVE view: enabled packs + project
+          // overrides; template resolution + rollups narrowed to :slug).
+          { path: 'system-hub', element: ws(<SystemHub />) },
+          { path: 'system-hub/:category', element: ws(<SystemHub />) },
+          { path: 'system-hub/:category/:id', element: ws(<SystemHub />) },
           { path: 'architecture', element: ws(<ScopedArchitecture />) },
           { path: 'serena', element: ws(<ScopedSerena />) },
           { path: 'graphify', element: ws(<ScopedGraphify />) },

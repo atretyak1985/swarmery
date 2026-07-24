@@ -2018,3 +2018,111 @@ export interface AgentProfile extends AgentRosterRow {
   tasks: AgentTask[];
   insights: AgentInsights;
 }
+
+// --- fusion phase 18: system hub ---------------------------------------------
+// The catalog-wide extension of the Agent Hub pattern grouped by ROLE (Toolkit =
+// Skills/Commands/Templates · Hooks · Insights). Go DTOs live in
+// internal/api/system_hub.go. Reuses SystemItem / SystemHook / SystemCommand for
+// definition meta — no forked contracts.
+
+/** Go: systemHubSummaryDTO — GET /api/system/hub/summary: the nav count badges. */
+export interface SystemHubSummary {
+  agents: number;
+  skills: number;
+  hooks: number;
+  commands: number;
+  templates: number;
+  /** Open insights-inbox count (promotion + stale-override). */
+  insights: number;
+  /** Active (unresolved) config-lint findings. */
+  lintFindings: number;
+}
+
+/** One local-day bucket in a usage sparkline. Go: systemHubDayCount. */
+export interface SystemHubDayCount {
+  day: string;
+  count: number;
+}
+
+/** Go: skillUsageDTO — the skill profile's 30-day rollup (skill_use grain). */
+export interface SkillUsage {
+  windowDays: number;
+  invocations: number;
+  sessions: number;
+  projects: number;
+  errors: number;
+  lastUsed: string | null;
+  /** true when the window overlaps pruned (rolled-up) days — counts undercount. */
+  approximate: boolean;
+  byDay: SystemHubDayCount[];
+}
+
+/** One recent invoking session in the skill profile. Go: skillSessionRow. */
+export interface SkillSession {
+  ts: string;
+  sessionUuid: string;
+  sessionTitle: string;
+  projectSlug: string;
+  status: string;
+}
+
+/** GET /api/system/skills/{id}/hub — definition meta + usage. Go: skillHubDTO. */
+export interface SkillHub extends SystemItem {
+  usage: SkillUsage;
+  sessions: SkillSession[];
+}
+
+/** One config_lint_findings row on a hub profile. Go: systemLintFindingDTO. */
+export interface SystemLintFindingRow {
+  rule: string;
+  severity: LintSeverity;
+  message: string;
+}
+
+/** GET /api/system/hooks/{id}/hub — the settings entry + lint. Go: hookHubDTO. */
+export interface HookHub extends SystemHook {
+  lint: SystemLintFindingRow[];
+  /** Always false in v1 — hook firings are not tracked (honest note in the UI). */
+  firingTelemetry: boolean;
+}
+
+/** GET /api/system/commands/{id}/hub — frontmatter + content + approximate usage. */
+export interface CommandHub extends SystemCommand {
+  /** Redacted frontmatter block. */
+  frontmatter: string;
+  /** Redacted markdown body. */
+  content: string;
+  usage: {
+    windowDays: number;
+    invocations: number;
+    /** ALWAYS true — slash-command usage is inferred from prompt text. */
+    approximate: boolean;
+  };
+}
+
+/** Go: systemTemplateDTO — one row of GET /api/system/templates. */
+export interface SystemTemplate {
+  /** Identity (file stem) — the {name} path handle. */
+  name: string;
+  fileName: string;
+  path: string;
+  /** Badge: "core" / "pack:<name>" / "project override". */
+  resolution: string;
+  /** plugin | project (only plugin built-ins can be copied into the project). */
+  source: 'plugin' | 'project';
+  pluginName: string;
+  /** A built-in shadowed by a project-local copy (project list only). */
+  overridden: boolean;
+}
+
+/** GET /api/system/templates/{name} — content (read-only). */
+export interface SystemTemplateContent extends SystemTemplate {
+  content: string;
+}
+
+/** 201 body of POST /api/system/templates/{name}/copy. */
+export interface SystemTemplateCopyResponse {
+  name: string;
+  path: string;
+  hint: string;
+}

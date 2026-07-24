@@ -275,4 +275,19 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// write surface (/api/system/agents/{id} + rollback) — the Hub UI calls it.
 	mux.HandleFunc("GET /api/agents/hub", h.agentsHub)
 	mux.HandleFunc("GET /api/agents/{id}/hub", h.agentHub)
+
+	// fusion phase 18: system hub — the catalog-wide extension of the agent-hub
+	// pattern grouped by ROLE (system_hub.go). Aggregation over the existing
+	// registry + events telemetry + config-lint; NO new tables. The per-type
+	// {id}/hub profile routes are more specific than the plain GET
+	// /api/system/{skills|hooks|commands}/{id} rows above, so the mux prefers
+	// them. The ONE new write is template copy-to-project: requireLocalOrigin,
+	// O_EXCL → 409, path-traversal fenced in the handler.
+	mux.HandleFunc("GET /api/system/hub/summary", h.systemHubSummary)
+	mux.HandleFunc("GET /api/system/skills/{id}/hub", h.skillHub)
+	mux.HandleFunc("GET /api/system/hooks/{id}/hub", h.hookHub)
+	mux.HandleFunc("GET /api/system/commands/{id}/hub", h.commandHub)
+	mux.HandleFunc("GET /api/system/templates", h.listSystemTemplates)
+	mux.HandleFunc("GET /api/system/templates/{name}", h.getSystemTemplate)
+	mux.HandleFunc("POST /api/system/templates/{name}/copy", requireLocalOrigin(h.copySystemTemplate))
 }
