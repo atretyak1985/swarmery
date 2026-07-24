@@ -29,6 +29,15 @@ type WorktreeManager interface {
 	Remove(repoRoot string, a worktree.Acquired, keepBranch bool) error
 }
 
+// Verifier is the auto-verification trigger seam (fusion phase 6). Declared HERE
+// (in dispatch) and satisfied by *verify.Service, so `verify` can depend on
+// dispatch's data deps (worktree/store) WITHOUT dispatch importing verify — no
+// import cycle. Poke is non-blocking (verify spawns its own goroutine). Attached
+// via the Service.Verifier field; nil ⇒ auto-verification not wired (guarded).
+type Verifier interface {
+	Poke(taskID int64)
+}
+
 // Service owns the dispatch loop: candidate selection, admission gates, spawn,
 // exit/sentinel handling, event-driven Poke + poll fallback, and startup heal.
 type Service struct {
@@ -40,6 +49,14 @@ type Service struct {
 	now  func() time.Time    // clock (test seam)
 	Go   func(func())        // async-spawn seam (nil ⇒ real `go`), mirrors improveGo
 	Notify func(taskID int64) // emits task_updated (wired to api.publishTaskUpdated)
+	// Verifier, when attached, is poked on a no-sentinel in_review landing so
+	// auto-verification (fusion phase 6) grades the work while the worktree is
+	// still live (before any terminal done/archived transition reclaims it via
+	// RemoveWorktreeFor). nil ⇒ not attached (call is guarded); keeps dispatch
+	// unit tests hermetic. The interface (Verifier, above) is declared in this
+	// package and satisfied by *verify.Service, so verify imports dispatch's data
+	// deps without dispatch importing verify — no import cycle.
+	Verifier Verifier
 
 	scheduling atomic.Bool // re-entrance guard: overlapping Schedule passes skip
 
@@ -512,7 +529,21 @@ func (s *Service) runAndHandle(c candidate, spec RunSpec) {
 		}
 		s.finishReview(c.ID, msg)
 	}
+	// A no-sentinel landing produced gradeable work on the swarm/<id> branch: poke
+	// auto-verification NOW, while the worktree is still live (a terminal move
+	// would reclaim it via RemoveWorktreeFor). Non-blocking + nil-safe. A nonzero
+	// exit still gets graded — verify degrades to INCONCLUSIVE if nothing gradeable.
+	s.pokeVerify(c.ID)
 	s.Poke()
+}
+
+// pokeVerify triggers auto-verification for a task when a Verifier is attached.
+// A nil-safe wrapper so the exit path can call it unconditionally (nil ⇒ no-op,
+// keeping dispatch unit tests hermetic).
+func (s *Service) pokeVerify(id int64) {
+	if s.Verifier != nil {
+		s.Verifier.Poke(id)
+	}
 }
 
 // finishReview moves a run to in_review (the normal end state), setting or

@@ -100,6 +100,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/dispatch", h.getDispatch)
 	mux.HandleFunc("POST /api/dispatch/pause", requireLocalOrigin(h.pauseDispatch))
 
+	// fusion phase 6: auto-verification — manual re-run of the read-only verifier
+	// for a task (the auto trigger fires from the dispatcher's exit path). 202 +
+	// async seam; a headless spawn write, so the same D4 origin hardening.
+	mux.HandleFunc("POST /api/tasks/{id}/verify", requireLocalOrigin(h.verifyTask))
+
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
 	// All write endpoints reject foreign browser Origins (D4); requests
 	// without an Origin (the swarmery hook shim, curl) pass.

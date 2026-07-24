@@ -46,6 +46,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -884,14 +885,33 @@ func cmdServe(args []string) error {
 	// daemon left behind back to todo, then attach — the scheduler ticker starts
 	// below under the shutdown context. The worktree Manager is Git-mockable but
 	// runs the real git here.
+	// One worktree.Manager runs the real git for both the dispatcher (acquire/
+	// remove/tree) and auto-verification (tree-hash). Shared so both agree on the
+	// worktree root and git boundary.
+	wtMgr := &worktree.Manager{Git: worktree.ExecGit{}}
 	dispatchSvc := dispatch.NewService(
-		db, dispatch.ConfigFromEnv(), dispatch.ClaudeRunner{},
-		&worktree.Manager{Git: worktree.ExecGit{}},
+		db, dispatch.ConfigFromEnv(), dispatch.ClaudeRunner{}, wtMgr,
 	)
 	if err := dispatchSvc.HealStale(); err != nil {
 		log.Printf("warning: dispatch heal on startup: %v", err)
 	}
 	api.AttachDispatch(dispatchSvc)
+
+	// fusion phase 6: auto-verification. After a dispatched run lands in_review
+	// WITHOUT a sentinel, a bounded READ-ONLY headless `claude -p` grades the
+	// task's acceptance criteria and stamps verify_verdict (pass|fail|
+	// inconclusive). FAIL spawns a fix task within the root's retry budget (3);
+	// INCONCLUSIVE spawns nothing. Kill-switch SWARMERY_AUTOVERIFY=0 disables the
+	// auto trigger (the manual POST /api/tasks/{id}/verify still works). Heal
+	// interrupted runs (crash left them 'running') to error+inconclusive, then
+	// attach — to the api layer AND, as the dispatcher's Verifier seam, to the
+	// dispatcher so a no-sentinel exit pokes verification while the worktree lives.
+	verifySvc := verify.NewService(db, verify.ConfigFromEnv(), verify.ClaudeRunner{}, wtMgr)
+	if err := verifySvc.HealStale(); err != nil {
+		log.Printf("warning: verify heal on startup: %v", err)
+	}
+	api.AttachVerify(verifySvc)
+	dispatchSvc.Verifier = verifySvc
 
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
@@ -909,6 +929,31 @@ func cmdServe(args []string) error {
 	// on restart) then sweeps every PollInterval; the event fast path is the
 	// board handlers' pokeDispatch(). Exits when ctx is cancelled.
 	go dispatchSvc.StartScheduler(ctx)
+
+	// fusion phase 6: the verification stale-run reaper. A verifier that was
+	// killed or wedged leaves a 'running' verification_runs row; the reaper marks
+	// runs older than the stale window (2h) as error and stamps their task
+	// inconclusive so it never parks forever. Runs on a 10-minute ticker under the
+	// shutdown context; a first pass fires immediately.
+	go func() {
+		reap := func() {
+			if _, err := verifySvc.Reap(); err != nil {
+				log.Printf("error: verify reaper: %v", err)
+			}
+		}
+		reap()
+		t := time.NewTicker(10 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				reap()
+			}
+		}
+	}()
+	log.Printf("swarmery verify reaper started (interval 10m)")
 
 	srv := &http.Server{Addr: addr, Handler: handler}
 	errCh := make(chan error, 1)
