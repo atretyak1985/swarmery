@@ -15,6 +15,10 @@ const (
 	// config item (agent/skill/hook/command) is created, changes content, or is
 	// soft-deleted. Additive — nothing above this line may change.
 	NoteSystemItemUpdated = "system_item_updated"
+	// fusion phase 1 — task board (additive): published by internal/api when a
+	// board task row is created or patched. The ONE message type the
+	// fusion-orchestration program adds; nothing above this line may change.
+	NoteTaskUpdated = "task_updated"
 )
 
 // Notification is one ingest event on the internal bus. It carries row ids
@@ -28,6 +32,8 @@ type Notification struct {
 	// phase 4 — system registry (additive): set for system_item_updated only.
 	Kind   string // agent | skill | hook | command
 	ItemID int64  // row id in the corresponding registry table
+	// fusion phase 1 — task board (additive): set for task_updated only.
+	TaskID int64 // tasks.id
 }
 
 // Bus is a minimal fan-out pub/sub channel for ingest notifications.

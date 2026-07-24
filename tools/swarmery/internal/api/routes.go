@@ -90,6 +90,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
 	mux.HandleFunc("GET /api/tasks/{id}", h.getTask)
 
+	// fusion phase 1: task board (dispatchable queue — writes are localhost-only).
+	mux.HandleFunc("GET /api/board/tasks", h.listBoardTasks)
+	mux.HandleFunc("POST /api/board/tasks", requireLocalOrigin(h.createBoardTask))
+	mux.HandleFunc("PATCH /api/board/tasks/{id}", requireLocalOrigin(h.patchBoardTask))
+
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
 	// All write endpoints reject foreign browser Origins (D4); requests
 	// without an Origin (the swarmery hook shim, curl) pass.

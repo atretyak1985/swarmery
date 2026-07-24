@@ -141,6 +141,17 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 			return nil, nil
 		}
 		payload = p
+	case ingest.NoteTaskUpdated:
+		// fusion phase 1 — task board: payload is the full board-task DTO,
+		// hydrated from the DB so the shape lives in one place (tasks.go).
+		bt, err := h.boardTaskByID(n.TaskID)
+		if err != nil {
+			return nil, err
+		}
+		if bt == nil {
+			return nil, nil
+		}
+		payload = bt
 	default:
 		return nil, errors.New("unknown notification type " + n.Type)
 	}

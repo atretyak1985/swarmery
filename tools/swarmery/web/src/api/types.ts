@@ -841,7 +841,8 @@ export type WSMessageType =
   | 'event_appended'
   | 'permission_requested'
   | 'permission_resolved'
-  | 'system_item_updated';
+  | 'system_item_updated'
+  | 'task_updated';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -850,7 +851,54 @@ export type WSMessage =
   | { type: 'event_appended'; payload: { sessionId: number; event: Event } }
   | { type: 'permission_requested'; payload: PermissionRequest }
   | { type: 'permission_resolved'; payload: PermissionRequest }
-  | { type: 'system_item_updated'; payload: SystemItemUpdate };
+  | { type: 'system_item_updated'; payload: SystemItemUpdate }
+  | { type: 'task_updated'; payload: BoardTask };
+
+// --- Fusion phase 1: task board — additive contracts --------------------------
+
+/** Closed set of kanban columns (Fusion builtin:coding semantics). */
+export type BoardColumn =
+  | 'triage'
+  | 'todo'
+  | 'in_progress'
+  | 'in_review'
+  | 'done'
+  | 'archived';
+
+/** Accepted task priority tokens (mapped to the INTEGER priority column server-side). */
+export type TaskPriority = 'urgent' | 'high' | 'normal' | 'low';
+
+/**
+ * A dispatchable board task — response of POST/PATCH /api/board/tasks, item of
+ * GET /api/board/tasks, and the `task_updated` WS payload. Mirrors
+ * boardTaskDTO in internal/api/tasks_board.go. Dispatcher-owned fields
+ * (branch, worktreePath, dispatchError, retryCount, verifyVerdict,
+ * verifyDetail) are read-only from the client until Phase 3/6 fill them.
+ */
+export interface BoardTask {
+  id: number;
+  externalId: string;
+  projectId: number;
+  projectSlug: string | null;
+  title: string;
+  prompt: string;
+  priority: TaskPriority;
+  status: string;
+  boardColumn: BoardColumn;
+  paused: boolean;
+  userPaused: boolean;
+  dependencies: string[];
+  model: string | null;
+  fileScope: string[];
+  branch: string | null;
+  worktreePath: string | null;
+  dispatchError: string | null;
+  retryCount: number;
+  verifyVerdict: string | null;
+  verifyDetail: string | null;
+  columnMovedAt: string | null;
+  createdAt: string;
+}
 
 // --- Phase 4: system registry (Stage 1) — additive contracts ------------------
 
