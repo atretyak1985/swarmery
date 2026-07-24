@@ -30,16 +30,20 @@ type approvalRuleDTO struct {
 	Enabled     bool    `json:"enabled"`
 	Note        *string `json:"note"`
 	CreatedAt   string  `json:"createdAt"`
+	// Source distinguishes hand-written rules ('manual') from ones a permission
+	// preset compiled ('preset', fusion phase 11). Managed rules are read-only in
+	// this manual CRUD surface — the preset owns their lifecycle.
+	Source string `json:"source"`
 }
 
 const approvalRuleSelect = `
-	SELECT r.id, r.project_id, p.slug, r.tool_pattern, r.action, r.enabled, r.note, r.created_at
+	SELECT r.id, r.project_id, p.slug, r.tool_pattern, r.action, r.enabled, r.note, r.created_at, r.source
 	FROM approval_rules r LEFT JOIN projects p ON p.id = r.project_id`
 
 func scanApprovalRule(scan func(...any) error, d *approvalRuleDTO) error {
 	var enabled int64
 	if err := scan(&d.ID, &d.ProjectID, &d.ProjectSlug, &d.ToolPattern, &d.Action,
-		&enabled, &d.Note, &d.CreatedAt); err != nil {
+		&enabled, &d.Note, &d.CreatedAt, &d.Source); err != nil {
 		return err
 	}
 	d.Enabled = enabled != 0
@@ -109,9 +113,11 @@ func (h *Handler) createApprovalRule(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// source='manual' is explicit (also the column default): only Compile writes
+	// source='preset', and only the manual surface writes here.
 	res, err := h.DB.Exec(
-		`INSERT INTO approval_rules (project_id, tool_pattern, note, created_at)
-		 VALUES (?, ?, ?, ?)`,
+		`INSERT INTO approval_rules (project_id, tool_pattern, note, source, created_at)
+		 VALUES (?, ?, ?, 'manual', ?)`,
 		body.ProjectID, pattern, nullableStr(body.Note),
 		time.Now().UTC().Format(ruleTSFormat))
 	if err != nil {
@@ -129,6 +135,28 @@ func (h *Handler) createApprovalRule(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(d)
 }
 
+// ruleSourceOf reads a rule's source. Returns ("", nil) when the rule is
+// absent (callers map that to 404).
+func (h *Handler) ruleSourceOf(id int64) (string, error) {
+	var source string
+	err := h.DB.QueryRow(`SELECT source FROM approval_rules WHERE id = ?`, id).Scan(&source)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return source, err
+}
+
+// rejectManagedRule writes a 409 when a rule is preset-managed (read-only in
+// this manual surface). Returns true when it handled the response.
+func rejectManagedRule(w http.ResponseWriter, source string) bool {
+	if source == "preset" {
+		writeClientErr(w, http.StatusConflict,
+			"this rule is managed by the project's permission preset — change it via the preset, not here")
+		return true
+	}
+	return false
+}
+
 // PATCH /api/approval-rules/{id} {enabled} → 200 DTO.
 func (h *Handler) patchApprovalRule(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -141,6 +169,19 @@ func (h *Handler) patchApprovalRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil || body.Enabled == nil {
 		http.Error(w, `{"error":"body must be {\"enabled\": true|false}"}`, http.StatusBadRequest)
+		return
+	}
+	// Managed (preset) rules are read-only here — the preset owns them.
+	source, err := h.ruleSourceOf(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if source == "" {
+		http.Error(w, `{"error":"rule not found"}`, http.StatusNotFound)
+		return
+	}
+	if rejectManagedRule(w, source) {
 		return
 	}
 	res, err := h.DB.Exec(`UPDATE approval_rules SET enabled = ? WHERE id = ?`,
@@ -162,6 +203,20 @@ func (h *Handler) deleteApprovalRule(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, `{"error":"invalid rule id"}`, http.StatusBadRequest)
+		return
+	}
+	// Managed (preset) rules are read-only here — deleting one would just be
+	// clobbered by the next recompile; direct the user to the preset instead.
+	source, err := h.ruleSourceOf(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if source == "" {
+		http.Error(w, `{"error":"rule not found"}`, http.StatusNotFound)
+		return
+	}
+	if rejectManagedRule(w, source) {
 		return
 	}
 	res, err := h.DB.Exec(`DELETE FROM approval_rules WHERE id = ?`, id)

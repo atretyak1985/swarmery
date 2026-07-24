@@ -9,6 +9,7 @@ import { fetchProject } from '../api';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { ProjectActions } from '../components/ProjectActions';
 import { ProjectPlugins } from '../components/ProjectPlugins';
+import { PermissionPresets } from '../components/PermissionPresets';
 import { Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 
 export function ProjectSettings(): JSX.Element {
@@ -74,6 +75,12 @@ export function ProjectSettings(): JSX.Element {
           </div>
         </>
       )}
+
+      {/* Permission preset applies to dispatch + approvals regardless of plugin
+          management state, so it shows for every project. */}
+      <div className="mt-5">
+        <PermissionPresets projectId={project.id} />
+      </div>
     </>,
   );
 }

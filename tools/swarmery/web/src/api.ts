@@ -24,6 +24,9 @@ import type {
   OnboardConfig,
   OnboardRequest,
   OnboardResponse,
+  PermissionEscalation,
+  PermissionPresetInput,
+  PermissionPresetView,
   PermissionRequest,
   PermissionRequestStatus,
   ProjectDetail,
@@ -713,6 +716,57 @@ export async function toggleApprovalRule(id: number, enabled: boolean): Promise<
 export async function deleteApprovalRule(id: number): Promise<void> {
   const res = await fetch(`/api/approval-rules/${String(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`delete rule failed: ${String(res.status)}`);
+}
+
+// --- fusion phase 11 — permission presets ------------------------------------
+
+/**
+ * Thrown by putPermissionPreset on a 428: the change escalates privileges and
+ * needs explicit confirmation. Carries the escalation list so the caller can
+ * render a confirm dialog, then retry with `confirm: true`.
+ */
+export class EscalationRequiredError extends Error {
+  readonly escalations: string[];
+  readonly reason: string;
+  constructor(payload: PermissionEscalation) {
+    super(payload.error);
+    this.name = 'EscalationRequiredError';
+    this.escalations = payload.escalations;
+    this.reason = payload.reason;
+  }
+}
+
+export function fetchPermissionPreset(projectId: number | string): Promise<PermissionPresetView> {
+  return get(`/api/projects/${String(projectId)}/permission-preset`);
+}
+
+/**
+ * PUT /api/projects/{id}/permission-preset. On a 428 (privileged change without
+ * confirm) throws {@link EscalationRequiredError}; other non-2xx throw a plain
+ * Error. Returns the recompiled effective policy view on success.
+ */
+export async function putPermissionPreset(
+  projectId: number | string,
+  input: PermissionPresetInput,
+): Promise<PermissionPresetView> {
+  const res = await fetch(`/api/projects/${String(projectId)}/permission-preset`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 428) {
+    const payload = (await res.json().catch(() => ({
+      error: 'confirmation required',
+      reason: '',
+      escalations: [],
+    }))) as PermissionEscalation;
+    throw new EscalationRequiredError(payload);
+  }
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `set preset failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as PermissionPresetView;
 }
 
 /** POST /api/sessions/{id}/kill — send SIGTERM (force=false) or SIGKILL (force=true). */

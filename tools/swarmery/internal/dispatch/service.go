@@ -203,6 +203,17 @@ func (s *Service) Schedule() {
 	}
 
 	for _, c := range cands {
+		// Gate: permission preset (fusion phase 11). A locked-down project never
+		// admits its Todo tasks — stamp the documented error and skip. Enforced
+		// here at admission; the preset ALSO compiled zero auto-approve rules, so
+		// even if this gate were bypassed nothing could auto-approve (defense in
+		// depth). A read error is logged and treated as NOT locked (mirrors
+		// isPaused) — the kill-switch/pause are the hard stops, and the missing
+		// auto-approve rules keep a locked-down project safe regardless.
+		if s.projectLockedDown(c.ProjectID) {
+			s.stampLockedDown(c.ID)
+			continue
+		}
 		// Gate: project pause.
 		if s.isPaused(ProjectScope(c.ProjectID)) {
 			continue
@@ -719,6 +730,47 @@ func (s *Service) isPaused(scope string) bool {
 		return false
 	}
 	return paused != 0
+}
+
+// lockedDownError is the documented dispatch_error a locked-down project's
+// Todo tasks carry (DESIGN.md §2 item 11).
+const lockedDownError = "project locked down"
+
+// projectLockedDown reports whether a project's permission preset (fusion phase
+// 11) is 'locked-down'. Read via inline SQL — dispatch must not import approvals
+// (that package imports ingest/notify, and dispatch stays a leaf of the data
+// layer). A missing row ⇒ not locked (the fail-closed default is
+// approval-required, which does NOT block dispatch). A read error is logged and
+// treated as not-locked (same posture as isPaused): the hard stops are the
+// kill-switch/pause, and a locked-down project has zero compiled auto-approve
+// rules so nothing can auto-approve regardless of this gate.
+func (s *Service) projectLockedDown(projectID int64) bool {
+	var preset string
+	err := s.DB.QueryRow(
+		`SELECT preset FROM project_permission_presets WHERE project_id = ?`, projectID).Scan(&preset)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false
+	}
+	if err != nil {
+		log.Printf("error: dispatch: read preset for project %d: %v", projectID, err)
+		return false
+	}
+	return preset == "locked-down"
+}
+
+// stampLockedDown records the locked-down error on a Todo task — but only when
+// it is not already set, so a locked project does not re-emit task_updated on
+// every poll pass (the row is already parked in todo; nothing changed).
+func (s *Service) stampLockedDown(id int64) {
+	var cur sql.NullString
+	if err := s.DB.QueryRow(`SELECT dispatch_error FROM tasks WHERE id=?`, id).Scan(&cur); err != nil {
+		log.Printf("error: dispatch: read dispatch_error (task %d): %v", id, err)
+		return
+	}
+	if cur.Valid && cur.String == lockedDownError {
+		return // already stamped — stay quiet
+	}
+	s.failAdmission(id, lockedDownError)
 }
 
 // SetPause upserts a pause row for a scope. Exposed for the api pause endpoint.

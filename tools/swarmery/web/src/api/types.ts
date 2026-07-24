@@ -832,6 +832,52 @@ export interface ApprovalRule {
   enabled: boolean;
   note: string | null;
   createdAt: string;
+  /**
+   * 'manual' (hand-written) or 'preset' (compiled from a project's permission
+   * preset, fusion phase 11). Managed ('preset') rules are read-only in the
+   * manual rules UI — the preset owns their lifecycle.
+   */
+  source: 'manual' | 'preset';
+}
+
+/* ----- permission presets (fusion phase 11 — DESIGN.md §2 item 11) ----- */
+
+/** The three presets, over the low-level approval_rules. */
+export type PermissionPreset = 'unrestricted' | 'approval-required' | 'locked-down';
+
+/** Per-category override policy — two states only ("block" is out of scope). */
+export type CategoryPolicy = 'allow' | 'ask';
+
+/** One category's resolved policy under the current preset + overrides. */
+export interface PermissionCategory {
+  category: string;
+  patterns: string[];
+  policy: CategoryPolicy;
+}
+
+/** GET /api/projects/{id}/permission-preset — the effective policy view. */
+export interface PermissionPresetView {
+  projectId: number;
+  preset: PermissionPreset;
+  overrides: Record<string, CategoryPolicy>;
+  /** true iff preset === 'locked-down' — the dispatcher refuses this project's tasks. */
+  lockedDown: boolean;
+  categories: PermissionCategory[];
+}
+
+/** PUT body for setting a project's permission preset. */
+export interface PermissionPresetInput {
+  preset: PermissionPreset;
+  overrides?: Record<string, CategoryPolicy>;
+  /** Required (→ true) when the change escalates privileges (R13); else 428. */
+  confirm?: boolean;
+}
+
+/** The 428 payload when a privileged change needs explicit confirmation. */
+export interface PermissionEscalation {
+  error: string;
+  reason: string;
+  escalations: string[];
 }
 
 /** WS event names — frozen; MVP trio implemented by Agent A, permission_* added at gate 2.2 (phase 2). */

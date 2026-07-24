@@ -374,6 +374,50 @@ func TestGlobalAndProjectPauseParkAdmission(t *testing.T) {
 	_ = id
 }
 
+// TestLockedDownPresetBlocksAdmission: a locked-down permission preset (fusion
+// phase 11) parks the project's Todo tasks with the documented dispatch_error
+// and never spawns a run; lifting the preset admits.
+func TestLockedDownPresetBlocksAdmission(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{}
+	s := newTestService(t, db, r, &stubWt{})
+	id := insertTask(t, db, "T-lock", taskOpts{})
+
+	// Lock the project down.
+	if _, err := db.Exec(
+		`INSERT INTO project_permission_presets(project_id, preset, updated_at)
+		 VALUES(1, 'locked-down', '2026-07-24T00:00:00.000Z')`); err != nil {
+		t.Fatal(err)
+	}
+	s.Schedule()
+	if r.count() != 0 {
+		t.Fatalf("locked-down: runner started %d, want 0 (dispatch must be blocked)", r.count())
+	}
+	if col := column(t, db, id); col != "todo" {
+		t.Fatalf("locked-down task column = %q, want todo (never admitted)", col)
+	}
+	if e := taskField(t, db, id, "dispatch_error"); !e.Valid || e.String != "project locked down" {
+		t.Fatalf("dispatch_error = %v, want 'project locked down'", e)
+	}
+
+	// A second pass must NOT re-stamp (idempotent — stays quiet).
+	before := r.count()
+	s.Schedule()
+	if r.count() != before {
+		t.Fatalf("second pass spawned a run (%d)", r.count())
+	}
+
+	// Lift the lock (→ approval-required) → the task admits.
+	if _, err := db.Exec(
+		`UPDATE project_permission_presets SET preset='approval-required' WHERE project_id=1`); err != nil {
+		t.Fatal(err)
+	}
+	s.Schedule()
+	if r.count() != 1 {
+		t.Errorf("after unlock: runner started %d, want 1", r.count())
+	}
+}
+
 func TestBothTaskPauseFlagsSkip(t *testing.T) {
 	db := testDB(t)
 	r := &stubRunner{}

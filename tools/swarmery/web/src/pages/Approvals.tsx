@@ -46,6 +46,7 @@ import { useScope } from '../lib/scope';
 import { applyPermissionMessage, useLiveUpdates } from '../lib/ws';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
+import { ApprovalContext } from '../components/ApprovalContext';
 
 const HISTORY_LIMIT = 50;
 
@@ -374,36 +375,38 @@ function PendingCard({
         </span>
       </div>
 
+      {/* Structured gated-action context (tool chip / command / cwd) — the
+          primary view, replacing the raw summary. The session link lives in its
+          slot; the full hook stdin stays one click away as an audit escape hatch. */}
+      <ApprovalContext
+        request={request}
+        sessionSlot={
+          <Link
+            to={sessionTo}
+            className="flex items-center gap-[7px] font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
+          >
+            <span className="truncate">
+              <SessionLabel sessionId={request.sessionId} session={session} />
+            </span>
+          </Link>
+        }
+      />
+
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        aria-label={expanded ? 'collapse request JSON' : 'expand request JSON'}
-        className="mt-2.5 flex w-full items-start gap-1.5 rounded-lg border border-line bg-bg px-3 py-2 text-left transition-colors hover:border-line-strong"
+        aria-label={expanded ? 'collapse raw request JSON' : 'expand raw request JSON'}
+        className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-ink-faint transition-colors hover:text-ink-dim"
       >
-        <span aria-hidden="true" className="mt-px shrink-0 font-mono text-[10px] text-ink-dim">
-          {expanded ? '▾' : '▸'}
-        </span>
-        <code
-          className={`min-w-0 flex-1 font-mono text-[11.5px] text-ink-3 ${
-            expanded ? 'break-all whitespace-pre-wrap' : 'block truncate whitespace-pre'
-          }`}
-        >
-          {requestSummary(request)}
-        </code>
+        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        raw
       </button>
       {expanded && (
         <pre className="mt-1.5 max-h-72 overflow-y-auto rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[10.5px] leading-relaxed break-all whitespace-pre-wrap text-ink-3">
           {requestJsonPretty(request)}
         </pre>
       )}
-
-      <Link
-        to={sessionTo}
-        className="mt-2.5 flex items-center gap-[7px] font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
-      >
-        <span className="truncate"><SessionLabel sessionId={request.sessionId} session={session} /></span>
-      </Link>
 
       {questions !== null && (
         <div className="mt-3 flex flex-col gap-2.5">

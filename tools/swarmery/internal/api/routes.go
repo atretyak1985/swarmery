@@ -206,4 +206,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/routines/{id}/run", requireLocalOrigin(h.runRoutine))
 	mux.HandleFunc("GET /api/routines/{id}/runs", h.listRoutineRuns)
 	mux.HandleFunc("POST /api/hooks/routine/{id}/{token}", h.hookRoutine)
+
+	// fusion phase 11: permission presets — a project's human-readable policy
+	// (unrestricted | approval-required | locked-down + per-category overrides)
+	// compiled into managed auto-approve rules. GET reads the effective policy;
+	// PUT sets it (D4 origin-fenced; escalations gated behind confirm → 428).
+	mux.HandleFunc("GET /api/projects/{id}/permission-preset", h.getPermissionPreset)
+	mux.HandleFunc("PUT /api/projects/{id}/permission-preset", requireLocalOrigin(h.putPermissionPreset))
 }
