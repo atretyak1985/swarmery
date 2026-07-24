@@ -254,4 +254,17 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/projects/{id}/memory", h.listMemory)
 	mux.HandleFunc("GET /api/projects/{id}/memory/file", h.getMemoryFile)
 	mux.HandleFunc("PUT /api/projects/{id}/memory/file", requireLocalOrigin(h.putMemoryFile))
+
+	// fusion phase 14: analytics uplift — Command-Center adoptions our store
+	// already backs (stats_uplift.go): autonomy ratio, productivity
+	// (LOC/languages/durations/hours-saved-ESTIMATE), the SDLC funnel snapshot,
+	// and the per-playbook rollup (degrades to an empty list pre-Phase-13). All
+	// read-only, range-scoped by the shared ?project= filter. Plus /api/usage —
+	// the Usage-popover windows with pace (telemetry ESTIMATE; the OAuth path is
+	// out of policy — see usage.go). /api/usage is unscoped (quota is global).
+	mux.HandleFunc("GET /api/stats/autonomy", h.statsAutonomy)
+	mux.HandleFunc("GET /api/stats/productivity", h.statsProductivity)
+	mux.HandleFunc("GET /api/stats/funnel", h.statsFunnel)
+	mux.HandleFunc("GET /api/stats/playbooks", h.statsPlaybooks)
+	mux.HandleFunc("GET /api/usage", h.usage)
 }
