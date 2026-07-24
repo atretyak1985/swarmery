@@ -1421,6 +1421,7 @@ export const mockApi = {
         mapPath: '/api/projects/3/architecture/architecture-map.html',
         analyzedAtCommit: 'aabbccddee112233445566778899001122334455',
         headCommit: 'aabbccddee112233445566778899001122334455',
+        provision: null,
       },
       {
         id: 1,
@@ -1431,6 +1432,18 @@ export const mockApi = {
         mapPath: '/api/projects/1/architecture/architecture-map.html',
         analyzedAtCommit: null,
         headCommit: null,
+        provision: null,
+      },
+      {
+        id: 2,
+        slug: 'example-app',
+        name: 'Example App',
+        hasMap: false,
+        builtAt: null,
+        mapPath: '/api/projects/2/architecture/architecture-map.html',
+        analyzedAtCommit: null,
+        headCommit: null,
+        provision: { state: 'generating', lastLine: 'running architecture-map', error: '' },
       },
     ];
     return {

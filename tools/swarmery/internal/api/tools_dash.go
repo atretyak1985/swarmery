@@ -92,15 +92,25 @@ type toolsGraphifySection struct {
 	Projects []graphifyProjectDTO `json:"projects"`
 }
 
+// provisionDTO is the latest provision job for a pack (auto-provision phase 3):
+// install→generate progress surfaced so the sidebar can render it. null when the
+// project has never had a provision job.
+type provisionDTO struct {
+	State    string `json:"state"`
+	LastLine string `json:"lastLine"`
+	Error    string `json:"error"`
+}
+
 type architectureProjectDTO struct {
-	ID               int64   `json:"id"`
-	Slug             string  `json:"slug"`
-	Name             *string `json:"name"`
-	HasMap           bool    `json:"hasMap"`
-	BuiltAt          *string `json:"builtAt"`
-	MapPath          string  `json:"mapPath"`
-	AnalyzedAtCommit *string `json:"analyzedAtCommit"`
-	HeadCommit       *string `json:"headCommit"`
+	ID               int64         `json:"id"`
+	Slug             string        `json:"slug"`
+	Name             *string       `json:"name"`
+	HasMap           bool          `json:"hasMap"`
+	BuiltAt          *string       `json:"builtAt"`
+	MapPath          string        `json:"mapPath"`
+	AnalyzedAtCommit *string       `json:"analyzedAtCommit"`
+	HeadCommit       *string       `json:"headCommit"`
+	Provision        *provisionDTO `json:"provision"`
 }
 
 type toolsArchitectureSection struct {
@@ -128,12 +138,21 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 		resp.Serena.Available = true
 	}
 
+	// Drain projects into a slice BEFORE building DTOs: the store caps the pool
+	// at one connection (SetMaxOpenConns(1)), so a per-project query (e.g.
+	// Provision.Latest) while this cursor is open would self-deadlock. Read all
+	// rows, close the cursor, then do the per-project work.
 	rows, err := h.DB.Query(`SELECT id, path, slug, name FROM projects WHERE archived = 0 ORDER BY id`)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	defer rows.Close()
+	type projRow struct {
+		id         int64
+		path, slug string
+		namePtr    *string
+	}
+	var projects []projRow
 	for rows.Next() {
 		var (
 			id         int64
@@ -141,6 +160,7 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 			name       sql.NullString
 		)
 		if err := rows.Scan(&id, &path, &slug, &name); err != nil {
+			rows.Close()
 			writeErr(w, err)
 			return
 		}
@@ -149,6 +169,17 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 			n := name.String
 			namePtr = &n
 		}
+		projects = append(projects, projRow{id: id, path: path, slug: slug, namePtr: namePtr})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		writeErr(w, err)
+		return
+	}
+	rows.Close()
+
+	for _, p := range projects {
+		id, path, slug, namePtr := p.id, p.path, p.slug, p.namePtr
 		// Read plugin state first so we can compute packEnabled for the
 		// architecture union (pack∪artifact). State nil = telemetry-only /
 		// unreadable settings — those still appear in the architecture list if
@@ -156,6 +187,14 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 		st, serr := projectscan.ReadPluginState(path, nil)
 		packEnabled := serr == nil && st != nil && slices.Contains(st.Packs, architecturePack)
 		if d, ok := architectureDTO(id, slug, namePtr, path, packEnabled); ok {
+			// The latest provision job (if any) rides on the DTO so the sidebar
+			// can render install/generate progress. Best-effort — a query error
+			// just leaves provision null.
+			if h.Provision != nil {
+				if j, ok, jerr := h.Provision.Latest(id, architecturePack); jerr == nil && ok {
+					d.Provision = &provisionDTO{State: j.Status, LastLine: j.LastLine, Error: j.Error}
+				}
+			}
 			resp.Architecture.Projects = append(resp.Architecture.Projects, d)
 		}
 		// nil state = telemetry-only / unreadable settings → off the serena/graphify lists.
@@ -168,10 +207,6 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 		if slices.Contains(st.Packs, graphifyPack) {
 			resp.Graphify.Projects = append(resp.Graphify.Projects, graphifyDTO(id, slug, namePtr, path))
 		}
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, err)
-		return
 	}
 	writeJSON(w, resp, nil)
 }

@@ -8,10 +8,15 @@
 // selection by id, same-origin iframe.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ToolsResponse } from '../api/types';
+import type { ProvisionState, ToolsResponse } from '../api/types';
 import { fetchTools } from '../api';
 import { Card, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 import { fmtAgo } from '../lib/format';
+
+// Provision states that are still in flight — while any project sits in one of
+// these, the page settle-polls /api/tools until it lands on a terminal state.
+const ACTIVE_STATES = new Set<ProvisionState['state']>(['pending', 'installing', 'generating']);
+const POLL_MS = 3_000;
 
 export function Architecture(): JSX.Element {
   const [data, setData] = useState<ToolsResponse | null>(null);
@@ -46,6 +51,18 @@ export function Architecture(): JSX.Element {
     projects.find((p) => p.id === selectedId) ??
     projects.find((p) => p.hasMap) ??
     projects[0];
+
+  // While any project has an in-flight provision job, re-fetch every 3s until
+  // it settles (mirrors Serena's interval-until-settled; the aliveRef guard in
+  // `load` bounds writes to a mounted component). The effect re-runs whenever
+  // `projects` changes, so once every job is terminal `active` is false and no
+  // new interval is scheduled — it does not loop forever.
+  useEffect(() => {
+    const active = projects.some((p) => p.provision !== null && ACTIVE_STATES.has(p.provision.state));
+    if (!active) return;
+    const t = window.setInterval(load, POLL_MS);
+    return () => window.clearInterval(t);
+  }, [projects, load]);
 
   return (
     <div className="min-w-0 px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]">
@@ -95,7 +112,22 @@ export function Architecture(): JSX.Element {
                 )}
               </div>
             </Card>
-            {project.hasMap ? (
+            {project.provision !== null && ACTIVE_STATES.has(project.provision.state) ? (
+              <div className="mt-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber/40 bg-amber/10 px-2.5 py-0.5 font-mono text-[11px] text-amber">
+                  <span aria-hidden>⟳</span>
+                  {project.provision.state}
+                  {project.provision.lastLine !== '' ? ` — ${project.provision.lastLine}` : ''}
+                </span>
+              </div>
+            ) : project.provision?.state === 'failed' ? (
+              <div className="mt-3">
+                <ErrorBox
+                  message={`${project.provision.error !== '' ? project.provision.error : 'provision failed'} — toggle the pack off/on to retry, or run /architecture-map manually`}
+                  onRetry={load}
+                />
+              </div>
+            ) : project.hasMap ? (
               <div className="mt-3">
                 <iframe
                   key={project.id}
@@ -106,7 +138,7 @@ export function Architecture(): JSX.Element {
               </div>
             ) : (
               <div className="mt-3">
-                <Empty>no map yet — run /architecture-map in this repo</Empty>
+                <Empty>no map yet — enabling architecture-pack generates it automatically</Empty>
               </div>
             )}
           </>

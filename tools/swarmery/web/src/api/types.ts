@@ -1422,6 +1422,19 @@ export interface ToolsGraphifyProject {
   vizPath: string;
 }
 
+/**
+ * Live auto-provision job state for a project's architecture map (phases 2–3):
+ * emitted while enabling architecture-pack drives an install + /architecture-map
+ * run. `null` when no job is (or has been) tracked for the project.
+ */
+export interface ProvisionState {
+  state: 'pending' | 'installing' | 'generating' | 'installed' | 'done' | 'skipped' | 'failed';
+  /** Last stdout line of the running job; "" when none yet. */
+  lastLine: string;
+  /** Failure reason on state='failed'; "" otherwise. */
+  error: string;
+}
+
 export interface ArchitectureProject {
   id: number;
   slug: string;
@@ -1433,6 +1446,8 @@ export interface ArchitectureProject {
   analyzedAtCommit: string | null;
   /** Current HEAD commit of the project repo resolved without exec; null when unresolvable. */
   headCommit: string | null;
+  /** Auto-provision job state; null when no job is tracked. */
+  provision: ProvisionState | null;
 }
 
 export interface ToolsResponse {

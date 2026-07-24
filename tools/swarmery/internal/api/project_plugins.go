@@ -231,5 +231,11 @@ func (h *Handler) putProjectPlugin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	// Auto-provision: only on a real enable (a no-op re-enable or any disable
+	// must not kick off install/generate). Best-effort — enqueueProvision never
+	// blocks or fails the toggle response.
+	if res.Changed && req.Enabled {
+		h.enqueueProvision(id, target, name)
+	}
 	writeJSON(w, putPluginResponse{Name: name, Enabled: req.Enabled, Changed: res.Changed, Backup: res.Backup}, nil)
 }

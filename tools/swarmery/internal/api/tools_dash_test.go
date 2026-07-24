@@ -495,3 +495,72 @@ func TestToolsDashArchitectureUnion(t *testing.T) {
 		}
 	})
 }
+
+// TestToolsDashArchitectureProvision covers the provision field added by the
+// auto-provision hook: the latest provision_jobs row for a pack-enabled project
+// surfaces on the architecture DTO; a project with no job carries provision:null.
+func TestToolsDashArchitectureProvision(t *testing.T) {
+	srv, db := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	// Project 1: pack-enabled (so it lands in the architecture list) + a seeded
+	// in-flight provision job.
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "architecture-pack@swarmery": true}
+	}`)
+	execSQL(t, db, `INSERT INTO provision_jobs (project_id, pack, status, last_line, error, started_at)
+		VALUES (1, 'architecture-pack', 'generating', 'running architecture-map', NULL, '2026-07-24T00:00:00Z')`)
+
+	resp := getToolsResponse(t, srv.URL)
+	var ap *architectureProjectDTO
+	for i := range resp.Architecture.Projects {
+		if resp.Architecture.Projects[i].ID == 1 {
+			ap = &resp.Architecture.Projects[i]
+			break
+		}
+	}
+	if ap == nil {
+		t.Fatal("project 1 not found in architecture.projects")
+	}
+	if ap.Provision == nil {
+		t.Fatal("provision = null, want the seeded job")
+	}
+	if ap.Provision.State != "generating" {
+		t.Errorf("provision.state = %q, want generating", ap.Provision.State)
+	}
+	if ap.Provision.LastLine != "running architecture-map" {
+		t.Errorf("provision.lastLine = %q, want 'running architecture-map'", ap.Provision.LastLine)
+	}
+	if ap.Provision.Error != "" {
+		t.Errorf("provision.error = %q, want empty", ap.Provision.Error)
+	}
+
+	// Project 2 (telemetry-only, no job) — appears via artifact, provision:null.
+	path2 := projectPath(t, srv.URL, "2")
+	archOut2 := filepath.Join(path2, "architecture-out")
+	os.RemoveAll(archOut2)
+	t.Cleanup(func() { os.RemoveAll(archOut2) })
+	if err := os.MkdirAll(archOut2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(archOut2, "architecture-map.html"), []byte("<html>arch2</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resp2 := getToolsResponse(t, srv.URL)
+	var ap2 *architectureProjectDTO
+	for i := range resp2.Architecture.Projects {
+		if resp2.Architecture.Projects[i].ID == 2 {
+			ap2 = &resp2.Architecture.Projects[i]
+			break
+		}
+	}
+	if ap2 == nil {
+		t.Fatal("project 2 not found in architecture.projects")
+	}
+	if ap2.Provision != nil {
+		t.Errorf("provision = %+v for a project with no job, want null", ap2.Provision)
+	}
+}

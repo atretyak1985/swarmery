@@ -14,6 +14,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 )
 
 // Handler bundles the API dependencies.
@@ -35,6 +36,12 @@ type Handler struct {
 	// improveGo, when non-nil, replaces the `go fn()` dispatch of the async
 	// generation pipeline — a test seam for deterministic httptest runs.
 	improveGo func(func())
+	// Provision owns "enable pack → install + generate" jobs behind the plugin
+	// toggle (auto-provision phase 3). Attached at startup next to Improve.
+	Provision *provision.Service
+	// provisionGo, when non-nil, replaces the `go fn()` dispatch of the async
+	// provision pipeline — a test seam mirroring improveGo.
+	provisionGo func(func())
 }
 
 type projectDTO struct {
