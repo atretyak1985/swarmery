@@ -68,13 +68,17 @@ const taskSummarySelect = `
 	JOIN workspaces w ON w.id = t.workspace_id
 	JOIN projects p   ON p.id = t.project_id
 	LEFT JOIN (
+		-- Per-session cost is a CORRELATED subquery, not a
+		-- "LEFT JOIN (SELECT ... FROM turns GROUP BY session_id)" derived table:
+		-- SQLite materializes the latter with a FULL scan of turns (fat text
+		-- column, ~100k rows) on every call. Correlated, it rides
+		-- idx_turns_session_usage once per task_sessions row -- a table two
+		-- orders of magnitude smaller. Same reasoning as sessionSelect.
 		SELECT ts.task_id,
-		       COUNT(*)            AS sessions,
-		       SUM(sagg.cost_usd)  AS cost_usd
+		       COUNT(*) AS sessions,
+		       SUM((SELECT SUM(tu.cost_usd) FROM turns tu
+		             WHERE tu.session_id = ts.session_id)) AS cost_usd
 		FROM task_sessions ts
-		LEFT JOIN (
-			SELECT session_id, SUM(cost_usd) AS cost_usd FROM turns GROUP BY session_id
-		) sagg ON sagg.session_id = ts.session_id
 		GROUP BY ts.task_id
 	) agg ON agg.task_id = t.id
 	WHERE t.source = 'workspace'`
@@ -157,12 +161,12 @@ func (h *Handler) getTask(w http.ResponseWriter, r *http.Request) {
 	d.SessionLinks = []taskSessionDTO{}
 	rows, err := h.DB.Query(`
 		SELECT s.id, s.session_uuid, s.title, s.started_at, s.ended_at,
-		       ts.link_source, ts.confidence, sagg.cost_usd
+		       ts.link_source, ts.confidence,
+		       -- correlated, not a materialized full scan of turns (see
+		       -- taskSummarySelect) -- this runs for one task's sessions only.
+		       (SELECT SUM(tu.cost_usd) FROM turns tu WHERE tu.session_id = s.id)
 		FROM task_sessions ts
 		JOIN sessions s ON s.id = ts.session_id
-		LEFT JOIN (
-			SELECT session_id, SUM(cost_usd) AS cost_usd FROM turns GROUP BY session_id
-		) sagg ON sagg.session_id = s.id
 		WHERE ts.task_id = ?
 		ORDER BY s.started_at`, d.ID)
 	if err != nil {

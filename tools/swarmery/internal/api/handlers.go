@@ -412,42 +412,67 @@ func (h *Handler) recentSessions(projectID int64) ([]projectRecentSessionDTO, er
 }
 
 // sessionSelect is the shared session projection: entity columns plus the
-// per-session token/cost aggregates (parity contract) computed in ONE
-// aggregate JOIN — never per-row subqueries (no N+1). The owning plan run
-// (session_plan_group.go) joins in on the same terms: three rowid lookups per
-// row, resolved here so the list endpoint needs no follow-up query.
-var sessionSelect = `
-	SELECT s.id, s.project_id, p.slug, p.name, s.session_uuid, s.model, s.git_branch, s.cwd,
+// per-session token/cost aggregates (parity contract) and the owning plan run
+// (session_plan_group.go), resolved here so the list endpoint needs no
+// follow-up query.
+//
+// The three `turns`-derived values (totals, context occupancy, "why") are
+// CORRELATED scalar subqueries, not derived-table LEFT JOINs. That distinction
+// is the whole performance contract of this query: SQLite cannot push a
+// predicate into an uncorrelated derived table, so the earlier
+// `LEFT JOIN (SELECT … FROM turns GROUP BY session_id)` shape forced
+// MATERIALIZE of a FULL scan of `turns` — three times — on every single call,
+// no matter how narrow the outer WHERE or how small the LIMIT. `turns` carries
+// the fat `text` column, so each of those scans reads the entire table off
+// disk. Correlated subqueries instead ride sqlite_autoindex_turns_1
+// (session_id, seq) and touch only the rows of the sessions actually selected.
+//
+// sessionSelect is used for SINGLE-ROW lookups (getSession, ws.sessionByID);
+// listSessions instead wraps the same pieces in a keyset-limited page CTE, so
+// the subqueries run for the returned page only, never for every candidate row.
+//
+// `tl` and `ho` stay derived joins on purpose: task_sessions and handoffs are
+// small (hundreds of rows), so materializing them is cheap, and each supplies
+// several columns — which a scalar subquery cannot.
+var sessionSelect = `SELECT ` + sessionCols + sessionFrom
+
+// sessionCols is the projection shared by every session query. Column order is
+// the contract with scanSession's dest slice — keep the two in lockstep.
+const sessionCols = `
+	       s.id, s.project_id, p.slug, p.name, s.session_uuid, s.model, s.git_branch, s.cwd,
 	       s.status, s.started_at, s.ended_at, COALESCE(s.custom_title, s.title), s.source,
 	       s.account,
-	       agg.tokens, agg.cost_usd, ctx.context_tokens,
+	       -- Session totals are the TRUE cost: every turn including subagents
+	       -- (phase 2). The Chat tab still shows the orchestrator turns only, but
+	       -- the card's cost/tokens reflect the whole session — consistent with
+	       -- the overview/today and analytics aggregates. SUM over the empty set
+	       -- is NULL, which reproduces the old LEFT JOIN's "no turns" miss.
+	       (SELECT SUM(COALESCE(t.tokens_in, 0) + COALESCE(t.tokens_out, 0))
+	          FROM turns t WHERE t.session_id = s.id),
+	       (SELECT SUM(t.cost_usd) FROM turns t WHERE t.session_id = s.id),
+	       -- Context occupancy: the LAST assistant turn's input footprint. Usage
+	       -- lives on assistant turns; the newest one's input tokens ≈ how full
+	       -- the context window is.
+	       (SELECT COALESCE(t.tokens_in, 0) + COALESCE(t.tokens_cache_read, 0) + COALESCE(t.tokens_cache_write, 0)
+	          FROM turns t
+	         WHERE t.session_id = s.id AND t.role = 'assistant'
+	           AND (t.tokens_in IS NOT NULL OR t.tokens_cache_read IS NOT NULL OR t.tokens_cache_write IS NOT NULL)
+	         ORDER BY t.seq DESC LIMIT 1),
 	       tl.task_id, tl.external_id, tl.link_source, tl.confidence,
 	       s.proc_state, s.pid, s.outcome,
-	       why.text,
-	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + `
+	       -- "why": the first user turn's prose.
+	       (SELECT t.text FROM turns t
+	         WHERE t.session_id = s.id AND t.role = 'user'
+	           AND t.text IS NOT NULL AND TRIM(t.text) != ''
+	         ORDER BY t.seq LIMIT 1),
+	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols
+
+// sessionFrom is the FROM/JOIN tail shared by sessionSelect and the page CTE
+// built in listSessions, so both resolve rows — and the ?planTask predicate's
+// plan_task/phase_task aliases — on identical terms.
+var sessionFrom = `
 	FROM sessions s
 	JOIN projects p ON p.id = s.project_id
-	LEFT JOIN (
-		-- Session totals are the TRUE cost: every turn including subagents
-		-- (phase 2). The Chat tab still shows the orchestrator turns only, but
-		-- the card's cost/tokens reflect the whole session — consistent with
-		-- the overview/today and analytics aggregates.
-		SELECT session_id,
-		       SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)) AS tokens,
-		       SUM(cost_usd) AS cost_usd
-		FROM turns GROUP BY session_id
-	) agg ON agg.session_id = s.id
-	LEFT JOIN (
-		-- Context occupancy: the LAST assistant turn's input footprint. Usage
-		-- lives on assistant turns; the newest one's input tokens ≈ how full the
-		-- context window is. A single window pass, no N+1.
-		SELECT session_id,
-		       COALESCE(tokens_in, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0) AS context_tokens,
-		       ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY seq DESC) AS rn
-		FROM turns
-		WHERE role = 'assistant'
-		  AND (tokens_in IS NOT NULL OR tokens_cache_read IS NOT NULL OR tokens_cache_write IS NOT NULL)
-	) ctx ON ctx.session_id = s.id AND ctx.rn = 1
 	LEFT JOIN (
 		-- phase 3.5: one best task link per session, picked in a single
 		-- window pass (explicit first, then highest confidence) — no N+1.
@@ -459,13 +484,6 @@ var sessionSelect = `
 		FROM task_sessions ts
 		JOIN tasks t ON t.id = ts.task_id
 	) tl ON tl.session_id = s.id AND tl.rn = 1
-	LEFT JOIN (
-		-- "why": the first user turn's prose per session, in one window pass.
-		SELECT session_id, text,
-		       ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY seq) AS rn
-		FROM turns
-		WHERE role = 'user' AND text IS NOT NULL AND TRIM(text) != ''
-	) why ON why.session_id = s.id AND why.rn = 1
 	LEFT JOIN (
 		-- fat-session wave (migration 0039): the latest daemon-generated handoff
 		-- brief per session, picked in one window pass — no N+1.
@@ -546,14 +564,19 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	// Sessions of ARCHIVED projects are excluded too — archiving a project hides
 	// it everywhere (list/analytics/overview), while its rows stay reachable by
 	// direct id and reappear if the project is restored.
-	query := sessionSelect + ` WHERE s.hidden = 0 AND p.archived = 0`
+	//
+	// `where` accumulates the filters for the PAGE CTE only — the cheap pass that
+	// picks which session rows this page returns. The expensive per-session
+	// columns (sessionCols) are then projected for those rows alone, so a 50-row
+	// page never pays the aggregate cost of the other ~1.7k sessions.
+	where := ` WHERE s.hidden = 0 AND p.archived = 0`
 	args := []any{}
 	if project := r.URL.Query().Get("project"); project != "" {
-		query += projectScopePredicate
+		where += projectScopePredicate
 		args = append(args, scopeArgs(project)...)
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
-		query += ` AND s.status = ?`
+		where += ` AND s.status = ?`
 		args = append(args, status)
 	}
 	// Subscription filter (migration 0047): exact match on sessions.account,
@@ -565,9 +588,9 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 	// its own rows.
 	if account := r.URL.Query().Get("account"); account != "" {
 		if account == ingest.DefaultAccount {
-			query += ` AND (s.account = '' OR s.account = ?)`
+			where += ` AND (s.account = '' OR s.account = ?)`
 		} else {
-			query += ` AND s.account = ?`
+			where += ` AND s.account = ?`
 		}
 		args = append(args, account)
 	}
@@ -582,7 +605,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid planTask"}`, http.StatusBadRequest)
 			return
 		}
-		query += ` AND (plan_task.id = ? OR phase_task.id = ?)`
+		where += ` AND (plan_task.id = ? OR phase_task.id = ?)`
 		args = append(args, id, id)
 	}
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
@@ -591,11 +614,20 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid cursor"}`, http.StatusBadRequest)
 			return
 		}
-		query += ` AND (s.started_at < ? OR (s.started_at = ? AND s.id < ?))`
+		where += ` AND (s.started_at < ? OR (s.started_at = ? AND s.id < ?))`
 		args = append(args, startedAt, startedAt, id)
 	}
 	// limit+1 probes for a next page without a COUNT query.
-	query += ` ORDER BY s.started_at DESC, s.id DESC LIMIT ?`
+	//
+	// Two stages, both keyed on the same (started_at DESC, id DESC) order:
+	//   page — the filters above over sessions/projects (+ the plan-group joins
+	//          the ?planTask predicate needs), yielding at most limit+1 ids;
+	//   outer — sessionCols for exactly those ids.
+	// Keeping the ORDER BY on the outer query too is what makes the page order
+	// survive the id round-trip: `IN (SELECT …)` is an unordered set.
+	const orderBy = ` ORDER BY s.started_at DESC, s.id DESC`
+	query := `WITH page AS (SELECT s.id AS sid` + sessionFrom + where + orderBy + ` LIMIT ?)
+		SELECT ` + sessionCols + sessionFrom + ` WHERE s.id IN (SELECT sid FROM page)` + orderBy
 	args = append(args, limit+1)
 
 	rows, err := h.DB.Query(query, args...)
