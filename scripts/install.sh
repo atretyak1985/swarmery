@@ -1,5 +1,5 @@
 #!/bin/bash
-# swarmery install — download a released binary. No toolchain required.
+# swarmery install — download or remove a released binary. No toolchain required.
 #
 #   # one line:
 #   curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh | bash
@@ -13,6 +13,8 @@
 # $SWARMERY_VERSION) → download that asset and SHA256SUMS → verify the checksum
 # → install into $SWARMERY_INSTALL_DIR (default ~/.local/bin). It builds
 # nothing, starts nothing, and installs no service.
+#
+# Use --uninstall to remove only the installed binary. User data is preserved.
 #
 # To build from source instead, use scripts/install-swarmery.sh (needs Go+Node).
 #
@@ -28,9 +30,30 @@ API="https://api.github.com/repos/${REPO_SLUG}/releases"
 for arg in "$@"; do
   case "$arg" in
     -h|--help)
-      echo "usage: install.sh"
+      echo "usage: install.sh [--uninstall]"
+      echo "  --uninstall                       remove the installed swarmery binary"
       echo "  SWARMERY_INSTALL_DIR=<dir>       install prefix (default: \$HOME/.local/bin)"
       echo "  SWARMERY_VERSION=swarmery-vX.Y.Z pin a release (default: latest)"
+      exit 0 ;;
+    --uninstall)
+      os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+      if [ "$os" = "darwin" ]; then
+        plist="$HOME/Library/LaunchAgents/com.swarmery.daemon.plist"
+        if [ -f "$plist" ]; then
+          echo "✗ swarmery launchd service is installed. Run 'swarmery uninstall' first, then retry." >&2
+          exit 1
+        fi
+      fi
+      binary="${INSTALL_DIR}/swarmery"
+      if [ -e "$binary" ]; then
+        rm -f "$binary"
+        echo "✓ removed ${binary}"
+      else
+        echo "• nothing to remove at ${binary}"
+      fi
+      echo "  User data was not removed:"
+      echo "    database: $HOME/.swarmery/swarmery.db"
+      echo "    logs:     $HOME/.swarmery/logs"
       exit 0 ;;
     *) echo "✗ unknown argument: $arg" >&2; exit 1 ;;
   esac
