@@ -85,12 +85,9 @@ function VerdictBadge({ verdict }: { verdict: string }): JSX.Element {
  * Record carried moved with it: `sourceLine` returns on every branch, so an
  * origin nobody has handled yet changes the words, not the render.
  */
-function SourceRow({ task }: { task: BoardTask }): JSX.Element {
+function SourceRow({ task, now }: { task: BoardTask; now: number }): JSX.Element {
   const sessionHref = useSessionHref();
   const line: SourceLine = sourceLine(task);
-  // One instant for both readings: an age and an expiry taken from two different
-  // clock reads can disagree by a day at a midnight boundary.
-  const now = Date.now();
   const age = ageLabel(task, now);
   const stale = staleLabel(task, now);
   const href =
@@ -481,12 +478,16 @@ export function TaskCard({
   const inTriage = task.boardColumn === 'triage';
   const signal = attentionSignal(task);
   const priorityDot = PRIORITY_DOT[task.priority];
+  // ONE clock read for the whole card: the dimming below and the age + archive
+  // caption in SourceRow are three readings of the same instant, and taking them
+  // from separate `Date.now()` calls lets a card dim without saying why.
+  const now = Date.now();
   // A card the sweeper is about to retire is dimmed rather than hidden or
   // badged: it is still triageable right up to the sweep, and the caption in the
   // source row says by when. `isStale` is false for every card the sweeper
   // cannot touch — which is most of the board — so this dims nothing that is not
   // actually expiring.
-  const stale = isStale(task, Date.now());
+  const stale = isStale(task, now);
   // A non-default playbook only. `null` and the literal 'standard' are the same
   // recipe (types.ts: null = default 'standard'), and the dispatcher stamps the
   // autopicked name onto the row, so a chip that fired on non-null would appear
@@ -529,7 +530,7 @@ export function TaskCard({
         <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">{task.title}</span>
       </div>
 
-      <SourceRow task={task} />
+      <SourceRow task={task} now={now} />
 
       {signal !== null && <SignalRow signal={signal} />}
 
