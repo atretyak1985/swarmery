@@ -1419,6 +1419,35 @@ export type TaskPriority = 'urgent' | 'high' | 'normal' | 'low';
 export type TaskOrigin = 'manual' | 'session' | 'llm' | 'verify-fix';
 
 /**
+ * Where a captured card came from — Go: boardTaskSourceDTO (migration 0066).
+ *
+ * The whole object is null on `BoardTask.source` for a hand-written card AND for
+ * a verifier fix task, so "was this captured?" is one null check instead of a
+ * compare against `origin` — a fix card has a non-manual origin and no capture
+ * provenance at all, which is precisely the case an origin test gets wrong.
+ */
+export interface BoardTaskSource {
+  /**
+   * The session the card was captured FROM. Not the session it runs in —
+   * `tasks.session_id` is that one, and confusing the two is the documented trap
+   * (plan README, board redesign v2).
+   */
+  sessionId: number | null;
+  /** uuid of the transcript record the card was minted from; null on older rows. */
+  turnUuid: string | null;
+  /**
+   * The session's opening prompt, clipped at capture (400 runes for new
+   * captures; rows backfilled by 0066 keep the full original excerpt).
+   */
+  quote: string | null;
+  /**
+   * Files that session had touched by capture time (≤20). Never null inside a
+   * non-null source — the DTO writes `[]`.
+   */
+  files: string[];
+}
+
+/**
  * A dispatchable board task — response of POST/PATCH /api/board/tasks, item of
  * GET /api/board/tasks, and the `task_updated` WS payload. Mirrors
  * boardTaskDTO in internal/api/tasks_board.go. Dispatcher-owned fields
@@ -1471,6 +1500,30 @@ export interface BoardTask {
   origin: TaskOrigin;
   /** Session a captured card was minted from; null for manual cards. */
   originSessionId: number | null;
+  /**
+   * Capture provenance as one nullable object (0066) — the turn, the quote and
+   * the files behind `origin`. Null for a manual card and for a verifier fix
+   * task. `originSessionId` above is the same id, kept for the callers that
+   * predate this field.
+   */
+  source: BoardTaskSource | null;
+  /**
+   * When the inbox sweeper will retire this card (RFC3339), or null when the
+   * sweep can never touch it — taskcap.StaleAfter under the daemon's
+   * SWARMERY_INBOX_TTL. Derived per request, never stored.
+   *
+   * NULL MEANS "NEVER EXPIRES", not "expired long ago": the sweeper only touches
+   * non-manual cards sitting in triage with no worktree, so most cards on the
+   * board carry null here. Read it with `isStale`/`staleLabel` in boardModel —
+   * `new Date(task.staleAfter) < now` on a null yields 1970 and marks half the
+   * board archivable.
+   */
+  staleAfter: string | null;
+  /**
+   * The exact first-stage prompt the dispatcher handed the runner — the audit of
+   * what actually went to the agent. Null until the card has been dispatched.
+   */
+  dispatchedPrompt: string | null;
   /**
    * External id of the WORKSPACE task this card's micro-plan became — the Plans
    * page entry for the same unit of work. A dispatched card materializes a
