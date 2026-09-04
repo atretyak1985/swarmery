@@ -39,7 +39,7 @@ for arg in "$@"; do
       os="$(uname -s | tr '[:upper:]' '[:lower:]')"
       if [ "$os" = "darwin" ]; then
         plist="$HOME/Library/LaunchAgents/com.swarmery.daemon.plist"
-        if [ -f "$plist" ] && launchctl print "gui/$(id -u)/com.swarmery.daemon" >/dev/null 2>&1; then
+        if [ -f "$plist" ]; then
           echo "✗ swarmery launchd service is installed. Run 'swarmery uninstall' first, then retry." >&2
           exit 1
         fi
