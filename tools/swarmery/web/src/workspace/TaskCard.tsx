@@ -1,9 +1,20 @@
 // Board task card (fusion phase 4): the unit on the board.
-// Shows title, the T-xxxx id chip, a priority dot, a model chip (when set), an
-// origin badge on cards the capture pipeline minted rather than a human, a
-// verdict badge (pass/fail/inconclusive — phase 6 fills verifyVerdict), a
-// dispatch-error warning icon with tooltip, a paused badge, and a session link
-// glyph when a branch/worktree exists. Clicking the card body opens the TaskModal.
+//
+// Four rows above the lane's action block (board redesign v2 phase 1), answering
+// "what / where from / does it want me" without opening the modal:
+//   1. title, with a priority dot only when the priority is urgent or high
+//   2. where the card came from + its age, linked, quote on hover (SourceRow)
+//   3. the ONE thing it wants — failed verdict, dispatch error, blocking
+//      dependency, awaited review — or nothing (SignalRow)
+//   4. chips for NON-DEFAULT values only: id, model, playbook ≠ standard, agent
+//      when set, a pass/inconclusive verdict, labels, paused, session link
+// A card the sweeper is about to retire is dimmed and captions its own archive
+// date in row 2. Everything a card no longer shows is in the TaskModal, which is
+// what clicking the body opens.
+//
+// Clipped in this phase: the ⟲ origin badge (row 2 says which session, not just
+// "from session") and the bare ⚠ dispatch-error glyph (row 3 says what broke).
+// The verdict chip survives only for pass/inconclusive — a FAIL is row 3.
 //
 // Drag&drop is GONE (board redesign phase 4). It used to be the dispatch
 // mechanism — HTML5 draggable on the card, a drop handler per column — and it
@@ -15,22 +26,37 @@
 // transition.
 
 import type { ReactNode } from 'react';
-import type { BoardColumn, BoardTask, TaskOrigin, TaskPriority } from '../api/types';
+import { Link } from 'react-router-dom';
+import type { BoardColumn, BoardTask, TaskPriority } from '../api/types';
+import { useSessionHref } from '../lib/sessionHref';
+import type { AttentionSignal, AttentionTone, SourceLine } from './boardModel';
 import {
+  ageLabel,
+  attentionSignal,
   BOARD_COLUMNS,
   BOARD_LANES,
   COLUMN_LABELS,
+  isStale,
   laneOf,
   LANE_TITLES,
   labelColor,
+  sourceLine,
+  staleLabel,
   visibleLabels,
 } from './boardModel';
+import { DEFAULT_PLAYBOOK } from './PlaybookPicker';
 
-const PRIORITY_DOT: Record<TaskPriority, string> = {
+/**
+ * Priorities that earn a dot. `normal` is the default every card carries and
+ * `low` is quieter than the default — a mark for either is a mark on every card,
+ * which is no mark at all (phase 1: badges only for non-default values).
+ *
+ * Partial on purpose: under `noUncheckedIndexedAccess` the lookup is
+ * `string | undefined`, so the renderer cannot forget the guard.
+ */
+const PRIORITY_DOT: Partial<Record<TaskPriority, string>> = {
   urgent: 'bg-red',
   high: 'bg-amber',
-  normal: 'bg-ink-faint',
-  low: 'bg-line-strong',
 };
 
 const VERDICT_STYLE: Record<string, string> = {
@@ -48,30 +74,90 @@ function VerdictBadge({ verdict }: { verdict: string }): JSX.Element {
   );
 }
 
-/** Provenance badge for a card the user did not write by hand: capture mints
- * 'session' cards from a session's todos, 'llm' cards from a suggestion, and the
- * verifier mints 'verify-fix' cards when a graded card fails. Manual cards (the
- * overwhelming majority) carry no badge.
+/**
+ * Where the card came from, with its age — row 2 of the card, and the answer to
+ * "what is this and why do I have it" that used to require opening the modal.
  *
- * This Record MUST stay total over the union: OriginBadge destructures the
- * looked-up entry, so a missing key is not a missing badge — it is a TypeError
- * that takes down the whole board render. 'verify-fix' was minted by the daemon
- * long before it was listed here, which is exactly how that happened. */
-const ORIGIN_BADGE: Record<Exclude<TaskOrigin, 'manual'>, { label: string; tip: string }> = {
-  session: { label: 'from session', tip: 'captured from a session todo' },
-  llm: { label: 'suggested', tip: 'suggested by a model, not hand-written' },
-  'verify-fix': { label: 'fix', tip: 'Spawned by verification to repair a failed card' },
+ * This replaced the ⟲ origin badge. The badge said "from session" in a chip; the
+ * line says which session, how long ago, links to the transcript and hovers the
+ * captured opening prompt. Keeping both would have printed the same fact twice
+ * on a card whose whole budget is four rows. The totality fence the badge's
+ * Record carried moved with it: `sourceLine` returns on every branch, so an
+ * origin nobody has handled yet changes the words, not the render.
+ */
+function SourceRow({ task }: { task: BoardTask }): JSX.Element {
+  const sessionHref = useSessionHref();
+  const line: SourceLine = sourceLine(task);
+  // One instant for both readings: an age and an expiry taken from two different
+  // clock reads can disagree by a day at a midnight boundary.
+  const now = Date.now();
+  const age = ageLabel(task, now);
+  const stale = staleLabel(task, now);
+  const href =
+    line.target === null
+      ? null
+      : line.target.kind === 'session'
+        ? sessionHref(line.target.sessionId)
+        : `/p/${line.target.slug}/plans`;
+  return (
+    <div className="mt-1 flex items-baseline gap-1.5 font-mono text-[9.5px] leading-snug text-ink-faint">
+      {href === null ? (
+        <span data-tip={line.tip} className="min-w-0 truncate">
+          {line.text}
+        </span>
+      ) : (
+        <Link
+          to={href}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          data-tip={line.tip}
+          className="min-w-0 truncate transition-colors hover:text-ink"
+        >
+          {line.text}
+        </Link>
+      )}
+      {age !== null && <span className="shrink-0">· {age}</span>}
+      {stale !== null && (
+        <span data-tip="the inbox sweeper retires captured cards left untriaged" className="ml-auto shrink-0 text-amber">
+          {stale}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Tone → how loud the signal row reads. A failure is red because it is a
+ * decision only a human can take; a dependency block is amber because it will
+ * clear itself; an awaited review is neither. */
+const SIGNAL_STYLE: Record<AttentionTone, string> = {
+  bad: 'text-red',
+  warn: 'text-amber',
+  info: 'text-ink-dim',
 };
 
-function OriginBadge({ origin }: { origin: Exclude<TaskOrigin, 'manual'> }): JSX.Element {
-  const { label, tip } = ORIGIN_BADGE[origin];
+/** The glyph that used to sit in the title row as a bare ⚠ with a tooltip. It
+ * reads the same way, next to words that say what happened. */
+const SIGNAL_GLYPH: Record<AttentionTone, string> = {
+  bad: '⚠',
+  warn: '⏸',
+  info: '◇',
+};
+
+/**
+ * Row 3: the ONE thing this card wants, or nothing at all. `attentionSignal`
+ * owns the precedence — see its doc for why a card never stacks two.
+ */
+function SignalRow({ signal }: { signal: AttentionSignal }): JSX.Element {
   return (
-    <span
-      data-tip={tip}
-      className="rounded-full border border-ink-faint/40 bg-field px-1.5 py-[1px] font-mono text-[9px] text-ink-dim"
+    <div
+      data-tip={signal.tip}
+      className={`mt-1 flex items-baseline gap-1 font-mono text-[9.5px] leading-snug ${SIGNAL_STYLE[signal.tone]}`}
     >
-      ⟲ {label}
-    </span>
+      <span aria-hidden="true" className="shrink-0">
+        {SIGNAL_GLYPH[signal.tone]}
+      </span>
+      <span className="min-w-0 truncate">{signal.text}</span>
+    </div>
   );
 }
 
@@ -393,6 +479,25 @@ export function TaskCard({
   // Triage is the only column where a card is still a question. Elsewhere it is
   // committed work, and the "why is this still here" hint would be noise.
   const inTriage = task.boardColumn === 'triage';
+  const signal = attentionSignal(task);
+  const priorityDot = PRIORITY_DOT[task.priority];
+  // A card the sweeper is about to retire is dimmed rather than hidden or
+  // badged: it is still triageable right up to the sweep, and the caption in the
+  // source row says by when. `isStale` is false for every card the sweeper
+  // cannot touch — which is most of the board — so this dims nothing that is not
+  // actually expiring.
+  const stale = isStale(task, Date.now());
+  // A non-default playbook only. `null` and the literal 'standard' are the same
+  // recipe (types.ts: null = default 'standard'), and the dispatcher stamps the
+  // autopicked name onto the row, so a chip that fired on non-null would appear
+  // on nearly every dispatched card.
+  const playbook = task.playbook !== null && task.playbook !== DEFAULT_PLAYBOOK ? task.playbook : null;
+  // A fail verdict is the attention signal above, with its detail. Repeating it
+  // as a chip would print the same word twice. Keyed on the verdict itself, not
+  // on the signal's tone: a PASSED card that also failed to dispatch has a 'bad'
+  // signal about the dispatch, and its verdict is still worth a chip.
+  const verdict =
+    task.verifyVerdict !== null && task.verifyVerdict.toLowerCase() !== 'fail' ? task.verifyVerdict : null;
   return (
     <div
       role="button"
@@ -411,25 +516,22 @@ export function TaskCard({
           onOpen();
         }
       }}
-      className="group cursor-pointer rounded-lg border border-line bg-surface p-2.5 transition-colors hover:border-line-strong focus:border-ink-dim focus:outline-none"
+      className={`group cursor-pointer rounded-lg border border-line bg-surface p-2.5 transition-colors hover:border-line-strong focus:border-ink-dim focus:outline-none ${stale ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start gap-2">
-        <span
-          aria-hidden="true"
-          data-tip={`${task.priority} priority`}
-          className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${PRIORITY_DOT[task.priority]}`}
-        />
-        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">{task.title}</span>
-        {task.dispatchError !== null && (
+        {priorityDot !== undefined && (
           <span
-            aria-label={`dispatch error: ${task.dispatchError}`}
-            data-tip={task.dispatchError}
-            className="shrink-0 text-[12px] leading-none text-red"
-          >
-            ⚠
-          </span>
+            aria-hidden="true"
+            data-tip={`${task.priority} priority`}
+            className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${priorityDot}`}
+          />
         )}
+        <span className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink">{task.title}</span>
       </div>
+
+      <SourceRow task={task} />
+
+      {signal !== null && <SignalRow signal={signal} />}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-faint">
@@ -440,16 +542,23 @@ export function TaskCard({
             {task.model}
           </span>
         )}
-        {task.playbook !== null && (
+        {playbook !== null && (
           <span
-            data-tip={`playbook: ${task.playbook}`}
+            data-tip={`playbook: ${playbook}`}
             className="rounded border border-brand/40 bg-brand/5 px-1 py-[1px] font-mono text-[9px] text-brand"
           >
-            ▤ {task.playbook}
+            ▤ {playbook}
           </span>
         )}
-        {task.origin !== 'manual' && <OriginBadge origin={task.origin} />}
-        {task.verifyVerdict !== null && <VerdictBadge verdict={task.verifyVerdict} />}
+        {task.agent !== null && (
+          <span
+            data-tip={`dispatches as @${task.agent}`}
+            className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-dim"
+          >
+            @{task.agent}
+          </span>
+        )}
+        {verdict !== null && <VerdictBadge verdict={verdict} />}
         <LabelBadges labels={task.labels} />
         {blocked && (
           <span className="rounded-full border border-amber/40 bg-amber/10 px-1.5 py-[1px] font-mono text-[9px] text-amber">
