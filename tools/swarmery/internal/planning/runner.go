@@ -2,6 +2,9 @@ package planning
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
@@ -25,6 +28,7 @@ type RunSpec struct {
 	Prompt      string // full planner prompt (idea + instructions)
 	SessionUUID string // daemon-generated; passed as --session-id (explicit link)
 	Cwd         string // the project path — the process runs here (hooks active)
+	Model       string // full model ID for --model; "" falls back to the runner's default
 }
 
 // Run is the outcome of a completed planner process.
@@ -40,10 +44,42 @@ type Run struct {
 // dir, which is longer than a mechanical run but must not wedge a slot forever).
 const planTimeout = 20 * time.Minute
 
-// defaultModel pins planner runs: without --model the CLI inherits the account
+// DefaultModel pins planner runs: without --model the CLI inherits the account
 // default (Fable-5 here — 2× the Opus price). Full ID, not an alias — aliases
 // re-resolve over time.
-const defaultModel = "claude-opus-5"
+const DefaultModel = "claude-opus-5"
+
+// Models is the closed set an operator may plan with, keyed by the short name
+// the dashboard shows and valued by the full ID that reaches --model. The
+// resolved ID is what the planning_sessions row stores, so every later resume
+// of the same wizard runs on the same model as its first turn.
+var Models = map[string]string{
+	"opus":   DefaultModel,
+	"sonnet": "claude-sonnet-5",
+	"fable":  "claude-fable-5-1",
+}
+
+// ErrUnknownModel: the requested model is neither a short name nor a full ID
+// from Models (400 at the api layer).
+var ErrUnknownModel = errors.New("unknown planning model")
+
+// ResolveModel maps an operator's choice to the full ID: "" is the default, a
+// short name or a full ID from Models passes, anything else is ErrUnknownModel.
+func ResolveModel(choice string) (string, error) {
+	c := strings.TrimSpace(choice)
+	if c == "" {
+		return DefaultModel, nil
+	}
+	if id, ok := Models[c]; ok {
+		return id, nil
+	}
+	for _, id := range Models {
+		if id == c {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("%w: %q", ErrUnknownModel, choice)
+}
 
 // permEnv is this spawn site's --permission-mode knob (internal/claudeflags owns
 // the resolution and the "off" escape hatch). A planner run's whole product is
@@ -61,7 +97,7 @@ const permEnv = "SWARMERY_PLANNING_PERMISSION_MODE"
 type ClaudeRunner struct {
 	// Timeout overrides planTimeout when > 0 (tests shrink it).
 	Timeout time.Duration
-	// Model overrides defaultModel when non-empty.
+	// Model overrides DefaultModel when non-empty and the spec carries none.
 	Model string
 }
 
@@ -75,9 +111,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	if timeout <= 0 {
 		timeout = planTimeout
 	}
-	model := r.Model
+	model := spec.Model
 	if model == "" {
-		model = defaultModel
+		model = r.Model
+	}
+	if model == "" {
+		model = DefaultModel
 	}
 
 	res, err := runcore.ClaudeRunner{Engine: "planning"}.Start(ctx, runcore.Spec{

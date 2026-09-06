@@ -1297,12 +1297,14 @@ export function fetchPlanning(projectId: number): Promise<PlanningStatus> {
  * 404 unknown project, 409 a run is already active, 503 not attached) throws the
  * server's {error} text for inline display.
  */
-export async function startPlanning(projectId: number, idea: string): Promise<PlanningStart> {
-  if (MOCK) return mockApi.startPlanning(projectId, idea);
+/** model is a planning short name (`opus` | `sonnet` | `fable`) or full ID;
+ * omit it for the planner default. 400 on an unknown model. */
+export async function startPlanning(projectId: number, idea: string, model?: string): Promise<PlanningStart> {
+  if (MOCK) return mockApi.startPlanning(projectId, idea, model);
   const res = await fetch(`/api/projects/${String(projectId)}/planning`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idea }),
+    body: JSON.stringify(model !== undefined && model !== '' ? { idea, model } : { idea }),
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };

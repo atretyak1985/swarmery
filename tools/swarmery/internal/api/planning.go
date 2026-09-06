@@ -150,9 +150,11 @@ func (h *Handler) getPlanning(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, st, err)
 }
 
-// POST /api/projects/{id}/planning {idea} → 202 {sessionUuid}. requireLocalOrigin.
-// 400 invalid id / empty idea; 404 unknown project; 409 a run is already active;
-// 503 the service is not attached.
+// POST /api/projects/{id}/planning {idea, model?} → 202 {sessionUuid}.
+// requireLocalOrigin. model is a planning.Models short name or full ID ("" or
+// absent = the planner default). 400 invalid id / empty idea / unknown model;
+// 404 unknown project; 409 a run is already active; 503 the service is not
+// attached.
 func (h *Handler) startPlanning(w http.ResponseWriter, r *http.Request) {
 	if planningSvc == nil {
 		writeClientErr(w, http.StatusServiceUnavailable, "planning not attached")
@@ -164,7 +166,8 @@ func (h *Handler) startPlanning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Idea string `json:"idea"`
+		Idea  string `json:"idea"`
+		Model string `json:"model"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
@@ -179,8 +182,11 @@ func (h *Handler) startPlanning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid, err := planningSvc.Start(id, body.Idea)
+	uuid, err := planningSvc.Start(id, body.Idea, body.Model)
 	switch {
+	case errors.Is(err, planning.ErrUnknownModel):
+		writeClientErr(w, http.StatusBadRequest, err.Error())
+		return
 	case errors.Is(err, planning.ErrProjectNotFound):
 		writeClientErr(w, http.StatusNotFound, "project not found")
 		return
@@ -219,8 +225,14 @@ func (h *Handler) cancelPlanning(w http.ResponseWriter, r *http.Request) {
 	writeJSONStatus(w, http.StatusAccepted, map[string]any{"status": "cancelling", "projectId": id})
 }
 
-// maxPlanningIdeaLen bounds the idea payload (a paragraph or three, not a file).
-const maxPlanningIdeaLen = 8000
+// maxPlanningIdeaLen bounds the idea payload in BYTES. The bound is technical,
+// not editorial: the idea travels inside the planner prompt, and the prompt is
+// ONE argv element of the spawned `claude -p` (see internal/runcore). Linux
+// caps a single argument at 128 KiB (MAX_ARG_STRLEN); macOS caps the whole argv
+// at 1 MiB. 100k leaves the prompt template and the rest of the argv room under
+// the stricter of the two, so a whole spec document pastes in, while a payload
+// that would make the spawn fail with E2BIG is refused up front instead.
+const maxPlanningIdeaLen = 100_000
 
 // maxRefineLen bounds refinement instructions (free-form prose, not a spec).
 const maxRefineLen = 4000
@@ -277,7 +289,10 @@ func (h *Handler) spawnWizardResume(w http.ResponseWriter, svc *planning.Service
 		writeClientErr(w, http.StatusConflict, msg)
 		return
 	}
-	started, err := startResume(sid, uuid, cwd.String, account.String, text, func(runErr error) {
+	// The wizard's pinned model rides along on every turn: the first spawn passed
+	// --model, and a resume without it would silently switch the interview to
+	// the account default mid-way.
+	started, err := startResume(sid, uuid, cwd.String, account.String, text, svc.Model(uuid), func(runErr error) {
 		// Runs after process exit, BEFORE the resume slot release. A failed or
 		// timed-out resume rolls back so the wizard is answerable again, WITH the
 		// process error as the reason — this is the one rollback the operator

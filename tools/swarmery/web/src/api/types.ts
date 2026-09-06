@@ -1682,6 +1682,8 @@ export interface PlanningOption {
   pros?: string[];
   cons?: string[];
   isOther?: boolean;
+  /** The one option the planner would pick itself; highlighted in the UI. */
+  recommended?: boolean;
 }
 
 /**
@@ -1765,6 +1767,9 @@ export interface PlanningStatus {
    * EXISTING plan and stages a diff instead of writing docs. The empty string
    * mirrors the wire ("" when no wizard row exists), same as `status`. */
   mode: 'plan' | 'revise' | '';
+  /** Full model ID every turn of this wizard runs on (the first spawn and each
+   * resume pass the same `--model`). Empty string when no wizard row exists. */
+  model: string;
   /** The workspace task whose plan a `revise` wizard targets; null otherwise. */
   reviseTaskId: number | null;
   /** Why the LAST action did not go through (failed resume spawn, planner

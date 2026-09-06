@@ -158,7 +158,7 @@ func TestClaudeRunner_Start_ArgvPin(t *testing.T) {
 		want  []string
 	}{
 		{"default model", "", []string{"-p", "plan it", "--session-id", "u-argv",
-			"--permission-mode", claudeflags.DefaultMode, "--model", defaultModel}},
+			"--permission-mode", claudeflags.DefaultMode, "--model", DefaultModel}},
 		{"model override", "claude-sonnet-5", []string{"-p", "plan it", "--session-id", "u-argv",
 			"--permission-mode", claudeflags.DefaultMode, "--model", "claude-sonnet-5"}},
 	} {
