@@ -266,6 +266,15 @@ type boardTaskDTO struct {
 	// DispatchedPrompt is the exact first-stage prompt the dispatcher handed the
 	// runner; null until the card has been dispatched.
 	DispatchedPrompt *string `json:"dispatchedPrompt"`
+	// PendingApprovalCount is how many permission requests are sitting unanswered
+	// on this card's run — the fourth disjunct of the board's "needs me" filter,
+	// and the only one the DTO could not already answer. Derived, never stored;
+	// 0 (never null) so the client reads "no run, no approvals" and "nothing
+	// pending" the same way, which is what the filter means by them.
+	//
+	// It is a COUNT rather than a bool because the number is the useful part of
+	// "this run is parked": one request is a question, five is a wall.
+	PendingApprovalCount int `json:"pendingApprovalCount"`
 	// Derived, never stored: whether a task that claims to be running actually is,
 	// and on what evidence. Computed per request by internal/staleness — a cached
 	// verdict would be stale exactly when it matters, since the state it reads
@@ -378,7 +387,108 @@ func (h *Handler) boardTaskByID(id int64) (*boardTaskDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.PendingApprovalCount = pendingApprovalCount(h.DB, id)
 	return &d, nil
+}
+
+// pendingApprovalPairs is every (card, unanswered permission request) pair in the
+// database, and the ONE definition of "this card's run is waiting on a human".
+// Both readers below wrap it, so the list and the single-card reads can never
+// answer the same question differently.
+//
+// permission_requests has no task_id — the link runs through the SESSION. Which
+// session is the whole design question, and there are three candidate columns:
+//
+//	tasks.session_id            REJECTED. Stamped COALESCE-first-wins
+//	                            (runcore.StampPrimarySession), so a multi-stage
+//	                            playbook pins it to stage 1 forever and an approval
+//	                            raised in stage 3 would be invisible. It is also
+//	                            redundant: it is only ever written after an explicit
+//	                            task_sessions upsert, so the arm below is a strict
+//	                            superset of it.
+//	tasks.origin_session_id     REJECTED. That is the session a card was CAPTURED
+//	                            from — someone's live interactive session, whose
+//	                            approvals have nothing to do with this card.
+//	task_sessions('explicit')   ARM 1. Every stage of a playbook lands here as it
+//	                            exits (dispatch.linkSession). 'explicit' only:
+//	                            heuristic links are cwd/time guesses and would
+//	                            charge a stranger's approval to this card.
+//
+// Arm 1 alone would still read 0 exactly when it matters. linkSession runs AFTER
+// a stage's process exits, and an agent blocked on a permission request has not
+// exited — so during the block the only thing tying the run to the card is the
+// uuid the dispatcher parked BEFORE spawning. Hence:
+//
+//	tasks.dispatch_session_uuid ARM 2. Authoritative from the instant the run
+//	                            starts, which is the same reason ingest.isEngineRun
+//	                            keeps it alongside its own task_sessions arm: a
+//	                            predicate that guards the board must not depend on
+//	                            a race with ingest.
+//
+// UNION, not UNION ALL: stage 1 satisfies both arms once its transcript lands, and
+// its request must count once. Deduping on (task_id, request_id) is what makes that
+// true for the request rather than for the row.
+const pendingApprovalPairs = `
+	SELECT ts.task_id AS task_id, pr.id AS request_id
+	  FROM permission_requests pr
+	  JOIN task_sessions ts ON ts.session_id = pr.session_id AND ts.link_source = 'explicit'
+	 WHERE pr.status = 'pending'
+	UNION
+	SELECT t.id AS task_id, pr.id AS request_id
+	  FROM permission_requests pr
+	  JOIN sessions s ON s.id = pr.session_id
+	  JOIN tasks t ON t.dispatch_session_uuid = s.session_uuid
+	 WHERE pr.status = 'pending'`
+
+// pendingApprovalCount answers for ONE card (the POST/PATCH response and the
+// task_updated WS payload, which replace the client's row wholesale — leaving it
+// at 0 here would blank the field on every edit). 0 on error: a derived hint must
+// never fail the write it rides along with.
+func pendingApprovalCount(db *sql.DB, id int64) int {
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM (`+pendingApprovalPairs+`) WHERE task_id = ?`, id).Scan(&n); err != nil {
+		log.Printf("warning: api: pending approvals (task %d): %v", id, err)
+		return 0
+	}
+	return n
+}
+
+// annotatePendingApprovals fills the count for a whole board in ONE query, the
+// same shape and the same best-effort contract as annotateStaleness: a card the
+// map does not mention keeps its zero value.
+//
+// Unbounded by the board's size on purpose — the outer filter is
+// `status = 'pending'` against idx_pr_pending, and unanswered approvals are a
+// handful at any instant, so the scan is over that handful and not over the
+// cards. Per-card queries would have inverted exactly that.
+func annotatePendingApprovals(db *sql.DB, out []boardTaskDTO) {
+	if len(out) == 0 {
+		return
+	}
+	rows, err := db.Query(`SELECT task_id, COUNT(*) FROM (` + pendingApprovalPairs + `) GROUP BY task_id`)
+	if err != nil {
+		log.Printf("warning: api: pending approvals annotate: %v", err)
+		return
+	}
+	defer rows.Close()
+	byID := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			log.Printf("warning: api: pending approvals scan: %v", err)
+			return
+		}
+		byID[id] = n
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("warning: api: pending approvals rows: %v", err)
+		return
+	}
+	for i := range out {
+		out[i].PendingApprovalCount = byID[out[i].ID]
+	}
 }
 
 // publishTaskUpdated notifies WS subscribers a board task row changed. No-op
@@ -534,6 +644,9 @@ func (h *Handler) listBoardTasks(w http.ResponseWriter, r *http.Request) {
 	// empty and never fails the list — a missing derived hint must not cost the
 	// board its data.
 	annotateStaleness(h.DB, out)
+	// Same reasoning, same shape: one extra query for the whole board rather than
+	// four more aggregates on the select every single-task reader would then pay for.
+	annotatePendingApprovals(h.DB, out)
 	writeJSON(w, out, nil)
 }
 

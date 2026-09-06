@@ -19,18 +19,27 @@ import {
   amnestyBefore,
   amnestyCandidates,
   attentionSignal,
+  BOARD_FILTERS,
   BOARD_LANES,
   COLUMN_LABELS,
   compareDispatchOrder,
   DEP_BLOCK_PREFIX,
+  filterTasks,
   idleSince,
   inboxTtlMs,
+  isExpired,
   isStale,
   labelColor,
   labelFilterOptions,
+  LANE_EMPTY,
   LANE_TITLES,
+  laneEmptyNote,
   laneOf,
+  matchesBoardFilter,
   matchesLabelFilter,
+  needsMe,
+  parseBoardFilter,
+  parseBoardView,
   sourceLine,
   splitLanes,
   staleLabel,
@@ -74,6 +83,7 @@ function makeTask(over: Partial<BoardTask> = {}): BoardTask {
     source: null,
     staleAfter: null,
     dispatchedPrompt: null,
+    pendingApprovalCount: 0,
     planExternalId: null,
     resultNote: null,
     columnMovedAt: null,
@@ -728,5 +738,254 @@ describe('stateLabel (board redesign v2 phase 2)', () => {
   it('keeps the column word when the row status disagrees with it', () => {
     // A card marked done by hand keeps whatever status its last run left behind.
     expect(stateLabel(makeTask({ boardColumn: 'done', status: 'running' }))).toBe('Done');
+  });
+});
+
+// --- board filters (phase 5) --------------------------------------------------
+
+describe('needsMe', () => {
+  // The phase doc defines this predicate as four disjuncts. Each one is peeled
+  // off a card that satisfies ALL of them, so a test can only pass by the
+  // disjunct it names — an implementation that dropped, say, the approval arm
+  // would still satisfy a test that left the other three set.
+  const allFour = (): BoardTask =>
+    makeTask({
+      boardColumn: 'in_review',
+      verifyVerdict: 'fail',
+      dispatchError: 'runner start: exec not found',
+      pendingApprovalCount: 2,
+    });
+
+  it('matches on the review lane alone', () => {
+    expect(
+      needsMe(
+        makeTask({
+          boardColumn: 'in_review',
+          verifyVerdict: null,
+          dispatchError: null,
+          pendingApprovalCount: 0,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('matches on a FAIL verdict alone', () => {
+    expect(
+      needsMe(makeTask({ boardColumn: 'todo', verifyVerdict: 'fail', pendingApprovalCount: 0 })),
+    ).toBe(true);
+  });
+
+  it('matches on a dispatch error alone', () => {
+    expect(
+      needsMe(
+        makeTask({
+          boardColumn: 'todo',
+          dispatchError: 'session exited 1: boom',
+          pendingApprovalCount: 0,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('matches on a pending approval alone', () => {
+    // The card the fourth disjunct exists for: running, healthy, and parked on a
+    // permission prompt. Nothing else on the row says so.
+    expect(
+      needsMe(
+        makeTask({
+          boardColumn: 'in_progress',
+          verifyVerdict: null,
+          dispatchError: null,
+          pendingApprovalCount: 1,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not match a card that satisfies none of the four', () => {
+    expect(
+      needsMe(
+        makeTask({
+          boardColumn: 'in_progress',
+          verifyVerdict: 'pass',
+          dispatchError: null,
+          pendingApprovalCount: 0,
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('still matches when every disjunct holds at once', () => {
+    expect(needsMe(allFour())).toBe(true);
+  });
+
+  it('reads a mixed-case verdict as a failure', () => {
+    // Verdicts are lowercase on the wire; a case fold is what keeps the loudest
+    // signal on the board from being lost silently.
+    expect(needsMe(makeTask({ boardColumn: 'todo', verifyVerdict: 'FAIL' }))).toBe(true);
+    expect(needsMe(makeTask({ boardColumn: 'todo', verifyVerdict: 'pass' }))).toBe(false);
+  });
+
+  it('treats an empty dispatch error as no error', () => {
+    // The column has held both null and '' for "nothing went wrong"; the chip
+    // must not fire on whitespace.
+    expect(needsMe(makeTask({ boardColumn: 'todo', dispatchError: '' }))).toBe(false);
+    expect(needsMe(makeTask({ boardColumn: 'todo', dispatchError: '   ' }))).toBe(false);
+  });
+
+  it('matches a dependency-blocked card, which is the same column as a real error', () => {
+    // Documented behaviour rather than an accident: the plan defines the third
+    // disjunct as any dispatch error, and the dispatcher writes a dependency
+    // block into that same column. The card's own signal row still tells the two
+    // apart in words.
+    const blocked = makeTask({ boardColumn: 'todo', dispatchError: `${DEP_BLOCK_PREFIX}T-14` });
+    expect(needsMe(blocked)).toBe(true);
+    expect(attentionSignal(blocked)?.tone).toBe('warn');
+  });
+
+  it('ignores a done or archived card that once failed', () => {
+    // laneOf is null for the history columns, but the verdict arm does not read
+    // the lane — a landed card keeps its FAIL verdict on the row, so this is the
+    // one place the predicate is deliberately loud about history.
+    expect(needsMe(makeTask({ boardColumn: 'done', verifyVerdict: 'pass' }))).toBe(false);
+  });
+});
+
+describe('matchesBoardFilter / filterTasks', () => {
+  const now = Date.parse('2026-09-06T00:00:00Z');
+  const inReview = makeTask({ boardColumn: 'in_review' });
+  const running = makeTask({ boardColumn: 'in_progress' });
+  const stale = makeTask({ boardColumn: 'triage', staleAfter: '2026-09-07T00:00:00Z' });
+  const plain = makeTask({ boardColumn: 'todo' });
+  const all = [inReview, running, stale, plain];
+
+  it('selects exactly the cards that need a human', () => {
+    expect(filterTasks(all, 'needsMe', now)).toEqual([inReview]);
+  });
+
+  it('selects exactly the in-flight cards', () => {
+    expect(filterTasks(all, 'running', now)).toEqual([running]);
+  });
+
+  it('selects exactly the cards near their archive date', () => {
+    expect(filterTasks(all, 'stale', now)).toEqual([stale]);
+  });
+
+  it('returns the list untouched with no filter', () => {
+    // Identity, not a copy: an unfiltered board must not allocate a new array on
+    // every render and re-run every downstream memo.
+    expect(filterTasks(all, null, now)).toBe(all);
+  });
+
+  it('agrees with the stale predicate the card dims on', () => {
+    // The chip and the card must select the same set — one predicate, two
+    // readers.
+    for (const t of all) {
+      expect(matchesBoardFilter(t, 'stale', now)).toBe(isStale(t, now));
+    }
+  });
+
+  it('composes with the label filter, in either order', () => {
+    // The two filters are orthogonal — one is about the card's state, the other
+    // about its subject — so intersecting them must be order-independent.
+    const tagged = makeTask({ boardColumn: 'in_review', labels: ['ui'] });
+    const untagged = makeTask({ boardColumn: 'in_review' });
+    const pool = [tagged, untagged, running];
+    const stateThenLabel = filterTasks(pool, 'needsMe', now).filter((t) =>
+      matchesLabelFilter(t, 'ui'),
+    );
+    const labelThenState = filterTasks(
+      pool.filter((t) => matchesLabelFilter(t, 'ui')),
+      'needsMe',
+      now,
+    );
+    expect(stateThenLabel).toEqual([tagged]);
+    expect(labelThenState).toEqual([tagged]);
+  });
+
+  it('can produce an empty result without dropping the filter', () => {
+    expect(filterTasks([plain], 'needsMe', now)).toEqual([]);
+  });
+});
+
+describe('parseBoardFilter / parseBoardView', () => {
+  it('round-trips every chip token', () => {
+    for (const f of BOARD_FILTERS) expect(parseBoardFilter(f)).toBe(f);
+  });
+
+  it('reads a missing or unknown ?f= as no filter', () => {
+    // A URL is user-editable and arrives from bookmarks written against older
+    // builds. Showing the whole board is the honest answer to a word we do not
+    // know; showing nothing would look like an empty board.
+    expect(parseBoardFilter(null)).toBeNull();
+    expect(parseBoardFilter('')).toBeNull();
+    expect(parseBoardFilter('needsme')).toBeNull();
+    expect(parseBoardFilter('blocked')).toBeNull();
+  });
+
+  it('reads ?view=graph and defaults everything else to the board', () => {
+    expect(parseBoardView('graph')).toBe('graph');
+    expect(parseBoardView('board')).toBe('board');
+    expect(parseBoardView(null)).toBe('board');
+    expect(parseBoardView('lanes')).toBe('board');
+  });
+});
+
+describe('laneEmptyNote', () => {
+  it('explains what each lane is for when nothing is filtered', () => {
+    for (const lane of BOARD_LANES) {
+      const note = laneEmptyNote(lane, null);
+      expect(note).toBe(LANE_EMPTY[lane]);
+      // One sentence, not a bare "empty".
+      expect(note.length).toBeGreaterThan(20);
+      expect(note.endsWith('.')).toBe(true);
+    }
+  });
+
+  it('says the filter is hiding the cards rather than repeating the lane blurb', () => {
+    // The lane blurb would be a non-sequitur under a filter: the reader needs to
+    // know which of "nothing is here" and "nothing matches" they are looking at.
+    const note = laneEmptyNote('review', 'needsMe');
+    expect(note).not.toBe(LANE_EMPTY.review);
+    expect(note).toContain('Review');
+    expect(note).toContain('needs me');
+  });
+});
+
+describe('isExpired vs isStale', () => {
+  const now = Date.parse('2026-09-06T00:00:00Z');
+
+  it('makes the amnesty set a subset of the stale set', () => {
+    // The banner writes; the chip only looks. Every card the banner offers to
+    // archive must therefore also read as stale on the board — the reverse is
+    // not true, and must not be.
+    const cards = [
+      makeTask({ staleAfter: '2026-09-01T00:00:00Z' }), // long past
+      makeTask({ staleAfter: '2026-09-07T00:00:00Z' }), // inside the warn window
+      makeTask({ staleAfter: '2026-10-01T00:00:00Z' }), // far out
+      makeTask({ staleAfter: null }), // never expires
+    ];
+    for (const t of cards) {
+      if (isExpired(t, now)) expect(isStale(t, now)).toBe(true);
+    }
+    expect(cards.filter((t) => isExpired(t, now)).length).toBe(1);
+    expect(cards.filter((t) => isStale(t, now)).length).toBe(2);
+  });
+
+  it('keeps the banner counting only what the server would actually archive', () => {
+    // The server's predicate is `idleSince < now - TTL`, i.e. exactly
+    // `staleAfter < now`. Counting the warn window here would put a number in
+    // the pitch that the write then declines to act on.
+    const cards = [
+      makeTask({ staleAfter: '2026-09-01T00:00:00Z' }),
+      makeTask({ staleAfter: '2026-09-07T00:00:00Z' }),
+    ];
+    expect(amnestyCandidates(cards, now)).toBe(1);
+  });
+
+  it('reads a card with no archive date as neither', () => {
+    const never = makeTask({ staleAfter: null });
+    expect(isExpired(never, now)).toBe(false);
+    expect(isStale(never, now)).toBe(false);
   });
 });

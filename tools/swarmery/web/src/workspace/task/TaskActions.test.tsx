@@ -71,6 +71,7 @@ function makeTask(over: Partial<BoardTask> = {}): BoardTask {
     source: null,
     staleAfter: null,
     dispatchedPrompt: null,
+    pendingApprovalCount: 0,
     planExternalId: null,
     resultNote: null,
     columnMovedAt: null,

@@ -1298,6 +1298,7 @@ function boardTask(p: Partial<BoardTask> & Pick<BoardTask, 'id' | 'externalId' |
     source: null,
     staleAfter: null,
     dispatchedPrompt: null,
+    pendingApprovalCount: 0,
     planExternalId: null,
     columnMovedAt: iso(30 * MIN),
     createdAt: iso(60 * MIN),
@@ -1336,6 +1337,10 @@ let mockBoard: BoardTask[] = [
     model: 'opus', playbook: 'review-heavy',
     // 4 labels demos the 3 + "+N" overflow chip.
     labels: ['jira-ticket', 'ui', 'needs-design', 'flaky'],
+    // The one card on the demo board that needs a human ONLY because its run is
+    // parked on permission requests: it is running, has no error and no verdict,
+    // so it matches `needsMe` through the fourth disjunct and nothing else.
+    pendingApprovalCount: 2,
   }),
   boardTask({
     id: 9105, externalId: 'T-m4n5o6', title: 'TaskDrawer edit fields', boardColumn: 'in_progress',
