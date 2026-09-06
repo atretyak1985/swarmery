@@ -1309,6 +1309,21 @@ function boardTask(p: Partial<BoardTask> & Pick<BoardTask, 'id' | 'externalId' |
 let mockBoard: BoardTask[] = [
   boardTask({ id: 9101, externalId: 'T-a1b2c3', title: 'Add keyboard nav to the board', boardColumn: 'triage', priority: 'high' }),
   boardTask({ id: 9102, externalId: 'T-d4e5f6', title: 'Wire status bar to /api/dispatch', boardColumn: 'triage' }),
+  // The card the board redesign is about: captured from a session, sitting in
+  // the Inbox with a provenance block (0066) and an archive date, and never
+  // dispatched. Without one here, neither the card's source line (phase 1) nor
+  // the modal's source block (phase 2) has anything to render in mock mode.
+  boardTask({
+    id: 9111, externalId: 'T-c9d8e7', title: 'Board cards should say where they came from',
+    boardColumn: 'triage', origin: 'session', originSessionId: 1867,
+    prompt: 'Every captured card reads "from a session" and nothing else: no quote, no link to the turn, no files.',
+    source: {
+      sessionId: 1867, turnUuid: '9f2c1ab4-0000-4000-8000-000000000001',
+      quote: 'the board is unreadable: I cannot tell what half these cards are or why I have them',
+      files: ['web/src/workspace/TaskCard.tsx', 'internal/api/tasks_board.go'],
+    },
+    staleAfter: iso(-2 * 24 * 60 * MIN), columnMovedAt: iso(12 * 24 * 60 * MIN), createdAt: iso(12 * 24 * 60 * MIN),
+  }),
   boardTask({
     id: 9103, externalId: 'T-g7h8i9', title: 'Optimistic column moves with revert', boardColumn: 'todo',
     planExternalId: '2026-07-18-plan-doc-lifecycle',
