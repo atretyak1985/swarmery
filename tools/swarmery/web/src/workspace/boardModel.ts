@@ -15,14 +15,44 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   'archived',
 ];
 
+/**
+ * The ONE word each column is called in the UI. `todo` reads 'Queued' because
+ * that is what the Working lane already calls the group it renders (Board.tsx)
+ * — the pair 'Todo'/'Queued' was two words for one state, and the modal printed
+ * a third (the raw `queued` status). Everything user-visible now derives from
+ * this map; the `todo` VALUE on the wire is untouched, it is what the dispatcher
+ * triggers on.
+ */
 export const COLUMN_LABELS: Record<BoardColumn, string> = {
   triage: 'Triage',
-  todo: 'Todo',
+  todo: 'Queued',
   in_progress: 'In Progress',
   in_review: 'In Review',
   done: 'Done',
   archived: 'Archived',
 };
+
+/**
+ * What state the card is in, in the board's own vocabulary — the modal's
+ * replacement for rendering the raw `status` field.
+ *
+ * `status` is the DISPATCHER's column: a card that has never run reads `queued`
+ * there whether it is sitting in the Inbox awaiting triage or actually waiting
+ * for a slot, so printing it told the reader something that was true of the row
+ * and false of the card. The board column is what the board is about, and the
+ * two pause flags are the only thing the column does not already say — the
+ * dispatcher parks a card (`paused`) for a reason the card cannot show, and the
+ * user parks it (`userPaused`) deliberately, and those need different words.
+ *
+ * Total over `BoardColumn` by construction: the base comes out of a total
+ * Record, so a new column changes what a card SAYS, never whether it renders.
+ */
+export function stateLabel(task: BoardTask): string {
+  const base = COLUMN_LABELS[task.boardColumn];
+  if (task.userPaused) return `${base} · paused by you`;
+  if (task.paused) return `${base} · paused by the dispatcher`;
+  return base;
+}
 
 // --- lanes (board redesign phase 4) -------------------------------------------
 //
