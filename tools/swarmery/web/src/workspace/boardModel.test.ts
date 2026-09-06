@@ -20,6 +20,7 @@ import {
   amnestyCandidates,
   attentionSignal,
   BOARD_LANES,
+  COLUMN_LABELS,
   compareDispatchOrder,
   DEP_BLOCK_PREFIX,
   idleSince,
@@ -34,6 +35,7 @@ import {
   splitLanes,
   staleLabel,
   STALE_WARN_DAYS,
+  stateLabel,
   uniqueLabels,
   visibleLabels,
 } from './boardModel';
@@ -687,5 +689,44 @@ describe('splitLanes', () => {
     const before = tasks.map((t) => t.id);
     splitLanes(tasks);
     expect(tasks.map((t) => t.id)).toEqual(before);
+  });
+});
+
+describe('stateLabel (board redesign v2 phase 2)', () => {
+  it('names every column in the board vocabulary, never the raw status', () => {
+    const columns: BoardColumn[] = ['triage', 'todo', 'in_progress', 'in_review', 'done', 'archived'];
+    const seen = columns.map((c) => stateLabel(makeTask({ boardColumn: c, status: 'queued' })));
+    expect(seen).toEqual(['Triage', 'Queued', 'In Progress', 'In Review', 'Done', 'Archived']);
+    // `status` is the dispatcher's own word for the row, and it reads 'queued'
+    // for a card that has never been near the dispatcher — which is exactly the
+    // card whose modal used to print it.
+    expect(seen).not.toContain('queued');
+  });
+
+  it("calls the todo column 'Queued' — the word the Working lane already uses", () => {
+    expect(COLUMN_LABELS.todo).toBe('Queued');
+  });
+
+  it('separates a pause the user took from one the dispatcher took', () => {
+    expect(stateLabel(makeTask({ boardColumn: 'todo', userPaused: true }))).toBe(
+      'Queued · paused by you',
+    );
+    expect(stateLabel(makeTask({ boardColumn: 'in_progress', paused: true }))).toBe(
+      'In Progress · paused by the dispatcher',
+    );
+  });
+
+  it('attributes the pause to the user when both flags are set', () => {
+    // A user pause sets user_paused and the dispatcher mirrors it into paused,
+    // so both are true on a card the user parked — "you did this" is the half
+    // that tells the reader how to undo it.
+    expect(stateLabel(makeTask({ boardColumn: 'todo', paused: true, userPaused: true }))).toBe(
+      'Queued · paused by you',
+    );
+  });
+
+  it('keeps the column word when the row status disagrees with it', () => {
+    // A card marked done by hand keeps whatever status its last run left behind.
+    expect(stateLabel(makeTask({ boardColumn: 'done', status: 'running' }))).toBe('Done');
   });
 });
