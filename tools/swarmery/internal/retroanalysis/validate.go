@@ -23,10 +23,11 @@ var RequiredSections = []string{"## Що болить", "## Чому", "## Що 
 // ChangeSection is the heading whose body becomes the Planning Mode idea.
 const ChangeSection = "## Що я б змінив"
 
-// maxChangeSectionLen bounds the change section in BYTES. It sits under
-// maxPlanningIdeaLen (8000, enforced with len() in internal/api/planning.go)
-// with room for the window/scope preamble the handoff prepends. Bytes, not
-// runes: the gate downstream measures bytes, and this text is Cyrillic.
+// maxChangeSectionLen bounds the change section in BYTES. It sits far under
+// maxPlanningIdeaLen (enforced with len() in internal/api/planning.go) with
+// room for the window/scope preamble the handoff prepends; the tighter cap here
+// is editorial — a change proposal is a paragraph or three, not a spec. Bytes,
+// not runes: the gate downstream measures bytes, and this text is Cyrillic.
 const maxChangeSectionLen = 6000
 
 // markerRe matches one citation marker. The kind vocabulary is the twin of

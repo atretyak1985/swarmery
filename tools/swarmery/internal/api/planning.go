@@ -225,8 +225,14 @@ func (h *Handler) cancelPlanning(w http.ResponseWriter, r *http.Request) {
 	writeJSONStatus(w, http.StatusAccepted, map[string]any{"status": "cancelling", "projectId": id})
 }
 
-// maxPlanningIdeaLen bounds the idea payload (a paragraph or three, not a file).
-const maxPlanningIdeaLen = 8000
+// maxPlanningIdeaLen bounds the idea payload in BYTES. The bound is technical,
+// not editorial: the idea travels inside the planner prompt, and the prompt is
+// ONE argv element of the spawned `claude -p` (see internal/runcore). Linux
+// caps a single argument at 128 KiB (MAX_ARG_STRLEN); macOS caps the whole argv
+// at 1 MiB. 100k leaves the prompt template and the rest of the argv room under
+// the stricter of the two, so a whole spec document pastes in, while a payload
+// that would make the spawn fail with E2BIG is refused up front instead.
+const maxPlanningIdeaLen = 100_000
 
 // maxRefineLen bounds refinement instructions (free-form prose, not a spec).
 const maxRefineLen = 4000

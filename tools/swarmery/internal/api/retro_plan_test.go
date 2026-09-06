@@ -246,7 +246,7 @@ func TestPlanRefusesAnOversizedIdea(t *testing.T) {
 	// caps it at generation time, so this models a row written by an older
 	// build — exactly the case the endpoint must refuse rather than truncate.
 	long := "## Що болить\nx [E:agent:tech-lead]\n\n## Чому\ny [E:rec:1]\n\n## Що я б змінив\n" +
-		strings.Repeat("змінити щось конкретне. ", 400) + "[E:session:sess-alpha]\n"
+		strings.Repeat("змінити щось конкретне. ", 2500) + "[E:session:sess-alpha]\n"
 	if _, err := db.Exec(`UPDATE retro_analyses SET markdown = ? WHERE id = ?`, long, id); err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestPlanRefusesAnOversizedIdea(t *testing.T) {
 	if code != http.StatusUnprocessableEntity {
 		t.Fatalf("plan = %d %s, want 422", code, body)
 	}
-	if !strings.Contains(body, "8000-byte limit") {
+	if !strings.Contains(body, "100000-byte limit") {
 		t.Errorf("422 body = %s, want the limit in the text", body)
 	}
 	if !strings.Contains(body, "-byte planning idea") {
