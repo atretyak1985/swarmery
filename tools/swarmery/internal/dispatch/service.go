@@ -349,11 +349,21 @@ type candidate struct {
 	depBlocker *DepBlocker // nil ⇒ every dependency clear
 }
 
-// body is the text a run is built from: the card's prompt plus, for a captured
-// card, its provenance block. Used for the {task_prompt} variable and for the
-// implicit single stage alike, so the two paths cannot disagree about what the
-// runner is told.
-func (c candidate) body() string { return c.Prompt + c.Provenance }
+// buildDispatchPrompt assembles the task body a run is built from: the card's
+// own prompt followed by, for a captured card, its provenance block. It feeds
+// the {task_prompt} variable and the implicit single stage alike, so the two
+// paths cannot disagree about what the runner is told, and it is the ONE place
+// that decides what a dispatched card says.
+//
+// The card's TITLE is deliberately not part of it. For a captured card the
+// title is a clipped prefix of the prompt (ingest/capture.go), and for a
+// title-only manual card the intake contract already copied the title INTO the
+// prompt ("empty prompt = title", NewTaskModal) — prepending it would repeat
+// the same sentence back at the model. The title does reach the run, as the
+// heading of the micro-plan doc the contract points at (mintMicroPlan). What
+// the user wrote therefore stays first and verbatim, and a card with no
+// provenance dispatches with a prompt byte-identical to the pre-0066 one.
+func buildDispatchPrompt(c candidate) string { return c.Prompt + c.Provenance }
 
 // provenanceBlock renders the dispatch-time provenance of a captured card.
 // "" when there is nothing to say. The wording deliberately differs from the
@@ -801,7 +811,7 @@ type resolvedPlaybook struct {
 // A card that never chose a playbook gets one auto-selected here and STAMPED
 // back onto the row, so the board shows the recipe that actually ran.
 func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
-	single := resolvedPlaybook{stages: []resolvedStage{{name: "implement", body: c.body()}}}
+	single := resolvedPlaybook{stages: []resolvedStage{{name: "implement", body: buildDispatchPrompt(c)}}}
 	if s.Playbooks == nil {
 		return single
 	}
@@ -950,7 +960,7 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 		// Render this stage's body with the per-run var map, then append the
 		// execution contract (appended to EVERY stage regardless of playbook).
 		vars := playbooks.Vars{
-			TaskPrompt:          c.body(),
+			TaskPrompt:          buildDispatchPrompt(c),
 			StartPoint:          acq.StartPoint,
 			Branch:              acq.Branch,
 			TaskID:              c.ExternalID,
