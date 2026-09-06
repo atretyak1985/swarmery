@@ -30,10 +30,9 @@ import { bulkArchiveBoardTasks, fetchBoardTasks } from '../api';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { useWorkspaceBoard, useWorkspaceTerminal } from '../workspace/ProjectWorkspaceLayout';
 import {
-  AMNESTY_AGE_DAYS,
   AMNESTY_THRESHOLD,
+  amnestyBefore,
   amnestyCandidates,
-  amnestyCutoff,
   BOARD_LANES,
   LANE_TITLES,
   labelFilterOptions,
@@ -136,13 +135,17 @@ export function Board(): JSX.Element {
     () => board.tasks.filter((t) => t.boardColumn === 'triage').length,
     [board.tasks],
   );
-  // Frozen for the mount rather than recomputed per render: the cutoff shown in
-  // the banner, counted against, and finally sent to the server must be ONE
-  // instant, or the confirmed number and the written number drift apart.
-  const [amnestyBefore] = useState(() => amnestyCutoff(AMNESTY_AGE_DAYS, Date.now()));
+  // `now` is frozen for the mount: the instant shown in the banner, counted
+  // against, and finally sent to the server must be ONE instant, or the
+  // confirmed number and the written number drift apart. The CUTOFF is no longer
+  // frozen with it — it is derived from the sweeper's own TTL (staleAfter minus
+  // idleSince), which arrives with the first board payload, so it settles as
+  // soon as the cards land and stays pinned to this instant.
+  const [amnestyNow] = useState(() => Date.now());
+  const amnestyCutoffAt = useMemo(() => amnestyBefore(board.tasks, amnestyNow), [board.tasks, amnestyNow]);
   const amnestyEligible = useMemo(
-    () => amnestyCandidates(board.tasks, amnestyBefore),
-    [board.tasks, amnestyBefore],
+    () => amnestyCandidates(board.tasks, amnestyNow),
+    [board.tasks, amnestyNow],
   );
   const [amnesty, setAmnesty] = useState<AmnestyState>({ phase: 'idle' });
   const [amnestyError, setAmnestyError] = useState<string | null>(null);
@@ -150,10 +153,10 @@ export function Board(): JSX.Element {
 
   const amnestyBody = useMemo(
     () =>
-      projectId === null
+      projectId === null || amnestyCutoffAt === null
         ? null
-        : ({ projectId, column: 'triage', before: amnestyBefore } as const),
-    [projectId, amnestyBefore],
+        : ({ projectId, column: 'triage', before: amnestyCutoffAt } as const),
+    [projectId, amnestyCutoffAt],
   );
 
   const countAmnesty = (): void => {
@@ -341,8 +344,8 @@ export function Board(): JSX.Element {
             <>
               <span className="min-w-0 flex-1">
                 <span className="font-mono font-semibold">{amnestyEligible}</span> captured card
-                {amnestyEligible === 1 ? '' : 's'} older than {AMNESTY_AGE_DAYS} days are sitting in
-                Triage.
+                {amnestyEligible === 1 ? '' : 's'} in Triage {amnestyEligible === 1 ? 'has' : 'have'}{' '}
+                passed the auto-archive date.
               </span>
               <button
                 type="button"

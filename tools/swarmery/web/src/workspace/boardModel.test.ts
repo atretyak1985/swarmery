@@ -1,26 +1,39 @@
-// Unit tests for the board's card-label helpers (0049 UI: badges + filter).
+// Unit tests for the board's pure presentation model: the card-label helpers
+// (0049 UI: badges + filter), the card readout selectors (board redesign v2
+// phase 1: source line, attention signal, stale), and the inbox amnesty.
 // Pure logic, no DOM.
 //
 // The web app ships no committed test runner (CI is `npm run build` only, and
 // the Go coverage gate excludes web/), so this suite is dev-only: run it with
 //   npx vitest run src/workspace/boardModel.test.ts
 // (vitest is fetched on demand; it is intentionally NOT a committed dependency).
-// The file still type-checks under `tsc --noEmit` in the normal build.
+// web/tsconfig.json EXCLUDES *.test.ts, so `npm run build` does NOT type-check
+// this file — check it explicitly with
+//   npx tsc --noEmit --project tsconfig.json src/workspace/boardModel.test.ts
+// or trust the runner, which type-errors as runtime failures.
 
 import { describe, expect, it } from 'vitest';
-import type { BoardColumn, BoardTask } from '../api/types';
+import type { BoardColumn, BoardTask, BoardTaskSource } from '../api/types';
 import {
+  ageLabel,
+  amnestyBefore,
   amnestyCandidates,
-  amnestyCutoff,
+  attentionSignal,
   BOARD_LANES,
   compareDispatchOrder,
+  DEP_BLOCK_PREFIX,
   idleSince,
+  inboxTtlMs,
+  isStale,
   labelColor,
   labelFilterOptions,
   LANE_TITLES,
   laneOf,
   matchesLabelFilter,
+  sourceLine,
   splitLanes,
+  staleLabel,
+  STALE_WARN_DAYS,
   uniqueLabels,
   visibleLabels,
 } from './boardModel';
@@ -56,11 +69,20 @@ function makeTask(over: Partial<BoardTask> = {}): BoardTask {
     agent: null,
     origin: 'manual',
     originSessionId: null,
+    source: null,
+    staleAfter: null,
+    dispatchedPrompt: null,
+    planExternalId: null,
     resultNote: null,
     columnMovedAt: null,
     createdAt: '2026-08-01T00:00:00Z',
     ...over,
   };
+}
+
+/** A capture source with the fields a test does not care about defaulted. */
+function makeSource(over: Partial<BoardTaskSource> = {}): BoardTaskSource {
+  return { sessionId: 1867, turnUuid: 'turn-uuid', quote: null, files: [], ...over };
 }
 
 describe('visibleLabels', () => {
@@ -174,14 +196,242 @@ describe('labelFilterOptions', () => {
   });
 });
 
-// --- inbox amnesty ------------------------------------------------------------
+// --- card readout: source line ------------------------------------------------
 
-describe('amnestyCutoff', () => {
-  it('renders the millisecond-Z shape the server stores, so string compares line up', () => {
-    const now = Date.UTC(2026, 7, 11, 12, 0, 0);
-    expect(amnestyCutoff(7, now)).toBe('2026-08-04T12:00:00.000Z');
+describe('sourceLine', () => {
+  it('names the session, links to it, and hovers the captured quote', () => {
+    const line = sourceLine(
+      makeTask({
+        origin: 'session',
+        originSessionId: 1867,
+        source: makeSource({ sessionId: 1867, quote: 'add waypoint editing to the board' }),
+      }),
+    );
+    expect(line.text).toBe('from session #1867');
+    expect(line.target).toEqual({ kind: 'session', sessionId: 1867 });
+    expect(line.tip).toBe('add waypoint editing to the board');
+  });
+
+  it('says an llm card was suggested, not captured', () => {
+    const line = sourceLine(
+      makeTask({ origin: 'llm', originSessionId: 42, source: makeSource({ sessionId: 42 }) }),
+    );
+    expect(line.text).toBe('suggested from session #42');
+    expect(line.target).toEqual({ kind: 'session', sessionId: 42 });
+  });
+
+  it('falls back to originSessionId when the 0066 source object is absent', () => {
+    // Rows captured before the provenance columns: origin + origin_session_id
+    // only. The line must still link, and say where the card came from.
+    const line = sourceLine(makeTask({ origin: 'session', originSessionId: 7, source: null }));
+    expect(line.text).toBe('from session #7');
+    expect(line.target).toEqual({ kind: 'session', sessionId: 7 });
+    expect(line.tip).toBe('captured from session #7');
+  });
+
+  it('reads a fix card as the repair of the card it names', () => {
+    // A fix card's own external_id IS the id of the card it repairs
+    // (verify/service.go createFixTask), which is what makes this derivable.
+    const line = sourceLine(makeTask({ origin: 'verify-fix', externalId: 'T-12' }));
+    expect(line.text).toBe('fix for T-12');
+    expect(line.target).toBeNull();
+    expect(line.tip).toBe('spawned by verification to repair T-12');
+  });
+
+  it('links a plan card to its project plan list', () => {
+    const line = sourceLine(
+      makeTask({ origin: 'manual', planExternalId: '2026-07-18-plan-doc-lifecycle', projectSlug: 'swarmery' }),
+    );
+    expect(line.text).toBe('plan 2026-07-18-plan-doc-lifecycle');
+    expect(line.target).toEqual({ kind: 'plans', slug: 'swarmery' });
+  });
+
+  it('drops the plan link, not the prose, when the card has no project slug', () => {
+    const line = sourceLine(makeTask({ planExternalId: 'plan-x', projectSlug: null }));
+    expect(line.text).toBe('plan plan-x');
+    expect(line.target).toBeNull();
+  });
+
+  it('prefers the session over the plan a dispatched card materialized', () => {
+    // Every dispatched card gets a micro-plan, so most running cards carry both.
+    // Provenance is where the card CAME FROM; the plan is where its outcome was
+    // recorded, and lives in the modal.
+    const line = sourceLine(
+      makeTask({ origin: 'session', originSessionId: 3, source: makeSource({ sessionId: 3 }), planExternalId: 'p-1' }),
+    );
+    expect(line.target).toEqual({ kind: 'session', sessionId: 3 });
+  });
+
+  it('says "added by hand" for a plain manual card', () => {
+    const line = sourceLine(makeTask({ origin: 'manual' }));
+    expect(line.text).toBe('added by hand');
+    expect(line.target).toBeNull();
+  });
+
+  it('still names a source for a captured card whose session is gone', () => {
+    expect(sourceLine(makeTask({ origin: 'session', originSessionId: null })).text).toBe('from a session');
+    expect(sourceLine(makeTask({ origin: 'llm', originSessionId: null })).text).toBe('suggested');
+  });
+
+  // Totality fence, inherited from the ORIGIN_BADGE Record this line replaced:
+  // that map crashed the whole board render on the first 'verify-fix' card
+  // because a missing key was destructured. Every origin must produce a line.
+  it('produces a non-empty line for every origin in the union', () => {
+    for (const origin of ['manual', 'session', 'llm', 'verify-fix'] as const) {
+      const line = sourceLine(makeTask({ origin, originSessionId: origin === 'manual' ? null : 99 }));
+      expect(line.text.length).toBeGreaterThan(0);
+    }
   });
 });
+
+describe('ageLabel', () => {
+  const now = Date.UTC(2026, 8, 4, 12, 0, 0);
+
+  it('counts whole days since the card appeared', () => {
+    expect(ageLabel(makeTask({ createdAt: '2026-08-23T12:00:00.000Z' }), now)).toBe('12d');
+  });
+
+  it('says "today" under a day rather than "0d"', () => {
+    expect(ageLabel(makeTask({ createdAt: '2026-09-04T01:00:00.000Z' }), now)).toBe('today');
+  });
+
+  it('returns null on an unparseable stamp instead of "NaNd"', () => {
+    expect(ageLabel(makeTask({ createdAt: 'not a date' }), now)).toBeNull();
+  });
+});
+
+// --- card readout: attention signal -------------------------------------------
+
+describe('attentionSignal', () => {
+  it('reports a failed verdict with its detail', () => {
+    const s = attentionSignal(makeTask({ verifyVerdict: 'fail', verifyDetail: 'typecheck: 3 errors' }));
+    expect(s).toEqual({ text: 'verdict FAIL: typecheck: 3 errors', tone: 'bad', tip: 'typecheck: 3 errors' });
+  });
+
+  it('reports a failed verdict with no detail as just the verdict', () => {
+    const s = attentionSignal(makeTask({ verifyVerdict: 'fail', verifyDetail: null }));
+    expect(s).toEqual({ text: 'verdict FAIL', tone: 'bad', tip: null });
+  });
+
+  it('clips a long detail into the line and keeps the whole of it in the tip', () => {
+    const detail = 'x'.repeat(200);
+    const s = attentionSignal(makeTask({ verifyVerdict: 'fail', verifyDetail: detail }));
+    expect(s?.text.endsWith('…')).toBe(true);
+    expect(s?.text.length).toBeLessThan(120);
+    expect(s?.tip).toBe(detail);
+  });
+
+  // The criterion: exactly one signal, in this order. Peeled one condition at a
+  // time off a card that satisfies all four.
+  it('returns exactly one signal, FAIL > dispatchError > blocked > in_review', () => {
+    const all = {
+      boardColumn: 'in_review' as BoardColumn,
+      dispatchError: 'runner exited 1',
+      verifyVerdict: 'fail',
+      verifyDetail: 'build broke',
+    };
+    expect(attentionSignal(makeTask(all))?.text).toBe('verdict FAIL: build broke');
+
+    const noVerdict = makeTask({ ...all, verifyVerdict: null, verifyDetail: null });
+    expect(attentionSignal(noVerdict)).toEqual({
+      text: 'dispatch error: runner exited 1',
+      tone: 'bad',
+      tip: 'runner exited 1',
+    });
+
+    const depBlocked = makeTask({
+      ...all,
+      verifyVerdict: null,
+      verifyDetail: null,
+      dispatchError: `${DEP_BLOCK_PREFIX}T-14: still in_progress`,
+    });
+    expect(attentionSignal(depBlocked)).toEqual({
+      text: 'blocked by T-14: still in_progress',
+      tone: 'warn',
+      tip: `${DEP_BLOCK_PREFIX}T-14: still in_progress`,
+    });
+
+    const reviewOnly = makeTask({ boardColumn: 'in_review' });
+    expect(attentionSignal(reviewOnly)).toEqual({ text: 'waiting for review', tone: 'info', tip: null });
+  });
+
+  it('separates a dependency block from a real failure — same column, different meaning', () => {
+    const blocked = attentionSignal(makeTask({ dispatchError: `${DEP_BLOCK_PREFIX}T-9: unknown id` }));
+    const broken = attentionSignal(makeTask({ dispatchError: 'worktree missing' }));
+    expect(blocked?.tone).toBe('warn');
+    expect(broken?.tone).toBe('bad');
+    expect(blocked?.text.startsWith('blocked by')).toBe(true);
+    expect(broken?.text.startsWith('dispatch error')).toBe(true);
+  });
+
+  it('reads a passing verdict as no signal at all', () => {
+    expect(attentionSignal(makeTask({ verifyVerdict: 'pass', verifyDetail: 'all green' }))).toBeNull();
+    expect(attentionSignal(makeTask({ verifyVerdict: 'inconclusive' }))).toBeNull();
+  });
+
+  it('folds verdict case — the wire is lowercase, a mixed-case row must not lose the signal', () => {
+    expect(attentionSignal(makeTask({ verifyVerdict: 'FAIL' }))?.tone).toBe('bad');
+  });
+
+  it('is silent on a card that wants nothing', () => {
+    expect(attentionSignal(makeTask({ boardColumn: 'todo' }))).toBeNull();
+    expect(attentionSignal(makeTask({ boardColumn: 'triage', dispatchError: '' }))).toBeNull();
+  });
+});
+
+// --- card readout: stale ------------------------------------------------------
+
+describe('isStale', () => {
+  const now = Date.UTC(2026, 8, 4, 12, 0, 0);
+  const inDays = (n: number): string => new Date(now + n * 86_400_000).toISOString();
+
+  // The one the plan review caught: the sweeper only touches non-manual cards in
+  // triage with no worktree, so null is the COMMON case — manual, running and
+  // review cards all carry it. Read naively (`new Date(null) < now`) it means
+  // 1970, and half the board renders as about to be archived.
+  it('is false when staleAfter is null — "never expires", not "expired in 1970"', () => {
+    expect(isStale(makeTask({ staleAfter: null }), now)).toBe(false);
+  });
+
+  it('is false on an empty string and on an unparseable stamp', () => {
+    expect(isStale(makeTask({ staleAfter: '' }), now)).toBe(false);
+    expect(isStale(makeTask({ staleAfter: 'soon' }), now)).toBe(false);
+  });
+
+  it('is true once the date has passed', () => {
+    expect(isStale(makeTask({ staleAfter: inDays(-1) }), now)).toBe(true);
+  });
+
+  it('is true inside the warning window and false outside it', () => {
+    expect(isStale(makeTask({ staleAfter: inDays(2) }), now)).toBe(true);
+    expect(isStale(makeTask({ staleAfter: inDays(STALE_WARN_DAYS) }), now)).toBe(false);
+    expect(isStale(makeTask({ staleAfter: inDays(11) }), now)).toBe(false);
+  });
+});
+
+describe('staleLabel', () => {
+  const now = Date.UTC(2026, 8, 4, 12, 0, 0);
+  const inDays = (n: number): string => new Date(now + n * 86_400_000).toISOString();
+
+  it('counts the days left', () => {
+    expect(staleLabel(makeTask({ staleAfter: inDays(2) }), now)).toBe('archived in 2d');
+    expect(staleLabel(makeTask({ staleAfter: inDays(0.5) }), now)).toBe('archived in 1d');
+  });
+
+  it('does not render a negative countdown for a date already passed', () => {
+    expect(staleLabel(makeTask({ staleAfter: inDays(-4) }), now)).toBe('archived at the next sweep');
+  });
+
+  it('is null exactly when the card is not stale, so caption and dimming agree', () => {
+    for (const staleAfter of [null, '', inDays(11)]) {
+      const task = makeTask({ staleAfter });
+      expect(staleLabel(task, now)).toBeNull();
+      expect(isStale(task, now)).toBe(false);
+    }
+  });
+});
+
+// --- inbox amnesty ------------------------------------------------------------
 
 describe('idleSince', () => {
   it('falls back to createdAt — capture never writes columnMovedAt', () => {
@@ -199,42 +449,100 @@ describe('idleSince', () => {
   });
 });
 
-describe('amnestyCandidates', () => {
-  const before = '2026-06-01T00:00:00.000Z';
-  const old = '2026-01-01T00:00:00.000Z';
+const TTL_MS = 14 * 86_400_000;
 
-  it('counts captured triage cards idle since before the cutoff', () => {
-    const tasks = [
-      makeTask({ origin: 'session', boardColumn: 'triage', createdAt: old }),
-      makeTask({ origin: 'llm', boardColumn: 'triage', createdAt: old }),
-    ];
-    expect(amnestyCandidates(tasks, before)).toBe(2);
-  });
-
-  it('mirrors every server-side exclusion, conjunct for conjunct', () => {
-    const excluded = [
-      makeTask({ origin: 'manual', boardColumn: 'triage', createdAt: old }),
-      makeTask({ origin: 'session', boardColumn: 'todo', createdAt: old }),
-      makeTask({ origin: 'session', boardColumn: 'triage', createdAt: old, worktreePath: '/tmp/wt' }),
-      makeTask({ origin: 'session', boardColumn: 'triage', createdAt: '2026-07-15T00:00:00.000Z' }),
-    ];
-    expect(amnestyCandidates(excluded, before)).toBe(0);
-    const withOneEligible = [...excluded, makeTask({ origin: 'session', createdAt: old })];
-    expect(amnestyCandidates(withOneEligible, before)).toBe(1);
-  });
-
-  it('dates a moved card by columnMovedAt, not by when it was created', () => {
-    const movedRecently = makeTask({
+describe('inboxTtlMs', () => {
+  // The sweeper's TTL is recoverable because staleAfter IS idleSince + TTL. That
+  // is what let AMNESTY_AGE_DAYS = 7 go: the client no longer carries a number
+  // that can disagree with the daemon's SWARMERY_INBOX_TTL (which was 14).
+  it('recovers the TTL from a dated card', () => {
+    const created = '2026-08-01T00:00:00.000Z';
+    const task = makeTask({
       origin: 'session',
-      boardColumn: 'triage',
-      createdAt: old,
-      columnMovedAt: '2026-07-20T00:00:00.000Z',
+      createdAt: created,
+      staleAfter: new Date(Date.parse(created) + TTL_MS).toISOString(),
     });
-    expect(amnestyCandidates([movedRecently], before)).toBe(0);
+    expect(inboxTtlMs([task])).toBe(TTL_MS);
+  });
+
+  it('measures from columnMovedAt when the card was moved — the server does', () => {
+    const moved = '2026-08-20T00:00:00.000Z';
+    const task = makeTask({
+      origin: 'session',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      columnMovedAt: moved,
+      staleAfter: new Date(Date.parse(moved) + TTL_MS).toISOString(),
+    });
+    expect(inboxTtlMs([task])).toBe(TTL_MS);
+  });
+
+  it('is null when no card is dated — the sweep is off, or nothing is eligible', () => {
+    expect(inboxTtlMs([])).toBeNull();
+    expect(inboxTtlMs([makeTask({ staleAfter: null }), makeTask({ staleAfter: '' })])).toBeNull();
+  });
+
+  it('skips undated cards to find a dated one', () => {
+    const created = '2026-08-01T00:00:00.000Z';
+    const dated = makeTask({
+      origin: 'session',
+      createdAt: created,
+      staleAfter: new Date(Date.parse(created) + TTL_MS).toISOString(),
+    });
+    expect(inboxTtlMs([makeTask(), makeTask({ staleAfter: null }), dated])).toBe(TTL_MS);
+  });
+});
+
+describe('amnestyBefore', () => {
+  it('renders now-minus-TTL in the millisecond-Z shape the server stores', () => {
+    // The server re-renders the cutoff in this exact format before comparing
+    // lexically, so an un-normalized instant would shift the matched set.
+    const now = Date.UTC(2026, 8, 4, 12, 0, 0);
+    const created = '2026-08-01T00:00:00.000Z';
+    const task = makeTask({
+      origin: 'session',
+      createdAt: created,
+      staleAfter: new Date(Date.parse(created) + TTL_MS).toISOString(),
+    });
+    expect(amnestyBefore([task], now)).toBe('2026-08-21T12:00:00.000Z');
+  });
+
+  it('is null when nothing on the board is dated', () => {
+    expect(amnestyBefore([makeTask()], Date.now())).toBeNull();
+  });
+});
+
+describe('amnestyCandidates', () => {
+  const now = Date.UTC(2026, 8, 4, 12, 0, 0);
+  const at = (days: number): string => new Date(now + days * 86_400_000).toISOString();
+
+  it('counts the cards whose server-published archive date has passed', () => {
+    const tasks = [
+      makeTask({ origin: 'session', staleAfter: at(-3) }),
+      makeTask({ origin: 'llm', staleAfter: at(-1) }),
+    ];
+    expect(amnestyCandidates(tasks, now)).toBe(2);
+  });
+
+  it('ignores cards that have not reached their date yet', () => {
+    expect(amnestyCandidates([makeTask({ origin: 'session', staleAfter: at(2) })], now)).toBe(0);
+  });
+
+  // The server's conjuncts (source='queue', triage, non-manual origin, no
+  // worktree) are already baked into whether staleAfter is set at all — so a
+  // null date is the whole exclusion list, in one field, with no second copy
+  // here to drift from taskcap.StaleInboxWhere.
+  it('excludes every card the sweeper cannot touch, by their null date alone', () => {
+    const excluded = [
+      makeTask({ origin: 'manual', boardColumn: 'triage', staleAfter: null }),
+      makeTask({ origin: 'session', boardColumn: 'todo', staleAfter: null }),
+      makeTask({ origin: 'session', boardColumn: 'triage', worktreePath: '/tmp/wt', staleAfter: null }),
+    ];
+    expect(amnestyCandidates(excluded, now)).toBe(0);
+    expect(amnestyCandidates([...excluded, makeTask({ origin: 'session', staleAfter: at(-1) })], now)).toBe(1);
   });
 
   it('is empty on an empty board', () => {
-    expect(amnestyCandidates([], before)).toBe(0);
+    expect(amnestyCandidates([], now)).toBe(0);
   });
 });
 

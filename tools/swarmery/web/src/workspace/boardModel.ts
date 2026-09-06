@@ -195,6 +195,214 @@ export function boardCounts(tasks: BoardTask[]): BoardCounts {
   return { waiting, running, blocked };
 }
 
+// --- card readout (board redesign v2 phase 1) ---------------------------------
+//
+// What the card answers without opening the modal: what this is, where it came
+// from, and whether it wants something from me. All four selectors below are
+// pure functions of ONE flat BoardTask (plus `now` where time matters), which is
+// the plan's architecture decision: the DTO stays flat and the grouping lives
+// here, where it is unit-testable without a server.
+
+/** Milliseconds in a day — every age and expiry sum below. */
+const DAY_MS = 86_400_000;
+
+/**
+ * `staleAfter` as epoch ms, or null when the card cannot expire.
+ *
+ * Null, and an empty string, BOTH mean "the sweeper will never touch this card".
+ * The sweeper only considers non-manual cards sitting in triage with no
+ * worktree, so null is the common case on a live board — a manual card, a
+ * running card, anything in review. Arithmetic straight off the raw field
+ * (`new Date(task.staleAfter) < now`) reads a null as 1970 and would mark most
+ * of the board as about to be archived, which is the exact defect this helper
+ * exists to make unrepresentable.
+ */
+function staleAfterMs(task: BoardTask): number | null {
+  if (task.staleAfter === null || task.staleAfter === '') return null;
+  const ms = Date.parse(task.staleAfter);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * How close to its archive date a card starts reading as stale. Three days is
+ * the last window in which "I should look at this" is still actionable — dimming
+ * a card the moment the server dates it (14 days out) would dim every captured
+ * card on the board and say nothing.
+ */
+export const STALE_WARN_DAYS = 3;
+
+/**
+ * Whether the card is at, or within `STALE_WARN_DAYS` of, its automatic-archive
+ * date. False for every card the sweeper cannot touch — see `staleAfterMs`.
+ */
+export function isStale(task: BoardTask, nowMs: number): boolean {
+  const at = staleAfterMs(task);
+  return at !== null && at - nowMs < STALE_WARN_DAYS * DAY_MS;
+}
+
+/**
+ * The stale card's own caption, or null when the card is not stale (so the
+ * caption and the dimming can never disagree — both read this pair).
+ *
+ * A date already in the past does not become a negative countdown: the sweeper
+ * runs on its own cadence, so the honest statement is that the next pass takes
+ * the card.
+ */
+export function staleLabel(task: BoardTask, nowMs: number): string | null {
+  const at = staleAfterMs(task);
+  if (at === null || !isStale(task, nowMs)) return null;
+  const remaining = at - nowMs;
+  if (remaining <= 0) return 'archived at the next sweep';
+  return `archived in ${String(Math.ceil(remaining / DAY_MS))}d`;
+}
+
+/**
+ * The card's age for the source line: "today" under a day, "12d" beyond. Null
+ * when `createdAt` is unparseable — the line then shows its source alone rather
+ * than the string "NaNd".
+ */
+export function ageLabel(task: BoardTask, nowMs: number): string | null {
+  const at = Date.parse(task.createdAt);
+  if (Number.isNaN(at)) return null;
+  const days = Math.max(0, Math.floor((nowMs - at) / DAY_MS));
+  return days === 0 ? 'today' : `${String(days)}d`;
+}
+
+/**
+ * What the source line opens, as a target rather than a path: routing lives in
+ * the component (a session href is mode-preserving — lib/sessionHref.ts — and
+ * this module must not learn URL shapes to stay a pure model).
+ */
+export type SourceTarget =
+  | { readonly kind: 'session'; readonly sessionId: number }
+  | { readonly kind: 'plans'; readonly slug: string };
+
+/** How a card's provenance reads on one line. */
+export interface SourceLine {
+  /** The prose: "from session #1867", "plan 2026-07-18-…", "fix for T-12". */
+  readonly text: string;
+  /** What `text` opens, or null when there is nothing to open. */
+  readonly target: SourceTarget | null;
+  /** Hover detail — the captured quote, or what the link leads to. */
+  readonly tip: string | null;
+}
+
+/**
+ * Where the card came from, as one line. Total over `TaskOrigin` by
+ * construction: every branch returns, so widening the union can change what a
+ * card SAYS but can never crash the renderer the way an incomplete Record
+ * indexed by origin did.
+ *
+ * Order is provenance-first. A dispatched card materializes a micro-plan, so
+ * most running cards carry `planExternalId` too — but a card captured from a
+ * session came from that session, and the plan is where its outcome was
+ * recorded. The session wins; the plan chip lives in the modal.
+ */
+export function sourceLine(task: BoardTask): SourceLine {
+  // A fix card's own external_id IS the id of the card it repairs — the verifier
+  // writes `external_id=<root external id>` so a fix's failure charges the root
+  // (verify/service.go createFixTask). That is what makes "fix for T-…"
+  // derivable from the flat DTO with no extra field.
+  if (task.origin === 'verify-fix') {
+    return {
+      text: `fix for ${task.externalId}`,
+      target: null,
+      tip: `spawned by verification to repair ${task.externalId}`,
+    };
+  }
+  const sessionId = task.source?.sessionId ?? task.originSessionId;
+  if (sessionId !== null) {
+    const id = String(sessionId);
+    return {
+      text: `${task.origin === 'llm' ? 'suggested from session' : 'from session'} #${id}`,
+      target: { kind: 'session', sessionId },
+      tip: task.source?.quote ?? `captured from session #${id}`,
+    };
+  }
+  if (task.planExternalId !== null) {
+    return {
+      text: `plan ${task.planExternalId}`,
+      // The Plans page is project-scoped only (main.tsx: /p/:slug/plans), so a
+      // card with no slug gets the prose without a link that would 404. It also
+      // deep-links by numeric task id rather than external id, which is why the
+      // target is the project's plan list and not this one plan.
+      target: task.projectSlug === null ? null : { kind: 'plans', slug: task.projectSlug },
+      tip: `plan ${task.planExternalId} — acceptance criteria and completion report`,
+    };
+  }
+  if (task.origin === 'manual') return { text: 'added by hand', target: null, tip: null };
+  // A captured card with no session id: rows that predate 0048, and rows whose
+  // origin session was pruned. It still says where it came from, without a link
+  // that would 404.
+  return { text: task.origin === 'llm' ? 'suggested' : 'from a session', target: null, tip: null };
+}
+
+/**
+ * The marker the dispatcher puts on a `dispatch_error` it wrote because a
+ * dependency was not satisfied (dispatch/service.go `depBlockPrefix`). A real
+ * failure — a crashed runner, a parked no-progress marker — lands in the same
+ * column, so this prefix is the only thing separating "waiting on T-14" from
+ * "the run broke", and the two must not read alike on a card.
+ */
+export const DEP_BLOCK_PREFIX = 'blocked by dependency ';
+
+/** How much detail the one-line signal carries before it is clipped; the full
+ * text stays in the hover tip. */
+export const SIGNAL_CLIP = 80;
+
+function clip(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** How loudly a signal reads: a failure, something waiting on another card, or
+ * a plain statement of where the card stands. */
+export type AttentionTone = 'bad' | 'warn' | 'info';
+
+export interface AttentionSignal {
+  readonly text: string;
+  readonly tone: AttentionTone;
+  /** The full text behind `text` (which may be clipped); null when there is no
+   * more to show than the line itself. */
+  readonly tip: string | null;
+}
+
+/**
+ * The ONE thing this card wants from a human, or null when it wants nothing.
+ *
+ * Exactly one, in a fixed order — a failed verdict, then a broken dispatch, then
+ * a blocking dependency, then an awaited review. A card that stacked four
+ * warnings would be a card nobody reads; the modal is where everything about a
+ * card is visible at once. The order is by what blocks whom: a FAIL is a
+ * decision only a human can take, a dispatch error stops this card, a dependency
+ * stops it on someone else's card, and a review is work waiting rather than work
+ * stuck.
+ */
+export function attentionSignal(task: BoardTask): AttentionSignal | null {
+  // Verdict tokens are lowercase on the wire (internal/verify/verdict.go), but a
+  // case fold costs nothing and a mixed-case row would otherwise silently lose
+  // the loudest signal on the board.
+  if ((task.verifyVerdict ?? '').toLowerCase() === 'fail') {
+    const detail = (task.verifyDetail ?? '').trim();
+    return {
+      text: detail === '' ? 'verdict FAIL' : `verdict FAIL: ${clip(detail, SIGNAL_CLIP)}`,
+      tone: 'bad',
+      tip: detail === '' ? null : detail,
+    };
+  }
+  const err = (task.dispatchError ?? '').trim();
+  if (err.startsWith(DEP_BLOCK_PREFIX)) {
+    const dep = err.slice(DEP_BLOCK_PREFIX.length);
+    return { text: `blocked by ${clip(dep, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
+  }
+  if (err !== '') {
+    return { text: `dispatch error: ${clip(err, SIGNAL_CLIP)}`, tone: 'bad', tip: err };
+  }
+  if (task.boardColumn === 'in_review') {
+    return { text: 'waiting for review', tone: 'info', tip: null };
+  }
+  return null;
+}
+
 // --- inbox amnesty (board inbox lifecycle) ------------------------------------
 
 /**
@@ -203,22 +411,6 @@ export function boardCounts(tasks: BoardTask[]): BoardCounts {
  * captured ones instead of pretending they are still triageable.
  */
 export const AMNESTY_THRESHOLD = 50;
-
-/** How old a captured card must be before the banner offers to archive it. */
-export const AMNESTY_AGE_DAYS = 7;
-
-/** Milliseconds in a day — the banner's cutoff arithmetic. */
-const DAY_MS = 86_400_000;
-
-/**
- * The cutoff instant the amnesty runs against: `days` ago, as an RFC3339
- * string. `toISOString()` renders exactly the millisecond-Z shape the server
- * stores, so the count below and the server's own predicate compare the same
- * way on the same strings.
- */
-export function amnestyCutoff(days: number, nowMs: number): string {
-  return new Date(nowMs - days * DAY_MS).toISOString();
-}
 
 /**
  * When a card's idle clock started. Mirrors taskcap.InboxIdleSince: capture
@@ -231,20 +423,60 @@ export function idleSince(task: BoardTask): string {
 }
 
 /**
- * How many cards the amnesty would archive — the client-side twin of
- * taskcap.StaleInboxWhere, conjunct for conjunct (captured origin, still in
- * Triage, no worktree, idle since before the cutoff). It only ever labels the
- * button; the server recounts under `dryRun` before anything is written, so a
- * drift here misleads nobody into a wrong write.
+ * The sweeper's TTL, recovered from any card the server already dated:
+ * `staleAfter` IS `idleSince + SWARMERY_INBOX_TTL`, so the difference between
+ * the two is the TTL itself. Null when no loaded card is dated (the sweep is
+ * off, or nothing in the inbox is eligible).
+ *
+ * This is what replaced the client's own `AMNESTY_AGE_DAYS = 7`: a second,
+ * unsynchronised copy of a number the daemon owns. It read 7 while the sweeper
+ * ran on 14, so the banner offered to archive cards the automatic sweep would
+ * not have touched for another week. Derived from the server's own answer, the
+ * two can no longer disagree.
  */
-export function amnestyCandidates(tasks: readonly BoardTask[], before: string): number {
+export function inboxTtlMs(tasks: readonly BoardTask[]): number | null {
+  for (const t of tasks) {
+    const at = staleAfterMs(t);
+    if (at === null) continue;
+    const from = Date.parse(idleSince(t));
+    if (Number.isNaN(from)) continue;
+    if (at > from) return at - from;
+  }
+  return null;
+}
+
+/**
+ * The cutoff instant the amnesty runs against — `now - TTL`, as an RFC3339
+ * string, or null when no card is dated and there is therefore nothing to offer.
+ *
+ * `toISOString()` renders exactly the millisecond-Z shape the server stores, and
+ * the server's predicate is `idleSince < before`. Since `staleAfter =
+ * idleSince + TTL`, this cutoff selects precisely the cards whose `staleAfter`
+ * has already passed: the number in the banner and the set the write touches are
+ * the same by construction rather than by two agreeing constants.
+ */
+export function amnestyBefore(tasks: readonly BoardTask[], nowMs: number): string | null {
+  const ttl = inboxTtlMs(tasks);
+  if (ttl === null) return null;
+  return new Date(nowMs - ttl).toISOString();
+}
+
+/**
+ * How many inbox cards the sweeper is already entitled to retire: the ones whose
+ * server-published `staleAfter` is in the past. It only ever labels the button —
+ * the server recounts under `dryRun` before anything is written, so a drift here
+ * misleads nobody into a wrong write.
+ *
+ * No origin / column / worktree conjuncts any more: `staleAfter` is non-null
+ * only for a card that already satisfies every one of them (taskcap.StaleAfter
+ * shares the sweeper's own predicate), so re-testing them here would be a second
+ * copy to drift.
+ */
+export function amnestyCandidates(tasks: readonly BoardTask[], nowMs: number): number {
   let n = 0;
   for (const t of tasks) {
-    if (t.boardColumn !== 'triage') continue;
-    if (t.origin === 'manual') continue;
-    if (t.worktreePath !== null) continue;
-    if (idleSince(t) >= before) continue;
-    n += 1;
+    const at = staleAfterMs(t);
+    if (at !== null && at < nowMs) n += 1;
   }
   return n;
 }
