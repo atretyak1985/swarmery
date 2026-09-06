@@ -1525,6 +1525,22 @@ export interface BoardTask {
    */
   dispatchedPrompt: string | null;
   /**
+   * How many permission requests this card's run is waiting on. Never null: a
+   * card that never ran and a card whose run has nothing pending both read 0,
+   * which is exactly what `needsMe` means by "not waiting on me".
+   *
+   * The server counts through the RUN session — the explicit task↔session links
+   * plus the uuid the dispatcher parks before spawning — so a mid-run card, whose
+   * link is not reconciled until the stage exits, is still counted. It is NOT the
+   * capture session (`source.sessionId`): that session's approvals belong to the
+   * person sitting in it.
+   *
+   * Refreshed by the board's own reads. An approval landing or being answered
+   * emits no `task_updated` frame, so the number converges on the 60s reconcile
+   * rather than instantly — good enough for a filter, not a live counter.
+   */
+  pendingApprovalCount: number;
+  /**
    * External id of the WORKSPACE task this card's micro-plan became — the Plans
    * page entry for the same unit of work. A dispatched card materializes a
    * single-phase plan so its outcome is evidence in a doc (ticked checkboxes, a

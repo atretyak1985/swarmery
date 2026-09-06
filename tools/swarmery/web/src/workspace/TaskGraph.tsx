@@ -43,7 +43,10 @@ export function TaskGraph({
   tasks,
   onOpen,
 }: {
-  tasks: BoardTask[];
+  // readonly: the board hands this a filtered list, and the graph only ever
+  // reads it. Widening the parameter is what lets the filter reach the graph
+  // without the board copying the array on every render to satisfy the type.
+  tasks: readonly BoardTask[];
   onOpen: (id: number) => void;
 }): JSX.Element {
   // Index by external_id so dependency links resolve to node ids.

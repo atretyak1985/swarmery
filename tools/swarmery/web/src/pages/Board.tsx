@@ -19,6 +19,13 @@
 // full intake form). Archived stays lazy — it loads on the first expand of the
 // history strip (boardColumn='archived' fetch) to keep the default view light.
 //
+// How the board is being LOOKED at is entirely in the URL (redesign v2 phase 5):
+// `?view=graph` picks the dependency graph over the lanes, `?f=` applies one of
+// three state filters (needs me / running / stale), and `?label=` the existing
+// subject filter. State and subject compose; the three state chips are one-of.
+// Nothing about the view lives in component state, so a reload, a bookmark and a
+// pasted link all restore the same board.
+//
 // The board reads the shared BoardState from the workspace layout so the card,
 // the status bar, and the detail modal all reflect one source of truth. Demo
 // mode (VITE_MOCK) renders a full board from fixtures.
@@ -33,20 +40,28 @@ import {
   AMNESTY_THRESHOLD,
   amnestyBefore,
   amnestyCandidates,
+  BOARD_FILTER_LABELS,
+  BOARD_FILTER_TIPS,
+  BOARD_FILTERS,
   BOARD_LANES,
+  filterTasks,
+  laneEmptyNote,
+  laneOf,
   LANE_TITLES,
   labelFilterOptions,
+  matchesBoardFilter,
   matchesLabelFilter,
+  parseBoardFilter,
+  parseBoardView,
   splitLanes,
+  type BoardFilter,
+  type BoardView,
 } from '../workspace/boardModel';
 import { NewTaskModal } from '../workspace/NewTaskModal';
 import { TaskCard } from '../workspace/TaskCard';
 import { TaskModal } from '../workspace/TaskModal';
 import { TaskGraph } from '../workspace/TaskGraph';
 import { Empty, ErrorBox, Loading } from '../components/ui';
-
-/** Board header view mode: the lanes or the dependency graph. */
-type BoardView = 'board' | 'graph';
 
 /** A muted group heading INSIDE a lane or the history strip. Deliberately
  * quieter than a lane title: a group is a subdivision of one lane, and it must
@@ -62,6 +77,15 @@ function GroupLabel({ children }: { children: ReactNode }): JSX.Element {
 /** A one-line status note where cards would otherwise be (empty, loading…). */
 function Note({ children }: { children: ReactNode }): JSX.Element {
   return <div className="px-1 py-2 font-mono text-[10px] text-ink-faint">{children}</div>;
+}
+
+/**
+ * What an empty LANE says. Prose rather than the mono `Note` above, and allowed
+ * to wrap: this is a sentence explaining what the lane is for, not a status
+ * token, and an empty bordered box explains nothing at all.
+ */
+function LaneEmpty({ children }: { children: ReactNode }): JSX.Element {
+  return <p className="px-1.5 py-2 text-[11.5px] leading-relaxed text-balance text-ink-faint">{children}</p>;
 }
 
 /**
@@ -87,7 +111,6 @@ export function Board(): JSX.Element {
   const compose = searchParams.get('compose') ?? '';
   const [composing, setComposing] = useState(compose !== '');
   const [openId, setOpenId] = useState<number | null>(null);
-  const [view, setView] = useState<BoardView>('board');
 
   // History strip: `done` rides the live board query, `archived` is its own lazy
   // fetch — unchanged from when these were two columns, only its trigger moved.
@@ -95,17 +118,20 @@ export function Board(): JSX.Element {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [archiveLoading, setArchiveLoading] = useState(false);
 
-  // Label filter — kept in the URL (not local state) so `?label=jira-ticket`
-  // is both the write target and the read source: a reload restores it with
-  // no separate rehydration step to keep in sync.
-  const labelFilter = searchParams.get('label');
-  const setLabelFilter = useCallback(
-    (label: string | null): void => {
+  // Everything about HOW the board is being looked at — which view, which state
+  // filter, which label — lives in the URL rather than in component state. That
+  // makes the URL both the write target and the read source, so a reload, a
+  // bookmark and a link pasted to a colleague all restore the same board with no
+  // separate rehydration step to keep in sync. One setter for all three: the
+  // rule that an empty value DELETES its key (rather than writing `?f=`) has to
+  // be the same rule everywhere, or the three drift in how they clear.
+  const setParam = useCallback(
+    (key: string, value: string | null): void => {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          if (label === null || label === '') next.delete('label');
-          else next.set('label', label);
+          if (value === null || value === '') next.delete(key);
+          else next.set(key, value);
           return next;
         },
         { replace: true },
@@ -113,18 +139,59 @@ export function Board(): JSX.Element {
     },
     [setSearchParams],
   );
+
+  const view = parseBoardView(searchParams.get('view'));
+  // 'board' is written as the ABSENCE of the key, not as ?view=board: the
+  // default state of the page should not need a query string to describe it.
+  const setView = useCallback(
+    (v: BoardView): void => setParam('view', v === 'board' ? null : v),
+    [setParam],
+  );
+
+  const filter = parseBoardFilter(searchParams.get('f'));
+  // Clicking the chip that is already on clears it — the chips are a one-of-three
+  // choice, and without this the only way back to the unfiltered board would be
+  // editing the URL.
+  const toggleFilter = useCallback(
+    (f: BoardFilter): void => setParam('f', filter === f ? null : f),
+    [filter, setParam],
+  );
+
+  const labelFilter = searchParams.get('label');
+  const setLabelFilter = useCallback((label: string | null): void => setParam('label', label), [setParam]);
   const labelOptions = useMemo(() => labelFilterOptions(board.tasks, labelFilter), [board.tasks, labelFilter]);
+
+  // One frozen instant for every time-dependent decision this board makes — the
+  // `stale` filter and the amnesty banner both read it. Two clock reads would let
+  // the chip and the banner disagree about a card sitting on the boundary.
+  const [nowMs] = useState(() => Date.now());
+
   // Filtered BEFORE the lane split so Archived (its own lazy fetch) is
-  // untouched — this list only ever feeds `lanes` below.
-  const labelFilteredTasks = useMemo(
+  // untouched — these lists only ever feed `lanes` below. Label first, then
+  // state: the two compose (the label filter is about the card's subject, the
+  // chips about its state), and they are kept as two steps because the chip
+  // counts have to be read off the middle one.
+  const labelScoped = useMemo(
     () => board.tasks.filter((t) => matchesLabelFilter(t, labelFilter)),
     [board.tasks, labelFilter],
   );
+  const visibleTasks = useMemo(() => filterTasks(labelScoped, filter, nowMs), [labelScoped, filter, nowMs]);
+
+  // What each chip would leave, counted over the cards the lanes can actually
+  // show: `done` and `archived` live in the history strip, which no filter
+  // touches, so counting them would put a number on a chip that no click can
+  // reveal.
+  const filterCounts = useMemo(() => {
+    const live = labelScoped.filter((t) => laneOf(t.boardColumn) !== null);
+    return Object.fromEntries(
+      BOARD_FILTERS.map((f) => [f, live.filter((t) => matchesBoardFilter(t, f, nowMs)).length]),
+    ) as Record<BoardFilter, number>;
+  }, [labelScoped, nowMs]);
 
   // Every grouping and ordering decision the board makes lives in this one pure
   // call — including the Queued group's dispatcher order — so what the board
   // claims about "what runs next" is testable without rendering anything.
-  const lanes = useMemo(() => splitLanes(labelFilteredTasks), [labelFilteredTasks]);
+  const lanes = useMemo(() => splitLanes(visibleTasks), [visibleTasks]);
 
   // --- inbox amnesty ----------------------------------------------------------
   // Counted off the UNFILTERED list on purpose: the banner reports the state of
@@ -135,18 +202,14 @@ export function Board(): JSX.Element {
     () => board.tasks.filter((t) => t.boardColumn === 'triage').length,
     [board.tasks],
   );
-  // `now` is frozen for the mount: the instant shown in the banner, counted
-  // against, and finally sent to the server must be ONE instant, or the
-  // confirmed number and the written number drift apart. The CUTOFF is no longer
+  // `nowMs` (above) is frozen for the mount: the instant shown in the banner,
+  // counted against, and finally sent to the server must be ONE instant, or the
+  // confirmed number and the written number drift apart. The CUTOFF is not
   // frozen with it — it is derived from the sweeper's own TTL (staleAfter minus
   // idleSince), which arrives with the first board payload, so it settles as
   // soon as the cards land and stays pinned to this instant.
-  const [amnestyNow] = useState(() => Date.now());
-  const amnestyCutoffAt = useMemo(() => amnestyBefore(board.tasks, amnestyNow), [board.tasks, amnestyNow]);
-  const amnestyEligible = useMemo(
-    () => amnestyCandidates(board.tasks, amnestyNow),
-    [board.tasks, amnestyNow],
-  );
+  const amnestyCutoffAt = useMemo(() => amnestyBefore(board.tasks, nowMs), [board.tasks, nowMs]);
+  const amnestyEligible = useMemo(() => amnestyCandidates(board.tasks, nowMs), [board.tasks, nowMs]);
   const [amnesty, setAmnesty] = useState<AmnestyState>({ phase: 'idle' });
   const [amnestyError, setAmnestyError] = useState<string | null>(null);
   const showAmnesty = triageTotal > AMNESTY_THRESHOLD && amnestyEligible > 0;
@@ -364,8 +427,10 @@ export function Board(): JSX.Element {
         </div>
       )}
 
-      {/* Board ⇄ Graph toggle. */}
-      <div className="mb-3 flex items-center gap-2">
+      {/* Board ⇄ Graph toggle, the three state chips, and the label filter — the
+          whole of "how am I looking at this board", left to right, all three
+          reading and writing the URL. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1" role="group" aria-label="board view">
           {(['board', 'graph'] as const).map((v) => (
             <button
@@ -382,6 +447,34 @@ export function Board(): JSX.Element {
               {v === 'board' ? '▤ Board' : '⋈ Graph'}
             </button>
           ))}
+        </div>
+
+        {/* Three chips, one at a time. The count next to each is how many cards
+            it would leave — computed against the LABEL-filtered list, so it
+            promises what a click actually produces rather than a number from a
+            board the reader is not looking at. A chip whose count is 0 stays
+            clickable and says so: "nothing needs me" is an answer. */}
+        <div className="flex items-center gap-1" role="group" aria-label="filter by state">
+          {BOARD_FILTERS.map((f) => {
+            const on = filter === f;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => toggleFilter(f)}
+                aria-pressed={on}
+                data-tip={BOARD_FILTER_TIPS[f]}
+                className={`rounded-lg border px-2.5 py-1 font-mono text-[11px] transition-colors ${
+                  on
+                    ? 'border-brand/50 bg-brand/10 text-brand'
+                    : 'border-line text-ink-dim hover:bg-surface2/50 hover:text-ink'
+                }`}
+              >
+                {BOARD_FILTER_LABELS[f]}
+                <span className={`ml-1.5 ${on ? 'text-brand/70' : 'text-ink-faint'}`}>{filterCounts[f]}</span>
+              </button>
+            );
+          })}
         </div>
 
         {(labelOptions.length > 0 || labelFilter !== null) && (
@@ -421,7 +514,10 @@ export function Board(): JSX.Element {
       {board.loading ? (
         <Loading label="board…" />
       ) : view === 'graph' ? (
-        <TaskGraph tasks={board.tasks} onOpen={setOpenId} />
+        // The graph gets the filtered list too: a chip that changed the lanes but
+        // left the graph showing every card would make the toggle a way to lose
+        // the filter without clearing it.
+        <TaskGraph tasks={visibleTasks} onOpen={setOpenId} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
@@ -456,6 +552,11 @@ export function Board(): JSX.Element {
                         </button>
                       )}
                       {lanes.inbox.map(liveCard)}
+                      {/* Inbox keeps its "+ New task" button above the sentence:
+                          the button is what the lane is FOR, and hiding the
+                          explanation behind it would only be right if an empty
+                          Inbox were the odd case. It is the normal one. */}
+                      {lanes.inbox.length === 0 && <LaneEmpty>{laneEmptyNote('inbox', filter)}</LaneEmpty>}
                     </>
                   )}
 
@@ -478,14 +579,16 @@ export function Board(): JSX.Element {
                           {lanes.running.map(liveCard)}
                         </>
                       )}
-                      {lanes.queued.length === 0 && lanes.running.length === 0 && <Note>empty</Note>}
+                      {lanes.queued.length === 0 && lanes.running.length === 0 && (
+                        <LaneEmpty>{laneEmptyNote('working', filter)}</LaneEmpty>
+                      )}
                     </>
                   )}
 
                   {lane === 'review' && (
                     <>
                       {lanes.review.map(liveCard)}
-                      {lanes.review.length === 0 && <Note>empty</Note>}
+                      {lanes.review.length === 0 && <LaneEmpty>{laneEmptyNote('review', filter)}</LaneEmpty>}
                     </>
                   )}
                 </div>

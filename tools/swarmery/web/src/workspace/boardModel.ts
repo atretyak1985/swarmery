@@ -264,10 +264,31 @@ export const STALE_WARN_DAYS = 3;
 /**
  * Whether the card is at, or within `STALE_WARN_DAYS` of, its automatic-archive
  * date. False for every card the sweeper cannot touch — see `staleAfterMs`.
+ *
+ * This is the ONE staleness predicate on the board: the card dims on it, the
+ * card's caption comes from it, and the `stale` filter chip selects on it.
  */
 export function isStale(task: BoardTask, nowMs: number): boolean {
   const at = staleAfterMs(task);
   return at !== null && at - nowMs < STALE_WARN_DAYS * DAY_MS;
+}
+
+/**
+ * The already-past subset of `isStale`: the archive date has been and gone, so
+ * the sweeper's next pass takes this card. `isExpired ⇒ isStale` by construction
+ * (both read the one `staleAfterMs`), which is what lets the amnesty banner and
+ * the `stale` chip share a definition without sharing a set.
+ *
+ * They must not share the SET. The banner offers a write, and the server's own
+ * predicate for that write is `idleSince < now - TTL` — which, since
+ * `staleAfter = idleSince + TTL`, is this comparison exactly, strict `<` and all.
+ * Counting the warn window in the banner would put a number in the pitch that
+ * the server would then decline to act on, which is the drift phase 1 removed
+ * when it deleted the client's own `AMNESTY_AGE_DAYS`.
+ */
+export function isExpired(task: BoardTask, nowMs: number): boolean {
+  const at = staleAfterMs(task);
+  return at !== null && at < nowMs;
 }
 
 /**
@@ -407,11 +428,29 @@ export interface AttentionSignal {
  * stops it on someone else's card, and a review is work waiting rather than work
  * stuck.
  */
+/**
+ * Verification came back FAIL on this card.
+ *
+ * Verdict tokens are lowercase on the wire (internal/verify/verdict.go), but a
+ * case fold costs nothing and a mixed-case row would otherwise silently lose the
+ * loudest signal on the board. Shared by the card's signal and the `needsMe`
+ * filter so the chip and the card can never disagree about what failed.
+ */
+export function hasFailedVerdict(task: BoardTask): boolean {
+  return (task.verifyVerdict ?? '').toLowerCase() === 'fail';
+}
+
+/**
+ * The dispatcher's error on this card, trimmed; `''` when there is none. Null
+ * and a whitespace-only string mean the same thing — the column has held both —
+ * and every reader treats them alike by going through here.
+ */
+export function dispatchErrorText(task: BoardTask): string {
+  return (task.dispatchError ?? '').trim();
+}
+
 export function attentionSignal(task: BoardTask): AttentionSignal | null {
-  // Verdict tokens are lowercase on the wire (internal/verify/verdict.go), but a
-  // case fold costs nothing and a mixed-case row would otherwise silently lose
-  // the loudest signal on the board.
-  if ((task.verifyVerdict ?? '').toLowerCase() === 'fail') {
+  if (hasFailedVerdict(task)) {
     const detail = (task.verifyDetail ?? '').trim();
     return {
       text: detail === '' ? 'verdict FAIL' : `verdict FAIL: ${clip(detail, SIGNAL_CLIP)}`,
@@ -419,7 +458,7 @@ export function attentionSignal(task: BoardTask): AttentionSignal | null {
       tip: detail === '' ? null : detail,
     };
   }
-  const err = (task.dispatchError ?? '').trim();
+  const err = dispatchErrorText(task);
   if (err.startsWith(DEP_BLOCK_PREFIX)) {
     const dep = err.slice(DEP_BLOCK_PREFIX.length);
     return { text: `blocked by ${clip(dep, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
@@ -431,6 +470,139 @@ export function attentionSignal(task: BoardTask): AttentionSignal | null {
     return { text: 'waiting for review', tone: 'info', tip: null };
   }
   return null;
+}
+
+// --- board filters (board redesign v2 phase 5) --------------------------------
+//
+// The board answers three questions a person actually asks of it: what is
+// waiting on ME, what is running, what has gone off. Before this the only filter
+// was `label`, which answers a question about how the cards were tagged rather
+// than about what state they are in.
+//
+// One filter at a time, deliberately. These three are not orthogonal facets to
+// intersect — they are three different readings of the same board, and a chip
+// row that let you ask for "needs me AND running" would mostly produce empty
+// lanes and a puzzle. The label filter IS orthogonal (it is about the card's
+// subject, not its state), so it composes with all three, and the two live in
+// the URL side by side.
+
+/** The three state filters, as they appear in `?f=`. */
+export type BoardFilter = 'needsMe' | 'running' | 'stale';
+
+/** Chip order, left to right. */
+export const BOARD_FILTERS: BoardFilter[] = ['needsMe', 'running', 'stale'];
+
+/** The words on the chips. `needsMe` is a camelCase token on the wire and a
+ * sentence fragment on screen; the two are not the same string. */
+export const BOARD_FILTER_LABELS: Record<BoardFilter, string> = {
+  needsMe: 'needs me',
+  running: 'running',
+  stale: 'stale',
+};
+
+/** What each chip promises, on hover — the chip's own name is three words at
+ * most, and `needs me` in particular covers four different situations. */
+export const BOARD_FILTER_TIPS: Record<BoardFilter, string> = {
+  needsMe: 'waiting for review, a failed verdict, a dispatch error, or an unanswered permission request',
+  running: 'cards the dispatcher has in flight right now',
+  stale: 'cards at or near their automatic-archive date',
+};
+
+/**
+ * The card is waiting on a HUMAN — the predicate behind the `needs me` chip.
+ *
+ * Four disjuncts, each a different way a card stops moving without a person:
+ *
+ *   review        by definition of the lane — a decision only a human takes.
+ *   FAIL verdict  verification said no; the next step is a judgement call.
+ *   dispatch error the run did not start, or broke.
+ *   pending approval the agent is alive and parked on a permission prompt.
+ *
+ * The fourth is why the DTO grew a field: it is invisible from the tasks row —
+ * `permission_requests` has no `task_id` and the link runs through the run
+ * session. Narrowing the chip to the first three would have been the cheap
+ * option and it would have made the chip lie about its own name, so the count
+ * is computed server-side instead (api/tasks_board.go `pendingApprovalPairs`).
+ *
+ * A dependency-blocked card matches through `dispatchError`, because that is
+ * where the dispatcher writes the block (`DEP_BLOCK_PREFIX`). Arguably it is
+ * waiting on another CARD rather than on a person — but the card it waits for
+ * may itself be stuck, and the plan defined this predicate as "any dispatch
+ * error". Kept literal; the card's own signal row still tells the two apart.
+ */
+export function needsMe(task: BoardTask): boolean {
+  return (
+    laneOf(task.boardColumn) === 'review' ||
+    hasFailedVerdict(task) ||
+    dispatchErrorText(task) !== '' ||
+    task.pendingApprovalCount > 0
+  );
+}
+
+/** Whether one card survives one filter. `null` — no filter — matches every
+ * card, mirroring `matchesLabelFilter`. */
+export function matchesBoardFilter(task: BoardTask, filter: BoardFilter | null, nowMs: number): boolean {
+  switch (filter) {
+    case null:
+      return true;
+    case 'needsMe':
+      return needsMe(task);
+    case 'running':
+      return task.boardColumn === 'in_progress';
+    case 'stale':
+      return isStale(task, nowMs);
+  }
+}
+
+/** The board under one filter. Pure; `null` returns the list unchanged. */
+export function filterTasks(
+  tasks: readonly BoardTask[],
+  filter: BoardFilter | null,
+  nowMs: number,
+): readonly BoardTask[] {
+  if (filter === null) return tasks;
+  return tasks.filter((t) => matchesBoardFilter(t, filter, nowMs));
+}
+
+/**
+ * `?f=` → a filter, or null. Anything unrecognised reads as "no filter": a URL
+ * is user-editable and arrives from bookmarks written against older builds, and
+ * the board showing everything is the honest response to a word it does not
+ * know — quietly showing nothing would look like an empty board.
+ */
+export function parseBoardFilter(raw: string | null): BoardFilter | null {
+  return BOARD_FILTERS.find((f) => f === raw) ?? null;
+}
+
+/** Board header view mode: the lanes, or the dependency graph. */
+export type BoardView = 'board' | 'graph';
+
+/** `?view=` → a view. Same tolerance as `parseBoardFilter`, defaulting to the
+ * board because that is what the page is. */
+export function parseBoardView(raw: string | null): BoardView {
+  return raw === 'graph' ? 'graph' : 'board';
+}
+
+/**
+ * What an empty lane says. A lane is empty far more often than it is full, and
+ * an empty bordered box teaches nobody what the lane is for — these sentences
+ * are the only place the board explains its own shape, so each one names what
+ * arrives here and what leaves.
+ */
+export const LANE_EMPTY: Record<BoardLane, string> = {
+  inbox: 'Tasks captured from sessions and routines land here — Run, Plan or Dismiss each one.',
+  working: 'The dispatcher picks cards up from here in priority order.',
+  review: 'Cards that have run and carry a verdict wait here — Land, Re-run or Discard.',
+};
+
+/**
+ * What an empty lane says when a filter is on. The sentence above would be a
+ * non-sequitur there: the lane is not empty, the filter is hiding it, and the
+ * reader needs to know which of the two they are looking at.
+ */
+export function laneEmptyNote(lane: BoardLane, filter: BoardFilter | null): string {
+  if (filter === null) return LANE_EMPTY[lane];
+  return `Nothing in ${LANE_TITLES[lane]} matches “${BOARD_FILTER_LABELS[filter]}”.`;
 }
 
 // --- inbox amnesty (board inbox lifecycle) ------------------------------------
@@ -504,10 +676,7 @@ export function amnestyBefore(tasks: readonly BoardTask[], nowMs: number): strin
  */
 export function amnestyCandidates(tasks: readonly BoardTask[], nowMs: number): number {
   let n = 0;
-  for (const t of tasks) {
-    const at = staleAfterMs(t);
-    if (at !== null && at < nowMs) n += 1;
-  }
+  for (const t of tasks) if (isExpired(t, nowMs)) n += 1;
   return n;
 }
 
