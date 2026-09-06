@@ -70,19 +70,25 @@ interface WorkspaceNavItem {
   path: string;
   glyph: string;
   label: string;
+  /** Parked from the rail (desktop + mobile strip) while the product's focus
+   * is planning. The route, page, and API stay wired — flip this to bring the
+   * entry back; nothing else is needed. */
+  hidden?: boolean;
 }
 
 const BASE_NAV: WorkspaceNavItem[] = [
   { path: '', glyph: '◉', label: 'Overview' },
-  { path: 'board', glyph: '▤', label: 'Board' },
+  { path: 'board', glyph: '▤', label: 'Board', hidden: true },
   { path: 'planning', glyph: '✦', label: 'Planning' },
   { path: 'plans', glyph: '❐', label: 'Plans' },
-  { path: 'playbooks', glyph: '▤', label: 'Playbooks' },
+  { path: 'playbooks', glyph: '▤', label: 'Playbooks', hidden: true },
   { path: 'sessions', glyph: '❯', label: 'Sessions' },
   { path: 'approvals', glyph: '⧗', label: 'Approvals' },
   { path: 'architecture', glyph: '▦', label: 'Architecture' },
   { path: 'memory', glyph: '❖', label: 'Memory' },
 ];
+/** What the rail actually renders: BASE_NAV minus the parked entries. */
+const VISIBLE_BASE_NAV: WorkspaceNavItem[] = BASE_NAV.filter((item) => !item.hidden);
 const INSIGHT_NAV: WorkspaceNavItem[] = [
   { path: 'analytics', glyph: '▦', label: 'Analytics' },
   { path: 'retro', glyph: '↺', label: 'Retro' },
@@ -184,7 +190,7 @@ function WorkspaceInner(): JSX.Element {
                 "All projects →" footer (and the ModeToggle) — no standalone
                 Projects item here; it lives in the session-mode sidebar. */}
             <div className="mt-3 flex flex-col gap-0.5">
-              {BASE_NAV.map((item) => (
+              {VISIBLE_BASE_NAV.map((item) => (
                 <WorkspaceLink key={item.path} slug={slug} item={item} />
               ))}
             </div>
@@ -213,7 +219,7 @@ function WorkspaceInner(): JSX.Element {
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Mobile tab strip (the desktop rail is hidden < desk). */}
             <div className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2 desk:hidden">
-              {[...BASE_NAV, ...toolNav, ...INSIGHT_NAV, SYSTEM_NAV, SETTINGS_NAV].map((item) => (
+              {[...VISIBLE_BASE_NAV, ...toolNav, ...INSIGHT_NAV, SYSTEM_NAV, SETTINGS_NAV].map((item) => (
                 <WorkspaceLink key={item.path} slug={slug} item={item} compact />
               ))}
             </div>
