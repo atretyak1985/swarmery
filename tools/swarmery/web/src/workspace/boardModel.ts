@@ -34,7 +34,7 @@ export const COLUMN_LABELS: Record<BoardColumn, string> = {
 
 /**
  * What state the card is in, in the board's own vocabulary — the modal's
- * replacement for rendering `task.status` raw.
+ * replacement for rendering the raw `status` field.
  *
  * `status` is the DISPATCHER's column: a card that has never run reads `queued`
  * there whether it is sitting in the Inbox awaiting triage or actually waiting
