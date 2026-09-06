@@ -1,6 +1,7 @@
 // Structured wizard question (interactive planning v2 — phase 3): radio group
 // for single_select, checkboxes for multi_select, per-option description,
-// collapsible pros/cons, and an "Other" option that reveals a textarea. Local
+// collapsible pros/cons, a "recommended" badge on the option the planner would
+// pick itself, and an "Other" option that reveals a textarea. Local
 // selection state only — the parent owns submission. Render with
 // key={question.id} so a new question resets the selection.
 
@@ -63,6 +64,7 @@ export function QuestionCard({
       >
         {question.options.map((opt) => {
           const checked = selected.includes(opt.id);
+          const recommended = opt.recommended === true && opt.isOther !== true;
           const hasProsCons =
             (opt.pros !== undefined && opt.pros.length > 0) ||
             (opt.cons !== undefined && opt.cons.length > 0);
@@ -70,7 +72,11 @@ export function QuestionCard({
             <div
               key={opt.id}
               className={`rounded-[10px] border px-3 py-2.5 transition-colors ${
-                checked ? 'border-brand/50 bg-brand/6' : 'border-line bg-bg hover:border-line-strong'
+                checked
+                  ? 'border-brand/50 bg-brand/6'
+                  : recommended
+                    ? 'border-brand/30 bg-brand/[0.03] hover:border-brand/50'
+                    : 'border-line bg-bg hover:border-line-strong'
               }`}
             >
               <label className="flex cursor-pointer items-start gap-2.5">
@@ -84,7 +90,17 @@ export function QuestionCard({
                   className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-brand"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[13px] font-semibold text-ink">{opt.label}</span>
+                  <span className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">
+                    {opt.label}
+                    {recommended && (
+                      <span
+                        className="rounded border border-brand/40 bg-brand/12 px-1.5 py-px font-mono text-[10px] font-medium tracking-[0.06em] text-brand uppercase"
+                        title="the option the planner would pick itself"
+                      >
+                        recommended
+                      </span>
+                    )}
+                  </span>
                   {opt.description !== undefined && opt.description !== '' && (
                     <span className="mt-0.5 block text-[12px] leading-relaxed whitespace-pre-wrap text-ink-dim">
                       {opt.description}

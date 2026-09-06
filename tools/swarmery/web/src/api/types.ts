@@ -1666,6 +1666,8 @@ export interface PlanningOption {
   pros?: string[];
   cons?: string[];
   isOther?: boolean;
+  /** The one option the planner would pick itself; highlighted in the UI. */
+  recommended?: boolean;
 }
 
 /**

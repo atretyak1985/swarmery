@@ -241,3 +241,21 @@ func TestParseTurnRunningPlan(t *testing.T) {
 		t.Errorf("RunningPlan.SuggestedSize: want %q, got %q", "M", got.Question.RunningPlan.SuggestedSize)
 	}
 }
+
+// The planner's lean survives the parse: "recommended":true on one option is
+// what the dashboard's highlight reads, and its absence stays false (omitempty).
+func TestParseTurnRecommendedOption(t *testing.T) {
+	text := "```json\n" +
+		`{"type":"question","data":{"id":"q1","type":"single_select","question":"?","options":[{"id":"a","label":"A","recommended":true},{"id":"b","label":"B"},{"id":"other","label":"Other","isOther":true}]}}` +
+		"\n```"
+	got := ParseTurn(text)
+	if got.Question == nil {
+		t.Fatal("want Question != nil")
+	}
+	if !got.Question.Options[0].Recommended {
+		t.Error("option a: want Recommended")
+	}
+	if got.Question.Options[1].Recommended {
+		t.Error("option b: want not Recommended")
+	}
+}

@@ -1825,6 +1825,7 @@ const mockPlanQuestion: PlanningQuestion = {
       description: 'Page through the result set and flush rows as they serialize.',
       pros: ['Constant memory on the server', 'First bytes arrive immediately'],
       cons: ['Harder to resume a broken download', 'No Content-Length progress bar'],
+      recommended: true,
     },
     {
       id: 'job',

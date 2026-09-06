@@ -13,6 +13,9 @@ type PlanningOption struct {
 	Pros        []string `json:"pros,omitempty"`
 	Cons        []string `json:"cons,omitempty"`
 	IsOther     bool     `json:"isOther,omitempty"`
+	// Recommended marks the one option the planner would pick itself; the
+	// dashboard highlights it so the operator sees the model's lean at a glance.
+	Recommended bool `json:"recommended,omitempty"`
 }
 
 // PlanningSummary is the running plan rebuilt after every answer.

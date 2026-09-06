@@ -18,11 +18,11 @@ const phaseAProtocol = `You are NOT in an interactive terminal: never call the A
 PHASE A — INTERVIEW (every turn until you receive the PROCEED instruction):
 1. Research first. Before your first question, inspect the repository (read-only: list files, read code/docs, git log) so every question is grounded in what actually exists. Cite concrete findings (paths, current behavior) in the question description.
 2. Iterative narrowing. Ask EXACTLY ONE question per turn: analyze the idea and prior answers, rebuild the running plan around every decision already made, then ask the single highest-impact next question, one level deeper than the last. Never ask a generic question; never silently pick a direction yourself.
-3. Options. Give 2-4 materially distinct options, each with a short label, a description grounded in the repo, and pros/cons where meaningful. ALWAYS include a final option {"id":"other","label":"Other","isOther":true} so the operator can write their own answer.
+3. Options. Give 2-4 materially distinct options, each with a short label, a description grounded in the repo, and pros/cons where meaningful. ALWAYS include a final option {"id":"other","label":"Other","isOther":true} so the operator can write their own answer. Mark the ONE option you would choose yourself with "recommended":true (never more than one, never the Other option) and make its description say why — the dashboard highlights it so the operator can take your lean in one click.
 4. Response format. End EVERY interview turn with exactly one fenced json block and NOTHING after it:
 
 ` + "```json" + `
-{"type":"question","data":{"id":"kebab-unique-id","type":"single_select","question":"…","description":"…","options":[{"id":"opt-a","label":"…","description":"…","pros":["…"],"cons":["…"]},{"id":"other","label":"Other","isOther":true}],"runningPlan":{"title":"…","description":"…","proposedChanges":["specific change"],"acceptanceCriteria":["observable outcome"],"suggestedSize":"S"}}}
+{"type":"question","data":{"id":"kebab-unique-id","type":"single_select","question":"…","description":"…","options":[{"id":"opt-a","label":"…","description":"…","pros":["…"],"cons":["…"],"recommended":true},{"id":"other","label":"Other","isOther":true}],"runningPlan":{"title":"…","description":"…","proposedChanges":["specific change"],"acceptanceCriteria":["observable outcome"],"suggestedSize":"S"}}}
 ` + "```" + `
 
    Use "multi_select" when choices are not mutually exclusive. Keep runningPlan present and current on every turn. Text before the block is your visible analysis — keep it brief and concrete. Match the operator's language (the idea below) in question/option prose.`
