@@ -166,7 +166,15 @@ type Status struct {
 // already in flight), project + path validation, then spawns the headless run
 // and returns the pre-generated session uuid so the caller answers 202
 // immediately. The run's own goroutine owns exit handling and slot release.
-func (s *Service) Start(projectID int64, idea string) (sessionUUID string, err error) {
+//
+// model is the operator's choice (a Models short name or full ID; "" = the
+// default). It is resolved BEFORE the slot is taken and stored on the wizard
+// row, so the resume turns run on the same model as the first one.
+func (s *Service) Start(projectID int64, idea, model string) (sessionUUID string, err error) {
+	modelID, err := ResolveModel(model)
+	if err != nil {
+		return "", err
+	}
 	// Validate the project + resolve its path BEFORE taking a slot (a phantom
 	// project or a pathless one is a clean client error, not a wedged slot).
 	var path sql.NullString
@@ -201,18 +209,18 @@ func (s *Service) Start(projectID int64, idea string) (sessionUUID string, err e
 	// mode='plan' explicitly, never via the column default — the two modes must
 	// be distinguishable in the row itself, not by which code path inserted it.
 	if _, err := s.DB.Exec(
-		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, created_at, updated_at)
-		 VALUES(?,?,?,?,?,?,?)`,
-		projectID, uuid, StatusGenerating, idea, ModePlan, now, now); err != nil {
+		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, model, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,?)`,
+		projectID, uuid, StatusGenerating, idea, ModePlan, modelID, now, now); err != nil {
 		// Non-fatal: the run still executes; the wizard just has no durable row
 		// (OnSessionTurns will no-op on the uuid miss).
 		log.Printf("error: planning: insert wizard row project=%d uuid=%s: %v", projectID, uuid, err)
 	}
 
-	log.Printf("planning: start project=%d uuid=%s cwd=%q (%d chars idea)", projectID, uuid, path.String, len(idea))
+	log.Printf("planning: start project=%d uuid=%s cwd=%q model=%s (%d chars idea)", projectID, uuid, path.String, modelID, len(idea))
 	s.notify(projectID) // active=true → page shows the run
 
-	spec := RunSpec{Prompt: BuildPrompt(idea, s.WorkspaceRoot), SessionUUID: uuid, Cwd: path.String}
+	spec := RunSpec{Prompt: BuildPrompt(idea, s.WorkspaceRoot), SessionUUID: uuid, Cwd: path.String, Model: modelID}
 	s.spawn(func() { s.runAndHandle(ctx, cancel, projectID, spec) })
 	return uuid, nil
 }
@@ -335,9 +343,9 @@ func (s *Service) StartRevise(taskID int64, reason string, triggerPhaseID *int64
 		log.Printf("planning: project=%d superseded an open wizard (revise)", projectID)
 	}
 	if _, err := s.DB.Exec(
-		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, revise_task_id, created_at, updated_at)
-		 VALUES(?,?,?,?,?,?,?,?)`,
-		projectID, uuid, StatusGenerating, reason, ModeRevise, taskID, now, now); err != nil {
+		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, revise_task_id, model, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,?,?)`,
+		projectID, uuid, StatusGenerating, reason, ModeRevise, taskID, DefaultModel, now, now); err != nil {
 		// Non-fatal, mirroring Start: the run still executes; OnSessionTurns
 		// no-ops on the uuid miss and no revision can be staged for it.
 		log.Printf("error: planning: insert revise wizard row task=%d uuid=%s: %v", taskID, uuid, err)
@@ -362,9 +370,25 @@ func (s *Service) StartRevise(taskID int64, reason string, triggerPhaseID *int64
 		taskID, projectID, uuid, planDir, scratchDir)
 	s.notify(projectID)
 
-	spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: projPath.String}
+	spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: projPath.String, Model: DefaultModel}
 	s.spawn(func() { s.runAndHandle(ctx, cancel, projectID, spec) })
 	return uuid, nil
+}
+
+// Model returns the full model ID a wizard's resume turns must run on: the ID
+// stamped on its planning_sessions row, or DefaultModel when the row predates
+// the column or does not exist. Never "" — an empty --model would let a resume
+// inherit the account default the first turn was pinned away from.
+func (s *Service) Model(sessionUUID string) string {
+	var model sql.NullString
+	err := s.DB.QueryRow(`SELECT model FROM planning_sessions WHERE session_uuid = ?`, sessionUUID).Scan(&model)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("error: planning: read model uuid=%s: %v", sessionUUID, err)
+	}
+	if model.Valid && model.String != "" {
+		return model.String
+	}
+	return DefaultModel
 }
 
 // readSeedDocs loads every phase/step doc of the plan dir (sorted, README

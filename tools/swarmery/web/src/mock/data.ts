@@ -1789,6 +1789,7 @@ const mockPlanningIdle: PlanningStatus = {
   history: [],
   planDir: null,
   mode: '',
+  model: '',
   reviseTaskId: null,
   lastError: null,
 };
@@ -2728,7 +2729,7 @@ export const mockApi = {
     return mockPlanning[projectId] ?? mockPlanningIdle;
   },
 
-  async startPlanning(projectId: number, _idea: string): Promise<PlanningStart> {
+  async startPlanning(projectId: number, _idea: string, model?: string): Promise<PlanningStart> {
     await delay(120);
     const uuid = `mock-plan-${String(projectId)}-${String(Date.now())}`;
     // Jump straight to the awaiting_answer wizard: 2 answered history turns +
@@ -2744,6 +2745,7 @@ export const mockApi = {
       currentQuestion: mockPlanQuestion,
       runningPlan: mockPlanSummary,
       mode: 'plan',
+      model: model === 'sonnet' ? 'claude-sonnet-5' : model === 'fable' ? 'claude-fable-5-1' : 'claude-opus-5',
       history: [
         ...mockPlanHistory,
         { seq: 3, question: mockPlanQuestion, answer: null, reasoning: '' },
@@ -2875,6 +2877,7 @@ export const mockApi = {
       currentQuestion: { ...mockPlanQuestion, description: reason },
       runningPlan: mockPlanSummary,
       mode: 'revise',
+      model: 'claude-opus-5',
       reviseTaskId: taskId,
       history: [{ seq: 1, question: mockPlanQuestion, answer: null, reasoning: '' }],
     };

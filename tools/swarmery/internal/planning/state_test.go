@@ -92,7 +92,7 @@ func wizardFixture(t *testing.T, db *sql.DB, status, turnText string) (s *Servic
 func TestStart_InsertsWizardRow(t *testing.T) {
 	db := testDB(t)
 	s := newInlineService(t, db, &stubRunner{})
-	if _, err := s.Start(1, "add a widget"); err != nil {
+	if _, err := s.Start(1, "add a widget", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	var status, idea string
@@ -112,7 +112,7 @@ func TestStart_SupersedesOpenRow(t *testing.T) {
 	db := testDB(t)
 	insertWizardRow(t, db, "uuid-old", StatusAwaiting)
 	s := newInlineService(t, db, &stubRunner{})
-	if _, err := s.Start(1, "new idea"); err != nil {
+	if _, err := s.Start(1, "new idea", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	st, _, _, _ := wizardState(t, db, "uuid-old")
@@ -395,7 +395,7 @@ func TestRunFailure_MarksFailed(t *testing.T) {
 		return &Run{SessionUUID: s.SessionUUID, ExitCode: 1, Stderr: "boom"}, nil
 	}}
 	s := newInlineService(t, db, r)
-	if _, err := s.Start(1, "idea"); err != nil {
+	if _, err := s.Start(1, "idea", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	status, _, _, _ := wizardState(t, db, "uuid-planning")

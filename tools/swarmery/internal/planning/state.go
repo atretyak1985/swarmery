@@ -105,12 +105,15 @@ type WizardTurn struct {
 // Field names are FROZEN — phase 3 mirrors them verbatim in TypeScript
 // (Mode/ReviseTaskId: plan-revision phase 4 does the same).
 type WizardStatus struct {
-	Active          bool              `json:"active"`
-	SessionUUID     string            `json:"sessionUuid"`
-	SessionID       *int64            `json:"sessionId"`
-	StartedAt       *string           `json:"startedAt"`
-	Status          string            `json:"status"` // "" when no wizard row (legacy idle)
-	Mode            string            `json:"mode"`   // plan|revise; "" when no wizard row
+	Active      bool    `json:"active"`
+	SessionUUID string  `json:"sessionUuid"`
+	SessionID   *int64  `json:"sessionId"`
+	StartedAt   *string `json:"startedAt"`
+	Status      string  `json:"status"` // "" when no wizard row (legacy idle)
+	Mode        string  `json:"mode"`   // plan|revise; "" when no wizard row
+	// Model is the full model ID every turn of this wizard runs on (see Models);
+	// "" when no wizard row.
+	Model           string            `json:"model"`
 	ReviseTaskId    *int64            `json:"reviseTaskId"`
 	CurrentQuestion *PlanningQuestion `json:"currentQuestion"`
 	RunningPlan     *PlanningSummary  `json:"runningPlan"`
@@ -138,15 +141,16 @@ type wizardRow struct {
 	mode            string
 	reviseTaskID    sql.NullInt64
 	lastError       sql.NullString
+	model           sql.NullString
 }
 
-const wizardCols = `id, project_id, session_uuid, status, running_plan, current_question, raw_reply, plan_dir, created_at, updated_at, mode, revise_task_id, last_error`
+const wizardCols = `id, project_id, session_uuid, status, running_plan, current_question, raw_reply, plan_dir, created_at, updated_at, mode, revise_task_id, last_error, model`
 
 func scanWizard(scan func(...any) error) (*wizardRow, error) {
 	var r wizardRow
 	err := scan(&r.id, &r.projectID, &r.uuid, &r.status, &r.runningPlan,
 		&r.currentQuestion, &r.rawReply, &r.planDir, &r.createdAt, &r.updatedAt,
-		&r.mode, &r.reviseTaskID, &r.lastError)
+		&r.mode, &r.reviseTaskID, &r.lastError, &r.model)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -691,7 +695,11 @@ func (s *Service) WizardSnapshot(projectID int64) (WizardStatus, error) {
 		StartedAt:   &startedAt,
 		Status:      row.status,
 		Mode:        row.mode,
+		Model:       DefaultModel,
 		History:     []WizardTurn{},
+	}
+	if row.model.Valid && row.model.String != "" {
+		st.Model = row.model.String
 	}
 	if row.reviseTaskID.Valid {
 		v := row.reviseTaskID.Int64

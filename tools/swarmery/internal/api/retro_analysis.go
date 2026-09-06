@@ -180,7 +180,7 @@ func (h *Handler) planFromRetroAnalysis(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	uuid, err := planningSvc.Start(body.ProjectID, idea)
+	uuid, err := planningSvc.Start(body.ProjectID, idea, "")
 	switch {
 	case errors.Is(err, planning.ErrProjectNotFound):
 		writeClientErr(w, http.StatusNotFound, "project not found")

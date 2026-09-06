@@ -103,7 +103,7 @@ func TestStart_HappyPath_InlineRun(t *testing.T) {
 	var notified int
 	s.Notify = func(int64) { notified++ }
 
-	uuid, err := s.Start(1, "add a widget")
+	uuid, err := s.Start(1, "add a widget", "")
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestStart_SingleFlight_409(t *testing.T) {
 	s := NewService(db, r) // real `go` so the first Start's goroutine parks on block
 	s.UUID = func() string { return "uuid-1" }
 
-	if _, err := s.Start(1, "first idea"); err != nil {
+	if _, err := s.Start(1, "first idea", ""); err != nil {
 		t.Fatalf("first Start: %v", err)
 	}
 	// Wait until the run's goroutine has actually ENTERED the runner (count==1),
@@ -151,7 +151,7 @@ func TestStart_SingleFlight_409(t *testing.T) {
 	// assertion below.
 	waitFor(t, func() bool { return r.count() == 1 })
 
-	_, err := s.Start(1, "second idea")
+	_, err := s.Start(1, "second idea", "")
 	if !errors.Is(err, ErrActive) {
 		t.Fatalf("second Start err = %v, want ErrActive", err)
 	}
@@ -167,7 +167,7 @@ func TestStart_SingleFlight_409(t *testing.T) {
 func TestStart_UnknownProject(t *testing.T) {
 	db := testDB(t)
 	s := newInlineService(t, db, &stubRunner{})
-	if _, err := s.Start(999, "idea"); !errors.Is(err, ErrProjectNotFound) {
+	if _, err := s.Start(999, "idea", ""); !errors.Is(err, ErrProjectNotFound) {
 		t.Fatalf("err = %v, want ErrProjectNotFound", err)
 	}
 }
@@ -179,7 +179,7 @@ func TestStart_PathlessProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newInlineService(t, db, &stubRunner{})
-	if _, err := s.Start(2, "idea"); !errors.Is(err, ErrNoPath) {
+	if _, err := s.Start(2, "idea", ""); !errors.Is(err, ErrNoPath) {
 		t.Fatalf("err = %v, want ErrNoPath", err)
 	}
 }
@@ -190,7 +190,7 @@ func TestSnapshot_ActiveResolvesSessionID(t *testing.T) {
 	s := NewService(db, r)
 	s.UUID = func() string { return "uuid-live" }
 
-	if _, err := s.Start(1, "idea"); err != nil {
+	if _, err := s.Start(1, "idea", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool { return s.Snapshot(1).Active })
@@ -234,7 +234,7 @@ func TestCancel(t *testing.T) {
 	s := NewService(db, r)
 	s.UUID = func() string { return "uuid-c" }
 
-	if _, err := s.Start(1, "idea"); err != nil {
+	if _, err := s.Start(1, "idea", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool { return s.Snapshot(1).Active })
@@ -272,7 +272,7 @@ func TestRunAndHandle_OutcomeBranchesDoNotPanic(t *testing.T) {
 			db := testDB(t)
 			r := &stubRunner{runFn: c.run}
 			s := newInlineService(t, db, r)
-			if _, err := s.Start(1, "idea"); err != nil {
+			if _, err := s.Start(1, "idea", ""); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 			if s.Snapshot(1).Active {
@@ -285,7 +285,7 @@ func TestRunAndHandle_OutcomeBranchesDoNotPanic(t *testing.T) {
 		db := testDB(t)
 		r := &stubRunner{startErr: errors.New("fork failed")}
 		s := newInlineService(t, db, r)
-		if _, err := s.Start(1, "idea"); err != nil {
+		if _, err := s.Start(1, "idea", ""); err != nil {
 			t.Fatalf("Start (the spawn itself succeeds; the runner error is handled in the goroutine): %v", err)
 		}
 		if s.Snapshot(1).Active {
@@ -305,4 +305,75 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("condition not met within 2s")
+}
+
+// The operator's model choice reaches the spawn AND the wizard row — the row is
+// what every later resume reads, so the interview cannot change model mid-way.
+func TestStart_Model(t *testing.T) {
+	for _, tc := range []struct {
+		name, choice, want string
+	}{
+		{"default", "", DefaultModel},
+		{"short name", "sonnet", "claude-sonnet-5"},
+		{"full id", "claude-fable-5-1", "claude-fable-5-1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			r := &stubRunner{}
+			s := newInlineService(t, db, r)
+			uuid, err := s.Start(1, "idea", tc.choice)
+			if err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			if got := r.lastSpec().Model; got != tc.want {
+				t.Errorf("spec.Model = %q, want %q", got, tc.want)
+			}
+			if got := s.Model(uuid); got != tc.want {
+				t.Errorf("Model(uuid) = %q, want %q", got, tc.want)
+			}
+			st, err := s.WizardSnapshot(1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if st.Model != tc.want {
+				t.Errorf("WizardStatus.Model = %q, want %q", st.Model, tc.want)
+			}
+		})
+	}
+}
+
+// An unknown model is rejected before a slot is taken or a row is written.
+func TestStart_UnknownModel(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{}
+	s := newInlineService(t, db, r)
+	if _, err := s.Start(1, "idea", "gpt-9"); !errors.Is(err, ErrUnknownModel) {
+		t.Fatalf("err = %v, want ErrUnknownModel", err)
+	}
+	if r.count() != 0 {
+		t.Error("runner must not spawn for an unknown model")
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM planning_sessions`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("planning_sessions rows = %d (err %v), want 0", n, err)
+	}
+}
+
+// A wizard row from before the model column (NULL) and an unknown uuid both
+// resolve to the planner default — never "", which would let a resume inherit
+// the account default.
+func TestModel_FallsBackToDefault(t *testing.T) {
+	db := testDB(t)
+	s := newInlineService(t, db, &stubRunner{})
+	if _, err := db.Exec(
+		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, created_at, updated_at)
+		 VALUES(1,'legacy','awaiting_answer','i','plan','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Model("legacy"); got != DefaultModel {
+		t.Errorf("legacy row: %q, want %q", got, DefaultModel)
+	}
+	if got := s.Model("nope"); got != DefaultModel {
+		t.Errorf("missing row: %q, want %q", got, DefaultModel)
+	}
 }

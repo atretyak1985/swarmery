@@ -285,3 +285,29 @@ func waitIdle(t *testing.T, svc *planning.Service) {
 	}
 	t.Fatal("planner run never went idle")
 }
+
+// An unknown model is a client error, and a known short name is accepted and
+// surfaced on the status DTO as its full ID.
+func TestStartPlanning_Model(t *testing.T) {
+	srv, _, svc := serverWithPlanning(t, &planStubRunner{})
+	bad := postPlanningJSON(t, srv.URL+"/api/projects/1/planning", map[string]string{"idea": "x", "model": "gpt-9"})
+	bad.Body.Close()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown model = %d, want 400", bad.StatusCode)
+	}
+	ok := postPlanningJSON(t, srv.URL+"/api/projects/1/planning", map[string]string{"idea": "x", "model": "sonnet"})
+	ok.Body.Close()
+	if ok.StatusCode != http.StatusAccepted {
+		t.Fatalf("sonnet = %d, want 202", ok.StatusCode)
+	}
+	if got := svc.Model("uuid-api"); got != "claude-sonnet-5" {
+		t.Errorf("stored model = %q, want claude-sonnet-5", got)
+	}
+	st, err := svc.WizardSnapshot(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Model != "claude-sonnet-5" {
+		t.Errorf("status model = %q, want claude-sonnet-5", st.Model)
+	}
+}

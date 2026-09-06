@@ -57,6 +57,36 @@ const PLAN_POLL_MS = 15_000;
 // Reconcile-poll cadence while the wizard is open (net under the WS refetch).
 const STATUS_POLL_MS = 4_000;
 
+/** The models an operator may plan with — the same closed set the daemon
+ * accepts (planning.Models); the value is the short name the API resolves. */
+const PLANNING_MODELS = [
+  { value: 'opus', label: 'opus — default', id: 'claude-opus-5' },
+  { value: 'sonnet', label: 'sonnet — faster, cheaper', id: 'claude-sonnet-5' },
+  { value: 'fable', label: 'fable — most capable, ~2× cost', id: 'claude-fable-5-1' },
+] as const;
+type PlanningModel = (typeof PLANNING_MODELS)[number]['value'];
+const DEFAULT_PLANNING_MODEL: PlanningModel = 'opus';
+const MODEL_STORAGE_KEY = 'swarmery.planning.model';
+
+function isPlanningModel(v: string | null): v is PlanningModel {
+  return PLANNING_MODELS.some((m) => m.value === v);
+}
+
+/** Last-used choice; falls back to the default when storage is unavailable. */
+function readStoredModel(): PlanningModel {
+  try {
+    const v = localStorage.getItem(MODEL_STORAGE_KEY);
+    return isPlanningModel(v) ? v : DEFAULT_PLANNING_MODEL;
+  } catch {
+    return DEFAULT_PLANNING_MODEL;
+  }
+}
+
+/** Short name for a full model ID from the status DTO (`claude-opus-5` → `opus`). */
+function modelShortName(id: string): string {
+  return PLANNING_MODELS.find((m) => m.id === id)?.value ?? id;
+}
+
 /** Compact elapsed string ("3m 12s") since an RFC3339 instant. */
 function fmtElapsed(startedAt: string, nowMs: number): string {
   const s = Math.max(0, Math.floor((nowMs - new Date(startedAt).getTime()) / 1000));
@@ -70,6 +100,7 @@ export function PlanningMode(): JSX.Element {
 
   const [status, setStatus] = useState<PlanningStatus | null>(null);
   const [idea, setIdea] = useState('');
+  const [plannerModel, setPlannerModel] = useState<PlanningModel>(readStoredModel);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -327,7 +358,12 @@ export function PlanningMode(): JSX.Element {
     setBusy(true);
     setError(null);
     setPlan(null);
-    startPlanning(projectId, idea.trim())
+    try {
+      localStorage.setItem(MODEL_STORAGE_KEY, plannerModel);
+    } catch {
+      // storage unavailable — the choice still applies to this run
+    }
+    startPlanning(projectId, idea.trim(), plannerModel)
       .then(() => {
         if (!aliveRef.current) return;
         // Optimistic flip BEFORE loadStatus so the stale-GET guard in
@@ -464,6 +500,14 @@ export function PlanningMode(): JSX.Element {
         aria-hidden="true"
       />
       <span className="text-[13px] font-semibold text-ink">{label}</span>
+      {status != null && status.model !== '' && (
+        <span
+          className="rounded border border-line px-1.5 py-px font-mono text-[10.5px] text-ink-dim"
+          title={status.model}
+        >
+          {modelShortName(status.model)}
+        </span>
+      )}
       {status?.startedAt != null && (
         <span className="font-mono text-[10.5px] text-ink-faint">started {fmtAgo(status.startedAt)}</span>
       )}
@@ -739,6 +783,22 @@ export function PlanningMode(): JSX.Element {
             >
               {busy ? 'starting…' : wstatus === 'failed' ? 'Start again' : 'Start planning'}
             </button>
+            <select
+              value={plannerModel}
+              disabled={busy}
+              onChange={(e) => {
+                if (isPlanningModel(e.target.value)) setPlannerModel(e.target.value);
+              }}
+              aria-label="planner model"
+              title="the model that runs the planning interview and writes the plan"
+              className="rounded-lg border border-line bg-field px-2 py-2 font-mono text-[11px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+            >
+              {PLANNING_MODELS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
             {newPlanMode && (
               <button
                 type="button"

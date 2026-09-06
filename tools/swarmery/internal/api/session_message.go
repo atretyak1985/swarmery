@@ -154,7 +154,7 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 
 	// The spawn body lives in resume.go so the planning-wizard endpoints share
 	// the exact same single-flight map, timeout, and session_updated edges.
-	started, err := startResume(id, sessionUUID, cwd.String, account.String, text, nil)
+	started, err := startResume(id, sessionUUID, cwd.String, account.String, text, "", nil)
 	if errors.Is(err, errResumeCwdGone) {
 		// A run's worktree is removed when the run ends — but only the CHECKOUT is
 		// disposable: the commits stay on swarm/<taskID>. So the missing directory
@@ -166,7 +166,7 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("session_message: re-attached run worktree %s for session id=%d", cwd.String, id)
-		started, err = startResume(id, sessionUUID, cwd.String, account.String, text, nil)
+		started, err = startResume(id, sessionUUID, cwd.String, account.String, text, "", nil)
 	}
 	if err != nil {
 		http.Error(w, `{"error":"claude executable not found (set SWARMERY_CLAUDE_BIN)"}`, http.StatusServiceUnavailable)

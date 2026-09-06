@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,9 +26,15 @@ import (
 const resumePermEnv = "SWARMERY_RESUME_PERMISSION_MODE"
 
 // resumeArgs is the argv of one resume spawn, split out so the flags are
-// assertable without spawning a process (mirrors runcore.Args).
-func resumeArgs(sessionUUID, text string) []string {
+// assertable without spawning a process (mirrors runcore.Args). model is
+// optional: "" lets the CLI pick (the composer's behaviour — the operator is
+// continuing a session they ran themselves); the planning wizard always passes
+// the wizard's pinned model so a resume never inherits the account default.
+func resumeArgs(sessionUUID, text, model string) []string {
 	args := []string{"-r", sessionUUID, "-p", text, "--output-format", "json"}
+	if m := strings.TrimSpace(model); m != "" {
+		args = append(args, "--model", m)
+	}
 	return append(args, claudeflags.PermissionModeArgs(resumePermEnv)...)
 }
 
@@ -54,7 +61,7 @@ var errResumeCwdGone = errors.New("session working directory no longer exists")
 // already visible when the final session_updated frame goes out. Returns
 // (false, nil) when a resume is already in flight for uuid; a non-nil err means
 // the claude binary could not be resolved (nothing was spawned).
-func startResume(sessionID int64, sessionUUID, cwd, account, text string, onExit func(err error)) (started bool, err error) {
+func startResume(sessionID int64, sessionUUID, cwd, account, text, model string, onExit func(err error)) (started bool, err error) {
 	// Cheapest, most specific reject first: a vanished cwd is a state error the
 	// caller must explain to the operator, not a missing-binary condition.
 	if fi, statErr := os.Stat(cwd); statErr != nil || !fi.IsDir() {
@@ -76,7 +83,7 @@ func startResume(sessionID int64, sessionUUID, cwd, account, text string, onExit
 	msgInFlightMu.Unlock()
 
 	log.Printf("session_message: resume session id=%d uuid=%s cwd=%q account=%q (%d chars)", sessionID, sessionUUID, cwd, account, len(text))
-	go runSessionMessage(ctx, cancel, sessionID, bin, sessionUUID, cwd, account, text, onExit)
+	go runSessionMessage(ctx, cancel, sessionID, bin, sessionUUID, cwd, account, text, model, onExit)
 	return true, nil
 }
 
@@ -95,7 +102,7 @@ func resumeInFlight(sessionUUID string) bool {
 // only log completion/failure and publish session_updated at the run's edges so
 // the composer flips to Stop (and back) while it is in flight. onExit (nil ok)
 // observes the process outcome before the slot release (see startResume).
-func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64, bin, sessionUUID, cwd, account, text string, onExit func(err error)) {
+func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64, bin, sessionUUID, cwd, account, text, model string, onExit func(err error)) {
 	var runErr error
 	defer func() {
 		if onExit != nil {
@@ -109,7 +116,7 @@ func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64,
 	}()
 	publishSessionUpdated(id) // resumeInFlight is now true → composer shows Stop
 
-	cmd := exec.CommandContext(ctx, bin, resumeArgs(sessionUUID, text)...)
+	cmd := exec.CommandContext(ctx, bin, resumeArgs(sessionUUID, text, model)...)
 	cmd.Dir = cwd
 	// The transcript `claude -r` must find lives under the config dir of the
 	// account that WROTE it, so the resume takes the account from the sessions row
