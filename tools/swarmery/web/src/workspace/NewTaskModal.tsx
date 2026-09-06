@@ -1,8 +1,17 @@
 // New-task modal — the board's creation form, replacing the inline quick-entry
-// input it grew out of (title + recipe only). Everything the dispatcher acts
-// on is settable at intake: prompt, the registry agent to dispatch as, model,
-// priority, playbook, file scope, dependencies, and the landing column (Triage
-// to park it, Todo to have the dispatcher pick it up immediately).
+// input it grew out of (title + recipe only).
+//
+// Two fields are visible: the title and what needs doing. Everything else the
+// dispatcher acts on — agent, priority, model, playbook, file scope,
+// dependencies, labels, landing column — is settable at intake but lives under
+// `advanced`, collapsed. That is the whole shape of this component: writing
+// down a task is the common case, and it used to cost ten controls, nine of
+// which have a working default. The collapsed section is NOT rendered (not
+// merely hidden), so what is off-screen is also out of the tab order.
+//
+// Hidden state stays legible: the disclosure names every advanced value that
+// is no longer at its default, and a `?compose=@agent:` deep link opens the
+// section so the resolved agent is never a silent setting.
 //
 // Deep link: Agent Hub "Run now" still navigates to /p/{slug}/board?compose=@<agent>:
 // — Board passes that text in as `initialText` and the modal resolves the
@@ -14,7 +23,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AgentRosterRow, BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { createBoardTask } from '../api';
 import { AgentHint, AgentSelect, useAgentRoster } from './AgentPicker';
-import { COLUMN_LABELS, TASK_MODELS, TASK_PRIORITIES } from './boardModel';
+import { COLUMN_LABELS, LANE_TITLES, laneOf, TASK_MODELS, TASK_PRIORITIES } from './boardModel';
 import { PlaybookHint, PlaybookSelect, usePlaybooks } from './PlaybookPicker';
 import { ChipEditor, FieldLabel } from './TaskFields';
 
@@ -72,6 +81,7 @@ export function NewTaskModal({
   const [dependencies, setDependencies] = useState<string[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
   const [column, setColumn] = useState<BoardColumn>('triage');
+  const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +100,9 @@ export function NewTaskModal({
     if (parsed.agent === '') return;
     setAgent(parsed.agent);
     setTitle(parsed.title);
+    // The deep link SET something the collapsed form does not show. Open the
+    // section rather than dispatch to an agent the operator never saw named.
+    setAdvanced(true);
   }, [rosterLoading, agents, initialText]);
 
   useEffect(() => {
@@ -124,6 +137,20 @@ export function NewTaskModal({
       first.focus();
     }
   };
+
+  // Which advanced values are no longer at their default. Named, not counted:
+  // the disclosure is the only trace a collapsed override leaves, and "3 set"
+  // would tell the operator that something is off without saying what.
+  const overrides: string[] = [
+    ...(agent !== '' ? ['agent'] : []),
+    ...(priority !== 'normal' ? ['priority'] : []),
+    ...(model !== 'default' ? ['model'] : []),
+    ...(playbook !== '' ? ['playbook'] : []),
+    ...(fileScope.length > 0 ? ['file scope'] : []),
+    ...(dependencies.length > 0 ? ['dependencies'] : []),
+    ...(labels.length > 0 ? ['labels'] : []),
+    ...(column !== 'triage' ? ['column'] : []),
+  ];
 
   const submit = (): void => {
     const t = title.trim();
@@ -206,104 +233,135 @@ export function NewTaskModal({
           </div>
 
           <div>
-            <FieldLabel>prompt</FieldLabel>
+            <FieldLabel>what needs doing</FieldLabel>
             <textarea
               value={prompt}
               disabled={busy}
               onChange={(e) => setPrompt(e.target.value)}
               rows={12}
               placeholder="the full request (empty = use the title)"
-              aria-label="prompt"
+              aria-label="what needs doing"
               className="w-full resize-y rounded-[8px] border border-line bg-field px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-ink outline-none placeholder:text-ink-faint focus:border-ink-dim disabled:opacity-50"
             />
           </div>
 
-          <div>
-            <FieldLabel>agent</FieldLabel>
-            <AgentSelect agents={agents} value={agent} onChange={setAgent} disabled={busy} />
-            <AgentHint agents={agents} value={agent} />
-          </div>
+          <button
+            type="button"
+            onClick={() => setAdvanced((v) => !v)}
+            aria-expanded={advanced}
+            className="flex w-fit items-center gap-1.5 font-mono text-[10.5px] tracking-[0.08em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
+          >
+            {/* The glyph is decorative — the word carries the meaning and
+                aria-expanded carries the state — and the label is ONE text
+                node: an accessible name is built by concatenating the trimmed
+                text of each child, so a summary split across spans would be
+                announced as "advanced· priority" however wide the flex gap
+                renders it. */}
+            <span aria-hidden="true">{advanced ? '−' : '+'}</span>
+            <span>
+              {advanced || overrides.length === 0
+                ? 'advanced'
+                : `advanced · ${overrides.join(', ')}`}
+            </span>
+          </button>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>priority</FieldLabel>
-              <select
-                value={priority}
+          {advanced && (
+            <>
+              <div>
+                <FieldLabel>agent</FieldLabel>
+                <AgentSelect agents={agents} value={agent} onChange={setAgent} disabled={busy} />
+                <AgentHint agents={agents} value={agent} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>priority</FieldLabel>
+                  <select
+                    value={priority}
+                    disabled={busy}
+                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                    aria-label="priority"
+                    className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
+                  >
+                    {TASK_PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel>model</FieldLabel>
+                  <select
+                    value={model}
+                    disabled={busy}
+                    onChange={(e) => setModel(e.target.value)}
+                    aria-label="model"
+                    className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
+                  >
+                    {TASK_MODELS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>playbook</FieldLabel>
+                <PlaybookSelect
+                  playbooks={playbooks}
+                  value={playbook}
+                  onChange={setPlaybook}
+                  disabled={busy}
+                />
+                <PlaybookHint playbooks={playbooks} value={playbook} />
+              </div>
+
+              <ChipEditor
+                label="file scope"
+                values={fileScope}
+                placeholder="add a path glob + Enter"
                 disabled={busy}
-                onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                aria-label="priority"
-                className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
-              >
-                {TASK_PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <FieldLabel>model</FieldLabel>
-              <select
-                value={model}
+                onChange={setFileScope}
+              />
+              <ChipEditor
+                label="dependencies"
+                values={dependencies}
+                placeholder="add a T-id + Enter"
                 disabled={busy}
-                onChange={(e) => setModel(e.target.value)}
-                aria-label="model"
-                className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
-              >
-                {TASK_MODELS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+                onChange={setDependencies}
+              />
+              <ChipEditor
+                label="labels"
+                values={labels}
+                placeholder="add a label + Enter"
+                disabled={busy}
+                onChange={setLabels}
+              />
 
-          <div>
-            <FieldLabel>playbook</FieldLabel>
-            <PlaybookSelect playbooks={playbooks} value={playbook} onChange={setPlaybook} disabled={busy} />
-            <PlaybookHint playbooks={playbooks} value={playbook} />
-          </div>
-
-          <ChipEditor
-            label="file scope"
-            values={fileScope}
-            placeholder="add a path glob + Enter"
-            disabled={busy}
-            onChange={setFileScope}
-          />
-          <ChipEditor
-            label="dependencies"
-            values={dependencies}
-            placeholder="add a T-id + Enter"
-            disabled={busy}
-            onChange={setDependencies}
-          />
-          <ChipEditor
-            label="labels"
-            values={labels}
-            placeholder="add a label + Enter"
-            disabled={busy}
-            onChange={setLabels}
-          />
-
-          <div>
-            <FieldLabel>column</FieldLabel>
-            <select
-              value={column}
-              disabled={busy}
-              onChange={(e) => setColumn(e.target.value as BoardColumn)}
-              aria-label="column"
-              className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
-            >
-              {TARGET_COLUMNS.map((c) => (
-                <option key={c} value={c}>
-                  {COLUMN_LABELS[c]}
-                </option>
-              ))}
-            </select>
-            <div className="mt-1 font-mono text-[10px] text-ink-faint">{COLUMN_HINT[column] ?? ''}</div>
-          </div>
+              <div>
+                <FieldLabel>column</FieldLabel>
+                <select
+                  value={column}
+                  disabled={busy}
+                  onChange={(e) => setColumn(e.target.value as BoardColumn)}
+                  aria-label="column"
+                  className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
+                >
+                  {TARGET_COLUMNS.map((c) => (
+                    <option key={c} value={c}>
+                      {COLUMN_LABELS[c]}
+                    </option>
+                  ))}
+                </select>
+                <div className="mt-1 font-mono text-[10px] text-ink-faint">
+                  {COLUMN_HINT[column] ?? ''}
+                </div>
+              </div>
+            </>
+          )}
 
           {error !== null && (
             <div
@@ -315,22 +373,20 @@ export function NewTaskModal({
           )}
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
-          >
-            cancel
-          </button>
+        {/* One action. The label names the lane the card will appear in rather
+            than saying "create task" over a column select the operator has to
+            go find — and it tracks that select when advanced changes it, so it
+            can never promise Inbox and deliver a dispatch. Cancelling is the ×,
+            Escape, or the backdrop: three ways out already, none of them a
+            button that competes with the one that does the work. */}
+        <div className="mt-4 flex justify-end">
           <button
             type="button"
             onClick={submit}
             disabled={busy || title.trim() === ''}
             className="rounded-lg border border-brand/50 bg-brand/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? '…' : 'create task'}
+            {busy ? '…' : `create in ${LANE_TITLES[laneOf(column) ?? 'inbox']}`}
           </button>
         </div>
       </div>

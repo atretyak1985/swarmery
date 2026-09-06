@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -174,6 +175,13 @@ type taskOpts struct {
 	// dispatcher does NOT own. Set it to model an admitted dispatcher run
 	// (admit() writes it in the same UPDATE as board_column='in_progress').
 	worktreePath string
+	// prompt: "" keeps the shared default ("do <extID>"). Set it to model a card
+	// whose body matters to the assertion (a verify-fix card's inherited prompt).
+	prompt string
+	// originQuote / originFiles: the 0066 provenance columns. "" / nil leave them
+	// NULL, i.e. a card the dispatcher appends no provenance block to.
+	originQuote string
+	originFiles []string
 }
 
 func insertTask(t *testing.T, db *sql.DB, extID string, o taskOpts) int64 {
@@ -222,6 +230,21 @@ func insertTask(t *testing.T, db *sql.DB, extID string, o taskOpts) int64 {
 	if o.worktreePath != "" {
 		if _, err := db.Exec(`UPDATE tasks SET worktree_path=? WHERE id=?`, o.worktreePath, id); err != nil {
 			t.Fatalf("set worktree_path on %s: %v", extID, err)
+		}
+	}
+	if o.prompt != "" {
+		if _, err := db.Exec(`UPDATE tasks SET prompt=? WHERE id=?`, o.prompt, id); err != nil {
+			t.Fatalf("set prompt on %s: %v", extID, err)
+		}
+	}
+	if o.originQuote != "" || o.originFiles != nil {
+		files, err := json.Marshal(o.originFiles)
+		if err != nil {
+			t.Fatalf("encode origin_files for %s: %v", extID, err)
+		}
+		if _, err := db.Exec(`UPDATE tasks SET origin_quote=?, origin_files=? WHERE id=?`,
+			o.originQuote, string(files), id); err != nil {
+			t.Fatalf("set provenance on %s: %v", extID, err)
 		}
 	}
 	return id
@@ -1474,5 +1497,88 @@ func TestScheduleWorktreeSingleFlight(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("Acquire(T-root1) called %d time(s) across two passes, want 2 — the "+
 			"deferred row must be admitted once the checkout is free", n)
+	}
+}
+
+// ── dispatched-prompt assembly (board redesign v2 phase 3) ──
+
+// TestBuildDispatchPromptGolden pins, byte for byte, the text a card is
+// dispatched with, over the three shapes a queue card comes in: hand-written,
+// captured from a session (0066 provenance columns set), and minted by the
+// verifier as a fix for a failed run.
+//
+// It goes through candidates() rather than hand-building the struct so the
+// golden covers the whole read path — origin_quote/origin_files → provenance
+// block → assembled body — and not just the concatenation at the end.
+//
+// Two invariants are load-bearing and neither is visible from a single-case
+// test. (1) The user's own prompt is FIRST and verbatim: nothing is prepended,
+// nothing is paraphrased, so what a person typed is what the model reads first.
+// (2) A card with no provenance dispatches with a prompt identical to the
+// pre-0066 one — the provenance work must be invisible to every card that has
+// none, which is most of them.
+func TestBuildDispatchPromptGolden(t *testing.T) {
+	db := testDB(t)
+
+	const sessionPrompt = "Extract the retry helper into internal/retry"
+	const sessionQuote = "Refactor the retry helper and add tests for the backoff."
+	// A fix card inherits the root's prompt with the verifier's reasons appended
+	// (verify.createFixTask) and carries no provenance columns of its own.
+	const fixPrompt = "Extract the retry helper into internal/retry\n\n## Verification failed\ntypecheck: 2 errors"
+
+	insertTask(t, db, "T-man", taskOpts{prompt: "Add a --json flag to the status command"})
+	insertTask(t, db, "T-cap", taskOpts{
+		origin:      "session",
+		prompt:      sessionPrompt,
+		originQuote: sessionQuote,
+		originFiles: []string{"internal/retry/retry.go", "internal/retry/retry_test.go"},
+	})
+	insertTask(t, db, "T-fix", taskOpts{origin: "verify-fix", prompt: fixPrompt})
+
+	cands, err := newTestService(t, db, &stubRunner{}, &stubWt{}).candidates()
+	if err != nil {
+		t.Fatalf("candidates: %v", err)
+	}
+	got := map[string]string{}
+	for _, c := range cands {
+		got[c.ExternalID] = buildDispatchPrompt(c)
+	}
+
+	want := map[string]string{
+		// Manual: the prompt and nothing else. The card's title ("t-T-man") does
+		// not appear — see buildDispatchPrompt's doc comment.
+		"T-man": "Add a --json flag to the status command",
+		// Captured: prompt first, then the provenance block. The quote is the
+		// session's opening ask; the files are what that session touched.
+		"T-cap": sessionPrompt + "\n\n" +
+			"--- PROVENANCE (captured card) ---\n" +
+			"The session this card was captured from was asked:\n" +
+			sessionQuote + "\n" +
+			"Files that session touched: internal/retry/retry.go, internal/retry/retry_test.go\n" +
+			"--- END PROVENANCE ---",
+		// verify-fix: the inherited prompt plus the verifier's reasons, no block
+		// — createFixTask copies neither origin_quote nor origin_files from the
+		// root, so a fix card has no provenance to render.
+		"T-fix": fixPrompt,
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("buildDispatchPrompt(%s) mismatch:\n got %q\nwant %q", id, got[id], w)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("candidates() returned %d cards, want %d", len(got), len(want))
+	}
+
+	// The regression the plan names outright: a card with no source dispatches
+	// with its prompt untouched. Stated separately from the table so a golden
+	// updated in haste cannot quietly relax it.
+	for _, id := range []string{"T-man", "T-fix"} {
+		if strings.Contains(got[id], "PROVENANCE") {
+			t.Errorf("%s (no origin_* columns) grew a provenance block:\n%s", id, got[id])
+		}
+	}
+	if !strings.HasPrefix(got["T-cap"], sessionPrompt) {
+		t.Errorf("captured card must open with the user's own prompt:\n%s", got["T-cap"])
 	}
 }
