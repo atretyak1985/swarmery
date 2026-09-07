@@ -39,18 +39,25 @@ while IFS= read -r f; do files+=("$f"); done < <(find plugins scripts -name '*.s
 # raw text would make documenting the hazard a build failure.
 code_of() { sed -E 's/^[[:space:]]*#.*$//' "$1"; }
 
+# has <file> <ERE> — true when the file's code (comments stripped) matches.
+# The strip runs inside a substitution, never as `code_of … | grep -q`: under
+# `pipefail`, grep -q exits on its first match, sed then takes SIGPIPE writing
+# its next block, and the pipeline reports 141 — a random failure on any file
+# large enough that sed is still writing when grep is already done.
+has() { grep -qE -- "$2" <<<"$(code_of "$1")"; }
+
 # ── stat ──────────────────────────────────────────────────────────
 # A file using `stat -f` must also use `stat -c`, and must not rely on `-f`
 # failing: the `||` chain with `-f` FIRST is the exact broken shape.
 for f in "${files[@]}"; do
-  code_of "$f" | grep -q 'stat -f' || continue
-  if ! code_of "$f" | grep -q 'stat -c'; then
+  has "$f" 'stat -f' || continue
+  if ! has "$f" 'stat -c'; then
     bad "$f uses BSD 'stat -f' with no GNU 'stat -c' form — it reads every mtime as garbage on Linux"
     continue
   fi
   # `stat -f … || stat -c …` on one line: the fallback is unreachable on Linux,
   # because GNU's -f exits 0.
-  if code_of "$f" | grep -qE 'stat -f[^|]*\|\|[[:space:]]*stat -c'; then
+  if has "$f" 'stat -f[^|]*\|\|[[:space:]]*stat -c'; then
     bad "$f falls back from 'stat -f' to 'stat -c' by exit code — GNU's -f exits 0, so the fallback never runs"
     continue
   fi
@@ -59,17 +66,23 @@ done
 
 # ── shasum / sha256sum ────────────────────────────────────────────
 for f in "${files[@]}"; do
-  code_of "$f" | grep -q 'shasum' || continue
-  if code_of "$f" | grep -q 'sha256sum'; then ok
+  has "$f" 'shasum' || continue
+  if has "$f" 'sha256sum'; then ok
   else bad "$f uses BSD 'shasum' with no GNU 'sha256sum' form"; fi
 done
 
 # ── date -v / date -d ─────────────────────────────────────────────
 for f in "${files[@]}"; do
-  code_of "$f" | grep -qE 'date -v' || continue
-  if code_of "$f" | grep -qE 'date -d'; then ok
+  has "$f" 'date -v' || continue
+  if has "$f" 'date -d'; then ok
   else bad "$f uses BSD 'date -v' with no GNU 'date -d' form"; fi
 done
+
+# ── this suite must not reintroduce the pipe it just removed ──────
+# `code_of … | grep` under pipefail is the SIGPIPE race described at `has`.
+if has "${BASH_SOURCE[0]}" 'code_of[^|]*\|[[:space:]]*grep'; then
+  bad "portable-shell.test.sh pipes code_of into grep — use has() so pipefail cannot turn a match into a SIGPIPE failure"
+else ok; fi
 
 # ── the shapes actually behave ────────────────────────────────────
 # Not just "both spellings are present" — the real check. This runs whichever
