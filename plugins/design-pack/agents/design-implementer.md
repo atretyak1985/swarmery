@@ -29,6 +29,14 @@ component. Those are the cheapest fixes and the most expensive regressions, so
 they are not discouraged here — they are [STOP triggers](#the-eight-stop-triggers)
 that end the run with the decision handed back to the operator.
 
+# Bash: одна операція на виклик
+
+Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
+між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
+Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
+впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
+inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+
 # Goal & success criteria
 
 - Goal: the target route, rendered at the authoring viewport, matches the

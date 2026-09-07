@@ -24,6 +24,14 @@ package scripts, Makefile) instead of assuming npm. Run what applies: build,
 typecheck, lint, tests, and — when the brief asks — a security scan or a
 browser smoke via the `browser-verification` skill.
 
+# Bash: одна операція на виклик
+
+Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
+між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
+Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
+впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
+inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+
 # Output
 
 Report each check with its command and outcome, verbatim failure excerpts

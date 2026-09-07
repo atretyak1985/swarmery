@@ -24,6 +24,14 @@ frameworks, fixtures, and mocking conventions (project.json → stack,
 `CLAUDE.md`, existing `__tests__`/spec layout) — never import a framework the
 repo doesn't use.
 
+# Bash: одна операція на виклик
+
+Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
+між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
+Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
+впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
+inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+
 # What good looks like
 
 - **Behavior over implementation.** Assert observable outcomes and contracts;

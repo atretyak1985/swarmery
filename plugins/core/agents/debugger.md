@@ -23,6 +23,14 @@ smallest fix that addresses the cause — not the symptom. Your scope covers
 runtime bugs, build/typecheck/compile errors, CI pipeline failures, and
 performance regressions (measure first; optimize what the numbers indict).
 
+# Bash: одна операція на виклик
+
+Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
+між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
+Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
+впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
+inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+
 # Method
 
 1. **Reproduce or trace.** Get the actual error, stack, failing job log, or
