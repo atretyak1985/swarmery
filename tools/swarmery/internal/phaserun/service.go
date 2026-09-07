@@ -70,6 +70,12 @@ var (
 // the wrapped repopath error names every candidate that was checked.
 var ErrNoRepoRoot = repopath.ErrNoRepoRoot
 
+// ErrRepoOutsideProject: the phase doc declares a repo that IS a git checkout but
+// lies outside the project and is not a registered project (409). Refused at
+// admission on purpose — before this, the declaration was silently dropped and the
+// phase ran in the project checkout, where its instructions matched nothing.
+var ErrRepoOutsideProject = repopath.ErrRepoOutsideProject
+
 // BranchDirtyError names the blocking branch and how many commits would be lost, so
 // the api's 409 body and the UI can offer an explicit delete-or-merge decision
 // instead of silently destroying work.
@@ -240,7 +246,11 @@ func (s *Service) runRoot(info phaseInfo) (string, error) {
 
 	resolve := s.RepoRoot
 	if resolve == nil {
-		resolve = repopath.Resolve
+		// Registered projects are the trusted roots: a declared repo outside this
+		// project is honoured only when it is one of them (runcore.RegisteredRoots).
+		resolve = func(projectPath string, cells ...string) (string, error) {
+			return repopath.ResolveTrusted(projectPath, runcore.RegisteredRoots(s.DB), cells...)
+		}
 	}
 	return resolve(info.ProjectPath, cells...)
 }

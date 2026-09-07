@@ -148,6 +148,10 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	// The project path is not a checkout and the phase's declared repo did not
 	// resolve to one. The wrapped repopath message lists every candidate that was
 	// tried, so it is forwarded verbatim.
+	// A declared repo that is a real checkout outside the project and not a
+	// registered project. Checked BEFORE ErrNoRepoRoot, which it also wraps.
+	case errors.Is(err, phaserun.ErrRepoOutsideProject):
+		writeConflict(w, codeRepoOutsideProject, err.Error())
 	case errors.Is(err, phaserun.ErrNoRepoRoot):
 		writeConflict(w, codeNoRepoRoot, err.Error())
 	// The leftover run branch holds commits a retry would collide with. Commit
@@ -240,6 +244,10 @@ func (h *Handler) deletePhaseRunBranch(w http.ResponseWriter, r *http.Request) {
 		writeConflict(w, codeAlreadyRunning, "a run is active for this phase")
 	case errors.Is(err, phaserun.ErrNoPath):
 		writeConflict(w, codeNoProjectPath, "project has no known path")
+	// A declared repo that is a real checkout outside the project and not a
+	// registered project. Checked BEFORE ErrNoRepoRoot, which it also wraps.
+	case errors.Is(err, phaserun.ErrRepoOutsideProject):
+		writeConflict(w, codeRepoOutsideProject, err.Error())
 	case errors.Is(err, phaserun.ErrNoRepoRoot):
 		writeConflict(w, codeNoRepoRoot, err.Error())
 	case errors.Is(err, phaserun.ErrNoRunBranch):

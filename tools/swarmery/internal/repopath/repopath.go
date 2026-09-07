@@ -33,6 +33,15 @@ import (
 // stderr at the user.
 var ErrNoRepoRoot = errors.New("no git repository to run in")
 
+// ErrRepoOutsideProject: a declared Repo cell named a path that IS a git repository
+// but lies outside the project root and outside every trusted root. Always wraps
+// ErrNoRepoRoot as well, so callers that only know the older sentinel still see a
+// refusal — but this one is refused LOUDLY, at admission, instead of falling through
+// to the project path: a doc that says "run in /abs/other-repo" and a run that then
+// quietly executes in the project checkout is a run doing the wrong work in the
+// wrong place, and every retry burns another one.
+var ErrRepoOutsideProject = errors.New("declared repo is outside the project")
+
 // backtickRe pulls the `wrapped` fragments out of a declared Repo cell.
 var backtickRe = regexp.MustCompile("`([^`]+)`")
 
@@ -121,22 +130,36 @@ func Primary(cell string) string {
 // project resolves exactly as it did before this package existed, even when a doc
 // declares a repo that is not on disk. That fallback is the backward-compatibility
 // guarantee, not a nicety: every other project in the registry depends on it.
+//
+// The one candidate that does NOT fall through is a declared path that is a real
+// git repository outside the project (ErrRepoOutsideProject): that is an explicit
+// instruction the guard refused, and running somewhere else instead is the bug
+// ResolveTrusted exists to close. Resolve is ResolveTrusted with no trusted roots.
 func Resolve(projectPath string, cells ...string) (string, error) {
+	return ResolveTrusted(projectPath, nil, cells...)
+}
+
+// ResolveTrusted is Resolve with an allow-list: a declared candidate that resolves
+// inside one of the trusted roots is accepted even though it lies outside
+// projectPath. The engines pass the registered projects' paths, so a phase in one
+// project's plan may declare `**Repo:** /abs/other-project` and run there — but only
+// if the operator has already brought that checkout under the daemon. A Repo cell is
+// untrusted text out of a markdown file; the registry is the boundary that keeps it
+// from placing a worktree anywhere on the disk.
+func ResolveTrusted(projectPath string, trusted []string, cells ...string) (string, error) {
 	if strings.TrimSpace(projectPath) == "" {
 		return "", fmt.Errorf("%w: no project path", ErrNoRepoRoot)
 	}
+	roots := containmentRoots(projectPath, trusted)
 	var tried []string
-	try := func(cand string) (string, bool) {
+	try := func(cand string) (string, acceptance) {
 		for _, t := range tried {
 			if t == cand {
-				return "", false // already rejected — do not re-stat or re-report it
+				return "", rejectedNotRepo // already rejected — do not re-stat or re-report it
 			}
 		}
 		tried = append(tried, cand)
-		if real, ok := accept(projectPath, cand); ok {
-			return real, true
-		}
-		return "", false
+		return accept(roots, cand)
 	}
 
 	for _, cell := range cells {
@@ -145,48 +168,90 @@ func Resolve(projectPath string, cells ...string) (string, error) {
 			if !filepath.IsAbs(cand) {
 				cand = filepath.Join(projectPath, cand)
 			}
-			if real, ok := try(cand); ok {
+			real, verdict := try(cand)
+			switch verdict {
+			case accepted:
 				return real, nil
+			case rejectedOutside:
+				return "", fmt.Errorf("%w: %s is a git repository outside project %s and is not a registered project — register it as a project, or move the phase to the plan of the project that owns it (%w)",
+					ErrRepoOutsideProject, real, projectPath, ErrNoRepoRoot)
 			}
 		}
 	}
-	if real, ok := try(projectPath); ok {
+	if real, verdict := try(projectPath); verdict == accepted {
 		return real, nil
 	}
 	return "", fmt.Errorf("%w: %s is not a git repository and no declared repo resolved (tried: %s)",
 		ErrNoRepoRoot, projectPath, strings.Join(tried, ", "))
 }
 
+// acceptance is accept's verdict on one candidate.
+type acceptance int
+
+const (
+	accepted        acceptance = iota
+	rejectedNotRepo            // missing, unreadable, or no .git entry — falls through
+	rejectedOutside            // a real repository, but outside every containment root
+)
+
+// containmentRoots resolves projectPath plus the trusted roots to their symlink-free
+// forms, dropping any that do not exist. projectPath is always first.
+func containmentRoots(projectPath string, trusted []string) []string {
+	roots := make([]string, 0, 1+len(trusted))
+	seen := map[string]bool{}
+	for _, r := range append([]string{projectPath}, trusted...) {
+		if strings.TrimSpace(r) == "" {
+			continue
+		}
+		real, err := filepath.EvalSymlinks(r)
+		if err != nil || seen[real] {
+			continue
+		}
+		seen[real] = true
+		roots = append(roots, real)
+	}
+	return roots
+}
+
 // accept validates one candidate: it must exist, carry a .git entry, and live
-// inside projectPath. Returns the symlink-resolved path.
+// inside one of the (already symlink-resolved) containment roots. Returns the
+// symlink-resolved path with the verdict; the path is set for rejectedOutside too,
+// so the refusal can name what it refused.
 //
 // EvalSymlinks runs BEFORE the containment check on purpose. A string-prefix test
 // on the declared path would pass for a symlink that sits inside the project and
 // points anywhere on the disk, and the cell it came from is untrusted text out of a
 // markdown file — that is the one input that must not be able to place a worktree
 // outside the project.
-func accept(projectPath, cand string) (string, bool) {
-	realProject, err := filepath.EvalSymlinks(projectPath)
-	if err != nil {
-		return "", false
-	}
+func accept(roots []string, cand string) (string, acceptance) {
 	real, err := filepath.EvalSymlinks(cand)
 	if err != nil {
-		return "", false
+		return "", rejectedNotRepo
 	}
 	// A .git DIRECTORY is a normal checkout; a .git FILE is a linked worktree or a
 	// submodule. Both are repositories git can run in, so both are accepted.
 	if _, err := os.Stat(filepath.Join(real, ".git")); err != nil {
-		return "", false
+		return "", rejectedNotRepo
 	}
-	rel, err := filepath.Rel(realProject, real)
+	for _, root := range roots {
+		if within(root, real) {
+			return real, accepted
+		}
+	}
+	return real, rejectedOutside
+}
+
+// within reports whether path equals root or sits underneath it (both already
+// symlink-resolved).
+func within(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
 	if err != nil {
-		return "", false
+		return false
 	}
-	if rel != "." && (rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel)) {
-		return "", false
+	if rel == "." {
+		return true
 	}
-	return real, true
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
 // overlayProject is the subset of a consumer's project.json this package reads.

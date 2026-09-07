@@ -58,6 +58,9 @@ var (
 	// wrapped repopath error names every candidate that was checked — the
 	// diagnostic the raw "fatal: not a git repository" never gave.
 	ErrNoRepoRoot = repopath.ErrNoRepoRoot
+	// ErrRepoOutsideProject mirrors phaserun's: a phase of this plan declares a
+	// checkout outside the project that is not a registered project (409).
+	ErrRepoOutsideProject = repopath.ErrRepoOutsideProject
 	// ErrPlanSpansRepos: the plan's unfinished phases declare more than one repo,
 	// and a plan run executes in ONE worktree (409). Returned as a
 	// *PlanSpansReposError, which errors.Is-matches this sentinel.
@@ -247,7 +250,11 @@ func (s *Service) runRoot(info planInfo) (string, error) {
 
 	resolve := s.RepoRoot
 	if resolve == nil {
-		resolve = repopath.Resolve
+		// Registered projects are the trusted roots: a declared repo outside this
+		// project is honoured only when it is one of them (runcore.RegisteredRoots).
+		resolve = func(projectPath string, cells ...string) (string, error) {
+			return repopath.ResolveTrusted(projectPath, runcore.RegisteredRoots(s.DB), cells...)
+		}
 	}
 	return resolve(info.ProjectPath, cells...)
 }

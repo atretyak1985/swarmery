@@ -613,3 +613,43 @@ func TestRunPhase_NoRepoRoot_409(t *testing.T) {
 		t.Errorf("code = %q, want no-repo-root", body.Code)
 	}
 }
+
+// A declared checkout OUTSIDE the project that is not a registered project is its
+// own 409 code on both surfaces: the remedy (register it, or move the phase) is
+// different from no-repo-root's, and before this code the declaration was dropped
+// silently and the run executed in the wrong repository.
+func TestRunPhase_RepoOutsideProject_409(t *testing.T) {
+	srv, db, taskID, _ := epicFixture(t)
+	p1, _ := fixturePhaseIDs(t, db, taskID)
+	base := t.TempDir()
+	proj := filepath.Join(base, "proj")
+	outside := filepath.Join(base, "outside")
+	for _, d := range []string{proj, outside} {
+		if err := os.MkdirAll(filepath.Join(d, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`UPDATE projects SET path=? WHERE id=1`, proj); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE epic_phases SET repo=? WHERE id=?", "`"+outside+"`", p1); err != nil {
+		t.Fatal(err)
+	}
+	svc := attachPhaseRunWt(t, db, &phaseStubRunner{}, true, &phaseWtStub{})
+	svc.RepoRoot = nil
+
+	resp := postPhase(t, phaseRunURL(srv, taskID, p1))
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	}
+	var body struct{ Error, Code string }
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code != "repo-outside-project" {
+		t.Errorf("code = %q, want repo-outside-project", body.Code)
+	}
+	if !strings.Contains(body.Error, "outside") {
+		t.Errorf("error = %q, want it to explain the refusal", body.Error)
+	}
+}
