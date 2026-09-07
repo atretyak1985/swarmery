@@ -271,3 +271,47 @@ func TestStart_SingleRepoRunInheritsNoSettings(t *testing.T) {
 		t.Fatalf("spec.SettingsFile = %q, want empty for a single-repo project", got)
 	}
 }
+
+// Plan-run mirror of phaserun's refusal: an unfinished phase declaring a real
+// checkout outside the project that is not a registered project stops admission.
+func TestStart_DeclaredRepoOutsideUnregistered_Refuses(t *testing.T) {
+	db, taskID, _ := fixture(t)
+	base := t.TempDir()
+	projectRoot := mkRepo(t, filepath.Join(base, "proj"))
+	outside := mkRepo(t, filepath.Join(base, "outside"))
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, projectRoot)
+	mustExec(t, db, `UPDATE epic_phases SET repo=? WHERE workspace_task_id=?`, "`"+outside+"`", taskID)
+
+	wt := &stubWt{}
+	s := newTestService(db, &stubRunner{}, wt)
+	s.RepoRoot = nil
+
+	if _, err := s.Start(taskID, "", ""); !errors.Is(err, ErrRepoOutsideProject) {
+		t.Fatalf("Start err = %v, want ErrRepoOutsideProject", err)
+	}
+	if got := wt.lastAcquireRoot(); got != "" {
+		t.Fatalf("a worktree was acquired at %q — admission must refuse first", got)
+	}
+}
+
+// And the registered case runs there.
+func TestStart_DeclaredRepoIsRegisteredProject_AcquiresThere(t *testing.T) {
+	db, taskID, _ := fixture(t)
+	base := t.TempDir()
+	projectRoot := mkRepo(t, filepath.Join(base, "proj"))
+	other := mkRepo(t, filepath.Join(base, "other"))
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, projectRoot)
+	mustExec(t, db, `INSERT INTO projects(id, path, slug, first_seen) VALUES(2, ?, 'other', '2026-01-01T00:00:00Z')`, other)
+	mustExec(t, db, `UPDATE epic_phases SET repo=? WHERE workspace_task_id=?`, "`"+other+"`", taskID)
+
+	wt := &stubWt{}
+	s := newTestService(db, &stubRunner{}, wt)
+	s.RepoRoot = nil
+
+	if _, err := s.Start(taskID, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if got := wt.lastAcquireRoot(); !sameDir(t, got, other) {
+		t.Fatalf("Acquire repoRoot = %q, want %q", got, other)
+	}
+}

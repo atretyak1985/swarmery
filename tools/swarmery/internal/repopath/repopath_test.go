@@ -327,3 +327,71 @@ func TestSameDir_ResolvesSymlinks(t *testing.T) {
 		t.Error("SameDir with an empty path = true")
 	}
 }
+
+// The cross-project case: a phase in one project's plan declares another
+// REGISTERED project's checkout. The registry is the allow-list, so the run goes
+// where the doc says instead of silently falling back to the project path.
+func TestResolveTrusted_AcceptsRegisteredProjectOutside(t *testing.T) {
+	base := t.TempDir()
+	proj := mkRepo(t, filepath.Join(base, "english-grammar"), false)
+	other := mkRepo(t, filepath.Join(base, "swarmery"), false)
+
+	got, err := ResolveTrusted(proj, []string{other}, "`"+other+"`")
+	if err != nil {
+		t.Fatalf("ResolveTrusted: %v", err)
+	}
+	if !sameDir(t, got, other) {
+		t.Fatalf("ResolveTrusted = %q, want the registered checkout %q", got, other)
+	}
+}
+
+// The six-wasted-runs regression: a declared path that IS a git repository but is
+// neither inside the project nor registered must be refused at admission — NOT
+// fall through to the project checkout, which is a repo and would happily accept
+// the run (and then execute a phase written for a different codebase).
+func TestResolve_DeclaredRepoOutsideIsRefusedLoudly(t *testing.T) {
+	base := t.TempDir()
+	proj := mkRepo(t, filepath.Join(base, "proj"), false)
+	outside := mkRepo(t, filepath.Join(base, "outside"), false)
+
+	got, err := Resolve(proj, "`"+outside+"`")
+	if !errors.Is(err, ErrRepoOutsideProject) {
+		t.Fatalf("Resolve = (%q, %v), want ErrRepoOutsideProject", got, err)
+	}
+	if !errors.Is(err, ErrNoRepoRoot) {
+		t.Fatalf("err = %v, must also wrap ErrNoRepoRoot for callers that only know the old sentinel", err)
+	}
+	for _, want := range []string{"outside", "register"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+}
+
+// A trusted root list that does not include the declared repo changes nothing:
+// the refusal stands. (Guards against "trusted" degrading into "anything goes".)
+func TestResolveTrusted_UntrustedOutsideStillRefused(t *testing.T) {
+	base := t.TempDir()
+	proj := mkRepo(t, filepath.Join(base, "proj"), false)
+	outside := mkRepo(t, filepath.Join(base, "outside"), false)
+	trustedElsewhere := mkRepo(t, filepath.Join(base, "elsewhere"), false)
+
+	if _, err := ResolveTrusted(proj, []string{trustedElsewhere}, "`"+outside+"`"); !errors.Is(err, ErrRepoOutsideProject) {
+		t.Fatalf("err = %v, want ErrRepoOutsideProject", err)
+	}
+}
+
+// A declared repo that is simply not on disk keeps falling through (the
+// single-repo compatibility guarantee) — only a REAL repository outside is loud.
+func TestResolveTrusted_MissingDeclarationStillFallsThrough(t *testing.T) {
+	base := t.TempDir()
+	proj := mkRepo(t, filepath.Join(base, "proj"), false)
+
+	got, err := ResolveTrusted(proj, []string{filepath.Join(base, "nope")}, "`"+filepath.Join(base, "ghost")+"`")
+	if err != nil {
+		t.Fatalf("ResolveTrusted: %v", err)
+	}
+	if !sameDir(t, got, proj) {
+		t.Fatalf("ResolveTrusted = %q, want the project path %q", got, proj)
+	}
+}

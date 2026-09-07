@@ -337,7 +337,25 @@ export interface SessionsPage {
 export type SessionsResponse = SessionsPage;
 
 /** GET /api/sessions/{id} — id is the numeric row id or the session UUID. */
-export type SessionDetailResponse = SessionDetail;
+/**
+ * GET /api/sessions/{uuid} → 202: the daemon minted this uuid for a run it spawned
+ * (phase, plan, dispatch, verify, planning, revision) and the transcript is not
+ * ingested yet — a session that has not started writing, not one that is missing.
+ * `running` false means the run ended without ever producing a transcript.
+ */
+export interface PendingSession {
+  pending: true;
+  sessionUuid: string;
+  source: 'phase' | 'plan' | 'dispatch' | 'verify' | 'planning' | 'revision' | (string & {});
+  running: boolean;
+  startedAt: string | null;
+  label: string;
+  taskId: number | null;
+  refId: number;
+  projectSlug: string;
+}
+
+export type SessionDetailResponse = SessionDetail | PendingSession;
 
 /** GET /api/sessions/{id}/handoff — the latest daemon-generated brief's body. */
 export interface SessionHandoffResponse {
@@ -2930,6 +2948,10 @@ export type RunConflictCode =
   | 'deps-unmet'
   | 'doc-unreadable'
   | 'no-project-path'
+  /** the project path is not a checkout and nothing the doc declares resolved to one */
+  | 'no-repo-root'
+  /** the doc declares a real checkout outside the project that is not a registered project */
+  | 'repo-outside-project'
   // Branch lifecycle — the phase surface's own gate, then the worktree sentinels.
   | 'no-run-branch'
   | 'branch-dirty'

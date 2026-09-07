@@ -156,3 +156,57 @@ func TestStart_MultiRepoRunInheritsProjectSettings(t *testing.T) {
 		t.Fatalf("spec.SettingsFile = %q, want %q", got, settings)
 	}
 }
+
+// The cross-project case that produced six wasted runs: a phase in project A's
+// plan declares `**Repo:** /abs/project-B`. When B is a REGISTERED project the run
+// is cut from B — that is where the phase's instructions apply.
+func TestStart_DeclaredRepoIsRegisteredProject_AcquiresThere(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	base := t.TempDir()
+	projectRoot := mkRepo(t, filepath.Join(base, "english-grammar"))
+	other := mkRepo(t, filepath.Join(base, "swarmery"))
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, projectRoot)
+	mustExec(t, db, `INSERT INTO projects(id, path, slug, first_seen) VALUES(2, ?, 'swarmery', '2026-01-01T00:00:00Z')`, other)
+	mustExec(t, db, "UPDATE epic_phases SET repo=? WHERE id=?", "`"+other+"`", p1)
+
+	wt := &stubWt{}
+	s := newTestService(db, &stubRunner{}, wt)
+	s.RepoRoot = nil // the REAL resolver, with the registry as its allow-list
+
+	if _, err := s.Start(p1); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if got := wt.lastAcquireRoot(); !sameDir(t, got, other) {
+		t.Fatalf("Acquire repoRoot = %q, want the declared registered checkout %q", got, other)
+	}
+}
+
+// The same declaration pointing at a checkout the daemon does NOT know is refused
+// at admission, and nothing is stamped — not silently run in the project checkout.
+func TestStart_DeclaredRepoOutsideUnregistered_Refuses(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	base := t.TempDir()
+	projectRoot := mkRepo(t, filepath.Join(base, "proj"))
+	outside := mkRepo(t, filepath.Join(base, "outside"))
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, projectRoot)
+	mustExec(t, db, "UPDATE epic_phases SET repo=? WHERE id=?", "`"+outside+"`", p1)
+
+	wt := &stubWt{}
+	s := newTestService(db, &stubRunner{}, wt)
+	s.RepoRoot = nil
+
+	_, err := s.Start(p1)
+	if !errors.Is(err, ErrRepoOutsideProject) {
+		t.Fatalf("Start err = %v, want ErrRepoOutsideProject", err)
+	}
+	if got := wt.lastAcquireRoot(); got != "" {
+		t.Fatalf("a worktree was acquired at %q — admission must refuse before touching git", got)
+	}
+	var state string
+	if err := db.QueryRow(`SELECT run_state FROM epic_phases WHERE id=?`, p1).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != "idle" {
+		t.Fatalf("run_state = %q after a refused admission, want idle", state)
+	}
+}

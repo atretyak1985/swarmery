@@ -123,6 +123,10 @@ func (h *Handler) runPlan(w http.ResponseWriter, r *http.Request) {
 	// The project path is not a checkout and no declared repo resolved to one. The
 	// wrapped repopath message lists every candidate that was tried, so it is
 	// forwarded verbatim rather than replaced by a generic sentence.
+	// A declared repo that is a real checkout outside the project and not a
+	// registered project. Checked BEFORE ErrNoRepoRoot, which it also wraps.
+	case errors.Is(err, planrun.ErrRepoOutsideProject):
+		writeConflict(w, codeRepoOutsideProject, err.Error())
 	case errors.Is(err, planrun.ErrNoRepoRoot):
 		writeConflict(w, codeNoRepoRoot, err.Error())
 	// One worktree, several declared repos: name them, so "run the phases

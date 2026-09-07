@@ -40,6 +40,14 @@ const (
 	// a multi-repo project answered with git's raw "fatal: not a git repository",
 	// which named nothing the user could act on.
 	codeNoRepoRoot = "no-repo-root"
+	// codeRepoOutsideProject: the phase doc's `Repo` header names a path that IS a
+	// git checkout, but it lies outside the project and is not a registered
+	// project. Distinct from codeNoRepoRoot because the fix is different again:
+	// register that checkout as a project (the allow-list), or move the phase into
+	// the plan of the project that owns it. Refused at admission — the old
+	// behaviour dropped the declaration silently and ran the phase in the wrong
+	// repository, once per retry.
+	codeRepoOutsideProject = "repo-outside-project"
 	// codePlanSpansRepos: a plan run executes in ONE worktree, and this plan's
 	// unfinished phases name several repos. Plan-run-only; the phase surface has no
 	// such condition (a phase is one repo by construction).
