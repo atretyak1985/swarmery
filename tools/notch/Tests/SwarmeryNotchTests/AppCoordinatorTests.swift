@@ -86,3 +86,26 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(count, 2)
     }
 }
+
+/// `AppCoordinatorConfig.fromEnvironment(environment:)` takes an injectable
+/// dictionary (default `ProcessInfo.processInfo.environment` in production)
+/// purely so these tests can exercise it without mutating the real process
+/// environment.
+final class AppCoordinatorConfigTests: XCTestCase {
+    func testZeroNegativeAndNonNumericLingerValuesFallBackToTheSixSecondDefault() {
+        for raw in ["0", "-1", "-5.5", "not-a-number"] {
+            let config = AppCoordinatorConfig.fromEnvironment(environment: ["SWARMERY_NOTCH_LINGER": raw])
+            XCTAssertEqual(config.linger, 6, "raw value \"\(raw)\" must fall back to the 6s default, not disable the linger")
+        }
+    }
+
+    func testAnUnsetLingerEnvVarFallsBackToTheSixSecondDefault() {
+        let config = AppCoordinatorConfig.fromEnvironment(environment: [:])
+        XCTAssertEqual(config.linger, 6)
+    }
+
+    func testAValidPositiveLingerIsHonored() {
+        let config = AppCoordinatorConfig.fromEnvironment(environment: ["SWARMERY_NOTCH_LINGER": "2.5"])
+        XCTAssertEqual(config.linger, 2.5)
+    }
+}

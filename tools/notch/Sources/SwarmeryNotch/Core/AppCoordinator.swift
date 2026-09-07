@@ -14,10 +14,18 @@ public struct AppCoordinatorConfig: Sendable {
     }
 
     /// `SWARMERY_NOTCH_LINGER` overrides the default 6s the panel stays open
-    /// after the most recent resolution.
-    public static func fromEnvironment() -> AppCoordinatorConfig {
-        let raw = ProcessInfo.processInfo.environment["SWARMERY_NOTCH_LINGER"]
-        let linger = raw.flatMap(TimeInterval.init) ?? 6
+    /// after the most recent resolution. Zero, negative, and non-numeric
+    /// values all fall back to the default: a non-positive linger would make
+    /// `AttentionState.shouldExpand(now:linger:)` false the instant an
+    /// approval resolves, collapsing the panel before the operator sees the
+    /// outcome. `environment` is overridable only so tests can exercise this
+    /// without mutating the real process environment.
+    public static func fromEnvironment(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> AppCoordinatorConfig {
+        let raw = environment["SWARMERY_NOTCH_LINGER"]
+        let parsed = raw.flatMap(TimeInterval.init)
+        let linger = parsed.flatMap { $0 > 0 ? $0 : nil } ?? 6
         return AppCoordinatorConfig(linger: linger)
     }
 }
