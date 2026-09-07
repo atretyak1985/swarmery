@@ -149,6 +149,26 @@ A project may ship a component with the **same name** as a core one in its `.cla
 (etc.) — the local one wins in that project only. Use this for project-specific variants of a
 core agent instead of forking the framework.
 
+**Overriding an agent replaces it whole, never per key.** So when the only thing a project
+wants to change is one frontmatter key — in practice `isolation:`, which Claude Code (not
+swarmery) resolves out of the agent file — do **not** hand-copy the agent. Declare the
+narrowing in the project's `.claude/settings.json` and let the fork be generated:
+
+```json
+"swarmery": { "agents": { "implementation-agent": { "isolation": "none" } } }
+```
+
+```bash
+swarmery agents sync            # writes .claude/agents/<name>.md, stamped with the upstream source_sha
+swarmery agents sync --check    # writes nothing; exits 1 once upstream has moved on
+```
+
+Commit the generated file next to `settings.json`. **Any file in a project's `.claude/agents/`
+is either generated or a bug** — the one exception is an agent that is genuinely unique to that
+project and never existed upstream (the graduation rule above). The reasoning, the rejected
+alternatives, and what stays deferred are in
+[`docs/adr/0001-agent-defaults-live-upstream.md`](adr/0001-agent-defaults-live-upstream.md).
+
 ## Template & script resolution convention
 
 - **Templates:** agents look in `${CLAUDE_PROJECT_DIR}/.claude/templates/` first, then fall back

@@ -12,6 +12,7 @@
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
+//	swarmery agents sync           regenerate the project-local agent overrides
 package main
 
 import (
@@ -35,6 +36,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
@@ -137,6 +139,10 @@ func main() {
 		os.Exit(cmdHook(os.Args[2:]))
 	case "hooks":
 		err = hookcfg.Cmd(os.Args[2:])
+	case "agents":
+		// Exit code is the contract: `agents sync --check` exits 1 on drift so
+		// CI can gate on it, which log.Fatalf's blanket 1 could not express.
+		os.Exit(agentsync.Cmd(os.Args[2:]))
 	case "onboard":
 		err = cmdOnboard(os.Args[2:])
 	case "offboard":
@@ -202,6 +208,12 @@ func usage() {
   swarmery service-status          launchd service health: pid, uptime, db size
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
+  swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
+                                   regenerate the .claude/agents/<name>.md overrides a project
+                                   declares under swarmery.agents in its settings.json: the upstream
+                                   pack agent with exactly the isolation key changed, stamped with
+                                   the upstream source_sha; --check writes nothing and exits 1 when
+                                   a stamp no longer matches upstream
   swarmery onboard <slug> [pack ...] [--dir <path>] [--workspace-root <path>] [--statusline-src <path>]
                                    bootstrap a consumer project: .claude/settings.json +
                                    project.json skeleton + workspace namespace (idempotent;
