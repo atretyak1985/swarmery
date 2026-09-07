@@ -1,0 +1,15 @@
+{
+  "type": "permission_requested",
+  "payload": {
+    "id": 601,
+    "sessionId": 1042,
+    "toolName": "Bash",
+    "requestJson": "{\"session_id\":\"a1b2c3d4-1111-2222-3333-444455556666\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"npm run lint\",\"description\":\"Lint the webhook handler\"}}",
+    "status": "pending",
+    "requestedAt": "2026-09-07T15:58:33.568Z",
+    "resolvedAt": null,
+    "resolvedVia": null,
+    "reason": null,
+    "expiresAt": "2026-09-07T16:00:33.568Z"
+  }
+}
