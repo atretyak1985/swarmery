@@ -45,6 +45,9 @@ var (
 		"handoff",
 		// plan-run grouping: the plan run that spawned this session (nullable).
 		"planGroup",
+		// notch companion phase 1: terminal identity captured at SessionStart
+		// (migration 0068, nullable).
+		"terminal",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",

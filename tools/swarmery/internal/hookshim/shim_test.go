@@ -2,6 +2,7 @@ package hookshim
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -260,5 +261,87 @@ func TestSessionStartDaemonDownPrintsNothing(t *testing.T) {
 	stdout, _, code := runShim(t, EventSessionStart, "http://"+addr, sessionStartStdin)
 	if code != 0 || stdout != "" {
 		t.Errorf("exit=%d stdout=%q, want 0 and silence", code, stdout)
+	}
+}
+
+// ── SessionStart terminal identity (notch companion, phase 1) ───────────────
+
+// sentTerminal decodes the "terminal" object the shim POSTed to the daemon.
+func sentTerminal(t *testing.T, body []byte) map[string]string {
+	t.Helper()
+	var payload struct {
+		Terminal map[string]string `json:"terminal"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode daemon body %q: %v", body, err)
+	}
+	return payload.Terminal
+}
+
+// Every source variable maps to its documented field (E-fixture: a fully
+// populated Warp environment, iTerm's session id takes precedence over
+// TERM_SESSION_ID when both happen to be set).
+func TestSessionStartTerminalIdentityMapsEveryVariable(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "WarpTerminal")
+	t.Setenv("WARP_FOCUS_URL", "warp://focus/abc")
+	t.Setenv("__CFBundleIdentifier", "dev.warp.Warp-Stable")
+	t.Setenv("ITERM_SESSION_ID", "w0t1p2:iterm-uuid")
+	t.Setenv("TERM_SESSION_ID", "should-lose-to-iterm")
+
+	srv, got := daemonStub(t, 204, "")
+	_, _, code := runShim(t, EventSessionStart, srv.URL, sessionStartStdin)
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+
+	terminal := sentTerminal(t, *got)
+	want := map[string]string{
+		"program":   "WarpTerminal",
+		"focusUrl":  "warp://focus/abc",
+		"bundleId":  "dev.warp.Warp-Stable",
+		"sessionId": "w0t1p2:iterm-uuid",
+	}
+	for field, wantVal := range want {
+		if terminal[field] != wantVal {
+			t.Errorf("terminal[%q] = %q, want %q", field, terminal[field], wantVal)
+		}
+	}
+}
+
+// TERM_SESSION_ID is the fallback when ITERM_SESSION_ID is absent (vscode's
+// integrated terminal and other TERM_SESSION_ID-only emulators).
+func TestSessionStartTerminalIdentityFallsBackToTermSessionID(t *testing.T) {
+	t.Setenv("ITERM_SESSION_ID", "")
+	t.Setenv("TERM_SESSION_ID", "vscode-term-1")
+
+	srv, got := daemonStub(t, 204, "")
+	runShim(t, EventSessionStart, srv.URL, sessionStartStdin)
+
+	terminal := sentTerminal(t, *got)
+	if terminal["sessionId"] != "vscode-term-1" {
+		t.Errorf("terminal[sessionId] = %q, want the TERM_SESSION_ID fallback", terminal["sessionId"])
+	}
+}
+
+// Absent variables are omitted from the JSON object entirely, never sent as
+// empty strings — the daemon tells "unset" from "explicitly blank" this way.
+func TestSessionStartTerminalIdentityOmitsAbsentVars(t *testing.T) {
+	for _, v := range []string{"TERM_PROGRAM", "WARP_FOCUS_URL", "__CFBundleIdentifier", "ITERM_SESSION_ID", "TERM_SESSION_ID"} {
+		t.Setenv(v, "")
+	}
+
+	srv, got := daemonStub(t, 204, "")
+	runShim(t, EventSessionStart, srv.URL, sessionStartStdin)
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(*got, &raw); err != nil {
+		t.Fatalf("decode daemon body %q: %v", *got, err)
+	}
+	var terminal map[string]json.RawMessage
+	if err := json.Unmarshal(raw["terminal"], &terminal); err != nil {
+		t.Fatalf("decode terminal object %q: %v", raw["terminal"], err)
+	}
+	if len(terminal) != 0 {
+		t.Errorf("terminal = %v, want every field omitted when its variable is absent", terminal)
 	}
 }

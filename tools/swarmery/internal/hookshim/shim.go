@@ -103,7 +103,7 @@ func Run(event string, stdin io.Reader, cfg Config) int {
 		outcome := post(cfg, EventStop, body, stopTimeout, nil)
 		logLine(cfg.LogPath, event, tool, outcome)
 	case EventSessionStart:
-		injected, err := injectPPID(body)
+		injected, err := injectSessionStartExtras(body)
 		if err != nil {
 			logLine(cfg.LogPath, event, "", "ppid-inject-error")
 			return 0
@@ -236,16 +236,68 @@ func toolNameOf(body []byte) string {
 	return p.ToolName
 }
 
-// injectPPID merges the hookshim's PPID (the parent claude process) into the
-// hook payload JSON before forwarding to the daemon. The daemon verifies
-// command identity before binding the PID.
-func injectPPID(body []byte) ([]byte, error) {
+// injectSessionStartExtras merges facts only the hookshim's own process
+// context can answer — never present in Claude Code's hook stdin — into the
+// SessionStart payload before forwarding to the daemon:
+//
+//   - pid: the hookshim's PPID (the parent claude process). The daemon
+//     verifies command identity before binding it to a session.
+//   - terminal: the terminal identity captured from the environment
+//     (terminalIdentity) — "which terminal tab owns this session".
+func injectSessionStartExtras(body []byte) ([]byte, error) {
 	var m map[string]any
 	if err := json.Unmarshal(body, &m); err != nil {
 		m = map[string]any{}
 	}
 	m["pid"] = os.Getppid()
+	m["terminal"] = readTerminalIdentity()
 	return json.Marshal(m)
+}
+
+// terminalIdentity is the terminal tab that owns this session, captured once
+// at SessionStart from the environment Claude Code inherits. Every field is
+// optional (omitempty) and left out when its source variable is absent — the
+// shim must stay silent, never guess. A daemon-spawned run (`claude -p` from
+// phaserun/dispatch) has no terminal at all: the shim runs in the daemon's
+// own environment there, so every field is absent and this marshals to `{}`.
+type terminalIdentity struct {
+	// Program is TERM_PROGRAM — the readable fallback (WarpTerminal,
+	// iTerm.app, Apple_Terminal, vscode).
+	Program string `json:"program,omitempty"`
+	// FocusURL is WARP_FOCUS_URL — Warp's own deep link back to this exact
+	// tab; empty for every other terminal.
+	FocusURL string `json:"focusUrl,omitempty"`
+	// BundleID is __CFBundleIdentifier, set by macOS for every process
+	// launched from an app bundle — the most reliable "which terminal app"
+	// hint there is.
+	BundleID string `json:"bundleId,omitempty"`
+	// SessionID is ITERM_SESSION_ID, falling back to TERM_SESSION_ID — the
+	// terminal emulator's own per-tab identifier. The daemon does not
+	// persist this in phase 1; carried for a future per-tab focus feature.
+	SessionID string `json:"sessionId,omitempty"`
+}
+
+// readTerminalIdentity reads the terminal-identity environment variables
+// documented on terminalIdentity. Never errors: an absent variable simply
+// leaves its field empty.
+func readTerminalIdentity() terminalIdentity {
+	return terminalIdentity{
+		Program:   os.Getenv("TERM_PROGRAM"),
+		FocusURL:  os.Getenv("WARP_FOCUS_URL"),
+		BundleID:  os.Getenv("__CFBundleIdentifier"),
+		SessionID: firstNonEmptyEnv("ITERM_SESSION_ID", "TERM_SESSION_ID"),
+	}
+}
+
+// firstNonEmptyEnv returns the value of the first name that is set to a
+// non-empty string, or "" if none are.
+func firstNonEmptyEnv(names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // logLine appends one audit line (ts, event, tool, outcome) — best-effort,

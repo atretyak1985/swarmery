@@ -12,19 +12,23 @@ import (
 type OsProvider struct{}
 
 func (OsProvider) Info(pid int) (*ProcInfo, error) {
-	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "pid=,lstart=,comm=").Output()
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "pid=,lstart=,tty=,comm=").Output()
 	if err != nil {
 		return nil, nil // process gone — ps exits non-zero when PID not found
 	}
 	fields := strings.Fields(string(bytes.TrimSpace(out)))
 	// lstart on macOS: "Mon Jan  2 15:04:05 2006" = 5 tokens after pid
-	// pid(1) + lstart(5) + comm(1+) = at least 7 tokens
-	if len(fields) < 7 {
+	// pid(1) + lstart(5) + tty(1) + comm(1+) = at least 8 tokens
+	if len(fields) < 8 {
 		return nil, fmt.Errorf("procwatch: ps: unexpected output for pid %d: %q", pid, string(out))
 	}
 	startTime := strings.Join(fields[1:6], " ")
-	command := strings.Join(fields[6:], " ")
-	return &ProcInfo{PID: pid, StartTime: startTime, Command: command}, nil
+	tty := fields[6]
+	if tty == "??" {
+		tty = "" // ps's own "no controlling tty" marker — normalize to absent
+	}
+	command := strings.Join(fields[7:], " ")
+	return &ProcInfo{PID: pid, StartTime: startTime, Command: command, TTY: tty}, nil
 }
 
 func (OsProvider) IsOrphaned(pid int) (bool, error) {
