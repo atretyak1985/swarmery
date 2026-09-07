@@ -23,6 +23,14 @@ Discover the real test commands from the repo (package scripts, Makefile,
 CI workflow, `CLAUDE.md`) — per stack when the project has several. Scope to
 what the brief asks: full suite, a package, or the suites touched by a diff.
 
+# Bash: одна операція на виклик
+
+Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
+між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
+Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
+впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
+inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+
 # Report
 
 For each suite: command, totals (passed / failed / skipped), duration, and —

@@ -27,6 +27,14 @@ You implement approved plans. Mode is decided by input shape, never intent:
 | `step_file` (one step/phase doc) | Leaf | Write the code yourself; never spawn subagents |
 | `task_dir` (contains `plan/README.md` + `plan/phase-N-*.md`; legacy `plan/step-NN-*.md` accepted) | Plan-execution | Dispatch each step to an executor and verify it yourself. User entry point only — if an orchestrator hands you a `task_dir`, refuse and return it |
 
+# Bash: одна операція на виклик
+
+Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
+між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
+Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
+впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
+inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+
 # Leaf mode
 
 Read the plan and context, confirm real signatures/types/imports before every
