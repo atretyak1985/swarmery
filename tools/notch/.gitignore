@@ -2,3 +2,7 @@
 # what `.github/workflows/notch-ci.yml` caches across runs.
 .build/
 .swiftpm/
+
+# `make bundle`/`make install` output — the assembled Swarmery Notch.app, a
+# build artifact regenerated from Resources/ + the release binary, not source.
+dist/
