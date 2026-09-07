@@ -31,6 +31,7 @@ private enum FakeWSError: Error, Equatable {
 private final class FakeWebSocketConnection: WebSocketConnecting, @unchecked Sendable {
     private let lock = NSLock()
     private var results: [Result<URLSessionWebSocketTask.Message, Error>]
+    private var didCancel = false
 
     init(results: [Result<URLSessionWebSocketTask.Message, Error>]) {
         self.results = results
@@ -44,6 +45,14 @@ private final class FakeWebSocketConnection: WebSocketConnecting, @unchecked Sen
         }
         guard let next else { throw FakeWSError.dropped }
         return try next.get()
+    }
+
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        lock.withLock { didCancel = true }
+    }
+
+    var cancelWasCalled: Bool {
+        lock.withLock { didCancel }
     }
 }
 
@@ -66,6 +75,12 @@ final class WSStreamTests: XCTestCase {
 
     // MARK: - Reconnect emits .connected, then the owner's snapshot request
 
+    // NOTE: the `snapshotRequests` counter below is a PROXY for "the owner
+    // asked DaemonClient for a fresh snapshot on every `.connected`" — it
+    // only counts `.connected` events reaching a would-be caller, it does not
+    // touch a real DaemonClient. The actual owner-side wiring (does
+    // AttentionModel's DaemonClient.snapshot() get called here in the real
+    // app) is phase 3's app-wiring test, not this package's.
     func testReconnectEmitsConnectedFollowedByASnapshotRequest() async {
         let sessionUpdatedJSON = #"""
         {"type":"session_updated","payload":{"id":7,"sessionUuid":"u-7","projectName":"p",
@@ -159,5 +174,38 @@ final class WSStreamTests: XCTestCase {
         // The malformed frame produced no `.message` — only `.connected` then
         // `.disconnected` once the fake's queue drains.
         XCTAssertEqual(collected, [.connected, .disconnected])
+    }
+
+    // MARK: - Stream termination closes the in-flight socket
+
+    func testStreamTerminationCancelsTheUnderlyingSocket() async {
+        // A single result that never gets consumed: the loop is still
+        // (conceptually) parked in `receive()` on this connection when the
+        // consumer below breaks out of the `for await`.
+        let connection = FakeWebSocketConnection(results: [.failure(FakeWSError.dropped)])
+        let stream = WSStream(connect: { connection }, sleep: { _ in })
+
+        var collected: [WSStreamEvent] = []
+        for await event in stream.events() {
+            collected.append(event)
+            if event == .connected { break }
+        }
+        XCTAssertEqual(collected, [.connected])
+
+        // `onTermination` runs as soon as the AsyncStream's iterator is
+        // released by the `break` above, which is synchronous in practice —
+        // but poll with a bounded number of `Task.yield()`s rather than
+        // asserting on the very next line, so this test stays robust to any
+        // future change in exactly when that release happens relative to the
+        // `for await` statement returning.
+        var observedCancel = false
+        for _ in 0..<50 {
+            if connection.cancelWasCalled { observedCancel = true; break }
+            await Task.yield()
+        }
+        XCTAssertTrue(
+            observedCancel,
+            "onTermination must close the in-flight socket (cancel), not just cancel the Task — a suspended receive() does not observe Task cancellation"
+        )
     }
 }

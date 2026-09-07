@@ -18,6 +18,12 @@ public enum WSStreamEvent: Equatable, Sendable {
 public protocol WebSocketConnecting: Sendable {
     func resume()
     func receive() async throws -> URLSessionWebSocketTask.Message
+    /// Closes the socket, unblocking any `receive()` currently suspended on
+    /// it. Swift-task cancellation alone does NOT do this for a real
+    /// `URLSessionWebSocketTask` — its `receive()` does not observe
+    /// `Task.isCancelled` — so tearing down the stream without calling this
+    /// leaks an open connection and a permanently suspended task.
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
 }
 
 extension URLSessionWebSocketTask: WebSocketConnecting {}
@@ -35,6 +41,28 @@ public enum Backoff {
         guard attempt > 0 else { return initial }
         let scaled = initial * pow(2.0, Double(attempt))
         return min(scaled, cap)
+    }
+}
+
+/// Holds whichever socket is currently in flight inside `events()`'s
+/// reconnect loop, so `onTermination` — which runs outside that loop's scope
+/// — can close it directly. A plain lock-protected box rather than an actor:
+/// `onTermination` is a synchronous, non-async closure.
+private final class CurrentSocket: @unchecked Sendable {
+    private let lock = NSLock()
+    private var socket: (any WebSocketConnecting)?
+
+    func set(_ socket: any WebSocketConnecting) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.socket = socket
+    }
+
+    func closeCurrent() {
+        lock.lock()
+        let socket = self.socket
+        lock.unlock()
+        socket?.cancel(with: .goingAway, reason: nil)
     }
 }
 
@@ -74,10 +102,12 @@ public struct WSStream: Sendable {
     /// `AsyncStream`'s `onTermination`.
     public func events() -> AsyncStream<WSStreamEvent> {
         AsyncStream { continuation in
+            let currentSocket = CurrentSocket()
             let task = Task {
                 var attempt = 0
                 while !Task.isCancelled {
                     let socket = connect()
+                    currentSocket.set(socket)
                     socket.resume()
                     continuation.yield(.connected)
                     do {
@@ -97,7 +127,14 @@ public struct WSStream: Sendable {
                 }
                 continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
+            continuation.onTermination = { _ in
+                task.cancel()
+                // `task.cancel()` alone does not unblock a `receive()`
+                // already suspended on the current socket (see
+                // WebSocketConnecting.cancel's doc) — close it explicitly so
+                // tearing down the stream never leaks an open connection.
+                currentSocket.closeCurrent()
+            }
         }
     }
 

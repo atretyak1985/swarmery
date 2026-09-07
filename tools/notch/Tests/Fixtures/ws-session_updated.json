@@ -35,6 +35,12 @@
       "phaseId": null,
       "phaseSeq": null,
       "phaseName": null
+    },
+    "terminal": {
+      "program": "WarpTerminal",
+      "focusUrl": "warp://action/e30=?window_id=win_ABC123&tab_id=tab_XYZ789",
+      "bundleId": "dev.warp.Warp-Stable",
+      "tty": "ttys004"
     }
   }
 }

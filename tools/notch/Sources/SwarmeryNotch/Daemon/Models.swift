@@ -10,6 +10,30 @@
 // doc, "Implementation Details").
 import Foundation
 
+/// Mirrors `SessionTerminal` (web/src/api/types.ts / Go: sessionTerminalDTO)
+/// — the terminal tab that owned a session at SessionStart (migration 0068),
+/// captured once by the hookshim from its environment. Each field is
+/// individually optional (its source variable was absent); the whole object
+/// is nil on `Session.terminal` when none of the four were ever set.
+public struct SessionTerminal: Decodable, Equatable, Sendable {
+    public let program: String?
+    public let focusUrl: String?
+    public let bundleId: String?
+    public let tty: String?
+
+    public init(
+        program: String? = nil,
+        focusUrl: String? = nil,
+        bundleId: String? = nil,
+        tty: String? = nil
+    ) {
+        self.program = program
+        self.focusUrl = focusUrl
+        self.bundleId = bundleId
+        self.tty = tty
+    }
+}
+
 /// Mirrors `Session` (web/src/api/types.ts / Go: sessionDTO), trimmed to the
 /// fields the notch companion actually renders.
 public struct Session: Decodable, Identifiable, Equatable, Sendable {
@@ -25,11 +49,11 @@ public struct Session: Decodable, Identifiable, Equatable, Sendable {
     /// building the fixtures for this phase) — it must never be treated as an
     /// error on its own; see AttentionModel.swift.
     public let procState: String?
-    /// Additive field a CONCURRENT phase-1 change is adding to the daemon's
-    /// Session DTO; its shape was not yet frozen from this phase's vantage
-    /// point, so it decodes best-effort in `init(from:)` below and swallows a
-    /// type mismatch to nil rather than fail the whole `Session` decode.
-    public let terminal: String?
+    /// The terminal tab that owned this session at SessionStart (migration
+    /// 0068), or nil when none of the four term_* columns were ever set — a
+    /// daemon-spawned run, a pre-0068 row, or a hook that never reached a
+    /// live daemon.
+    public let terminal: SessionTerminal?
 
     public init(
         id: Int,
@@ -39,7 +63,7 @@ public struct Session: Decodable, Identifiable, Equatable, Sendable {
         title: String?,
         why: String?,
         procState: String?,
-        terminal: String? = nil
+        terminal: SessionTerminal? = nil
     ) {
         self.id = id
         self.sessionUuid = sessionUuid
@@ -64,10 +88,11 @@ public struct Session: Decodable, Identifiable, Equatable, Sendable {
         title = try c.decodeIfPresent(String.self, forKey: .title)
         why = try c.decodeIfPresent(String.self, forKey: .why)
         procState = try c.decodeIfPresent(String.self, forKey: .procState)
-        // [LOW-CONFIDENCE]: `terminal`'s real shape lands with phase 1, out of
-        // scope for this worktree. `try?` turns "present but a different
-        // shape than a bare string" into nil instead of an aborted decode.
-        terminal = try? c.decodeIfPresent(String.self, forKey: .terminal)
+        // A shape that is neither the `{program,focusUrl,bundleId,tty}`
+        // object nor JSON null (e.g. a stale bare string from a daemon that
+        // predates migration 0068, or any future daemon-side regression)
+        // must degrade to nil rather than abort the whole Session decode.
+        terminal = try? c.decodeIfPresent(SessionTerminal.self, forKey: .terminal)
     }
 }
 

@@ -1,6 +1,6 @@
 // Decodes the pinned fixtures (Tests/Fixtures/) into the Swift models — the
 // SAME fixture files tools/swarmery/internal/api/notch_fixtures_test.go
-// decodes into the live Go DTOs with DisallowUnknownFields. A DTO rename
+// decodes into the live Go DTO structs with DisallowUnknownFields. A DTO rename
 // breaks CI on the Go side; a genuinely new/unknown field breaking THIS side
 // is exactly the regression these tests guard against (Decodable must keep
 // tolerating it). Also covers DaemonClient's URL resolution and its
@@ -87,7 +87,16 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(first.sessionUuid, "378d69b2-9942-40b4-b34a-e702a431b3e0")
         XCTAssertEqual(first.status, "active")
         XCTAssertEqual(first.procState, "orphaned")
-        XCTAssertNil(first.terminal)
+        // sessionTerminalDTO (migration 0068): session[0] is the populated
+        // shape, session[1] the explicit-null shape — the two forms
+        // sessionDTO.Terminal ever takes (Go: notch_fixtures_test.go pins the
+        // same fixture on the wire side).
+        let firstTerminal = try XCTUnwrap(first.terminal)
+        XCTAssertEqual(firstTerminal.program, "WarpTerminal")
+        XCTAssertEqual(firstTerminal.focusUrl, "warp://action/e30=?window_id=win_ABC123&tab_id=tab_XYZ789")
+        XCTAssertEqual(firstTerminal.bundleId, "dev.warp.Warp-Stable")
+        XCTAssertEqual(firstTerminal.tty, "ttys004")
+        XCTAssertNil(page.sessions[1].terminal)
         XCTAssertNil(page.nextCursor)
     }
 
@@ -125,6 +134,8 @@ final class ModelsTests: XCTestCase {
         }
         XCTAssertEqual(session.id, 2307)
         XCTAssertEqual(session.status, "active")
+        XCTAssertEqual(session.terminal?.program, "WarpTerminal")
+        XCTAssertEqual(session.terminal?.tty, "ttys004")
     }
 
     // MARK: - Additive-field tolerance (the reason this model layer exists)
@@ -154,12 +165,37 @@ final class ModelsTests: XCTestCase {
         XCTAssertNil(session.terminal)
     }
 
-    func testSessionToleratesTerminalOfAnUnexpectedShape() throws {
-        // The concurrent phase-1 change may ship `terminal` as something other
-        // than a bare string; Session must still decode everything else.
+    func testSessionTerminalPopulatedObjectDecodesAllFourFields() throws {
         let json = """
         {"id":1,"sessionUuid":"u","projectName":"p","status":"active","title":"t",
-         "why":null,"procState":"running","terminal":{"ttyPath":"/dev/ttys001"}}
+         "why":null,"procState":"running",
+         "terminal":{"program":"WarpTerminal","focusUrl":"warp://x","bundleId":"dev.warp.Warp-Stable","tty":"ttys004"}}
+        """
+        let session = try JSONDecoder().decode(Session.self, from: Data(json.utf8))
+        let terminal = try XCTUnwrap(session.terminal)
+        XCTAssertEqual(terminal.program, "WarpTerminal")
+        XCTAssertEqual(terminal.focusUrl, "warp://x")
+        XCTAssertEqual(terminal.bundleId, "dev.warp.Warp-Stable")
+        XCTAssertEqual(terminal.tty, "ttys004")
+    }
+
+    func testSessionTerminalExplicitNullDecodesToNil() throws {
+        let json = """
+        {"id":1,"sessionUuid":"u","projectName":"p","status":"active","title":"t",
+         "why":null,"procState":"running","terminal":null}
+        """
+        let session = try JSONDecoder().decode(Session.self, from: Data(json.utf8))
+        XCTAssertNil(session.terminal)
+    }
+
+    func testSessionToleratesTerminalOfAnUnexpectedShape() throws {
+        // A shape that is neither the `{program,focusUrl,bundleId,tty}`
+        // object nor JSON null (e.g. a stale bare string, or a future
+        // daemon-side regression) must not abort the whole Session decode —
+        // only `terminal` itself degrades to nil.
+        let json = """
+        {"id":1,"sessionUuid":"u","projectName":"p","status":"active","title":"t",
+         "why":null,"procState":"running","terminal":"iTerm.app"}
         """
         let session = try JSONDecoder().decode(Session.self, from: Data(json.utf8))
         XCTAssertEqual(session.id, 1)
@@ -222,5 +258,28 @@ final class ModelsTests: XCTestCase {
         } catch DaemonClientError.http(let status) {
             XCTAssertEqual(status, 409)
         }
+    }
+
+    func testTrailingSlashBaseURLProducesASingleSlashPathForGETAndPOST() async throws {
+        // StubURLProtocol keys strictly on the clean request path
+        // (url.path), so this fails with .unsupportedURL against the
+        // un-normalized "http://127.0.0.1:7777//api/..." a trailing-slash
+        // base URL used to produce — the double slash Go's
+        // net/http.ServeMux 301-redirects, turning a redirected POST into a
+        // GET (approve/deny/stop/kill would silently become no-op reads).
+        StubURLProtocol.responses = [
+            "/api/sessions": (200, try Fixture.data("sessions.json")),
+            "/api/approvals": (200, try Fixture.data("approvals.json")),
+            "/api/usage": (200, try Fixture.data("usage.json")),
+            "/api/sessions/2307/stop": (200, Data("{}".utf8)),
+        ]
+        let client = DaemonClient(baseURL: URL(string: "http://127.0.0.1:7777/")!, session: StubURLProtocol.makeSession())
+
+        // GET side.
+        let snapshot = try await client.snapshot()
+        XCTAssertEqual(snapshot.sessions.count, 2)
+
+        // POST side.
+        try await client.stop(sessionId: 2307)
     }
 }

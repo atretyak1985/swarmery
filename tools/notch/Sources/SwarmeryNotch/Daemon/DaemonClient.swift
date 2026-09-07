@@ -46,7 +46,7 @@ public struct DaemonClient: Sendable {
     private let decoder: JSONDecoder
 
     public init(baseURL: URL? = nil, session: URLSession = .shared) {
-        self.baseURL = baseURL ?? Self.resolveBaseURL()
+        self.baseURL = Self.normalize(baseURL ?? Self.resolveBaseURL())
         self.session = session
         self.decoder = JSONDecoder()
     }
@@ -56,12 +56,27 @@ public struct DaemonClient: Sendable {
     public static func resolveBaseURL() -> URL {
         let env = ProcessInfo.processInfo.environment["SWARMERY_URL"]
         if let env, !env.isEmpty, let url = URL(string: env) {
-            return url
+            return normalize(url)
         }
         guard let fallback = URL(string: "http://127.0.0.1:7777") else {
             preconditionFailure("hardcoded fallback URL must be valid")
         }
         return fallback
+    }
+
+    /// Strips trailing "/" characters so `baseURL` never carries one. Without
+    /// this, a `SWARMERY_URL` (or explicit `baseURL`) set with a trailing
+    /// slash produces a double slash once `makeURL` appends an endpoint path
+    /// (`http://127.0.0.1:7777//api/sessions`): Go's `net/http.ServeMux`
+    /// 301-redirects that unclean path, and `URLSession` turns a redirected
+    /// POST into a GET — approve/deny/stop/kill would silently become no-op
+    /// reads.
+    private static func normalize(_ url: URL) -> URL {
+        var s = url.absoluteString
+        while s.hasSuffix("/") {
+            s.removeLast()
+        }
+        return URL(string: s) ?? url
     }
 
     // MARK: - Snapshot
@@ -120,8 +135,19 @@ public struct DaemonClient: Sendable {
 
     // MARK: - Transport
 
+    /// Joins `baseURL` (already trailing-slash-free, see `normalize`) and
+    /// `path` with exactly one "/" between them, regardless of whether `path`
+    /// itself happens to carry a leading one — proper path joining instead of
+    /// raw string concatenation, so this stays correct even if a future
+    /// caller passes a path without the leading slash.
+    private static func joinPath(base: String, path: String) -> String {
+        let trimmedBase = base.hasSuffix("/") ? String(base.dropLast()) : base
+        let trimmedPath = path.hasPrefix("/") ? path : "/" + path
+        return trimmedBase + trimmedPath
+    }
+
     private func makeURL(path: String, query: [URLQueryItem]) throws -> URL {
-        guard var components = URLComponents(string: baseURL.absoluteString + path) else {
+        guard var components = URLComponents(string: Self.joinPath(base: baseURL.absoluteString, path: path)) else {
             throw DaemonClientError.invalidURL
         }
         if !query.isEmpty {

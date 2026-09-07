@@ -61,6 +61,29 @@ func TestNotchFixturesSessions(t *testing.T) {
 	if page.NextCursor != nil {
 		t.Errorf("want nextCursor == nil, got %v", *page.NextCursor)
 	}
+
+	// Pins sessionTerminalDTO (migration 0068): session[0] carries a fully
+	// populated terminal object, session[1] an explicit JSON null — the two
+	// shapes sessionDTO.Terminal ever takes.
+	term := page.Sessions[0].Terminal
+	if term == nil {
+		t.Fatal("want session[0].Terminal populated, got nil")
+	}
+	if term.Program != "WarpTerminal" {
+		t.Errorf("want session[0].Terminal.Program == WarpTerminal, got %q", term.Program)
+	}
+	if term.FocusURL != "warp://action/e30=?window_id=win_ABC123&tab_id=tab_XYZ789" {
+		t.Errorf("want session[0].Terminal.FocusURL to match the fixture, got %q", term.FocusURL)
+	}
+	if term.BundleID != "dev.warp.Warp-Stable" {
+		t.Errorf("want session[0].Terminal.BundleID == dev.warp.Warp-Stable, got %q", term.BundleID)
+	}
+	if term.TTY != "ttys004" {
+		t.Errorf("want session[0].Terminal.TTY == ttys004, got %q", term.TTY)
+	}
+	if page.Sessions[1].Terminal != nil {
+		t.Errorf("want session[1].Terminal == nil, got %+v", page.Sessions[1].Terminal)
+	}
 }
 
 func TestNotchFixturesApprovals(t *testing.T) {
@@ -134,5 +157,16 @@ func TestNotchFixturesWSSessionUpdated(t *testing.T) {
 	}
 	if frame.Payload.ID != 2307 {
 		t.Errorf("want payload.id == 2307, got %d", frame.Payload.ID)
+	}
+
+	term := frame.Payload.Terminal
+	if term == nil {
+		t.Fatal("want payload.Terminal populated, got nil")
+	}
+	if term.Program != "WarpTerminal" {
+		t.Errorf("want payload.Terminal.Program == WarpTerminal, got %q", term.Program)
+	}
+	if term.TTY != "ttys004" {
+		t.Errorf("want payload.Terminal.TTY == ttys004, got %q", term.TTY)
 	}
 }
