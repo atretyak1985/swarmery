@@ -70,10 +70,23 @@ own `swarmery uninstall`).
 
 ## Configuration (environment variables)
 
-Both variables are read once at process start; set them in the LaunchAgent
-plist (`tools/notch/Resources/com.swarmery.notch.plist`, `EnvironmentVariables`
-dict) if you need them to apply to the installed widget, or export them before
-`make run` for local development.
+Both variables are read once at process start. Export them before `make run`
+for local development. To apply them to the *installed* widget, add an
+`EnvironmentVariables` dict to the installed LaunchAgent at
+`~/Library/LaunchAgents/com.swarmery.notch.plist` — the shipped template
+(`tools/notch/Resources/com.swarmery.notch.plist`) carries no such key, so add
+one at the top level of its root `<dict>`:
+
+```xml
+<key>EnvironmentVariables</key>
+<dict>
+    <key>SWARMERY_URL</key>
+    <string>http://127.0.0.1:7777</string>
+</dict>
+```
+
+then `make restart` to pick it up. Note that `make install` rewrites the
+installed plist from the template, so re-apply the block after an upgrade.
 
 - **`SWARMERY_URL`** — overrides the daemon base URL, default
   `http://127.0.0.1:7777`. Set this if the daemon runs on a non-default port
@@ -110,6 +123,10 @@ is best-effort (Warp via a `warp://` URL, iTerm2/Terminal.app via AppleScript
 on the tty); an unrecognized terminal, or a session with no captured terminal
 identity (headless/daemon-spawned sessions), falls back to opening the
 dashboard in your browser instead of erroring.
+
+**`make install` fails with `launchctl bootstrap` exit 5.** `launchctl bootout`
+is asynchronous, so an install run immediately after an uninstall can race the
+old service's unregistration. Wait a few seconds and run `make install` again.
 
 ## Development
 
