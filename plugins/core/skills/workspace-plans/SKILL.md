@@ -38,7 +38,9 @@ deviates from the format ships work the operator cannot see.
 Tick each satisfied criterion `- [ ]` → `- [x]` immediately after verifying
 it — progress is derived only from these checkboxes. When a phase's last
 criterion is ticked, fill that doc's `## Completion Report` (what shipped,
-files/commits, verification output, deviations; ≤50 lines) — the dashboard
+files/commits, verification output, deviations, and a mandatory
+**Blocked calls** list — which tool calls were refused or failed and how you
+got around them, written as "none" when there were none; ≤50 lines) — the dashboard
 renders exactly that heading. Never tick unsatisfied criteria; never archive
 with unmet criteria or a missing SUMMARY.md.
 

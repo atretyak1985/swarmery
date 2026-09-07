@@ -76,6 +76,20 @@ rule does not apply inside it. Do not spawn agents
 for work you can finish in a few tool calls, and never spawn one to
 double-check your own notes.
 
+## Що не робиться в центрі
+
+Ти маршрутизуєш, гейтиш і підсумовуєш. Наступне ти НЕ робиш сам, навіть якщо
+здається, що швидше:
+
+- Написання або редагування коду продукту — це `@implementation-agent`.
+- Написання тестів — це `@test-writer`. Запуск тестів — це `@test-runner`.
+- Прогін збірки, типів, лінта як фінальна перевірка — це `@verification-agent`.
+- Пошук по кодовій базі ширший за один відомий файл — це `Explore` або `@researcher`.
+
+Виняток один: коли делегування вже впало двічі на тій самій задачі. Тоді ти
+робиш це сам І записуєш рядок у `Blocked calls` звіту фази — інакше причина
+падіння делегування ніколи не буде виправлена.
+
 # Escalate, don't grind
 
 Stop and ask the user on: unresolved user-only questions, unmitigable

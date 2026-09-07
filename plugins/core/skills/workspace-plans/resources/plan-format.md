@@ -57,10 +57,17 @@ verification passes, edit THIS phase doc (spell out its absolute path) and
 flip every Acceptance Criteria checkbox that task satisfies `- [ ]` → `- [x]`
 — one edit per completed task, immediately, never batched. When the phase's
 LAST checkbox is ticked, fill `## Completion Report` — what shipped, commits,
-verification output, deviations (≤50 lines); the platform shows exactly that
-section as the phase summary. When the plan's final phase lands, also write
-`plan/SUMMARY.md` (objective, what shipped per phase, verification results,
-follow-ups) — the plan-level summary.
+verification output, deviations, blocked calls (≤50 lines); the platform shows
+exactly that section as the phase summary. When the plan's final phase lands,
+also write `plan/SUMMARY.md` (objective, what shipped per phase, verification
+results, follow-ups) — the plan-level summary.
+
+Alongside what shipped, commits, verification output and deviations,
+`## Completion Report` carries one more mandatory field:
+
+> **Blocked calls** — which tool calls were refused or failed, and how you got
+> around them (or that you did not). One line each. An empty list is written as
+> "none" — omitting the field is not the same as having nothing to report.
 
 The final phase of a multi-phase plan is always a quality gate
 (`kind: quality-gate`).
