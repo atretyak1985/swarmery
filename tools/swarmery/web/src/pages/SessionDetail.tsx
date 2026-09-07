@@ -8,11 +8,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import type { SessionDetail, SessionOutcome, SessionStatus, WSMessage } from '../api/types';
+import type { PendingSession, SessionDetail, SessionOutcome, SessionStatus, WSMessage } from '../api/types';
 import {
   MOCK,
   extractSessionTasks,
   fetchSession,
+  isPendingSession,
   patchSessionOutcome,
   renameSession,
   sendSessionMessage,
@@ -32,6 +33,7 @@ import { Chat, type PendingSend } from './detail/Chat';
 import { CommandInput } from './detail/CommandInput';
 import { SummaryChips } from './detail/SummaryChips';
 import { DetailRail } from './detail/DetailRail';
+import { PendingRunNotice } from './detail/PendingRunNotice';
 
 /** Header liveness chip — the same tri-state the sessions list speaks (green
  * pulsing dot = the session produced transcript activity recently; amber =
@@ -173,6 +175,8 @@ function TitleEditor({
 /** A pending bubble is abandoned to `failed` if no matching turn arrives within
  * this window (also the spec's reconcile horizon). */
 const PENDING_STALE_MS = 120_000;
+/** Re-poll cadence while a spawned run has not written its transcript yet. */
+const PENDING_RUN_POLL_MS = 2_000;
 
 /** Demo-only (VITE_MOCK=1) seed so the offline Chat tab shows the two optimistic
  * states — one still sending, one failed with a retry affordance. `sentAt: now`
@@ -193,6 +197,9 @@ export function SessionDetailPage(): JSX.Element {
   const { id, slug } = useParams<{ id: string; slug?: string }>();
   const sessionsHref = slug != null ? `/p/${slug}/sessions` : '/sessions';
   const [detail, setDetail] = useState<SessionDetail | null>(null);
+  // The 202 answer: a run the daemon spawned whose transcript is not ingested
+  // yet. Rendered as "starting…" (and re-polled) instead of a 404 error.
+  const [pendingRun, setPendingRun] = useState<PendingSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Optimistic echo of messages sent via the composer — shown immediately as
   // pending user bubbles until the real turn is ingested (dropped on match) or
@@ -208,11 +215,26 @@ export function SessionDetailPage(): JSX.Element {
     if (id === undefined) return;
     fetchSession(id)
       .then((d) => {
+        if (isPendingSession(d)) {
+          setPendingRun(d);
+          setError(null);
+          return;
+        }
+        setPendingRun(null);
         setDetail(d);
         setError(null);
       })
       .catch((e: unknown) => setError(String(e)));
   }, [id]);
+
+  // While the run is still starting, poll: the session_started frame below is the
+  // fast path, this is the safety net (a WS reconnect can drop that one frame).
+  // Stops on its own once the run ends without a transcript (`running` false).
+  useEffect(() => {
+    if (detail !== null || pendingRun === null || !pendingRun.running) return;
+    const t = setTimeout(load, PENDING_RUN_POLL_MS);
+    return () => clearTimeout(t);
+  }, [detail, pendingRun, load]);
 
   // New turns (chat bubbles) are NOT carried on the WS bus — only session_updated
   // (header fields) and event_appended (timeline events) are. So a coalesced
@@ -239,6 +261,7 @@ export function SessionDetailPage(): JSX.Element {
 
   useEffect(() => {
     setDetail(null);
+    setPendingRun(null);
     // Real sessions always start clean; demo mode seeds two optimistic bubbles
     // (one sending, one failed) so the offline Chat tab shows both states.
     setPending(MOCK ? mockPending() : []);
@@ -351,9 +374,15 @@ export function SessionDetailPage(): JSX.Element {
   };
 
   const onMessage = useCallback((msg: WSMessage): void => {
+    // The session this page is waiting for has just been ingested (the route
+    // param is its uuid) — load the real detail. Any other session_started frame
+    // carries nothing for an open detail view.
+    if (msg.type === 'session_started') {
+      if (msg.payload.sessionUuid === id || String(msg.payload.id) === id) load();
+      return;
+    }
     setDetail((prev) => {
       if (prev === null) return prev;
-      if (msg.type === 'session_started') return prev;
       if (msg.type === 'session_updated') {
         return msg.payload.id === prev.id ? { ...prev, ...msg.payload } : prev;
       }
@@ -379,7 +408,7 @@ export function SessionDetailPage(): JSX.Element {
       (msg.type === 'event_appended' && msg.payload.sessionId === detailIdRef.current) ||
       (msg.type === 'session_updated' && msg.payload.id === detailIdRef.current);
     if (forThis) scheduleLoad();
-  }, [scheduleLoad]);
+  }, [scheduleLoad, load, id]);
   useLiveUpdates(onMessage, load);
 
   const onSent = useCallback((text: string): void => {
@@ -504,6 +533,14 @@ export function SessionDetailPage(): JSX.Element {
       <>
         <BackLink to={sessionsHref} />
         <ErrorBox message={error} onRetry={load} />
+      </>
+    );
+  }
+  if (detail === null && pendingRun !== null) {
+    return (
+      <>
+        <BackLink to={sessionsHref} />
+        <PendingRunNotice run={pendingRun} onRetry={load} />
       </>
     );
   }

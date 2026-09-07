@@ -91,6 +91,7 @@ import type {
   RoutineRun,
   SearchResponse,
   ContextHogsReport,
+  PendingSession,
   SessionDetailResponse,
   SessionHandoffResponse,
   SessionOutcome,
@@ -480,6 +481,11 @@ export function fetchSessions(
   if (page.cursor !== undefined) qs.set('cursor', page.cursor);
   const query = qs.toString();
   return get(`/api/sessions${query === '' ? '' : `?${query}`}`);
+}
+
+/** Narrows the 202 "not ingested yet" answer from the 200 session detail. */
+export function isPendingSession(r: SessionDetailResponse): r is PendingSession {
+  return 'pending' in r && r.pending === true;
 }
 
 export function fetchSession(id: number | string): Promise<SessionDetailResponse> {

@@ -692,6 +692,19 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	var d sessionDetailDTO
 	err := scanSession(h.DB.QueryRow(sessionSelect+` WHERE `+where, idArg).Scan, &d.sessionDTO)
 	if errors.Is(err, sql.ErrNoRows) {
+		// A uuid the daemon minted for a run whose transcript is not ingested yet
+		// is a session that has not started writing — 202 with the run's context
+		// (session_pending.go), not a 404 indistinguishable from a pruned session.
+		// Only uuids: an integer id can only come from an ingested row.
+		if where != `s.id = ?` {
+			if p, ok, perr := pendingSession(h.DB, idArg); perr != nil {
+				writeErr(w, perr)
+				return
+			} else if ok {
+				writeJSONStatus(w, http.StatusAccepted, p)
+				return
+			}
+		}
 		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
 		return
 	}

@@ -33,6 +33,7 @@ import {
   fetchApprovals,
   fetchErrorGroups,
   fetchSession,
+  isPendingSession,
   fetchSessions,
   fetchStatsOverview,
 } from '../api';
@@ -532,7 +533,11 @@ function SpineRow({
   useEffect(() => {
     if (!open || trace !== null || traceError) return;
     fetchSession(session.id)
-      .then((d) => setTrace(traceOf(d)))
+      .then((d) => {
+        // An integer id never answers 202, but the union says so — fail closed.
+        if (isPendingSession(d)) setTraceError(true);
+        else setTrace(traceOf(d));
+      })
       .catch(() => setTraceError(true));
   }, [open, session.id, trace, traceError]);
 
