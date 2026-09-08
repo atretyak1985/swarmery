@@ -7,7 +7,7 @@ struct NotchRootView: View {
     @ObservedObject var viewState: WidgetViewState
     let actions: WidgetActions
     let onHover: (Bool) -> Void
-    let onTapTab: () -> Void
+    let onTapTab: (PanelKind) -> Void
     let onCollapse: () -> Void
     let onContentGeometry: (WidgetPresentation, WidgetContentGeometry) -> Void
 
@@ -27,13 +27,27 @@ struct NotchRootView: View {
                 onContentGeometry(viewState.presentation, WidgetContentGeometry(size: size))
             }
             .onHover(perform: onHover)
+            // The window can be larger than the content for a frame or two
+            // (fallback size before the first measurement, animation). Pin
+            // the content so it never floats: glued to the right edge and
+            // hanging from the top for the right-edge placement, top-centred
+            // for the notch. Applied OUTSIDE the GeometryReader so the
+            // measured size stays the content's own.
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: viewState.placement == .rightEdge ? .topTrailing : .top
+            )
     }
 
     @ViewBuilder
     private var surface: some View {
-        if viewState.presentation == .dormant {
+        switch (viewState.placement, viewState.presentation) {
+        case (.rightEdge, .dormant), (.rightEdge, .compact):
+            // Nothing to draw around the hot strip; the tabs draw their own
+            // surfaces (each is its own rounded card).
             content
-        } else {
+        default:
             placedSurface
         }
     }
@@ -47,13 +61,8 @@ struct NotchRootView: View {
                     .fill(Color.black)
             )
         case .rightEdge:
-            let shape = UnevenRoundedRectangle(
-                topLeadingRadius: 14, bottomLeadingRadius: 14, bottomTrailingRadius: 0, topTrailingRadius: 0
-            )
             content
-                .background(shape.fill(WidgetPalette.surface))
-                .overlay(shape.strokeBorder(WidgetPalette.border, lineWidth: 1))
-                .shadow(color: WidgetPalette.shadow, radius: 8, x: -2, y: 2)
+                .edgeSurface()
                 .padding(.leading, Self.edgeInset)
                 .padding(.vertical, Self.edgeInset)
         }
@@ -73,16 +82,19 @@ struct NotchRootView: View {
             switch viewState.placement {
             case .notch: CompactStrip(state: viewState.attention)
             case .rightEdge:
-                EdgeTab(state: viewState.attention)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onTapTab() }
+                EdgeTabs(state: viewState.attention, onTap: onTapTab)
+                    .padding(.leading, Self.edgeInset)
+                    .padding(.vertical, Self.edgeInset)
             }
         case .expanded:
-            ExpandedPanel(
-                state: viewState.attention,
-                actions: actions,
-                onCollapse: viewState.placement == .rightEdge ? onCollapse : nil
-            )
+            switch (viewState.placement, viewState.panel) {
+            case (.rightEdge, .usage):
+                UsagePanel(usage: viewState.attention.usage, onCollapse: onCollapse)
+            case (.rightEdge, .sessions):
+                ExpandedPanel(state: viewState.attention, actions: actions, onCollapse: onCollapse, showsUsage: false)
+            case (.notch, _):
+                ExpandedPanel(state: viewState.attention, actions: actions)
+            }
         }
     }
 }

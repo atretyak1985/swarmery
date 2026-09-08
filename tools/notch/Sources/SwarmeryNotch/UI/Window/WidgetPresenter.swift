@@ -10,6 +10,8 @@ final class WidgetViewState: ObservableObject {
     @Published var presentation: WidgetPresentation = .hidden
     @Published var attention: AttentionState = AttentionState()
     @Published var metrics: WidgetMetrics
+    /// Which panel `.expanded` shows for the right-edge placement.
+    @Published var panel: PanelKind = .sessions
     let placement: WidgetPlacement
 
     init(metrics: WidgetMetrics, placement: WidgetPlacement) {
@@ -72,6 +74,9 @@ public final class WidgetPresenter {
 
     public func update(attention: AttentionState, shouldOpen: Bool) {
         viewState.attention = attention
+        // Attention always concerns sessions/approvals: switch the panel over
+        // unless the operator pinned one open themselves.
+        if shouldOpen, !attentionWantsOpen, !pinnedOpen { viewState.panel = .sessions }
         attentionWantsOpen = shouldOpen
         apply(target())
     }
@@ -93,11 +98,21 @@ public final class WidgetPresenter {
         }
     }
 
-    /// Click on the collapsed tab: open the panel and keep it open.
-    public func toggleExpanded() {
-        pinnedOpen.toggle()
+    /// Click on a collapsed tab: open that tab's panel and keep it open; a
+    /// second click on the same tab (or the panel's chevron) closes it, a
+    /// click on the other tab switches panels.
+    public func toggleExpanded(_ panel: PanelKind = .sessions) {
+        if pinnedOpen, viewState.panel == panel {
+            pinnedOpen = false
+        } else {
+            viewState.panel = panel
+            pinnedOpen = true
+        }
         apply(target())
     }
+
+    /// The panel currently selected for the expanded presentation.
+    public var currentPanel: PanelKind { viewState.panel }
 
     /// Header chevron, or a click anywhere outside the widget.
     public func dismissPinned() {
@@ -153,7 +168,7 @@ public final class WidgetPresenter {
             viewState: viewState,
             actions: actions,
             onHover: { [weak self] hovering in self?.setHovering(hovering) },
-            onTapTab: { [weak self] in self?.toggleExpanded() },
+            onTapTab: { [weak self] kind in self?.toggleExpanded(kind) },
             onCollapse: { [weak self] in self?.dismissPinned() },
             onContentGeometry: { [weak self] presentation, geometry in
                 self?.contentGeometryChanged(presentation, geometry)

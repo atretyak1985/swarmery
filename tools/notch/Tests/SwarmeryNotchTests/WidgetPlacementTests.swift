@@ -40,8 +40,19 @@ final class WidgetPlacementTests: XCTestCase {
         )
         XCTAssertEqual(frame.maxX, visibleFrame.maxX)
         XCTAssertEqual(frame.midY, visibleFrame.midY, accuracy: 1)
-        XCTAssertEqual(frame.width, EdgeTab.size.width + NotchRootView.edgeInset * 2)
-        XCTAssertEqual(frame.height, EdgeTab.size.height + NotchRootView.edgeInset * 2)
+        XCTAssertEqual(frame.width, EdgeTabs.size.width + NotchRootView.edgeInset)
+        XCTAssertEqual(frame.height, EdgeTabs.size.height + NotchRootView.edgeInset * 2)
+        XCTAssertEqual(EdgeTabs.size.height, EdgeTab.size.height * 2 + EdgeTabs.gap)
+    }
+
+    func testExpandedPanelHangsFromTheTabsTopEdge() {
+        var geometry = WidgetWindowGeometry(placement: .rightEdge, edgeAnchorFromBottom: 0.5)
+        geometry.record(WidgetContentGeometry(size: CGSize(width: 370, height: 300)), for: .expanded)
+        let tab = geometry.frame(for: .compact, metrics: plainMetrics, screenFrame: screenFrame, visibleFrame: visibleFrame)
+        let panel = geometry.frame(for: .expanded, metrics: plainMetrics, screenFrame: screenFrame, visibleFrame: visibleFrame)
+        XCTAssertEqual(panel.maxY, tab.maxY, accuracy: 1)
+        XCTAssertEqual(panel.maxX, visibleFrame.maxX)
+        XCTAssertEqual(panel.height, 300)
     }
 
     func testExpandedFallbackStaysInsideTheVisibleFrameAndFlushRight() {
@@ -52,7 +63,7 @@ final class WidgetPlacementTests: XCTestCase {
         XCTAssertEqual(frame.maxX, visibleFrame.maxX)
         XCTAssertGreaterThanOrEqual(frame.minY, visibleFrame.minY)
         XCTAssertLessThanOrEqual(frame.maxY, visibleFrame.maxY)
-        XCTAssertEqual(frame.width, ExpandedPanel.panelWidth + NotchRootView.edgeInset * 2)
+        XCTAssertEqual(frame.width, ExpandedPanel.panelWidth + NotchRootView.edgeInset)
     }
 
     func testAMeasuredPanelTallerThanTheVisibleFrameIsClampedToIt() {
@@ -161,5 +172,57 @@ final class WidgetPlacementTests: XCTestCase {
     func testTabTintReflectsTheWorstStateOnScreen() {
         XCTAssertEqual(AttentionState(isConnected: false).tabTint, .secondary)
         XCTAssertEqual(AttentionState(isConnected: true).tabTint, WidgetPalette.accent)
+    }
+
+    // MARK: - Usage panel view model
+
+    private func usage(percents: [Double], status: String = "ok", accounts: [String] = ["default"]) -> UsageReport {
+        let windows = percents.enumerated().map { index, percent in
+            UsageWindow(
+                key: "w\(index)", label: "Window \(index)", percentUsed: percent, percentLeft: 100 - percent,
+                resetText: "resets in 1h", resetMs: 3_600_000, resetAt: "2030-01-01T12:00:00Z",
+                windowDurationMs: 18_000_000,
+                pace: UsagePace(status: "behind", percentElapsed: 50, message: "10% under pace"),
+                source: "oauth", used: nil, limit: nil
+            )
+        }
+        let providers = accounts.map {
+            UsageProvider(account: $0, name: "Claude", status: status, plan: "Max", source: "oauth", windows: windows)
+        }
+        return UsageReport(
+            generatedAt: "2030-01-01T10:00:00Z",
+            providers: providers,
+            accounts: accounts.map { name in UsageAccount(account: name, providers: providers.filter { $0.account == name }) }
+        )
+    }
+
+    func testUsageBarTintFollowsTheDashboardThresholds() {
+        XCTAssertEqual(UsagePanelViewModel.tint(forPercentUsed: 8), .green)
+        XCTAssertEqual(UsagePanelViewModel.tint(forPercentUsed: 69.9), .green)
+        XCTAssertEqual(UsagePanelViewModel.tint(forPercentUsed: 70), .orange)
+        XCTAssertEqual(UsagePanelViewModel.tint(forPercentUsed: 90), .red)
+    }
+
+    func testUsagePanelGroupsByAccountAndCarriesPaceAndResetClock() {
+        let model = UsagePanelViewModel(usage: usage(percents: [8, 29], accounts: ["default", "nanitor"]))
+        XCTAssertEqual(model?.accounts.map(\.id), ["default", "nanitor"])
+        let window = model?.accounts[0].providers[0].windows[1]
+        XCTAssertEqual(window?.percentUsed, 29)
+        XCTAssertEqual(window?.pace, "10% under pace")
+        XCTAssertEqual(window?.resetText, "resets in 1h")
+        XCTAssertNotNil(window?.resetClock)
+        XCTAssertNotNil(model?.generatedClock)
+    }
+
+    func testUsagePanelIsNilWithoutDataOrWithOnlyUnauthenticatedProviders() {
+        XCTAssertNil(UsagePanelViewModel(usage: nil))
+        XCTAssertNil(UsagePanelViewModel(usage: usage(percents: [50], status: "no-auth")))
+    }
+
+    func testWorstUsagePercentDrivesTheUsageTab() {
+        var state = AttentionState(isConnected: true)
+        XCTAssertNil(state.worstUsagePercent)
+        state.usage = usage(percents: [8, 29, 19])
+        XCTAssertEqual(state.worstUsagePercent, 29)
     }
 }

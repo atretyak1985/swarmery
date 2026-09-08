@@ -13,6 +13,9 @@ struct ExpandedPanel: View {
     /// so it needs a visible way to close. The notch placement collapses on
     /// mouse-out and passes nil.
     var onCollapse: (() -> Void)? = nil
+    /// The notch panel carries the usage strip; the right-edge sessions panel
+    /// does not — usage has its own tab and panel there.
+    var showsUsage: Bool = true
 
     private var layout: PanelLayout {
         PanelLayout(
@@ -40,7 +43,9 @@ struct ExpandedPanel: View {
             if !state.isConnected {
                 OfflineBadge()
             }
-            UsageStrip(usage: state.usage)
+            if showsUsage {
+                UsageStrip(usage: state.usage)
+            }
             ForEach(layout.rows) { row in
                 switch row {
                 case let .approval(request):

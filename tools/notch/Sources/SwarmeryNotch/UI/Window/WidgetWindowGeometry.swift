@@ -121,25 +121,39 @@ public struct WidgetWindowGeometry {
         let width = min(content.width.rounded(.up), visible.width)
         let height = min(content.height.rounded(.up), visible.height)
         let anchorY = visible.minY + visible.height * edgeAnchorFromBottom
-        let unclampedY = (anchorY - height / 2).rounded()
+        // The tab (and the dormant strip) are centred on the anchor. The
+        // panel opens with its TOP on the tab's top edge and hangs down from
+        // there — right next to where the operator just clicked, the way
+        // Grammarly's does — and is only shifted when it would not fit.
+        let unclampedY: CGFloat
+        switch presentation {
+        case .expanded:
+            let tabTop = anchorY + Self.tabWindowHeight / 2
+            unclampedY = (tabTop - height).rounded()
+        case .compact, .dormant, .hidden:
+            unclampedY = (anchorY - height / 2).rounded()
+        }
         let y = min(max(unclampedY, visible.minY), visible.maxY - height)
         return NSRect(x: (visible.maxX - width).rounded(), y: y, width: width, height: height)
     }
+
+    /// Height of the collapsed tab's window (tab + shadow margins).
+    public static var tabWindowHeight: CGFloat { EdgeTabs.size.height + NotchRootView.edgeInset * 2 }
+    /// Width of a right-edge window: content plus the shadow margin on the
+    /// LEFT only — the right side is glued to the screen edge.
+    public static func edgeWindowWidth(content: CGFloat) -> CGFloat { content + NotchRootView.edgeInset }
 
     private func edgeFallback(for presentation: WidgetPresentation, visibleFrame visible: CGRect) -> CGSize {
         switch presentation {
         case .expanded:
             return CGSize(
-                width: min(visible.width, ExpandedPanel.panelWidth + NotchRootView.edgeInset * 2),
+                width: min(visible.width, Self.edgeWindowWidth(content: ExpandedPanel.panelWidth)),
                 height: min(visible.height * 0.8, 640)
             )
         case .compact, .hidden:
-            return CGSize(
-                width: EdgeTab.size.width + NotchRootView.edgeInset * 2,
-                height: EdgeTab.size.height + NotchRootView.edgeInset * 2
-            )
+            return CGSize(width: Self.edgeWindowWidth(content: EdgeTabs.size.width), height: Self.tabWindowHeight)
         case .dormant:
-            return CGSize(width: Self.hotStripWidth, height: EdgeTab.size.height + NotchRootView.edgeInset * 2)
+            return CGSize(width: Self.hotStripWidth, height: Self.tabWindowHeight)
         }
     }
 

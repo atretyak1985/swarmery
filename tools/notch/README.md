@@ -16,20 +16,29 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
   the right edge, about 30% down the screen (above Grammarly's own tab, so the
   two never overlap; `SWARMERY_NOTCH_EDGE_ANCHOR` moves it). Touch the edge
   with the mouse and the tab slides in.
-- **Collapsed tab** (44×64 pt): a hexagon-grid
-  icon tinted by the worst state on screen — teal when everything is fine,
-  **red** when an approval is pending (plus a red badge with the count),
-  **orange** when a session needs you or failed, gray with a crossed-out Wi-Fi
-  symbol when the daemon is offline — and the live-session count underneath.
-  The surface is the system window gray (adapts to light/dark mode) with a
-  hairline border and a soft shadow, deliberately not black.
-- **Expanded panel** (360 pt wide, grows around the tab): usage windows first,
-  then one card per pending approval (tool name, project, request summary,
-  `Deny` / `Approve`), then the session rows with a coloured status dot, the
+- **Two tabs** (each 44×64 pt, stacked, glued to the edge). The **sessions
+  tab** on top: a hexagon-grid icon tinted by the worst state on screen — teal
+  when everything is fine, **red** when an approval is pending (plus a red
+  badge with the count), **orange** when a session needs you or failed, gray
+  with a crossed-out Wi-Fi symbol when the daemon is offline — and the
+  live-session count underneath. The **usage tab** below: a gauge icon tinted
+  green / orange / red by the highest percent used across your plan windows,
+  with that percent underneath. Both surfaces are the system window gray
+  (adapts to light/dark mode) with a hairline border and a soft shadow,
+  deliberately not black.
+- **Sessions panel** (360 pt wide, hangs from the top of the tabs): one card
+  per pending approval (tool name, project, request summary, `Deny` /
+  `Approve`), then the session rows with a coloured status dot, the
   jump-to-terminal / open-in-dashboard button and a stop button. **Click the
-  tab** to open the panel; it stays open until you click the `›` in its header
-  or anywhere outside the widget. It also opens by itself on a pending approval
-  or a failed session and closes after the linger period.
+  sessions tab** to open it; it stays open until you click the `›` in its
+  header, click the tab again, or click anywhere outside the widget. It also
+  opens by itself on a pending approval or a failed session and closes after
+  the linger period.
+- **Usage panel** — the dashboard's Usage modal, natively: click the usage tab.
+  One card per provider (an account switcher appears when the daemon reports
+  more than one account), each plan window with a progress bar, `N% used`,
+  `M% left`, the reset countdown and clock time, and the daemon's pace line
+  (`27% under pace`). Same close gestures as the sessions panel.
 
 Swarmery Notch is a thin client: every byte of data it shows comes from the
 swarmery daemon on `:7777` (`GET /api/sessions`, `/api/approvals`, `/api/usage`,
