@@ -592,6 +592,45 @@ export interface MatrixResp {
   cells: { row: string; col: string; runs: number; cost?: number | null }[];
 }
 
+// --- Exploration share (GET /api/analytics/exploration) ----------------------
+
+/**
+ * One local day of tool calls bucketed by what they were for. Every day in the
+ * requested range is present, zero-filled — a quiet day is a zero, not a gap.
+ */
+export interface ExplorationDay {
+  /** Local YYYY-MM-DD. */
+  day: string;
+  explore: number;
+  edit: number;
+  run: number;
+  other: number;
+  calls: number;
+  /** explore/calls for this day, 0..1 (0 when the day had no calls). */
+  share: number;
+}
+
+/** Range totals. `share` is explore/calls over the whole range, NOT the mean of the daily shares. */
+export interface ExplorationTotals {
+  explore: number;
+  edit: number;
+  run: number;
+  other: number;
+  calls: number;
+  share: number;
+}
+
+/**
+ * GET /api/analytics/exploration?from&to&project — what share of an agent's
+ * tool calls is spent rediscovering the repo. `top` ranks the explore-classified
+ * tools only; Bash entries are broken out by the command that ran ("grep", "rg").
+ */
+export interface ExplorationResp {
+  days: ExplorationDay[];
+  totals: ExplorationTotals;
+  top: { tool: string; n: number }[];
+}
+
 // --- Analytics uplift (GET /api/stats/{tools,durations,errors}) --------------
 
 /** Per-agent share of one tool's calls; agent keys are normAgentType-folded, "main" = orchestrator. */

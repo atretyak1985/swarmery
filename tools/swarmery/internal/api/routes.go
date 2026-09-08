@@ -91,6 +91,8 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/stats/matrix", h.statsMatrix)
 	// verification contour v2: per-agent first-pass success rate (analytics.go).
 	mux.HandleFunc("GET /api/analytics/first-pass", h.firstPassRates)
+	// graft context layer phase 1: exploration share of tool calls (analytics.go).
+	mux.HandleFunc("GET /api/analytics/exploration", h.analyticsExploration)
 	// trajjudge phase 2: LLM-judge verdicts for a session (analytics.go).
 	mux.HandleFunc("GET /api/analytics/trajectory-judgments", h.trajectoryJudgments)
 

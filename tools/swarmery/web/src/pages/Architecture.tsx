@@ -8,8 +8,9 @@
 // selection by id, same-origin iframe.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ProvisionState, ToolsResponse } from '../api/types';
-import { fetchTools, rebuildArchitectureMap, toggleProjectPlugin } from '../api';
+import type { ExplorationResp, ProvisionState, ToolsResponse } from '../api/types';
+import { fetchExploration, fetchTools, rebuildArchitectureMap, toggleProjectPlugin } from '../api';
+import { Sparkline } from '../components/Sparkline';
 import {
   Card,
   Empty,
@@ -168,6 +169,10 @@ export function Architecture({
   scopedId,
 }: { scopedSlug?: string; scopedId?: number | null } = {}): JSX.Element {
   const [data, setData] = useState<ToolsResponse | null>(null);
+  // Exploration share for the selected project (14 local days). Its own state
+  // and its own failure mode: the metric is a header ornament, so a failed
+  // fetch leaves it null and the page renders exactly as it did before.
+  const [exploration, setExploration] = useState<ExplorationResp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // Expanded state only — Esc, the body scroll lock, focus containment and focus
@@ -226,6 +231,26 @@ export function Architecture({
   const project = scoped
     ? (findProject(projects, scopedSlug ?? null) ?? undefined)
     : (projects.find((p) => p.id === selectedId) ?? projects.find((p) => p.hasMap) ?? projects[0]);
+
+  // The exploration share is scoped to whichever project the page is showing,
+  // so it re-fetches on every project switch. Failures are swallowed on
+  // purpose: this is a header ornament, and it must never take the map with it.
+  const exploreSlug = project?.slug;
+  useEffect(() => {
+    if (exploreSlug === undefined) return;
+    let alive = true;
+    setExploration(null);
+    fetchExploration(exploreSlug)
+      .then((d) => {
+        if (alive) setExploration(d);
+      })
+      .catch(() => {
+        if (alive) setExploration(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [exploreSlug]);
 
   // Kick off a rebuild (or the scoped enable-and-build) and re-fetch — the
   // provision job lands as 'pending' in the feed, so the settle-poll below
@@ -340,6 +365,24 @@ export function Architecture({
                           · stale (HEAD {project.headCommit.slice(0, 7)})
                         </span>
                       ))}
+                  </span>
+                )}
+                {exploration !== null && exploration.totals.calls > 0 && (
+                  // Exploration share: the number the context layer is judged
+                  // by. The sparkline is the daily share over the same 14 days
+                  // the server defaults to; `[&>svg]:mt-0` cancels the
+                  // component's tile-stack top margin so it sits on this row.
+                  <span
+                    className="flex items-center gap-2 font-mono text-[10.5px] text-ink-faint"
+                    title="share of tool calls spent exploring the repo (reads, greps, finds) over the last 14 days"
+                  >
+                    explore {(exploration.totals.share * 100).toFixed(0)}%
+                    <span className="block w-16 [&>svg]:mt-0">
+                      <Sparkline
+                        values={exploration.days.map((d) => d.share)}
+                        highlight={exploration.days.length - 1}
+                      />
+                    </span>
                   </span>
                 )}
                 <span className="ml-auto flex items-center gap-2">

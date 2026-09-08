@@ -28,6 +28,7 @@ import type {
   DurationsResp,
   Epic,
   ErrorsResp,
+  ExplorationResp,
   FileSessionsResponse,
   FunnelResp,
   HealthResponse,
@@ -1793,6 +1794,16 @@ export async function renameSession(id: number, title: string | null): Promise<v
 export function fetchTools(): Promise<ToolsResponse> {
   if (MOCK) return mockApi.tools();
   return get('/api/tools');
+}
+
+/**
+ * GET /api/analytics/exploration — the share of tool calls spent rediscovering
+ * the repo, per local day. `project` is the usual slug|name|id scope; omit it
+ * for the fleet-wide number. Defaults to the trailing 14 days server-side.
+ */
+export function fetchExploration(project?: string): Promise<ExplorationResp> {
+  const qs = project !== undefined && project !== '' ? `?project=${encodeURIComponent(project)}` : '';
+  return get(`/api/analytics/exploration${qs}`);
 }
 
 /**
