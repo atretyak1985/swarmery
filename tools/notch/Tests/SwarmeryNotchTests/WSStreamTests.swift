@@ -69,6 +69,37 @@ final class WSStreamTests: XCTestCase {
         XCTAssertEqual(Backoff.delay(forAttempt: 1_000), Backoff.cap)
     }
 
+    // MARK: - Socket URL scheme
+
+    // `URLSession.webSocketTask(with:)` throws an uncatchable ObjC exception
+    // for a non-`ws(s)` URL, so a wrong scheme is a crash on launch, not a
+    // recoverable error. The daemon's base URL is `http(s)`: mapping it is
+    // WSStream's job, and these pin that mapping for every scheme it sees.
+
+    func testSocketURLMapsHTTPToWSKeepingHostPortAndPath() {
+        let url = WSStream.socketURL(from: URL(string: "http://127.0.0.1:7777/api/ws")!)
+        XCTAssertEqual(url.absoluteString, "ws://127.0.0.1:7777/api/ws")
+    }
+
+    func testSocketURLMapsHTTPSToWSS() {
+        let url = WSStream.socketURL(from: URL(string: "https://swarm.example.test/api/ws")!)
+        XCTAssertEqual(url.absoluteString, "wss://swarm.example.test/api/ws")
+    }
+
+    func testSocketURLLeavesWSAndWSSUntouched() {
+        for raw in ["ws://127.0.0.1:7777/api/ws", "wss://swarm.example.test/api/ws"] {
+            XCTAssertEqual(WSStream.socketURL(from: URL(string: raw)!).absoluteString, raw)
+        }
+    }
+
+    func testSocketURLFromTheDaemonClientsDefaultBaseIsAWebSocketURL() {
+        // The exact composition App.swift performs at launch.
+        let client = DaemonClient()
+        let url = WSStream.socketURL(from: client.baseURL.appendingPathComponent("api/ws"))
+        XCTAssertEqual(url.scheme, "ws")
+        XCTAssertEqual(url.path, "/api/ws")
+    }
+
     func testBackoffAtAttemptZeroIsTheInitialDelay() {
         XCTAssertEqual(Backoff.delay(forAttempt: 0), Backoff.initial)
     }

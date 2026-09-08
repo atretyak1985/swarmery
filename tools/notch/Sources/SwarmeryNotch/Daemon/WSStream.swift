@@ -77,10 +77,28 @@ public struct WSStream: Sendable {
     private let sleep: SleepFn
 
     /// Real-socket initializer: connects to `url` via `session` on every
-    /// (re)connect attempt.
+    /// (re)connect attempt. `url` may carry the daemon's `http(s)` scheme —
+    /// it is mapped to `ws(s)` here (see `socketURL(from:)`), so no caller
+    /// can hand `URLSession` a scheme it refuses.
     public init(url: URL, session: URLSession = .shared, sleep: @escaping SleepFn = WSStream.defaultSleep) {
-        self.connect = { session.webSocketTask(with: url) }
+        let socketURL = Self.socketURL(from: url)
+        self.connect = { session.webSocketTask(with: socketURL) }
         self.sleep = sleep
+    }
+
+    /// `URLSession.webSocketTask(with:)` raises an Objective-C
+    /// `NSGenericException` — which Swift cannot catch — for any scheme other
+    /// than `ws`/`wss`. The daemon's base URL is spoken as `http(s)`, so the
+    /// socket URL is always derived from it here: `http` → `ws`, `https` →
+    /// `wss`, anything else (already `ws`/`wss`) is returned unchanged.
+    public static func socketURL(from url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        switch components.scheme?.lowercased() {
+        case "http": components.scheme = "ws"
+        case "https": components.scheme = "wss"
+        default: break
+        }
+        return components.url ?? url
     }
 
     /// Test/advanced initializer: inject the connector directly (and, in
