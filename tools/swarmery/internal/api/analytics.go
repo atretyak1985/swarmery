@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/exploration"
 )
 
 // maxRangeDays caps the requested span so a hostile ?from is not a fan-out.
@@ -1276,4 +1277,31 @@ func (h *Handler) firstPassRates(w http.ResponseWriter, r *http.Request) {
 		out = append(out, *byAgent[agent])
 	}
 	writeJSON(w, out, nil)
+}
+
+// ── /api/analytics/exploration ────────────────────────────────────────────────
+
+// analyticsExploration serves the exploration-share metric: of the tool calls
+// in the window, what fraction was spent rediscovering the repo instead of
+// changing or running it. Range parsing and the project scope are the SAME
+// conventions as statsTimeseries above (parseRange + scopeFilter), so a
+// dashboard-wide range/project selection applies here unchanged.
+//
+// The classification rules live in internal/exploration, not in SQL — one
+// dialect, one place to argue about `sed -i`.
+//
+// GET /api/analytics/exploration?from=&to=&project=
+func (h *Handler) analyticsExploration(w http.ResponseWriter, r *http.Request) {
+	dr, err := parseRange(r)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusBadRequest)
+		return
+	}
+	pf, pargs := scopeFilter(r)
+	res, err := exploration.Share(h.DB, exploration.Range{
+		Days:  dr.days,
+		Start: dr.start,
+		End:   dr.end,
+	}, pf, pargs)
+	writeJSON(w, res, err)
 }

@@ -592,6 +592,45 @@ export interface MatrixResp {
   cells: { row: string; col: string; runs: number; cost?: number | null }[];
 }
 
+// --- Exploration share (GET /api/analytics/exploration) ----------------------
+
+/**
+ * One local day of tool calls bucketed by what they were for. Every day in the
+ * requested range is present, zero-filled — a quiet day is a zero, not a gap.
+ */
+export interface ExplorationDay {
+  /** Local YYYY-MM-DD. */
+  day: string;
+  explore: number;
+  edit: number;
+  run: number;
+  other: number;
+  calls: number;
+  /** explore/calls for this day, 0..1 (0 when the day had no calls). */
+  share: number;
+}
+
+/** Range totals. `share` is explore/calls over the whole range, NOT the mean of the daily shares. */
+export interface ExplorationTotals {
+  explore: number;
+  edit: number;
+  run: number;
+  other: number;
+  calls: number;
+  share: number;
+}
+
+/**
+ * GET /api/analytics/exploration?from&to&project — what share of an agent's
+ * tool calls is spent rediscovering the repo. `top` ranks the explore-classified
+ * tools only; Bash entries are broken out by the command that ran ("grep", "rg").
+ */
+export interface ExplorationResp {
+  days: ExplorationDay[];
+  totals: ExplorationTotals;
+  top: { tool: string; n: number }[];
+}
+
 // --- Analytics uplift (GET /api/stats/{tools,durations,errors}) --------------
 
 /** Per-agent share of one tool's calls; agent keys are normAgentType-folded, "main" = orchestrator. */
@@ -2724,6 +2763,34 @@ export interface ProvisionState {
   error: string;
 }
 
+/**
+ * One member checkout of a MULTI-repo workspace — a project whose root is not
+ * itself a git repo, so `ArchitectureProject.headCommit` is null and freshness
+ * can only be answered per member.
+ *
+ * A member that is not on disk (or is not a checkout) arrives with `ok: false`
+ * and null commits instead of being left out: the page has to be able to say
+ * "we could not see 2 of 8", because a shorter list reads as a smaller,
+ * healthier workspace.
+ */
+export interface ArchitectureRepoHead {
+  /** Repo name as declared in `.claude/project.json` `repos[]`. */
+  name: string;
+  /**
+   * Whether this member's HEAD was readable. When false, `headCommit`,
+   * `commitsBehind` and `touchedModules` are null — but `analyzedAtCommit` may
+   * still be set, because the map can record a commit for a member that has
+   * since become unreadable.
+   */
+  ok: boolean;
+  headCommit: string | null;
+  /** The commit the map recorded FOR THIS REPO; null when it records none. */
+  analyzedAtCommit: string | null;
+  /** Same contract as the project-level fields: null is unmeasurable, 0 is current. */
+  commitsBehind: number | null;
+  touchedModules: number | null;
+}
+
 export interface ArchitectureProject {
   id: number;
   slug: string;
@@ -2735,8 +2802,59 @@ export interface ArchitectureProject {
   analyzedAtCommit: string | null;
   /** Current HEAD commit of the project repo resolved without exec; null when unresolvable. */
   headCommit: string | null;
+  /**
+   * Commits between analyzedAtCommit and HEAD. `0` means the map is current;
+   * `null` means it could not be measured (no git, no analysed commit) — the
+   * two are deliberately different, so never `?? 0` this.
+   */
+  commitsBehind: number | null;
+  /** Modules the commits since analyzedAtCommit touch; null when unmeasurable. */
+  touchedModules: number | null;
+  /** Total modules in architecture-map.json; null when the map is absent or corrupt. */
+  moduleCount: number | null;
   /** Auto-provision job state; null when no job is tracked. */
   provision: ProvisionState | null;
+  /**
+   * Per-member freshness of a multi-repo workspace. ABSENT (not `[]`) for a
+   * single-repo project, whose wire shape is unchanged — so treat it as
+   * optional and never index it without a length check. When present,
+   * `commitsBehind` / `touchedModules` above are the rollup across these.
+   */
+  repos?: ArchitectureRepoHead[];
+}
+
+// --- blast radius (GET /api/projects/{id}/architecture/blast) ----------------
+
+/** A module the branch touches, with the changed files that put it there. */
+export interface BlastModule {
+  id: string;
+  name: string;
+  files: string[];
+}
+
+/** A flow whose file-anchored steps the branch hits. */
+export interface BlastFlow {
+  id: string;
+  name: string;
+  steps: string[];
+}
+
+/** Changed files mapped onto the architecture map. */
+export interface BlastTouched {
+  modules: BlastModule[];
+  flows: BlastFlow[];
+  /** Changed files no module path claims. */
+  unmatched: string[];
+}
+
+export interface BlastResponse {
+  /** Baseline branch the diff ran against (origin/HEAD, else main/master). */
+  base: string;
+  /** HEAD commit the diff ran to. */
+  head: string;
+  /** Number of changed files across base..head. */
+  files: number;
+  touched: BlastTouched;
 }
 
 export interface ToolsResponse {

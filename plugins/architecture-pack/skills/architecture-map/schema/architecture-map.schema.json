@@ -10,6 +10,12 @@
     "schemaVersion": { "const": 1 },
     "analyzedAt": { "type": "string", "description": "ISO date of analysis" },
     "analyzedAtCommit": { "type": "string", "minLength": 7, "description": "git rev-parse HEAD at analysis time" },
+    "analyzedAtCommits": {
+      "type": "object",
+      "description": "OPTIONAL, multi-repo workspaces only: the analysed HEAD per member repo, keyed by the name declared in .claude/project.json repos[]. A workspace root is not a checkout, so the scalar analyzedAtCommit above cannot say which member it belongs to and freshness is unanswerable without this. Additive within schemaVersion 1 — a map without it is still valid.",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "minLength": 7 }
+    },
     "project": {
       "type": "object",
       "required": ["name", "description", "techStack", "entryPoints"],

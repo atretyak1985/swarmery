@@ -2950,7 +2950,9 @@ export const mockApi = {
   // --- tool dashboards (GET /api/tools) ---
 
   /** Serena available (one stopped, one running); graphify one viz + one without;
-   * architecture: one project with a built map (current), one enabled-but-unbuilt. */
+   * architecture: one project with a built but STALE map (so the numeric
+   * freshness line and the blast strip both render in mock mode), one
+   * enabled-but-unbuilt. */
   async tools(): Promise<ToolsResponse> {
     await delay(90);
     const archProjects: ArchitectureProject[] = [
@@ -2962,7 +2964,10 @@ export const mockApi = {
         builtAt: iso(2 * 60 * MIN),
         mapPath: '/api/projects/3/architecture/architecture-map.html',
         analyzedAtCommit: 'aabbccddee112233445566778899001122334455',
-        headCommit: 'aabbccddee112233445566778899001122334455',
+        headCommit: 'd8cbac70011223344556677889900112233445566',
+        commitsBehind: 130,
+        touchedModules: 11,
+        moduleCount: 56,
         provision: null,
       },
       {
@@ -2974,6 +2979,9 @@ export const mockApi = {
         mapPath: '/api/projects/1/architecture/architecture-map.html',
         analyzedAtCommit: null,
         headCommit: null,
+        commitsBehind: null,
+        touchedModules: null,
+        moduleCount: null,
         provision: null,
       },
       {
@@ -2985,6 +2993,9 @@ export const mockApi = {
         mapPath: '/api/projects/2/architecture/architecture-map.html',
         analyzedAtCommit: null,
         headCommit: null,
+        commitsBehind: null,
+        touchedModules: null,
+        moduleCount: null,
         provision: { state: 'generating', lastLine: 'running architecture-map', error: '' },
       },
     ];

@@ -15,6 +15,14 @@ HTML by hand.
 
 ## 0. Freshness gate (always first)
 
+Which of the two shapes you are in decides everything below: a **single repo**
+(the working directory is itself a checkout — `.git` exists) or a **multi-repo
+workspace** (no `.git` at the root; the member checkouts are listed in
+`.claude/project.json` → `repos[]`, and module paths are workspace-relative,
+`<repo>/<path-inside-it>`).
+
+### Single repo
+
 ```bash
 HEAD=$(git rev-parse HEAD)
 LAST=$(node -e "try{const v=JSON.parse(require('fs').readFileSync('architecture-out/architecture-map.json')).analyzedAtCommit;console.log(typeof v==='string'&&v.length>=7?v:'')}catch{console.log('')}")
@@ -25,6 +33,42 @@ LAST=$(node -e "try{const v=JSON.parse(require('fs').readFileSync('architecture-
   map changed paths onto existing `modules[].path` prefixes; re-describe ONLY
   touched modules, re-check only flows whose steps reference them; keep the rest.
 - `LAST` empty → full analysis.
+
+### Multi-repo workspace
+
+There is no single HEAD to compare against, so compare PER MEMBER against the
+map's optional `analyzedAtCommits` object (`{"<repo>": "<sha>"}`):
+
+```bash
+# One member per LINE — a member directory may contain spaces.
+node -e "try{const r=JSON.parse(require('fs').readFileSync('.claude/project.json')).repos;if(Array.isArray(r))console.log(r.join('\n'))}catch{}" |
+while IFS= read -r repo; do
+  [ -n "$repo" ] || continue
+  [ -e "$repo/.git" ] || { echo "$repo: not a checkout — skipping"; continue; }
+  head=$(cd "$repo" && git rev-parse HEAD)
+  last=$(node -e "try{const m=JSON.parse(require('fs').readFileSync('architecture-out/architecture-map.json')).analyzedAtCommits||{};const v=m[process.argv[1]];console.log(typeof v==='string'&&v.length>=7?v:'')}catch{console.log('')}" "$repo")
+  echo "$repo $last $head"
+done
+```
+
+- Every member reports `last == head` → up to date, STOP.
+- Some members moved → **incremental mode for those members only**: diff each one
+  with `(cd "$repo" && git diff --name-only "$last".."$head")` and prefix every
+  path with `<repo>/` before matching it against `modules[].path`. Members whose
+  `last == head` are left alone.
+- **A member whose `last` is EMPTY gets a FULL analysis of that member**, even when
+  other members are merely incremental. Never diff it: an empty `last` makes the
+  range `..$head`, which git reads as `HEAD..$head` and reports as *no changes* — so
+  a newly added member (or one that was unreadable last run and therefore omitted
+  from the stamp per step 5) would be silently treated as analysed-and-current and
+  stamped as such in step 5, freezing it out of every future run. A member you have
+  no baseline for is unknown, not unchanged.
+- No `analyzedAtCommits` at all (every `last` empty) → full analysis. An older map
+  carries one scalar `analyzedAtCommit` that cannot say WHICH member it belongs
+  to, so it is not a usable baseline — writing `analyzedAtCommits` in step 5 is
+  what makes the next run incremental.
+- A declared member with no `.git` is reported and skipped, never silently
+  dropped: a member you could not read is unknown, not unchanged.
 
 ## 1. Inventory (ground truth, no invention)
 
@@ -61,7 +105,26 @@ one per flow), `payload` where meaningful. Prefer flows crossing ≥ 3 modules.
 ## 5. Synthesize + validate + render
 
 Assemble the full JSON (`schemaVersion: 1`, `analyzedAt` = today,
-`analyzedAtCommit` = HEAD). Then:
+`analyzedAtCommit` = HEAD).
+
+In a **multi-repo workspace** also write `analyzedAtCommits` — `{"<repo>":
+"<sha>"}` for every member you actually analysed, using the HEAD you read in
+step 0. `analyzedAtCommit` stays required: set it to the main app's member HEAD
+(or the first member you resolved) so older consumers keep working.
+`schemaVersion` stays `1` — the field is optional and additive. Omit members you
+could not read rather than stamping a guess: a wrong stamp makes a stale repo
+report as current forever.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "analyzedAt": "2026-09-08",
+  "analyzedAtCommit": "<mainApp member HEAD>",
+  "analyzedAtCommits": { "<repo-a>": "<sha>", "<repo-b>": "<sha>" }
+}
+```
+
+Then:
 
 Bundled files (schema, validator, renderer) live under ${CLAUDE_PLUGIN_ROOT}/skills/architecture-map/ — never copy them into the project.
 
@@ -105,8 +168,8 @@ Run it from the repository root you want mapped; everything else is discovered f
 
 ## Inputs
 
-- Repository — the working directory the skill runs in — required, and it must be a git checkout, since the freshness gate stamps the map with `HEAD`.
-- `.claude/project.json` — project name, repos, stack, domain terms — optional, used as ground truth when present.
+- Repository — the working directory the skill runs in — required. Either a git checkout (the map is stamped with its `HEAD`) or a multi-repo workspace whose member checkouts are declared in `.claude/project.json` `repos[]` (the map is stamped per member, and `.claude/project.json` stops being optional).
+- `.claude/project.json` — project name, repos, stack, domain terms — optional for a single repo, REQUIRED for a multi-repo workspace since `repos[]` is the only list of members there is.
 - `graphify-out/graph.json` — an existing knowledge graph — optional, used only as candidate module groupings.
 
 ## What you get back

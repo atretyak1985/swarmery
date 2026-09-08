@@ -32,6 +32,26 @@ if (map.schemaVersion !== 1) errors.push('schemaVersion must be 1');
 if (!isStr(map.analyzedAt)) errors.push('analyzedAt missing');
 if (!isStr(map.analyzedAtCommit) || map.analyzedAtCommit.length < 7)
   errors.push('analyzedAtCommit missing or shorter than 7 chars');
+// analyzedAtCommits is OPTIONAL and additive within schemaVersion 1: a
+// multi-repo workspace has no root HEAD, so the scalar stamp above cannot say
+// which member repo it belongs to. Both shapes are valid — a map without the
+// object is a single-repo map (or a multi-repo map from before this field).
+// When present it must be a non-empty {repo: sha} object; an empty one, or a
+// short/blank sha, would pass a freshness check by accident.
+if (map.analyzedAtCommits !== undefined) {
+  const c = map.analyzedAtCommits;
+  if (c === null || typeof c !== 'object' || isArr(c)) {
+    errors.push('analyzedAtCommits must be an object of {repo: sha}');
+  } else if (Object.keys(c).length === 0) {
+    errors.push('analyzedAtCommits is empty — omit it rather than writing {}');
+  } else {
+    for (const [repo, sha] of Object.entries(c)) {
+      if (!isStr(repo)) errors.push('analyzedAtCommits: repo name must be a non-empty string');
+      if (!isStr(sha) || sha.length < 7)
+        errors.push(`analyzedAtCommits["${repo}"]: sha missing or shorter than 7 chars`);
+    }
+  }
+}
 const p = map.project ?? {};
 if (!isStr(p.name)) errors.push('project.name missing');
 if (!isStr(p.description)) errors.push('project.description missing');

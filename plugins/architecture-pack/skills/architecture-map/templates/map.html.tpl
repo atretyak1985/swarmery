@@ -44,6 +44,12 @@ h1{margin:0 0 4px;font-size:20px} #desc{margin:0 0 8px;color:var(--ink-dim);max-
 .card .resp{margin-top:4px;font-size:11.5px;color:var(--ink-dim)}
 .card.on{border-color:var(--flow);background:var(--card-on)}
 .card.dim{opacity:.22}
+/* Blast highlight, driven by the embedder's highlight message (see the
+   message listener at the end of the script). outline, not border: a border
+   would resize the card and move every edge the SVG has already routed.
+   Stays visible under .dim so a highlighted module is never faded out. */
+.card.blast{outline:2px solid var(--accent);outline-offset:2px}
+.card.blast.dim{opacity:1}
 .edge{stroke:var(--edge);stroke-width:1.2;fill:none}
 .edge.dim{opacity:.12}
 .fedge{stroke:var(--flow);stroke-width:1.8;fill:none}
@@ -318,6 +324,24 @@ function syncThemeGlyph() { $('theme').textContent = document.documentElement.da
     if (onBoard) requestAnimationFrame(draw);
   }
 })();
+
+// ---- embed channel: blast highlight ----
+// The dashboard that frames this map posts {type:'swarmery:highlight',
+// moduleIds:[...]} to say "these are the modules the current branch touches".
+// An empty (or absent) moduleIds clears the highlight, so one message shape
+// covers both select and deselect.
+//
+// Opened standalone (file:// straight from architecture-out/) nothing ever
+// posts, so this listener costs nothing and changes nothing. The origin is NOT
+// checked on purpose: the payload is a list of module ids that only ever
+// toggles a CSS class on cards this document already rendered — an id that
+// matches nothing is a no-op, and nothing here is injected as markup.
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || d.type !== 'swarmery:highlight') return;
+  const wanted = new Set(Array.isArray(d.moduleIds) ? d.moduleIds : []);
+  for (const [mid, el] of cardEls) el.classList.toggle('blast', wanted.has(mid));
+});
 
 function name(id) { const m = modById.get(id); return m ? m.name : id; }
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }

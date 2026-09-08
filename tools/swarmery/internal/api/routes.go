@@ -91,6 +91,8 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/stats/matrix", h.statsMatrix)
 	// verification contour v2: per-agent first-pass success rate (analytics.go).
 	mux.HandleFunc("GET /api/analytics/first-pass", h.firstPassRates)
+	// graft context layer phase 1: exploration share of tool calls (analytics.go).
+	mux.HandleFunc("GET /api/analytics/exploration", h.analyticsExploration)
 	// trajjudge phase 2: LLM-judge verdicts for a session (analytics.go).
 	mux.HandleFunc("GET /api/analytics/trajectory-judgments", h.trajectoryJudgments)
 
@@ -280,6 +282,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("/api/projects/{id}/architecture/{rest...}", h.architectureStatic)
 	// More specific than the static jail, so POST …/rebuild wins over {rest...}.
 	mux.HandleFunc("POST /api/projects/{id}/architecture/rebuild", requireLocalOrigin(h.architectureRebuild))
+	// Same deal for …/blast — a literal segment beats {rest...}, so the jail
+	// never gets a chance to look for a FILE called "blast" in architecture-out
+	// and 404 it. Registered method-less (like the jail) so the handler can
+	// answer 405 itself instead of letting a POST fall through to the SPA.
+	mux.HandleFunc("/api/projects/{id}/architecture/blast", h.architectureBlast)
 
 	// control-plane v2: notifications & auto-approve rules. Writes carry the
 	// same D4 origin hardening as every other mutating endpoint; evaluation
