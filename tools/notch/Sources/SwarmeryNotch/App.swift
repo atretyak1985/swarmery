@@ -38,14 +38,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             focus: { session in TerminalFocus.focus(session) },
             openDashboard: { session in TerminalFocus.openDashboard(session) },
             stop: { session in Task { try? await client.stop(sessionId: session.id) } },
-            quit: { NSApp.terminate(nil) }
+            quit: { NSApp.terminate(nil) },
+            refreshUsage: { [weak self] in
+                guard let coordinator = self?.coordinator else { return }
+                Task { @MainActor in await coordinator.refreshUsage(fresh: true) }
+            }
         )
 
         setUpMenuBar()
         setUpPresenters(actions: actions)
 
         let stream = WSStream(url: client.baseURL.appendingPathComponent("api/ws"))
-        let coordinator = AppCoordinator(client: client, stream: stream)
+        let coordinator = AppCoordinator(client: client, stream: stream, usageRefreshInterval: config.usageRefreshInterval)
         coordinator.onStateChange = { [weak self] state in
             self?.render(state)
         }

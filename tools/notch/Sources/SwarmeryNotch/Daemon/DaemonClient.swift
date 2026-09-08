@@ -109,7 +109,11 @@ public struct DaemonClient: Sendable {
     }
 
     private func fetchUsage() async throws -> UsageReport {
-        try await get(path: "/api/usage", query: [])
+        try await usage(fresh: false)
+    }
+
+    public func usage(fresh: Bool) async throws -> UsageReport {
+        try await get(path: "/api/usage", query: fresh ? [URLQueryItem(name: "fresh", value: "1")] : [])
     }
 
     // MARK: - Actions

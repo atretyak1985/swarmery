@@ -18,6 +18,14 @@ private actor RecordingDaemonClient: DaemonClientProtocol {
         return snapshotResult
     }
 
+    private(set) var usageCalls: [Bool] = []
+    var usageResult: UsageReport = UsageReport(generatedAt: "2030-01-01T00:00:00Z", providers: [], accounts: [])
+
+    func usage(fresh: Bool) async throws -> UsageReport {
+        usageCalls.append(fresh)
+        return usageResult
+    }
+
     func approve(id: Int, decision: ApprovalDecision, reason: String?) async throws {}
     func stop(sessionId: Int) async throws {}
     func kill(sessionId: Int, force: Bool) async throws {}
@@ -44,6 +52,8 @@ private actor FailingDaemonClient: DaemonClientProtocol {
         snapshotCallCount += 1
         throw FakeDaemonError.boom
     }
+
+    func usage(fresh: Bool) async throws -> UsageReport { throw FakeDaemonError.boom }
 
     func approve(id: Int, decision: ApprovalDecision, reason: String?) async throws {}
     func stop(sessionId: Int) async throws {}
@@ -107,5 +117,75 @@ final class AppCoordinatorConfigTests: XCTestCase {
     func testAValidPositiveLingerIsHonored() {
         let config = AppCoordinatorConfig.fromEnvironment(environment: ["SWARMERY_NOTCH_LINGER": "2.5"])
         XCTAssertEqual(config.linger, 2.5)
+    }
+
+    // MARK: - Usage refresh
+
+    @MainActor
+    func testRefreshUsageAsksTheDaemonToBypassItsCacheAndPublishesTheReport() async {
+        let client = RecordingDaemonClient()
+        let coordinator = AppCoordinator(
+            client: client,
+            stream: WSStream(connect: { UnusedConnection() }, sleep: { _ in })
+        )
+        var published: [AttentionState] = []
+        coordinator.onStateChange = { published.append($0) }
+
+        await coordinator.refreshUsage(fresh: true)
+
+        let calls = await client.usageCalls
+        XCTAssertEqual(calls, [true])
+        XCTAssertEqual(coordinator.state.usage?.generatedAt, "2030-01-01T00:00:00Z")
+        XCTAssertEqual(published.count, 1)
+    }
+
+    @MainActor
+    func testAFailedUsageRefreshKeepsTheLastReportAndPublishesNothing() async {
+        let coordinator = AppCoordinator(
+            client: FailingDaemonClient(),
+            stream: WSStream(connect: { UnusedConnection() }, sleep: { _ in })
+        )
+        var published = 0
+        coordinator.onStateChange = { _ in published += 1 }
+
+        await coordinator.refreshUsage(fresh: false)
+
+        XCTAssertNil(coordinator.state.usage)
+        XCTAssertEqual(published, 0)
+    }
+
+    @MainActor
+    func testTheUsageTimerRefreshesOnlyWhileConnected() async {
+        let client = RecordingDaemonClient()
+        // A sleep that yields once and returns: each loop iteration is one
+        // "tick" with no wall-clock time.
+        let coordinator = AppCoordinator(
+            client: client,
+            stream: WSStream(connect: { UnusedConnection() }, sleep: { _ in }),
+            usageRefreshInterval: 30,
+            sleep: { _ in await Task.yield() }
+        )
+        coordinator.startUsageTimer()
+        for _ in 0..<20 { await Task.yield() }
+        coordinator.stop()
+        let whileDisconnected = await client.usageCalls.count
+        XCTAssertEqual(whileDisconnected, 0)
+
+        await coordinator.handle(.connected)
+        coordinator.startUsageTimer()
+        var polls = 0
+        while await client.usageCalls.isEmpty, polls < 200 { await Task.yield(); polls += 1 }
+        coordinator.stop()
+        let calls = await client.usageCalls
+        XCTAssertFalse(calls.isEmpty)
+        XCTAssertTrue(calls.allSatisfy { $0 == false })
+    }
+
+    func testUsageRefreshIntervalIsReadFromTheEnvironmentAndFlooredAtTheDaemonCache() {
+        XCTAssertEqual(AppCoordinatorConfig.fromEnvironment(environment: [:]).usageRefreshInterval, 300)
+        XCTAssertEqual(AppCoordinatorConfig.fromEnvironment(environment: ["SWARMERY_NOTCH_USAGE_REFRESH": "60"]).usageRefreshInterval, 60)
+        XCTAssertEqual(AppCoordinatorConfig.fromEnvironment(environment: ["SWARMERY_NOTCH_USAGE_REFRESH": "5"]).usageRefreshInterval, 300)
+        XCTAssertEqual(AppCoordinatorConfig.fromEnvironment(environment: ["SWARMERY_NOTCH_USAGE_REFRESH": "abc"]).usageRefreshInterval, 300)
+        XCTAssertEqual(AppCoordinatorConfig(linger: 6, usageRefreshInterval: 1).usageRefreshInterval, 30)
     }
 }

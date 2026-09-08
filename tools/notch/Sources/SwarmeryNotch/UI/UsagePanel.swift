@@ -106,7 +106,11 @@ public struct UsagePanelViewModel: Equatable {
 struct UsagePanel: View {
     let usage: UsageReport?
     var onCollapse: (() -> Void)? = nil
+    /// Re-fetch with the daemon cache bypassed; called on the refresh button
+    /// and once when the panel appears, so the footer is never hours old.
+    var onRefresh: (() -> Void)? = nil
     @State private var selectedAccount: String?
+    @State private var spinning = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -115,6 +119,24 @@ struct UsagePanel: View {
                     .foregroundStyle(WidgetPalette.accent)
                 Text("Usage").font(.callout.bold())
                 Spacer()
+                if let onRefresh {
+                    Button {
+                        spinning = true
+                        onRefresh()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(spinning ? 360 : 0))
+                            .animation(spinning ? .linear(duration: 0.6) : .default, value: spinning)
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(Color.primary.opacity(0.08)))
+                            .overlay(Circle().strokeBorder(WidgetPalette.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Refresh usage")
+                    .accessibilityLabel("Refresh usage")
+                }
                 if let onCollapse {
                     PanelCloseButton(action: onCollapse)
                 }
@@ -149,6 +171,8 @@ struct UsagePanel: View {
         }
         .padding(12)
         .frame(width: ExpandedPanel.panelWidth)
+        .onAppear { onRefresh?() }
+        .onChange(of: usage?.generatedAt) { _, _ in spinning = false }
     }
 
     private func providerCard(_ provider: UsagePanelViewModel.Provider) -> some View {
