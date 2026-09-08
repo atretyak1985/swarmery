@@ -105,7 +105,6 @@ public struct UsagePanelViewModel: Equatable {
 
 struct UsagePanel: View {
     let usage: UsageReport?
-    let onCollapse: () -> Void
     @State private var selectedAccount: String?
 
     var body: some View {
@@ -114,11 +113,6 @@ struct UsagePanel: View {
                 Image(systemName: "gauge.with.dots.needle.33percent")
                     .foregroundStyle(WidgetPalette.accent)
                 Text("Usage").font(.callout.bold())
-                Spacer()
-                Button(action: onCollapse) { Image(systemName: "chevron.right") }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Collapse")
             }
             if let model = UsagePanelViewModel(usage: usage) {
                 if model.accounts.count > 1 {

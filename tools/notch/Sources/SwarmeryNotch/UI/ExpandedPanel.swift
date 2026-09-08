@@ -9,10 +9,11 @@ struct ExpandedPanel: View {
 
     let state: AttentionState
     let actions: WidgetActions
-    /// Present for the right-edge placement: the panel is opened by a click,
-    /// so it needs a visible way to close. The notch placement collapses on
-    /// mouse-out and passes nil.
-    var onCollapse: (() -> Void)? = nil
+    /// The right-edge placement titles the panel, since it stands apart from
+    /// the tab that opened it; the notch placement grows out of the strip and
+    /// needs no title. Closing is a click on the tab or anywhere outside the
+    /// widget, so the header carries no control of its own.
+    var showsHeader: Bool = false
     /// The notch panel carries the usage strip; the right-edge sessions panel
     /// does not — usage has its own tab and panel there.
     var showsUsage: Bool = true
@@ -26,18 +27,11 @@ struct ExpandedPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let onCollapse {
+            if showsHeader {
                 HStack(spacing: 6) {
                     Image(systemName: "circle.hexagongrid.fill")
                         .foregroundStyle(state.tabTint)
                     Text("Swarmery").font(.callout.bold())
-                    Spacer()
-                    Button(action: onCollapse) {
-                        Image(systemName: "chevron.right")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Collapse")
                 }
             }
             if !state.isConnected {
