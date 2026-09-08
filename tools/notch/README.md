@@ -51,10 +51,10 @@ make install
 This builds a release binary, assembles `Swarmery Notch.app`, copies it to
 `~/Applications/Swarmery Notch.app`, writes the LaunchAgent
 (`~/Library/LaunchAgents/com.swarmery.notch.plist`), and loads it — the widget
-appears in the notch/menu bar within a couple of seconds. Re-running
-`make install` after a rebuild reinstalls the app and restarts the running
-LaunchAgent on the new build (`launchctl kickstart -k`), the same ergonomics as
-`tools/swarmery`'s own `make install`.
+appears on the right edge within a couple of seconds. Re-running
+`make install` after a rebuild stops the running LaunchAgent first, swaps the
+bundle, and loads it again on the new build (`bootout` → copy → `bootstrap`);
+the running process is never left with its `.app` deleted underneath it.
 
 `make restart` kicks an already-installed LaunchAgent without rebuilding —
 useful if the widget looks stuck for some other reason.
