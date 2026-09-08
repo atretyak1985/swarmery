@@ -16,6 +16,8 @@ public struct WidgetActions: Sendable {
     public let openDashboard: @MainActor @Sendable (Session) -> Void
     public let stop: @MainActor @Sendable (Session) -> Void
     public let quit: @MainActor @Sendable () -> Void
+    /// Usage panel: re-fetch `/api/usage` with the daemon cache bypassed.
+    public let refreshUsage: @MainActor @Sendable () -> Void
 
     public init(
         approve: @escaping @MainActor @Sendable (Int) -> Void,
@@ -23,7 +25,8 @@ public struct WidgetActions: Sendable {
         focus: @escaping @MainActor @Sendable (Session) -> Void,
         openDashboard: @escaping @MainActor @Sendable (Session) -> Void,
         stop: @escaping @MainActor @Sendable (Session) -> Void,
-        quit: @escaping @MainActor @Sendable () -> Void
+        quit: @escaping @MainActor @Sendable () -> Void,
+        refreshUsage: @escaping @MainActor @Sendable () -> Void = {}
     ) {
         self.approve = approve
         self.deny = deny
@@ -31,5 +34,6 @@ public struct WidgetActions: Sendable {
         self.openDashboard = openDashboard
         self.stop = stop
         self.quit = quit
+        self.refreshUsage = refreshUsage
     }
 }

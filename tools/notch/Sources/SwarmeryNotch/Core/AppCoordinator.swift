@@ -8,9 +8,16 @@ import Foundation
 
 public struct AppCoordinatorConfig: Sendable {
     public let linger: TimeInterval
+    /// Seconds between background `GET /api/usage` refreshes. The daemon
+    /// itself caches for 30 s, so anything below that is pointless; default
+    /// 300 (the dashboard polls at the same cadence).
+    public let usageRefreshInterval: TimeInterval
+    public static let defaultUsageRefreshInterval: TimeInterval = 300
+    public static let minimumUsageRefreshInterval: TimeInterval = 30
 
-    public init(linger: TimeInterval) {
+    public init(linger: TimeInterval, usageRefreshInterval: TimeInterval = AppCoordinatorConfig.defaultUsageRefreshInterval) {
         self.linger = linger
+        self.usageRefreshInterval = max(usageRefreshInterval, Self.minimumUsageRefreshInterval)
     }
 
     /// `SWARMERY_NOTCH_LINGER` overrides the default 6s the panel stays open
@@ -26,7 +33,9 @@ public struct AppCoordinatorConfig: Sendable {
         let raw = environment["SWARMERY_NOTCH_LINGER"]
         let parsed = raw.flatMap(TimeInterval.init)
         let linger = parsed.flatMap { $0 > 0 ? $0 : nil } ?? 6
-        return AppCoordinatorConfig(linger: linger)
+        let rawInterval = environment["SWARMERY_NOTCH_USAGE_REFRESH"].flatMap(TimeInterval.init)
+        let interval = rawInterval.flatMap { $0 >= minimumUsageRefreshInterval ? $0 : nil } ?? defaultUsageRefreshInterval
+        return AppCoordinatorConfig(linger: linger, usageRefreshInterval: interval)
     }
 }
 
@@ -37,14 +46,28 @@ public final class AppCoordinator {
 
     private let client: any DaemonClientProtocol
     private let stream: WSStream
+    private let usageRefreshInterval: TimeInterval
+    private let sleep: @Sendable (TimeInterval) async -> Void
     private var streamTask: Task<Void, Never>?
+    private var usageTask: Task<Void, Never>?
+    /// True while a usage refresh is in flight — a second request (timer +
+    /// button, or two quick clicks) is dropped rather than queued.
+    public private(set) var isRefreshingUsage = false
 
-    public init(client: any DaemonClientProtocol, stream: WSStream) {
+    public init(
+        client: any DaemonClientProtocol,
+        stream: WSStream,
+        usageRefreshInterval: TimeInterval = AppCoordinatorConfig.defaultUsageRefreshInterval,
+        sleep: @escaping @Sendable (TimeInterval) async -> Void = WSStream.defaultSleep
+    ) {
         self.client = client
         self.stream = stream
+        self.usageRefreshInterval = usageRefreshInterval
+        self.sleep = sleep
     }
 
     public func start() {
+        startUsageTimer()
         streamTask?.cancel()
         streamTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -57,6 +80,40 @@ public final class AppCoordinator {
     public func stop() {
         streamTask?.cancel()
         streamTask = nil
+        usageTask?.cancel()
+        usageTask = nil
+    }
+
+    /// Background cadence for `GET /api/usage`. Started by `start()`; each
+    /// tick is skipped while disconnected (the reconnect snapshot brings
+    /// usage along anyway).
+    public func startUsageTimer() {
+        usageTask?.cancel()
+        usageTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.sleep(self.usageRefreshInterval)
+                if Task.isCancelled { return }
+                guard self.state.isConnected else { continue }
+                await self.refreshUsage(fresh: false)
+            }
+        }
+    }
+
+    /// On-demand refresh (panel opened, refresh button). `fresh` asks the
+    /// daemon to bypass its own cache, so the footer's "Updated" moves.
+    public func refreshUsage(fresh: Bool) async {
+        guard !isRefreshingUsage else { return }
+        isRefreshingUsage = true
+        defer { isRefreshingUsage = false }
+        do {
+            let usage = try await client.usage(fresh: fresh)
+            state = AttentionModel.reduce(state, .usageUpdated(usage))
+            publish()
+        } catch {
+            // Keep the last known report; the daemon-offline badge (via the
+            // WS stream) is the signal for a dead daemon, not a missing refresh.
+        }
     }
 
     /// Not `private`: `AppCoordinatorTests` drives this directly -- the

@@ -89,7 +89,7 @@ struct NotchRootView: View {
         case .expanded:
             switch (viewState.placement, viewState.panel) {
             case (.rightEdge, .usage):
-                UsagePanel(usage: viewState.attention.usage, onCollapse: onCollapse)
+                UsagePanel(usage: viewState.attention.usage, onCollapse: onCollapse, onRefresh: actions.refreshUsage)
             case (.rightEdge, .sessions):
                 ExpandedPanel(
                     state: viewState.attention, actions: actions,

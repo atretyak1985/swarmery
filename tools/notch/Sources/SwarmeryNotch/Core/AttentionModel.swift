@@ -48,6 +48,9 @@ public enum AttentionEvent: Sendable {
     /// never by this type).
     case permissionResolved(PermissionRequest, at: Date)
     case connectionChanged(Bool)
+    /// A fresh `GET /api/usage` — the only part of the snapshot that has no
+    /// WS frame of its own, so it is re-fetched on a timer and on demand.
+    case usageUpdated(UsageReport?)
 }
 
 /// A stateless reducer: `reduce(state, event) -> newState`. No singletons, no
@@ -70,6 +73,10 @@ public enum AttentionModel {
         case let .permissionResolved(request, at):
             next.pendingApprovals.removeValue(forKey: request.id)
             next.lastResolvedAt = at
+        case let .usageUpdated(usage):
+            var next = state
+            next.usage = usage
+            return next
         case let .connectionChanged(isConnected):
             next.isConnected = isConnected
         }

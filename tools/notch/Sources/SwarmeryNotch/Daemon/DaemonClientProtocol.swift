@@ -7,6 +7,9 @@ import Foundation
 
 public protocol DaemonClientProtocol: Sendable {
     func snapshot() async throws -> DaemonSnapshot
+    /// `GET /api/usage`; `fresh` bypasses the daemon's 30-second cache
+    /// (`?fresh=1`, what the dashboard's refresh button sends).
+    func usage(fresh: Bool) async throws -> UsageReport
     func approve(id: Int, decision: ApprovalDecision, reason: String?) async throws
     func stop(sessionId: Int) async throws
     func kill(sessionId: Int, force: Bool) async throws

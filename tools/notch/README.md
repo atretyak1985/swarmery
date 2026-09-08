@@ -38,7 +38,10 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
   One card per provider (an account switcher appears when the daemon reports
   more than one account), each plan window with a progress bar, `N% used`,
   `M% left`, the reset countdown and clock time, and the daemon's pace line
-  (`27% under pace`). Same close gestures as the sessions panel.
+  (`27% under pace`), and an `Updated hh:mm:ss` footer. Usage is re-fetched
+  in the background every 5 minutes, again each time the panel opens, and on
+  the round ↻ button in the header (which asks the daemon to bypass its own
+  30-second cache). Same close gestures as the sessions panel.
 
 Swarmery Notch is a thin client: every byte of data it shows comes from the
 swarmery daemon on `:7777` (`GET /api/sessions`, `/api/approvals`, `/api/usage`,
@@ -130,6 +133,9 @@ installed plist from the template, so re-apply the block after an upgrade.
 - **`SWARMERY_NOTCH_EDGE_ANCHOR`** — where on the right edge the tab sits, as
   a fraction of the screen height from the top; default `0.3`. Accepted range
   `0.05`–`0.95`, anything else keeps the default.
+- **`SWARMERY_NOTCH_USAGE_REFRESH`** — seconds between background usage
+  refreshes, default `300`; values under `30` (the daemon's own cache window)
+  and non-numeric values keep the default.
 - **`SWARMERY_NOTCH_LINGER`** — seconds the panel stays expanded after the
   most recent approval/session resolution before auto-collapsing, default `6`.
   Zero, negative, or non-numeric values fall back to the default rather than
