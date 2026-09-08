@@ -118,20 +118,41 @@ func EnvFor(projectPath string) []string {
 // — the default account — because a silent spawn under the default beats a
 // failed spawn.
 func EnvForAccount(key string) []string {
+	dir, ok := ConfigDirForAccount(key)
+	if !ok {
+		return nil
+	}
+	return []string{configDirEnv + "=" + dir}
+}
+
+// ConfigDirForAccount is the config dir a spawn under `key` actually reads —
+// the same answer EnvForAccount encodes as CLAUDE_CONFIG_DIR, exposed for the
+// callers that must touch that dir's files directly (a settings.json snapshot
+// before a user-scope install, a plugin cache lookup). Discover wins over the
+// canonical path so an account living in a non-canonical dir is still found.
+// ok=false for the default account and for an unresolvable key: the caller then
+// keeps the default ~/.claude it already holds, which is exactly what the spawn
+// falls back to.
+func ConfigDirForAccount(key string) (string, bool) {
 	key = strings.TrimSpace(key)
 	if key == "" || key == ingest.DefaultAccount {
-		return nil
+		return "", false
 	}
 	for _, a := range Discover() {
 		if a.Key == key {
-			return []string{configDirEnv + "=" + a.ConfigDir}
+			return a.ConfigDir, true
 		}
 	}
 	dir, err := ConfigDirFor(key)
 	if err != nil {
-		return nil
+		return "", false
 	}
-	return []string{configDirEnv + "=" + dir}
+	return dir, true
+}
+
+// ConfigDirForProject is ConfigDirForAccount over the project's own binding.
+func ConfigDirForProject(projectPath string) (string, bool) {
+	return ConfigDirForAccount(Binding(projectPath))
 }
 
 // ── settings surgery helpers (internal/hookcfg's, verbatim in behaviour) ──────

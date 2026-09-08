@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,8 +232,11 @@ func TestRunInstallFallsBackToUserScopeOnSymlinkedClaudeDir(t *testing.T) {
 	if strings.Join(args, " ") != strings.Join(want, " ") {
 		t.Errorf("args = %v, want %v — project scope cannot succeed here", args, want)
 	}
-	if cwd != "" {
-		t.Errorf("cwd = %q, want empty for a user-scope install", cwd)
+	// User scope ignores cwd, but the dir is what binds the call to the
+	// project's Claude account — a bare "" would install into ~/.claude for a
+	// project whose sessions run somewhere else entirely.
+	if cwd != dir {
+		t.Errorf("cwd = %q, want the project dir %q so the account env applies", cwd, dir)
 	}
 
 	raw, err := os.ReadFile(userSettings)
@@ -316,4 +320,81 @@ func status(t *testing.T, s *Service, id int64) string {
 		t.Fatal(err)
 	}
 	return st
+}
+
+// A project bound to a non-default Claude account runs its sessions against
+// that account's config dir, so a user-scope fallback install must land there
+// too: every CLI call carries the project dir (Runner turns it into
+// CLAUDE_CONFIG_DIR), and the global-enable snapshot/revert reads the ACCOUNT's
+// settings.json, not the daemon's default. Before this, a symlinked-.claude
+// project on account X got the pack installed into ~/.claude while its generate
+// step ran in ~/.claude-X and reported "no such skill".
+func TestRunUserScopeFallbackTargetsTheAccountConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("agents", filepath.Join(dir, ".claude")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	if err := claudeacct.SetBinding(dir, "acct"); err != nil {
+		t.Fatalf("SetBinding: %v", err)
+	}
+
+	acctDir := filepath.Join(home, ".claude-acct")
+	if err := os.MkdirAll(acctDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	acctSettings := filepath.Join(acctDir, "settings.json")
+	if err := os.WriteFile(acctSettings, []byte(`{"enabledPlugins":{"core@swarmery":true}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The daemon's default dir must stay untouched throughout.
+	defaultDir := t.TempDir()
+	defaultSettings := filepath.Join(defaultDir, "settings.json")
+	if err := os.WriteFile(defaultSettings, []byte(`{"enabledPlugins":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &stubRunner{}
+	r.onRun = func() { // the real CLI writes the enable into the ACCOUNT's settings
+		if err := os.WriteFile(acctSettings,
+			[]byte(`{"enabledPlugins":{"core@swarmery":true,"graphify-pack@swarmery":true}}`), 0o644); err != nil {
+			t.Error(err)
+		}
+	}
+	s := newSvc(t, r, map[string]GenerateAction{})
+	s.ClaudeDir = defaultDir
+
+	id, _, _ := s.Enqueue(1, "graphify-pack")
+	if err := s.Run(context.Background(), id, dir, "graphify-pack"); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, c := range r.calls {
+		if r.dirs[i] != dir {
+			t.Errorf("call %v ran with dir %q, want the project dir %q — only that binds the account env", c, r.dirs[i], dir)
+		}
+	}
+
+	raw, err := os.ReadFile(acctSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := got["enabledPlugins"]["graphify-pack@swarmery"]; present {
+		t.Error("the account's global enable was not reverted — the snapshot was taken from the wrong config dir")
+	}
+	if got["enabledPlugins"]["core@swarmery"] != true {
+		t.Error("a foreign global enable in the account dir was clobbered by the revert")
+	}
+	if b, err := os.ReadFile(defaultSettings); err != nil || string(b) != `{"enabledPlugins":{}}` {
+		t.Errorf("default settings.json changed to %q — the revert touched the wrong dir", string(b))
+	}
 }

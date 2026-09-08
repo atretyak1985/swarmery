@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
 // foreignSettings is a settings.local.json that belongs to Claude Code, not to
@@ -371,5 +373,34 @@ func TestEnvForAccountUnsafeKeyIsNil(t *testing.T) {
 		if got := EnvForAccount(key); got != nil {
 			t.Errorf("EnvForAccount(%q) = %v, want nil", key, got)
 		}
+	}
+}
+
+func TestConfigDirForAccountResolvesBoundKeyOnly(t *testing.T) {
+	home := t.TempDir()
+	prev := userHomeDir
+	userHomeDir = func() (string, error) { return home, nil }
+	t.Cleanup(func() { userHomeDir = prev })
+
+	if _, ok := ConfigDirForAccount(""); ok {
+		t.Error("empty key must not resolve — the caller keeps its default dir")
+	}
+	if _, ok := ConfigDirForAccount(ingest.DefaultAccount); ok {
+		t.Error("the default account must not resolve — it IS the default dir")
+	}
+	got, ok := ConfigDirForAccount("acct")
+	if !ok || got != filepath.Join(home, ".claude-acct") {
+		t.Errorf("ConfigDirForAccount(acct) = %q, %v; want %q, true", got, ok, filepath.Join(home, ".claude-acct"))
+	}
+
+	project := t.TempDir()
+	if _, ok := ConfigDirForProject(project); ok {
+		t.Error("an unbound project must not resolve")
+	}
+	if err := SetBinding(project, "acct"); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := ConfigDirForProject(project); !ok || got != filepath.Join(home, ".claude-acct") {
+		t.Errorf("ConfigDirForProject = %q, %v after binding", got, ok)
 	}
 }
