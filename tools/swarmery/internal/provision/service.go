@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 )
@@ -115,8 +116,14 @@ func (s *Service) run(ctx context.Context, jobID int64, projectPath, pack string
 	s.sem <- struct{}{}
 	defer func() { <-s.sem }()
 
+	// Every CLI call in this pipeline carries projectPath as its dir, even the
+	// ones whose outcome does not depend on cwd: the dir is what binds the call
+	// to the project's Claude account (Runner resolves CLAUDE_CONFIG_DIR from
+	// it). A bare "" runs against the default ~/.claude, so a project bound to
+	// another account would have its marketplace index refreshed and its pack
+	// installed in a config dir the generate step never reads.
 	s.set(jobID, "installing", "updating marketplace index", "", false)
-	if _, err := s.Runner.Claude(ctx, "", "", "plugin", "marketplace", "update", "swarmery"); err != nil {
+	if _, err := s.Runner.Claude(ctx, projectPath, "", "plugin", "marketplace", "update", "swarmery"); err != nil {
 		s.set(jobID, "failed", "", err.Error(), true)
 		return err
 	}
@@ -176,14 +183,21 @@ func (s *Service) install(ctx context.Context, projectPath, pack string) error {
 		return err
 	}
 
-	snap, cerr := onboard.CaptureGlobalEnable(s.ClaudeDir, id)
+	// The user settings.json to snapshot is the one the install will write: the
+	// account's config dir when the project is bound to one, else the default.
+	claudeDir := s.ClaudeDir
+	if d, ok := claudeacct.ConfigDirForProject(projectPath); ok {
+		claudeDir = d
+	}
+	snap, cerr := onboard.CaptureGlobalEnable(claudeDir, id)
 	if cerr != nil {
 		// Refuse rather than risk an irreversible global enable.
 		return fmt.Errorf("refusing to install %s: %s has a symlinked .claude, so only a "+
 			"user-scope install is possible, and that would enable the pack for every "+
 			"project on this machine without a way to revert it: %w", id, projectPath, cerr)
 	}
-	_, ierr := s.Runner.Claude(ctx, "", "", "plugin", "install", id)
+	// projectPath as dir binds the account env; user scope itself ignores cwd.
+	_, ierr := s.Runner.Claude(ctx, projectPath, "", "plugin", "install", id)
 	if rerr := snap.Restore(); rerr != nil {
 		log.Printf("provision: user-scope install of %s left the global enable in place: %v", id, rerr)
 	}
