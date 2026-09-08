@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.swarmery.notch</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>__APP_PATH__</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<!--
+	  KeepAlive.SuccessfulExit=false means launchd restarts this job only when
+	  it exits with a non-zero (crash) status -- never after a clean exit(0).
+	  This is deliberate, not an oversight: the widget's own WSStream reconnect
+	  loop (Sources/SwarmeryNotch/Daemon/WSStream.swift) already retries the
+	  daemon connection with capped backoff and just shows the offline badge
+	  while the daemon is down (AppCoordinator never exits the process for
+	  that) -- so a daemon restart gives launchd nothing to restart-loop over,
+	  and `launchctl print` keeps reporting the same PID throughout. What this
+	  DOES do: a deliberate Quit from the widget's own menu calls
+	  NSApp.terminate(nil), a SuccessfulExit, and is correctly NOT respawned.
+	  ThrottleInterval is a defensive floor against a genuine crash loop (e.g.
+	  a future startup bug), on top of launchd's own default throttling.
+	-->
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>StandardOutPath</key>
+	<string>__LOG_DIR__/notch.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>__LOG_DIR__/notch.err.log</string>
+</dict>
+</plist>

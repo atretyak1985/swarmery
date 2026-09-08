@@ -64,10 +64,18 @@ func escalateKill(pid int, procStartedAt, sessionUUID string, delay time.Duratio
 	log.Printf("prockill: escalated to SIGKILL pid %d (session %s survived SIGTERM for %s)", pid, sessionUUID, delay)
 }
 
+// sessionStartProcInfo resolves the process behind a SessionStart PID.
+// Swappable in tests so terminal-identity coverage does not depend on a real
+// OS process literally named "claude"; production always uses the real OS
+// provider.
+var sessionStartProcInfo = procwatch.OsProvider{}.Info
+
 // POST /api/hooks/session-start — called by the hookshim when a new Claude
 // Code session starts. Binds the reported PID to the session after verifying
-// the process command is "claude", then answers 200 + additionalContext when
-// this project has unloadable plugins, or 204 when it does not.
+// the process command is "claude", records the terminal identity the shim
+// read from its environment (migration 0068) plus the tty derived from that
+// same PID, then answers 200 + additionalContext when this project has
+// unloadable plugins, or 204 when it does not.
 func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		SessionID string `json:"session_id"`
@@ -76,30 +84,66 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 		// project path, and at SessionStart the sessions row may not exist yet,
 		// so this — not a sessions lookup — is how the project is resolved.
 		CWD string `json:"cwd"`
+		// Terminal is the hookshim's terminal-identity object
+		// (docs/hooks-protocol.md); every field is "" when its source
+		// variable was absent (a daemon-spawned `claude -p` run sends none).
+		// sessionId (ITERM_SESSION_ID/TERM_SESSION_ID) rides along on the wire
+		// but is not decoded here — no column stores it in this phase.
+		Terminal struct {
+			Program  string `json:"program"`
+			FocusURL string `json:"focusUrl"`
+			BundleID string `json:"bundleId"`
+		} `json:"terminal"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PID <= 0 || body.SessionID == "" {
 		w.WriteHeader(http.StatusNoContent) // fire-and-forget — never error back
 		return
 	}
 
-	info, err := procwatch.OsProvider{}.Info(body.PID)
+	info, err := sessionStartProcInfo(body.PID)
 	if err != nil || info == nil || !strings.Contains(strings.ToLower(info.Command), "claude") {
 		w.WriteHeader(http.StatusNoContent) // not a claude process — ignore silently
 		return
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err = h.DB.Exec(`UPDATE sessions SET pid = ?, pid_source = 'hook',
-		proc_started_at = ?, proc_state = 'running', proc_checked_at = ?
+	res, err := h.DB.Exec(`UPDATE sessions SET pid = ?, pid_source = 'hook',
+		proc_started_at = ?, proc_state = 'running', proc_checked_at = ?,
+		term_program = ?, term_focus_url = ?, term_bundle_id = ?, term_tty = ?
 		WHERE session_uuid = ?`,
-		body.PID, info.StartTime, now, body.SessionID); err != nil {
+		body.PID, info.StartTime, now,
+		nullStr(body.Terminal.Program), nullStr(body.Terminal.FocusURL), nullStr(body.Terminal.BundleID), nullStr(info.TTY),
+		body.SessionID)
+	if err != nil {
 		log.Printf("prockill: bind pid for session %s: %v", body.SessionID, err)
+	} else if n, _ := res.RowsAffected(); n == 0 {
+		// The transcript hasn't been ingested yet, so there is no sessions row
+		// to UPDATE. Park the terminal identity — ingest applies it the moment
+		// it mints the row (session_started path) — so the session does not
+		// lose its terminal to this race. The pid/proc_state columns above are
+		// lost to the same race today; that gap predates this phase and stays
+		// out of scope here.
+		ingest.ParkPendingTerminal(body.SessionID, ingest.SessionTerminal{
+			Program:  body.Terminal.Program,
+			FocusURL: body.Terminal.FocusURL,
+			BundleID: body.Terminal.BundleID,
+			TTY:      info.TTY,
+		})
 	}
 	if ctx := h.driftContext(body.CWD); ctx != "" {
 		writeJSON(w, map[string]string{"additionalContext": ctx}, nil)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// nullStr converts "" to a SQL NULL bind value so an absent terminal field
+// stores as NULL, not the empty string.
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // maxDriftContextLines caps the injection: this text is prepended to every

@@ -1,0 +1,26 @@
+[
+  {
+    "id": 601,
+    "sessionId": 1042,
+    "toolName": "Bash",
+    "requestJson": "{\"session_id\":\"a1b2c3d4-1111-2222-3333-444455556666\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"npm run lint\",\"description\":\"Lint the webhook handler\"}}",
+    "status": "pending",
+    "requestedAt": "2026-09-07T15:58:33.568Z",
+    "resolvedAt": null,
+    "resolvedVia": null,
+    "reason": null,
+    "expiresAt": "2026-09-07T16:00:33.568Z"
+  },
+  {
+    "id": 600,
+    "sessionId": 2307,
+    "toolName": "Write",
+    "requestJson": "{\"session_id\":\"378d69b2-9942-40b4-b34a-e702a431b3e0\",\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"tools/notch/Package.swift\",\"content\":\"…\"}}",
+    "status": "approved",
+    "requestedAt": "2026-09-07T16:17:02.000Z",
+    "resolvedAt": "2026-09-07T16:17:05.000Z",
+    "resolvedVia": "dashboard",
+    "reason": null,
+    "expiresAt": "2026-09-07T16:19:02.000Z"
+  }
+]

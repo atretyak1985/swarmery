@@ -15,6 +15,10 @@ type ProcInfo struct {
 	PID       int
 	StartTime string // lstart string (PID-reuse guard)
 	Command   string // process command name
+	// TTY is the controlling terminal device (e.g. "ttys004"), or "" when
+	// the process has none (a daemon-spawned `claude -p` run, ps reports
+	// "??"). Used to derive a session's terminal identity (migration 0068).
+	TTY string
 }
 
 // Provider is the OS interface used by Ticker — swappable for tests.

@@ -179,6 +179,25 @@ export interface SessionPlanGroup {
   phaseName: string | null;
 }
 
+/**
+ * Go: sessionTerminalDTO — the terminal tab that owned a session at
+ * SessionStart (migration 0068), captured once by the hookshim from its
+ * environment. Every field is individually optional (its source variable was
+ * absent); the whole object is null (Session.terminal) when none of the four
+ * were ever set — a daemon-spawned run, a pre-0068 row, or a hook that never
+ * reached a live daemon.
+ */
+export interface SessionTerminal {
+  /** TERM_PROGRAM — readable fallback (WarpTerminal, iTerm.app, Apple_Terminal, vscode). */
+  program?: string;
+  /** WARP_FOCUS_URL — Warp's own deep link back to this exact tab. */
+  focusUrl?: string;
+  /** __CFBundleIdentifier — set by macOS for every app-bundle-launched process. */
+  bundleId?: string;
+  /** Derived daemon-side from the bound PID (procwatch), never from the shim's environment. */
+  tty?: string;
+}
+
 /** Go: sessionDTO */
 export interface Session {
   id: number;
@@ -257,6 +276,15 @@ export interface Session {
    * interactive session. Drives the Sessions page's group-by-plan view.
    */
   planGroup?: SessionPlanGroup | null;
+  /**
+   * The terminal tab that owned this session at SessionStart (migration
+   * 0068). Always present as an explicit `null` (never an omitted key) on
+   * responses from a daemon that has the column — that null is the notch
+   * widget's signal to offer "open in dashboard" instead of "focus the
+   * terminal". Optional here only for backward compatibility with an older
+   * daemon that predates this field.
+   */
+  terminal?: SessionTerminal | null;
 }
 
 /** Go: turnDTO */

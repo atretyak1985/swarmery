@@ -137,6 +137,90 @@ payload beyond recording liveness.
   `GET /api/health` (`HealthResponse`, additive optional field). Both hook
   endpoints refresh the heartbeat.
 
+## POST /api/hooks/session-start
+
+Fired once when a Claude Code session starts (`SessionStart` hook). Binds the
+session's OS process, injects plugin-drift context when the project has
+unloadable plugins, and — as of the notch-companion wave (migration 0068,
+additive) — records which terminal tab owns the session.
+
+### Request
+
+The shim never forwards the `SessionStart` hook stdin verbatim: it augments it
+with facts only the shim's own process context can answer (`injectSessionStartExtras`,
+`internal/hookshim/shim.go`) before POSTing:
+
+```json
+{
+  "session_id": "<uuid>",
+  "cwd": "<project path>",
+  "pid": 12345,
+  "terminal": {
+    "program": "WarpTerminal",
+    "focusUrl": "warp://focus/…",
+    "bundleId": "dev.warp.Warp-Stable",
+    "sessionId": "w0t1p2:…"
+  }
+}
+```
+
+- `pid` is the hookshim's PPID (the parent `claude` process) — used to bind
+  process liveness (migration 0009) and, as of migration 0068, to derive the
+  session's tty.
+- `terminal` is the terminal-identity object, read from the environment the
+  shim inherits and never guessed:
+
+  | Field | Source | Notes |
+  |---|---|---|
+  | `program` | `TERM_PROGRAM` | Readable fallback (`WarpTerminal`, `iTerm.app`, `Apple_Terminal`, `vscode`). |
+  | `focusUrl` | `WARP_FOCUS_URL` | Warp's own deep link back to this exact tab; empty for every other terminal. |
+  | `bundleId` | `__CFBundleIdentifier` | Set by macOS for every process launched from an app bundle — the most reliable "which terminal app" hint there is. |
+  | `sessionId` | `ITERM_SESSION_ID`, falling back to `TERM_SESSION_ID` | The terminal emulator's own per-tab identifier. Rides the wire but is **not persisted** by the daemon in this phase — reserved for a future per-tab focus feature. |
+
+  Every field is individually omitted (not sent as `""`) when its source
+  variable is absent, so `terminal` itself can arrive as `{}`. A
+  daemon-spawned run (`claude -p` from phaserun/dispatch) has no terminal at
+  all: the shim runs inside the daemon's own environment there, so every
+  field is absent.
+
+### Response
+
+| Status | Body | When |
+|---|---|---|
+| `200` | `{"additionalContext": "<markdown>"}` | The project has active `error`-severity plugin-drift findings (`driftContext`) — injected into the session as `hookSpecificOutput.additionalContext`. |
+| `204` (no body) | — | The normal case: PID/terminal recorded, nothing to say. |
+| `204` (no body) | — | The body is undecodable, or `pid`/`session_id` are missing/invalid, or the PID does not resolve to a process whose command contains `"claude"` — silent no-op, same fire-and-forget posture as every hook endpoint. |
+
+### Side effects (daemon)
+
+On a PID that verifies as a live `claude` process (`hookSessionStart`,
+`internal/api/prockill.go`):
+
+1. `sessions.pid`, `pid_source = 'hook'`, `proc_started_at`, `proc_state = 'running'`,
+   `proc_checked_at` are set via `UPDATE … WHERE session_uuid = ?`.
+2. The tty is derived from that same PID (procwatch's `ps -o tty=`, normalized
+   to `""` when the process has none) and, together with `terminal.program` /
+   `.focusUrl` / `.bundleId`, written to `sessions.term_program`,
+   `term_focus_url`, `term_bundle_id`, `term_tty` (migration 0068) in the same
+   `UPDATE`.
+3. **Race with ingest**: at `SessionStart` the transcript may not be ingested
+   yet, so the `UPDATE` above can affect zero rows. When that happens the
+   terminal identity is **parked** in an in-memory map keyed by
+   `session_uuid` (`ingest.ParkPendingTerminal`) and applied the moment the
+   JSONL tail mints the row (`ingest`'s session-creation path), in the same
+   transaction as the `INSERT` — a session never loses its terminal to this
+   race. `pid`/`proc_state` are not parked this way; that gap predates this
+   phase.
+4. `driftContext(cwd)` renders the project's active error-severity plugin
+   findings, capped at 5 lines, and — only when there is something to
+   say — kicks an out-of-band drift refresh (`driftRefresher`).
+
+`GET /api/sessions/{id}` and the sessions list project the four `term_*`
+columns as `terminal: {program, focusUrl, bundleId, tty} | null` — an explicit
+JSON `null` (never an omitted key) when none of the four were ever set. That
+`null` is what a terminal-aware client uses to fall back to "open in
+dashboard" instead of "focus the terminal".
+
 ## Known boundary — headless sessions
 
 **`claude -p` (print/headless) sessions never fire the `PermissionRequest` hook**

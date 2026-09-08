@@ -9,6 +9,7 @@ type FakeProcess struct {
 	Command   string
 	Orphaned  bool
 	CWD       string
+	TTY       string
 }
 
 // FakeProvider is a deterministic Provider for unit tests.
@@ -19,7 +20,7 @@ type FakeProvider struct {
 func (f *FakeProvider) Info(pid int) (*ProcInfo, error) {
 	for _, p := range f.Procs {
 		if p.PID == pid {
-			return &ProcInfo{PID: p.PID, StartTime: p.StartTime, Command: p.Command}, nil
+			return &ProcInfo{PID: p.PID, StartTime: p.StartTime, Command: p.Command, TTY: p.TTY}, nil
 		}
 	}
 	return nil, nil // gone

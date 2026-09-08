@@ -1,0 +1,127 @@
+{
+  "generatedAt": "2026-09-07T16:21:04Z",
+  "providers": [
+    {
+      "account": "default",
+      "name": "Claude",
+      "status": "ok",
+      "plan": "Max",
+      "source": "oauth",
+      "windows": [
+        {
+          "key": "session-5h",
+          "label": "Session (5h)",
+          "percentUsed": 63,
+          "percentLeft": 37,
+          "resetText": "resets in 8m 55s",
+          "resetMs": 535845,
+          "resetAt": "2026-09-07T16:30:00Z",
+          "windowDurationMs": 18000000,
+          "pace": {
+            "status": "behind",
+            "percentElapsed": 97,
+            "message": "34% under pace"
+          },
+          "source": "oauth"
+        },
+        {
+          "key": "weekly",
+          "label": "Weekly",
+          "percentUsed": 24,
+          "percentLeft": 76,
+          "resetText": "resets in 4d 21h",
+          "resetMs": 423535845,
+          "resetAt": "2026-09-12T14:00:00Z",
+          "windowDurationMs": 604800000,
+          "pace": {
+            "status": "behind",
+            "percentElapsed": 30,
+            "message": "6% under pace"
+          },
+          "source": "oauth"
+        }
+      ],
+      "connectedVia": "swarmery"
+    }
+  ],
+  "accounts": [
+    {
+      "account": "default",
+      "providers": [
+        {
+          "account": "default",
+          "name": "Claude",
+          "status": "ok",
+          "plan": "Max",
+          "source": "oauth",
+          "windows": [
+            {
+              "key": "session-5h",
+              "label": "Session (5h)",
+              "percentUsed": 63,
+              "percentLeft": 37,
+              "resetText": "resets in 8m 55s",
+              "resetMs": 535845,
+              "resetAt": "2026-09-07T16:30:00Z",
+              "windowDurationMs": 18000000,
+              "pace": {
+                "status": "behind",
+                "percentElapsed": 97,
+                "message": "34% under pace"
+              },
+              "source": "oauth"
+            },
+            {
+              "key": "weekly",
+              "label": "Weekly",
+              "percentUsed": 24,
+              "percentLeft": 76,
+              "resetText": "resets in 4d 21h",
+              "resetMs": 423535845,
+              "resetAt": "2026-09-12T14:00:00Z",
+              "windowDurationMs": 604800000,
+              "pace": {
+                "status": "behind",
+                "percentElapsed": 30,
+                "message": "6% under pace"
+              },
+              "source": "oauth"
+            }
+          ],
+          "connectedVia": "swarmery"
+        }
+      ]
+    },
+    {
+      "account": "work",
+      "providers": [
+        {
+          "account": "work",
+          "name": "Claude",
+          "status": "ok",
+          "plan": "Max",
+          "source": "oauth",
+          "windows": [
+            {
+              "key": "session-5h",
+              "label": "Session (5h)",
+              "percentUsed": 28,
+              "percentLeft": 72,
+              "resetText": "resets in 3h 8m",
+              "resetMs": 11334891,
+              "resetAt": "2026-09-07T19:29:59Z",
+              "windowDurationMs": 18000000,
+              "pace": {
+                "status": "behind",
+                "percentElapsed": 37,
+                "message": "9% under pace"
+              },
+              "source": "oauth"
+            }
+          ],
+          "connectedVia": "swarmery"
+        }
+      ]
+    }
+  ]
+}
