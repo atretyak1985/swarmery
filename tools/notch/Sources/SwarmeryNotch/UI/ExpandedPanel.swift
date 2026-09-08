@@ -9,6 +9,10 @@ struct ExpandedPanel: View {
 
     let state: AttentionState
     let actions: WidgetActions
+    /// Present for the right-edge placement: the panel is opened by a click,
+    /// so it needs a visible way to close. The notch placement collapses on
+    /// mouse-out and passes nil.
+    var onCollapse: (() -> Void)? = nil
 
     private var layout: PanelLayout {
         PanelLayout(
@@ -19,6 +23,20 @@ struct ExpandedPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let onCollapse {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.hexagongrid.fill")
+                        .foregroundStyle(state.tabTint)
+                    Text("Swarmery").font(.callout.bold())
+                    Spacer()
+                    Button(action: onCollapse) {
+                        Image(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Collapse")
+                }
+            }
             if !state.isConnected {
                 OfflineBadge()
             }

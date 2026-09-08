@@ -33,8 +33,8 @@ final class WidgetPlacementTests: XCTestCase {
 
     // MARK: - Geometry
 
-    func testCompactFallbackIsFlushWithTheRightEdgeAndCentredInTheVisibleFrame() {
-        let geometry = WidgetWindowGeometry(placement: .rightEdge)
+    func testCompactFallbackIsFlushWithTheRightEdgeAndCentredOnTheAnchor() {
+        let geometry = WidgetWindowGeometry(placement: .rightEdge, edgeAnchorFromBottom: 0.5)
         let frame = geometry.frame(
             for: .compact, metrics: plainMetrics, screenFrame: screenFrame, visibleFrame: visibleFrame
         )
@@ -79,10 +79,81 @@ final class WidgetPlacementTests: XCTestCase {
     }
 
     func testWithoutAVisibleFrameTheScreenFrameIsUsed() {
-        let geometry = WidgetWindowGeometry(placement: .rightEdge)
+        let geometry = WidgetWindowGeometry(placement: .rightEdge, edgeAnchorFromBottom: 0.5)
         let frame = geometry.frame(for: .compact, metrics: plainMetrics, screenFrame: screenFrame)
         XCTAssertEqual(frame.maxX, screenFrame.maxX)
         XCTAssertEqual(frame.midY, screenFrame.midY, accuracy: 1)
+    }
+
+    // MARK: - Anchor (stays clear of Grammarly's mid-height tab)
+
+    func testDefaultAnchorSitsAboveTheVerticalMiddle() {
+        let geometry = WidgetWindowGeometry(placement: .rightEdge)
+        let frame = geometry.frame(
+            for: .compact, metrics: plainMetrics, screenFrame: screenFrame, visibleFrame: visibleFrame
+        )
+        let expectedMidY = visibleFrame.minY + visibleFrame.height * 0.7
+        XCTAssertEqual(frame.midY, expectedMidY, accuracy: 1)
+        XCTAssertGreaterThan(frame.minY, visibleFrame.midY + 40)
+    }
+
+    func testAnchorEnvironmentIsAFractionFromTheTopAndClampedToTheDefaultWhenInvalid() {
+        XCTAssertEqual(WidgetWindowGeometry.edgeAnchorFromBottom(environmentValue: "0.3"), 0.7, accuracy: 0.0001)
+        XCTAssertEqual(WidgetWindowGeometry.edgeAnchorFromBottom(environmentValue: "0.9"), 0.1, accuracy: 0.0001)
+        XCTAssertEqual(WidgetWindowGeometry.edgeAnchorFromBottom(environmentValue: nil), 0.7)
+        XCTAssertEqual(WidgetWindowGeometry.edgeAnchorFromBottom(environmentValue: "1.5"), 0.7)
+        XCTAssertEqual(WidgetWindowGeometry.edgeAnchorFromBottom(environmentValue: "abc"), 0.7)
+    }
+
+    // MARK: - Dormant hot strip
+
+    func testDormantFrameIsAThinStripFlushWithTheRightEdgeAtTheAnchor() {
+        let geometry = WidgetWindowGeometry(placement: .rightEdge, edgeAnchorFromBottom: 0.5)
+        let frame = geometry.frame(
+            for: .dormant, metrics: plainMetrics, screenFrame: screenFrame, visibleFrame: visibleFrame
+        )
+        XCTAssertEqual(frame.width, WidgetWindowGeometry.hotStripWidth)
+        XCTAssertEqual(frame.maxX, visibleFrame.maxX)
+        XCTAssertEqual(frame.midY, visibleFrame.midY, accuracy: 1)
+    }
+
+    func testDormantHasItsOwnSizeKey() {
+        XCTAssertEqual(WidgetWindowGeometry.sizeKey(.dormant), .dormant)
+        XCTAssertEqual(WidgetWindowGeometry.sizeKey(.hidden), .compact)
+    }
+
+    // MARK: - Presentation state machine
+
+    func testRightEdgeRestsDormantRevealsTheTabOnHoverAndOpensOnClickOrAttention() {
+        XCTAssertEqual(WidgetPresentation.resting(for: .rightEdge), .dormant)
+        XCTAssertEqual(
+            WidgetPresentation.target(placement: .rightEdge, attentionWantsOpen: false, pinnedOpen: false, hovering: false),
+            .dormant
+        )
+        XCTAssertEqual(
+            WidgetPresentation.target(placement: .rightEdge, attentionWantsOpen: false, pinnedOpen: false, hovering: true),
+            .compact
+        )
+        XCTAssertEqual(
+            WidgetPresentation.target(placement: .rightEdge, attentionWantsOpen: false, pinnedOpen: true, hovering: false),
+            .expanded
+        )
+        XCTAssertEqual(
+            WidgetPresentation.target(placement: .rightEdge, attentionWantsOpen: true, pinnedOpen: false, hovering: false),
+            .expanded
+        )
+    }
+
+    func testNotchKeepsItsAlwaysVisibleStripAndHoverToExpand() {
+        XCTAssertEqual(WidgetPresentation.resting(for: .notch), .compact)
+        XCTAssertEqual(
+            WidgetPresentation.target(placement: .notch, attentionWantsOpen: false, pinnedOpen: false, hovering: false),
+            .compact
+        )
+        XCTAssertEqual(
+            WidgetPresentation.target(placement: .notch, attentionWantsOpen: false, pinnedOpen: false, hovering: true),
+            .expanded
+        )
     }
 
     // MARK: - Tab tint

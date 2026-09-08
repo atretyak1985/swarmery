@@ -1,24 +1,10 @@
-// Presents the notch panel on exactly one screen: window lifecycle and
-// transition choreography.
-//
-// Adapted from notchling's WidgetPresenter.swift (MIT license, see
-// NOTICE.md) for the per-screen presenter shape and the transition
-// sequencing (resize the window before the content moves, not during --
-// once a state has been measured, its size is final, so the whole
-// transition runs inside a window that does not change). Adapted: notchling
-// wires its own session store / root view / actions; this port wires
-// `AttentionState` / `NotchRootView` / this package's `WidgetActions`.
-// Dropped: the debounced re-measure ("settle") and "grow if clipped while
-// open" refinements notchling layers on top -- pure UI polish this phase had
-// no way to visually iterate on headless, noted as a deviation in the
-// phase-3 Completion Report.
+// Owns one WidgetPanel per display and decides which presentation is on
+// screen. Adapted from notchling's WidgetPresenter (MIT, see NOTICE.md); the
+// right-edge state machine (dormant hot strip → tab on hover → panel on
+// click / attention) is ours.
 import AppKit
 import SwiftUI
 
-/// The mutable state `NotchRootView` observes. Deliberately a plain
-/// `ObservableObject` (Combine) rather than the newer `@Observable` macro --
-/// no functional difference here, and `@Published`/`ObservableObject` is the
-/// more widely portable choice across toolchains.
 @MainActor
 final class WidgetViewState: ObservableObject {
     @Published var presentation: WidgetPresentation = .hidden
@@ -34,50 +20,92 @@ final class WidgetViewState: ObservableObject {
 
 @MainActor
 public final class WidgetPresenter {
-    /// Screens are identified by display id, not by `NSScreen`: those
-    /// objects are replaced wholesale on reconfiguration, so a stored
-    /// reference goes stale the moment someone plugs in a monitor.
     public let displayID: CGDirectDisplayID
-
     private let actions: WidgetActions
     private let viewState: WidgetViewState
     private var panel: WidgetPanel?
     private var geometry: WidgetWindowGeometry
-    private var isHovering = false
 
-    public init(screen: NSScreen, actions: WidgetActions, placement: WidgetPlacement = .default) {
+    /// Mouse is inside the widget's window (hot strip, tab or panel).
+    private var isHovering = false
+    /// The operator opened the panel by clicking the tab; it stays open until
+    /// they click the header chevron, click the tab again, or click anywhere
+    /// outside the widget (see `dismissPinned`).
+    private var pinnedOpen = false
+    /// Attention state's verdict from the last `update` — kept so hover and
+    /// click changes can recompute the target without a fresh model pass.
+    private var attentionWantsOpen = false
+    private var settleTask: Task<Void, Never>?
+
+    /// How long the tab stays visible after the mouse leaves it before the
+    /// widget goes dormant again. Long enough to move from the hot strip onto
+    /// the tab (the window grows under the cursor) without flicker.
+    nonisolated static let hoverGrace: TimeInterval = 0.45
+
+    public init(
+        screen: NSScreen,
+        actions: WidgetActions,
+        placement: WidgetPlacement = .default,
+        edgeAnchorFromBottom: CGFloat = WidgetWindowGeometry.defaultEdgeAnchorFromBottom
+    ) {
         self.displayID = screen.displayID
         self.actions = actions
         self.viewState = WidgetViewState(metrics: WidgetMetrics(screen: screen), placement: placement)
-        self.geometry = WidgetWindowGeometry(placement: placement)
+        self.geometry = WidgetWindowGeometry(placement: placement, edgeAnchorFromBottom: edgeAnchorFromBottom)
     }
 
     public var placement: WidgetPlacement { viewState.placement }
-
     public var isPhysicalNotch: Bool { viewState.metrics.isPhysicalNotch }
 
     private var screen: NSScreen? {
         NSScreen.screens.first { $0.displayID == displayID }
     }
 
-    // MARK: - State in
+    /// True while the mouse is over this presenter's window — used by the
+    /// app-wide click monitor to tell a click inside from a click outside.
+    public var containsMouse: Bool {
+        guard let panel else { return false }
+        return panel.frame.contains(NSEvent.mouseLocation)
+    }
 
-    /// Called by the app coordinator on every attention-state change.
-    /// `shouldOpen` is the coordinator's `shouldExpand(now:linger:)` result,
-    /// OR'd with manual hover here -- this presenter does not own the clock.
+    // MARK: - Inputs
+
     public func update(attention: AttentionState, shouldOpen: Bool) {
         viewState.attention = attention
-        apply(shouldOpen || isHovering ? .expanded : .compact)
+        attentionWantsOpen = shouldOpen
+        apply(target())
     }
 
     public func setHovering(_ hovering: Bool) {
         guard hovering != isHovering else { return }
         isHovering = hovering
-        apply(hovering || viewState.attention.needsAttention ? .expanded : .compact)
+        settleTask?.cancel()
+        if hovering {
+            apply(target())
+            return
+        }
+        // Leaving: give the cursor a moment — it may be crossing from the hot
+        // strip onto the tab that just appeared under it.
+        settleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.hoverGrace * 1_000_000_000))
+            guard !Task.isCancelled, let self, !self.isHovering else { return }
+            self.apply(self.target())
+        }
     }
 
-    /// Re-measure after a display change: resolution, scale factor and menu
-    /// bar height can all move under a screen that kept its id.
+    /// Click on the collapsed tab: open the panel and keep it open.
+    public func toggleExpanded() {
+        pinnedOpen.toggle()
+        apply(target())
+    }
+
+    /// Header chevron, or a click anywhere outside the widget.
+    public func dismissPinned() {
+        guard pinnedOpen else { return }
+        pinnedOpen = false
+        apply(target())
+    }
+
     public func refreshMetrics() {
         guard let screen else { return }
         let fresh = WidgetMetrics(screen: screen)
@@ -87,47 +115,50 @@ public final class WidgetPresenter {
     }
 
     public func teardown() {
+        settleTask?.cancel()
         geometry.forget()
         viewState.presentation = .hidden
         isHovering = false
+        pinnedOpen = false
         panel?.orderOut(nil)
         panel?.close()
         panel = nil
     }
 
-    // MARK: - Presentation
+    // MARK: - State machine
+
+    /// Pure decision, exposed for tests via `WidgetPresentation.target(...)`.
+    private func target() -> WidgetPresentation {
+        WidgetPresentation.target(
+            placement: placement,
+            attentionWantsOpen: attentionWantsOpen,
+            pinnedOpen: pinnedOpen,
+            hovering: isHovering
+        )
+    }
 
     private func apply(_ presentation: WidgetPresentation) {
         guard presentation != viewState.presentation else { return }
-
         let hadPanel = panel != nil
         ensurePanel()
-        // Before the content moves, not during -- once a state has been
-        // measured this is its final size, so the whole transition runs
-        // inside a window that does not change.
         resizeWindow(for: presentation)
-
         withAnimation(WidgetTiming.curve(to: presentation, hasPanel: hadPanel)) {
             viewState.presentation = presentation
         }
     }
 
-    // MARK: - Window
-
     private func ensurePanel() {
-        // No screen with this id any more means the display was unplugged
-        // mid-flight.
         guard panel == nil, screen != nil else { return }
-
         let root = NotchRootView(
             viewState: viewState,
             actions: actions,
             onHover: { [weak self] hovering in self?.setHovering(hovering) },
+            onTapTab: { [weak self] in self?.toggleExpanded() },
+            onCollapse: { [weak self] in self?.dismissPinned() },
             onContentGeometry: { [weak self] presentation, geometry in
                 self?.contentGeometryChanged(presentation, geometry)
             }
         )
-
         let panel = WidgetPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -136,8 +167,7 @@ public final class WidgetPresenter {
         )
         panel.contentView = NSHostingView(rootView: root)
         self.panel = panel
-
-        resizeWindow(for: .compact)
+        resizeWindow(for: WidgetPresentation.resting(for: placement))
         panel.orderFrontRegardless()
     }
 
@@ -156,9 +186,6 @@ public final class WidgetPresenter {
         )
         guard panel.frame != frame else { return }
         panel.setFrame(frame, display: false)
-        // Lay out synchronously, before the caller starts animating -- SwiftUI
-        // centres content in the width it has been offered, and without this
-        // the first frames are laid out against the *old* width.
         panel.layoutIfNeeded()
     }
 }

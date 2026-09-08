@@ -7,6 +7,8 @@ struct NotchRootView: View {
     @ObservedObject var viewState: WidgetViewState
     let actions: WidgetActions
     let onHover: (Bool) -> Void
+    let onTapTab: () -> Void
+    let onCollapse: () -> Void
     let onContentGeometry: (WidgetPresentation, WidgetContentGeometry) -> Void
 
     /// Transparent margin around the right-edge surface so its shadow has
@@ -29,6 +31,15 @@ struct NotchRootView: View {
 
     @ViewBuilder
     private var surface: some View {
+        if viewState.presentation == .dormant {
+            content
+        } else {
+            placedSurface
+        }
+    }
+
+    @ViewBuilder
+    private var placedSurface: some View {
         switch viewState.placement {
         case .notch:
             content.background(
@@ -53,13 +64,25 @@ struct NotchRootView: View {
         switch viewState.presentation {
         case .hidden:
             EmptyView()
+        case .dormant:
+            // Nothing visible, but hit-testable: a fully transparent colour is
+            // skipped by hit testing, so keep a hair of opacity.
+            Color.black.opacity(0.001)
+                .frame(width: WidgetWindowGeometry.hotStripWidth, height: EdgeTab.size.height + Self.edgeInset * 2)
         case .compact:
             switch viewState.placement {
             case .notch: CompactStrip(state: viewState.attention)
-            case .rightEdge: EdgeTab(state: viewState.attention)
+            case .rightEdge:
+                EdgeTab(state: viewState.attention)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTapTab() }
             }
         case .expanded:
-            ExpandedPanel(state: viewState.attention, actions: actions)
+            ExpandedPanel(
+                state: viewState.attention,
+                actions: actions,
+                onCollapse: viewState.placement == .rightEdge ? onCollapse : nil
+            )
         }
     }
 }

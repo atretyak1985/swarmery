@@ -12,7 +12,11 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
 
 ### What you see
 
-- **Collapsed tab** (44×64 pt, mid-height on the right edge): a hexagon-grid
+- **Dormant**: nothing at all. The widget is an invisible 6-pt hot strip on
+  the right edge, about 30% down the screen (above Grammarly's own tab, so the
+  two never overlap; `SWARMERY_NOTCH_EDGE_ANCHOR` moves it). Touch the edge
+  with the mouse and the tab slides in.
+- **Collapsed tab** (44×64 pt): a hexagon-grid
   icon tinted by the worst state on screen — teal when everything is fine,
   **red** when an approval is pending (plus a red badge with the count),
   **orange** when a session needs you or failed, gray with a crossed-out Wi-Fi
@@ -22,9 +26,10 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
 - **Expanded panel** (360 pt wide, grows around the tab): usage windows first,
   then one card per pending approval (tool name, project, request summary,
   `Deny` / `Approve`), then the session rows with a coloured status dot, the
-  jump-to-terminal / open-in-dashboard button and a stop button. Hovering the
-  tab opens the panel; it opens by itself on a pending approval or a failed
-  session and closes after the linger period.
+  jump-to-terminal / open-in-dashboard button and a stop button. **Click the
+  tab** to open the panel; it stays open until you click the `›` in its header
+  or anywhere outside the widget. It also opens by itself on a pending approval
+  or a failed session and closes after the linger period.
 
 Swarmery Notch is a thin client: every byte of data it shows comes from the
 swarmery daemon on `:7777` (`GET /api/sessions`, `/api/approvals`, `/api/usage`,
@@ -113,6 +118,9 @@ installed plist from the template, so re-apply the block after an upgrade.
 - **`SWARMERY_NOTCH_PLACEMENT`** — `right` (default) docks the widget to the
   right screen edge as described above; `notch` restores the original
   top-edge/notch presentation. Anything else falls back to `right`.
+- **`SWARMERY_NOTCH_EDGE_ANCHOR`** — where on the right edge the tab sits, as
+  a fraction of the screen height from the top; default `0.3`. Accepted range
+  `0.05`–`0.95`, anything else keeps the default.
 - **`SWARMERY_NOTCH_LINGER`** — seconds the panel stays expanded after the
   most recent approval/session resolution before auto-collapsing, default `6`.
   Zero, negative, or non-numeric values fall back to the default rather than
