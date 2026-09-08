@@ -21,6 +21,10 @@ import (
 // the paths themselves — the per-module file lists inside `touched` are what
 // the UI renders, and a whole-branch file list on a long-lived branch is a
 // payload nobody reads.
+//
+// `base` is the NAME the branch is measured against (usually "main"), which is
+// what the UI labels the strip with; the diff itself starts at the merge base
+// of that name and `head`, not at its tip.
 type blastResponse struct {
 	Base    string          `json:"base"`
 	Head    string          `json:"head"`
@@ -79,7 +83,19 @@ func (h *Handler) architectureBlast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, err := archmap.Diff(r.Context(), path, base, head)
+	// `base...head`, spelled as merge-base + a two-dot diff: the blast radius is
+	// what the branch changed SINCE IT WAS CUT, not everything that differs from
+	// the base branch tip. Once `base` advances after the cut, a plain
+	// `base..head` folds every file those newer base commits touched into this
+	// branch's answer, inflating the count with modules the branch never opened.
+	// Resolving to a sha here also hands Diff an immutable memo key.
+	mergeBase, err := archmap.MergeBase(r.Context(), path, base, head)
+	if err != nil {
+		writeJSONStatus(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		return
+	}
+
+	files, err := archmap.Diff(r.Context(), path, mergeBase, head)
 	if err != nil {
 		writeJSONStatus(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		return

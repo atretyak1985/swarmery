@@ -313,6 +313,52 @@ func TestArchitectureBlast(t *testing.T) {
 	}
 }
 
+// TestArchitectureBlastIgnoresCommitsThatLandedOnBaseAfterTheCut is the
+// regression for `base..head` vs `base...head`. TestArchitectureBlast above
+// cannot catch it: in its fixture `main` never advances past the point the
+// branch was cut, so both ranges agree. Here main gains a commit AFTERWARDS,
+// touching web/src/main.tsx — a file in the `web` module this branch never
+// opened. A two-dot diff against main's TIP reports it as part of the branch's
+// blast radius; the merge-base range must not.
+func TestArchitectureBlastIgnoresCommitsThatLandedOnBaseAfterTheCut(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+	path := projectPath(t, srv.URL, "1")
+	seedArchProject(t, path)
+
+	gitRun(t, path, "checkout", "main")
+	writeFileIn(t, path, "web/src/main.tsx", "export const movedOn = true;\n")
+	gitRun(t, path, "add", "-A")
+	gitRun(t, path, "commit", "-m", "main moves on after the branch was cut")
+	gitRun(t, path, "checkout", "feature")
+	// The seeded answers were computed before main moved.
+	archmap.ResetMemo()
+
+	var got blastResponse
+	getJSON(t, srv.URL+"/api/projects/1/architecture/blast", &got)
+
+	// Home.tsx, routes.go, CHANGELOG.md — main's later commit is not this
+	// branch's work, so web/src/main.tsx is NOT a fourth file.
+	if got.Files != 3 {
+		t.Errorf("files = %d, want 3 — a commit that landed on main after the cut inflated the count", got.Files)
+	}
+	ids := map[string][]string{}
+	for _, m := range got.Touched.Modules {
+		ids[m.ID] = m.Files
+	}
+	if f, ok := ids["web"]; ok {
+		t.Errorf("module web reported touched (%v); only main's post-cut commit changed web/src/main.tsx", f)
+	}
+	// The branch's real work still lands.
+	if _, ok := ids["web-pages"]; !ok {
+		t.Error("web-pages not touched; the branch added web/src/pages/Home.tsx")
+	}
+	if _, ok := ids["api"]; !ok {
+		t.Error("api not touched; the branch changed internal/api/routes.go")
+	}
+}
+
 func TestArchitectureBlastDegrades(t *testing.T) {
 	t.Run("no map — 404, not an empty blast", func(t *testing.T) {
 		srv, _ := projectsTestServer(t)
