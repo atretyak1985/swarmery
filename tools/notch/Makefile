@@ -45,8 +45,17 @@ bundle: build
 # without an app). Writes the LaunchAgent plist (substituting the installed
 # app's real binary path and the log dir) and either kickstarts an
 # already-loaded service or bootstraps it fresh.
+# The running agent is stopped BEFORE the bundle on disk is replaced: an
+# AppKit process whose .app vanishes underneath it can trap inside layout
+# (SIGTRAP in NSHostingView) instead of exiting cleanly, which is how the
+# previous build died on every upgrade. bootout → swap → bootstrap gives a
+# clean stop, a clean start on the new build, and one PID afterwards.
 install: bundle
 	mkdir -p "$(HOME)/Applications" "$(HOME)/Library/LaunchAgents" "$(LOG_DIR)"
+	@if launchctl print gui/$$(id -u)/$(LAUNCHD_LABEL) >/dev/null 2>&1; then \
+		launchctl bootout gui/$$(id -u)/$(LAUNCHD_LABEL) 2>/dev/null || true; \
+		echo "→ stopped running $(LAUNCHD_LABEL) before replacing the bundle"; \
+	fi
 	rm -rf "$(INSTALL_APP).new"
 	cp -R "$(APP_BUNDLE)" "$(INSTALL_APP).new"
 	rm -rf "$(INSTALL_APP)"
@@ -54,13 +63,8 @@ install: bundle
 	sed -e "s|__APP_PATH__|$(INSTALL_APP)/Contents/MacOS/$(BIN_NAME)|" \
 		-e "s|__LOG_DIR__|$(LOG_DIR)|" \
 		Resources/$(LAUNCHD_LABEL).plist > "$(LAUNCHD_PLIST)"
-	@if launchctl print gui/$$(id -u)/$(LAUNCHD_LABEL) >/dev/null 2>&1; then \
-		launchctl kickstart -k gui/$$(id -u)/$(LAUNCHD_LABEL) && \
-		echo "→ reinstalled $(INSTALL_APP); restarted $(LAUNCHD_LABEL) on the new build"; \
-	else \
-		launchctl bootstrap gui/$$(id -u) "$(LAUNCHD_PLIST)" && \
-		echo "→ installed $(INSTALL_APP); loaded $(LAUNCHD_LABEL)"; \
-	fi
+	launchctl bootstrap gui/$$(id -u) "$(LAUNCHD_PLIST)"
+	@echo "→ installed $(INSTALL_APP); loaded $(LAUNCHD_LABEL) on the new build"
 
 # uninstall: unload the LaunchAgent and remove both it and the app bundle.
 # Logs are left in place, matching the daemon's uninstall (rollback, not a

@@ -9,6 +9,13 @@ struct ExpandedPanel: View {
 
     let state: AttentionState
     let actions: WidgetActions
+    /// Present for the right-edge placement: the panel is opened by a click,
+    /// so it needs a visible way to close. The notch placement collapses on
+    /// mouse-out and passes nil.
+    var onCollapse: (() -> Void)? = nil
+    /// The notch panel carries the usage strip; the right-edge sessions panel
+    /// does not — usage has its own tab and panel there.
+    var showsUsage: Bool = true
 
     private var layout: PanelLayout {
         PanelLayout(
@@ -19,10 +26,26 @@ struct ExpandedPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let onCollapse {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.hexagongrid.fill")
+                        .foregroundStyle(state.tabTint)
+                    Text("Swarmery").font(.callout.bold())
+                    Spacer()
+                    Button(action: onCollapse) {
+                        Image(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Collapse")
+                }
+            }
             if !state.isConnected {
                 OfflineBadge()
             }
-            UsageStrip(usage: state.usage)
+            if showsUsage {
+                UsageStrip(usage: state.usage)
+            }
             ForEach(layout.rows) { row in
                 switch row {
                 case let .approval(request):

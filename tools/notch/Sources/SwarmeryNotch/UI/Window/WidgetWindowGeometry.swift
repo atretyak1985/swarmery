@@ -32,7 +32,33 @@ public struct WidgetContentGeometry: Equatable, Sendable {
 }
 
 public struct WidgetWindowGeometry {
-    public init() {}
+    public let placement: WidgetPlacement
+
+    /// Where along the right edge the tab sits, as a fraction of the visible
+    /// frame's height measured from the BOTTOM. The default puts it at 30%
+    /// from the top — above the vertical middle, where Grammarly's own tab
+    /// lives, so the two never stack on the same spot. The expanded panel
+    /// grows around the same anchor.
+    public let edgeAnchorFromBottom: CGFloat
+    public static let defaultEdgeAnchorFromBottom: CGFloat = 0.7
+
+    /// Width of the invisible hot strip shown while dormant.
+    public static let hotStripWidth: CGFloat = 6
+
+    public init(placement: WidgetPlacement, edgeAnchorFromBottom: CGFloat = WidgetWindowGeometry.defaultEdgeAnchorFromBottom) {
+        self.placement = placement
+        self.edgeAnchorFromBottom = min(max(edgeAnchorFromBottom, 0.05), 0.95)
+    }
+
+    /// `SWARMERY_NOTCH_EDGE_ANCHOR` is written the way people think about a
+    /// screen — a fraction from the TOP (`0.3` = 30% down). Out-of-range or
+    /// non-numeric values keep the default.
+    public static func edgeAnchorFromBottom(environmentValue raw: String?) -> CGFloat {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let fromTop = Double(raw), fromTop >= 0.05, fromTop <= 0.95
+        else { return defaultEdgeAnchorFromBottom }
+        return CGFloat(1 - fromTop)
+    }
 
     /// Sizes the content settled on, so a transition can size the window
     /// before anything moves rather than chasing it.
@@ -41,7 +67,11 @@ public struct WidgetWindowGeometry {
     /// `hidden` and `compact` lay out identically -- hiding is opacity and an
     /// offset, not a size change -- so they share one measurement.
     public static func sizeKey(_ presentation: WidgetPresentation) -> WidgetPresentation {
-        presentation == .expanded ? .expanded : .compact
+        switch presentation {
+        case .expanded: return .expanded
+        case .dormant: return .dormant
+        case .compact, .hidden: return .compact
+        }
     }
 
     /// Records a measurement. Returns true when it is new information worth
@@ -67,7 +97,67 @@ public struct WidgetWindowGeometry {
         measured = [:]
     }
 
-    public func frame(for presentation: WidgetPresentation, metrics: WidgetMetrics, screenFrame: CGRect) -> NSRect {
+    /// `visibleFrame` is the screen minus menu bar and Dock; the right-edge
+    /// placement stays inside it so the panel never hides under either. The
+    /// notch placement deliberately uses the full `screenFrame` (it lives in
+    /// the menu bar band by design).
+    public func frame(
+        for presentation: WidgetPresentation,
+        metrics: WidgetMetrics,
+        screenFrame: CGRect,
+        visibleFrame: CGRect? = nil
+    ) -> NSRect {
+        switch placement {
+        case .notch:
+            return notchFrame(for: presentation, metrics: metrics, screenFrame: screenFrame)
+        case .rightEdge:
+            return edgeFrame(for: presentation, visibleFrame: visibleFrame ?? screenFrame)
+        }
+    }
+
+    private func edgeFrame(for presentation: WidgetPresentation, visibleFrame visible: CGRect) -> NSRect {
+        let recorded = measured[Self.sizeKey(presentation)]
+        let content = recorded?.size ?? edgeFallback(for: presentation, visibleFrame: visible)
+        let width = min(content.width.rounded(.up), visible.width)
+        let height = min(content.height.rounded(.up), visible.height)
+        let anchorY = visible.minY + visible.height * edgeAnchorFromBottom
+        // The tab (and the dormant strip) are centred on the anchor. The
+        // panel opens with its TOP on the tab's top edge and hangs down from
+        // there — right next to where the operator just clicked, the way
+        // Grammarly's does — and is only shifted when it would not fit.
+        let unclampedY: CGFloat
+        switch presentation {
+        case .expanded:
+            let tabTop = anchorY + Self.tabWindowHeight / 2
+            unclampedY = (tabTop - height).rounded()
+        case .compact, .dormant, .hidden:
+            unclampedY = (anchorY - height / 2).rounded()
+        }
+        let y = min(max(unclampedY, visible.minY), visible.maxY - height)
+        return NSRect(x: (visible.maxX - width).rounded(), y: y, width: width, height: height)
+    }
+
+    /// Height of the collapsed tab's window (tab + shadow margins).
+    public static var tabWindowHeight: CGFloat { EdgeTabs.size.height + NotchRootView.edgeInset * 2 }
+    /// Width of a right-edge window: content plus the shadow margin on the
+    /// LEFT only — the right side is glued to the screen edge.
+    public static func edgeWindowWidth(content: CGFloat) -> CGFloat { content + NotchRootView.edgeInset }
+
+    private func edgeFallback(for presentation: WidgetPresentation, visibleFrame visible: CGRect) -> CGSize {
+        switch presentation {
+        case .expanded:
+            return CGSize(
+                width: min(visible.width, Self.edgeWindowWidth(content: ExpandedPanel.panelWidth)),
+                height: min(visible.height * 0.8, 640)
+            )
+        case .compact, .hidden:
+            return CGSize(width: Self.edgeWindowWidth(content: EdgeTabs.size.width), height: Self.tabWindowHeight)
+        case .dormant:
+            return CGSize(width: Self.hotStripWidth, height: Self.tabWindowHeight)
+        }
+    }
+
+    private func notchFrame(for presentation: WidgetPresentation, metrics: WidgetMetrics, screenFrame: CGRect) -> NSRect {
         let recorded = measured[Self.sizeKey(presentation)]
         let content = recorded?.size ?? fallback(for: presentation, metrics: metrics, screenFrame: screenFrame)
 
@@ -108,7 +198,7 @@ public struct WidgetWindowGeometry {
         switch presentation {
         case .expanded:
             return CGSize(width: width, height: min(screenFrame.height * 0.92, 760))
-        case .compact, .hidden:
+        case .compact, .hidden, .dormant:
             return CGSize(width: min(screenFrame.width, 260), height: metrics.anchorSize.height + 28)
         }
     }

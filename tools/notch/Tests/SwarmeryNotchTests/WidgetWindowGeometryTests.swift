@@ -22,7 +22,7 @@ final class WidgetWindowGeometryTests: XCTestCase {
     // MARK: - Notch display
 
     func testCompactFallbackOnANotchDisplaySitsAtTheTopEdgeCenteredHorizontally() {
-        let geometry = WidgetWindowGeometry()
+        let geometry = WidgetWindowGeometry(placement: .notch)
         let frame = geometry.frame(for: .compact, metrics: notchMetrics, screenFrame: screenFrame)
 
         XCTAssertEqual(frame.maxY, screenFrame.maxY, accuracy: 0.5)
@@ -34,7 +34,7 @@ final class WidgetWindowGeometryTests: XCTestCase {
     // MARK: - Plain display (top-edge fallback)
 
     func testCompactFallbackOnAPlainDisplayAlsoSitsAtTheTopEdgeCenteredHorizontally() {
-        let geometry = WidgetWindowGeometry()
+        let geometry = WidgetWindowGeometry(placement: .notch)
         let frame = geometry.frame(for: .compact, metrics: plainMetrics, screenFrame: screenFrame)
 
         XCTAssertEqual(frame.maxY, screenFrame.maxY, accuracy: 0.5)
@@ -42,7 +42,7 @@ final class WidgetWindowGeometryTests: XCTestCase {
     }
 
     func testAPlainDisplayFallsBackToTheMenuBarHeightRatherThanANotchHeight() {
-        let geometry = WidgetWindowGeometry()
+        let geometry = WidgetWindowGeometry(placement: .notch)
         let notchFrame = geometry.frame(for: .compact, metrics: notchMetrics, screenFrame: screenFrame)
         let plainFrame = geometry.frame(for: .compact, metrics: plainMetrics, screenFrame: screenFrame)
 
@@ -57,7 +57,7 @@ final class WidgetWindowGeometryTests: XCTestCase {
     // MARK: - Never larger than the screen
 
     func testFrameNeverExceedsTheScreenEvenWithAHugeMeasuredSize() {
-        var geometry = WidgetWindowGeometry()
+        var geometry = WidgetWindowGeometry(placement: .notch)
         geometry.record(WidgetContentGeometry(size: CGSize(width: 5000, height: 5000)), for: .expanded)
         let frame = geometry.frame(for: .expanded, metrics: notchMetrics, screenFrame: screenFrame)
 
@@ -68,7 +68,7 @@ final class WidgetWindowGeometryTests: XCTestCase {
     // MARK: - record/has/forget
 
     func testRecordIgnoresDegenerateSizesAndForgetClearsRecordedMeasurements() {
-        var geometry = WidgetWindowGeometry()
+        var geometry = WidgetWindowGeometry(placement: .notch)
         XCTAssertFalse(geometry.record(WidgetContentGeometry(size: .zero), for: .compact))
         XCTAssertTrue(geometry.record(WidgetContentGeometry(size: CGSize(width: 100, height: 40)), for: .compact))
         XCTAssertTrue(geometry.has(.compact))

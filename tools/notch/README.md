@@ -1,11 +1,44 @@
 # Swarmery Notch
 
-A native macOS 14+ menu-bar / notch companion for the [swarmery](../../README.md)
-daemon. It lives collapsed in the notch (or docked to the top edge on displays
-without one) and expands on its own the moment an operator is needed — a
-permission request is pending, or a session has failed. From the panel you can
-approve/deny, jump to the terminal tab that owns a session, see plan usage, and
-open the dashboard.
+A native macOS 14+ companion for the [swarmery](../../README.md) daemon. It
+lives as a small tab docked to the **right edge** of every display — rounded on
+the left, flush on the right, the shape you know from Grammarly's desktop
+widget — and expands into a side panel on its own the moment an operator is
+needed: a permission request is pending, or a session has failed. From the
+panel you can approve/deny, jump to the terminal tab that owns a session, see
+plan usage, and open the dashboard. The original notch placement (collapsed
+into the notch, or the top edge on displays without one) is still available
+via `SWARMERY_NOTCH_PLACEMENT=notch`.
+
+### What you see
+
+- **Dormant**: nothing at all. The widget is an invisible 6-pt hot strip on
+  the right edge, about 30% down the screen (above Grammarly's own tab, so the
+  two never overlap; `SWARMERY_NOTCH_EDGE_ANCHOR` moves it). Touch the edge
+  with the mouse and the tab slides in.
+- **Two tabs** (each 44×64 pt, stacked, glued to the edge). The **sessions
+  tab** on top: a hexagon-grid icon tinted by the worst state on screen — teal
+  when everything is fine, **red** when an approval is pending (plus a red
+  badge with the count), **orange** when a session needs you or failed, gray
+  with a crossed-out Wi-Fi symbol when the daemon is offline — and the
+  live-session count underneath. The **usage tab** below: a gauge icon tinted
+  green / orange / red by the highest percent used across your plan windows,
+  with that percent underneath. Both surfaces are the system window gray
+  (adapts to light/dark mode) with a hairline border and a soft shadow,
+  deliberately not black.
+- **Sessions panel** (360 pt wide, hangs from the top of the tabs): one card
+  per pending approval (tool name, project, request summary, `Deny` /
+  `Approve`), then the session rows with a coloured status dot, the
+  jump-to-terminal / open-in-dashboard button and a stop button. **Click the
+  sessions tab** to open it; it stays open until you click the `›` in its
+  header, click the tab again, or click anywhere outside the widget. It also
+  opens by itself on a pending approval or a failed session and closes after
+  the linger period.
+- **Usage panel** — the dashboard's Usage modal, natively: click the usage tab.
+  One card per provider (an account switcher appears when the daemon reports
+  more than one account), each plan window with a progress bar, `N% used`,
+  `M% left`, the reset countdown and clock time, and the daemon's pace line
+  (`27% under pace`). Same close gestures as the sessions panel.
 
 Swarmery Notch is a thin client: every byte of data it shows comes from the
 swarmery daemon on `:7777` (`GET /api/sessions`, `/api/approvals`, `/api/usage`,
@@ -32,10 +65,10 @@ make install
 This builds a release binary, assembles `Swarmery Notch.app`, copies it to
 `~/Applications/Swarmery Notch.app`, writes the LaunchAgent
 (`~/Library/LaunchAgents/com.swarmery.notch.plist`), and loads it — the widget
-appears in the notch/menu bar within a couple of seconds. Re-running
-`make install` after a rebuild reinstalls the app and restarts the running
-LaunchAgent on the new build (`launchctl kickstart -k`), the same ergonomics as
-`tools/swarmery`'s own `make install`.
+appears on the right edge within a couple of seconds. Re-running
+`make install` after a rebuild stops the running LaunchAgent first, swaps the
+bundle, and loads it again on the new build (`bootout` → copy → `bootstrap`);
+the running process is never left with its `.app` deleted underneath it.
 
 `make restart` kicks an already-installed LaunchAgent without rebuilding —
 useful if the widget looks stuck for some other reason.
@@ -91,6 +124,12 @@ installed plist from the template, so re-apply the block after an upgrade.
 - **`SWARMERY_URL`** — overrides the daemon base URL, default
   `http://127.0.0.1:7777`. Set this if the daemon runs on a non-default port
   or host. A trailing slash is tolerated (normalized internally).
+- **`SWARMERY_NOTCH_PLACEMENT`** — `right` (default) docks the widget to the
+  right screen edge as described above; `notch` restores the original
+  top-edge/notch presentation. Anything else falls back to `right`.
+- **`SWARMERY_NOTCH_EDGE_ANCHOR`** — where on the right edge the tab sits, as
+  a fraction of the screen height from the top; default `0.3`. Accepted range
+  `0.05`–`0.95`, anything else keeps the default.
 - **`SWARMERY_NOTCH_LINGER`** — seconds the panel stays expanded after the
   most recent approval/session resolution before auto-collapsing, default `6`.
   Zero, negative, or non-numeric values fall back to the default rather than

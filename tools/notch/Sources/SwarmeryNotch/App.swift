@@ -15,6 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: AppCoordinator?
     private var collapseTask: Task<Void, Never>?
     private let config = AppCoordinatorConfig.fromEnvironment()
+    private let placement = WidgetPlacement.fromEnvironment()
+    private let edgeAnchorFromBottom = WidgetWindowGeometry.edgeAnchorFromBottom(
+        environmentValue: ProcessInfo.processInfo.environment["SWARMERY_NOTCH_EDGE_ANCHOR"]
+    )
+    private var outsideClickMonitor: Any?
 
     static func main() {
         let app = NSApplication.shared
@@ -58,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         coordinator?.stop()
         collapseTask?.cancel()
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         for presenter in presenters { presenter.teardown() }
     }
 
@@ -90,7 +96,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Presenters (one per screen, so a widget follows every display)
 
     private func setUpPresenters(actions: WidgetActions) {
-        presenters = NSScreen.screens.map { WidgetPresenter(screen: $0, actions: actions) }
+        presenters = NSScreen.screens.map {
+            WidgetPresenter(screen: $0, actions: actions, placement: placement, edgeAnchorFromBottom: edgeAnchorFromBottom)
+        }
+        // A panel the operator opened by clicking the tab closes on a click
+        // anywhere else — the Grammarly convention. Global monitors receive
+        // mouse events from other apps without any accessibility grant.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard !self.presenters.contains(where: { $0.containsMouse }) else { return }
+                for presenter in self.presenters { presenter.dismissPinned() }
+            }
+        }
     }
 
     @objc private func screenParametersChanged() {
