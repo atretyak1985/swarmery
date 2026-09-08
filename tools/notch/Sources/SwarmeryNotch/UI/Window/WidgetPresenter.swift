@@ -31,8 +31,8 @@ public final class WidgetPresenter {
     /// Mouse is inside the widget's window (hot strip, tab or panel).
     private var isHovering = false
     /// The operator opened the panel by clicking the tab; it stays open until
-    /// they click the header chevron, click the tab again, or click anywhere
-    /// outside the widget (see `dismissPinned`).
+    /// they click the tab again or click anywhere outside the widget (see
+    /// `dismissPinned`).
     private var pinnedOpen = false
     /// Attention state's verdict from the last `update` — kept so hover and
     /// click changes can recompute the target without a fresh model pass.
@@ -99,8 +99,8 @@ public final class WidgetPresenter {
     }
 
     /// Click on a collapsed tab: open that tab's panel and keep it open; a
-    /// second click on the same tab (or the panel's chevron) closes it, a
-    /// click on the other tab switches panels.
+    /// second click on the same tab closes it, a click on the other tab
+    /// switches panels.
     public func toggleExpanded(_ panel: PanelKind = .sessions) {
         if pinnedOpen, viewState.panel == panel {
             pinnedOpen = false
@@ -114,7 +114,7 @@ public final class WidgetPresenter {
     /// The panel currently selected for the expanded presentation.
     public var currentPanel: PanelKind { viewState.panel }
 
-    /// Header chevron, or a click anywhere outside the widget.
+    /// A click anywhere outside the widget.
     public func dismissPinned() {
         guard pinnedOpen else { return }
         pinnedOpen = false
@@ -169,7 +169,6 @@ public final class WidgetPresenter {
             actions: actions,
             onHover: { [weak self] hovering in self?.setHovering(hovering) },
             onTapTab: { [weak self] kind in self?.toggleExpanded(kind) },
-            onCollapse: { [weak self] in self?.dismissPinned() },
             onContentGeometry: { [weak self] presentation, geometry in
                 self?.contentGeometryChanged(presentation, geometry)
             }
