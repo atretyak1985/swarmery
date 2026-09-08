@@ -11,9 +11,12 @@ struct ExpandedPanel: View {
     let actions: WidgetActions
     /// The right-edge placement titles the panel, since it stands apart from
     /// the tab that opened it; the notch placement grows out of the strip and
-    /// needs no title. Closing is a click on the tab or anywhere outside the
-    /// widget, so the header carries no control of its own.
+    /// needs no title.
     var showsHeader: Bool = false
+    /// Right-edge only: the header's × button. A tab click or an outside
+    /// click also closes the panel, but the operator asked for the
+    /// conventional control to be there and visible.
+    var onCollapse: (() -> Void)? = nil
     /// The notch panel carries the usage strip; the right-edge sessions panel
     /// does not — usage has its own tab and panel there.
     var showsUsage: Bool = true
@@ -32,6 +35,10 @@ struct ExpandedPanel: View {
                     Image(systemName: "circle.hexagongrid.fill")
                         .foregroundStyle(state.tabTint)
                     Text("Swarmery").font(.callout.bold())
+                    Spacer()
+                    if let onCollapse {
+                        PanelCloseButton(action: onCollapse)
+                    }
                 }
             }
             if !state.isConnected {

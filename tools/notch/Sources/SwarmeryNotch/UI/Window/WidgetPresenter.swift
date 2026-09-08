@@ -169,6 +169,7 @@ public final class WidgetPresenter {
             actions: actions,
             onHover: { [weak self] hovering in self?.setHovering(hovering) },
             onTapTab: { [weak self] kind in self?.toggleExpanded(kind) },
+            onCollapse: { [weak self] in self?.dismissPinned() },
             onContentGeometry: { [weak self] presentation, geometry in
                 self?.contentGeometryChanged(presentation, geometry)
             }

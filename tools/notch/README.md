@@ -30,7 +30,7 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
   per pending approval (tool name, project, request summary, `Deny` /
   `Approve`), then the session rows with a coloured status dot, the
   jump-to-terminal / open-in-dashboard button and a stop button. **Click the
-  sessions tab** to open it; it stays open until you click the `›` in its
+  sessions tab** to open it; it stays open until you click the round `×` button in its
   header, click the tab again, or click anywhere outside the widget. It also
   opens by itself on a pending approval or a failed session and closes after
   the linger period.
