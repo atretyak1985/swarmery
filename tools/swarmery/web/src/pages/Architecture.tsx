@@ -247,13 +247,25 @@ function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.
   const measured = repos.filter((r) => r.commitsBehind !== null);
   const ahead = measured.filter((r) => (r.commitsBehind ?? 0) > 0);
   const unreadable = repos.filter((r) => !r.ok);
+  // Readable, and the map DOES carry a commit for it, yet no number came back:
+  // the git measurement itself failed. Distinct from "the map records none",
+  // and it must never be folded into the current/green count below.
+  const unmeasured = repos.filter(
+    (r) => r.ok && r.commitsBehind === null && r.analyzedAtCommit !== null,
+  );
   const { commitsBehind, touchedModules, moduleCount } = project;
 
   const tooltip = repos
     .map((r) => {
       if (!r.ok) return `${r.name} — not a readable checkout`;
       const head = r.headCommit === null ? '?' : r.headCommit.slice(0, 7);
-      if (r.commitsBehind === null) return `${r.name} @ ${head} — the map records no commit for it`;
+      if (r.commitsBehind === null) {
+        // Two very different causes, two very different remedies: re-run
+        // /architecture-map, or go look at the repo.
+        return r.analyzedAtCommit === null
+          ? `${r.name} @ ${head} — the map records no commit for it`
+          : `${r.name} @ ${head} — could not be measured against the map`;
+      }
       if (r.commitsBehind === 0) return `${r.name} @ ${head} — current`;
       return `${r.name} @ ${head} — ${String(r.commitsBehind)} ahead of the map`;
     })
@@ -269,7 +281,12 @@ function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.
     );
   }
 
-  const tone = ahead.length === 0 ? 'text-green' : 'text-amber';
+  // Green claims "this workspace is current", so it requires that every declared
+  // member actually SAID so. One unreadable or unmeasured member means the claim
+  // is unproven, and an unproven claim reads amber — the whole point of this
+  // component is that unknown must not render as fine.
+  const proven = ahead.length === 0 && unreadable.length === 0 && unmeasured.length === 0;
+  const tone = proven ? 'text-green' : 'text-amber';
   return (
     <span className={`ml-1 ${tone}`} title={tooltip}>
       {` · ${String(ahead.length)} of ${String(repos.length)} repos ahead of the map`}
@@ -279,6 +296,7 @@ function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.
       {touchedModules !== null && moduleCount !== null
         ? ` · ${String(touchedModules)} of ${String(moduleCount)} modules touched`
         : ''}
+      {unmeasured.length > 0 ? ` · ${String(unmeasured.length)} unmeasured` : ''}
       {unreadable.length > 0 ? ` · ${String(unreadable.length)} unreadable` : ''}
     </span>
   );

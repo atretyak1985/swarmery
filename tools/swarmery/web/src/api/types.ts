@@ -2776,7 +2776,12 @@ export interface ProvisionState {
 export interface ArchitectureRepoHead {
   /** Repo name as declared in `.claude/project.json` `repos[]`. */
   name: string;
-  /** Whether this member's HEAD was readable. Everything below is null when false. */
+  /**
+   * Whether this member's HEAD was readable. When false, `headCommit`,
+   * `commitsBehind` and `touchedModules` are null — but `analyzedAtCommit` may
+   * still be set, because the map can record a commit for a member that has
+   * since become unreadable.
+   */
   ok: boolean;
   headCommit: string | null;
   /** The commit the map recorded FOR THIS REPO; null when it records none. */
