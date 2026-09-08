@@ -8,6 +8,7 @@ struct NotchRootView: View {
     let actions: WidgetActions
     let onHover: (Bool) -> Void
     let onTapTab: (PanelKind) -> Void
+    let onCollapse: () -> Void
     let onContentGeometry: (WidgetPresentation, WidgetContentGeometry) -> Void
 
     /// Transparent margin around the right-edge surface so its shadow has
@@ -88,9 +89,12 @@ struct NotchRootView: View {
         case .expanded:
             switch (viewState.placement, viewState.panel) {
             case (.rightEdge, .usage):
-                UsagePanel(usage: viewState.attention.usage)
+                UsagePanel(usage: viewState.attention.usage, onCollapse: onCollapse)
             case (.rightEdge, .sessions):
-                ExpandedPanel(state: viewState.attention, actions: actions, showsHeader: true, showsUsage: false)
+                ExpandedPanel(
+                    state: viewState.attention, actions: actions,
+                    showsHeader: true, onCollapse: onCollapse, showsUsage: false
+                )
             case (.notch, _):
                 ExpandedPanel(state: viewState.attention, actions: actions)
             }
