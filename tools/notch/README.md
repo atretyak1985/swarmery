@@ -60,6 +60,8 @@ Swarmery Notch (`make uninstall`) never touches anything belonging to notchling.
 
 ## Install
 
+### From source (recommended — gives you `make install`/`uninstall`/`restart`)
+
 ```bash
 cd tools/notch
 make install
@@ -76,11 +78,21 @@ the running process is never left with its `.app` deleted underneath it.
 `make restart` kicks an already-installed LaunchAgent without rebuilding —
 useful if the widget looks stuck for some other reason.
 
+### From a GitHub release
+
+Every `notch-v*` tag publishes `SwarmeryNotch-v<version>-macos.zip` (plus
+`SHA256SUMS`) on the
+[releases page](https://github.com/atretyak1985/swarmery/releases?q=notch-v).
+Unzip it, move `Swarmery Notch.app` to `~/Applications`, approve it once
+through Gatekeeper (below), and open it — it runs as a menu-bar accessory with
+no Dock icon. The zip carries no LaunchAgent; to have it start at login, add
+the app under *System Settings → General → Login Items*, or use the
+from-source install above, which writes the LaunchAgent for you.
+
 ### Gatekeeper note (the app is unsigned)
 
 Swarmery Notch ships **unsigned** for now — signing/notarization needs a paid
-Apple Developer ID and is tracked as a follow-up, not a blocker (see
-`plan/SUMMARY.md`'s Follow-ups). The first time you open
+Apple Developer ID and is a known follow-up, not a blocker. The first time you open
 `~/Applications/Swarmery Notch.app` (or right after any `make install`),
 macOS Gatekeeper will refuse a plain double-click launch. To approve it once:
 
@@ -106,7 +118,7 @@ own `swarmery uninstall`).
 
 ## Configuration (environment variables)
 
-Both variables are read once at process start. Export them before `make run`
+All of these are read once at process start. Export them before `make run`
 for local development. To apply them to the *installed* widget, add an
 `EnvironmentVariables` dict to the installed LaunchAgent at
 `~/Library/LaunchAgents/com.swarmery.notch.plist` — the shipped template
@@ -164,10 +176,26 @@ Confirm you approved the Gatekeeper prompt at least once (see above) — an
 unapproved quarantine flag can prevent launchd from starting it too.
 
 **A session row's terminal doesn't come forward when clicked.** Terminal focus
-is best-effort (Warp via a `warp://` URL, iTerm2/Terminal.app via AppleScript
-on the tty); an unrecognized terminal, or a session with no captured terminal
-identity (headless/daemon-spawned sessions), falls back to opening the
-dashboard in your browser instead of erroring.
+is best-effort: Warp via its `warp://` focus URL, iTerm2/Terminal.app via
+AppleScript on the tty, and any other terminal (JetBrains IDEs, VS Code, …)
+by activating the owning app from its bundle id — that brings the app forward
+but cannot pick the tab. A session with no captured terminal identity
+(headless/daemon-spawned) opens the dashboard in your browser instead of
+erroring. Terminal identity is captured by the daemon's `SessionStart` hook,
+so sessions started before the daemon was upgraded to a build with migration
+0068 show no terminal.
+
+**The usage panel's `Updated` time is old.** The panel re-fetches on its own
+every 5 minutes, each time it opens, and immediately on the ↻ button (which
+bypasses the daemon's 30-second cache). If the time still does not move, the
+daemon's usage provider is not connected — check the dashboard's Usage modal.
+
+**The tab never appears when I touch the right edge.** The hot strip sits at
+30% down the screen by default (`SWARMERY_NOTCH_EDGE_ANCHOR`); on a display
+where another edge widget lives there, move it. If the widget is running
+(`launchctl print gui/$(id -u)/com.swarmery.notch` shows a PID) but nothing
+ever slides in, a pending approval will still open the panel by itself — the
+hot strip is only the manual way in.
 
 **`make install` fails with `launchctl bootstrap` exit 5.** `launchctl bootout`
 is asynchronous, so an install run immediately after an uninstall can race the
@@ -177,9 +205,17 @@ old service's unregistration. Wait a few seconds and run `make install` again.
 
 ```bash
 cd tools/notch
-swift build && swift test   # 57 tests as of phase 4
-swift run SwarmeryNotch     # run unbundled, un-notch-installed, for iteration
+swift build && swift test   # unit tests: models, WS stream, attention model, geometry, panels
+swift run SwarmeryNotch     # run unbundled, uninstalled, for iteration
 ```
+
+Layout: `Daemon/` (REST client, WebSocket stream, wire models pinned by the
+fixtures in `Tests/Fixtures/` — the same files the daemon's Go tests decode),
+`Core/` (the pure `AttentionModel` reducer, `AppCoordinator`, terminal focus),
+`UI/` (SwiftUI views; `UI/Window/` is the window layer adapted from notchling
+plus the right-edge placement). Releases: push a `notch-v*` tag and
+`.github/workflows/notch-release.yml` builds, zips and attaches the bundle;
+bump `Resources/Info.plist`'s `CFBundleShortVersionString` first.
 
 Zero external dependencies by design (`Package.swift`'s `dependencies: []`):
 the daemon client, WebSocket stream, and attention model are built entirely on
