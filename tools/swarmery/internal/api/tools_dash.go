@@ -10,6 +10,7 @@ package api
 // never raw localhost URLs.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/archmap"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/githead"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
@@ -110,7 +112,14 @@ type architectureProjectDTO struct {
 	MapPath          string        `json:"mapPath"`
 	AnalyzedAtCommit *string       `json:"analyzedAtCommit"`
 	HeadCommit       *string       `json:"headCommit"`
-	Provision        *provisionDTO `json:"provision"`
+	// Freshness as a number rather than a boolean. All three degrade to nil —
+	// never 0 — on any failure (no git, no map, unparseable map, unknown
+	// commit), exactly like HeadCommit: 0 would read as "current" and "no
+	// modules", which is the opposite of "we could not tell".
+	CommitsBehind  *int          `json:"commitsBehind"`
+	TouchedModules *int          `json:"touchedModules"`
+	ModuleCount    *int          `json:"moduleCount"`
+	Provision      *provisionDTO `json:"provision"`
 }
 
 type toolsArchitectureSection struct {
@@ -289,7 +298,53 @@ func architectureDTO(id int64, slug string, name *string, projectPath string, pa
 		d.HeadCommit = &sha
 	}
 
+	archFreshness(&d, projectPath)
+
 	return d, true
+}
+
+// archFreshness fills commitsBehind / touchedModules / moduleCount, or leaves
+// them nil. It is the one place in the feed that forks git, so it is fenced by
+// the cheap checks first: no analysed commit or no resolvable HEAD means there
+// is nothing to measure between, and a map that will not parse means there are
+// no modules to count. archmap memoises per (repo, from, to), so the page's 3 s
+// settle-poll re-reads the answer instead of re-walking the revision graph.
+//
+// The three fields move together only as far as the data allows: moduleCount
+// survives a git failure (it is a property of the artifact alone), while
+// touchedModules needs both halves and so goes nil with the diff.
+func archFreshness(d *architectureProjectDTO, projectPath string) {
+	m, err := archmap.Load(projectPath)
+	if err == nil {
+		n := archmap.ModuleCount(m)
+		d.ModuleCount = &n
+	}
+	if d.AnalyzedAtCommit == nil || d.HeadCommit == nil {
+		return
+	}
+	from, to := *d.AnalyzedAtCommit, *d.HeadCommit
+	if from == to {
+		// Current: zero here is a measurement, not a fallback.
+		zero := 0
+		d.CommitsBehind = &zero
+		empty := 0
+		d.TouchedModules = &empty
+		return
+	}
+	behind, err := archmap.Behind(context.Background(), projectPath, from, to)
+	if err != nil {
+		return
+	}
+	d.CommitsBehind = &behind
+	if m == nil {
+		return
+	}
+	files, err := archmap.Diff(context.Background(), projectPath, from, to)
+	if err != nil {
+		return
+	}
+	touched := len(archmap.Match(m, files).Modules)
+	d.TouchedModules = &touched
 }
 
 // graphifyDTO reports the on-disk build artifacts under <project>/graphify-out.

@@ -15,6 +15,7 @@ import type {
   BoardTask,
   BreakdownResp,
   AddConnectorInput,
+  BlastResponse,
   Connector,
   ConnectorsResponse,
   DetachResponse,
@@ -1794,6 +1795,18 @@ export async function renameSession(id: number, title: string | null): Promise<v
 export function fetchTools(): Promise<ToolsResponse> {
   if (MOCK) return mockApi.tools();
   return get('/api/tools');
+}
+
+/**
+ * GET /api/projects/{id}/architecture/blast — which modules and flows of the
+ * project's architecture map the commits since the default branch touch.
+ *
+ * Degrades by STATUS, not by an empty body: 404 = no map, 409 = no baseline
+ * branch / not a git repo. Callers treat any throw as "no blast strip", never
+ * as "this branch touches nothing".
+ */
+export function fetchArchitectureBlast(id: number): Promise<BlastResponse> {
+  return get(`/api/projects/${String(id)}/architecture/blast`);
 }
 
 /**

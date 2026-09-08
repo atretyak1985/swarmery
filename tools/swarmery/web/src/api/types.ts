@@ -2774,8 +2774,52 @@ export interface ArchitectureProject {
   analyzedAtCommit: string | null;
   /** Current HEAD commit of the project repo resolved without exec; null when unresolvable. */
   headCommit: string | null;
+  /**
+   * Commits between analyzedAtCommit and HEAD. `0` means the map is current;
+   * `null` means it could not be measured (no git, no analysed commit) — the
+   * two are deliberately different, so never `?? 0` this.
+   */
+  commitsBehind: number | null;
+  /** Modules the commits since analyzedAtCommit touch; null when unmeasurable. */
+  touchedModules: number | null;
+  /** Total modules in architecture-map.json; null when the map is absent or corrupt. */
+  moduleCount: number | null;
   /** Auto-provision job state; null when no job is tracked. */
   provision: ProvisionState | null;
+}
+
+// --- blast radius (GET /api/projects/{id}/architecture/blast) ----------------
+
+/** A module the branch touches, with the changed files that put it there. */
+export interface BlastModule {
+  id: string;
+  name: string;
+  files: string[];
+}
+
+/** A flow whose file-anchored steps the branch hits. */
+export interface BlastFlow {
+  id: string;
+  name: string;
+  steps: string[];
+}
+
+/** Changed files mapped onto the architecture map. */
+export interface BlastTouched {
+  modules: BlastModule[];
+  flows: BlastFlow[];
+  /** Changed files no module path claims. */
+  unmatched: string[];
+}
+
+export interface BlastResponse {
+  /** Baseline branch the diff ran against (origin/HEAD, else main/master). */
+  base: string;
+  /** HEAD commit the diff ran to. */
+  head: string;
+  /** Number of changed files across base..head. */
+  files: number;
+  touched: BlastTouched;
 }
 
 export interface ToolsResponse {

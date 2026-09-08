@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "analyzedAt": "2026-09-01",
+  "analyzedAtCommit": "aabbccddee112233445566778899001122334455",
+  "project": {
+    "name": "fixture",
+    "description": "archmap test fixture — shaped for longest-prefix, flow-step and unmatched coverage",
+    "techStack": ["go", "typescript"],
+    "entryPoints": ["cmd/app/main.go"]
+  },
+  "layers": [
+    { "id": "ui", "name": "UI", "order": 1 },
+    { "id": "server", "name": "Server", "order": 2 }
+  ],
+  "modules": [
+    {
+      "id": "web",
+      "name": "Web app",
+      "path": "web/src",
+      "layer": "ui",
+      "responsibility": "the SPA; parent of the pages module below"
+    },
+    {
+      "id": "web-pages",
+      "name": "Web pages",
+      "path": "web/src/pages",
+      "layer": "ui",
+      "responsibility": "nested under web/src on purpose — longest prefix must win"
+    },
+    {
+      "id": "web-legacy",
+      "name": "Web legacy",
+      "path": "web/src-legacy",
+      "layer": "ui",
+      "responsibility": "shares a string prefix with web/src but is a different tree"
+    },
+    {
+      "id": "api",
+      "name": "HTTP API",
+      "path": "internal/api",
+      "layer": "server",
+      "responsibility": "route handlers"
+    },
+    {
+      "id": "single-file",
+      "name": "Entrypoint",
+      "path": "cmd/app/main.go",
+      "layer": "server",
+      "responsibility": "a module anchored on one FILE, not a directory"
+    }
+  ],
+  "flows": [
+    {
+      "id": "render-page",
+      "name": "Render a page",
+      "description": "browser asks the API, the page renders it",
+      "steps": [
+        { "from": "web-pages", "to": "api", "action": "fetch the feed", "file": "web/src/pages/Home.tsx" },
+        { "from": "api", "to": "web-pages", "action": "serve JSON", "file": "internal/api/routes.go" }
+      ]
+    },
+    {
+      "id": "boot",
+      "name": "Boot the server",
+      "description": "process start wires the router",
+      "steps": [
+        { "from": "single-file", "to": "api", "action": "mount routes", "file": "cmd/app/main.go" },
+        { "from": "api", "to": "api", "action": "listen", "file": "internal/api/server.go" }
+      ]
+    },
+    {
+      "id": "unanchored",
+      "name": "Unanchored flow",
+      "description": "every step lacks a file — must never match anything",
+      "steps": [
+        { "from": "web", "to": "api", "action": "no file anchor" },
+        { "from": "api", "to": "web", "action": "still no file anchor" }
+      ]
+    }
+  ]
+}
