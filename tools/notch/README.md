@@ -1,11 +1,30 @@
 # Swarmery Notch
 
-A native macOS 14+ menu-bar / notch companion for the [swarmery](../../README.md)
-daemon. It lives collapsed in the notch (or docked to the top edge on displays
-without one) and expands on its own the moment an operator is needed — a
-permission request is pending, or a session has failed. From the panel you can
-approve/deny, jump to the terminal tab that owns a session, see plan usage, and
-open the dashboard.
+A native macOS 14+ companion for the [swarmery](../../README.md) daemon. It
+lives as a small tab docked to the **right edge** of every display — rounded on
+the left, flush on the right, the shape you know from Grammarly's desktop
+widget — and expands into a side panel on its own the moment an operator is
+needed: a permission request is pending, or a session has failed. From the
+panel you can approve/deny, jump to the terminal tab that owns a session, see
+plan usage, and open the dashboard. The original notch placement (collapsed
+into the notch, or the top edge on displays without one) is still available
+via `SWARMERY_NOTCH_PLACEMENT=notch`.
+
+### What you see
+
+- **Collapsed tab** (44×64 pt, mid-height on the right edge): a hexagon-grid
+  icon tinted by the worst state on screen — teal when everything is fine,
+  **red** when an approval is pending (plus a red badge with the count),
+  **orange** when a session needs you or failed, gray with a crossed-out Wi-Fi
+  symbol when the daemon is offline — and the live-session count underneath.
+  The surface is the system window gray (adapts to light/dark mode) with a
+  hairline border and a soft shadow, deliberately not black.
+- **Expanded panel** (360 pt wide, grows around the tab): usage windows first,
+  then one card per pending approval (tool name, project, request summary,
+  `Deny` / `Approve`), then the session rows with a coloured status dot, the
+  jump-to-terminal / open-in-dashboard button and a stop button. Hovering the
+  tab opens the panel; it opens by itself on a pending approval or a failed
+  session and closes after the linger period.
 
 Swarmery Notch is a thin client: every byte of data it shows comes from the
 swarmery daemon on `:7777` (`GET /api/sessions`, `/api/approvals`, `/api/usage`,
@@ -91,6 +110,9 @@ installed plist from the template, so re-apply the block after an upgrade.
 - **`SWARMERY_URL`** — overrides the daemon base URL, default
   `http://127.0.0.1:7777`. Set this if the daemon runs on a non-default port
   or host. A trailing slash is tolerated (normalized internally).
+- **`SWARMERY_NOTCH_PLACEMENT`** — `right` (default) docks the widget to the
+  right screen edge as described above; `notch` restores the original
+  top-edge/notch presentation. Anything else falls back to `right`.
 - **`SWARMERY_NOTCH_LINGER`** — seconds the panel stays expanded after the
   most recent approval/session resolution before auto-collapsing, default `6`.
   Zero, negative, or non-numeric values fall back to the default rather than

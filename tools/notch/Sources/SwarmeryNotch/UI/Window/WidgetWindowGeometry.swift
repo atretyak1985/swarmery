@@ -32,7 +32,16 @@ public struct WidgetContentGeometry: Equatable, Sendable {
 }
 
 public struct WidgetWindowGeometry {
-    public init() {}
+    public let placement: WidgetPlacement
+
+    /// Where along the right edge the docked tab sits, as a fraction of the
+    /// visible frame's height measured from the bottom: 0.5 is vertically
+    /// centred. The expanded panel grows around the same anchor.
+    public static let edgeAnchorFraction: CGFloat = 0.5
+
+    public init(placement: WidgetPlacement) {
+        self.placement = placement
+    }
 
     /// Sizes the content settled on, so a transition can size the window
     /// before anything moves rather than chasing it.
@@ -67,7 +76,51 @@ public struct WidgetWindowGeometry {
         measured = [:]
     }
 
-    public func frame(for presentation: WidgetPresentation, metrics: WidgetMetrics, screenFrame: CGRect) -> NSRect {
+    /// `visibleFrame` is the screen minus menu bar and Dock; the right-edge
+    /// placement stays inside it so the panel never hides under either. The
+    /// notch placement deliberately uses the full `screenFrame` (it lives in
+    /// the menu bar band by design).
+    public func frame(
+        for presentation: WidgetPresentation,
+        metrics: WidgetMetrics,
+        screenFrame: CGRect,
+        visibleFrame: CGRect? = nil
+    ) -> NSRect {
+        switch placement {
+        case .notch:
+            return notchFrame(for: presentation, metrics: metrics, screenFrame: screenFrame)
+        case .rightEdge:
+            return edgeFrame(for: presentation, visibleFrame: visibleFrame ?? screenFrame)
+        }
+    }
+
+    private func edgeFrame(for presentation: WidgetPresentation, visibleFrame visible: CGRect) -> NSRect {
+        let recorded = measured[Self.sizeKey(presentation)]
+        let content = recorded?.size ?? edgeFallback(for: presentation, visibleFrame: visible)
+        let width = min(content.width.rounded(.up), visible.width)
+        let height = min(content.height.rounded(.up), visible.height)
+        let anchorY = visible.minY + visible.height * Self.edgeAnchorFraction
+        let unclampedY = (anchorY - height / 2).rounded()
+        let y = min(max(unclampedY, visible.minY), visible.maxY - height)
+        return NSRect(x: (visible.maxX - width).rounded(), y: y, width: width, height: height)
+    }
+
+    private func edgeFallback(for presentation: WidgetPresentation, visibleFrame visible: CGRect) -> CGSize {
+        switch presentation {
+        case .expanded:
+            return CGSize(
+                width: min(visible.width, ExpandedPanel.panelWidth + NotchRootView.edgeInset * 2),
+                height: min(visible.height * 0.8, 640)
+            )
+        case .compact, .hidden:
+            return CGSize(
+                width: EdgeTab.size.width + NotchRootView.edgeInset * 2,
+                height: EdgeTab.size.height + NotchRootView.edgeInset * 2
+            )
+        }
+    }
+
+    private func notchFrame(for presentation: WidgetPresentation, metrics: WidgetMetrics, screenFrame: CGRect) -> NSRect {
         let recorded = measured[Self.sizeKey(presentation)]
         let content = recorded?.size ?? fallback(for: presentation, metrics: metrics, screenFrame: screenFrame)
 

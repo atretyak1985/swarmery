@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: AppCoordinator?
     private var collapseTask: Task<Void, Never>?
     private let config = AppCoordinatorConfig.fromEnvironment()
+    private let placement = WidgetPlacement.fromEnvironment()
 
     static func main() {
         let app = NSApplication.shared
@@ -90,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Presenters (one per screen, so a widget follows every display)
 
     private func setUpPresenters(actions: WidgetActions) {
-        presenters = NSScreen.screens.map { WidgetPresenter(screen: $0, actions: actions) }
+        presenters = NSScreen.screens.map { WidgetPresenter(screen: $0, actions: actions, placement: placement) }
     }
 
     @objc private func screenParametersChanged() {

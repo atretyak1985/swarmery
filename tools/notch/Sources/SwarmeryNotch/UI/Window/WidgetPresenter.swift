@@ -24,9 +24,11 @@ final class WidgetViewState: ObservableObject {
     @Published var presentation: WidgetPresentation = .hidden
     @Published var attention: AttentionState = AttentionState()
     @Published var metrics: WidgetMetrics
+    let placement: WidgetPlacement
 
-    init(metrics: WidgetMetrics) {
+    init(metrics: WidgetMetrics, placement: WidgetPlacement) {
         self.metrics = metrics
+        self.placement = placement
     }
 }
 
@@ -40,14 +42,17 @@ public final class WidgetPresenter {
     private let actions: WidgetActions
     private let viewState: WidgetViewState
     private var panel: WidgetPanel?
-    private var geometry = WidgetWindowGeometry()
+    private var geometry: WidgetWindowGeometry
     private var isHovering = false
 
-    public init(screen: NSScreen, actions: WidgetActions) {
+    public init(screen: NSScreen, actions: WidgetActions, placement: WidgetPlacement = .default) {
         self.displayID = screen.displayID
         self.actions = actions
-        self.viewState = WidgetViewState(metrics: WidgetMetrics(screen: screen))
+        self.viewState = WidgetViewState(metrics: WidgetMetrics(screen: screen), placement: placement)
+        self.geometry = WidgetWindowGeometry(placement: placement)
     }
+
+    public var placement: WidgetPlacement { viewState.placement }
 
     public var isPhysicalNotch: Bool { viewState.metrics.isPhysicalNotch }
 
@@ -143,7 +148,12 @@ public final class WidgetPresenter {
 
     private func resizeWindow(for presentation: WidgetPresentation) {
         guard let panel, let screen else { return }
-        let frame = geometry.frame(for: presentation, metrics: viewState.metrics, screenFrame: screen.frame)
+        let frame = geometry.frame(
+            for: presentation,
+            metrics: viewState.metrics,
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame
+        )
         guard panel.frame != frame else { return }
         panel.setFrame(frame, display: false)
         // Lay out synchronously, before the caller starts animating -- SwiftUI
