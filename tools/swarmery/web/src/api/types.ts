@@ -2763,6 +2763,29 @@ export interface ProvisionState {
   error: string;
 }
 
+/**
+ * One member checkout of a MULTI-repo workspace — a project whose root is not
+ * itself a git repo, so `ArchitectureProject.headCommit` is null and freshness
+ * can only be answered per member.
+ *
+ * A member that is not on disk (or is not a checkout) arrives with `ok: false`
+ * and null commits instead of being left out: the page has to be able to say
+ * "we could not see 2 of 8", because a shorter list reads as a smaller,
+ * healthier workspace.
+ */
+export interface ArchitectureRepoHead {
+  /** Repo name as declared in `.claude/project.json` `repos[]`. */
+  name: string;
+  /** Whether this member's HEAD was readable. Everything below is null when false. */
+  ok: boolean;
+  headCommit: string | null;
+  /** The commit the map recorded FOR THIS REPO; null when it records none. */
+  analyzedAtCommit: string | null;
+  /** Same contract as the project-level fields: null is unmeasurable, 0 is current. */
+  commitsBehind: number | null;
+  touchedModules: number | null;
+}
+
 export interface ArchitectureProject {
   id: number;
   slug: string;
@@ -2786,6 +2809,13 @@ export interface ArchitectureProject {
   moduleCount: number | null;
   /** Auto-provision job state; null when no job is tracked. */
   provision: ProvisionState | null;
+  /**
+   * Per-member freshness of a multi-repo workspace. ABSENT (not `[]`) for a
+   * single-repo project, whose wire shape is unchanged — so treat it as
+   * optional and never index it without a length check. When present,
+   * `commitsBehind` / `touchedModules` above are the rollup across these.
+   */
+  repos?: ArchitectureRepoHead[];
 }
 
 // --- blast radius (GET /api/projects/{id}/architecture/blast) ----------------

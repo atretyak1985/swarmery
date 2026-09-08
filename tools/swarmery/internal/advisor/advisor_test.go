@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1233,6 +1234,198 @@ func TestR7StaleArchitectureMap(t *testing.T) {
 		}
 		if len(fs) != 0 {
 			t.Fatalf("findings = %+v, want none for archived project", fs)
+		}
+	})
+}
+
+// ── R7, multi-repo ────────────────────────────────────────────────────────
+
+// makeWorkspaceDir builds a MULTI-repo project: no .git at the root, member
+// checkouts declared in .claude/project.json, and an architecture map aged
+// `age` before testNow. Each entry of `members` maps a repo name to the HEAD it
+// should resolve to; a member whose HEAD is "" is declared but never created on
+// disk. `perRepo` becomes the map's optional analyzedAtCommits object — pass nil
+// for the scalar-stamp shape every multi-repo map has today.
+func makeWorkspaceDir(t *testing.T, members map[string]string, perRepo map[string]string, scalar string, age time.Duration) string {
+	t.Helper()
+	root := t.TempDir()
+
+	write := func(p, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	names := make([]string, 0, len(members))
+	for name := range members {
+		names = append(names, name)
+	}
+	sort.Strings(names) // deterministic declaration order
+	cfg, err := json.Marshal(map[string]any{"name": "workspace", "repos": names})
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(filepath.Join(root, ".claude", "project.json"), string(cfg))
+
+	for name, head := range members {
+		if head == "" {
+			continue // declared but absent
+		}
+		gitDir := filepath.Join(root, name, ".git")
+		write(filepath.Join(gitDir, "HEAD"), "ref: refs/heads/main\n")
+		write(filepath.Join(gitDir, "refs", "heads", "main"), head+"\n")
+	}
+
+	meta := map[string]any{"schemaVersion": 1}
+	if scalar != "" {
+		meta["analyzedAtCommit"] = scalar
+	}
+	if perRepo != nil {
+		meta["analyzedAtCommits"] = perRepo
+	}
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapPath := filepath.Join(root, "architecture-out", "architecture-map.json")
+	write(mapPath, string(raw))
+	mtime := testNow.Add(-age)
+	if err := os.Chtimes(mapPath, mtime, mtime); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// The four biggest projects the daemon indexes are multi-repo workspaces whose
+// root has no .git at all. R7 used to resolve HEAD from that root, get
+// ok=false, and skip them forever — the rule was blind exactly where the repos
+// were largest. It now goes through archmap.ResolveFreshness, the same resolver
+// the Architecture page uses.
+func TestR7StaleArchitectureMapMultiRepo(t *testing.T) {
+	staleAge := time.Duration(R7StaleDays+1) * 24 * time.Hour
+
+	t.Run("fires when one member moved past its recorded commit", func(t *testing.T) {
+		db := testDB(t)
+		root := makeWorkspaceDir(t,
+			map[string]string{"repo-one": shaA, "repo-two": shaA, "repo-gone": ""},
+			map[string]string{"repo-one": shaA, "repo-two": shaB, "repo-gone": shaA},
+			"", staleAge)
+		insertProjectAt(t, db, 99, root, "proj-workspace")
+
+		fs, err := r7StaleArchitectureMap(db, evalWindow(), testNow)
+		if err != nil {
+			t.Fatalf("r7: %v", err)
+		}
+		if len(fs) != 1 {
+			t.Fatalf("findings = %+v, want exactly 1 — repo-two moved past the map", fs)
+		}
+		f := fs[0]
+		if f.rule != "R7" || f.target != "proj-workspace" {
+			t.Errorf("finding = %+v, want R7/proj-workspace", f)
+		}
+		if !strings.Contains(f.detail, "repo-two") {
+			t.Errorf("detail %q must name the member that moved", f.detail)
+		}
+		if strings.Contains(f.detail, "repo-one") {
+			t.Errorf("detail %q must NOT name a member that is current", f.detail)
+		}
+		repos, ok := f.evidence["repos"].([]map[string]any)
+		if !ok {
+			t.Fatalf("evidence[repos] = %T, want the per-repo list", f.evidence["repos"])
+		}
+		if len(repos) != 3 {
+			t.Fatalf("evidence repos = %+v, want all 3 members incl. the unreadable one", repos)
+		}
+		byName := map[string]map[string]any{}
+		for _, r := range repos {
+			byName[r["name"].(string)] = r
+		}
+		if byName["repo-two"]["stale"] != true {
+			t.Errorf("repo-two evidence = %+v, want stale=true", byName["repo-two"])
+		}
+		if byName["repo-one"]["stale"] != false {
+			t.Errorf("repo-one evidence = %+v, want stale=false", byName["repo-one"])
+		}
+		if byName["repo-gone"]["ok"] != false {
+			t.Errorf("repo-gone evidence = %+v, want ok=false and still listed", byName["repo-gone"])
+		}
+	})
+
+	t.Run("no finding when every member matches the map", func(t *testing.T) {
+		db := testDB(t)
+		root := makeWorkspaceDir(t,
+			map[string]string{"repo-one": shaA, "repo-two": shaB},
+			map[string]string{"repo-one": shaA, "repo-two": shaB},
+			"", staleAge)
+		insertProjectAt(t, db, 99, root, "proj-current")
+
+		fs, err := r7StaleArchitectureMap(db, evalWindow(), testNow)
+		if err != nil {
+			t.Fatalf("r7: %v", err)
+		}
+		if len(fs) != 0 {
+			t.Fatalf("findings = %+v, want none — every member is at its recorded commit", fs)
+		}
+	})
+
+	t.Run("fires on age alone when the map carries only a scalar stamp", func(t *testing.T) {
+		db := testDB(t)
+		// The shape every multi-repo map has today: one commit for eight repos.
+		root := makeWorkspaceDir(t,
+			map[string]string{"repo-one": shaA, "repo-two": shaB},
+			nil, shaA, staleAge)
+		insertProjectAt(t, db, 99, root, "proj-scalar")
+
+		fs, err := r7StaleArchitectureMap(db, evalWindow(), testNow)
+		if err != nil {
+			t.Fatalf("r7: %v", err)
+		}
+		if len(fs) != 1 {
+			t.Fatalf("findings = %+v, want 1 — unverifiable freshness on an old map is not 'fine'", fs)
+		}
+		if !strings.Contains(fs[0].detail, "analyzedAtCommits") {
+			t.Errorf("detail %q must point at the per-repo stamp that fixes the ambiguity", fs[0].detail)
+		}
+	})
+
+	t.Run("no finding when the map is younger than the age gate", func(t *testing.T) {
+		db := testDB(t)
+		freshAge := time.Duration(R7StaleDays-1) * 24 * time.Hour
+		root := makeWorkspaceDir(t,
+			map[string]string{"repo-one": shaA},
+			map[string]string{"repo-one": shaB},
+			"", freshAge)
+		insertProjectAt(t, db, 99, root, "proj-ws-fresh")
+
+		fs, err := r7StaleArchitectureMap(db, evalWindow(), testNow)
+		if err != nil {
+			t.Fatalf("r7: %v", err)
+		}
+		if len(fs) != 0 {
+			t.Fatalf("findings = %+v, want none for a map fresher than %d days", fs, R7StaleDays)
+		}
+	})
+
+	t.Run("no finding when no member is readable", func(t *testing.T) {
+		db := testDB(t)
+		// Every declared member is absent: nothing to compare, nothing seen.
+		// That is unknown, not stale — the same "never guess" rule the
+		// unreadable-.git counter-case pins for single repos.
+		root := makeWorkspaceDir(t,
+			map[string]string{"repo-one": "", "repo-two": ""},
+			nil, shaA, staleAge)
+		insertProjectAt(t, db, 99, root, "proj-ws-blind")
+
+		fs, err := r7StaleArchitectureMap(db, evalWindow(), testNow)
+		if err != nil {
+			t.Fatalf("r7: %v", err)
+		}
+		if len(fs) != 0 {
+			t.Fatalf("findings = %+v, want none when not one member could be read", fs)
 		}
 	})
 }

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -104,14 +105,14 @@ type provisionDTO struct {
 }
 
 type architectureProjectDTO struct {
-	ID               int64         `json:"id"`
-	Slug             string        `json:"slug"`
-	Name             *string       `json:"name"`
-	HasMap           bool          `json:"hasMap"`
-	BuiltAt          *string       `json:"builtAt"`
-	MapPath          string        `json:"mapPath"`
-	AnalyzedAtCommit *string       `json:"analyzedAtCommit"`
-	HeadCommit       *string       `json:"headCommit"`
+	ID               int64   `json:"id"`
+	Slug             string  `json:"slug"`
+	Name             *string `json:"name"`
+	HasMap           bool    `json:"hasMap"`
+	BuiltAt          *string `json:"builtAt"`
+	MapPath          string  `json:"mapPath"`
+	AnalyzedAtCommit *string `json:"analyzedAtCommit"`
+	HeadCommit       *string `json:"headCommit"`
 	// Freshness as a number rather than a boolean. All three degrade to nil —
 	// never 0 — on any failure (no git, no map, unparseable map, unknown
 	// commit), exactly like HeadCommit: 0 would read as "current" and "no
@@ -120,6 +121,28 @@ type architectureProjectDTO struct {
 	TouchedModules *int          `json:"touchedModules"`
 	ModuleCount    *int          `json:"moduleCount"`
 	Provision      *provisionDTO `json:"provision"`
+	// Repos is the per-member freshness of a MULTI-repo workspace, whose root
+	// has no .git at all and whose HeadCommit is therefore null. omitempty is
+	// load-bearing: a single-repo project must keep sending the exact bytes it
+	// always did, so the field is absent rather than `[]` for them.
+	Repos []repoHeadDTO `json:"repos,omitempty"`
+}
+
+// repoHeadDTO is one member checkout of a multi-repo workspace. A member that
+// is not on disk, or is not a checkout, arrives with ok=false and NULL commits
+// instead of being omitted — the page must be able to say "we could not see
+// 2 of 8", because a shorter list reads as a smaller, healthier workspace.
+type repoHeadDTO struct {
+	Name string `json:"name"`
+	// OK reports that this member's HEAD was readable. Everything below is
+	// null when it is false.
+	OK               bool    `json:"ok"`
+	HeadCommit       *string `json:"headCommit"`
+	AnalyzedAtCommit *string `json:"analyzedAtCommit"`
+	// Same contract as the project-level fields: null is "unmeasurable",
+	// 0 is "measured, and current".
+	CommitsBehind  *int `json:"commitsBehind"`
+	TouchedModules *int `json:"touchedModules"`
 }
 
 type toolsArchitectureSection struct {
@@ -313,11 +336,21 @@ func architectureDTO(id int64, slug string, name *string, projectPath string, pa
 // The three fields move together only as far as the data allows: moduleCount
 // survives a git failure (it is a property of the artifact alone), while
 // touchedModules needs both halves and so goes nil with the diff.
+//
+// A MULTI-repo workspace takes the other branch: its root is not a checkout,
+// so there is no root HEAD to measure against and every number here used to be
+// null for the largest projects on the page. archmap.ResolveFreshness answers
+// per member instead — the same answer advisor R7 consumes, so the page and the
+// advisor cannot disagree.
 func archFreshness(d *architectureProjectDTO, projectPath string) {
 	m, err := archmap.Load(projectPath)
 	if err == nil {
 		n := archmap.ModuleCount(m)
 		d.ModuleCount = &n
+	}
+	if f := archmap.ResolveFreshness(projectPath); f.MultiRepo() {
+		archFreshnessMulti(d, m, f)
+		return
 	}
 	if d.AnalyzedAtCommit == nil || d.HeadCommit == nil {
 		return
@@ -345,6 +378,99 @@ func archFreshness(d *architectureProjectDTO, projectPath string) {
 	}
 	touched := len(archmap.Match(m, files).Modules)
 	d.TouchedModules = &touched
+}
+
+// archFreshnessMulti fills the per-repo strip for a multi-repo workspace and
+// rolls it up into the project-level commitsBehind / touchedModules.
+//
+// Two details that are easy to get wrong and both change the answer:
+//
+//   - Module paths in a multi-repo map are WORKSPACE-relative ("app/src/lib"),
+//     while `git diff` inside a member emits REPO-relative ones ("src/lib").
+//     Matching the raw diff would land every file in Unmatched and report a
+//     confident "0 modules touched".
+//   - The rollups are all-or-nothing. A member whose git call failed makes the
+//     sum an undercount, and an undercount here is worse than a null: it reads
+//     as a smaller blast radius than the one that exists. Members that are
+//     merely UNMEASURABLE (no HEAD, or no per-repo stamp in the map) do not
+//     taint the rollup — they were never part of the sum, and the per-repo
+//     rows say so explicitly.
+func archFreshnessMulti(d *architectureProjectDTO, m *archmap.Map, f archmap.Freshness) {
+	ctx := context.Background()
+	repos := make([]repoHeadDTO, 0, len(f.Repos))
+
+	behindTotal, measured := 0, 0
+	behindComplete, touchedComplete := true, true
+	touchedIDs := map[string]struct{}{}
+
+	for _, r := range f.Repos {
+		row := repoHeadDTO{Name: r.Name, OK: r.OK}
+		if r.OK {
+			head := r.Head
+			row.HeadCommit = &head
+		}
+		if r.Analyzed != "" {
+			analyzed := r.Analyzed
+			row.AnalyzedAtCommit = &analyzed
+		}
+		if !r.Measurable() {
+			repos = append(repos, row)
+			continue
+		}
+		measured++
+		if r.Head == r.Analyzed {
+			// Current: zero here is a measurement, not a fallback.
+			zero, none := 0, 0
+			row.CommitsBehind, row.TouchedModules = &zero, &none
+			repos = append(repos, row)
+			continue
+		}
+		behind, err := archmap.Behind(ctx, r.Path, r.Analyzed, r.Head)
+		if err != nil {
+			behindComplete, touchedComplete = false, false
+			repos = append(repos, row)
+			continue
+		}
+		row.CommitsBehind = &behind
+		behindTotal += behind
+		if m == nil {
+			repos = append(repos, row)
+			continue
+		}
+		files, err := archmap.Diff(ctx, r.Path, r.Analyzed, r.Head)
+		if err != nil {
+			touchedComplete = false
+			repos = append(repos, row)
+			continue
+		}
+		scoped := make([]string, 0, len(files))
+		for _, p := range files {
+			scoped = append(scoped, path.Join(r.Name, p))
+		}
+		mods := archmap.Match(m, scoped).Modules
+		n := len(mods)
+		row.TouchedModules = &n
+		for _, tm := range mods {
+			touchedIDs[tm.ID] = struct{}{}
+		}
+		repos = append(repos, row)
+	}
+
+	d.Repos = repos
+	if measured == 0 {
+		return
+	}
+	if behindComplete {
+		total := behindTotal
+		d.CommitsBehind = &total
+	}
+	// Distinct module ids, not a sum of per-repo counts: module paths are
+	// repo-scoped so the sets should be disjoint, but a union cannot double
+	// count if a map ever anchors one module across two members.
+	if m != nil && touchedComplete {
+		n := len(touchedIDs)
+		d.TouchedModules = &n
+	}
 }
 
 // graphifyDTO reports the on-disk build artifacts under <project>/graphify-out.

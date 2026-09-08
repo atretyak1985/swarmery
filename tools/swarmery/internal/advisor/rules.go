@@ -13,8 +13,10 @@ package advisor
 //	R4 re-dispatch share   — the delegationRates isRedispatch classifier
 //	R5 stale improvements  — retro_improvements via task_retros/tasks
 //	R6 cache regression    — the Analytics timeseriesCache hit-rate math
-//	R7 stale architecture  — architecture-out/architecture-map.json analyzed
-//	                         commit vs repo HEAD, aged past R7StaleDays
+//	R7 stale architecture  — archmap.ResolveFreshness, the same resolver the
+//	                         /api/tools architecture DTO uses (root HEAD, or
+//	                         per-repo HEADs for a multi-repo workspace), aged
+//	                         past R7StaleDays
 //
 // The tiny classifiers (agent-name fold, error-message normalization,
 // re-dispatch verdict grammar) are duplicated here rather than imported:
@@ -35,7 +37,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/githead"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/archmap"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
@@ -811,8 +813,16 @@ func r6CacheRegression(db *sql.DB, win window, now time.Time) ([]finding, error)
 // ── R7: stale architecture map ────────────────────────────────────────────
 
 // r7StaleArchitectureMap flags non-archived projects whose architecture map
-// no longer matches the repo HEAD and has aged past R7StaleDays. Filesystem-
-// grounded (map JSON + githead), no git exec.
+// no longer matches the code and has aged past R7StaleDays.
+//
+// The comparison goes through archmap.ResolveFreshness — the SAME resolver the
+// /api/tools architecture DTO uses — so this rule and the Architecture page can
+// never disagree about the same project. Before that, this rule resolved HEAD
+// from the project root itself, which meant every multi-repo workspace (root
+// with no .git, members listed in .claude/project.json) answered "unknown" and
+// was silently skipped: the rule was blind exactly where the repos were biggest.
+//
+// Still filesystem-grounded, still no git exec.
 func r7StaleArchitectureMap(db *sql.DB, win window, now time.Time) ([]finding, error) {
 	rows, err := db.Query(`SELECT path, slug FROM projects WHERE archived = 0 ORDER BY id`)
 	if err != nil {
@@ -831,39 +841,115 @@ func r7StaleArchitectureMap(db *sql.DB, win window, now time.Time) ([]finding, e
 		if err != nil || fi.IsDir() || !fi.ModTime().Before(cutoff) {
 			continue
 		}
-		raw, err := os.ReadFile(mapPath)
-		if err != nil {
-			continue
-		}
-		var m struct {
-			AnalyzedAtCommit string `json:"analyzedAtCommit"`
-		}
-		if json.Unmarshal(raw, &m) != nil || len(m.AnalyzedAtCommit) < 7 {
-			continue
-		}
-		head, ok := githead.Resolve(path)
-		if !ok || head == m.AnalyzedAtCommit {
+		f := archmap.ResolveFreshness(path)
+		if !r7Fires(f) {
 			continue
 		}
 		ageDays := int(now.Sub(fi.ModTime()).Hours() / 24)
+		ev := map[string]any{
+			"window": win,
+			"counts": map[string]int{"age_days": ageDays},
+		}
+		if f.Analyzed != "" {
+			ev["analyzedAtCommit"] = f.Analyzed
+		}
+		if f.Single != nil {
+			ev["headCommit"] = *f.Single
+		}
+		if f.MultiRepo() {
+			ev["repos"] = r7RepoEvidence(f)
+		}
 		out = append(out, finding{
 			rule:       "R7",
 			targetKind: "project",
 			target:     slug,
 			title:      "Architecture map is stale: " + slug,
-			detail: fmt.Sprintf(
-				"architecture-map.json was analyzed at %s but HEAD is %s (map is %d days old). Re-run /architecture-map — the freshness gate makes it an incremental refresh.",
-				m.AnalyzedAtCommit[:7], head[:7], ageDays),
-			evidence: map[string]any{
-				"window":           win,
-				"counts":           map[string]int{"age_days": ageDays},
-				"analyzedAtCommit": m.AnalyzedAtCommit,
-				"headCommit":       head,
-			},
+			detail:     r7Detail(f, ageDays),
+			evidence:   ev,
 		})
 	}
 	sortFindings(out)
 	return out, rows.Err()
+}
+
+// r7Fires decides whether a map old enough to qualify is ALSO out of date.
+//
+// Two ways to qualify, and the second one is the multi-repo concession:
+//
+//   - A commit comparison proved it (Stale). True for a single repo whose HEAD
+//     moved, and for a workspace where at least one member moved past its
+//     recorded commit.
+//   - The workspace is multi-repo, its members are readable, but the map only
+//     carries the scalar `analyzedAtCommit` — which cannot say which of eight
+//     repos it belongs to. Age is then the only evidence there is, and the map
+//     is already past R7StaleDays by the time this runs. Firing on age alone
+//     here is deliberate: the alternative is the pre-existing silence, and the
+//     fix (re-run /architecture-map, which now stamps analyzedAtCommits) also
+//     removes the ambiguity for good.
+//
+// A workspace where NO member was readable never fires: there is nothing to
+// compare and nothing to look at, which is not the same as being out of date.
+func r7Fires(f archmap.Freshness) bool {
+	if f.Stale {
+		return true
+	}
+	return f.MultiRepo() && !f.Comparable && f.ResolvedRepos() > 0
+}
+
+// r7Detail writes the finding's prose for whichever of the three shapes the
+// project turned out to be.
+func r7Detail(f archmap.Freshness, ageDays int) string {
+	const fix = "Re-run /architecture-map — the freshness gate makes it an incremental refresh."
+	if !f.MultiRepo() {
+		head := ""
+		if f.Single != nil {
+			head = shortSHA(*f.Single)
+		}
+		return fmt.Sprintf(
+			"architecture-map.json was analyzed at %s but HEAD is %s (map is %d days old). %s",
+			shortSHA(f.Analyzed), head, ageDays, fix)
+	}
+	if !f.Comparable {
+		return fmt.Sprintf(
+			"architecture-map.json records a single analyzed commit for a %d-repo workspace, so no repo's freshness can be checked (map is %d days old). %s It now stamps analyzedAtCommits per repo.",
+			len(f.Repos), ageDays, fix)
+	}
+	var moved []string
+	for _, r := range f.Repos {
+		if r.Stale() {
+			moved = append(moved, fmt.Sprintf("%s (analyzed %s, HEAD %s)", r.Name, shortSHA(r.Analyzed), shortSHA(r.Head)))
+		}
+	}
+	return fmt.Sprintf(
+		"architecture-map.json is behind in %d of %d repos: %s (map is %d days old). %s",
+		len(moved), len(f.Repos), strings.Join(moved, ", "), ageDays, fix)
+}
+
+// r7RepoEvidence renders the per-repo answer for the finding's evidence blob,
+// including members that could not be read — a shorter list would read as a
+// smaller, healthier workspace.
+func r7RepoEvidence(f archmap.Freshness) []map[string]any {
+	out := make([]map[string]any, 0, len(f.Repos))
+	for _, r := range f.Repos {
+		out = append(out, map[string]any{
+			"name":             r.Name,
+			"ok":               r.OK,
+			"headCommit":       r.Head,
+			"analyzedAtCommit": r.Analyzed,
+			"stale":            r.Stale(),
+		})
+	}
+	return out
+}
+
+// shortSHA abbreviates a commit for prose without assuming it is long enough
+// to slice — the map is written by a skill, and a hand-edited stamp is a real
+// input.
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // ── R8: recurring trajectory anti-patterns ────────────────────────────────────

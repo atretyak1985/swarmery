@@ -226,6 +226,65 @@ function highlightModules(frame: HTMLIFrameElement, moduleIds: readonly string[]
 }
 
 /**
+ * Freshness for a MULTI-repo workspace: `3 of 8 repos ahead of the map · 41
+ * commits behind · 6 of 32 modules touched`.
+ *
+ * A workspace root is not a checkout, so `headCommit` is null for these
+ * projects and the single-repo line above has nothing to say about them — for
+ * the four largest projects on this page it said nothing at all, which read as
+ * "fine" rather than "unknown".
+ *
+ * The denominator is every DECLARED member, including ones the daemon could not
+ * read: "3 of 8" over a list that quietly dropped two unreadable members would
+ * describe a smaller, healthier workspace than the real one. Those are counted
+ * out loud at the end instead, and the title attribute carries the per-repo
+ * breakdown.
+ */
+function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.Element | null {
+  const repos = project.repos ?? [];
+  if (repos.length === 0) return null;
+
+  const measured = repos.filter((r) => r.commitsBehind !== null);
+  const ahead = measured.filter((r) => (r.commitsBehind ?? 0) > 0);
+  const unreadable = repos.filter((r) => !r.ok);
+  const { commitsBehind, touchedModules, moduleCount } = project;
+
+  const tooltip = repos
+    .map((r) => {
+      if (!r.ok) return `${r.name} — not a readable checkout`;
+      const head = r.headCommit === null ? '?' : r.headCommit.slice(0, 7);
+      if (r.commitsBehind === null) return `${r.name} @ ${head} — the map records no commit for it`;
+      if (r.commitsBehind === 0) return `${r.name} @ ${head} — current`;
+      return `${r.name} @ ${head} — ${String(r.commitsBehind)} ahead of the map`;
+    })
+    .join('\n');
+
+  // Nothing measurable: say so. Silence here is what this whole component
+  // exists to remove.
+  if (measured.length === 0) {
+    return (
+      <span className="ml-1 text-ink-faint" title={tooltip}>
+        {` · ${String(repos.length)} repos · freshness unknown`}
+      </span>
+    );
+  }
+
+  const tone = ahead.length === 0 ? 'text-green' : 'text-amber';
+  return (
+    <span className={`ml-1 ${tone}`} title={tooltip}>
+      {` · ${String(ahead.length)} of ${String(repos.length)} repos ahead of the map`}
+      {commitsBehind !== null && commitsBehind > 0
+        ? ` · ${String(commitsBehind)} commit${commitsBehind === 1 ? '' : 's'} behind`
+        : ''}
+      {touchedModules !== null && moduleCount !== null
+        ? ` · ${String(touchedModules)} of ${String(moduleCount)} modules touched`
+        : ''}
+      {unreadable.length > 0 ? ` · ${String(unreadable.length)} unreadable` : ''}
+    </span>
+  );
+}
+
+/**
  * Freshness as a number instead of a boolean badge: `@ d8cbac7 · 130 commits
  * behind · 11 of 56 modules touched`.
  *
@@ -233,9 +292,22 @@ function highlightModules(frame: HTMLIFrameElement, moduleIds: readonly string[]
  * nullable on the wire — `commitsBehind === null` means "could not measure",
  * which is NOT the same as 0 and must not render as "current". A map whose
  * HEAD matches its analysed commit shows the plain `current` it always did.
+ *
+ * A multi-repo workspace takes the other branch BEFORE the analyzedAtCommit
+ * guard below: its map may stamp only `analyzedAtCommits` (per repo) and carry
+ * no scalar commit at all, and returning null there would put us back to
+ * rendering nothing for the biggest projects on the page.
  */
 function Freshness({ project }: { project: ArchitectureProject }): JSX.Element | null {
   const { analyzedAtCommit, headCommit, commitsBehind, touchedModules, moduleCount } = project;
+  if (project.repos !== undefined && project.repos.length > 0) {
+    return (
+      <>
+        {analyzedAtCommit !== null ? ` · @ ${analyzedAtCommit.slice(0, 7)}` : ''}
+        <MultiRepoFreshness project={project} />
+      </>
+    );
+  }
   if (analyzedAtCommit === null) return null;
 
   const current = headCommit !== null && headCommit === analyzedAtCommit;
