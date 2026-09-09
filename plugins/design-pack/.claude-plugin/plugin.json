@@ -1,7 +1,7 @@
 {
   "name": "design-pack",
-  "description": "Design-handoff pack: /design-implement turns an exported design (Claude Design HTML export, handoff prompt, or screenshots) into a pixel-accurate implementation in the project's own stack \u2014 token inventory from a real headless render, reuse-vs-create reconnaissance, an approval gate before any code, and a measured pixel diff against the design as the completion criterion. Opt-in; requires core.",
-  "version": "0.3.2",
+  "description": "Design-handoff pack: /design-implement turns an exported design (Claude Design HTML export, handoff prompt, or screenshots) into a pixel-accurate implementation in the project's own stack — token inventory from a real headless render, reuse-vs-create reconnaissance, an approval gate before any code, and a measured pixel diff against the design as the completion criterion. Opt-in; requires core.",
+  "version": "0.3.3",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"

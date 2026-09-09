@@ -1,7 +1,7 @@
 {
   "name": "core",
   "description": "Vendor-neutral agent-development core: a 13-agent judgment-style fleet (orchestration, planning, design, execution, review) plus progressively-disclosed skills, commands, hooks, and the project-aware agent-work CLI.",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"

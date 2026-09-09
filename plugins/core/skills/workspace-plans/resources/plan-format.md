@@ -53,14 +53,16 @@ instructions — executable without opening anything else.
 **TICK CONTRACT paragraph** (place right before the report-back
 instructions): the platform renders this doc's status and checkboxes live. At
 phase start flip the `Status:` header to `In progress`. The moment a task's
-verification passes, edit THIS phase doc (spell out its absolute path) and
-flip every Acceptance Criteria checkbox that task satisfies `- [ ]` → `- [x]`
-— one edit per completed task, immediately, never batched. When the phase's
-LAST checkbox is ticked, fill `## Completion Report` — what shipped, commits,
-verification output, deviations, blocked calls (≤50 lines); the platform shows
-exactly that section as the phase summary. When the plan's final phase lands,
-also write `plan/SUMMARY.md` (objective, what shipped per phase, verification
-results, follow-ups) — the plan-level summary.
+verification passes, edit THIS phase doc — name it by the path the execution
+contract gave you (a lent copy inside your root when you are isolated, the
+workspace path otherwise); never hard-code an absolute path that points outside
+your root. Flip every Acceptance Criteria checkbox that task satisfies
+`- [ ]` → `- [x]` — one edit per completed task, immediately, never batched.
+When the phase's LAST checkbox is ticked, fill `## Completion Report` — what
+shipped, commits, verification output, deviations, blocked calls (≤50 lines); the platform
+shows exactly that section as the phase summary. When the plan's final phase
+lands, also write `plan/SUMMARY.md` (objective, what shipped per phase,
+verification results, follow-ups) — the plan-level summary.
 
 Alongside what shipped, commits, verification output and deviations,
 `## Completion Report` carries one more mandatory field:
