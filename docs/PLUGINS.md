@@ -84,6 +84,35 @@ A component in a project's own `.claude/` **wins** over a plugin component with 
 
 ---
 
+## graft-pack — the context graph, unasked
+
+**What it is.** The `graft` skill plus the two hooks that make it act without being invoked. Graft keeps a wiring graph of the repo — every file and symbol as a node, `calls`/`imports`/`contains` as edges — under `<repo>/graft/`. The pack's premise is that a graph nobody remembers to query is a graph nobody uses, so it puts the answers in front of the agent instead.
+
+**Requires.** The `graft` CLI on the machine (`npm i -g @nanonets/graft`). No API key: every command the pack runs is a local graph read.
+
+**What it can do.**
+- **Prompt injection** (`UserPromptSubmit`). Runs each prompt through `graft ask --json --no-refresh` and injects `file:line` locators when the graph demonstrably covers it. The gate is graft's own — a resolved-symbol answer always passes, a lexical answer needs `coverageStrong >= 0.1` or `coverage >= 0.5` — so a project that calibrated under `graft init` behaves identically under the pack. Below the gate it nudges toward `graft ask --source`, at most twice per session.
+- **Blast radius** (`PostToolUse` on `Edit|Write`). After a file changes, names the files that depend on it, read straight from `graft/.graph/wiring.json`. Capped at `graft.maxDependents` (default 8) with a `+N more` tail.
+- The skill's decision table: `ask --source` for how/where, `grep` for every occurrence, `skeleton` for a file's API, `callers --depth 2` before a rename, `map` for orientation.
+- Core's `/impact` prefers `graft callers` when the CLI is present, then graphify, then ripgrep.
+
+**Configuration.** All optional — every field has a default, so an enabled pack works with no config. In `.claude/project.json`:
+
+```json
+{ "graft": { "graphDir": "graft", "promptContext": true, "blastRadius": true, "maxDependents": 8 } }
+```
+
+Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0`. Both hooks fail open — a missing CLI, a missing index, a slow or crashed call all exit 0 silently.
+
+**How to work with it.**
+1. Enable `graft-pack` for the project, then run `graft build` once in the repo.
+2. **Dashboard sidebar → TOOLS → Graft**: the project's index with its node/edge counts and build time. `available: false` there means the pack is on but the CLI is missing.
+3. Keep it fresh: `graft check` fails when the index lags the code, and a plain `graft build` is incremental. A stale graph's silence looks exactly like "nothing depends on this", which is the one failure mode worth watching for.
+
+**If both graft-pack and graphify-pack are on**, they do not conflict — different directories, different hooks. Note that a project already wired by `graft init` carries graft's own hook entries in its `.claude/settings.json`; remove those when enabling the pack, or every prompt is processed twice.
+
+---
+
 ## graphify-pack — knowledge graphs
 
 **What it is.** The `/graphify` skill: turns any repo or folder (code, docs, SQL, media) into a persistent knowledge graph with community detection, an audit trail, and three outputs — interactive `graph.html`, GraphRAG-ready `graph.json`, and a plain-language `GRAPH_REPORT.md` under `<repo>/graphify-out/`.
@@ -179,6 +208,7 @@ A component in a project's own `.claude/` **wins** over a plugin component with 
 | core | mandatory baseline | — | everything (sessions, plugins card, …) |
 | lsp-pack | tool (Serena MCP) | `serena` (uv) | sidebar **Serena** page: start/stop + embedded dashboard |
 | graphify-pack | tool (knowledge graph) | `graphify` CLI (uv) | sidebar **Graphify** page: embedded `graph.html` |
+| graft-pack | tool (context graph) | `graft` CLI (npm) | sidebar **Graft** page: index size + freshness |
 | architecture-pack | tool (architecture map) | — | sidebar **Architecture** page: embedded `architecture-map.html` |
 | uav-pack | domain | — | — |
 | iot-pack | domain | — | — |
