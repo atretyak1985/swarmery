@@ -138,6 +138,14 @@ func (s *Service) run(ctx context.Context, jobID int64, projectPath, pack string
 		s.set(jobID, "installed", "installed", "", true)
 		return nil
 	}
+	// Cheap refresh first, gate second: the gate may decide the map's commit is
+	// current and skip the LLM, and the viewer must not be left behind by that.
+	if act.Refresh != nil {
+		s.set(jobID, "generating", "re-rendering viewer from the existing map", "", false)
+		if err := act.Refresh(ctx, s, projectPath); err != nil {
+			log.Printf("provision: %s refresh for %s: %v", pack, projectPath, err)
+		}
+	}
 	if !force && act.Fresh != nil && act.Fresh(projectPath) {
 		s.set(jobID, "skipped", "artifact already current", "", true)
 		return nil
