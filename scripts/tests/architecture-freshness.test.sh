@@ -45,7 +45,7 @@ decision() {
   local dir="$1" sid="$2" atype="$3" desc="${4:-do the thing}" rc
   jq -nc --arg a "$atype" --arg d "$desc" --arg s "$sid" \
     '{session_id:$s,tool_name:"Agent",tool_input:{subagent_type:$a,description:$d}}' |
-    CLAUDE_PROJECT_DIR="$dir" bash "$HOOK" >/dev/null 2>&1
+    CLAUDE_PROJECT_DIR="$dir" "$HOOK" >/dev/null 2>&1
   rc=$?
   case "$rc" in
     0) printf 'ALLOW' ;;
@@ -111,17 +111,17 @@ printf 'not json at all' > "$badmap/architecture-out/architecture-map.json"
 expect ALLOW "an unparseable map is not evidence of staleness" "$(decision "$badmap" s13 general-purpose)"
 
 for payload in '{}' 'not json'; do
-  printf '%s' "$payload" | CLAUDE_PROJECT_DIR="$STALE" bash "$HOOK" >/dev/null 2>&1
+  printf '%s' "$payload" | CLAUDE_PROJECT_DIR="$STALE" "$HOOK" >/dev/null 2>&1
   if [ $? -eq 0 ]; then ok; else bad "payload $payload must pass silently"; fi
 done
 
 out=$(jq -nc '{session_id:"kill",tool_input:{subagent_type:"general-purpose"}}' |
-  CLAUDE_PROJECT_DIR="$STALE" SWARMERY_MAP_FRESHNESS=0 bash "$HOOK" 2>&1; printf '|%s' "$?")
+  CLAUDE_PROJECT_DIR="$STALE" SWARMERY_MAP_FRESHNESS=0 "$HOOK" 2>&1; printf '|%s' "$?")
 if [ "${out##*|}" = "0" ]; then ok; else bad "SWARMERY_MAP_FRESHNESS=0 must disable the gate"; fi
 
 # ── the refusal has to be actionable ──────────────────────────────
 msg=$(jq -nc '{session_id:"msg",tool_input:{subagent_type:"general-purpose"}}' |
-  CLAUDE_PROJECT_DIR="$STALE" bash "$HOOK" 2>&1 >/dev/null)
+  CLAUDE_PROJECT_DIR="$STALE" "$HOOK" 2>&1 >/dev/null)
 for needle in '/architecture-map' 'INCREMENTAL' 'ONCE per session' 'days old'; do
   if printf '%s' "$msg" | grep -qiF "$needle"; then ok; else bad "the refusal never mentions $needle"; fi
 done

@@ -27,7 +27,7 @@ LOG="$TASK_DIR/logs/agents.md"
 run_hook() { # run_hook <json>
   printf '%s' "$1" | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj \
     AGENT_TASK_ID="$TASK_ID" AGENT_PHASE="${AGENT_PHASE:-}" \
-    bash "$HOOK" >/dev/null 2>&1 || true
+    "$HOOK" >/dev/null 2>&1 || true
 }
 
 # ── 1. verdict + artifact are read out of the final message ───────────
@@ -71,7 +71,7 @@ cat > "$TRANSCRIPT" <<EOF
 {"type":"assistant","text":"wrote $TASK_DIR/reports/phase-9-report.md"}
 EOF
 printf '%s' "{\"agent_type\":\"test-writer\",\"session_id\":\"s4b\",\"transcript_path\":\"$TRANSCRIPT\",\"last_assistant_message\":\"reports/phase-9-report.md\\nVERDICT: PASS\"}" \
-  | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj bash "$HOOK" >/dev/null 2>&1 || true
+  | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj "$HOOK" >/dev/null 2>&1 || true
 if grep -q '| @test-writer | phase-9 | PASS | 1 |' "$LOG"; then
   ok "task dir resolved from transcript_path without AGENT_TASK_ID"
 else
@@ -83,7 +83,7 @@ CLEAN="$TMP/clean"; mkdir -p "$CLEAN"
 out_rc=0
 printf '%s' '{"agent_type":"debugger","session_id":"s5","last_assistant_message":"VERDICT: PASS"}' \
   | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj CLAUDE_PROJECT_DIR="$CLEAN" \
-    bash "$HOOK" >/dev/null 2>&1 || out_rc=$?
+    "$HOOK" >/dev/null 2>&1 || out_rc=$?
 if [ "$out_rc" -eq 0 ] && [ -z "$(find "$CLEAN" -name agents.md 2>/dev/null)" ]; then
   ok "no AGENT_TASK_ID: writes nothing, exits 0"
 else
@@ -92,7 +92,7 @@ fi
 
 # ── 6. malformed stdin never breaks the hook ──────────────────────────
 rc=0
-printf 'not json at all' | AGENT_TASK_ID="$TASK_ID" bash "$HOOK" >/dev/null 2>&1 || rc=$?
+printf 'not json at all' | AGENT_TASK_ID="$TASK_ID" "$HOOK" >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 0 ] && ok "malformed stdin exits 0" || bad "malformed stdin" "rc=$rc"
 
 # ── 7. every emitted row parses under the wsingest ledger rules ───────

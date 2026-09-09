@@ -25,7 +25,7 @@ mk_task() { # mk_task <slug> <status>
   printf '# Task: %s\n\n**Status:** %s\n**Goal:** fixture\n' "$1" "$2" > "$d/README.md"
   echo "$d"
 }
-run() { printf '{"session_id":"%s"}' "$UUID" | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj bash "$HOOK" >/dev/null 2>&1 || true; }
+run() { printf '{"session_id":"%s"}' "$UUID" | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj "$HOOK" >/dev/null 2>&1 || true; }
 
 # The hook has two locking branches: flock(1) where it exists (Linux) and an
 # atomic-mkdir spin lock where it does not (macOS). They are NOT equivalent --
@@ -40,7 +40,7 @@ chmod +x "$FLOCK_STUB/flock"
 run_with_flock() {
   printf '{"session_id":"%s"}' "$1" \
     | PATH="$FLOCK_STUB:$PATH" AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj \
-      bash "$HOOK" >/dev/null 2>&1 || true
+      "$HOOK" >/dev/null 2>&1 || true
 }
 
 
@@ -81,7 +81,7 @@ fi
 # ── 5. two active tasks → writes nothing rather than guessing ─────────
 B=$(mk_task bravo active)
 UUID2="9e8d7c6b-5a4f-4321-9876-fedcba098765"
-printf '{"session_id":"%s"}' "$UUID2" | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj bash "$HOOK" >/dev/null 2>&1 || true
+printf '{"session_id":"%s"}' "$UUID2" | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj "$HOOK" >/dev/null 2>&1 || true
 if ! grep -rq "$UUID2" "$A/logs" "$B/logs" 2>/dev/null; then
   ok "ambiguous active set: writes nothing rather than the wrong card"
 else
@@ -92,7 +92,7 @@ fi
 rm -rf "$TMP/ws2"; WS2="$TMP/ws2/proj/workspace/working/2026/09/02/idle"
 mkdir -p "$WS2/logs"; printf '# Task: idle\n\n**Status:** done\n' > "$WS2/README.md"
 rc=0
-printf '{"session_id":"%s"}' "$UUID" | AGENT_WORKSPACE_ROOT="$TMP/ws2" AGENT_PROJECT=proj bash "$HOOK" >/dev/null 2>&1 || rc=$?
+printf '{"session_id":"%s"}' "$UUID" | AGENT_WORKSPACE_ROOT="$TMP/ws2" AGENT_PROJECT=proj "$HOOK" >/dev/null 2>&1 || rc=$?
 if [ "$rc" -eq 0 ] && [ ! -f "$WS2/logs/sessions.md" ]; then
   ok "no active task: writes nothing, exits 0"
 else
@@ -101,7 +101,7 @@ fi
 
 # ── 7. malformed stdin never fails session start ──────────────────────
 rc=0
-printf 'not json' | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj bash "$HOOK" >/dev/null 2>&1 || rc=$?
+printf 'not json' | AGENT_WORKSPACE_ROOT="$TMP/ws" AGENT_PROJECT=proj "$HOOK" >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 0 ] && ok "malformed stdin exits 0" || bad "malformed stdin" "rc=$rc"
 
 # ── 8. the header survives the flock branch, on every host ────────────

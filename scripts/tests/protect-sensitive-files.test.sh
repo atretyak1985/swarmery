@@ -15,7 +15,7 @@ fail=0
 # assert <expected-exit> <description> <json-payload>
 assert() {
   local expected="$1" desc="$2" payload="$3" actual
-  printf '%s' "$payload" | bash "$HOOK" >/dev/null 2>&1
+  printf '%s' "$payload" | "$HOOK" >/dev/null 2>&1
   actual=$?
   if [ "$actual" -eq "$expected" ]; then
     pass=$((pass + 1))

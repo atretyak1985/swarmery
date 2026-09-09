@@ -48,7 +48,7 @@ RC=0
 OUT=""
 run_hook() {
   local dir="$1" stdin="$3"
-  OUT=$(printf '%s' "$stdin" | CLAUDE_PROJECT_DIR="$dir" bash "$HOOK")
+  OUT=$(printf '%s' "$stdin" | CLAUDE_PROJECT_DIR="$dir" "$HOOK")
   RC=$?
 }
 
