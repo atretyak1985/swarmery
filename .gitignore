@@ -35,3 +35,6 @@ architecture-out/
 
 # design-pack working artifacts (sources, token inventories, diffs) — large, regenerable
 .design-verify/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

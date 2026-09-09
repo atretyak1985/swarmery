@@ -22,10 +22,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/archmap"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/githead"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/pluginreq"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
 )
@@ -48,7 +50,11 @@ const (
 	// sidebar list.
 	serenaPack       = "lsp-pack"
 	graphifyPack     = "graphify-pack"
+	graftPack        = "graft-pack"
 	architecturePack = "architecture-pack"
+	// defaultGraftDir is graft's own default index location; a project may move
+	// it with graft.graphDir in project.json (see plugins/graft-pack/requirements.json).
+	defaultGraftDir = "graft"
 	// sidebarLogTailCap bounds logTail in the GET /api/tools feed (toolproc
 	// keeps up to 40 lines; the sidebar only ever shows the last few).
 	sidebarLogTailCap = 10
@@ -86,9 +92,33 @@ type graphifyProjectDTO struct {
 	VizPath  string  `json:"vizPath"`
 }
 
+type graftProjectDTO struct {
+	ID   int64   `json:"id"`
+	Slug string  `json:"slug"`
+	Name *string `json:"name"`
+	// GraphDir is repo-relative and reported so the UI can name the path a
+	// missing graph is missing FROM — a project that moved its index with
+	// graft.graphDir would otherwise read as "never built".
+	GraphDir string  `json:"graphDir"`
+	HasGraph bool    `json:"hasGraph"`
+	BuiltAt  *string `json:"builtAt"`
+	Nodes    int     `json:"nodes"`
+	Edges    int     `json:"edges"`
+}
+
 type toolsSerenaSection struct {
 	Available bool               `json:"available"`
 	Projects  []serenaProjectDTO `json:"projects"`
+}
+
+// toolsGraftSection carries Available (the graft binary on PATH) because
+// graft-pack is useless without the CLI: unlike graphify, whose artifacts the
+// daemon can serve on their own, every graft answer comes from running the CLI.
+// A project on this list with Available=false is a real misconfiguration, and
+// the UI should be able to say so.
+type toolsGraftSection struct {
+	Available bool              `json:"available"`
+	Projects  []graftProjectDTO `json:"projects"`
 }
 
 type toolsGraphifySection struct {
@@ -152,6 +182,7 @@ type toolsArchitectureSection struct {
 type toolsResponse struct {
 	Serena       toolsSerenaSection       `json:"serena"`
 	Graphify     toolsGraphifySection     `json:"graphify"`
+	Graft        toolsGraftSection        `json:"graft"`
 	Architecture toolsArchitectureSection `json:"architecture"`
 }
 
@@ -164,10 +195,14 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 	resp := toolsResponse{
 		Serena:       toolsSerenaSection{Projects: []serenaProjectDTO{}},
 		Graphify:     toolsGraphifySection{Projects: []graphifyProjectDTO{}},
+		Graft:        toolsGraftSection{Projects: []graftProjectDTO{}},
 		Architecture: toolsArchitectureSection{Projects: []architectureProjectDTO{}},
 	}
 	if _, err := lookPathFn("serena"); err == nil {
 		resp.Serena.Available = true
+	}
+	if _, err := lookPathFn("graft"); err == nil {
+		resp.Graft.Available = true
 	}
 
 	// Drain projects into a slice BEFORE building DTOs: the store caps the pool
@@ -240,6 +275,9 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 		}
 		if slices.Contains(st.Packs, graphifyPack) {
 			resp.Graphify.Projects = append(resp.Graphify.Projects, graphifyDTO(id, slug, namePtr, path))
+		}
+		if slices.Contains(st.Packs, graftPack) {
+			resp.Graft.Projects = append(resp.Graft.Projects, graftDTO(id, slug, namePtr, path))
 		}
 	}
 	writeJSON(w, resp, nil)
@@ -489,6 +527,75 @@ func graphifyDTO(id int64, slug string, name *string, projectPath string) graphi
 	}
 	if fi, err := os.Stat(filepath.Join(out, "graph.html")); err == nil && !fi.IsDir() {
 		d.HasViz = true
+	}
+	return d
+}
+
+// graftDTO reports the on-disk graft index under <project>/<graphDir>. Read-only
+// and exec-free: the wiring graph is a file, so the daemon never has to run the
+// CLI to say whether a project has a graph and how big it is.
+//
+// graphDir comes from the project's own graft.graphDir (graft's --dir), falling
+// back to graft's default. A project that relocated its index must not be
+// reported as having no graph at all.
+func graftDTO(id int64, slug string, name *string, projectPath string) graftProjectDTO {
+	graphDir := defaultGraftDir
+	if cfg := pluginreq.ReadProjectConfig(projectPath); cfg != nil {
+		if raw, ok := cfg["graft"]; ok {
+			var block struct {
+				GraphDir string `json:"graphDir"`
+			}
+			if err := json.Unmarshal(raw, &block); err == nil && block.GraphDir != "" {
+				graphDir = block.GraphDir
+			}
+		}
+	}
+	d := graftProjectDTO{ID: id, Slug: slug, Name: name, GraphDir: graphDir}
+
+	// filepath.Join cleans the path, but a configured graphDir is operator input
+	// and "../.." would walk out of the project. Anything not staying inside is
+	// treated as no graph rather than followed.
+	wiring := filepath.Join(projectPath, filepath.FromSlash(graphDir), ".graph", "wiring.json")
+	if !strings.HasPrefix(wiring, filepath.Clean(projectPath)+string(filepath.Separator)) {
+		return d
+	}
+	fi, err := os.Stat(wiring)
+	if err != nil || fi.IsDir() {
+		return d
+	}
+	d.HasGraph = true
+	v := fi.ModTime().UTC().Format(time.RFC3339)
+	d.BuiltAt = &v
+
+	// Counts come from the file's `meta` header. A wiring graph is unbounded in
+	// size (nodes + edges for a whole repo), and this feed is polled, so the
+	// decoder reads ONLY the first key and stops — never the node array. graft
+	// writes meta first (verified against 0.16.0); if a future version reorders,
+	// the counts come back 0 and the project still reports hasGraph correctly,
+	// which is the right way for this to degrade. Scanning further to find meta
+	// would trade a graceful zero for a whole-file read on every poll.
+	f, err := os.Open(wiring)
+	if err != nil {
+		return d
+	}
+	defer f.Close()
+	dec := json.NewDecoder(f)
+	if _, err := dec.Token(); err != nil { // opening '{'
+		return d
+	}
+	if !dec.More() {
+		return d
+	}
+	key, err := dec.Token()
+	if err != nil || key != "meta" {
+		return d
+	}
+	var meta struct {
+		NodeCount int `json:"nodeCount"`
+		EdgeCount int `json:"edgeCount"`
+	}
+	if err := dec.Decode(&meta); err == nil {
+		d.Nodes, d.Edges = meta.NodeCount, meta.EdgeCount
 	}
 	return d
 }

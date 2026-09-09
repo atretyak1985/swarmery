@@ -28,7 +28,13 @@ fail=0
 # decision <json-payload> — echoes "BLOCK <rule>" or "ALLOW".
 decision() {
   local payload="$1" err rc
-  err=$(printf '%s' "$payload" | bash "$HOOK" 2>&1 >/dev/null)
+  # Execute the hook, do NOT run it as `bash "$HOOK"`. Claude Code invokes it
+  # by path, so the interpreter comes from its own shebang — on macOS that is
+  # bash 3.2, while a dev machine's PATH `bash` is usually homebrew 5.x. That
+  # gap is what let a bash-4-only builtin (`mapfile`) sit on a hot path with
+  # this suite green: 77 passing tests over a hook that died on every real
+  # call. Running it the way production runs it is the only honest harness.
+  err=$(printf '%s' "$payload" | "$HOOK" 2>&1 >/dev/null)
   rc=$?
   if printf '%s' "$err" | grep -Eq '^(⚠️  WARN \(enforce from [0-9-]+\)|🚫 BLOCKED): \[[a-z-]+\]'; then
     printf 'BLOCK %s' "$(printf '%s' "$err" | sed -nE 's/^.*\[([a-z-]+)\].*$/\1/p' | head -1)"
@@ -63,7 +69,7 @@ expect() {
 # sentence-cased message still satisfies a lowercase contract phrase.
 stderr_contains() {
   local needle="$1" desc="$2" cmd="$3" err
-  err=$(printf '%s' "$(jc "$cmd")" | bash "$HOOK" 2>&1 >/dev/null)
+  err=$(printf '%s' "$(jc "$cmd")" | "$HOOK" 2>&1 >/dev/null)
   if printf '%s' "$err" | grep -qiF "$needle"; then
     pass=$((pass + 1))
   else
@@ -116,13 +122,13 @@ expect "ALLOW" "read then sleep"       "cat /tmp/run.log && sleep 5"
 
 # ── payload edge cases ────────────────────────────────────────────
 expect "ALLOW" "empty command"         ""
-if printf '%s' '{"tool_input":{}}' | bash "$HOOK" >/dev/null 2>&1; then
+if printf '%s' '{"tool_input":{}}' | "$HOOK" >/dev/null 2>&1; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
   printf '  ✗ payload with no command must exit 0\n'
 fi
-if printf '%s' 'not json at all' | bash "$HOOK" >/dev/null 2>&1; then
+if printf '%s' 'not json at all' | "$HOOK" >/dev/null 2>&1; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
@@ -174,7 +180,7 @@ expect_cwd "ALLOW" "root cannot be resolved — no opinion" \
 stderr_contains_cwd() {
   local needle="$1" desc="$2" cwd="$3" cmd="$4" err
   err=$(printf '%s' "$(jq -nc --arg c "$cmd" --arg w "$cwd" '{session_id:"s",cwd:$w,tool_input:{command:$c}}')" |
-    bash "$HOOK" 2>&1 >/dev/null)
+    "$HOOK" 2>&1 >/dev/null)
   if printf '%s' "$err" | grep -qiF "$needle"; then
     pass=$((pass + 1))
   else
@@ -247,7 +253,7 @@ hit() {
   : > "$BASH_SHAPE_GUARD_LOG"
   payload=$(jq -nc --arg c "$cmd" --arg s "$session" --arg w "$cwd" \
     '{session_id:$s,cwd:$w,tool_input:{command:$c}}')
-  printf '%s' "$payload" | bash "$HOOK" >/dev/null 2>&1
+  printf '%s' "$payload" | "$HOOK" >/dev/null 2>&1
   cat "$BASH_SHAPE_GUARD_LOG"
 }
 
@@ -328,11 +334,11 @@ fi
 # Telemetry is strictly secondary to the allow-or-block contract: an unwritable
 # log must leave the decision and the message byte-identical.
 payload=$(jq -nc '{session_id:"s",tool_input:{command:"cat <<EOF > f.txt"}}')
-good_err=$(printf '%s' "$payload" | bash "$HOOK" 2>&1 >/dev/null); good_rc=$?
+good_err=$(printf '%s' "$payload" | "$HOOK" 2>&1 >/dev/null); good_rc=$?
 blocked_dir="$TESTDIR/readonly"
 mkdir -p "$blocked_dir" && chmod 500 "$blocked_dir"
 bad_err=$(printf '%s' "$payload" |
-  BASH_SHAPE_GUARD_LOG="$blocked_dir/nested/deep.jsonl" bash "$HOOK" 2>&1 >/dev/null); bad_rc=$?
+  BASH_SHAPE_GUARD_LOG="$blocked_dir/nested/deep.jsonl" "$HOOK" 2>&1 >/dev/null); bad_rc=$?
 chmod 700 "$blocked_dir"
 if [ "$good_err" = "$bad_err" ] && [ "$good_rc" = "$bad_rc" ]; then
   pass=$((pass + 1))

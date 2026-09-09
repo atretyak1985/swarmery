@@ -2751,6 +2751,25 @@ export interface ToolsGraphifyProject {
 }
 
 /**
+ * One project's graft index, read from <graphDir>/.graph/wiring.json. The daemon
+ * never runs the graft CLI to produce this — it stats the file and reads the
+ * counts out of its `meta` header.
+ */
+export interface ToolsGraftProject {
+  id: number;
+  slug: string;
+  name: string | null;
+  /** Repo-relative index dir; "graft" unless project.json sets graft.graphDir. */
+  graphDir: string;
+  hasGraph: boolean;
+  /** wiring.json mtime, RFC3339; null when no index exists. */
+  builtAt: string | null;
+  /** Counts from wiring.json meta; 0 when there is no index. */
+  nodes: number;
+  edges: number;
+}
+
+/**
  * Live auto-provision job state for a project's architecture map (phases 2–3):
  * emitted while enabling architecture-pack drives an install + /architecture-map
  * run. `null` when no job is (or has been) tracked for the project.
@@ -2860,6 +2879,9 @@ export interface BlastResponse {
 export interface ToolsResponse {
   serena: { available: boolean; projects: ToolsSerenaProject[] };
   graphify: { projects: ToolsGraphifyProject[] };
+  /** `available` is the graft binary on the daemon's PATH — a project listed here
+   *  with available=false has the pack on but no CLI to run it. */
+  graft: { available: boolean; projects: ToolsGraftProject[] };
   architecture: { projects: ArchitectureProject[] };
 }
 

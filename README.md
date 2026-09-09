@@ -92,7 +92,8 @@ namespace:
 cd /path/to/your/project
 swarmery onboard <project-slug> [pack ...]
 #   packs: web-pack | iot-pack | uav-pack | infra-pack | lsp-pack
-#          claude-eng-pack | graphify-pack | architecture-pack | jira-pack
+#          claude-eng-pack | graphify-pack | graft-pack | architecture-pack
+#          jira-pack
 ```
 
 Then open a fresh Claude Code session, accept the `swarmery` marketplace trust prompt,
@@ -180,6 +181,7 @@ the native Claude Code plugin mechanism — **semver-versioned**, **namespaced**
 | `infra-pack` | Infrastructure & delivery domain pack: Kubernetes/Helm, GitOps promotion, IaC, GitLab CI, cloud CI auth (GCP + AWS), Keycloak. |
 | `lsp-pack` | Semantic code-navigation pack: Serena LSP MCP server. Requires the serena binary (uv) on the machine. |
 | `claude-eng-pack` | Claude-engineering pack: skills for building/auditing Claude agent systems — agent architecture, tool/MCP design, prompt engineering, Claude Code config, context reliability. |
+| `graft-pack` | Context-graph pack: the graft skill plus two hooks — coverage-gated file:line locators injected into a prompt before the first grep, and a blast-radius note after every edit. Requires the graft CLI on the machine. |
 | `graphify-pack` | Knowledge-graph pack: the /graphify skill — repo/folder → persistent knowledge graph with query/path/affected tools and HTML/JSON/Neo4j exports. Requires the graphify CLI on the machine. |
 | `architecture-pack` | Repo-wide architecture map: /architecture-map generates a machine-readable JSON contract (layers, modules, file-anchored flows) + self-contained HTML viewer, freshness-stamped per commit; the swarmery dashboard serves both on its Architecture page. |
 | `jira-pack` | Issue-tracker pack: /jira-fix drives any Jira ticket end-to-end — access preflight, defect-or-change triage, reproduction or test-first evidence, delegated fix/implementation, evidence comment, QA transition. Requires an Atlassian MCP provider enabled on the machine. |

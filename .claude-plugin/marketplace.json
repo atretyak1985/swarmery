@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Vendor-neutral, multi-project Claude Code agent framework. One shared core plus opt-in domain packs; per-project flavor comes from each consumer's project.json overlay.",
-    "version": "3.2.1"
+    "version": "3.2.3"
   },
   "plugins": [
     {
@@ -43,6 +43,11 @@
       "name": "claude-eng-pack",
       "source": "./plugins/claude-eng-pack",
       "description": "Claude-engineering pack: skills for building/auditing Claude agent systems — agent architecture, tool/MCP design, prompt engineering, Claude Code config, context reliability. Opt-in; requires core."
+    },
+    {
+      "name": "graft-pack",
+      "source": "./plugins/graft-pack",
+      "description": "Context-graph pack: the graft skill plus two hooks — coverage-gated file:line locators injected into a prompt before the first grep, and a blast-radius note after every edit. Opt-in; requires the graft CLI on the machine."
     },
     {
       "name": "graphify-pack",

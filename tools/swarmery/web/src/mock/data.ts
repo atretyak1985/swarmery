@@ -3052,6 +3052,31 @@ export const mockApi = {
           },
         ],
       },
+      graft: {
+        available: true,
+        projects: [
+          {
+            id: 3,
+            slug: 'swarmery',
+            name: 'Swarmery',
+            graphDir: 'graft',
+            hasGraph: true,
+            builtAt: iso(40 * MIN),
+            nodes: 1842,
+            edges: 5310,
+          },
+          {
+            id: 1,
+            slug: 'orders-api',
+            name: 'Orders API',
+            graphDir: 'graft',
+            hasGraph: false,
+            builtAt: null,
+            nodes: 0,
+            edges: 0,
+          },
+        ],
+      },
       architecture: {
         projects: archProjects,
       },

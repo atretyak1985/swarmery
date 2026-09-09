@@ -157,7 +157,17 @@ fi
 # Split on the shell's sequencing operators only. A pipe is NOT a separator:
 # a pipe chain is one operation for this guard's purposes, and treating it as
 # many is exactly the false positive that gets a guard switched off.
-mapfile -t segments < <(printf '%s' "$command_text" | sed -E 's/(\|\||&&|;)/\n/g')
+#
+# Read loop rather than `mapfile`: mapfile is a bash 4 builtin, and this hook
+# runs under its own `#!/bin/bash` shebang — which on macOS is the GPLv2-frozen
+# bash 3.2. There it is not a syntax error but a MISSING COMMAND, so the hook
+# stayed silently dead (`segments` unset, then `set -u` killed every rule below
+# this line) while still exiting non-zero on every single Bash call. The
+# worktree-escape rule already uses this spelling; keep them the same.
+segments=()
+while IFS= read -r seg_line || [ -n "$seg_line" ]; do
+  segments+=("$seg_line")
+done < <(printf '%s' "$command_text" | sed -E 's/(\|\||&&|;)/\n/g')
 
 # trim <string> — strip leading/trailing whitespace.
 trim() { printf '%s' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }

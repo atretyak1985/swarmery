@@ -41,7 +41,7 @@ transcript() {
 # contract on the way through.
 run_hook() {
   local sid="$1" tr="$2" out rc
-  out=$(jq -nc --arg s "$sid" --arg t "$tr" '{session_id:$s,transcript_path:$t,tool_name:"Bash"}' | bash "$HOOK" 2>/dev/null)
+  out=$(jq -nc --arg s "$sid" --arg t "$tr" '{session_id:$s,transcript_path:$t,tool_name:"Bash"}' | "$HOOK" 2>/dev/null)
   rc=$?
   if [ "$rc" -ne 0 ]; then
     bad "hook exited $rc — it must never fail a tool call"
@@ -90,12 +90,12 @@ if has_message "$out"; then ok; else bad "a second fat session was silenced by t
 
 # ── the threshold is configurable ─────────────────────────────────
 out=$(jq -nc --arg t "$small" '{session_id:"sess-cfg",transcript_path:$t}' |
-  SWARMERY_SESSION_BUDGET_TOKENS=10000 bash "$HOOK" 2>/dev/null)
+  SWARMERY_SESSION_BUDGET_TOKENS=10000 "$HOOK" 2>/dev/null)
 if has_message "$out"; then ok; else bad "SWARMERY_SESSION_BUDGET_TOKENS did not lower the threshold"; fi
 
 # ── degenerate payloads fail open and silent ──────────────────────
 for payload in '{}' '{"session_id":"x"}' '{"session_id":"x","transcript_path":"/nope/missing.jsonl"}' 'not json'; do
-  out=$(printf '%s' "$payload" | bash "$HOOK" 2>/dev/null); rc=$?
+  out=$(printf '%s' "$payload" | "$HOOK" 2>/dev/null); rc=$?
   if [ "$rc" -eq 0 ] && printf '%s' "$out" | jq -e '.continue == true' >/dev/null 2>&1 && ! has_message "$out"; then
     ok
   else
@@ -125,7 +125,7 @@ fi
 
 # ── activity log: one compact line per tool call ──────────────────
 rm -f "$SWARMERY_SESSION_FILE"
-out=$(jq -nc '{tool_name:"Bash",tool_input:{command:"ls -la"},session_id:"sess-log"}' | bash "$HOOK" 2>/dev/null)
+out=$(jq -nc '{tool_name:"Bash",tool_input:{command:"ls -la"},session_id:"sess-log"}' | "$HOOK" 2>/dev/null)
 if [ -f "$SWARMERY_SESSION_FILE" ] \
    && jq -e 'select(.tool=="Bash" and .cmd=="ls -la")' "$SWARMERY_SESSION_FILE" >/dev/null 2>&1; then
   ok
@@ -136,7 +136,7 @@ fi
 # An Agent dispatch whose observed model differs from the requested one logs a
 # ModelFallback event — the routing/cost report's raw signal.
 rm -f "$SWARMERY_SESSION_FILE"
-jq -nc '{tool_name:"Agent",tool_input:{model:"opus"},tool_response:{model:"sonnet"},session_id:"sess-fb"}' | bash "$HOOK" >/dev/null 2>&1
+jq -nc '{tool_name:"Agent",tool_input:{model:"opus"},tool_response:{model:"sonnet"},session_id:"sess-fb"}' | "$HOOK" >/dev/null 2>&1
 if jq -e 'select(.tool=="ModelFallback")' "$SWARMERY_SESSION_FILE" >/dev/null 2>&1; then
   ok
 else

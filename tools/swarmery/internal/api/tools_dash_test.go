@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -133,7 +134,9 @@ func TestToolsDashSerenaUnavailable(t *testing.T) {
 	stubLookPath(t, errors.New("exec: \"serena\": executable file not found in $PATH"))
 
 	// Raw body: available=false, and all empty lists render [] — never null.
-	// Three sections carry "projects": serena, graphify, architecture.
+	// Four sections carry "projects": serena, graphify, graft, architecture. The
+	// count is asserted rather than a per-section check so that adding a fifth
+	// section fails here until it is confirmed to render [] too.
 	res, err := http.Get(srv.URL + "/api/tools")
 	if err != nil {
 		t.Fatal(err)
@@ -150,8 +153,8 @@ func TestToolsDashSerenaUnavailable(t *testing.T) {
 	if !strings.Contains(body, `"available":false`) {
 		t.Errorf("body missing \"available\":false:\n%s", body)
 	}
-	if strings.Count(body, `"projects":[]`) != 3 {
-		t.Errorf("empty lists must serialize as [] for all three tools (serena, graphify, architecture):\n%s", body)
+	if strings.Count(body, `"projects":[]`) != 4 {
+		t.Errorf("empty lists must serialize as [] for all four tools (serena, graphify, graft, architecture):\n%s", body)
 	}
 	if strings.Contains(body, "null") {
 		t.Errorf("empty response must not contain null:\n%s", body)
@@ -562,5 +565,195 @@ func TestToolsDashArchitectureProvision(t *testing.T) {
 	}
 	if ap2.Provision != nil {
 		t.Errorf("provision = %+v for a project with no job, want null", ap2.Provision)
+	}
+}
+
+// ── graft section (graft-pack) ───────────────────────────────────────────────
+//
+// The graft DTO is read-only and exec-free: it stats <graphDir>/.graph/wiring.json
+// and reads the counts out of that file's `meta` header. These tests pin the
+// three things that would silently mislead an operator — a project with the pack
+// but no index reading as broken rather than un-built, a relocated index reading
+// as absent, and a traversal in graphDir escaping the project directory.
+
+// writeWiring drops a wiring.json with the real 0.16.0 top-level shape (meta
+// first, then nodes/edges) under <dir>/.graph/.
+func writeWiring(t *testing.T, dir string, nodes, edges int) {
+	t.Helper()
+	g := filepath.Join(dir, ".graph")
+	if err := os.MkdirAll(g, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"meta":{"version":1,"nodeCount":` + strconv.Itoa(nodes) +
+		`,"edgeCount":` + strconv.Itoa(edges) +
+		`,"languages":["typescript"],"scopes":[]},"nodes":[],"edges":[]}`
+	if err := os.WriteFile(filepath.Join(g, "wiring.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// writeProjectJSON drops a .claude/project.json, the overlay graftDTO reads
+// graft.graphDir out of.
+func writeProjectJSON(t *testing.T, projectDir, body string) {
+	t.Helper()
+	dir := filepath.Join(projectDir, ".claude")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "project.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestToolsDashGraft(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil) // graft on PATH
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "graft-pack@swarmery": true}
+	}`)
+	writeWiring(t, filepath.Join(path, "graft"), 412, 1180)
+
+	resp := getToolsResponse(t, srv.URL)
+	if !resp.Graft.Available {
+		t.Error("graft.available = false with lookPath stubbed to succeed, want true")
+	}
+	if len(resp.Graft.Projects) != 1 {
+		t.Fatalf("graft.projects len = %d, want 1 (%+v)", len(resp.Graft.Projects), resp.Graft.Projects)
+	}
+	p := resp.Graft.Projects[0]
+	if p.ID != 1 || p.Slug != "managed" {
+		t.Errorf("graft project = id %d slug %q, want id 1 slug managed", p.ID, p.Slug)
+	}
+	if !p.HasGraph {
+		t.Error("hasGraph = false with wiring.json present, want true")
+	}
+	if p.GraphDir != "graft" {
+		t.Errorf("graphDir = %q, want graft (the default)", p.GraphDir)
+	}
+	if p.Nodes != 412 || p.Edges != 1180 {
+		t.Errorf("nodes/edges = %d/%d, want 412/1180 from meta", p.Nodes, p.Edges)
+	}
+	if p.BuiltAt == nil {
+		t.Error("builtAt = null with wiring.json present, want its mtime")
+	} else if _, err := time.Parse(time.RFC3339, *p.BuiltAt); err != nil {
+		t.Errorf("builtAt = %q is not RFC3339: %v", *p.BuiltAt, err)
+	}
+}
+
+func TestToolsDashGraftNoIndex(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "graft-pack@swarmery": true}
+	}`)
+
+	// Pack on, nothing built yet. The project must still be listed — that is the
+	// state the UI needs in order to say "enabled, never built" rather than
+	// omitting the project and leaving the operator with no explanation.
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Graft.Projects) != 1 {
+		t.Fatalf("graft.projects len = %d, want 1 even with no index", len(resp.Graft.Projects))
+	}
+	p := resp.Graft.Projects[0]
+	if p.HasGraph {
+		t.Error("hasGraph = true with no wiring.json, want false")
+	}
+	if p.BuiltAt != nil {
+		t.Errorf("builtAt = %v with no index, want null", *p.BuiltAt)
+	}
+	if p.Nodes != 0 || p.Edges != 0 {
+		t.Errorf("nodes/edges = %d/%d with no index, want 0/0", p.Nodes, p.Edges)
+	}
+}
+
+func TestToolsDashGraftUnavailable(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, errors.New("not found"))
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "graft-pack@swarmery": true}
+	}`)
+	writeWiring(t, filepath.Join(path, "graft"), 3, 4)
+
+	// The CLI is gone but the artifacts remain. available=false is the signal the
+	// UI reports on — the pack is enabled and the graph on disk is now orphaned.
+	resp := getToolsResponse(t, srv.URL)
+	if resp.Graft.Available {
+		t.Error("graft.available = true with lookPath failing, want false")
+	}
+	if len(resp.Graft.Projects) != 1 || !resp.Graft.Projects[0].HasGraph {
+		t.Errorf("project should still be listed with its graph: %+v", resp.Graft.Projects)
+	}
+}
+
+func TestToolsDashGraftCustomGraphDir(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "graft-pack@swarmery": true}
+	}`)
+	writeProjectJSON(t, path, `{"name":"t","codePath":".","enabledPacks":[],"graft":{"graphDir":".ctx"}}`)
+	writeWiring(t, filepath.Join(path, ".ctx"), 7, 9)
+
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Graft.Projects) != 1 {
+		t.Fatalf("graft.projects len = %d, want 1", len(resp.Graft.Projects))
+	}
+	p := resp.Graft.Projects[0]
+	if p.GraphDir != ".ctx" {
+		t.Errorf("graphDir = %q, want .ctx from project.json", p.GraphDir)
+	}
+	if !p.HasGraph || p.Nodes != 7 || p.Edges != 9 {
+		t.Errorf("relocated index not found: hasGraph=%v nodes=%d edges=%d", p.HasGraph, p.Nodes, p.Edges)
+	}
+}
+
+func TestToolsDashGraftGraphDirEscape(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "graft-pack@swarmery": true}
+	}`)
+	// graphDir is operator input; a traversal must not be followed out of the
+	// project directory, even to stat a file.
+	writeProjectJSON(t, path, `{"name":"t","codePath":".","enabledPacks":[],"graft":{"graphDir":"../../etc"}}`)
+
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Graft.Projects) != 1 {
+		t.Fatalf("graft.projects len = %d, want 1", len(resp.Graft.Projects))
+	}
+	if resp.Graft.Projects[0].HasGraph {
+		t.Error("hasGraph = true for a graphDir that escapes the project, want false")
+	}
+}
+
+func TestToolsDashGraftPackOffOmitsProject(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{"enabledPlugins": {"core@swarmery": true}}`)
+	writeWiring(t, filepath.Join(path, "graft"), 5, 5)
+
+	// An index on disk is not opt-in. Without the pack enabled the project stays
+	// off the list, exactly as it does for serena and graphify.
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Graft.Projects) != 0 {
+		t.Errorf("graft.projects = %+v, want empty without graft-pack enabled", resp.Graft.Projects)
 	}
 }
