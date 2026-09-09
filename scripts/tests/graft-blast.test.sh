@@ -40,6 +40,23 @@ chmod +x "$BIN/graft"
 
 STUBPATH="$BIN:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
 
+# NOGRAFT is the same toolchain WITHOUT graft: jq and node are symlinked in by
+# absolute path and nothing else is on PATH. Simply stripping PATH would make the
+# no-CLI case pass for the wrong reason — the hook would bail on a missing jq
+# long before it ever looked for graft, and the assertion could never tell.
+NOGRAFT="$TMP/nograft"
+mkdir -p "$NOGRAFT"
+# cat is in the list because the hook drains stdin with it BEFORE any early
+# exit; leaving it out would make the hook skip the drain it is being tested for.
+for tool in jq node cat; do
+  bin=$(command -v "$tool") || { echo "graft-blast.test: $tool is required" >&2; exit 1; }
+  ln -sf "$bin" "$NOGRAFT/$tool"
+done
+if PATH="$NOGRAFT" command -v graft >/dev/null 2>&1; then
+  echo "graft-blast.test: graft leaked into the no-CLI PATH" >&2
+  exit 1
+fi
+
 REPO="$TMP/repo"
 mkdir -p "$REPO/graft/.graph" "$REPO/.claude"
 WIRING="$REPO/graft/.graph/wiring.json"
@@ -89,7 +106,7 @@ run_hook() {
     process.stdout.write(JSON.stringify({
       session_id: "sid", tool_name: "Edit", tool_input: { file_path: process.argv[1] },
     }))' "$fp")
-  OUT=$(printf '%s' "$payload" | env "$@" PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" bash "$HOOK")
+  OUT=$(printf '%s' "$payload" | env "$@" PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
   RC=$?
 }
 
@@ -194,7 +211,7 @@ fi
 BARE="$TMP/bare"
 mkdir -p "$BARE"
 OUT=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{"file_path":"%s/src/a.ts"}}' "$BARE" \
-  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$BARE" bash "$HOOK")
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$BARE" "$HOOK")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ]; then
   ok_case
@@ -205,7 +222,7 @@ fi
 # ── Case 11: no graft on PATH → silent ──────────────────────────────────
 write_wiring 3
 OUT=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{"file_path":"%s/src/a.ts"}}' "$REPO" \
-  | env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$REPO" bash "$HOOK")
+  | env PATH="$NOGRAFT" CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ]; then
   ok_case
@@ -217,7 +234,7 @@ fi
 printf 'not json {{{' > "$WIRING"
 ERR="$TMP/err"
 OUT=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{"file_path":"%s/src/a.ts"}}' "$REPO" \
-  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" bash "$HOOK" 2>"$ERR")
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" 2>"$ERR")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ "$(wc -l < "$ERR")" -eq 1 ]; then
   ok_case
@@ -236,10 +253,10 @@ fi
 
 # ── Case 14: malformed stdin / no file_path → silent ───────────────────
 OUT=$(printf 'not json at all {{{' \
-  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" bash "$HOOK")
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
 RC=$?
 OUT2=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{}}' \
-  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" bash "$HOOK")
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$REPO" "$HOOK")
 RC2=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ "$RC2" -eq 0 ] && [ -z "$OUT2" ]; then
   ok_case
@@ -255,7 +272,7 @@ WIRING="$ALT/.ctx/.graph/wiring.json"
 write_wiring 2
 echo '{"name":"t","codePath":".","enabledPacks":[],"graft":{"graphDir":".ctx"}}' > "$ALT/.claude/project.json"
 OUT=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{"file_path":"%s/src/a.ts"}}' "$ALT" \
-  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$ALT" bash "$HOOK")
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$ALT" "$HOOK")
 RC=$?
 C=$(ctx "$OUT")
 if [ "$RC" -eq 0 ] && [[ "$C" == *"2 files depend"* ]]; then

@@ -51,6 +51,23 @@ exit 0
 STUB
 chmod +x "$BIN/graft"
 
+# NOGRAFT is the same toolchain WITHOUT graft: jq and node are symlinked in by
+# absolute path and nothing else is on PATH. Simply stripping PATH would make the
+# no-CLI cases pass for the wrong reason — the hook would bail on a missing jq
+# long before it ever looked for graft, and the assertion could never tell.
+NOGRAFT="$TMP/nograft"
+mkdir -p "$NOGRAFT"
+# cat is in the list because the hook drains stdin with it BEFORE any early
+# exit; leaving it out would make the hook skip the drain it is being tested for.
+for tool in jq node cat; do
+  bin=$(command -v "$tool") || { echo "graft-prompt-context.test: $tool is required" >&2; exit 1; }
+  ln -sf "$bin" "$NOGRAFT/$tool"
+done
+if PATH="$NOGRAFT" command -v graft >/dev/null 2>&1; then
+  echo "graft-prompt-context.test: graft leaked into the no-CLI PATH" >&2
+  exit 1
+fi
+
 # A project with an index present. The hook checks for wiring.json before it ever
 # calls the CLI, so every case needs one on disk.
 REPO="$TMP/repo"
@@ -78,7 +95,7 @@ run_hook() {
   OUT=$(printf '%s' "$payload" | env "$@" \
     PATH="$BIN:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
     GRAFT_STUB_RESPONSE="$RESP" \
-    CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" bash "$HOOK")
+    CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" "$HOOK")
   RC=$?
 }
 
@@ -172,7 +189,7 @@ fi
 
 # ── Case 9: no graft on PATH → silent ──────────────────────────────────────
 OUT=$(printf '{"session_id":"sid-nocli","prompt":"where is the beta helper defined"}' \
-  | env PATH="/usr/bin:/bin" CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" bash "$HOOK")
+  | env PATH="$NOGRAFT" CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" "$HOOK")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ]; then
   ok_case
@@ -186,7 +203,7 @@ mkdir -p "$BARE"
 printf '%s' "$STRONG_JSON" > "$RESP"
 OUT=$(printf '{"session_id":"sid-noindex","prompt":"where is the beta helper defined"}' \
   | env PATH="$BIN:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
-        GRAFT_STUB_RESPONSE="$RESP" CLAUDE_PROJECT_DIR="$BARE" TMPDIR="$TMPDIR" bash "$HOOK")
+        GRAFT_STUB_RESPONSE="$RESP" CLAUDE_PROJECT_DIR="$BARE" TMPDIR="$TMPDIR" "$HOOK")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ]; then
   ok_case
@@ -209,7 +226,7 @@ ERR="$TMP/err"
 OUT=$(printf '{"session_id":"sid-garbage","prompt":"where is the beta helper defined"}' \
   | env PATH="$BIN:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
         GRAFT_STUB_RESPONSE="$RESP" CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" \
-        bash "$HOOK" 2>"$ERR")
+        "$HOOK" 2>"$ERR")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ "$(wc -l < "$ERR")" -eq 1 ]; then
   ok_case
@@ -231,7 +248,7 @@ fi
 printf '%s' "$STRONG_JSON" > "$RESP"
 OUT=$(printf 'this is not json {{{' \
   | env PATH="$BIN:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
-        GRAFT_STUB_RESPONSE="$RESP" CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" bash "$HOOK")
+        GRAFT_STUB_RESPONSE="$RESP" CLAUDE_PROJECT_DIR="$REPO" TMPDIR="$TMPDIR" "$HOOK")
 RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$OUT" ]; then
   ok_case
