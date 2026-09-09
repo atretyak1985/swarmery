@@ -366,6 +366,7 @@ in-progress plugin changes with `claude --plugin-dir plugins/core` (repeatable p
 Further reading: [docs/ONBOARDING.md](docs/ONBOARDING.md) ·
 [docs/PLUGINS.md](docs/PLUGINS.md) · [docs/EXTENDING.md](docs/EXTENDING.md) ·
 [docs/NEUTRALITY.md](docs/NEUTRALITY.md) · [docs/WORKFLOW.md](docs/WORKFLOW.md) ·
+[ADR 0001 — agent defaults live upstream](docs/adr/0001-agent-defaults-live-upstream.md) ·
 [control plane README](tools/swarmery/README.md) · [SECURITY.md](SECURITY.md)
 
 ---
