@@ -45,6 +45,11 @@
       "description": "Claude-engineering pack: skills for building/auditing Claude agent systems — agent architecture, tool/MCP design, prompt engineering, Claude Code config, context reliability. Opt-in; requires core."
     },
     {
+      "name": "graft-pack",
+      "source": "./plugins/graft-pack",
+      "description": "Context-graph pack: the graft skill plus two hooks — coverage-gated file:line locators injected into a prompt before the first grep, and a blast-radius note after every edit. Opt-in; requires the graft CLI on the machine."
+    },
+    {
       "name": "graphify-pack",
       "source": "./plugins/graphify-pack",
       "description": "Knowledge-graph pack: the /graphify skill — repo/folder → persistent knowledge graph with query/path/affected tools and HTML/JSON/Neo4j exports. Opt-in; requires the graphify CLI on the machine."

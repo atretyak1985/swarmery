@@ -1,0 +1,9 @@
+{
+  "name": "graft-pack",
+  "description": "Context-graph pack: the graft skill plus two hooks that put the graph in front of the agent instead of waiting to be asked — a coverage-gated prompt injection that answers \"where is X\" with file:line locators before the first grep, and a blast-radius note after every edit naming what depends on the file just changed. Opt-in; REQUIRES the graft CLI installed on the machine. Core's /impact command prefers graft callers when the CLI is present and falls back to graphify, then ripgrep.",
+  "version": "0.1.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  }
+}

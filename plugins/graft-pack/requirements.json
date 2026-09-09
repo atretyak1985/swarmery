@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "projectConfig": [
+    {
+      "key": "graft",
+      "title": "Context graph",
+      "why": "graft-pack puts the repo graph in front of the agent without being asked: a coverage-gated prompt injection and a post-edit blast-radius note. Where the graph lives, whether each hook is wanted, and how long the blast list may run are project facts the pack cannot guess. Every field has a default, so leaving this block out is a valid configuration.",
+      "docs": "skills/graft/SKILL.md",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Context-graph contract consumed by graft-pack. Optional — every field has a default, so an enabled pack works with no `graft` block at all. This fragment is mirrored in plugins/graft-pack/requirements.json, which the dashboard renders the config form from; scripts/check-plugin-requirements.sh fails CI when the two drift, so change both in one commit.",
+        "properties": {
+          "graphDir": {
+            "type": "string",
+            "default": "graft",
+            "description": "Repo-relative directory holding the graft index, i.e. the value passed to `graft --dir`. The wiring graph the blast-radius hook reads is <graphDir>/.graph/wiring.json."
+          },
+          "promptContext": {
+            "type": "boolean",
+            "default": true,
+            "description": "Inject file:line locators from the graph into a prompt when the graph covers it. Turn off for a project whose graph is too sparse to be worth the tokens; the SWARMERY_GRAFT_PROMPT=0 env var is the per-session equivalent."
+          },
+          "blastRadius": {
+            "type": "boolean",
+            "default": true,
+            "description": "After each Edit/Write, name the files that depend on the edited file. Turn off for a project where edits are mostly leaf files; the SWARMERY_GRAFT_BLAST=0 env var is the per-session equivalent."
+          },
+          "maxDependents": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 8,
+            "description": "Most dependents the blast-radius note lists before it truncates to a `+N more` line. A hook is a nudge, not a report — a long list is scrolled past."
+          }
+        }
+      }
+    }
+  ]
+}
