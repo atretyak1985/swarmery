@@ -256,5 +256,24 @@ else
   fail_case "case14 malformed-stdin: expected silence + exit 0 (rc=$RC, out=$OUT)"
 fi
 
+
+# ── Case 15: federated workspace (workspace.json, no root wiring) → injected ─
+# `graft build` on a folder of checkouts leaves only workspace.json at the root;
+# the graphs live in the members. The hook must still ask — `graft ask` from the
+# root federates across them.
+FED="$TMPDIR/fed"
+mkdir -p "$FED/graft" "$FED/.claude"
+echo '{"version":1,"children":["repo1","repo2"]}' > "$FED/graft/workspace.json"
+printf '%s' "$STRONG_JSON" > "$RESP"
+OUT=$(printf '{"session_id":"fed-sid","prompt":"where is the device enrollment handler registered"}' \
+  | env PATH="$BIN:/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin" \
+        GRAFT_STUB_RESPONSE="$RESP" CLAUDE_PROJECT_DIR="$FED" TMPDIR="$TMPDIR" "$HOOK")
+RC=$?
+if [ "$RC" -eq 0 ] && valid_json "$OUT" && [[ "$(ctx "$OUT")" == *"Context graph hits"* ]]; then
+  ok_case
+else
+  fail_case "case15 federated: expected an injection with only workspace.json at the root (rc=$RC, out=$OUT)"
+fi
+
 printf 'graft-prompt-context: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
