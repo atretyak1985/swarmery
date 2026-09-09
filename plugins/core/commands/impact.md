@@ -1,17 +1,59 @@
 ---
-description: Cross-repo impact analysis — graph-aware (Graphify) with a live ripgrep fallback
+description: Cross-repo impact analysis — graph-aware (Graft, then Graphify) with a live ripgrep fallback
 color: red
 docs:
   status: reviewed
   source_sha: fc326bb79534
-  updated: 2026-08-06
+  updated: 2026-09-09
 ---
 
 # Impact Analysis Command
 
 Find everything affected by a change to: $ARGUMENTS
 
-## Primary path — Graphify (graph-aware, most accurate)
+## Which path to take
+
+Three sources, in this order. Take the first one the project actually has —
+they are ordered by how directly each one answers "who depends on this", not by
+preference:
+
+| # | Source | Available when | Why it ranks here |
+|---|---|---|---|
+| 1 | **Graft** | `graft` on PATH **and** `<repo>/graft/.graph/wiring.json` exists | Call/import edges straight from the syntax tree, with a transitive walk built in. No model call, no API key, and the fastest of the three. |
+| 2 | **Graphify** | `<repo>/graphify-out/graph.json` exists | A richer graph spanning docs and media as well as code, with community detection. Use it when there is no graft index, or to cross-check a graft answer on a repo that has both. |
+| 3 | **ripgrep** | always | Text, not structure. It cannot see an indirect caller, but it also cannot go stale, and it reaches files no graph indexed (deploy manifests, YAML, generated code). |
+
+Whatever the graph says, **finish with the ripgrep sweep** and reconcile. A graph
+answers "what depends on this symbol"; ripgrep answers "where does this string
+appear". A hit only ripgrep found is either a config reference the graph never
+indexed or a caller the graph missed — both are worth knowing about, and both are
+invisible if you stop at step 1.
+
+## Primary path — Graft (graph-aware, cheapest, no key)
+
+Graft keeps a wiring graph at `<repo>/graft/.graph/wiring.json`. Run from inside
+the repo you are analyzing.
+
+1. **Direct callers** — `graft callers "$ARGUMENTS" --depth 2` — everything that
+   references the symbol within two hops. `d=1` breaks, `d=2` probably breaks.
+2. **Full closure** — `graft callers "$ARGUMENTS" --depth all` — the whole
+   connected blast radius. This is the one to run before a delete.
+3. **The other direction** — `graft callers "$ARGUMENTS" --direction out` — what
+   the symbol itself calls, when you need to know what a change might break
+   *underneath* it rather than above it.
+4. **Where it lives** — `graft ask "$ARGUMENTS" --source -n 5` — the definition
+   and its immediate context inline, so you can read the signature you are about
+   to change without opening files.
+5. Weigh edge confidence exactly as below: `extracted` edges come from the AST
+   (trust them); `inferred` edges were resolved heuristically (verify before
+   calling them WILL BREAK).
+
+> Narrow to one subtree with `--in <path>`, and add `--json` when you want to
+> post-process rather than read. If `graft check` reports the index stale, a plain
+> `graft build` is incremental — do it before trusting an empty result, because a
+> stale graph's silence looks exactly like "nothing depends on this".
+
+## Second path — Graphify (graph-aware, spans docs and media)
 
 Graphify builds a per-repo knowledge graph at `<repo>/graphify-out/graph.json`. Each repo from
 `project.json → repos` has its own graph — **run the commands from inside the repo you are
@@ -31,11 +73,12 @@ analyzing** (or pass `--graph <repo>/graphify-out/graph.json` explicitly).
 > (add `--force` after refactors that deleted files) — otherwise the blast radius may
 > omit new callers (a false "safe to change").
 
-## Fallback path — ripgrep (always live; covers anything the graph misses)
+## Final path — ripgrep (always live; covers anything the graphs miss)
 
-Use ripgrep whenever the graph is stale or absent, and to double-check infra config
-(deploy manifests/YAML) if it is not in the graph. Run from the workspace root, listing
-the repos from `project.json → repos`:
+Use ripgrep whenever both graphs are stale or absent, and **always** as the closing
+cross-check — to catch infra config (deploy manifests/YAML) and anything else no
+index covers. Run from the workspace root, listing the repos from
+`project.json → repos`:
 
 ```bash
 rg -n --no-heading "$ARGUMENTS" \
@@ -48,7 +91,9 @@ rg -n --no-heading "$ARGUMENTS" \
 1. Total occurrences + per-repo breakdown.
 2. File paths with line numbers and surrounding context.
 3. For graph results: depth (`d=1` WILL BREAK / `d=2` LIKELY / `d=3` MAYBE) and the
-   edge confidence tag (`EXTRACTED` vs `INFERRED`).
+   edge confidence tag (`EXTRACTED` vs `INFERRED`). Name which source produced each
+   section — a graft hit and a ripgrep hit are not the same kind of evidence, and a
+   reader who cannot tell them apart cannot weigh them.
 4. Recommended update order if the symbol changes (interfaces → impls → callers → tests).
 5. **Cross-tier flag:** if the symbol crosses the main app ↔ the device/edge repo, call out the
    manual contract (no shared schema) and the coordinated-merge requirement.
@@ -59,7 +104,7 @@ rg -n --no-heading "$ARGUMENTS" \
 ## Impact Analysis for "$ARGUMENTS"
 
 ### Summary
-- Total occurrences: X · Repositories affected: Y · Source: Graphify graph / ripgrep
+- Total occurrences: X · Repositories affected: Y · Source: Graft graph / Graphify graph / ripgrep
 
 ### <mainApp> (Z)
 - d=1 (WILL BREAK): src/app/api/things/route.ts:45 — POST handler [calls, EXTRACTED]
@@ -77,7 +122,7 @@ Now analyze impact of: $ARGUMENTS
 
 ## What it does
 
-Finds everything that would break if you change a symbol, across every repository in your project. It leads with the Graphify knowledge graph for a real dependency traversal, then falls back to a live ripgrep sweep so nothing is missed when the graph is stale or absent. You get one report with per-repo hits, a break-likelihood rating, and the order to update things in.
+Finds everything that would break if you change a symbol, across every repository in your project. It takes the most structural source the project has — the Graft wiring graph first, then a Graphify knowledge graph — for a real dependency traversal, and always closes with a live ripgrep sweep so config files and anything the index missed still show up. You get one report with per-repo hits, a break-likelihood rating, the source behind each section, and the order to update things in.
 
 ## When to use it
 
@@ -98,7 +143,7 @@ Finds everything that would break if you change a symbol, across every repositor
 /impact createOrder
 ```
 
-Type the command followed by the symbol you are changing. Run it from inside the repo you want analyzed so the per-repo graph at `graphify-out/graph.json` resolves, or let the ripgrep fallback sweep the repos listed in your project config.
+Type the command followed by the symbol you are changing. Run it from inside the repo you want analyzed so its per-repo graph resolves — `graft/.graph/wiring.json` for graft, `graphify-out/graph.json` for graphify. With neither index present the ripgrep sweep still covers the repos listed in your project config, so the command always returns something.
 
 ## Inputs
 
@@ -106,7 +151,7 @@ Type the command followed by the symbol you are changing. Run it from inside the
 
 ## What you get back
 
-A single markdown report in the chat. It opens with a summary line (total occurrences, repositories affected, and whether the graph or ripgrep produced the result), then a section per repository listing file paths with line numbers and context. Graph-sourced hits carry a depth rating — `d=1` WILL BREAK, `d=2` LIKELY, `d=3` MAYBE — and an edge-confidence tag (`EXTRACTED` from the syntax tree, `INFERRED` by a model and worth verifying). The report closes with a recommended update order: interfaces, then implementations, then callers, then tests. Nothing is written to disk and no files are edited.
+A single markdown report in the chat. It opens with a summary line (total occurrences, repositories affected, and which of the three sources produced the result), then a section per repository listing file paths with line numbers and context. Graph-sourced hits carry a depth rating — `d=1` WILL BREAK, `d=2` LIKELY, `d=3` MAYBE — and an edge-confidence tag (`EXTRACTED` from the syntax tree, `INFERRED` by a model or a heuristic and worth verifying). The report closes with a recommended update order: interfaces, then implementations, then callers, then tests. Nothing is written to disk and no files are edited.
 
 ## Worked example
 
@@ -115,7 +160,7 @@ A single markdown report in the chat. It opens with a summary line (total occurr
 
 → ## Impact Analysis for "OrderStatus"
   ### Summary
-  - Total occurrences: 14 · Repositories affected: 2 · Source: Graphify graph
+  - Total occurrences: 14 · Repositories affected: 2 · Source: Graft graph + ripgrep sweep
   ### apps/<mainApp> (11)
   - d=1 (WILL BREAK): src/orders/line-items/route.ts:45 — POST handler [calls, EXTRACTED]
   ### <device repo> (3)
@@ -131,4 +176,5 @@ You end up knowing which eleven call sites break immediately, which three live b
 
 - `/search` — plain ripgrep across repos when you want matches, not analysis.
 - `/refactor-plan` — turns a known blast radius into a sequenced refactor plan.
-- `/graphify` — build or refresh the knowledge graph this command reads from.
+- `/graphify` — build or refresh the Graphify knowledge graph this command reads from.
+- `graft build` — build or refresh the Graft wiring graph this command prefers (graft-pack).
