@@ -51,6 +51,12 @@ func stubLookPath(t *testing.T, err error) {
 		return "/usr/local/bin/" + name, nil
 	}
 	t.Cleanup(func() { lookPathFn = prev })
+	// The user-bin fallback would find a real ~/.npm-global/bin/graft on a dev
+	// machine and make every "not on PATH" case pass or fail by accident; a
+	// stubbed PATH answer is the whole answer unless a test says otherwise.
+	prevBins := userBinDirsFn
+	userBinDirsFn = func() []string { return nil }
+	t.Cleanup(func() { userBinDirsFn = prevBins })
 }
 
 func getToolsResponse(t *testing.T, srvURL string) toolsResponse {
@@ -755,5 +761,77 @@ func TestToolsDashGraftPackOffOmitsProject(t *testing.T) {
 	resp := getToolsResponse(t, srv.URL)
 	if len(resp.Graft.Projects) != 0 {
 		t.Errorf("graft.projects = %+v, want empty without graft-pack enabled", resp.Graft.Projects)
+	}
+}
+
+// A multi-repo workspace federated by `graft build` has no root wiring graph —
+// only <graphDir>/workspace.json naming the members, each with its own graph.
+// It must report as built, with the members' counts summed and the member
+// count exposed; a child that escapes the project or has no graph is skipped.
+func TestToolsDashGraftFederatedWorkspace(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, nil)
+
+	path := projectPath(t, srv.URL, "1")
+	writeProjectSettings(t, path, `{
+		"enabledPlugins": {"core@swarmery": true, "graft-pack@swarmery": true}
+	}`)
+	if err := os.MkdirAll(filepath.Join(path, "graft"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "graft", "workspace.json"),
+		[]byte(`{"version":1,"children":["api","ui","docs","../escape"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeWiring(t, filepath.Join(path, "api", "graft"), 100, 300)
+	writeWiring(t, filepath.Join(path, "ui", "graft"), 50, 120)
+	// docs has no graph; ../escape must never be followed.
+
+	resp := getToolsResponse(t, srv.URL)
+	if len(resp.Graft.Projects) != 1 {
+		t.Fatalf("graft.projects len = %d, want 1", len(resp.Graft.Projects))
+	}
+	p := resp.Graft.Projects[0]
+	if !p.HasGraph {
+		t.Fatal("hasGraph = false for a federated workspace, want true")
+	}
+	if p.Members != 2 {
+		t.Errorf("members = %d, want 2 (api + ui; docs has no graph, ../escape is refused)", p.Members)
+	}
+	if p.Nodes != 150 || p.Edges != 420 {
+		t.Errorf("nodes/edges = %d/%d, want 150/420 summed over members", p.Nodes, p.Edges)
+	}
+	if p.BuiltAt == nil {
+		t.Error("builtAt = null, want workspace.json's mtime")
+	}
+}
+
+// The daemon runs under launchd with a minimal PATH, so a per-user `npm i -g`
+// (~/.npm-global/bin) is invisible to exec.LookPath while every interactive
+// session can run it. Availability must consult the conventional user bin dirs.
+func TestToolsDashGraftAvailableFromUserBinDir(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	attachStubToolManager(t)
+	stubLookPath(t, errors.New("not on PATH"))
+
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "graft"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prev := userBinDirsFn
+	userBinDirsFn = func() []string { return []string{bin} }
+	t.Cleanup(func() { userBinDirsFn = prev })
+
+	if !getToolsResponse(t, srv.URL).Graft.Available {
+		t.Error("graft.available = false with an executable in a user bin dir, want true")
+	}
+
+	// A non-executable file of the same name is not a tool.
+	if err := os.Chmod(filepath.Join(bin, "graft"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if getToolsResponse(t, srv.URL).Graft.Available {
+		t.Error("graft.available = true for a non-executable file, want false")
 	}
 }

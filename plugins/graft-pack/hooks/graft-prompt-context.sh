@@ -92,7 +92,11 @@ fi
 
 # No index, nothing to ask. Checked before the CLI call so a repo that has never
 # been built costs nothing per prompt.
-[ -f "${PROJECT_DIR}/${graph_dir}/.graph/wiring.json" ] || exit 0
+# An index exists either as a single graph (<graphDir>/.graph/wiring.json) or,
+# in a multi-repo workspace `graft build` federated, as <graphDir>/workspace.json
+# at the root with one graph per member. `graft ask` run from the root answers
+# over the federation, so either marker means there is something to ask.
+[ -f "${PROJECT_DIR}/${graph_dir}/.graph/wiring.json" ] || [ -f "${PROJECT_DIR}/${graph_dir}/workspace.json" ] || exit 0
 
 # ── bounded CLI call ──────────────────────────────────────────────────────────
 # The hook's installed timeout (hooks.json) is 10s; this is 8, so the hook always

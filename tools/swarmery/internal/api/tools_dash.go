@@ -104,6 +104,10 @@ type graftProjectDTO struct {
 	BuiltAt  *string `json:"builtAt"`
 	Nodes    int     `json:"nodes"`
 	Edges    int     `json:"edges"`
+	// Members is set only for a federated multi-repo workspace: the number of
+	// member checkouts whose own graph was found under <member>/<graphDir>.
+	// Nodes/Edges are then the sum over those members.
+	Members int `json:"members,omitempty"`
 }
 
 type toolsSerenaSection struct {
@@ -201,7 +205,7 @@ func (h *Handler) toolsDash(w http.ResponseWriter, r *http.Request) {
 	if _, err := lookPathFn("serena"); err == nil {
 		resp.Serena.Available = true
 	}
-	if _, err := lookPathFn("graft"); err == nil {
+	if toolAvailable("graft") {
 		resp.Graft.Available = true
 	}
 
@@ -561,7 +565,10 @@ func graftDTO(id int64, slug string, name *string, projectPath string) graftProj
 	}
 	fi, err := os.Stat(wiring)
 	if err != nil || fi.IsDir() {
-		return d
+		// No single graph at the root. A multi-repo workspace that `graft build`
+		// federated keeps <graphDir>/workspace.json there and one graph per
+		// member; report it as built with the members' counts summed.
+		return graftFederatedDTO(d, projectPath, graphDir)
 	}
 	d.HasGraph = true
 	v := fi.ModTime().UTC().Format(time.RFC3339)
@@ -574,30 +581,117 @@ func graftDTO(id int64, slug string, name *string, projectPath string) graftProj
 	// the counts come back 0 and the project still reports hasGraph correctly,
 	// which is the right way for this to degrade. Scanning further to find meta
 	// would trade a graceful zero for a whole-file read on every poll.
+	d.Nodes, d.Edges = wiringMeta(wiring)
+	return d
+}
+
+// wiringMeta reads nodeCount/edgeCount from a wiring graph's leading `meta`
+// key and nothing else — see graftDTO for why the decoder stops there. Zeros
+// on any failure.
+func wiringMeta(wiring string) (nodes, edges int) {
 	f, err := os.Open(wiring)
 	if err != nil {
-		return d
+		return 0, 0
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
 	if _, err := dec.Token(); err != nil { // opening '{'
-		return d
+		return 0, 0
 	}
 	if !dec.More() {
-		return d
+		return 0, 0
 	}
 	key, err := dec.Token()
 	if err != nil || key != "meta" {
-		return d
+		return 0, 0
 	}
 	var meta struct {
 		NodeCount int `json:"nodeCount"`
 		EdgeCount int `json:"edgeCount"`
 	}
-	if err := dec.Decode(&meta); err == nil {
-		d.Nodes, d.Edges = meta.NodeCount, meta.EdgeCount
+	if err := dec.Decode(&meta); err != nil {
+		return 0, 0
+	}
+	return meta.NodeCount, meta.EdgeCount
+}
+
+// graftFederatedDTO fills d from <project>/<graphDir>/workspace.json, the marker
+// `graft build` leaves at the root of a multi-repo workspace: `children[]` names
+// the member checkouts, each with its own <member>/<graphDir>/.graph/wiring.json.
+// A child that escapes the project or has no graph is skipped, not counted.
+// Without the marker d is returned untouched (hasGraph false).
+func graftFederatedDTO(d graftProjectDTO, projectPath, graphDir string) graftProjectDTO {
+	root := filepath.Clean(projectPath) + string(filepath.Separator)
+	ws := filepath.Join(projectPath, filepath.FromSlash(graphDir), "workspace.json")
+	if !strings.HasPrefix(ws, root) {
+		return d
+	}
+	fi, err := os.Stat(ws)
+	if err != nil || fi.IsDir() {
+		return d
+	}
+	raw, err := os.ReadFile(ws)
+	if err != nil {
+		return d
+	}
+	var marker struct {
+		Children []string `json:"children"`
+	}
+	if err := json.Unmarshal(raw, &marker); err != nil {
+		return d
+	}
+	d.HasGraph = true
+	v := fi.ModTime().UTC().Format(time.RFC3339)
+	d.BuiltAt = &v
+	for _, child := range marker.Children {
+		wiring := filepath.Join(projectPath, filepath.FromSlash(child), filepath.FromSlash(graphDir), ".graph", "wiring.json")
+		if !strings.HasPrefix(wiring, root) {
+			continue
+		}
+		if cfi, err := os.Stat(wiring); err != nil || cfi.IsDir() {
+			continue
+		}
+		n, e := wiringMeta(wiring)
+		d.Nodes += n
+		d.Edges += e
+		d.Members++
 	}
 	return d
+}
+
+// userBinDirsFn lists the directories a per-user CLI install lands in when it
+// is NOT on the daemon's PATH — launchd starts the daemon with a minimal PATH,
+// so an `npm i -g` under ~/.npm-global (or a volta/bun/pipx shim dir) is
+// invisible to exec.LookPath even though every interactive session sees it.
+// A var so tests can point it at a temp tree.
+var userBinDirsFn = func() []string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	return []string{
+		filepath.Join(home, ".npm-global", "bin"),
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, ".volta", "bin"),
+		filepath.Join(home, ".bun", "bin"),
+		"/opt/homebrew/bin",
+		"/usr/local/bin",
+	}
+}
+
+// toolAvailable reports whether name is runnable: on PATH, or as an executable
+// file in one of the conventional user bin dirs above.
+func toolAvailable(name string) bool {
+	if _, err := lookPathFn(name); err == nil {
+		return true
+	}
+	for _, dir := range userBinDirsFn() {
+		fi, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // serenaFence runs the shared guard chain for the serena control endpoints —
