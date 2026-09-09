@@ -66,18 +66,38 @@ if [ -f "$PROJECT_JSON" ]; then
   }
 fi
 
-WIRING="${PROJECT_DIR}/${graph_dir}/.graph/wiring.json"
-[ -f "$WIRING" ] || exit 0
+# ── which graph? ──────────────────────────────────────────────────────────────
+# A single repo keeps one graph at <project>/<graphDir>. A multi-repo workspace
+# (a folder of checkouts with no root .git — `graft build` federates it) keeps
+# one graph PER MEMBER, at <member>/<graphDir>, and the root holds only
+# workspace.json. Node paths are relative to whichever graph they live in. So
+# walk up from the edited file towards the project root and take the nearest
+# graph; the root graph is simply the last candidate. An edit outside the
+# project has no graph on that walk and no dependents either.
+case "$file_path" in
+  "${PROJECT_DIR}/"*) ;;
+  *) exit 0 ;;
+esac
+BASE=""
+WIRING=""
+probe=$(dirname "$file_path")
+while :; do
+  if [ -f "${probe}/${graph_dir}/.graph/wiring.json" ]; then
+    BASE="$probe"
+    WIRING="${probe}/${graph_dir}/.graph/wiring.json"
+    break
+  fi
+  [ "$probe" = "$PROJECT_DIR" ] && break
+  parent=$(dirname "$probe")
+  [ "$parent" = "$probe" ] && break
+  probe="$parent"
+done
+[ -n "$WIRING" ] || exit 0
 
 # ── the edited file, as the graph spells it ───────────────────────────────────
-# Node paths are repo-relative and forward-slashed; the hook payload carries an
-# absolute path. Strip the project prefix, and bail on anything still absolute
-# (an edit outside the repo has no node, so it has no dependents either).
-rel="$file_path"
-case "$rel" in
-  "${PROJECT_DIR}/"*) rel="${rel#"${PROJECT_DIR}"/}" ;;
-  /*) exit 0 ;;
-esac
+# Node paths are graph-relative and forward-slashed; the hook payload carries an
+# absolute path. Strip the graph's base directory.
+rel="${file_path#"${BASE}"/}"
 
 # The graph's own directory is not source. Editing a card or the wiring file is
 # bookkeeping, and reporting its dependents is noise on every rebuild.

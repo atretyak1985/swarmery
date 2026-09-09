@@ -281,5 +281,37 @@ else
   fail_case "case15 custom-graphDir: expected the graph at .ctx to be read (rc=$RC, ctx=$C)"
 fi
 
+
+# ── Case 16: federated workspace — the graph lives in the member repo ────────
+# `graft build` on a folder of checkouts writes <member>/graft/.graph/wiring.json
+# per member and only workspace.json at the root. An edit inside a member must
+# find THAT member's graph, with node paths relative to the member.
+WS="$TMP/ws"
+mkdir -p "$WS/graft" "$WS/repo1/graft/.graph" "$WS/repo1/src" "$WS/.claude"
+printf '{"version":1,"repos":["repo1"]}' > "$WS/graft/workspace.json"
+SAVED_WIRING="$WIRING"
+WIRING="$WS/repo1/graft/.graph/wiring.json"
+write_wiring 2
+WIRING="$SAVED_WIRING"
+OUT=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{"file_path":"%s/repo1/src/a.ts"}}' "$WS" \
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$WS" "$HOOK")
+RC=$?
+C=$(ctx "$OUT")
+if [ "$RC" -eq 0 ] && valid_json "$OUT" && [[ "$C" == *"2 files depend"* ]] && [[ "$C" == *"src/dep01.ts"* ]]; then
+  ok_case
+else
+  fail_case "case16 federated: expected the member repo's graph to answer (rc=$RC, ctx=$C)"
+fi
+
+# ── Case 17: federated workspace — an edit at the root has no graph, so silence ─
+OUT=$(printf '{"session_id":"sid","tool_name":"Edit","tool_input":{"file_path":"%s/README.md"}}' "$WS" \
+  | env PATH="$STUBPATH" CLAUDE_PROJECT_DIR="$WS" "$HOOK")
+RC=$?
+if [ "$RC" -eq 0 ] && [ -z "$OUT" ]; then
+  ok_case
+else
+  fail_case "case17 federated-root: expected exit 0 and no output (rc=$RC, out=$OUT)"
+fi
+
 printf 'graft-blast: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
