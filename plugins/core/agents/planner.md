@@ -35,7 +35,9 @@ carries the full format; honor it precisely:
   of Done.
 - `plan/phase-N-<slug>.md` per phase — a self-contained copy-paste executor
   prompt, measurable `- [ ]` acceptance criteria, and an empty
-  `## Completion Report` stub as the last section.
+  `## Completion Report` stub as the last section. The executor prompt states
+  that the report's **Blocked calls** field is mandatory — refused or failed
+  tool calls and how the executor got around them, `none` when there were none.
 - `plan/manifest.json` — the machine-readable phase DAG the plan runner
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase

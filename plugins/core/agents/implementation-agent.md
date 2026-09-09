@@ -71,9 +71,11 @@ from those checkboxes. Unsatisfied criteria stay unticked — never tick to
 close out a phase.
 
 **Summary contract (hard gate).** When a phase's last criterion is ticked,
-write what shipped (files, commits, verification output, deviations; ≤50
-lines) into that phase doc under a literal `## Completion Report` heading —
-fill the stub or append the section. The platform renders exactly that
+write what shipped (files, commits, verification output, deviations, and the
+mandatory **Blocked calls** list — tool calls that were refused or failed and
+how you got around them, `none` when there were none; ≤50 lines) into that
+phase doc under a literal `## Completion Report` heading — fill the stub or
+append the section. The platform renders exactly that
 heading as the phase summary; a report anywhere else is invisible to the
 operator.
 
