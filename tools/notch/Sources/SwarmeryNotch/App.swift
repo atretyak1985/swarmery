@@ -20,6 +20,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         environmentValue: ProcessInfo.processInfo.environment["SWARMERY_NOTCH_EDGE_ANCHOR"]
     )
     private var outsideClickMonitor: Any?
+    /// Kept so a display plugged in after launch can be given its own
+    /// presenter -- see `reconcilePresenters`.
+    private var actions: WidgetActions?
+    /// The last state rendered, replayed into a presenter created after
+    /// launch so it shows the same thing as its siblings instead of staying
+    /// blank until the next daemon event.
+    private var lastState = AttentionState()
 
     static func main() {
         let app = NSApplication.shared
@@ -100,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Presenters (one per screen, so a widget follows every display)
 
     private func setUpPresenters(actions: WidgetActions) {
+        self.actions = actions
         presenters = NSScreen.screens.map {
             WidgetPresenter(screen: $0, actions: actions, placement: placement, edgeAnchorFromBottom: edgeAnchorFromBottom)
         }
@@ -115,8 +123,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Displays come and go -- a monitor is plugged in, the lid closes, the
+    /// resolution changes. The presenter set used to be built once at launch
+    /// and never revisited, so a display added later got no widget and a
+    /// display removed left a presenter holding a window on a screen that no
+    /// longer exists.
     @objc private func screenParametersChanged() {
+        reconcilePresenters()
         for presenter in presenters { presenter.refreshMetrics() }
+    }
+
+    private func reconcilePresenters() {
+        guard let actions else { return }
+        let screens = NSScreen.screens
+        let plan = DisplayReconciliation.plan(
+            existing: presenters.map(\.displayID),
+            current: screens.map(\.displayID)
+        )
+        guard plan.hasWork else { return }
+
+        for presenter in presenters where plan.removed.contains(presenter.displayID) {
+            presenter.teardown()
+        }
+
+        var surviving = presenters.filter { !plan.removed.contains($0.displayID) }
+        let added = screens
+            .filter { plan.added.contains($0.displayID) }
+            .map {
+                WidgetPresenter(
+                    screen: $0,
+                    actions: actions,
+                    placement: placement,
+                    edgeAnchorFromBottom: edgeAnchorFromBottom
+                )
+            }
+        surviving.append(contentsOf: added)
+
+        // Keep the list in the window server's own display order.
+        let order = screens.map(\.displayID)
+        presenters = surviving.sorted {
+            (order.firstIndex(of: $0.displayID) ?? .max) < (order.firstIndex(of: $1.displayID) ?? .max)
+        }
+
+        // A fresh presenter has no window until its first `update` -- without
+        // this it would stay invisible until the next daemon event.
+        let shouldOpen = lastState.shouldExpand(now: Date(), linger: config.linger)
+        for presenter in added {
+            presenter.update(attention: lastState, shouldOpen: shouldOpen)
+        }
     }
 
     // MARK: - Rendering
@@ -127,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the linger window has passed -- nothing else would re-evaluate it.
     private func render(_ state: AttentionState) {
         collapseTask?.cancel()
+        lastState = state
         let now = Date()
         let shouldOpen = state.shouldExpand(now: now, linger: config.linger)
         for presenter in presenters {
