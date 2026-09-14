@@ -40,6 +40,8 @@ anything.)
 | `sleep-before-read` | 0 | 0 | n/a — never fired | stay in warn | 2026-09-14 |
 | `worktree-escape` | 0 | 0 | n/a — never fired (≥4 hits masked, and blind to `.worktrees/`, see below) | stay in warn | 2026-09-14 |
 | `ambiguous-git` | 0 | 0 | n/a — never fired | stay in warn | 2026-09-14 |
+| `leading-cd` | new rule, burn-in starts 2026-09-14 | — | — | stay in warn | — |
+| `compound-form` | new rule, burn-in starts 2026-09-14 | — | — | stay in warn | — |
 
 [fp-review]: `reports/heredoc-false-positive-review.md` in the consumer's private
 workspace task dir
@@ -114,6 +116,18 @@ scratch. Per-rule enforcement exists precisely so a new rule can burn in without
 waiting for it, and without it being dragged into blocking by them. Their first burn-in read
 (above) produced no hits for either — for `worktree-escape`, demonstrably because it could not see
 this project's worktrees rather than because none were escaped.
+
+`leading-cd` and `compound-form` shipped on **2026-09-14** and start their burn-in at zero on that
+date. They are in `warn` on purpose: a brand-new rule raised to `block` in the same change that
+writes it is the date-driven flip this document exists to forbid, whatever the evidence for the
+*shape* is elsewhere. `compound-form` refuses on shape what the auto-mode classifier refuses after a
+wait, so its row is expected to fill quickly — fill it and review the hits before raising it.
+
+**Why `heredoc` did not flip with them.** The change that added these two rules was written to
+raise `heredoc` to `block` from the 492-hit read. The fuller read above, done the same day, found the
+2 false positives and the regex defect behind them, and this document's own rule is that a row with
+reviewed false positives stays in `warn`. So the rules landed and the flip did not; it waits on the
+tightened regex and a fresh burn-in, exactly as the `heredoc` row says.
 
 ## `agent-routing-guard.sh`
 
