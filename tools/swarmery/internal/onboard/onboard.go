@@ -27,7 +27,7 @@ const DefaultMarketplaceRepo = "atretyak1985/swarmery"
 
 // KnownPacks is the allow-list of opt-in domain packs a project may enable
 // (core is always on). Mirrors the case guard in scripts/init.sh.
-var KnownPacks = []string{"uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack"}
+var KnownPacks = []string{"uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack", "claude-eng-pack", "graft-pack", "graphify-pack", "architecture-pack", "jira-pack", "accounts-pack", "design-pack"}
 
 // marketplaceSuffix tags every swarmery plugin key in enabledPlugins
 // (e.g. "core@swarmery") — the marketplace manifest name is "swarmery".
