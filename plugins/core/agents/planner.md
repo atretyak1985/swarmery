@@ -35,9 +35,13 @@ carries the full format; honor it precisely:
   of Done.
 - `plan/phase-N-<slug>.md` per phase — a self-contained copy-paste executor
   prompt, measurable `- [ ]` acceptance criteria, and an empty
-  `## Completion Report` stub as the last section. The executor prompt states
-  that the report's **Blocked calls** field is mandatory — refused or failed
-  tool calls and how the executor got around them, `none` when there were none.
+  `## Completion Report` stub as the last section. Every Verify command in the
+  prompt is file-backed: a repo script or test by absolute path, never a
+  heredoc, `python3 -` or `node -e`. The prompt also states that the report's
+  **Blocked calls**, **Delegation cost** and one-sentence **What would have
+  made this cheaper** fields are all mandatory and written out even when empty.
+  `workspace-plans/resources/plan-format.md` carries their exact wording — cite
+  it, never re-copy it.
 - `plan/manifest.json` — the machine-readable phase DAG the plan runner
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase
@@ -81,7 +85,7 @@ Describe the goal and constraints; add scope hints if you have them. It reads th
 
 ## What you get back
 
-A task dir under the workspace with `plan/README.md`, `plan/phase-N-<slug>.md` docs (each with an executor prompt, `- [ ]` criteria, and a Completion Report stub), and `plan/spec.md` when the size warrants it — ready for `/run-plan` or the dashboard's plan runner.
+A task dir under the workspace with `plan/README.md`, `plan/phase-N-<slug>.md` docs (each with an executor prompt whose Verify commands are file-backed, `- [ ]` criteria, and a Completion Report stub carrying the mandatory Blocked calls / Delegation cost / "what would have made this cheaper" fields), and `plan/spec.md` when the size warrants it — ready for `/run-plan` or the dashboard's plan runner.
 
 ## Worked example
 

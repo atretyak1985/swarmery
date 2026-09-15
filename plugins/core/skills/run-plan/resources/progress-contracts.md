@@ -30,11 +30,14 @@ Ticks say WHICH criteria are met; they never say what was built. The prose accou
 goes into the phase doc's own `## Completion Report` section — fill the planner's
 stub, or append the section at the end of the doc when the plan has no stub.
 Contents: what shipped, files and commits (SHAs), verification output, deviations
-from the plan's design, anything DEFERRED, and a mandatory **Blocked calls**
-field — which tool calls were refused or failed and how you got around them (or
-that you did not), one line each, written as "none" when the list is empty;
-omitting the field is not the same as having nothing to report. Keep it under
-~50 lines.
+from the plan's design, anything DEFERRED, and three mandatory fields, in order —
+**Blocked calls** (refused or failed tool calls and how you got around them),
+**Delegation cost** (every subagent dispatched, with wall-clock and, where the
+platform reports it, dollar cost), and **What would have made this cheaper**
+(exactly one sentence). Each is written out even when empty — "none", or
+"Nothing, it was already minimal"; omitting a field is not the same as having
+nothing to report. Their exact wording is in
+`workspace-plans/resources/plan-format.md`. Keep it under ~50 lines.
 
 That section is the ONLY per-phase summary the platform surfaces: it parses
 `## Completion Report` out of the doc and renders it as the phase's Summary tab. A
