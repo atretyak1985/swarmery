@@ -1,5 +1,5 @@
 ---
-description: Thin entry point for `/design-implement <export-path|url> [--route <path>] [--viewport WxH] [--from-screenshots] [--dry-run]` — parses and validates the argument shape only, then hands control to the design-implement skill. No run logic lives here.
+description: Thin entry point for `/design-implement <export-path|url> [--route <path>] [--viewport WxH] [--from-screenshots] [--dry-run]` — parses and validates the argument shape only, then hands control to the `design-build` skill. No run logic lives here.
 allowed-tools:
   - Bash
 docs:
@@ -34,7 +34,7 @@ same rationale as `plugins/jira-pack/commands/jira-fix.md:21-25`).
 
 This is a **thin proxy**. It parses `$ARGUMENTS`, validates the *shape* of the
 positional argument and the flags, and delegates everything else to the
-`design-implement` skill (`plugins/design-pack/skills/design-implement/SKILL.md`),
+`design-build` skill (`plugins/design-pack/skills/design-build/SKILL.md`),
 which owns all of Phases 0-6: prerequisites, acquire, ground truth, recon, plan,
 implement, verify.
 
@@ -91,7 +91,7 @@ echo "$VIEWPORT" | grep -qE '^[0-9]{3,5}x[0-9]{3,5}$' || echo "usage: --viewport
 ## Delegation
 
 Once the argument and flags parse cleanly, hand control to the
-`design-implement` skill with: the positional argument exactly as given,
+`design-build` skill with: the positional argument exactly as given,
 `--route`, `--viewport`, and the two flag states. The skill re-derives
 everything else from the `design` block of `.claude/project.json` and never
 trusts this command's parsing beyond "here is an export-shaped argument and
@@ -99,7 +99,7 @@ here are the flags."
 
 ## Related
 
-- `plugins/design-pack/skills/design-implement/SKILL.md` — the six phases; the
+- `plugins/design-pack/skills/design-build/SKILL.md` — the six phases; the
   operator approves the Phase 4 plan before any project file is written.
 - `plugins/design-pack/agents/design-implementer.md` — the executor the skill
   invokes for Phases 5-6, with its autonomy contract and eight STOP triggers.
@@ -110,7 +110,7 @@ here are the flags."
 
 ## What it does
 
-You have a design handoff — an exported HTML file, a zip, a share URL, or a folder of screenshots — and a screen in your project that should match it. This command is the entry point that turns that handoff into an implemented, verified screen. It checks only that your argument and flags are well formed, then hands the whole run to the `design-implement` skill, which acquires the export, reads ground truth, plans the change, implements it, and measures the result with a pixel diff.
+You have a design handoff — an exported HTML file, a zip, a share URL, or a folder of screenshots — and a screen in your project that should match it. This command is the entry point that turns that handoff into an implemented, verified screen. It checks only that your argument and flags are well formed, then hands the whole run to the `design-build` skill, which acquires the export, reads ground truth, plans the change, implements it, and measures the result with a pixel diff.
 
 ## When to use it
 
@@ -155,6 +155,6 @@ The argument shape checks out, so control passes to the skill. It unpacks the ex
 
 ## Related
 
-- `design-implement` skill — the six phases behind this command; read it when you want to know how a phase decides something.
+- `design-build` skill — the six phases behind this command; read it when you want to know how a phase decides something.
 - `design-implementer` agent — the executor the skill runs for the implement-and-verify phases, with its stop conditions.
 - `design-verify` skill — prefer it when the screen already exists and you only want the diff.

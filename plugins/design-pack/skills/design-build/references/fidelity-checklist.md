@@ -1,7 +1,7 @@
 # Fidelity checklist
 
-The precision rules behind `design-implement`. Seven of them; each states the rule, the
-consequence of breaking it, and what it looks like in practice. `design-implement` and
+The precision rules behind `design-build`. Seven of them; each states the rule, the
+consequence of breaking it, and what it looks like in practice. `design-build` and
 `design-verify` cite these by number.
 
 ---

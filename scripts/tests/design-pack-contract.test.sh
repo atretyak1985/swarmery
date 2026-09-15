@@ -70,10 +70,10 @@ else
 fi
 
 # ── 3. The main skill's description carries an explicit NOT for block ───────
-if head -n 15 "$SKILLS/design-implement/SKILL.md" | grep -q 'NOT for'; then
-  ok "check3: design-implement description says when NOT to fire"
+if head -n 15 "$SKILLS/design-build/SKILL.md" | grep -q 'NOT for'; then
+  ok "check3: design-build description says when NOT to fire"
 else
-  bad "check3: design-implement description has no 'NOT for' block"
+  bad "check3: design-build description has no 'NOT for' block"
 fi
 
 # ── 4. The export route is reproduced verbatim, label for label ─────────────

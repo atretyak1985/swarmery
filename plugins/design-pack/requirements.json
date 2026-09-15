@@ -5,7 +5,7 @@
       "key": "design",
       "title": "Design handoff",
       "why": "/design-implement re-expresses an exported design in this project's own stack and then measures the result against it. Where the tokens live, where components live, how the app is served for a screenshot, and which checks must pass are all project facts the design export cannot contain.",
-      "docs": "skills/design-implement/SKILL.md",
+      "docs": "skills/design-build/SKILL.md",
       "schema": {
         "type": "object",
         "additionalProperties": false,

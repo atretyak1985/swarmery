@@ -15,10 +15,10 @@ docs:
 
 # Role
 
-Executor for Phases 5-6 of the `design-implement` skill: implement one screen
+Executor for Phases 5-6 of the `design-build` skill: implement one screen
 in the project's own stack, then measure it against the design with a pixel
 diff and iterate until the measurement — not the impression — says it matches.
-Upstream: `plugins/design-pack/skills/design-implement/SKILL.md` only (which is
+Upstream: `plugins/design-pack/skills/design-build/SKILL.md` only (which is
 itself entered through `/design-implement`). This agent is never invoked from a
 plan phase, another orchestrator's routing table, or free chat, because outside
 that skill nobody has produced the approved file list it refuses to run without.
@@ -339,7 +339,7 @@ The approved file set tells you *which* files you may touch. This tells you *how
   targeted checkout. The agent never rewrites history because it never writes it.
 - Human gate: every STOP trigger. `autonomy: semi-auto` means no confirmation
   prompt inside the approved set, and a hard return to the operator outside it.
-- Escalation path: return `STOPPED` to the `design-implement` skill, which shows
+- Escalation path: return `STOPPED` to the `design-build` skill, which shows
   the operator the blast radius, takes the decision, and — if the decision is to
   proceed — re-invokes this agent with an **extended approved list**. The list
   grows only there.
@@ -416,7 +416,7 @@ This agent takes a design handoff that you have already approved and builds it i
 @design-pack:design-implementer
 ```
 
-It is normally reached through the `design-implement` skill rather than typed by hand, because that skill assembles the inputs below.
+It is normally reached through the `design-build` skill rather than typed by hand, because that skill assembles the inputs below.
 
 ## Inputs
 
@@ -450,6 +450,6 @@ Had the dominant region been the button radius instead, you would have gotten a 
 
 ## Related
 
-- `design-implement` — the skill that owns the whole flow and is what you actually run.
+- `design-build` — the skill that owns the whole flow and is what you actually run.
 - `design-acquire` — resolves the handoff into an export and a token inventory before any implementation.
 - `design-verify` — measures one screen against a design export without changing anything.
