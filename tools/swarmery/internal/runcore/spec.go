@@ -71,10 +71,11 @@ type Spec struct {
 	// dispatch's shape, where the stage's deadline lives with the dispatcher.
 	Timeout time.Duration
 
-	// Bin resolves the executable. nil means the literal "claude", resolved by
-	// exec through PATH at start (dispatch/verify — the daemon's service PATH must
-	// contain it). phaserun/planrun/planning pass planning.ClaudeBin, which also
-	// probes the common install locations because launchd's PATH is minimal.
+	// Bin resolves the executable. nil means claudebin.Resolve — the daemon's
+	// service PATH is launchd's minimal one (/usr/bin:/bin:/usr/sbin:/sbin) and
+	// does NOT contain the usual install dirs, so a bare exec of "claude" fails
+	// with ENOENT under the service while working fine in the operator's shell.
+	// Only tests pass a non-nil Bin, to point the spawn at a fixture script.
 	Bin func() (string, error)
 }
 

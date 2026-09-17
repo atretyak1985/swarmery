@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 )
 
 // Runner executes one extraction prompt and returns the model's raw stdout.
@@ -74,11 +76,19 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	if effort == "" {
 		effort = defaultEffort
 	}
+	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
+	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT
+	// under the service while working in the operator's shell. Resolve explicitly.
+	bin, err := claudebin.Resolve()
+	if err != nil {
+		return "", err
+	}
+
 	// --setting-sources project,local: skip user-level settings (global plugin
 	// stack) — headless runs don't need them; project plugins and OAuth are
 	// unaffected. Keep the flag order identical to the improve twin (trajjudge
 	// matches minus --effort).
-	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", model, "--effort", effort, "--output-format", "text", "--setting-sources", "project,local")
+	cmd := exec.CommandContext(ctx, bin, "-p", "--model", model, "--effort", effort, "--output-format", "text", "--setting-sources", "project,local")
 	// System home, not the inherited launchd cwd "/": transcripts then attribute
 	// to the deliberate "System" project (see internal/ingest) — which is also
 	// what keeps THIS run from capturing itself, since CaptureSkipReason refuses

@@ -10,8 +10,15 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procgroup"
 )
+
+// resolveBin is the default executable resolver for a Spec that leaves Bin nil,
+// which is every production caller. A package var only so a test can assert the
+// default is wired at all without a claude on the box — the same seam
+// claudeprobe uses, and for the same reason.
+var resolveBin = claudebin.Resolve
 
 // StderrTailBytes caps the stderr kept on a Result. Every engine surfaces that
 // tail in its own error column (dispatch_error, run_error, verify_detail), and
@@ -92,15 +99,15 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 		defer cancel()
 	}
 
-	bin := "claude"
-	if spec.Bin != nil {
-		resolved, err := spec.Bin()
-		if err != nil {
-			// Resolution failed before anything was spawned, so there is no
-			// duration and no stderr to report — only the missing binary.
-			return &Result{SessionUUID: spec.SessionUUID, ExitCode: -1}, err
-		}
-		bin = resolved
+	resolve := spec.Bin
+	if resolve == nil {
+		resolve = resolveBin
+	}
+	bin, err := resolve()
+	if err != nil {
+		// Resolution failed before anything was spawned, so there is no
+		// duration and no stderr to report — only the missing binary.
+		return &Result{SessionUUID: spec.SessionUUID, ExitCode: -1}, err
 	}
 
 	start := time.Now()

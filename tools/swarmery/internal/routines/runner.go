@@ -10,6 +10,8 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 )
 
 // permEnv is this spawn site's --permission-mode knob (internal/claudeflags owns
@@ -72,7 +74,15 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 		args = append(args, "--model", m)
 	}
 	args = append(args, claudeflags.PermissionModeArgs(permEnv)...)
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
+	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT
+	// under the service while working in the operator's shell. Resolve explicitly.
+	bin, err := claudebin.Resolve()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = cwd
 	// cwd doubles as the account lookup key here: for a project-scoped routine it
 	// IS the project's real directory (projects.path, resolved by

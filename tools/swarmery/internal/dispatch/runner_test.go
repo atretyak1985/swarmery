@@ -169,12 +169,19 @@ func TestClaudeRunnerTimeout(t *testing.T) {
 }
 
 func TestClaudeRunnerStartError(t *testing.T) {
-	// Point PATH at an empty dir so `claude` cannot be resolved → Start error.
-	t.Setenv("PATH", t.TempDir())
+	// An empty PATH is NO LONGER enough to make this fail, and that is the point:
+	// dispatch leaves runcore.Spec.Bin nil, which now resolves through
+	// internal/claudebin — PATH, then the common install dirs. Under launchd the
+	// service PATH is /usr/bin:/bin:/usr/sbin:/sbin and contains no claude, which
+	// is exactly how dispatch used to die with ENOENT before spending a token.
+	// Force the failure hermetically instead, through the documented override, so
+	// the assertion holds on a box that has claude installed and on one that
+	// does not.
+	t.Setenv("SWARMERY_CLAUDE_BIN", filepath.Join(t.TempDir(), "does-not-exist"))
 	run, err := ClaudeRunner{}.Start(context.Background(),
 		RunSpec{Prompt: "p", SessionUUID: "u5", Cwd: t.TempDir()})
 	if err == nil {
-		t.Fatal("expected a Start error when claude is absent from PATH")
+		t.Fatal("expected a Start error when the claude binary cannot be executed")
 	}
 	if run.ExitCode != -1 {
 		t.Errorf("start-failure exit code = %d, want -1", run.ExitCode)
