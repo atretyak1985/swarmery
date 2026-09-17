@@ -322,6 +322,27 @@ func FileHints(jsonPath string) []string {
 	return out
 }
 
+// Cells builds the standard candidate cell list for Resolve/ResolveTrusted, in
+// priority order: the caller's own declared cell(s) first (a phase doc's `Repo`
+// header, a plan README row — often none), then the workspace overlay's
+// project.json (workspaces.root_path/overlay/project.json), then the checkout's
+// own .claude/project.json. Every engine that resolves a run's repository
+// (phaserun, planrun, dispatch) built this same three-tier list by hand; this is
+// the one place the order lives, so a hint source added here reaches all of them.
+func Cells(projectPath, workspaceRoot string, declared ...string) []string {
+	var cells []string
+	for _, d := range declared {
+		if strings.TrimSpace(d) != "" {
+			cells = append(cells, d)
+		}
+	}
+	if workspaceRoot != "" {
+		cells = append(cells, FileHints(filepath.Join(workspaceRoot, "overlay", "project.json"))...)
+	}
+	cells = append(cells, FileHints(filepath.Join(projectPath, ".claude", "project.json"))...)
+	return cells
+}
+
 // SameDir reports whether two paths name the same directory, comparing them
 // AFTER symlink resolution.
 //

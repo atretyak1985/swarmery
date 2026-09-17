@@ -15,6 +15,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/playbooks"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskdir"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -326,20 +327,27 @@ func (s *Service) Schedule() {
 
 // candidate is one eligible-or-nearly Todo task with the fields the gates need.
 type candidate struct {
-	ID           int64
-	ExternalID   string
-	Title        string // the card's title — the micro-plan's headings and table cell
-	ProjectID    int64
-	ProjectSlug  string
-	ProjectPath  string // repo root for worktree.Acquire
-	Prompt       string
-	Model        sql.NullString
-	Agent        sql.NullString // registry agent name (NULL ⇒ plain run, no mention)
-	Playbook     sql.NullString // selected recipe name (NULL ⇒ default 'standard')
-	Priority     int
-	CreatedAt    string
-	FileScope    []string
-	Dependencies []string
+	ID          int64
+	ExternalID  string
+	Title       string // the card's title — the micro-plan's headings and table cell
+	ProjectID   int64
+	ProjectSlug string
+	// ProjectPath is projects.path — the project ROOT, which for a multi-repo
+	// project is an umbrella dir and NOT itself a git checkout. Never hand it to
+	// worktree.Acquire directly; resolve it through runRoot first (mirrors
+	// phaserun/planrun's ProjectPath vs RepoRoot split).
+	ProjectPath string
+	// WorkspaceRoot is the workspace namespace dir (workspaces.root_path), home of
+	// overlay/project.json — one of runRoot's repo-hint sources. "" when unmapped.
+	WorkspaceRoot string
+	Prompt        string
+	Model         sql.NullString
+	Agent         sql.NullString // registry agent name (NULL ⇒ plain run, no mention)
+	Playbook      sql.NullString // selected recipe name (NULL ⇒ default 'standard')
+	Priority      int
+	CreatedAt     string
+	FileScope     []string
+	Dependencies  []string
 	// Provenance is the block appended to the task body of a CAPTURED card:
 	// the session's opening prompt and the files it touched, read from the
 	// origin_* columns (0066). "" for a manual card. It is added here, at
@@ -394,11 +402,16 @@ func provenanceBlock(quote string, files []string) string {
 // ordered by priority (urgent<high<normal<low ⇒ ascending int) then created_at
 // then id, with per-candidate dependency satisfaction resolved in-memory.
 func (s *Service) candidates() ([]candidate, error) {
+	// LEFT JOIN workspaces: the overlay's project.json is a repo-hint source, and a
+	// project with no workspace mapped must still be a candidate (the join is
+	// advisory) — same posture as phaserun/planrun's loadPhase.
 	rows, err := s.DB.Query(`
 		SELECT t.id, COALESCE(t.external_id,''), COALESCE(t.title,''), t.project_id, p.slug, p.path,
+		       w.root_path,
 		       t.prompt, t.model, t.agent, t.playbook, t.priority, t.created_at, t.file_scope, t.dependencies,
 		       COALESCE(t.origin_quote,''), COALESCE(t.origin_files,'')
 		  FROM tasks t JOIN projects p ON p.id = t.project_id
+		  LEFT JOIN workspaces w ON w.project_id = p.id
 		 WHERE t.source='queue' AND t.board_column='todo'
 		   AND t.paused=0 AND t.user_paused=0`)
 	if err != nil {
@@ -410,11 +423,13 @@ func (s *Service) candidates() ([]candidate, error) {
 	for rows.Next() {
 		var c candidate
 		var scopeJSON, depsJSON, quote, filesJSON string
+		var wsRoot sql.NullString
 		if err := rows.Scan(&c.ID, &c.ExternalID, &c.Title, &c.ProjectID, &c.ProjectSlug,
-			&c.ProjectPath, &c.Prompt, &c.Model, &c.Agent, &c.Playbook, &c.Priority, &c.CreatedAt,
+			&c.ProjectPath, &wsRoot, &c.Prompt, &c.Model, &c.Agent, &c.Playbook, &c.Priority, &c.CreatedAt,
 			&scopeJSON, &depsJSON, &quote, &filesJSON); err != nil {
 			return nil, err
 		}
+		c.WorkspaceRoot = wsRoot.String
 		if c.FileScope, err = decodeStringList(scopeJSON); err != nil {
 			return nil, err
 		}
@@ -620,6 +635,36 @@ func (s *Service) liveWorktreeCount() (int, error) {
 
 // ── admission ──
 
+// runRoot resolves the repository a dispatched card runs in: a board card
+// declares no Repo cell of its own (unlike a phase doc), so the only hints are
+// the workspace overlay's project.json and the checkout's own
+// .claude/project.json — same two-tier fallback phaserun/planrun use, via the
+// shared repopath.Cells order, ending in projectPath itself for a single-repo
+// project (unchanged behaviour).
+//
+// Before this, admit() handed worktree.Acquire the raw project path — the
+// umbrella directory of a multi-repo project, never a git checkout — so every
+// hand-added card in such a project failed immediately with
+// worktree.ErrNotARepo, regardless of project.json's mainApp (project Skygor,
+// 2026-09-17).
+func (s *Service) runRoot(projectPath, workspaceRoot string) (string, error) {
+	cells := repopath.Cells(projectPath, workspaceRoot)
+	// Registered projects are the trusted roots: a declared repo outside this
+	// project is honoured only when it is one of them (mirrors phaserun/planrun).
+	return repopath.ResolveTrusted(projectPath, runcore.RegisteredRoots(s.DB), cells...)
+}
+
+// resolvedRepoRoot is runRoot for a worktree-REMOVAL call site: best-effort by
+// construction (removeWorktree already logs-and-continues on any failure), so a
+// resolution error falls back to projectPath rather than skipping the removal —
+// the same degraded answer every call site gave before runRoot existed.
+func (s *Service) resolvedRepoRoot(projectPath, workspaceRoot string) string {
+	if repoRoot, err := s.runRoot(projectPath, workspaceRoot); err == nil {
+		return repoRoot
+	}
+	return projectPath
+}
+
 // admit acquires a worktree, writes the explicit session link, moves the task
 // todo→in_progress via a guarded CAS, and spawns the run goroutine. Returns
 // true when the run was launched. Any failure is surfaced on the row's
@@ -640,7 +685,14 @@ func (s *Service) admit(c candidate) bool {
 		return false
 	}
 
-	acq, err := s.Wt.Acquire(c.ProjectPath, c.ProjectSlug, c.ExternalID)
+	repoRoot, err := s.runRoot(c.ProjectPath, c.WorkspaceRoot)
+	if err != nil {
+		s.clearActive(c.ID)
+		s.failAdmission(c.ID, err.Error())
+		return false
+	}
+
+	acq, err := s.Wt.Acquire(repoRoot, c.ProjectSlug, c.ExternalID)
 	if err != nil {
 		s.clearActive(c.ID)
 		s.failAdmission(c.ID, "worktree acquire: "+err.Error())
@@ -694,7 +746,7 @@ func (s *Service) admit(c candidate) bool {
 	// doc rather than the column someone dragged it to. Non-fatal by construction —
 	// a docless run is the pre-micro-plan behaviour, and refusing to run work because
 	// a markdown file could not be written would be the worse trade.
-	taskDoc := s.mintMicroPlan(c)
+	taskDoc := s.mintMicroPlan(c, repoRoot)
 
 	s.notify(c.ID)
 
@@ -762,7 +814,7 @@ func microPlansEnabled() bool {
 // plan it materialized. No workspace task ROW is written here: wsingest discovers
 // the dir on its next pass and stays the only writer of those rows, so there is one
 // path from a dir to a row and no way for the two to disagree.
-func (s *Service) mintMicroPlan(c candidate) string {
+func (s *Service) mintMicroPlan(c candidate, repoRoot string) string {
 	if s.WorkspaceRoot == "" || !microPlansEnabled() {
 		return ""
 	}
@@ -770,7 +822,7 @@ func (s *Service) mintMicroPlan(c candidate) string {
 		ExternalID: c.ExternalID,
 		Title:      c.Title,
 		Prompt:     c.Prompt,
-		RepoPath:   c.ProjectPath,
+		RepoPath:   repoRoot,
 	}, s.clock())
 	if err != nil {
 		// Logged, not surfaced on the card: the run is about to happen either way, and
@@ -1184,7 +1236,7 @@ func (s *Service) finishDone(c candidate, line string) {
 	} else if n > 0 {
 		log.Printf("dispatch: task %d done — ticked %d phase checkbox(es)", c.ID, n)
 	}
-	s.removeWorktree(c.ProjectPath, wtpath.String, branch.String)
+	s.removeWorktree(s.resolvedRepoRoot(c.ProjectPath, c.WorkspaceRoot), wtpath.String, branch.String)
 	s.notify(c.ID)
 }
 
@@ -1221,11 +1273,12 @@ func (s *Service) removeWorktree(repoRoot, wtPath, branch string) {
 // clears worktree_path so the row no longer counts as holding a live worktree.
 func (s *Service) RemoveWorktreeFor(taskID int64) {
 	var repoPath string
-	var branch, wtpath sql.NullString
+	var branch, wtpath, wsRoot sql.NullString
 	err := s.DB.QueryRow(`
-		SELECT p.path, t.branch, t.worktree_path
+		SELECT p.path, t.branch, t.worktree_path, w.root_path
 		  FROM tasks t JOIN projects p ON p.id=t.project_id
-		 WHERE t.id=? AND t.worktree_path IS NOT NULL`, taskID).Scan(&repoPath, &branch, &wtpath)
+		  LEFT JOIN workspaces w ON w.project_id = p.id
+		 WHERE t.id=? AND t.worktree_path IS NOT NULL`, taskID).Scan(&repoPath, &branch, &wtpath, &wsRoot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return // no live worktree
 	}
@@ -1233,7 +1286,7 @@ func (s *Service) RemoveWorktreeFor(taskID int64) {
 		log.Printf("error: dispatch: lookup worktree for removal (task %d): %v", taskID, err)
 		return
 	}
-	s.removeWorktree(repoPath, wtpath.String, branch.String)
+	s.removeWorktree(s.resolvedRepoRoot(repoPath, wsRoot.String), wtpath.String, branch.String)
 	if _, err := s.DB.Exec(`UPDATE tasks SET worktree_path=NULL WHERE id=?`, taskID); err != nil {
 		log.Printf("error: dispatch: clear worktree_path (task %d): %v", taskID, err)
 	}

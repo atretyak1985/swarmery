@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -59,12 +60,13 @@ func (s *stubRunner) spec(i int) RunSpec {
 // swarm/<id> branch and records calls; Remove records calls. acquireErr forces
 // a failure.
 type stubWt struct {
-	mu         sync.Mutex
-	acquired   []string // task ids acquired
-	removed    []string // task ids (via branch) removed
-	acquireErr error
-	commits    map[string][]string // external id → trailer-bearing commit SHAs
-	commitsErr error               // when set, the progress signal is UNREADABLE
+	mu           sync.Mutex
+	acquired     []string // task ids acquired
+	acquireRoots []string // repoRoot Acquire was actually called with, one per acquired id
+	removed      []string // task ids (via branch) removed
+	acquireErr   error
+	commits      map[string][]string // external id → trailer-bearing commit SHAs
+	commitsErr   error               // when set, the progress signal is UNREADABLE
 	// root overrides the fake "/wt" prefix with a REAL directory, for the tests
 	// that need the worktree to exist on disk (lending the plan doc into it).
 	// Left empty everywhere else so the cheap fake path stays the default.
@@ -78,6 +80,7 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 		return worktree.Acquired{}, w.acquireErr
 	}
 	w.acquired = append(w.acquired, taskID)
+	w.acquireRoots = append(w.acquireRoots, repoRoot)
 	base := w.root
 	if base == "" {
 		base = "/wt"
@@ -136,6 +139,17 @@ func (w *stubWt) acquiredIDs() []string {
 }
 func (w *stubWt) removedCount() int { w.mu.Lock(); defer w.mu.Unlock(); return len(w.removed) }
 
+// lastAcquireRoot is the repoRoot the most recent Acquire call actually
+// received — the thing this file's multi-repo regression tests assert on.
+func (w *stubWt) lastAcquireRoot() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.acquireRoots) == 0 {
+		return ""
+	}
+	return w.acquireRoots[len(w.acquireRoots)-1]
+}
+
 // ── harness ──
 
 func testDB(t *testing.T) *sql.DB {
@@ -145,11 +159,26 @@ func testDB(t *testing.T) *sql.DB {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
+	// A real .git marker: admit() now resolves the project path through
+	// repopath.ResolveTrusted before ever reaching the (stubbed) worktree
+	// manager, and that resolver requires the final fallback candidate
+	// (projects.path itself) to be an actual git checkout.
+	repo := mkRepo(t, filepath.Join(t.TempDir(), "p"))
 	if _, err := db.Exec(
-		`INSERT INTO projects(id, path, slug, first_seen) VALUES(1,'/repo/p','p','2026-01-01T00:00:00Z')`); err != nil {
+		`INSERT INTO projects(id, path, slug, first_seen) VALUES(1,?,'p','2026-01-01T00:00:00Z')`, repo); err != nil {
 		t.Fatal(err)
 	}
 	return db
+}
+
+// mkRepo marks dir as a git checkout for repopath.Resolve (which stats .git
+// and never shells out to git) — mirrors phaserun/planrun's own mkRepo.
+func mkRepo(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 // newTestService builds a Service whose async spawn runs INLINE (Go seam) and

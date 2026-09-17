@@ -260,10 +260,7 @@ func (s *Service) runRoot(info planInfo) (string, error) {
 		sort.Strings(names) // deterministic message; the set has no natural order
 		return "", &PlanSpansReposError{Repos: names}
 	}
-	if info.WorkspaceRoot != "" {
-		cells = append(cells, repopath.FileHints(filepath.Join(info.WorkspaceRoot, "overlay", "project.json"))...)
-	}
-	cells = append(cells, repopath.FileHints(filepath.Join(info.ProjectPath, ".claude", "project.json"))...)
+	cells = append(cells, repopath.Cells(info.ProjectPath, info.WorkspaceRoot)...)
 
 	resolve := s.RepoRoot
 	if resolve == nil {
