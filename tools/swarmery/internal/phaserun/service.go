@@ -518,7 +518,7 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 	if lendErr != nil {
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
 	}
-	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath)
+	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path)
 	spec := RunSpec{
 		Prompt:       prompt,
 		SessionUUID:  uuid,

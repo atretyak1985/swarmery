@@ -104,13 +104,41 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 
 // The prompt orients the agent only when the worktree is NOT the project root.
 func TestBuildPromptIn_RepoNote(t *testing.T) {
-	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj")
+	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "")
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj")
+	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", "")
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
+	}
+}
+
+// The prompt orients the agent about additionalDirectories only when the
+// project declares them — the fix for the exact silent-block symptom this
+// package's own header comment names: a phase declared blocked, believing
+// the sandbox would refuse paths that additionalDirectories actually granted.
+func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(projectRoot, ".claude", "settings.json")
+	body := `{"permissions":{"additionalDirectories":["/proj/sk-control-box","/proj/dk-infrastructure"]}}`
+	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	withDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", filepath.Join(projectRoot, "app"), projectRoot, "")
+	for _, want := range []string{"ADDITIONAL ACCESS:", "/proj/sk-control-box", "/proj/dk-infrastructure"} {
+		if !strings.Contains(withDirs, want) {
+			t.Errorf("prompt missing %q when additionalDirectories is declared:\n%s", want, withDirs)
+		}
+	}
+
+	noDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "")
+	if strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
+		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }
 

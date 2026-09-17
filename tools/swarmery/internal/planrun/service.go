@@ -414,7 +414,7 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	s.notify(taskID)
 
 	spec := RunSpec{
-		Prompt:       BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath),
+		Prompt:       BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, acq.Path),
 		SessionUUID:  uuid,
 		Cwd:          acq.Path,
 		Agent:        agent,

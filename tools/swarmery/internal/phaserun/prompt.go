@@ -47,7 +47,7 @@ The phase document below is your complete contract. Follow it exactly:
 // execution on a fixed template with string data cannot fail, so the
 // (unreachable) error is ignored (same posture as planning.BuildPrompt).
 func BuildPrompt(docPath, docRelPath, docContent string) string {
-	return BuildPromptIn(docPath, docRelPath, docContent, "", "")
+	return BuildPromptIn(docPath, docRelPath, docContent, "", "", "")
 }
 
 // BuildPromptIn is BuildPrompt with the run's repository context: repoRoot is the
@@ -64,30 +64,32 @@ func BuildPrompt(docPath, docRelPath, docContent string) string {
 // root, and an instruction to edit a file outside it contradicts that and is
 // refused by the sandbox — which is what one retro window measured as 56
 // isolation errors and 4 plan-read refusals.
-func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath string) string {
+func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath string) string {
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
 		DocPath    string
 		DocRelPath string
 		DocContent string
 		RepoNote   string
-	}{docPath, docRelPath, docContent, repoNote(repoRoot, projectPath)})
+	}{docPath, docRelPath, docContent, repoNote(repoRoot, projectPath, worktreePath)})
 	return b.String()
 }
 
-// repoNote renders the multi-repo orientation block, or "" when the run's
-// repository IS the project root (where the note would only add noise).
-func repoNote(repoRoot, projectPath string) string {
+// repoNote renders the multi-repo orientation block plus, when the project
+// declares extra reachable paths, repopath.AdditionalDirsNote — "" when
+// neither applies.
+func repoNote(repoRoot, projectPath, worktreePath string) string {
+	note := ""
 	// repopath.SameDir, not a Clean comparison: the resolved root has been through
 	// EvalSymlinks and projects.path has not, so on a symlinked path a single-repo
 	// run would otherwise be handed a note telling it it is somewhere it is not.
-	if repoRoot == "" || projectPath == "" || repopath.SameDir(repoRoot, projectPath) {
-		return ""
+	if repoRoot != "" && projectPath != "" && !repopath.SameDir(repoRoot, projectPath) {
+		name := filepath.Base(repoRoot)
+		note = fmt.Sprintf(
+			"REPOSITORY: your worktree is a checkout of `%s` (%s), ONE repository inside the project root %s.\n"+
+				"Paths in this document may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
+				"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
+			name, repoRoot, projectPath, name, name)
 	}
-	name := filepath.Base(repoRoot)
-	return fmt.Sprintf(
-		"REPOSITORY: your worktree is a checkout of `%s` (%s), ONE repository inside the project root %s.\n"+
-			"Paths in this document may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
-			"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
-		name, repoRoot, projectPath, name, name)
+	return note + repopath.AdditionalDirsNote(projectPath, worktreePath)
 }

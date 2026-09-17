@@ -192,13 +192,38 @@ func TestDeleteRunBranch_UsesResolvedRepo(t *testing.T) {
 func TestBuildPromptIn_RepoNote(t *testing.T) {
 	phases := []Phase{{Seq: 1, Name: "P1", DocPath: "/plan/phase-1.md", Total: 1}}
 
-	multi := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj")
+	multi := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", "")
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj", "/proj")
+	solo := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj", "/proj", "")
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
+	}
+}
+
+// Same additional-access orientation as phaserun's TestBuildPromptIn_AdditionalDirsNote
+// — the two run surfaces must not differ about telling the agent what it can reach.
+func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
+	phases := []Phase{{Seq: 1, Name: "P1", DocPath: "/plan/phase-1.md", Total: 1}}
+	projectRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(projectRoot, ".claude", "settings.json")
+	body := `{"permissions":{"additionalDirectories":["/proj/sk-control-box"]}}`
+	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	withDirs := BuildPromptIn("/plan", "readme", phases, ModeAuto, filepath.Join(projectRoot, "app"), projectRoot, "")
+	if !strings.Contains(withDirs, "ADDITIONAL ACCESS:") || !strings.Contains(withDirs, "/proj/sk-control-box") {
+		t.Errorf("prompt missing additional-access note when additionalDirectories is declared:\n%s", withDirs)
+	}
+
+	noDirs := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", "")
+	if strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
+		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }
 
