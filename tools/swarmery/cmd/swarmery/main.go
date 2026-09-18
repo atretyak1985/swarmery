@@ -236,7 +236,9 @@ func usage() {
        SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC
        SWARMERY_SETTINGS_OVERLAYS (descriptor of settings files that also apply to given project
        roots; default ~/.swarmery/overlays.json — missing = repo-only plugin detection)
-       SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT`)
+       SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT
+       SWARMERY_RETENTION_DAYS (daily telemetry prune window while serving; default 60,
+       0 disables, values 1..13 are raised to 14 — the daemon never VACUUMs)`)
 }
 
 // autoProjectsRoots is the SWARMERY_PROJECTS_ROOTS value that means "find them
@@ -645,12 +647,22 @@ func cmdBackup(args []string) error {
 // cmdPrune implements retention — see internal/prune. --older-than is
 // REQUIRED (a destructive default would be a foot-gun); --dry-run prints the
 // per-table candidate counts and writes nothing.
+//
+// Both modes are BOUNDED at internal/prune.MaxSessionsPerPass sessions per
+// pass, so neither the printed counts nor the deleted rows are ever the whole
+// backlog. The capped notice below says so, and points at how to size a backlog
+// honestly, because "--dry-run says 300, so the backlog is 300" is the natural
+// and wrong reading.
 func cmdPrune(args []string) error {
 	fs := flag.NewFlagSet("prune", flag.ExitOnError)
 	dbPath := dbFlag(fs)
 	olderThan := fs.String("older-than", "",
 		"retention window, e.g. 90d — prune sessions that ENDED more than this long ago (required)")
-	dryRun := fs.Bool("dry-run", false, "count what would be pruned per table; write nothing")
+	dryRun := fs.Bool("dry-run", false,
+		"count what ONE bounded pass would prune per table; write nothing. "+
+			"A pass is capped at "+strconv.Itoa(prune.MaxSessionsPerPass)+" sessions, so these "+
+			"counts are a slice of the backlog, not its size "+
+			"(the daemon also prunes daily; see SWARMERY_RETENTION_DAYS)")
 	fs.Parse(args)
 	if fs.NArg() != 0 || *olderThan == "" {
 		return fmt.Errorf("usage: swarmery prune [--db <path>] --older-than <Nd> [--dry-run]")
@@ -681,6 +693,43 @@ func cmdPrune(args []string) error {
 	}
 	fmt.Printf("prune %s (cutoff %s)\n  %s:\n  sessions marked: %d\n  turns: %d\n  events: %d\n  file_changes: %d\n  daily_rollups rows written: %d\n",
 		*dbPath, st.Cutoff, mode, st.Sessions, st.Turns, st.Events, st.FileChanges, st.RollupRows)
+	// One pass is bounded (internal/prune.MaxSessionsPerPass) so it can never
+	// hold the single connection for minutes; say so instead of leaving the
+	// operator to wonder why old sessions are still there. Capped means real
+	// candidates remain BEYOND this slice (internal/prune.candidateProbe), so
+	// "run again" always has work to do.
+	//
+	// The VACUUM cost is spelled out because it is not intuitive: the CLI
+	// VACUUMs after EVERY pass, and VACUUM rewrites the whole database file.
+	// Draining a large backlog therefore pays one full-file rewrite per run,
+	// not one in total — an operator planning the drain needs that number.
+	if st.Capped {
+		fmt.Printf("  capped at %d sessions this pass — more remain; run again to continue the backlog\n",
+			prune.MaxSessionsPerPass)
+		if !st.DryRun {
+			fmt.Println("  note: each pass ends with its own VACUUM (a full rewrite of the database file), so a multi-pass drain pays that rewrite once per run")
+		}
+	}
+	// Under --dry-run the printed counts are the bounded slice, never the whole
+	// backlog, and that is precisely how a backlog gets mis-sized ("sessions
+	// marked: 300" read as "the backlog is 300"). Point at the honest way to
+	// measure it — see the Retention section of tools/swarmery/README.md.
+	//
+	// A plain sqlite3 SELECT, deliberately: it changes no data and runs no
+	// migrations. NOT `swarmery backup` (it opens the source through store.Open,
+	// which applies pending MIGRATIONS as a side effect of the snapshot), and
+	// NOT a mode=ro URI — SQLite cannot create the -shm a WAL database needs on
+	// a read-only connection, so that fails outright on a cleanly-closed store.
+	if st.DryRun && st.Capped {
+		fmt.Printf("  the counts above are ONE bounded pass (%d sessions), not the whole backlog — "+
+			"size it with: sqlite3 %s \"SELECT COUNT(*) FROM sessions WHERE pruned = 0 AND ended_at IS NOT NULL AND ended_at < '%s';\"\n",
+			prune.MaxSessionsPerPass, *dbPath, st.Cutoff)
+	}
+	// Deleted, but excluded from the rollups: they carry no parseable day.
+	if st.UndatableTurns > 0 || st.UndatableEvents > 0 || st.UndatableSessions > 0 {
+		fmt.Printf("  undatable (deleted, not rolled up): turns %d, events %d, sessions %d\n",
+			st.UndatableTurns, st.UndatableEvents, st.UndatableSessions)
+	}
 	// A post-commit VACUUM failure (e.g. SQLITE_BUSY from a live daemon) is
 	// only about disk space — the prune itself committed. Warn, exit 0.
 	if st.VacuumErr != nil {
@@ -1639,6 +1688,16 @@ func cmdServe(args []string) error {
 	// plan-revision phase 5: revision retention, daily alongside the other
 	// maintenance tickers — staged proposals nobody decided go superseded
 	// after 14 days; decided revisions' document bodies are nulled after 90.
+	//
+	// agent-memory phase 2: telemetry retention rides the SAME daily tick.
+	// `swarmery prune` has always existed but nothing ever invoked it, so
+	// sessions/turns/events grew without bound. The window is resolved ONCE,
+	// here, so a bad SWARMERY_RETENTION_DAYS warns at startup instead of every
+	// 24h, and so the disabled notice is printed once rather than forever.
+	retentionDays := prune.RetentionDays()
+	if retentionDays == 0 {
+		log.Printf("retention prune: disabled")
+	}
 	go func() {
 		tick := func() {
 			if st, err := prune.PruneRevisions(db, time.Now()); err != nil {
@@ -1646,7 +1705,50 @@ func cmdServe(args []string) error {
 			} else if st.Superseded > 0 || st.ContentNulled > 0 {
 				log.Printf("revision prune: superseded=%d content_nulled=%d", st.Superseded, st.ContentNulled)
 			}
+			// Unlike the revision line above, this logs even on a zero pass: at
+			// one line per day it is the only evidence retention is alive, and
+			// "ran, deleted nothing" is what tells an operator a healthy daemon
+			// from a wedged one. A prune error is logged, never fatal.
+			if retentionDays > 0 {
+				if st, err := prune.Tick(db, time.Now(), retentionDays); err != nil {
+					log.Printf("error: retention prune: %v", err)
+				} else {
+					log.Printf("retention prune: sessions=%d turns=%d events=%d file_changes=%d rollups=%d (cutoff %s)",
+						st.Sessions, st.Turns, st.Events, st.FileChanges, st.RollupRows, st.Cutoff)
+					// A capped pass is normal on a backlog, but an operator
+					// staring at a still-huge DB needs to know the daemon is
+					// catching up rather than stuck. "backlog remains" is a
+					// claim about the NEXT pass, so it may only be printed when
+					// candidates genuinely remain beyond this slice — which is
+					// what Stats.Capped now means (internal/prune.candidateProbe);
+					// it used to also fire on a backlog of exactly the cap, which
+					// one pass had just drained.
+					if st.Capped {
+						log.Printf("retention prune: capped at %d sessions/pass — backlog remains, continuing next pass",
+							prune.MaxSessionsPerPass)
+					}
+					// Rows with an unparseable timestamp are deleted but cannot
+					// be rolled up. A non-zero count at volume means ingest is
+					// writing bad timestamps; silence here is what let that hide.
+					if st.UndatableTurns > 0 || st.UndatableEvents > 0 || st.UndatableSessions > 0 {
+						log.Printf("retention prune: undatable rows deleted without rollup — turns=%d events=%d sessions=%d",
+							st.UndatableTurns, st.UndatableEvents, st.UndatableSessions)
+					}
+				}
+			}
 		}
+		// Deliberately NOT called inline. The prune is a destructive transaction
+		// on the store's SINGLE connection (internal/store.Open sets
+		// SetMaxOpenConns(1)), and startup is precisely when ingest is replaying
+		// transcripts over that same connection. Ticking here made every HTTP
+		// handler queue behind a multi-minute transaction on a large store — and
+		// killing the wedged daemon rolled it back, so a restart loop pruned
+		// nothing while the dashboard stayed dead. The window is resolved above
+		// (so `disabled` and the clamp warning still print at startup); only the
+		// WORK is deferred until ingest has settled.
+		first := time.NewTimer(prune.FirstTickDelay)
+		defer first.Stop()
+		<-first.C
 		tick()
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()

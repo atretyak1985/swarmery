@@ -26,7 +26,7 @@ Agent roster and ownership metadata live in `AGENTS.md`, not here.
 | SessionStart | `session-context-bridge.sh` | Carries last session's state into a cold one — the newest `NEXT.md` slice (≤40 lines / 2048 B) and the newest daemon handoff brief for this project (≤1024 B), whole block ≤3072 B. Silent when there is nothing to inject or no daemon answers | `SWARMERY_CONTEXT_BRIDGE=0`, `SWARMERY_PORT` |
 | SessionStart | `task-session-log.sh` | Links the session uuid to the active task card | — |
 | SessionStart | `architecture-digest.sh` | Injects a compact architecture digest when the repo has a map | — |
-| SessionEnd | `session-summary.sh` | Aggregates the session's tool calls into a summary | — |
+| SessionEnd | `session-summary.sh` | Aggregates the session's tool calls into a summary, and rotates the append-only logs it feeds — workspace `sessions/*.json`, `metrics/session-*.jsonl` and `logs/trace-*.jsonl` at 30d, the per-day statusline substrate `claude-session-*.jsonl` in `/tmp` at 7d. `working/**` and the single-file audit logs (`bash-shape-guard.jsonl`, `gate-bypasses.jsonl`) are never swept | `CLAUDE_SESSION_TMP` |
 | SubagentStart | `subagent-start.sh` | Records an agent spawn | — |
 | SubagentStop | `subagent-stop.sh` | Records an agent's completion and duration | — |
 | PreCompact | `pre-compact.sh` | Warns that the context window is about to be compacted | — |
