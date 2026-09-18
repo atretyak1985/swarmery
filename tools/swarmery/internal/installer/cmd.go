@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -20,11 +21,22 @@ var Version = version.String()
 // installEnvKeys maps each install flag to the SWARMERY_* var it bakes into the
 // plist. launchd does not inherit the installing shell's environment, so these
 // are the only way to configure the daemon under launchd.
-var installEnvKeys = []struct{ flag, env string }{
-	{"onboard-roots", "SWARMERY_ONBOARD_ROOTS"},
-	{"workspace-root", "SWARMERY_WORKSPACE_ROOT"},
-	{"statusline-src", "SWARMERY_STATUSLINE_SRC"},
-	{"projects-roots", "SWARMERY_PROJECTS_ROOTS"},
+var installEnvKeys = []struct {
+	flag, env string
+	// noShellEnv drops the shell-environment step of the precedence chain for
+	// this var, leaving flag > existing plist. Only CLAUDE_CONFIG_DIR sets it:
+	// the SWARMERY_* vars are deliberate, but CLAUDE_CONFIG_DIR is ambient in
+	// every session started with an explicit config dir, so reading it from the
+	// installing shell would silently bake THAT shell's account into the daemon
+	// — `swarmery install` run from a second-account session would quietly
+	// re-home every background run.
+	noShellEnv bool
+}{
+	{flag: "onboard-roots", env: "SWARMERY_ONBOARD_ROOTS"},
+	{flag: "workspace-root", env: "SWARMERY_WORKSPACE_ROOT"},
+	{flag: "statusline-src", env: "SWARMERY_STATUSLINE_SRC"},
+	{flag: "projects-roots", env: "SWARMERY_PROJECTS_ROOTS"},
+	{flag: "claude-config-dir", env: "CLAUDE_CONFIG_DIR", noShellEnv: true},
 }
 
 // CmdInstall implements
@@ -55,6 +67,13 @@ func CmdInstall(args []string) error {
 	projectsRoots := fs.String("projects-roots", "",
 		"comma-separated transcript roots, or 'auto' = every ~/.claude*/projects — what makes "+
 			"a second account's sessions and usage visible (env: SWARMERY_PROJECTS_ROOTS)")
+	claudeConfigDir := fs.String("claude-config-dir", "",
+		"CLAUDE_CONFIG_DIR baked into the plist — the account every daemon-spawned run uses when a "+
+			"project has no binding. Set it when the operator's own sessions always export one: Claude "+
+			"Code namespaces its keychain credential per config dir, so an unset var sends the daemon "+
+			"to a DIFFERENT (often empty) credential than the interactive shell uses, and every run "+
+			"fails with \"OAuth session expired\". Unlike the SWARMERY_* vars this one is never read "+
+			"from the installing shell — only this flag or the existing plist.")
 	fs.Parse(args)
 	if *port != -1 && (*port < 0 || *port > 65535) {
 		return fmt.Errorf("invalid port %d", *port)
@@ -74,6 +93,8 @@ func CmdInstall(args []string) error {
 		"workspace-root": *workspaceRoot,
 		"statusline-src": *statuslineSrc,
 		"projects-roots": *projectsRoots,
+
+		"claude-config-dir": *claudeConfigDir,
 	}, os.LookupEnv)
 	for _, k := range preserved {
 		fmt.Fprintf(os.Stdout, "  preserving %s from existing plist\n", k)
@@ -98,13 +119,14 @@ func mergeInstallEnv(
 	flags map[string]string,
 	getenv func(string) (string, bool),
 ) (env []EnvVar, preserved []string) {
+	handled := make(map[string]bool, len(installEnvKeys))
 	for _, k := range installEnvKeys {
 		var val string
 		switch {
 		case set[k.flag]:
 			val = strings.TrimSpace(flags[k.flag])
 		default:
-			if v, ok := getenv(k.env); ok {
+			if v, ok := getenv(k.env); ok && !k.noShellEnv {
 				val = strings.TrimSpace(v)
 			} else if p, ok := prev[k.env]; ok {
 				val = p
@@ -116,6 +138,28 @@ func mergeInstallEnv(
 		if val != "" {
 			env = append(env, EnvVar{Key: k.env, Value: val})
 		}
+		handled[k.env] = true
+	}
+
+	// Carry over every OTHER var already baked into the plist. ExistingPlistEnv
+	// promises to preserve "the onboarding allow-list (or any other baked var)",
+	// but the loop above only knows the handful with flags — so a var an operator
+	// baked in by hand was silently WIPED by the next `swarmery install`. The
+	// daemon reads ~60 SWARMERY_* knobs and only four have flags; on this machine
+	// SWARMERY_EXCLUDE was one hand-baked var away from being lost that way.
+	// SWARMERY_PORT is excluded because resolveInstallPort owns it and plist.go
+	// emits it separately — passing it through here would duplicate the key.
+	extra := make([]string, 0, len(prev))
+	for k := range prev {
+		if handled[k] || k == "SWARMERY_PORT" || strings.TrimSpace(prev[k]) == "" {
+			continue
+		}
+		extra = append(extra, k)
+	}
+	sort.Strings(extra) // deterministic plist output
+	for _, k := range extra {
+		env = append(env, EnvVar{Key: k, Value: prev[k]})
+		preserved = append(preserved, k)
 	}
 	return env, preserved
 }

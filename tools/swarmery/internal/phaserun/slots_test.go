@@ -19,7 +19,7 @@ func TestStart_RefusesDuringALivePlanRun(t *testing.T) {
 	mustExec(t, db, `INSERT INTO plan_runs (workspace_task_id, run_state) VALUES (?, 'running')`, taskID)
 
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	_, err := s.Start(p1)
+	_, err := s.Start(p1, "")
 	if !errors.Is(err, ErrPlanRunning) {
 		t.Fatalf("err = %v, want ErrPlanRunning", err)
 	}
@@ -39,7 +39,7 @@ func TestStart_AllowedAfterThePlanRunEnded(t *testing.T) {
 	mustExec(t, db, `INSERT INTO plan_runs (workspace_task_id, run_state) VALUES (?, 'done')`, taskID)
 
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 }
@@ -59,7 +59,7 @@ func TestStart_UnaffectedByAnotherPlansRun(t *testing.T) {
 	mustExec(t, db, `INSERT INTO plan_runs (workspace_task_id, run_state) VALUES (?, 'running')`, otherTask)
 
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestStart_RefusedWhenTheRunBudgetIsFull(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := s.Start(p1)
+	_, err := s.Start(p1, "")
 	if !errors.Is(err, runcore.ErrNoSlot) {
 		t.Fatalf("err = %v, want runcore.ErrNoSlot", err)
 	}
@@ -91,7 +91,7 @@ func TestStart_RefusedWhenTheRunBudgetIsFull(t *testing.T) {
 
 	// Free the slot and the very same Start succeeds.
 	s.Slots.Release(runcore.SlotKey("dispatch", 5))
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start after the slot freed: %v", err)
 	}
 }
@@ -105,7 +105,7 @@ func TestStart_DuplicateStillReportsErrRunning(t *testing.T) {
 	if _, err := s.Slots.TryAcquire(s.slotKey(p1), "u-live", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Start(p1); !errors.Is(err, ErrRunning) {
+	if _, err := s.Start(p1, ""); !errors.Is(err, ErrRunning) {
 		t.Fatalf("err = %v, want ErrRunning", err)
 	}
 }
@@ -134,7 +134,7 @@ func TestStart_LinksTheRunSessionToThePlan(t *testing.T) {
 	}
 
 	s := newTestService(db, &stubRunner{}, &stubWt{}) // Go runs inline: Start returns after the exit path
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestStart_LinksTheRunSessionToThePlan(t *testing.T) {
 func TestStart_UningestedSessionLeavesNoLink(t *testing.T) {
 	db, taskID, p1, _ := fixture(t)
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	var n int

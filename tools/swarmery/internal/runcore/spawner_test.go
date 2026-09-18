@@ -2,6 +2,7 @@ package runcore
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -432,5 +433,61 @@ func TestAccountFor_EmptyProjectPathResolvesNothing(t *testing.T) {
 	}
 	if got := AccountFor(t.TempDir()); got != "" {
 		t.Errorf("AccountFor(unbound project) = %q, want the empty key", got)
+	}
+}
+
+// ── nil Spec.Bin: the production shape ───────────────────────────────────────
+//
+// dispatch and verify never set Bin, and for a long time nil meant "exec the
+// literal string claude and let PATH find it". Under launchd the daemon's PATH
+// is /usr/bin:/bin:/usr/sbin:/sbin, which contains no install dir, so both
+// engines died with `exec: "claude": executable file not found in $PATH` before
+// a single token was spent — reproduced live on 2026-09-17 with a dispatched
+// board task and a manually-run routine. nil must therefore resolve.
+
+func TestStart_NilBinGoesThroughTheResolver(t *testing.T) {
+	script := fakeBin(t, "exit 0\n")
+	called := false
+	orig := resolveBin
+	resolveBin = func() (string, error) { called = true; return script() }
+	t.Cleanup(func() { resolveBin = orig })
+
+	res, err := ClaudeRunner{Engine: "test"}.Start(context.Background(), Spec{
+		Prompt: "p", SessionUUID: "u-nil-bin", Cwd: t.TempDir(),
+		Timeout: 30 * time.Second, // Bin deliberately nil — dispatch/verify's shape.
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if !called {
+		t.Error("a nil Spec.Bin did not go through resolveBin — it would exec a bare \"claude\"")
+	}
+	if res.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", res.ExitCode)
+	}
+}
+
+func TestStart_NilBinResolutionFailureIsAnError(t *testing.T) {
+	wantErr := errors.New("no claude anywhere")
+	orig := resolveBin
+	resolveBin = func() (string, error) { return "", wantErr }
+	t.Cleanup(func() { resolveBin = orig })
+
+	res, err := ClaudeRunner{Engine: "test"}.Start(context.Background(), Spec{
+		Prompt: "p", SessionUUID: "u-nil-bin-fail", Cwd: t.TempDir(),
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("err = %v, want %v", err, wantErr)
+	}
+	if res == nil || res.ExitCode != -1 {
+		t.Errorf("res = %+v, want ExitCode -1 (never started)", res)
+	}
+}
+
+// The default must actually be wired to claudebin, not left nil — otherwise
+// both tests above would pass against a resolveBin that production never uses.
+func TestResolveBinDefaultIsWired(t *testing.T) {
+	if resolveBin == nil {
+		t.Fatal("resolveBin is nil; a nil Spec.Bin would panic or exec a bare \"claude\"")
 	}
 }

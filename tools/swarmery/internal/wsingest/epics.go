@@ -75,6 +75,11 @@ type epicPhase struct {
 	// normalized to off|normal|strict. Doc-owned like everything else here: the plan
 	// author decides which phases are worth grading, and a rescan re-derives it.
 	verifyMode string
+	// docModel is the RAW model the doc declares for its own runs (`**Model:** opus`,
+	// ParseModel), never validated here — rung 2 of the phase-run ladder judges it at
+	// admission so an unknown value fails the run instead of being dropped by a scan
+	// that must never fail. "" when the doc declares nothing.
+	docModel string
 }
 
 var (
@@ -320,6 +325,70 @@ func ParseCovers(md string) []string {
 		return out // first Covers declaration wins, even when it names no ids
 	}
 	return nil
+}
+
+var (
+	// The phase doc's header table row: `| **Model** | opus |`.
+	docModelRowRe = regexp.MustCompile(`(?i)^\|\s*\*\*Model:?\*\*\s*\|\s*(.+?)\s*\|\s*$`)
+	// The prose header form, beside the existing `**Covers:**` line: `**Model:** opus`.
+	docModelLineRe = regexp.MustCompile(`(?i)^\s*\*\*Model:\*\*\s*(.+?)\s*$`)
+	// Markdown decoration the author may wrap the value in: `**Model:** `opus``.
+	docModelTrimSet = "`*_ \t"
+)
+
+// ParseModel returns the model a phase doc DECLARES for its own runs via a
+// `**Model:** opus` header line or a `| **Model** | opus |` header table row —
+// scanned exactly the way ParseCovers and ParseDocVerify scan: bounded to the
+// doc's header block, stopping at the first `## ` section, first declaration
+// wins. That bound is load-bearing here, not decorative: every phase doc in this
+// workspace embeds a copy-paste agent prompt further down, and a `**Model:**`
+// line quoted inside one is describing someone else's phase.
+//
+// "" when the doc declares nothing — which is what keeps a plan that never opted
+// in behaving exactly as it did before this field existed.
+//
+// The value is returned VERBATIM (trimmed, and stripped of the markdown
+// decoration an author may wrap it in), NOT normalized to a known model and NOT
+// rejected here. This is the deliberate difference from ParseDocVerify, which
+// folds an unrecognized value to `off` with a warning:
+//
+//   - the scan's contract is "degrade with a warning, never fail" — it runs on a
+//     debounce over every plan on the machine and must not be stoppable by one
+//     author's typo;
+//   - rung 2 of the phase-run ladder has the OPPOSITE contract — an unknown model
+//     in a document is a defect in the plan and must fail the run, naming the
+//     document (internal/phaserun.Service.Start → resolveModel).
+//
+// Both hold only if this parser reports what the author wrote and leaves the
+// judgement to the single resolution site. Folding an unknown value to "" here
+// would re-create the bug internal/dispatch/service.go:979 records for playbooks:
+// a `model:` chip rendered in the UI for several phases while dispatch ignored
+// it, so the chip named a model no run ever used.
+//
+// Exported alongside ParseCovers as the single definition of the `**Model:**`
+// format. Pure; unit-tested.
+func ParseModel(md string) string {
+	lines := strings.Split(md, "\n")
+	if len(lines) > docStatusHeaderLines {
+		lines = lines[:docStatusHeaderLines]
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		cell := ""
+		if m := docModelRowRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			cell = m[1]
+		} else if m := docModelLineRe.FindStringSubmatch(line); m != nil {
+			cell = m[1]
+		} else {
+			continue
+		}
+		// First Model declaration wins, even when it is empty after trimming
+		// (`**Model:** ``` ` is an author writing "no opinion" the long way).
+		return strings.Trim(cell, docModelTrimSet)
+	}
+	return ""
 }
 
 // CountCheckboxes counts acceptance-criteria checkboxes in a doc, returning
@@ -631,6 +700,9 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		}
 		phases[i].covers = ParseCovers(string(body))
 		phases[i].verifyMode = ParseDocVerify(string(body))
+		// Same single read of the doc body as every extraction above it — the doc is
+		// opened once per scan and each parser is handed the bytes, never the path.
+		phases[i].docModel = ParseModel(string(body))
 		if fi, err := os.Stat(abs); err == nil {
 			phases[i].docUpdatedAt = fi.ModTime().UTC().Format(time.RFC3339)
 		}
@@ -706,7 +778,13 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 //     quotes a checklist template stops inflating its total (a shipped phase read
 //     7/11 with all seven criteria ticked);
 //   - epic_phases.verify_mode is parsed from the `**Verify:**` header line.
-const parserVersion = "v5"
+//
+// v6: epic_phases.doc_model — the `**Model:**` header line (ParseModel, migration
+// 0069). Without the bump an already-indexed plan whose author adds the line keeps
+// a NULL doc_model until some OTHER byte of the plan changes, and rung 2 of the
+// phase-run ladder would silently not apply — the exact class of failure this
+// constant exists to prevent.
+const parserVersion = "v6"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -899,12 +977,19 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if verifyMode == "" {
 			verifyMode = VerifyOff
 		}
+		// Nullable (0069), unlike verify_mode: "the doc declares no model" and "the
+		// doc declares the empty model" are the same statement, and NULL is how every
+		// other doc-owned optional on this row spells it.
+		var docModel any
+		if p.docModel != "" {
+			docModel = p.docModel
+		}
 		if _, err := tx.Exec(`
 			INSERT INTO epic_phases
 				(workspace_task_id, seq, name, doc_path, depends_on,
 				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-				 completion_report, repo, covers, verify_mode)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 completion_report, repo, covers, verify_mode, doc_model)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
 				seq               = excluded.seq,
 				name              = excluded.name,
@@ -916,10 +1001,14 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 				completion_report = excluded.completion_report,
 				repo              = excluded.repo,
 				covers            = excluded.covers,
-				verify_mode       = excluded.verify_mode`,
+				verify_mode       = excluded.verify_mode,
+				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
+				-- from a doc must actually retract the declaration, the same way
+				-- deleting a **Covers:** line does.
+				doc_model         = excluded.doc_model`,
 			taskID, p.seq, p.name, p.docPath, string(depJSON),
 			p.checkboxesTotal, p.checkboxesDone, docStatus, docUpdatedAt,
-			completionReport, repo, string(coversJSON), verifyMode); err != nil {
+			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
 			return err
 		}
 	}

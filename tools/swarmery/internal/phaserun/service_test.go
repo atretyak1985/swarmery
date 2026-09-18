@@ -77,6 +77,9 @@ type stubWt struct {
 	// base...HEAD, and a test whose base happens to equal the branch would pass on
 	// exactly the bug that column prevents. "" ⇒ stubStartPoint.
 	startPoint string
+	// pathOverride makes Acquire hand back a REAL directory, so a test can exercise
+	// the lent-document round trip instead of a path that does not exist.
+	pathOverride string
 
 	reclaimed    []string // branches handed to ReclaimEmptyBranch, in order
 	reclaimAhead int      // commits-ahead ReclaimEmptyBranch reports (0 ⇒ reclaimed)
@@ -104,8 +107,12 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 	if sp == "" {
 		sp = stubStartPoint
 	}
+	path := "/wt/" + projectSlug + "/" + taskID
+	if w.pathOverride != "" {
+		path = w.pathOverride
+	}
 	return worktree.Acquired{
-		Path:       "/wt/" + projectSlug + "/" + taskID,
+		Path:       path,
 		Branch:     "swarm/" + taskID,
 		StartPoint: sp,
 	}, nil
@@ -317,7 +324,7 @@ func TestStart_HappyPath(t *testing.T) {
 	s.Notify = func(id int64) { notified = append(notified, id) }
 	before := taskCount(t, db)
 
-	uuid, err := s.Start(p1)
+	uuid, err := s.Start(p1, "")
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -390,7 +397,7 @@ func TestStart_SnapshotsCheckboxesBefore(t *testing.T) {
 	mustExec(t, db, `UPDATE epic_phases SET checkboxes_total=8, checkboxes_done=3 WHERE id=?`, p1)
 	s := newTestService(db, &stubRunner{}, &stubWt{})
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	before, _ := phaseOutcome(t, db, p1)
@@ -446,7 +453,7 @@ func TestStamp_ClosesCheckboxInterval(t *testing.T) {
 	}}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	before, _ := phaseOutcome(t, db, p1)
@@ -486,7 +493,7 @@ func TestStamp_CountsTheDocNotTheLaggingColumn(t *testing.T) {
 	}}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	var (
@@ -531,7 +538,7 @@ func TestStamp_UnreadableDocFallsBackToTheLiveColumn(t *testing.T) {
 	}}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := phaseAfter(t, db, p1); !got.Valid || got.Int64 != 2 {
@@ -557,7 +564,7 @@ func TestRunTeardown_WorktreeRemovedBeforeSlotRelease(t *testing.T) {
 	}
 	s = newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if !hookCalled {
@@ -606,7 +613,7 @@ func TestStart_StampsRunEndedAt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, _, p1, _ := fixture(t)
 			s := newTestService(db, &stubRunner{runFn: tc.runFn}, &stubWt{})
-			if _, err := s.Start(p1); err != nil {
+			if _, err := s.Start(p1, ""); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 			if state, _, _, _ := phaseRow(t, db, p1); state != tc.want {
@@ -635,7 +642,7 @@ func TestStart_ClearsPriorEndedAt(t *testing.T) {
 	s.UUID = func() string { return "uuid-1" }
 	mustExec(t, db, `UPDATE epic_phases SET run_state='failed', run_ended_at='2026-01-01T00:00:00Z' WHERE id=?`, p1)
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool {
@@ -660,7 +667,7 @@ func TestStart_NonzeroExit_Failed(t *testing.T) {
 	wt := &stubWt{}
 	s := newTestService(db, r, wt)
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	state, _, _, runErr := phaseRow(t, db, p1)
@@ -682,7 +689,7 @@ func TestStart_Timeout_Failed(t *testing.T) {
 	}}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	state, _, _, runErr := phaseRow(t, db, p1)
@@ -696,7 +703,7 @@ func TestStart_RunnerStartError_Failed(t *testing.T) {
 	r := &stubRunner{startErr: errors.New("fork: claude not found")}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start (admission) should succeed; spawn failure is stamped: %v", err)
 	}
 	state, _, _, runErr := phaseRow(t, db, p1)
@@ -709,7 +716,7 @@ func TestStart_DepsGate(t *testing.T) {
 	t.Run("unmet dep blocks", func(t *testing.T) {
 		db, _, _, p2 := fixture(t)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		_, err := s.Start(p2)
+		_, err := s.Start(p2, "")
 		if !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet", err)
 		}
@@ -728,7 +735,7 @@ func TestStart_DepsGate(t *testing.T) {
 		mustExec(t, db, `UPDATE epic_phases
 			SET run_state='done', checkboxes_total=7, checkboxes_done=0 WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		_, err := s.Start(p2)
+		_, err := s.Start(p2, "")
 		if !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet (a 0/7 'done' run is not a completed phase)", err)
 		}
@@ -747,7 +754,7 @@ func TestStart_DepsGate(t *testing.T) {
 		mustExec(t, db, `UPDATE epic_phases
 			SET checkboxes_done=2, verify_mode='normal', verify_verdict=NULL WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		_, err := s.Start(p2)
+		_, err := s.Start(p2, "")
 		if !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet (a dep that asked to be graded and was not is unverified)", err)
 		}
@@ -758,7 +765,7 @@ func TestStart_DepsGate(t *testing.T) {
 		mustExec(t, db, `UPDATE epic_phases
 			SET checkboxes_done=2, verify_mode='strict', verify_verdict='inconclusive' WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); !errors.Is(err, ErrDepsUnmet) {
+		if _, err := s.Start(p2, ""); !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet", err)
 		}
 	})
@@ -770,7 +777,7 @@ func TestStart_DepsGate(t *testing.T) {
 		mustExec(t, db, `UPDATE epic_phases
 			SET checkboxes_done=2, verify_mode='off', verify_verdict=NULL WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); err != nil {
+		if _, err := s.Start(p2, ""); err != nil {
 			t.Fatalf("Start: %v — a phase that never asked to be graded must not be gated", err)
 		}
 	})
@@ -784,7 +791,7 @@ func TestStart_DepsGate(t *testing.T) {
 			mustExec(t, db, `UPDATE epic_phases
 				SET checkboxes_done=2, verify_mode='normal', verify_verdict=? WHERE id=?`, verdict, p1)
 			s := newTestService(db, &stubRunner{}, &stubWt{})
-			if _, err := s.Start(p2); err != nil {
+			if _, err := s.Start(p2, ""); err != nil {
 				t.Fatalf("verdict=%s: Start: %v", verdict, err)
 			}
 		}
@@ -794,7 +801,7 @@ func TestStart_DepsGate(t *testing.T) {
 		db, _, p1, p2 := fixture(t)
 		mustExec(t, db, `UPDATE epic_phases SET checkboxes_done=2 WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); err != nil {
+		if _, err := s.Start(p2, ""); err != nil {
 			t.Fatalf("Start: %v", err)
 		}
 	})
@@ -809,7 +816,7 @@ func TestStart_DepsGate(t *testing.T) {
 		mustExec(t, db, `UPDATE epic_phases
 			SET run_state='failed', checkboxes_total=7, checkboxes_done=7 WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); err != nil {
+		if _, err := s.Start(p2, ""); err != nil {
 			t.Fatalf("Start: %v", err)
 		}
 	})
@@ -818,7 +825,7 @@ func TestStart_DepsGate(t *testing.T) {
 		db, _, p1, p2 := fixture(t)
 		mustExec(t, db, `UPDATE epic_phases SET checkboxes_total=0, checkboxes_done=0 WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); !errors.Is(err, ErrDepsUnmet) {
+		if _, err := s.Start(p2, ""); !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet (0/0 checkboxes must not satisfy)", err)
 		}
 	})
@@ -833,7 +840,7 @@ func TestStart_DepsGate(t *testing.T) {
 		btID, _ := res.LastInsertId()
 		mustExec(t, db, `UPDATE epic_phases SET activated_board_task_id=? WHERE id=?`, btID, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); err != nil {
+		if _, err := s.Start(p2, ""); err != nil {
 			t.Fatalf("Start: %v", err)
 		}
 	})
@@ -848,7 +855,7 @@ func TestStart_DepsGate(t *testing.T) {
 		btID, _ := res.LastInsertId()
 		mustExec(t, db, `UPDATE epic_phases SET activated_board_task_id=? WHERE id=?`, btID, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); err != nil {
+		if _, err := s.Start(p2, ""); err != nil {
 			t.Fatalf("Start: %v", err)
 		}
 	})
@@ -863,7 +870,7 @@ func TestStart_DepsGate(t *testing.T) {
 		btID, _ := res.LastInsertId()
 		mustExec(t, db, `UPDATE epic_phases SET activated_board_task_id=? WHERE id=?`, btID, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); !errors.Is(err, ErrDepsUnmet) {
+		if _, err := s.Start(p2, ""); !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet", err)
 		}
 	})
@@ -872,7 +879,7 @@ func TestStart_DepsGate(t *testing.T) {
 		db, _, _, p2 := fixture(t)
 		mustExec(t, db, `UPDATE epic_phases SET depends_on='[7]' WHERE id=?`, p2)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
-		if _, err := s.Start(p2); !errors.Is(err, ErrDepsUnmet) {
+		if _, err := s.Start(p2, ""); !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet", err)
 		}
 	})
@@ -885,14 +892,14 @@ func TestStart_DoubleStart_ErrRunning(t *testing.T) {
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool {
 		state, _, _, _ := phaseRow(t, db, p1)
 		return state == "running"
 	})
-	if _, err := s.Start(p1); !errors.Is(err, ErrRunning) {
+	if _, err := s.Start(p1, ""); !errors.Is(err, ErrRunning) {
 		t.Fatalf("second Start err = %v, want ErrRunning", err)
 	}
 	close(r.block)
@@ -908,7 +915,7 @@ func TestStart_RunningRowWithoutSlot_ErrRunning(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	mustExec(t, db, `UPDATE epic_phases SET run_state='running' WHERE id=?`, p1)
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(p1); !errors.Is(err, ErrRunning) {
+	if _, err := s.Start(p1, ""); !errors.Is(err, ErrRunning) {
 		t.Fatalf("err = %v, want ErrRunning", err)
 	}
 }
@@ -916,7 +923,7 @@ func TestStart_RunningRowWithoutSlot_ErrRunning(t *testing.T) {
 func TestStart_UnknownPhase(t *testing.T) {
 	db, _, _, _ := fixture(t)
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(9999); !errors.Is(err, ErrPhaseNotFound) {
+	if _, err := s.Start(9999, ""); !errors.Is(err, ErrPhaseNotFound) {
 		t.Fatalf("err = %v, want ErrPhaseNotFound", err)
 	}
 }
@@ -925,7 +932,7 @@ func TestStart_NoDoc(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	mustExec(t, db, `UPDATE epic_phases SET doc_path='/nope/missing.md' WHERE id=?`, p1)
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(p1); !errors.Is(err, ErrNoDoc) {
+	if _, err := s.Start(p1, ""); !errors.Is(err, ErrNoDoc) {
 		t.Fatalf("err = %v, want ErrNoDoc", err)
 	}
 }
@@ -934,7 +941,7 @@ func TestStart_NoProjectPath(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	mustExec(t, db, `UPDATE projects SET path='' WHERE id=1`)
 	s := newTestService(db, &stubRunner{}, &stubWt{})
-	if _, err := s.Start(p1); !errors.Is(err, ErrNoPath) {
+	if _, err := s.Start(p1, ""); !errors.Is(err, ErrNoPath) {
 		t.Fatalf("err = %v, want ErrNoPath", err)
 	}
 }
@@ -943,12 +950,12 @@ func TestStart_AcquireFailure_StampsFailed(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	wt := &stubWt{acquireErr: errors.New("branch busy")}
 	s := newTestService(db, &stubRunner{}, wt)
-	if _, err := s.Start(p1); err == nil || !strings.Contains(err.Error(), "branch busy") {
+	if _, err := s.Start(p1, ""); err == nil || !strings.Contains(err.Error(), "branch busy") {
 		t.Fatalf("err = %v, want the acquire error surfaced", err)
 	}
 	// Slot released — a retry is admitted.
 	wt.acquireErr = nil
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("retry after acquire failure: %v", err)
 	}
 }
@@ -969,7 +976,7 @@ func TestStart_ResetsPriorCheckboxesAfter(t *testing.T) {
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool {
@@ -1016,7 +1023,7 @@ func TestStart_DBFailure_WorktreeRemovedBeforeSlotRelease(t *testing.T) {
 	}
 	s = newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1); err == nil {
+	if _, err := s.Start(p1, ""); err == nil {
 		t.Fatal("Start = nil, want the failed run_state UPDATE surfaced")
 	}
 	if !hookCalled {
@@ -1042,7 +1049,7 @@ func TestStart_ReclaimsEmptyLeftoverBranch(t *testing.T) {
 	wt := &stubWt{} // reclaimAhead=0 ⇒ the leftover was empty and got deleted
 	s := newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	want := "swarm/phase-" + itoa64(p1)
@@ -1089,7 +1096,7 @@ func TestStart_BranchDirty_NamesTheBase(t *testing.T) {
 	s.Git = git
 
 	var bde *BranchDirtyError
-	if _, err := s.Start(p1); !errors.As(err, &bde) {
+	if _, err := s.Start(p1, ""); !errors.As(err, &bde) {
 		t.Fatalf("err = %v, want a *BranchDirtyError", err)
 	}
 	if bde.Base != "dev" {
@@ -1098,7 +1105,7 @@ func TestStart_BranchDirty_NamesTheBase(t *testing.T) {
 	// A detached HEAD (or any git failure) names nothing rather than guessing.
 	s2 := newTestService(db, &stubRunner{}, &stubWt{reclaimAhead: 3})
 	s2.Git = &stubGit{err: errors.New("detached HEAD")}
-	if _, err := s2.Start(p1); !errors.As(err, &bde) {
+	if _, err := s2.Start(p1, ""); !errors.As(err, &bde) {
 		t.Fatalf("err = %v, want a *BranchDirtyError", err)
 	}
 	if bde.Base != "" {
@@ -1115,7 +1122,7 @@ func TestStart_BranchDirty_RefusesAndReleasesSlot(t *testing.T) {
 	wt := &stubWt{reclaimAhead: 3}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	_, err := s.Start(p1)
+	_, err := s.Start(p1, "")
 	if !errors.Is(err, ErrBranchDirty) {
 		t.Fatalf("err = %v, want ErrBranchDirty", err)
 	}
@@ -1149,7 +1156,7 @@ func TestStart_BranchDirty_RefusesAndReleasesSlot(t *testing.T) {
 	wt.mu.Lock()
 	wt.reclaimAhead = 0
 	wt.mu.Unlock()
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("retry after the branch was resolved: %v", err)
 	}
 }
@@ -1159,7 +1166,7 @@ func TestStart_ReclaimError_ReleasesSlot(t *testing.T) {
 	wt := &stubWt{reclaimErr: errors.New("could not lock ref")}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1); err == nil || !strings.Contains(err.Error(), "could not lock ref") {
+	if _, err := s.Start(p1, ""); err == nil || !strings.Contains(err.Error(), "could not lock ref") {
 		t.Fatalf("err = %v, want the reclaim failure surfaced", err)
 	}
 	if wt.acquiredCount() != 0 {
@@ -1168,7 +1175,7 @@ func TestStart_ReclaimError_ReleasesSlot(t *testing.T) {
 	wt.mu.Lock()
 	wt.reclaimErr = nil
 	wt.mu.Unlock()
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("retry after a reclaim failure: %v", err)
 	}
 }
@@ -1235,7 +1242,7 @@ func TestDeleteRunBranch_ErrRunning(t *testing.T) {
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool {
@@ -1285,7 +1292,7 @@ func TestCancel(t *testing.T) {
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool {

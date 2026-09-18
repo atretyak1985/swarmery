@@ -1394,6 +1394,8 @@ const mockEpicPhase = (
       EpicPhase,
       | 'runState'
       | 'runSessionUuid'
+      | 'runModel'
+      | 'docModel'
       | 'runStartedAt'
       | 'runError'
       | 'runOutcome'
@@ -1427,6 +1429,13 @@ const mockEpicPhase = (
   boardColumn: null,
   runState: 'idle',
   runSessionUuid: null,
+  // Which model the last run used, read from its session — a phase that never
+  // ran has nothing to say, so `null` is the honest default here.
+  runModel: null,
+  // What the DOC asks for, as opposed to what a run used. Most phase docs declare
+  // nothing, which is what keeps the picker's `default` in charge — the cases that
+  // demo a declaration set it explicitly below.
+  docModel: null,
   runStartedAt: null,
   runError: null,
   runOutcome: 'idle',
@@ -1510,6 +1519,7 @@ const mockEpics: Epic[] = [
       mockEpicPhase(1, 1, 'Task queue: schema + write API', [], 5, 5, {
         runState: 'done',
         runSessionUuid: 'mock-run-done-uuid',
+        runModel: 'claude-opus-5',
         runStartedAt: iso(2 * 24 * 60 * MIN),
         runEndedAt: iso(2 * 24 * 60 * MIN - 15 * MIN),
         runOutcome: 'completed',
@@ -1520,10 +1530,14 @@ const mockEpics: Epic[] = [
         runSessionUuid: 'mock-run-live-uuid',
         runStartedAt: iso(6 * MIN),
         runOutcome: 'running',
+        // The doc declares its own model: demos the `doc: sonnet` chip, which is
+        // what the phase runs on while the picker stays on `default`.
+        docModel: 'sonnet',
       }),
       mockEpicPhase(3, 3, 'Board UI', [1], 2, 8, {
         runState: 'failed',
         runSessionUuid: 'mock-run-failed-uuid',
+        runModel: 'claude-sonnet-5',
         runStartedAt: iso(60 * MIN),
         runEndedAt: iso(56 * MIN),
         runError: 'exit 1: npm run build failed — TS2339 in Board.tsx',
@@ -1535,6 +1549,9 @@ const mockEpics: Epic[] = [
       mockEpicPhase(4, 4, 'Epics rollup + graph', [2, 3], 0, 6, {
         runState: 'done',
         runSessionUuid: 'mock-run-noop-uuid',
+        // The operator's pinned env value, context-window suffix and all: the
+        // label must shorten it without rewriting it.
+        runModel: 'claude-opus-5[1m]',
         runStartedAt: iso(90 * MIN),
         runEndedAt: iso(85 * MIN),
         runOutcome: 'noop',

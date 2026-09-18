@@ -3234,6 +3234,23 @@ export interface EpicPhase {
   /** Direct phase-run state (no board task involved). */
   runState: PhaseRunState;
   runSessionUuid: string | null;
+  /** The model the linked run session ACTUALLY used (`sessions.model`), not the
+   * one that was asked for — the run's own record, reached through
+   * `runSessionUuid`. Null when the phase never ran, when its session has not
+   * been ingested yet, or when that session carries no model. */
+  runModel: string | null;
+  /** The model the phase DOC asks for (`**Model:** opus` in its header —
+   * `epic_phases.doc_model`). Null when the doc declares nothing.
+   *
+   * A DIFFERENT FACT from `runModel`: this is what the plan ASKS FOR and applies
+   * to the NEXT run; `runModel` is what a past run actually USED. They disagree
+   * legitimately — after the author edits the line, or when the operator overrode
+   * the doc from the picker — so they are never merged.
+   *
+   * Verbatim, including a value the daemon does not know: such a phase is refused
+   * at admission (409 `doc-model-unknown`) and the operator has to see the
+   * offending text to fix it. */
+  docModel: string | null;
   runStartedAt: string | null;
   /** Failure detail (stderr tail / timeout / cancelled) when runState==='failed'. */
   runError: string | null;

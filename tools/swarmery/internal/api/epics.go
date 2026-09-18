@@ -70,8 +70,28 @@ type epicPhaseDTO struct {
 	// error. Consumed by the Plans page's Run/Cancel UI (phase 6).
 	RunState       string  `json:"runState"`
 	RunSessionUUID *string `json:"runSessionUuid"`
-	RunStartedAt   *string `json:"runStartedAt"`
-	RunError       *string `json:"runError"`
+	// The model the linked run session ACTUALLY used (sessions.model), read
+	// through run_session_uuid rather than copied onto the phase row — decision
+	// D3 of the phase-model-selection plan: one owner for the fact, so there is
+	// no second copy to drift. Null when the phase has never run, when the run's
+	// session has not been ingested yet, or when that session carries no model.
+	RunModel *string `json:"runModel"`
+	// The model the phase DOC asks for (`**Model:** opus`, epic_phases.doc_model,
+	// migration 0069) — rung 2 of the ladder. Null when the doc declares nothing.
+	//
+	// A DIFFERENT FACT from RunModel, which is why it is a separate field and not a
+	// fallback inside it: DocModel is what the plan ASKS FOR and applies to the next
+	// run; RunModel is what a past run actually USED. They disagree legitimately —
+	// after the author edits the line, or when the operator overrode the doc from the
+	// picker — and folding them into one field would make the UI unable to say which
+	// of the two it is showing.
+	//
+	// VERBATIM, including a value this daemon does not know: the run refuses such a
+	// phase (409 doc-model-unknown) and the operator has to SEE the offending text to
+	// fix it.
+	DocModel     *string `json:"docModel"`
+	RunStartedAt *string `json:"runStartedAt"`
+	RunError     *string `json:"runError"`
 	// Derived: what the run ACHIEVED, as opposed to how the process ended.
 	// completed | partial | noop | failed | running | idle — see
 	// internal/phasediag.OutcomeFromRow, the single row-aware implementation, so
@@ -582,9 +602,15 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		       bt.external_id, bt.board_column,
 		       e.run_state, e.run_session_uuid, e.run_started_at, e.run_error,
 		       e.run_ended_at, e.run_checkboxes_before, e.run_checkboxes_after,
-		       e.verify_mode, e.verify_verdict, e.verify_detail
+		       e.verify_mode, e.verify_verdict, e.verify_detail,
+		       e.doc_model,
+		       se.model
 		FROM epic_phases e
 		LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
+		-- The run's own record of which model it used. LEFT, so a phase that never
+		-- ran (or whose session has not been ingested) still comes back; sessions
+		-- .session_uuid is UNIQUE, so this can never fan a phase row out.
+		LEFT JOIN sessions se ON se.session_uuid = e.run_session_uuid
 		WHERE e.workspace_task_id = ?
 		ORDER BY e.seq, e.id`, taskID)
 	if err != nil {
@@ -619,13 +645,20 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			// is the normal state: verification is opt-in per doc.
 			verifyVerdict sql.NullString
 			verifyDetail  sql.NullString
+			// sessions.model for the linked run. NULL both when no session is
+			// joined and when that session has no model recorded yet.
+			runModel sql.NullString
+			// epic_phases.doc_model (0069) — the doc's own declaration. NULL for
+			// every phase whose doc carries no `**Model:**` header, which is all of
+			// them until an author opts in.
+			docModel sql.NullString
 		)
 		if err := rows.Scan(&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
-			&p.VerifyMode, &verifyVerdict, &verifyDetail); err != nil {
+			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel); err != nil {
 			return nil, epicRollupDTO{}, nil, err
 		}
 		p.DependsOn = decodeIntList(depsJSON)
@@ -651,6 +684,16 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		}
 		if runUUID.Valid {
 			p.RunSessionUUID = &runUUID.String
+		}
+		// An empty sessions.model is "not recorded", not a model name — it must
+		// read as null rather than as a chip with no text in it.
+		if runModel.Valid && runModel.String != "" {
+			p.RunModel = &runModel.String
+		}
+		// Same guard, same reason: an empty declaration is "the doc asks for
+		// nothing", not a model whose name is the empty string.
+		if docModel.Valid && docModel.String != "" {
+			p.DocModel = &docModel.String
 		}
 		if runStartedAt.Valid {
 			p.RunStartedAt = &runStartedAt.String

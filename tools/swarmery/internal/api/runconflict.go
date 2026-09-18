@@ -48,6 +48,16 @@ const (
 	// behaviour dropped the declaration silently and ran the phase in the wrong
 	// repository, once per retry.
 	codeRepoOutsideProject = "repo-outside-project"
+	// codeDocModelUnknown: the phase doc's `**Model:**` header names a model outside
+	// planning.Models. A 409 and not the 400 the REQUEST model gets, because the
+	// operator did not type it — the plan did, and the fix is an edit to a document,
+	// which is why the body carries `doc` and `declared`. Nothing is started: rung 2
+	// resolves at admission, before the slot, the worktree and any stamp.
+	//
+	// The alternative — dropping an unrecognized declaration and running on the
+	// daemon default — is the bug internal/dispatch/service.go:979 records for
+	// playbook `model:` chips, where the UI showed a model no run ever used.
+	codeDocModelUnknown = "doc-model-unknown"
 	// codePlanSpansRepos: a plan run executes in ONE worktree, and this plan's
 	// unfinished phases name several repos. Plan-run-only; the phase surface has no
 	// such condition (a phase is one repo by construction).

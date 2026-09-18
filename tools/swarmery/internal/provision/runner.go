@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 )
 
 // Runner executes the claude binary. It is the ONLY seam that touches a real
@@ -38,12 +40,21 @@ const defaultModel = "claude-opus-5"
 // service.go, whose product is files on disk.
 const permEnv = "SWARMERY_PROVISION_PERMISSION_MODE"
 
-// ClaudeRunner is the production Runner: a plain PATH lookup of the claude
-// binary, the same pattern internal/improve and internal/toolproc use.
+// ClaudeRunner is the production Runner: it resolves the claude binary through
+// internal/claudebin, the same pattern internal/improve and every other
+// daemon-launched spawn use — a bare PATH lookup is not enough under launchd.
 type ClaudeRunner struct{}
 
 func (ClaudeRunner) Claude(ctx context.Context, dir, stdin string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "claude", args...)
+	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
+	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT
+	// under the service while working in the operator's shell. Resolve explicitly.
+	bin, err := claudebin.Resolve()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.CommandContext(ctx, bin, args...)
 	// Resolving the account from `dir` is correct HERE — and only here and in
 	// planning. A provision run's dir IS the project path, so it carries the
 	// project's .claude/settings.local.json. dispatch and verify look the same but

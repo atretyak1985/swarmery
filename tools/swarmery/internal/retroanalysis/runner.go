@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 )
 
 // Runner executes one analysis prompt and returns the model's raw stdout.
@@ -72,9 +74,17 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	if effort == "" {
 		effort = defaultEffort
 	}
+	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
+	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT
+	// under the service while working in the operator's shell. Resolve explicitly.
+	bin, err := claudebin.Resolve()
+	if err != nil {
+		return "", err
+	}
+
 	// Flag order kept identical to the internal/improve twin so the two spawn
 	// sites stay diffable at a glance.
-	cmd := exec.CommandContext(ctx, "claude", "-p", "--model", model, "--effort", effort,
+	cmd := exec.CommandContext(ctx, bin, "-p", "--model", model, "--effort", effort,
 		"--output-format", "text", "--setting-sources", "project,local")
 	// System home rather than the inherited launchd cwd "/": transcripts then
 	// attribute to the deliberate "System" project, and ~/.swarmery is itself a
