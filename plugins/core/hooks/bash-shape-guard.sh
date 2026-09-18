@@ -18,10 +18,14 @@
 #
 # WARN-MODE BURN-IN (gate-hardening rule 1, added 2026-08-24): every rule logs
 # its decision to stderr AND to a durable per-rule counter, and exits 0 until
-# the flip. Each message carries its rule id ([heredoc] / [multi-mutation] /
-# [sleep-before-read] / [worktree-escape] / [ambiguous-git]) so hits can be
-# counted per rule before the flip, and the tests assert the DECISION rather
-# than the exit code, so they keep passing across it.
+# ITS OWN flip. Each message carries its rule id ([heredoc] / [multi-mutation] /
+# [sleep-before-read] / [worktree-escape] / [ambiguous-git] / [leading-cd] /
+# [compound-form]) so hits can be counted per rule before the flip, and the
+# tests assert the DECISION rather than the exit code, so they keep passing
+# across it. Every rule is still in warn: the 2026-09-14 read of the `heredoc`
+# row found 2 false positives (a `1<<b` bit-shift and a `grep "<<EOF"` search,
+# both refused as heredocs), so the flip waits on a tightened regex and a fresh
+# burn-in — see docs/GATE-HARDENING.md.
 #
 # THE GATE IS docs/GATE-HARDENING.md, NOT THE DATE BELOW. A date cannot answer
 # "how many times did this rule fire, and how many of those were wrong?" —
@@ -41,11 +45,17 @@
 # counted hits, distinct sessions, false positives reviewed. Never from a date.
 rule_mode() {
   case "$1" in
+    # Row filled 2026-09-14 (494 hits / 13 sessions) and it stays in warn:
+    # 2 reviewed false positives, both from the `<<` regex matching a bit-shift
+    # and a grep pattern. Tighten the regex, re-burn-in, then flip.
     heredoc)           printf 'warn' ;;
     multi-mutation)    printf 'warn' ;;
     sleep-before-read) printf 'warn' ;;
     worktree-escape)   printf 'warn' ;;
     ambiguous-git)     printf 'warn' ;;
+    # New 2026-09-14, no burn-in of their own yet — they start at zero.
+    leading-cd)        printf 'warn' ;;
+    compound-form)     printf 'warn' ;;
     # An unknown rule id is a bug in this file, not a licence to block.
     *)                 printf 'warn' ;;
   esac
@@ -290,7 +300,10 @@ worktree_root=""
 candidate_cwd="$hook_cwd"
 [ -n "$candidate_cwd" ] || candidate_cwd="${CLAUDE_PROJECT_DIR:-}"
 case "$candidate_cwd" in
-  */worktrees/*)
+  # Both spellings of the marker directory: a dot-prefixed `.worktrees/` root is
+  # just as common in the burn-in log as the bare one, and the rule had simply
+  # never looked at it.
+  */worktrees/*|*/.worktrees/*)
     # The cwd may be a subdirectory of the worktree; ask git for the actual
     # root. If git cannot answer, the root is unknown — see conservatism (2).
     if top=$(git -C "$candidate_cwd" rev-parse --show-toplevel 2>/dev/null) && [ -n "$top" ]; then
@@ -408,5 +421,122 @@ for seg in "${segments[@]}"; do
     "" \
     "One call, no directory change, and the repository it acts on is written down."
 done
+
+# ── shape rules: leading-cd, compound-form ────────────────────────
+# WHY THESE ARE LAST. refuse() exits, so the first rule that matches is the only
+# rule that speaks — and these two are the most GENERAL rules in the file: they
+# judge the shape of any multi-segment command. Every specific rule above also
+# needs ≥2 segments (multi-mutation, sleep-before-read, ambiguous-git) or names
+# a concrete path (worktree-escape), and each hands back a rewrite aimed at that
+# exact failure. Putting a general shape rule above them would swallow all four:
+# they would never fire again, their burn-in rows would freeze at zero, and the
+# suite's structural sweep — every refuse() rule must reach the log — would fail.
+# Specific first, general last. Within this block leading-cd comes first, because
+# "put the path in the command" is the more specific rewrite of the two, and an
+# agent should not be refused twice for one command.
+#
+# Both rules ship in `warn`: they have no burn-in of their own, and a brand-new
+# rule shipped straight to `block` is the date-driven flip docs/GATE-HARDENING.md
+# exists to forbid.
+
+nonempty_segments=()
+for seg in "${segments[@]}"; do
+  trimmed=$(trim "$seg")
+  [ -z "$trimmed" ] && continue
+  nonempty_segments+=("$trimmed")
+done
+
+# is_shell_compound <command> — a `;` inside a compound statement is SYNTAX, not
+# sequencing: `for f in a b; do echo $f; done` is one operation however many
+# semicolons it spells itself with. Firing on every shell loop is the loud-rule
+# failure that gets a whole guard switched off, so this carve-out is not
+# optional. Case globs rather than a stored regex: `=~` with a variable pattern
+# is not portable to the bash 3.2 this hook runs under.
+is_shell_compound() {
+  case "$1" in
+    for[[:space:]]*|while[[:space:]]*|if[[:space:]]*|until[[:space:]]*|\
+    case[[:space:]]*|function[[:space:]]*|do[[:space:]]*|\
+    *'; do '*|*'; then '*|*'; done'*|*'; fi'*|*'; esac'*)
+      return 0 ;;
+  esac
+  return 1
+}
+
+command_trimmed=$(trim "$command_text")
+
+if [ "${#nonempty_segments[@]}" -ge 2 ] && ! is_shell_compound "$command_trimmed"; then
+  first_segment="${nonempty_segments[0]}"
+  next_segment="${nonempty_segments[1]}"
+
+  # ── rule: leading-cd ────────────────────────────────────────────
+  # `cd <path> && <command>` — the directory change is not the operation, it is
+  # a way of not writing the path down. Every tool that matters here can take
+  # the path directly, and then the call says which tree it acts on.
+  if printf '%s' "$first_segment" | grep -Eq '^cd[[:space:]]+[^[:space:]]+$'; then
+    cd_path=$(printf '%s' "$first_segment" | sed -E 's/^cd[[:space:]]+//')
+    case "$next_segment" in
+      git)        rewrite="git -C $cd_path" ;;
+      git[[:space:]]*)  rewrite="git -C $cd_path $(printf '%s' "$next_segment" | sed -E 's/^git[[:space:]]+//')" ;;
+      make)       rewrite="make -C $cd_path" ;;
+      make[[:space:]]*) rewrite="make -C $cd_path $(printf '%s' "$next_segment" | sed -E 's/^make[[:space:]]+//')" ;;
+      npm)        rewrite="npm --prefix $cd_path" ;;
+      npm[[:space:]]*)  rewrite="npm --prefix $cd_path $(printf '%s' "$next_segment" | sed -E 's/^npm[[:space:]]+//')" ;;
+      *)          rewrite="" ;;
+    esac
+
+    details=(
+      "  cd target: $cd_path"
+      "  then:      $next_segment"
+      ""
+      "Put the path IN the command instead of changing directory into it — then the"
+      "call states the tree it acts on, and it is one operation:"
+      ""
+    )
+    if [ -n "$rewrite" ]; then
+      details+=("  $rewrite")
+    else
+      details+=(
+        "  • pass $cd_path to the command as its own argument, or"
+        "  • set this Bash call's working directory instead of cd-ing inside it"
+      )
+    fi
+    details+=(
+      ""
+      "And if you still need two operations, they are two calls. Independent calls can"
+      "go in ONE message and run in parallel; that is the replacement for &&, and it is"
+      "faster than the chain."
+    )
+    refuse "leading-cd" \
+      "this command changes directory and then runs another operation." \
+      "${details[@]}"
+  fi
+
+  # ── rule: compound-form ─────────────────────────────────────────
+  # The shape the auto-mode classifier refuses, refused here on shape alone —
+  # which is the gap that let 56 classifier denials through a guard that was
+  # watching. A pipe chain is deliberately NOT this: `||` is consumed before `|`
+  # in the segmentation above, so `grep … | head` stays one operation.
+  details=(
+    "The auto-mode classifier refuses this shape — 56 times in the last retro window —"
+    "and the refusal arrives after a wait of up to 610 s, with no rewrite attached."
+    ""
+    "Send them as separate calls instead. Independent calls can go in ONE message and"
+    "run in parallel; that is the replacement for &&, and it is faster than the chain."
+    ""
+  )
+  n=0
+  for seg in "${nonempty_segments[@]}"; do
+    n=$((n + 1))
+    details+=("  $n. $seg")
+  done
+  details+=(
+    ""
+    "A pipe chain (grep … | head) is one operation and stays allowed as one call, and"
+    "so is a loop or an if — a \`;\` inside those is syntax, not sequencing."
+  )
+  refuse "compound-form" \
+    "this command joins ${#nonempty_segments[@]} operations with && / ; / ||." \
+    "${details[@]}"
+fi
 
 exit 0

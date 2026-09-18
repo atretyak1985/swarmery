@@ -96,29 +96,65 @@ expect "BLOCK multi-mutation" "install then commit"    "npm install && git commi
 stderr_contains "one operation per call" "names the rule" "git add -A && git commit -m x"
 stderr_contains "git add -A"             "names the offending segment" "git add -A && git commit -m x"
 
-# ── canonical commands must NOT fire (SC-3) ───────────────────────
-# Every one of these is documented in this repo's own CLAUDE.md. A guard that
-# breaks them gets switched off rather than used.
-expect "ALLOW" "cd + make test"        "cd tools/swarmery && make test"
+# ── one logical operation must NOT fire (SC-3) ────────────────────
+# A guard that refuses a single operation gets switched off rather than used.
+# A pipe chain is ONE operation here, and so is a compound statement: `||` is
+# consumed before `|` in the segmentation, and a `;` inside for/while/if is
+# syntax rather than sequencing.
 expect "ALLOW" "find | xargs shellcheck" "find plugins scripts -name '*.sh' -print0 | xargs -0 shellcheck -S error"
 expect "ALLOW" "git log | head"        "git log --oneline | head -20"
 expect "ALLOW" "grep | head"           "grep -rn foo . | head"
+expect "ALLOW" "grep | head, explicit" "grep -rn foo src | head -20"
+expect "ALLOW" "command substitution"  "echo \"\$(git rev-parse HEAD)\""
+expect "ALLOW" "for loop"              "for f in a b; do echo \$f; done"
+expect "ALLOW" "if statement"          "if [ -f x ]; then cat x; fi"
+expect "ALLOW" "while read loop"       "while read -r l; do echo \$l; done < f.txt"
 expect "ALLOW" "npm run build"         "npm run build"
-expect "ALLOW" "cd + npm run build"    "cd web && npm run build"
-expect "ALLOW" "vet then test"         "go vet ./... && go test ./..."
 expect "ALLOW" "single mutation"       "git commit -m 'one thing'"
-expect "ALLOW" "cd + single mutation"  "cd tools/swarmery && make install"
-expect "ALLOW" "read chain, three parts" "cat a.txt && wc -l b.txt && ls -la"
-expect "ALLOW" "redirect to /dev/null" "make test >/dev/null && echo done"
+expect "ALLOW" "absolute path, one op" "ls -la /Volumes/Work/Skygor"
+
+# ── rule: leading-cd (SC-3) ───────────────────────────────────────
+# `cd <path> && <command>` — the directory change is a way of not writing the
+# path down, and CLAUDE.md §10.1 already asks for these as separate calls. The
+# rule ships in warn; the suite asserts the DECISION, so it needs no edit when
+# it hardens.
+expect "BLOCK leading-cd" "cd + make test"       "cd tools/swarmery && make test"
+expect "BLOCK leading-cd" "cd + npm run build"   "cd web && npm run build"
+expect "BLOCK leading-cd" "cd + npm typecheck"   "cd /abs/path && npm run typecheck"
+expect "BLOCK leading-cd" "cd + single mutation" "cd tools/swarmery && make install"
+# Ordering is behaviour: this command matches compound-form too, and leading-cd
+# must win — the more specific rewrite, and one refusal rather than two.
+expect "BLOCK leading-cd" "cd + grep beats compound-form" "cd /tmp && grep -rn foo ."
+stderr_contains "npm --prefix /abs/path run typecheck" "hands back the --prefix rewrite" \
+  "cd /abs/path && npm run typecheck"
+stderr_contains "make -C tools/swarmery test" "hands back the -C rewrite" \
+  "cd tools/swarmery && make test"
+stderr_contains "two calls" "says the two operations are two calls" \
+  "cd /tmp && grep -rn foo ."
+# A heredoc inside a cd-chain is the deeper problem and speaks first.
+expect "BLOCK heredoc" "heredoc beats leading-cd" "cd /tmp && python3 - <<'PY'"
+
+# ── rule: compound-form (SC-3) ────────────────────────────────────
+expect "BLOCK compound-form" "two echoes"        "echo a; echo b"
+expect "BLOCK compound-form" "vet then test"     "go vet ./... && go test ./..."
+expect "BLOCK compound-form" "read chain, three parts" "cat a.txt && wc -l b.txt && ls -la"
+expect "BLOCK compound-form" "redirect to /dev/null" "make test >/dev/null && echo done"
+expect "BLOCK compound-form" "or-chain"          "make build || echo failed"
+stderr_contains "1. echo a" "enumerates the segments"        "echo a; echo b"
+stderr_contains "2. echo b" "enumerates every segment"       "echo a; echo b"
+stderr_contains "ONE message and" "names parallel calls as the replacement for &&" "echo a; echo b"
 
 # ── rule: sleep-before-read (SC-4) ────────────────────────────────
 expect "BLOCK sleep-before-read" "sleep && tail"  "sleep 5 && tail -n 50 /tmp/run.log"
 expect "BLOCK sleep-before-read" "sleep ; cat"    "sleep 60 ; cat /tmp/out.log"
 expect "BLOCK sleep-before-read" "sleep ; grep"   "sleep 2 ; grep ERROR /tmp/run.log"
 stderr_contains "separate call" "sleep names the fix" "sleep 5 && tail -n 50 /tmp/run.log"
-# A sleep on its own is fine, and so is a read that precedes one.
+# A sleep on its own is fine. A read that PRECEDES a sleep is not this rule's
+# business — it is refused one rule later, as a compound form, and the tag is
+# what proves sleep-before-read stayed order-sensitive.
 expect "ALLOW" "bare sleep"            "sleep 30"
-expect "ALLOW" "read then sleep"       "cat /tmp/run.log && sleep 5"
+expect "BLOCK compound-form" "read then sleep is not sleep-before-read" \
+  "cat /tmp/run.log && sleep 5"
 
 # ── payload edge cases ────────────────────────────────────────────
 expect "ALLOW" "empty command"         ""
@@ -194,23 +230,38 @@ stderr_contains_cwd "root:" "names the worktree root" "$WT" "cat /Volumes/elsewh
 stderr_contains_cwd "placed INSIDE the root" "states the lending contract" \
   "$WT" "cat /Volumes/elsewhere/project/file.txt"
 
+# A DOT-prefixed `.worktrees/` root is the same isolation boundary, and the
+# trigger glob `*/worktrees/*` never matched it — `/x/.worktrees/y` has no
+# `/worktrees/` substring. Agents demonstrably work in such trees (35 cwds in
+# the burn-in log), so the rule simply had no opinion where it was needed.
+DOTWT="$TESTDIR/.worktrees/p7-sk-next"
+mkdir -p "$DOTWT/sub"
+git -C "$DOTWT" init -q 2>/dev/null
+expect_cwd "BLOCK worktree-escape" "dot-prefixed worktree root is a root" \
+  "$DOTWT" "cat /Volumes/Work/Skygor/sk-next/package.json"
+expect_cwd "ALLOW" "path inside a dot-prefixed root" "$DOTWT" "cat $DOTWT/package.json"
+expect_cwd "ALLOW" "dot-prefixed root, cwd is a subdir" "$DOTWT/sub" "cat $DOTWT/package.json"
+
 # ── rule: ambiguous-git ───────────────────────────────────────────
 expect "BLOCK ambiguous-git" "relative cd then commit"   "cd tools/swarmery && git commit -m x"
 expect "BLOCK ambiguous-git" "relative cd then checkout" "cd web ; git checkout -- ."
 stderr_contains "git -C tools/swarmery commit -m x" "hands back the -C replacement" \
   "cd tools/swarmery && git commit -m x"
 
-expect "ALLOW" "already -C"              "cd tools/swarmery && git -C . commit -m x"
-expect "ALLOW" "read-only query after cd" "cd tools/swarmery && git status"
-expect "ALLOW" "read-only log after cd"   "cd web && git log --oneline -5"
-expect "ALLOW" "absolute cd is unambiguous" "cd /srv/repo && git commit -m x"
+# ambiguous-git keeps its narrow scope: an existing -C, an absolute cd and a
+# read-only query are all outside it. They are still refused — by leading-cd,
+# one rule later — and the TAG is what proves ambiguous-git did not widen.
+expect "BLOCK leading-cd" "already -C"              "cd tools/swarmery && git -C . commit -m x"
+expect "BLOCK leading-cd" "read-only query after cd" "cd tools/swarmery && git status"
+expect "BLOCK leading-cd" "read-only log after cd"   "cd web && git log --oneline -5"
+expect "BLOCK leading-cd" "absolute cd is unambiguous" "cd /srv/repo && git commit -m x"
+expect "BLOCK leading-cd" "cd then a non-git build" "cd tools/swarmery && make test"
 expect "ALLOW" "no cd at all"            "git commit -m x"
-expect "ALLOW" "cd then a non-git build" "cd tools/swarmery && make test"
 
 # ── per-rule enforcement is independent ───────────────────────────
 # The whole point of the per-rule mapping: raising one rule must not raise the
 # others, and must not lower them either.
-one_blocked=$(sed -E 's/^( *)(heredoc\))( *printf '\''warn'\'')/\1\2 printf '\''block'\''/' "$HOOK")
+one_blocked=$(sed -E 's/^( *multi-mutation\)) *printf '\''warn'\''/\1 printf '\''block'\''/' "$HOOK")
 printf '%s' "$one_blocked" > "$TESTDIR/hook-one-blocked.sh"
 probe_rc() {
   local hook="$1" cmd="$2"
@@ -218,13 +269,13 @@ probe_rc() {
     | bash "$hook" >/dev/null 2>&1
   printf '%s' "$?"
 }
-if [ "$(probe_rc "$TESTDIR/hook-one-blocked.sh" 'cat <<EOF > f.txt')" = "2" ]; then
+if [ "$(probe_rc "$TESTDIR/hook-one-blocked.sh" 'git add -A && git commit -m x')" = "2" ]; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
   printf '  ✗ setting a rule to block must make that rule exit 2\n'
 fi
-for other in 'git add -A && git commit -m x' 'sleep 5 && tail -n 5 /tmp/run.log'; do
+for other in 'sleep 5 && tail -n 5 /tmp/run.log' 'echo a; echo b' 'cd /abs/path && npm run typecheck'; do
   if [ "$(probe_rc "$TESTDIR/hook-one-blocked.sh" "$other")" = "0" ]; then
     pass=$((pass + 1))
   else
@@ -232,15 +283,28 @@ for other in 'git add -A && git commit -m x' 'sleep 5 && tail -n 5 /tmp/run.log'
     printf '  ✗ blocking one rule changed another rule'\''s decision: %s\n' "$other"
   fi
 done
-
-# Every rule ships in warn mode at the end of Phase 2 — the switch was built,
-# not thrown. A rule set to block without its row in docs/GATE-HARDENING.md
-# being filled is exactly the failure this plan exists to prevent.
-if ! sed -n '/^rule_mode()/,/^}/p' "$HOOK" | grep -q "printf 'block'"; then
+# …and raising one rule must not change a rule it did not touch: heredoc is
+# still in warn (its row found 2 false positives), so it still exits 0.
+if [ "$(probe_rc "$TESTDIR/hook-one-blocked.sh" 'cat <<EOF > f.txt')" = "0" ]; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  printf '  ✗ a rule is set to block — check its row in docs/GATE-HARDENING.md is filled first\n'
+  printf '  ✗ raising one rule changed the heredoc rule, which is still in warn\n'
+fi
+
+# NO rule blocks today. The one candidate, `heredoc`, has a filled row in
+# docs/GATE-HARDENING.md (494 hits / 13 sessions) and that row found 2 reviewed
+# false positives — so its flip waits on a tightened regex and a fresh burn-in.
+# Any rule set to block is a flip made without a clean filled row — exactly the
+# failure this plan exists to prevent — so the COUNT is asserted, not merely the
+# absence.
+blocking_arms=$(sed -n '/^rule_mode()/,/^}/p' "$HOOK" | grep -c "printf 'block'")
+if [ "$blocking_arms" = "0" ]; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  printf '  ✗ %s rule(s) are set to block — none may until a filled row in docs/GATE-HARDENING.md reads zero false positives\n' \
+    "$blocking_arms"
 fi
 
 # ── burn-in telemetry ─────────────────────────────────────────────
@@ -267,6 +331,8 @@ probe_for() {
     sleep-before-read) printf 'sleep 5 && tail -n 5 /tmp/run.log' ;;
     ambiguous-git)     printf 'cd tools/pkg && git commit -m x' ;;
     worktree-escape)   printf 'cat /Volumes/elsewhere/x.txt\t%s' "$WT" ;;
+    leading-cd)        printf 'cd /abs/path && npm run typecheck' ;;
+    compound-form)     printf 'echo a; echo b' ;;
   esac
 }
 
