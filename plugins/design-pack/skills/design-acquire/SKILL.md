@@ -1,6 +1,6 @@
 ---
 name: design-acquire
-description: "Resolve a design handoff into something measurable: parse a handoff prompt, unpack an exported HTML/zip, pull tokens from a design-system source, or record an honest degraded mode for screenshots-only input. NOT for the implementation workflow itself (that's design-implement) and NOT for measuring a diff (that's design-verify)."
+description: "Resolve a design handoff into something measurable: parse a handoff prompt, unpack an exported HTML/zip, pull tokens from a design-system source, or record an honest degraded mode for screenshots-only input. NOT for the implementation workflow itself (that's design-build) and NOT for measuring a diff (that's design-verify)."
 version: "0.1.0"
 owner: "swarmery-core"
 docs:
@@ -11,7 +11,7 @@ docs:
 
 # Purpose
 
-Phase 1 of `design-implement`. Four input shapes arrive in practice, and they do not promise
+Phase 1 of `design-build`. Four input shapes arrive in practice, and they do not promise
 the same thing: only a self-contained HTML export is ground truth for geometry. This skill
 turns whatever arrived into a path plus an honest statement of what that path can support, and
 hands both back. It does not extract tokens (Phase 2) and it does not measure anything
@@ -94,7 +94,7 @@ Check the project's `.gitignore` for `.design-verify/` and remind the operator t
 is missing. These are large, regenerable, machine-produced artefacts; they do not belong in the
 history.
 
-# Output back to `design-implement`
+# Output back to `design-build`
 
 - the design path (entry document, or the screenshot set);
 - the input shape and the mode (`degraded: …` when applicable);
@@ -116,7 +116,7 @@ You have a design handoff — a pasted prompt, a downloaded `.zip`, a design-sys
 
 ## When not to use it
 
-- You want the full implementation workflow end to end — use `design-implement`, which calls this skill as its first phase.
+- You want the full implementation workflow end to end — use `design-build`, which calls this skill as its first phase.
 - You already have a built screen and want it measured against the design — use `design-verify`.
 - You are checking UI behaviour with no reference design at all — use `browser-verification` in core.
 
@@ -151,6 +151,6 @@ resource that will reshape text if it fails to load in the headless run.
 
 ## Related
 
-- `design-implement` — the whole workflow; start there unless you only need the input resolved.
+- `design-build` — the whole workflow; start there unless you only need the input resolved.
 - `design-verify` — measures a built screen against the design once implementation exists.
 - `browser-verification` — behavioural UI checks when there is no design to measure against.

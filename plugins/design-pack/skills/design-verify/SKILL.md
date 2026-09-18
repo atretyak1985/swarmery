@@ -1,6 +1,6 @@
 ---
 name: design-verify
-description: "Measure an implemented screen against its design export with a headless pixel diff and report the regions, the number and the side-by-side image. NOT for choosing what to build (that's design-implement), NOT for resolving the design input (that's design-acquire), and NOT for behavioural UI checks without a reference design (that's browser-verification in core)."
+description: "Measure an implemented screen against its design export with a headless pixel diff and report the regions, the number and the side-by-side image. NOT for choosing what to build (that's design-build), NOT for resolving the design input (that's design-acquire), and NOT for behavioural UI checks without a reference design (that's browser-verification in core)."
 version: "0.1.0"
 owner: "swarmery-core"
 docs:
@@ -11,7 +11,7 @@ docs:
 
 # Purpose
 
-Phase 6 of `design-implement`, and the only place the measurement procedure is written down.
+Phase 6 of `design-build`, and the only place the measurement procedure is written down.
 Mechanical on purpose: six steps, run in order, every one of them producing something the
 operator can see.
 
@@ -26,7 +26,7 @@ Never point verification at a production origin. The target is the local dev URL
 
 # 2. Run the diff
 
-`$SCRIPTS_DIR` is the one resolved in `design-implement` Step 0.3
+`$SCRIPTS_DIR` is the one resolved in `design-build` Step 0.3
 (`${CLAUDE_PLUGIN_ROOT}/scripts` inside the pack, the skill's own `scripts/`
 directory inside a standalone bundle).
 
@@ -46,7 +46,7 @@ scope.
 
 Exit codes: `0` ok, `1` bad arguments or unreadable input, `2` runtime failure (the render
 failed, or the URL was unreachable — check step 1 before blaming the diff), `3` the render
-runtime is not prepared: run `ensure-runtime.mjs` once while online, see `design-implement`
+runtime is not prepared: run `ensure-runtime.mjs` once while online, see `design-build`
 Step 0.3.
 
 Artefacts written to the output directory: `design.png`, `impl.png`, `diff.png`,
@@ -120,7 +120,7 @@ This skill measures an implemented screen against its design export. It starts t
 
 ## When not to use it
 
-- You are deciding what to build or how to structure the implementation — use `design-implement`.
+- You are deciding what to build or how to structure the implementation — use `design-build`.
 - You still need to unpack, parse, or resolve the design input itself — use `design-acquire`.
 - You are checking UI behaviour with no reference design to compare against — use `browser-verification` in core.
 
@@ -130,7 +130,7 @@ This skill measures an implemented screen against its design export. It starts t
 Skill(skill: "design-pack:design-verify")
 ```
 
-Invoke it directly when you want a measurement pass, or let `design-implement` reach it as its verification phase.
+Invoke it directly when you want a measurement pass, or let `design-build` reach it as its verification phase.
 
 ## Inputs
 
@@ -161,6 +161,6 @@ You get `pass: true` and a real finding in the same report — the 2px shift is 
 
 ## Related
 
-- `design-implement` — prefer it when you are implementing a screen end to end; it calls this skill as its final phase.
+- `design-build` — prefer it when you are implementing a screen end to end; it calls this skill as its final phase.
 - `design-acquire` — prefer it when the design input is not yet a measurable file.
 - `browser-verification` — prefer it for behavioural checks where no reference design exists.

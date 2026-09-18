@@ -13,7 +13,7 @@ Two things ship from this repository on separate clocks:
   `infra-pack` 1.3.1, `architecture-pack` 1.2.0, `iot-pack` 1.2.1,
   `uav-pack` 1.2.1, `web-pack` 1.2.1, `claude-eng-pack` 1.1.0,
   `graphify-pack` 1.1.0, `lsp-pack` 1.0.0, `jira-pack` 0.6.1,
-  `design-pack` 0.3.1, `accounts-pack` 0.2.1. The marketplace's
+  `design-pack` 0.4.0, `accounts-pack` 0.2.1. The marketplace's
   `metadata.version` tracks `core`.
 
 ## [Unreleased]
@@ -66,6 +66,14 @@ Two things ship from this repository on separate clocks:
   recorder, a monthly model-upgrade routine, and a version-floor gate.
 
 ### Changed
+
+- **`design-pack` 0.4.0.** The pack's main skill is renamed `design-implement`
+  → `design-build`, because a plugin that ships both a command and a skill under
+  the same name registers them under one key and one of the two is dropped —
+  `design-pack` was the only pack in the marketplace with that collision, and
+  the casualty was `/design-implement` no longer being offered in the slash-command
+  picker. `/design-implement` stays the entry point and its arguments are
+  unchanged; only the skill it hands control to has a new name.
 
 - **License split.** The plugin framework (`plugins/`, `scripts/`, `overlays/`,
   `docs/`, `site/` and the repository root) is now **Apache-2.0**; the control

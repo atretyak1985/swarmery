@@ -143,13 +143,13 @@ bundle is a zip with exactly one root directory:
 
 ```bash
 PACK=plugins/design-pack
-STAGE=$(mktemp -d)/design-implement && mkdir -p "$STAGE"
-cp "$PACK/skills/design-implement/SKILL.md" "$STAGE/SKILL.md"
-cp -R "$PACK/skills/design-implement/references" "$STAGE/references"
+STAGE=$(mktemp -d)/design-build && mkdir -p "$STAGE"
+cp "$PACK/skills/design-build/SKILL.md" "$STAGE/SKILL.md"
+cp -R "$PACK/skills/design-build/references" "$STAGE/references"
 cp -R "$PACK/scripts" "$STAGE/scripts"
 cp "$PACK/skills/design-acquire/SKILL.md" "$STAGE/references/design-acquire.md"
 cp "$PACK/skills/design-verify/SKILL.md"  "$STAGE/references/design-verify.md"
-(cd "$(dirname "$STAGE")" && zip -qr design-implement.skill design-implement -x '*/.DS_Store')
+(cd "$(dirname "$STAGE")" && zip -qr design-build.skill design-build -x '*/.DS_Store')
 ```
 
 Install it by unpacking that directory into the skills directory the CLI loads
@@ -161,7 +161,7 @@ What the bundle gives up, stated plainly:
   the `design` block for a bundled skill — fill it into `.claude/project.json` by hand.
 - **No `@design-implementer`.** Agents ship with the pack; in the bundle the workflow runs in
   the session that invoked it, and the autonomy contract is prose rather than an agent boundary.
-- **No `/design-implement` command** — invoke the skill by name.
+- **No `/design-implement` command** — invoke the `design-build` skill by name.
 - `design-acquire` and `design-verify` travel as `references/*.md` rather than as sibling
   skills, so they are read, not delegated to.
 
@@ -178,6 +178,6 @@ the pack and to the skill's own `scripts/` inside the bundle, and that one varia
 difference between the two.
 
 The bundling recipe above is hand-copied and nothing in CI checks it, so a new file under
-`skills/design-implement/references/` or `scripts/` lands in the bundle only because `cp -R`
+`skills/design-build/references/` or `scripts/` lands in the bundle only because `cp -R`
 happens to sweep the whole directory. If the layout ever gains a file outside those two trees,
 update the recipe in the same commit.
