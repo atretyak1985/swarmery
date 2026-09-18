@@ -11,6 +11,8 @@ bash "$SCRIPT_DIR/build.sh" \
 
 grep -q 'id="map-data"' "$tmp/map.html" || { echo "FAIL: map-data script missing"; exit 1; }
 grep -q '{%%%MAP_JSON%%%}' "$tmp/map.html" && { echo "FAIL: sentinel not substituted"; exit 1; }
+grep -q "id: 'reader'" "$tmp/map.html" || { echo "FAIL: reader tab (modules & flows) missing"; exit 1; }
+grep -q 'id="zoomctl"' "$tmp/map.html" || { echo "FAIL: diagram zoom control missing"; exit 1; }
 
 node - "$tmp/map.html" <<'EOF'
 const { readFileSync } = require('node:fs');
