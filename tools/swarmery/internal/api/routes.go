@@ -59,6 +59,10 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/sessions", h.listSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/{id}/handoff", h.getSessionHandoff)
+	// …and the same brief keyed by PROJECT instead of session: the newest one
+	// for the project a cwd resolves to, for the SessionStart context bridge
+	// (handoff_latest.go). 204 when there is nothing to inject.
+	mux.HandleFunc("GET /api/handoffs/latest", h.getLatestHandoff)
 	// per-tool context attribution: parses the session transcript on demand and
 	// ranks the tools driving context growth (context_hogs.go). 404 when no
 	// transcript is on disk.
