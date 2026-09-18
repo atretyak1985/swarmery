@@ -89,10 +89,12 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 	// Service.projectPath in store.go — never a worktree, unlike
 	// dispatch/verify/planrun/phaserun), so it carries that project's own
 	// .claude/settings.local.json directly. For a GLOBAL routine (ProjectID NULL)
-	// projectPath is "", and accountEnvFor's guard keeps that from ever reaching
-	// claudeacct.EnvFor. nil delta for an unbound project ⇒ cmd.Env is a
-	// byte-identical copy of os.Environ() — behaviour unchanged from before.
-	cmd.Env = append(os.Environ(), accountEnvFor(cwd)...)
+	// projectPath is "", and SpawnEnvFor's guard keeps that from ever reaching
+	// claudeacct.Binding (which would otherwise read a RELATIVE settings file
+	// under the daemon's own cwd). An unbound project gets os.Environ() back
+	// untouched; a bound one gets its config dir AND its secret store — the same
+	// composition every other swarmery spawn uses.
+	cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), cwd)
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -101,21 +103,6 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 		return "", wrapRunErr(ctx, err, stderr.String())
 	}
 	return stdout.String(), nil
-}
-
-// accountEnvFor resolves the CLAUDE_CONFIG_DIR env delta for projectPath.
-// Mirrors internal/api/term.go's termAccountEnv (plan A3, extended to this
-// spawn site): claudeacct.Binding joins its argument with
-// ".claude/settings.local.json" unconditionally, so claudeacct.EnvFor("")
-// would resolve that RELATIVE path against the daemon's OWN process working
-// directory and silently bind the run to whatever unrelated settings file
-// happens to sit there. An empty projectPath (the global-routine case,
-// ProjectID NULL) must short-circuit to nil before EnvFor is ever called.
-func accountEnvFor(projectPath string) []string {
-	if projectPath == "" {
-		return nil
-	}
-	return claudeacct.EnvFor(projectPath)
 }
 
 func wrapRunErr(ctx context.Context, err error, stderr string) error {

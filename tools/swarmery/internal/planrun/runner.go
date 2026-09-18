@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
@@ -154,9 +153,8 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// delta, so cmd.Env stays a byte-identical copy of os.Environ().
 		Account: runcore.AccountFor(spec.ProjectPath),
 		Timeout: timeout,
-		// planning.ClaudeBin, not a bare PATH lookup: launchd starts the daemon with
-		// a minimal PATH that omits npm/homebrew.
-		Bin: planning.ClaudeBin,
+		// Bin left nil: runcore resolves through claudebin by default (launchd's
+		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})
 	return &Run{
 		SessionUUID: res.SessionUUID,

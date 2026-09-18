@@ -114,8 +114,9 @@ func TestRunMissingSystemDirGuardsAccountResolution(t *testing.T) {
 		t.Fatalf("precondition: ~/.swarmery must not exist (stat err = %v)", err)
 	}
 
-	if got := accountEnvFor(""); got != nil {
-		t.Errorf("accountEnvFor(\"\") = %v, want nil — it must never reach EnvFor with an empty project path", got)
+	base := []string{"PATH=/usr/bin"}
+	if got := claudeacct.SpawnEnvFor(base, ""); len(got) != 1 || got[0] != base[0] {
+		t.Errorf("SpawnEnvFor(base, \"\") = %v, want base untouched — it must never resolve a binding for an empty project path", got)
 	}
 
 	got := childConfigDir(t)
@@ -131,7 +132,7 @@ func TestRunMissingSystemDirGuardsAccountResolution(t *testing.T) {
 func TestAccountEnvForUnboundDirIsByteIdenticalToOsEnviron(t *testing.T) {
 	dir := t.TempDir() // exists, but unbound
 	base := os.Environ()
-	got := append(os.Environ(), accountEnvFor(dir)...) // the spawn line, verbatim
+	got := claudeacct.SpawnEnvFor(os.Environ(), dir) // the spawn line, verbatim
 	if len(got) != len(base) {
 		t.Fatalf("env length %d, want %d (an unbound spawn must add nothing)", len(got), len(base))
 	}

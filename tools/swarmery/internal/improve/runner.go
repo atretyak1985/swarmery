@@ -94,16 +94,16 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// daemon owns ~/.swarmery, so in production it is always there).
 	//
 	// ~/.swarmery is ALSO improve's own project for account resolution — it is
-	// itself a registered project (see internal/ingest), so accountEnvFor picks
-	// up whatever Claude account it is bound to, the same plan-A3 pattern every
-	// other spawn site in this program follows. Gated behind the SAME isDir
-	// check as cmd.Dir, deliberately: when the directory does not exist there is
-	// no project to resolve an account FOR, so cmd.Env must stay untouched too —
-	// a byte-identical spawn to before this feature existed.
+	// itself a registered project (see internal/ingest), so SpawnEnvFor picks up
+	// whatever Claude account it is bound to (config dir AND secret store), the
+	// same composition every other spawn site in this program uses. Gated behind
+	// the SAME isDir check as cmd.Dir, deliberately: when the directory does not
+	// exist there is no project to resolve an account FOR, so cmd.Env must stay
+	// untouched too — a byte-identical spawn to before this feature existed.
 	if home, err := os.UserHomeDir(); err == nil {
 		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), accountEnvFor(dir)...)
+			cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
 		}
 	}
 	cmd.Stdin = strings.NewReader(prompt)
@@ -118,23 +118,6 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 		return "", fmt.Errorf("claude -p: %w; stderr: %s", err, tail(stderr.String(), stderrTailBytes))
 	}
 	return stdout.String(), nil
-}
-
-// accountEnvFor resolves the CLAUDE_CONFIG_DIR env delta for projectPath.
-// Mirrors internal/api/term.go's termAccountEnv (plan A3, extended to this
-// spawn site): claudeacct.Binding joins its argument with
-// ".claude/settings.local.json" unconditionally, so claudeacct.EnvFor("")
-// would resolve that RELATIVE path against the daemon's OWN process working
-// directory and silently bind the run to whatever unrelated settings file
-// happens to sit there. projectPath is always ~/.swarmery here and thus never
-// empty in production, but the guard is kept anyway — every account
-// resolution in this program goes through the same short-circuit, never a
-// bespoke one per call site.
-func accountEnvFor(projectPath string) []string {
-	if projectPath == "" {
-		return nil
-	}
-	return claudeacct.EnvFor(projectPath)
 }
 
 // tail returns the last ≤ n bytes of s, trimmed.

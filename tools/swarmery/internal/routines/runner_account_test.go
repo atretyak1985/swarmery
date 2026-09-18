@@ -134,8 +134,9 @@ func TestRunGlobalRoutineEmptyCwdGuardsAccountResolution(t *testing.T) {
 		t.Fatalf("precondition: EnvFor(\"\") = nil — the relative-path trap this test guards is gone")
 	}
 
-	if got := accountEnvFor(""); got != nil {
-		t.Errorf("accountEnvFor(\"\") = %v, want nil — it must never reach EnvFor with an empty project path", got)
+	base := []string{"PATH=/usr/bin"}
+	if got := claudeacct.SpawnEnvFor(base, ""); len(got) != 1 || got[0] != base[0] {
+		t.Errorf("SpawnEnvFor(base, \"\") = %v, want base untouched — it must never resolve a binding for an empty project path", got)
 	}
 
 	got := childConfigDir(t, "") // the global-routine cwd
@@ -150,7 +151,7 @@ func TestRunGlobalRoutineEmptyCwdGuardsAccountResolution(t *testing.T) {
 // PWD/SHLVL/_ of its own, so the full environment can only be compared here.
 func TestRunUnboundSpawnEnvIsByteIdenticalToOsEnviron(t *testing.T) {
 	base := os.Environ()
-	got := append(os.Environ(), accountEnvFor(t.TempDir())...) // the spawn line, verbatim
+	got := claudeacct.SpawnEnvFor(os.Environ(), t.TempDir()) // the spawn line, verbatim
 	if len(got) != len(base) {
 		t.Fatalf("env length %d, want %d (an unbound spawn must add nothing)", len(got), len(base))
 	}

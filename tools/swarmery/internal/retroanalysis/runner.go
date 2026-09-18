@@ -94,7 +94,9 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	if home, err := os.UserHomeDir(); err == nil {
 		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), accountEnvFor(dir)...)
+			// Config dir AND secret store, the same composition every other
+			// swarmery spawn uses; "" is guarded inside SpawnEnvFor.
+			cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
 		}
 	}
 	cmd.Stdin = strings.NewReader(prompt)
@@ -115,18 +117,6 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 func isDir(path string) bool {
 	st, err := os.Stat(path)
 	return err == nil && st.IsDir()
-}
-
-// accountEnvFor resolves the CLAUDE_CONFIG_DIR delta for projectPath. The
-// empty-string guard matters: claudeacct.Binding joins its argument with
-// ".claude/settings.local.json" unconditionally, so an empty path would
-// resolve that RELATIVE path against the daemon's own working directory and
-// silently bind the run to an unrelated settings file.
-func accountEnvFor(projectPath string) []string {
-	if projectPath == "" {
-		return nil
-	}
-	return claudeacct.EnvFor(projectPath)
 }
 
 // tail returns the last ≤ n bytes of s, trimmed.

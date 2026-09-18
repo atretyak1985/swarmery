@@ -126,7 +126,7 @@ func TestProvisionUnboundSpawnEnvIsByteIdenticalToOsEnviron(t *testing.T) {
 	dir := t.TempDir()
 
 	base := os.Environ()
-	got := append(os.Environ(), claudeacct.EnvFor(dir)...) // the spawn line, verbatim
+	got := claudeacct.SpawnEnvFor(os.Environ(), dir) // the spawn line, verbatim
 	if len(got) != len(base) {
 		t.Fatalf("env length %d, want %d (an unbound spawn must add nothing)", len(got), len(base))
 	}

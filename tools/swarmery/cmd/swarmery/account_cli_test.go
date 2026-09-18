@@ -223,9 +223,9 @@ func TestAccountExecOverridesAStaleConfigDirFromTheCallersShell(t *testing.T) {
 
 	// 1. The unit-level property: one entry per overridden key, override value,
 	//    and every unrelated variable carried through untouched.
-	merged := mergeEnv(
+	merged := claudeacct.SpawnEnvFor(
 		[]string{"PATH=/usr/bin", "CLAUDE_CONFIG_DIR=" + staleConfigDir, "TERM=xterm"},
-		[]string{"CLAUDE_CONFIG_DIR=" + want},
+		dir,
 	)
 	var seen []string
 	for _, kv := range merged {

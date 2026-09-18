@@ -189,6 +189,15 @@ func parseSecretEnv(path string, r io.Reader) []string {
 			log.Printf("claudeacct: secret store %s: skipping malformed line %d", path, n)
 			continue
 		}
+		// The binding OWNS the config dir: the store is keyed by the account the
+		// binding named, so a store line re-pointing it would make the two spawn
+		// seams disagree (os/exec is last-wins, raw execve is first-wins). It is
+		// refused, by name — this one name is not a secret.
+		if name == configDirEnv {
+			log.Printf("claudeacct: secret store %s: line %d sets %s, which the account binding owns; ignoring it",
+				path, n, configDirEnv)
+			continue
+		}
 		out = append(out, name+"="+unquote(strings.TrimSpace(value)))
 	}
 	if err := sc.Err(); err != nil {

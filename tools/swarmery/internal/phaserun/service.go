@@ -338,15 +338,13 @@ func resolveModel(choice, docModel, docPath string) (string, error) {
 // owns the ladder and is applied first, so a bad model costs nothing.
 func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err error) {
 	// loadPhase is a pure READ — one SELECT, no stamp, no acquire — and rung 2 of
-	// the ladder lives on the row it returns (epic_phases.doc_model), so resolution
-	// cannot precede it. Everything that leaves a trace still comes after: the
-	// single-flight slot, the worktree, run_state='running'. An unknown model
-	// (rung 1 or rung 2) is an admission verdict that must leave none.
+	// the ladder lives on the row it returns (epic_phases.doc_model), so model
+	// resolution cannot precede it. It sits right after the already-running gates
+	// (a live run outranks a bad model as the thing to report) and before
+	// everything that leaves a trace: the single-flight slot, the worktree,
+	// run_state='running'. An unknown model (rung 1 or rung 2) is an admission
+	// verdict that must leave none.
 	info, err := s.loadPhase(phaseID)
-	if err != nil {
-		return "", err
-	}
-	runModel, err := resolveModel(model, info.DocModel, info.DocPath)
 	if err != nil {
 		return "", err
 	}
@@ -361,6 +359,16 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 		return "", err
 	} else if busy {
 		return "", ErrPlanRunning
+	}
+	// After the two "something is already running" gates, before anything else:
+	// a live run is the operator's real blocker and must be the answer even when
+	// the doc's **Model:** line was broken in the meantime — otherwise the client
+	// is told to edit a document while the actual reason is "wait". Still ahead
+	// of every step that leaves a trace (slot, worktree, run_state), so an
+	// unknown model is an admission verdict and nothing else.
+	runModel, err := resolveModel(model, info.DocModel, info.DocPath)
+	if err != nil {
+		return "", err
 	}
 	if info.ProjectPath == "" {
 		return "", ErrNoPath

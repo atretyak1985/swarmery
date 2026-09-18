@@ -170,8 +170,10 @@ Some plugins ship an `.mcp.json` whose servers reference credentials as
 and on a multi-account machine they belong to one account, not to the box: an
 operator's work tokens have no business in a personal project's sessions.
 
-swarmery keeps them in a per-account store and injects them at the two seams
-that already know the account:
+swarmery keeps them in a per-account store and injects them wherever it starts
+a `claude` for a bound project — every daemon engine (dispatch, verify, plan and
+phase runs, planning, routines, improve, retro analysis, provisioning), the
+dashboard's resume and terminal dock, and `swarmery account exec`:
 
 ```
 <SWARMERY_SECRETS_DIR or ~/.swarmery/secrets>/<account>.env    dir 0700, file 0600
@@ -187,9 +189,17 @@ Properties worth knowing:
   gets no variables at all, even when a store exists on the machine.
 - **It never reaches stdout.** `swarmery account env` prints the config-dir line
   and nothing else; the store travels through `account exec` and through the
-  daemon's spawner.
+  daemon's spawns.
+- **It cannot re-point the account.** A `CLAUDE_CONFIG_DIR=` line in the store is
+  ignored with a log line: the binding owns that variable, and the store is keyed
+  by the account the binding named.
 - **swarmery never writes it.** Put the file there yourself, `chmod 600` it, and
   keep it out of every repo.
+
+A project bound **explicitly** to `default` runs under `~/.claude` even when the
+daemon's plist carries a `CLAUDE_CONFIG_DIR` (`swarmery install
+--claude-config-dir`): the spawn removes the inherited variable. A project with
+**no** binding inherits it — that is what the install flag is for.
 
 ## Known edges
 
