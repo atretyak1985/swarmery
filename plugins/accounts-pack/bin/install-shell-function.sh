@@ -33,33 +33,31 @@ usage() {
 
 # ── the block ───────────────────────────────────────────────────────────────
 #
-# Two properties this function cannot be shipped without:
+# Three properties this function cannot be shipped without:
 #
-#   1. `command claude` — NOT `claude`. Calling `claude` inside a function named
-#      `claude` recurses until the shell dies.
-#   2. a SILENT fallback — no CLI, no binding, or a failed lookup all fall
-#      through to plain `claude` with no output. This runs on every single
-#      invocation; a warning here would be noise forever.
-#
-# The env var is applied as an assignment PREFIX rather than through `env`:
-# `env "$line" command claude` cannot work, because `command` is a shell
-# builtin and `env` can only exec a real binary. The prefix form is portable
-# across bash and zsh and keeps the value quoted, so a config dir with a space
-# in it survives.
+#   1. it delegates to `swarmery account exec`, which hands the project's WHOLE
+#      environment delta to the child through execve. That is the only form
+#      that can carry per-account MCP credentials: `swarmery account env`
+#      prints to this terminal, so it carries the config dir and deliberately
+#      nothing secret. Parsing `account env` here would leave every ${VAR} in a
+#      plugin's .mcp.json unexpanded.
+#   2. `command claude` in the fallback — NOT `claude`. Calling `claude` inside
+#      a function named `claude` recurses until the shell dies. The `claude`
+#      handed to `account exec` is safe: swarmery resolves it on PATH with
+#      execve, which never sees a shell function.
+#   3. a SILENT fallback — no CLI on PATH falls through to plain `claude` with
+#      no output. This runs on every single invocation; a warning here would be
+#      noise forever. A swarmery that IS present and fails is NOT retried: its
+#      exit status is the command's, and re-running claude after a nonzero exit
+#      would start a second session behind the operator's back.
 block_content() {
   cat <<'SWARMERY_ACCOUNTS_BLOCK'
 # >>> swarmery accounts-pack >>>
 claude() {
-  local swarmery_env_line=""
   if command -v swarmery >/dev/null 2>&1; then
-    swarmery_env_line="$(swarmery account env 2>/dev/null)" || swarmery_env_line=""
+    swarmery account exec -- claude "$@"
+    return
   fi
-  case "$swarmery_env_line" in
-    CLAUDE_CONFIG_DIR=?*)
-      CLAUDE_CONFIG_DIR="${swarmery_env_line#CLAUDE_CONFIG_DIR=}" command claude "$@"
-      return
-      ;;
-  esac
   command claude "$@"
 }
 # <<< swarmery accounts-pack <<<

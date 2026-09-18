@@ -118,7 +118,14 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	// claudeacct.EnvFor(cmd.Dir) here would resolve nothing and silently run under
 	// the default account (plan A3). EnvForAccount("") returns nil, so an unbound
 	// project's cmd.Env is a byte-identical copy of os.Environ().
+	//
+	// SecretEnvForAccount carries the same account's MCP credentials. It is keyed
+	// the same way and for the same reason, and it is the ONLY channel that
+	// works here: a headless spawn passes --setting-sources project,local, under
+	// which a settings `env` block does not expand ${VAR} at all. An account with
+	// no secret store adds nothing.
 	cmd.Env = append(os.Environ(), claudeacct.EnvForAccount(spec.Account)...)
+	cmd.Env = append(cmd.Env, claudeacct.SecretEnvForAccount(spec.Account)...)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
