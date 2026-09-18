@@ -70,8 +70,14 @@ type epicPhaseDTO struct {
 	// error. Consumed by the Plans page's Run/Cancel UI (phase 6).
 	RunState       string  `json:"runState"`
 	RunSessionUUID *string `json:"runSessionUuid"`
-	RunStartedAt   *string `json:"runStartedAt"`
-	RunError       *string `json:"runError"`
+	// The model the linked run session ACTUALLY used (sessions.model), read
+	// through run_session_uuid rather than copied onto the phase row — decision
+	// D3 of the phase-model-selection plan: one owner for the fact, so there is
+	// no second copy to drift. Null when the phase has never run, when the run's
+	// session has not been ingested yet, or when that session carries no model.
+	RunModel     *string `json:"runModel"`
+	RunStartedAt *string `json:"runStartedAt"`
+	RunError     *string `json:"runError"`
 	// Derived: what the run ACHIEVED, as opposed to how the process ended.
 	// completed | partial | noop | failed | running | idle — see
 	// internal/phasediag.OutcomeFromRow, the single row-aware implementation, so
@@ -582,9 +588,14 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		       bt.external_id, bt.board_column,
 		       e.run_state, e.run_session_uuid, e.run_started_at, e.run_error,
 		       e.run_ended_at, e.run_checkboxes_before, e.run_checkboxes_after,
-		       e.verify_mode, e.verify_verdict, e.verify_detail
+		       e.verify_mode, e.verify_verdict, e.verify_detail,
+		       se.model
 		FROM epic_phases e
 		LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
+		-- The run's own record of which model it used. LEFT, so a phase that never
+		-- ran (or whose session has not been ingested) still comes back; sessions
+		-- .session_uuid is UNIQUE, so this can never fan a phase row out.
+		LEFT JOIN sessions se ON se.session_uuid = e.run_session_uuid
 		WHERE e.workspace_task_id = ?
 		ORDER BY e.seq, e.id`, taskID)
 	if err != nil {
@@ -619,13 +630,16 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			// is the normal state: verification is opt-in per doc.
 			verifyVerdict sql.NullString
 			verifyDetail  sql.NullString
+			// sessions.model for the linked run. NULL both when no session is
+			// joined and when that session has no model recorded yet.
+			runModel sql.NullString
 		)
 		if err := rows.Scan(&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
-			&p.VerifyMode, &verifyVerdict, &verifyDetail); err != nil {
+			&p.VerifyMode, &verifyVerdict, &verifyDetail, &runModel); err != nil {
 			return nil, epicRollupDTO{}, nil, err
 		}
 		p.DependsOn = decodeIntList(depsJSON)
@@ -651,6 +665,11 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		}
 		if runUUID.Valid {
 			p.RunSessionUUID = &runUUID.String
+		}
+		// An empty sessions.model is "not recorded", not a model name — it must
+		// read as null rather than as a chip with no text in it.
+		if runModel.Valid && runModel.String != "" {
+			p.RunModel = &runModel.String
 		}
 		if runStartedAt.Valid {
 			p.RunStartedAt = &runStartedAt.String

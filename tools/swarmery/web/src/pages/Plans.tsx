@@ -393,6 +393,112 @@ function RunCompletedChip({ phase }: { phase: EpicPhase }): JSX.Element {
   );
 }
 
+// ── Per-phase model selection ───────────────────────────────────────────────
+// The picker's options ARE the closed set the daemon accepts (planning.Models,
+// internal/planning/runner.go), so SC-5 — "the UI cannot send a value the API
+// would reject" — is structural here rather than a second validation.
+//
+// `default` is NOT a model. It means SEND NO `model` KEY AT ALL, leaving the
+// daemon's own SWARMERY_PHASERUN_MODEL (a hand-pinned plist value that may carry
+// a `[1m]` context-window suffix the closed set does not contain) in charge. It
+// is first, and it is the fallback, so a phase run started by someone who never
+// touched this control behaves exactly as it did before the control existed.
+//
+// Scope: this is the PER-PHASE control only. The whole-plan run reads
+// SWARMERY_PLANRUN_MODEL and is deliberately untouched, so it gets no picker —
+// one there would silently do nothing.
+const PHASE_RUN_MODELS = [
+  { value: 'default', label: 'daemon default (no model sent)' },
+  { value: 'opus', label: 'opus 5 — default' },
+  { value: 'sonnet', label: 'sonnet 5 — faster, cheaper' },
+  { value: 'fable', label: 'fable 5.1 — most capable, ~2× cost' },
+] as const;
+type PhaseRunModel = (typeof PHASE_RUN_MODELS)[number]['value'];
+const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
+/** Its OWN key — beside the planner's `swarmery.planning.model`, never shared:
+ * the two choices are about different runs and different money. */
+const PHASE_RUN_MODEL_KEY = 'swarmery.phaserun.model';
+
+function isPhaseRunModel(v: string | null): v is PhaseRunModel {
+  return PHASE_RUN_MODELS.some((m) => m.value === v);
+}
+
+/** Last-used choice; falls back to the default when storage is unavailable
+ * (Safari private mode throws on access, not just on write). */
+function readStoredPhaseRunModel(): PhaseRunModel {
+  try {
+    const v = localStorage.getItem(PHASE_RUN_MODEL_KEY);
+    return isPhaseRunModel(v) ? v : DEFAULT_PHASE_RUN_MODEL;
+  } catch {
+    return DEFAULT_PHASE_RUN_MODEL;
+  }
+}
+
+/** The short name behind a full model ID (`claude-opus-5` → `opus`). The `[1m]`
+ * suffix on the operator's pinned env value is stripped for the LABEL only — the
+ * full string stays in the tooltip, because that suffix is the whole difference
+ * between a 200k run and a 1M one. An ID we do not know is shown verbatim. */
+function phaseModelShortName(id: string): string {
+  const base = id.replace(/\[[^\]]*\]$/, '');
+  return MODEL_SHORT_NAMES[base] ?? id;
+}
+const MODEL_SHORT_NAMES: Record<string, string> = {
+  'claude-opus-5': 'opus',
+  'claude-sonnet-5': 'sonnet',
+  'claude-fable-5-1': 'fable',
+};
+
+/** Which model a finished run ACTUALLY used — read from the session the run
+ * produced (`sessions.model`), never from what the UI asked for, so a run that
+ * fell back to the daemon's default cannot be mislabelled as the operator's
+ * choice. Renders nothing while the run is live: a label about a process still
+ * in flight would be a claim, not a record. */
+function RunModelChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
+  if (phase.runModel === null || phase.runState === 'running') return null;
+  return (
+    <span
+      className="rounded border border-line px-1.5 py-px font-mono text-[9.5px] text-ink-dim"
+      data-tip={`the last run used ${phase.runModel} (from its session)`}
+    >
+      {phaseModelShortName(phase.runModel)}
+    </span>
+  );
+}
+
+/** The per-phase run model picker. Sits with the Run/Retry controls it governs
+ * — the choice is made where the money is spent, not in a settings page. */
+function PhaseRunModelPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PhaseRunModel;
+  onChange: (m: PhaseRunModel) => void;
+  disabled: boolean;
+}): JSX.Element {
+  return (
+    <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+      phase run model
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          if (isPhaseRunModel(e.target.value)) onChange(e.target.value);
+        }}
+        aria-label="phase run model"
+        title="the model every Run phase / Retry run on this plan starts with — the whole-plan run is not affected"
+        className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+      >
+        {PHASE_RUN_MODELS.map((m) => (
+          <option key={m.value} value={m.value}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 // Plan status badge — the theme has no `yellow` token; `amber` is the app's
 // semantic waiting/approval color, so paused uses it.
 const STATUS_BADGE: Record<Epic['status'], string> = {
@@ -620,11 +726,22 @@ export function Plans(): JSX.Element {
   // it can be open over any state, including a live plan run.
   const [outcomeFor, setOutcomeFor] = useState<number | null>(null);
 
+  // Which model the next phase run starts with. Lives HERE, with startRun, so the
+  // three places that can start one — the phase row's Run button, the detail
+  // panel's Retry and the diagnosis modal's Retry — cannot disagree about it.
+  const [phaseRunModel, setPhaseRunModel] = useState<PhaseRunModel>(readStoredPhaseRunModel);
+
   const startRun = useCallback(
     (taskId: number, phaseId: number): void => {
       setRunBusy(phaseId);
       setRunMsg(null);
-      runEpicPhase(taskId, phaseId)
+      try {
+        localStorage.setItem(PHASE_RUN_MODEL_KEY, phaseRunModel);
+      } catch {
+        // storage unavailable — the choice still applies to this run
+      }
+      // `default` means send no `model` key at all: undefined, not ''.
+      runEpicPhase(taskId, phaseId, phaseRunModel === 'default' ? undefined : phaseRunModel)
         .then(() => reload())
         .catch((e: unknown) => {
           failRunMsg(taskId)(e);
@@ -638,7 +755,7 @@ export function Plans(): JSX.Element {
         })
         .finally(() => setRunBusy(null));
     },
-    [reload, failRunMsg],
+    [reload, failRunMsg, phaseRunModel],
   );
   const cancelRun = useCallback(
     (taskId: number, phaseId: number): void => {
@@ -851,6 +968,8 @@ export function Plans(): JSX.Element {
               runMsg={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.text : null}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
+              phaseRunModel={phaseRunModel}
+              onPhaseRunModel={setPhaseRunModel}
               planRunBusy={planRunBusy}
               onRunPlan={(agent, mode) => startPlanRun(activeEpic.taskId, agent, mode)}
               onCancelPlanRun={() => cancelPlanRun(activeEpic.taskId)}
@@ -916,6 +1035,8 @@ function EpicDetail({
   runMsg,
   onRun,
   onCancelRun,
+  phaseRunModel,
+  onPhaseRunModel,
   planRunBusy,
   onRunPlan,
   onCancelPlanRun,
@@ -934,6 +1055,11 @@ function EpicDetail({
   runMsg: string | null;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
+  /** The model every per-phase run on this plan starts with — owned by the page
+   * so the list's Run, the detail panel's Retry and the diagnosis modal's Retry
+   * all spend the same way. */
+  phaseRunModel: PhaseRunModel;
+  onPhaseRunModel: (m: PhaseRunModel) => void;
   planRunBusy: boolean;
   onRunPlan: (agent: string, mode: PlanRunMode) => void;
   onCancelPlanRun: () => void;
@@ -1121,6 +1247,17 @@ function EpicDetail({
           from whatever is being read. */}
       <div className="flex min-w-0 items-start gap-4">
         <div className="min-w-0 flex-1">
+          {/* Above the phase area, not in the plan header: the header's control is
+              the WHOLE-PLAN run, which reads SWARMERY_PLANRUN_MODEL and is out of
+              scope here (risk R3). Sitting here it governs exactly what it names —
+              every per-phase Run/Retry below it, list or detail panel. */}
+          <div className="mb-2 flex items-center justify-end">
+            <PhaseRunModelPicker
+              value={phaseRunModel}
+              onChange={onPhaseRunModel}
+              disabled={runBusy !== null || planRunning}
+            />
+          </div>
           {detail !== null ? (
             <>
               {detail.kind === 'phase' ? (
@@ -1517,6 +1654,7 @@ function PhaseList({
                   </span>
                 ) : status === 'done' ? (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <RunModelChip phase={p} />
                     {p.runOutcome === 'completed' && <RunCompletedChip phase={p} />}
                     {isUnresolvedOutcome(p.runOutcome) && (
                       <RunOutcomeChip
@@ -1538,6 +1676,7 @@ function PhaseList({
                   </span>
                 ) : (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <RunModelChip phase={p} />
                     {p.runOutcome === 'completed' && <RunCompletedChip phase={p} />}
                     {isUnresolvedOutcome(p.runOutcome) && (
                       <RunOutcomeChip
@@ -2302,6 +2441,7 @@ function PhaseDetailPanel({
               <PhaseActivity docUpdatedAt={phase.docUpdatedAt} running={false} />
             )}
             <RunStateChip phase={phase} onOpenOutcome={onOpenOutcome} />
+            <RunModelChip phase={phase} />
             <VerifyVerdictChip phase={phase} />
             <span className="font-mono text-[10px] text-ink-faint">
               {phase.checkboxesDone}/{phase.checkboxesTotal || 0}

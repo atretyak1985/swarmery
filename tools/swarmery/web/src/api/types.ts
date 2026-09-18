@@ -3234,6 +3234,11 @@ export interface EpicPhase {
   /** Direct phase-run state (no board task involved). */
   runState: PhaseRunState;
   runSessionUuid: string | null;
+  /** The model the linked run session ACTUALLY used (`sessions.model`), not the
+   * one that was asked for — the run's own record, reached through
+   * `runSessionUuid`. Null when the phase never ran, when its session has not
+   * been ingested yet, or when that session carries no model. */
+  runModel: string | null;
   runStartedAt: string | null;
   /** Failure detail (stderr tail / timeout / cancelled) when runState==='failed'. */
   runError: string | null;

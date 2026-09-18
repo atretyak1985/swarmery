@@ -2155,15 +2155,28 @@ function runConflictError(
  * headlessly in an isolated worktree (no board task). 202 {status, sessionUuid};
  * 409 carries the gate reason (already running / unmet deps / no doc) in the
  * error body — surfaced verbatim for the toast.
+ *
+ * `model` is the OPTIONAL per-run override (a short name from the daemon's closed
+ * set: opus | sonnet | fable; an unknown one is a 400). Omitting it sends NO BODY
+ * AT ALL, exactly as before, which leaves the daemon's own SWARMERY_PHASERUN_MODEL
+ * in charge. An empty string is deliberately not sent either: the API treats
+ * absent and empty alike, but only absent says "I did not choose" in a network log.
  */
 export async function runEpicPhase(
   taskId: number,
   phaseId: number,
+  model?: string,
 ): Promise<{ status: string; sessionUuid: string }> {
   if (MOCK) return { status: 'running', sessionUuid: 'mock-run-uuid' };
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run`, {
-    method: 'POST',
-  });
+  const init: RequestInit =
+    model === undefined || model === ''
+      ? { method: 'POST' }
+      : {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model }),
+        };
+  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run`, init);
   if (!res.ok) {
     // Every 409 carries a `code`; the branch-holds-commits one additionally
     // carries structured escape-hatch data (`branch`, `commitsAhead`, `base`) the
