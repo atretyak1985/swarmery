@@ -382,6 +382,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/projects/{id}/memory", h.listMemory)
 	mux.HandleFunc("GET /api/projects/{id}/memory/file", h.getMemoryFile)
 	mux.HandleFunc("PUT /api/projects/{id}/memory/file", requireLocalOrigin(h.putMemoryFile))
+	// agent-memory phase 3: consolidate the always-loaded auto-memory index.
+	// Not project-scoped — the handle is the auto-memory DIRECTORY, and the
+	// fence checks it against every registered project's root. dry_run is the
+	// default; only an explicit dry_run=0 moves files (under one backup).
+	mux.HandleFunc("POST /api/memory/consolidate", requireLocalOrigin(h.consolidateMemory))
 
 	// fusion phase 14: analytics uplift — Command-Center adoptions our store
 	// already backs (stats_uplift.go): autonomy ratio, productivity

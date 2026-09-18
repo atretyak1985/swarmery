@@ -57,6 +57,7 @@ import type {
   ErrorsResp,
   FunnelResp,
   MatrixResp,
+  MemoryConsolidateResp,
   MemoryFileContent,
   MemoryListResp,
   PlaybookRollup,
@@ -2453,6 +2454,47 @@ export const mockApi = {
       content,
       hash: mockHash(content),
       writable: true,
+    };
+  },
+
+  // agent-memory phase 3 — auto-memory index consolidation. The mock always
+  // reports a dry run: the demo dataset has no files to move.
+  async consolidateMemory(dir: string, dryRun: boolean): Promise<MemoryConsolidateResp> {
+    await delay(160);
+    const plan = {
+      dir,
+      indexPath: `${dir}/MEMORY.md`,
+      indexBytes: 4096,
+      totalLines: 12,
+      closedCount: 4,
+      closedShare: 4 / 12,
+      closedDir: `${dir}/closed`,
+      move: [
+        {
+          title: 'Order line items',
+          file: 'order-line-items.md',
+          hook: 'DONE 2026-07-27: line-item CRUD shipped.',
+          lineNo: 3,
+          reason: 'closed marker, no open tail',
+        },
+      ],
+      keep: [
+        {
+          title: 'Checkout rollout',
+          file: 'checkout-rollout.md',
+          hook: 'MERGED 2026-08-24; OPEN: flip the guard.',
+          lineNo: 5,
+          reason: 'kept: referenced by [[link]] from an open memory',
+        },
+      ],
+    };
+    // `result` is ABSENT on a dry run, never present-and-undefined
+    // (exactOptionalPropertyTypes).
+    if (dryRun) return { dryRun, plan };
+    return {
+      dryRun,
+      plan,
+      result: { moved: [], closedDir: plan.closedDir, indexPath: plan.indexPath },
     };
   },
 

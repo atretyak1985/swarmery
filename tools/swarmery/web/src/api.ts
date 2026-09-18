@@ -35,6 +35,7 @@ import type {
   HealthResponse,
   MatrixResp,
   DuplicatePlaybookResponse,
+  MemoryConsolidateResp,
   MemoryFileContent,
   MemoryListResp,
   OnboardConfig,
@@ -923,6 +924,27 @@ export async function putMemoryFile(
     throw new Error(data.error ?? `save failed: ${String(res.status)}`);
   }
   return (await res.json()) as MemoryFileContent;
+}
+
+/**
+ * POST /api/memory/consolidate?path=<auto-memory dir>&dry_run= — plan, or
+ * perform, the consolidation of the always-loaded auto-memory index.
+ *
+ * `dryRun` defaults to true on BOTH sides: the caller has to ask for the write,
+ * and the daemon treats anything but an explicit `dry_run=0` as a plan.
+ */
+export async function consolidateMemory(
+  dir: string,
+  dryRun = true,
+): Promise<MemoryConsolidateResp> {
+  if (MOCK) return mockApi.consolidateMemory(dir, dryRun);
+  const qs = new URLSearchParams({ path: dir, dry_run: dryRun ? '1' : '0' });
+  const res = await fetch(`/api/memory/consolidate?${qs.toString()}`, { method: 'POST' });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `consolidate failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as MemoryConsolidateResp;
 }
 
 // --- self-improvement phase 4 — agent change proposals -----------------------

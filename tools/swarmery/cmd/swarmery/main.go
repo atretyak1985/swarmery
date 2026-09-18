@@ -8,6 +8,7 @@
 //	swarmery stale                 tasks claiming to run with no sign of it (read-only)
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
+//	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
 //	swarmery install               launchd auto-start (uninstall / status)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
@@ -16,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -52,6 +54,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/logbuf"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/modeleval"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/notify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
@@ -112,6 +115,8 @@ func main() {
 		err = cmdBackup(os.Args[2:])
 	case "prune":
 		err = cmdPrune(os.Args[2:])
+	case "memory":
+		err = cmdMemory(os.Args[2:])
 	case "worktrees":
 		err = cmdWorktrees(os.Args[2:])
 	case "wscan":
@@ -187,6 +192,15 @@ func usage() {
                                    retention: write daily_rollups for sessions ended > Nd ago,
                                    delete their events/file_changes/turns (headers kept, pruned=1),
                                    VACUUM at the end; --dry-run prints per-table counts only
+  swarmery memory consolidate --project <path> [--dry-run] [--claude-dir <dir>]
+                                   shrink a project's ALWAYS-LOADED auto-memory index: move
+                                   closed entries out of MEMORY.md into memory/closed/ (the
+                                   topic file moves too — a file left behind stays a recall
+                                   candidate). --dry-run only PRINTS the plan and writes
+                                   nothing; without it every touched file is backed up first.
+                                   Entries with an open tail, and entries an open memory still
+                                   [[links]] to, are always held back. Needs no daemon and
+                                   never opens the database.
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
   swarmery evals-import [--db <path>] --agent <name> <results.json>
                                    import a promptfoo results.json as an eval run for a
@@ -653,6 +667,172 @@ func cmdBackup(args []string) error {
 // backlog. The capped notice below says so, and points at how to size a backlog
 // honestly, because "--dry-run says 300, so the backlog is 300" is the natural
 // and wrong reading.
+// cmdMemory routes the `swarmery memory <verb>` family (agent-memory phase 3).
+// Only `consolidate` exists today; the sub-verb shape is deliberate, so the
+// later memory maintenance verbs do not each need a top-level command.
+func cmdMemory(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: swarmery memory consolidate --project <path> [--yes] [--dry-run] [--claude-dir <dir>]")
+	}
+	switch args[0] {
+	case "consolidate":
+		return cmdMemoryConsolidate(args[1:])
+	default:
+		return fmt.Errorf("unknown memory subcommand %q (want: consolidate)", args[0])
+	}
+}
+
+// cmdMemoryConsolidate plans, and optionally performs, the consolidation of one
+// project's auto-memory index.
+//
+// It resolves the index straight off the filesystem and NEVER opens the
+// database: the operator can run this while the daemon is serving, and a
+// read-only dry run must not be able to migrate a schema as a side effect (the
+// trap `swarmery backup` fell into).
+//
+// PLANNING IS THE DEFAULT. Moving a memory file needs an explicit --yes; a bare
+// invocation prints the plan and writes nothing, exactly like the API, whose
+// dry_run parameter is defaulted-on for the same stated reason: a missing or
+// malformed argument must never be the difference between planning and moving
+// the operator's memory files. This command is reachable from the /land ritual,
+// i.e. an agent can run it, so the guard belongs in the code and not only in a
+// prose warning. --dry-run is the explicit spelling of that same default, and is
+// refused together with --yes rather than silently letting one of them win.
+func cmdMemoryConsolidate(args []string) error {
+	fs := flag.NewFlagSet("memory consolidate", flag.ExitOnError)
+	project := fs.String("project", "",
+		"path of the project whose auto-memory index to consolidate (required)")
+	dryRun := fs.Bool("dry-run", false,
+		"print the plan and write nothing - already the default when --yes is absent")
+	apply := fs.Bool("yes", false,
+		"actually move the planned files (REQUIRED to write; without it this command only plans)")
+	claudeDir := fs.String("claude-dir", memconsolidate.DefaultClaudeDir(),
+		"Claude Code config dir holding projects/<slug>/memory")
+	fs.Parse(args)
+	if fs.NArg() != 0 || *project == "" {
+		return fmt.Errorf("usage: swarmery memory consolidate --project <path> [--yes] [--dry-run] [--claude-dir <dir>]")
+	}
+
+	if *dryRun && *apply {
+		return fmt.Errorf("swarmery memory consolidate: --dry-run and --yes are mutually exclusive")
+	}
+
+	dir := memconsolidate.AutoMemoryDirIn(*claudeDir, *project)
+	plan, err := memconsolidate.BuildPlan(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("no auto-memory index at %s — nothing to consolidate", memconsolidate.IndexPath(dir))
+		}
+		return err
+	}
+
+	mode := "dry-run"
+	if *apply {
+		mode = "apply"
+	}
+	fmt.Printf("memory consolidate (%s)\n", mode)
+	fmt.Print(memconsolidate.FormatPlan(plan))
+	if !*apply {
+		if len(plan.Move) > 0 {
+			fmt.Printf("\n  nothing was written — re-run with --yes to move these %d\n", len(plan.Move))
+		}
+		return nil
+	}
+	if len(plan.Move) == 0 {
+		return nil
+	}
+
+	res, err := memconsolidate.Apply(dir, plan, memconsolidate.ApplyOptions{
+		Now:    time.Now(),
+		Backup: cliBackupMemoryFiles,
+	})
+	if err != nil {
+		// Apply has no rollback by design, so the backup id and the list of files
+		// already moved ARE the recovery handle for a half-applied state. Returning
+		// the error alone throws both away and leaves the operator with a failure,
+		// no snapshot name, and no idea which files already left the memory dir.
+		if res.BackupID != "" || len(res.Moved) > 0 {
+			fmt.Fprintf(os.Stderr,
+				"\n  PARTIAL APPLY — recover from this, do not re-run blind:\n"+
+					"    moved %d — %s: %s\n    backup: %s\n    index:  %s\n",
+				len(res.Moved), res.ClosedDir, strings.Join(res.Moved, ", "),
+				backupIDOrNone(res.BackupID), res.IndexPath)
+		}
+		return err
+	}
+	fmt.Printf("\n  moved %d → %s\n  backup: %s\n  index:  %s\n",
+		len(res.Moved), res.ClosedDir, res.BackupID, res.IndexPath)
+	return nil
+}
+
+// backupIDOrNone renders a backup id for the partial-apply notice. An empty id
+// means the failure landed before the snapshot was taken, which is the one case
+// where there is genuinely nothing to restore - say so rather than printing a
+// blank where an id belongs.
+func backupIDOrNone(id string) string {
+	if id == "" {
+		return "none taken (the apply failed before the snapshot)"
+	}
+	return id
+}
+
+// cliBackupMemoryFiles mirrors internal/api's backupMemoryFiles for the CLI:
+// one timestamp dir under the shared config-backups root holds every file the
+// apply will touch, copied by absolute path and verified byte-for-byte, so a
+// consolidation is restored as ONE coherent snapshot. The daemon's own backup
+// helper is unexported (and lives in a package that imports this command's
+// dependencies), so the idiom is repeated here rather than exported: the backup
+// root and layout are identical, which is what an operator restoring actually
+// depends on.
+func cliBackupMemoryFiles(paths []string) (string, error) {
+	root := sysedit.DefaultBackupsDir()
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return "", err
+	}
+	base := time.Now().UTC().Format("2006-01-02T15-04-05Z")
+	name := base
+	var tsDir string
+	for i := 2; ; i++ {
+		candidate := filepath.Join(root, name)
+		mkErr := os.Mkdir(candidate, 0o755)
+		if mkErr == nil {
+			tsDir = candidate
+			break
+		}
+		if !os.IsExist(mkErr) {
+			return "", mkErr
+		}
+		name = fmt.Sprintf("%s-%d", base, i)
+	}
+	for _, src := range paths {
+		if _, serr := os.Stat(src); serr != nil {
+			if os.IsNotExist(serr) {
+				continue
+			}
+			return "", serr
+		}
+		dst := filepath.Join(tsDir, strings.TrimPrefix(filepath.Clean(src), string(os.PathSeparator)))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return "", err
+		}
+		data, rerr := os.ReadFile(src)
+		if rerr != nil {
+			return "", rerr
+		}
+		if werr := os.WriteFile(dst, data, 0o600); werr != nil {
+			return "", werr
+		}
+		check, cerr := os.ReadFile(dst)
+		if cerr != nil {
+			return "", cerr
+		}
+		if !bytes.Equal(data, check) {
+			return "", fmt.Errorf("memory: backup verification failed: %s != %s", dst, src)
+		}
+	}
+	return name, nil
+}
+
 func cmdPrune(args []string) error {
 	fs := flag.NewFlagSet("prune", flag.ExitOnError)
 	dbPath := dbFlag(fs)

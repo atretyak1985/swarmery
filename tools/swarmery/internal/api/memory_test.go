@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -45,11 +46,16 @@ func newMemoryFixture(t *testing.T, seed bool) *memoryFixture {
 	autoDir := filepath.Join(claudeDir, "projects", ingest.SlugForPath(projectPath), "memory")
 
 	// Redirect the package-level roots at the temp locations, restore after.
+	// AttachMemoryDirs also points internal/memconsolidate at the same claude
+	// dir, so that one is restored here too — otherwise a later test in another
+	// package's suite inherits a t.TempDir() that no longer exists.
 	prevClaude, prevBackups := memoryClaudeDir, memoryBackupsDir
+	prevConsolidate := memconsolidate.ClaudeDir()
 	AttachMemoryDirs(claudeDir, backupsDir)
 	t.Cleanup(func() {
 		memoryClaudeDir = prevClaude
 		memoryBackupsDir = prevBackups
+		memconsolidate.SetClaudeDir(prevConsolidate)
 	})
 
 	if seed {

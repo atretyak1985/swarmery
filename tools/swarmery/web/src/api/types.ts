@@ -1310,6 +1310,51 @@ export interface MemoryFileContent {
   writable: boolean;
 }
 
+// --- agent-memory phase 3 — auto-memory index consolidation ------------------
+
+/** One index entry in a consolidation plan (move or held-back). */
+export interface MemoryConsolidateAction {
+  title: string;
+  /** Link target as written in MEMORY.md, e.g. `order-line-items.md`. */
+  file: string;
+  hook: string;
+  /** 1-based line number in MEMORY.md. */
+  lineNo: number;
+  /** Why it moves, or why it was held back. */
+  reason: string;
+}
+
+/** The dry-run plan: what consolidation would do, and nothing it did. */
+export interface MemoryConsolidatePlan {
+  dir: string;
+  indexPath: string;
+  indexBytes: number;
+  /** Index entries parsed (headings and prose are not counted). */
+  totalLines: number;
+  /** Entries carrying a closed marker — including the held-back ones. */
+  closedCount: number;
+  /** closedCount / totalLines, 0..1. */
+  closedShare: number;
+  closedDir: string;
+  move: MemoryConsolidateAction[];
+  keep: MemoryConsolidateAction[];
+}
+
+/** What an apply actually did (absent on a dry run). */
+export interface MemoryConsolidateResult {
+  moved: string[];
+  closedDir: string;
+  backupId?: string;
+  indexPath: string;
+}
+
+/** POST /api/memory/consolidate?path=&dry_run= body. */
+export interface MemoryConsolidateResp {
+  dryRun: boolean;
+  plan: MemoryConsolidatePlan;
+  result?: MemoryConsolidateResult;
+}
+
 /** 409 body of a PUT whose base_hash no longer matches disk. */
 export interface MemoryConflict {
   error: string;

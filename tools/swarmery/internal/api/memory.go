@@ -12,13 +12,17 @@ package api
 //	serena       <project.path>/.serena/memories/*.md           (if present)
 //
 // Endpoints (self-wired via h.DB; no cmd/main.go edit):
-//	GET /api/projects/{id}/memory            → list {kind, path, name, sizeBytes, updatedAt, writable}
-//	GET /api/projects/{id}/memory/file?path= → {path, content, hash, writable}
-//	PUT /api/projects/{id}/memory/file?path= → versioned write (backup → atomic), 409 on base_hash drift
+//	GET  /api/projects/{id}/memory            → list {kind, path, name, sizeBytes, updatedAt, writable}
+//	GET  /api/projects/{id}/memory/file?path= → {path, content, hash, writable}
+//	PUT  /api/projects/{id}/memory/file?path= → versioned write (backup → atomic), 409 on base_hash drift
+//	POST /api/memory/consolidate?path=&dry_run= → plan (dry-run) or execute the
+//	                                             auto-memory index consolidation
 //
 // Traversal fence: every ?path= is filepath.Clean'd and required to resolve
 // (after EvalSymlinks) STRICTLY inside one of the three roots — `../` walks and
-// symlink escapes are 400, never a read/write outside the roots.
+// symlink escapes are 400, never a read/write outside the roots. The consolidate
+// endpoint takes a DIRECTORY instead of a file, and fences it the same way: the
+// resolved directory must BE some registered project's auto-memory root.
 
 import (
 	"bytes"
@@ -29,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,6 +42,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 )
 
@@ -65,9 +71,13 @@ func defaultMemoryClaudeDir() string {
 
 // AttachMemoryDirs points the Memory surface at a claude dir + backups dir.
 // Empty arguments keep the current value (so callers can override just one).
+// It also forwards the claude dir to internal/memconsolidate, which resolves the
+// same auto-memory root for the advisor's R10 rule and the CLI — the two must
+// never point at different directories.
 func AttachMemoryDirs(claudeDir, backupsDir string) {
 	if claudeDir != "" {
 		memoryClaudeDir = claudeDir
+		memconsolidate.SetClaudeDir(claudeDir)
 	}
 	if backupsDir != "" {
 		memoryBackupsDir = backupsDir
@@ -428,6 +438,117 @@ func (h *Handler) putMemoryFile(w http.ResponseWriter, r *http.Request) {
 	}, nil)
 }
 
+// ---- consolidate (agent-memory phase 3) -----------------------------------
+
+// memoryConsolidateDTO is the POST body: always the plan, plus what was done
+// when it was not a dry run.
+type memoryConsolidateDTO struct {
+	DryRun bool                        `json:"dryRun"`
+	Plan   memconsolidate.Plan         `json:"plan"`
+	Result *memconsolidate.ApplyResult `json:"result,omitempty"`
+	// Error carries an apply failure ALONGSIDE Result rather than instead of it.
+	// The field name matches the plain {"error": "..."} shape every other handler
+	// returns, so existing clients keep reading the message from the same place.
+	Error string `json:"error,omitempty"`
+}
+
+// POST /api/memory/consolidate?path=<auto-memory dir>&dry_run=1|0
+//
+// dry_run is the DEFAULT: only an explicit `dry_run=0` writes anything. A
+// missing or malformed parameter must never be the difference between planning
+// and moving the operator's memory files.
+//
+// The apply path takes ONE backup covering the index and every file it will
+// move, before the first write, through the same copy-verify + rotation idiom
+// the versioned PUT uses; the backup id comes back in the response.
+func (h *Handler) consolidateMemory(w http.ResponseWriter, r *http.Request) {
+	dir, err := h.resolveAutoMemoryDir(r.URL.Query().Get("path"))
+	if err != nil {
+		writeMemoryPathErr(w, err)
+		return
+	}
+	dryRun := r.URL.Query().Get("dry_run") != "0"
+	if !dryRun && memoryReadOnly() {
+		writeClientErr(w, http.StatusForbidden,
+			"memory editor is in readonly mode ("+sysedit.EnvReadOnly+")")
+		return
+	}
+
+	plan, err := memconsolidate.BuildPlan(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeClientErr(w, http.StatusNotFound, "no MEMORY.md in "+dir)
+			return
+		}
+		writeErr(w, err)
+		return
+	}
+	out := memoryConsolidateDTO{DryRun: dryRun, Plan: plan}
+	if dryRun {
+		writeJSON(w, out, nil)
+		return
+	}
+	res, err := memconsolidate.Apply(dir, plan, memconsolidate.ApplyOptions{
+		Now:    time.Now(),
+		Backup: backupMemoryFiles,
+	})
+	out.Result = &res
+	if err != nil {
+		// Apply owns the no-rollback trade-off deliberately, which makes the
+		// backup id and the list of files already moved the ONLY handles an
+		// operator has on a half-applied state. Collapsing this into a bare 500
+		// discards both and leaves the Memory page showing a failure over a
+		// directory that has already changed. Send them WITH the error.
+		log.Printf("error: api: memory consolidate %s: %v", dir, err)
+		out.Error = err.Error()
+		writeJSONStatus(w, http.StatusInternalServerError, out)
+		return
+	}
+	writeJSON(w, out, nil)
+}
+
+// resolveAutoMemoryDir fences a requested directory: after Clean + EvalSymlinks
+// it must BE the auto-memory root of some registered project. Anything else —
+// a `../` walk, a symlink escape, an arbitrary directory, even one of the OTHER
+// two memory roots — is a 400. The candidate roots are built with the same
+// formula projectMemoryRoots uses for kindAutoMemory.
+func (h *Handler) resolveAutoMemoryDir(reqPath string) (string, error) {
+	if reqPath == "" {
+		return "", errBadMemoryPath("path is required")
+	}
+	clean := filepath.Clean(reqPath)
+	if !filepath.IsAbs(clean) {
+		return "", errBadMemoryPath("path must be absolute")
+	}
+	resolved, err := evalExistingPath(clean)
+	if err != nil {
+		return "", err
+	}
+	rows, err := h.DB.Query(`SELECT path FROM projects`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var projectPath string
+		if err := rows.Scan(&projectPath); err != nil {
+			return "", err
+		}
+		candidate := memconsolidate.AutoMemoryDirIn(memoryClaudeDir, projectPath)
+		candResolved, cerr := evalExistingPath(filepath.Clean(candidate))
+		if cerr != nil {
+			continue // unreadable root — it cannot be the one being asked for
+		}
+		if candResolved == resolved {
+			return resolved, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	return "", errBadMemoryPath("path is not a registered project's auto-memory directory")
+}
+
 // memoryReadOnly reuses the sysedit kill-switch env so a single flag freezes
 // every config write surface, memory included.
 func memoryReadOnly() bool {
@@ -458,19 +579,42 @@ func writeMemoryPathErr(w http.ResponseWriter, err error) {
 // fsyncs, verifies byte-for-byte, then rotates — the exact contract of
 // sysedit.backupFile, but for files outside the registry.
 func backupMemoryFile(src string) error {
+	_, err := backupMemoryFiles([]string{src})
+	return err
+}
+
+// backupMemoryFiles is the same contract for a SET of files that must be
+// recoverable together: ONE timestamp dir holds all of them, so a consolidation
+// that moved eleven files is restored as one coherent snapshot rather than
+// eleven that have to be correlated by clock. Returns the timestamp dir's name —
+// the backup id the API hands back. Files that do not exist are skipped: a plan
+// can legitimately reference an index line whose file vanished between the plan
+// and the apply, and that is not a reason to refuse the whole operation.
+func backupMemoryFiles(paths []string) (string, error) {
 	tsDir, err := newMemoryBackupDir()
 	if err != nil {
-		return err
+		return "", err
 	}
-	mirror := strings.TrimPrefix(filepath.Clean(src), string(os.PathSeparator))
-	dst := filepath.Join(tsDir, mirror)
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
+	for _, src := range paths {
+		if _, serr := os.Stat(src); serr != nil {
+			if os.IsNotExist(serr) {
+				continue
+			}
+			return "", serr
+		}
+		mirror := strings.TrimPrefix(filepath.Clean(src), string(os.PathSeparator))
+		dst := filepath.Join(tsDir, mirror)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return "", err
+		}
+		if err := copyVerifyFile(src, dst); err != nil {
+			return "", err
+		}
 	}
-	if err := copyVerifyFile(src, dst); err != nil {
-		return err
+	if err := rotateMemoryBackups(); err != nil {
+		return "", err
 	}
-	return rotateMemoryBackups()
+	return filepath.Base(tsDir), nil
 }
 
 func newMemoryBackupDir() (string, error) {

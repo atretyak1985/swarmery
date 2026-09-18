@@ -68,12 +68,13 @@ cited by a recommendation matches what the pages show.
 | **evals chip** | `passed/total` from the latest imported eval run for the agent. |
 | **approx flag** | Set when the range (or its comparison window) overlaps pruned days that only exist as daily rollups — counts there are honest but incomplete. |
 
-## 4. The advisor — rules R1–R6
+## 4. The advisor — rules R1–R6 (plus R10)
 
 > [!NOTE]
 > The advisor registers more rules than this section documents. `advisor.Run` in
 > `internal/advisor/advisor.go` is the authoritative list; the rules described below
-> are the original six.
+> are the original six, plus R10 (the auto-memory index budget) which has its own
+> subsection after the table.
 
 `internal/advisor` runs at daemon startup, on a 24 h ticker, and on demand
 (`Analyze now` → `POST /api/retro/advise`). Every rule evaluates the trailing
@@ -89,6 +90,39 @@ session ids.
 | **R4** re-dispatch | agent | ≥ 3 ledger rows and re-dispatch share > 25 % | sharpen the agent's brief / acceptance criteria; consider an eval case |
 | **R5** stale improvement | process | a high-priority Process-Improvements row still open 14 d after its retro was ingested | do it, then mark the row `done` in the retro doc |
 | **R6** cache regression | config | cache hit rate dropped > 10 p.p. vs the preceding window | check prompt/session structure changes |
+| **R10** auto-memory index | memory | the project's `MEMORY.md` is > 6 KiB, **or** > 50 % of its ≥ 10 index lines are closed | run `swarmery memory consolidate` (see below) |
+
+### R10 — the auto-memory index budget
+
+`<claude-dir>/projects/<slug>/memory/MEMORY.md` is loaded into **every** conversation in the
+project, so its bytes are re-read on every turn forever and every line describing finished work
+is rent paid for nothing. R10 measures that, deterministically and without an LLM: it reads the
+index off disk each pass (the same auto-memory root the Memory page uses), parses its
+`- [Title](file.md) — hook` lines, and classifies each hook as **closed** when it carries a
+closed marker (`DONE|MERGED|CLOSED|SHIPPED|RESOLVED|LIVE`) and **no** open marker
+(`OPEN`, `open:`, `tail =`, `impl open`, `awaits`). A line carrying both is an open tail and
+counts as live — `MERGED … OPEN: flip the guard` stays, `FULLY CLOSED …; no open tail` closes.
+
+Two independent triggers, because the two failure shapes differ: an index can be over budget
+while entirely live (too many topics), and it can be small but mostly dead (a long tail of DONE
+lines). The finding's `detail` leads with the numbers — `index 8.1 KB, 28/53 lines closed
+(53%)` — and its baseline metric is `memory_index_closed_share` (lower is better).
+
+Like R7/R8/R9 it is **self-checking**: it re-examines the world every pass, so a consolidated
+index simply stops firing and the row is `resolved` automatically. `target_kind` is `memory`
+(migration `0071`), it has no adoption signal, and `verify()` never selects it — it is a
+notification, not a measured improvement.
+
+Acting on it is `swarmery memory consolidate --project <path> [--dry-run]`, or the
+**Consolidate index** panel on the project's Memory page (`POST /api/memory/consolidate`).
+Consolidation moves a closed entry's topic file to `memory/closed/`, stamps it
+`closed_at` + `status: closed`, moves its index line to `memory/closed/INDEX.md`, and removes it
+from `MEMORY.md`. Moving the **file** is the load-bearing half — a file left in `memory/` is
+still a recall candidate even with no index line. Nothing is deleted, every touched file is
+backed up into one timestamp dir first, and `--dry-run` (the default on the API) writes nothing
+at all. Two entries are always held back: one with an open tail, and one whose file an **open**
+memory still references with a `[[link]]` — closing that would dangle a live dependency.
+There is no LLM merge here and no duplicate detection beyond these exact markers.
 
 ## 5. Recommendation lifecycle
 
