@@ -54,6 +54,36 @@ func isPlaceholder(tok string) bool {
 	return false
 }
 
+// expandHome resolves a leading "~" in a declared path to the operator's home
+// directory.
+//
+// A Repo cell is hand-written in the same notation the operator types into a
+// shell, and "~/projects/x" is overwhelmingly how these docs name a checkout
+// outside the project. Go expands none of it: filepath.IsAbs("~/projects/x") is
+// FALSE, so the token is treated as RELATIVE, joined onto the project path,
+// resolves to a directory that does not exist, and ResolveTrusted falls through
+// to the project root — running the phase in the wrong repository and saying
+// nothing. That is not hypothetical: retire-cx phases 2 and 3 were both
+// dispatched into a swarmery worktree while declaring the AE plugin checkout.
+//
+// Only "~" and "~/…" are expanded. The "~user/…" form needs a user database
+// lookup, is not a shape these docs produce, and would silently resolve to the
+// WRONG home if guessed — it stays unexpanded and therefore stays a miss.
+// Returns tok unchanged when the home directory cannot be resolved.
+func expandHome(tok string) string {
+	if tok != "~" && !strings.HasPrefix(tok, "~/") {
+		return tok
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return tok
+	}
+	if tok == "~" {
+		return home
+	}
+	return filepath.Join(home, tok[2:])
+}
+
 // Tokens splits a declared Repo cell into candidate tokens, most specific first.
 // It handles every shape the plan format actually produces:
 //
@@ -62,13 +92,17 @@ func isPlaceholder(tok string) bool {
 //	"`sk-next` (+ Helm in `sk-k8s-next` / `dk-infrastructure`)"
 //	                                             → ["sk-next", "sk-k8s-next", "dk-infrastructure"]
 //
+// A leading "~" is expanded to the operator's home directory — see expandHome for
+// why that is not cosmetic.
+//
 // Absolute paths sort first because they are the least ambiguous thing a doc can
-// say; the relative order of everything else is preserved. Pure.
+// say; the relative order of everything else is preserved. Reads the environment
+// only through expandHome; otherwise pure.
 func Tokens(cell string) []string {
 	var abs, rel []string
 	seen := map[string]bool{}
 	add := func(tok string) {
-		tok = strings.TrimSpace(strings.Trim(strings.TrimSpace(tok), "*"))
+		tok = expandHome(strings.TrimSpace(strings.Trim(strings.TrimSpace(tok), "*")))
 		if isPlaceholder(tok) || seen[tok] {
 			return
 		}
