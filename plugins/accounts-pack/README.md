@@ -78,6 +78,11 @@ swarmery account env [--path <dir>]                zero or one line: CLAUDE_CONF
 swarmery account exec [--path <dir>] -- <cmd ...>  run a command under the project's account
 ```
 
+`env` prints to your terminal, so it prints the config dir and nothing else.
+`exec` hands the environment to the child without printing it, so it is the one
+that also carries the account's secrets (see below). Both terminal surfaces in
+this pack use `exec` for exactly that reason.
+
 `which`, `use`, `clear`, `env` and `exec` never contact the daemon. Your
 terminal has to keep working with swarmery stopped.
 
@@ -118,10 +123,14 @@ of the directory you are standing in. What it guarantees:
 - `--uninstall` removes exactly its own marker block and nothing else;
 - unbalanced markers (a hand-edited profile) **abort** the run instead of
   guessing;
-- the function calls `command claude`, never `claude`, so it cannot recurse;
-- the fallback is silent — no CLI, no binding, or a failed lookup all fall
-  through to plain `claude` with no output. This runs on every invocation, so a
-  warning here would be noise forever.
+- it delegates to `swarmery account exec`, so the session gets the project's
+  whole environment delta — the config dir *and* the account's MCP credentials,
+  if it has any — and `exec`'s exit code, signals and terminal are the child's;
+- the fallback calls `command claude`, never `claude`, so it cannot recurse;
+- the fallback is silent — no CLI on `PATH` falls through to plain `claude`
+  with no output. This runs on every invocation, so a warning here would be
+  noise forever. A swarmery that is present and fails is not retried: its exit
+  status is the command's.
 
 Already-open shells keep the old definition until they are restarted
 (`source ~/.zshrc`, or `unset -f claude` after uninstalling).
@@ -153,6 +162,34 @@ exactly one line of SessionStart hook JSON —
 — so Claude Code sees the warning from the first message of the session.
 Like every hook here it is fail-open — a hook that can fail is a hook that
 can block a session.
+
+## Per-account secrets
+
+Some plugins ship an `.mcp.json` whose servers reference credentials as
+`${SOME_TOKEN}`. Those expand from the **process environment** of the session,
+and on a multi-account machine they belong to one account, not to the box: an
+operator's work tokens have no business in a personal project's sessions.
+
+swarmery keeps them in a per-account store and injects them at the two seams
+that already know the account:
+
+```
+<SWARMERY_SECRETS_DIR or ~/.swarmery/secrets>/<account>.env    dir 0700, file 0600
+```
+
+`KEY=value` per line; blank lines and `#` comments are skipped, a leading
+`export ` is tolerated, and one matched pair of surrounding quotes is stripped.
+Properties worth knowing:
+
+- **The mode is enforced.** A store file readable by group or other is refused
+  outright — swarmery logs the path and the mode and loads *nothing*.
+- **It is per account.** A project bound to no account, or to the default one,
+  gets no variables at all, even when a store exists on the machine.
+- **It never reaches stdout.** `swarmery account env` prints the config-dir line
+  and nothing else; the store travels through `account exec` and through the
+  daemon's spawner.
+- **swarmery never writes it.** Put the file there yourself, `chmod 600` it, and
+  keep it out of every repo.
 
 ## Known edges
 

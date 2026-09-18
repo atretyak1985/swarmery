@@ -326,6 +326,12 @@ func accountKeys() []string {
 // ~/.claude, where the CLI looks with no CLAUDE_CONFIG_DIR set), so binding to
 // it must produce an empty delta rather than an explicit variable.
 //
+// It prints the CONFIG DIR delta only. The account's MCP secrets deliberately
+// never reach it: this output goes to a terminal and its scrollback, and a
+// second line would fall outside the `CLAUDE_CONFIG_DIR=?*` case the shell
+// function matches, silently dropping the binding. Secrets travel through
+// `account exec`, which hands them to the child without printing them.
+//
 // The line is printed RAW, not shell-quoted, because its consumer is
 // `env "$(swarmery account env)" command claude` — a single quoted argument,
 // which is correct even for a home directory with a space in it. Quoting here
@@ -378,8 +384,14 @@ func accountExec(args []string) error {
 	if err != nil {
 		return fmt.Errorf("account exec: %w", err)
 	}
+	// The account's MCP secrets ride along here and NOT in `account env`: exec
+	// hands the array to the child, `env` prints it to the terminal. This is the
+	// terminal half of the secret channel the daemon's spawner has in
+	// internal/runcore — the same store, the same key, so a session started by
+	// hand and one dispatched from the dashboard see the same variables.
+	delta := append(claudeacct.EnvFor(dir), claudeacct.SecretEnvFor(dir)...)
 	// Returns only on failure — on success this process IS the command.
-	return syscall.Exec(bin, argv, mergeEnv(os.Environ(), claudeacct.EnvFor(dir)))
+	return syscall.Exec(bin, argv, mergeEnv(os.Environ(), delta))
 }
 
 // mergeEnv appends overrides to base, having first removed from base every entry
