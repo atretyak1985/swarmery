@@ -115,6 +115,34 @@ waiting for it, and without it being dragged into blocking by them. Their first 
 (above) produced no hits for either — for `worktree-escape`, demonstrably because it could not see
 this project's worktrees rather than because none were escaped.
 
+## `agent-routing-guard.sh`
+
+Log: `agent-routing-guard.jsonl` · Reader: `scripts/guard-hits.sh --log <path>` · Review deadline:
+**2026-10-15** (`ENFORCE_FROM` in the hook is that deadline, not a trigger).
+
+The record shape is `bash-shape-guard.jsonl`'s, so the reader works unchanged — it only needs to be
+pointed at the other basename:
+
+```bash
+scripts/guard-hits.sh --log "$AGENT_WORKSPACE_ROOT/$AGENT_PROJECT/workspace/metrics/agent-routing-guard.jsonl"
+```
+
+| Rule | Hits | Sessions | False positives reviewed | Decision | Reviewed on |
+|---|---|---|---|---|---|
+| `gp-search-routing` | not yet counted | not yet counted | not yet reviewed | warn — new rule, burn-in starts 2026-09-14 | — |
+
+**What the false-positive review has to answer here**, because this rule judges intent from a
+description rather than from syntax: of the dispatches it flagged, how many were genuinely
+search-shaped work that `Explore` could have done? A brief that says "investigate the failing
+migration and fix it" is an implementation task wearing a research verb, and if those dominate the
+hits the vocabulary needs narrowing before the exit code is raised — not after.
+
+**Why it ships in warn.** The rule has no burn-in data, and the half of it that carries the real
+value — the completion-criterion and step-ceiling requirement in the second paragraph — reaches the
+model on stderr in `warn` exactly as it would in `block`. Blocking buys only the re-dispatch, and
+buys it at the cost of being wrong in public on a judgement call this rule is making for the first
+time.
+
 ## Rules retired from this table
 
 None yet. When a rule reaches `block`, leave its row in place with the evidence that justified the
