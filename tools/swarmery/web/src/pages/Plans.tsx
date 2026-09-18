@@ -407,8 +407,14 @@ function RunCompletedChip({ phase }: { phase: EpicPhase }): JSX.Element {
 // Scope: this is the PER-PHASE control only. The whole-plan run reads
 // SWARMERY_PLANRUN_MODEL and is deliberately untouched, so it gets no picker —
 // one there would silently do nothing.
+//
+// Since phase 3, `default` is also what lets a phase DOC's own `**Model:**`
+// declaration apply: sending no key leaves the daemon's four-rung ladder in
+// charge, and rung 2 of that ladder is the doc. Choosing a real model here is an
+// OVERRIDE of every doc on the plan — which is why the label says so, and why
+// each phase that declares one shows a `doc:` chip beside its Run button.
 const PHASE_RUN_MODELS = [
-  { value: 'default', label: 'daemon default (no model sent)' },
+  { value: 'default', label: 'per-doc / daemon default (no model sent)' },
   { value: 'opus', label: 'opus 5 — default' },
   { value: 'sonnet', label: 'sonnet 5 — faster, cheaper' },
   { value: 'fable', label: 'fable 5.1 — most capable, ~2× cost' },
@@ -465,6 +471,58 @@ function RunModelChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
   );
 }
 
+/** The models the daemon actually knows (`planning.Models`), used to tell a
+ * declaration it will accept from one it will refuse. Short names and full IDs
+ * both resolve server-side, so both count as known here. */
+const KNOWN_PHASE_MODELS = new Set<string>([
+  ...PHASE_RUN_MODELS.filter((m) => m.value !== 'default').map((m) => m.value),
+  ...Object.keys(MODEL_SHORT_NAMES),
+]);
+
+/** What the phase DOC asks for (`**Model:** opus` in its header) — rung 2 of the
+ * daemon's ladder, and a different fact from `RunModelChip`'s: that one reports
+ * what a past run USED, this one what the next run WILL use.
+ *
+ * Rendered per phase because the declaration is per phase, while the picker above
+ * the column is one control for the whole plan (phase 2 made it plan-wide so the
+ * row's Run, the detail panel's Retry and the diagnosis modal's Retry could not
+ * disagree). Splitting it into N selects would reintroduce exactly that.
+ *
+ * Three states, and the distinction is the point — silently showing a declaration
+ * that is not in effect is the bug this whole rung exists to avoid:
+ *   - picker on `default`, value known  → IN EFFECT, normal weight;
+ *   - picker overridden                 → struck through, the override named;
+ *   - value the daemon does not know    → red, because Run will 409 on it. */
+function DocModelChip({
+  phase,
+  picked,
+}: {
+  phase: EpicPhase;
+  picked: PhaseRunModel;
+}): JSX.Element | null {
+  if (phase.docModel === null) return null;
+  const known = KNOWN_PHASE_MODELS.has(phase.docModel);
+  const overridden = picked !== 'default';
+  const tip = !known
+    ? `the phase doc declares **Model:** ${phase.docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed`
+    : overridden
+      ? `the phase doc asks for ${phase.docModel}, but the picker above is set to ${picked} and overrides it for this run`
+      : `the phase doc asks for ${phase.docModel} — this run will use it`;
+  const cls = !known
+    ? 'border-red/40 text-red'
+    : overridden
+      ? 'border-line text-ink-faint line-through'
+      : 'border-line text-ink-dim';
+  return (
+    <span
+      className={`rounded border px-1.5 py-px font-mono text-[9.5px] ${cls}`}
+      data-tip={tip}
+    >
+      doc: {phaseModelShortName(phase.docModel)}
+    </span>
+  );
+}
+
 /** The per-phase run model picker. Sits with the Run/Retry controls it governs
  * — the choice is made where the money is spent, not in a settings page. */
 function PhaseRunModelPicker({
@@ -486,7 +544,7 @@ function PhaseRunModelPicker({
           if (isPhaseRunModel(e.target.value)) onChange(e.target.value);
         }}
         aria-label="phase run model"
-        title="the model every Run phase / Retry run on this plan starts with — the whole-plan run is not affected"
+        title="the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected."
         className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
       >
         {PHASE_RUN_MODELS.map((m) => (
@@ -1268,6 +1326,7 @@ function EpicDetail({
                   onTab={(t) => onOpenPhase(detail.phase.seq, t)}
                   runBusy={runBusy}
                   planRunning={planRunning}
+                  phaseRunModel={phaseRunModel}
                   onRetry={() => onRun(detail.phase.id)}
                   onCancelRun={() => onCancelRun(detail.phase.id)}
                   onOpenOutcome={() => onOpenOutcome(detail.phase.id)}
@@ -1298,6 +1357,7 @@ function EpicDetail({
               now={now}
               runBusy={runBusy}
               planRunning={planRunning}
+              phaseRunModel={phaseRunModel}
               onOpenPhase={onOpenPhase}
               onRun={onRun}
               onCancelRun={onCancelRun}
@@ -1513,6 +1573,7 @@ function PhaseList({
   now,
   runBusy,
   planRunning,
+  phaseRunModel,
   onOpenPhase,
   onRun,
   onCancelRun,
@@ -1524,6 +1585,11 @@ function PhaseList({
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
+  /** The picker's current value — read ONLY to tell whether a phase doc's own
+   * declaration is in effect or overridden (DocModelChip). The resolution itself
+   * stays server-side, in phaserun.resolveModel: a second ladder here would be a
+   * second thing to drift. */
+  phaseRunModel: PhaseRunModel;
   onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
@@ -1655,6 +1721,7 @@ function PhaseList({
                 ) : status === 'done' ? (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <RunModelChip phase={p} />
+                    <DocModelChip phase={p} picked={phaseRunModel} />
                     {p.runOutcome === 'completed' && <RunCompletedChip phase={p} />}
                     {isUnresolvedOutcome(p.runOutcome) && (
                       <RunOutcomeChip
@@ -1677,6 +1744,7 @@ function PhaseList({
                 ) : (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <RunModelChip phase={p} />
+                    <DocModelChip phase={p} picked={phaseRunModel} />
                     {p.runOutcome === 'completed' && <RunCompletedChip phase={p} />}
                     {isUnresolvedOutcome(p.runOutcome) && (
                       <RunOutcomeChip
@@ -2299,6 +2367,7 @@ function PhaseDetailPanel({
   onTab,
   runBusy,
   planRunning,
+  phaseRunModel,
   onRetry,
   onCancelRun,
   onOpenOutcome,
@@ -2313,6 +2382,8 @@ function PhaseDetailPanel({
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
+  /** The picker's value, for DocModelChip — see PhaseList's note. */
+  phaseRunModel: PhaseRunModel;
   onRetry: () => void;
   onCancelRun: () => void;
   /** Open the run-diagnosis modal for this phase. */
@@ -2442,6 +2513,7 @@ function PhaseDetailPanel({
             )}
             <RunStateChip phase={phase} onOpenOutcome={onOpenOutcome} />
             <RunModelChip phase={phase} />
+            <DocModelChip phase={phase} picked={phaseRunModel} />
             <VerifyVerdictChip phase={phase} />
             <span className="font-mono text-[10px] text-ink-faint">
               {phase.checkboxesDone}/{phase.checkboxesTotal || 0}

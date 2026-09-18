@@ -1,0 +1,21 @@
+-- 0069: the model a phase DOC asks for (`**Model:** opus` in its header block,
+-- wsingest.ParseModel) — rung 2 of the phase-run model ladder.
+--
+-- DOC-OWNED, exactly like verify_mode (0057) and covers: the plan author writes
+-- it, every scan re-derives it, and it is deliberately NOT part of phaseState —
+-- a rescan must be free to drop it the moment the author deletes the line.
+--
+-- Stored VERBATIM, not normalized and not validated here. The scan's contract is
+-- "degrade with a warning, never fail", while rung 2's contract is the opposite:
+-- an unknown value must FAIL THE RUN naming the document. Those two only coexist
+-- if the column carries what the author actually wrote and internal/phaserun is
+-- the one place that judges it (see internal/phaserun/service.go resolveModel).
+-- Validating at scan time would have to either reject the row or silently blank
+-- the column, and silently blanking it is precisely the bug
+-- internal/dispatch/service.go:979 records for playbook `model:` chips.
+--
+-- NULL (the default for every existing row) means the doc declares nothing, which
+-- is what keeps every already-indexed plan on today's behaviour until its author
+-- opts in. parserVersion moves v5 → v6 so indexed plans re-parse for this field
+-- even though their bytes never changed.
+ALTER TABLE epic_phases ADD COLUMN doc_model TEXT;

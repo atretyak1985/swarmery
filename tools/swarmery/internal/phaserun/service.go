@@ -229,6 +229,12 @@ type phaseInfo struct {
 	// Run is the contract this run answers to, and a doc rescan mid-run must not
 	// retroactively decide the run should (or should not) have been graded.
 	VerifyMode string
+	// DocModel is the RAW model the phase DOC declares (`**Model:** opus`,
+	// wsingest.ParseModel; epic_phases.doc_model, migration 0069) — rung 2 of the
+	// model ladder. "" when the doc declares nothing. Unvalidated on the way in:
+	// resolveModel is the one place that judges it, and it fails the run rather than
+	// dropping it.
+	DocModel string
 }
 
 // runRoot resolves the repository this phase runs in: what the phase doc declares
@@ -256,24 +262,66 @@ func (s *Service) runRoot(info phaseInfo) (string, error) {
 	return resolve(info.ProjectPath, cells...)
 }
 
+// DocModelError: the phase DOC declares a `**Model:**` this daemon does not know.
+// Rung 2's failure, and deliberately NOT rung 1's: a bad value in a document is a
+// defect in the plan, not a bad HTTP request, so it names the document the author
+// has to edit instead of the closed set the operator never typed. The api layer
+// answers it 409 `doc-model-unknown` (runconflict.go), above the 400 arm, because
+// it wraps planning.ErrUnknownModel and would otherwise be swallowed by it.
+type DocModelError struct {
+	// Doc is the phase doc's absolute path — the whole point of this error type.
+	Doc string
+	// Declared is what the doc actually says, verbatim, so the author can grep for
+	// the line. (The line NUMBER is not carried: epic_phases stores the value, not
+	// its position, and one greppable string beats a second doc-owned column that a
+	// checkbox flip would have to keep in sync.)
+	Declared string
+	err      error
+}
+
+func (e *DocModelError) Error() string {
+	return fmt.Sprintf("phase doc %s declares **Model:** %q, which is not a known model "+
+		"(opus, sonnet, fable) — fix the line in the doc: %v", e.Doc, e.Declared, e.err)
+}
+
+// Unwrap keeps errors.Is(err, planning.ErrUnknownModel) true through this type.
+func (e *DocModelError) Unwrap() error { return e.err }
+
 // resolveModel walks the phase-run model ladder and returns what reaches
 // --model ("" ⇒ no flag at all, today's behaviour).
 //
 //  1. an operator choice on the request — VALIDATED through planning.ResolveModel,
 //     so a typo is a 400 before anything is acquired or stamped;
-//  2. otherwise SWARMERY_PHASERUN_MODEL — passed through VERBATIM, deliberately
+//  2. otherwise the phase DOC's own `**Model:** opus` header (epic_phases.doc_model,
+//     wsingest.ParseModel, migration 0069) — VALIDATED too, because it is authored
+//     text, but failing DIFFERENTLY: a *DocModelError naming the document, so the
+//     run does not start and the author learns which file to edit. Never silently
+//     ignored — internal/dispatch/service.go:979 records exactly that bug for
+//     playbooks, where a `model:` chip named a model no run ever used;
+//  3. otherwise SWARMERY_PHASERUN_MODEL — passed through VERBATIM, deliberately
 //     unvalidated. The env knob is pinned by whoever runs the daemon and legitimately
 //     holds full IDs outside planning.Models (a "[1m]" context-window suffix, say);
 //     routing it through the validator would reject it and silently drop every phase
 //     run back to the account default — the exact failure this ladder exists to remove;
-//  3. otherwise "" — no --model flag.
-func resolveModel(choice string) (string, error) {
+//  4. otherwise "" — no --model flag.
+//
+// Rungs 1, 3 and 4 behave exactly as they did before rung 2 existed: a request model
+// still wins outright, and a doc that declares nothing (docModel == "") falls straight
+// through to the env knob.
+func resolveModel(choice, docModel, docPath string) (string, error) {
 	if strings.TrimSpace(choice) != "" {
 		id, err := planning.ResolveModel(choice)
 		if err != nil {
 			// planning.ResolveModel already wraps ErrUnknownModel, so errors.Is
 			// still matches through this second wrap at the api layer.
 			return "", fmt.Errorf("phase run model: %w", err)
+		}
+		return id, nil
+	}
+	if declared := strings.TrimSpace(docModel); declared != "" {
+		id, err := planning.ResolveModel(declared)
+		if err != nil {
+			return "", &DocModelError{Doc: docPath, Declared: declared, err: err}
 		}
 		return id, nil
 	}
@@ -286,17 +334,19 @@ func resolveModel(choice string) (string, error) {
 // immediately. The run's own goroutine owns exit stamping, worktree removal
 // (branch kept), and slot release.
 //
-// model is the operator's choice for THIS run ("" = none); resolveModel below
+// model is the operator's choice for THIS run ("" = none); resolveModel above
 // owns the ladder and is applied first, so a bad model costs nothing.
 func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err error) {
-	// BEFORE loadPhase, before the single-flight slot, before any row is stamped:
-	// an unknown model is an admission verdict and must leave no trace — no
-	// worktree acquired, no run_state='running' to clean up.
-	runModel, err := resolveModel(model)
+	// loadPhase is a pure READ — one SELECT, no stamp, no acquire — and rung 2 of
+	// the ladder lives on the row it returns (epic_phases.doc_model), so resolution
+	// cannot precede it. Everything that leaves a trace still comes after: the
+	// single-flight slot, the worktree, run_state='running'. An unknown model
+	// (rung 1 or rung 2) is an admission verdict that must leave none.
+	info, err := s.loadPhase(phaseID)
 	if err != nil {
 		return "", err
 	}
-	info, err := s.loadPhase(phaseID)
+	runModel, err := resolveModel(model, info.DocModel, info.DocPath)
 	if err != nil {
 		return "", err
 	}
@@ -819,19 +869,22 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 		runBranch sql.NullString
 		repo      sql.NullString
 		wsRoot    sql.NullString
+		// NULL for every phase whose doc declares no `**Model:**` — which is every
+		// phase predating migration 0069.
+		docModel sql.NullString
 	)
 	// LEFT JOIN workspaces: the overlay's project.json is a repo-hint source, and a
 	// project with no workspace mapped must still load (the join is advisory).
 	err := s.DB.QueryRow(`
 		SELECT e.workspace_task_id, e.seq, e.name, e.doc_path, e.depends_on, e.run_state,
-		       e.run_branch, e.repo, e.verify_mode, p.path, p.slug, w.root_path
+		       e.run_branch, e.repo, e.verify_mode, e.doc_model, p.path, p.slug, w.root_path
 		  FROM epic_phases e
 		  JOIN tasks t ON t.id = e.workspace_task_id
 		  JOIN projects p ON p.id = t.project_id
 		  LEFT JOIN workspaces w ON w.project_id = p.id
 		 WHERE e.id = ?`, phaseID).Scan(
 		&info.WorkspaceTaskID, &info.Seq, &info.Name, &info.DocPath, &depsJSON,
-		&info.RunState, &runBranch, &repo, &info.VerifyMode, &path, &info.ProjectSlug, &wsRoot)
+		&info.RunState, &runBranch, &repo, &info.VerifyMode, &docModel, &path, &info.ProjectSlug, &wsRoot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return info, ErrPhaseNotFound
 	}
@@ -841,6 +894,7 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 	info.ProjectPath = path.String
 	info.WorkspaceRoot = wsRoot.String
 	info.Repo = repo.String
+	info.DocModel = docModel.String
 	info.RunBranch = runBranch.String
 	if err := json.Unmarshal([]byte(depsJSON), &info.DependsOn); err != nil {
 		info.DependsOn = nil // garbage depends_on ⇒ no gate (same posture as epics.go decodeIntList)

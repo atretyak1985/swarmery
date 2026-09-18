@@ -75,6 +75,7 @@ const phase = (over: Partial<EpicPhase> = {}): EpicPhase => ({
   runState: 'idle',
   runSessionUuid: null,
   runModel: null,
+  docModel: null,
   runStartedAt: null,
   runError: null,
   runOutcome: 'idle',
