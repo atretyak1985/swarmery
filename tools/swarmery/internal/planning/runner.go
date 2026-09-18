@@ -66,7 +66,10 @@ var ErrUnknownModel = errors.New("unknown planning model")
 // ResolveModel maps an operator's choice to the full ID: "" is the default, a
 // short name or a full ID from Models passes, anything else is ErrUnknownModel.
 func ResolveModel(choice string) (string, error) {
-	c := strings.TrimSpace(choice)
+	// Case-insensitive: the value is authored text (a `**Model:** Opus` header,
+	// a picker, an env knob) and its case carries no meaning. Every short name
+	// and every full ID in Models is lower-case, so folding the input is enough.
+	c := strings.ToLower(strings.TrimSpace(choice))
 	if c == "" {
 		return DefaultModel, nil
 	}
@@ -136,9 +139,8 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// then a byte-identical copy of os.Environ().
 		Account: claudeacct.Binding(spec.Cwd),
 		Timeout: timeout,
-		// launchd starts the daemon with a minimal PATH that omits npm/homebrew, so a
-		// bare PATH lookup can miss — ClaudeBin probes the install locations too.
-		Bin: ClaudeBin,
+		// Bin left nil: runcore resolves through claudebin by default (launchd's
+		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})
 	return &Run{
 		SessionUUID: res.SessionUUID,

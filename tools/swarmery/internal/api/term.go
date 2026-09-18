@@ -310,7 +310,7 @@ func resolveTermAccount(key string) (cwd string, env []string, ok bool) {
 	if err != nil || home == "" {
 		return "", nil, false
 	}
-	return home, claudeacct.EnvForAccount(acct.Key), true
+	return home, claudeacct.SpawnDelta(acct.Key), true
 }
 
 // termAccountEnv resolves the CLAUDE_CONFIG_DIR env delta for a terminal
@@ -323,11 +323,19 @@ func resolveTermAccount(key string) (cwd string, env []string, ok bool) {
 // read whatever unrelated settings file happens to sit there — silently
 // binding the session to a stranger's account instead of correctly reporting
 // "no project". "" must short-circuit to nil before EnvFor is ever called.
+//
+// The delta is claudeacct.SpawnDelta — the config dir AND the account's secret
+// store — so a dock shell sees the same MCP credentials a dashboard-dispatched
+// run and `swarmery account exec` see. Delta-shaped (not SpawnEnv) because the
+// PTY layer appends it after its own environment; the one thing a delta cannot
+// express is REMOVING an inherited CLAUDE_CONFIG_DIR for a project bound
+// explicitly to the default account, so the dock inherits the daemon's baked
+// dir in that single case where every whole-env spawn drops it.
 func termAccountEnv(projectPath string) []string {
 	if projectPath == "" {
 		return nil
 	}
-	return claudeacct.EnvFor(projectPath)
+	return claudeacct.SpawnDelta(claudeacct.Binding(projectPath))
 }
 
 // scanColumn runs a single-column string query and returns the non-null rows.

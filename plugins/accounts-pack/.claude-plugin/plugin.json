@@ -1,7 +1,7 @@
 {
   "name": "accounts-pack",
   "description": "Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it — /account, a shell wrapper, an optional shell function, and a wrong-account warning. Opt-in; REQUIRES the swarmery CLI on the machine (every decision lives in `swarmery account`, so the shell surfaces and the daemon can never disagree about which account a project uses).",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"

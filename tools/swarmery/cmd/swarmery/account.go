@@ -41,6 +41,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	// Aliased: this package already has a `usage()` function (main.go's help
 	// text), and the import would shadow it for the whole file.
@@ -380,63 +381,51 @@ func accountExec(args []string) error {
 	if err != nil {
 		return err
 	}
-	bin, err := exec.LookPath(argv[0])
+	bin, err := resolveExecBin(argv[0])
 	if err != nil {
-		return fmt.Errorf("account exec: %w", err)
+		return err
 	}
 	// The account's MCP secrets ride along here and NOT in `account env`: exec
 	// hands the array to the child, `env` prints it to the terminal. This is the
-	// terminal half of the secret channel the daemon's spawner has in
-	// internal/runcore — the same store, the same key, so a session started by
-	// hand and one dispatched from the dashboard see the same variables.
-	delta := append(claudeacct.EnvFor(dir), claudeacct.SecretEnvFor(dir)...)
+	// terminal half of the channel the daemon's spawner has in internal/runcore —
+	// claudeacct.SpawnEnv is the same composition, the same store, the same key,
+	// so a session started by hand and one dispatched from the dashboard see the
+	// same variables.
+	//
+	// This is the only raw execve(2) path in the program, and execve does no
+	// normalisation: it copies the array to the child verbatim, where a libc
+	// getenv() returns the FIRST match. SpawnEnv therefore removes every key its
+	// delta sets before appending it — a CLAUDE_CONFIG_DIR the caller's shell had
+	// already exported would otherwise sort first and silently win, running the
+	// command under the WRONG account while `swarmery account which` reports the
+	// right one.
+	//
 	// Returns only on failure — on success this process IS the command.
-	return syscall.Exec(bin, argv, mergeEnv(os.Environ(), delta))
+	return syscall.Exec(bin, argv, claudeacct.SpawnEnvFor(os.Environ(), dir))
 }
 
-// mergeEnv appends overrides to base, having first removed from base every entry
-// whose NAME an override also sets. The result therefore names each overridden
-// key exactly once.
+// resolveExecBin finds the executable `account exec` replaces itself with.
 //
-// The five daemon spawn sites in internal/ hand their delta to exec.Cmd.Env,
-// which Go documents as last-wins and normalises before spawning — a duplicate
-// there is harmless. This is the only raw execve(2) path, and execve does no
-// normalisation whatsoever: it copies the array to the child verbatim, where a
-// libc getenv() walks it and returns the FIRST match. So a plain
-// append(os.Environ(), delta...) is silently defeated by a CLAUDE_CONFIG_DIR the
-// caller's shell had already exported — the stale value sorts first and wins.
-//
-// That is this feature's worst failure: the command runs under the WRONG account
-// while `swarmery account which` reports the right one, and nothing anywhere
-// says so.
-func mergeEnv(base, overrides []string) []string {
-	if len(overrides) == 0 {
-		// Preserves the byte-identical-passthrough property accountExec
-		// documents: no delta, no rewriting of the caller's environment.
-		return base
+// PATH first, like any shell. The fallback exists for one caller: the shell
+// function plugins/accounts-pack installs is itself named `claude` and hands the
+// bare word "claude" here — and the official local install
+// (`claude migrate-installer`) defines `claude` as a shell ALIAS to
+// ~/.claude/local/claude with nothing on PATH. execve cannot see an alias, so a
+// bare LookPath fails and the operator's `claude` stops launching altogether.
+// claudebin.Resolve probes exactly that location (and the other common install
+// dirs), the same way every daemon spawn already finds the binary under launchd's
+// minimal PATH. Any other command name gets the plain PATH answer.
+func resolveExecBin(name string) (string, error) {
+	bin, err := exec.LookPath(name)
+	if err == nil {
+		return bin, nil
 	}
-	overridden := make(map[string]struct{}, len(overrides))
-	for _, kv := range overrides {
-		overridden[envKey(kv)] = struct{}{}
-	}
-	merged := make([]string, 0, len(base)+len(overrides))
-	for _, kv := range base {
-		if _, dup := overridden[envKey(kv)]; dup {
-			continue
+	if name == "claude" {
+		if probed, perr := claudebin.Resolve(); perr == nil {
+			return probed, nil
 		}
-		merged = append(merged, kv)
 	}
-	return append(merged, overrides...)
-}
-
-// envKey is the NAME half of a "NAME=value" entry. An entry with no "=" is not a
-// valid assignment, so it is keyed whole — that way it can never be mistaken for
-// a name an override is trying to replace.
-func envKey(kv string) string {
-	if i := strings.IndexByte(kv, '='); i >= 0 {
-		return kv[:i]
-	}
-	return kv
+	return "", fmt.Errorf("account exec: %w", err)
 }
 
 // ── formatting ──────────────────────────────────────────────────────────────

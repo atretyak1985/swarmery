@@ -122,9 +122,11 @@ func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64,
 	// account that WROTE it, so the resume takes the account from the sessions row
 	// rather than from cwd: a dispatched session's cwd is a worktree with no
 	// project settings file, which would resolve to the default account and read
-	// an empty projects/ dir. EnvForAccount yields nil for the default account, so
-	// cmd.Env is then a byte-identical copy of os.Environ().
-	cmd.Env = append(os.Environ(), claudeacct.EnvForAccount(account)...)
+	// an empty projects/ dir. SpawnEnv is the composition every swarmery spawn
+	// uses — config dir plus the account's secret store, an inherited
+	// CLAUDE_CONFIG_DIR removed for an explicit default binding — and hands
+	// os.Environ() back untouched for an unbound session.
+	cmd.Env = claudeacct.SpawnEnv(os.Environ(), account)
 	// Own process group: a daemon restart (make install / launchd job stop)
 	// SIGKILLs the daemon's process group — without this, every in-flight
 	// dashboard-driven session dies mid-turn. Detached children survive as

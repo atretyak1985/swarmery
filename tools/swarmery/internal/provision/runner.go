@@ -62,16 +62,16 @@ func (ClaudeRunner) Claude(ctx context.Context, dir, stdin string, args ...strin
 	// take the key from the caller instead (plan A3).
 	//
 	// dir=="" means "inherit the daemon cwd" and names no project at all —
-	// claudeacct.EnvFor("") would probe a RELATIVE .claude/settings.local.json and
-	// could bind the run to whatever project the daemon happens to sit in, so that
-	// case resolves nothing.
-	var acctEnv []string
+	// resolving a binding for "" would probe a RELATIVE .claude/settings.local.json
+	// and could bind the run to whatever project the daemon happens to sit in, so
+	// SpawnEnvFor hands os.Environ() back untouched for it. A bound project gets
+	// its config dir AND its secret store — the same composition every other
+	// swarmery spawn uses.
 	if dir != "" {
 		cmd.Dir = dir
-		acctEnv = claudeacct.EnvFor(dir)
 	}
-	// nil delta for an unbound project ⇒ a byte-identical copy of os.Environ().
-	cmd.Env = append(os.Environ(), acctEnv...)
+	// An unbound project ⇒ a byte-identical copy of os.Environ().
+	cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
