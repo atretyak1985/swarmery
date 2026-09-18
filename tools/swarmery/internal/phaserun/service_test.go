@@ -77,6 +77,9 @@ type stubWt struct {
 	// base...HEAD, and a test whose base happens to equal the branch would pass on
 	// exactly the bug that column prevents. "" ⇒ stubStartPoint.
 	startPoint string
+	// pathOverride makes Acquire hand back a REAL directory, so a test can exercise
+	// the lent-document round trip instead of a path that does not exist.
+	pathOverride string
 
 	reclaimed    []string // branches handed to ReclaimEmptyBranch, in order
 	reclaimAhead int      // commits-ahead ReclaimEmptyBranch reports (0 ⇒ reclaimed)
@@ -104,8 +107,12 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 	if sp == "" {
 		sp = stubStartPoint
 	}
+	path := "/wt/" + projectSlug + "/" + taskID
+	if w.pathOverride != "" {
+		path = w.pathOverride
+	}
 	return worktree.Acquired{
-		Path:       "/wt/" + projectSlug + "/" + taskID,
+		Path:       path,
 		Branch:     "swarm/" + taskID,
 		StartPoint: sp,
 	}, nil

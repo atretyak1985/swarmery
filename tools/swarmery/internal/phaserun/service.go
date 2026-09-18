@@ -538,21 +538,41 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 	// worth grading: a cancelled or crashed executor may have left the tree mid-edit,
 	// and a verdict on that measures the interruption, not the work.
 	endState := ""
+	// The executor ticks and writes its report in the LENT copy inside the
+	// worktree; returnDoc copies that back over the workspace document. It runs
+	// once, as early as the run's exit allows, because two readers downstream
+	// both claim to read what the executor wrote and neither can until it has:
+	//
+	//   - stamp() counts the ticked criteria to close the run's measurement
+	//     interval. Reading the workspace copy first stamps run_checkboxes_after
+	//     at the PRE-run count, and phasediag.OutcomeFromRow prefers that stamped
+	//     edge over the live count forever — so a phase whose work landed is
+	//     chipped `noop` permanently. Observed on every phase run of both plans
+	//     on 2026-09-18, including one that ticked eight criteria.
+	//   - verifyRun() reads info.DocPath to grade "the doc as it stands NOW",
+	//     which before this was the doc as it stood BEFORE the run.
+	//
+	// The defer still calls it, guarded, so a panic between here and the switch
+	// cannot lose the report — the one artifact most worth not losing.
+	docReturned := false
+	returnDoc := func() {
+		if docReturned {
+			return
+		}
+		docReturned = true
+		worktree.ReturnPlanDocLogged(fmt.Sprintf("phaserun phase=%d", phaseID), acq.Path, docRel, info.DocPath)
+	}
 	defer func() {
 		cancel()
+		// Safety net only: the normal path already returned the doc before
+		// stamping. Must stay AHEAD of verifyRun and removeWorktree.
+		returnDoc()
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the
 		// same ordering argument as worktree-before-slot, one step earlier in the
 		// sequence, and it is why verification lives in the defer at all rather than
 		// after the switch: every exit path has to pass through it in this order.
 		s.verifyRun(phaseID, info, acq, endState)
-		// Return the doc BEFORE removeWorktree deletes the only copy of it, and
-		// on EVERY exit path — done, blocked, failed, cancelled. The dashboard
-		// renders the workspace copy's `## Completion Report` and nothing else,
-		// so a report that stays in the worktree is work that shipped and reads
-		// as "no summary of the work written". A report about why a run STOPPED
-		// is the one most worth not losing.
-		worktree.ReturnPlanDocLogged(fmt.Sprintf("phaserun phase=%d", phaseID), acq.Path, docRel, info.DocPath)
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
 		// 'running', so the DB gate in Start is open; releasing the single-flight
 		// slot before the (git shell-out, tens of ms) removal opens a window where a
@@ -569,6 +589,9 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 	}()
 
 	res, err := s.Run.Start(ctx, spec)
+	// Before the switch: every arm below stamps, and stamp counts the ticks in the
+	// workspace copy.
+	returnDoc()
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled):
 		// Cancel() beat the exit — whatever the child reported, the outcome is a
