@@ -10,7 +10,7 @@ package wsingest
 //
 // NormalizeLessonTitle is the fold that gives them one: deterministic, pure,
 // and cheap enough to run on every insert. It is the ONLY definition of lesson
-// identity — migration 0069's retro_lessons.norm_title, the grouped
+// identity — migration 0070's retro_lessons.norm_title, the grouped
 // /api/retro/lessons?group=1 feed, and advisor R11 all read the column this
 // writes, so none of them can disagree about what "the same lesson" means.
 //
@@ -123,7 +123,7 @@ func capNormTitle(s string) string {
 }
 
 // BackfillNormTitles fills retro_lessons.norm_title for rows that predate
-// migration 0069 (norm_title = ''), and returns how many rows it wrote.
+// migration 0070 (norm_title = ''), and returns how many rows it wrote.
 //
 // Idempotent by construction: it only ever selects rows whose key is still
 // empty, so a second call after a complete pass writes nothing and returns 0.
@@ -134,7 +134,7 @@ func capNormTitle(s string) string {
 // Run() calls this once, before the first scan pass, so the first advisor tick
 // after an upgrade already sees a fully folded table. It is deliberately NOT
 // part of Scan(): a rescan every 60 s has no reason to re-walk history, and the
-// insert path (applyRetro) has folded every new row since 0069 landed.
+// insert path (applyRetro) has folded every new row since 0070 landed.
 func (s *Scanner) BackfillNormTitles() (int, error) {
 	rows, err := s.db.Query(`SELECT id, title FROM retro_lessons WHERE norm_title = ''`)
 	if err != nil {

@@ -8,7 +8,7 @@ package advisor
 // and nothing carries it forward into the procedure the next run actually reads.
 //
 // R11 is the detector for exactly that failure: fold the window's lessons by
-// their cross-task identity (retro_lessons.norm_title, migration 0069) and raise
+// their cross-task identity (retro_lessons.norm_title, migration 0070) and raise
 // the ones that turned up in R11MinTasks or more DISTINCT tasks. One task
 // writing the same lesson twice is a duplicated paragraph, not a pattern — the
 // count is over tasks, never over rows.
@@ -62,7 +62,7 @@ type lessonGroup struct {
 //
 // Rows whose norm_title is still '' are excluded — '' is the "not folded yet"
 // marker, not an identity, and grouping by it would invent one enormous bogus
-// finding out of every unrelated pre-0069 lesson in the database.
+// finding out of every unrelated pre-0070 lesson in the database.
 func r11RecurringLesson(db *sql.DB, win window) ([]finding, error) {
 	groups, err := lessonGroups(db, win)
 	if err != nil {

@@ -135,9 +135,9 @@ func (s *Scanner) Run(ctx context.Context) error {
 	}
 
 	// Before the first pass, once per daemon start: fold the lesson titles that
-	// predate migration 0069. It runs here and not inside Scan() because it is a
+	// predate migration 0070. It runs here and not inside Scan() because it is a
 	// history walk, not a rescan concern — the insert path has folded every new
-	// row since 0069, so after the first successful pass this is a no-op query.
+	// row since 0070, so after the first successful pass this is a no-op query.
 	// A failure is logged and swallowed for the same reason a scan error is: an
 	// un-backfilled row degrades grouping, it does not justify refusing to index.
 	if n, err := s.BackfillNormTitles(); err != nil {

@@ -118,7 +118,7 @@ func TestNormTitleReinsertKeepsIdentity(t *testing.T) {
 	}
 }
 
-// TestNormTitleBackfill covers the pre-0069 history path: rows written before
+// TestNormTitleBackfill covers the pre-0070 history path: rows written before
 // the column existed carry '', the startup backfill folds them, a second call is
 // a no-op, and a title that folds to nothing is left '' rather than being given
 // a fake shared identity.
@@ -129,7 +129,7 @@ func TestNormTitleBackfill(t *testing.T) {
 	seedNormTitleTask(t, db, 1, "2026-09-01-task-a", "2026-09-01T00:00:00Z")
 	mustExec(t, db, `INSERT INTO task_retros (id, task_id, ingested_at)
 		VALUES (1, 1, '2026-09-01T00:00:00Z')`)
-	// Written the way a pre-0069 daemon wrote them: no norm_title at all.
+	// Written the way a pre-0070 daemon wrote them: no norm_title at all.
 	mustExec(t, db, `INSERT INTO retro_lessons (id, retro_id, seq, title) VALUES
 		(1, 1, 1, 'Sync-Cache Before Build!'),
 		(2, 1, 2, 'sync the cache before the build'),

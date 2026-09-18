@@ -765,7 +765,7 @@ type retroLessonsDTO struct {
 }
 
 // retroLessonGroupDTO is one lesson IDENTITY (wsingest.NormalizeLessonTitle,
-// migration 0069) folded across every task that learned it. The flat feed above
+// migration 0070) folded across every task that learned it. The flat feed above
 // answers "what did we learn"; this answers "what do we keep re-learning", which
 // is the only one of the two a human can act on.
 type retroLessonGroupDTO struct {
@@ -861,7 +861,7 @@ func isTruthyParam(q url.Values, key string) bool {
 // SQL aggregate is how the three quietly start disagreeing.
 //
 // Rows with an empty norm_title are excluded. '' is the "not folded yet" marker
-// (migration 0069 + BackfillNormTitles), not an identity — grouping by it would
+// (migration 0070 + BackfillNormTitles), not an identity — grouping by it would
 // pile unrelated lessons into one bogus, high-count group at the top of exactly
 // the view meant to show what recurs.
 //
