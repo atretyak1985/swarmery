@@ -128,10 +128,10 @@ func TestResolveTermCwdProjectPathUsesOwnAccount(t *testing.T) {
 		t.Errorf("projectPath = %q, want %q (the cwd itself)", projectPath, project)
 	}
 
-	got := termAccountEnv(projectPath)
+	got := termConfigDirs(termAccountEnv(projectPath))
 	want := []string{"CLAUDE_CONFIG_DIR=" + dirs["nabu-org"]}
 	if !slices.Equal(got, want) {
-		t.Errorf("env = %v, want %v, cwd = %v", got, want, cwd)
+		t.Errorf("CLAUDE_CONFIG_DIR entries = %v, want %v, cwd = %v", got, want, cwd)
 	}
 }
 
@@ -175,10 +175,10 @@ func TestResolveTermCwdWorktreeUsesProjectAccount(t *testing.T) {
 		t.Errorf("projectPath = %q, want %q (the task's project, not the worktree)", projectPath, project)
 	}
 
-	got := termAccountEnv(projectPath)
+	got := termConfigDirs(termAccountEnv(projectPath))
 	want := []string{"CLAUDE_CONFIG_DIR=" + dirs["nabu-org"]}
 	if !slices.Equal(got, want) {
-		t.Errorf("env = %v, want %v — the account was not resolved from the project", got, want)
+		t.Errorf("CLAUDE_CONFIG_DIR entries = %v, want %v — the account was not resolved from the project", got, want)
 	}
 }
 
@@ -203,8 +203,8 @@ func TestResolveTermCwdWorktreeUnboundProjectYieldsNoAccount(t *testing.T) {
 		t.Errorf("projectPath = %q, want %q", projectPath, project)
 	}
 
-	if got := termAccountEnv(projectPath); got != nil {
-		t.Errorf("env = %v, want nil for an unbound project", got)
+	if got := termAccountEnv(projectPath); !slices.Equal(got, os.Environ()) {
+		t.Errorf("env = %v, want the daemon's own environment byte for byte for an unbound project", got)
 	}
 }
 
@@ -230,7 +230,7 @@ func TestResolveTermCwdOrphanedWorktreeTaskYieldsNoAccount(t *testing.T) {
 
 	got := termAccountEnv(projectPath) // must not panic
 	if got != nil {
-		t.Errorf("env = %v, want nil, cwd = %v", got, cwd)
+		t.Errorf("env = %v, want nil (no project ⇒ the daemon's own environment), cwd = %v", got, cwd)
 	}
 }
 
@@ -270,6 +270,6 @@ func TestTermAccountEnvGuardsEmptyProjectPath(t *testing.T) {
 	}
 
 	if got := termAccountEnv(""); got != nil {
-		t.Errorf("termAccountEnv(\"\") = %v, want nil — it must never reach EnvFor with an empty project path", got)
+		t.Errorf("termAccountEnv(\"\") = %v, want nil — it must never resolve a binding for an empty project path", got)
 	}
 }

@@ -199,12 +199,15 @@ func (m *Manager) Count() int {
 // Start spawns a new PTY in cwd sized cols×rows. Returns ErrTooManySessions when
 // the cap is reached. The caller owns the returned Session and MUST Close it.
 //
-// env is an environment DELTA for the shell, appended after the daemon's own
-// environment. The HTTP handler fills it with claudeacct.EnvFor(cwd) so the dock
-// session runs under the project's Claude account; nil leaves the child's
-// environment exactly as it was before this parameter existed.
+// env is the shell's WHOLE environment (TERM is added on top). The HTTP handler
+// fills it with claudeacct.SpawnEnvFor(os.Environ(), projectPath) so the dock
+// session runs under the project's Claude account with that account's secret
+// store — and, for a project bound explicitly to the default account, WITHOUT
+// a CLAUDE_CONFIG_DIR the daemon itself inherited, which a delta could never
+// express. nil means the daemon's own environment, exactly what the child got
+// before this parameter existed.
 //
-// The Manager takes the delta rather than resolving it, because only the caller
+// The Manager takes the env rather than resolving it, because only the caller
 // knows what its cwd IS. The dock's cwd is a registered project path (settings
 // file present ⇒ resolves) or a live task worktree (no settings file ⇒ resolves
 // to the default account, exactly like dispatch's Cwd would — plan A3). Keeping
@@ -343,15 +346,18 @@ func (p osProcess) SignalGroup(sig syscall.Signal) error {
 
 func (p osProcess) Wait() error { return p.cmd.Wait() }
 
-// ptyEnv composes the child environment for a dock session: the daemon's own
-// environment, the terminal type the frontend's xterm expects, then the caller's
-// delta LAST so an account binding (CLAUDE_CONFIG_DIR) wins over anything the
-// daemon inherited — os/exec keeps the last occurrence of a duplicated key.
+// ptyEnv composes the child environment for a dock session: the caller's whole
+// environment (nil ⇒ the daemon's own) plus the terminal type the frontend's
+// xterm expects, appended last so it wins over anything inherited — os/exec
+// keeps the last occurrence of a duplicated key.
 //
-// A nil delta must leave the result byte-identical to what this line produced
+// A nil env must leave the result byte-identical to what this line produced
 // before the env parameter existed; that is what the term tests pin.
-func ptyEnv(extra []string) []string {
-	return append(append(os.Environ(), "TERM=xterm-256color"), extra...)
+func ptyEnv(env []string) []string {
+	if env == nil {
+		env = os.Environ()
+	}
+	return append(env[:len(env):len(env)], "TERM=xterm-256color")
 }
 
 func (osPTYStarter) start(shell, cwd string, env []string, cols, rows uint16) (ptyFile, process, error) {

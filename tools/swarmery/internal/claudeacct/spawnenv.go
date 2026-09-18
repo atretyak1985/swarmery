@@ -2,9 +2,9 @@ package claudeacct
 
 // The ONE place that composes the environment a swarmery-launched `claude` runs
 // under. Every spawn site — the five runcore engines, routines, improve,
-// retroanalysis, provision, the dashboard's resume, and `swarmery account exec`
-// — hands its base environment and the account key here and uses the result
-// verbatim. Before this file each site appended its own delta, and the secret
+// retroanalysis, provision, the dashboard's resume and terminal dock, and
+// `swarmery account exec` — hands its base environment and the account key here
+// and uses the result verbatim. Before this file each site appended its own delta, and the secret
 // store (secrets.go) reached only two of them while the README promised "same
 // store, same key" everywhere.
 //
@@ -35,12 +35,10 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
-// SpawnDelta is the env DELTA for one account key — EnvForAccount followed by
-// SecretEnvForAccount — for the one seam that must stay delta-shaped: the
-// terminal dock's PTY (internal/term.Manager.Start appends it after the daemon's
-// own environment). nil for "" and for the default account. Everything that
-// sets a child's whole environment uses SpawnEnv instead.
-func SpawnDelta(key string) []string {
+// spawnDelta is the env DELTA for one account key — EnvForAccount followed by
+// SecretEnvForAccount. nil for "" and for the default account. Unexported on
+// purpose: a delta cannot express "unset", so every seam goes through SpawnEnv.
+func spawnDelta(key string) []string {
 	return append(EnvForAccount(key), SecretEnvForAccount(key)...)
 }
 
@@ -56,7 +54,7 @@ func SpawnEnv(base []string, key string) []string {
 	if key == ingest.DefaultAccount {
 		return withoutKeys(base, map[string]struct{}{configDirEnv: {}})
 	}
-	delta := SpawnDelta(key)
+	delta := spawnDelta(key)
 	if len(delta) == 0 {
 		return base
 	}

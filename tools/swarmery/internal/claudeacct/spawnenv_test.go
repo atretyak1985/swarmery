@@ -93,17 +93,17 @@ func TestSpawnEnv_BoundAccountMergesConfigDirAndSecrets(t *testing.T) {
 	}
 }
 
-// SpawnDelta is the same two pieces, delta-shaped, for the PTY seam.
+// spawnDelta is the same two pieces, delta-shaped, before the merge.
 func TestSpawnDelta_ConfigDirThenSecrets(t *testing.T) {
 	fakeHome(t)
 	seedStore(t, "work", "MCP_TOKEN=abc\n", 0o600)
 	dir, _ := ConfigDirForAccount("work")
-	if got, want := SpawnDelta("work"), []string{configDirEnv + "=" + dir, "MCP_TOKEN=abc"}; !slices.Equal(got, want) {
-		t.Errorf("SpawnDelta(work) = %v, want %v", got, want)
+	if got, want := spawnDelta("work"), []string{configDirEnv + "=" + dir, "MCP_TOKEN=abc"}; !slices.Equal(got, want) {
+		t.Errorf("spawnDelta(work) = %v, want %v", got, want)
 	}
 	for _, key := range []string{"", "default"} {
-		if got := SpawnDelta(key); got != nil {
-			t.Errorf("SpawnDelta(%q) = %v, want nil", key, got)
+		if got := spawnDelta(key); got != nil {
+			t.Errorf("spawnDelta(%q) = %v, want nil", key, got)
 		}
 	}
 }
