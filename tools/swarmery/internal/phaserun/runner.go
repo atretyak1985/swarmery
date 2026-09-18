@@ -10,14 +10,16 @@ package phaserun
 //
 // Knobs (all optional):
 //   - SWARMERY_PHASERUN_MODEL   the FALLBACK model for a run whose request named
-//     none. The service reads it (one resolution site) and puts it on
+//     none AND whose phase doc declares no **Model:** header — the LAST rung before
+//     "no --model at all". The service reads it (one resolution site) and puts it on
 //     RunSpec.Model; the runner itself no longer touches the environment. It is
-//     passed as --model VERBATIM and is never validated — an operator pins a full
-//     ID here, including forms the dashboard's closed model set does not know
-//     (e.g. a "[1m]" context-window suffix), and validating it would silently
-//     drop every run back to the account default. Pin full model IDs, not
-//     aliases — aliases re-resolve over time. A model on the request outranks it;
-//     see Service.Start for the whole ladder.
+//     passed as --model VERBATIM and is never validated — unlike the two rungs above
+//     it, both checked against the dashboard's closed model set. An operator pins a
+//     full ID here, including forms that set does not know (e.g. a "[1m]"
+//     context-window suffix), and validating it would silently drop every run back
+//     to the account default. Pin full model IDs, not aliases — aliases re-resolve
+//     over time. A model on the request outranks it, and so does one declared by the
+//     phase doc; see Service.Start for the whole ladder.
 //   - SWARMERY_PHASERUN_TIMEOUT Go duration bounding one phase run (default 4h).
 //   - SWARMERY_PHASERUN_PERMISSION_MODE  --permission-mode for this site; see
 //     internal/claudeflags for the default and the measurements behind it. A
@@ -62,9 +64,10 @@ type RunSpec struct {
 	SettingsFile string
 
 	// Model is the already-resolved model for this run, passed as --model when
-	// non-empty. The service owns the ladder that fills it (request model →
-	// SWARMERY_PHASERUN_MODEL → nothing); the runner only forwards it, so ""
-	// means "emit no --model flag" and the run inherits the account default.
+	// non-empty. The service owns the ladder that fills it (request model → the
+	// phase doc's **Model:** → SWARMERY_PHASERUN_MODEL → nothing); the runner only
+	// forwards it, so "" means "emit no --model flag" and the run inherits the
+	// account default.
 	Model string
 
 	// ProjectPath is the phase's project — phaseInfo.ProjectPath (projects.path),
@@ -148,7 +151,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// verification command and cannot commit — and it still exits 0. See
 		// internal/claudeflags for the resolution and its escape hatch.
 		PermissionMode: claudeflags.Mode(permEnv),
-		// Already resolved by the service (request → env → none); "" emits no flag.
+		// Already resolved by the service (request → doc → env → none); "" emits no flag.
 		Model:        spec.Model,
 		SettingsFile: spec.SettingsFile,
 		// The account comes from spec.ProjectPath, never from Cwd: Cwd is the

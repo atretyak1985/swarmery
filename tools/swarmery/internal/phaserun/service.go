@@ -518,8 +518,9 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 		SettingsFile: repopath.InheritedSettings(info.ProjectPath, info.RepoRoot, acq.Path),
 		ProjectPath:  info.ProjectPath,
 		// The ladder, already walked by resolveModel at the top of Start: the
-		// request's model (validated) → SWARMERY_PHASERUN_MODEL (verbatim) → "",
-		// which emits no --model flag and inherits the account default.
+		// request's model (validated) → the phase DOC's **Model:** (validated) →
+		// SWARMERY_PHASERUN_MODEL (verbatim) → "", which emits no --model flag and
+		// inherits the account default.
 		Model: runModel,
 	}
 	if spec.SettingsFile != "" {
