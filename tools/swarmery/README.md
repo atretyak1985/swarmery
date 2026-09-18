@@ -27,6 +27,13 @@ make build          # snapshot docs → vite bundle → go:embed → single ./sw
 # or: make install  # deploy + launchd auto-start (see repo-root README)
 ```
 
+Under launchd the daemon starts with `PATH=/usr/bin:/bin:/usr/sbin:/sbin`. `serve`
+widens its own PATH once at boot with the tool dirs that exist on the machine
+(`~/.local/bin`, `~/.npm-global/bin`, `~/bin`, bun/cargo/volta/fnm, the newest nvm
+node, `~/.claude/local`, Homebrew, `/usr/local/bin`) so the `claude` it spawns can
+start `npx`/`uvx`-based MCP servers. `SWARMERY_SPAWN_PATH=/dir1:/dir2` (bake it
+into the plist like any other knob) prepends extra dirs verbatim.
+
 ## Backup & restore
 
 The daemon's operational database (`~/.swarmery/swarmery.db` by default — sessions,

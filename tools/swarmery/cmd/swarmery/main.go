@@ -66,6 +66,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/settingsoverlay"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/spawnpath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/staleness"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
@@ -1128,6 +1129,15 @@ func cmdServe(args []string) error {
 	log.SetOutput(logbuf.NewWriter(ring, "daemon", os.Stderr))
 	api.AttachLogRing(ring)
 	api.AttachUptime(bootStart)
+
+	// Under launchd PATH is /usr/bin:/bin:/usr/sbin:/sbin. `claude` itself is
+	// found by claudebin's probes, but the stdio MCP servers it then starts
+	// (`npx …`, `uvx …`) are resolved through the PATH it inherits — so without
+	// this every node/python MCP server fails in every daemon-spawned run.
+	// Widened once here, in-process; every spawn inherits it via os.Environ().
+	// Silent in an interactive shell where nothing is missing. See
+	// internal/spawnpath; SWARMERY_SPAWN_PATH prepends extra dirs verbatim.
+	spawnpath.Apply()
 	bootLog := logbuf.Tagged(slog.Default(), "boot")
 
 	migrateStart := time.Now()

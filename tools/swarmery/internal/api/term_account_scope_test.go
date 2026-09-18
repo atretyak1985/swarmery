@@ -28,10 +28,10 @@ func termAccountWSURL(srv *httptest.Server, account string) string {
 	return base + "/api/term/ws?account=" + url.QueryEscape(account)
 }
 
-// TestResolveTermAccount: the env delta comes from claudeacct.EnvForAccount
-// (CLAUDE_CONFIG_DIR for a named account, NOTHING for the default — absence
-// selects it), the cwd is the operator's home, and a malformed or unknown key
-// is refused before anything resolves.
+// TestResolveTermAccount: the env is claudeacct.SpawnEnv over the daemon's own
+// (exactly one CLAUDE_CONFIG_DIR for a named account, NONE for the default —
+// absence selects it), the cwd is the operator's home, and a malformed or
+// unknown key is refused before anything resolves.
 func TestResolveTermAccount(t *testing.T) {
 	unsetConfigDir(t)
 	home, dirs := attachHomeAccounts(t, ingest.DefaultAccount, "nabu-org")
@@ -43,16 +43,16 @@ func TestResolveTermAccount(t *testing.T) {
 	if cwd != home {
 		t.Errorf("cwd = %q, want the operator's home %q", cwd, home)
 	}
-	if want := []string{"CLAUDE_CONFIG_DIR=" + dirs["nabu-org"]}; !slices.Equal(env, want) {
-		t.Errorf("env = %v, want %v", env, want)
+	if want := []string{"CLAUDE_CONFIG_DIR=" + dirs["nabu-org"]}; !slices.Equal(termConfigDirs(env), want) {
+		t.Errorf("CLAUDE_CONFIG_DIR entries = %v, want %v", termConfigDirs(env), want)
 	}
 
 	cwd, env, ok = resolveTermAccount(ingest.DefaultAccount)
 	if !ok || cwd != home {
 		t.Fatalf("resolveTermAccount(default) = (%q, ok=%v), want home and ok", cwd, ok)
 	}
-	if env != nil {
-		t.Errorf("default account env = %v, want nil — absence of CLAUDE_CONFIG_DIR selects the default", env)
+	if got := termConfigDirs(env); len(got) != 0 {
+		t.Errorf("default account env carries %v, want none — absence of CLAUDE_CONFIG_DIR selects the default", got)
 	}
 
 	for _, key := range []string{"../evil", "a b", ".", ""} {
