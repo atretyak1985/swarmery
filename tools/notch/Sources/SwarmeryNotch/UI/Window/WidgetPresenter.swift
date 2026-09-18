@@ -27,6 +27,10 @@ public final class WidgetPresenter {
     private let viewState: WidgetViewState
     private var panel: WidgetPanel?
     private var geometry: WidgetWindowGeometry
+    /// Everything about the screen the current window frame was computed
+    /// against, so `refreshMetrics` can tell a real move from a no-op
+    /// notification.
+    private var snapshot: ScreenSnapshot?
 
     /// Mouse is inside the widget's window (hot strip, tab or panel).
     private var isHovering = false
@@ -54,6 +58,7 @@ public final class WidgetPresenter {
         self.actions = actions
         self.viewState = WidgetViewState(metrics: WidgetMetrics(screen: screen), placement: placement)
         self.geometry = WidgetWindowGeometry(placement: placement, edgeAnchorFromBottom: edgeAnchorFromBottom)
+        self.snapshot = ScreenSnapshot(screen: screen)
     }
 
     public var placement: WidgetPlacement { viewState.placement }
@@ -121,11 +126,25 @@ public final class WidgetPresenter {
         apply(target())
     }
 
+    /// Re-reads the screen after a `didChangeScreenParameters` and moves the
+    /// window if anything it is positioned against moved.
+    ///
+    /// Gated on `ScreenSnapshot`, NOT on `WidgetMetrics`: the right-edge
+    /// frame is computed from `visibleFrame`, which `WidgetMetrics` does not
+    /// carry, so a resolution change with an unchanged notch and menu bar
+    /// used to be swallowed here and leave the window at a frame computed for
+    /// the previous screen -- off the edge of the new one.
     public func refreshMetrics() {
         guard let screen else { return }
-        let fresh = WidgetMetrics(screen: screen)
-        guard fresh != viewState.metrics else { return }
-        viewState.metrics = fresh
+        let fresh = ScreenSnapshot(screen: screen)
+        guard fresh != snapshot else { return }
+        snapshot = fresh
+        viewState.metrics = fresh.metrics
+        // The cached content measurements were taken against the old screen;
+        // an expanded panel measured on a large display would otherwise be
+        // clamped to the small one and never re-measured, because a size that
+        // does not change reports no preference update.
+        geometry.forget()
         resizeWindow(for: viewState.presentation)
     }
 
