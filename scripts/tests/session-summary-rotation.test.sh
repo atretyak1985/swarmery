@@ -82,7 +82,7 @@ aged "$WS_ROOT/working/2026/01/01/old-task/metrics/session-x.jsonl" 40
   AGENT_WORKSPACE_ROOT="$TESTDIR/workspace-root" \
   CLAUDE_SESSION_TMP="$TMP_SANDBOX" \
   CLAUDE_PROJECT_DIR="$TESTDIR/project" \
-  bash "$HOOK"
+  "$HOOK"
 ) >/dev/null 2>&1
 hook_status=$?
 
@@ -186,7 +186,7 @@ mkdir -p "$NOWS_HOME" "$TESTDIR/nows-project"
     HOME="$NOWS_HOME" \
     CLAUDE_SESSION_TMP="$TMP_NOWS" \
     CLAUDE_PROJECT_DIR="$TESTDIR/nows-project" \
-    bash "$HOOK"
+    "$HOOK"
 ) >/dev/null 2>&1
 nows_status=$?
 
@@ -226,7 +226,7 @@ aged "$NOFILE_WS/logs/trace-nofile.jsonl"      40
   AGENT_WORKSPACE_ROOT="$TESTDIR/workspace-root" \
   CLAUDE_SESSION_TMP="$TMP_NOFILE" \
   CLAUDE_PROJECT_DIR="$TESTDIR/project" \
-  bash "$HOOK"
+  "$HOOK"
 ) >/dev/null 2>&1
 nofile_status=$?
 
@@ -259,7 +259,7 @@ aged "$TMP_EMPTY/claude-session-20260101.jsonl" 40
   AGENT_WORKSPACE_ROOT="$TESTDIR/workspace-root" \
   CLAUDE_SESSION_TMP="$TMP_EMPTY" \
   CLAUDE_PROJECT_DIR="$TESTDIR/project" \
-  bash "$HOOK"
+  "$HOOK"
 ) >/dev/null 2>&1
 empty_status=$?
 if [ "$empty_status" -eq 0 ]; then ok; else bad "hook exited $empty_status on an empty substrate file, want 0"; fi
