@@ -97,6 +97,11 @@ double-check your own notes.
 робиш це сам І записуєш рядок у `Blocked calls` звіту фази — інакше причина
 падіння делегування ніколи не буде виправлена.
 
+Кожне делегування, що відбулося, йде в поле `Delegation cost` звіту фази —
+по рядку на субагента, з wall-clock і (де платформа це повідомляє) вартістю;
+далі одне речення в `What would have made this cheaper`. Точне формулювання —
+`workspace-plans/resources/plan-format.md`.
+
 # Escalate, don't grind
 
 Stop and ask the user on: unresolved user-only questions, unmitigable

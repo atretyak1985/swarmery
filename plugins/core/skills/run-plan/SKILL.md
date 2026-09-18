@@ -27,9 +27,10 @@ never be delegated.
    immediately, never in a batch; unsatisfied criteria stay unticked.
 3. **Write the `## Completion Report`** into the phase doc itself — the only
    per-phase summary the platform surfaces; a `reports/` file is no substitute.
-   Its **Blocked calls** field is mandatory: which tool calls were refused or
-   failed and how you got around them, one line each, `none` when there were
-   none — omitting it is not the same as having nothing to report.
+   Three fields are mandatory and written out even when empty: **Blocked calls**,
+   **Delegation cost**, and the one-sentence **What would have made this
+   cheaper** — omitting one is not the same as having nothing to report. Exact
+   wording: `workspace-plans/resources/plan-format.md`.
 4. **Executors never commit** — commits, pushes, MRs, migrations, and deploys are
    ASK-gated controller business.
 5. **Never skip the re-review** after a fix dispatch; review the reconciled tree,

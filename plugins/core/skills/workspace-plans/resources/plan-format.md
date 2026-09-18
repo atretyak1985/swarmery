@@ -37,7 +37,7 @@ Status: Pending
 ## Goal
 ## Files to Create / Files to Modify
 ## Implementation Details
-## Copy-paste Agent Prompt
+## Copy-paste Agent Prompt   ← Verify block: file-backed commands only
 ## Dependencies
 ## Acceptance Criteria
 - [ ] {measurable criterion with its verification command}
@@ -50,6 +50,19 @@ branch, a "read first for conventions" file list, numbered tasks,
 verification commands, a TICK CONTRACT paragraph, and report-back
 instructions — executable without opening anything else.
 
+**Verification commands are file-backed.** Every command in a Verify block is
+either a project script/test invoked by **absolute path**, or a single tool
+invocation with its arguments. No `<<EOF` / `<<'PY'` heredoc, no `python3 -`,
+no `node -e`. If a check needs more than one line of logic, it is a file in
+the repo — `scripts/<name>.sh` or a test — committed with the phase, and the
+phase doc names that path.
+
+This removes three failure classes at once: `<stdin>` tracebacks that name no
+file, `eval: line N: unexpected EOF` from a delimiter broken by quoting, and
+`ERR_MODULE_NOT_FOUND` from a script that resolved its imports against the
+wrong root. A file has a path, a stack trace that points at it, and a second
+run that behaves the same way.
+
 **TICK CONTRACT paragraph** (place right before the report-back
 instructions): the platform renders this doc's status and checkboxes live. At
 phase start flip the `Status:` header to `In progress`. The moment a task's
@@ -59,17 +72,37 @@ workspace path otherwise); never hard-code an absolute path that points outside
 your root. Flip every Acceptance Criteria checkbox that task satisfies
 `- [ ]` → `- [x]` — one edit per completed task, immediately, never batched.
 When the phase's LAST checkbox is ticked, fill `## Completion Report` — what
-shipped, commits, verification output, deviations, blocked calls (≤50 lines); the platform
+shipped, commits, verification output, deviations, and the three mandatory
+fields below — blocked calls, delegation cost, and the one-sentence
+"what would have made this cheaper" (≤50 lines); the platform
 shows exactly that section as the phase summary. When the plan's final phase
 lands, also write `plan/SUMMARY.md` (objective, what shipped per phase,
 verification results, follow-ups) — the plan-level summary.
 
 Alongside what shipped, commits, verification output and deviations,
-`## Completion Report` carries one more mandatory field:
+`## Completion Report` carries three mandatory fields, in this order:
 
 > **Blocked calls** — which tool calls were refused or failed, and how you got
 > around them (or that you did not). One line each. An empty list is written as
 > "none" — omitting the field is not the same as having nothing to report.
+
+> **Delegation cost** — every subagent this phase dispatched, with its
+> wall-clock and (where the platform reports it) its dollar cost. One line each.
+> A phase that dispatched nothing writes "none" — omitting the field is not the
+> same as having nothing to report.
+
+> **What would have made this cheaper** — exactly one sentence. Not a retro, not
+> a list: the single change that would most have reduced the above. "Nothing, it
+> was already minimal" is a legitimate answer and must be written out rather than
+> left blank.
+
+The last two exist because of a measured window in which one task produced 7
+successful delegations and another 5 recorded **zero** lessons — because nothing
+was reworked, and expense on its own was not treated as a finding. They are what
+makes a phase that went well but cost too much still leave a trace. Keep both
+after `Blocked calls`, inside the same ≤50-line budget; the one-sentence limit on
+the second is load-bearing — an open-ended "lessons learned" section is what
+agents skip.
 
 The final phase of a multi-phase plan is always a quality gate
 (`kind: quality-gate`).

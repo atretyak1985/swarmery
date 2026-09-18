@@ -24,7 +24,9 @@ deviates from the format ships work the operator cannot see.
   the sequencing table with exactly these header cells:
   `| # | Phase | Doc | Depends on |`, risks, Definition of Done.
 - `plan/phase-N-<slug>.md` per phase (flat; `step-NN-*.md` is legacy
-  read-compat only) — each with a self-contained copy-paste executor prompt,
+  read-compat only) — each with a self-contained copy-paste executor prompt
+  whose Verify block is file-backed (a repo script or test by absolute path;
+  no heredoc, `python3 -` or `node -e` — see `resources/plan-format.md`),
   `- [ ]` acceptance criteria checkable by command or boolean inspection, and
   an empty `## Completion Report` section as the LAST section.
 - `plan/manifest.json` — machine-readable phase DAG (must pass
@@ -38,10 +40,12 @@ deviates from the format ships work the operator cannot see.
 Tick each satisfied criterion `- [ ]` → `- [x]` immediately after verifying
 it — progress is derived only from these checkboxes. When a phase's last
 criterion is ticked, fill that doc's `## Completion Report` (what shipped,
-files/commits, verification output, deviations, and a mandatory
-**Blocked calls** list — which tool calls were refused or failed and how you
-got around them, written as "none" when there were none; ≤50 lines) — the dashboard
-renders exactly that heading. Never tick unsatisfied criteria; never archive
+files/commits, verification output, deviations, plus three mandatory fields —
+**Blocked calls**, **Delegation cost**, and the one-sentence **What would have
+made this cheaper**; ≤50 lines) — the dashboard renders exactly that heading.
+Each of the three is written out even when empty ("none" / "Nothing, it was
+already minimal"); `resources/plan-format.md` carries their exact wording and
+is the source of truth. Never tick unsatisfied criteria; never archive
 with unmet criteria or a missing SUMMARY.md.
 
 Full field-by-field format, examples, and the manifest schema:
@@ -51,7 +55,7 @@ Full field-by-field format, examples, and the manifest schema:
 
 ## What it does
 
-Carries the exact workspace-plan format the dashboard ingests: README sequencing table, phase docs with executor prompts and checkbox criteria, manifest DAG, optional spec with SC coverage, and the tick/Completion Report duties for executors.
+Carries the exact workspace-plan format the dashboard ingests: README sequencing table, phase docs with file-backed-verification executor prompts and checkbox criteria, manifest DAG, optional spec with SC coverage, and the tick/Completion Report duties for executors — including the report's Blocked calls, Delegation cost and "what would have made this cheaper" fields.
 
 ## When to use it
 
@@ -63,4 +67,4 @@ The `@core:planner` and `@core:implementation-agent` agents list it in their `sk
 
 ## Worked example
 
-A planner writing `plan/phase-2-api.md` includes: `**Covers:** SC-3`, a prompt an executor can run cold, three `- [ ]` criteria each with a check command, and ends the doc with an empty `## Completion Report` section. The executor later ticks the boxes one by one and fills the report — the dashboard's phase Summary tab shows exactly that section.
+A planner writing `plan/phase-2-api.md` includes: `**Covers:** SC-3`, a prompt an executor can run cold whose Verify block names `scripts/check-api.sh` rather than inlining a heredoc, three `- [ ]` criteria each with a check command, and ends the doc with an empty `## Completion Report` section. The executor later ticks the boxes one by one and fills the report — Blocked calls, Delegation cost and the one-sentence cheaper field included — and the dashboard's phase Summary tab shows exactly that section.
