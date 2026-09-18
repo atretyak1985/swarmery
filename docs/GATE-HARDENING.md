@@ -35,20 +35,85 @@ anything.)
 
 | Rule | Hits | Sessions | False positives reviewed | Decision | Reviewed on |
 |---|---|---|---|---|---|
-| `heredoc` | not yet counted | not yet counted | not yet reviewed | stay in warn | — |
-| `multi-mutation` | not yet counted | not yet counted | not yet reviewed | stay in warn | — |
-| `sleep-before-read` | not yet counted | not yet counted | not yet reviewed | stay in warn | — |
-| `worktree-escape` | not yet counted | not yet counted | not yet reviewed | stay in warn | — |
-| `ambiguous-git` | not yet counted | not yet counted | not yet reviewed | stay in warn | — |
+| `heredoc` | 494 (483 in window) | 13 (11 in window) | 22 sampled + exhaustive machine scan → **2 false positives** ([review][fp-review]) | **stay in warn** — 2 > 0 | 2026-09-14 |
+| `multi-mutation` | 0 | 0 | n/a — never fired (≥53 hits masked, see below) | stay in warn | 2026-09-14 |
+| `sleep-before-read` | 0 | 0 | n/a — never fired | stay in warn | 2026-09-14 |
+| `worktree-escape` | 0 | 0 | n/a — never fired (≥4 hits masked, and blind to `.worktrees/`, see below) | stay in warn | 2026-09-14 |
+| `ambiguous-git` | 0 | 0 | n/a — never fired | stay in warn | 2026-09-14 |
+
+[fp-review]: `reports/heredoc-false-positive-review.md` in the consumer's private
+workspace task dir
+`<workspace>/<project>/workspace/working/2026/09/14/agent-friction-guards-hardening/`
+— the burn-in log lives with the project whose sessions produced it, so the
+review does too; this row is the repo-side record of what it found.
+
+Window read: 2026-09-01 → 2026-09-14, via
+`scripts/guard-hits.sh --from 2026-09-01 --to 2026-09-14`. Log spans
+2026-08-28 → 2026-09-14; every record is rule `heredoc`, decision `warn`.
+
+**What the first read found (2026-09-14).** The window is no longer empty. 494 decisions across 13
+sessions, from 2026-08-28 to 2026-09-14 — and every single one of them is `heredoc`. One rule
+accounts for the entire log, which is itself a finding: the other four were never reached, never
+applicable, or both. `heredoc` is a busy and mostly accurate rule with a narrow, reproducible
+defect, so it stays in `warn` until the defect is fixed and re-burned-in; the other four have no
+evidence to flip on.
+
+The period *before* the counter still has no honest number: the three older rules shipped in warn
+mode with their decisions going only to stderr, which reaches the model but is not durably
+queryable. Do not backfill these rows from transcripts — the window starts at the counter, and the
+counts above are exactly what it recorded. (Transcripts were read during the review, but only to
+recover the full text of individual commands the log truncates at 200 chars; no count in this table
+comes from them.)
+
+**Why `heredoc` stays in `warn` at 2 false positives out of 494.** Both are the
+same defect and both reproduce against the hook today: the regex at
+`bash-shape-guard.sh:142` matches any `<<` followed by a word, with no
+requirement that it opens a token or sits outside a quoted argument. So a
+bit-shift in inline code (`node -e '… const m=1<<b; …'`, a read-only bitmask
+decode) and a search string (`grep -n "…\|<<EOF\|…" <file>`, a read-only grep)
+are both refused as "this command writes file content through an inline
+heredoc", with advice to use `Write` — for commands that write nothing. Under
+`block` neither has any way to comply, and the second means an agent cannot grep
+a file for the string `<<EOF` at all. The rule is otherwise right: 492 of 494
+hits are genuine heredocs, and 62% of the log is `python3 - <<'PY'` doing
+`s.replace(old, new)` on one file — the `Edit` tool's job done the long way.
+Tighten the regex, add both refused commands as regression tests, re-burn-in,
+then fill a fresh row.
+
+### Zero hits is a measurement artefact here, not a clean bill of health
+
+Four rules read 0. None of that zero is evidence they are safe to flip:
+
+- **The `heredoc` rule fires first and `refuse()` exits.** It is the first rule
+  in the file (`:139`), so every later rule was unreachable on all 494 logged
+  commands. Replaying the whole log through a scratch copy of the hook with the
+  heredoc test disabled (the repo file untouched) yields **53 `multi-mutation`**
+  and **4 `worktree-escape`** hits — lower bounds, since the log truncates each
+  command at 200 chars (`LOG_CMD_MAX`). Those rows read 0 because they never got
+  to look, not because the shapes did not occur.
+- **`worktree-escape` cannot see a dot-prefixed worktree layout.** Its cwd test
+  at `:293` is `*/worktrees/*`, which needs a `/` immediately before
+  `worktrees`. A cwd of `<repo>/.worktrees/<tree>` does not match, so
+  `worktree_root` is never set and conservatism rule 2 ("no root ⇒ no opinion")
+  silences the rule — for 44 of the 494 records. `.claude/worktrees/` and
+  `.swarmery/worktrees/` do match; the blind spot is exactly the project-root
+  `.worktrees/` convention.
+- **`multi-mutation` is silent on read-only chains by construction.**
+  `is_mutating()` (`:178-211`) returns false for `git status`, `git log`,
+  `grep`, `ls`, so `git status --short; git log --oneline -5; grep -rn TODO src`
+  passes while `mkdir -p /tmp/x && touch /tmp/x/a` is caught. That is the
+  documented intent, but it means the rule does not cover the compound
+  *exploratory* shape the permission classifier also refuses, so its hit count
+  will always understate the friction the guard was built to remove.
+- **`sleep-before-read` and `ambiguous-git`** have no evidence either way — no
+  recorded hits and no structural reason found for or against. "Never fired" is
+  the honest statement; it is not "clean".
 
 `worktree-escape` and `ambiguous-git` are newer than the other three and start their own burn-in from
 scratch. Per-rule enforcement exists precisely so a new rule can burn in without the older ones
-waiting for it, and without it being dragged into blocking by them.
-
-**Why the counts are empty.** The counter shipped with this document; the burn-in window has not been
-read yet. The three rules shipped earlier in warn mode with their decisions going only to stderr,
-which reaches the model but is not durably queryable — so no honest number exists for the period
-before the counter. Do not backfill these rows from transcripts; start the window at the counter.
+waiting for it, and without it being dragged into blocking by them. Their first burn-in read
+(above) produced no hits for either — for `worktree-escape`, demonstrably because it could not see
+this project's worktrees rather than because none were escaped.
 
 ## Rules retired from this table
 
