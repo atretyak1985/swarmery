@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
-
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/systemspawn"
 )
 
 // Runner executes one improvement prompt and returns the model's raw stdout.
@@ -52,12 +49,6 @@ type ClaudeRunner struct {
 	Effort string
 }
 
-// isDir reports whether path exists and is a directory.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
-}
-
 func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	timeout := r.Timeout
 	if timeout <= 0 {
@@ -87,25 +78,10 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// unaffected. Keep the flag order identical to the extract twin (trajjudge
 	// matches minus --effort).
 	cmd := exec.CommandContext(ctx, bin, "-p", "--model", model, "--effort", effort, "--output-format", "text", "--setting-sources", "project,local")
-	// System home, not the inherited launchd cwd "/": transcripts then
-	// attribute to the deliberate "System" project (see internal/ingest).
-	// Only when it actually exists — a missing dir would fail the spawn with
-	// chdir ENOENT, and losing attribution beats not running at all (the
-	// daemon owns ~/.swarmery, so in production it is always there).
-	//
-	// ~/.swarmery is ALSO improve's own project for account resolution — it is
-	// itself a registered project (see internal/ingest), so SpawnEnvFor picks up
-	// whatever Claude account it is bound to (config dir AND secret store), the
-	// same composition every other spawn site in this program uses. Gated behind
-	// the SAME isDir check as cmd.Dir, deliberately: when the directory does not
-	// exist there is no project to resolve an account FOR, so cmd.Env must stay
-	// untouched too — a byte-identical spawn to before this feature existed.
-	if home, err := os.UserHomeDir(); err == nil {
-		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
-			cmd.Dir = dir
-			cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
-		}
-	}
+	// Cwd and account in one decision, both taken from the System project home:
+	// see internal/systemspawn for why they are inseparable and why a missing
+	// home means neither.
+	systemspawn.Attach(cmd)
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -1,12 +1,13 @@
 package claudeacct
 
 // The ONE place that composes the environment a swarmery-launched `claude` runs
-// under. Every spawn site — the five runcore engines, routines, improve,
-// retroanalysis, provision, the dashboard's resume and terminal dock, and
-// `swarmery account exec` — hands its base environment and the account key here
-// and uses the result verbatim. Before this file each site appended its own delta, and the secret
-// store (secrets.go) reached only two of them while the README promised "same
-// store, same key" everywhere.
+// under. Every spawn site — the five runcore engines, routines, provision, the
+// five System-project runners behind internal/systemspawn (improve,
+// retroanalysis, trajjudge, handoff, extract), the dashboard's resume and
+// terminal dock, and `swarmery account exec` — hands its base environment and
+// the account key here and uses the result verbatim. Before this file each site
+// appended its own delta, and the secret store (secrets.go) reached only two of
+// them while the README promised "same store, same key" everywhere.
 //
 // Three account states, three answers:
 //

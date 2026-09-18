@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/systemspawn"
 )
 
 // claudeTimeout bounds one headless handoff generation run.
@@ -28,12 +27,6 @@ type ClaudeRunner struct {
 	Timeout time.Duration
 	// Model pins the run; the caller always sets it (SWARMERY_HANDOFF_MODEL).
 	Model string
-}
-
-// isDir reports whether path exists and is a directory.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
 }
 
 func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
@@ -56,16 +49,10 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// stack) — headless runs don't need them; project plugins and OAuth are
 	// unaffected. Keep the flag order identical to the improve/trajjudge twins.
 	cmd := exec.CommandContext(ctx, bin, "-p", "--model", r.Model, "--output-format", "text", "--setting-sources", "project,local")
-	// System home, not the inherited launchd cwd "/": transcripts then attribute
-	// to the deliberate "System" project (see internal/ingest). Only when it
-	// actually exists — a missing dir would fail the spawn with chdir ENOENT, and
-	// losing attribution beats not running at all (the daemon owns ~/.swarmery,
-	// so in production it is always there). Twin of internal/improve.ClaudeRunner.
-	if home, err := os.UserHomeDir(); err == nil {
-		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
-			cmd.Dir = dir
-		}
-	}
+	// Cwd and account in one decision, both taken from the System project home:
+	// see internal/systemspawn for why they are inseparable and why a missing
+	// home means neither.
+	systemspawn.Attach(cmd)
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

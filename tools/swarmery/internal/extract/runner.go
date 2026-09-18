@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/systemspawn"
 )
 
 // Runner executes one extraction prompt and returns the model's raw stdout.
@@ -54,12 +53,6 @@ type ClaudeRunner struct {
 	Effort string
 }
 
-// isDir reports whether path exists and is a directory.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
-}
-
 func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	timeout := r.Timeout
 	if timeout <= 0 {
@@ -89,17 +82,13 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// unaffected. Keep the flag order identical to the improve twin (trajjudge
 	// matches minus --effort).
 	cmd := exec.CommandContext(ctx, bin, "-p", "--model", model, "--effort", effort, "--output-format", "text", "--setting-sources", "project,local")
-	// System home, not the inherited launchd cwd "/": transcripts then attribute
-	// to the deliberate "System" project (see internal/ingest) — which is also
-	// what keeps THIS run from capturing itself, since CaptureSkipReason refuses
-	// System-project sessions. Only when the dir actually exists: a missing dir
-	// would fail the spawn with chdir ENOENT, and losing attribution beats not
-	// running at all (the daemon owns ~/.swarmery, so in production it is there).
-	if home, err := os.UserHomeDir(); err == nil {
-		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
-			cmd.Dir = dir
-		}
-	}
+	// Cwd and account in one decision, both taken from the System project home:
+	// see internal/systemspawn for why they are inseparable and why a missing
+	// home means neither.
+	//
+	// Attributing to "System" is also what keeps THIS run from capturing itself,
+	// since CaptureSkipReason refuses System-project sessions.
+	systemspawn.Attach(cmd)
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

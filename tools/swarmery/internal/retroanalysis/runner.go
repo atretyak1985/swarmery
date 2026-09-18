@@ -10,15 +10,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
-
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/systemspawn"
 )
 
 // Runner executes one analysis prompt and returns the model's raw stdout.
@@ -86,19 +83,10 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// sites stay diffable at a glance.
 	cmd := exec.CommandContext(ctx, bin, "-p", "--model", model, "--effort", effort,
 		"--output-format", "text", "--setting-sources", "project,local")
-	// System home rather than the inherited launchd cwd "/": transcripts then
-	// attribute to the deliberate "System" project, and ~/.swarmery is itself a
-	// registered project, so the account binding resolves from it. Both are
-	// gated on the directory actually existing — a missing dir would fail the
-	// spawn with chdir ENOENT, and losing attribution beats not running.
-	if home, err := os.UserHomeDir(); err == nil {
-		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
-			cmd.Dir = dir
-			// Config dir AND secret store, the same composition every other
-			// swarmery spawn uses; "" is guarded inside SpawnEnvFor.
-			cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
-		}
-	}
+	// Cwd and account in one decision, both taken from the System project home:
+	// see internal/systemspawn for why they are inseparable and why a missing
+	// home means neither.
+	systemspawn.Attach(cmd)
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -111,12 +99,6 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 		return "", fmt.Errorf("claude -p: %w; stderr: %s", err, tail(stderr.String(), stderrTailBytes))
 	}
 	return stdout.String(), nil
-}
-
-// isDir reports whether path exists and is a directory.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
 }
 
 // tail returns the last ≤ n bytes of s, trimmed.
