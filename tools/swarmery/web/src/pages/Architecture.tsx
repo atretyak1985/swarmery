@@ -123,6 +123,15 @@ function ProvisionProgress({ provision }: { provision: ProvisionState }): JSX.El
   );
 }
 
+// Set on the map document's <html> while the pane is expanded to the viewport.
+// The map's own header — title, description, stack chips, analysed-at line — is
+// chrome the dashboard already carries in its header row, and in full-screen
+// it is exactly what sits between the reader and the content (the tabs, the
+// board, the modules & flows reader). EMBED_CSS keys on the attribute to hide
+// that block and keep only the search box, on a slim bar. An attribute rather
+// than a class so the rule can never collide with a class the artifact uses.
+const EXPANDED_ATTR = 'data-swarmery-expanded';
+
 // CSS pushed INTO the map document for as long as it is embedded here.
 //
 // WHY it lives dashboard-side and not in the generator's template
@@ -135,22 +144,34 @@ function ProvisionProgress({ provision }: { provision: ProvisionState }): JSX.El
 // where these rules must NOT apply — the map is the whole page there, keeps its
 // own theme toggle, and sizes against a real viewport.
 //
-// Scope is deliberately narrow. The artifact's internal layout already survives a
-// constrained height on its own: `body` is a flex column with `overflow:hidden`,
-// `#layout{flex:1;min-height:0}` and `#ref{flex:1;min-height:0;overflow:auto}`
-// give it a real min-height:0 chain, `#boardwrap{flex:1;overflow:auto}` and
-// `#side{overflow-y:auto}` scroll inside the frame, and `#tabs{flex:none}` is
-// pinned above them. So this patches only what standalone-vs-embedded actually
-// changes, and adds no rule that merely restates one the artifact already has.
+// Scope is deliberately narrow: only what standalone-vs-embedded actually
+// changes, and no rule that merely restates one the artifact already has. The
+// artifact's own layout is a pinned header + tab bar over panels that scroll
+// inside (`body{height:100vh;overflow:hidden}`, `#layout{flex:1;min-height:0}`,
+// `#ref{flex:1;min-height:0;overflow:auto}`, `#boardwrap{flex:1;overflow:auto}`,
+// `#side{overflow-y:auto}`). That layout is kept for the EXPANDED pane, where the
+// frame is the viewport, and replaced by ordinary document scrolling for the
+// collapsed pane — see the two rule groups keyed on EXPANDED_ATTR below.
 const EMBED_CSS = [
   // The map ships a standalone light/dark toggle; embedded it follows the app
   // theme (pushed as inline custom properties below), so the control is dead UI.
   '#theme{display:none}',
-  // The artifact sizes itself with `body{height:100vh}`. Inside an iframe that
-  // already resolves to the frame's height, so this changes nothing today — it
-  // re-anchors the body to its own box so the map cannot outgrow a frame whose
-  // height the embedder controls, whatever a future artifact does with `100vh`.
-  'html,body{height:100%;overflow:hidden}',
+  // Collapsed pane: the WHOLE document scrolls, header included. The artifact
+  // pins its header and tab bar (`body{height:100vh;overflow:hidden}`, the
+  // panels scroll inside) — right for a standalone window, but in a pane a
+  // third of the viewport tall the pinned title, description and stack chips
+  // ate most of the height and left the content a short strip scrolling under
+  // them. Letting <html> scroll turns the map into an ordinary page: the header
+  // scrolls away, and the board/reader take whatever height their content needs.
+  // `#ref` must stop scrolling itself or it would stay that same short strip.
+  `html:not([${EXPANDED_ATTR}]){overflow:auto}`,
+  `html:not([${EXPANDED_ATTR}]) body{height:auto;min-height:100%;overflow:visible}`,
+  `html:not([${EXPANDED_ATTR}]) #ref{overflow:visible}`,
+  // Expanded pane: the frame IS the viewport, so the artifact's pinned layout is
+  // the right one — re-anchored to 100% rather than `100vh` so the map cannot
+  // outgrow a frame whose height the embedder controls, whatever a future
+  // artifact does with `100vh`.
+  `html[${EXPANDED_ATTR}],html[${EXPANDED_ATTR}] body{height:100%;overflow:hidden}`,
   // `#inspector` is `position:fixed;bottom:20px;max-height:44vh`. Inside a frame
   // `vh` is already the PANE's height, so 44vh cannot overflow the bottom on its
   // own — the panel only becomes a problem when the pane is short, where 44% of
@@ -169,6 +190,12 @@ const EMBED_CSS = [
   // invisible. outline rather than border — a border would reflow the card and
   // move every edge the SVG has already routed.
   '.card.blast{outline:2px solid var(--accent);outline-offset:2px}',
+  // Expanded pane: drop the header's left block (see EXPANDED_ATTR) and pull the
+  // remaining search box onto a slim right-aligned bar. The header is
+  // `display:flex;justify-content:space-between` with exactly two children —
+  // the text block and `.head-right` — in every template version shipped.
+  `html[${EXPANDED_ATTR}] header>div:first-child{display:none}`,
+  `html[${EXPANDED_ATTR}] header{padding:8px 24px;justify-content:flex-end}`,
 ].join('');
 
 /** The one message the dashboard sends into the map iframe. */
@@ -195,6 +222,11 @@ function syncMapTheme(frame: HTMLIFrameElement, resolved: 'light' | 'dark'): voi
     // the artifact's own <style> earlier in the head without needing !important.
     doc.head.appendChild(style);
   }
+}
+
+/** Mirror the pane's expanded state into the map document (see EXPANDED_ATTR). */
+function syncExpanded(frame: HTMLIFrameElement, expanded: boolean): void {
+  frame.contentDocument?.documentElement.toggleAttribute(EXPANDED_ATTR, expanded);
 }
 
 /**
@@ -554,6 +586,12 @@ export function Architecture({
     pushHighlight();
   }, [pushHighlight]);
 
+  // Expanded state into the frame on every toggle; onLoad below covers a
+  // document that arrives while the pane is already expanded.
+  useEffect(() => {
+    if (frameRef.current !== null) syncExpanded(frameRef.current, expanded);
+  }, [expanded]);
+
   // Kick off a rebuild (or the scoped enable-and-build) and re-fetch — the
   // provision job lands as 'pending' in the feed, so the settle-poll below
   // takes over the progress display. Failures reuse the top ErrorBox.
@@ -751,11 +789,13 @@ export function Architecture({
                       : project.mapPath
                   }
                   title="Architecture map"
-                  // Theme AND highlight are re-pushed on load: a fresh document
-                  // has neither, and the selection may predate the frame.
-                  onLoad={() => {
+                  // Theme, highlight AND expanded state are re-pushed on load: a
+                  // fresh document has none of them, and all three may predate
+                  // the frame.
+                  onLoad={(e) => {
                     syncTheme();
                     pushHighlight();
+                    syncExpanded(e.currentTarget, expanded);
                   }}
                   // One class list for both states — the height comes from the
                   // flex parent, never from the viewport. The previous height was

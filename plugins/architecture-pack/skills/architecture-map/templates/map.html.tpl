@@ -33,7 +33,17 @@ h1{margin:0 0 4px;font-size:20px} #desc{margin:0 0 8px;color:var(--ink-dim);max-
 #layout{display:none;flex:1;min-height:0}
 #layout.on{display:flex}
 #boardwrap{flex:1;overflow:auto;padding:20px}
-#board{position:relative;display:flex;gap:28px;align-items:flex-start;min-width:max-content;padding-bottom:40px}
+/* Zoom. #board is scaled with a CSS transform (origin top-left); a transform
+   does not change layout, so #zoomwrap is sized to the scaled board by script
+   and is what #boardwrap actually scrolls. width:max-content (not min-width):
+   the board must keep its natural size whatever the wrapper's width is, or the
+   wrapper measuring the board would feed back into the board's own width. */
+#zoomwrap{position:relative}
+#board{position:relative;display:flex;gap:28px;align-items:flex-start;width:max-content;padding-bottom:40px;transform-origin:0 0}
+#zoomctl{display:flex;align-items:center;gap:2px;margin-left:auto}
+#zoomctl button{background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink-dim);cursor:pointer;font:600 11px var(--mono);padding:3px 8px;min-width:28px}
+#zoomctl button:hover{color:var(--ink);border-color:var(--flow)}
+#zoomctl #zoomlvl{min-width:48px;text-align:center}
 #edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .col{min-width:220px;max-width:250px}
 .col h3{margin:0 0 4px;font:600 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
@@ -82,6 +92,32 @@ h1{margin:0 0 4px;font-size:20px} #desc{margin:0 0 8px;color:var(--ink-dim);max-
 #ref th{color:var(--ink-faint);font-weight:600}
 #ref ul{margin:0;padding-left:18px;font-size:12px;color:var(--ink-dim)}
 #ref li{margin-bottom:4px}
+/* Reader tab. Board cards are capped at 250px so the SVG edges route between
+   columns; a 400-char responsibility then becomes a tall sliver, and reading
+   the whole map means scrolling every column top to bottom. The reader is the
+   same layers → modules → flows laid out to be READ: a grid of reading-width
+   entries that spends whatever width the frame has (full-screen included),
+   and every flow with its steps expanded instead of hidden behind a click. */
+.rd-layer{margin:0 0 28px}
+.rd-layer .ldesc{margin:-6px 0 12px;font-size:12.5px;line-height:1.5;color:var(--ink-dim);max-width:90ch}
+.rd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px}
+.rd-mod{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 14px;cursor:pointer;transition:border-color .15s,background .15s}
+.rd-mod:hover{border-color:var(--ink-faint)}
+.rd-mod.on{border-color:var(--flow);background:var(--card-on)}
+.rd-mod.blast{outline:2px solid var(--accent);outline-offset:2px}
+.rd-mod b{display:block;font-size:13.5px}
+.rd-mod .path{display:block;font:10.5px var(--mono);color:var(--ink-faint);word-break:break-all}
+.rd-mod p{margin:6px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-dim)}
+.rd-flow{border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-bottom:10px;max-width:110ch}
+.rd-flow.on{border-color:var(--flow)}
+.rd-flow>b{font-size:13.5px}
+.rd-flow>p{margin:4px 0 8px;font-size:12.5px;line-height:1.5;color:var(--ink-dim);max-width:90ch}
+.rd-flow ol{margin:0;padding-left:22px;font-size:12px;line-height:1.5;color:var(--ink)}
+.rd-flow li{margin-bottom:3px}
+.rd-flow li b{font:600 11px var(--mono)}
+.rd-flow li .file,.rd-flow li .payload{font:10.5px var(--mono);color:var(--ink-faint);word-break:break-all}
+.rd-show{float:right;margin-left:10px;background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink-dim);padding:3px 9px;cursor:pointer;font:11px var(--mono)}
+.rd-show:hover{color:var(--ink);border-color:var(--flow)}
 </style>
 </head>
 <body>
@@ -97,10 +133,16 @@ h1{margin:0 0 4px;font-size:20px} #desc{margin:0 0 8px;color:var(--ink-dim);max-
     <button id="theme" title="toggle theme">☾</button>
   </div>
 </header>
-<nav id="tabs" aria-label="map sections"></nav>
+<nav id="tabs" aria-label="map sections">
+  <div id="zoomctl" role="group" aria-label="diagram zoom" title="pinch on the trackpad, or ctrl/⌘ + scroll, to zoom the diagram">
+    <button type="button" id="zoomout" aria-label="zoom out">−</button>
+    <button type="button" id="zoomlvl" title="reset zoom">100%</button>
+    <button type="button" id="zoomin" aria-label="zoom in">+</button>
+  </div>
+</nav>
 <div id="layout" class="on">
   <main id="boardwrap">
-    <div id="board"><svg id="edges" aria-hidden="true"></svg></div>
+    <div id="zoomwrap"><div id="board"><svg id="edges" aria-hidden="true"></svg></div></div>
   </main>
   <aside id="side">
     <h2>Flows</h2>
@@ -120,6 +162,9 @@ const $ = (id) => document.getElementById(id);
 const board = $('board'), svg = $('edges');
 const modById = new Map(MAP.modules.map((m) => [m.id, m]));
 const cardEls = new Map();
+// Reader-tab entries keyed by module id — the same modules as cardEls, so
+// search, flow selection and the embedder's blast highlight address both.
+const readerEls = new Map();
 let activeFlow = null;
 
 // ---- header ----
@@ -177,17 +222,26 @@ function selectFlow(id) {
     el.classList.toggle('on', involved.has(mid));
     el.classList.toggle('dim', flow !== undefined && flow !== null && !involved.has(mid));
   }
+  for (const [mid, el] of readerEls) el.classList.toggle('on', involved.has(mid));
+  document.querySelectorAll('.rd-flow').forEach((el) => el.classList.toggle('on', el.dataset.id === id));
   draw();
 }
 
 // ---- search ----
 $('search').addEventListener('input', (e) => {
   const q = e.target.value.trim().toLowerCase();
+  const hits = (m) => q === '' || (m.name + ' ' + m.path + ' ' + m.responsibility).toLowerCase().includes(q);
   for (const [mid, el] of cardEls) {
-    const m = modById.get(mid);
-    const hit = q === '' || (m.name + ' ' + m.path + ' ' + m.responsibility).toLowerCase().includes(q);
-    el.classList.toggle('dim', q !== '' ? !hit : activeFlow !== null && !el.classList.contains('on'));
+    el.classList.toggle('dim', q !== '' ? !hits(modById.get(mid)) : activeFlow !== null && !el.classList.contains('on'));
   }
+  // The reader hides a miss outright: a dimmed entry in a grid is still a hole
+  // to scroll past, and the point of that tab is to read without scrolling.
+  for (const [mid, el] of readerEls) el.hidden = !hits(modById.get(mid));
+  // A layer whose every module missed is just a heading over nothing — hide it
+  // too, so a narrow query collapses the reader to only the layers that answer.
+  document.querySelectorAll('.rd-layer[data-layer]').forEach((el) => {
+    el.hidden = q !== '' && el.querySelector('.rd-mod:not([hidden])') === null;
+  });
   draw();
 });
 
@@ -207,8 +261,10 @@ document.body.addEventListener('click', () => { $('inspector').hidden = true; })
 
 // ---- edges ----
 function anchor(el, side) {
+  // Both rects are in screen space, i.e. already scaled by the zoom; the SVG
+  // sits inside the scaled board, so its coordinates are in unscaled board units.
   const b = el.getBoundingClientRect(), r = board.getBoundingClientRect();
-  return { x: (side === 'l' ? b.left : b.right) - r.left, y: b.top - r.top + b.height / 2 };
+  return { x: ((side === 'l' ? b.left : b.right) - r.left) / zoom, y: (b.top - r.top + b.height / 2) / zoom };
 }
 function curve(a, b) {
   const dx = Math.max(36, Math.abs(b.x - a.x) / 2);
@@ -222,6 +278,7 @@ function link(fromId, toId) {
   return curve(f, t);
 }
 function draw() {
+  sizeZoomWrap();
   svg.setAttribute('width', board.scrollWidth);
   svg.setAttribute('height', board.scrollHeight);
   svg.innerHTML = '';
@@ -250,6 +307,70 @@ function draw() {
     svg.appendChild(g);
   });
 }
+// ---- zoom ----
+// A trackpad pinch reaches the page as a wheel event with ctrlKey set (Chrome,
+// Firefox, Edge) or as gesture events (Safari) — both are handled, and while a
+// Safari gesture is in progress wheel events are ignored so a browser that
+// sends both cannot zoom twice. ⌘/ctrl + scroll works the same way for a mouse.
+// preventDefault is what keeps the pinch from zooming the whole page (or, when
+// this map is embedded, the page around it). Zoom is applied around the cursor:
+// the board point under it stays under it, by shifting the scroll position by
+// that point's displacement. Persisted, because the map is regenerated in place
+// and the reader's zoom should survive a rebuild.
+const ZOOM_MIN = 0.4, ZOOM_MAX = 2.5;
+const boardwrap = $('boardwrap'), zoomwrap = $('zoomwrap');
+let zoom = 1;
+function sizeZoomWrap() {
+  // A transform does not change layout: reserve the scaled size explicitly so
+  // #boardwrap scrolls exactly the zoomed board — no dead space, no clipping.
+  zoomwrap.style.width = zoom === 1 ? '' : board.offsetWidth * zoom + 'px';
+  zoomwrap.style.height = zoom === 1 ? '' : board.offsetHeight * zoom + 'px';
+}
+function setZoom(next, cx, cy) {
+  next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+  if (next === zoom) return;
+  const r = boardwrap.getBoundingClientRect();
+  if (cx === undefined) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+  // The board point under the focal point, in unscaled board units.
+  const z = zoomwrap.getBoundingClientRect();
+  const px = (cx - z.left) / zoom, py = (cy - z.top) / zoom;
+  const prev = zoom;
+  zoom = next;
+  board.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+  sizeZoomWrap();
+  // Keep that point under the cursor. Vertically the scroller may be the
+  // document rather than #boardwrap (an embedder can let the whole map page
+  // scroll), so whatever #boardwrap could not absorb goes to the window.
+  boardwrap.scrollLeft += px * (zoom - prev);
+  const dy = py * (zoom - prev), before = boardwrap.scrollTop;
+  boardwrap.scrollTop += dy;
+  const rest = dy - (boardwrap.scrollTop - before);
+  if (Math.abs(rest) > 0.5) window.scrollBy(0, rest);
+  $('zoomlvl').textContent = Math.round(zoom * 100) + '%';
+  try { localStorage.setItem('am-zoom', String(zoom)); } catch (_) { /* storage blocked */ }
+}
+let gesturing = false;
+boardwrap.addEventListener('wheel', (e) => {
+  if (gesturing || !(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  // A pinch arrives as many small deltas (a few px each); a mouse-wheel notch as
+  // one ~120px jump. The clamp caps a single event at ~1.5× so a notch steps
+  // rather than leaps, while the pinch stays smooth. exp() keeps in/out symmetric.
+  const d = Math.max(-40, Math.min(40, e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY));
+  setZoom(zoom * Math.exp(-d * 0.01), e.clientX, e.clientY);
+}, { passive: false });
+let gestureBase = 1;
+boardwrap.addEventListener('gesturestart', (e) => { e.preventDefault(); gesturing = true; gestureBase = zoom; });
+boardwrap.addEventListener('gesturechange', (e) => { e.preventDefault(); setZoom(gestureBase * e.scale, e.clientX, e.clientY); });
+boardwrap.addEventListener('gestureend', (e) => { e.preventDefault(); gesturing = false; });
+$('zoomin').addEventListener('click', () => setZoom(zoom * 1.2));
+$('zoomout').addEventListener('click', () => setZoom(zoom / 1.2));
+$('zoomlvl').addEventListener('click', () => setZoom(1));
+try {
+  const savedZoom = parseFloat(localStorage.getItem('am-zoom'));
+  if (Number.isFinite(savedZoom) && savedZoom > 0) setZoom(savedZoom);
+} catch (_) { /* storage blocked */ }
+
 let raf = 0;
 window.addEventListener('resize', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); });
 requestAnimationFrame(draw);
@@ -266,11 +387,32 @@ $('theme').addEventListener('click', () => {
 });
 function syncThemeGlyph() { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☾'; }
 
-// ---- reference tabs (diagram / APIs / database / external services / notes) ----
+// ---- reference tabs (diagram / modules & flows / APIs / database / external services / notes) ----
 // Each reference section is a full-height tab panel instead of an accordion
 // below the board — no long page scroll; only tabs with content are rendered.
 (function renderRef() {
   const sections = [];
+
+  // Modules & flows: the board's content at reading width (see the .rd-* CSS
+  // for why the board itself cannot be that). Always rendered — a map with no
+  // modules is not a map. Clicking an entry opens the same inspector as a
+  // board card; "show on diagram" jumps to the board with that flow selected.
+  const layers = [...MAP.layers].sort((a, b) => a.order - b.order);
+  const readerHtml = layers.map((layer) => {
+    const mods = MAP.modules.filter((m) => m.layer === layer.id);
+    return `<div class="rd-layer" data-layer="${esc(layer.id)}"><h2>${esc(layer.name)}</h2><p class="ldesc">${esc(layer.description || '')}</p><div class="rd-grid">` +
+      mods.map((m) => `<div class="rd-mod" data-id="${esc(m.id)}"><b>${esc(m.name)}</b><span class="path">${esc(m.path)}</span><p>${esc(m.responsibility)}</p></div>`).join('') +
+      '</div></div>';
+  }).join('') + (MAP.flows.length
+    ? '<div class="rd-layer"><h2>Flows</h2>' + MAP.flows.map((f) =>
+        `<div class="rd-flow" data-id="${esc(f.id)}"><button type="button" class="rd-show" data-id="${esc(f.id)}">show on diagram</button><b>${esc(f.name)}</b><p>${esc(f.description)}</p><ol>` +
+        f.steps.map((s) => `<li><b>${esc(name(s.from))} → ${esc(name(s.to))}</b> ${esc(s.action)}` +
+          (s.file ? ` <span class="file">${esc(s.file)}</span>` : '') +
+          (s.payload ? ` <span class="payload">⇢ ${esc(s.payload)}</span>` : '') + '</li>').join('') +
+        '</ol></div>').join('') + '</div>'
+    : '');
+  sections.push({ id: 'reader', label: `Modules & flows (${MAP.modules.length} · ${MAP.flows.length})`, html: readerHtml });
+
   if ((MAP.apis || []).length) {
     sections.push({ id: 'apis', label: `API endpoints (${MAP.apis.length})`,
       html: `<table><tr><th>Method</th><th>Path</th><th>Handler</th><th>Description</th></tr>` +
@@ -303,10 +445,18 @@ function syncThemeGlyph() { $('theme').textContent = document.documentElement.da
 
   const ref = $('ref');
   ref.innerHTML = sections.map((s) => `<section class="refsec" data-tab="${s.id}">${s.html}</section>`).join('');
+  ref.querySelectorAll('.rd-mod').forEach((el) => {
+    readerEls.set(el.dataset.id, el);
+    el.addEventListener('click', (e) => { e.stopPropagation(); inspect(modById.get(el.dataset.id)); });
+  });
+  ref.querySelectorAll('.rd-show').forEach((btn) => {
+    btn.addEventListener('click', () => { selectTab('board'); selectFlow(btn.dataset.id); });
+  });
 
   const tabs = [{ id: 'board', label: 'Diagram' }, ...sections];
   const bar = $('tabs');
-  bar.innerHTML = tabs.map((t) => `<button class="tab${t.id === 'board' ? ' on' : ''}" data-tab="${t.id}">${esc(t.label)}</button>`).join('');
+  // Inserted before the static #zoomctl rather than replacing the bar's content.
+  bar.insertAdjacentHTML('afterbegin', tabs.map((t) => `<button class="tab${t.id === 'board' ? ' on' : ''}" data-tab="${t.id}">${esc(t.label)}</button>`).join(''));
   bar.addEventListener('click', (e) => {
     const btn = e.target.closest('.tab');
     if (btn) selectTab(btn.dataset.tab);
@@ -319,6 +469,7 @@ function syncThemeGlyph() { $('theme').textContent = document.documentElement.da
     ref.classList.toggle('on', !onBoard);
     ref.querySelectorAll('.refsec').forEach((el) => el.classList.toggle('on', el.dataset.tab === id));
     $('inspector').hidden = true;
+    $('zoomctl').hidden = !onBoard;
     // Edges are sized from getBoundingClientRect — zero while the board is
     // display:none, so redraw after it is visible again.
     if (onBoard) requestAnimationFrame(draw);
@@ -341,6 +492,7 @@ window.addEventListener('message', (e) => {
   if (!d || d.type !== 'swarmery:highlight') return;
   const wanted = new Set(Array.isArray(d.moduleIds) ? d.moduleIds : []);
   for (const [mid, el] of cardEls) el.classList.toggle('blast', wanted.has(mid));
+  for (const [mid, el] of readerEls) el.classList.toggle('blast', wanted.has(mid));
 });
 
 function name(id) { const m = modById.get(id); return m ? m.name : id; }

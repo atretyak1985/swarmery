@@ -189,7 +189,7 @@ architecture-out/architecture-map.json
 architecture-out/architecture-map.html
 ```
 
-Open the HTML file in a browser to walk the layers left to right and step through each flow with its file anchors.
+Open the HTML file in a browser to walk the layers left to right (pinch on the trackpad, or ctrl/⌘ + scroll, zooms the diagram around the cursor) and step through each flow with its file anchors, or switch to the "Modules & flows" tab to read every module and flow at reading width.
 
 ## Related
 
