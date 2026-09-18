@@ -9,8 +9,15 @@ package phaserun
 // stub-testable.
 //
 // Knobs (all optional):
-//   - SWARMERY_PHASERUN_MODEL   passed as --model verbatim; unset ⇒ the account
-//     default. Pin full model IDs, not aliases — aliases re-resolve over time.
+//   - SWARMERY_PHASERUN_MODEL   the FALLBACK model for a run whose request named
+//     none. The service reads it (one resolution site) and puts it on
+//     RunSpec.Model; the runner itself no longer touches the environment. It is
+//     passed as --model VERBATIM and is never validated — an operator pins a full
+//     ID here, including forms the dashboard's closed model set does not know
+//     (e.g. a "[1m]" context-window suffix), and validating it would silently
+//     drop every run back to the account default. Pin full model IDs, not
+//     aliases — aliases re-resolve over time. A model on the request outranks it;
+//     see Service.Start for the whole ladder.
 //   - SWARMERY_PHASERUN_TIMEOUT Go duration bounding one phase run (default 4h).
 //   - SWARMERY_PHASERUN_PERMISSION_MODE  --permission-mode for this site; see
 //     internal/claudeflags for the default and the measurements behind it. A
@@ -54,6 +61,12 @@ type RunSpec struct {
 	// permissions and additionalDirectories.
 	SettingsFile string
 
+	// Model is the already-resolved model for this run, passed as --model when
+	// non-empty. The service owns the ladder that fills it (request model →
+	// SWARMERY_PHASERUN_MODEL → nothing); the runner only forwards it, so ""
+	// means "emit no --model flag" and the run inherits the account default.
+	Model string
+
 	// ProjectPath is the phase's project — phaseInfo.ProjectPath (projects.path),
 	// the SAME value SettingsFile is derived from. Used ONLY to resolve the
 	// Claude account this run must execute under: Cwd is the acquired
@@ -82,7 +95,9 @@ type Run struct {
 // bounded default well under the whole plan's 8h.
 const phaseRunTimeout = 4 * time.Hour
 
-// Env knobs — see the file header.
+// Env knobs — see the file header. modelEnv is read by the SERVICE (Start), not
+// here: the ladder has one resolution site, so it stays testable without a
+// t.Setenv reaching into the spawn.
 const (
 	modelEnv   = "SWARMERY_PHASERUN_MODEL"
 	timeoutEnv = "SWARMERY_PHASERUN_TIMEOUT"
@@ -116,8 +131,9 @@ type ClaudeRunner struct {
 // Run. Everything shared — the argv, the account env merge, the process group,
 // the drain that must finish before the service removes the worktree, the exit
 // ladder — lives in internal/runcore; what stays here is the phase run's own
-// policy: its timeout window, its three env knobs, and the settings file it lends
-// a worktree that cannot discover the project's own.
+// policy: its timeout window, its two env knobs, the model the service already
+// resolved, and the settings file it lends a worktree that cannot discover the
+// project's own.
 func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	timeout := r.Timeout
 	if timeout <= 0 {
@@ -132,8 +148,9 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// verification command and cannot commit — and it still exits 0. See
 		// internal/claudeflags for the resolution and its escape hatch.
 		PermissionMode: claudeflags.Mode(permEnv),
-		Model:          strings.TrimSpace(os.Getenv(modelEnv)),
-		SettingsFile:   spec.SettingsFile,
+		// Already resolved by the service (request → env → none); "" emits no flag.
+		Model:        spec.Model,
+		SettingsFile: spec.SettingsFile,
 		// The account comes from spec.ProjectPath, never from Cwd: Cwd is the
 		// phase's acquired worktree, which has no .claude/settings.local.json of its
 		// own, so resolving it there would silently run the phase under the default

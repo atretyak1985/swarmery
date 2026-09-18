@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -255,12 +256,46 @@ func (s *Service) runRoot(info phaseInfo) (string, error) {
 	return resolve(info.ProjectPath, cells...)
 }
 
+// resolveModel walks the phase-run model ladder and returns what reaches
+// --model ("" ⇒ no flag at all, today's behaviour).
+//
+//  1. an operator choice on the request — VALIDATED through planning.ResolveModel,
+//     so a typo is a 400 before anything is acquired or stamped;
+//  2. otherwise SWARMERY_PHASERUN_MODEL — passed through VERBATIM, deliberately
+//     unvalidated. The env knob is pinned by whoever runs the daemon and legitimately
+//     holds full IDs outside planning.Models (a "[1m]" context-window suffix, say);
+//     routing it through the validator would reject it and silently drop every phase
+//     run back to the account default — the exact failure this ladder exists to remove;
+//  3. otherwise "" — no --model flag.
+func resolveModel(choice string) (string, error) {
+	if strings.TrimSpace(choice) != "" {
+		id, err := planning.ResolveModel(choice)
+		if err != nil {
+			// planning.ResolveModel already wraps ErrUnknownModel, so errors.Is
+			// still matches through this second wrap at the api layer.
+			return "", fmt.Errorf("phase run model: %w", err)
+		}
+		return id, nil
+	}
+	return strings.TrimSpace(os.Getenv(modelEnv)), nil
+}
+
 // Start admits a run for a phase: gates (single-flight, deps, doc, path), then
 // acquires a worktree, stamps run_state='running', and spawns the headless
 // executor. Returns the pre-generated session uuid so the caller answers 202
 // immediately. The run's own goroutine owns exit stamping, worktree removal
 // (branch kept), and slot release.
-func (s *Service) Start(phaseID int64) (sessionUUID string, err error) {
+//
+// model is the operator's choice for THIS run ("" = none); resolveModel below
+// owns the ladder and is applied first, so a bad model costs nothing.
+func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err error) {
+	// BEFORE loadPhase, before the single-flight slot, before any row is stamped:
+	// an unknown model is an admission verdict and must leave no trace — no
+	// worktree acquired, no run_state='running' to clean up.
+	runModel, err := resolveModel(model)
+	if err != nil {
+		return "", err
+	}
 	info, err := s.loadPhase(phaseID)
 	if err != nil {
 		return "", err
@@ -432,6 +467,10 @@ func (s *Service) Start(phaseID int64) (sessionUUID string, err error) {
 		Cwd:          acq.Path,
 		SettingsFile: repopath.InheritedSettings(info.ProjectPath, info.RepoRoot, acq.Path),
 		ProjectPath:  info.ProjectPath,
+		// The ladder, already walked by resolveModel at the top of Start: the
+		// request's model (validated) → SWARMERY_PHASERUN_MODEL (verbatim) → "",
+		// which emits no --model flag and inherits the account default.
+		Model: runModel,
 	}
 	if spec.SettingsFile != "" {
 		log.Printf("phaserun: phase=%d inheriting project settings %s (worktree is a checkout of %s)",

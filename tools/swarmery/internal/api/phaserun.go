@@ -21,7 +21,9 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -29,6 +31,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -99,12 +102,17 @@ func (h *Handler) parsePhaseRunParams(w http.ResponseWriter, r *http.Request) (p
 	return phaseID, true
 }
 
-// runPhase — POST /api/epics/{taskId}/phases/{phaseId}/run. requireLocalOrigin.
-// 202 {status:"running", sessionUuid}; 404 unknown phase; 409 already running /
-// unmet deps (body names them) / unreadable doc / pathless project / any branch
-// sentinel; 503 not attached. EVERY 409 carries a `code` (see runconflict.go)
-// alongside its pre-existing fields, so the client discriminates on one stable
-// value instead of sniffing which fields happen to be present.
+// runPhase — POST /api/epics/{taskId}/phases/{phaseId}/run [{model?}].
+// requireLocalOrigin. 202 {status:"running", sessionUuid}; 400 unknown model;
+// 404 unknown phase; 409 already running / unmet deps (body names them) /
+// unreadable doc / pathless project / any branch sentinel; 503 not attached.
+// EVERY 409 carries a `code` (see runconflict.go) alongside its pre-existing
+// fields, so the client discriminates on one stable value instead of sniffing
+// which fields happen to be present.
+//
+// The body is OPTIONAL: `model` is a planning.Models short name or full ID that
+// overrides SWARMERY_PHASERUN_MODEL for this run, and an absent or empty body
+// (every caller before this endpoint grew one) runs exactly as it always did.
 func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	if phaserunSvc == nil {
 		writeClientErr(w, http.StatusServiceUnavailable, "phase runs not attached")
@@ -114,7 +122,18 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	uuid, err := phaserunSvc.Start(phaseID)
+	// An optional body, mirroring startPlanning's shape. io.EOF is what the decoder
+	// reports for the no-body POST the run button has always sent, so it is not an
+	// error here — only malformed JSON is.
+	var body struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	uuid, err := phaserunSvc.Start(phaseID, body.Model)
 	var depsErr *phaserun.DepsUnmetError
 	var dirtyErr *phaserun.BranchDirtyError
 	var noSlot *runcore.NoSlotError
@@ -124,6 +143,11 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	// unreachable, which no body assertion would ever reveal.
 	wtCode, wtMsg, isWtConflict := worktreeConflict(err)
 	switch {
+	// The only 400 on this path, and the only model arm: the request named a model
+	// outside planning.Models. Nothing was started — Start resolves before it
+	// acquires or stamps anything.
+	case errors.Is(err, planning.ErrUnknownModel):
+		writeClientErr(w, http.StatusBadRequest, "unknown model: choose one of opus, sonnet, fable")
 	case errors.Is(err, phaserun.ErrPhaseNotFound):
 		writeClientErr(w, http.StatusNotFound, "phase not found")
 	case errors.Is(err, phaserun.ErrRunning):

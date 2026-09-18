@@ -24,10 +24,12 @@ import (
 type phaseStubRunner struct {
 	mu    sync.Mutex
 	block chan struct{}
+	specs []phaserun.RunSpec // every spec the service dispatched, in order
 }
 
 func (r *phaseStubRunner) Start(ctx context.Context, spec phaserun.RunSpec) (*phaserun.Run, error) {
 	r.mu.Lock()
+	r.specs = append(r.specs, spec)
 	block := r.block
 	r.mu.Unlock()
 	if block != nil {
@@ -162,6 +164,25 @@ func postPhase(t *testing.T, url string) *http.Response {
 	}
 	t.Cleanup(func() { resp.Body.Close() })
 	return resp
+}
+
+// postPhaseBody is postPhase with a request body — the optional {model} payload.
+func postPhaseBody(t *testing.T, url, body string) *http.Response {
+	t.Helper()
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	return resp
+}
+
+// dispatchedSpecs is the runner-side seam: what the service actually handed the
+// spawn, which is where a rejected run must leave nothing.
+func (r *phaseStubRunner) dispatchedSpecs() []phaserun.RunSpec {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]phaserun.RunSpec(nil), r.specs...)
 }
 
 func phaseRunURL(srv *httptest.Server, taskID, phaseID int64) string {

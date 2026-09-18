@@ -67,7 +67,7 @@ func TestStartPersistsRunStartPoint(t *testing.T) {
 	wt := &stubWt{startPoint: "deadbeef123"}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	sp := phaseStartPoint(t, db, p1)
@@ -94,7 +94,7 @@ func TestVerifyRunsBeforeWorktreeRemoval(t *testing.T) {
 	wt.onRemove = func() { order = append(order, "remove") }
 	s.Verify = v
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	// Go is synchronous in the harness, so the run goroutine (and its defer) is done.
@@ -120,7 +120,7 @@ func TestVerifyRequestCarriesTheRunsFacts(t *testing.T) {
 	v := &stubVerifier{}
 	s.Verify = v
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	calls := v.calls()
@@ -165,7 +165,7 @@ func TestVerifySkippedWhenDocDidNotOptIn(t *testing.T) {
 	v := &stubVerifier{}
 	s.Verify = v
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if n := len(v.calls()); n != 0 {
@@ -196,7 +196,7 @@ func TestVerifySkippedWhenRunDidNotEndCleanly(t *testing.T) {
 			v := &stubVerifier{}
 			s.Verify = v
 
-			if _, err := s.Start(p1); err != nil {
+			if _, err := s.Start(p1, ""); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 			if state, _, _, _ := phaseRow(t, db, p1); state != "failed" {
@@ -218,7 +218,7 @@ func TestVerifyErrorDoesNotFailTheRun(t *testing.T) {
 	setVerifyMode(t, db, p1, "normal")
 	s.Verify = &stubVerifier{err: errors.New("verifier could not start")}
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if state, _, _, runErr := phaseRow(t, db, p1); state != "done" || runErr.Valid {
@@ -238,7 +238,7 @@ func TestVerifyNotWiredIsSilent(t *testing.T) {
 	setVerifyMode(t, db, p1, "strict")
 	s.Verify = nil
 
-	if _, err := s.Start(p1); err != nil {
+	if _, err := s.Start(p1, ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if state, _, _, _ := phaseRow(t, db, p1); state != "done" {

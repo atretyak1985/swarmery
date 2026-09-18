@@ -34,7 +34,10 @@ func fakeClaude(t *testing.T, argFile, stderr string, code int) {
 func TestClaudeRunner_Start_DefaultNoModelFlag(t *testing.T) {
 	argFile := filepath.Join(t.TempDir(), "args")
 	fakeClaude(t, argFile, "", 0)
-	t.Setenv(modelEnv, "") // account default — no --model
+	// Deliberately SET: the runner no longer reads the environment (the service
+	// resolves the ladder and fills RunSpec.Model), so an env value with an empty
+	// spec must still produce no --model flag.
+	t.Setenv(modelEnv, "claude-opus-5")
 	t.Setenv(permEnv, "")
 	t.Setenv(claudeflags.ModeEnv, "")
 
@@ -71,14 +74,16 @@ func TestClaudeRunner_Start_DefaultNoModelFlag(t *testing.T) {
 	}
 }
 
-func TestClaudeRunner_Start_ModelEnvOverride(t *testing.T) {
+// A model on the spec — whatever rung of the ladder put it there — reaches
+// --model. The ladder itself is pinned service-side in model_test.go.
+func TestClaudeRunner_Start_ModelFromSpec(t *testing.T) {
 	argFile := filepath.Join(t.TempDir(), "args")
 	fakeClaude(t, argFile, "", 0)
-	t.Setenv(modelEnv, "claude-opus-5")
+	t.Setenv(modelEnv, "") // proves the flag comes from the spec, not the env
 
 	r := ClaudeRunner{Timeout: 30 * time.Second}
 	if _, err := r.Start(context.Background(), RunSpec{
-		Prompt: "p", SessionUUID: "u2", Cwd: t.TempDir(),
+		Prompt: "p", SessionUUID: "u2", Cwd: t.TempDir(), Model: "claude-opus-5",
 	}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -261,11 +266,12 @@ func TestClaudeRunner_Start_FullArgvPin(t *testing.T) {
 	fakeClaude(t, argFile, "", 0)
 	t.Setenv(claudeflags.ModeEnv, "")
 	t.Setenv(permEnv, "acceptEdits")
-	t.Setenv(modelEnv, "claude-opus-5")
+	t.Setenv(modelEnv, "")
 	settings := filepath.Join(t.TempDir(), "settings.json")
 
 	if _, err := r0().Start(context.Background(), RunSpec{
 		Prompt: "execute phase", SessionUUID: "u-full", Cwd: t.TempDir(), SettingsFile: settings,
+		Model: "claude-opus-5",
 	}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
