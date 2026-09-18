@@ -30,9 +30,9 @@
 //	                                                    acceptance (skips adopted)
 //	memory      R10    none — the rule re-reads the     none: notification only. The
 //	project     R7     world every pass, so a fixed     baseline still snapshots the
-//	session     R8 R9  condition simply stops firing    metric where one exists (R10),
-//	                   and resolveVanished closes it    but verify() never selects
-//	                                                    these kinds.
+//	session     R8 R9  condition simply stops firing    metric where one exists (R10,
+//	skill       R11    and resolveVanished closes it    R11), but verify() never
+//	                                                    selects these kinds.
 //
 // Verification never fires on absence of data: each metric carries an
 // activity floor (R1 ≥1 tool call, R2 ≥R2MinRuns runs, R4 ≥R4MinRows ledger
@@ -148,6 +148,7 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 		{"R8", func() ([]finding, error) { return r8TrajectoryAntiPatterns(db, win) }},
 		{"R9", func() ([]finding, error) { return r9FatSessions(db, win) }},
 		{"R10", func() ([]finding, error) { return r10MemoryIndex(db, win) }},
+		{"R11", func() ([]finding, error) { return r11RecurringLesson(db, win) }},
 	}
 	// fired records every (rule, target) this pass produced, so the sweep below
 	// can tell "the condition is gone" from "the rule never ran".
@@ -975,6 +976,15 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 			return "memory_index_closed_share", 0, false, nil
 		}
 		return "memory_index_closed_share", st.ClosedShare, true, nil
+	case "R11":
+		// R11 (a lesson re-learned across tasks) counts DISTINCT tasks carrying
+		// the lesson identity inside the window. Lower is better — a lesson that
+		// got absorbed into a procedure stops being re-learned and the windowed
+		// count falls. Not normalized per day: it is a distinct-entity count over
+		// a fixed-length window, not an event rate, and BaselineFor and verify
+		// always use windows of the same length (WindowDays).
+		v, ok, verr := lessonTaskCount(db, target, win)
+		return "lesson_task_count", v, ok, verr
 	default:
 		return "", 0, false, fmt.Errorf("unknown rule %q", rule)
 	}

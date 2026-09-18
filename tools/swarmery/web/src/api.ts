@@ -82,6 +82,7 @@ import type {
   RemoveAccountResponse,
   RetroAgentsResp,
   RetroFrictionResp,
+  RetroLessonGroupsResp,
   RetroLessonsResp,
   RetroAnalysis,
   RetroAnalysisResp,
@@ -712,6 +713,16 @@ export function fetchRetroFriction(range: AnalyticsRange = {}): Promise<RetroFri
 export function fetchRetroLessons(range: AnalyticsRange = {}): Promise<RetroLessonsResp> {
   if (MOCK) return mockApi.retroLessons();
   return get(`/api/retro/lessons?${rangeQuery(range, {})}`);
+}
+
+/**
+ * The same window folded by lesson identity (agent-memory phase 4): one row per
+ * `norm_title` with the tasks that learned it. Same endpoint, same filters —
+ * `?group=1` only changes the question, so the two views can never drift apart.
+ */
+export function fetchRetroLessonGroups(range: AnalyticsRange = {}): Promise<RetroLessonGroupsResp> {
+  if (MOCK) return mockApi.retroLessonGroups();
+  return get(`/api/retro/lessons?group=1&${rangeQuery(range, {})}`);
 }
 
 /** Estimation accuracy + loop/delegation counts per task (retro phase 2). */

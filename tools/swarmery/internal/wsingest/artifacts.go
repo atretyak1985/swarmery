@@ -290,10 +290,16 @@ func (s *Scanner) applyRetro(tx *sql.Tx, taskID int64, text string) error {
 		return err
 	}
 	for _, l := range doc.lessons {
+		// norm_title (migration 0069) is the lesson's cross-task identity: the
+		// rows themselves are replaced wholesale on every rescan, so it is the
+		// only thing that survives to say "this is the same lesson again".
+		// Written HERE, on the insert, so a lesson is groupable the moment it is
+		// ingested — BackfillNormTitles only ever has to catch pre-0069 history.
 		if _, err := tx.Exec(`
-			INSERT INTO retro_lessons (retro_id, seq, title, body, action)
-			VALUES (?, ?, ?, ?, ?)`,
-			retroID, l.seq, l.title, nullStr(l.body), nullStr(l.action)); err != nil {
+			INSERT INTO retro_lessons (retro_id, seq, title, body, action, norm_title)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			retroID, l.seq, l.title, nullStr(l.body), nullStr(l.action),
+			NormalizeLessonTitle(l.title)); err != nil {
 			return err
 		}
 	}

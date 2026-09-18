@@ -14,11 +14,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentChangeProposal,
   Recommendation,
+  RecommendationTargetKind,
   RetroAgentRow,
   RetroAgentsResp,
   RetroErrorGroup,
   RetroFrictionResp,
   RetroLesson,
+  RetroLessonGroup,
   RetroTaskRow,
   Session,
 } from '../api/types';
@@ -30,6 +32,7 @@ import {
   fetchRecommendations,
   fetchRetroAgents,
   fetchRetroFriction,
+  fetchRetroLessonGroups,
   fetchRetroLessons,
   fetchRetroTasks,
   fetchSessions,
@@ -186,12 +189,36 @@ function VerifyProgress({ rec }: { rec: Recommendation }): JSX.Element | null {
   );
 }
 
-/** Lifecycle chip for in-flight statuses (accepted/adopted). The accepted
- * copy is per target kind: agent/tool/process recs have a detectable adoption
- * signal to wait for; error_group/config verify straight from accepted, so
- * their chip counts down to the verification check instead ("waiting for
- * adoption" would promise a step that never happens). Adopted recs count down
- * from the detected change. */
+/** Target kinds internal/advisor/advisor.go verify() reads from the `adopted`
+ * status — these have a detectable adoption signal to wait for. Keep in
+ * lockstep with that query's first `target_kind IN (…)` list. */
+const ADOPTABLE_KINDS: readonly RecommendationTargetKind[] = ['agent', 'tool', 'process'];
+
+/** Target kinds verify() reads straight from `accepted` — no adoption hop, so
+ * the countdown runs from accepted_at. Lockstep with that query's second
+ * `target_kind IN (…)` list. */
+const ACCEPTED_VERIFY_KINDS: readonly RecommendationTargetKind[] = [
+  'agent',
+  'error_group',
+  'config',
+];
+
+/** Lifecycle chip for in-flight statuses (accepted/adopted). The accepted copy
+ * is per target kind, and the three cases are disjoint:
+ *
+ *  - ADOPTABLE_KINDS — verify() reads them from `adopted`, so the chip waits for
+ *    the adoption signal;
+ *  - ACCEPTED_VERIFY_KINDS minus those — verify() reads them straight from
+ *    `accepted`, so the chip counts down to the verification check instead;
+ *  - everything else (memory/project/session/skill) — verify() selects NEITHER
+ *    status for these, so there is no terminal state to count down to and the
+ *    chip says only `accepted`. R11's `skill` recs are deliberately in this
+ *    bucket: absence of retrospectives is not evidence a lesson was absorbed
+ *    (see internal/advisor/rules_lesson.go), so they close by an operator's
+ *    accepted → dismissed and nothing else. Rendering a `verify check in 14d`
+ *    over them would promise exactly the step that never happens.
+ *
+ * Adopted recs count down from the detected change. */
 function RecStatusChip({ rec }: { rec: Recommendation }): JSX.Element | null {
   const countdown = (anchor: string): string => {
     const d = daysUntilVerify(anchor);
@@ -201,9 +228,9 @@ function RecStatusChip({ rec }: { rec: Recommendation }): JSX.Element | null {
   };
   if (rec.status === 'accepted') {
     const kind = rec.target_kind;
-    const adoptable = kind === 'agent' || kind === 'tool' || kind === 'process';
+    const adoptable = ADOPTABLE_KINDS.includes(kind);
     const anchor = rec.baseline?.accepted_at;
-    const showCountdown = !adoptable && anchor !== undefined;
+    const showCountdown = !adoptable && ACCEPTED_VERIFY_KINDS.includes(kind) && anchor !== undefined;
     return (
       <>
         <span className="rounded-[7px] border border-amber/40 bg-amber/10 px-1.5 py-[2px] font-mono text-[10px] text-amber">
@@ -1128,10 +1155,28 @@ function Scorecard({
 
 /* ----- lessons feed (retro phase 2) ----- */
 
-function LessonsFeed({ lessons }: { lessons: RetroLesson[] }): JSX.Element {
+/** Both feeds are `null` while in flight and `*Failed` when their fetch threw —
+ * kept apart because conflating them renders a failure as "nothing here", which
+ * is the one reading an operator cannot act on. */
+function LessonsFeed({
+  lessons,
+  groups,
+  lessonsFailed,
+  groupsFailed,
+}: {
+  lessons: RetroLesson[] | null;
+  groups: RetroLessonGroup[] | null;
+  lessonsFailed: boolean;
+  groupsFailed: boolean;
+}): JSX.Element {
   const [filter, setFilter] = useState('');
+  // Grouping is a view of the same window, not a different dataset. It stays off
+  // by default: the flat feed is the one that reads chronologically, and the
+  // grouped one is what you switch to when you suspect a repeat.
+  const [grouped, setGrouped] = useState(false);
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
+    if (lessons === null) return [];
     if (q === '') return lessons;
     return lessons.filter((l) =>
       [l.title, l.action ?? '', l.body ?? '', l.task_external_id, l.task_title]
@@ -1140,18 +1185,104 @@ function LessonsFeed({ lessons }: { lessons: RetroLesson[] }): JSX.Element {
         .includes(q),
     );
   }, [lessons, filter]);
+  const visibleGroups = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (groups === null) return [];
+    if (q === '') return groups;
+    return groups.filter((g) =>
+      [g.title, g.norm_title, g.latest_action ?? '', ...g.tasks]
+        .join('\n')
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [groups, filter]);
 
-  return (
-    <div className="flex flex-col gap-2.5">
+  const toggle = (
+    <label className="flex items-center gap-1.5 font-mono text-[11px] text-ink-dim">
+      {/* Never disabled. `disabled={groups === null}` locked the toggle in BOTH
+          directions, so a grouped fetch that failed after the operator had
+          switched the view on stranded them in it: an error rendered as
+          emptiness, over a flat feed that had data and no way back to it. */}
+      <input
+        type="checkbox"
+        checked={grouped}
+        onChange={(e) => setGrouped(e.target.checked)}
+        aria-label="group by lesson"
+        className="accent-brand"
+      />
+      Group by lesson
+    </label>
+  );
+
+  const controls = (
+    <div className="flex flex-wrap items-center gap-3">
       <input
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="filter lessons…"
+        placeholder={grouped ? 'filter lesson groups…' : 'filter lessons…'}
         aria-label="filter lessons"
         className="w-full max-w-xs rounded-md border border-line bg-surface px-2.5 py-1.5 font-mono text-[11px] text-ink placeholder:text-ink-faint"
       />
-      {lessons.length === 0 ? (
+      {toggle}
+    </div>
+  );
+
+  if (grouped) {
+    return (
+      <div className="flex flex-col gap-2.5">
+        {controls}
+        {groupsFailed ? (
+          <ErrorBox message="lesson groups failed to load for this range — untick “Group by lesson” for the flat feed" />
+        ) : groups === null ? (
+          <Loading label="lesson groups…" />
+        ) : groups.length === 0 ? (
+          <Empty>no retrospective lessons in this range</Empty>
+        ) : visibleGroups.length === 0 ? (
+          <Empty>no lessons match “{filter}”</Empty>
+        ) : (
+          visibleGroups.map((g) => (
+            <div key={g.norm_title} className="rounded-[10px] border border-line px-3.5 py-2.5">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-mono text-[12px] font-medium text-ink">{g.title}</span>
+                <span
+                  className={`rounded-[7px] border px-1.5 py-[2px] font-mono text-[10px] ${
+                    g.count >= 3
+                      ? 'border-amber/40 bg-amber/10 text-amber'
+                      : 'border-line bg-surface text-ink-dim'
+                  }`}
+                  title={
+                    g.count >= 3
+                      ? 'recurring: the advisor raises this as an R11 recommendation'
+                      : undefined
+                  }
+                >
+                  {g.count} {g.count === 1 ? 'task' : 'tasks'}
+                </span>
+                {g.latest_action !== null && (
+                  <span className="rounded-[7px] border border-brand/40 bg-brand/10 px-1.5 py-[2px] font-mono text-[10px] text-brand">
+                    action: {g.latest_action}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
+                {g.tasks.join(' · ')}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {controls}
+      {lessonsFailed ? (
+        <ErrorBox message="lessons failed to load for this range" />
+      ) : lessons === null ? (
+        <Loading label="lessons…" />
+      ) : lessons.length === 0 ? (
         <Empty>no retrospective lessons in this range</Empty>
       ) : visible.length === 0 ? (
         <Empty>no lessons match “{filter}”</Empty>
@@ -1382,6 +1513,9 @@ export function Retro(): JSX.Element {
   const [agents, setAgents] = useState<RetroAgentsResp | null>(null);
   const [friction, setFriction] = useState<RetroFrictionResp | null>(null);
   const [lessons, setLessons] = useState<RetroLesson[] | null>(null);
+  const [lessonsFailed, setLessonsFailed] = useState(false);
+  const [lessonGroups, setLessonGroups] = useState<RetroLessonGroup[] | null>(null);
+  const [lessonGroupsFailed, setLessonGroupsFailed] = useState(false);
   const [taskRows, setTaskRows] = useState<RetroTaskRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Map of folded agent name → distinct trajectory anti-pattern kinds. */
@@ -1425,9 +1559,23 @@ export function Retro(): JSX.Element {
     fetchRetroFriction(range)
       .then(setFriction)
       .catch(() => setFriction(null));
+    // Cleared before the refetch, not just on failure: both feeds describe a
+    // WINDOW, so keeping the previous range's rows on screen while the new ones
+    // are in flight is the cross-window disagreement the eager grouped fetch
+    // below exists to prevent — only inside one range instead of across two.
+    setLessons(null);
+    setLessonsFailed(false);
+    setLessonGroups(null);
+    setLessonGroupsFailed(false);
     fetchRetroLessons(range)
       .then((r) => setLessons(r.lessons))
-      .catch(() => setLessons(null));
+      .catch(() => setLessonsFailed(true));
+    // Fetched alongside the flat feed rather than on first toggle: both views
+    // must describe the SAME window, and a lazy second fetch would let them
+    // straddle an ingest tick and disagree about what the range contained.
+    fetchRetroLessonGroups(range)
+      .then((r) => setLessonGroups(r.groups))
+      .catch(() => setLessonGroupsFailed(true));
     fetchRetroTasks(range)
       .then((r) => setTaskRows(r.tasks))
       .catch(() => setTaskRows(null));
@@ -1520,14 +1668,19 @@ export function Retro(): JSX.Element {
 
       {scope !== null ? <JudgmentsSection project={scope} /> : <JudgmentsSection />}
 
-      {lessons !== null && (
-        <>
-          <SectionTitle>
-            Lessons learned <Explain id="retro-lessons" />
-          </SectionTitle>
-          <LessonsFeed lessons={lessons} />
-        </>
-      )}
+      {/* Rendered unconditionally. Gating on `lessons !== null` unmounted the
+          feed on every refetch, which silently threw away the operator's group
+          toggle and filter text; LessonsFeed owns the loading and error copy
+          instead. */}
+      <SectionTitle>
+        Lessons learned <Explain id="retro-lessons" />
+      </SectionTitle>
+      <LessonsFeed
+        lessons={lessons}
+        groups={lessonGroups}
+        lessonsFailed={lessonsFailed}
+        groupsFailed={lessonGroupsFailed}
+      />
 
       {taskRows !== null && (
         <>

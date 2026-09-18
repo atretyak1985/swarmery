@@ -40,6 +40,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -763,11 +764,56 @@ type retroLessonsDTO struct {
 	Lessons []retroLessonDTO `json:"lessons"`
 }
 
+// retroLessonGroupDTO is one lesson IDENTITY (wsingest.NormalizeLessonTitle,
+// migration 0069) folded across every task that learned it. The flat feed above
+// answers "what did we learn"; this answers "what do we keep re-learning", which
+// is the only one of the two a human can act on.
+type retroLessonGroupDTO struct {
+	NormTitle string `json:"norm_title"`
+	// Title is the most recent wording — the flat feed keeps every variant, and
+	// the newest one is the one the operator just saw.
+	Title string `json:"title"`
+	// Tasks are the external task ids that carried the lesson, newest first.
+	Tasks []string `json:"tasks"`
+	// Count is len(Tasks): DISTINCT tasks, never lesson rows. Two lessons in one
+	// retro that fold together are one occurrence, not two.
+	Count int `json:"count"`
+	// LatestAction is the `**Action**:` line of the most recent occurrence, or
+	// null when that occurrence carried none.
+	LatestAction *string `json:"latest_action"`
+}
+
+type retroLessonGroupsDTO struct {
+	Groups []retroLessonGroupDTO `json:"groups"`
+}
+
 const retroLessonsLimit = 100
 
-// GET /api/retro/lessons?from&to&project — the lessons-learned feed parsed
-// from 09-retrospective.md docs (wsingest artifacts), joined through tasks and
-// filtered on the task's start date. Newest tasks first, capped at 100.
+// retroLessonGroupsLimit caps the grouped view. Groups are far coarser than
+// rows, so this is generous — it exists to bound the response, not to filter.
+const retroLessonGroupsLimit = 100
+
+// retroLessonGroupsScanLimit bounds the ROWS the grouped query loads, which is a
+// different bound from the output cap above: one group is many rows, so a
+// LIMIT 100 on rows would truncate the very counts this view exists to show.
+// It is needed because the fold happens in Go — without it a wide window pulls
+// every lesson row in the database into memory while holding the process's only
+// SQLite connection (store.Open sets SetMaxOpenConns(1)).
+//
+// Rows come back newest-task-first, so a window wider than this folds the newest
+// retroLessonGroupsScanLimit rows and the tail is dropped — the same truncation
+// rule the flat feed's LIMIT already applies, not a new one.
+const retroLessonGroupsScanLimit = 5000
+
+// GET /api/retro/lessons?from&to&project[&group=1] — the lessons-learned feed
+// parsed from 09-retrospective.md docs (wsingest artifacts), joined through
+// tasks and filtered on the task's start date. Newest tasks first, capped at
+// 100.
+//
+// With group=1 the same window is folded by retro_lessons.norm_title instead:
+// `{"groups": [{norm_title, title, tasks, count, latest_action}]}`, ordered by
+// count descending. Same window, same scope, different question — so the page
+// can toggle between them without a second endpoint whose filters could drift.
 func (h *Handler) retroLessons(w http.ResponseWriter, r *http.Request) {
 	dr, err := parseRange(r)
 	if err != nil {
@@ -775,6 +821,15 @@ func (h *Handler) retroLessons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pf, pargs := scopeFilter(r)
+	if isTruthyParam(r.URL.Query(), "group") {
+		grouped, gerr := h.buildRetroLessonGroups(dr, pf, pargs)
+		if gerr != nil {
+			writeErr(w, gerr)
+			return
+		}
+		writeJSON(w, grouped, nil)
+		return
+	}
 	out, err := h.buildRetroLessons(dr, pf, pargs)
 	if err != nil {
 		writeErr(w, err)
@@ -783,12 +838,110 @@ func (h *Handler) retroLessons(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out, nil)
 }
 
+// isTruthyParam reads a boolean query flag the forgiving way — `?group=1`,
+// `?group=true` and a bare `?group` all mean the same thing to whoever typed the
+// URL, and disagreeing with them is never the interesting failure. `?group=0`
+// and `?group=false` are explicit opt-outs and stay false.
+func isTruthyParam(q url.Values, key string) bool {
+	if !q.Has(key) {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(q.Get(key))) {
+	case "", "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// buildRetroLessonGroups folds the window's lessons by norm_title.
+//
+// The fold is done in Go rather than in SQL on purpose: "newest first" for the
+// task list, "the most recent wording" for the title, and "the most recent
+// action" all need the SAME row to win, and expressing that as one correlated
+// SQL aggregate is how the three quietly start disagreeing.
+//
+// Rows with an empty norm_title are excluded. '' is the "not folded yet" marker
+// (migration 0069 + BackfillNormTitles), not an identity — grouping by it would
+// pile unrelated lessons into one bogus, high-count group at the top of exactly
+// the view meant to show what recurs.
+//
+// tasks.external_id is NULLABLE (migration 0006), so it is COALESCEd to the row
+// id exactly as advisor/rules_lesson.go lessonGroups does — scanning a NULL into
+// a string 500s the endpoint, while the same row silently counts in R11. The two
+// queries are documented as twins; this is part of keeping them so.
+func (h *Handler) buildRetroLessonGroups(dr dateRange, pf string, pargs []any) (retroLessonGroupsDTO, error) {
+	rows, err := h.DB.Query(`
+		SELECT l.norm_title, l.title, l.action,
+		       COALESCE(t.external_id, CAST(t.id AS TEXT)), t.started_at
+		  FROM retro_lessons l
+		  JOIN task_retros r ON r.id = l.retro_id
+		  JOIN tasks t ON t.id = r.task_id
+		  JOIN projects p ON p.id = t.project_id
+		 WHERE t.started_at >= ? AND t.started_at < ? AND p.archived = 0
+		   AND l.norm_title <> ''`+pf+`
+		 ORDER BY t.started_at DESC, t.external_id DESC, l.seq ASC
+		 LIMIT ?`,
+		append(append([]any{dr.start, dr.end}, pargs...), retroLessonGroupsScanLimit)...)
+	if err != nil {
+		return retroLessonGroupsDTO{}, err
+	}
+	defer rows.Close()
+
+	out := retroLessonGroupsDTO{Groups: []retroLessonGroupDTO{}}
+	index := map[string]int{}
+	seenTask := map[string]bool{}
+	for rows.Next() {
+		var norm, title, externalID, startedAt string
+		var action sql.NullString
+		if err := rows.Scan(&norm, &title, &action, &externalID, &startedAt); err != nil {
+			return retroLessonGroupsDTO{}, err
+		}
+		i, known := index[norm]
+		if !known {
+			// First row wins the display fields: the query is ordered newest
+			// first, so this IS the most recent occurrence.
+			g := retroLessonGroupDTO{NormTitle: norm, Title: title, Tasks: []string{}}
+			if action.Valid {
+				a := action.String
+				g.LatestAction = &a
+			}
+			out.Groups = append(out.Groups, g)
+			i = len(out.Groups) - 1
+			index[norm] = i
+		}
+		if key := norm + "\x00" + externalID; !seenTask[key] {
+			seenTask[key] = true
+			out.Groups[i].Tasks = append(out.Groups[i].Tasks, externalID)
+			out.Groups[i].Count++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return retroLessonGroupsDTO{}, err
+	}
+
+	// Most-recurring first; norm_title breaks ties so the order is stable
+	// between two calls over an unchanged window.
+	sort.SliceStable(out.Groups, func(a, b int) bool {
+		if out.Groups[a].Count != out.Groups[b].Count {
+			return out.Groups[a].Count > out.Groups[b].Count
+		}
+		return out.Groups[a].NormTitle < out.Groups[b].NormTitle
+	})
+	if len(out.Groups) > retroLessonGroupsLimit {
+		out.Groups = out.Groups[:retroLessonGroupsLimit]
+	}
+	return out, nil
+}
+
 // buildRetroLessons computes the lessons feed for one resolved window and
 // scope. Split out of the handler so /api/retro/report can reuse it.
 func (h *Handler) buildRetroLessons(dr dateRange, pf string, pargs []any) (retroLessonsDTO, error) {
 
+	// COALESCE for the same reason as the grouped twin above: tasks.external_id
+	// is NULLABLE (migration 0006) and scanning a NULL into a string 500s the feed.
 	rows, err := h.DB.Query(`
-		SELECT t.external_id, t.title, t.started_at, l.seq, l.title, l.action, l.body
+		SELECT COALESCE(t.external_id, CAST(t.id AS TEXT)),
+		       t.title, t.started_at, l.seq, l.title, l.action, l.body
 		  FROM retro_lessons l
 		  JOIN task_retros r ON r.id = l.retro_id
 		  JOIN tasks t ON t.id = r.task_id

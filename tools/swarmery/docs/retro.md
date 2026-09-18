@@ -68,13 +68,13 @@ cited by a recommendation matches what the pages show.
 | **evals chip** | `passed/total` from the latest imported eval run for the agent. |
 | **approx flag** | Set when the range (or its comparison window) overlaps pruned days that only exist as daily rollups — counts there are honest but incomplete. |
 
-## 4. The advisor — rules R1–R6 (plus R10)
+## 4. The advisor — rules R1–R6 (plus R10, R11)
 
 > [!NOTE]
 > The advisor registers more rules than this section documents. `advisor.Run` in
 > `internal/advisor/advisor.go` is the authoritative list; the rules described below
-> are the original six, plus R10 (the auto-memory index budget) which has its own
-> subsection after the table.
+> are the original six, plus R10 (the auto-memory index budget) and R11 (the recurring
+> lesson), each with its own subsection after the table.
 
 `internal/advisor` runs at daemon startup, on a 24 h ticker, and on demand
 (`Analyze now` → `POST /api/retro/advise`). Every rule evaluates the trailing
@@ -91,6 +91,7 @@ session ids.
 | **R5** stale improvement | process | a high-priority Process-Improvements row still open 14 d after its retro was ingested | do it, then mark the row `done` in the retro doc |
 | **R6** cache regression | config | cache hit rate dropped > 10 p.p. vs the preceding window | check prompt/session structure changes |
 | **R10** auto-memory index | memory | the project's `MEMORY.md` is > 6 KiB, **or** > 50 % of its ≥ 10 index lines are closed | run `swarmery memory consolidate` (see below) |
+| **R11** recurring lesson | skill | one lesson identity (`norm_title`) turns up in ≥ 3 **distinct** tasks in the window | move the lesson into the `SKILL.md` the next run actually reads |
 
 ### R10 — the auto-memory index budget
 
@@ -123,6 +124,39 @@ backed up into one timestamp dir first, and `--dry-run` (the default on the API)
 at all. Two entries are always held back: one with an open tail, and one whose file an **open**
 memory still references with a `[[link]]` — closing that would dangle a live dependency.
 There is no LLM merge here and no duplicate detection beyond these exact markers.
+
+### R11 — the lesson the fleet keeps re-learning
+
+A retrospective lesson is, by construction, something that already went wrong once. The fleet
+writes it down honestly and then learns it again three tasks later, because a lesson lives in a
+finished task's retro doc and nothing carries it forward into the procedure the next run reads.
+
+R11 detects exactly that. `retro_lessons` rows are DELETE+reinserted on every rescan, so the row
+id could never be a cross-task identity — migration **0069** adds `retro_lessons.norm_title`,
+written by `wsingest.NormalizeLessonTitle`: lowercase, a leading `Lesson N:` ordinal dropped,
+punctuation folded to spaces, the stop-words `the a an of to in for and` removed, whitespace
+collapsed, 80 runes. So `Lesson 3: Sync-Cache Before Build!` and
+`sync the cache before the build` are one identity. The fold is deliberately not clever — no
+stemming, no edit distance, no synonyms: a fold that guesses would merge two different lessons
+under one heading and nobody could see it had happened. A title that folds to nothing keeps
+`norm_title = ''`, and **every** reader skips `''` — it is the "not folded yet" marker, never an
+identity. Rows written before 0069 are folded once per daemon start by the wsingest backfill
+(`retro lessons backfilled: N` in the log); the insert path folds everything since.
+
+The rule fires when one `norm_title` appears in ≥ 3 **distinct tasks** inside the 14-day window.
+Distinct tasks, never rows: one retro repeating itself is a duplicated paragraph, not a pattern.
+`detail` reads `"<title>" recurred in N tasks: <slug…>` (the first 5 ids, then `(+K more)`) plus
+the most recent `**Action**:` line; the baseline metric is `lesson_task_count` (lower is better).
+
+`target_kind` is **`skill`** (migration `0072`), not `process` like R5: R5 points at one retro's
+improvement row and asks a human to do it, R11 points at a procedure that should have carried the
+lesson and never did — and the improve loop's skill proposals route on that kind, so it is
+load-bearing, not decoration. Unlike R7/R8/R9/R10, R11 is **not** self-checking: it reads stored
+rows over a trailing window, so a fortnight with no retrospectives looks exactly like a fortnight
+in which the lesson was finally absorbed, and closing an `accepted` row on that would be guessing.
+A `proposed` row is still swept when the rule goes quiet, and re-proposed if the lesson returns.
+
+The same fold backs the Retro page's **Group by lesson** toggle — see `?group=1` in §7.
 
 ## 5. Recommendation lifecycle
 
@@ -211,10 +245,36 @@ known ones. The latest run appears as the scorecard's `evals` chip.
 | `GET /api/retro/agents?from&to&project` | scorecard rows + `main` + prev-window block |
 | `GET /api/retro/friction?from&to&project` | denied tools (`has_rule`), error groups, approval waits |
 | `GET /api/retro/lessons?from&to&project` | lessons feed (newest first, limit 100) |
+| `GET /api/retro/lessons?group=1&…` | the SAME window folded by `norm_title`, most-recurring first |
 | `GET /api/retro/tasks?from&to&project` | estimation variance, loops, delegation verdicts (limit 200) |
 | `GET /api/retro/recommendations?status=` | CSV filter; default `proposed,accepted,adopted`; `status=all` |
 | `PATCH /api/retro/recommendations/{id}` | `{"status":"accepted"\|"dismissed"}`; legal transitions only (422), conflict → 409; local-origin only |
 | `POST /api/retro/advise` | run the advisor now; returns `{proposed, updated, adopted, verified}`; local-origin only |
+
+### `?group=1` — the grouped lessons view
+
+`group=1` (also `true`/`yes`/`on`, or a bare `?group`; `0`/`false` opts out) keeps the window and
+the project scope identical and only changes the fold, so the two views can never disagree about
+what the range contained:
+
+```json
+{ "groups": [
+  { "norm_title": "sync cache before build",
+    "title": "Sync-cache before build",
+    "tasks": ["2026-09-10-task-a", "2026-09-08-task-b", "2026-09-04-task-c"],
+    "count": 3,
+    "latest_action": "add it to the build skill" }
+] }
+```
+
+Ordered by `count` descending, `norm_title` breaking ties so two calls over an unchanged window
+return the same order; limit 100 groups. `count` is **distinct tasks**, `title` and
+`latest_action` come from the most recent occurrence (`latest_action` is `null` when that
+occurrence carried no `**Action**:` line), `tasks` is newest first. Rows with an empty
+`norm_title` are excluded — grouping by the "not folded yet" marker would pile every unrelated
+pre-0069 lesson into one bogus, high-count group at the top of exactly the view meant to show
+what recurs. At `count ≥ 3` the Retro page's **Group by lesson** view marks the row amber: that
+is the same threshold R11 fires on.
 
 ## 8. Storage
 
@@ -222,6 +282,12 @@ known ones. The latest run appears as the scorecard's `evals` chip.
   `retro_improvements`, `task_loops`, `task_delegations`.
 - Migration **0019** — `recommendations` (rule, target, evidence JSON, status, unique
   `dedup_key`, baseline JSON).
+- Migration **0069** — `retro_lessons.norm_title` + `idx_retro_lessons_norm_title`: the lesson's
+  cross-task identity (R11, `?group=1`). `NOT NULL DEFAULT ''`; `''` means "not folded yet".
+- Migration **0072** — widens the `recommendations.target_kind` CHECK with `'skill'` (R11).
+  Numbered **above 0071 on purpose**: migrations apply in filename order and 0071 rebuilds the
+  table with its vocabulary spelled out in full, so a widening numbered below it would be
+  silently undone on a fresh database with no error anywhere.
 
 ## 9. Cadences
 

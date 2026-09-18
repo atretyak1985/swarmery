@@ -1095,6 +1095,29 @@ export interface RetroLessonsResp {
   lessons: RetroLesson[];
 }
 
+/**
+ * One lesson IDENTITY of GET /api/retro/lessons?group=1 — the same lesson folded
+ * across every task that learned it (retro_lessons.norm_title, migration 0069).
+ * The flat feed answers "what did we learn"; this answers "what do we keep
+ * re-learning", which is the actionable half.
+ */
+export interface RetroLessonGroup {
+  /** The folded identity — also the render key and advisor R11's target. */
+  norm_title: string;
+  /** The most recent wording; the flat feed keeps every variant. */
+  title: string;
+  /** External task ids that carried the lesson, newest first. */
+  tasks: string[];
+  /** DISTINCT tasks, never lesson rows. */
+  count: number;
+  /** The `**Action**:` line of the most recent occurrence, when it had one. */
+  latest_action: string | null;
+}
+
+export interface RetroLessonGroupsResp {
+  groups: RetroLessonGroup[];
+}
+
 /** Ledger verdict split of one task (redispatch = re-dispatch/redo/fail/reject, matched in English or the legacy Ukrainian ledger vocabulary: повтор/відхил/провал/фейл). */
 export interface RetroTaskVerdicts {
   ok: number;
@@ -1132,7 +1155,17 @@ export type RecommendationStatus =
   | 'resolved';
 
 /** recommendations.target_kind — what the recommendation is about. */
-export type RecommendationTargetKind = 'tool' | 'agent' | 'error_group' | 'process' | 'config' | 'project';
+export type RecommendationTargetKind =
+  | 'tool'
+  | 'agent'
+  | 'error_group'
+  | 'process'
+  | 'config'
+  | 'project'
+  | 'session'
+  | 'memory'
+  /** R11 — a lesson re-learned across tasks; the improve loop routes on this. */
+  | 'skill';
 
 /** The advisor's metric snapshot written when a recommendation is accepted
  * (internal/advisor baseline JSON) — the verification comparison anchor. */

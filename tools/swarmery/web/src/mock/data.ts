@@ -69,6 +69,7 @@ import type {
   RemoveAccountResponse,
   RetroAgentsResp,
   RetroFrictionResp,
+  RetroLessonGroupsResp,
   RetroLessonsResp,
   RetroReportResp,
   RetroTasksResp,
@@ -2341,6 +2342,11 @@ export const mockApi = {
   async retroLessons(): Promise<RetroLessonsResp> {
     await delay(120);
     return { lessons: [] };
+  },
+
+  async retroLessonGroups(): Promise<RetroLessonGroupsResp> {
+    await delay(120);
+    return { groups: [] };
   },
 
   async retroTasks(): Promise<RetroTasksResp> {
