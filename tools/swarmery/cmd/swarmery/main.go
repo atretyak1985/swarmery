@@ -92,6 +92,12 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+	// `version` / `--version` / `-v` need no database, no flags and no daemon,
+	// so they are answered before the subcommand switch and its flag parsing.
+	if isVersionCommand(os.Args[1]) {
+		cmdVersion(os.Stdout)
+		return
+	}
 	var err error
 	switch os.Args[1] {
 	case "ingest":
@@ -220,6 +226,7 @@ func usage() {
                                    interactive TUI attached to the daemon: live event
                                    feed + approvals (y/n) + dispatcher pause ([p])
   swarmery service-status          launchd service health: pid, uptime, db size
+  swarmery version                 print the build identity (one line; also --version, -v)
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
