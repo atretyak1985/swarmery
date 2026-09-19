@@ -330,8 +330,10 @@ Stated plainly, so nothing here surprises you later:
 - **Graphify artifacts are served, not built.** The daemon embeds an existing `graph.html`;
   generating it is the `graphify` CLI's job.
 - **Auto-provisioning generates for `architecture-pack` only.** Other packs are install-only.
-- **macOS is the first-class host.** The daemon is portable Go, but `install` /
-  `service-status` are launchd-specific.
+- **macOS is the first-class host; Linux auto-start is supported.** The daemon is portable
+  Go. `install` / `uninstall` / `service-status` drive launchd on macOS and a `systemd --user`
+  unit (`~/.config/systemd/user/swarmery.service`) on Linux; the Linux path is tested against a
+  fake manager, not exercised in CI on a real one.
 
 ---
 

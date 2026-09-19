@@ -1,0 +1,16 @@
+[Unit]
+Description=swarmery control plane daemon
+After=default.target
+
+[Service]
+ExecStart=/home/u/.swarmery/bin/swarmery serve
+Restart=on-failure
+RestartSec=2
+Environment="SWARMERY_PORT=7777"
+Environment="SWARMERY_ONBOARD_ROOTS=/home/u/projects,/srv/repos"
+Environment="SWARMERY_STATUSLINE_SRC=/home/u/50%% \"quoted\" dir"
+StandardOutput=append:/home/u/.swarmery/logs/swarmery.out.log
+StandardError=append:/home/u/.swarmery/logs/swarmery.err.log
+
+[Install]
+WantedBy=default.target

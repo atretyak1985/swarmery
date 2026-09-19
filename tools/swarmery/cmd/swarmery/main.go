@@ -9,7 +9,7 @@
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
-//	swarmery install               launchd auto-start (uninstall / status)
+//	swarmery install               auto-start: launchd (macOS) or systemd --user (Linux)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
@@ -208,10 +208,10 @@ func usage() {
                                    one-shot system-config scan (agents/skills/hooks/commands)
   swarmery install  [--port <n>] [--onboard-roots <dirs>] [--workspace-root <dir>] [--statusline-src <dir>]
                     [--projects-roots <dirs|auto>]
-                                   launchd auto-start; bakes SWARMERY_* into the plist's EnvironmentVariables
+                                   auto-start (launchd on macOS, systemd --user on Linux); bakes SWARMERY_* into the service definition
                                    (--onboard-roots enables POST /api/projects/onboard + the dashboard button;
                                    --projects-roots auto makes every ~/.claude*/projects account visible)
-  swarmery uninstall               remove launchd service (keeps logs+db)
+  swarmery uninstall               remove the launchd / systemd --user service (keeps logs+db)
   swarmery status   [--port <n>] [--url <base>]
                                    live daemon snapshot (version/uptime/db/migrations/
                                    ingest-lag + today sessions/cost/tokens + dispatch +
@@ -219,7 +219,7 @@ func usage() {
   swarmery console  [--port <n>] [--url <base>]
                                    interactive TUI attached to the daemon: live event
                                    feed + approvals (y/n) + dispatcher pause ([p])
-  swarmery service-status          launchd service health: pid, uptime, db size
+  swarmery service-status          service health (launchd on macOS, systemd --user on Linux): pid, uptime, db size
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]

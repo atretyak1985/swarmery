@@ -1,10 +1,12 @@
-// Package installer manages the macOS launchd integration for the swarmery
-// daemon: `swarmery install` copies the binary to ~/.swarmery/bin and
-// registers a LaunchAgent (RunAtLoad + KeepAlive), `uninstall` removes the
-// service and plist (keeping logs and DB), and `status` reports health.
+// Package installer manages the daemon's auto-start integration: `swarmery
+// install` copies the binary to ~/.swarmery/bin and registers a service,
+// `uninstall` removes the service and its definition (keeping logs and DB),
+// and `service-status` reports health. Two backends behind the same verbs,
+// chosen by runtime.GOOS: a launchd LaunchAgent (RunAtLoad + KeepAlive) on
+// macOS — this file — and a `systemd --user` unit on Linux (systemd.go).
 //
-// All launchctl interaction goes through the Runner interface so logic can
-// be tested without a real launchd domain.
+// All launchctl / systemctl interaction goes through the Runner interface so
+// logic can be tested without a real service manager.
 package installer
 
 import (
@@ -46,15 +48,17 @@ func (s *System) sleep(d time.Duration) {
 	time.Sleep(d)
 }
 
+// The daemon's home layout is the same under launchd and systemd; both
+// backends resolve it through these helpers so the two can never disagree.
+func homeBinPath(home string) string { return filepath.Join(home, ".swarmery", "bin", "swarmery") }
+func homeLogsDir(home string) string { return filepath.Join(home, ".swarmery", "logs") }
+func homeDBPath(home string) string  { return filepath.Join(home, ".swarmery", "swarmery.db") }
+
 // BinPath returns ~/.swarmery/bin/swarmery.
-func (s *System) BinPath() string {
-	return filepath.Join(s.Home, ".swarmery", "bin", "swarmery")
-}
+func (s *System) BinPath() string { return homeBinPath(s.Home) }
 
 // LogsDir returns ~/.swarmery/logs.
-func (s *System) LogsDir() string {
-	return filepath.Join(s.Home, ".swarmery", "logs")
-}
+func (s *System) LogsDir() string { return homeLogsDir(s.Home) }
 
 // PlistPath returns ~/Library/LaunchAgents/com.swarmery.daemon.plist.
 func (s *System) PlistPath() string {
@@ -62,9 +66,13 @@ func (s *System) PlistPath() string {
 }
 
 // DBPath returns ~/.swarmery/swarmery.db.
-func (s *System) DBPath() string {
-	return filepath.Join(s.Home, ".swarmery", "swarmery.db")
-}
+func (s *System) DBPath() string { return homeDBPath(s.Home) }
+
+// ExistingEnv is ExistingPlistEnv under the name the service interface uses.
+func (s *System) ExistingEnv() map[string]string { return s.ExistingPlistEnv() }
+
+// DefinitionKind names the service definition in operator output.
+func (s *System) DefinitionKind() string { return "plist" }
 
 // ExistingPlistEnv reads the EnvironmentVariables dict out of the currently
 // installed plist so a reinstall can PRESERVE values the operator did not
