@@ -43,6 +43,12 @@ for arg in "$@"; do
           echo "✗ swarmery launchd service is installed. Run 'swarmery uninstall' first, then retry." >&2
           exit 1
         fi
+      elif [ "$os" = "linux" ]; then
+        unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/swarmery.service"
+        if [ -f "$unit" ]; then
+          echo "✗ swarmery systemd --user service is installed. Run 'swarmery uninstall' first, then retry." >&2
+          exit 1
+        fi
       fi
       binary="${INSTALL_DIR}/swarmery"
       if [ -e "$binary" ]; then

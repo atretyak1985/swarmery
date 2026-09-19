@@ -1,0 +1,13 @@
+[Unit]
+Description=swarmery control plane daemon
+After=default.target
+
+[Service]
+ExecStart=/home/u/.swarmery/bin/swarmery serve
+Restart=on-failure
+RestartSec=2
+StandardOutput=append:/home/u/.swarmery/logs/swarmery.out.log
+StandardError=append:/home/u/.swarmery/logs/swarmery.err.log
+
+[Install]
+WantedBy=default.target
