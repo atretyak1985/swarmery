@@ -318,7 +318,13 @@ fi
 #    line, so a session that recorded no tool calls never reaches this sweep.
 #    Accepted: no substrate file today means nothing was added to /tmp today
 #    either, so the backlog cannot grow while the sweep is being skipped.
-find "$CLAUDE_SESSION_TMP" -maxdepth 1 -name 'claude-session-*.jsonl' -type f -mtime +7 -delete 2>/dev/null || true
+#
+#    The trailing slash is load-bearing. On macOS /tmp is a symlink to
+#    /private/tmp, and find (default -P) does not follow a symlinked starting
+#    point: `find /tmp -maxdepth 1 -type f` lists nothing there, so this sweep
+#    was a silent no-op on the platform it matters most on. `/tmp/` resolves
+#    through the link before find ever sees it.
+find "${CLAUDE_SESSION_TMP%/}/" -maxdepth 1 -name 'claude-session-*.jsonl' -type f -mtime +7 -delete 2>/dev/null || true
 
 if [ -n "$WS_ROOT" ]; then
   human_date=$(date +%Y-%m-%d)

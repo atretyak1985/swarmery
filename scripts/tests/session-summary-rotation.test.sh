@@ -269,5 +269,32 @@ else
   bad "an empty substrate file was treated as present; the early exit tests -s, not -f"
 fi
 
+# ── /tmp is a symlink on macOS: the sweep must follow it ──────────
+# `find <symlink> -maxdepth 1` does not descend (find is -P by default), which
+# made the substrate rotation a no-op on macOS; a real dir in the sandbox above
+# could never catch that. Point CLAUDE_SESSION_TMP at a LINK to the sandbox.
+TMP_REAL="$TESTDIR/tmp-real"
+TMP_LINK="$TESTDIR/tmp-link"
+mkdir -p "$TMP_REAL"
+ln -s "$TMP_REAL" "$TMP_LINK"
+printf '{"tool":"Bash","cmd":"ls","file":""}\n' > "$TMP_REAL/claude-session-${today}.jsonl"
+aged "$TMP_REAL/claude-session-20260101.jsonl" 40
+aged "$TMP_REAL/claude-session-20260902.jsonl"  3
+(
+  cd "$TESTDIR" || exit 1
+  AGENT_PROJECT="$AGENT_PROJECT" \
+  AGENT_WORKSPACE_ROOT="$TESTDIR/workspace-root" \
+  CLAUDE_SESSION_TMP="$TMP_LINK" \
+  CLAUDE_PROJECT_DIR="$TESTDIR/project" \
+  "$HOOK"
+) >/dev/null 2>&1
+if exists "$TMP_REAL/claude-session-20260101.jsonl"; then
+  bad "an expired substrate file survived behind a symlinked tmp dir"
+else
+  ok
+fi
+if exists "$TMP_REAL/claude-session-20260902.jsonl"; then ok
+else bad "a fresh substrate file was deleted behind a symlinked tmp dir"; fi
+
 printf 'session-summary-rotation: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

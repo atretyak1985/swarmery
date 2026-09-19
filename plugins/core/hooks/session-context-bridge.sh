@@ -14,6 +14,15 @@
 # brief at most 1024 bytes, and the whole block at most 3072 bytes — the bridge
 # must cost far less than the rediscovery it replaces.
 #
+# Only a cold start gets the bridge. SessionStart also fires on `compact`, and
+# a compaction is not a cold start: the session already read its NEXT.md and
+# brief, and the point of compacting is to spend LESS context, not to append
+# this block again. The hook input's `source` field decides.
+#
+# Which NEXT.md: the newest one whose task card is still active, and only when
+# no task is active the newest overall. A NEXT.md left on a task that was
+# completed since must not steer the next session towards finished work.
+#
 # Kill switch: SWARMERY_CONTEXT_BRIDGE=0 disables it entirely.
 #
 # Best-effort by construction. No workspace, no daemon, no jq, a malformed
@@ -41,19 +50,55 @@ else
   working_dir="${PROJECT_DIR}/.claude-workspace/working"
 fi
 
-# ── Newest NEXT.md anywhere under working/ (any task layout) ──────
+# ── Which SessionStart is this? ───────────────────────────────────
+# The harness pipes one line of JSON and closes the pipe. A hand-run hook, or
+# a caller that inherited an open stdin, must not hang here: read ONE line with
+# a bound, and treat anything unreadable as a cold start.
+hook_source=""
+hook_input=""
+if [ ! -t 0 ]; then
+  IFS= read -r -t 2 hook_input 2>/dev/null || true
+  hook_source=$(printf '%s' "$hook_input" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' | head -1)
+fi
+[ "$hook_source" = "compact" ] && exit 0
+
+# ── NEXT.md candidates under working/, newest first (any task layout) ──
 # `stat -c '%Y %n'` is the GNU spelling, `stat -f '%m %N'` the BSD/macOS one.
 # The one that yields "<digits> <path>" wins — an exit-code fallback would be
 # wrong, because GNU's -f prints filesystem status and exits 0.
-newest_next=""
+next_candidates=""
 if [ -d "$working_dir" ]; then
-  newest_next=$(find "$working_dir" -maxdepth 6 -name NEXT.md \
-    -exec stat -c '%Y %n' {} \; 2>/dev/null | grep -E '^[0-9]+ ' | sort -rn | head -1 | cut -d' ' -f2-)
-  if [ -z "$newest_next" ]; then
-    newest_next=$(find "$working_dir" -maxdepth 6 -name NEXT.md \
-      -exec stat -f '%m %N' {} \; 2>/dev/null | grep -E '^[0-9]+ ' | sort -rn | head -1 | cut -d' ' -f2-)
+  next_candidates=$(find "$working_dir" -maxdepth 6 -name NEXT.md \
+    -exec stat -c '%Y %n' {} \; 2>/dev/null | grep -E '^[0-9]+ ' | sort -rn | cut -d' ' -f2-)
+  if [ -z "$next_candidates" ]; then
+    next_candidates=$(find "$working_dir" -maxdepth 6 -name NEXT.md \
+      -exec stat -f '%m %N' {} \; 2>/dev/null | grep -E '^[0-9]+ ' | sort -rn | cut -d' ' -f2-)
   fi
 fi
+
+# task_active <NEXT.md> — the task card beside it says the task is still open.
+# Same Status: vocabulary session-start.sh uses for its in-flight list.
+task_active() {
+  local card="$(dirname "$1")/README.md"
+  [ -f "$card" ] || return 1
+  grep -m1 'Status:' "$card" 2>/dev/null \
+    | grep -qiE 'Status:[*]*[[:space:]]*(active|in[-_ ]?progress)'
+}
+
+# The newest ACTIVE task's NEXT.md; the newest overall only when none is active.
+newest_next=""
+active_next=""
+while IFS= read -r cand; do
+  [ -n "$cand" ] || continue
+  [ -n "$newest_next" ] || newest_next="$cand"
+  if task_active "$cand"; then
+    active_next="$cand"
+    break
+  fi
+done <<EOF
+$next_candidates
+EOF
+[ -n "$active_next" ] && newest_next="$active_next"
 
 # ── Small helpers (jq when present, python3 otherwise) ────────────
 urlencode() {

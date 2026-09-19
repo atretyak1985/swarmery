@@ -47,16 +47,19 @@ task() {
   printf '%s' "$dir"
 }
 
-# hook_out <workspace-root> <port> [bridge-flag] — the hook's stdout.
+# hook_out <workspace-root> <port> [bridge-flag] [source] — the hook's stdout,
+# with the hook input the harness would pipe (source defaults to startup).
 hook_out() {
-  CLAUDE_PROJECT_DIR="$REPO" AGENT_WORKSPACE_ROOT="$1" AGENT_PROJECT=proj \
-    SWARMERY_PORT="$2" SWARMERY_CONTEXT_BRIDGE="${3:-1}" "$HOOK" 2>/dev/null
+  printf '{"session_id":"t","hook_event_name":"SessionStart","source":"%s"}' "${4:-startup}" \
+    | CLAUDE_PROJECT_DIR="$REPO" AGENT_WORKSPACE_ROOT="$1" AGENT_PROJECT=proj \
+      SWARMERY_PORT="$2" SWARMERY_CONTEXT_BRIDGE="${3:-1}" "$HOOK" 2>/dev/null
 }
 
-# hook_rc <workspace-root> <port> [bridge-flag] — the hook's exit code.
+# hook_rc <workspace-root> <port> [bridge-flag] [source] — the hook's exit code.
 hook_rc() {
-  CLAUDE_PROJECT_DIR="$REPO" AGENT_WORKSPACE_ROOT="$1" AGENT_PROJECT=proj \
-    SWARMERY_PORT="$2" SWARMERY_CONTEXT_BRIDGE="${3:-1}" "$HOOK" >/dev/null 2>&1
+  printf '{"session_id":"t","hook_event_name":"SessionStart","source":"%s"}' "${4:-startup}" \
+    | CLAUDE_PROJECT_DIR="$REPO" AGENT_WORKSPACE_ROOT="$1" AGENT_PROJECT=proj \
+      SWARMERY_PORT="$2" SWARMERY_CONTEXT_BRIDGE="${3:-1}" "$HOOK" >/dev/null 2>&1
   printf '%s' "$?"
 }
 
@@ -104,6 +107,18 @@ printf '# NEXT — newer\n- do the new thing\n' > "$newer/NEXT.md"
 touch -t 202609010900 "$older/NEXT.md"
 touch -t 202609020900 "$newer/NEXT.md"
 
+# WSACTIVE: the newer task is finished, the older one is still active — the
+# active one must win even though its NEXT.md is older.
+WSACTIVE="$TESTDIR/ws-active"
+act_done=$(task "$WSACTIVE" 2026/09/02 finished-task)
+act_live=$(task "$WSACTIVE" 2026/09/01 live-task)
+printf '# NEXT — finished\n- nothing left\n' > "$act_done/NEXT.md"
+printf '# NEXT — live\n- keep going\n' > "$act_live/NEXT.md"
+printf '# finished-task\n**Status:** done\n' > "$act_done/README.md"
+printf '# live-task\n**Status:** active\n' > "$act_live/README.md"
+touch -t 202609020900 "$act_done/NEXT.md"
+touch -t 202609010900 "$act_live/NEXT.md"
+
 # WSLINES: one long NEXT.md of short lines — proves the 40-line slice.
 WSLINES="$TESTDIR/ws-lines"
 lines_task=$(task "$WSLINES" 2026/09/03 long-task)
@@ -142,6 +157,28 @@ lacks    "$out" 'do the old thing'         "an older NEXT.md must not win"
 lacks    "$out" 'Handoff brief'            "no daemon means no handoff block"
 rc=$(hook_rc "$WS" "$DEAD_PORT")
 if [ "$rc" = "0" ]; then ok; else bad "a dead daemon must still exit 0 (got $rc)"; fi
+
+# ── The active task wins over a newer, finished one ───────────────
+out=$(hook_out "$WSACTIVE" "$DEAD_PORT")
+contains "$out" "### NEXT.md (live-task)" "active task's NEXT.md is chosen"
+lacks "$out" "finished-task" "a finished task's newer NEXT.md is passed over"
+# …and with no task card at all, the newest still wins (WS has no README.md).
+out=$(hook_out "$WS" "$DEAD_PORT")
+contains "$out" "### NEXT.md (newer-task)" "without task cards the newest NEXT.md is chosen"
+
+# ── A compaction is not a cold start ──────────────────────────────
+out=$(hook_out "$WS" "$DEAD_PORT" 1 compact)
+if [ -z "$out" ]; then ok; else bad "source=compact must inject nothing, got: $out"; fi
+rc=$(hook_rc "$WS" "$DEAD_PORT" 1 compact)
+if [ "$rc" = "0" ]; then ok; else bad "source=compact exited $rc, want 0"; fi
+for src in startup resume clear; do
+  out=$(hook_out "$WS" "$DEAD_PORT" 1 "$src")
+  contains "$out" "### NEXT.md (newer-task)" "source=$src still gets the bridge"
+done
+# No hook input at all (a hand-run hook, stdin at EOF) behaves as a cold start.
+out=$(CLAUDE_PROJECT_DIR="$REPO" AGENT_WORKSPACE_ROOT="$WS" AGENT_PROJECT=proj \
+  SWARMERY_PORT="$DEAD_PORT" "$HOOK" 2>/dev/null </dev/null)
+contains "$out" "### NEXT.md (newer-task)" "an empty hook input is a cold start"
 
 # ── Daemon serving a brief: both blocks ───────────────────────────
 start_stub hit
