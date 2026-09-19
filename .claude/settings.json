@@ -5,6 +5,7 @@
     "claude-eng-pack@swarmery": true,
     "core@swarmery": true,
     "design-pack@swarmery": true,
+    "graft-pack@swarmery": true,
     "graphify-pack@swarmery": true,
     "lsp-pack@swarmery": true,
     "web-pack@swarmery": true
