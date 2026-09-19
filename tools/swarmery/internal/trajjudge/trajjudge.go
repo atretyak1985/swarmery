@@ -6,7 +6,6 @@
 package trajjudge
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -246,12 +245,7 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// see internal/systemspawn for why they are inseparable and why a missing
 	// home means neither.
 	systemspawn.Attach(cmd)
-	cmd.Stdin = strings.NewReader(prompt)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("claude -p: %w; stderr: %s", err, strings.TrimSpace(stderr.String()))
-	}
-	return stdout.String(), nil
+	// One error path for all five runners: stdout is quoted alongside stderr,
+	// because the CLI prints some failures there and exits with an empty stderr.
+	return systemspawn.Run(ctx, cmd, prompt)
 }

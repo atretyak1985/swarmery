@@ -7,11 +7,8 @@ package retroanalysis
 // difference is the whole reason this is a separate package.
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
@@ -36,9 +33,6 @@ const defaultModel = "claude-opus-5"
 // aggregates is the hard part of this feature, and 'high' is the cost/quality
 // sweet spot the Opus 5 prompting guide names.
 const defaultEffort = "high"
-
-// stderrTailBytes caps how much captured stderr lands in retro_analyses.error.
-const stderrTailBytes = 4096
 
 // ClaudeRunner runs `claude -p --output-format text` with the prompt on stdin.
 //
@@ -87,25 +81,7 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// see internal/systemspawn for why they are inseparable and why a missing
 	// home means neither.
 	systemspawn.Attach(cmd)
-	cmd.Stdin = strings.NewReader(prompt)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("claude -p timed out after %s; stderr: %s", timeout, tail(stderr.String(), stderrTailBytes))
-		}
-		return "", fmt.Errorf("claude -p: %w; stderr: %s", err, tail(stderr.String(), stderrTailBytes))
-	}
-	return stdout.String(), nil
-}
-
-// tail returns the last ≤ n bytes of s, trimmed.
-func tail(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) > n {
-		s = s[len(s)-n:]
-	}
-	return s
+	// One error path for all five runners: stdout is quoted alongside stderr,
+	// because the CLI prints some failures there and exits with an empty stderr.
+	return systemspawn.Run(ctx, cmd, prompt)
 }

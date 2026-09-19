@@ -1,11 +1,8 @@
 package extract
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
@@ -35,10 +32,6 @@ const defaultModel = "claude-opus-5"
 // classification pass over a ≤16KB digest — per the Opus 5 prompting guide,
 // medium effort holds quality on such tasks at a fraction of the tokens.
 const defaultEffort = "medium"
-
-// stderrTailBytes caps how much captured stderr lands in the error (and thus in
-// the 502 detail the operator sees).
-const stderrTailBytes = 4096
 
 // ClaudeRunner runs `claude -p --output-format text` with the prompt on stdin.
 // Binary resolution is a plain PATH lookup — the same pattern as
@@ -89,25 +82,7 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// Attributing to "System" is also what keeps THIS run from capturing itself,
 	// since CaptureSkipReason refuses System-project sessions.
 	systemspawn.Attach(cmd)
-	cmd.Stdin = strings.NewReader(prompt)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("claude -p timed out after %s; stderr: %s", timeout, tail(stderr.String(), stderrTailBytes))
-		}
-		return "", fmt.Errorf("claude -p: %w; stderr: %s", err, tail(stderr.String(), stderrTailBytes))
-	}
-	return stdout.String(), nil
-}
-
-// tail returns the last ≤ n bytes of s, trimmed.
-func tail(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) > n {
-		s = s[len(s)-n:]
-	}
-	return s
+	// One error path for all five runners: stdout is quoted alongside stderr,
+	// because the CLI prints some failures there and exits with an empty stderr.
+	return systemspawn.Run(ctx, cmd, prompt)
 }
