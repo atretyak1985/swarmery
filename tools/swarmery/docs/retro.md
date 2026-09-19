@@ -132,7 +132,7 @@ writes it down honestly and then learns it again three tasks later, because a le
 finished task's retro doc and nothing carries it forward into the procedure the next run reads.
 
 R11 detects exactly that. `retro_lessons` rows are DELETE+reinserted on every rescan, so the row
-id could never be a cross-task identity — migration **0069** adds `retro_lessons.norm_title`,
+id could never be a cross-task identity — migration **0070** adds `retro_lessons.norm_title`,
 written by `wsingest.NormalizeLessonTitle`: lowercase, a leading `Lesson N:` ordinal dropped,
 punctuation folded to spaces, the stop-words `the a an of to in for and` removed, whitespace
 collapsed, 80 runes. So `Lesson 3: Sync-Cache Before Build!` and
@@ -140,7 +140,7 @@ collapsed, 80 runes. So `Lesson 3: Sync-Cache Before Build!` and
 stemming, no edit distance, no synonyms: a fold that guesses would merge two different lessons
 under one heading and nobody could see it had happened. A title that folds to nothing keeps
 `norm_title = ''`, and **every** reader skips `''` — it is the "not folded yet" marker, never an
-identity. Rows written before 0069 are folded once per daemon start by the wsingest backfill
+identity. Rows written before 0070 are folded once per daemon start by the wsingest backfill
 (`retro lessons backfilled: N` in the log); the insert path folds everything since.
 
 The rule fires when one `norm_title` appears in ≥ 3 **distinct tasks** inside the 14-day window.
@@ -272,7 +272,7 @@ return the same order; limit 100 groups. `count` is **distinct tasks**, `title` 
 `latest_action` come from the most recent occurrence (`latest_action` is `null` when that
 occurrence carried no `**Action**:` line), `tasks` is newest first. Rows with an empty
 `norm_title` are excluded — grouping by the "not folded yet" marker would pile every unrelated
-pre-0069 lesson into one bogus, high-count group at the top of exactly the view meant to show
+pre-0070 lesson into one bogus, high-count group at the top of exactly the view meant to show
 what recurs. At `count ≥ 3` the Retro page's **Group by lesson** view marks the row amber: that
 is the same threshold R11 fires on.
 
@@ -282,7 +282,7 @@ is the same threshold R11 fires on.
   `retro_improvements`, `task_loops`, `task_delegations`.
 - Migration **0019** — `recommendations` (rule, target, evidence JSON, status, unique
   `dedup_key`, baseline JSON).
-- Migration **0069** — `retro_lessons.norm_title` + `idx_retro_lessons_norm_title`: the lesson's
+- Migration **0070** — `retro_lessons.norm_title` + `idx_retro_lessons_norm_title`: the lesson's
   cross-task identity (R11, `?group=1`). `NOT NULL DEFAULT ''`; `''` means "not folded yet".
 - Migration **0072** — widens the `recommendations.target_kind` CHECK with `'skill'` (R11).
   Numbered **above 0071 on purpose**: migrations apply in filename order and 0071 rebuilds the

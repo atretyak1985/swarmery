@@ -8,9 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
+
+// handoffMaxAge bounds how old a brief may be and still be injected. A handoff
+// describes the state of ONE session; two weeks later the NEXT.md slice printed
+// above it in the same hook has moved on, and a brief from an abandoned session
+// would contradict it in every cold start of the project — forever, since
+// nothing prunes handoff rows. Past this age the endpoint answers 204, exactly
+// as if no brief existed.
+const handoffMaxAge = 14 * 24 * time.Hour
 
 // getLatestHandoff serves GET /api/handoffs/latest?cwd=<abs path> — the newest
 // handoff brief belonging to the PROJECT that cwd resolves to, so a cold
@@ -46,9 +55,10 @@ func (h *Handler) getLatestHandoff(w http.ResponseWriter, r *http.Request) {
 		FROM handoffs ho
 		JOIN sessions s ON s.id = ho.session_id
 		JOIN projects p ON p.id = s.project_id
-		WHERE p.path = ?
+		WHERE p.path = ? AND ho.created_at >= ?
 		ORDER BY ho.created_at DESC, ho.id DESC
-		LIMIT 1`, canon).Scan(&sessionUUID, &path, &tokens, &createdAt)
+		LIMIT 1`, canon, time.Now().Add(-handoffMaxAge).UTC().Format("2006-01-02T15:04:05Z"),
+	).Scan(&sessionUUID, &path, &tokens, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		w.WriteHeader(http.StatusNoContent)
 		return

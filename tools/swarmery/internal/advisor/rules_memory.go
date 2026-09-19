@@ -17,6 +17,8 @@ package advisor
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
 )
@@ -55,7 +57,15 @@ func r10MemoryIndex(db *sql.DB, win window) ([]finding, error) {
 		}
 		st, serr := memconsolidate.Inspect(memconsolidate.AutoMemoryDir(path))
 		if serr != nil {
-			continue // no index (or unreadable) — nothing to say about it
+			// No index is the healthy state. Anything else (permissions, a
+			// directory where the file should be) is skipped too — one bad
+			// project must not abort the whole advisor pass — but it is said
+			// out loud: a skipped project looks to resolveVanished exactly like
+			// a consolidated one, and an accepted R10 would be closed on it.
+			if !os.IsNotExist(serr) {
+				log.Printf("warn: advisor R10: %s: %v (skipped this pass)", slug, serr)
+			}
+			continue
 		}
 		if !r10Fires(st) {
 			continue

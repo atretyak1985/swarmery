@@ -139,7 +139,7 @@ var closedRe = regexp.MustCompile(`\b(DONE|MERGED|CLOSED|SHIPPED|RESOLVED|LIVE)\
 //     "no open tail" does not have. One live line changes verdict, correctly.
 //   - the `\bOPEN:` alternative is dropped as dead weight: `\bOPEN\b` already
 //     matches "OPEN:" (the `:` IS the trailing word boundary).
-var openRe = regexp.MustCompile(`\bOPEN\b|\bopen:|\btail\s*[=:]|\bimpl open\b|\bawaits\b`)
+var openRe = regexp.MustCompile(`\bOPEN\b|\b[Oo]pen:|\btail\s*[=:]|\bimpl open\b|\bawaits\b`)
 
 // openTailPhraseRe matches a counted open tail — "<N> <noun> open", as in
 // "4 deferrals open" or "2 phases open". It requires a number AND a word before

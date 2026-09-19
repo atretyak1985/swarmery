@@ -1097,7 +1097,7 @@ export interface RetroLessonsResp {
 
 /**
  * One lesson IDENTITY of GET /api/retro/lessons?group=1 — the same lesson folded
- * across every task that learned it (retro_lessons.norm_title, migration 0069).
+ * across every task that learned it (retro_lessons.norm_title, migration 0070).
  * The flat feed answers "what did we learn"; this answers "what do we keep
  * re-learning", which is the actionable half.
  */
@@ -1386,6 +1386,13 @@ export interface MemoryConsolidateResp {
   dryRun: boolean;
   plan: MemoryConsolidatePlan;
   result?: MemoryConsolidateResult;
+  /**
+   * Set when an apply failed part-way (the daemon answers 500 with the plan and
+   * the partial result ALONGSIDE the message). `result.moved` and
+   * `result.backupId` are then the recovery handles; the index may still list
+   * files that have already left the directory.
+   */
+  error?: string;
 }
 
 /** 409 body of a PUT whose base_hash no longer matches disk. */

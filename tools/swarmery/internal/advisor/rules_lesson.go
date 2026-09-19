@@ -60,7 +60,7 @@ type lessonGroup struct {
 // last 14 days", so a lesson that genuinely got absorbed into a procedure stops
 // being re-learned and the number falls (see metricValue's R11 case).
 //
-// Rows whose norm_title is still '' are excluded — '' is the "not folded yet"
+// Rows whose norm_title is still ” are excluded — ” is the "not folded yet"
 // marker, not an identity, and grouping by it would invent one enormous bogus
 // finding out of every unrelated pre-0070 lesson in the database.
 func r11RecurringLesson(db *sql.DB, win window) ([]finding, error) {

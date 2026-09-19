@@ -860,7 +860,7 @@ func isTruthyParam(q url.Values, key string) bool {
 // action" all need the SAME row to win, and expressing that as one correlated
 // SQL aggregate is how the three quietly start disagreeing.
 //
-// Rows with an empty norm_title are excluded. '' is the "not folded yet" marker
+// Rows with an empty norm_title are excluded. ” is the "not folded yet" marker
 // (migration 0070 + BackfillNormTitles), not an identity — grouping by it would
 // pile unrelated lessons into one bogus, high-count group at the top of exactly
 // the view meant to show what recurs.

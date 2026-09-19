@@ -118,7 +118,7 @@ func TestR11CountsDistinctTasksNotRows(t *testing.T) {
 	}
 }
 
-// TestR11IgnoresUnfoldedAndOutOfWindow: '' is the "not folded yet" marker, never
+// TestR11IgnoresUnfoldedAndOutOfWindow: ” is the "not folded yet" marker, never
 // an identity — grouping by it would pile every unrelated pre-0069 lesson into
 // one enormous bogus finding. A task outside the window does not count either.
 func TestR11IgnoresUnfoldedAndOutOfWindow(t *testing.T) {

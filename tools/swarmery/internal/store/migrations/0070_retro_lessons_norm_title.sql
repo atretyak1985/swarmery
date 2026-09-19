@@ -1,4 +1,4 @@
--- 0069: cross-task identity for retro lessons (agent-memory phase 4).
+-- 0070: cross-task identity for retro lessons (agent-memory phase 4).
 --
 -- `retro_lessons` rows are DELETE+reinserted on every retro rescan (wsingest
 -- artifacts.go applyRetro), so `id` is not an identity a second task can share.

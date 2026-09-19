@@ -540,7 +540,12 @@ func (h *Handler) resolveAutoMemoryDir(reqPath string) (string, error) {
 			continue // unreadable root — it cannot be the one being asked for
 		}
 		if candResolved == resolved {
-			return resolved, nil
+			// Return the candidate — the string built from the projects table —
+			// not the request-derived `resolved`. They are equal, but every
+			// path the caller touches from here on then derives from the DB
+			// row rather than from ?path=, which is also what makes the fence
+			// legible to a taint analysis (CodeQL go/path-injection).
+			return candResolved, nil
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -579,9 +584,21 @@ func writeMemoryPathErr(w http.ResponseWriter, err error) {
 // fsyncs, verifies byte-for-byte, then rotates — the exact contract of
 // sysedit.backupFile, but for files outside the registry.
 func backupMemoryFile(src string) error {
+	// The PUT just matched base_hash against this file, so it must exist: a
+	// vanished source here is a race worth refusing, not one to skip the way
+	// the plural helper does for a consolidation plan.
+	if _, err := os.Stat(src); err != nil {
+		return fmt.Errorf("memory: backup %s: %w", src, err)
+	}
 	_, err := backupMemoryFiles([]string{src})
 	return err
 }
+
+// BackupMemoryFiles is backupMemoryFiles for callers outside the package. The
+// `swarmery memory consolidate` CLI takes its pre-apply snapshot through it, so
+// the CLI and the API share ONE copy-verify + rotation idiom and cannot drift
+// (the CLI used to carry its own copy, which skipped fsync and never rotated).
+func BackupMemoryFiles(paths []string) (string, error) { return backupMemoryFiles(paths) }
 
 // backupMemoryFiles is the same contract for a SET of files that must be
 // recoverable together: ONE timestamp dir holds all of them, so a consolidation

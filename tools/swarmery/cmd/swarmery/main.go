@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -744,7 +743,7 @@ func cmdMemoryConsolidate(args []string) error {
 
 	res, err := memconsolidate.Apply(dir, plan, memconsolidate.ApplyOptions{
 		Now:    time.Now(),
-		Backup: cliBackupMemoryFiles,
+		Backup: api.BackupMemoryFiles,
 	})
 	if err != nil {
 		// Apply has no rollback by design, so the backup id and the list of files
@@ -774,63 +773,6 @@ func backupIDOrNone(id string) string {
 		return "none taken (the apply failed before the snapshot)"
 	}
 	return id
-}
-
-// cliBackupMemoryFiles mirrors internal/api's backupMemoryFiles for the CLI:
-// one timestamp dir under the shared config-backups root holds every file the
-// apply will touch, copied by absolute path and verified byte-for-byte, so a
-// consolidation is restored as ONE coherent snapshot. The daemon's own backup
-// helper is unexported (and lives in a package that imports this command's
-// dependencies), so the idiom is repeated here rather than exported: the backup
-// root and layout are identical, which is what an operator restoring actually
-// depends on.
-func cliBackupMemoryFiles(paths []string) (string, error) {
-	root := sysedit.DefaultBackupsDir()
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return "", err
-	}
-	base := time.Now().UTC().Format("2006-01-02T15-04-05Z")
-	name := base
-	var tsDir string
-	for i := 2; ; i++ {
-		candidate := filepath.Join(root, name)
-		mkErr := os.Mkdir(candidate, 0o755)
-		if mkErr == nil {
-			tsDir = candidate
-			break
-		}
-		if !os.IsExist(mkErr) {
-			return "", mkErr
-		}
-		name = fmt.Sprintf("%s-%d", base, i)
-	}
-	for _, src := range paths {
-		if _, serr := os.Stat(src); serr != nil {
-			if os.IsNotExist(serr) {
-				continue
-			}
-			return "", serr
-		}
-		dst := filepath.Join(tsDir, strings.TrimPrefix(filepath.Clean(src), string(os.PathSeparator)))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return "", err
-		}
-		data, rerr := os.ReadFile(src)
-		if rerr != nil {
-			return "", rerr
-		}
-		if werr := os.WriteFile(dst, data, 0o600); werr != nil {
-			return "", werr
-		}
-		check, cerr := os.ReadFile(dst)
-		if cerr != nil {
-			return "", cerr
-		}
-		if !bytes.Equal(data, check) {
-			return "", fmt.Errorf("memory: backup verification failed: %s != %s", dst, src)
-		}
-	}
-	return name, nil
 }
 
 func cmdPrune(args []string) error {
@@ -1877,6 +1819,20 @@ func cmdServe(args []string) error {
 	retentionDays := prune.RetentionDays()
 	if retentionDays == 0 {
 		log.Printf("retention prune: disabled")
+	} else {
+		log.Printf("retention prune: window=%dd (%s), first pass in %s",
+			retentionDays, prune.RetentionDaysEnv, prune.FirstTickDelay)
+	}
+	// Revision retention is a handful of UPDATEs on plan_revisions and ran
+	// inline at every start before telemetry retention joined this goroutine.
+	// Keep that: a daemon restarted more often than FirstTickDelay (a launchd
+	// restart loop, a `make install` cadence) would otherwise never prune a
+	// revision. Only the telemetry pass — the destructive transaction that
+	// contends with the startup replay — is deferred below.
+	if st, err := prune.PruneRevisions(db, time.Now()); err != nil {
+		log.Printf("error: revision prune: %v", err)
+	} else if st.Superseded > 0 || st.ContentNulled > 0 {
+		log.Printf("revision prune: superseded=%d content_nulled=%d", st.Superseded, st.ContentNulled)
 	}
 	go func() {
 		tick := func() {

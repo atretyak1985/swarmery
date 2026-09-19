@@ -170,6 +170,20 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
       setError(null);
       consolidateMemory(dir, dryRun)
         .then((r) => {
+          if (r.error !== undefined) {
+            // A half-applied consolidation: files may already have moved and
+            // the index may still list them. Keep the backup id and the moved
+            // count on screen next to the message — they are how the operator
+            // recovers — and spend the plan, since the directory has changed.
+            const moved = r.result?.moved ?? [];
+            setError(r.error);
+            setApplied(
+              `partial: moved ${String(moved.length)} · backup ${r.result?.backupId ?? 'none'}`,
+            );
+            setResp(null);
+            onApplied();
+            return;
+          }
           setResp(r);
           if (!dryRun) {
             const moved = r.result?.moved ?? [];
@@ -207,7 +221,13 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
             ? `${fmtBytes(plan.indexBytes)} · ${String(plan.closedCount)}/${String(plan.totalLines)} lines closed`
             : 'move finished entries out of the always-loaded index'}
         </span>
-        {applied !== null && <span className="font-mono text-[10.5px] text-green">{applied}</span>}
+        {applied !== null && (
+          <span
+            className={`font-mono text-[10.5px] ${applied.startsWith('partial:') ? 'text-amber' : 'text-green'}`}
+          >
+            {applied}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => {

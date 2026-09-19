@@ -8,9 +8,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
+
+// handoffStamp is a handoffs.created_at value `ago` from now, in the column's
+// own spelling (strftime('%Y-%m-%dT%H:%M:%fZ')).
+func handoffStamp(ago time.Duration) string {
+	return time.Now().Add(ago).UTC().Format("2006-01-02T15:04:05.000Z")
+}
 
 // latestHandoffGet issues GET /api/handoffs/latest?cwd=… and returns the
 // response; the caller closes the body.
@@ -33,13 +40,16 @@ func TestLatestHandoffResolvesCwdToProject(t *testing.T) {
 	if err := os.WriteFile(path, []byte(brief), 0o644); err != nil {
 		t.Fatalf("write brief: %v", err)
 	}
-	// Two rows: the newest must win regardless of insert order.
+	// Two rows: the newest must win regardless of insert order. Stamps are
+	// relative to now — the endpoint has an age bound, and a fixture pinned to
+	// a calendar date would start answering 204 the day it aged out.
 	if _, err := db.Exec(`INSERT INTO handoffs (session_id, path, context_tokens, created_at)
-		VALUES (1, '/nonexistent/older.md', 90000, '2026-09-01T09:00:00Z')`); err != nil {
+		VALUES (1, '/nonexistent/older.md', 90000, ?)`, handoffStamp(-3*24*time.Hour)); err != nil {
 		t.Fatalf("insert older handoff: %v", err)
 	}
+	newest := handoffStamp(-2 * time.Hour)
 	if _, err := db.Exec(`INSERT INTO handoffs (session_id, path, context_tokens, created_at)
-		VALUES (1, ?, 164000, '2026-09-17T18:30:00Z')`, path); err != nil {
+		VALUES (1, ?, 164000, ?)`, path, newest); err != nil {
 		t.Fatalf("insert handoff: %v", err)
 	}
 
@@ -88,7 +98,7 @@ func TestLatestHandoffResolvesCwdToProject(t *testing.T) {
 			if got.SessionUUID != "u-ho-1" {
 				t.Errorf("session_uuid = %q, want u-ho-1", got.SessionUUID)
 			}
-			if got.CreatedAt != "2026-09-17T18:30:00Z" {
+			if got.CreatedAt != newest {
 				t.Errorf("created_at = %q — the newest row must win", got.CreatedAt)
 			}
 			if got.ContextTokens != 164000 {
@@ -137,5 +147,26 @@ func TestLatestHandoff204WhenBriefUnreadable(t *testing.T) {
 	}
 	if body, _ := io.ReadAll(resp.Body); len(body) != 0 {
 		t.Errorf("body = %q — a 204 must not leak the brief path", body)
+	}
+}
+
+// A brief older than handoffMaxAge is not injected: the project has moved on
+// and nothing would ever retire the row otherwise. Both a stale-only project
+// and a stale row sitting next to a fresh one are covered — the fresh one wins
+// on ORDER BY anyway, the stale-only case is what the age bound decides.
+func TestLatestHandoffIgnoresStaleBriefs(t *testing.T) {
+	srv, db := handoffTestServer(t)
+	path := filepath.Join(t.TempDir(), "u-ho-stale.md")
+	if err := os.WriteFile(path, []byte("# stale\n"), 0o644); err != nil {
+		t.Fatalf("write brief: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO handoffs (session_id, path, context_tokens, created_at)
+		VALUES (1, ?, 120000, ?)`, path, handoffStamp(-(handoffMaxAge + 24*time.Hour))); err != nil {
+		t.Fatalf("insert stale handoff: %v", err)
+	}
+	resp := latestHandoffGet(t, srv.URL, "/tmp/hp")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("a %s-old brief: status = %d, want 204", handoffMaxAge, resp.StatusCode)
 	}
 }

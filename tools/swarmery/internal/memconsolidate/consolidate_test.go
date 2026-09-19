@@ -612,3 +612,17 @@ func TestFormatPlanMentionsCountsAndReasons(t *testing.T) {
 		}
 	}
 }
+
+// A capitalised "Open:" tail is the same veto as "open:" — the index is
+// hand-written, and a sentence-initial spelling after a closed stamp is common.
+func TestIsClosedCapitalisedOpenTailVetoes(t *testing.T) {
+	for _, hook := range []string{
+		"MERGED 2026-08-12; Open: light-mode check",
+		"DONE 2026-07-27; open: the dogfood",
+		"SHIPPED — OPEN: merge to dev",
+	} {
+		if IsClosed(hook) {
+			t.Errorf("IsClosed(%q) = true, want the open tail to veto", hook)
+		}
+	}
+}
