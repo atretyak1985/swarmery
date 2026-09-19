@@ -1,16 +1,12 @@
 package extract
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/systemspawn"
 )
 
 // Runner executes one extraction prompt and returns the model's raw stdout.
@@ -37,10 +33,6 @@ const defaultModel = "claude-opus-5"
 // medium effort holds quality on such tasks at a fraction of the tokens.
 const defaultEffort = "medium"
 
-// stderrTailBytes caps how much captured stderr lands in the error (and thus in
-// the 502 detail the operator sees).
-const stderrTailBytes = 4096
-
 // ClaudeRunner runs `claude -p --output-format text` with the prompt on stdin.
 // Binary resolution is a plain PATH lookup — the same pattern as
 // internal/improve's twin (the daemon's launchd/service PATH must contain the
@@ -52,12 +44,6 @@ type ClaudeRunner struct {
 	Model string
 	// Effort overrides defaultEffort when non-empty.
 	Effort string
-}
-
-// isDir reports whether path exists and is a directory.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
 }
 
 func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
@@ -89,36 +75,14 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// unaffected. Keep the flag order identical to the improve twin (trajjudge
 	// matches minus --effort).
 	cmd := exec.CommandContext(ctx, bin, "-p", "--model", model, "--effort", effort, "--output-format", "text", "--setting-sources", "project,local")
-	// System home, not the inherited launchd cwd "/": transcripts then attribute
-	// to the deliberate "System" project (see internal/ingest) — which is also
-	// what keeps THIS run from capturing itself, since CaptureSkipReason refuses
-	// System-project sessions. Only when the dir actually exists: a missing dir
-	// would fail the spawn with chdir ENOENT, and losing attribution beats not
-	// running at all (the daemon owns ~/.swarmery, so in production it is there).
-	if home, err := os.UserHomeDir(); err == nil {
-		if dir := filepath.Join(home, ".swarmery"); isDir(dir) {
-			cmd.Dir = dir
-		}
-	}
-	cmd.Stdin = strings.NewReader(prompt)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("claude -p timed out after %s; stderr: %s", timeout, tail(stderr.String(), stderrTailBytes))
-		}
-		return "", fmt.Errorf("claude -p: %w; stderr: %s", err, tail(stderr.String(), stderrTailBytes))
-	}
-	return stdout.String(), nil
-}
-
-// tail returns the last ≤ n bytes of s, trimmed.
-func tail(s string, n int) string {
-	s = strings.TrimSpace(s)
-	if len(s) > n {
-		s = s[len(s)-n:]
-	}
-	return s
+	// Cwd and account in one decision, both taken from the System project home:
+	// see internal/systemspawn for why they are inseparable and why a missing
+	// home means neither.
+	//
+	// Attributing to "System" is also what keeps THIS run from capturing itself,
+	// since CaptureSkipReason refuses System-project sessions.
+	systemspawn.Attach(cmd)
+	// One error path for all five runners: stdout is quoted alongside stderr,
+	// because the CLI prints some failures there and exits with an empty stderr.
+	return systemspawn.Run(ctx, cmd, prompt)
 }
