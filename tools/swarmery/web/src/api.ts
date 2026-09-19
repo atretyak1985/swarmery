@@ -35,6 +35,7 @@ import type {
   HealthResponse,
   MatrixResp,
   DuplicatePlaybookResponse,
+  MemoryConsolidateResp,
   MemoryFileContent,
   MemoryListResp,
   OnboardConfig,
@@ -81,6 +82,7 @@ import type {
   RemoveAccountResponse,
   RetroAgentsResp,
   RetroFrictionResp,
+  RetroLessonGroupsResp,
   RetroLessonsResp,
   RetroAnalysis,
   RetroAnalysisResp,
@@ -713,6 +715,16 @@ export function fetchRetroLessons(range: AnalyticsRange = {}): Promise<RetroLess
   return get(`/api/retro/lessons?${rangeQuery(range, {})}`);
 }
 
+/**
+ * The same window folded by lesson identity (agent-memory phase 4): one row per
+ * `norm_title` with the tasks that learned it. Same endpoint, same filters —
+ * `?group=1` only changes the question, so the two views can never drift apart.
+ */
+export function fetchRetroLessonGroups(range: AnalyticsRange = {}): Promise<RetroLessonGroupsResp> {
+  if (MOCK) return mockApi.retroLessonGroups();
+  return get(`/api/retro/lessons?group=1&${rangeQuery(range, {})}`);
+}
+
 /** Estimation accuracy + loop/delegation counts per task (retro phase 2). */
 export function fetchRetroTasks(range: AnalyticsRange = {}): Promise<RetroTasksResp> {
   if (MOCK) return mockApi.retroTasks();
@@ -923,6 +935,35 @@ export async function putMemoryFile(
     throw new Error(data.error ?? `save failed: ${String(res.status)}`);
   }
   return (await res.json()) as MemoryFileContent;
+}
+
+/**
+ * POST /api/memory/consolidate?path=<auto-memory dir>&dry_run= — plan, or
+ * perform, the consolidation of the always-loaded auto-memory index.
+ *
+ * `dryRun` defaults to true on BOTH sides: the caller has to ask for the write,
+ * and the daemon treats anything but an explicit `dry_run=0` as a plan.
+ */
+export async function consolidateMemory(
+  dir: string,
+  dryRun = true,
+): Promise<MemoryConsolidateResp> {
+  if (MOCK) return mockApi.consolidateMemory(dir, dryRun);
+  const qs = new URLSearchParams({ path: dir, dry_run: dryRun ? '1' : '0' });
+  const res = await fetch(`/api/memory/consolidate?${qs.toString()}`, { method: 'POST' });
+  const data = (await res.json().catch(() => ({}))) as Partial<MemoryConsolidateResp>;
+  if (!res.ok) {
+    const error = data.error ?? `consolidate failed: ${String(res.status)}`;
+    // A failed APPLY is answered with the plan and the partial result — the
+    // backup id and the files already moved are the operator's only recovery
+    // handles — so that body is handed back with its error set, not thrown
+    // away. Anything without a plan (a 400 fence refusal, a 403) is an error.
+    if (data.plan !== undefined) {
+      return { ...data, plan: data.plan, dryRun: data.dryRun ?? !dryRun, error };
+    }
+    throw new Error(error);
+  }
+  return data as MemoryConsolidateResp;
 }
 
 // --- self-improvement phase 4 — agent change proposals -----------------------

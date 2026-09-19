@@ -4,7 +4,7 @@
 //
 //	proposed → accepted|dismissed → adopted → verified
 //
-// Run() evaluates the seven rules (rules.go) over the trailing 14-day window,
+// Run() evaluates every rule (rules.go) over the trailing 14-day window,
 // upserts recommendations under the dedup contract, auto-detects adoption
 // and verification. The daemon calls Run at startup and on a 24h ticker;
 // POST /api/retro/advise calls it on demand.
@@ -28,6 +28,11 @@
 //	config      R6     stays accepted                   better over [accepted_at, now),
 //	                                                    ≥ VerifyAfterDays after
 //	                                                    acceptance (skips adopted)
+//	memory      R10    none — the rule re-reads the     none: notification only. The
+//	project     R7     world every pass, so a fixed     baseline still snapshots the
+//	session     R8 R9  condition simply stops firing    metric where one exists (R10,
+//	skill       R11    and resolveVanished closes it    R11), but verify() never
+//	                                                    selects these kinds.
 //
 // Verification never fires on absence of data: each metric carries an
 // activity floor (R1 ≥1 tool call, R2 ≥R2MinRuns runs, R4 ≥R4MinRows ledger
@@ -50,6 +55,7 @@ package advisor
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -57,6 +63,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
 )
 
 // Lifecycle thresholds.
@@ -140,6 +147,8 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 		{"R7", func() ([]finding, error) { return r7StaleArchitectureMap(db, win, now) }},
 		{"R8", func() ([]finding, error) { return r8TrajectoryAntiPatterns(db, win) }},
 		{"R9", func() ([]finding, error) { return r9FatSessions(db, win) }},
+		{"R10", func() ([]finding, error) { return r10MemoryIndex(db, win) }},
+		{"R11", func() ([]finding, error) { return r11RecurringLesson(db, win) }},
 	}
 	// fired records every (rule, target) this pass produced, so the sweep below
 	// can tell "the condition is gone" from "the rule never ran".
@@ -180,6 +189,8 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 //
 //   - R7 reads the architecture map off disk and compares it to git HEAD.
 //   - R8 and R9 name one specific agent trajectory or one session in the window.
+//   - R10 re-reads the auto-memory index off disk and re-counts it, so a
+//     consolidated index simply stops firing.
 //
 // Every other rule (R1–R6) is a rate over stored events, where "did not fire"
 // is ambiguous: the problem may have been fixed, or the tool may simply not
@@ -188,7 +199,7 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 // cannot be the discriminator here. Absence of data is not evidence of repair,
 // so a rate rule's ACCEPTED row is never closed by this sweep — adoption and
 // verification own those, and they will say so with numbers.
-var selfCheckingRules = map[string]bool{"R7": true, "R8": true, "R9": true}
+var selfCheckingRules = map[string]bool{"R7": true, "R8": true, "R9": true, "R10": true}
 
 // resolveVanished closes recommendations whose condition no longer reproduces.
 //
@@ -944,6 +955,36 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 		return "anti_pattern", 0, false, nil
 	case "R9":
 		return "fat_session", 0, false, nil
+	case "R10":
+		// R10 (auto-memory index budget) is filesystem-grounded like R7, but
+		// unlike it there IS a scalar worth snapshotting: the closed share of
+		// the index at the moment the operator accepted. Lower is better, which
+		// is relImprovement's default direction, so a consolidation shows up as
+		// a real improvement number on the card. The target is the project slug
+		// (findings are per project), so the path comes back out of the
+		// registry — a project that vanished, or one with no index on disk,
+		// reports ok=false and the verify loop never acts on absence of data.
+		var path string
+		if err := db.QueryRow(`SELECT path FROM projects WHERE slug = ?`, target).Scan(&path); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return "memory_index_closed_share", 0, false, nil
+			}
+			return "memory_index_closed_share", 0, false, err
+		}
+		st, serr := memconsolidate.Inspect(memconsolidate.AutoMemoryDir(path))
+		if serr != nil || st.TotalLines == 0 {
+			return "memory_index_closed_share", 0, false, nil
+		}
+		return "memory_index_closed_share", st.ClosedShare, true, nil
+	case "R11":
+		// R11 (a lesson re-learned across tasks) counts DISTINCT tasks carrying
+		// the lesson identity inside the window. Lower is better — a lesson that
+		// got absorbed into a procedure stops being re-learned and the windowed
+		// count falls. Not normalized per day: it is a distinct-entity count over
+		// a fixed-length window, not an event rate, and BaselineFor and verify
+		// always use windows of the same length (WindowDays).
+		v, ok, verr := lessonTaskCount(db, target, win)
+		return "lesson_task_count", v, ok, verr
 	default:
 		return "", 0, false, fmt.Errorf("unknown rule %q", rule)
 	}

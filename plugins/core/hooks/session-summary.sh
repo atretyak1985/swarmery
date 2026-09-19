@@ -1,6 +1,35 @@
 #!/bin/bash
 # Session Summary Hook for Claude Code
 # Stop hook — aggregates all tool calls and shows a colored session summary
+#
+# It also owns log ROTATION for the append-only files it feeds, because this is
+# the workspace's write path (the daemon only ever reads the workspace). Windows:
+#   ${WS_ROOT}/sessions/*.json          30d
+#   ${WS_ROOT}/metrics/session-*.jsonl  30d
+#   ${WS_ROOT}/logs/trace-*.jsonl       30d
+#   /tmp/claude-session-*.jsonl          7d   (per-day statusline substrate)
+#
+# The metrics window covers session-*.jsonl ONLY, never metrics/*.jsonl. The
+# other files there (bash-shape-guard.jsonl, gate-bypasses.jsonl) are single
+# append-only AUDIT logs, not one-file-per-session: an mtime sweep would delete
+# the entire guard/bypass history 30 days after its last write — i.e. exactly
+# when a quiet period makes it most worth keeping. Only per-session files rotate.
+#
+# ${WS_ROOT}/working/** is never swept — task dirs are the work product.
+# The /tmp sweep runs OUTSIDE the workspace block (which is NOT the same as
+# unconditionally): WS_ROOT is empty whenever AGENT_PROJECT is unset and no
+# ancestor carries both .claude-workspace and .claude, and in that configuration
+# a workspace-gated sweep would let /tmp grow forever — the unbounded growth
+# this rotation exists to stop.
+#
+# The real precondition for EVERY sweep here is the early exit further down:
+# with no non-empty substrate file for today, the hook `exit 0`s before any
+# rotation runs, so a session that recorded no tool calls rotates nothing at
+# all. That is accepted rather than fixed — this is a summary hook with nothing
+# to summarise, and a machine idle enough to produce no substrate file is not
+# the machine whose /tmp is growing — but it does mean the sweeps are reached,
+# not guaranteed.
+# Covered by scripts/tests/session-summary-rotation.test.sh.
 set -e
 
 # ── Colors ────────────────────────────────────────────────────────
@@ -15,8 +44,16 @@ WHITE='\033[1;37m'
 today=$(date +%Y%m%d)
 SESSION_FILE=""
 
+# Where the per-day statusline substrate lives. The default is the literal /tmp
+# every other hook in this pack writes to (session-start, subagent-start/stop,
+# pre/post-compact, notify-completion) — this variable exists so the rotation
+# test can point the hook at a sandbox instead of sweeping a real developer's
+# /tmp. Overriding it in production would desync this hook from the six that
+# hardcode /tmp, so leave it unset outside tests.
+CLAUDE_SESSION_TMP="${CLAUDE_SESSION_TMP:-/tmp}"
+
 # Try to find the most recent session file for today
-for f in /tmp/claude-session-*-"${today}".jsonl "/tmp/claude-session-${today}.jsonl"; do
+for f in "${CLAUDE_SESSION_TMP}"/claude-session-*-"${today}".jsonl "${CLAUDE_SESSION_TMP}/claude-session-${today}.jsonl"; do
   if [ -f "$f" ] && [ -s "$f" ]; then
     SESSION_FILE="$f"
   fi
@@ -265,6 +302,30 @@ else
   done
 fi
 
+# 0) Rotate the per-day statusline substrate in /tmp. This sweep is OUTSIDE the
+#    workspace block on purpose: WS_ROOT is empty whenever AGENT_PROJECT is unset
+#    AND no ancestor of the project dir carries both .claude-workspace and
+#    .claude, and gating the sweep on it meant /tmp grew without bound in exactly
+#    that configuration — the failure this rotation exists to prevent. The files
+#    are regenerated per day and only ever read for "today", hence 7d, tighter
+#    than the 30d workspace windows below. -maxdepth 1 and -type f keep it to the
+#    flat substrate files; || true keeps a SessionEnd hook from failing on a
+#    read-only or absent path.
+#
+#    "Outside the workspace block" is the ONLY guarantee here — it is not
+#    unconditional. The SESSION_FILE check near the top of this script exits 0
+#    when today's substrate file is missing or empty, which is upstream of this
+#    line, so a session that recorded no tool calls never reaches this sweep.
+#    Accepted: no substrate file today means nothing was added to /tmp today
+#    either, so the backlog cannot grow while the sweep is being skipped.
+#
+#    The trailing slash is load-bearing. On macOS /tmp is a symlink to
+#    /private/tmp, and find (default -P) does not follow a symlinked starting
+#    point: `find /tmp -maxdepth 1 -type f` lists nothing there, so this sweep
+#    was a silent no-op on the platform it matters most on. `/tmp/` resolves
+#    through the link before find ever sees it.
+find "${CLAUDE_SESSION_TMP%/}/" -maxdepth 1 -name 'claude-session-*.jsonl' -type f -mtime +7 -delete 2>/dev/null || true
+
 if [ -n "$WS_ROOT" ]; then
   human_date=$(date +%Y-%m-%d)
 
@@ -274,6 +335,26 @@ if [ -n "$WS_ROOT" ]; then
       cp "$diff_json_file" "${WS_ROOT}/sessions/${human_date}-$$.json" 2>/dev/null || true
     find "${WS_ROOT}/sessions" -name '*.json' -type f -mtime +30 -delete 2>/dev/null || true
   fi
+
+  # 1b) Rotate the other append-only workspace logs nobody rotates. Each of these
+  #     grows one file per session/day forever; the sessions mirror above was the
+  #     only one with a window. 30d matches that mirror. (The /tmp substrate has
+  #     its own, tighter window and is swept above — outside this workspace
+  #     block, though still downstream of the SESSION_FILE early exit, so
+  #     "outside the workspace block" rather than "unconditionally".)
+  #
+  #     The metrics pattern is 'session-*.jsonl', NOT '*.jsonl': the other files
+  #     in that directory (bash-shape-guard.jsonl, gate-bypasses.jsonl) are SINGLE
+  #     append-only audit logs rather than one-file-per-session, so an mtime sweep
+  #     would delete the whole audit trail 30 days after its last write.
+  #
+  #     Deliberately NOT swept here: ${WS_ROOT}/working/** (task dirs are the
+  #     work product — pruning them would delete plans and reports), and
+  #     ${WS_ROOT}/sessions, which the mirror above already handled. -type f keeps
+  #     the globs from ever matching a directory; || true keeps a SessionEnd hook
+  #     from failing on a read-only or absent path.
+  find "${WS_ROOT}/metrics" -name 'session-*.jsonl' -type f -mtime +30 -delete 2>/dev/null || true
+  find "${WS_ROOT}/logs" -name 'trace-*.jsonl' -type f -mtime +30 -delete 2>/dev/null || true
 
   # 2) Link session → tasks: any working/YYYY/MM/DD/{slug}/ path touched this session
   #    gets a row appended to that task's logs/sessions.md. The canonical task-id is the

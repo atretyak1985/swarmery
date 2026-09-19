@@ -148,6 +148,20 @@ card** instead of carrying a second copy that will drift. Keep the memory line a
 relative dates to absolute while you're in there (`rules/ALWAYS.md` memory hygiene), and keep
 the `MEMORY.md` index in sync.
 
+Then measure what the index still costs. `MEMORY.md` is loaded into every conversation, so a
+long tail of closed entries is paid for on every turn:
+
+```bash
+swarmery memory consolidate --project "$(pwd)"   # plans only; writing needs --yes
+```
+
+Paste its headline into the landing report as
+`Memory consolidation: N closed / M total (dry-run)`. The command **plans unless it is given
+`--yes`**, so a bare invocation here is safe — and `--yes` is never correct in a landing:
+landing reports the number, moving files is the operator's call, made from the Memory page's
+Consolidate panel or a deliberate second run. Skip the line (`n/a`) if the `swarmery` CLI is not
+on the machine.
+
 ## 7. Landing report
 
 End with a compact report — checklist, not prose:
@@ -159,6 +173,7 @@ Landed:
   NEXT.md written:     working/YYYY/MM/DD/<slug>/NEXT.md   (or "none — nothing in-flight")
   Follow-ups filed:    <n> in SUMMARY  ·  Jira: <PROJECT-KEY>-…  (or "none / not confirmed")
   Memory trimmed:      <file> → pointer             (or "n/a")
+  Memory consolidation: N closed / M total (dry-run) (or "n/a")
 ```
 
 ---

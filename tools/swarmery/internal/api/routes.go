@@ -59,6 +59,10 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/sessions", h.listSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/{id}/handoff", h.getSessionHandoff)
+	// …and the same brief keyed by PROJECT instead of session: the newest one
+	// for the project a cwd resolves to, for the SessionStart context bridge
+	// (handoff_latest.go). 204 when there is nothing to inject.
+	mux.HandleFunc("GET /api/handoffs/latest", h.getLatestHandoff)
 	// per-tool context attribution: parses the session transcript on demand and
 	// ranks the tools driving context growth (context_hogs.go). 404 when no
 	// transcript is on disk.
@@ -378,6 +382,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/projects/{id}/memory", h.listMemory)
 	mux.HandleFunc("GET /api/projects/{id}/memory/file", h.getMemoryFile)
 	mux.HandleFunc("PUT /api/projects/{id}/memory/file", requireLocalOrigin(h.putMemoryFile))
+	// agent-memory phase 3: consolidate the always-loaded auto-memory index.
+	// Not project-scoped — the handle is the auto-memory DIRECTORY, and the
+	// fence checks it against every registered project's root. dry_run is the
+	// default; only an explicit dry_run=0 moves files (under one backup).
+	mux.HandleFunc("POST /api/memory/consolidate", requireLocalOrigin(h.consolidateMemory))
 
 	// fusion phase 14: analytics uplift — Command-Center adoptions our store
 	// already backs (stats_uplift.go): autonomy ratio, productivity
