@@ -53,12 +53,28 @@ jobs:
           done
           ( cd dist && sha256sum swarmery-* > SHA256SUMS )
 
+      # The release body opens with the marketplace totals derived from the
+      # tree — the same numbers README.md and site/index.html are generated
+      # from — so no release description is ever typed by hand and drifts.
+      # `set -e` is the guard: a release WITHOUT numbers would be fine, a
+      # release with wrong numbers would not, so a failing counts.sh fails
+      # the job rather than shipping a body without the block.
+      - name: Render marketplace totals for the release notes
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          bash scripts/docgen/counts.sh --markdown > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
+          grep -q 'Marketplace totals' "$RUNNER_TEMP/release-notes.md"
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # --notes-file lands ABOVE the auto-generated changelog; both stay.
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
             --generate-notes \
             dist/swarmery-* dist/SHA256SUMS
