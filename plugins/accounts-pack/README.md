@@ -172,8 +172,10 @@ operator's work tokens have no business in a personal project's sessions.
 
 swarmery keeps them in a per-account store and injects them wherever it starts
 a `claude` for a bound project — every daemon engine (dispatch, verify, plan and
-phase runs, planning, routines, improve, retro analysis, provisioning), the
-dashboard's resume and terminal dock, and `swarmery account exec`:
+phase runs, planning, routines, provisioning, and the background runners that
+work out of the daemon's own home: improve, retro analysis, trajectory judging,
+handoff generation, extraction), the dashboard's resume and terminal dock, and
+`swarmery account exec`:
 
 ```
 <SWARMERY_SECRETS_DIR or ~/.swarmery/secrets>/<account>.env    dir 0700, file 0600
