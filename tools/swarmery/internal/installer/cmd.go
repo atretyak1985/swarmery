@@ -3,6 +3,7 @@ package installer
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"runtime"
@@ -82,11 +83,11 @@ func CmdInstall(args []string) error {
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 
-	sys, err := realSystem()
+	sys, err := realService()
 	if err != nil {
 		return err
 	}
-	prev := sys.ExistingPlistEnv()
+	prev := sys.ExistingEnv()
 
 	env, preserved := mergeInstallEnv(prev, set, map[string]string{
 		"onboard-roots":  *onboardRoots,
@@ -97,7 +98,7 @@ func CmdInstall(args []string) error {
 		"claude-config-dir": *claudeConfigDir,
 	}, os.LookupEnv)
 	for _, k := range preserved {
-		fmt.Fprintf(os.Stdout, "  preserving %s from existing plist\n", k)
+		fmt.Fprintf(os.Stdout, "  preserving %s from existing %s\n", k, sys.DefinitionKind())
 	}
 	resolvedPort := resolveInstallPort(prev, set["port"], *port)
 
@@ -186,7 +187,7 @@ func resolveInstallPort(prev map[string]string, explicit bool, flagVal int) int 
 func CmdUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 	fs.Parse(args)
-	sys, err := realSystem()
+	sys, err := realService()
 	if err != nil {
 		return err
 	}
@@ -197,18 +198,28 @@ func CmdUninstall(args []string) error {
 func CmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	fs.Parse(args)
-	sys, err := realSystem()
+	sys, err := realService()
 	if err != nil {
 		return err
 	}
 	return sys.Status()
 }
 
-// realSystem wires a System against the actual host environment.
-func realSystem() (*System, error) {
-	if runtime.GOOS != "darwin" {
-		return nil, fmt.Errorf("install/uninstall/status use launchd and are macOS-only (got %s)", runtime.GOOS)
-	}
+// service is what the three verbs need from a backend. Two implementations:
+// *System (launchd, macOS) and *Systemd (systemd --user, Linux).
+type service interface {
+	Install(sourceBin string, port int, env ...EnvVar) error
+	Uninstall() error
+	Status() error
+	// ExistingEnv reads the environment baked into the installed service
+	// definition, so a reinstall can preserve what was not re-supplied.
+	ExistingEnv() map[string]string
+	// DefinitionKind names that definition in operator output ("plist", "unit file").
+	DefinitionKind() string
+}
+
+// realService wires the backend for the actual host environment.
+func realService() (service, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolve home dir: %w", err)
@@ -217,7 +228,20 @@ func realSystem() (*System, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve current user: %w", err)
 	}
-	return &System{Home: home, UID: u.Uid, Run: ExecRunner{}, Out: os.Stdout}, nil
+	return newService(runtime.GOOS, home, u.Uid, ExecRunner{}, os.Stdout)
+}
+
+// newService is realService's pure core: the GOOS switch, with every input
+// injectable so a test can exercise the choice on any host.
+func newService(goos, home, uid string, run Runner, out io.Writer) (service, error) {
+	switch goos {
+	case "darwin":
+		return &System{Home: home, UID: uid, Run: run, Out: out}, nil
+	case "linux":
+		return &Systemd{Home: home, Run: run, Out: out}, nil
+	default:
+		return nil, fmt.Errorf("install/uninstall/service-status need launchd (macOS) or systemd --user (Linux); got %s", goos)
+	}
 }
 
 // envPort mirrors the serve command's SWARMERY_PORT handling, but returns 0
