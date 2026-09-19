@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -214,18 +215,41 @@ func isTransient(err error) bool {
 	return false
 }
 
-// safeRev rejects revision arguments that could be read as git options. Both
-// `from` and `to` reach here from a query string, and `--upload-pack=…` in
-// argv[n] is the classic way a "just two revisions" call turns into an exec.
+// revPattern is the allow-list a revision must match before it is handed to
+// git: a sha, a branch or tag name, a remote-tracking ref, or the usual
+// suffixes (`HEAD~2`, `v1.0^2`, `main@{u}`). The first character is a letter
+// or digit, so nothing here can ever be read as an option; the rest is the
+// refname alphabet plus the revision punctuation git itself accepts.
+var revPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/@^~{}-]*$`)
+
+// maxRevLen bounds a revision argument: the longest legitimate value is a
+// remote-tracking ref of a few dozen characters; a sha is 40 (64 for SHA-256).
+const maxRevLen = 256
+
+// safeRev rejects revision arguments that could be read as anything but a
+// revision. Both `from` and `to` reach here from a query string, and
+// `--upload-pack=…` in argv[n] is the classic way a "just two revisions" call
+// turns into an exec. Deny-listing `-` and whitespace was the first version;
+// this is an ALLOW-list — a value either matches revPattern or is refused —
+// and every call site additionally passes `--end-of-options` before the
+// revision, so even a future relaxation of the pattern cannot make git parse
+// one as a flag. `..` is refused too: the callers compose `from..to`
+// themselves, and a revision carrying its own range would double the operator.
 func safeRev(rev string) error {
 	if rev == "" {
 		return fmt.Errorf("archmap: empty revision")
 	}
+	if len(rev) > maxRevLen {
+		return fmt.Errorf("archmap: revision longer than %d bytes", maxRevLen)
+	}
 	if strings.HasPrefix(rev, "-") {
 		return fmt.Errorf("archmap: revision %q may not start with '-'", rev)
 	}
-	if strings.ContainsAny(rev, " \t\n\r") {
-		return fmt.Errorf("archmap: revision %q may not contain whitespace", rev)
+	if strings.Contains(rev, "..") {
+		return fmt.Errorf("archmap: revision %q may not contain '..'", rev)
+	}
+	if !revPattern.MatchString(rev) {
+		return fmt.Errorf("archmap: revision %q contains characters outside the git refname alphabet", rev)
 	}
 	return nil
 }
@@ -278,7 +302,7 @@ func Diff(ctx context.Context, repo, from, to string) ([]string, error) {
 		return nil, err
 	}
 	v := memoized(memoKey{repo: repo, from: from, to: to, op: "diff"}, memoTTL(from, to), func() memoVal {
-		out, err := runGit(ctx, repo, "diff", "--name-only", from+".."+to)
+		out, err := runGit(ctx, repo, "diff", "--name-only", "--end-of-options", from+".."+to)
 		if err != nil {
 			return memoVal{err: err}
 		}
@@ -320,7 +344,7 @@ func MergeBase(ctx context.Context, repo, base, head string) (string, error) {
 		return "", err
 	}
 	v := memoized(memoKey{repo: repo, from: base, to: head, op: "merge-base"}, memoTTL(base, head), func() memoVal {
-		out, err := runGit(ctx, repo, "merge-base", base, head)
+		out, err := runGit(ctx, repo, "merge-base", "--end-of-options", base, head)
 		if err != nil {
 			// Unrelated histories: git exits 1 saying nothing at all. That is a
 			// property of the two commits, not a flake, so it IS cached.
@@ -354,7 +378,7 @@ func Behind(ctx context.Context, repo, from, to string) (int, error) {
 		return 0, err
 	}
 	v := memoized(memoKey{repo: repo, from: from, to: to, op: "behind"}, memoTTL(from, to), func() memoVal {
-		out, err := runGit(ctx, repo, "rev-list", "--count", from+".."+to)
+		out, err := runGit(ctx, repo, "rev-list", "--count", "--end-of-options", from+".."+to)
 		if err != nil {
 			return memoVal{err: err}
 		}

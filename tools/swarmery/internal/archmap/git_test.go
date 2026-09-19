@@ -446,3 +446,29 @@ func TestDefaultBranchPrefersOriginHEAD(t *testing.T) {
 		t.Errorf("DefaultBranch = %q, want \"trunk\" from refs/remotes/origin/HEAD", got)
 	}
 }
+
+// safeRev is an allow-list: everything git accepts as a plain revision passes,
+// and every shape that could be read as an option, a shell fragment or a
+// second range is refused before any process is spawned.
+func TestSafeRevAllowlist(t *testing.T) {
+	ok := []string{
+		"main", "HEAD", "HEAD~2", "v1.0^2", "origin/main", "main@{u}",
+		"feat/x-y_z.1", "41157a8", "0123456789abcdef0123456789abcdef01234567",
+	}
+	for _, rev := range ok {
+		if err := safeRev(rev); err != nil {
+			t.Errorf("safeRev(%q) = %v, want accepted", rev, err)
+		}
+	}
+	bad := []string{
+		"", "-", "--upload-pack=touch /tmp/x", "-n", " main", "main ", "a b",
+		"main;id", "$(id)", "`id`", "main|id", "main&&id", "main\nid",
+		"main..HEAD", "main...HEAD", "ma\x00in", "héad", ".hidden", "/abs",
+		strings.Repeat("a", maxRevLen+1),
+	}
+	for _, rev := range bad {
+		if err := safeRev(rev); err == nil {
+			t.Errorf("safeRev(%q) accepted, want refused", rev)
+		}
+	}
+}
