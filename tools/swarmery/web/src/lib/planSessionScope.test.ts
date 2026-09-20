@@ -5,7 +5,8 @@
 // the Go coverage gate excludes web/), so this suite is dev-only: run it with
 //   npx vitest run src/lib/planSessionScope.test.ts
 // (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
-// The file still type-checks under `tsc --noEmit` in the normal build.
+// web/tsconfig.json EXCLUDES *.test.ts, so `npm run build` does NOT type-check
+// this file — the runner surfaces type errors as failures instead.
 //
 // The fence these tests hold is the NEGATIVE half of the contract: no row
 // without a real phase coordinate may ever be counted into, or rendered in, the
@@ -93,21 +94,23 @@ const linkedRow = makeLinked({ sessionUuid: 'uuid-operator' });
 const SESSIONS = [phase1Sub, controller, phase1Run]; // deliberately unsorted
 const LINKED = [linkedRow];
 
+// The contract is the ORDER the key induces, not the sentinel values it picks,
+// so these assert relations — swapping -1 for -Infinity must stay green.
 describe('planSessionOrder', () => {
+  const key = (over: Partial<SessionPlanGroup>): number =>
+    planSessionOrder(makeSession({ planGroup: plan(over) }));
+
   it('sorts the controller above the phases, and phases by seq', () => {
-    expect(planSessionOrder(controller)).toBe(-1);
-    expect(planSessionOrder(makeSession({ planGroup: plan({ phaseSeq: 1 }) }))).toBe(1);
-    expect(planSessionOrder(makeSession({ planGroup: plan({ phaseSeq: 4 }) }))).toBe(4);
+    expect(planSessionOrder(controller)).toBeLessThan(key({ phaseSeq: 1 }));
+    expect(key({ phaseSeq: 1 })).toBeLessThan(key({ phaseSeq: 4 }));
   });
 
   it('parks a phase row with no seq at the end rather than above the controller', () => {
-    expect(planSessionOrder(makeSession({ planGroup: plan({ phaseSeq: null }) }))).toBe(
-      Number.MAX_SAFE_INTEGER,
-    );
+    expect(key({ phaseSeq: null })).toBeGreaterThan(key({ phaseSeq: 4 }));
   });
 
-  it('treats a session with no plan group as plan-level', () => {
-    expect(planSessionOrder(makeSession())).toBe(-1);
+  it('treats a session with no plan group as plan-level, like the controller', () => {
+    expect(planSessionOrder(makeSession())).toBe(planSessionOrder(controller));
   });
 });
 
@@ -136,8 +139,14 @@ describe('scopePlanSessions — no phase open (timeline)', () => {
     ]);
   });
 
-  it('does not mutate the caller’s array', () => {
+  it('does not mutate either caller array', () => {
     expect(SESSIONS.map((s) => s.sessionUuid)).toEqual(['uuid-p1-sub', 'uuid-controller', 'uuid-p1-run']);
+    // The `linked` fence is the easier one to lose: a future `linked.sort(...)`
+    // that skips the `.filter()` copy would reorder the page's own props array.
+    const older = makeLinked({ sessionUuid: 'uuid-older', startedAt: '2026-09-19T09:00:00Z' });
+    const callerLinked = [older, linkedRow];
+    scopePlanSessions({ sessions: SESSIONS, linked: callerLinked, activePhaseId: null, picked: null });
+    expect(callerLinked.map((l) => l.sessionUuid)).toEqual(['uuid-older', 'uuid-operator']);
   });
 });
 
