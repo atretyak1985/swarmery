@@ -1473,20 +1473,32 @@ function PlanSessions({
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink-dim">sessions</span>
         {sessions !== null &&
-          (view.phaseCount === null ? (
+          // A plan with no sessions at all has nothing to switch between, so it
+          // keeps the bare count rather than a toggle that cannot do anything.
+          (view.phaseCount === null || view.totalCount === 0 ? (
             <span className="font-mono text-[10px] text-ink-faint">{view.totalCount}</span>
           ) : (
             // Both numbers stay on screen in either slice, so a narrowed column
             // never hides the FACT that it is hiding rows — and `#N (0)` is the
             // visible marker of the auto-fallback.
+            //
+            // The visible label is two counts, which say nothing on their own to
+            // a screen reader, so the accessible name spells the state out and
+            // `aria-pressed` carries the flip. Both keep the literal prefix
+            // "session scope" — that is what selectors match on.
             <button
               type="button"
-              aria-label="session scope"
+              aria-pressed={view.scope === 'phase'}
+              aria-label={
+                view.scope === 'phase'
+                  ? `session scope: phase ${String(activePhaseSeq ?? '?')} only, ${String(view.phaseCount)} of ${String(view.totalCount)} sessions`
+                  : `session scope: all ${String(view.totalCount)} sessions of the plan`
+              }
               data-tip={
                 view.scope === 'phase'
                   ? 'showing this phase only — click for every session of the plan'
                   : view.fellBack
-                    ? 'this phase has no sessions of its own — showing the whole plan'
+                    ? 'this phase has no sessions of its own — showing the whole plan; click to narrow anyway'
                     : 'showing every session of the plan — click to narrow to this phase'
               }
               onClick={() =>
@@ -1497,11 +1509,21 @@ function PlanSessions({
               }
               className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
             >
-              <span className={view.scope === 'phase' ? 'text-ink' : undefined}>
+              {/* Colour alone must not carry the state — the active side is also
+                  underlined, which survives a monochrome or high-contrast view. */}
+              <span
+                className={
+                  view.scope === 'phase' ? 'text-ink underline decoration-dotted underline-offset-2' : undefined
+                }
+              >
                 #{activePhaseSeq ?? '?'} ({view.phaseCount})
               </span>
               <span className="px-1">/</span>
-              <span className={view.scope === 'all' ? 'text-ink' : undefined}>
+              <span
+                className={
+                  view.scope === 'all' ? 'text-ink underline decoration-dotted underline-offset-2' : undefined
+                }
+              >
                 all ({view.totalCount})
               </span>
             </button>

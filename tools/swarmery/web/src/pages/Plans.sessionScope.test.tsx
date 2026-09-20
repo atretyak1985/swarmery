@@ -19,8 +19,8 @@
 //   npx vitest run src/pages/Plans.sessionScope.test.tsx
 // after fetching the runner on demand:
 //   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
-// web/tsconfig.json EXCLUDES *.test.tsx, so `npm run build` does NOT type-check
-// this file — the runner surfaces type errors as failures instead.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -100,7 +100,7 @@ const OPERATOR_LINK: LinkedSession = {
   endedAt: null,
 };
 
-const epic = (): Epic => ({
+const epic = (over: Partial<Epic> = {}): Epic => ({
   taskId: TASK_ID,
   externalId: '2026-09-20-plan-sessions-phase-filter',
   projectId: 3,
@@ -117,7 +117,38 @@ const epic = (): Epic => ({
   planRun: null,
   cardExternalId: null,
   linkedSessions: [OPERATOR_LINK],
+  ...over,
 });
+
+// A SECOND plan, so the pick's `taskId` key is load-bearing: its phase has a
+// session of its own, which means the automatic rule narrows there. If the pick
+// leaked across plans, this plan would open wide instead.
+const OTHER_TASK_ID = 88;
+const OTHER_PHASE = 81;
+const otherEpic = (): Epic =>
+  epic({
+    taskId: OTHER_TASK_ID,
+    externalId: '2026-09-20-some-other-plan',
+    title: 'some other plan',
+    phases: [phase({ id: OTHER_PHASE, seq: 1, name: 'Other work' })],
+    rollup: { done: 0, total: 3, pct: 0, incompletePhases: 1 },
+    linkedSessions: [],
+  });
+
+// A THIRD plan that never ran, so the `no sessions ran this plan` branch and the
+// bare-count header are exercised WITH a phase open — which is the only state
+// where that branch could be confused with the filtered-empty one.
+const EMPTY_TASK_ID = 99;
+const EMPTY_PHASE = 91;
+const emptyEpic = (): Epic =>
+  epic({
+    taskId: EMPTY_TASK_ID,
+    externalId: '2026-09-20-never-ran',
+    title: 'a plan that never ran',
+    phases: [phase({ id: EMPTY_PHASE, seq: 1, name: 'Never ran' })],
+    rollup: { done: 0, total: 3, pct: 0, incompletePhases: 1 },
+    linkedSessions: [],
+  });
 
 function group(over: Partial<SessionPlanGroup> = {}): SessionPlanGroup {
   return {
@@ -163,6 +194,28 @@ const SESSIONS: Session[] = [
 /** 4 grouped sessions + 1 linked-only row. */
 const TOTAL = SESSIONS.length + 1;
 
+/** The other plan's single session, under its only phase. */
+const OTHER_SESSIONS: Session[] = [
+  session(
+    5,
+    'other plan run',
+    group({ taskId: OTHER_TASK_ID, title: 'some other plan', phaseId: OTHER_PHASE, phaseSeq: 1, phaseName: 'Other work' }),
+    '2026-09-20T11:00:00Z',
+  ),
+];
+
+/** Which plan's sessions the column asked for — the column is the only caller
+ * that passes ?planTask=, so serving per-plan windows here is what makes the
+ * cross-plan assertions mean anything. */
+function sessionsFor(url: string): Session[] {
+  const task = new URL(url, 'http://localhost').searchParams.get('planTask');
+  if (task === String(OTHER_TASK_ID)) return OTHER_SESSIONS;
+  if (task === String(EMPTY_TASK_ID)) return [];
+  return SESSIONS;
+}
+
+let epics: Epic[] = [];
+
 function stubFetch(): void {
   vi.stubGlobal(
     'fetch',
@@ -170,8 +223,8 @@ function stubFetch(): void {
       const url = String(input);
       const json = (body: unknown): Promise<Response> =>
         Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
-      if (url.startsWith('/api/epics?')) return json([epic()]);
-      if (url.startsWith('/api/sessions?')) return json({ sessions: SESSIONS, nextCursor: null });
+      if (url.startsWith('/api/epics?')) return json(epics);
+      if (url.startsWith('/api/sessions?')) return json({ sessions: sessionsFor(url), nextCursor: null });
       // Opening a phase mounts the detail panel, which loads that phase's doc.
       if (/\/docs\?path=/.test(url)) return json({ path: 'phase.md', content: '# phase\n' });
       return json([]);
@@ -211,11 +264,22 @@ function backToPhases(): void {
   fireEvent.click(screen.getByRole('button', { name: 'all phases' }));
 }
 
+/** The header toggle. Its accessible name carries the STATE (counts + which
+ * slice), so it is matched on the stable prefix rather than in full. */
 function scopeToggle(): HTMLElement {
-  return screen.getByLabelText('session scope');
+  return screen.getByRole('button', { name: /^session scope:/ });
+}
+
+function queryScopeToggle(): HTMLElement | null {
+  return screen.queryByRole('button', { name: /^session scope:/ });
+}
+
+function selectPlan(title: string): void {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(title) }));
 }
 
 beforeEach(() => {
+  epics = [epic()];
   localStorage.clear();
   stubFetch();
 });
@@ -233,7 +297,7 @@ describe('plan sessions column — no phase open', () => {
     expect(titles).toHaveLength(TOTAL);
     expect(titles[0]).toContain('controller run');
     expect(titles.some((t) => t.includes('operator'))).toBe(true);
-    expect(screen.queryByLabelText('session scope')).toBeNull();
+    expect(queryScopeToggle()).toBeNull();
     expect(within(column()).getByText(String(TOTAL))).toBeTruthy();
   });
 });
@@ -321,7 +385,7 @@ describe('plan sessions column — the pick belongs to the plan, not the phase',
     await waitFor(() => {
       expect(rowTitles()).toHaveLength(TOTAL);
     });
-    expect(screen.queryByLabelText('session scope')).toBeNull();
+    expect(queryScopeToggle()).toBeNull();
   });
 });
 
@@ -335,7 +399,7 @@ describe('plan sessions column — a phase with no sessions of its own', () => {
     });
     expect(rowTitles()).toHaveLength(TOTAL);
     expect(scopeToggle().getAttribute('data-tip')).toBe(
-      'this phase has no sessions of its own — showing the whole plan',
+      'this phase has no sessions of its own — showing the whole plan; click to narrow anyway',
     );
   });
 
@@ -355,5 +419,88 @@ describe('plan sessions column — a phase with no sessions of its own', () => {
     // The plan's real size is still on screen, so the empty column is legible
     // as "filtered", not as "this plan never ran" (SC-7).
     expect(scopeToggle().textContent).toContain(`all (${String(TOTAL)})`);
+  });
+});
+
+describe('plan sessions column — the pick does NOT leak to another plan (SC-4)', () => {
+  it('switching plans drops back to the automatic slice', async () => {
+    epics = [epic(), otherEpic()];
+    await mountPlans();
+
+    // Stand on a manual "all" in the FIRST plan.
+    openPhase(1, 'Scope model');
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(2);
+    });
+    fireEvent.click(scopeToggle());
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(TOTAL);
+    });
+
+    selectPlan('some other plan');
+    await waitFor(() => {
+      expect(rowTitles().some((t) => t.includes('other plan run'))).toBe(true);
+    });
+    openPhase(1, 'Other work');
+
+    // The other plan's phase has a session of its own, so the automatic rule
+    // narrows. A pick that leaked across plans would leave it wide.
+    await waitFor(() => {
+      expect(scopeToggle().getAttribute('aria-pressed')).toBe('true');
+    });
+    expect(rowTitles()).toHaveLength(1);
+    expect(rowTitles()[0]).toContain('other plan run');
+  });
+});
+
+describe('plan sessions column — a plan that never ran', () => {
+  it('says so even with a phase open, and offers no dead toggle', async () => {
+    epics = [emptyEpic()];
+    render(
+      <MemoryRouter>
+        <Plans />
+      </MemoryRouter>,
+    );
+    await screen.findByText('no sessions ran this plan');
+
+    openPhase(1, 'Never ran');
+
+    // Still the plan-level message, NOT "no sessions for this phase": the plan
+    // has no rows at all, which is a different fact from a filtered-out slice.
+    await waitFor(() => {
+      expect(screen.getByText('no sessions ran this plan')).toBeTruthy();
+    });
+    expect(queryScopeToggle()).toBeNull();
+    expect(within(column()).getByText('0')).toBeTruthy();
+  });
+});
+
+describe('plan sessions column — the toggle explains itself in every state', () => {
+  it('carries a distinct tip and aria-pressed per slice', async () => {
+    await mountPlans();
+
+    openPhase(1, 'Scope model');
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(2);
+    });
+    expect(scopeToggle().getAttribute('aria-pressed')).toBe('true');
+    expect(scopeToggle().getAttribute('data-tip')).toBe(
+      'showing this phase only — click for every session of the plan',
+    );
+    expect(scopeToggle().getAttribute('aria-label')).toBe(
+      `session scope: phase 1 only, 2 of ${String(TOTAL)} sessions`,
+    );
+
+    fireEvent.click(scopeToggle());
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(TOTAL);
+    });
+    expect(scopeToggle().getAttribute('aria-pressed')).toBe('false');
+    expect(scopeToggle().getAttribute('data-tip')).toBe(
+      'showing every session of the plan — click to narrow to this phase',
+    );
+    expect(scopeToggle().getAttribute('aria-label')).toBe(
+      `session scope: all ${String(TOTAL)} sessions of the plan`,
+    );
   });
 });
