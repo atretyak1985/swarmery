@@ -242,7 +242,10 @@ CMDS=$(find "$CLAUDE_DIR/commands" -name "*.md" -not -name "README.md" 2>/dev/nu
 HOOKS=$(find "$CLAUDE_DIR/hooks" -name "*.sh" 2>/dev/null | wc -l | tr -d ' ')
 
 # ----- memory / tasks / sessions ------------------------------------------
-MEM_DIR="$HOME/.claude/projects/$(echo "$PROJECT_DIR" | tr '/' '-')/memory"
+# Claude Code names each project dir by mapping every '/' AND every '.' to '-'
+# (so /a/.local/x -> -a--local-x). The authority is tools/swarmery/internal/claudeproj;
+# this shell copy exists only because a statusline is a shell hook and cannot call Go.
+MEM_DIR="$HOME/.claude/projects/$(echo "$PROJECT_DIR" | tr '/.' '--')/memory"
 MEMORIES=$(find "$MEM_DIR" -name "*.md" -not -name "MEMORY.md" 2>/dev/null | wc -l | tr -d ' ')
 # Active task dirs: working/YYYY/MM/DD/<slug> — swarmery workspace first, legacy fallback
 if [ -n "${AGENT_PROJECT:-}" ]; then

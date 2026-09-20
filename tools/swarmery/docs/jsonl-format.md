@@ -31,7 +31,10 @@ Anonymized fixtures mirroring these sessions: [`testdata/fixtures/`](../testdata
 ## 1. On-disk layout
 
 ```
-~/.claude/projects/<slug>/                  # slug = cwd with '/' → '-', e.g. -home-dev-litware
+~/.claude/projects/<slug>/                  # slug = cwd with '/' AND '.' → '-', e.g. -home-dev-litware
+                                            # (a dot segment doubles the dash: /home/dev/.local → -home-dev--local;
+                                            #  canonical encoder: internal/claudeproj.Slug — NOT ingest.SlugForPath,
+                                            #  which is the '/'-only DB identity slug)
   <sessionId>.jsonl                         # main transcript; sessionId is a UUID = file name
   <sessionId>/                              # OPTIONAL companion dir (same name, no extension)
     subagents/
