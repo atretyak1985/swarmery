@@ -1507,7 +1507,7 @@ function PlanSessions({
                   scope: view.scope === 'phase' ? 'all' : 'phase',
                 })
               }
-              className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
+              className="rounded font-mono text-[10px] text-ink-faint transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
             >
               {/* Colour alone must not carry the state — the active side is also
                   underlined, which survives a monochrome or high-contrast view. */}

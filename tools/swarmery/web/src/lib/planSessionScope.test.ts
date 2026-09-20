@@ -5,8 +5,8 @@
 // the Go coverage gate excludes web/), so this suite is dev-only: run it with
 //   npx vitest run src/lib/planSessionScope.test.ts
 // (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
-// web/tsconfig.json EXCLUDES *.test.ts, so `npm run build` does NOT type-check
-// this file — the runner surfaces type errors as failures instead.
+// web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 //
 // The fence these tests hold is the NEGATIVE half of the contract: no row
 // without a real phase coordinate may ever be counted into, or rendered in, the
