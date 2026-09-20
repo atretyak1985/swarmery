@@ -1404,8 +1404,22 @@ export interface MemoryConflict {
 
 // --- self-improvement phase 4 — agent change proposals -----------------------
 
-/** agent_change_proposals.status lifecycle (migration 0021). */
-export type ProposalStatus = 'proposed' | 'approved' | 'applied' | 'rejected' | 'failed';
+/**
+ * agent_change_proposals.status lifecycle (migrations 0021 + 0074).
+ * `needs_target` is a routed skill recommendation whose SKILL.md could not be
+ * resolved from the lesson's action line — real evidence, unknown file, waiting
+ * for an operator to point it somewhere (or dismiss it).
+ */
+export type ProposalStatus =
+  | 'proposed'
+  | 'approved'
+  | 'applied'
+  | 'rejected'
+  | 'failed'
+  | 'needs_target';
+
+/** agent_change_proposals.target_kind (migration 0074) — which file is edited. */
+export type ProposalTargetKind = 'agent' | 'skill';
 
 /**
  * One agent-rewrite proposal (internal/improve): a unified diff against an
@@ -1416,10 +1430,14 @@ export interface AgentChangeProposal {
   id: number;
   /** Links back to the accepted recommendation, or null for the ad-hoc trigger. */
   recommendation_id: number | null;
-  /** Registry key (normalized). */
+  /** Registry key (normalized) for an agent target; the lesson identity for a skill target. */
   agent: string;
-  /** Absolute source path at generation time. */
+  /** Repo-relative agent file path; '' on a skill proposal. */
   agent_path: string;
+  /** Which kind of file this proposal edits (migration 0074). */
+  target_kind: ProposalTargetKind;
+  /** Repo-relative SKILL.md path; '' on an agent proposal or an unresolved one. */
+  target_path: string;
   /** sha256 of the agent content the diff was generated against. */
   base_sha256: string;
   /** Unified diff. */

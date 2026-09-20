@@ -474,7 +474,27 @@ const PROPOSAL_STATUS_HUE: Record<AgentChangeProposal['status'], string> = {
   applied: 'border-green/40 text-green',
   rejected: 'border-line-strong text-ink-faint',
   failed: 'border-red/40 text-red',
+  needs_target: 'border-amber/40 text-amber',
 };
+
+/**
+ * The file a proposal edits. An agent proposal carries it in agent_path, a
+ * skill proposal in target_path, and a routed skill lesson that resolved to no
+ * SKILL.md carries neither — which is the state the operator has to resolve, so
+ * it says so rather than rendering an empty cell.
+ *
+ * The copy offers only what the row can actually do. There is no target picker
+ * in this phase: PATCH accepts approved|rejected, and legalProposalTransition
+ * refuses approve on a needs_target row, so Dismiss is the single available
+ * transition — the same thing docs/retro.md states ("Dismissing is the only
+ * transition it has"). Offering "pick a skill" pointed at a control that does
+ * not exist.
+ */
+function proposalTarget(p: AgentChangeProposal): string {
+  const path = p.target_kind === 'skill' ? p.target_path : p.agent_path;
+  if (path !== '') return path;
+  return 'no target file — dismissing is the only transition';
+}
 
 function ProposalStatusChip({ status }: { status: AgentChangeProposal['status'] }): JSX.Element {
   return (
@@ -529,8 +549,8 @@ function ProposalDetail({
   return (
     <div className="mt-2 border-t border-line pt-2.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-ink-faint">
-        <span className="truncate" data-tip-mono data-tip={p.agent_path}>
-          {p.agent_path}
+        <span className="truncate" data-tip-mono data-tip={proposalTarget(p)}>
+          {proposalTarget(p)}
         </span>
         {p.recommendation_id !== null && (
           <span data-tip="source recommendation">from recommendation #{p.recommendation_id}</span>
@@ -572,6 +592,17 @@ function ProposalDetail({
               {busy ? '…' : 'Reject'}
             </button>
           </>
+        )}
+        {p.status === 'needs_target' && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDecide(p.id, 'rejected')}
+            data-tip="no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
+            className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-red/40 hover:text-red disabled:opacity-50"
+          >
+            {busy ? '…' : 'Dismiss'}
+          </button>
         )}
         {p.status === 'failed' && (
           <button
@@ -629,6 +660,14 @@ function ProposalCard({
         <span className="min-w-0 flex-1 font-mono text-[12.5px] font-medium text-ink">
           {p.agent}
         </span>
+        {p.target_kind === 'skill' && (
+          <span
+            data-tip="a SKILL.md procedure edit, routed from a recurring retrospective lesson"
+            className="rounded-[7px] border border-line-strong px-1.5 py-[2px] font-mono text-[10px] font-medium text-ink-dim"
+          >
+            skill
+          </span>
+        )}
         <ProposalStatusChip status={p.status} />
         <span className="font-mono text-[10px] text-ink-faint">{fmtAgo(p.created_at)}</span>
         <button

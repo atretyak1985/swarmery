@@ -22,9 +22,10 @@ import (
 var (
 	// ErrAgentNotFound — the agent key resolves to no live registry row.
 	ErrAgentNotFound = errors.New("agent not found in registry")
-	// ErrOpenProposal — a proposal in proposed|approved already exists for
-	// the agent (the one-open-proposal invariant).
-	ErrOpenProposal = errors.New("an open proposal already exists for this agent")
+	// ErrOpenProposal — a proposal in proposed|approved|needs_target already
+	// exists for the TARGET (the one-open-proposal invariant). The target is an
+	// agent file or, since phase 5, a SKILL.md — hence "target", not "agent".
+	ErrOpenProposal = errors.New("an open proposal already exists for this target")
 	// ErrProposalNotFound — Retry target row does not exist.
 	ErrProposalNotFound = errors.New("proposal not found")
 	// ErrNotRetriable — Retry target is not in status 'failed'.

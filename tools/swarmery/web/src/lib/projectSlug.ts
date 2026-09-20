@@ -1,6 +1,10 @@
 // Pretty project slugs (URL layer). The DB `slug` is the path-encoded identity
-// (`/Volumes/Work/swarmery` → `-Volumes-Work-swarmery`, mirroring the
-// ~/.claude/projects dir naming) and stays the ingest/API identity everywhere.
+// (`/Volumes/Work/swarmery` → `-Volumes-Work-swarmery`, produced by
+// ingest.SlugForPath, which encodes '/' ONLY) and stays the ingest/API identity
+// everywhere. It is NOT the ~/.claude/projects directory name: that encoding
+// (internal/claudeproj.Slug) also maps '.' → '-', so the two diverge on any path
+// with a dot segment. Nothing here may adopt that encoding — project identity and
+// every dashboard URL are keyed on the DB slug.
 // URLs and ?scope= carry a DISPLAY slug derived from the project NAME instead
 // ("My App" → "my-app"), which the server's scope predicate also matches
 // (internal/api/scope.go projectMatchExpr — slugifyName must mirror its SQL

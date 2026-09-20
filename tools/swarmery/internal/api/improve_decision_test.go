@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
@@ -60,7 +62,8 @@ func patchProposalReq(t *testing.T, url string, status string, wantCode int) {
 
 // noopChangedPath is the single repo-relative path noopExec's numstat reports;
 // seedProposal stores the matching /repo/<noopChangedPath> as agent_path so the
-// apply-scope gate passes. Non-core → no semver bump on the happy path.
+// apply-scope gate passes. Non-core → the pack manifest bumps, the marketplace
+// one does not.
 const noopChangedPath = "plugins/uav-pack/agents/x.md"
 
 // noopExec is an Exec whose apply pipeline never fails: git/gh succeed, scan is
@@ -84,7 +87,10 @@ func (e *noopExec) Run(_ context.Context, _ string, name string, args ...string)
 	// --numstat --no-renames HEAD`; match on the presence of a "diff" arg so the
 	// config-flag prefix doesn't dodge the stub.
 	if name == "git" && hasArg(args, "diff") {
-		return "1\t0\t" + noopChangedPath + "\n", nil // non-core → no semver bump
+		// Single in-scope path, inside one pack → the pack's plugin.json is
+		// bumped (phase 5 generalized the bump from core-only to pack-aware);
+		// not core, so the marketplace manifest is NOT mirrored.
+		return "1\t0\t" + noopChangedPath + "\n", nil
 	}
 	return "", nil
 }
@@ -97,7 +103,12 @@ func hasArg(args []string, want string) bool {
 	return false
 }
 
-func (e *noopExec) ReadFile(string) ([]byte, error) {
+func (e *noopExec) ReadFile(path string) ([]byte, error) {
+	// The semver bump reads the owning pack's manifest; everything else the
+	// pipeline reads is a definition file the frontmatter gate checks.
+	if strings.HasSuffix(path, "plugin.json") || strings.HasSuffix(path, "marketplace.json") {
+		return []byte("{\n  \"name\": \"uav-pack\",\n  \"version\": \"1.4.2\"\n}\n"), nil
+	}
 	return []byte("---\nname: x\ndescription: y\n---\n"), nil
 }
 func (e *noopExec) WriteFile(string, []byte) error { return nil }
@@ -206,4 +217,179 @@ func TestApplyProposalManualRerun(t *testing.T) {
 
 	// unknown id: 404.
 	postJSON(t, url(999), http.StatusNotFound)
+}
+
+// --- pack-aware semver bump (phase 5) ------------------------------------
+//
+// noopExec discards WriteFile, so the pre-phase-5 tests could only prove the
+// pipeline REACHED the bump, never WHICH manifests it wrote. The bump changed
+// behaviour in two ways that nothing asserted: a non-core pack now bumps at all,
+// and a pack manifest without a version field now hard-fails the apply.
+
+const bumpPackSkillRel = "plugins/uav-pack/skills/mavlink-integration/SKILL.md"
+
+const bumpPackSkillBody = "---\nname: mavlink-integration\ndescription: \"Talk MAVLink.\"\n---\n\n# Rules\n\n1. Parse carefully.\n"
+
+const bumpPackManifestRel = "plugins/uav-pack/.claude-plugin/plugin.json"
+
+const marketplaceRel = ".claude-plugin/marketplace.json"
+
+// recordingExec is noopExec with a real write log: manifest reads come from a
+// table keyed by repo-relative path, and every WriteFile is REMEMBERED so a test
+// can assert exactly which manifests the post-gate semver bump touched.
+type recordingExec struct {
+	tmp         string
+	changedPath string
+	body        string
+	manifests   map[string]string
+	writes      map[string]string
+	reads       []string
+}
+
+func (e *recordingExec) rel(path string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(path, e.tmp), "/")
+}
+
+func (e *recordingExec) Run(_ context.Context, _ string, name string, args ...string) (string, error) {
+	switch {
+	case name == "bash":
+		return "✓ clean\n", nil
+	case name == "gh":
+		return "https://github.com/x/y/pull/1\n", nil
+	case name == "git" && hasArg(args, "show"):
+		return e.body, nil
+	case name == "git" && hasArg(args, "diff"):
+		return "1\t0\t" + e.changedPath + "\n", nil
+	}
+	return "", nil
+}
+
+func (e *recordingExec) ReadFile(path string) ([]byte, error) {
+	rel := e.rel(path)
+	e.reads = append(e.reads, rel)
+	if raw, ok := e.manifests[rel]; ok {
+		return []byte(raw), nil
+	}
+	if strings.HasSuffix(rel, ".json") {
+		return nil, errors.New("no such manifest: " + rel)
+	}
+	return []byte(e.body), nil
+}
+
+func (e *recordingExec) WriteFile(path string, b []byte) error {
+	if e.writes == nil {
+		e.writes = map[string]string{}
+	}
+	e.writes[e.rel(path)] = string(b)
+	return nil
+}
+func (e *recordingExec) MkdirTemp() (string, error) { return e.tmp, nil }
+func (e *recordingExec) RemoveAll(string) error     { return nil }
+
+func recordingServer(t *testing.T, ex *recordingExec) (string, *sql.DB) {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "bump.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	ex.tmp = filepath.Join(t.TempDir(), "wt")
+	h := &Handler{
+		DB: db,
+		Improve: &improve.Service{DB: db, Runner: &improveMockRunner{out: improveValidOut},
+			Repo: "/repo", Exec: ex},
+		improveGo: func(fn func()) { fn() },
+	}
+	mux := http.NewServeMux()
+	Routes(mux, h)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL, db
+}
+
+// seedSkillProposal inserts one approved SKILL.md proposal whose base_sha256
+// matches the content the exec's `git show origin/main:<path>` returns.
+func seedSkillProposal(t *testing.T, db *sql.DB, id int64, rel, body string) {
+	t.Helper()
+	sum := sha256.Sum256([]byte(body))
+	improveExec(t, db, `INSERT INTO agent_change_proposals
+		(id, agent, agent_path, target_kind, target_path, base_sha256, diff, rationale, status, created_at)
+		VALUES (?, 'sync the cache before building', '', 'skill', ?, ?, 'd', 'r', 'approved', '2026-09-20T00:00:00.000Z')`,
+		id, rel, hex.EncodeToString(sum[:]))
+}
+
+func proposalError(t *testing.T, db *sql.DB, id int64) string {
+	t.Helper()
+	var e sql.NullString
+	if err := db.QueryRow(`SELECT error FROM agent_change_proposals WHERE id = ?`, id).Scan(&e); err != nil {
+		t.Fatal(err)
+	}
+	return e.String
+}
+
+// TestApplyBumpsOwningPackNotMarketplace: a SKILL.md inside a NON-core pack
+// bumps that pack's own plugin.json and leaves the marketplace manifest alone —
+// the marketplace version tracks core by convention, so mirroring a domain
+// pack's patch bump into it would be wrong.
+func TestApplyBumpsOwningPackNotMarketplace(t *testing.T) {
+	ex := &recordingExec{
+		changedPath: bumpPackSkillRel,
+		body:        bumpPackSkillBody,
+		manifests: map[string]string{
+			bumpPackManifestRel: "{\n  \"name\": \"uav-pack\",\n  \"version\": \"1.4.2\"\n}\n",
+			marketplaceRel:      "{\n  \"name\": \"swarmery\",\n  \"version\": \"3.5.0\"\n}\n",
+		},
+	}
+	srv, db := recordingServer(t, ex)
+	seedSkillProposal(t, db, 1, bumpPackSkillRel, bumpPackSkillBody)
+
+	postJSON(t, srv+"/api/retro/proposals/1/apply", http.StatusAccepted)
+	if s := proposalStatus(t, db, 1); s != "applied" {
+		t.Fatalf("proposal = %q (error %q), want applied", s, proposalError(t, db, 1))
+	}
+
+	// (a) the owning pack's manifest was patch-bumped.
+	got, ok := ex.writes[bumpPackManifestRel]
+	if !ok {
+		t.Fatalf("%s was never written; writes = %v", bumpPackManifestRel, ex.writes)
+	}
+	if !strings.Contains(got, `"version": "1.4.3"`) {
+		t.Errorf("%s = %q, want version 1.4.3", bumpPackManifestRel, got)
+	}
+
+	// (b) the marketplace manifest was neither read nor written for a non-core pack.
+	if _, hit := ex.writes[marketplaceRel]; hit {
+		t.Errorf("marketplace.json was written for non-core pack uav-pack: %q", ex.writes[marketplaceRel])
+	}
+	for _, r := range ex.reads {
+		if r == marketplaceRel {
+			t.Errorf("marketplace.json was read for non-core pack uav-pack")
+		}
+	}
+}
+
+// TestApplyFailsWhenPackManifestHasNoVersion: the bump is a hard step, not a
+// best-effort one — a pack whose plugin.json carries no version field fails the
+// apply with that reason on the row instead of shipping an unversioned PR.
+func TestApplyFailsWhenPackManifestHasNoVersion(t *testing.T) {
+	ex := &recordingExec{
+		changedPath: bumpPackSkillRel,
+		body:        bumpPackSkillBody,
+		manifests: map[string]string{
+			bumpPackManifestRel: "{\n  \"name\": \"uav-pack\"\n}\n",
+		},
+	}
+	srv, db := recordingServer(t, ex)
+	seedSkillProposal(t, db, 1, bumpPackSkillRel, bumpPackSkillBody)
+
+	postJSON(t, srv+"/api/retro/proposals/1/apply", http.StatusAccepted)
+	if s := proposalStatus(t, db, 1); s != "failed" {
+		t.Fatalf("proposal = %q, want failed", s)
+	}
+	if e := proposalError(t, db, 1); !strings.Contains(e, "no version field") {
+		t.Errorf("error = %q, want it to name the missing version field", e)
+	}
+	if _, hit := ex.writes[bumpPackManifestRel]; hit {
+		t.Errorf("a manifest with no version field must not be rewritten: %q", ex.writes[bumpPackManifestRel])
+	}
 }

@@ -1265,6 +1265,18 @@ func projectNameFor(path string) string {
 }
 
 // SlugForPath derives the project slug from its cwd path: '/' → '-' (§1).
+//
+// THIS IS THE DB SLUG, and it is deliberately NOT the name Claude Code gives
+// the project's directory under `<home>/.claude/projects` — that one encodes
+// '.' to '-' as well and lives in internal/claudeproj. Do not "fix" the
+// divergence by making this one match: SlugForPath fills the projects.slug
+// column below, and that value is project identity — URLs and stored rows
+// depend on it, so changing the encoding rewrites identity for every project
+// whose path contains a dot.
+//
+// The rule for picking one: locating a file under ~/.claude/projects →
+// claudeproj.Slug; naming a project in our own data → SlugForPath. Pinned by
+// TestSlugForPathIsTheDBSlugNotTheClaudeDirName.
 func SlugForPath(path string) string {
 	return strings.ReplaceAll(path, "/", "-")
 }

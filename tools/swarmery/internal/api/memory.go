@@ -7,8 +7,12 @@ package api
 // an atomic write):
 //
 //	claude-md    <project.path>/CLAUDE.md                       (single file)
-//	auto-memory  ~/.claude/projects/<slug>/memory/*.md          (MEMORY.md + siblings)
-//	                 slug = ingest.SlugForPath(project.path) = path with "/"→"-"
+//	auto-memory  memconsolidate.AutoMemoryDirIn(~/.claude, project.path)
+//	                 = ~/.claude/projects/<slug>/memory/*.md    (MEMORY.md + siblings)
+//	                 slug = claudeproj.Slug = path with "/" AND "." → "-", the
+//	                 name Claude Code itself gives the directory. NOT the DB slug
+//	                 (ingest.SlugForPath, "/"→"-" only) — that one is project
+//	                 identity and would miss any project under a dot-directory.
 //	serena       <project.path>/.serena/memories/*.md           (if present)
 //
 // Endpoints (self-wired via h.DB; no cmd/main.go edit):
@@ -41,7 +45,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 )
@@ -154,10 +157,9 @@ func (h *Handler) projectMemoryRoots(w http.ResponseWriter, id string) ([]memory
 	}
 
 	clean := filepath.Clean(projectPath)
-	slug := ingest.SlugForPath(clean)
 	roots := []memoryRoot{
 		{kind: kindClaudeMD, dir: clean, exactFile: "CLAUDE.md"},
-		{kind: kindAutoMemory, dir: filepath.Join(memoryClaudeDir, "projects", slug, "memory")},
+		{kind: kindAutoMemory, dir: memconsolidate.AutoMemoryDirIn(memoryClaudeDir, clean)},
 		{kind: kindSerena, dir: filepath.Join(clean, ".serena", "memories")},
 	}
 	return roots, true

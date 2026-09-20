@@ -34,16 +34,25 @@ type memoryFixture struct {
 
 func newMemoryFixture(t *testing.T, seed bool) *memoryFixture {
 	t.Helper()
+	return newMemoryFixtureIn(t, seed, t.TempDir())
+}
+
+// newMemoryFixtureIn is newMemoryFixture with the project path chosen by the
+// caller, so a test can pin how the auto-memory root is derived from a path
+// shape — a dotted one, in particular.
+func newMemoryFixtureIn(t *testing.T, seed bool, projectPath string) *memoryFixture {
+	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "memory.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 
-	projectPath := t.TempDir()
 	claudeDir := t.TempDir()
 	backupsDir := filepath.Join(t.TempDir(), "config-backups")
-	autoDir := filepath.Join(claudeDir, "projects", ingest.SlugForPath(projectPath), "memory")
+	// The auto-memory root is keyed on the name Claude Code gives the directory
+	// (claudeproj.Slug, via memconsolidate), NOT on the DB slug inserted below.
+	autoDir := memconsolidate.AutoMemoryDirIn(claudeDir, projectPath)
 
 	// Redirect the package-level roots at the temp locations, restore after.
 	// AttachMemoryDirs also points internal/memconsolidate at the same claude
@@ -134,6 +143,41 @@ func TestMemoryList(t *testing.T) {
 	if out.Files[1].Name != "MEMORY.md" || out.Files[2].Name != "user_role.md" {
 		t.Errorf("auto-memory order = [%s,%s], want [MEMORY.md,user_role.md]",
 			out.Files[1].Name, out.Files[2].Name)
+	}
+}
+
+// TestMemoryListDottedProjectPath is the regression for a project living under
+// a dot-directory (`…/.local/src/acme`). The DB slug encodes '/' only, so the
+// old root named `…-.local-src-acme` — a directory Claude Code never creates —
+// and the Memory page listed zero auto-memory files over memory that existed.
+// The fixture seeds at memconsolidate's resolved root; what this asserts is
+// that the HANDLER resolves the same place, and that the DB slug (which still
+// carries the dot, deliberately) no longer decides where memory is read from.
+func TestMemoryListDottedProjectPath(t *testing.T) {
+	projectPath := filepath.Join(t.TempDir(), ".local", "src", "acme")
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fx := newMemoryFixtureIn(t, true, projectPath)
+
+	// The two encodings really do disagree for this path — otherwise the test
+	// would pass for the wrong reason.
+	if ingest.SlugForPath(projectPath) == filepath.Base(filepath.Dir(fx.autoDir)) {
+		t.Fatal("the DB slug and the claude-dir name coincide here; pick a path where they differ")
+	}
+
+	var out memoryListDTO
+	getJSON(t, fx.srv.URL+"/api/projects/1/memory", &out)
+
+	var auto []string
+	for _, f := range out.Files {
+		if f.Kind == kindAutoMemory {
+			auto = append(auto, f.Name)
+		}
+	}
+	if len(auto) != 2 || auto[0] != "MEMORY.md" || auto[1] != "user_role.md" {
+		t.Fatalf("auto-memory files = %v, want [MEMORY.md user_role.md] — "+
+			"the handler resolved a different root than %s", auto, fx.autoDir)
 	}
 }
 

@@ -1,0 +1,9 @@
+--- a/plugins/core/skills/docker-build/SKILL.md
++++ b/plugins/core/skills/docker-build/SKILL.md
+@@ -6,4 +6,6 @@
+ 
+ # Rules (never violate)
+ 
+ 1. Build from a clean checkout; never reuse a stale layer cache across branches.
++2. Sync the plugin cache before building — the build reads the INSTALLED cache,
++   so an uncommitted local edit is not what the build sees.
