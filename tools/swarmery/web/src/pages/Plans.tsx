@@ -82,6 +82,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { Markdown } from '../lib/markdown';
 import { fmtAgo, fmtCost, fmtDateTime, fmtElapsed } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
+import { planSessionOrder } from '../lib/planSessionScope';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { RunOutcomeModal } from '../components/RunOutcomeModal';
 import { PlanBranchDirtyModal, type PlanBranchDirty } from '../components/PlanBranchDirtyModal';
@@ -1396,12 +1397,6 @@ const SESSION_DOT: Record<SessionStatus, string> = {
   completed: 'bg-brand/60',
   killed: 'bg-red/70',
 };
-
-/** Controller sessions sort above the phases; a phase sorts by its seq. */
-function planSessionOrder(s: Session): number {
-  if (s.planGroup?.role === 'phase') return s.planGroup.phaseSeq ?? Number.MAX_SAFE_INTEGER;
-  return -1;
-}
 
 /** Every session the plan produced, to the RIGHT of the phase timeline: the
  * plan-run controller, each phase run, and the subagents under them — resolved
