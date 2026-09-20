@@ -5,10 +5,10 @@ import (
 )
 
 // Regression: a pruned session carrying an event with an EMPTY ts used to abort
-// the entire prune. SQLite's date('') is NULL, daily_rollups.day is NOT NULL, so
+// the entire prune. SQLite's date(”) is NULL, daily_rollups.day is NOT NULL, so
 // the rollup INSERT failed with "NOT NULL constraint failed: daily_rollups.day"
 // and the transaction rolled back — nothing was ever pruned. Observed on a real
-// 872MB store: 4 'unknown' events out of 43k had ts=''.
+// 872MB store: 4 'unknown' events out of 43k had ts=”.
 //
 // The row must still be DELETED (retention is the point); only its contribution
 // to the day's aggregate is dropped, because it cannot be attributed to a day.
