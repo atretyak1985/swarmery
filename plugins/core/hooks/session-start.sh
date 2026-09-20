@@ -31,10 +31,89 @@ project_display_name() {
 }
 
 # ── Count system components ───────────────────────────────────────
-agent_count=$(find "${CLAUDE_DIR}/agents" -name "*.md" -not -name "README.md" 2>/dev/null | wc -l | tr -d ' ')
-command_count=$(find "${CLAUDE_DIR}/commands" -name "*.md" -not -name "README.md" 2>/dev/null | wc -l | tr -d ' ')
-skill_count=$(find "${CLAUDE_DIR}/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-hook_count=$(find "${CLAUDE_DIR}/hooks" -name "*.sh" 2>/dev/null | wc -l | tr -d ' ')
+# Components live in two places: this project's own .claude/ overrides and
+# the install root of every enabled plugin. Counting only the former made
+# the banner read 0/0/0/0 in any consumer that follows the graduation rule
+# and keeps no local copies (docs/EXTENDING.md) — i.e. in almost all of them.
+# A plugin counts only when it is BOTH enabled and installed, so a pack that
+# is switched on but missing from the install registry stays invisible here,
+# exactly as it is invisible to the session.
+component_counts() {
+  SS_PROJECT_DIR="$PROJECT_DIR" node <<'NODE' 2>/dev/null
+const fs = require('fs'), path = require('path'), os = require('os');
+
+const projectDir = process.env.SS_PROJECT_DIR;
+const claudeDir = path.join(projectDir, '.claude');
+const home = os.homedir();
+
+const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return null; } };
+
+// Later files win, mirroring how the harness layers settings.
+const enabled = {};
+for (const f of [
+  path.join(home, '.claude', 'settings.json'),
+  path.join(claudeDir, 'settings.json'),
+  path.join(claudeDir, 'settings.local.json'),
+]) {
+  const s = readJson(f);
+  if (s && s.enabledPlugins) Object.assign(enabled, s.enabledPlugins);
+}
+
+const reg = readJson(path.join(home, '.claude', 'plugins', 'installed_plugins.json')) || {};
+const installed = reg.plugins || reg;
+
+const roots = [claudeDir];
+for (const [name, on] of Object.entries(enabled)) {
+  if (!on) continue;
+  const entries = installed[name];
+  if (!Array.isArray(entries)) continue;
+  // A project-scoped install pins this project to one version; otherwise the
+  // user-scoped one applies. No match at all = enabled but not installed.
+  const pick = entries.find((e) => e.scope === 'project' && e.projectPath === projectDir)
+    || entries.find((e) => e.scope === 'user');
+  if (pick && pick.installPath && fs.existsSync(pick.installPath)) roots.push(pick.installPath);
+}
+
+const walk = (dir, keep) => {
+  let n = 0;
+  let ents;
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return 0; }
+  for (const ent of ents) {
+    if (ent.isDirectory()) n += walk(path.join(dir, ent.name), keep);
+    else if (keep(ent.name)) n += 1;
+  }
+  return n;
+};
+
+const subdirs = (dir) => {
+  try { return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).length; }
+  catch (e) { return 0; }
+};
+
+const isDoc = (f) => f.endsWith('.md') && f !== 'README.md';
+let agents = 0, commands = 0, skills = 0, hooks = 0;
+for (const root of [...new Set(roots)]) {
+  agents += walk(path.join(root, 'agents'), isDoc);
+  commands += walk(path.join(root, 'commands'), isDoc);
+  skills += subdirs(path.join(root, 'skills'));
+  hooks += walk(path.join(root, 'hooks'), (f) => f.endsWith('.sh'));
+}
+
+process.stdout.write(`${agents} ${commands} ${skills} ${hooks}`);
+NODE
+}
+
+counts=$(component_counts) || counts=""
+if [ -z "$counts" ]; then
+  # No node on PATH — fall back to this project's own files.
+  counts="$(find "${CLAUDE_DIR}/agents" -name "*.md" -not -name "README.md" 2>/dev/null | wc -l | tr -d ' ') \
+$(find "${CLAUDE_DIR}/commands" -name "*.md" -not -name "README.md" 2>/dev/null | wc -l | tr -d ' ') \
+$(find "${CLAUDE_DIR}/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ') \
+$(find "${CLAUDE_DIR}/hooks" -name "*.sh" 2>/dev/null | wc -l | tr -d ' ')"
+fi
+read -r agent_count command_count skill_count hook_count <<EOF
+$counts
+EOF
 
 # ── Check for previous session data ──────────────────────────────
 today=$(date +%Y%m%d)
@@ -158,7 +237,14 @@ fi
 echo -e "${CYAN}${BOLD}│${RST}  ${DIM}Quick commands:${RST}"
 echo -e "${CYAN}${BOLD}│${RST}    ${WHITE}/dashboard${RST}  ${DIM}— session stats & system overview${RST}"
 echo -e "${CYAN}${BOLD}│${RST}    ${WHITE}/cost${RST}       ${DIM}— token usage & cost${RST}"
-echo -e "${CYAN}${BOLD}│${RST}    ${WHITE}@tech-lead${RST}  ${DIM}— orchestrate complex tasks${RST}"
+# A plugin agent is addressed <plugin>:<agent>; only a project-local
+# override under .claude/agents/ answers to the bare name.
+if [ -f "${CLAUDE_DIR}/agents/tech-lead.md" ]; then
+  tech_lead_ref="@tech-lead"
+else
+  tech_lead_ref="@core:tech-lead"
+fi
+echo -e "${CYAN}${BOLD}│${RST}    ${WHITE}${tech_lead_ref}${RST}  ${DIM}— orchestrate complex tasks${RST}"
 echo -e "${CYAN}${BOLD}│${RST}"
 echo -e "${CYAN}${BOLD}└──────────────────────────────────────────────────────┘${RST}"
 echo ""
