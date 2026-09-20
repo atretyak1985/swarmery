@@ -114,6 +114,25 @@ isolated git worktree on its own branch — `swarm/plan-<task-id>` for a whole-p
 run, `swarm/phase-<phase-id>` for a single phase. The branch survives when the
 worktree is reclaimed, so the work is never stranded.
 
+**What a run remembers.** The worktree sits at a different absolute path from the
+checkout, and Claude Code names a session's transcript directory after the path the
+session runs in — so a run's transcripts land under a directory of their own, one
+per worktree. Auto-memory does *not* follow that split: it is resolved from the
+canonical project, so a headless run reads the same `MEMORY.md` index an
+interactive session in the checkout reads. Project memory is therefore neither
+re-learned per run nor forked per worktree: every run of every plan in a repo
+*reads* one index. Writing is a separate claim and worth keeping separate — the
+probe measured read resolution and the absence of a per-worktree `memory/`, not
+write-through sharing. What the daemon writes is canonical by construction
+rather than by measurement: `memconsolidate.AutoMemoryDir` keys on the project's
+own path, never on the cwd of the run, so a consolidation from any worktree
+edits the checkout's index. This is the
+tool's behaviour rather than the daemon's, so it is measured rather than assumed —
+`scripts/tests/worktree-memory-probe.sh` re-derives it on any machine (free,
+read-only, prints `MATCH`, `MISMATCH` or `INCONCLUSIVE`), and
+`tools/swarmery/internal/worktree/memory.go` holds a dormant, tested remedy in
+case the answer ever changes.
+
 A run's state machine is deliberately small:
 
 ```mermaid

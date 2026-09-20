@@ -575,6 +575,46 @@ func TestAutoMemoryDirMirrorsTheApiRoot(t *testing.T) {
 	}
 }
 
+// TestAutoMemoryDirUsesTheClaudeCodeSlugForDottedPaths is the regression for a
+// project under a dot-directory. The DB slug (ingest.SlugForPath) encodes '/'
+// only, so it would name `-Users-dev-.local-src-acme` — a directory Claude Code
+// never creates. The resolver must produce the name Claude Code does write, or
+// the stat fails, advisor rule R10 concludes "no auto-memory" and the dashboard
+// Memory page shows an empty root over memory that exists.
+func TestAutoMemoryDirUsesTheClaudeCodeSlugForDottedPaths(t *testing.T) {
+	const dotted = "/Users/dev/.local/src/acme"
+	got := AutoMemoryDirIn("/tmp/claude", dotted)
+	want := filepath.Join("/tmp/claude", "projects", "-Users-dev--local-src-acme", "memory")
+	if got != want {
+		t.Fatalf("AutoMemoryDirIn(%q) = %q, want %q", dotted, got, want)
+	}
+}
+
+// TestAutoMemoryDirFindsARealDottedProjectsMemory proves the same thing against
+// the filesystem rather than against a string: seed a memory dir under the name
+// Claude Code would use, then ask the resolver for it and read through.
+func TestAutoMemoryDirFindsARealDottedProjectsMemory(t *testing.T) {
+	claude := t.TempDir()
+	const project = "/Users/dev/.local/src/acme"
+
+	seeded := filepath.Join(claude, "projects", "-Users-dev--local-src-acme", "memory")
+	if err := os.MkdirAll(seeded, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seeded, indexName), []byte("- [A](a.md) — hook\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := AutoMemoryDirIn(claude, project)
+	raw, err := os.ReadFile(IndexPath(dir))
+	if err != nil {
+		t.Fatalf("resolver pointed at %q, which cannot be read: %v", dir, err)
+	}
+	if string(raw) != "- [A](a.md) — hook\n" {
+		t.Fatalf("read %q through the resolved dir", raw)
+	}
+}
+
 func TestSetClaudeDir(t *testing.T) {
 	prev := ClaudeDir()
 	t.Cleanup(func() { claudeDir = prev })

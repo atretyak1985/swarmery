@@ -43,15 +43,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeproj"
 )
 
 // ── auto-memory root resolution ─────────────────────────────────────────────
 //
 // One implementation of "where does this project's auto-memory live", shared by
 // the advisor rule, the API handler and the CLI, so they can never disagree:
-// <claudeDir>/projects/<slug>/memory, slug = ingest.SlugForPath(project path).
-// This mirrors internal/api/memory.go's kindAutoMemory root exactly.
+// <claudeDir>/projects/<slug>/memory, slug = claudeproj.Slug(project path).
+// internal/api/memory.go's kindAutoMemory root calls AutoMemoryDirIn rather
+// than mirroring it, so there is one resolver and not two.
+//
+// The slug here is claudeproj.Slug, NOT ingest.SlugForPath. They agree for any
+// dot-free path, which is how they drifted apart unnoticed; they disagree the
+// moment a project lives under a dot-directory (`/Users/dev/.local/src/acme`),
+// and there the ingest encoding names a directory Claude Code never created —
+// so the stat fails, the advisor concludes the project has no auto-memory and
+// the dashboard shows an empty root. See internal/claudeproj for which slug
+// answers which question.
 
 // claudeDir is the resolved ~/.claude root. SetClaudeDir overrides it (the
 // daemon's --claude-dir, and tests).
@@ -78,9 +87,9 @@ func SetClaudeDir(dir string) {
 func ClaudeDir() string { return claudeDir }
 
 // AutoMemoryDirIn is the pure resolver: the auto-memory dir of projectPath under
-// an explicit claude dir.
+// an explicit claude dir. claudeproj.Slug cleans the path itself.
 func AutoMemoryDirIn(claude, projectPath string) string {
-	return filepath.Join(claude, "projects", ingest.SlugForPath(filepath.Clean(projectPath)), "memory")
+	return filepath.Join(claude, "projects", claudeproj.Slug(projectPath), "memory")
 }
 
 // AutoMemoryDir resolves projectPath's auto-memory dir under the package claude dir.
