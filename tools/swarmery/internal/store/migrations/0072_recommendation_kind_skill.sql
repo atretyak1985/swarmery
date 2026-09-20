@@ -16,10 +16,11 @@
 -- widening numbered below 0071 would be silently undone by 0071's own CREATE
 -- TABLE a moment later, on a fresh database, with no error anywhere. The
 -- vocabulary therefore has to be widened AFTER the last rebuild, not before it.
--- For the same reason the agent-memory phase 5 proposals migration is reserved
--- slot 0073, NOT 0070: migrate.go applies any UNAPPLIED file in filename order,
--- so a 0070 written later would run BEFORE 0071/0072 on a fresh database and
--- AFTER them on an already-migrated one — two different schemas, no error
+-- For the same reason the agent-memory phase 5 proposals migration landed in slot
+-- 0074, NOT 0070 (and not the 0073 once reserved here — 0073_fk_child_indexes.sql
+-- took that number first): migrate.go applies any UNAPPLIED file in filename
+-- order, so a 0070 written later would run BEFORE 0071/0072 on a fresh database
+-- and AFTER them on an already-migrated one — two different schemas, no error
 -- anywhere. New migrations always take the next number above the highest one.
 --
 -- SQLite cannot ALTER a CHECK constraint, so the table is rebuilt, and the

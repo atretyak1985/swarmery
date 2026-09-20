@@ -13,16 +13,32 @@ import (
 // errNoChangeRow is the error column text of an ErrNoChange outcome.
 const errNoChangeRow = "model found no justified change"
 
-// OpenProposalID returns the id of the agent's open (proposed|approved)
-// proposal, or 0 when none exists — the code-level half of the
-// one-open-proposal invariant (migration 0022 adds the partial unique index
-// that enforces the DB-level half).
+// OpenProposalID returns the id of the AGENT target's open proposal, or 0 when
+// none exists. Thin wrapper over OpenTargetProposalID for the agent callers that
+// have no reason to know a kind exists.
 func (s *Service) OpenProposalID(agent string) (int64, error) {
+	return s.OpenTargetProposalID(TargetAgent, agent)
+}
+
+// OpenTargetProposalID returns the id of the TARGET's open proposal
+// (proposed|approved|needs_target), or 0 when none exists — the code-level half
+// of the one-open-proposal invariant (migration 0074's partial unique index
+// enforces the DB-level half).
+//
+// Keyed on the TARGET, not the agent name, since phase 5: `key` is the agent
+// registry key for an agent proposal and the SKILL.md path — or, while the file
+// is still unknown, the lesson identity — for a skill proposal. The SQL mirrors
+// the index expression COALESCE(NULLIF(target_path,''), agent) exactly; if one
+// changes the other must, or the friendly 409 and the hard constraint will
+// disagree about what "already open" means.
+func (s *Service) OpenTargetProposalID(targetKind, key string) (int64, error) {
 	var id int64
 	err := s.DB.QueryRow(`
 		SELECT id FROM agent_change_proposals
-		 WHERE agent = ? AND status IN ('proposed','approved')
-		 ORDER BY id DESC LIMIT 1`, agent).Scan(&id)
+		 WHERE target_kind = ?
+		   AND COALESCE(NULLIF(target_path, ''), agent) = ?
+		   AND status IN ('proposed','approved','needs_target')
+		 ORDER BY id DESC LIMIT 1`, targetKind, key).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -181,13 +197,19 @@ func (s *Service) run(ctx context.Context, ev *Evidence) (diff, rationale string
 // Retry re-runs the pipeline for a failed proposal, updating the row in
 // place: success flips failed → proposed with a fresh diff/rationale/base
 // SHA; another failure refreshes the error text. Only 'failed' rows are
-// retriable; an open proposal for the same agent (created since the
+// retriable; an open proposal for the same TARGET (created since the
 // failure) blocks the retry.
+//
+// Kind-aware since phase 5. A skill row's `agent` column holds a lesson
+// identity, not a registry key, so retrying it down the agent path would hand
+// resolveAgentInRepo a sentence and fail with the misleading "agent not found".
+// The stored target is re-resolved instead, and the row keeps its target_path.
 func (s *Service) Retry(ctx context.Context, id int64) error {
-	var agent, status string
+	var agent, targetKind, targetPath, status string
 	err := s.DB.QueryRow(
-		`SELECT agent, status FROM agent_change_proposals WHERE id = ?`, id).
-		Scan(&agent, &status)
+		`SELECT agent, target_kind, target_path, status
+		   FROM agent_change_proposals WHERE id = ?`, id).
+		Scan(&agent, &targetKind, &targetPath, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrProposalNotFound
 	}
@@ -197,30 +219,56 @@ func (s *Service) Retry(ctx context.Context, id int64) error {
 	if status != "failed" {
 		return fmt.Errorf("%w (status %s)", ErrNotRetriable, status)
 	}
-	if open, err := s.OpenProposalID(agent); err != nil {
+	key := agent
+	if targetKind == TargetSkill && targetPath != "" {
+		key = targetPath
+	}
+	if open, err := s.OpenTargetProposalID(targetKind, key); err != nil {
 		return err
 	} else if open != 0 {
 		return fmt.Errorf("%w (proposal %d)", ErrOpenProposal, open)
 	}
 
-	ev, err := s.buildEvidence(agent)
+	ev, run, err := s.retryEvidence(targetKind, agent, targetPath)
 	if err != nil {
 		return err
 	}
-	diff, rationale, runErr := s.run(ctx, ev)
+	diff, rationale, runErr := run(ctx, ev)
 	if runErr != nil {
-		log.Printf("warn: improve: retry %d (agent %s): %v", id, agent, runErr)
+		log.Printf("warn: improve: retry %d (%s %s): %v", id, targetKind, agent, runErr)
 		_, err = s.DB.Exec(`
 			UPDATE agent_change_proposals
-			   SET agent_path = ?, base_sha256 = ?, error = ? WHERE id = ?`,
-			ev.AgentPath, ev.BaseSHA256, runErr.Error(), id)
+			   SET base_sha256 = ?, error = ? WHERE id = ?`,
+			ev.BaseSHA256, runErr.Error(), id)
 		return err
 	}
 	_, err = s.DB.Exec(`
 		UPDATE agent_change_proposals
-		   SET agent_path = ?, base_sha256 = ?, diff = ?, rationale = ?,
+		   SET agent_path = CASE WHEN target_kind = 'skill' THEN agent_path ELSE ? END,
+		       target_path = CASE WHEN target_kind = 'skill' THEN ? ELSE target_path END,
+		       base_sha256 = ?, diff = ?, rationale = ?,
 		       status = 'proposed', error = NULL
 		 WHERE id = ? AND status = 'failed'`,
-		ev.AgentPath, ev.BaseSHA256, diff, rationale, id)
+		ev.AgentPath, ev.AgentPath, ev.BaseSHA256, diff, rationale, id)
 	return err
+}
+
+// retryEvidence rebuilds the bundle for a retry and returns the matching model
+// runner, so Retry itself stays kind-agnostic.
+func (s *Service) retryEvidence(targetKind, agent, targetPath string) (
+	*Evidence, func(context.Context, *Evidence) (string, string, error), error) {
+	if targetKind != TargetSkill {
+		ev, err := s.buildEvidence(agent)
+		return ev, s.run, err
+	}
+	name := skillNameOf(targetPath)
+	if name == "" {
+		return nil, nil, fmt.Errorf("%w: proposal has no resolved SKILL.md to retry", ErrSkillNotFound)
+	}
+	relPath, content, err := resolveSkillInRepo(s.Exec, s.Repo, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	ev, err := s.buildSkillEvidence(agent, relPath, content)
+	return ev, s.runSkill, err
 }

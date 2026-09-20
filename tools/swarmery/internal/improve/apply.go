@@ -36,9 +36,9 @@ type Exec interface {
 // almost certainly off the rails and must go through a human, not the loop.
 const maxChangedLines = 120
 
-// coreOnlyPrefix is the path prefix that makes a change "core-only" (and thus
-// eligible for the automatic semver patch bump).
-const coreOnlyPrefix = "plugins/core/"
+// corePack is the vendor-neutral plugin whose version the marketplace manifest
+// tracks; a bump there is mirrored into .claude-plugin/marketplace.json.
+const corePack = "core"
 
 // gateErr names a guardrail in the failure it produces, so the failed row's
 // error column always identifies which gate rejected the diff.
@@ -57,11 +57,11 @@ func (e *gateErr) Error() string { return e.gate + ": " + e.msg }
 // re-run). A non-nil return is reserved for pre-flight problems (bad id, DB
 // error) the API surfaces as 4xx/5xx.
 func (s *Service) Apply(ctx context.Context, proposalID int64) error {
-	var agent, agentPath, baseSHA, diff, createdAt, status string
+	var agent, agentPath, targetKind, targetPath, baseSHA, diff, createdAt, status string
 	err := s.DB.QueryRow(`
-		SELECT agent, agent_path, base_sha256, diff, created_at, status
+		SELECT agent, agent_path, target_kind, target_path, base_sha256, diff, created_at, status
 		  FROM agent_change_proposals WHERE id = ?`, proposalID).
-		Scan(&agent, &agentPath, &baseSHA, &diff, &createdAt, &status)
+		Scan(&agent, &agentPath, &targetKind, &targetPath, &baseSHA, &diff, &createdAt, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrProposalNotFound
 	}
@@ -72,38 +72,52 @@ func (s *Service) Apply(ctx context.Context, proposalID int64) error {
 		return fmt.Errorf("proposal %d is %s, not approved", proposalID, status)
 	}
 
-	// The agent-scope gate needs the agent file as a repo-relative path. Since
-	// generation resolves the source from origin/main, agent_path is already
-	// repo-relative (plugins/<pack>/agents/<name>.md); repoRel normalizes it and
-	// blocks any escape.
-	relAgentPath, err := repoRel(s.Repo, agentPath)
+	// The scope gate needs the target file as a repo-relative path. Since
+	// generation resolves the source from origin/main, the stored path is already
+	// repo-relative (plugins/<pack>/agents/<name>.md, or
+	// plugins/<pack>/skills/<name>/SKILL.md for a skill proposal); repoRel
+	// normalizes it and blocks any escape.
+	stored := agentPath
+	if targetKind == TargetSkill {
+		stored = targetPath
+	}
+	relTarget, err := repoRel(s.Repo, stored)
 	if err != nil {
 		return s.markFailed(proposalID, err)
 	}
+	// The stored target must be a shape the loop is allowed to edit at all. A
+	// needs_target row (empty path) or a hand-edited row pointing at
+	// .github/workflows/x.yml dies here, before any git op — the path-scope gate
+	// inside the worktree would also catch it, but only after fetching and
+	// creating a branch.
+	if !isEditableTarget(relTarget) {
+		return s.markFailed(proposalID, &gateErr{gate: "path scope",
+			msg: fmt.Sprintf("%q is not an agent definition or a SKILL.md", relTarget)})
+	}
 
-	// Step 2: the diff was generated against the agent's origin/main content; if
+	// Step 2: the diff was generated against the target's origin/main content; if
 	// origin/main drifted since (a merge landed), the patch context is stale —
 	// fail before any worktree. Re-read the CURRENT origin/main content through
 	// the same Exec boundary generation used, so generate-time and approve-time
 	// are both origin/main-based (no working-tree drift).
-	curContent, err := s.Exec.Run(context.Background(), s.Repo, "git", "show", "origin/main:"+relAgentPath)
+	curContent, err := s.Exec.Run(context.Background(), s.Repo, "git", "show", "origin/main:"+relTarget)
 	if err != nil {
-		return s.markFailed(proposalID, fmt.Errorf("re-read agent at origin/main: %w", err))
+		return s.markFailed(proposalID, fmt.Errorf("re-read target at origin/main: %w", err))
 	}
 	sum := sha256.Sum256([]byte(curContent))
 	if hex.EncodeToString(sum[:]) != baseSHA {
 		return s.markFailed(proposalID, errors.New("agent changed since proposal (sha256 mismatch)"))
 	}
 
-	branch, err := branchName(agent, createdAt)
+	branch, err := branchName(targetKind, agent, relTarget, createdAt)
 	if err != nil {
 		return s.markFailed(proposalID, err)
 	}
 
-	if ghErr := s.runApply(ctx, proposalID, agent, relAgentPath, diff, branch); ghErr != nil {
+	if ghErr := s.runApply(ctx, proposalID, targetKind, agent, relTarget, diff, branch); ghErr != nil {
 		// gh outage: leave the proposal approved so the dashboard can re-run.
-		log.Printf("warn: improve: apply %d (agent %s): PR step failed, left approved: %v",
-			proposalID, agent, ghErr)
+		log.Printf("warn: improve: apply %d (%s %s): PR step failed, left approved: %v",
+			proposalID, targetKind, agent, ghErr)
 		_, uerr := s.DB.Exec(
 			`UPDATE agent_change_proposals SET error = ? WHERE id = ? AND status = 'approved'`,
 			ghErr.Error(), proposalID)
@@ -114,10 +128,10 @@ func (s *Service) Apply(ctx context.Context, proposalID int64) error {
 
 // runApply performs the worktree-scoped part of the pipeline. A *gateErr or
 // sha/git failure is converted to a failed row here and returns nil; a PR-step
-// (gh) failure is returned so Apply can keep the proposal approved. agentPath is
-// the repo-relative path of the target agent file — the only path the model's
-// diff is permitted to touch (the path-scope gate).
-func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff, branch string) (ghErr error) {
+// (gh) failure is returned so Apply can keep the proposal approved. targetPath is
+// the repo-relative path of the target file (an agent definition or a SKILL.md)
+// — the only path the model's diff is permitted to touch (the path-scope gate).
+func (s *Service) runApply(ctx context.Context, id int64, targetKind, agent, targetPath, diff, branch string) (ghErr error) {
 	tmp, err := s.Exec.MkdirTemp()
 	if err != nil {
 		return s.failWrap(id, err)
@@ -178,7 +192,7 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 	if err != nil {
 		return s.failWrap(id, err)
 	}
-	if err := checkPathScope(changed, agentPath); err != nil {
+	if err := checkPathScope(changed, targetPath); err != nil {
 		return s.failWrap(id, err)
 	}
 
@@ -187,11 +201,12 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 		return s.failWrap(id, err)
 	}
 
-	// Step 5: core-only ⇒ patch-bump the core plugin + marketplace in lockstep.
-	// This writes the two manifest files AFTER the gate; the re-stage below adds
-	// them to the index so they land in the commit but were absent at gate time.
-	if coreOnly(changed) {
-		if err := s.bumpCoreSemver(tmp); err != nil {
+	// Step 5: the diff lives inside exactly one plugin pack ⇒ patch-bump that
+	// pack's manifest (and, for core, the marketplace metadata in lockstep). This
+	// writes the manifest files AFTER the gate; the re-stage below adds them to
+	// the index so they land in the commit but were absent at gate time.
+	if pack, ok := packOnly(changed); ok {
+		if err := s.bumpPackSemver(tmp, pack); err != nil {
 			return s.failWrap(id, err)
 		}
 	}
@@ -205,7 +220,7 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 	if out, err := s.Exec.Run(ctx, tmp, "git", "add", "-A"); err != nil {
 		return s.failWrap(id, fmt.Errorf("git add: %v (%s)", err, out))
 	}
-	commitMsg := fmt.Sprintf("feat(core): improve %s agent (advisor-evidenced)", agent)
+	label, commitMsg, title := prLabels(targetKind, agent, targetPath)
 	if out, err := s.Exec.Run(ctx, tmp, "git", "commit", "-m", commitMsg); err != nil {
 		return s.failWrap(id, fmt.Errorf("git commit: %v (%s)", err, out))
 	}
@@ -215,8 +230,7 @@ func (s *Service) runApply(ctx context.Context, id int64, agent, agentPath, diff
 	}
 
 	// Step 7: open the PR.
-	body := prBody(agent)
-	title := fmt.Sprintf("feat(core): improve %s agent", agent)
+	body := prBody(targetKind, label, targetPath)
 	out, err := s.Exec.Run(ctx, tmp, "gh", "pr", "create",
 		"--head", branch, "--title", title, "--body", body)
 	if err != nil {
@@ -269,18 +283,23 @@ func (s *Service) changedPaths(ctx context.Context, tmp string) ([]string, int, 
 }
 
 // checkPathScope is the HARD apply-scope gate. It rejects (gate "path scope") if
-// any changed path is outside the target agent file. The gate runs against the
-// STAGED (intent-to-add) tree BEFORE the semver bump writes-and-stages its two
+// any changed path is outside the single target file. The gate runs against the
+// STAGED (intent-to-add) tree BEFORE the semver bump writes-and-stages its
 // manifests, so the ONLY path the model's diff is allowed to have touched is the
-// agent file itself — anything else (a sibling CI workflow, a renamed-away
+// target itself — anything else (a sibling CI workflow, a renamed-away
 // destination, a manifest the model tried to edit directly) is a bypass attempt
 // and must be rejected. The bump's own manifest writes are added to the commit
 // afterward by our code, never present at gate time.
-func checkPathScope(changed []string, agentPath string) error {
+//
+// Phase 5 widens WHICH file may be the target (an agent definition or a
+// SKILL.md) and changes NOTHING about this gate's semantics — deliberately. A
+// skill that references sibling resources/*.md still cannot have them edited by
+// the loop: exactly one path, and it is the target.
+func checkPathScope(changed []string, targetPath string) error {
 	for _, p := range changed {
-		if p != agentPath {
+		if p != targetPath {
 			return &gateErr{gate: "path scope",
-				msg: fmt.Sprintf("diff touches %s outside the target agent file %s", p, agentPath)}
+				msg: fmt.Sprintf("diff touches %s outside the target file %s", p, targetPath)}
 		}
 	}
 	return nil
@@ -323,9 +342,12 @@ func (s *Service) guardrails(ctx context.Context, tmp string, changed []string, 
 		return &gateErr{gate: "scan-flavor", msg: "neutrality scan not clean"}
 	}
 
-	// 2) frontmatter on every changed agent definition file.
+	// 2) frontmatter on every changed agent definition OR skill definition file.
+	// Both carry the same contract — a leading `---` with name: and description:
+	// inside the first 15 lines — so one predicate covers the CI agent gate and
+	// the SKILL.md shape a skill proposal must not break.
 	for _, p := range changed {
-		if !isAgentFile(p) {
+		if !isEditableTarget(p) {
 			continue
 		}
 		content, rerr := s.Exec.ReadFile(filepath.Join(tmp, p))
@@ -343,42 +365,6 @@ func (s *Service) guardrails(ctx context.Context, tmp string, changed []string, 
 			msg: fmt.Sprintf("%d changed lines exceeds the %d-line cap", total, maxChangedLines)}
 	}
 	return nil
-}
-
-// bumpCoreSemver patch-bumps plugins/core/.claude-plugin/plugin.json and keeps
-// the marketplace metadata.version in lockstep, in-place in the worktree.
-func (s *Service) bumpCoreSemver(tmp string) error {
-	pjPath := filepath.Join(tmp, "plugins/core/.claude-plugin/plugin.json")
-	pjRaw, err := s.Exec.ReadFile(pjPath)
-	if err != nil {
-		return fmt.Errorf("read core plugin.json: %w", err)
-	}
-	loc := versionFieldRe.FindSubmatch(pjRaw)
-	if loc == nil {
-		return errors.New("core plugin.json: no version field")
-	}
-	next, err := bumpPatch(string(loc[2]))
-	if err != nil {
-		return fmt.Errorf("core plugin.json: %w", err)
-	}
-	pjNew, _, err := bumpVersionField(pjRaw, next)
-	if err != nil {
-		return err
-	}
-	if err := s.Exec.WriteFile(pjPath, pjNew); err != nil {
-		return err
-	}
-
-	mpPath := filepath.Join(tmp, ".claude-plugin/marketplace.json")
-	mpRaw, err := s.Exec.ReadFile(mpPath)
-	if err != nil {
-		return fmt.Errorf("read marketplace.json: %w", err)
-	}
-	mpNew, _, err := bumpVersionField(mpRaw, next)
-	if err != nil {
-		return fmt.Errorf("marketplace.json: %w", err)
-	}
-	return s.Exec.WriteFile(mpPath, mpNew)
 }
 
 // markFailed flips the proposal to failed with the given error text and returns
@@ -400,19 +386,6 @@ func (s *Service) failWrap(id int64, cause error) error {
 	return nil
 }
 
-// coreOnly reports whether every changed path lives under plugins/core/.
-func coreOnly(paths []string) bool {
-	if len(paths) == 0 {
-		return false
-	}
-	for _, p := range paths {
-		if !strings.HasPrefix(p, coreOnlyPrefix) {
-			return false
-		}
-	}
-	return true
-}
-
 // isAgentFile matches the CI frontmatter glob plugins/*/agents/*.md.
 func isAgentFile(p string) bool {
 	if !strings.HasPrefix(p, "plugins/") || !strings.HasSuffix(p, ".md") {
@@ -429,18 +402,24 @@ func isAgentFile(p string) bool {
 // token), and core.quotepath=false keeps that path verbatim rather than quoting
 // non-ASCII bytes. It is fail-CLOSED: any row with fewer than three
 // tab-separated columns is a hard error, not a silent skip.
+//
+// The row is split on TABs, never on whitespace: git does not quote spaces in
+// numstat paths, so a whitespace split would truncate `plugins/a/x.md y.md` to
+// its last token — two rows could then both parse to the target path and smuggle
+// an extra file past checkPathScope. Everything after the second TAB is the path
+// VERBATIM (spaces included); only a trailing CR is stripped, because trimming
+// spaces would corrupt a path that legitimately ends in one.
 func parseNumstat(out string) (paths []string, total int, err error) {
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
+		fields := strings.SplitN(line, "\t", 3)
+		if len(fields) < 3 || fields[2] == "" {
 			return nil, 0, fmt.Errorf("malformed numstat line %q", line)
 		}
-		path := fields[len(fields)-1]
-		paths = append(paths, path)
+		paths = append(paths, fields[2])
 		add := parseCount(fields[0])
 		del := parseCount(fields[1])
 		total += add + del
@@ -460,16 +439,48 @@ func parseCount(s string) int {
 	return n
 }
 
-// branchName derives the deterministic branch agent-improve/{agent}-{yyyymmdd}
+// branchName derives the deterministic branch {kind}-improve/{slug}-{yyyymmdd}
 // from the proposal's created_at (RFC-ish "2006-01-02T15:04:05.000Z"), so the
 // branch is reproducible on a re-run and independent of wall-clock in tests.
-func branchName(agent, createdAt string) (string, error) {
-	slug := branchSlug(agent)
+//
+// An agent row's slug is its registry key. A SKILL row's `agent` column holds
+// the lesson identity — a whole sentence — so the slug comes from the target
+// path's skill name instead; a 60-character branch named after a retro sentence
+// is not a ref anyone can read.
+func branchName(targetKind, agent, targetPath, createdAt string) (string, error) {
+	prefix, slug := "agent-improve/", branchSlug(agent)
+	if targetKind == TargetSkill {
+		prefix = "skill-improve/"
+		if name := skillNameOf(targetPath); name != "" {
+			slug = branchSlug(name)
+		}
+	}
 	day, err := createdDay(createdAt)
 	if err != nil {
 		return "", err
 	}
-	return "agent-improve/" + slug + "-" + day, nil
+	return prefix + slug + "-" + day, nil
+}
+
+// prLabels renders the three human-facing strings of the PR step: the display
+// label of the target, the conventional-commit subject, and the PR title. The
+// scope is the owning pack (plugins/<pack>/…) rather than a hardcoded `core`, so
+// a domain pack's skill does not open a PR claiming to change core.
+func prLabels(targetKind, agent, targetPath string) (label, commitMsg, title string) {
+	scope := corePack
+	if pack, ok := packOf(targetPath); ok {
+		scope = pack
+	}
+	noun, label := "agent", agent
+	if targetKind == TargetSkill {
+		noun = "skill"
+		if name := skillNameOf(targetPath); name != "" {
+			label = name
+		}
+	}
+	return label,
+		fmt.Sprintf("feat(%s): improve %s %s (advisor-evidenced)", scope, label, noun),
+		fmt.Sprintf("feat(%s): improve %s %s", scope, label, noun)
 }
 
 // createdDay extracts YYYYMMDD from the stored created_at timestamp.
@@ -514,8 +525,26 @@ func firstURL(s string) string {
 }
 
 // prBody renders the PR description: rationale/evidence pointer + the advisor
-// verify-plan line the retro loop closes on.
-func prBody(agent string) string {
+// verify-plan line the retro loop closes on. The two kinds cite DIFFERENT
+// evidence and DIFFERENT verify metrics, because they are answers to different
+// questions — an agent rewrite answers "this agent keeps failing", a skill edit
+// answers "the fleet keeps re-learning this lesson" — and a reviewer who cannot
+// tell which claim the PR is making cannot check it.
+func prBody(targetKind, label, targetPath string) string {
+	if targetKind == TargetSkill {
+		return fmt.Sprintf(`Automated skill improvement generated by the swarmery retro self-improvement loop.
+
+**Skill:** %s (`+"`%s`"+`)
+
+This diff was produced by the advisor-evidenced rewriter from a recurring
+retrospective lesson (R11: one lesson identity learned in ≥3 distinct tasks) and
+passed the neutrality, frontmatter, path-scope, and diff-size guardrails.
+
+**Verify plan:** advisor verifies lesson_task_count for this lesson falls over
+the 14 days after merge; if the fleet keeps re-learning it, revert this PR.
+
+Do not auto-merge — human review required.`, label, targetPath)
+	}
 	return fmt.Sprintf(`Automated agent improvement generated by the swarmery retro self-improvement loop.
 
 **Agent:** %s
@@ -527,7 +556,7 @@ and passed the neutrality, frontmatter, and diff-size guardrails.
 **Verify plan:** advisor verifies behavior_failed_run_share improves by ≥20%%
 for %s 7 days after merge; if it does not regress-free, revert this PR.
 
-Do not auto-merge — human review required.`, agent, agent)
+Do not auto-merge — human review required.`, label, label)
 }
 
 // OSExec is the production Exec: real process spawns + filesystem.

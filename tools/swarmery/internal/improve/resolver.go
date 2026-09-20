@@ -102,6 +102,61 @@ func locateAgentPath(ctx context.Context, ex Exec, repo, agent string) (string, 
 	return matches[0], nil
 }
 
+// resolveSkillInRepo is resolveAgentInRepo's twin for a SKILL.md: it resolves
+// plugins/<pack>/skills/<name>/SKILL.md from the APPLY REPO at origin/main, for
+// exactly the same reason — the generated diff header (a/<relPath> b/<relPath>)
+// must apply at the worktree root, and only origin/main can promise that.
+//
+// The skill name is sanitized against the same single-segment pattern the agent
+// path uses, so `../../evil` can never be interpolated into a repo path.
+// plugins/core wins a collision; otherwise the lexicographically smallest pack,
+// so two packs shipping a same-named skill resolve deterministically.
+func resolveSkillInRepo(ex Exec, repo, skill string) (relPath, content string, err error) {
+	if !agentNameRe.MatchString(skill) {
+		return "", "", fmt.Errorf("%w: %q (invalid skill name)", ErrSkillNotFound, skill)
+	}
+	if repo == "" {
+		return "", "", fmt.Errorf("%w: %q (no apply repo configured)", ErrSkillNotFound, skill)
+	}
+	if ex == nil {
+		ex = OSExec{}
+	}
+	ctx := context.Background()
+	_, _ = ex.Run(ctx, repo, "git", "fetch", "origin", "main")
+
+	out, err := ex.Run(ctx, repo, "git", "ls-tree", "-r", "--name-only", "origin/main")
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %q (git ls-tree: %v)", ErrSkillNotFound, skill, err)
+	}
+	var matches []string
+	for _, line := range strings.Split(out, "\n") {
+		p := strings.TrimSpace(line)
+		if p == "" {
+			continue
+		}
+		if m := skillPathRe.FindStringSubmatch(p); m != nil && m[2] == skill {
+			matches = append(matches, p)
+		}
+	}
+	if len(matches) == 0 {
+		return "", "", fmt.Errorf("%w: %q", ErrSkillNotFound, skill)
+	}
+	core := "plugins/" + corePack + "/skills/" + skill + "/SKILL.md"
+	sort.Strings(matches)
+	relPath = matches[0]
+	for _, p := range matches {
+		if p == core {
+			relPath = core
+			break
+		}
+	}
+	body, err := ex.Run(ctx, repo, "git", "show", "origin/main:"+relPath)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %q (git show %s: %v)", ErrSkillNotFound, skill, relPath, err)
+	}
+	return relPath, body, nil
+}
+
 // repoAgentSet returns the set of agent names that ship at
 // plugins/*/agents/*.md in origin/main of the apply repo — the agents the
 // rewriter can act on. A missing repo or exec (generation disabled) yields an

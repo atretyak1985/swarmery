@@ -689,11 +689,15 @@ func (h *Handler) fillAgentInsights(out *agentProfileDTO, key string, pf string,
 	}
 
 	// Change proposals for the agent (newest first) — the same proposalDTO shape.
+	// target_kind is pinned to 'agent': a SKILL proposal stores its lesson
+	// identity in the same `agent` column, so without the filter a retro sentence
+	// that happened to equal an agent key would surface on that agent's page as if
+	// it were a rewrite of its prompt.
 	prows, err := h.DB.Query(`
-		SELECT id, recommendation_id, agent, agent_path, base_sha256, diff,
-		       rationale, status, error, pr_url, created_at, decided_at
+		SELECT id, recommendation_id, agent, agent_path, target_kind, target_path,
+		       base_sha256, diff, rationale, status, error, pr_url, created_at, decided_at
 		  FROM agent_change_proposals
-		 WHERE agent = ?
+		 WHERE agent = ? AND target_kind = 'agent'
 		 ORDER BY created_at DESC, id DESC`, nk)
 	if err != nil {
 		return err
@@ -702,6 +706,7 @@ func (h *Handler) fillAgentInsights(out *agentProfileDTO, key string, pf string,
 	for prows.Next() {
 		var p proposalDTO
 		if err := prows.Scan(&p.ID, &p.RecommendationID, &p.Agent, &p.AgentPath,
+			&p.TargetKind, &p.TargetPath,
 			&p.BaseSHA256, &p.Diff, &p.Rationale, &p.Status, &p.Error, &p.PRURL,
 			&p.CreatedAt, &p.DecidedAt); err != nil {
 			return err

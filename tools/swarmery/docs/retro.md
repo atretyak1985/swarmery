@@ -158,6 +158,44 @@ A `proposed` row is still swept when the rule goes quiet, and re-proposed if the
 
 The same fold backs the Retro page's **Group by lesson** toggle — see `?group=1` in §7.
 
+### Skill proposals — what R11 turns into
+
+Accepting an R11 recommendation routes it into the **same** human-gated diff pipeline agent
+rewrites use (`internal/improve`), pointed at a `SKILL.md` instead of an agent definition. The
+proposal row says which kind of file it targets: `agent_change_proposals.target_kind` is `agent`
+or `skill`, and `target_path` holds the repo-relative `plugins/<pack>/skills/<name>/SKILL.md`
+(migration `0074`). Nothing else about the pipeline changes — the diff still needs a human
+Approve, and it still has to pass the neutrality scan, the frontmatter check, the hard path-scope
+gate and the ≤120-line cap before a PR exists.
+
+**Resolving the target.** A recommendation's `target` is the lesson identity (`norm_title`), not a
+file. The file comes from the lesson's most recent `**Action**:` line when it names a skill —
+the literal token `skills/<name>` — resolved against `origin/main` of the apply repo. Two things
+can go wrong, and both end in a row you can see rather than in silence:
+
+| Action line | Outcome |
+|---|---|
+| names `skills/<name>` that a pack ships | proposal `proposed`, `target_path` set, diff generated |
+| names no skill, or one no pack ships | proposal **`needs_target`**, `target_path` empty, no model run |
+
+A `needs_target` row is real evidence with an unknown file: the Retro page shows it with the
+reason on the card, the target cell reading `no target file — dismissing is the only transition`,
+and a **Dismiss** button. Dismissing is the only transition it has — approving
+is refused, because there is nothing to apply. There is no target picker in this phase; if one is
+added, that cell's copy and this paragraph change together. It counts as OPEN for the one-open invariant, so a
+lesson nobody can place cannot accumulate duplicate rows; dismissing frees the slot and the rule
+re-proposes if the lesson recurs.
+
+**What the loop may NOT do.** The path-scope gate still permits exactly one changed path, and for
+a skill proposal that path is the `SKILL.md`. A skill's sibling `resources/*.md` files are
+off-limits in this phase — a diff touching one is rejected whole with gate `path scope`, not
+trimmed. The model is told so in its prompt, and the gate enforces it regardless.
+
+**One open proposal per TARGET**, not per name (migration `0074` replaces `0022`'s index). An
+agent and a skill may share a name without colliding; two lessons routed at the same `SKILL.md`
+collide, and the second is refused. The semver bump follows whichever pack owns the edited file,
+with `plugins/core` additionally mirroring the marketplace `metadata.version`.
+
 ## 5. Recommendation lifecycle
 
 ```
@@ -288,6 +326,10 @@ is the same threshold R11 fires on.
   Numbered **above 0071 on purpose**: migrations apply in filename order and 0071 rebuilds the
   table with its vocabulary spelled out in full, so a widening numbered below it would be
   silently undone on a fresh database with no error anywhere.
+- Migration **0074** — `agent_change_proposals.target_kind` + `target_path`, the `needs_target`
+  status, and a one-open partial unique index keyed on
+  `(target_kind, COALESCE(NULLIF(target_path,''), agent))` instead of `0022`'s `(agent)`. Numbered
+  **above 0073** for the same filename-order reason as 0072.
 
 ## 9. Cadences
 

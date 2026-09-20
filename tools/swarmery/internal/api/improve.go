@@ -128,9 +128,18 @@ func (h *Handler) improveRecommendation(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, err)
 		return
 	}
-	if status != "accepted" || targetKind != "agent" {
+	if status != "accepted" {
 		writeClientErr(w, http.StatusUnprocessableEntity,
-			"recommendation must be accepted and agent-kind (got "+status+"/"+targetKind+")")
+			"recommendation must be accepted (got "+status+")")
+		return
+	}
+	if targetKind == improve.TargetSkill {
+		h.improveSkillRecommendation(w, recID, target)
+		return
+	}
+	if targetKind != improve.TargetAgent {
+		writeClientErr(w, http.StatusUnprocessableEntity,
+			"recommendation must be agent- or skill-kind (got "+targetKind+")")
 		return
 	}
 	agent := advisor.NormAgent(target)
@@ -145,6 +154,43 @@ func (h *Handler) improveRecommendation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.improveAccepted(w, agent, &recID)
+}
+
+// improveSkillRecommendation routes an accepted R11 (skill-kind)
+// recommendation into a SKILL.md proposal. The recommendation's `target` IS the
+// lesson identity (retro_lessons.norm_title) — that is what R11 puts there — so
+// no registry lookup applies: the target FILE is resolved from the lesson's
+// latest action inside improve.RouteSkill, which falls back to a needs_target
+// row rather than guessing. Both outcomes answer 202; the row on the Retro page
+// is the result.
+func (h *Handler) improveSkillRecommendation(w http.ResponseWriter, recID int64, norm string) {
+	if strings.TrimSpace(norm) == "" {
+		writeClientErr(w, http.StatusUnprocessableEntity,
+			"skill recommendation has no lesson identity (empty target)")
+		return
+	}
+	open, err := h.Improve.OpenLessonProposalID(norm)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if open != 0 {
+		writeJSONStatus(w, http.StatusConflict, map[string]any{
+			"error":       "an open proposal already exists for lesson " + norm,
+			"proposal_id": open,
+		})
+		return
+	}
+	h.spawnImprove("route skill lesson "+norm, func() {
+		if _, err := h.Improve.RouteSkill(context.Background(), improve.SkillRouteReq{
+			NormTitle: norm, RecommendationID: &recID,
+		}); err != nil {
+			log.Printf("error: improve: route skill lesson %s: %v", norm, err)
+		}
+	})
+	writeJSONStatus(w, http.StatusAccepted, map[string]string{
+		"status": "generating", "target_kind": improve.TargetSkill, "lesson": norm,
+	})
 }
 
 // POST /api/retro/agents/{agent}/improve — the ad-hoc trigger, same pipeline
@@ -194,6 +240,8 @@ type proposalDTO struct {
 	RecommendationID *int64  `json:"recommendation_id"`
 	Agent            string  `json:"agent"`
 	AgentPath        string  `json:"agent_path"`
+	TargetKind       string  `json:"target_kind"`
+	TargetPath       string  `json:"target_path"`
 	BaseSHA256       string  `json:"base_sha256"`
 	Diff             string  `json:"diff"`
 	Rationale        string  `json:"rationale"`
@@ -208,17 +256,19 @@ type proposalsDTO struct {
 	Proposals []proposalDTO `json:"proposals"`
 }
 
-// propStatuses is the closed status vocabulary of migration 0021.
+// propStatuses is the closed status vocabulary of migrations 0021 + 0074
+// ('needs_target': a routed skill recommendation whose SKILL.md is not resolved
+// yet and which an operator has to point at a file).
 var propStatuses = map[string]bool{
 	"proposed": true, "approved": true, "applied": true,
-	"rejected": true, "failed": true,
+	"rejected": true, "failed": true, improve.StatusNeedsTarget: true,
 }
 
 // GET /api/retro/proposals?status=proposed,failed — newest first; no filter
 // returns everything.
 func (h *Handler) listProposals(w http.ResponseWriter, r *http.Request) {
-	q := `SELECT id, recommendation_id, agent, agent_path, base_sha256, diff,
-	             rationale, status, error, pr_url, created_at, decided_at
+	q := `SELECT id, recommendation_id, agent, agent_path, target_kind, target_path,
+	             base_sha256, diff, rationale, status, error, pr_url, created_at, decided_at
 	        FROM agent_change_proposals`
 	var args []any
 	if filter := r.URL.Query().Get("status"); filter != "" {
@@ -247,6 +297,7 @@ func (h *Handler) listProposals(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d proposalDTO
 		if err := rows.Scan(&d.ID, &d.RecommendationID, &d.Agent, &d.AgentPath,
+			&d.TargetKind, &d.TargetPath,
 			&d.BaseSHA256, &d.Diff, &d.Rationale, &d.Status, &d.Error, &d.PRURL,
 			&d.CreatedAt, &d.DecidedAt); err != nil {
 			writeErr(w, err)
@@ -259,14 +310,22 @@ func (h *Handler) listProposals(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/retro/proposals/{id}/retry — re-run generation for a FAILED
 // proposal. 404 unknown id; 422 not failed; 409 an open proposal for the
-// same agent appeared since the failure.
+// same TARGET appeared since the failure.
+//
+// The pre-flight must compute the target key exactly the way improve.Retry
+// does, because Retry's own ErrOpenProposal is only logged — the HTTP reply has
+// already been written by then. A skill row's `agent` column holds the LESSON
+// SENTENCE, not a file, so the old agent-keyed pre-flight never matched a skill
+// row: Retry answered 202 "generating", failed silently on the open-proposal
+// check, and the row stayed `failed` with no reason on screen.
 func (h *Handler) retryProposal(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var rowID int64
-	var agent, status string
+	var agent, targetKind, targetPath, status string
 	err := h.DB.QueryRow(
-		`SELECT id, agent, status FROM agent_change_proposals WHERE id = ?`, id).
-		Scan(&rowID, &agent, &status)
+		`SELECT id, agent, target_kind, target_path, status
+		   FROM agent_change_proposals WHERE id = ?`, id).
+		Scan(&rowID, &agent, &targetKind, &targetPath, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeClientErr(w, http.StatusNotFound, "proposal not found")
 		return
@@ -280,19 +339,28 @@ func (h *Handler) retryProposal(w http.ResponseWriter, r *http.Request) {
 			"only failed proposals can be retried (status "+status+")")
 		return
 	}
-	open, err := h.Improve.OpenProposalID(agent)
+	// Same key improve.Retry computes: the SKILL.md for a resolved skill row,
+	// the agent key otherwise. Sharing the computation is the point — a
+	// pre-flight that can disagree with the real check is not a pre-flight.
+	key := agent
+	subject := "agent " + agent
+	if targetKind == improve.TargetSkill && targetPath != "" {
+		key = targetPath
+		subject = "skill " + targetPath
+	}
+	open, err := h.Improve.OpenTargetProposalID(targetKind, key)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	if open != 0 {
 		writeJSONStatus(w, http.StatusConflict, map[string]any{
-			"error":       "an open proposal already exists for agent " + agent,
+			"error":       "an open proposal already exists for " + subject,
 			"proposal_id": open,
 		})
 		return
 	}
-	h.spawnImprove(fmt.Sprintf("retry proposal %d (agent %s)", rowID, agent), func() {
+	h.spawnImprove(fmt.Sprintf("retry proposal %d (%s)", rowID, subject), func() {
 		if err := h.Improve.Retry(context.Background(), rowID); err != nil {
 			log.Printf("error: improve: retry %d: %v", rowID, err)
 		}
@@ -305,7 +373,16 @@ func (h *Handler) retryProposal(w http.ResponseWriter, r *http.Request) {
 // legalProposalTransition guards the human decision on a proposal: a proposed
 // row may be approved or rejected; nothing else is a PATCH (applied/failed are
 // pipeline outcomes, retry has its own endpoint).
+//
+// A needs_target row may be REJECTED but never approved. Rejecting is the
+// operator saying "this lesson is not a skill edit" — without it the row would
+// hold its target's one-open slot forever, because it has no file to apply and
+// no failure to retry. Approving is refused for the same reason: there is
+// nothing to apply.
 func legalProposalTransition(from, to string) bool {
+	if from == improve.StatusNeedsTarget {
+		return to == "rejected"
+	}
 	return from == "proposed" && (to == "approved" || to == "rejected")
 }
 
