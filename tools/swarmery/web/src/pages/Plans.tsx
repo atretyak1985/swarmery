@@ -82,7 +82,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { Markdown } from '../lib/markdown';
 import { fmtAgo, fmtCost, fmtDateTime, fmtElapsed } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
-import { planSessionOrder } from '../lib/planSessionScope';
+import { scopePlanSessions, type PlanSessionScope } from '../lib/planSessionScope';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { RunOutcomeModal } from '../components/RunOutcomeModal';
 import { PlanBranchDirtyModal, type PlanBranchDirty } from '../components/PlanBranchDirtyModal';
@@ -1442,47 +1442,84 @@ function PlanSessions({
     };
   }, [epic.taskId, runFingerprint]);
 
-  // Plan order, not recency: the controller heads the column and the phases
-  // follow the timeline they sit next to. Ties (subagents of one phase) keep
-  // chronological order.
-  const ordered = useMemo(
+  // The operator's hand-picked slice lives WITH the plan it belongs to:
+  // [taskId, scope]. Keying on taskId (the same idiom as `runMsg`, above) means
+  // the pick cannot leak onto another plan and needs no reset effect — so the
+  // refetch on `runFingerprint`, which replaces the whole session array whenever
+  // a run ends, cannot knock the operator back to the automatic slice.
+  const [picked, setPicked] = useState<{ taskId: number; scope: PlanSessionScope } | null>(null);
+  const pickedScope = picked !== null && picked.taskId === epic.taskId ? picked.scope : null;
+
+  // Ordering, dedup of the two sources, the phase slice and the auto-fallback
+  // are one pure decision — see lib/planSessionScope.ts. This component only
+  // renders what comes back.
+  const view = useMemo(
     () =>
-      [...(sessions ?? [])].sort(
-        (a, b) => planSessionOrder(a) - planSessionOrder(b) || a.startedAt.localeCompare(b.startedAt),
-      ),
-    [sessions],
+      scopePlanSessions({
+        sessions: sessions ?? [],
+        linked: epic.linkedSessions,
+        activePhaseId,
+        picked: pickedScope,
+      }),
+    [sessions, epic.linkedSessions, activePhaseId, pickedScope],
   );
 
-  // The union's second half: sessions task_sessions links to this plan that the
-  // ?planTask= grouping cannot see. That grouping resolves sessions from the stamped
-  // run branch / worktree cwd, so it finds daemon-spawned runs and their subagents —
-  // and misses the operator's own session entirely, which is the path that does most
-  // of the work on most plans. Deduped by uuid, so a run that BOTH grouping rules
-  // find appears once, in its plan-ordered position.
-  const linkedOnly = useMemo(() => {
-    const seen = new Set((sessions ?? []).map((s) => s.sessionUuid));
-    return epic.linkedSessions
-      .filter((l) => !seen.has(l.sessionUuid))
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-  }, [sessions, epic.linkedSessions]);
-
-  const total = ordered.length + linkedOnly.length;
+  // The human label for the open phase — `phaseId` is a database id, `seq` is
+  // what the timeline next to this column calls it.
+  const activePhaseSeq = epic.phases.find((p) => p.id === activePhaseId)?.seq ?? null;
 
   return (
     <aside className="hidden w-[264px] shrink-0 flex-col lg:flex" aria-label="plan sessions">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink-dim">sessions</span>
-        {sessions !== null && <span className="font-mono text-[10px] text-ink-faint">{total}</span>}
+        {sessions !== null &&
+          (view.phaseCount === null ? (
+            <span className="font-mono text-[10px] text-ink-faint">{view.totalCount}</span>
+          ) : (
+            // Both numbers stay on screen in either slice, so a narrowed column
+            // never hides the FACT that it is hiding rows — and `#N (0)` is the
+            // visible marker of the auto-fallback.
+            <button
+              type="button"
+              aria-label="session scope"
+              data-tip={
+                view.scope === 'phase'
+                  ? 'showing this phase only — click for every session of the plan'
+                  : view.fellBack
+                    ? 'this phase has no sessions of its own — showing the whole plan'
+                    : 'showing every session of the plan — click to narrow to this phase'
+              }
+              onClick={() =>
+                setPicked({
+                  taskId: epic.taskId,
+                  scope: view.scope === 'phase' ? 'all' : 'phase',
+                })
+              }
+              className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
+            >
+              <span className={view.scope === 'phase' ? 'text-ink' : undefined}>
+                #{activePhaseSeq ?? '?'} ({view.phaseCount})
+              </span>
+              <span className="px-1">/</span>
+              <span className={view.scope === 'all' ? 'text-ink' : undefined}>
+                all ({view.totalCount})
+              </span>
+            </button>
+          ))}
       </div>
       {err !== null ? (
         <ErrorBox message={err} />
       ) : sessions === null ? (
         <Loading />
-      ) : total === 0 ? (
+      ) : view.totalCount === 0 ? (
         <Empty>no sessions ran this plan</Empty>
+      ) : view.sessions.length === 0 && view.linked.length === 0 ? (
+        // Only reachable through a deliberate pick: the automatic rule hands back
+        // 'all' when the phase slice would be empty.
+        <Empty>no sessions for this phase</Empty>
       ) : (
         <ol className="space-y-1">
-          {ordered.map((s) => {
+          {view.sessions.map((s) => {
             const g = s.planGroup ?? null;
             const label = g?.role === 'phase' ? `#${String(g.phaseSeq ?? '?')}` : 'plan';
             const selected = g?.role === 'phase' && g.phaseId === activePhaseId;
@@ -1522,7 +1559,7 @@ function PlanSessions({
               </li>
             );
           })}
-          {linkedOnly.map((l) => (
+          {view.linked.map((l) => (
             <li key={l.sessionUuid}>
               <Link
                 to={sessionHref(l.sessionUuid)}
