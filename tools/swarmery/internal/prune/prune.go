@@ -119,7 +119,7 @@ var candidateProbe = fmt.Sprintf(`SELECT id FROM sessions
 // written for some 'unknown' events — and daily_rollups.day is NOT NULL, so a
 // single such row used to abort the whole INSERT and therefore the whole prune
 // ("NOT NULL constraint failed: daily_rollups.day"). Found on a real store: 4
-// events out of 43k carried ts=''. A row with no parseable timestamp cannot be
+// events out of 43k carried ts=”. A row with no parseable timestamp cannot be
 // attributed to a day at all, so dropping it from the aggregate is the only
 // meaningful option; it is still DELETED below like every other pruned row, so
 // this costs a few counts in one day's rollup, never retention itself.
@@ -268,6 +268,15 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 	// FK-safe order: permission_requests.event_id references events — keep
 	// the approval history rows, drop the edge to the rows being deleted.
 	// file_changes references events; both reference sessions (kept).
+	//
+	// FK-CHEAP as well: the store runs with foreign_keys=ON, so each deleted
+	// event and turn is checked against every column that references it. With
+	// an unindexed referencing column that check is a full scan of the child
+	// table PER DELETED ROW — the first live pass sat in `DELETE FROM events`
+	// for 11 hours on ~30k rows. Migration 0073 indexes those columns
+	// (events.parent_event_id, events.turn_id, file_changes.event_id,
+	// permission_requests.event_id); migrate_0073_test.go pins that every FK
+	// child of events/turns stays indexed.
 	steps := []struct {
 		q   string
 		dst *int64 // reported count, from RowsAffected (nil = not reported)
