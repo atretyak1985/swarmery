@@ -133,6 +133,22 @@ export function MermaidBlock({ code }: { code: string }): JSX.Element {
           theme: mermaidTheme(currentMode()),
           securityLevel: 'strict',
           fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          // PINNED FOR THE v12 UPGRADE. v12 is a deliberately breaking release:
+          // "existing flowcharts, state and class diagrams will re-lay out and
+          // recolour" unless the old defaults are named explicitly. Every
+          // diagram in the docs surface was authored against them, so they are
+          // stated here rather than inherited — an upgrade should not silently
+          // redraw content nobody re-reviewed.
+          //
+          // The release note also says to pin `theme: 'default'`; that advice
+          // does NOT apply to this app, which picks 'neutral'/'dark' on purpose
+          // (see mermaidTheme above — 'default' hard-codes a lavender palette
+          // that fights the Canvas surfaces). Both names still resolve in v12.
+          //
+          // Drop these two the day someone decides the new look is wanted, and
+          // look at the diagrams when they do.
+          layout: 'dagre',
+          look: 'classic',
         });
         const { svg } = await mermaid.render(domId, code);
         if (!alive) return;
