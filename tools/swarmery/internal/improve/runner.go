@@ -21,7 +21,7 @@ const claudeTimeout = 10 * time.Minute
 // defaultModel pins headless runs that carry no explicit override: without
 // --model the CLI inherits the account default (Fable-5 here — 2× the Opus
 // price). Full ID, not an alias — aliases re-resolve over time.
-const defaultModel = "claude-opus-5"
+const defaultModel = "claude-opus-5-5"
 
 // defaultEffort pins reasoning depth for this headless run: without --effort
 // the CLI inherits its xhigh default. Proposal generation needs real

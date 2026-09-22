@@ -47,7 +47,7 @@ const planTimeout = 20 * time.Minute
 // DefaultModel pins planner runs: without --model the CLI inherits the account
 // default (Fable-5 here — 2× the Opus price). Full ID, not an alias — aliases
 // re-resolve over time.
-const DefaultModel = "claude-opus-5"
+const DefaultModel = "claude-opus-5-5"
 
 // Models is the closed set an operator may plan with, keyed by the short name
 // the dashboard shows and valued by the full ID that reaches --model. The

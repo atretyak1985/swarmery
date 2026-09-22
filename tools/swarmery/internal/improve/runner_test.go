@@ -66,9 +66,14 @@ func TestClaudeRunnerMissingBinary(t *testing.T) {
 // full model id (an alias would silently re-resolve; no --model inherits the
 // expensive account default) and pin effort (no --effort inherits the CLI's
 // xhigh ceiling — high is the cost/quality sweet spot for proposal generation).
+//
+// The effort pin earns its keep twice over since the Opus 5.5 cutover: that
+// model's own default effort is medium, where Opus 5's was high. An unpinned
+// site would therefore have quietly dropped a level on the swap — pinning is
+// what makes the model change a price change and nothing else.
 func TestModelAndEffortPins(t *testing.T) {
-	if defaultModel != "claude-opus-5" {
-		t.Errorf("defaultModel = %q, want claude-opus-5", defaultModel)
+	if defaultModel != "claude-opus-5-5" {
+		t.Errorf("defaultModel = %q, want claude-opus-5-5", defaultModel)
 	}
 	if defaultEffort != "high" {
 		t.Errorf("defaultEffort = %q, want high", defaultEffort)

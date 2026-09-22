@@ -2,10 +2,12 @@
   "_meta": {
     "unit": "USD per 1M tokens",
     "source": "https://platform.claude.com/docs/en/about-claude/pricing",
-    "verified_at": "2026-07-12",
+    "verified_at": "2026-09-22",
     "notes": [
       "cache_write uses the 5-minute-TTL rate (1.25x input). The JSONL usage field cache_creation_input_tokens does not distinguish 5m vs 1h writes; 5m is the overwhelmingly dominant case in Claude Code sessions.",
       "claude-sonnet-5 uses introductory pricing valid through 2026-08-31 ($3 in / $15 out after) — update this file and run `swarmery recost` on 2026-09-01.",
+      "claude-opus-5-5 rates confirmed against the official Anthropic pricing page (2026-09-22): $4 in / $20 out / $0.20 cache-read / $5 cache-write-5m. Two things differ from the rest of the Opus tier: it is CHEAPER than Opus 5 ($5/$25), and its cache-read multiplier is 0.05x base input, not the usual 0.1x — do not derive cache_read by multiplying input by 0.1 here.",
+      "claude-opus-5-5 vs claude-opus-5 is a longest-prefix HAZARD, not just two rows: the id claude-opus-5-5[1m] is not matched by the claude-opus-5-5- prefix (bracket, not dash) but IS matched by claude-opus-5-, which would bill it at Opus 5 rates. cost.PriceFor strips a trailing [..] context-window marker before lookup so that cannot happen; TestOpus55NotMispricedAsOpus5 pins it. Any future model whose id extends an existing key inherits the same hazard.",
       "claude-opus-5 rates confirmed against the official Anthropic pricing page (2026-07-25): $5 in / $25 out / $0.50 cache-read / $6.25 cache-write-5m — identical to the Opus 4.5-4.8 tier. Full 1M context window is standard-priced with NO long-context multiplier (a 900k-token request is billed per-token like a 9k one).",
       "claude-opus-5-fast is a SEPARATE SKU at 2x standard ($10 in / $50 out) and does NOT combine with the Batch API — priced explicitly so a speed:\"fast\" session is not silently mapped to standard pricing by the claude-opus-5- prefix fallback (longest-prefix match picks claude-opus-5-fast- first).",
       "Tokenizer change (models >= 4.7, incl. Opus 5): the newer tokenizer emits ~30% more tokens for the same text. Per-token rates are unchanged, but token COUNTS rise — the main recost risk when comparing Opus 5 sessions against Opus 4.5/4.6 or Sonnet 4.6 history.",
@@ -18,6 +20,8 @@
   "models": {
     "claude-fable-5":    { "input": 10,  "output": 50, "cache_read": 1,    "cache_write": 12.5 },
     "claude-mythos-5":   { "input": 10,  "output": 50, "cache_read": 1,    "cache_write": 12.5 },
+    "claude-opus-5-5":      { "input": 4,   "output": 20, "cache_read": 0.2,  "cache_write": 5 },
+    "claude-opus-5-5-fast": { "input": 8,   "output": 40, "cache_read": 0.4,  "cache_write": 10 },
     "claude-opus-5":      { "input": 5,   "output": 25, "cache_read": 0.5,  "cache_write": 6.25 },
     "claude-opus-5-fast": { "input": 10,  "output": 50, "cache_read": 1,    "cache_write": 12.5 },
     "claude-opus-4-8":   { "input": 5,   "output": 25, "cache_read": 0.5,  "cache_write": 6.25 },
@@ -33,6 +37,8 @@
   "fallback_prefixes": {
     "claude-fable-5-":    "claude-fable-5",
     "claude-mythos-5-":   "claude-mythos-5",
+    "claude-opus-5-5-fast-": "claude-opus-5-5-fast",
+    "claude-opus-5-5-":   "claude-opus-5-5",
     "claude-opus-5-fast-": "claude-opus-5-fast",
     "claude-opus-5-":     "claude-opus-5",
     "claude-opus-4-8-":   "claude-opus-4-8",

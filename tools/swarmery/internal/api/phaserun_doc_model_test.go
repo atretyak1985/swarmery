@@ -113,8 +113,8 @@ func TestPhaseRun_RequestModelOverridesABrokenDocModel(t *testing.T) {
 	if len(specs) != 1 {
 		t.Fatalf("dispatched %d runs, want 1", len(specs))
 	}
-	if got := specs[0].Model; got != "claude-opus-5" {
-		t.Errorf("RunSpec.Model = %q, want claude-opus-5", got)
+	if got := specs[0].Model; got != "claude-opus-5-5" {
+		t.Errorf("RunSpec.Model = %q, want claude-opus-5-5", got)
 	}
 }
 

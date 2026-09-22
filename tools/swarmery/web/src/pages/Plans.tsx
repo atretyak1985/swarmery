@@ -441,7 +441,7 @@ function readStoredPhaseRunModel(): PhaseRunModel {
   }
 }
 
-/** The short name behind a full model ID (`claude-opus-5` → `opus`). The `[1m]`
+/** The short name behind a full model ID (`claude-opus-5-5` → `opus`). The `[1m]`
  * suffix on the operator's pinned env value is stripped for the LABEL only — the
  * full string stays in the tooltip, because that suffix is the whole difference
  * between a 200k run and a 1M one. An ID we do not know is shown verbatim. */
@@ -450,6 +450,9 @@ function phaseModelShortName(id: string): string {
   return MODEL_SHORT_NAMES[base] ?? id;
 }
 const MODEL_SHORT_NAMES: Record<string, string> = {
+  'claude-opus-5-5': 'opus',
+  // Kept past the 5.5 cutover: runs recorded before it still carry this id in
+  // sessions.model, and a historical row must keep rendering as "opus".
   'claude-opus-5': 'opus',
   'claude-sonnet-5': 'sonnet',
   'claude-fable-5-1': 'fable',

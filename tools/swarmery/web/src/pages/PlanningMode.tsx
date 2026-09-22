@@ -60,9 +60,9 @@ const STATUS_POLL_MS = 4_000;
 /** The models an operator may plan with — the same closed set the daemon
  * accepts (planning.Models); the value is the short name the API resolves. */
 const PLANNING_MODELS = [
-  { value: 'opus', label: 'opus 5 — default', id: 'claude-opus-5' },
+  { value: 'opus', label: 'opus 5.5 — default', id: 'claude-opus-5-5' },
   { value: 'sonnet', label: 'sonnet 5 — faster, cheaper', id: 'claude-sonnet-5' },
-  { value: 'fable', label: 'fable 5.1 — most capable, ~2× cost', id: 'claude-fable-5-1' },
+  { value: 'fable', label: 'fable 5.1 — most capable, ~2.5× cost', id: 'claude-fable-5-1' },
 ] as const;
 type PlanningModel = (typeof PLANNING_MODELS)[number]['value'];
 const DEFAULT_PLANNING_MODEL: PlanningModel = 'opus';
@@ -82,7 +82,7 @@ function readStoredModel(): PlanningModel {
   }
 }
 
-/** Short name for a full model ID from the status DTO (`claude-opus-5` → `opus`). */
+/** Short name for a full model ID from the status DTO (`claude-opus-5-5` → `opus`). */
 function modelShortName(id: string): string {
   return PLANNING_MODELS.find((m) => m.id === id)?.value ?? id;
 }

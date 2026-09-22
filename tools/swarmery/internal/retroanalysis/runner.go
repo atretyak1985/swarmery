@@ -27,7 +27,7 @@ const claudeTimeout = 10 * time.Minute
 // defaultModel pins headless runs that carry no explicit override: without
 // --model the CLI inherits the account default. Full ID, not an alias —
 // aliases re-resolve over time.
-const defaultModel = "claude-opus-5"
+const defaultModel = "claude-opus-5-5"
 
 // defaultEffort pins reasoning depth. Cross-cutting diagnosis over noisy
 // aggregates is the hard part of this feature, and 'high' is the cost/quality

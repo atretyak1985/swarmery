@@ -2816,7 +2816,7 @@ export const mockApi = {
       currentQuestion: mockPlanQuestion,
       runningPlan: mockPlanSummary,
       mode: 'plan',
-      model: model === 'sonnet' ? 'claude-sonnet-5' : model === 'fable' ? 'claude-fable-5-1' : 'claude-opus-5',
+      model: model === 'sonnet' ? 'claude-sonnet-5' : model === 'fable' ? 'claude-fable-5-1' : 'claude-opus-5-5',
       history: [
         ...mockPlanHistory,
         { seq: 3, question: mockPlanQuestion, answer: null, reasoning: '' },

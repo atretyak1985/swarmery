@@ -53,7 +53,7 @@ const claudeTimeout = 15 * time.Minute
 // defaultModel pins verifier runs whose task carries no model override: an
 // unset --model inherits the account default (Fable-5 here — 2× the Opus
 // price). Full ID, not an alias — aliases re-resolve over time.
-const defaultModel = "claude-opus-5"
+const defaultModel = "claude-opus-5-5"
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`
 // with cwd set to the worktree. Binary resolution is a plain PATH lookup — the

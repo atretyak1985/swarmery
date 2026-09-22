@@ -43,7 +43,7 @@
     {
       "type": "command",
       "name": "model eval",
-      "command": "swarmery modeleval --model \"$(swarmery economics --current-model 2>/dev/null || echo claude-opus-5)\"",
+      "command": "swarmery modeleval --model \"$(swarmery economics --current-model 2>/dev/null || echo claude-opus-5-5)\"",
       "timeoutSec": 900,
       "continueOnFailure": true
     },
