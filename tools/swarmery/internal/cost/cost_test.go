@@ -214,3 +214,44 @@ func TestRecostIdempotent(t *testing.T) {
 }
 
 func f64(v float64) *float64 { return &v }
+
+// TestOpus55NotMispricedAsOpus5 guards the sibling-prefix trap introduced when
+// claude-opus-5-5 joined a table that already held claude-opus-5: every Opus
+// 5.5 id must price at the 5.5 rates ($4/$20/$0.20/$5), never at Opus 5's
+// $5/$25. The "[1m]" case is the sharp one — that id is not matched by the
+// "claude-opus-5-5-" prefix (bracket, not dash) but IS matched by the shorter
+// "claude-opus-5-", so without the context-window strip in PriceFor it would
+// bill 25% high and no test or log would notice.
+func TestOpus55NotMispricedAsOpus5(t *testing.T) {
+	tbl, err := Load(config.PricingJSON)
+	if err != nil {
+		t.Fatalf("embedded pricing.json invalid: %v", err)
+	}
+
+	for _, id := range []string{
+		"claude-opus-5-5",
+		"claude-opus-5-5[1m]",
+		"claude-opus-5-5-20260922",
+	} {
+		p, ok := tbl.PriceFor(id)
+		if !ok {
+			t.Errorf("%s: not priced", id)
+			continue
+		}
+		if p.Input != 4 || p.Output != 20 || p.CacheRead != 0.2 || p.CacheWrite != 5 {
+			t.Errorf("%s = %+v, want {4 20 0.2 5}", id, p)
+		}
+	}
+
+	// Fast mode is its own SKU and must not collapse into standard 5.5.
+	if p, ok := tbl.PriceFor("claude-opus-5-5-fast"); !ok || p.Input != 8 || p.Output != 40 {
+		t.Errorf("claude-opus-5-5-fast = %+v (ok=%v), want {8 40 ...}", p, ok)
+	}
+
+	// The predecessor keeps its own rates, brackets and all.
+	for _, id := range []string{"claude-opus-5", "claude-opus-5[1m]"} {
+		if p, ok := tbl.PriceFor(id); !ok || p.Input != 5 || p.Output != 25 {
+			t.Errorf("%s = %+v (ok=%v), want {5 25 ...}", id, p, ok)
+		}
+	}
+}

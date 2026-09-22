@@ -92,7 +92,21 @@ func Default() *Table {
 // PriceFor resolves a model id to its price: exact key match first, then the
 // longest matching entry in fallback_prefixes (for date-suffixed ids like
 // claude-haiku-4-5-20251001).
+//
+// A trailing context-window marker is stripped before either lookup. Claude
+// Code stamps the selected window onto the id it writes to the transcript
+// ("claude-opus-5-5[1m]"), but the window carries no price of its own — the
+// full 1M context is standard-priced, per the note in config/pricing.json — so
+// the marker is identity noise here. Stripping it is what keeps the
+// longest-prefix fallback honest: "claude-opus-5-5[1m]" is NOT matched by the
+// "claude-opus-5-5-" prefix (no dash before the bracket) but IS matched by the
+// shorter "claude-opus-5-", which would silently bill an Opus 5.5 session at
+// Opus 5 rates. Without the strip the id is simply unknown and goes unpriced;
+// with a sibling model whose id is a prefix of it, unknown turns into wrong.
 func (t *Table) PriceFor(model string) (ModelPrice, bool) {
+	if i := strings.IndexByte(model, '['); i > 0 {
+		model = model[:i]
+	}
 	if p, ok := t.Models[model]; ok {
 		return p, true
 	}

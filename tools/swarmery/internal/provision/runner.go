@@ -33,7 +33,7 @@ const stderrTailBytes = 4096
 // defaultModel pins headless generator runs: without --model the CLI inherits
 // the account default (Fable-5 here — 2× the Opus price). Full ID, not an
 // alias — aliases re-resolve over time.
-const defaultModel = "claude-opus-5"
+const defaultModel = "claude-opus-5-5"
 
 // permEnv is this spawn site's --permission-mode knob (internal/claudeflags owns
 // the resolution and the "off" escape hatch). Used by the generate step in

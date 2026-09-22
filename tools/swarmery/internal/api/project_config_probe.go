@@ -233,7 +233,7 @@ func (h *Handler) runProbe(parent context.Context, dir string, probe pluginreq.P
 // probeModel pins the probe run. Without --model the CLI inherits the account
 // default, which is not necessarily the cheap end of the lineup; the provision
 // pipeline pins for the same reason. Full ID, not an alias — aliases re-resolve.
-const probeModel = "claude-opus-5"
+const probeModel = "claude-opus-5-5"
 
 // firstJSONObject returns the first balanced {…} in s, or nil.
 //
