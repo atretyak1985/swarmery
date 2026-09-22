@@ -91,13 +91,16 @@ var ErrMemoryTargetNotSymlink = errors.New("worktree: memory path exists and is 
 var memoryHome string
 
 // ProjectSlug encodes an absolute path the way Claude Code names the
-// per-project directory under `<home>/.claude/projects`.
+// per-project directory under `<configDir>/projects`: every character outside
+// [A-Za-z0-9] becomes '-', and a result past 200 characters is truncated and
+// hash-suffixed.
 //
 // It is a thin alias for claudeproj.Slug, which is the single authority for
-// that encoding. It stays here because this file's prose is written in terms of
-// it and callers of the memory helpers expect it, but the rule itself lives in
-// exactly one place — see internal/claudeproj for the encoding, the ground
-// truth behind it, and why it differs from ingest.SlugForPath (the DB slug).
+// that encoding — the rule is read out of the shipped binary there, along with
+// the ground truth behind it and why it differs from ingest.SlugForPath (the DB
+// slug, which encodes '/' only because it is project identity). It stays here
+// because this file's prose is written in terms of it and callers of the memory
+// helpers expect it.
 func ProjectSlug(path string) string { return claudeproj.Slug(path) }
 
 // projectsDir is `<home>/.claude/projects`.
