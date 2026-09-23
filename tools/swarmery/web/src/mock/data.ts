@@ -1814,6 +1814,7 @@ const mockPlanningIdle: PlanningStatus = {
   planDir: null,
   mode: '',
   model: '',
+  effort: '',
   reviseTaskId: null,
   lastError: null,
 };
@@ -2800,7 +2801,12 @@ export const mockApi = {
     return mockPlanning[projectId] ?? mockPlanningIdle;
   },
 
-  async startPlanning(projectId: number, _idea: string, model?: string): Promise<PlanningStart> {
+  async startPlanning(
+    projectId: number,
+    _idea: string,
+    model?: string,
+    effort?: string,
+  ): Promise<PlanningStart> {
     await delay(120);
     const uuid = `mock-plan-${String(projectId)}-${String(Date.now())}`;
     // Jump straight to the awaiting_answer wizard: 2 answered history turns +
@@ -2817,6 +2823,9 @@ export const mockApi = {
       runningPlan: mockPlanSummary,
       mode: 'plan',
       model: model === 'sonnet' ? 'claude-sonnet-5' : model === 'fable' ? 'claude-fable-5-1' : 'claude-opus-5-5',
+      // Mirrors the daemon: an un-picked effort is STORED as the resolved engine
+      // default, never as '' (which would mean "send no --effort" → xhigh).
+      effort: effort !== undefined && effort !== '' ? effort : 'high',
       history: [
         ...mockPlanHistory,
         { seq: 3, question: mockPlanQuestion, answer: null, reasoning: '' },

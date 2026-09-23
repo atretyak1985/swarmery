@@ -1,0 +1,13 @@
+-- How hard a planning wizard thinks. The twin of 0067's model column, added for
+-- the same reason and against a sharper edge: the first turn now carries
+-- --effort (the planner resolves it through SWARMERY_PLANNING_EFFORT to its own
+-- pinned default), but every RESUME turn — answer, refine, proceed — took the
+-- resume site's generic default instead of the depth the interview was STARTED
+-- at, so a wizard an operator opened on `low` finished its plan on `high`.
+--
+-- Omission is not the cheap end here, which is why the value is stamped rather
+-- than left to fall through: a `claude -p` with no --effort runs at the CLI's
+-- own xhigh, the deepest and most expensive setting there is. The resolved
+-- value is written at Start and read back by every resume, so one wizard thinks
+-- at one depth end to end. NULL on historical rows means "the planner default".
+ALTER TABLE planning_sessions ADD COLUMN effort TEXT;

@@ -113,7 +113,12 @@ type WizardStatus struct {
 	Mode        string  `json:"mode"`   // plan|revise; "" when no wizard row
 	// Model is the full model ID every turn of this wizard runs on (see Models);
 	// "" when no wizard row.
-	Model           string            `json:"model"`
+	Model string `json:"model"`
+	// Effort is the reasoning depth every turn of this wizard runs at (see
+	// ResolveEffort); "" when no wizard row. Never the literal "default" — what
+	// is stored and reported is the RESOLVED rung, because an unpinned run does
+	// not think less, it thinks at the CLI's own xhigh.
+	Effort          string            `json:"effort"`
 	ReviseTaskId    *int64            `json:"reviseTaskId"`
 	CurrentQuestion *PlanningQuestion `json:"currentQuestion"`
 	RunningPlan     *PlanningSummary  `json:"runningPlan"`
@@ -142,15 +147,16 @@ type wizardRow struct {
 	reviseTaskID    sql.NullInt64
 	lastError       sql.NullString
 	model           sql.NullString
+	effort          sql.NullString
 }
 
-const wizardCols = `id, project_id, session_uuid, status, running_plan, current_question, raw_reply, plan_dir, created_at, updated_at, mode, revise_task_id, last_error, model`
+const wizardCols = `id, project_id, session_uuid, status, running_plan, current_question, raw_reply, plan_dir, created_at, updated_at, mode, revise_task_id, last_error, model, effort`
 
 func scanWizard(scan func(...any) error) (*wizardRow, error) {
 	var r wizardRow
 	err := scan(&r.id, &r.projectID, &r.uuid, &r.status, &r.runningPlan,
 		&r.currentQuestion, &r.rawReply, &r.planDir, &r.createdAt, &r.updatedAt,
-		&r.mode, &r.reviseTaskID, &r.lastError, &r.model)
+		&r.mode, &r.reviseTaskID, &r.lastError, &r.model, &r.effort)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -696,10 +702,14 @@ func (s *Service) WizardSnapshot(projectID int64) (WizardStatus, error) {
 		Status:      row.status,
 		Mode:        row.mode,
 		Model:       DefaultModel,
+		Effort:      DefaultEffort,
 		History:     []WizardTurn{},
 	}
 	if row.model.Valid && row.model.String != "" {
 		st.Model = row.model.String
+	}
+	if row.effort.Valid && row.effort.String != "" {
+		st.Effort = row.effort.String
 	}
 	if row.reviseTaskID.Valid {
 		v := row.reviseTaskID.Int64

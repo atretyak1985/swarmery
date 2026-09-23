@@ -1958,6 +1958,12 @@ export interface PlanningStatus {
   /** Full model ID every turn of this wizard runs on (the first spawn and each
    * resume pass the same `--model`). Empty string when no wizard row exists. */
   model: string;
+  /** Reasoning depth every turn of this wizard runs at (the first spawn and each
+   * resume pass the same `--effort`). Always a RESOLVED rung — `low`…`max`,
+   * never `default` and never `""` when a wizard row exists, because an omitted
+   * `--effort` is the CLI's xhigh rather than anything cheaper. Empty string
+   * only when no wizard row exists. */
+  effort: string;
   /** The workspace task whose plan a `revise` wizard targets; null otherwise. */
   reviseTaskId: number | null;
   /** Why the LAST action did not go through (failed resume spawn, planner

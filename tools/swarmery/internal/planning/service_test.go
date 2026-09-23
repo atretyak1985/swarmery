@@ -103,7 +103,7 @@ func TestStart_HappyPath_InlineRun(t *testing.T) {
 	var notified int
 	s.Notify = func(int64) { notified++ }
 
-	uuid, err := s.Start(1, "add a widget", "")
+	uuid, err := s.Start(1, "add a widget", "", "")
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestStart_SingleFlight_409(t *testing.T) {
 	s := NewService(db, r) // real `go` so the first Start's goroutine parks on block
 	s.UUID = func() string { return "uuid-1" }
 
-	if _, err := s.Start(1, "first idea", ""); err != nil {
+	if _, err := s.Start(1, "first idea", "", ""); err != nil {
 		t.Fatalf("first Start: %v", err)
 	}
 	// Wait until the run's goroutine has actually ENTERED the runner (count==1),
@@ -151,7 +151,7 @@ func TestStart_SingleFlight_409(t *testing.T) {
 	// assertion below.
 	waitFor(t, func() bool { return r.count() == 1 })
 
-	_, err := s.Start(1, "second idea", "")
+	_, err := s.Start(1, "second idea", "", "")
 	if !errors.Is(err, ErrActive) {
 		t.Fatalf("second Start err = %v, want ErrActive", err)
 	}
@@ -167,7 +167,7 @@ func TestStart_SingleFlight_409(t *testing.T) {
 func TestStart_UnknownProject(t *testing.T) {
 	db := testDB(t)
 	s := newInlineService(t, db, &stubRunner{})
-	if _, err := s.Start(999, "idea", ""); !errors.Is(err, ErrProjectNotFound) {
+	if _, err := s.Start(999, "idea", "", ""); !errors.Is(err, ErrProjectNotFound) {
 		t.Fatalf("err = %v, want ErrProjectNotFound", err)
 	}
 }
@@ -179,7 +179,7 @@ func TestStart_PathlessProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := newInlineService(t, db, &stubRunner{})
-	if _, err := s.Start(2, "idea", ""); !errors.Is(err, ErrNoPath) {
+	if _, err := s.Start(2, "idea", "", ""); !errors.Is(err, ErrNoPath) {
 		t.Fatalf("err = %v, want ErrNoPath", err)
 	}
 }
@@ -190,7 +190,7 @@ func TestSnapshot_ActiveResolvesSessionID(t *testing.T) {
 	s := NewService(db, r)
 	s.UUID = func() string { return "uuid-live" }
 
-	if _, err := s.Start(1, "idea", ""); err != nil {
+	if _, err := s.Start(1, "idea", "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool { return s.Snapshot(1).Active })
@@ -234,7 +234,7 @@ func TestCancel(t *testing.T) {
 	s := NewService(db, r)
 	s.UUID = func() string { return "uuid-c" }
 
-	if _, err := s.Start(1, "idea", ""); err != nil {
+	if _, err := s.Start(1, "idea", "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitFor(t, func() bool { return s.Snapshot(1).Active })
@@ -272,7 +272,7 @@ func TestRunAndHandle_OutcomeBranchesDoNotPanic(t *testing.T) {
 			db := testDB(t)
 			r := &stubRunner{runFn: c.run}
 			s := newInlineService(t, db, r)
-			if _, err := s.Start(1, "idea", ""); err != nil {
+			if _, err := s.Start(1, "idea", "", ""); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 			if s.Snapshot(1).Active {
@@ -285,7 +285,7 @@ func TestRunAndHandle_OutcomeBranchesDoNotPanic(t *testing.T) {
 		db := testDB(t)
 		r := &stubRunner{startErr: errors.New("fork failed")}
 		s := newInlineService(t, db, r)
-		if _, err := s.Start(1, "idea", ""); err != nil {
+		if _, err := s.Start(1, "idea", "", ""); err != nil {
 			t.Fatalf("Start (the spawn itself succeeds; the runner error is handled in the goroutine): %v", err)
 		}
 		if s.Snapshot(1).Active {
@@ -321,7 +321,7 @@ func TestStart_Model(t *testing.T) {
 			db := testDB(t)
 			r := &stubRunner{}
 			s := newInlineService(t, db, r)
-			uuid, err := s.Start(1, "idea", tc.choice)
+			uuid, err := s.Start(1, "idea", tc.choice, "")
 			if err != nil {
 				t.Fatalf("Start: %v", err)
 			}
@@ -347,7 +347,7 @@ func TestStart_UnknownModel(t *testing.T) {
 	db := testDB(t)
 	r := &stubRunner{}
 	s := newInlineService(t, db, r)
-	if _, err := s.Start(1, "idea", "gpt-9"); !errors.Is(err, ErrUnknownModel) {
+	if _, err := s.Start(1, "idea", "gpt-9", ""); !errors.Is(err, ErrUnknownModel) {
 		t.Fatalf("err = %v, want ErrUnknownModel", err)
 	}
 	if r.count() != 0 {

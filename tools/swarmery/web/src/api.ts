@@ -1347,13 +1347,31 @@ export function fetchPlanning(projectId: number): Promise<PlanningStatus> {
  * server's {error} text for inline display.
  */
 /** model is a planning short name (`opus` | `sonnet` | `fable`) or full ID;
- * omit it for the planner default. 400 on an unknown model. */
-export async function startPlanning(projectId: number, idea: string, model?: string): Promise<PlanningStart> {
-  if (MOCK) return mockApi.startPlanning(projectId, idea, model);
+ * omit it for the planner default. 400 on an unknown model.
+ *
+ * effort is a CLI rung (`low` | `medium` | `high` | `xhigh` | `max`); omit it
+ * for the planner's ladder. 400 on an unknown rung.
+ *
+ * Both are omitted from the BODY when undefined or empty, never sent as a
+ * placeholder word. That is load-bearing for effort in a way it is not for
+ * model: the daemon folds `"default"` (and `"off"`, and `"none"`) to "send no
+ * --effort", and a spawn with no --effort runs at the CLI's xhigh — the
+ * deepest, most expensive setting. So the picker's `default` option must reach
+ * here as `undefined` and drop the key, letting the daemon's own ladder decide. */
+export async function startPlanning(
+  projectId: number,
+  idea: string,
+  model?: string,
+  effort?: string,
+): Promise<PlanningStart> {
+  if (MOCK) return mockApi.startPlanning(projectId, idea, model, effort);
+  const body: { idea: string; model?: string; effort?: string } = { idea };
+  if (model !== undefined && model !== '') body.model = model;
+  if (effort !== undefined && effort !== '') body.effort = effort;
   const res = await fetch(`/api/projects/${String(projectId)}/planning`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(model !== undefined && model !== '' ? { idea, model } : { idea }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
