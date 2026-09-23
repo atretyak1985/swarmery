@@ -126,6 +126,13 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// phase 15.4: graduate an active lesson into the consumer repo's nested
 	// CLAUDE.md — a commit on a NEW branch, never the checked-out one.
 	mux.HandleFunc("POST /api/lessons/{id}/promote", requireLocalOrigin(h.promoteLesson))
+	// phase 16: the retirement queue (proposed, never silent — confirm or keep;
+	// unanswered proposals auto-retire after the documented window) and the
+	// forecast calibration view (groups under 20 samples are never returned).
+	mux.HandleFunc("GET /api/lessons/retirements", h.listRetirements)
+	mux.HandleFunc("POST /api/lessons/retirements/{id}/confirm", requireLocalOrigin(h.confirmRetirement))
+	mux.HandleFunc("POST /api/lessons/retirements/{id}/keep", requireLocalOrigin(h.keepLesson))
+	mux.HandleFunc("GET /api/calibration", h.calibration)
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)

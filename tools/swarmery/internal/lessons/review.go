@@ -10,7 +10,9 @@ package lessons
 //
 // Edit changes the words, the areas and the identity (norm_title), never the
 // status. Every function is called from an operator endpoint behind
-// requireLocalOrigin; nothing in the daemon calls them on its own.
+// requireLocalOrigin, with ONE documented exception (phase 16, retire.go): the
+// verification pass calls Retire itself for a retirement proposal the operator
+// left unanswered for the auto-retire window, recording the proposal's reason.
 
 import (
 	"database/sql"
@@ -59,6 +61,9 @@ type Lesson struct {
 	// PromotedBranch is the branch of the lesson's latest successful promotion
 	// into a nested CLAUDE.md (15.4, lesson_promotions); "" when never promoted.
 	PromotedBranch string `json:"promotedBranch"`
+	// Effectiveness is the lesson's stored verification row (phase 16); nil
+	// until the first verification pass measured it.
+	Effectiveness *EffectivenessRow `json:"effectiveness"`
 	// Matches are merge suggestions (candidates only): lessons whose identity
 	// equals this one's, or overlaps it by at least half its words.
 	Matches []Match `json:"matches"`
@@ -163,6 +168,9 @@ func List(db *sql.DB, status string) ([]Lesson, error) {
 	if err := attachMatches(db, out); err != nil {
 		return nil, err
 	}
+	if err := attachEffectiveness(db, out); err != nil {
+		return nil, err
+	}
 	if out == nil {
 		out = []Lesson{}
 	}
@@ -179,7 +187,9 @@ func Get(db *sql.DB, id int64) (Lesson, error) {
 		return l, err
 	}
 	one := []Lesson{l}
-	err = attachMatches(db, one)
+	if err = attachMatches(db, one); err == nil {
+		err = attachEffectiveness(db, one)
+	}
 	return one[0], err
 }
 

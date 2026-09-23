@@ -621,8 +621,9 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		   SET run_state='running', run_session_uuid=?, run_started_at=?,
 		       run_error=NULL, run_ended_at=NULL, run_branch=?,
 		       run_start_point=NULLIF(?, ''),
-		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL
-		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, phaseID); err != nil {
+		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL,
+		       run_effort=NULLIF(?, '')
+		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, runEffort, phaseID); err != nil {
 		// Worktree FIRST, slot LAST — the same invariant runAndHandle's defer
 		// enforces. Releasing the slot while the worktree still exists lets a
 		// concurrent Start warm-reuse (worktree invariant 4) the deterministic

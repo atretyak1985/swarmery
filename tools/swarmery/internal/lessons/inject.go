@@ -34,8 +34,8 @@ package lessons
 // with no forecast areas at all (no prior, a planning run) gets no lessons: a
 // run we cannot place gets nothing rather than everything.
 //
-// RANKING. Effectiveness first (phase 16 fills the Effectiveness hook; until
-// then every lesson is unscored), then recency (activated_at, newest first),
+// RANKING. Effectiveness first (phase 16's stored median surprise drop; a
+// lesson without enough data is unscored), then recency (activated_at, newest first),
 // then id. The block is cut at the budget: lessons are taken in rank order and
 // the first one that would push the WHOLE injected text (separator and header
 // included) past SWARMERY_LESSON_BUDGET_TOKENS stops the selection — a strict
@@ -136,9 +136,10 @@ func (a Active) Line() string {
 	return "- [" + Ref(a.ID) + "] " + strings.Join(strings.Fields(a.Guidance), " ")
 }
 
-// Effectiveness is the ranking hook phase 16 fills: lesson id → score. The
-// default scores nothing, so ranking falls through to recency.
-var Effectiveness = func(db *sql.DB, ids []int64) (map[int64]float64, error) { return nil, nil }
+// Effectiveness is the ranking hook: lesson id → score. Phase 16 wires it to
+// the stored median surprise drop (StoredEffectiveness); a lesson without
+// enough area runs to measure stays unscored and ranks by recency.
+var Effectiveness = StoredEffectiveness
 
 // globHits reports whether one lesson glob overlaps one scope entry (rules 1–2
 // in the file comment).

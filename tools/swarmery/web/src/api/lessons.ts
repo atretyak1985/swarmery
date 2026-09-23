@@ -45,6 +45,96 @@ export interface Lesson {
   /** Branch of the latest successful promotion into a nested CLAUDE.md; '' when never promoted. */
   promotedBranch: string;
   matches: LessonMatch[];
+  /** Stored verification row (phase 16); null until the first verification pass. */
+  effectiveness?: LessonEffectiveness | null;
+}
+
+/** lesson_effectiveness: median area surprise before vs after activation.
+ *  The medians and the drop are null when either side has fewer than minRuns runs. */
+export interface LessonEffectiveness {
+  lessonId: number;
+  windowN: number;
+  minRuns: number;
+  beforeN: number;
+  afterN: number;
+  medianBefore: number | null;
+  medianAfter: number | null;
+  /** before − after; positive = the area got less surprising. */
+  medianDrop: number | null;
+  uses: number;
+  relied: number;
+  reliedRate: number | null;
+  computedAt: string;
+}
+
+export type RetireReason = 'ineffective' | 'stale' | 'unused_60d' | 'superseded';
+
+/** One retirement proposal (lesson_retirements). */
+export interface RetirementProposal {
+  id: number;
+  lessonId: number;
+  title: string;
+  guidance: string;
+  areaGlobs: string[];
+  reason: RetireReason;
+  detail: string;
+  evidence: Record<string, unknown>;
+  state: 'proposed' | 'confirmed' | 'kept' | 'auto_retired' | 'withdrawn';
+  proposedAt: string;
+  decidedAt: string | null;
+  /** When the daemon retires it if nobody answers; null when auto-retire is off. */
+  autoRetireAt: string | null;
+  effectiveness: LessonEffectiveness | null;
+}
+
+const MOCK_PROPOSALS: RetirementProposal[] = [
+  {
+    id: 1,
+    lessonId: 2,
+    title: 'Index every FK child column before a prune',
+    guidance:
+      'In internal/store/migrations, index every foreign-key child column before a retention prune deletes parents.',
+    areaGlobs: ['tools/swarmery/internal/store/**'],
+    reason: 'ineffective',
+    detail: 'no measured drop: median surprise 0.41 over 6 runs before activation, 0.44 over 5 runs after',
+    evidence: {},
+    state: 'proposed',
+    proposedAt: '2026-09-22T09:00:00Z',
+    decidedAt: null,
+    autoRetireAt: '2026-10-06T09:00:00Z',
+    effectiveness: null,
+  },
+];
+
+/** GET /api/lessons/retirements — the open retirement queue. */
+export async function fetchRetirements(): Promise<RetirementProposal[]> {
+  if (MOCK) return MOCK_PROPOSALS.filter((p) => p.state === 'proposed');
+  const body = await jsonOrThrow<{ proposals: RetirementProposal[] }>(
+    await fetch('/api/lessons/retirements'),
+    'GET /api/lessons/retirements',
+  );
+  return body.proposals;
+}
+
+async function decideRetirement(id: number, action: 'confirm' | 'keep'): Promise<RetirementProposal> {
+  if (MOCK) {
+    const cur = MOCK_PROPOSALS.find((p) => p.id === id);
+    if (cur === undefined) throw new Error(`no such proposal ${String(id)}`);
+    cur.state = action === 'confirm' ? 'confirmed' : 'kept';
+    return cur;
+  }
+  const path = `/api/lessons/retirements/${String(id)}/${action}`;
+  return jsonOrThrow<RetirementProposal>(await fetch(path, { method: 'POST' }), `POST ${path}`);
+}
+
+/** Confirm a proposal: the lesson is retired with the proposal's reason. */
+export function confirmRetirement(id: number): Promise<RetirementProposal> {
+  return decideRetirement(id, 'confirm');
+}
+
+/** Keep the lesson: the proposal closes and its reason is held off for 30 days. */
+export function keepLesson(id: number): Promise<RetirementProposal> {
+  return decideRetirement(id, 'keep');
 }
 
 export interface LessonEdit {

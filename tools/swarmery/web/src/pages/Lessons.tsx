@@ -1,25 +1,127 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   acceptLesson,
+  confirmRetirement,
   dismissLesson,
   editLesson,
   fetchLessons,
+  fetchRetirements,
+  keepLesson,
   type Lesson,
+  type LessonEffectiveness,
   type LessonMatch,
   type LessonStatus,
   mergeLesson,
   promoteLesson,
+  type RetirementProposal,
   retireLesson,
 } from '../api/lessons';
+import { CalibrationPanel } from './LessonsCalibration';
+
+const BTN = 'rounded border border-line px-2 py-px font-mono text-[11px] text-ink-dim hover:text-ink';
+const BTN_PRIMARY = 'rounded border border-brand px-2 py-px font-mono text-[11px] text-brand';
+
+function effectivenessLabel(e: LessonEffectiveness): string {
+  const drop =
+    e.medianDrop === null
+      ? `not enough data (${String(e.beforeN)}/${String(e.afterN)} of ${String(e.minRuns)} runs)`
+      : `surprise ${(e.medianBefore ?? 0).toFixed(2)} → ${(e.medianAfter ?? 0).toFixed(2)}`;
+  const relied =
+    e.reliedRate === null
+      ? 'never injected'
+      : `relied on ${String(Math.round(e.reliedRate * 100))}% of ${String(e.uses)}`;
+  return `${drop} · ${relied}`;
+}
+
+const REASON_LABEL: Record<RetirementProposal['reason'], string> = {
+  ineffective: 'ineffective',
+  stale: 'stale',
+  unused_60d: 'unused 60 days',
+  superseded: 'superseded',
+};
+
+/** The retirement queue (phase 16.2): proposals wait for the operator; an
+ *  unanswered one is retired by the daemon on its auto-retire date. */
+function RetirementQueue(): JSX.Element | null {
+  const [items, setItems] = useState<RetirementProposal[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    fetchRetirements()
+      .then((ps) => {
+        setItems(ps);
+        setErr(null);
+      })
+      .catch((e: unknown) => setErr(String(e)));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const decide = (run: () => Promise<RetirementProposal>): void => {
+    setBusy(true);
+    run()
+      .then(load)
+      .catch((e: unknown) => setErr(String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  if (err === null && (items === null || items.length === 0)) return null;
+  return (
+    <section className="mt-4 max-w-3xl" aria-labelledby="retirement-heading">
+      <h2 id="retirement-heading" className="text-sm text-ink">
+        Proposed retirements
+      </h2>
+      {err !== null && (
+        <div role="alert" className="mt-2 text-[12px] text-red">
+          {err}
+        </div>
+      )}
+      <ul className="mt-2 grid gap-2">
+        {(items ?? []).map((p) => (
+          <li key={p.id} className="rounded border border-line p-2 text-[12px]">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-ink">
+                L-{String(p.lessonId)} {p.title}
+              </span>
+              <span className="shrink-0 font-mono text-[10px] text-ink-dim">
+                {REASON_LABEL[p.reason]}
+                {p.autoRetireAt !== null && ` · auto-retires ${p.autoRetireAt.slice(0, 10)}`}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-ink-dim">{p.detail}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                className={BTN_PRIMARY}
+                onClick={() => decide(() => confirmRetirement(p.id))}
+              >
+                retire
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className={BTN}
+                onClick={() => decide(() => keepLesson(p.id))}
+              >
+                keep
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 const FILTERS: { value: LessonStatus | undefined; label: string }[] = [
   { value: 'candidate', label: 'candidates' },
   { value: 'active', label: 'active' },
   { value: undefined, label: 'all' },
 ];
-
-const BTN = 'rounded border border-line px-2 py-px font-mono text-[11px] text-ink-dim hover:text-ink';
-const BTN_PRIMARY = 'rounded border border-brand px-2 py-px font-mono text-[11px] text-brand';
 
 function matchLabel(m: LessonMatch): string {
   const where = m.kind === 'retro' ? `retro ×${String(m.count)}` : `lesson #${String(m.lessonId ?? 0)}`;
@@ -132,6 +234,13 @@ function LessonCard({
         {lesson.planId} · {lesson.phaseName}
         {lesson.linkedNormTitle !== '' && ` · linked to "${lesson.linkedNormTitle}"`}
       </div>
+      {lesson.status === 'active' &&
+        lesson.effectiveness !== undefined &&
+        lesson.effectiveness !== null && (
+          <div className="mt-1 font-mono text-[10px] text-ink-dim">
+            effectiveness: {effectivenessLabel(lesson.effectiveness)}
+          </div>
+        )}
       {lesson.promotedBranch !== '' && (
         <div className="mt-1 font-mono text-[10px] text-ink-dim">
           L-{String(lesson.id)} promoted to CLAUDE.md on branch{' '}
@@ -267,7 +376,11 @@ export function Lessons(): JSX.Element {
         When a phase run lands far from its forecast and its report explains why, a cheap model
         proposes up to two lessons, each citing evidence from that run. A candidate reaches future
         runs only after you accept it here. Merge it into an existing lesson when it repeats one.
+        Active lessons are re-measured against their area&apos;s surprise; one that stops earning
+        its place is proposed for retirement below, and retired on its own after 14 days without
+        an answer.
       </p>
+      <RetirementQueue />
       <fieldset className="mt-3 inline-flex gap-1" aria-label="filter lessons by status">
         {FILTERS.map((f) => (
           <button
@@ -299,6 +412,7 @@ export function Lessons(): JSX.Element {
           ))}
         </ul>
       )}
+      <CalibrationPanel />
     </div>
   );
 }

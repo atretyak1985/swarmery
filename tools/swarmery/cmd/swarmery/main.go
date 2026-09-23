@@ -41,6 +41,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
@@ -67,6 +68,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
@@ -122,6 +124,8 @@ func main() {
 		err = cmdActuals(os.Args[2:])
 	case "economics":
 		err = cmdEconomics(os.Args[2:])
+	case "calibration":
+		err = cmdCalibration(os.Args[2:])
 	case "backup":
 		err = cmdBackup(os.Args[2:])
 	case "prune":
@@ -204,6 +208,11 @@ func usage() {
                                    (read-only; safe while the daemon is serving).
                                    --current-model prints ONLY the model id with the most
                                    assistant turns in the last 30 days, for scripts.
+  swarmery calibration [--db <path>] [--by <dims>] [--json]
+                                   forecast calibration and mean surprise per group
+                                   (dims: agent,model,effort,project; default model,effort —
+                                   the model-upgrade routine's comparison column). Groups under
+                                   20 non-post-hoc samples are hidden. Read-only.
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
@@ -687,6 +696,34 @@ func cmdEconomics(args []string) error {
 		return err
 	}
 	return economics.Render(os.Stdout, rep, *asJSON)
+}
+
+// cmdCalibration prints forecast calibration and mean surprise per group
+// (internal/calibration). Read-only; the monthly model-upgrade routine runs it
+// by model/effort as one more comparison column.
+func cmdCalibration(args []string) error {
+	fs := flag.NewFlagSet("calibration", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	by := fs.String("by", "model,effort", "comma-separated dimensions: agent, model, effort, project")
+	asJSON := fs.Bool("json", false, "emit the report as JSON instead of text")
+	fs.Parse(args)
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: swarmery calibration [--db <path>] [--by <dims>] [--json]")
+	}
+	dims, err := calibration.ParseDims(*by)
+	if err != nil {
+		return err
+	}
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	rep, err := calibration.Compute(db, dims, calibration.MinSamples)
+	if err != nil {
+		return err
+	}
+	return calibration.Render(os.Stdout, rep, *asJSON)
 }
 
 // cmdStale lists tasks that CLAIM to be running but show no sign of it, with the
@@ -2108,6 +2145,26 @@ func cmdServe(args []string) error {
 	phaserunSvc.InjectLessons = lessonInjector.ForPhase
 	phaserunSvc.LessonCitations = lessonInjector.AfterPhaseRun
 	log.Printf("lesson injection: budget=%d tokens", lessonBudget)
+	// Learning loop phase 16: re-measure every active lesson's effectiveness
+	// (median area surprise before vs after activation) and PROPOSE retirements
+	// (ineffective, stale, unused 60 days, superseded) into the Lessons page's
+	// queue. A proposal the operator leaves unanswered for
+	// SWARMERY_LESSON_AUTO_RETIRE_DAYS (default 14) is retired by this pass.
+	verifyCfg, verifyWarn := lessons.VerifyConfigFromEnv(os.Getenv)
+	for _, w := range verifyWarn {
+		log.Printf("warn: %s", w)
+	}
+	api.AttachLessonVerify(verifyCfg)
+	lessonVerifier := lessons.NewVerifier(db, wtMgr.Git, repopath.Resolve, verifyCfg)
+	log.Printf("lesson verification: %s", verifyCfg)
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for {
+			lessonVerifier.RunLogged()
+			<-ticker.C
+		}
+	}()
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same
 	// boundary the worktree manager uses.
 	api.AttachPhaseDiag(wtMgr.Git, wtMgr)
