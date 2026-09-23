@@ -55,6 +55,13 @@ type RunSpec struct {
 	// core@swarmery, and the default agent does not exist.
 	SettingsFile string
 
+	// Resume makes this spawn a CONTINUATION of SessionUUID (`claude -r <uuid>`):
+	// the completion loop's nudge to an orchestrator that ended its turn with
+	// phase criteria still unticked. The service copies the original spec and
+	// changes only this and Prompt, so --agent, --settings and the account are
+	// unchanged; model and effort are re-resolved identically by this runner.
+	Resume bool
+
 	// ProjectPath is the plan's project — planInfo.ProjectPath (projects.path),
 	// the SAME value SettingsFile is derived from. Used ONLY to resolve the
 	// Claude account this run must execute under: Cwd is the acquired
@@ -162,6 +169,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
+		Resume:      spec.Resume,
 		// Without a permission mode the orchestrator cannot write, run or commit —
 		// and it still exits 0. See internal/claudeflags.
 		PermissionMode: claudeflags.Mode(permEnv),

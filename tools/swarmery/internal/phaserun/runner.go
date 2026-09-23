@@ -84,6 +84,14 @@ type RunSpec struct {
 	// phase run at maximum depth is the most expensive shape this daemon has.
 	Effort string
 
+	// Resume makes this spawn a CONTINUATION of SessionUUID (`claude -r <uuid>`)
+	// instead of a fresh session: the completion loop's nudge to a run that ended
+	// its turn with acceptance criteria still unticked. The service builds it by
+	// COPYING the original spec and setting only this and Prompt, so the
+	// continuation keeps the same model, effort, permission mode, settings file
+	// and account — an unpinned --effort on a resume would be the CLI's xhigh.
+	Resume bool
+
 	// ProjectPath is the phase's project — phaseInfo.ProjectPath (projects.path),
 	// the SAME value SettingsFile is derived from. Used ONLY to resolve the
 	// Claude account this run must execute under: Cwd is the acquired
@@ -170,6 +178,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
+		Resume:      spec.Resume,
 		// Without a permission mode the run cannot write, cannot run its
 		// verification command and cannot commit — and it still exits 0. See
 		// internal/claudeflags for the resolution and its escape hatch.

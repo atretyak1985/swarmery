@@ -466,6 +466,51 @@ func CountCheckboxes(text string) (done, total int) {
 	return done, total
 }
 
+// untickedLabelCap bounds one criterion's rendered label. Criteria run long —
+// a whole paragraph with an embedded command is common — and the consumer is a
+// continuation MESSAGE sent back into a session whose context window is already
+// at its largest, so the list has to identify each criterion, not restate it.
+const untickedLabelCap = 160
+
+// UntickedCheckboxes returns the LABEL of every unticked acceptance-criteria
+// checkbox, in document order, each trimmed of its `- [ ] ` marker, of markdown
+// emphasis, and to untickedLabelCap runes.
+//
+// It walks the SAME line walker CountCheckboxes and tickAllCheckboxes use, which
+// is the whole point of it living here rather than in the engine that wants it:
+// "how many are unticked" and "which ones are unticked" must be answers about
+// the same set of lines. A phase doc quoting a checklist inside a ``` fence has
+// bitten this codebase before (a shipped phase stuck at 7/11 forever), and a
+// second parser in phaserun would hand a continuation four criteria that live in
+// a markdown example and can never be ticked.
+//
+// Used by the run completion loop: when a cleanly-exited run leaves criteria
+// unticked, this is the list it is resumed with.
+func UntickedCheckboxes(text string) []string {
+	var out []string
+	forEachLineOutsideFences(text, func(_ int, line string) {
+		loc := checkboxRe.FindStringSubmatchIndex(line)
+		if loc == nil {
+			return
+		}
+		// loc[2]:loc[3] is the state character; anything at/after the match end is
+		// the label.
+		if strings.EqualFold(line[loc[2]:loc[3]], "x") {
+			return
+		}
+		label := strings.TrimSpace(line[loc[1]:])
+		label = strings.Trim(label, "*_` ")
+		if label == "" {
+			return
+		}
+		if r := []rune(label); len(r) > untickedLabelCap {
+			label = string(r[:untickedLabelCap]) + "…"
+		}
+		out = append(out, label)
+	})
+	return out
+}
+
 // forEachLineOutsideFences calls fn for every line that is not inside a fenced
 // code block. Fence tracking follows CommonMark's rule that a fence closes only on
 // a marker of the SAME character and at least the opening length, so a ```` block

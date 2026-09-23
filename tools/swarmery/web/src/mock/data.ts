@@ -1431,6 +1431,9 @@ const mockEpicPhase = (
   boardColumn: null,
   runState: 'idle',
   runSessionUuid: null,
+  // The completion loop's timeline. Empty by default because that IS the common
+  // case: a run only accrues events when the harness had to nudge it.
+  runEvents: [],
   // Which model the last run used, read from its session — a phase that never
   // ran has nothing to say, so `null` is the honest default here.
   runModel: null,
@@ -1614,6 +1617,7 @@ const mockEpics: Epic[] = [
       runSessionUuid: 'mock-plan-run-uuid',
       runStartedAt: '2026-07-24T09:00:00Z',
       runError: null,
+      runEvents: [],
     },
     phases: [
       mockEpicPhase(11, 1, 'Ingest: plan dir scanner', [], 4, 4, {

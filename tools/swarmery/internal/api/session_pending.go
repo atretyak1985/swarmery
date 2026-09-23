@@ -86,6 +86,7 @@ var pendingSessionSources = []pendingSessionSource{
 var pendingSessionExempt = map[string]string{
 	"sessions.session_uuid":                "the ingested session row itself — a hit here is a 200, not a pending answer",
 	"retro_analyses.planning_session_uuid": "a copy of planning_sessions.session_uuid stamped on the analysis it planned; the planning row is the source",
+	"run_events.session_uuid":             "a copy of the RUN's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each completion-loop decision so an event can be cross-linked to the transcript; those two run rows are the sources, and an event never exists without one",
 }
 
 // pendingSessionDTO is the 202 body for GET /api/sessions/{uuid}. `pending` is the

@@ -39,10 +39,21 @@ const drainGrace = 5 * time.Second
 //	-p <prompt> --session-id <uuid> [--setting-sources S] [--permission-mode P]
 //	[--agent A] [--model M] [--effort E] [--settings F] [extra…]
 //
+// A Resume spec swaps the head for `-r <uuid> -p <prompt>` — the shape
+// internal/api's resumeArgs already emits — and keeps every remaining flag
+// byte-identical, because a continuation that silently changed model, effort or
+// permission mode would not be a continuation of the same run. Note in
+// particular what NOT emitting --effort would mean here: the CLI's unpinned
+// default is xhigh, so an "inherited" effort on a resume is the most expensive
+// rung, not a cheap one.
+//
 // Prompt and SessionUUID are NOT trimmed: they are values, not flags, and a
 // prompt's leading whitespace is the caller's business.
 func Args(spec Spec) []string {
 	args := []string{"-p", spec.Prompt, "--session-id", spec.SessionUUID}
+	if spec.Resume {
+		args = []string{"-r", spec.SessionUUID, "-p", spec.Prompt}
+	}
 	if s := strings.TrimSpace(spec.SettingSources); s != "" {
 		args = append(args, "--setting-sources", s)
 	}

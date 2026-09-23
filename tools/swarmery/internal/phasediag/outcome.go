@@ -48,7 +48,19 @@ func Outcome(runState string, total, before, after int) string {
 		return OutcomeRunning
 	case "failed":
 		return OutcomeFailed
-	case "done":
+	// `blocked` and `partial` join `done` here, and the vocabulary above stays
+	// CLOSED. All three describe a process that exited 0 — the completion loop
+	// (runcore.ClassifyEnd) merely says WHICH kind of clean exit it was — so the
+	// question this function answers, "did work land?", is still answered by the
+	// checkbox interval and by nothing else. Falling through to the default would
+	// report a blocked run as `idle`, i.e. as a run that never happened.
+	//
+	// Note that `partial` the run_state and OutcomePartial the outcome are NOT the
+	// same claim and are not derived from each other: a run nudged twice that then
+	// ticked its last criterion is run_state=partial only if the loop ran out of
+	// continuations, while a run that ticked everything is OutcomeCompleted
+	// regardless of how it got there.
+	case "done", "blocked", "partial":
 		switch {
 		case CriteriaMet(after, total):
 			return OutcomeCompleted

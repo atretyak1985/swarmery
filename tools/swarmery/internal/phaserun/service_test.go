@@ -29,6 +29,19 @@ type stubRunner struct {
 	block    chan struct{}
 	runFn    func(spec RunSpec) (*Run, error)
 	startErr error
+	// tickDB, when set, makes the DEFAULT stub run behave like an executor that
+	// did the work: before returning exit 0 it ticks every acceptance checkbox in
+	// every phase doc of the fixture.
+	//
+	// It exists because "exit 0" stopped meaning "finished" (runcore.ClassifyEnd):
+	// a run whose doc still shows unticked criteria is now resumed and finally
+	// stamped `partial`, which is correct behaviour and wrong for the dozen tests
+	// here that use the spawn purely as a way to reach the exit path and assert
+	// worktree/slot/branch/stamp mechanics. Ticking the doc is the smallest change
+	// that keeps those tests asserting what they were written to assert — the
+	// run they describe is a SUCCESSFUL one — instead of weakening the new gate.
+	// newTestService wires it; a test that wants the unfinished shape clears it.
+	tickDB *sql.DB
 }
 
 func (s *stubRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
@@ -37,6 +50,7 @@ func (s *stubRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	block := s.block
 	fn := s.runFn
 	startErr := s.startErr
+	tickDB := s.tickDB
 	s.mu.Unlock()
 	if block != nil {
 		select {
@@ -51,7 +65,56 @@ func (s *stubRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	if fn != nil {
 		return fn(spec)
 	}
+	if tickDB != nil {
+		tickEveryPhaseDoc(tickDB)
+	}
 	return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+}
+
+// tickEveryPhaseDoc rewrites every phase doc in the fixture with all of its
+// checkboxes ticked — what a successful executor leaves behind.
+func tickEveryPhaseDoc(db *sql.DB) {
+	rows, err := db.Query(`SELECT doc_path FROM epic_phases WHERE doc_path IS NOT NULL AND doc_path <> ''`)
+	if err != nil {
+		return
+	}
+	var paths []string
+	for rows.Next() {
+		var p string
+		if rows.Scan(&p) == nil {
+			paths = append(paths, p)
+		}
+	}
+	rows.Close()
+	for _, p := range paths {
+		body, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		out := make([]string, 0, 8)
+		for _, line := range strings.Split(string(body), "\n") {
+			out = append(out, strings.Replace(line, "- [ ] ", "- [x] ", 1))
+		}
+		_ = os.WriteFile(p, []byte(strings.Join(out, "\n")), 0o644)
+	}
+}
+
+// firstSpec is the ORIGINAL spawn's spec — the one a continuation would follow,
+// not replace. Tests asserting what the run was STARTED with must use this:
+// lastSpec now returns the continuation's spec whenever the completion loop ran.
+func (s *stubRunner) firstSpec() RunSpec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.specs) == 0 {
+		return RunSpec{}
+	}
+	return s.specs[0]
+}
+
+func (s *stubRunner) specCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.specs)
 }
 
 func (s *stubRunner) lastSpec() RunSpec {
@@ -246,6 +309,12 @@ func testTime(n int) string {
 // monotonically advancing clock. Tests that need an in-flight run override Go
 // with nil (real goroutine) + a blocking runner.
 func newTestService(db *sql.DB, r Runner, wt *stubWt) *Service {
+	// The default stub run is a SUCCESSFUL run: it leaves the phase docs ticked.
+	// See stubRunner.tickDB — exit 0 alone no longer proves completion, and these
+	// fixtures describe runs that finished.
+	if sr, ok := r.(*stubRunner); ok && sr.tickDB == nil && sr.runFn == nil {
+		sr.tickDB = db
+	}
 	s := NewService(db, r, wt)
 	s.UUID = func() string { return "uuid-1" }
 	s.Go = func(fn func()) { fn() }
@@ -637,6 +706,7 @@ func TestStart_StampsRunEndedAt(t *testing.T) {
 func TestStart_ClearsPriorEndedAt(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
+	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, &stubWt{}) // real goroutine — run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -888,6 +958,7 @@ func TestStart_DepsGate(t *testing.T) {
 func TestStart_DoubleStart_ErrRunning(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
+	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, &stubWt{}) // real goroutine — run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -972,6 +1043,7 @@ func TestStart_ResetsPriorCheckboxesAfter(t *testing.T) {
 		    run_checkboxes_before=1, run_checkboxes_after=5 WHERE id=?`, p1)
 
 	r := &stubRunner{block: make(chan struct{})}
+	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, &stubWt{}) // real goroutine — the run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -1238,6 +1310,7 @@ func TestDeleteRunBranch_ErrRunning(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
+	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine — run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -1288,6 +1361,7 @@ func TestCancel(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
+	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }

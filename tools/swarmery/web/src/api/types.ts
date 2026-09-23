@@ -3202,8 +3202,33 @@ export interface RoutineInput {
 
 // --- fusion phase 10: epic rollups + plan-doc editor --------------------------
 
-/** Direct phase-run lifecycle (interactive planning v2 phase 5). */
-export type PhaseRunState = 'idle' | 'running' | 'done' | 'failed';
+/** Direct phase-run lifecycle (interactive planning v2 phase 5).
+ *
+ * `blocked` and `partial` arrived with the run completion loop: all THREE of
+ * `done`/`blocked`/`partial` are clean (exit 0) endings, and which one a run got
+ * is decided from the doc's ticked criteria plus the run's final assistant text,
+ * never from the exit code. `partial` means the harness resumed the session up
+ * to twice and criteria were still unticked; `blocked` means the run itself said
+ * so, with the reason in `runError`. */
+export type PhaseRunState = 'idle' | 'running' | 'done' | 'failed' | 'blocked' | 'partial';
+
+/** One decision of the run completion loop (`run_events`, migration 0077).
+ *
+ * The timeline exists because `runState` collapses a decision CHAIN into one
+ * word: a `partial` phase that was nudged twice and progressed each time and one
+ * that stalled immediately read identically without it. Empty for the common
+ * case of a run that finished on its first turn. */
+export interface RunEvent {
+  id: number;
+  /** The resumed session — the same uuid as the run's own, for cross-linking. */
+  sessionUuid: string;
+  kind: 'continuation' | 'blocked' | 'partial' | 'done';
+  /** 1..2 for `continuation`; 0 otherwise. */
+  attempt: number;
+  /** The blocked reason, or the message the continuation was sent with. */
+  detail: string;
+  createdAt: string;
+}
 
 /** What a run ACHIEVED, derived server-side — mirrors internal/phasediag.OutcomeFromRow.
  *  Distinct from PhaseRunState, which only says how the process ended. */
@@ -3361,8 +3386,13 @@ export interface EpicPhase {
    * offending text to fix it. */
   docModel: string | null;
   runStartedAt: string | null;
-  /** Failure detail (stderr tail / timeout / cancelled) when runState==='failed'. */
+  /** Failure detail (stderr tail / timeout / cancelled) when runState==='failed',
+   * the blocked reason when runState==='blocked', and the ticked-criteria count
+   * when runState==='partial'. */
   runError: string | null;
+  /** This run's completion-loop timeline — see RunEvent. Empty for a run that
+   * finished on its first turn, which is the overwhelmingly common case. */
+  runEvents: RunEvent[];
   /** Derived: what the run ACHIEVED, as opposed to how the process ended. A
    * `runState: 'done'` run that ticked nothing is `noop`, not `completed` — the
    * green chip keys on THIS, never on runState. */
@@ -3504,10 +3534,13 @@ export type PlanRunMode = 'auto' | 'subagents' | 'inline';
 export interface PlanRun {
   agent: string | null;
   mode: PlanRunMode;
-  runState: 'idle' | 'running' | 'done' | 'failed';
+  /** Same six-state vocabulary as PhaseRunState, and for the same reason. */
+  runState: PhaseRunState;
   runSessionUuid: string | null;
   runStartedAt: string | null;
   runError: string | null;
+  /** This run's completion-loop timeline — see RunEvent. */
+  runEvents: RunEvent[];
 }
 
 /** GET/PUT/PATCH /api/epics/{taskId}/docs response body. */

@@ -76,7 +76,7 @@ import {
   type RevisionStartError,
 } from '../api';
 import { fetchSystemItems } from '../api/system';
-import type { PlanRunMode } from '../api/types';
+import type { PlanRunMode, RunEvent } from '../api/types';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { useLiveUpdates } from '../lib/ws';
 import { Markdown } from '../lib/markdown';
@@ -1855,6 +1855,8 @@ function PhaseList({
                     Cancel + session link; a DONE phase retires the Run button
                     and offers ✓ summary (opens the details rail); idle/failed
                     offer Run/Retry. */}
+                <ContinuationChip events={p.runEvents} />
+
                 {p.runState === 'running' ? (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <span
@@ -3223,5 +3225,34 @@ function ProgressBar({
     >
       <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${String(pct)}%` }} />
     </div>
+  );
+}
+
+/** ContinuationChip surfaces the run completion loop's decisions (`run_events`,
+ * migration 0077) on the phase row.
+ *
+ * It renders NOTHING for a run that finished on its first turn, which is the
+ * overwhelmingly common case — the chip has to earn its space. It appears
+ * exactly when the harness had to intervene, because that is the fact `runState`
+ * alone cannot carry: a `partial` phase nudged twice that progressed each time
+ * and one that stalled on turn one read identically without it, and the
+ * difference is what says whether the phase doc or the executor is at fault.
+ *
+ * The tooltip carries each continuation's message, so the operator can see what
+ * the run was actually told rather than inferring it. */
+function ContinuationChip({ events }: { events: RunEvent[] }): JSX.Element | null {
+  const continuations = events.filter((e) => e.kind === 'continuation');
+  if (continuations.length === 0) return null;
+  const tip = continuations
+    .map((e) => `#${e.attempt}: ${e.detail.split('\n')[0]}`)
+    .join(' — ');
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
+      data-tip={`the run ended its turn with criteria unticked and was resumed ${continuations.length}× — ${tip}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      ↻ {continuations.length}
+    </span>
   );
 }

@@ -16,6 +16,14 @@ type RunSpec struct {
 	Cwd         string // the task's worktree path — the process runs here
 	Model       string // optional --model override ("" = account default at the spawn layer; the service fills DefaultModel before building the spec)
 
+	// Resume makes this spawn a CONTINUATION of SessionUUID (`claude -r <uuid>`).
+	// One use only: a verifier that produced output but no VERDICT: line is asked
+	// once for the line it owed, in the session that already holds every piece of
+	// evidence it gathered. Re-running from scratch instead would pay for the whole
+	// read-only pass a second time and could reach a different conclusion, which is
+	// not a retry but a second opinion.
+	Resume bool
+
 	// Account is the Claude Code account key this run must execute under,
 	// resolved by the CALLER from the task's PROJECT — never from Cwd. Cwd is a
 	// worktree, which carries no project settings file, so resolving it here
@@ -116,6 +124,7 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
+		Resume:      spec.Resume,
 		Model:       spec.Model,
 		// Resolved, never omitted: an absent --effort is the CLI's xhigh, paid on
 		// every graded task in the fleet.

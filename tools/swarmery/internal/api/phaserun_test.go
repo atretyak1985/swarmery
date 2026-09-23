@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,12 +26,50 @@ type phaseStubRunner struct {
 	mu    sync.Mutex
 	block chan struct{}
 	specs []phaserun.RunSpec // every spec the service dispatched, in order
+	// tickDB makes the default stub run a SUCCESSFUL one: it ticks every phase
+	// doc's checkboxes before exiting 0. attachPhaseRunWt wires it.
+	//
+	// Exit 0 stopped meaning "finished" (runcore.ClassifyEnd): a run whose doc
+	// still shows unticked criteria is resumed up to twice and then stamped
+	// `partial`. These api tests assert the HTTP contract and the DTO, not the
+	// completion semantics, so the stub is made to leave behind what a finished
+	// run leaves behind rather than the new gate being weakened.
+	tickDB *sql.DB
+}
+
+// tickEveryPhaseDoc rewrites every phase doc in the fixture with all of its
+// checkboxes ticked — what a successful executor leaves behind.
+func tickEveryPhaseDoc(db *sql.DB) {
+	rows, err := db.Query(`SELECT doc_path FROM epic_phases WHERE doc_path IS NOT NULL AND doc_path <> ''`)
+	if err != nil {
+		return
+	}
+	var paths []string
+	for rows.Next() {
+		var p string
+		if rows.Scan(&p) == nil {
+			paths = append(paths, p)
+		}
+	}
+	rows.Close()
+	for _, p := range paths {
+		body, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		var out []string
+		for _, line := range strings.Split(string(body), "\n") {
+			out = append(out, strings.Replace(line, "- [ ] ", "- [x] ", 1))
+		}
+		_ = os.WriteFile(p, []byte(strings.Join(out, "\n")), 0o644)
+	}
 }
 
 func (r *phaseStubRunner) Start(ctx context.Context, spec phaserun.RunSpec) (*phaserun.Run, error) {
 	r.mu.Lock()
 	r.specs = append(r.specs, spec)
 	block := r.block
+	tickDB := r.tickDB
 	r.mu.Unlock()
 	if block != nil {
 		select {
@@ -38,6 +77,9 @@ func (r *phaseStubRunner) Start(ctx context.Context, spec phaserun.RunSpec) (*ph
 		case <-ctx.Done():
 			return &phaserun.Run{SessionUUID: spec.SessionUUID, ExitCode: -1}, nil
 		}
+	}
+	if tickDB != nil && !spec.Resume {
+		tickEveryPhaseDoc(tickDB)
 	}
 	return &phaserun.Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
 }
@@ -71,6 +113,10 @@ func attachPhaseRun(t *testing.T, db *sql.DB, r phaserun.Runner, sync bool) *pha
 // branch-lifecycle paths (dirty reclaim, DeleteRunBranch).
 func attachPhaseRunWt(t *testing.T, db *sql.DB, r phaserun.Runner, sync bool, wt dispatch.WorktreeManager) *phaserun.Service {
 	t.Helper()
+	// The default stub run finishes its work — see phaseStubRunner.tickDB.
+	if sr, ok := r.(*phaseStubRunner); ok && sr.tickDB == nil {
+		sr.tickDB = db
+	}
 	svc := phaserun.NewService(db, r, wt)
 	svc.UUID = func() string { return "phase-uuid-1" }
 	// Identity resolver: the api fixtures use project paths that are not checkouts,

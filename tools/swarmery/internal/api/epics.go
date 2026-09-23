@@ -35,6 +35,9 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
@@ -114,6 +117,16 @@ type epicPhaseDTO struct {
 	VerifyMode    string  `json:"verifyMode"`
 	VerifyVerdict *string `json:"verifyVerdict"`
 	VerifyDetail  *string `json:"verifyDetail"`
+	// RunEvents is this run's completion-loop timeline (migration 0077): the
+	// continuations the harness sent, and the decision it settled on.
+	//
+	// It exists because RunState collapses a decision CHAIN into one word. A phase
+	// that reads `partial` may have been nudged twice and made progress each time,
+	// or stalled on the first turn and repeated itself — the operator cannot tell,
+	// and the difference is exactly what says whether the phase doc or the executor
+	// is at fault. Empty (and omitted from the UI) for the overwhelmingly common
+	// case of a run that finished on its first turn.
+	RunEvents []runcore.RunEvent `json:"runEvents"`
 	// THE completion gate's answer: complete | unverified | incomplete
 	// (internal/phasegate). Distinct from RunOutcome, which reports whether work
 	// landed, and from VerifyVerdict, which reports the grade: this reports whether
@@ -223,12 +236,18 @@ type linkedSessionDTO struct {
 
 // planRunDTO is the plan_runs row for one epic.
 type planRunDTO struct {
-	Agent          *string `json:"agent"`
-	Mode           string  `json:"mode"`     // auto | subagents | inline
-	RunState       string  `json:"runState"` // idle | running | done | failed
+	Agent    *string `json:"agent"`
+	Mode     string  `json:"mode"` // auto | subagents | inline
+	// RunState: idle | running | done | failed | blocked | partial. The last two
+	// arrived with the completion loop (phase 3) — they are both CLEAN exits, and
+	// which one it was is decided from the plan's ticked criteria and the run's
+	// final assistant text, never from the exit code.
+	RunState       string  `json:"runState"`
 	RunSessionUUID *string `json:"runSessionUuid"`
 	RunStartedAt   *string `json:"runStartedAt"`
 	RunError       *string `json:"runError"`
+	// RunEvents is this run's completion-loop timeline — see epicPhaseDTO.RunEvents.
+	RunEvents []runcore.RunEvent `json:"runEvents"`
 }
 
 // wsPlanPayload is the plan_updated WS payload (frozen once shipped) — a thin
@@ -508,7 +527,16 @@ func (h *Handler) planRunsByTask() (map[int64]*planRunDTO, error) {
 		}
 		out[taskID] = &dto
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// After the cursor is closed, never inside the loop — see loadPhases for the
+	// single-connection deadlock this ordering avoids.
+	rows.Close()
+	for taskID, dto := range out {
+		dto.RunEvents = runcore.RunEvents(h.DB, planrun.Engine, taskID)
+	}
+	return out, nil
 }
 
 // specCriteriaByTask loads every spec_criteria row keyed by workspace task id,
@@ -746,10 +774,24 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		rollup.Total += p.CheckboxesTotal
 		phases = append(phases, p)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, epicRollupDTO{}, nil, err
+	}
+	// The run_events read happens AFTER this result set is closed, never inside
+	// the loop above, and that is not a style preference: the store runs on a
+	// single SQLite connection, so issuing a second query while these rows are
+	// still open takes the only connection the outer cursor is holding and the
+	// handler deadlocks until the test binary's 10-minute panic timeout. (Observed
+	// exactly that way on the first draft of this change.) The explicit Close is
+	// what makes the ordering true — the deferred one runs far too late.
+	rows.Close()
+	for i := range phases {
+		phases[i].RunEvents = runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID)
+	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100
 	}
-	return phases, rollup, covers, rows.Err()
+	return phases, rollup, covers, nil
 }
 
 // decodeIntList parses a JSON array of ints; [] on empty/garbage.

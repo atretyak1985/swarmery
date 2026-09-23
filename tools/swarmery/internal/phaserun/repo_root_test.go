@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // mkRepo marks dir as a git checkout for repopath.Resolve (which stats .git and
@@ -104,11 +106,11 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 
 // The prompt orients the agent only when the worktree is NOT the project root.
 func TestBuildPromptIn_RepoNote(t *testing.T) {
-	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj")
+	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", runcore.Budget{})
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj")
+	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", runcore.Budget{})
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
 	}

@@ -128,3 +128,36 @@ func TestBuildPrompt_ReportDestinationInBothBranches(t *testing.T) {
 		}
 	})
 }
+
+// TestContract_CarriesTheStandingInstructionExactlyOnce is step 3.4's acceptance
+// criterion for the dispatcher. Dispatch carries NO budget line: a dispatched
+// stage's deadline lives with the dispatcher (runcore.Spec.Timeout is 0 here), so
+// there is no wall clock that could honestly be stated to the executor.
+func TestContract_CarriesTheStandingInstructionExactlyOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		got  string
+	}{
+		{"with a plan doc", BuildStagePromptDoc("body", "swarm/T-1", "T-1", "plan/phase-1.md", nil)},
+		{"without a plan doc", BuildPrompt("body", "swarm/T-1", "T-1", nil)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if n := strings.Count(tc.got, "HOW YOUR TURN ENDS"); n != 1 {
+				t.Errorf("standing instruction appears %d times, want exactly 1:\n%s", n, tc.got)
+			}
+			if strings.Contains(tc.got, "Budget: ") {
+				t.Errorf("dispatch must state no budget it does not own:\n%s", tc.got)
+			}
+			// It must sit INSIDE the contract block, not after it.
+			if strings.Index(tc.got, "HOW YOUR TURN ENDS") > strings.Index(tc.got, "--- END CONTRACT ---") {
+				t.Error("the standing instruction must be inside the contract block")
+			}
+			// And the pre-existing sentinel vocabulary must survive beside it.
+			for _, want := range []string{"BLOCKED:", "PREMISE STALE:", "NO-OP:", "Swarm-Task-Id:"} {
+				if !strings.Contains(tc.got, want) {
+					t.Errorf("contract lost %q", want)
+				}
+			}
+		})
+	}
+}

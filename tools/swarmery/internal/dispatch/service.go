@@ -1284,17 +1284,13 @@ func (s *Service) classifyLastTurn(uuid string) Sentinel {
 // "" when the session/transcript is not (yet) ingested. It feeds both sentinel
 // classification and the {previous_stage_output} of the next playbook stage — a
 // missing transcript degrades gracefully to an empty carry-forward.
+//
+// The query itself now lives in runcore.LastAssistantText: phaserun, planrun and
+// verify all needed the same read for the completion loop (phase 3), and this
+// was the copy they would otherwise have been cloned from. The method stays as a
+// one-line adapter so dispatch's two call sites keep reading as dispatch code.
 func (s *Service) lastAssistantText(uuid string) string {
-	var text sql.NullString
-	err := s.DB.QueryRow(`
-		SELECT tr.text
-		  FROM turns tr JOIN sessions se ON se.id = tr.session_id
-		 WHERE se.session_uuid=? AND tr.role='assistant' AND tr.text IS NOT NULL
-		 ORDER BY tr.seq DESC LIMIT 1`, uuid).Scan(&text)
-	if err != nil || !text.Valid {
-		return ""
-	}
-	return text.String
+	return runcore.LastAssistantText(s.DB, uuid)
 }
 
 // ── startup heal ──

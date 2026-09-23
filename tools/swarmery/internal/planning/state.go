@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procfind"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // Wizard statuses — the closed set persisted in planning_sessions.status.
@@ -218,17 +219,10 @@ func (s *Service) processAlive(projectID int64, uuid string) bool {
 // lastAssistantText. Note: turns.text is text blocks ONLY — ingest drops
 // thinking blocks entirely (migration 0005), so the persisted "reasoning" is
 // the pre-JSON analysis prose, never extended thinking.
+// The query lives in runcore.LastAssistantText — one reader for every engine
+// that asks "what did this session say last".
 func (s *Service) lastAssistantText(uuid string) string {
-	var text sql.NullString
-	err := s.DB.QueryRow(`
-		SELECT tr.text
-		  FROM turns tr JOIN sessions se ON se.id = tr.session_id
-		 WHERE se.session_uuid=? AND tr.role='assistant' AND tr.text IS NOT NULL
-		 ORDER BY tr.seq DESC LIMIT 1`, uuid).Scan(&text)
-	if err != nil || !text.Valid {
-		return ""
-	}
-	return text.String
+	return runcore.LastAssistantText(s.DB, uuid)
 }
 
 // extractPlanDir pulls the absolute path off the LAST "PLAN SAVED:" line.

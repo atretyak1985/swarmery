@@ -149,7 +149,13 @@ func TestVerifyRequestCarriesTheRunsFacts(t *testing.T) {
 	if got.Title != "Phase 1 — Schema" {
 		t.Errorf("Title = %q, want the phase name", got.Title)
 	}
-	if !strings.Contains(got.Prompt, "- [ ] a") {
+	// `- [x] a`, not `- [ ] a`: verifyRun reads info.DocPath AFTER the executor's
+	// edits have been copied back (service.go's returnDoc ordering), so the
+	// verifier grades the document as it stands NOW — which is exactly what the
+	// service comment there promises. The stub run ticks the doc, so a successful
+	// run's verify request carries ticked criteria. Asserting the unticked form
+	// would be asserting that the verifier sees the pre-run document.
+	if !strings.Contains(got.Prompt, "- [x] a") {
 		t.Errorf("Prompt does not carry the phase doc's criteria:\n%s", got.Prompt)
 	}
 	if got.ProjectPath != "/repo/p" {

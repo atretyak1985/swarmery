@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // promptTemplate is the phase-run execution contract (interactive planning v2
@@ -38,6 +39,8 @@ The phase document below is your complete contract. Follow it exactly:
 - ENDING YOUR TURN ENDS THIS PROCESS, and any subagent still running dies with it — while the exit code stays 0, so the run is recorded as a clean success that landed nothing. Never dispatch helpers and then reply that you are waiting on them: that reply IS the kill. Await anything you dispatch inside the same turn, or do the work yourself.
 - If the document's premises don't match the code you find, STOP and end your reply with: PHASE BLOCKED: <one-line reason>. Otherwise end with: PHASE DONE.
 
+{{.TurnContract}}
+
 {{.RepoNote}}PHASE DOCUMENT ({{.DocRelPath}}):
 ----------------------------------------
 {{.DocContent}}
@@ -47,7 +50,7 @@ The phase document below is your complete contract. Follow it exactly:
 // execution on a fixed template with string data cannot fail, so the
 // (unreachable) error is ignored (same posture as planning.BuildPrompt).
 func BuildPrompt(docPath, docRelPath, docContent string) string {
-	return BuildPromptIn(docPath, docRelPath, docContent, "", "")
+	return BuildPromptIn(docPath, docRelPath, docContent, "", "", runcore.Budget{})
 }
 
 // BuildPromptIn is BuildPrompt with the run's repository context: repoRoot is the
@@ -64,14 +67,23 @@ func BuildPrompt(docPath, docRelPath, docContent string) string {
 // root, and an instruction to edit a file outside it contradicts that and is
 // refused by the sandbox — which is what one retro window measured as 56
 // isolation errors and 4 plan-read refusals.
-func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath string) string {
+//
+// budget states this run's wall clock and start instant (step 3.5). It is a
+// VALUE, not a knob read here, because the same budget has to reach three places
+// — this prompt, every continuation message, and settle's loop deadline — and
+// three independent reads of SWARMERY_PHASERUN_TIMEOUT plus three calls to
+// time.Now() would leave the executor reading one clock while the harness enforces
+// another. A zero Budget renders no budget line at all (the BuildPrompt shape and
+// the prompt tests that predate the clock).
+func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath string, budget runcore.Budget) string {
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
-		DocPath    string
-		DocRelPath string
-		DocContent string
-		RepoNote   string
-	}{docPath, docRelPath, docContent, repoNote(repoRoot, projectPath)})
+		DocPath      string
+		DocRelPath   string
+		DocContent   string
+		RepoNote     string
+		TurnContract string
+	}{docPath, docRelPath, docContent, repoNote(repoRoot, projectPath), runcore.TurnContract(budget)})
 	return b.String()
 }
 

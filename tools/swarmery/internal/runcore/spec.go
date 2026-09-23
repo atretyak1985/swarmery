@@ -38,6 +38,25 @@ type Spec struct {
 	SessionUUID string // --session-id: the daemon-generated explicit run↔session link
 	Cwd         string // the process's working directory (a worktree, or a project path for planning)
 
+	// Resume turns this spawn into a CONTINUATION of SessionUUID: Args emits
+	// `-r <uuid>` instead of `--session-id <uuid>`, and the model receives Prompt
+	// as the next user message in a transcript it already has.
+	//
+	// It exists for the completion loop (phase 3): a phaserun/planrun executor
+	// that ends its turn with criteria unticked and no blocked line is nudged to
+	// carry on rather than stamped `done`. Every OTHER field stays exactly as the
+	// original spawn set it — same model, same effort, same permission mode, same
+	// settings file, same account — which is what makes this a continuation of a
+	// run rather than a new conversation that happens to share a transcript.
+	//
+	// The engines pass the SAME Spec they spawned with, mutated only here and in
+	// Prompt. That is deliberate and is why this is a bool rather than a separate
+	// resume path: internal/api's resumeOrigin has to RECONSTRUCT those flags from
+	// the database because the composer resumes a session it never spawned, and
+	// reconstructing values we are still holding in memory is how the two copies
+	// would drift.
+	Resume bool
+
 	Model string // --model; "" inherits the account default
 	// Effort is --effort. "" omits the flag, which does NOT mean "the cheap
 	// default": the CLI's own default is xhigh, the deepest setting, so an
