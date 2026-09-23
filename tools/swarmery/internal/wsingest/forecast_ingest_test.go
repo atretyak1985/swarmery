@@ -262,6 +262,39 @@ func TestApplyEpicsSweepsForecastsOfPrunedPhases(t *testing.T) {
 	}
 }
 
+// phase_actuals (0081) is swept by the same rule as phase_forecasts: a phase
+// removed from the plan leaves no measured-run rows behind, and a surviving
+// phase keeps its own.
+func TestApplyEpicsSweepsActualsOfPrunedPhases(t *testing.T) {
+	db := carryFixture(t)
+	warn, _ := collectWarn(t)
+	phases := parsePlan(forecastPlan(t), warn)
+	applyPhases(t, db, phases)
+
+	if _, err := db.Exec(`
+		INSERT INTO phase_actuals (phase_id, session_uuid, computed_at)
+		SELECT id, 'run-' || id, '2026-09-23T00:00:00Z' FROM epic_phases`); err != nil {
+		t.Fatal(err)
+	}
+	applyPhases(t, db, phases[:2]) // phases 3 and 4 dropped from the README
+
+	var n, orphans int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM phase_actuals`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("actuals rows after the prune = %d, want 2 (phases 1 and 2 survive)", n)
+	}
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM phase_actuals WHERE phase_id NOT IN (SELECT id FROM epic_phases)`).
+		Scan(&orphans); err != nil {
+		t.Fatal(err)
+	}
+	if orphans != 0 {
+		t.Errorf("orphaned actuals rows = %d, want 0", orphans)
+	}
+}
+
 // parserVersion is part of the identity of a parse result, not just the bytes:
 // without a bump, a plan whose author ADDS a Forecast section to an
 // already-indexed doc keeps zero forecast rows until some other byte changes.

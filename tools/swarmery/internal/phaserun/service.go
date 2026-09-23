@@ -146,6 +146,14 @@ type Service struct {
 	// wires it from the verify service). See verifyRun for the ordering contract: it
 	// runs BEFORE the worktree is reclaimed, because the worktree is the subject.
 	Verify runcore.PhaseVerifier
+	// Actuals records what a finished run actually did — files, lines, cost,
+	// outcome, verdict (internal/actuals, learning-loop phase 12). Called from the
+	// run's exit path AFTER stamp and verifyRun, so the row it reads carries this
+	// run's terminal state and verdict, and BEFORE the slot is released, so no new
+	// run can overwrite the row (or clear its run_events) mid-measurement. nil ⇒
+	// not wired: the unit tests' state, and a daemon that never records actuals.
+	// ADVISORY: the callee must never fail or block the run — it logs and returns.
+	Actuals func(phaseID int64, sessionUUID, repoRoot string)
 	// Slots is the DAEMON-WIDE run registry and budget (internal/runcore): the
 	// per-phase single-flight gate AND — new — a bound this engine never had. A
 	// phase run used to be limited by nothing at all: ten phases started from the
@@ -261,6 +269,20 @@ func (s *Service) runRoot(info phaseInfo) (string, error) {
 		}
 	}
 	return resolve(info.ProjectPath, cells...)
+}
+
+// RunRoot resolves the repository a phase's runs execute in, by the same rules
+// Start applies — so a reader measuring a past run (internal/actuals' backfill)
+// looks for its branch where the run actually committed it.
+func (s *Service) RunRoot(phaseID int64) (string, error) {
+	info, err := s.loadPhase(phaseID)
+	if err != nil {
+		return "", err
+	}
+	if info.ProjectPath == "" {
+		return "", ErrNoPath
+	}
+	return s.runRoot(info)
 }
 
 // DocModelError: the phase DOC declares a `**Model:**` this daemon does not know.
@@ -682,6 +704,11 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// sequence, and it is why verification lives in the defer at all rather than
 		// after the switch: every exit path has to pass through it in this order.
 		s.verifyRun(phaseID, info, acq, endState)
+		// After the verdict, before the slot: see the Actuals field. The branch
+		// survives removeWorktree (keepBranch), so the order against it is free.
+		if s.Actuals != nil {
+			s.Actuals(phaseID, spec.SessionUUID, info.RepoRoot)
+		}
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
 		// 'running', so the DB gate in Start is open; releasing the single-flight
 		// slot before the (git shell-out, tens of ms) removal opens a window where a

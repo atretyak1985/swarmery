@@ -198,6 +198,20 @@
         }
       }
     },
+    "learning": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Forecast-vs-actual learning loop, read by the swarmery daemon. Optional — every field has a default.",
+      "properties": {
+        "areaDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 2,
+          "description": "How many directory segments from the repo root name an 'area' when the daemon records what a phase run changed (phase_actuals.areas_json). 2 names the unit in apps/<app>, packages/<pkg>, internal/<pkg> layouts; raise it for a repo that nests modules deeper (e.g. 4 for tools/<module>/internal/<pkg>)."
+        }
+      }
+    },
     "graft": {
       "type": "object",
       "additionalProperties": false,

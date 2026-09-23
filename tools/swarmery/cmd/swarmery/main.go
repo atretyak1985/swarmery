@@ -36,6 +36,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/actuals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
@@ -114,6 +115,8 @@ func main() {
 		err = cmdRoutine(os.Args[2:])
 	case "stale":
 		err = cmdStale(os.Args[2:])
+	case "actuals":
+		err = cmdActuals(os.Args[2:])
 	case "economics":
 		err = cmdEconomics(os.Args[2:])
 	case "backup":
@@ -187,6 +190,10 @@ func usage() {
                     [--notify-telegram-chat <id>]
   swarmery recost   [--db <path>]
   swarmery stale [--db <path>] [--project <id>] [--all]
+  swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]
+                                   best-effort: record phase_actuals for past phase runs whose
+                                   run branch still exists (latest run per phase only); every
+                                   other run is skipped and counted by reason
   swarmery economics [--db <path>] [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>]
                     [--project <id>] [--json] [--current-model]
                                    token economy of the agent system: cost per completed task,
@@ -437,6 +444,58 @@ func cmdRecost(args []string) error {
 	}
 	fmt.Printf("recost %s\n  turns examined: %d\n  priced: %d\n  unpriced (unknown model → NULL): %d\n  no usage (user turns → NULL): %d\n",
 		*dbPath, stats.Total, stats.Priced, stats.Unpriced, stats.NoUsage)
+	return nil
+}
+
+// cmdActuals is `swarmery actuals backfill`: measure past phase runs the daemon
+// ended before it recorded actuals (learning loop phase 12). Only a phase's
+// LATEST run is reachable (epic_phases keeps one), and only while its branch
+// exists; every other run is skipped and counted, never guessed. Idempotent: a
+// run that already has a row is left alone unless --force.
+func cmdActuals(args []string) error {
+	const usageLine = "usage: swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]"
+	if len(args) == 0 || args[0] != "backfill" {
+		return errors.New(usageLine)
+	}
+	fs := flag.NewFlagSet("actuals backfill", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	force := fs.Bool("force", false, "recompute runs that already have a phase_actuals row")
+	dryRun := fs.Bool("dry-run", false, "measure and report, store nothing")
+	verbose := fs.Bool("verbose", false, "print one line per skipped or failed run")
+	fs.Parse(args[1:])
+	if fs.NArg() != 0 {
+		return errors.New(usageLine)
+	}
+
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	git := worktree.ExecGit{}
+	// RunRoot is phaserun's own repository resolution, so the backfill looks for
+	// each branch in the repo the run actually committed it to. The runner and the
+	// worktree manager are never touched by RunRoot.
+	resolver := phaserun.NewService(db, nil, nil)
+	opts := actuals.BackfillOptions{RepoRoot: resolver.RunRoot, Force: *force, DryRun: *dryRun}
+	if *verbose {
+		opts.Log = os.Stdout
+	}
+	st, err := actuals.NewRecorder(db, git).Backfill(opts)
+	if err != nil {
+		return err
+	}
+	verb := "recorded"
+	if *dryRun {
+		verb = "measurable (dry run, nothing stored)"
+	}
+	fmt.Printf("actuals backfill %s\n  phase runs scanned: %d\n  %s: %d\n  already recorded: %d\n"+
+		"  skipped — still running / never finished: %d\n  skipped — no run branch recorded: %d\n"+
+		"  skipped — no start point (pre-0057 run): %d\n  skipped — repository unresolved: %d\n"+
+		"  skipped — branch no longer exists: %d\n  failed: %d\n",
+		*dbPath, st.Scanned, verb, st.Recorded, st.AlreadyRecorded, st.InFlight, st.NoBranch,
+		st.NoStartPoint, st.NoRepo, st.BranchGone, st.Failed)
 	return nil
 }
 
@@ -1956,6 +2015,12 @@ func cmdServe(args []string) error {
 	// the verdict lands on epic_phases as an INPUT to the phase's diagnosis (D5), never
 	// as a second status. Every plan that does not ask keeps today's behaviour.
 	phaserunSvc.Verify = verifySvc
+	// Learning loop phase 12: every finished phase run records what it actually
+	// did (phase_actuals — files/areas/lines from its branch, cost, outcome,
+	// verdict, test failures, continuations, fallback), measured again once the
+	// transcript ingest has caught up. Advisory: the recorder logs and returns, so
+	// a measurement failure never changes how a run is reported.
+	phaserunSvc.Actuals = actuals.NewRecorder(db, wtMgr.Git).AfterRun
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same
 	// boundary the worktree manager uses.
 	api.AttachPhaseDiag(wtMgr.Git, wtMgr)

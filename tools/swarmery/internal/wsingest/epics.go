@@ -1180,6 +1180,13 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
 			return err
 		}
+		// phase_actuals (0081) is the forecasts' measured counterpart and carries
+		// no foreign key for the same reasons; it is swept by the same rule, here.
+		if _, err := tx.Exec(
+			`DELETE FROM phase_actuals
+			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
+			return err
+		}
 	}
 	return nil
 }

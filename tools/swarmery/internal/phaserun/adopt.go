@@ -57,6 +57,16 @@ func (t tracked) Adopt(c runcore.Candidate, pid int) (runcore.AdoptHooks, bool) 
 				state, note = "failed", "cancelled"
 			}
 			t.s.stamp(c.ID, info.DocPath, state, note)
+			// A survivor's actuals are measured like any run's, after the stamp.
+			// loadPhase does not resolve the repo (Start does), so resolve it here;
+			// a failure only costs the git half of the row.
+			if t.s.Actuals != nil {
+				root, err := t.s.runRoot(info)
+				if err != nil {
+					log.Printf("warning: phaserun: phase=%d actuals: run repository unresolved: %v", c.ID, err)
+				}
+				t.s.Actuals(c.ID, c.UUID, root)
+			}
 			t.s.notify(info.WorkspaceTaskID)
 		},
 	}, true
