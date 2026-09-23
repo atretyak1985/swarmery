@@ -3508,9 +3508,14 @@ export interface PhaseForecast {
   risks: string[];
   /** 0..1; null — NOT 0 — when the author said nothing readable. */
   confidence: number | null;
-  /** True for a prior whose doc already carried a filled `## Completion Report`
-   *  when the scan read it: a prediction that cannot have been one. */
+  /** True when this forecast cannot have been a prediction, so calibration
+   *  skips it. `postHocReason` says which observation decided that. */
   postHoc: boolean;
+  /** '' when not post hoc; otherwise 'report-filled' (a prior in a doc whose
+   *  `## Completion Report` was already filled) or 'after-first-edit' (a
+   *  posterior the transcript shows was written after the run's first change to
+   *  another file). */
+  postHocReason: string;
   /** sha256 of the phase doc at the scan that stored this row. */
   docHash: string;
 }

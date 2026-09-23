@@ -48,6 +48,23 @@ long form and the working record, the doc section is the summary. When you accep
 subagent's work, YOU write the doc section as part of acceptance, the same way you
 own the ticks. A phase without a Completion Report is not done.
 
+## Forecast contract
+
+After the executor has read the code a phase touches and **before its first
+edit**, it adds a `kind: posterior` yaml block to that phase doc's `## Forecast`
+section, mirroring the `kind: prior` block the planner left there.
+
+It is a prediction, not a limit: do whatever the phase actually needs.
+
+When the work turns out different, the Completion Report carries a short
+"Where reality diverged" paragraph saying how and why.
+
+The forecast is data the platform scores later, never a gate — nothing refuses a
+run, a dispatch or a tick for diverging from one, or for having none. A
+posterior written after the run's first file change is recorded as post hoc and
+dropped from calibration, which is the only consequence of writing it late. The
+block's format is in `workspace-plans/resources/plan-format.md`.
+
 ## Invariants (all routes)
 
 - ASK gates are the controller's: commits, pushes, MRs, migrations, and deploys

@@ -47,6 +47,14 @@ your current working directory, never against the main checkout. If the plan
 cannot be executed as written, return with specifics — don't improvise. If
 verification still fails after 3 fix attempts, report blocked.
 
+**Forecast.** Once you have read the code the phase touches and before your
+first edit, add a `kind: posterior` block beside the prior in the doc's
+`## Forecast` section (format: `workspace-plans/resources/plan-format.md`).
+It is a prediction, not a limit: do whatever the phase actually needs.
+If the work then diverges from it, say how and why in a short
+"Where reality diverged" paragraph of the Completion Report. Written after your first edit it is a
+report, not a prediction, and the platform drops it from calibration.
+
 # Plan-execution mode
 
 1. Read `plan/README.md` (sequencing table, depends-on) and every phase doc.

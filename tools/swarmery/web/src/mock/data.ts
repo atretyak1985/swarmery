@@ -1426,6 +1426,7 @@ const MOCK_FORECAST_PAIR: PhaseForecast[] = [
     risks: ['migration touches the turns table'],
     confidence: 0.7,
     postHoc: false,
+    postHocReason: '',
     docHash: 'a1b2c3d4',
   },
   {
@@ -1438,7 +1439,8 @@ const MOCK_FORECAST_PAIR: PhaseForecast[] = [
     outcome: 'partial',
     risks: [],
     confidence: 0.4,
-    postHoc: false,
+    postHoc: true,
+    postHocReason: 'after-first-edit',
     docHash: 'a1b2c3d4',
   },
 ];
@@ -1455,6 +1457,7 @@ const MOCK_FORECAST_BAD: PhaseForecast[] = [
     risks: [],
     confidence: 3.5,
     postHoc: true,
+    postHocReason: 'report-filled',
     docHash: 'e5f6a7b8',
   },
 ];

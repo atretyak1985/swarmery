@@ -196,10 +196,14 @@ type phaseForecastDTO struct {
 	Risks        []string `json:"risks"`
 	// null, not 0, when the author said nothing readable — see migration 0079.
 	Confidence *float64 `json:"confidence"`
-	// True for a prior whose doc already carried a filled `## Completion Report`
-	// when the scan read it: a prediction that cannot have been one.
-	PostHoc bool   `json:"postHoc"`
-	DocHash string `json:"docHash"`
+	// True when this forecast cannot have been a prediction, so calibration must
+	// not score it. PostHocReason says which observation decided that:
+	// "report-filled" (a prior in a doc whose `## Completion Report` was already
+	// filled) or "after-first-edit" (a posterior the run's transcript shows was
+	// written after the run's first change to another file). "" when not post hoc.
+	PostHoc       bool   `json:"postHoc"`
+	PostHocReason string `json:"postHocReason"`
+	DocHash       string `json:"docHash"`
 }
 
 // epicRollupDTO is a checkbox rollup across all of an epic's phases.
@@ -930,7 +934,7 @@ func (h *Handler) phaseForecasts(taskID int64) map[int64][]storedForecast {
 	rows, err := h.DB.Query(`
 		SELECT f.phase_id, f.kind, f.written_at, f.areas_json, f.files_json,
 		       f.size_band, f.duration_band, f.outcome, f.risks_json,
-		       f.confidence, f.post_hoc, f.doc_hash
+		       f.confidence, f.post_hoc, f.doc_hash, f.post_hoc_reason
 		  FROM phase_forecasts f
 		  JOIN epic_phases e ON e.id = f.phase_id
 		 WHERE e.workspace_task_id = ?
@@ -950,7 +954,7 @@ func (h *Handler) phaseForecasts(taskID int64) map[int64][]storedForecast {
 		)
 		if err := rows.Scan(&phaseID, &s.Kind, &s.WrittenAt, &areasJSON, &filesJSON,
 			&s.SizeBand, &s.DurationBand, &s.Outcome, &risksJSON,
-			&confidence, &postHoc, &s.DocHash); err != nil {
+			&confidence, &postHoc, &s.DocHash, &s.PostHocReason); err != nil {
 			log.Printf("warning: epics: phase forecast row (task %d): %v", taskID, err)
 			return out
 		}

@@ -82,13 +82,28 @@ type Forecast struct {
 	// wrong" are opposite statements, and a REAL column that cannot be null would
 	// have to pick one of them.
 	Confidence *float64
-	// PostHoc marks a PRIOR that cannot have been a prediction: the doc it lives
-	// in already carries a filled `## Completion Report`, so the work was already
-	// reported done when the forecast was written. Derived by the scan rather than
-	// declared by the author, because an author backfilling a prior is precisely
-	// the person who would not tick the box. Always false for a posterior, which
-	// is post hoc by definition and says so in Kind.
+	// PostHoc marks a forecast that cannot have been a prediction, and so must not
+	// be scored by calibration. Derived, never declared — the author backfilling a
+	// forecast is precisely the person who would not tick a box saying so.
+	//
+	// TWO independent observations set it, one per kind, and PostHocReason says
+	// which (see ordering.go for the vocabulary):
+	//
+	//   - a PRIOR in a doc whose `## Completion Report` is already filled: the work
+	//     was reported done before the prediction existed. Computed here, from the
+	//     doc, because the doc is the whole evidence.
+	//   - a POSTERIOR the run's transcript shows was written after the run's first
+	//     change to another file. Computed by the scan's write path, which is where
+	//     the phase's run session is known; ParseForecasts cannot see it.
+	//
+	// They share one flag because every consumer asks one question — "is this
+	// forecast trustworthy?" — and a compound predicate is a predicate someone
+	// eventually forgets half of.
 	PostHoc bool
+	// PostHocReason is PostHocReportFilled, PostHocAfterFirstEdit, or "" when the
+	// forecast is not post hoc. It is for the operator, who has to fix two quite
+	// different mistakes; nothing filters on it.
+	PostHocReason string
 }
 
 // ForecastLint is one thing wrong with a phase's forecasts. Code is a stable
@@ -200,7 +215,9 @@ func decodeForecast(body string, hasReport bool) Forecast {
 			f.Confidence = &v
 		}
 	}
-	f.PostHoc = hasReport && f.Kind == ForecastPrior
+	if hasReport && f.Kind == ForecastPrior {
+		f.PostHoc, f.PostHocReason = true, PostHocReportFilled
+	}
 	return f
 }
 

@@ -24,6 +24,16 @@ import (
 // that in fact shipped — so the prompt demands the section explicitly, on the
 // blocked path too.
 //
+// THE FORECAST BULLET is the predictive half of the learning loop (phase 11):
+// the executor writes a `kind: posterior` block after reading the code and
+// before its first edit, so the prediction is made while it is still a
+// prediction. The sentence "It is a prediction, not a limit: do whatever the
+// phase actually needs." is load-bearing and appears EXACTLY ONCE here — the
+// measured risk of asking an agent for a forecast is that the agent then treats
+// its own forecast as a scope fence and under-delivers to stay inside it. No
+// code path in this daemon gates on a forecast, and no second sentence in this
+// prompt may suggest one does. TestPromptForecastContract pins the count.
+//
 // text/template so the doc path/content interpolate without any prompt-side
 // format bug (idiom of planning/prompt.go).
 var promptTemplate = template.Must(template.New("phaserun").Parse(
@@ -32,6 +42,7 @@ var promptTemplate = template.Must(template.New("phaserun").Parse(
 The phase document below is your complete contract. Follow it exactly:
 - Complete the numbered tasks / acceptance criteria of THIS phase only — do not start other phases.
 - As you complete each acceptance criterion, EDIT the phase document itself and tick its checkbox (- [ ] → - [x]). The document has been lent into this worktree at: {{.DocPath}} (relative to the worktree root) — edit it there. Your edits are copied back to the operator's workspace when the run ends.
+- FORECAST: after you have read the code this phase touches and before your first edit, add a ` + "`kind: posterior`" + ` yaml block to the document's ` + "`## Forecast`" + ` section, mirroring the shape of the ` + "`kind: prior`" + ` block already there (areas, size_band, duration_band, outcome, risks, confidence). It is a prediction, not a limit: do whatever the phase actually needs. If the work turns out different, add a short "Where reality diverged" paragraph to the Completion Report saying how and why.
 - Run the verification commands the document specifies before declaring done.
 - Installed dependencies (node_modules, .venv, …) are LENT from the project's main checkout as symlinks, because git only materializes committed files in a worktree: build and test commands work as-is. Do NOT run a package-install command (npm ci / npm install / pip install) — it would mutate the main checkout's shared tree.
 - Commit your work in the worktree with conventional commits. Do NOT push, do NOT open PRs, do NOT merge.

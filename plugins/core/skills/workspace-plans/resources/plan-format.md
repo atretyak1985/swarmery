@@ -162,14 +162,30 @@ confidence: 0.7        # 0..1, how sure the whole forecast holds
 ````
 
 A doc may carry both a prior and a posterior — two fenced blocks in one
-section, told apart by `kind`. The planner writes the prior; the executor
-writes the posterior beside it when filling `## Completion Report`.
+section, told apart by `kind`. The planner writes the prior. The executor
+writes the posterior **after it has read the code the phase touches and before
+its first edit** — that is the last moment at which it is still a prediction.
+It is a prediction, not a limit: do whatever the phase actually needs. When the
+work turns out different, the Completion Report carries a short "Where reality
+diverged" paragraph saying how and why.
 
 Linted (shown on the phase, never enforced): an unrecognized `kind`,
 `size_band`, `duration_band` or `outcome`; a `confidence` that is not a number
 in 0..1; a forecast with no `areas`; a posterior with no prior to score
-against. A prior added to a doc whose `## Completion Report` is already filled
-is flagged **post hoc** — it cannot have been a prediction.
+against.
+
+**Post hoc.** A forecast is flagged post hoc when it cannot have been a
+prediction, and post-hoc forecasts are excluded from calibration. Two
+independent observations set the flag, and the phase shows which one did:
+
+| Reason | Applies to | Evidence |
+|---|---|---|
+| `report-filled` | prior | The doc's `## Completion Report` was already filled when the prior appeared. |
+| `after-first-edit` | posterior | The run's transcript shows the posterior was written to the doc after the run's first change to some other file. |
+
+Neither is a gate. A post-hoc forecast still ingests, still renders, and still
+lets its phase run; the only consequence is that the learning loop does not
+score it.
 
 ## Verification hooks for planners
 

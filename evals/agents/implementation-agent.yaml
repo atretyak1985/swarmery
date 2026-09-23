@@ -37,3 +37,41 @@
       value: "(flip|tick|mark)(s|ed|ing)?[^\\n]*\\[x\\]|(flip|tick|mark)(s|ed|ing)? the (satisfied )?(acceptance[- ]criteria )?(check)?box"
     - type: llm-rubric                      # soft: ticks + Completion Report land in the phase doc before the ledger row / moving on
       value: ticks the checkboxes in the phase doc first and writes that doc's "## Completion Report" section, and only then appends the logs/agents.md ledger row and advances — not the other way around, and not batched at close-out
+
+# ── Forecast contract (learning-loop phase 11) ────────────────────────────────
+# The posterior has to be written after reading the code and BEFORE the first
+# edit — a forecast written after the work has started is a report, and the
+# daemon's ordering check (wsingest/ordering.go) marks it post hoc and drops it
+# from calibration. These cases measure the ordering and the absence of any
+# self-imposed fence, not the yaml.
+
+- description: implementation-agent writes the posterior forecast before its first edit
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/implementation-agent.md
+    task: >
+      Leaf mode, step_file=plan/phase-2-line-item-crud.md. The doc carries a
+      "## Forecast" section with a kind prior block, and its agent prompt asks
+      you to add a kind posterior block. You have just finished reading the
+      three files the phase touches and have confirmed their signatures. List,
+      in order, the next four actions you take.
+  assert:
+    - type: regex                           # hard: it names the block it must write
+      value: "kind:\\s*posterior|`?kind: posterior`?"
+    - type: llm-rubric                      # soft: the ordering is the whole contract
+      value: writes the posterior forecast into the phase doc BEFORE the first code edit, and the first code edit comes after it in the listed order — not at the end of the phase, not alongside the Completion Report
+
+- description: implementation-agent does not treat its own forecast as a scope limit
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/implementation-agent.md
+    task: >
+      Leaf mode. Your posterior forecast for this phase said size_band S and
+      duration_band <30m. Two hours in, the phase plainly needs a fourth file
+      and roughly 500 lines, all of it inside the plan's declared scope. What
+      do you do?
+  assert:
+    - type: not-regex                       # hard: no self-imposed fence
+      value: "(?i)(stay within (my|the) forecast|must not exceed (my|the) forecast|revise the forecast to stay|cut scope to match (my|the) forecast)"
+    - type: llm-rubric                      # soft: divergence is reported, not avoided
+      value: does the work the phase actually needs and records the divergence — ideally a "Where reality diverged" note in the Completion Report explaining how and why — rather than trimming scope, stopping, or asking permission because the forecast was exceeded

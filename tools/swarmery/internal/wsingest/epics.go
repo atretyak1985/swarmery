@@ -861,7 +861,13 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // Forecast section to an ALREADY-INDEXED doc keeps zero forecast rows until some
 // other byte of the plan changes, and the learning loop would be measuring a
 // prediction the daemon never read.
-const parserVersion = "v7"
+//
+// v8: phase_forecasts.post_hoc_reason plus the POSTERIOR ordering check
+// (ordering.go, migration 0080). Both are computed by the scan, so an
+// already-indexed plan keeps post_hoc_reason = '' and an unflagged posterior
+// until its bytes change — and a posterior written after the run's first edit is
+// exactly the row a stale parse would hand to calibration as trustworthy.
+const parserVersion = "v8"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1191,11 +1197,19 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 // A phase whose doc declares no forecast still runs the DELETE: removing the
 // `## Forecast` section from a doc must actually retract the forecast, the same
 // way deleting a `**Covers:**` line retracts the coverage claim.
+// THE POSTERIOR ORDERING CHECK runs here rather than in ParseForecasts because
+// it needs the phase's run session, which is daemon state on the epic_phases row
+// and not something the doc knows. It is re-derived on every scan of a changed
+// plan, which is what makes it self-healing: a plan scanned before its
+// transcript finished ingesting simply stores no flag, and the next scan that
+// touches the doc stamps it. Never the other way round — see ordering.go on why
+// absent evidence must not be read as guilt.
 func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 	var phaseID int64
+	var runSessionUUID sql.NullString
 	err := tx.QueryRow(
-		`SELECT id FROM epic_phases WHERE workspace_task_id = ? AND doc_path = ?`,
-		taskID, p.docPath).Scan(&phaseID)
+		`SELECT id, run_session_uuid FROM epic_phases WHERE workspace_task_id = ? AND doc_path = ?`,
+		taskID, p.docPath).Scan(&phaseID, &runSessionUUID)
 	if err == sql.ErrNoRows {
 		// Unreachable via applyEpics (the upsert above just wrote this row), and
 		// deliberately not fatal anyway: a forecast is data, never a fence, and the
@@ -1209,6 +1223,20 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 	}
 	if _, err := tx.Exec(`DELETE FROM phase_forecasts WHERE phase_id = ?`, phaseID); err != nil {
 		return err
+	}
+	// One read per phase, and only when the doc actually declares a posterior —
+	// the scan runs on a debounce over every plan on the machine, and the
+	// overwhelming majority of phases have nothing to ask about.
+	var ordering DocEditOrdering
+	if hasPosterior(p.forecasts) {
+		o, oerr := forecastOrdering(tx, runSessionUUID.String, p.docPath)
+		if oerr != nil {
+			// Same trade as the missing-phase-row branch above: losing a guess beats
+			// rolling back the plan's phases and checkboxes over one failed read.
+			log.Printf("warn: wsingest: task=%d forecast ordering for %s: %v", taskID, p.docPath, oerr)
+		} else {
+			ordering = o
+		}
 	}
 	for _, f := range p.forecasts {
 		areasJSON, err := jsonList(f.Areas)
@@ -1227,6 +1255,9 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		if f.Confidence != nil {
 			confidence = *f.Confidence
 		}
+		if f.Kind == ForecastPosterior && ordering.PostHoc() {
+			f.PostHoc, f.PostHocReason = true, PostHocAfterFirstEdit
+		}
 		postHoc := 0
 		if f.PostHoc {
 			postHoc = 1
@@ -1234,10 +1265,12 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		if _, err := tx.Exec(`
 			INSERT INTO phase_forecasts
 				(phase_id, kind, written_at, areas_json, files_json, size_band,
-				 duration_band, outcome, risks_json, confidence, post_hoc, doc_hash)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 duration_band, outcome, risks_json, confidence, post_hoc, doc_hash,
+				 post_hoc_reason)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			phaseID, f.Kind, f.WrittenAt, areasJSON, filesJSON, f.SizeBand,
-			f.DurationBand, f.Outcome, risksJSON, confidence, postHoc, p.docHash); err != nil {
+			f.DurationBand, f.Outcome, risksJSON, confidence, postHoc, p.docHash,
+			f.PostHocReason); err != nil {
 			return err
 		}
 	}

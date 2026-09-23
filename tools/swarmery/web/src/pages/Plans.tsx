@@ -2394,7 +2394,11 @@ function ForecastColumn({ f }: { f: PhaseForecast }): JSX.Element {
         <span className="uppercase tracking-wider text-ink">{f.kind === '' ? '(no kind)' : f.kind}</span>
         {f.postHoc && (
           <span
-            data-tip="written into a doc that already reported the work done — not a prediction"
+            data-tip={
+              f.postHocReason === 'after-first-edit'
+                ? 'written to the doc after the run had already changed another file — not a prediction, so calibration skips it'
+                : 'written into a doc that already reported the work done — not a prediction, so calibration skips it'
+            }
             className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px text-[9.5px] text-amber"
           >
             post hoc
