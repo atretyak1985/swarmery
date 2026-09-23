@@ -94,6 +94,9 @@ type Verifier struct {
 	Resolve RepoResolver // nil disables the stale check
 	Cfg     VerifyConfig
 	Now     func() time.Time
+	// afterDueList runs between reading the due auto-retire list and acting on
+	// it. Test seam for the operator-races-the-pass case; nil in production.
+	afterDueList func()
 }
 
 // NewVerifier builds a verifier.
@@ -438,12 +441,25 @@ func (v *Verifier) autoRetire(now time.Time, st *VerifyStats) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	if v.afterDueList != nil {
+		v.afterDueList()
+	}
 	for _, d := range list {
-		if _, err := Retire(v.DB, d.lesson, d.reason, now); err != nil && !errors.Is(err, ErrState) {
+		// Claim the proposal FIRST: an operator Keep (or Confirm) that landed after
+		// the list was read has already moved it out of `proposed`, and must win.
+		// Retiring before claiming would overrule it.
+		res, err := v.DB.Exec(`UPDATE lesson_retirements SET state = ?, decided_at = ? WHERE id = ? AND state = ?`,
+			ProposalAuto, stamp(now), d.id, ProposalOpen)
+		if err != nil {
 			return err
 		}
-		if _, err := v.DB.Exec(`UPDATE lesson_retirements SET state = ?, decided_at = ? WHERE id = ? AND state = ?`,
-			ProposalAuto, stamp(now), d.id, ProposalOpen); err != nil {
+		if n, _ := res.RowsAffected(); n != 1 {
+			continue
+		}
+		if _, err := Retire(v.DB, d.lesson, d.reason, now); err != nil && !errors.Is(err, ErrState) {
+			// Give the proposal back so the next pass (or the operator) can act on it.
+			_, _ = v.DB.Exec(`UPDATE lesson_retirements SET state = ?, decided_at = NULL WHERE id = ? AND state = ?`,
+				ProposalOpen, d.id, ProposalAuto)
 			return err
 		}
 		st.AutoRetired++
