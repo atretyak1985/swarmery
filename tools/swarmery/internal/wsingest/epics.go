@@ -82,6 +82,14 @@ type epicPhase struct {
 	// admission so an unknown value fails the run instead of being dropped by a scan
 	// that must never fail. "" when the doc declares nothing.
 	docModel string
+	// forecasts are the doc's `## Forecast` blocks (prior and/or posterior), in
+	// document order. nil for every doc that carries none, which is all of them
+	// until an author opts in. DATA, never a gate — see forecast.go.
+	forecasts []Forecast
+	// docHash is sha256 of the phase doc's bytes at this scan, stored on each
+	// forecast row so a later scoring pass can tell whether the forecast it grades
+	// is still the one in the doc. "" when the doc did not resolve.
+	docHash string
 }
 
 var (
@@ -758,6 +766,14 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
+		// A prior written into a doc that ALREADY reports its work done is not a
+		// prediction; parseCompletionReport above has the only fact that can say so,
+		// which is why it is threaded in rather than re-read.
+		phases[i].forecasts = ParseForecasts(string(body), phases[i].completionReport != "")
+		if len(phases[i].forecasts) > 0 {
+			sum := sha256.Sum256(body)
+			phases[i].docHash = hex.EncodeToString(sum[:])
+		}
 		if fi, err := os.Stat(abs); err == nil {
 			phases[i].docUpdatedAt = fi.ModTime().UTC().Format(time.RFC3339)
 		}
@@ -839,7 +855,13 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // a NULL doc_model until some OTHER byte of the plan changes, and rung 2 of the
 // phase-run ladder would silently not apply — the exact class of failure this
 // constant exists to prevent.
-const parserVersion = "v6"
+//
+// v7: phase_forecasts — the doc's `## Forecast` blocks (ParseForecasts, migration
+// 0079). Same reasoning as v6: without the bump, a plan whose author adds a
+// Forecast section to an ALREADY-INDEXED doc keeps zero forecast rows until some
+// other byte of the plan changes, and the learning loop would be measuring a
+// prediction the daemon never read.
+const parserVersion = "v7"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1066,6 +1088,11 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
 			return err
 		}
+		// After the upsert, so the row (and therefore its id) exists whether this
+		// scan inserted it or updated it.
+		if err := applyForecasts(tx, taskID, p); err != nil {
+			return err
+		}
 	}
 
 	// A plan dir with no README is not a plan with no phases — it is a plan we
@@ -1132,10 +1159,102 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 	if err := logKeptRunningOrphans(tx, taskID, phases, carried); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(q, keep...); err != nil {
+	res, err := tx.Exec(q, keep...)
+	if err != nil {
 		return err
 	}
+	// phase_forecasts carries no foreign key (migration 0079, for the reasons
+	// 0077 spells out), so a deleted phase leaves its forecast rows behind. Sweep
+	// them here and ONLY here — the one place in the daemon that deletes a phase —
+	// and only when the prune actually removed something, so the common no-op
+	// rescan does not pay for a whole-table anti-join.
+	if n, err := res.RowsAffected(); err == nil && n > 0 {
+		if _, err := tx.Exec(
+			`DELETE FROM phase_forecasts
+			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// applyForecasts replaces one phase's phase_forecasts rows with what its doc
+// currently declares: delete the set, insert the parsed blocks in document order.
+//
+// REPLACE rather than upsert, unlike every other artifact in this file, because a
+// forecast has no natural key. (phase, kind) looks like one until a doc carries
+// two priors — a shape the format does not forbid and the lint is there to report,
+// not to silence by losing one of them. The rows are pure doc derivations with no
+// daemon-owned state on them, so churning their ids costs nothing; readers come
+// the other way, with a known phase id.
+//
+// A phase whose doc declares no forecast still runs the DELETE: removing the
+// `## Forecast` section from a doc must actually retract the forecast, the same
+// way deleting a `**Covers:**` line retracts the coverage claim.
+func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
+	var phaseID int64
+	err := tx.QueryRow(
+		`SELECT id FROM epic_phases WHERE workspace_task_id = ? AND doc_path = ?`,
+		taskID, p.docPath).Scan(&phaseID)
+	if err == sql.ErrNoRows {
+		// Unreachable via applyEpics (the upsert above just wrote this row), and
+		// deliberately not fatal anyway: a forecast is data, never a fence, and the
+		// error return here rolls back the WHOLE plan's ingest — phases, checkboxes
+		// and all. Losing a guess is the correct trade against losing the plan.
+		log.Printf("warn: wsingest: task=%d no phase row for %s — forecasts skipped", taskID, p.docPath)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM phase_forecasts WHERE phase_id = ?`, phaseID); err != nil {
+		return err
+	}
+	for _, f := range p.forecasts {
+		areasJSON, err := jsonList(f.Areas)
+		if err != nil {
+			return err
+		}
+		filesJSON, err := jsonList(f.Files)
+		if err != nil {
+			return err
+		}
+		risksJSON, err := jsonList(f.Risks)
+		if err != nil {
+			return err
+		}
+		var confidence any // NULL, not 0, when the author said nothing readable
+		if f.Confidence != nil {
+			confidence = *f.Confidence
+		}
+		postHoc := 0
+		if f.PostHoc {
+			postHoc = 1
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO phase_forecasts
+				(phase_id, kind, written_at, areas_json, files_json, size_band,
+				 duration_band, outcome, risks_json, confidence, post_hoc, doc_hash)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			phaseID, f.Kind, f.WrittenAt, areasJSON, filesJSON, f.SizeBand,
+			f.DurationBand, f.Outcome, risksJSON, confidence, postHoc, p.docHash); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// jsonList marshals a string slice, spelling nil as `[]` rather than `null` —
+// the columns are NOT NULL DEFAULT '[]' and every reader ranges over the result.
+func jsonList(v []string) (string, error) {
+	if v == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // applySpec folds the parsed plan/spec.md criteria into the task's spec_criteria

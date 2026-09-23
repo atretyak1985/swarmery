@@ -40,6 +40,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
@@ -159,6 +160,46 @@ type epicPhaseDTO struct {
 	// because one gate cites every reason it has, rather than several gates each
 	// refusing for its own.
 	CompletionBlockers []string `json:"completionBlockers"`
+	// Forecasts are the doc's `## Forecast` blocks (migration 0079): the PRIOR the
+	// planner wrote and/or the POSTERIOR the executor wrote, in document order.
+	// Empty for every phase that declares none, which is all of them until an
+	// author opts in.
+	//
+	// READ-ONLY DATA, deliberately absent from every field above it: nothing in
+	// CompletionState, CompletionBlockers or RunOutcome consults a forecast, and
+	// nothing may start to. A forecast is a prediction to be scored later, not a
+	// contract a phase can violate.
+	Forecasts []phaseForecastDTO `json:"forecasts"`
+	// ForecastLints is what is wrong with those blocks — an unknown band, a
+	// confidence outside 0..1, a forecast naming no areas, a posterior with no
+	// prior to score against.
+	//
+	// Computed in the READ path from the stored rows, exactly like the spec
+	// rollup's `unknownRefs` beside it, and for the same reason: a lint is a thing
+	// to show the operator, never a thing that can refuse an ingest or a run. A
+	// plan whose every forecast fails every rule still indexes and still runs.
+	ForecastLints []wsingest.ForecastLint `json:"forecastLints"`
+}
+
+// phaseForecastDTO is one stored `## Forecast` block. Every text field is
+// VERBATIM — the value the author wrote, not a normalized band — because the
+// operator cannot fix a typo the API has already hidden (the same decision
+// epic_phases.doc_model carries).
+type phaseForecastDTO struct {
+	Kind         string   `json:"kind"`      // prior | posterior; "" when the block declares none
+	WrittenAt    string   `json:"writtenAt"` // RFC3339 as written; "" when absent
+	Areas        []string `json:"areas"`
+	Files        []string `json:"files"`
+	SizeBand     string   `json:"sizeBand"`
+	DurationBand string   `json:"durationBand"`
+	Outcome      string   `json:"outcome"`
+	Risks        []string `json:"risks"`
+	// null, not 0, when the author said nothing readable — see migration 0079.
+	Confidence *float64 `json:"confidence"`
+	// True for a prior whose doc already carried a filled `## Completion Report`
+	// when the scan read it: a prediction that cannot have been one.
+	PostHoc bool   `json:"postHoc"`
+	DocHash string `json:"docHash"`
 }
 
 // epicRollupDTO is a checkbox rollup across all of an epic's phases.
@@ -806,6 +847,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	// Same rule, same reason: one query for the whole task AFTER the cursor is
 	// closed, never one per phase inside the loop.
 	usage := h.phaseRunModels(taskID)
+	forecasts := h.phaseForecasts(taskID) // same rule, same reason: one query, cursor closed
 	for i := range phases {
 		phases[i].RunEvents = runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID)
 		used := usage[phases[i].ID]
@@ -813,11 +855,117 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			used = []phaseModelUseDTO{} // [] not null: the UI maps over it
 		}
 		phases[i].RunModels, phases[i].RunModelFellBack = used, fellBack(used)
+		fs := forecasts[phases[i].ID]
+		phases[i].Forecasts = forecastDTOs(fs)
+		phases[i].ForecastLints = wsingest.LintForecasts(forecastsOnly(fs))
 	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100
 	}
 	return phases, rollup, covers, nil
+}
+
+// storedForecast is a phase_forecasts row: the parsed forecast wsingest owns the
+// shape of, plus the doc hash the scan stamped on it. doc_hash lives here rather
+// than on wsingest.Forecast because it is not part of the FORMAT — the parser
+// cannot know it, the scan derives it from the file it read, and only a later
+// scoring pass (is the forecast I am grading still the one in the doc?) cares.
+type storedForecast struct {
+	wsingest.Forecast
+	DocHash string
+}
+
+// forecastDTOs renders stored forecasts for the wire. Always a non-nil slice:
+// the UI maps over it, and "this phase declares no forecast" is [] rather than
+// null for the same reason CompletionBlockers is.
+func forecastDTOs(fs []storedForecast) []phaseForecastDTO {
+	out := make([]phaseForecastDTO, 0, len(fs))
+	for _, f := range fs {
+		out = append(out, phaseForecastDTO{
+			Kind:         f.Kind,
+			WrittenAt:    f.WrittenAt,
+			Areas:        nonNilStrs(f.Areas),
+			Files:        nonNilStrs(f.Files),
+			SizeBand:     f.SizeBand,
+			DurationBand: f.DurationBand,
+			Outcome:      f.Outcome,
+			Risks:        nonNilStrs(f.Risks),
+			Confidence:   f.Confidence,
+			PostHoc:      f.PostHoc,
+			DocHash:      f.DocHash,
+		})
+	}
+	return out
+}
+
+// forecastsOnly strips the storage wrapper so the lint sees exactly the parsed
+// shape it is written against.
+func forecastsOnly(fs []storedForecast) []wsingest.Forecast {
+	out := make([]wsingest.Forecast, 0, len(fs))
+	for _, f := range fs {
+		out = append(out, f.Forecast)
+	}
+	return out
+}
+
+func nonNilStrs(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
+}
+
+// phaseForecasts returns, per phase id of this task, the `## Forecast` blocks
+// wsingest stored for it, in document order.
+//
+// One query for the whole task, called only AFTER the phase cursor is closed —
+// the store runs on a single SQLite connection and a second query issued while
+// that cursor is open deadlocks the handler (see the note at the call site).
+//
+// Errors degrade to an empty map, like phaseRunModels: a forecast is a decoration
+// on a page that must still render, and it is the one field on the row that must
+// never be able to take the Plans page down.
+func (h *Handler) phaseForecasts(taskID int64) map[int64][]storedForecast {
+	out := map[int64][]storedForecast{}
+	rows, err := h.DB.Query(`
+		SELECT f.phase_id, f.kind, f.written_at, f.areas_json, f.files_json,
+		       f.size_band, f.duration_band, f.outcome, f.risks_json,
+		       f.confidence, f.post_hoc, f.doc_hash
+		  FROM phase_forecasts f
+		  JOIN epic_phases e ON e.id = f.phase_id
+		 WHERE e.workspace_task_id = ?
+		 ORDER BY f.phase_id, f.id`, taskID)
+	if err != nil {
+		log.Printf("warning: epics: phase forecasts unreadable (task %d): %v", taskID, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			phaseID                         int64
+			s                               storedForecast
+			areasJSON, filesJSON, risksJSON string
+			confidence                      sql.NullFloat64
+			postHoc                         int
+		)
+		if err := rows.Scan(&phaseID, &s.Kind, &s.WrittenAt, &areasJSON, &filesJSON,
+			&s.SizeBand, &s.DurationBand, &s.Outcome, &risksJSON,
+			&confidence, &postHoc, &s.DocHash); err != nil {
+			log.Printf("warning: epics: phase forecast row (task %d): %v", taskID, err)
+			return out
+		}
+		s.Areas, s.Files, s.Risks = decodeStrList(areasJSON), decodeStrList(filesJSON), decodeStrList(risksJSON)
+		if confidence.Valid {
+			v := confidence.Float64
+			s.Confidence = &v
+		}
+		s.PostHoc = postHoc != 0
+		out[phaseID] = append(out[phaseID], s)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("warning: epics: phase forecasts (task %d): %v", taskID, err)
+	}
+	return out
 }
 
 // phaseModelUseDTO is one model a phase run actually used, and how many

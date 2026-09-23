@@ -65,6 +65,72 @@ func EndsOpen(text string) bool {
 	return fenceLen > 0
 }
 
+// Block is one fenced code block of a document.
+//
+// Info is the opening marker's info string with the fence characters stripped
+// ("yaml" for ```yaml, "" for a bare ```). Content is the block's lines joined
+// by "\n", WITHOUT either fence line. Start is the 0-based index of the OPENING
+// fence line in the original text, so a caller can report a line number.
+type Block struct {
+	Info    string
+	Content string
+	Start   int
+}
+
+// Blocks returns every fenced code block in text, in document order — the exact
+// complement of ForEachLine.
+//
+// It exists because one reader in this codebase needs the opposite of what every
+// other reader needs. ForEachLine skips fenced content because a checklist or a
+// `PHASE BLOCKED:` line quoted inside a fence is an ILLUSTRATION, not the
+// document's own text. A phase doc's `## Forecast` block is the other case: the
+// payload IS inside a ```yaml fence, and a parser built on ForEachLine would see
+// nothing at all. The fix is not a second fence parser in wsingest — that is the
+// duplication this package was extracted to end — but the same fence definition
+// read from the other side: a line ForEachLine skips as fenced is a line Blocks
+// reports, because both ask the same marker() where a fence opens and closes.
+//
+// Nesting follows the same CommonMark rule ForEachLine follows: a fence closes
+// only on a marker of the SAME character and at least the opening length, so a
+// ```` block quoting ``` markdown is ONE block whose Content contains the inner
+// ``` lines verbatim — never two.
+//
+// An unclosed fence yields a block running to the end of the document, which is
+// what ForEachLine already assumes when it skips everything after one.
+func Blocks(text string) []Block {
+	var (
+		out       []Block
+		fenceChar byte
+		fenceLen  int
+		cur       Block
+		body      []string
+	)
+	for i, line := range strings.Split(text, "\n") {
+		c, n := marker(line)
+		if n > 0 && fenceLen == 0 {
+			s := strings.TrimLeft(line, " ")
+			fenceChar, fenceLen = c, n
+			cur = Block{Info: strings.TrimSpace(strings.Trim(s[n:], string(c))), Start: i}
+			body = body[:0]
+			continue
+		}
+		if n > 0 && c == fenceChar && n >= fenceLen {
+			cur.Content = strings.Join(body, "\n")
+			out = append(out, cur)
+			fenceChar, fenceLen = 0, 0
+			continue
+		}
+		if fenceLen > 0 {
+			body = append(body, line)
+		}
+	}
+	if fenceLen > 0 { // unclosed fence — the block runs to EOF
+		cur.Content = strings.Join(body, "\n")
+		out = append(out, cur)
+	}
+	return out
+}
+
 // marker reports a line's fence character and run length, or (0, 0) when the
 // line does not open or close a fence. Up to three leading spaces are allowed, as
 // in CommonMark.

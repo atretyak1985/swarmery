@@ -51,6 +51,7 @@ import type {
   BoardColumn,
   Epic,
   EpicPhase,
+  PhaseForecast,
   PhaseRunOutcome,
   PhaseVerifyVerdict,
   PlanRevision,
@@ -2374,6 +2375,77 @@ function RailSection({ label, children }: { label: string; children: ReactNode }
   );
 }
 
+/** One forecast column — the prior or the posterior, whichever the doc carries.
+ *
+ * Every value is rendered VERBATIM, including a band the daemon does not
+ * recognise: the operator cannot fix a typo the UI has already normalised away.
+ * `forecastLints` below the columns is what says a value is wrong. */
+function ForecastColumn({ f }: { f: PhaseForecast }): JSX.Element {
+  const row = (label: string, value: string): JSX.Element | null =>
+    value === '' ? null : (
+      <div className="flex gap-1.5">
+        <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
+        <span className="break-words text-ink-dim">{value}</span>
+      </div>
+    );
+  return (
+    <div className="min-w-0 flex-1 rounded-md border border-line px-2.5 py-2 font-mono text-[10.5px]">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="uppercase tracking-wider text-ink">{f.kind === '' ? '(no kind)' : f.kind}</span>
+        {f.postHoc && (
+          <span
+            data-tip="written into a doc that already reported the work done — not a prediction"
+            className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px text-[9.5px] text-amber"
+          >
+            post hoc
+          </span>
+        )}
+      </div>
+      <div className="space-y-0.5">
+        {row('written', f.writtenAt)}
+        {row('size', f.sizeBand)}
+        {row('duration', f.durationBand)}
+        {row('outcome', f.outcome)}
+        {/* null, not 0: "the author said nothing" is not "certain it is wrong". */}
+        {f.confidence !== null && row('confidence', f.confidence.toFixed(2))}
+        {f.areas.length > 0 && row('areas', f.areas.join(', '))}
+        {f.files.length > 0 && row('files', f.files.join(', '))}
+        {f.risks.length > 0 && row('risks', f.risks.join(' · '))}
+      </div>
+    </div>
+  );
+}
+
+/** The phase's `## Forecast` blocks, prior and posterior side by side, plus the
+ * lints over them. READ-ONLY, and renders nothing at all when the doc declares
+ * no forecast — which is every phase until an author opts in.
+ *
+ * Deliberately NOT a verdict and deliberately placed away from the completion
+ * chips: a forecast is a prediction to be scored later, not something a phase
+ * can fail. A lint here says the block is unreadable, never that the work is. */
+function ForecastSection({ phase }: { phase: EpicPhase }): JSX.Element | null {
+  if (phase.forecasts.length === 0 && phase.forecastLints.length === 0) return null;
+  return (
+    <RailSection label="forecast">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {phase.forecasts.map((f, i) => (
+          <ForecastColumn key={`${f.kind}-${String(i)}`} f={f} />
+        ))}
+      </div>
+      {phase.forecastLints.length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          {phase.forecastLints.map((l, i) => (
+            <div key={`${l.code}-${String(i)}`} className="font-mono text-[10.5px] text-amber">
+              {l.kind === '' ? '' : `${l.kind}: `}
+              {l.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </RailSection>
+  );
+}
+
 /** Acceptance-criteria list with tick state (✓ done / ○ open). With `onToggle`
  * the rows become buttons that flip the criterion in the doc (the affordance
  * the retired doc modal owned); without it the list is read-only. */
@@ -2790,6 +2862,8 @@ function PhaseDetailPanel({
               <ChecksList checks={checks} onToggle={toggle} busyLine={busyLine} />
             )}
           </RailSection>
+
+          <ForecastSection phase={phase} />
 
           <RailSection label="doc">
             {doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}

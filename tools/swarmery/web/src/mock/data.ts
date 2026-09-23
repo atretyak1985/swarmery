@@ -13,10 +13,12 @@ import type {
   EpicPhase,
   Event,
   FileChange,
+  ForecastLint,
   HealthResponse,
   PermissionRequest,
   PhaseBlocker,
   PhaseDiagnosis,
+  PhaseForecast,
   PlanDoc,
   Playbook,
   PlanRevision,
@@ -1410,6 +1412,59 @@ let mockBoard: BoardTask[] = [
 const MOCK_PRIORITIES = new Set(['urgent', 'high', 'normal', 'low']);
 let mockBoardSeq = 9200;
 
+/** A clean prior/posterior pair, and a malformed block with the lints it earns —
+ * the two forecast shapes the Plans rail has to render offline. */
+const MOCK_FORECAST_PAIR: PhaseForecast[] = [
+  {
+    kind: 'prior',
+    writtenAt: '2026-09-23T10:12:00Z',
+    areas: ['internal/ingest', 'internal/cost'],
+    files: ['internal/ingest/record.go'],
+    sizeBand: 'M',
+    durationBand: '30-90m',
+    outcome: 'done',
+    risks: ['migration touches the turns table'],
+    confidence: 0.7,
+    postHoc: false,
+    docHash: 'a1b2c3d4',
+  },
+  {
+    kind: 'posterior',
+    writtenAt: '2026-09-23T13:40:00Z',
+    areas: ['internal/ingest', 'internal/cost', 'internal/api'],
+    files: [],
+    sizeBand: 'L',
+    durationBand: '90m-4h',
+    outcome: 'partial',
+    risks: [],
+    confidence: 0.4,
+    postHoc: false,
+    docHash: 'a1b2c3d4',
+  },
+];
+
+const MOCK_FORECAST_BAD: PhaseForecast[] = [
+  {
+    kind: 'prior',
+    writtenAt: '',
+    areas: [],
+    files: [],
+    sizeBand: 'ENORMOUS',
+    durationBand: '',
+    outcome: '',
+    risks: [],
+    confidence: 3.5,
+    postHoc: true,
+    docHash: 'e5f6a7b8',
+  },
+];
+
+const MOCK_FORECAST_BAD_LINTS: ForecastLint[] = [
+  { kind: 'prior', code: 'unknown-size-band', message: 'size_band "ENORMOUS" is not one of XS, S, M, L, XL' },
+  { kind: 'prior', code: 'bad-confidence', message: 'confidence 3.5 is outside 0..1' },
+  { kind: 'prior', code: 'missing-areas', message: 'forecast declares no areas — nothing to score a run against' },
+];
+
 // fusion phase 10: one demo epic for project 3 (swarmery) with a diamond
 // dependency shape (1 → 2,3 → 4) so the phase timeline + rollup render offline.
 const mockEpicPhase = (
@@ -1439,6 +1494,11 @@ const mockEpicPhase = (
 ): EpicPhase => ({
   runModels: [],
   runModelFellBack: false,
+  // Phase 2 demos the prior/posterior pair and phase 3 a malformed block, so the
+  // offline Plans page renders both halves of the forecast section; every other
+  // phase declares none, which is the normal state.
+  forecasts: seq === 2 ? MOCK_FORECAST_PAIR : seq === 3 ? MOCK_FORECAST_BAD : [],
+  forecastLints: seq === 3 ? MOCK_FORECAST_BAD_LINTS : [],
   id,
   seq,
   name,

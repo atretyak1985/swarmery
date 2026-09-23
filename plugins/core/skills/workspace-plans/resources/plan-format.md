@@ -42,6 +42,7 @@ Status: Pending
 ## Acceptance Criteria
 - [ ] {measurable criterion with its verification command}
 ## Notes
+## Forecast                   ← optional; see "## Forecast" below
 ## Completion Report          ← empty stub, ALWAYS the last section
 ```
 
@@ -136,6 +137,39 @@ The WHAT/WHY: short problem statement, user stories, and an
 spec.md exists, every phase doc MUST carry a `**Covers:** SC-…` line; every
 SC id must be covered by ≥1 phase and no phase may cover an undeclared id —
 the platform lints coverage.
+
+## `## Forecast` (optional, in a phase doc, before `## Completion Report`)
+
+A small prediction the platform stores and later scores. It is DATA, never a
+gate: no run is refused and no phase is incomplete for diverging from one, or
+for lacking one. A block the platform cannot read is a lint on a plan that
+still ingests.
+
+````markdown
+## Forecast
+
+```yaml
+kind: prior            # prior (planner) | posterior (executor)
+written_at: 2026-09-23T10:12:00Z
+areas: [internal/ingest, internal/cost]                    # REQUIRED
+files: [internal/ingest/record.go, config/pricing.json]    # optional, globs ok
+size_band: M           # XS <20 lines | S <100 | M <400 | L <1500 | XL
+duration_band: 30-90m  # <30m | 30-90m | 90m-4h | >4h
+outcome: done          # done | partial | blocked
+risks: ["migration touches turns table", "recost path diverges"]
+confidence: 0.7        # 0..1, how sure the whole forecast holds
+```
+````
+
+A doc may carry both a prior and a posterior — two fenced blocks in one
+section, told apart by `kind`. The planner writes the prior; the executor
+writes the posterior beside it when filling `## Completion Report`.
+
+Linted (shown on the phase, never enforced): an unrecognized `kind`,
+`size_band`, `duration_band` or `outcome`; a `confidence` that is not a number
+in 0..1; a forecast with no `areas`; a posterior with no prior to score
+against. A prior added to a doc whose `## Completion Report` is already filled
+is flagged **post hoc** — it cannot have been a prediction.
 
 ## Verification hooks for planners
 

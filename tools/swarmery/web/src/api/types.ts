@@ -3472,6 +3472,57 @@ export interface EpicPhase {
   /** Why the gate refused, in the operator's words; [] when complete. A list because
    *  one gate cites every reason it has. */
   completionBlockers: string[];
+  /** The doc's `## Forecast` blocks (migration 0079) — the PRIOR the planner wrote
+   *  and/or the POSTERIOR the executor wrote, in document order. [] for every phase
+   *  that declares none, which is all of them until an author opts in.
+   *
+   *  READ-ONLY DATA. Nothing above it consults a forecast and nothing may start to:
+   *  a forecast is a prediction to be scored later, not a contract a phase can
+   *  violate. Rendering it beside `completionState` must never read as a verdict. */
+  forecasts: PhaseForecast[];
+  /** What is wrong with those blocks — an unknown band, a confidence outside 0..1,
+   *  a forecast naming no areas, a posterior with no prior to score against.
+   *  Computed server-side in the read path, like `EpicSpec.unknownRefs`, and like it
+   *  refuses nothing. */
+  forecastLints: ForecastLint[];
+}
+
+/** One stored `## Forecast` block — mirrors phaseForecastDTO.
+ *
+ *  Every text field is VERBATIM, including a band this daemon does not recognise:
+ *  the operator cannot fix a typo the API has already hidden. Render the value as
+ *  written and let `forecastLints` say what is wrong with it. */
+export interface PhaseForecast {
+  /** 'prior' | 'posterior'; '' when the block declares no kind. */
+  kind: string;
+  /** RFC3339 as the author wrote it; '' when absent. */
+  writtenAt: string;
+  areas: string[];
+  files: string[];
+  /** XS | S | M | L | XL, verbatim. */
+  sizeBand: string;
+  /** '<30m' | '30-90m' | '90m-4h' | '>4h', verbatim. */
+  durationBand: string;
+  /** done | partial | blocked, verbatim. */
+  outcome: string;
+  risks: string[];
+  /** 0..1; null — NOT 0 — when the author said nothing readable. */
+  confidence: number | null;
+  /** True for a prior whose doc already carried a filled `## Completion Report`
+   *  when the scan read it: a prediction that cannot have been one. */
+  postHoc: boolean;
+  /** sha256 of the phase doc at the scan that stored this row. */
+  docHash: string;
+}
+
+/** One problem with a phase's forecasts — mirrors wsingest.ForecastLint. */
+export interface ForecastLint {
+  /** The forecast the lint is about: 'prior' | 'posterior' | ''. */
+  kind: string;
+  /** Stable slug: unknown-kind | unknown-size-band | unknown-duration-band |
+   *  unknown-outcome | bad-confidence | missing-areas | posterior-without-prior. */
+  code: string;
+  message: string;
 }
 
 /** The completion gate's states (server-side internal/phasegate).
