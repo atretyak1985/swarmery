@@ -170,6 +170,16 @@ type Service struct {
 	// ADVISORY like the scorer: the verdict it produces is information on the
 	// phase, and phasegate never gates on a verdict for a doc whose own mode is off.
 	SurpriseVerify func(phaseID int64, sessionUUID string) (focusHint string, ok bool)
+	// InjectLessons returns the text appended to the run's prompt: the active
+	// lessons whose areas overlap the phase's prior forecast, within the token
+	// budget, each already recorded in lesson_uses (internal/lessons, learning-loop
+	// phase 15). "" ⇒ nothing appended, so the prompt is byte-identical to a run
+	// without injection. nil ⇒ not wired (the unit tests' state).
+	InjectLessons func(phaseID int64, sessionUUID string) string
+	// LessonCitations marks, after the run, the injected lessons the executor
+	// cited ("[L-12]") in its transcript or in the returned doc's Completion
+	// Report. ADVISORY: it logs and returns, never failing the run. nil ⇒ off.
+	LessonCitations func(phaseID int64, sessionUUID, docPath string)
 	// Slots is the DAEMON-WIDE run registry and budget (internal/runcore): the
 	// per-phase single-flight gate AND — new — a bound this engine never had. A
 	// phase run used to be limited by nothing at all: ten phases started from the
@@ -645,6 +655,11 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
 	}
 	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, budget)
+	// After run_session_uuid is stamped (so every lesson_uses row names a run the
+	// pending-session registry already answers for) and before the spawn.
+	if s.InjectLessons != nil {
+		prompt += s.InjectLessons(phaseID, uuid)
+	}
 	spec := RunSpec{
 		Prompt:       prompt,
 		SessionUUID:  uuid,
@@ -724,6 +739,11 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// survives removeWorktree (keepBranch), so the order against it is free.
 		if s.Actuals != nil {
 			s.Actuals(phaseID, spec.SessionUUID, info.RepoRoot)
+		}
+		// Next to the actuals recorder: the doc has been returned, so its
+		// Completion Report is the executor's.
+		if s.LessonCitations != nil {
+			s.LessonCitations(phaseID, spec.SessionUUID, info.DocPath)
 		}
 		// After the score (Actuals computes it), before the worktree goes: an
 		// auto-verification grades the worktree exactly as verifyRun does.

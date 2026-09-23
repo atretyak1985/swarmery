@@ -2096,6 +2096,18 @@ func cmdServe(args []string) error {
 	recorder.OnRecorded = scorer.AfterActuals
 	phaserunSvc.Actuals = recorder.AfterRun
 	phaserunSvc.SurpriseVerify = scorer.AutoVerifyHint
+	// Learning loop phase 15: ACTIVE lessons whose areas overlap a run's prior
+	// forecast are appended to the headless phase/plan prompt (never to MEMORY.md,
+	// never through a hook), within SWARMERY_LESSON_BUDGET_TOKENS, and recorded in
+	// lesson_uses; citations are detected after the run.
+	lessonBudget, budgetWarn := lessons.BudgetFromEnv(os.Getenv)
+	for _, w := range budgetWarn {
+		log.Printf("warn: %s", w)
+	}
+	lessonInjector := lessons.NewInjector(db, lessonBudget)
+	phaserunSvc.InjectLessons = lessonInjector.ForPhase
+	phaserunSvc.LessonCitations = lessonInjector.AfterPhaseRun
+	log.Printf("lesson injection: budget=%d tokens", lessonBudget)
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same
 	// boundary the worktree manager uses.
 	api.AttachPhaseDiag(wtMgr.Git, wtMgr)
@@ -2105,6 +2117,8 @@ func cmdServe(args []string) error {
 	// worktree.Manager as dispatch/verify/phaserun; same startup heal posture.
 	planrunSvc := planrun.NewService(db, planrun.ClaudeRunner{}, wtMgr)
 	planrunSvc.Slots = runSlots // the one daemon-wide budget (see runSlots above)
+	planrunSvc.InjectLessons = lessonInjector.ForPlan
+	planrunSvc.LessonCitations = lessonInjector.AfterPlanRun
 	// Read-only git seam, through the same boundary the worktree manager uses: it
 	// NAMES the base a dirty-branch refusal counted commits against, and answers
 	// whether a run branch existed before DeleteRunBranch removed it. Without it

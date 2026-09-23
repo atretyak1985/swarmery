@@ -123,6 +123,9 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/lessons/{id}/merge", requireLocalOrigin(h.mergeLesson))
 	mux.HandleFunc("POST /api/lessons/{id}/dismiss", requireLocalOrigin(h.dismissLesson))
 	mux.HandleFunc("POST /api/lessons/{id}/retire", requireLocalOrigin(h.retireLesson))
+	// phase 15.4: graduate an active lesson into the consumer repo's nested
+	// CLAUDE.md — a commit on a NEW branch, never the checked-out one.
+	mux.HandleFunc("POST /api/lessons/{id}/promote", requireLocalOrigin(h.promoteLesson))
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)

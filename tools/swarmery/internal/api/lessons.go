@@ -3,6 +3,10 @@ package api
 // Lesson review queue (learning-loop phase 14, internal/lessons):
 //
 //	GET   /api/lessons?status=candidate|active|retired|dismissed|merged → {lessons:[Lesson]}
+//	      &area=<repo-relative dir or file> keeps only lessons whose area globs
+//	      overlap it (the injection matcher, phase 15; read by core's area-lessons skill)
+//	POST  /api/lessons/{id}/promote   {area?} → Lesson   (active only; writes the
+//	      lesson into <repo>/<area>/CLAUDE.md on a NEW branch, phase 15.4)
 //	PATCH /api/lessons/{id}           {title?, guidance?, areaGlobs?} → Lesson
 //	POST  /api/lessons/{id}/accept    → Lesson   (candidate → active; the ONLY path to active)
 //	POST  /api/lessons/{id}/merge     {lessonId? | normTitle?} → Lesson
@@ -21,6 +25,8 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
 var lessonStatuses = map[string]bool{
@@ -35,7 +41,38 @@ func (h *Handler) listLessons(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ls, err := lessons.List(h.DB, status)
+	if area := r.URL.Query().Get("area"); err == nil && area != "" {
+		ls = filterLessonsByArea(ls, area)
+	}
 	writeJSON(w, map[string]any{"lessons": ls}, err)
+}
+
+// filterLessonsByArea keeps the lessons a run working in area would be handed
+// (lessons.Matches — the same rule injection applies).
+func filterLessonsByArea(ls []lessons.Lesson, area string) []lessons.Lesson {
+	out := []lessons.Lesson{}
+	sc := lessons.Scope{Areas: []string{area}}
+	for _, l := range ls {
+		if lessons.Matches(l.AreaGlobs, sc) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// promoteLesson graduates an active lesson into the consumer repo's nested
+// CLAUDE.md, on a new branch for the operator to review (internal/lessons).
+func (h *Handler) promoteLesson(w http.ResponseWriter, r *http.Request) {
+	id, ok := lessonID(w, r)
+	if !ok {
+		return
+	}
+	var body lessons.PromoteInput
+	if !decodeLessonBody(w, r, &body) {
+		return
+	}
+	l, err := lessons.Promote(h.DB, worktree.ExecGit{}, repopath.Resolve, id, body, time.Now())
+	writeLesson(w, l, err)
 }
 
 func lessonID(w http.ResponseWriter, r *http.Request) (int64, bool) {

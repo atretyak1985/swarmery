@@ -8,6 +8,7 @@ import {
   type LessonMatch,
   type LessonStatus,
   mergeLesson,
+  promoteLesson,
   retireLesson,
 } from '../api/lessons';
 
@@ -131,6 +132,12 @@ function LessonCard({
         {lesson.planId} · {lesson.phaseName}
         {lesson.linkedNormTitle !== '' && ` · linked to "${lesson.linkedNormTitle}"`}
       </div>
+      {lesson.promotedBranch !== '' && (
+        <div className="mt-1 font-mono text-[10px] text-ink-dim">
+          L-{String(lesson.id)} promoted to CLAUDE.md on branch{' '}
+          <span className="text-ink">{lesson.promotedBranch}</span>. Review it there.
+        </div>
+      )}
       {lesson.sourceParagraph !== '' && (
         <details className="mt-1 text-[11px] text-ink-dim">
           <summary className="cursor-pointer">where reality diverged</summary>
@@ -202,6 +209,17 @@ function LessonCard({
               onClick={() => act(() => retireLesson(lesson.id, 'retired by operator'))}
             >
               retire
+            </button>
+          )}
+          {lesson.status === 'active' && lesson.promotedBranch === '' && (
+            <button
+              type="button"
+              disabled={busy}
+              className={BTN}
+              title="Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
+              onClick={() => act(() => promoteLesson(lesson.id))}
+            >
+              promote to CLAUDE.md
             </button>
           )}
         </div>

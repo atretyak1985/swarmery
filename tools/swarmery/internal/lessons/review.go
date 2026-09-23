@@ -56,6 +56,9 @@ type Lesson struct {
 	ActivatedAt     *string  `json:"activatedAt"`
 	RetiredAt       *string  `json:"retiredAt"`
 	RetireReason    *string  `json:"retireReason"`
+	// PromotedBranch is the branch of the lesson's latest successful promotion
+	// into a nested CLAUDE.md (15.4, lesson_promotions); "" when never promoted.
+	PromotedBranch string `json:"promotedBranch"`
 	// Matches are merge suggestions (candidates only): lessons whose identity
 	// equals this one's, or overlaps it by at least half its words.
 	Matches []Match `json:"matches"`
@@ -77,7 +80,9 @@ const maxMatches = 5
 const selectLesson = `SELECT l.id, l.phase_id, COALESCE(e.name, ''), COALESCE(t.external_id, ''),
 	l.source_phase_run, l.title, l.norm_title, l.guidance, l.area_globs, l.evidence_json, l.cause,
 	l.source_paragraph, l.surprise_index, l.status, l.linked_norm_title, l.merged_into_id, l.recurrences,
-	l.recurrence_runs_json, l.model, l.created_at, l.updated_at, l.activated_at, l.retired_at, l.retire_reason
+	l.recurrence_runs_json, l.model, l.created_at, l.updated_at, l.activated_at, l.retired_at, l.retire_reason,
+	COALESCE((SELECT p.branch FROM lesson_promotions p WHERE p.lesson_id = l.id AND p.error = ''
+	          ORDER BY p.id DESC LIMIT 1), '')
 	FROM surprise_lessons l
 	LEFT JOIN epic_phases e ON e.id = l.phase_id
 	LEFT JOIN tasks t ON t.id = e.workspace_task_id`
@@ -92,7 +97,8 @@ func scanLesson(scan func(...any) error) (Lesson, error) {
 	)
 	if err := scan(&l.ID, &l.PhaseID, &l.PhaseName, &l.PlanID, &l.SourcePhaseRun, &l.Title, &l.NormTitle,
 		&l.Guidance, &areas, &ev, &l.Cause, &l.SourceParagraph, &idx, &l.Status, &l.LinkedNormTitle,
-		&merged, &l.Recurrences, &runs, &l.Model, &l.CreatedAt, &l.UpdatedAt, &activated, &retired, &retireWhy); err != nil {
+		&merged, &l.Recurrences, &runs, &l.Model, &l.CreatedAt, &l.UpdatedAt, &activated, &retired, &retireWhy,
+		&l.PromotedBranch); err != nil {
 		return l, err
 	}
 	l.AreaGlobs = splitGlobs(areas)

@@ -147,6 +147,15 @@ type Service struct {
 	Go       func(func())     // async-spawn seam (nil ⇒ real `go`); mirrors phaserun.Go
 	// Notify emits plan_updated for the plan at run edges. nil ⇒ no live nudge.
 	Notify func(taskID int64)
+	// InjectLessons returns the text appended to the run's prompt: the active
+	// lessons whose areas overlap the priors of the plan's phases, within the
+	// token budget, each recorded in lesson_uses (internal/lessons, learning-loop
+	// phase 15). "" ⇒ the prompt is byte-identical to one without injection.
+	// nil ⇒ not wired (the unit tests' state).
+	InjectLessons func(taskID int64, sessionUUID string) string
+	// LessonCitations marks, after the run, the injected lessons its transcript
+	// cited. ADVISORY: it logs and returns. nil ⇒ off.
+	LessonCitations func(taskID int64, sessionUUID string)
 	// FindRun locates the live process of a run by its session uuid (adopt.go).
 	// nil ⇒ a ps scan. Test seam: adoption must be exercisable without spawning.
 	FindRun func(sessionUUID string) (int, bool)
@@ -426,8 +435,12 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 		taskID, agent, runMode, uuid, acq.Path, len(info.Phases))
 	s.notify(taskID)
 
+	prompt := BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, budget)
+	if s.InjectLessons != nil {
+		prompt += s.InjectLessons(taskID, uuid)
+	}
 	spec := RunSpec{
-		Prompt:       BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, budget),
+		Prompt:       prompt,
 		SessionUUID:  uuid,
 		Cwd:          acq.Path,
 		Agent:        agent,
@@ -459,6 +472,9 @@ func allComplete(phases []Phase) bool {
 func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, releaseSlot func(), info planInfo, acq worktree.Acquired, spec RunSpec, budget runcore.Budget) {
 	defer func() {
 		cancel()
+		if s.LessonCitations != nil {
+			s.LessonCitations(info.TaskID, spec.SessionUUID)
+		}
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
 		// 'running', so the DB gate in Start is open; releasing the single-flight
 		// slot before the (git shell-out, tens of ms) removal opens a window where a

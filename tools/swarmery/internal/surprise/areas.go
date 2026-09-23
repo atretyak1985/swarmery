@@ -147,6 +147,26 @@ func overlaps(x, y string) bool {
 	return insideAfterStrip(a, b) || insideAfterStrip(b, a)
 }
 
+// NormArea is normArea for other packages: the area/path/glob entry with its
+// decoration stripped and cut at the first glob segment ("" when nothing
+// path-like is left, "." for the root). internal/lessons uses it to place a
+// lesson's glob as a directory (phase 15), so there is one definition of "the
+// directory an area entry names".
+func NormArea(s string) string { return normArea(s) }
+
+// AreaOverlap is the file-less, symmetric rule `overlaps` applies to two
+// forecasts, over two RAW entries: either names a place inside the other, by
+// segments, after stripping a leading sub-module prefix off either. Exported for
+// internal/lessons, which matches a lesson's area globs against a run's prior
+// forecast with it (phase 15) instead of writing a third matcher.
+func AreaOverlap(x, y string) bool {
+	a, b := normArea(x), normArea(y)
+	if a == "" || b == "" {
+		return false
+	}
+	return overlaps(a, b)
+}
+
 func anyOverlap(x string, in []string) bool {
 	for _, y := range in {
 		if overlaps(x, y) {

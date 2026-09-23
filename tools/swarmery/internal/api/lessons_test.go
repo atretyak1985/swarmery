@@ -79,3 +79,45 @@ func TestLessonsReviewQueueEndpoints(t *testing.T) {
 		t.Errorf("cross-origin accept = %d, want 403", resp.StatusCode)
 	}
 }
+
+// TestLessonsAreaFilterAndPromoteErrors: ?area= keeps only lessons whose globs
+// overlap the directory (the injection matcher), and promote maps its refusals.
+// The branch-writing path itself is covered in internal/lessons with a fixture repo.
+func TestLessonsAreaFilterAndPromoteErrors(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	ins := func(uuid, globs, status string) int64 {
+		res, err := db.Exec(`INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, norm_title,
+			guidance, area_globs, evidence_json, status, created_at, updated_at)
+			VALUES (?, 1, 1, ?, ?, 'Do it.', ?, '[]', ?, 'now', 'now')`, uuid, "t"+uuid, "n"+uuid, globs, status)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := res.LastInsertId()
+		return id
+	}
+	store := ins("s", "internal/store/**", "active")
+	ins("w", "web/src/**", "active")
+	cand := ins("c", "internal/**", "candidate")
+
+	var got struct {
+		Lessons []lessons.Lesson `json:"lessons"`
+	}
+	getJSON(t, srv.URL+"/api/lessons?status=active&area=tools/app/internal/store", &got)
+	if len(got.Lessons) != 1 || got.Lessons[0].ID != store {
+		t.Fatalf("area filter = %+v, want only lesson %d", got.Lessons, store)
+	}
+	for _, tc := range []struct {
+		id   string
+		want int
+	}{
+		{itoa64(cand), 409},  // only an active lesson can be promoted
+		{itoa64(store), 409}, // its phase maps to no project
+		{"999", 404},
+		{"x", 400},
+	} {
+		r := decisionReq(t, http.MethodPost, srv.URL+"/api/lessons/"+tc.id+"/promote", "")
+		if r.StatusCode != tc.want {
+			t.Errorf("promote %s = %d, want %d", tc.id, r.StatusCode, tc.want)
+		}
+	}
+}

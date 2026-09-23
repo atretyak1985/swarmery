@@ -42,6 +42,8 @@ export interface Lesson {
   activatedAt: string | null;
   retiredAt: string | null;
   retireReason: string | null;
+  /** Branch of the latest successful promotion into a nested CLAUDE.md; '' when never promoted. */
+  promotedBranch: string;
   matches: LessonMatch[];
 }
 
@@ -84,6 +86,7 @@ const MOCK_LESSONS: Lesson[] = [
     activatedAt: null,
     retiredAt: null,
     retireReason: null,
+    promotedBranch: '',
     matches: [
       {
         kind: 'retro',
@@ -123,6 +126,7 @@ const MOCK_LESSONS: Lesson[] = [
     activatedAt: '2026-09-21T09:00:00Z',
     retiredAt: null,
     retireReason: null,
+    promotedBranch: '',
     matches: [],
   },
 ];
@@ -205,4 +209,11 @@ export async function dismissLesson(id: number, reason: string): Promise<Lesson>
 export async function retireLesson(id: number, reason: string): Promise<Lesson> {
   if (MOCK) return mockUpdate(id, { status: 'retired', retireReason: reason });
   return send('POST', `/api/lessons/${String(id)}/retire`, { reason });
+}
+
+/** POST /api/lessons/{id}/promote — write an active lesson into the project's nested
+ *  CLAUDE.md for its area, committed on a NEW branch for review (never the checked-out one). */
+export async function promoteLesson(id: number): Promise<Lesson> {
+  if (MOCK) return mockUpdate(id, { promotedBranch: `swarm/lesson-L${String(id)}` });
+  return send('POST', `/api/lessons/${String(id)}/promote`, {});
 }
