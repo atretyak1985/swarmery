@@ -10,6 +10,8 @@
 #   1. frontmatter key whitelist (catches permissionMode & friends — ignored
 #      on plugin subagents, so their presence is always a bug);
 #   2. `model:` must be an alias: opus | sonnet | haiku | inherit;
+#   2b. `effort:` must be one of low | medium | high | xhigh | max — a typo or a
+#      retired level is silently ignored at dispatch, so it must fail here;
 #   3. every `skills:` entry resolves to <plugin>/skills/<name>/SKILL.md — or,
 #      for domain packs, to a core skill (packs layer on top of core: every
 #      consumer that enables a pack also enables core). Anything else needs a
@@ -56,6 +58,7 @@ AGENT_KEYS = {'name', 'description', 'model', 'tools', 'disallowedTools',
               'skills', 'memory', 'isolation', 'background', 'color',
               'maxTurns', 'docs', 'effort'}
 MODEL_ALIASES = {'opus', 'sonnet', 'haiku', 'inherit'}
+EFFORT_LEVELS = {'low', 'medium', 'high', 'xhigh', 'max'}
 RETIRED_MODEL = re.compile(r'sonnet-4-6|opus-4-8|claude-(?:sonnet|opus)-4(?![0-9])[0-9a-z.\-]*')
 PINNED_MODEL = re.compile(r'claude-(?:sonnet|opus|haiku)-[0-9][0-9a-z.\-]*')
 
@@ -94,6 +97,9 @@ for path in sorted(glob.glob(os.path.join(root, 'plugins/*/agents/*.md'))):
     mm = re.search(r'^model:\s*(\S+)\s*$', fm, re.M)
     if mm and mm.group(1) not in MODEL_ALIASES:
         report(rel, f'model "{mm.group(1)}" is not an alias — use one of {sorted(MODEL_ALIASES)} so model upgrades never strand the fleet')
+    em = re.search(r'^effort:\s*(\S+)\s*$', fm, re.M)
+    if em and em.group(1) not in EFFORT_LEVELS:
+        report(rel, f'effort "{em.group(1)}" is not a known level — use one of {sorted(EFFORT_LEVELS)}; an unrecognised value is ignored at dispatch instead of failing loudly')
     # tools:/disallowedTools: take exact tool names, MCP server patterns
     # (mcp__server, mcp__server__*) or Agent(a, b) — NOT the scoped permission
     # syntax from settings.json. `Bash(git diff:*)` in tools: is silently not a

@@ -7,6 +7,7 @@ maxTurns: 50
 color: purple
 skills:
   - design-verify
+  - code-standards
 docs:
   status: reviewed
   source_sha: 4a66e9bc0ebf
@@ -29,41 +30,18 @@ component. Those are the cheapest fixes and the most expensive regressions, so
 they are not discouraged here — they are [STOP triggers](#the-eight-stop-triggers)
 that end the run with the decision handed back to the operator.
 
-# Bash: одна операція на виклик
+# Sandbox preflight
 
-Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
-між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
-Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
-впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
-inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
+You may be running inside a git worktree isolate. Before your first read
+or write, follow the `sandbox-preflight.md` resource of core's
+`code-standards` skill (listed above, so it loads with you): one operation
+per Bash call, and confirm ROOT and every path the task names before you
+rely on it.
 
-## Preflight: де я і що навколо мене
-
-Перед першою дією, що читає або пише файли, виконай ці кроки — кожен окремим
-викликом Bash, без `;` і `&&`:
-
-1. `pwd` — це твій ЄДИНИЙ корінь. Запам'ятай значення; далі воно зветься ROOT.
-2. `git rev-parse --show-toplevel` — якщо результат відрізняється від ROOT, ти в
-   worktree. Це нормально; далі діє правило 4.
-3. Перевір існування кожної цілі, названої в завданні, окремим `test -e <шлях>`.
-   Якщо хоча б однієї немає — ЗУПИНИСЬ і поверни звіт: який шлях відсутній, який
-   крок ти виконував, що потрібно, щоб продовжити. Не запускай скрипт, який на
-   ньому впаде, і не вигадуй замінник.
-4. Шляхи із завдання можуть бути написані від кореня проєкту
-   (`<project-root>/src/…`). Усередині твого ROOT той самий файл — це
-   `src/…`. Ніколи не звертайся за абсолютним шляхом, що починається не з ROOT:
-   пісочниця його відхилить і ти втратиш хід. Будуй абсолютні шляхи як
-   `<ROOT>/<репо-відносний шлях>`.
-5. Якщо ROOT — worktree, `node_modules` і `.venv` можуть бути відсутні. НЕ
-   запускай `npm install` / `npm ci` / `pip install`: це мутує спільне дерево.
-   Замість цього створи символьне посилання на копію головного чекауту одним
-   викликом і перевір його: `ln -s <main-checkout>/node_modules node_modules`,
-   далі `test -d node_modules/.bin`. Якщо це неможливо — зупинись зі звітом, а не
-   продовжуй у надії.
-6. Документ, який ти маєш редагувати (phase-док, звіт), може лежати ПОЗА ROOT.
-   Якщо `test -e` за його шляхом не проходить — не редагуй його наосліп: зупинись
-   і повідом, що документ недоступний з ізоляції. Мовчазний запис у scratch-файл
-   не рахується: панель читає лише оригінал.
+The rule that bites this agent specifically: a fresh worktree has no
+`node_modules`, and installing one mutates the shared tree every other
+session is using. Symlink it from the main checkout instead, then check
+`node_modules/.bin` exists — never run `npm install` or `npm ci` here.
 
 # Goal & success criteria
 

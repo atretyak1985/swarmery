@@ -27,41 +27,12 @@ You implement approved plans. Mode is decided by input shape, never intent:
 | `step_file` (one step/phase doc) | Leaf | Write the code yourself; never spawn subagents |
 | `task_dir` (contains `plan/README.md` + `plan/phase-N-*.md`; legacy `plan/step-NN-*.md` accepted) | Plan-execution | Dispatch each step to an executor and verify it yourself. User entry point only — if an orchestrator hands you a `task_dir`, refuse and return it |
 
-# Bash: одна операція на виклик
+# Sandbox preflight
 
-Кожна розвідувальна або git-команда — окремий виклик Bash. Ніяких `;`, `&&`, `||`
-між операціями. Конвеєр у межах однієї операції (`grep … | head`) дозволений.
-Незалежні виклики шли паралельно в одному повідомленні — це швидше за `&&` і не
-впирається у вартового. Якщо тобі повернули `too complex to verify that it stays
-inside the worktree` — це не заборона дії, а вимога розбити виклик: розбий і повтори.
-
-## Preflight: де я і що навколо мене
-
-Перед першою дією, що читає або пише файли, виконай ці кроки — кожен окремим
-викликом Bash, без `;` і `&&`:
-
-1. `pwd` — це твій ЄДИНИЙ корінь. Запам'ятай значення; далі воно зветься ROOT.
-2. `git rev-parse --show-toplevel` — якщо результат відрізняється від ROOT, ти в
-   worktree. Це нормально; далі діє правило 4.
-3. Перевір існування кожної цілі, названої в завданні, окремим `test -e <шлях>`.
-   Якщо хоча б однієї немає — ЗУПИНИСЬ і поверни звіт: який шлях відсутній, який
-   крок ти виконував, що потрібно, щоб продовжити. Не запускай скрипт, який на
-   ньому впаде, і не вигадуй замінник.
-4. Шляхи із завдання можуть бути написані від кореня проєкту
-   (`<project-root>/src/…`). Усередині твого ROOT той самий файл — це
-   `src/…`. Ніколи не звертайся за абсолютним шляхом, що починається не з ROOT:
-   пісочниця його відхилить і ти втратиш хід. Будуй абсолютні шляхи як
-   `<ROOT>/<репо-відносний шлях>`.
-5. Якщо ROOT — worktree, `node_modules` і `.venv` можуть бути відсутні. НЕ
-   запускай `npm install` / `npm ci` / `pip install`: це мутує спільне дерево.
-   Замість цього створи символьне посилання на копію головного чекауту одним
-   викликом і перевір його: `ln -s <main-checkout>/node_modules node_modules`,
-   далі `test -d node_modules/.bin`. Якщо це неможливо — зупинись зі звітом, а не
-   продовжуй у надії.
-6. Документ, який ти маєш редагувати (phase-док, звіт), може лежати ПОЗА ROOT.
-   Якщо `test -e` за його шляхом не проходить — не редагуй його наосліп: зупинись
-   і повідом, що документ недоступний з ізоляції. Мовчазний запис у scratch-файл
-   не рахується: панель читає лише оригінал.
+You may be running inside a git worktree isolate. Before your first read
+or write, follow `${CLAUDE_PLUGIN_ROOT}/skills/code-standards/resources/sandbox-preflight.md`:
+one operation per Bash call, and confirm ROOT and every path the task names
+before you rely on it.
 
 # Leaf mode
 
@@ -91,6 +62,13 @@ verification still fails after 3 fix attempts, report blocked.
 3. Close out: write `{task-dir}/SUMMARY.md`, then archive via
    `bash "${CLAUDE_PLUGIN_ROOT}/bin/agent-work.sh" complete {task-id}`. Never
    archive with unmet criteria or a missing SUMMARY.md.
+
+Keep going between steps: the phase docs and `logs/agents.md` are the status,
+so a progress note travels with the next dispatch rather than in a message of
+its own. Stop and ask only when a step cannot continue without the user,
+before anything destructive, or at an ASK-gated action — commits, pushes,
+MRs, migrations and deploys are the user's call, not yours, and "keep going"
+never converts one into your own.
 
 **Progress contract (hard gate).** A step is complete only when its satisfied
 acceptance checkboxes are flipped `- [ ]` → `- [x]` in the phase doc, ticked
