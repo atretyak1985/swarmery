@@ -19,8 +19,11 @@ func ctxBackground() context.Context {
 }
 
 // openBrowser opens url in the OS default browser ([o] hotkey). Best-effort:
-// callers ignore the error (a headless box just gets no window).
-func openBrowser(url string) error {
+// callers ignore the error (a headless box just gets no window). A variable so
+// tests can swap it out — the real one pops a browser tab on every `go test`.
+var openBrowser = osOpenBrowser
+
+func osOpenBrowser(url string) error {
 	var cmd string
 	var args []string
 	switch runtime.GOOS {

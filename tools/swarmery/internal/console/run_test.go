@@ -144,8 +144,17 @@ func TestStreamLoopConnectsAndReconnectsAfterDrop(t *testing.T) {
 
 func TestOpenDashboardCmdRuns(t *testing.T) {
 	// openDashboardCmd returns a Cmd that best-effort opens the browser; running
-	// it must not panic and returns nil (no feed spam). openBrowser itself may
-	// fail on a headless box — that's swallowed by design.
+	// it must not panic and returns nil (no feed spam), even when the opener
+	// fails (a headless box). The opener is stubbed: the real one would open a
+	// browser tab on the developer's machine on every test run.
+	var opened []string
+	orig := openBrowser
+	openBrowser = func(url string) error {
+		opened = append(opened, url)
+		return errors.New("no browser")
+	}
+	t.Cleanup(func() { openBrowser = orig })
+
 	m := NewModel(&stubClient{base: "http://localhost:7777"})
 	_, cmd := m.Update(key('o'))
 	if cmd == nil {
@@ -153,6 +162,9 @@ func TestOpenDashboardCmdRuns(t *testing.T) {
 	}
 	if msg := runCmd(cmd); msg != nil {
 		t.Errorf("openDashboard Cmd msg = %v, want nil", msg)
+	}
+	if len(opened) != 1 || opened[0] != "http://localhost:7777" {
+		t.Errorf("opened = %v, want [http://localhost:7777]", opened)
 	}
 }
 
