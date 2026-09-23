@@ -156,6 +156,48 @@
       },
       "required": ["tokensFile", "componentsRoot", "routesRoot", "devUrl", "verify"]
     },
+    "web": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Marketing/landing-site contract consumed by web-pack. Optional — without it the landing agent reads the repo's own token source and asks for anything it cannot find rather than inventing a brand.",
+      "properties": {
+        "landingRoot": {
+          "type": "string",
+          "description": "Repo-relative directory holding the landing/marketing site, e.g. apps/marketing-site/src"
+        },
+        "tokensSource": {
+          "type": "string",
+          "description": "Repo-relative file that defines the site's design tokens — the Tailwind config or the CSS custom-property block. Colours, spacing and radii come from here, never from the prompt."
+        },
+        "palette": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Brand role → token name or value, e.g. {\"primary\": \"--color-brand-primary\", \"accent\": \"--color-brand-accent\"}. Declared here so no palette is baked into an agent prompt."
+        },
+        "fonts": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Type role → family, e.g. {\"display\": \"<display-family>\", \"body\": \"<body-family>\", \"mono\": \"<mono-family>\"}. A family absent from the project is requested, never silently substituted."
+        },
+        "sections": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The landing page's own section inventory in page order, e.g. [\"Hero\", \"Problem\", \"Pricing\", \"FAQ\"]. The agent works from this list instead of assuming a standard one."
+        },
+        "audience": {
+          "type": "string",
+          "description": "Who the page converts, in the project's own words — used for copy register and objection handling, e.g. \"operations leads evaluating a pilot\"."
+        },
+        "conversionGoal": {
+          "type": "string",
+          "description": "The single action the page optimises for, e.g. \"waitlist email capture\" or \"book a demo\"."
+        },
+        "analytics": {
+          "type": "string",
+          "description": "How conversion events are recorded, e.g. the analytics client module or event-name convention. Needed before any A/B test is proposed."
+        }
+      }
+    },
     "graft": {
       "type": "object",
       "additionalProperties": false,

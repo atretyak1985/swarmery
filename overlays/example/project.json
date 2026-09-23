@@ -17,6 +17,16 @@
   "stack": { "web": "Next.js + TypeScript", "db": "PostgreSQL + an ORM" },
   "commitScopes": ["web-app", "marketing-site", "docs", "infra"],
   "enabledPacks": ["iot-pack", "web-pack"],
+  "web": {
+    "landingRoot": "apps/marketing-site/src",
+    "tokensSource": "apps/marketing-site/tailwind.config.ts",
+    "palette": { "primary": "--color-brand-primary", "accent": "--color-brand-accent", "surface": "--color-surface" },
+    "fonts": { "display": "<display-family>", "body": "<body-family>", "mono": "<mono-family>" },
+    "sections": ["Hero", "Problem", "Features", "HowItWorks", "Pricing", "SocialProof", "FAQ", "EmailCapture", "FinalCTA"],
+    "audience": "your target buyer, in your own words",
+    "conversionGoal": "waitlist email capture",
+    "analytics": "src/lib/analytics.ts — track(eventName, props)"
+  },
   "jira": {
     "baseUrl": "<jira-base-url>",
     "projectKey": "<PROJECT-KEY>",

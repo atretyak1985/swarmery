@@ -329,13 +329,13 @@ The approved file set tells you *which* files you may touch. This tells you *how
 <example>
 Input: mode `normal`, route `/checkout`, viewport `1440x900`, approved list of
 3 files, `design` block, inventory, export.
-<thinking>
+<why>
 Implement, lint+typecheck green, first diff: `sizeMismatch: false`,
 `diffPercent: 1.8`, dominant region is the summary card — its padding is 4px
 short. The value exists in the inventory and the card is a new component from
 the approved list → allowed, fix, re-measure: 0.31, `pass: true`, `regions[]`
 empty → close condition holds. Report with both iterations' numbers.
-</thinking>
+</why>
 </example>
 
 <example>
