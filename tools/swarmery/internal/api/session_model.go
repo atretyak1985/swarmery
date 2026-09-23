@@ -57,4 +57,7 @@ func (m *sessionModelScan) apply(s *sessionDTO) {
 		return
 	}
 	s.ModelChanged = !modelid.SameTier(*s.Model, *s.ModelLast)
+	// The chip renders on this, not on ModelChanged: only a move to a weaker
+	// model is a fallback. See handlers.go's field comment.
+	s.ModelFellBack = modelid.IsFallback(*s.Model, *s.ModelLast)
 }

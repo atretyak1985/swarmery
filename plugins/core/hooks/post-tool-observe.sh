@@ -107,20 +107,38 @@ EOF
 safe_session=$(printf '%s' "$session_id" | tr -c 'A-Za-z0-9_.-' '_')
 
 # ── 1b. Main-session model drift ────────────────────────────────────────────
-# Cheap by construction: ONE `tail` of the transcript, then bash's own regex.
-# The greedy `.*` makes the match land on the LAST "model":"…" in the tail, i.e.
-# the newest line that names a model. A name the tier table does not recognise
-# is ignored rather than guessed at, which also filters the tool_input.model of
-# an Agent dispatch that happens to sit in the tail.
+# Cheap by construction: ONE `tail` of the transcript piped into ONE jq (which
+# this hook has already required and exited without, above — no new dependency).
+#
+# READ THE FIELD, NOT THE LINE. This used to be a bash regex for the LAST
+# "model":"…" anywhere in the tail, and "anywhere" is the bug: an assistant line
+# that dispatches a subagent serialises `message.model` BEFORE the tool_use
+# block's `input.model`, so every `Task(model: "haiku")` on an opus session read
+# as a session-wide fallback to haiku. It logged a spurious event, wrote `haiku`
+# into the state file, and — worst of the three — made the NEXT real fallback
+# compare as an upgrade and log nothing. The "unrecognised names are ignored"
+# guard below never caught it: `haiku` is a recognised tier.
+#
+# The session's model is `message.model` on an assistant record; a subagent's is
+# a tool INPUT and is not one. `fromjson?` skips a line the tail cut in half
+# rather than failing the whole extraction, and isSidechain records (a subagent
+# transcribed into this file) are not the session speaking either.
 #
 # The remembered value is updated on EVERY change, so a downgrade logs once and
 # a switch back logs nothing — this is a change detector, not a poll.
 model_state_dir="${TMPDIR:-/tmp}/swarmery-session-model"
 model_state="${model_state_dir}/${safe_session}"
-tail_txt=$(tail -n 40 "$transcript" 2>/dev/null)
-main_model=""
-if [[ "$tail_txt" =~ .*\"model\":\"([^\"]+)\" ]]; then
-  main_model="${BASH_REMATCH[1]}"
+main_model=$(tail -n 40 "$transcript" 2>/dev/null | jq -rRs '
+  [ split("\n")[]
+    | fromjson?
+    | select(type == "object")
+    | select((.type // "") == "assistant" and (.isSidechain // false) != true)
+    | (.message // {})
+    | select(type == "object")
+    | (.model // empty)
+    | select(type == "string" and . != "") ]
+  | last // ""' 2>/dev/null)
+if [ -n "$main_model" ]; then
   model_rank "$main_model" 2>/dev/null || true
   [ "${MODEL_TIER:-0}" -gt 0 ] 2>/dev/null || main_model=""
 fi

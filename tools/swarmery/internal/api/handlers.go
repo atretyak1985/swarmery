@@ -141,6 +141,13 @@ type sessionDTO struct {
 	// with no assistant turn yet. See internal/api/session_model.go.
 	ModelLast    *string `json:"modelLast"`
 	ModelChanged bool    `json:"modelChanged"`
+	// ModelFellBack narrows ModelChanged to the direction that needs explaining:
+	// the session finished on a WEAKER model than it opened on. ModelChanged
+	// alone is direction-agnostic, and rendering "fell back to opus" over an
+	// operator escalating sonnet -> opus is the same crying-wolf this phase
+	// removed from the hooks. Same rule as a phase run's runModelFellBack —
+	// both call modelid.IsFallback, deliberately one function.
+	ModelFellBack bool `json:"modelFellBack"`
 	GitBranch    *string `json:"gitBranch"`
 	CWD         *string `json:"cwd"`
 	Status      string  `json:"status"`

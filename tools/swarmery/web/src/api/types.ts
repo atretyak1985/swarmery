@@ -218,6 +218,10 @@ export interface Session {
    * i.e. the session really changed model, as opposed to picking up a
    * context-window marker (`claude-opus-5-5[1m]`) on the same one. */
   modelChanged: boolean;
+  /** The session finished on a WEAKER model than it opened on. Narrower than
+   *  modelChanged, which has no direction: an operator escalating sonnet ->
+   *  opus changed model but did not fall back. The chip renders on THIS. */
+  modelFellBack: boolean;
   gitBranch: string | null;
   cwd: string | null;
   status: SessionStatus;

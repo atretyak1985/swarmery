@@ -161,3 +161,28 @@ func SameTier(a, b string) bool {
 	fa, fb := Family(a), Family(b)
 	return fa != "" && fa == fb && Generation(a) == Generation(b)
 }
+
+// IsFallback reports whether moving from -> to landed on a WEAKER model: an
+// older generation of the same family, or a lower family tier.
+//
+// It is the direction half of the chip's claim, and it exists as one function
+// because every surface that renders "fell back to X" has to agree. A move UP —
+// the operator escalating sonnet to opus mid-session, which is exactly what the
+// pre-model-switch gate is built around — is a change but not a fallback, and
+// chipping it amber is the crying-wolf bug this package was written to remove.
+//
+// Silent on doubt, like every other judgement here: an unrecognised family on
+// either side answers false rather than guessing at an ordering.
+func IsFallback(from, to string) bool {
+	if SameTier(from, to) {
+		return false
+	}
+	ff, ft := Family(from), Family(to)
+	if ff == "" || ft == "" {
+		return false
+	}
+	if ff == ft {
+		return Generation(to) > 0 && Generation(from) > Generation(to)
+	}
+	return FamilyTier(ft) > 0 && FamilyTier(ft) < FamilyTier(ff)
+}

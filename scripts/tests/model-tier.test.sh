@@ -63,6 +63,38 @@ downgrade "claude-opus-5-5" "claude-opus-5"     yes
 downgrade "claude-opus-5-5" "claude-haiku-4-5"  yes
 downgrade "claude-sonnet-5" "claude-haiku-4-5"  yes
 
+# ── 1b. a DATE is not a minor version ─────────────────────────────
+# `claude-opus-4-20250514` parsed as major=4, minor=20250514 and scaled to
+# generation 20250554, so it compared as NEWER than claude-opus-5-5 and a
+# genuine safeguard fallback onto a dated model logged nothing at all. The rule
+# that rejects it lives in tools/swarmery/internal/modelid (scale(): a major is
+# at most two digits, a minor is exactly one) and the shell half must agree id
+# for id — the values below are the ones modelid.Generation returns.
+gen() { # gen <name> <want MODEL_GEN>
+  model_rank "$1"
+  if [ "$MODEL_GEN" = "$2" ]; then ok; else
+    bad "model_rank($1) → MODEL_GEN=$MODEL_GEN, want $2"
+  fi
+}
+gen "claude-opus-5-5"            55
+gen "claude-opus-4-1"            41
+gen "claude-opus-4-20250514"     40   # the date is dropped, not read as a minor
+gen "claude-3-5-sonnet-20241022" 35   # pre-5 word order, AND a trailing date
+gen "claude-haiku-4-5-20251001"  45   # a real minor AND a date on one id
+gen "claude-opus-5-5-fast"       55
+gen "claude-opus-5-5[1m]"        55
+
+# …and the verdict that bug produced. Dated ids on BOTH sides of the compare:
+# the observed side is the safeguard-fallback case, the requested side is the
+# session that already fell back and then falls further.
+downgrade "claude-opus-5-5"            "claude-opus-4-20250514"     yes
+downgrade "opus"                       "claude-opus-4-20250514"     yes
+downgrade "claude-opus-4-20250514"     "claude-opus-5-5"            no
+downgrade "claude-opus-4-20250514"     "claude-opus-4-1"            no
+downgrade "claude-opus-5-5"            "claude-3-5-sonnet-20241022" yes
+downgrade "claude-3-5-sonnet-20241022" "claude-3-5-sonnet-20241022" no
+downgrade "claude-haiku-4-5-20251001"  "claude-haiku-4-5"           no
+
 # The alias table is overridable, so a machine ahead of this repo is not stuck
 # with a stale answer.
 if SWARMERY_MODEL_CURRENT_GENS="opus=60" bash -c ". '$LIB'; model_is_downgrade opus claude-opus-5-5"; then
@@ -155,6 +187,43 @@ run_observe; run_observe
 n=$(jq -s '[.[] | select(.tool=="ModelFallback")] | length' "$LOG2" 2>/dev/null || echo 0)
 if [ "$n" = "1" ]; then ok; else bad "the main-session downgrade re-logged on later tool calls ($n total)"; fi
 
+# ── 4b. an Agent dispatch is NOT a session model change ───────────
+# The drift check used to scan the raw tail for the LAST `"model":"…"` anywhere
+# in it. An assistant line that dispatches a subagent serialises `message.model`
+# BEFORE the tool_use block's `input.model`, so on any opus session every
+# `Task(model: "haiku")` read as a session-wide fallback to haiku: it logged a
+# spurious event, wrote `haiku` into the state file, and left the NEXT real
+# fallback comparing against haiku — where a true opus → opus-4-1 move reads as
+# an UPGRADE and logs nothing. The "unrecognised names are ignored" guard could
+# never catch this one: `haiku` is a recognised tier.
+TR3="$TESTDIR/dispatch.jsonl"
+LOG3="$TESTDIR/dispatch-log.jsonl"
+STATE3="$TESTDIR/swarmery-session-model/s-dispatch"
+run_observe3() {
+  jq -nc --arg t "$TR3" '{tool_name:"Bash",tool_input:{command:"ls"},session_id:"s-dispatch",transcript_path:$t}' |
+    SWARMERY_SESSION_FILE="$LOG3" "$OBSERVE" >/dev/null 2>&1
+}
+
+# A plain turn first, so the session's model is already remembered and the next
+# call is a CHANGE detector with something to compare against.
+printf '%s\n' '{"type":"assistant","message":{"id":"m1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"working"}],"usage":{"input_tokens":1}}}' > "$TR3"
+run_observe3
+
+# …then the dispatch line: the session is still on opus 5.5 and hands a subagent
+# to haiku. Field order here is the real one — message.model, then the tool_use
+# input.model — which is exactly what defeated the greedy regex.
+printf '%s\n' '{"type":"assistant","message":{"id":"m2","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"tool_use","name":"Task","input":{"subagent_type":"Explore","model":"haiku"}}],"usage":{"input_tokens":2}}}' >> "$TR3"
+run_observe3
+
+n=$(jq -s '[.[] | select(.tool=="ModelFallback")] | length' "$LOG3" 2>/dev/null || echo 0)
+if [ "$n" = "0" ]; then ok
+else bad "dispatching a haiku subagent logged $n session ModelFallback events, want 0 — a subagent's model was read as the session's"; fi
+
+remembered=""
+[ -r "$STATE3" ] && read -r remembered < "$STATE3"
+if [ "$remembered" = "claude-opus-5-5" ]; then ok
+else bad "the remembered session model is '${remembered:-<unset>}', want claude-opus-5-5 — the dispatched subagent's model overwrote the session's"; fi
+
 # ── 5. pre-model-switch: a downgrade is never blocked ─────────────
 # A safeguard fallback IS a downgrade, and blocking one strands the session with
 # nowhere to go. This is the fail-open half of the gate.
@@ -176,6 +245,35 @@ if [ "$rc" -eq 0 ]; then ok; else bad "a downgrade to a weaker family was blocke
 # The gate itself must survive: an UPGRADE onto an unvalidated model still blocks.
 rc=0; pre '{"from_model":"claude-opus-5","to_model":"claude-opus-6","session_id":"s"}' || rc=$?
 if [ "$rc" -eq 2 ]; then ok; else bad "an unvalidated UPGRADE exited $rc, want 2 — the gate was disabled, not narrowed"; fi
+
+# THE DEFAULT ON DOUBT IS ALLOW. Each of these three was blocked before: none is
+# a provable downgrade, so each fell through to the validation gate and exit 2 —
+# and every one of them is the hook not KNOWING, not the hook catching an
+# operator. A gate that blocks what it cannot read strands the session just as
+# surely as one that blocks a safeguard fallback.
+
+# 1. No from_model at all. The live PreModelSwitch payload shape is unattested
+#    (see the header of pre-model-switch.sh), so this spelling is realistic and
+#    must not be a block.
+rc=0; pre '{"to_model":"claude-opus-4-1","session_id":"s"}' || rc=$?
+if [ "$rc" -eq 0 ]; then ok; else bad "a switch with no from_model exited $rc, want 0 — direction unknown must fail OPEN"; fi
+
+# 2. A safeguard fallback onto a DATE-SUFFIXED id. This is the P1-a parser bug
+#    reaching the one hook allowed to block: 20250554 > 55 made a downgrade look
+#    like an upgrade, and the session was stranded on the way down.
+rc=0; pre '{"from_model":"claude-opus-5-5","to_model":"claude-opus-4-20250514","session_id":"s"}' || rc=$?
+if [ "$rc" -eq 0 ]; then ok; else bad "a fallback onto a dated id exited $rc, want 0"; fi
+
+# 3. lib/model-tier.sh unreadable. The stub used to mean "nothing is ever a
+#    downgrade", which restored the old stranding on any machine with a broken
+#    copy of the library. Simulated by running the hook from a directory whose
+#    lib/ does not exist.
+COPY="$TESTDIR/hookcopy"; mkdir -p "$COPY"
+cp "$PRE" "$COPY/pre-model-switch.sh"
+[ -e "$COPY/lib/model-tier.sh" ] && bad "the no-library fixture is not actually missing its library"
+rc=0; printf '%s' '{"from_model":"claude-opus-5","to_model":"claude-opus-6","session_id":"s"}' |
+  PATH="$SHIM:$PATH" "$COPY/pre-model-switch.sh" >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 0 ]; then ok; else bad "with lib/model-tier.sh unreadable the hook exited $rc, want 0 — a missing library must fail OPEN, not block every switch"; fi
 
 msg=$(printf '%s' '{"from_model":"claude-opus-5-5","to_model":"claude-opus-4-1"}' | PATH="$SHIM:$PATH" "$PRE" 2>&1 >/dev/null)
 if printf '%s' "$msg" | grep -qi 'safeguard'; then ok

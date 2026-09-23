@@ -877,20 +877,10 @@ func fellBack(use []phaseModelUseDTO) bool {
 	if len(use) < 2 {
 		return false
 	}
-	first, last := use[0].Model, use[len(use)-1].Model
-	if modelid.SameTier(first, last) {
-		return false
-	}
-	// A move UP (an operator switching to a stronger model mid-phase) is not a
-	// fallback and must not be chipped as one.
-	ff, fl := modelid.Family(first), modelid.Family(last)
-	if ff == "" || fl == "" {
-		return false
-	}
-	if ff == fl {
-		return modelid.Generation(last) > 0 && modelid.Generation(first) > modelid.Generation(last)
-	}
-	return modelid.FamilyTier(fl) > 0 && modelid.FamilyTier(fl) < modelid.FamilyTier(ff)
+	// The direction rule lives in modelid.IsFallback, not here: the session row
+	// renders the same claim off the same two ids, and two copies of "is this
+	// weaker" is how one surface starts calling an escalation a fallback.
+	return modelid.IsFallback(use[0].Model, use[len(use)-1].Model)
 }
 
 // decodeIntList parses a JSON array of ints; [] on empty/garbage.

@@ -220,6 +220,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 1,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -249,6 +250,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 2,
     projectId: 2,
     projectSlug: 'example-app',
@@ -269,6 +271,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 3,
     projectId: 3,
     projectSlug: 'swarmery',
@@ -292,6 +295,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 4,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -311,6 +315,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 5,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -334,6 +339,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 6,
     projectId: 4,
     projectSlug: 'docs-site',
@@ -353,6 +359,7 @@ export const mockSessions: Session[] = [
   {
     modelLast: null,
     modelChanged: false,
+    modelFellBack: false,
     id: 7,
     projectId: 2,
     projectSlug: 'example-app',

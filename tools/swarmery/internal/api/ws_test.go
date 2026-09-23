@@ -52,7 +52,7 @@ var (
 		// is a different tier from the first. ADDITIVE — `model` keeps meaning
 		// the first model, so no existing reader changes behaviour; these two
 		// are what make a safeguard fallback visible at all.
-		"modelLast", "modelChanged",
+		"modelLast", "modelChanged", "modelFellBack",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",
