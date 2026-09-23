@@ -160,6 +160,13 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 	}, nil
 }
 
+// Path mirrors worktree.Manager.Path — the checkout Acquire WOULD derive, named
+// without creating anything. planrun never lends a doc into a worktree, so
+// nothing in this engine reads it; it is here because the seam is shared.
+func (w *stubWt) Path(projectSlug, taskID string) (string, error) {
+	return "/wt/" + projectSlug + "/" + taskID, nil
+}
+
 func (w *stubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) error {
 	w.mu.Lock()
 	w.removed = append(w.removed, a)

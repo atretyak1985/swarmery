@@ -2,6 +2,7 @@ package planrun
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -212,6 +213,125 @@ func TestPlanPrompt_CarriesTheStandingInstructionAndBudgetExactlyOnce(t *testing
 	for _, want := range []string{"PLAN DONE", "PLAN BLOCKED at phase", "run-plan", "PHASE MANIFEST"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("prompt lost %q:\n%s", want, got)
+		}
+	}
+}
+
+// TestPlanSettle_TooLittleClockLeftSpawnsNoContinuation is phaserun's twin of
+// the same money bound: runcore.MinContinuationWindow had only a "> 0"
+// assertion, which the guard's previous form (`elapsed >= budget.Timeout`)
+// satisfies too. A plan run that exits with work left and 30 seconds of budget
+// must settle `partial` having spawned EXACTLY ONCE.
+func TestPlanSettle_TooLittleClockLeftSpawnsNoContinuation(t *testing.T) {
+	t.Setenv("SWARMERY_PLANRUN_TIMEOUT", "30s")
+	db, taskID, planDir := fixture(t)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		mustWrite(t, filepath.Join(planDir, "phase-1-schema.md"), "# Phase 1 — Schema\n\n- [x] a\n- [ ] b\n")
+		seedTranscript(t, db, spec.SessionUUID, "Phase 1 is half done. Here is where I got to.")
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(taskID, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, runErr := planRunState(t, db, taskID)
+	if state != "partial" {
+		t.Errorf("run_state = %q, want partial", state)
+	}
+	if !strings.Contains(runErr.String, "less than 5m0s left of the 30s budget") {
+		t.Errorf("run_error = %q, want the budget guard named", runErr.String)
+	}
+	if n := r.specCount(); n != 1 {
+		t.Errorf("spawned %d times, want 1 — a continuation with 30s of clock left is pure spend", n)
+	}
+	if k := runEventKinds(t, db, taskID); len(k) != 1 || k[0] != runcore.EventPartial {
+		t.Errorf("run events = %v, want one partial and NO continuation", k)
+	}
+}
+
+// TestPlanSettle_NoReadablePhaseDocAtExitIsPartialNotDone drives planrun's half
+// of F1, which until now was verified by reading only (phaserun has both of
+// these; planrun had neither). Admission accepts docs that EXIST, the run
+// removes them (an operator rename, a plan revision), and settle then has no
+// tick count at all.
+//
+// An unknown tick count is not evidence of completion, and there is no unticked
+// list to nudge with — so the honest answer is `partial` naming the cause, never
+// the green `done` an exit code used to buy.
+func TestPlanSettle_NoReadablePhaseDocAtExitIsPartialNotDone(t *testing.T) {
+	db, taskID, planDir := fixture(t)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		seedTranscript(t, db, spec.SessionUUID, "a report with no sentinel")
+		removeAllPhaseDocs(t, planDir)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(taskID, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, runErr := planRunState(t, db, taskID)
+	if state != "partial" {
+		t.Errorf("run_state = %q, want partial — an unreadable plan proves nothing", state)
+	}
+	if !strings.Contains(runErr.String, "no readable phase doc at exit (2 phases)") {
+		t.Errorf("run_error = %q, want the cause named with the phase count", runErr.String)
+	}
+	if n := r.specCount(); n != 1 {
+		t.Errorf("spawned %d times, want 1 — there is no unticked list to nudge with", n)
+	}
+	if k := runEventKinds(t, db, taskID); len(k) != 1 || k[0] != runcore.EventPartial {
+		t.Errorf("run events = %v, want one partial", k)
+	}
+}
+
+// TestPlanSettle_BlockedWinsWhenNoPhaseDocIsReadable: the transcript is
+// classified BEFORE the docs are read, so a `PLAN BLOCKED at phase n:` ending
+// survives every phase doc going away. Without that ordering the no-evidence
+// branch returns first and buries an explicit blocked report under a generic
+// `partial`.
+func TestPlanSettle_BlockedWinsWhenNoPhaseDocIsReadable(t *testing.T) {
+	db, taskID, planDir := fixture(t)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		seedTranscript(t, db, spec.SessionUUID,
+			"I could not find the plan.\n\nPLAN BLOCKED at phase 1: the phase docs were deleted under me")
+		removeAllPhaseDocs(t, planDir)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(taskID, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, runErr := planRunState(t, db, taskID)
+	if state != "blocked" {
+		t.Errorf("run_state = %q, want blocked — the sentinel is evidence without the docs", state)
+	}
+	if runErr.String != "the phase docs were deleted under me" {
+		t.Errorf("run_error = %q, want the blocked reason", runErr.String)
+	}
+	if n := r.specCount(); n != 1 {
+		t.Errorf("spawned %d times, want 1 — a blocked plan must not be continued", n)
+	}
+	if k := runEventKinds(t, db, taskID); len(k) != 1 || k[0] != runcore.EventBlocked {
+		t.Errorf("run events = %v, want one blocked event", k)
+	}
+}
+
+// removeAllPhaseDocs deletes every phase doc the fixture wrote, leaving planrun
+// with nothing to measure.
+func removeAllPhaseDocs(t *testing.T, planDir string) {
+	t.Helper()
+	for _, name := range []string{"phase-1-schema.md", "phase-2-ui.md"} {
+		if err := os.Remove(filepath.Join(planDir, name)); err != nil {
+			t.Fatalf("remove %s: %v", name, err)
 		}
 	}
 }

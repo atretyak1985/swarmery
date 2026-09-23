@@ -94,6 +94,9 @@ func (phaseStubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool)
 
 // No leftover branch in the api tests: reclaim always reports "nothing to do",
 // so Start proceeds straight to Acquire.
+func (phaseStubWt) Path(projectSlug, taskID string) (string, error) {
+	return "/wt/" + projectSlug + "/" + taskID, nil
+}
 func (phaseStubWt) ReclaimEmptyBranch(repoRoot, branch string) (int, error) { return 0, nil }
 func (phaseStubWt) DeleteBranch(repoRoot, branch string) (bool, error)      { return true, nil }
 

@@ -98,6 +98,18 @@ func (w *stubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) e
 
 // Branch reclamation is not part of the dispatch flow (dispatch tasks own their
 // branch for their whole lifetime) — inert here.
+// Path MUST agree with Acquire above, including w.root. The real Manager.Path is
+// literally the join Acquire performs, and a stub where the two disagree is how a
+// copy-back test passes while reading an empty directory — the exact blindness
+// that let an adopted phase run be graded from the wrong copy of its doc.
+func (w *stubWt) Path(projectSlug, taskID string) (string, error) {
+	base := w.root
+	if base == "" {
+		base = "/wt"
+	}
+	return filepath.Join(base, projectSlug, taskID), nil
+}
+
 func (w *stubWt) ReclaimEmptyBranch(repoRoot, branch string) (int, error) { return 0, nil }
 func (w *stubWt) DeleteBranch(repoRoot, branch string) (bool, error)      { return false, nil }
 

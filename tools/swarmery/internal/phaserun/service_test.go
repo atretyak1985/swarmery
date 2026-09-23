@@ -143,6 +143,15 @@ type stubWt struct {
 	// pathOverride makes Acquire hand back a REAL directory, so a test can exercise
 	// the lent-document round trip instead of a path that does not exist.
 	pathOverride string
+	// root stands in for worktree.Manager.Root: set it to a temp dir and the
+	// DERIVED checkout (<root>/<slug>/<taskName>) is a real place on disk, which is
+	// what a test of the adoption path needs — adoption never calls Acquire, so
+	// pathOverride cannot reach it.
+	root string
+	// pathErr makes Path fail, the way worktree.Manager.Path fails when the
+	// default root cannot be resolved — the one case in which adoption genuinely
+	// cannot reach the copy the executor ticked.
+	pathErr error
 
 	reclaimed    []string // branches handed to ReclaimEmptyBranch, in order
 	reclaimAhead int      // commits-ahead ReclaimEmptyBranch reports (0 ⇒ reclaimed)
@@ -170,7 +179,7 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 	if sp == "" {
 		sp = stubStartPoint
 	}
-	path := "/wt/" + projectSlug + "/" + taskID
+	path := w.pathFor(projectSlug, taskID)
 	if w.pathOverride != "" {
 		path = w.pathOverride
 	}
@@ -183,6 +192,37 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 
 // stubStartPoint is the harness's stand-in for the SHA Acquire pins a worktree to.
 const stubStartPoint = "base0ffee"
+
+// pathFor is the stub's copy of worktree.Manager's <root>/<slug>/<taskID>
+// layout. Acquire and Path both go through it, so a test that sets `root` to a
+// real directory gets a checkout that actually exists on disk — which is what a
+// test of the LENT plan doc needs.
+func (w *stubWt) pathFor(projectSlug, taskID string) string {
+	root := w.root
+	if root == "" {
+		root = "/wt"
+	}
+	return filepath.Join(root, projectSlug, taskID)
+}
+
+// Path mirrors worktree.Manager.Path: the checkout Acquire WOULD derive, named
+// without creating anything. Adoption uses it to reach a worktree this daemon
+// never acquired.
+// Path goes through the same pathFor as Acquire, and honours pathOverride for
+// the same reason: a stub whose Path disagrees with its own Acquire lets a
+// copy-back test read an empty directory and pass, which is precisely how an
+// adopted phase run came to be graded from the wrong copy of its doc.
+func (w *stubWt) Path(projectSlug, taskID string) (string, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.pathErr != nil {
+		return "", w.pathErr
+	}
+	if w.pathOverride != "" {
+		return w.pathOverride, nil
+	}
+	return w.pathFor(projectSlug, taskID), nil
+}
 
 func (w *stubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) error {
 	w.mu.Lock()

@@ -371,3 +371,44 @@ func TestPrompt_CarriesTheStandingInstructionAndBudgetExactlyOnce(t *testing.T) 
 		}
 	}
 }
+
+// TestSettle_TooLittleClockLeftSpawnsNoContinuation is the BEHAVIOURAL half of
+// runcore.MinContinuationWindow's money bound. The constant had only a
+// "> 0" assertion on it, which the guard's previous form (`elapsed >=
+// budget.Timeout`) satisfies just as well — so the bound lived in the code and
+// in nothing that would notice it going away.
+//
+// Here the run exits with work left and roughly half a minute of its 30s budget
+// gone: far inside the window, and far from the old guard's "the budget is
+// already spent". The run must settle `partial` having spawned EXACTLY ONCE — a
+// continuation the deadline would kill mid-sentence is pure spend.
+func TestSettle_TooLittleClockLeftSpawnsNoContinuation(t *testing.T) {
+	t.Setenv("SWARMERY_PHASERUN_TIMEOUT", "30s")
+	db, _, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [x] a\n- [ ] b\n")
+		seedTranscript(t, db, spec.SessionUUID, "One down. Here is a progress report.")
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, _, _, runErr := phaseRow(t, db, p1)
+	if state != "partial" {
+		t.Errorf("run_state = %q, want partial", state)
+	}
+	if !strings.Contains(runErr.String, "less than 5m0s left of the 30s budget") {
+		t.Errorf("run_error = %q, want the budget guard named", runErr.String)
+	}
+	if n := r.specCount(); n != 1 {
+		t.Errorf("spawned %d times, want 1 — a continuation with 30s of clock left cannot finish anything", n)
+	}
+	if k := runEventKinds(t, db, p1); len(k) != 1 || k[0] != runcore.EventPartial {
+		t.Errorf("run events = %v, want one partial and NO continuation", k)
+	}
+}
