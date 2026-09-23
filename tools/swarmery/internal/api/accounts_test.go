@@ -935,6 +935,60 @@ func TestAccountsRunnableFromStoredVerdict(t *testing.T) {
 	assertRows(t, srv2)
 }
 
+// TestAccountRunnableLimited: a stored 'limited' verdict is not a login answer
+// — the row renders "runnable":null with its reason attached, and NEVER
+// "runnable":false ("could not determine it" is never "not ready").
+func TestAccountRunnableLimited(t *testing.T) {
+	attachHomeAccounts(t, ingest.DefaultAccount, "nabu-org")
+	db, srv := accountsTestDB(t, "accounts-runnable-limited.db")
+	useProbe(t, func(context.Context, string) claudeprobe.Result {
+		t.Error("GET /api/accounts ran a probe")
+		return claudeprobe.Result{}
+	})
+	checked := time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)
+	if err := store.PutAccountRunnable(db, "nabu-org", string(claudeprobe.StatusLimited),
+		claudeprobe.ReasonRateLimited, "run", checked); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	status, body := acctDo(t, http.MethodGet, srv.URL+"/api/accounts", "")
+	if status != http.StatusOK {
+		t.Fatalf("GET /api/accounts = %d", status)
+	}
+	var raw struct {
+		Accounts []map[string]json.RawMessage `json:"accounts"`
+	}
+	if err := json.Unmarshal([]byte(body), &raw); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, a := range raw.Accounts {
+		var key string
+		_ = json.Unmarshal(a["key"], &key)
+		if key != "nabu-org" {
+			continue
+		}
+		found = true
+		if got := string(a["runnable"]); got != "null" && got != "" {
+			t.Errorf(`limited account: "runnable":%s, want null`, got)
+		}
+		var reason string
+		_ = json.Unmarshal(a["runnableReason"], &reason)
+		if reason != claudeprobe.ReasonRateLimited {
+			t.Errorf("reason = %q, want the fixed rate-limit phrase", reason)
+		}
+	}
+	if !found {
+		t.Fatalf("nabu-org row missing")
+	}
+	if strings.Contains(body, `"runnable":false`) {
+		t.Error(`a limited verdict rendered "runnable":false`)
+	}
+	row := accountNamed(t, listAccountsOK(t, srv), "nabu-org")
+	if row.Runnable != nil {
+		t.Errorf("runnable = %v, want nil", *row.Runnable)
+	}
+}
+
 // TestAccountsProbeEndpoint: POST /api/accounts/{account}/probe runs the probe
 // for THAT account's config dir (empty for the default — absence selects it),
 // persists the verdict with source='probe', and returns it.
@@ -1003,6 +1057,39 @@ func TestAccountsProbeEndpoint(t *testing.T) {
 	}
 	if len(dirs) != 2 {
 		t.Errorf("unknown-account probe ran the CLI: dirs = %v", dirs)
+	}
+}
+
+// TestAccountsProbeLimitedKeepsStoredVerdict: a probe that comes back limited
+// answers the caller (runnable null + the rate-limit reason) but never
+// overwrites the stored login verdict.
+func TestAccountsProbeLimitedKeepsStoredVerdict(t *testing.T) {
+	attachHomeAccounts(t, ingest.DefaultAccount, "nabu-org")
+	db, srv := accountsTestDB(t, "accounts-probe-limited.db")
+	checked := time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)
+	if err := store.PutAccountRunnable(db, "nabu-org", "ready", "", "probe", checked); err != nil {
+		t.Fatal(err)
+	}
+	useProbe(t, func(context.Context, string) claudeprobe.Result {
+		return claudeprobe.Result{Status: claudeprobe.StatusLimited, Reason: claudeprobe.ReasonRateLimited}
+	})
+	status, body := acctDo(t, http.MethodPost, srv.URL+"/api/accounts/nabu-org/probe", "")
+	if status != http.StatusOK {
+		t.Fatalf("POST probe = %d\n%s", status, body)
+	}
+	var resp struct {
+		Runnable       *bool  `json:"runnable"`
+		RunnableReason string `json:"runnableReason"`
+	}
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Runnable != nil || resp.RunnableReason != claudeprobe.ReasonRateLimited {
+		t.Errorf("response = %+v, want runnable null with the rate-limit reason", resp)
+	}
+	row, ok, err := store.GetAccountRunnable(db, "nabu-org")
+	if err != nil || !ok || row.Status != "ready" || !row.CheckedAt.Equal(checked) {
+		t.Errorf("stored verdict = %+v (%v, %v), want the untouched ready row", row, ok, err)
 	}
 }
 

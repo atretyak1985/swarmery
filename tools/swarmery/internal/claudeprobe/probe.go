@@ -46,6 +46,11 @@ const (
 	StatusReady   Status = "ready"    // the CLI authenticated
 	StatusNoLogin Status = "no-login" // the CLI demanded a login for this config dir
 	StatusUnknown Status = "unknown"  // could not be determined (timeout, no binary, unrecognised failure)
+	// StatusLimited: the run failed because the account hit a Claude usage
+	// limit. It says NOTHING about the login — a limited account is logged in —
+	// so it is never stored as an account_runnable verdict (runtruth routes it
+	// to account_limit_hits instead).
+	StatusLimited Status = "limited"
 )
 
 // The fixed set of operator-facing reasons. Nothing outside this list may ever
@@ -56,6 +61,7 @@ const (
 	ReasonTimeout      = "the claude CLI did not answer within the probe timeout"
 	ReasonUnrecognised = "the claude CLI failed in an unrecognised way"
 	ReasonStartFailed  = "the claude CLI could not be started"
+	ReasonRateLimited  = "this account has hit a Claude usage limit"
 )
 
 // Result is what a probe run produced. Reason is a SHORT operator-facing

@@ -50,6 +50,53 @@ serving** (brief read lock, no downtime) and yields a single self-contained file
 with no `-wal`/`-shm` sidecars. Schedule it from cron/launchd for a rolling
 history.
 
+**A pre-migration snapshot must not come from `swarmery backup` of a newer
+binary.** `backup` opens the source through `store.Open`, which applies any
+pending migration as a side effect — so it would snapshot the already-migrated
+shape. Before installing a binary that adds a migration, take the snapshot with
+`sqlite3 ~/.swarmery/swarmery.db "VACUUM INTO '<path>'"` (or with the OLD binary's
+`swarmery backup`).
+
+## Switching accounts
+
+Two terminal commands move work between Claude Code accounts. Neither contacts
+the daemon; both read the database through a no-migrate handle.
+
+```bash
+swarmery account switch <key> [--estate <root>] [--force] [--clear-pins] [--dry-run]
+swarmery account move-session <uuid> --to <key> [--from <key>] [--cwd <path>] \
+    [--project-dir <name>] [--force] [--overwrite] [--dry-run]
+```
+
+- `switch` re-binds a whole **declared estate** (a root whose
+  `.claude/settings.local.json` carries `swarmery.estate`) to `<key>`. It refuses
+  a path under no estate (use `swarmery account use <key> --path <dir>` for one
+  directory), and refuses an account whose quota headroom is unknown — no fresh
+  `account_quota` row — unless `--force`. Descendant pins are listed as
+  *redundant* (same account as the estate) or *disagreeing* (a deliberate
+  override, never cleared); `--clear-pins` sweeps redundant pins only on a run
+  that keeps the payer (`switch <current-key> --clear-pins`). The estate's
+  credential store is reported as a count, never a name or a value.
+- `move-session` finds `<uuid>.jsonl` under the source account's
+  `projects/*/`, copies it, its `<uuid>/` directory and the project `memory/`
+  into the same-named directory of `<key>`'s config dir (never moving),
+  re-points the session's `sessions.account`, and prints the resume command.
+  Identical destination files (size + SHA-256) are left alone; a destination
+  file that DIFFERS refuses the whole move, listing every such path, unless
+  `--overwrite`, which first renames each to `<name>.pre-move-<UTC timestamp>`.
+  Files land via temp file + fsync + rename; symlinks are never copied (listed
+  as refused/skipped), and a symlinked destination directory refuses the move.
+  Re-running a finished move is a one-line no-op. The directory name is located
+  on disk, never computed from the session's cwd. A live session is refused
+  unless `--force`.
+
+The headroom `switch` gates on is recorded by the daemon's **quota poller**:
+every `SWARMERY_QUOTA_INTERVAL` (default `10m`; `0` or `off` disables it, with
+one log line and no requests) it reads each account's usage windows into
+`account_quota`. A failed read writes nothing, so absence stays "unknown".
+Usage-limit hits are recorded in `account_limit_hits` from transcript error
+records as they are ingested.
+
 ## Retention (prune)
 
 Old sessions' raw rows (turns/events/file_changes) can be rolled up into

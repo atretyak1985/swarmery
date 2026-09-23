@@ -81,6 +81,10 @@ swarmery account exec [--path <dir>] -- <cmd ...>  run a command under the proje
 swarmery account estate use <key> [--path <dir>]   declare <dir> as the root of estate <key>
 swarmery account estate show [--path <dir>]        the estate a path resolves to, and its root
 swarmery account estate clear [--path <dir>]       remove the declaration at <dir>
+swarmery account switch <key> [--estate <root>]    move a whole declared estate to <key>; refuses a path
+      [--force] [--clear-pins] [--dry-run]           under no estate and an account with unknown headroom
+swarmery account move-session <uuid> --to <key>    copy a session into <key>'s config dir, re-point its
+      [--from <key>] [--cwd <path>] [--dry-run]      row, print the resume command
 ```
 
 `env` prints to your terminal, so it prints the config dir and nothing else.
@@ -88,7 +92,9 @@ swarmery account estate clear [--path <dir>]       remove the declaration at <di
 that also carries the MCP secrets (see below). Both terminal surfaces in this
 pack use `exec` for exactly that reason.
 
-`which`, `use`, `clear`, `env`, `exec` and `estate` never contact the daemon.
+`which`, `use`, `clear`, `env`, `exec`, `estate`, `switch` and `move-session`
+never contact the daemon (`switch` and `move-session` read its database without
+migrating it).
 Your terminal has to keep working with swarmery stopped.
 
 The pack degrades honestly rather than silently: without the CLI on `PATH`,

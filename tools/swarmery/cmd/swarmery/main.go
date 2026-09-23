@@ -64,6 +64,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/quota"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
@@ -1973,6 +1974,21 @@ func cmdServe(args []string) error {
 	// on restart) then sweeps every PollInterval; the event fast path is the
 	// board handlers' pokeDispatch(). Exits when ctx is cancelled.
 	go dispatchSvc.StartScheduler(ctx)
+
+	// Quota poller: per-account headroom into account_quota, the signal
+	// `swarmery account switch` gates on. SWARMERY_QUOTA_INTERVAL=0|off is a
+	// real off switch — no timer, no request to Anthropic.
+	quotaInterval, quotaOn, quotaErr := quota.ParseInterval(os.Getenv("SWARMERY_QUOTA_INTERVAL"))
+	if quotaErr != nil {
+		log.Printf("warn: %v", quotaErr)
+	}
+	if !quotaOn {
+		log.Printf("swarmery quota poller disabled (SWARMERY_QUOTA_INTERVAL=%q)", os.Getenv("SWARMERY_QUOTA_INTERVAL"))
+	} else {
+		poller := &quota.Poller{DB: db, Interval: quotaInterval, Accounts: claudeacct.DiscoverWithDefault}
+		go poller.Run(ctx)
+		log.Printf("swarmery quota poller started (interval %s, %d accounts)", quotaInterval, len(claudeacct.DiscoverWithDefault()))
+	}
 
 	// fusion phase 6: the verification stale-run reaper. A verifier that was
 	// killed or wedged leaves a 'running' verification_runs row; the reaper marks

@@ -1,5 +1,5 @@
 ---
-description: Thin entry point for `/account [list|use <key>|clear|setup-shell [--shim] [--uninstall]]` — shows which Claude Code account this project runs under and switches it. Every decision lives in the `swarmery account` CLI; no run logic lives here.
+description: Thin entry point for `/account [list|use <key>|clear|switch <key>|setup-shell [--shim] [--uninstall]]` — shows which Claude Code account this project runs under and switches it. Every decision lives in the `swarmery account` CLI; no run logic lives here.
 allowed-tools:
   - Bash
 docs:
@@ -16,6 +16,7 @@ docs:
 /account                              list the accounts and mark the one this project uses
 /account use <key>                    bind this project to an account
 /account clear                        drop the binding (back to the default account)
+/account switch <key>                 move this project's whole declared estate to an account
 /account setup-shell [--uninstall]    install/remove the `claude` shell function in your profile
 /account setup-shell --shim [--uninstall]
                                       install/remove the `claude` PATH shim in ~/.swarmery/bin
@@ -72,6 +73,20 @@ the *next* session starts under. Say so instead of implying a live switch.
 swarmery account clear --path "${CLAUDE_PROJECT_DIR:-$PWD}"
 ```
 
+### `/account switch <key>`
+
+```bash
+cd "${CLAUDE_PROJECT_DIR:-$PWD}" && swarmery account switch "<key>"
+```
+
+Re-binds the whole **declared estate** this project belongs to. The CLI refuses
+a directory under no estate (it names `swarmery account use` as the
+single-directory command) and refuses an account whose quota headroom it cannot
+vouch for — report either refusal as-is. Pass `--force` only when the operator
+asked for it this turn. The output lists the descendant pins that disagree (they
+keep their own account) and a credential **count**; relay it unchanged. As with
+`use`, a running session keeps its own account.
+
 ### `/account setup-shell [--uninstall]`
 
 ```bash
@@ -109,6 +124,8 @@ not already export it. Same consent rule as above: only when asked this turn.
 2. `use` → requires exactly one following token, the account key. Missing key →
    print usage and stop; never pick an account for the operator.
 3. `clear` → takes no further arguments.
+3a. `switch` → requires exactly one following token, the account key; `--force`
+    and `--dry-run` are passed through. Missing key → usage, stop.
 4. `setup-shell` → optional `--uninstall` or `--status`, or `--shim` optionally
    followed by `--uninstall` (→ `--shim-uninstall`). Any other flag → usage
    error, stop.

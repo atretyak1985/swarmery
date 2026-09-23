@@ -286,6 +286,11 @@ func runnableDTOFields(v store.AccountRunnable) (*bool, string, string) {
 	case claudeprobe.StatusNoLogin:
 		no := false
 		return &no, v.Reason, checkedAt
+	case claudeprobe.StatusLimited:
+		// A usage limit says nothing about the login — a limited account IS
+		// logged in — so it must never render as false ("not ready"). runtruth
+		// never stores it here; this arm pins the meaning should a row carry it.
+		return nil, v.Reason, checkedAt
 	default:
 		return nil, v.Reason, checkedAt
 	}
@@ -520,6 +525,12 @@ func (h *Handler) runAccountProbe(key, dir, source string) (store.AccountRunnabl
 			Reason:    res.Reason,
 			CheckedAt: time.Now().UTC(),
 			Source:    source,
+		}
+		// A usage limit says nothing about the login (a limited account IS
+		// logged in), so it never overwrites the stored runnable verdict; the
+		// caller still gets this run's answer.
+		if res.Status == claudeprobe.StatusLimited {
+			return row, nil
 		}
 		if err := store.PutAccountRunnable(h.DB, key, row.Status, row.Reason, row.Source, row.CheckedAt); err != nil {
 			return store.AccountRunnable{}, err

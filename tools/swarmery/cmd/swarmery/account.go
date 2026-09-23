@@ -10,6 +10,8 @@ package main
 //	swarmery account exec   [--path <dir>] -- <cmd…> run a command under a project's account
 //	swarmery account estate use|show|clear           declare, inspect, remove an estate root
 //	swarmery account doctor --fast [--json]          credential coverage, names only (account_doctor.go)
+//	swarmery account switch <key> [--estate <root>]  move a declared estate's payer (account_switch.go)
+//	swarmery account move-session <uuid> --to <key>  copy a session to another account (account_switch.go)
 //
 // # Two properties this file exists to preserve
 //
@@ -66,6 +68,15 @@ const accountUsage = `usage:
                                                      read-only credential coverage for this path: the ${VAR}
                                                      names its enabled packs reference, which are set, which
                                                      are missing — names only, never a value
+  swarmery account switch <key> [--estate <root>] [--force] [--clear-pins] [--dry-run]
+                                                     move a whole declared ESTATE's payer to <key>; refuses
+                                                     an estate-less path and an account whose quota
+                                                     headroom is unknown (unless --force)
+  swarmery account move-session <uuid> --to <key> [--from <key>] [--cwd <path>]
+                                [--project-dir <name>] [--force] [--overwrite] [--dry-run]
+                                                     copy a session's transcript, its <uuid>/ dir and the
+                                                     project memory/ into <key>'s config dir, and re-point
+                                                     its database row; prints the resume command
 
   --path defaults to the current directory. A binding lives in
   <path>/` + claudeacct.BindingFile + `; a path with none inherits the account
@@ -84,8 +95,9 @@ const accountUsage = `usage:
   listed pin. --keep-pins lists and clears nothing. With no flag, a terminal
   is asked; anything else only lists.
 
-  which|use|clear|env|exec|doctor|estate never contact the daemon — the
-  terminal has to keep working with swarmery stopped.`
+  which|use|clear|env|exec|doctor|estate|switch|move-session never contact the
+  daemon — the terminal has to keep working with swarmery stopped. switch and
+  move-session read the database without migrating it.`
 
 // cmdAccount dispatches the `account` subcommands.
 func cmdAccount(args []string) error {
@@ -110,6 +122,10 @@ func cmdAccount(args []string) error {
 		return accountEstate(rest, os.Stdout, os.Stderr)
 	case "doctor":
 		return accountDoctor(rest, os.Stdout)
+	case "switch":
+		return accountSwitch(rest, os.Stdout)
+	case "move-session":
+		return accountMoveSession(rest, os.Stdout)
 	case "-h", "--help", "help":
 		fmt.Fprintln(os.Stderr, accountUsage)
 		return nil

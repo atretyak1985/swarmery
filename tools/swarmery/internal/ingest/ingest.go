@@ -560,6 +560,13 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 				in.stats.SkippedLines++
 				continue
 			}
+			// Usage-limit detector (limits.go): one bool test per record on
+			// the hot path; only a flagged API-error record is ever matched.
+			if r.IsAPIErrorMessage {
+				if err := in.recordLimitHit(r); err != nil {
+					return err
+				}
+			}
 			// Assistant turns are recorded for BOTH the main transcript and
 			// subagent sidechains (phase 2): in.agentName (set by
 			// processRecords) tags sidechain turns; usage is priced the same
