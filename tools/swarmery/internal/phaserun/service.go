@@ -873,18 +873,33 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 	for attempt := 0; ; attempt++ {
 		returnDocNow()
 
+		// The TRANSCRIPT is read first and classified first. A `PHASE BLOCKED:`
+		// ending is evidence in its own right and must win even when the document
+		// it refers to can no longer be read — the doc being renamed or rewritten
+		// mid-run (an operator edit, a plan revision) is exactly when a run is
+		// likeliest to end blocked, and it was precisely then that the old order
+		// returned `done` with a NULL run_error over `PHASE BLOCKED: <reason>`.
+		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
+
 		c, ok := criteriaInDoc(info.DocPath)
 		if !ok {
-			// No readable doc means no evidence, in either direction. Continuing
-			// would nudge a run with an EMPTY unticked list ("0 criteria are still
-			// unticked — continue with them"), which is nonsense; so this degrades
-			// to the pre-loop behaviour rather than to a guess.
-			log.Printf("warning: phaserun: phase=%d doc %q unreadable at exit, settling on the exit code as before",
-				phaseID, info.DocPath)
-			return "done", ""
+			if reason, blocked := runcore.BlockedReason(text); blocked {
+				s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
+				log.Printf("phaserun: phase=%d uuid=%s blocked (doc %q unreadable): %s",
+					phaseID, spec.SessionUUID, info.DocPath, reason)
+				return "blocked", reason
+			}
+			// No doc and no blocked line: the tick count is UNKNOWN, and an unknown
+			// tick count is not evidence of completion. Continuing is impossible too
+			// (the unticked list would be empty — "0 criteria are still unticked,
+			// continue with them"), so the honest state is `partial` with the cause
+			// named, not the green stamp the exit code used to buy.
+			detail := fmt.Sprintf("phase doc unreadable at exit: %s", info.DocPath)
+			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
+			log.Printf("warning: phaserun: phase=%d uuid=%s partial: %s", phaseID, spec.SessionUUID, detail)
+			return "partial", detail
 		}
 
-		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
 		end, reason := runcore.ClassifyEnd(text, c.Done, c.Total)
 		switch end {
 		case runcore.EndBlocked:
@@ -911,10 +926,13 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
 			log.Printf("phaserun: phase=%d uuid=%s partial: %s", phaseID, spec.SessionUUID, detail)
 			return "partial", detail
-		case budget.Timeout > 0 && elapsed >= budget.Timeout:
-			// The wall clock this phase was given is spent. A continuation would run
-			// under a deadline that has already passed and be killed on the spot.
-			detail := fmt.Sprintf("%d of %d criteria ticked when the %s budget ran out", c.Done, c.Total, budget.Timeout)
+		case budget.Timeout > 0 && budget.Timeout-elapsed < runcore.MinContinuationWindow:
+			// Not enough wall clock left to be worth a billed turn. The guard used to
+			// be `elapsed >= budget.Timeout`, which let a run with seconds left spawn
+			// a continuation the deadline killed immediately — a spawn that cannot
+			// finish anything is pure spend. See runcore.MinContinuationWindow.
+			detail := fmt.Sprintf("%d of %d criteria ticked with less than %s left of the %s budget",
+				c.Done, c.Total, runcore.MinContinuationWindow, budget.Timeout)
 			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
 			return "partial", detail
 		}

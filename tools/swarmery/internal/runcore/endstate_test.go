@@ -38,27 +38,27 @@ func TestClassifyEnd(t *testing.T) {
 			wantReason: "the schema does not match the doc",
 		},
 		{
-			name:       "plan blocked carries its free-form qualifier",
-			text:       "PLAN BLOCKED at phase 3: needs a human to approve the drop",
-			done:       1, tot: 5, want: EndBlocked,
+			name: "plan blocked carries its free-form qualifier",
+			text: "PLAN BLOCKED at phase 3: needs a human to approve the drop",
+			done: 1, tot: 5, want: EndBlocked,
 			wantReason: "needs a human to approve the drop",
 		},
 		{
-			name:       "bare dispatch-style blocked",
-			text:       "BLOCKED: file scope does not cover internal/store",
-			done:       0, tot: 2, want: EndBlocked,
+			name: "bare dispatch-style blocked",
+			text: "BLOCKED: file scope does not cover internal/store",
+			done: 0, tot: 2, want: EndBlocked,
 			wantReason: "file scope does not cover internal/store",
 		},
 		{
-			name:       "markdown-wrapped blocked line still matches",
-			text:       "summary\n\n**PHASE BLOCKED: the API it calls does not exist**",
-			done:       0, tot: 1, want: EndBlocked,
+			name: "markdown-wrapped blocked line still matches",
+			text: "summary\n\n**PHASE BLOCKED: the API it calls does not exist**",
+			done: 0, tot: 1, want: EndBlocked,
 			wantReason: "the API it calls does not exist**",
 		},
 		{
-			name:       "the LAST blocked line wins",
-			text:       "The contract says to end with PHASE BLOCKED: <reason>.\nPHASE BLOCKED: the real one",
-			done:       0, tot: 1, want: EndBlocked,
+			name: "the LAST blocked line wins",
+			text: "The contract says to end with PHASE BLOCKED: <reason>.\nPHASE BLOCKED: the real one",
+			done: 0, tot: 1, want: EndBlocked,
 			wantReason: "the real one",
 		},
 		{
@@ -106,23 +106,74 @@ func TestClassifyEndBlockedWithoutReasonKeepsTheLine(t *testing.T) {
 	}
 }
 
-func TestHasDoneLine(t *testing.T) {
-	for _, tc := range []struct {
-		text string
-		want bool
-	}{
-		{"PHASE DONE", true},
-		{"PLAN DONE", true},
-		{"work log\n\nDONE", true},
-		{"DONE.", true},
-		{"**PLAN DONE**", true},
-		{"the work is done", false},
-		{"DONE: with caveats", false},
-		{"", false},
+// TestBlockedInsideAFenceIsNotBlocked: a completion report that QUOTES its own
+// contract inside a code fence is showing the template, not invoking it. Blocked
+// wins over a full tick count by design, so reading a quote as a sentinel stamps
+// a finished phase blocked with a nonsense reason that no continuation can clear.
+func TestBlockedInsideAFenceIsNotBlocked(t *testing.T) {
+	text := "Every criterion is ticked.\n\n" +
+		"The contract this phase runs under:\n\n" +
+		"```\n" +
+		"PHASE BLOCKED: <reason>\n" +
+		"```\n\n" +
+		"PHASE DONE\n"
+	if got, reason := ClassifyEnd(text, 4, 4); got != EndDone || reason != "" {
+		t.Errorf("ClassifyEnd = (%q, %q), want (done, \"\") — the fenced line is a quote", got, reason)
+	}
+	if reason, ok := BlockedReason(text); ok {
+		t.Errorf("BlockedReason = (%q, true), want not blocked", reason)
+	}
+}
+
+// TestBlockedOutsideAFenceStillWins is the other half of the same rule: the fence
+// skip must not cost the real sentinel, including when the report also quotes the
+// template earlier — and including a ```` fence that quotes ``` (CommonMark: the
+// inner marker is too short to close the outer block).
+func TestBlockedOutsideAFenceStillWins(t *testing.T) {
+	text := "Contract:\n\n" +
+		"````\n" +
+		"```\n" +
+		"PHASE BLOCKED: <reason>\n" +
+		"```\n" +
+		"````\n\n" +
+		"PHASE BLOCKED: the migration the doc names does not exist\n"
+	got, reason := ClassifyEnd(text, 4, 4)
+	if got != EndBlocked {
+		t.Fatalf("ClassifyEnd = %q, want blocked", got)
+	}
+	if reason != "the migration the doc names does not exist" {
+		t.Errorf("reason = %q, want the real ending's reason", reason)
+	}
+}
+
+// TestBlockedReasonMatchesClassifyEnd: the exported helper the unreadable-doc
+// paths use must give the SAME answer ClassifyEnd would — it exists so a blocked
+// ending survives a missing document, not so a second rule can drift in.
+func TestBlockedReasonMatchesClassifyEnd(t *testing.T) {
+	for _, text := range []string{
+		"PHASE BLOCKED: no schema",
+		"> **PLAN BLOCKED at phase 3**: the API contract is undecided",
+		"PHASE BLOCKED:",
+		"a plain progress report",
+		"",
 	} {
-		if got := HasDoneLine(tc.text); got != tc.want {
-			t.Errorf("HasDoneLine(%q) = %v, want %v", tc.text, got, tc.want)
+		end, want := ClassifyEnd(text, 0, 2)
+		got, ok := BlockedReason(text)
+		if ok != (end == EndBlocked) {
+			t.Errorf("BlockedReason(%q) ok = %v, ClassifyEnd = %q", text, ok, end)
 		}
+		if ok && got != want {
+			t.Errorf("BlockedReason(%q) = %q, ClassifyEnd reason = %q", text, got, want)
+		}
+	}
+}
+
+// TestMinContinuationWindowIsNonZero pins the other half of the money bound: the
+// old guard (`elapsed >= timeout`) let a run with seconds left spawn a
+// continuation the deadline killed on the spot.
+func TestMinContinuationWindowIsNonZero(t *testing.T) {
+	if MinContinuationWindow <= 0 {
+		t.Fatalf("MinContinuationWindow = %s, want a real window", MinContinuationWindow)
 	}
 }
 
@@ -175,5 +226,33 @@ func TestContinuationMessageCapsTheList(t *testing.T) {
 func TestElapsedLineOmitsAnUnknownBudget(t *testing.T) {
 	if got := ElapsedLine(90*time.Second, 0); got != "elapsed 90s\n" {
 		t.Errorf("ElapsedLine with no timeout = %q", got)
+	}
+}
+
+// TestBlockedSurvivesAnUnclosedFence guards the hole the fence-awareness fix
+// opened. A truncated build log or traceback that opens ``` and never closes it
+// makes the fence walker skip everything after it — including the
+// `PHASE BLOCKED:` the executor wrote underneath. Skipped, the run would be
+// stamped done over an explicit report that it is stuck (blocked wins over the
+// tick count precisely so that cannot happen), or would burn both continuations
+// on a situation nothing can clear.
+func TestBlockedSurvivesAnUnclosedFence(t *testing.T) {
+	const wantReason = "the private module proxy credentials are missing"
+	text := "I could not finish. The build output, truncated:\n\n" +
+		"```\n" +
+		"go: downloading example.com/thing v1.2.3\n" +
+		"FATAL: no credentials for the private module proxy\n\n" +
+		"PHASE BLOCKED: " + wantReason + "\n"
+
+	reason, ok := BlockedReason(text)
+	if !ok {
+		t.Fatalf("BlockedReason = (%q, false); an unclosed fence must not hide the sentinel", reason)
+	}
+	if reason != wantReason {
+		t.Errorf("reason = %q, want %q", reason, wantReason)
+	}
+	// And it must still beat a full tick count, exactly as a fence-free run does.
+	if got, r := ClassifyEnd(text, 6, 6); got != EndBlocked || r != wantReason {
+		t.Errorf("ClassifyEnd = (%q, %q), want (%q, %q)", got, r, EndBlocked, wantReason)
 	}
 }

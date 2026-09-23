@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 )
 
 var (
@@ -512,53 +514,16 @@ func UntickedCheckboxes(text string) []string {
 }
 
 // forEachLineOutsideFences calls fn for every line that is not inside a fenced
-// code block. Fence tracking follows CommonMark's rule that a fence closes only on
-// a marker of the SAME character and at least the opening length, so a ```` block
-// quoting ``` markdown — exactly how a phase doc shows a generated template —
-// stays one block instead of toggling twice.
+// code block.
 //
 // The single line walker for both checkbox readers: counting and ticking MUST
 // agree about which lines are the doc's own, or an auto-tick would rewrite a
 // checkbox inside a code sample and the count would then disagree with the file.
+// It now lives in internal/mdfence because runcore's blocked-sentinel matcher
+// needs the same rule and cannot import this package (wsingest imports runcore);
+// the local name stays so every call site here reads as it always did.
 func forEachLineOutsideFences(text string, fn func(i int, line string)) {
-	var fenceChar byte
-	fenceLen := 0
-	for i, line := range strings.Split(text, "\n") {
-		if c, n := fenceMarker(line); n > 0 {
-			switch {
-			case fenceLen == 0:
-				fenceChar, fenceLen = c, n
-			case c == fenceChar && n >= fenceLen:
-				fenceChar, fenceLen = 0, 0
-			}
-			continue // the fence line itself is never content
-		}
-		if fenceLen == 0 {
-			fn(i, line)
-		}
-	}
-}
-
-// fenceMarker reports a line's fence character and run length, or (0, 0) when the
-// line does not open or close a fence. Up to three leading spaces are allowed, as
-// in CommonMark.
-func fenceMarker(line string) (byte, int) {
-	s := strings.TrimLeft(line, " ")
-	if len(line)-len(s) > 3 || s == "" {
-		return 0, 0
-	}
-	c := s[0]
-	if c != '`' && c != '~' {
-		return 0, 0
-	}
-	n := 0
-	for n < len(s) && s[n] == c {
-		n++
-	}
-	if n < 3 {
-		return 0, 0
-	}
-	return c, n
+	mdfence.ForEachLine(text, fn)
 }
 
 // phaseCols is the 0-based column layout of a phase-sequencing table; -1 means

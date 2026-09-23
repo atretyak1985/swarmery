@@ -2,6 +2,7 @@ package phaserun
 
 import (
 	"database/sql"
+	"os"
 	"strings"
 	"testing"
 
@@ -250,23 +251,72 @@ func TestSettle_ContinuationFailureIsPartialNotDone(t *testing.T) {
 	}
 }
 
-// TestSettle_UnreadableDocDegradesToTheOldBehaviour: no doc means no evidence in
-// EITHER direction, so the loop must not nudge with an empty criteria list.
-func TestSettle_UnreadableDocDegradesToTheOldBehaviour(t *testing.T) {
+// TestSettle_DocUnreadableAtExitIsPartialNotDone drives the branch the name
+// promises: admission accepts a doc that EXISTS, the executor's run removes it
+// (an operator rename, a plan revision), and settle then has no tick count.
+//
+// An unknown tick count is not evidence of completion, so the run must settle
+// `partial` naming the cause — never the green `done` the exit code used to buy.
+func TestSettle_DocUnreadableAtExitIsPartialNotDone(t *testing.T) {
 	db, _, p1, _ := fixture(t)
-	mustExec(t, db, `UPDATE epic_phases SET doc_path='/nope/missing.md' WHERE id=?`, p1)
+	doc := phaseDocPath(t, db, p1)
 
 	r := &stubRunner{}
 	r.runFn = func(spec RunSpec) (*Run, error) {
 		seedTranscript(t, db, spec.SessionUUID, "a report with no sentinel")
+		if err := os.Remove(doc); err != nil { // the doc vanishes mid-run
+			t.Fatalf("remove doc: %v", err)
+		}
 		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
 	}
 	s := newTestService(db, r, &stubWt{})
-	// Start reads the doc for admission, so seed it, then break the path after.
-	if _, err := s.Start(p1, "", ""); err == nil {
-		// Admission refuses an unreadable doc (ErrNoDoc); that IS the guard, and it
-		// means this branch is only reachable when the doc vanishes mid-run.
-		t.Skip("admission refuses an unreadable doc, so the degrade path is unreachable from Start")
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, _, _, runErr := phaseRow(t, db, p1)
+	if state != "partial" {
+		t.Errorf("run_state = %q, want partial — an unreadable doc proves nothing", state)
+	}
+	if !strings.Contains(runErr.String, "phase doc unreadable at exit") {
+		t.Errorf("run_error = %q, want the cause named", runErr.String)
+	}
+	if n := r.specCount(); n != 1 {
+		t.Errorf("spawned %d times, want 1 — there is no unticked list to nudge with", n)
+	}
+}
+
+// TestSettle_BlockedWinsWhenTheDocIsUnreadable: the transcript is classified
+// BEFORE the doc is read, so a `PHASE BLOCKED:` ending survives the doc going
+// away. Previously the unreadable-doc branch returned early and stamped the run
+// green with a NULL run_error over an explicit blocked report.
+func TestSettle_BlockedWinsWhenTheDocIsUnreadable(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		seedTranscript(t, db, spec.SessionUUID,
+			"I could not find the migration.\n\nPHASE BLOCKED: the doc names a table that does not exist")
+		if err := os.Remove(doc); err != nil {
+			t.Fatalf("remove doc: %v", err)
+		}
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, _, _, runErr := phaseRow(t, db, p1)
+	if state != "blocked" {
+		t.Errorf("run_state = %q, want blocked — the sentinel is evidence without the doc", state)
+	}
+	if runErr.String != "the doc names a table that does not exist" {
+		t.Errorf("run_error = %q, want the blocked reason", runErr.String)
+	}
+	if k := runEventKinds(t, db, p1); len(k) != 1 || k[0] != runcore.EventBlocked {
+		t.Errorf("run events = %v, want one blocked event", k)
 	}
 }
 

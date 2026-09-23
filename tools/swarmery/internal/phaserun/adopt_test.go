@@ -2,6 +2,7 @@ package phaserun
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os/exec"
 	"strings"
@@ -46,12 +47,16 @@ func TestHealStale_AdoptsSurvivingRun(t *testing.T) {
 		t.Fatal("adoption spawned no watcher")
 	}
 	watcher()
+	// The survivor left the fixture's criteria UNTICKED and said nothing: the same
+	// evidence the normal exit path would call `continue`. Adoption cannot continue
+	// (the counter died with the previous daemon), so the honest state is `partial`
+	// — not the `done` the vanished pid used to buy.
 	state, _, _, runErr := phaseRow(t, db, p1)
-	if state != "done" {
-		t.Errorf("adopted run after exit: state = %q, want done", state)
+	if state != "partial" {
+		t.Errorf("adopted run after exit: state = %q, want partial", state)
 	}
-	if !strings.Contains(runErr.String, "exit status unknown") {
-		t.Errorf("run_error = %q, want the unknown-exit note", runErr.String)
+	if !strings.Contains(runErr.String, "not continued") {
+		t.Errorf("run_error = %q, want the not-continued note", runErr.String)
 	}
 	// Slot released — the phase can run again.
 	if _, err := s.Start(p1, "", ""); errors.Is(err, ErrRunning) {
@@ -108,4 +113,62 @@ func TestAdopt_CancelKillsTheOrphan(t *testing.T) {
 		state, _, _, runErr := phaseRow(t, db, p1)
 		return state == "failed" && runErr.String == "cancelled"
 	})
+}
+
+// TestAdopt_TickedCriteriaSettleDone: a survivor that FINISHED its work is still
+// `done` — adoption grades by the same evidence, so the fix for the exit-code
+// rule must not turn every restart into a `partial`.
+func TestAdopt_TickedCriteriaSettleDone(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	mustWriteDoc(t, phaseDocPath(t, db, p1), "# Phase 1 — Schema\n\n- [x] a\n- [x] b\n")
+	mustExec(t, db, `UPDATE epic_phases SET run_state='running', run_session_uuid='live-uuid' WHERE id=?`, p1)
+	seedTranscript(t, db, "live-uuid", "Both criteria landed.\n\nPHASE DONE")
+
+	state, runErr := adoptThenExit(t, db, p1)
+	if state != "done" {
+		t.Errorf("state = %q, want done — every criterion is ticked", state)
+	}
+	if !strings.Contains(runErr.String, "exit status unknown") {
+		t.Errorf("run_error = %q, want the unknown-exit note kept", runErr.String)
+	}
+}
+
+// TestAdopt_BlockedTranscriptSettlesBlocked: the ending the executor actually
+// wrote outranks the tick count, on the adoption path exactly as on the normal
+// one — this is the branch that used to be stamped green by a disappearing pid.
+func TestAdopt_BlockedTranscriptSettlesBlocked(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	mustWriteDoc(t, phaseDocPath(t, db, p1), "# Phase 1 — Schema\n\n- [x] a\n- [x] b\n")
+	mustExec(t, db, `UPDATE epic_phases SET run_state='running', run_session_uuid='live-uuid' WHERE id=?`, p1)
+	seedTranscript(t, db, "live-uuid", "PHASE BLOCKED: the credentials the doc assumes are missing")
+
+	state, runErr := adoptThenExit(t, db, p1)
+	if state != "blocked" {
+		t.Errorf("state = %q, want blocked", state)
+	}
+	if runErr.String != "the credentials the doc assumes are missing" {
+		t.Errorf("run_error = %q, want the blocked reason", runErr.String)
+	}
+}
+
+// adoptThenExit adopts phase id's live process, then lets it disappear, and
+// returns the terminal row the adoption watcher wrote.
+func adoptThenExit(t *testing.T, db *sql.DB, id int64) (string, sql.NullString) {
+	t.Helper()
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	var watcher func()
+	s.Go = func(fn func()) { watcher = fn }
+	s.FindRun = func(uuid string) (int, bool) { return 4242, uuid == "live-uuid" }
+	alive := true
+	s.ProcAlive = func(pid int) bool { return alive && pid == 4242 }
+	if err := s.HealStale(); err != nil {
+		t.Fatalf("HealStale: %v", err)
+	}
+	if watcher == nil {
+		t.Fatal("adoption spawned no watcher")
+	}
+	alive = false
+	watcher()
+	state, _, _, runErr := phaseRow(t, db, id)
+	return state, runErr
 }

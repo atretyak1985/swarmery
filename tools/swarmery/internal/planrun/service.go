@@ -538,15 +538,27 @@ func planCriteria(phases []Phase) (done, total int, unticked []string, ok bool) 
 // Returns the run_state to stamp and its detail.
 func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budget runcore.Budget) (state, detail string) {
 	for attempt := 0; ; attempt++ {
+		// Transcript first, and classified first: a `PLAN BLOCKED at phase n:`
+		// ending is evidence on its own and must win even when no phase doc can be
+		// read — see phaserun.settle for the failure this ordering prevents.
+		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
+
 		done, total, unticked, ok := planCriteria(info.Phases)
 		if !ok {
-			// No readable phase doc anywhere: nothing to measure and nothing to put
-			// in a continuation. Degrade to the pre-loop behaviour rather than guess.
-			log.Printf("warning: planrun: plan=%d no readable phase doc at exit, settling on the exit code as before", info.TaskID)
-			return "done", ""
+			if reason, blocked := runcore.BlockedReason(text); blocked {
+				s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
+				log.Printf("planrun: plan=%d uuid=%s blocked (no readable phase doc): %s", info.TaskID, spec.SessionUUID, reason)
+				return "blocked", reason
+			}
+			// Nothing to measure and nothing to put in a continuation. An unknown
+			// tick count is not evidence of completion, so this settles `partial`
+			// with the cause named rather than stamping the old green `done`.
+			detail := fmt.Sprintf("no readable phase doc at exit (%d phases)", len(info.Phases))
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
+			log.Printf("warning: planrun: plan=%d uuid=%s partial: %s", info.TaskID, spec.SessionUUID, detail)
+			return "partial", detail
 		}
 
-		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
 		end, reason := runcore.ClassifyEnd(text, done, total)
 		switch end {
 		case runcore.EndBlocked:
@@ -569,8 +581,12 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, d)
 			log.Printf("planrun: plan=%d uuid=%s partial: %s", info.TaskID, spec.SessionUUID, d)
 			return "partial", d
-		case budget.Timeout > 0 && elapsed >= budget.Timeout:
-			d := fmt.Sprintf("%d of %d criteria ticked when the %s budget ran out", done, total, budget.Timeout)
+		case budget.Timeout > 0 && budget.Timeout-elapsed < runcore.MinContinuationWindow:
+			// The twin of phaserun's guard, and for the same reason: a spawn with
+			// seconds left on the clock is killed by the deadline before it can
+			// finish anything, so it is pure spend. See runcore.MinContinuationWindow.
+			d := fmt.Sprintf("%d of %d criteria ticked with less than %s left of the %s budget",
+				done, total, runcore.MinContinuationWindow, budget.Timeout)
 			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, d)
 			return "partial", d
 		}

@@ -33,9 +33,13 @@
 --      (fixed by 0073_fk_child_indexes). A history table that only ever grows is
 --      precisely the shape that hurts there.
 --
--- The cost of no FK is orphan rows after a phase is deleted; retention/cleanup
--- can sweep them by subject, and an orphan event is inert — nothing joins FROM
--- run_events, readers always come the other way with a known (engine, subject).
+-- The cost of no FK is orphan rows after a phase is deleted. NOTHING SWEEPS THEM:
+-- internal/prune covers session-scoped tables and worktree_sweeps only, and this
+-- table is not in it. What bounds growth instead is runcore.ClearRunEvents, which
+-- every engine calls at run START — a subject keeps the events of its CURRENT run
+-- and no more, so the table grows with live subjects, not with run history. An
+-- orphan event is inert: nothing joins FROM run_events, readers always come the
+-- other way with a known (engine, subject).
 
 CREATE TABLE IF NOT EXISTS run_events (
   id           INTEGER PRIMARY KEY,

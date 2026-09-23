@@ -2,6 +2,7 @@ package planrun
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os/exec"
 	"strings"
@@ -41,12 +42,16 @@ func TestHealStale_AdoptsSurvivingRun(t *testing.T) {
 		t.Fatal("adoption spawned no watcher")
 	}
 	watcher()
+	// The fixture's phase docs are UNTICKED and the survivor said nothing: the same
+	// evidence the normal exit path calls `continue`. Adoption must not continue
+	// (the counter died with the previous daemon), so it settles `partial` rather
+	// than stamping `done` because a pid went away.
 	state, _, _, _, runErr := planRow(t, db, taskID)
-	if state != "done" {
-		t.Errorf("adopted run after exit: state = %q, want done", state)
+	if state != "partial" {
+		t.Errorf("adopted run after exit: state = %q, want partial", state)
 	}
-	if !strings.Contains(runErr.String, "exit status unknown") {
-		t.Errorf("run_error = %q, want the unknown-exit note", runErr.String)
+	if !strings.Contains(runErr.String, "not continued") {
+		t.Errorf("run_error = %q, want the not-continued note", runErr.String)
 	}
 }
 
@@ -98,4 +103,63 @@ func TestAdopt_CancelKillsTheOrphan(t *testing.T) {
 		state, _, _, _, runErr := planRow(t, db, taskID)
 		return state == "failed" && runErr.String == "cancelled"
 	})
+}
+
+// TestAdopt_FinishedPlanSettlesDone: a survivor whose phase docs are fully ticked
+// is still `done` — the adoption path grades by the same evidence as the normal
+// exit, so removing the exit-code rule must not turn every restart into partial.
+func TestAdopt_FinishedPlanSettlesDone(t *testing.T) {
+	db, taskID, planDir := fixture(t)
+	finishAllPhases(t, planDir)
+	mustExec(t, db, `INSERT INTO plan_runs (workspace_task_id, run_state, run_session_uuid)
+		VALUES (?, 'running', 'live-uuid')`, taskID)
+	seedTranscript(t, db, "live-uuid", "Every phase landed.\n\nPLAN DONE")
+
+	state, runErr := adoptThenExit(t, db, taskID)
+	if state != "done" {
+		t.Errorf("state = %q, want done", state)
+	}
+	if !strings.Contains(runErr.String, "exit status unknown") {
+		t.Errorf("run_error = %q, want the unknown-exit note kept", runErr.String)
+	}
+}
+
+// TestAdopt_BlockedTranscriptSettlesBlocked: the orchestrator's own blocked
+// ending outranks the tick count on the adoption path too.
+func TestAdopt_BlockedTranscriptSettlesBlocked(t *testing.T) {
+	db, taskID, planDir := fixture(t)
+	finishAllPhases(t, planDir)
+	mustExec(t, db, `INSERT INTO plan_runs (workspace_task_id, run_state, run_session_uuid)
+		VALUES (?, 'running', 'live-uuid')`, taskID)
+	seedTranscript(t, db, "live-uuid", "PLAN BLOCKED at phase 2: the rollout needs a human decision")
+
+	state, runErr := adoptThenExit(t, db, taskID)
+	if state != "blocked" {
+		t.Errorf("state = %q, want blocked", state)
+	}
+	if runErr.String != "the rollout needs a human decision" {
+		t.Errorf("run_error = %q, want the blocked reason", runErr.String)
+	}
+}
+
+// adoptThenExit adopts the plan's live process, then lets it disappear, and
+// returns the terminal row the adoption watcher wrote.
+func adoptThenExit(t *testing.T, db *sql.DB, taskID int64) (string, sql.NullString) {
+	t.Helper()
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	var watcher func()
+	s.Go = func(fn func()) { watcher = fn }
+	s.FindRun = func(uuid string) (int, bool) { return 4242, uuid == "live-uuid" }
+	alive := true
+	s.ProcAlive = func(pid int) bool { return alive && pid == 4242 }
+	if err := s.HealStale(); err != nil {
+		t.Fatalf("HealStale: %v", err)
+	}
+	if watcher == nil {
+		t.Fatal("adoption spawned no watcher")
+	}
+	alive = false
+	watcher()
+	state, _, _, _, runErr := planRow(t, db, taskID)
+	return state, runErr
 }
