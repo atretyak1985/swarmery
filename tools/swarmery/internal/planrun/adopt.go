@@ -65,6 +65,8 @@ func (t tracked) Adopt(c runcore.Candidate, pid int) (runcore.AdoptHooks, bool) 
 // been nudged settles `partial` with runcore.AdoptedNotContinuedNote.
 func (s *Service) settleAdopted(taskID int64, uuid string) (state, note string) {
 	text := runcore.LastAssistantText(s.DB, uuid)
+	stop := runcore.LastStopReason(s.DB, uuid)
+	refusalCat := runcore.RefusalCategory(s.DB, uuid)
 
 	phases, err := s.loadPhases(taskID)
 	if err != nil {
@@ -72,7 +74,7 @@ func (s *Service) settleAdopted(taskID int64, uuid string) (state, note string) 
 	}
 	done, total, _, ok := planCriteria(phases)
 	if !ok {
-		if reason, blocked := runcore.BlockedReason(text); blocked {
+		if reason, blocked := runcore.BlockedOrRefused(text, stop, refusalCat); blocked {
 			s.event(taskID, uuid, runcore.EventBlocked, 0, reason)
 			log.Printf("planrun: adopted plan=%d blocked: %s", taskID, reason)
 			return "blocked", reason
@@ -82,7 +84,7 @@ func (s *Service) settleAdopted(taskID int64, uuid string) (state, note string) 
 		return "partial", note
 	}
 
-	switch end, reason := runcore.ClassifyEnd(text, done, total); end {
+	switch end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, done, total); end {
 	case runcore.EndBlocked:
 		s.event(taskID, uuid, runcore.EventBlocked, 0, reason)
 		log.Printf("planrun: adopted plan=%d blocked: %s", taskID, reason)

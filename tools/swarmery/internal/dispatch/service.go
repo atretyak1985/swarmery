@@ -1274,10 +1274,24 @@ func (s *Service) linkSession(taskID int64, uuid string) {
 // routing).
 func (s *Service) classifyLastTurn(uuid string) Sentinel {
 	text := s.lastAssistantText(uuid)
-	if text == "" {
-		return Sentinel{}
+	if sent := ClassifySentinel(text); text != "" && sent.Kind != "" {
+		// The agent's OWN sentinel wins: it is the more specific account, and a
+		// refusal that still managed to write `BLOCKED: …` routes identically.
+		return sent
 	}
-	return ClassifySentinel(text)
+	// No sentinel — but a stop_reason of `refusal` is one all the same
+	// (migration 0078). An Opus 5.5 safeguard ends the turn with no sentinel,
+	// frequently with no text at all, and `claude -p` still exits 0: the final
+	// stage therefore landed in_review as a CLEAN run, and a non-final stage
+	// carried an empty {previous_stage_output} into the next billed stage of a
+	// chain that cannot progress. Route it to the blocked path the card already
+	// has, through the same Sentinel the sentinel reader produces rather than a
+	// parallel branch at the call site.
+	if detail, ok := runcore.RefusalDetail(
+		runcore.LastStopReason(s.DB, uuid), runcore.RefusalCategory(s.DB, uuid)); ok {
+		return Sentinel{Kind: "blocked", Line: blockedSentinel + " " + detail}
+	}
+	return Sentinel{}
 }
 
 // lastAssistantText returns a session's final assistant turn text (by uuid), or

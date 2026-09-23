@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/modelid"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
@@ -79,6 +81,22 @@ type epicPhaseDTO struct {
 	// no second copy to drift. Null when the phase has never run, when the run's
 	// session has not been ingested yet, or when that session carries no model.
 	RunModel *string `json:"runModel"`
+	// RunModels is every model the run's session actually ran an assistant turn
+	// on, in the order they first appeared, with that model's turn count.
+	//
+	// RunModel above (sessions.model) is the FIRST of them, and for most runs it
+	// is the only one — the list is then a single entry and the UI shows what it
+	// always did. It stops being the only one exactly when it matters: an Opus
+	// 5.5 safeguard refusal moves the session onto an older model and the run
+	// carries on there, so "the model this run used" was a true statement about
+	// its first turn and a false one about its output. Empty when the phase has
+	// never run or its session is not ingested.
+	RunModels []phaseModelUseDTO `json:"runModels"`
+	// RunModelFellBack is true when the LAST of those models is a weaker family
+	// or an older generation than the first — i.e. the list is not just a
+	// rename or a context-window marker. This, not len(RunModels) > 1, is what
+	// the "fell back to X" chip renders on.
+	RunModelFellBack bool `json:"runModelFellBack"`
 	// The model the phase DOC asks for (`**Model:** opus`, epic_phases.doc_model,
 	// migration 0069) — rung 2 of the ladder. Null when the doc declares nothing.
 	//
@@ -785,13 +803,94 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	// exactly that way on the first draft of this change.) The explicit Close is
 	// what makes the ordering true — the deferred one runs far too late.
 	rows.Close()
+	// Same rule, same reason: one query for the whole task AFTER the cursor is
+	// closed, never one per phase inside the loop.
+	usage := h.phaseRunModels(taskID)
 	for i := range phases {
 		phases[i].RunEvents = runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID)
+		used := usage[phases[i].ID]
+		if used == nil {
+			used = []phaseModelUseDTO{} // [] not null: the UI maps over it
+		}
+		phases[i].RunModels, phases[i].RunModelFellBack = used, fellBack(used)
 	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100
 	}
 	return phases, rollup, covers, nil
+}
+
+// phaseModelUseDTO is one model a phase run actually used, and how many
+// assistant turns it carried. The count is what makes the list readable: "42
+// turns on opus 5.5, 3 on opus 4.1" says the run was nearly finished when the
+// safeguard hit, which "two models" does not.
+type phaseModelUseDTO struct {
+	Model string `json:"model"`
+	Turns int    `json:"turns"`
+}
+
+// phaseRunModels returns, per phase id of this task, the models its run session
+// used in FIRST-APPEARANCE order.
+//
+// Chronological rather than heaviest-first on purpose: the last element is "what
+// this run finished on", which is the number the chip shows, and a
+// frequency-ordered list would put it anywhere. Errors degrade to an empty map —
+// this is a decoration on a page that must still render.
+func (h *Handler) phaseRunModels(taskID int64) map[int64][]phaseModelUseDTO {
+	out := map[int64][]phaseModelUseDTO{}
+	rows, err := h.DB.Query(`
+		SELECT e.id, tr.model, COUNT(*) AS turns, MIN(tr.seq) AS first_seq
+		  FROM epic_phases e
+		  JOIN sessions se ON se.session_uuid = e.run_session_uuid
+		  JOIN turns tr ON tr.session_id = se.id
+		 WHERE e.workspace_task_id = ?
+		   AND tr.role = 'assistant' AND tr.model IS NOT NULL AND tr.model <> ''
+		 GROUP BY e.id, tr.model
+		 ORDER BY e.id, first_seq`, taskID)
+	if err != nil {
+		log.Printf("warning: epics: phase run models unreadable (task %d): %v", taskID, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			phaseID  int64
+			model    string
+			turns    int
+			firstSeq int64
+		)
+		if err := rows.Scan(&phaseID, &model, &turns, &firstSeq); err != nil {
+			log.Printf("warning: epics: phase run model row unreadable (task %d): %v", taskID, err)
+			return out
+		}
+		out[phaseID] = append(out[phaseID], phaseModelUseDTO{Model: model, Turns: turns})
+	}
+	return out
+}
+
+// fellBack reports whether a run ENDED on a weaker model than it started on.
+//
+// Not len(use) > 1: `claude-opus-5-5` and `claude-opus-5-5[1m]` are two rows for
+// one model (the bracket is a context-window marker, not a model), and a rename
+// or a date suffix would likewise light a chip that claims something untrue.
+func fellBack(use []phaseModelUseDTO) bool {
+	if len(use) < 2 {
+		return false
+	}
+	first, last := use[0].Model, use[len(use)-1].Model
+	if modelid.SameTier(first, last) {
+		return false
+	}
+	// A move UP (an operator switching to a stronger model mid-phase) is not a
+	// fallback and must not be chipped as one.
+	ff, fl := modelid.Family(first), modelid.Family(last)
+	if ff == "" || fl == "" {
+		return false
+	}
+	if ff == fl {
+		return modelid.Generation(last) > 0 && modelid.Generation(first) > modelid.Generation(last)
+	}
+	return modelid.FamilyTier(fl) > 0 && modelid.FamilyTier(fl) < modelid.FamilyTier(ff)
 }
 
 // decodeIntList parses a JSON array of ints; [] on empty/garbage.

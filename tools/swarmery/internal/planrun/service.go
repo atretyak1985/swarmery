@@ -542,10 +542,15 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 		// ending is evidence on its own and must win even when no phase doc can be
 		// read — see phaserun.settle for the failure this ordering prevents.
 		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
+		// stop_reason beside the sentinel — see phaserun.settle. A plan run is
+		// the longer of the two and therefore the more expensive one to resume
+		// into a safeguard it has already tripped.
+		stop := runcore.LastStopReason(s.DB, spec.SessionUUID)
+		refusalCat := runcore.RefusalCategory(s.DB, spec.SessionUUID)
 
 		done, total, unticked, ok := planCriteria(info.Phases)
 		if !ok {
-			if reason, blocked := runcore.BlockedReason(text); blocked {
+			if reason, blocked := runcore.BlockedOrRefused(text, stop, refusalCat); blocked {
 				s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
 				log.Printf("planrun: plan=%d uuid=%s blocked (no readable phase doc): %s", info.TaskID, spec.SessionUUID, reason)
 				return "blocked", reason
@@ -559,7 +564,7 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 			return "partial", detail
 		}
 
-		end, reason := runcore.ClassifyEnd(text, done, total)
+		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, done, total)
 		switch end {
 		case runcore.EndBlocked:
 			s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, reason)

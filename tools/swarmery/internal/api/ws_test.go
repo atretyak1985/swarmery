@@ -48,6 +48,11 @@ var (
 		// notch companion phase 1: terminal identity captured at SessionStart
 		// (migration 0068, nullable).
 		"terminal",
+		// opus-5.5 fallback visibility: the session's LAST model and whether it
+		// is a different tier from the first. ADDITIVE — `model` keeps meaning
+		// the first model, so no existing reader changes behaviour; these two
+		// are what make a safeguard fallback visible at all.
+		"modelLast", "modelChanged",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",

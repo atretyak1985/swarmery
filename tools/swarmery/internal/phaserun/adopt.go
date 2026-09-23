@@ -93,10 +93,15 @@ func (s *Service) settleAdopted(phaseID int64, uuid string, info phaseInfo) (sta
 	located := s.returnAdoptedDoc(phaseID, info)
 
 	text := runcore.LastAssistantText(s.DB, uuid)
+	// Same evidence pair as settle: an adopted run can have ended in a safeguard
+	// refusal exactly as an attended one can, and the adoption path is the one
+	// with NO continuation loop to notice later.
+	stop := runcore.LastStopReason(s.DB, uuid)
+	refusalCat := runcore.RefusalCategory(s.DB, uuid)
 
 	c, ok := criteriaInDoc(docPath)
 	if !ok {
-		if reason, blocked := runcore.BlockedReason(text); blocked {
+		if reason, blocked := runcore.BlockedOrRefused(text, stop, refusalCat); blocked {
 			s.event(phaseID, uuid, runcore.EventBlocked, 0, reason)
 			log.Printf("phaserun: adopted phase=%d blocked: %s", phaseID, reason)
 			return "blocked", reason
@@ -106,7 +111,7 @@ func (s *Service) settleAdopted(phaseID int64, uuid string, info phaseInfo) (sta
 		return "partial", note
 	}
 
-	switch end, reason := runcore.ClassifyEnd(text, c.Done, c.Total); end {
+	switch end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total); end {
 	case runcore.EndBlocked:
 		s.event(phaseID, uuid, runcore.EventBlocked, 0, reason)
 		log.Printf("phaserun: adopted phase=%d blocked: %s", phaseID, reason)

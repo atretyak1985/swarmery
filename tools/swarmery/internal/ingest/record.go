@@ -37,6 +37,17 @@ type apiMessage struct {
 	Role    string          `json:"role"`
 	Content json.RawMessage `json:"content"` // string (user prompt) or []contentBlock
 	Usage   *usage          `json:"usage"`
+
+	// StopReason is the API's own account of why the turn ended: end_turn,
+	// tool_use, max_tokens, stop_sequence or refusal. It is duplicated across
+	// the split lines of one message and is null on every line but the last,
+	// so ingest only ever writes a NON-EMPTY value (migration 0078).
+	//
+	// `refusal` is the one that changes a decision: it is how an Opus 5.5
+	// safeguard ends a turn, and the process still exits 0. Without it the
+	// completion loop cannot tell a safeguard stop from a model that simply
+	// finished talking.
+	StopReason string `json:"stop_reason"`
 }
 
 type usage struct {

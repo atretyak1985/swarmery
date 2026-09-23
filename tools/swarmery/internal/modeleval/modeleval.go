@@ -23,7 +23,24 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/modelid"
 )
+
+// modelBaseExpr strips the trailing context-window marker from turns.model
+// INSIDE SQL: `claude-opus-5-5[1m]` and `claude-opus-5-5` are one model bought
+// with two different context windows, and every query here compares model ids
+// for equality.
+//
+// Without it the marker split the evidence three ways at once: a 1M-window
+// session never matched `WHERE model = ?` for its own model, so it was invisible
+// to gather(); it counted as a SECOND model in `COUNT(DISTINCT model) = 1`, so
+// any judged session that also had normal-window turns was discarded as "mixed";
+// and it formed its own row in baseline(), diluting the incumbent it should have
+// reinforced. The Go side strips the parameter with modelid.Base so both sides
+// of every comparison are the same shape.
+const modelBaseExpr = `CASE WHEN INSTR(t.model, '[') > 1 ` +
+	`THEN SUBSTR(t.model, 1, INSTR(t.model, '[') - 1) ELSE t.model END`
 
 // RegressionMargin is how far below the incumbent baseline a candidate model
 // may score before it is called a regression.
@@ -68,7 +85,7 @@ func baseline(db *sql.DB, exclude string) (float64, string, bool, error) {
 	// judgment only for a session that ran on a single model.
 	rows, err := db.Query(`
 		WITH scoped AS (
-		  SELECT tj.id, tj.overall, MIN(t.model) AS model
+		  SELECT tj.id, tj.overall, MIN(`+modelBaseExpr+`) AS model
 		    FROM trajectory_judgments tj
 		    JOIN turns t
 		      ON t.session_id = tj.session_id
@@ -76,7 +93,7 @@ func baseline(db *sql.DB, exclude string) (float64, string, bool, error) {
 		        OR  t.agent_name = tj.agent )
 		   WHERE t.model IS NOT NULL AND t.model <> ''
 		   GROUP BY tj.id, tj.overall
-		  HAVING COUNT(DISTINCT t.model) = 1
+		  HAVING COUNT(DISTINCT `+modelBaseExpr+`) = 1
 		)
 		SELECT model, AVG(overall) AS mean, COUNT(*) AS n
 		  FROM scoped
@@ -204,7 +221,7 @@ func gather(db *sql.DB, model string) (evidence, error) {
 	//     when that agent ran on exactly that one model for the whole session.
 	rows, err := db.Query(`
 		WITH scoped AS (
-		  SELECT tj.id, tj.agent, tj.overall, MIN(t.model) AS model
+		  SELECT tj.id, tj.agent, tj.overall, MIN(`+modelBaseExpr+`) AS model
 		    FROM trajectory_judgments tj
 		    JOIN turns t
 		      ON t.session_id = tj.session_id
@@ -212,7 +229,7 @@ func gather(db *sql.DB, model string) (evidence, error) {
 		        OR  t.agent_name = tj.agent )
 		   WHERE t.model IS NOT NULL AND t.model <> ''
 		   GROUP BY tj.id, tj.agent, tj.overall
-		  HAVING COUNT(DISTINCT t.model) = 1
+		  HAVING COUNT(DISTINCT `+modelBaseExpr+`) = 1
 		)
 		SELECT agent, AVG(overall) AS mean, COUNT(*) AS n
 		  FROM scoped
@@ -253,6 +270,11 @@ func gather(db *sql.DB, model string) (evidence, error) {
 // pass drawn from one agent's runs should not look like a pass across the
 // roster.
 func Evaluate(db *sql.DB, gs *GoldenSet, model string) (Result, error) {
+	// Normalised ONCE, at the entry point, so gather/baseline/Persist all speak
+	// about the same id: a verdict recorded against `claude-opus-5-5[1m]` would
+	// never be found by a gate asking about `claude-opus-5-5`, and the operator
+	// would be blocked by a model they had just validated.
+	model = modelid.Base(model)
 	res := Result{Model: model, GoldenSetVersion: gs.Version}
 
 	ev, err := gather(db, model)
@@ -338,6 +360,7 @@ func Persist(db *sql.DB, res Result, now time.Time) error {
 // model has never been evaluated — which the gate must treat as "unknown",
 // not as "fine".
 func Newest(db *sql.DB, model string) (Result, bool, error) {
+	model = modelid.Base(model) // the gate may be asked about a 1M-window id
 	var r Result
 	err := db.QueryRow(`
 		SELECT model, golden_set_version, verdict, COALESCE(score,0),

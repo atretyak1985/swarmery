@@ -881,9 +881,18 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 		// returned `done` with a NULL run_error over `PHASE BLOCKED: <reason>`.
 		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
 
+		// The turn's stop_reason (migration 0078) is read from the same
+		// transcript and weighed beside the sentinel, not in a second machine:
+		// an Opus 5.5 safeguard ends the turn with stop_reason=refusal and the
+		// process still exits 0, so without this a refused run classifies as
+		// `continue` and the loop resumes the session straight back into the
+		// classifier — twice, at this run's pinned effort.
+		stop := runcore.LastStopReason(s.DB, spec.SessionUUID)
+		refusalCat := runcore.RefusalCategory(s.DB, spec.SessionUUID)
+
 		c, ok := criteriaInDoc(info.DocPath)
 		if !ok {
-			if reason, blocked := runcore.BlockedReason(text); blocked {
+			if reason, blocked := runcore.BlockedOrRefused(text, stop, refusalCat); blocked {
 				s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
 				log.Printf("phaserun: phase=%d uuid=%s blocked (doc %q unreadable): %s",
 					phaseID, spec.SessionUUID, info.DocPath, reason)
@@ -900,7 +909,7 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 			return "partial", detail
 		}
 
-		end, reason := runcore.ClassifyEnd(text, c.Done, c.Total)
+		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total)
 		switch end {
 		case runcore.EndBlocked:
 			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)

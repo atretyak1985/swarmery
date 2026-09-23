@@ -188,10 +188,12 @@ func usage() {
   swarmery recost   [--db <path>]
   swarmery stale [--db <path>] [--project <id>] [--all]
   swarmery economics [--db <path>] [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>]
-                    [--project <id>] [--json]
+                    [--project <id>] [--json] [--current-model]
                                    token economy of the agent system: cost per completed task,
                                    cache efficiency, delegation cost, wasted work, model mix
-                                   (read-only; safe while the daemon is serving)
+                                   (read-only; safe while the daemon is serving).
+                                   --current-model prints ONLY the model id with the most
+                                   assistant turns in the last 30 days, for scripts.
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
@@ -558,9 +560,11 @@ func cmdEconomics(args []string) error {
 	until := fs.String("until", "", "upper bound, YYYY-MM-DD inclusive")
 	project := fs.Int64("project", 0, "project id filter (0 = all)")
 	asJSON := fs.Bool("json", false, "emit the report as JSON instead of text")
+	currentModel := fs.Bool("current-model", false,
+		"print only the model id the fleet ran the most assistant turns on in the last 30 days")
 	fs.Parse(args)
 	if fs.NArg() != 0 {
-		return fmt.Errorf("usage: swarmery economics [--db <path>] [--since <d>] [--until <d>] [--project <id>] [--json]")
+		return fmt.Errorf("usage: swarmery economics [--db <path>] [--since <d>] [--until <d>] [--project <id>] [--json] [--current-model]")
 	}
 
 	db, err := store.Open(*dbPath)
@@ -568,6 +572,28 @@ func cmdEconomics(args []string) error {
 		return err
 	}
 	defer db.Close()
+
+	// --current-model short-circuits the whole report: its one consumer is
+	// config/routines/model-upgrade.json, which needs a bare id to interpolate
+	// and nothing else. It answers on stdout or FAILS — never silently, which is
+	// the behaviour that let a routine call a nonexistent flag for months.
+	if *currentModel {
+		model, turns, ok, err := economics.CurrentModel(db)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("economics: no assistant turns in the last %d days — nothing to call the current model",
+				economics.CurrentModelWindowDays)
+		}
+		if *asJSON {
+			return json.NewEncoder(os.Stdout).Encode(map[string]any{
+				"model": model, "turns": turns, "windowDays": economics.CurrentModelWindowDays,
+			})
+		}
+		fmt.Fprintln(os.Stdout, model)
+		return nil
+	}
 
 	rep, err := economics.Compute(db, economics.Options{
 		Since: *since, Until: *until, ProjectID: *project,

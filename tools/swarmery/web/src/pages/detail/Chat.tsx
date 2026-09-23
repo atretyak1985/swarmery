@@ -317,11 +317,33 @@ export function Chat({
   // Suppress the backfill hint for active/idle sessions: text === null is normal
   // while the ingest pipeline hasn't yet processed in-flight turns. The hint is
   // only useful for completed/killed sessions whose rows predate migration 0005.
+  // A null `text` has two unrelated causes and this check used to conflate
+  // them: a row ingested before migration 0005 (a real backfill gap) and a turn
+  // that genuinely produced no prose — thinking-only, or cut off by a safeguard
+  // refusal. The second kind got told to run a backfill that would change
+  // nothing, on a session where nothing was missing.
+  //
+  // `stopReason` separates them because it is an INGEST-VINTAGE MARKER: every
+  // build since migration 0078 writes it, so a null-text turn that has one was
+  // written by a build that also stores prose.
   const needsBackfill =
     assistantTurns.length > 0 &&
-    assistantTurns.every((t) => t.text === null) &&
+    assistantTurns.every((t) => t.text === null && t.stopReason === null) &&
     detail.status !== 'active' &&
     detail.status !== 'idle';
+  // The other half of the split: a modern, fully ingested last turn that simply
+  // ended without prose. Naming the reason the API gave is the difference
+  // between "we lost your data" and "the model stopped here, and this is why" —
+  // and `refusal` here is the visible end of a safeguard fallback.
+  const lastAssistant =
+    assistantTurns.length > 0 ? assistantTurns[assistantTurns.length - 1] : undefined;
+  const noFinalMessage =
+    !needsBackfill &&
+    lastAssistant !== undefined &&
+    lastAssistant.text === null &&
+    lastAssistant.stopReason !== null
+      ? lastAssistant.stopReason
+      : null;
   const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : undefined;
   return (
     <div className="mt-[26px]">
@@ -342,6 +364,11 @@ export function Chat({
       <LiveActivity detail={detail} />
       {detail.status === 'waiting_approval' && (
         <AwaitingApprovalPill since={lastEvent !== undefined ? fmtAgo(lastEvent.ts) : null} />
+      )}
+      {noFinalMessage !== null && (
+        <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
+          no final message (stop_reason={noFinalMessage})
+        </div>
       )}
       {needsBackfill && (
         <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">

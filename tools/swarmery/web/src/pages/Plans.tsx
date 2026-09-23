@@ -427,9 +427,18 @@ const PHASE_RUN_DEFAULT_MODEL_LABEL = 'opus 5.5';
 
 const PHASE_RUN_MODELS = [
   { value: 'default', label: `per-doc, else ${PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)` },
-  { value: 'opus', label: 'opus 5 — default' },
+  // Labels name the GENERATION each alias resolves to today and what choosing
+  // it costs relative to opus 5.5, which is the rung `default` lands on. No
+  // entry says "default" any more: two of them did, the picker's own default is
+  // the first row, and a second thing calling itself the default is how an
+  // operator ends up overriding every doc on the plan by picking what they read
+  // as "leave it alone".
+  { value: 'opus', label: 'opus 5.5' },
   { value: 'sonnet', label: 'sonnet 5 — faster, cheaper' },
-  { value: 'fable', label: 'fable 5.1 — most capable, ~2× cost' },
+  // ~2.5x, not ~2x: fable 5 is $10/$50 per MTok against opus 5.5's $4/$20
+  // (tools/swarmery/config/pricing.json). The old figure was measured against
+  // opus 5, which cost $5/$25 — opus 5.5 got cheaper and the comparison moved.
+  { value: 'fable', label: 'fable 5.1 — most capable, ~2.5× cost' },
 ] as const;
 type PhaseRunModel = (typeof PHASE_RUN_MODELS)[number]['value'];
 const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
@@ -518,6 +527,26 @@ const MODEL_SHORT_NAMES: Record<string, string> = {
  * in flight would be a claim, not a record. */
 function RunModelChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
   if (phase.runModel === null || phase.runState === 'running') return null;
+  // A run that FELL BACK gets its own chip instead of the plain one. `runModel`
+  // is the session's first model, which for these runs is a true statement about
+  // the first turn and a false one about the output: an Opus 5.5 safeguard
+  // refusal moves the session onto an older model and the work continues there.
+  // The tooltip lists every model with its turn count, because "42 turns on opus
+  // 5.5, 3 on opus 4.1" says how much of the run the fallback actually touched.
+  const lastUse = phase.runModels[phase.runModels.length - 1];
+  if (phase.runModelFellBack && phase.runModels.length > 1 && lastUse !== undefined) {
+    const last = lastUse.model;
+    return (
+      <span
+        className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
+        data-tip={`this run changed model mid-flight: ${phase.runModels
+          .map((m) => `${m.model} (${m.turns} turn${m.turns === 1 ? '' : 's'})`)
+          .join(' → ')}`}
+      >
+        {phaseModelShortName(phase.runModel)} → fell back to {phaseModelShortName(last)}
+      </span>
+    );
+  }
   return (
     <span
       className="rounded border border-line px-1.5 py-px font-mono text-[9.5px] text-ink-dim"

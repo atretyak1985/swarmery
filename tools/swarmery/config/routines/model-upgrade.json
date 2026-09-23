@@ -43,7 +43,14 @@
     {
       "type": "command",
       "name": "model eval",
-      "command": "swarmery modeleval --model \"$(swarmery economics --current-model 2>/dev/null || echo claude-opus-5-5)\"",
+      "command": "set -e; m=$(swarmery economics --current-model) || { echo 'economics --current-model failed; not guessing a model' >&2; exit 1; }; echo \"current model: $m\"; swarmery modeleval --model \"$m\"",
+      "timeoutSec": 900,
+      "continueOnFailure": true
+    },
+    {
+      "type": "ai-prompt",
+      "name": "effort re-sweep",
+      "prompt": "Re-derive the reasoning effort each agent should run at, for the model the fleet is on TODAY. Read every plugins/*/agents/*.md frontmatter and list the agents whose declared effort no longer matches what its work needs: name the agent, its current effort, the effort you would set, and the evidence (what the agent actually does, and what a run at the current effort cost or missed). A newer model moves this line in BOTH directions -- a stronger model makes a high-effort pin wasteful on routine work, and a cheaper one makes a low pin a false economy on judgment work -- so report reductions and increases alike. Change nothing: this step produces the list the card below triages. Report only agents you have read, and say plainly when you have no evidence either way.",
       "timeoutSec": 900,
       "continueOnFailure": true
     },

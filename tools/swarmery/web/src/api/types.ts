@@ -206,7 +206,18 @@ export interface Session {
   /** Clean project display name (projects.name, base of the path); additive — null until healed. */
   projectName?: string | null;
   sessionUuid: string;
+  /** The FIRST assistant model of the transcript (`sessions.model`). */
   model: string | null;
+  /** The model of the session's NEWEST assistant turn. Null until it has one.
+   *
+   * A separate fact from `model`, not a replacement: a session an Opus 5.5
+   * safeguard moved onto an older model needs to show both ends of the move,
+   * and `model` alone reported the one it started on for the row's whole life. */
+  modelLast: string | null;
+  /** True when `modelLast` is a different family or generation from `model` —
+   * i.e. the session really changed model, as opposed to picking up a
+   * context-window marker (`claude-opus-5-5[1m]`) on the same one. */
+  modelChanged: boolean;
   gitBranch: string | null;
   cwd: string | null;
   status: SessionStatus;
@@ -308,6 +319,18 @@ export interface Turn {
    * truncated; null for pre-0005 rows until `swarmery backfill --rebuild-text`.
    */
   text: string | null;
+  /**
+   * Why the turn ended (`turns.stop_reason`, migration 0078): `end_turn`,
+   * `tool_use`, `max_tokens`, `stop_sequence` or `refusal`. Null on user turns
+   * and on every turn ingested before that migration.
+   *
+   * That null doubles as an INGEST-VINTAGE MARKER, which is the only reason the
+   * Chat tab can tell the two causes of missing prose apart: a null-text
+   * assistant turn that carries a stop reason was written by a build that
+   * stores prose, so its missing text is a real fact about the turn (a
+   * thinking-only turn, or one a safeguard cut off) rather than a backfill gap.
+   */
+  stopReason: string | null;
 }
 
 /** Go: eventDTO — payload is raw JSON (json.RawMessage), decoded client-side. */
@@ -3338,6 +3361,15 @@ export interface PhaseDiagnosis {
 }
 
 /** One epic phase — mirrors epicPhaseDTO in internal/api/epics.go. */
+/** Go: phaseModelUseDTO — one model a phase run actually used, and how many
+ * assistant turns it carried. The count is what makes the list readable: "42
+ * turns on opus 5.5, 3 on opus 4.1" says the run was nearly finished when the
+ * safeguard hit, which "two models" does not. */
+export interface PhaseModelUse {
+  model: string;
+  turns: number;
+}
+
 export interface EpicPhase {
   id: number;
   seq: number;
@@ -3373,6 +3405,19 @@ export interface EpicPhase {
    * `runSessionUuid`. Null when the phase never ran, when its session has not
    * been ingested yet, or when that session carries no model. */
   runModel: string | null;
+  /** Every model the run's session actually ran an assistant turn on, in the
+   * order they first appeared, with that model's turn count.
+   *
+   * `runModel` above is the FIRST of them and for most runs the only one. It
+   * stops being the only one exactly when it matters: a safeguard refusal moves
+   * the session onto an older model and the run continues there, so "the model
+   * this run used" was true of its first turn and false of its output.
+   * `[]` when the phase never ran or its session is not ingested. */
+  runModels: PhaseModelUse[];
+  /** True when the run ENDED on a weaker model than it started on. Not
+   * `runModels.length > 1`: a context-window marker or a rename produces two
+   * entries without any fallback having happened. */
+  runModelFellBack: boolean;
   /** The model the phase DOC asks for (`**Model:** opus` in its header —
    * `epic_phases.doc_model`). Null when the doc declares nothing.
    *

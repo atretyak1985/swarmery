@@ -218,6 +218,8 @@ const MOCK_HANDOFF_MARKDOWN = `# Handoff: migrate email templates to the provide
 
 export const mockSessions: Session[] = [
   {
+    modelLast: null,
+    modelChanged: false,
     id: 1,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -245,6 +247,8 @@ export const mockSessions: Session[] = [
     },
   },
   {
+    modelLast: null,
+    modelChanged: false,
     id: 2,
     projectId: 2,
     projectSlug: 'example-app',
@@ -263,6 +267,8 @@ export const mockSessions: Session[] = [
     account: 'nabu-org',
   },
   {
+    modelLast: null,
+    modelChanged: false,
     id: 3,
     projectId: 3,
     projectSlug: 'swarmery',
@@ -284,6 +290,8 @@ export const mockSessions: Session[] = [
     taskConfidence: 0.92,
   },
   {
+    modelLast: null,
+    modelChanged: false,
     id: 4,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -301,6 +309,8 @@ export const mockSessions: Session[] = [
     costUsd: 0.11,
   },
   {
+    modelLast: null,
+    modelChanged: false,
     id: 5,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -322,6 +332,8 @@ export const mockSessions: Session[] = [
     taskConfidence: 0.74,
   },
   {
+    modelLast: null,
+    modelChanged: false,
     id: 6,
     projectId: 4,
     projectSlug: 'docs-site',
@@ -339,6 +351,8 @@ export const mockSessions: Session[] = [
     costUsd: 0.19,
   },
   {
+    modelLast: null,
+    modelChanged: false,
     id: 7,
     projectId: 2,
     projectSlug: 'example-app',
@@ -640,6 +654,7 @@ Ready for the full suite whenever you are.`;
 
 const s1Turns: Turn[] = [
   {
+    stopReason: null,
     id: 11,
     seq: 1,
     role: 'user',
@@ -655,6 +670,7 @@ const s1Turns: Turn[] = [
     text: 'Port the order-confirmation and vendor-notify templates to the provider v2 API. Keep backwards compatibility with old event payloads.',
   },
   {
+    stopReason: null,
     id: 12,
     seq: 2,
     role: 'assistant',
@@ -670,6 +686,7 @@ const s1Turns: Turn[] = [
     text: s1AssistantText,
   },
   {
+    stopReason: null,
     id: 13,
     seq: 3,
     role: 'user',
@@ -685,6 +702,7 @@ const s1Turns: Turn[] = [
     text: 'Looks good — run the full suite and commit.',
   },
   {
+    stopReason: null,
     id: 14,
     seq: 4,
     role: 'assistant',
@@ -975,6 +993,7 @@ const s1FileChanges: FileChange[] = [
 
 const s2Turns: Turn[] = [
   {
+    stopReason: null,
     id: 21,
     seq: 1,
     role: 'user',
@@ -990,6 +1009,7 @@ const s2Turns: Turn[] = [
     text: 'Analyze the agent system and summarize orchestration.',
   },
   {
+    stopReason: null,
     id: 22,
     seq: 2,
     role: 'assistant',
@@ -1095,6 +1115,7 @@ function simpleDetail(session: Session, events: Event[], turns: Turn[]): Session
 
 function promptTurn(id: number, seq: number, ts: string, text: string | null): Turn {
   return {
+    stopReason: null,
     id,
     seq,
     role: seq % 2 === 1 ? 'user' : 'assistant',
@@ -1409,6 +1430,8 @@ const mockEpicPhase = (
     >
   >,
 ): EpicPhase => ({
+  runModels: [],
+  runModelFellBack: false,
   id,
   seq,
   name,
