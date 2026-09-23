@@ -164,10 +164,13 @@ type NeedsOperator struct {
 	Detail      string
 }
 
-// Configured reports whether any classifier backend exists. The rules backend
-// alone does not count: with no URL (and claude off) the package is inert.
+// Configured reports whether a classifier backend the shipped questions can
+// actually reach exists. The rules backend alone does not count, and neither
+// does the claude backend on its own: it answers only questions that set
+// AllowRemote, and neither D1 nor D2 does, so without a local URL the package
+// stays inert instead of writing a "no backend" error row on every pass.
 func (e *Engine) Configured() bool {
-	return e != nil && (e.Local != nil || e.Claude != nil)
+	return e != nil && e.Local != nil
 }
 
 func (e *Engine) now() time.Time {

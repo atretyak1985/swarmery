@@ -51,7 +51,9 @@ Two things ship from this repository on separate clocks:
     samples. The monthly `model-upgrade` routine reads it.
   - *Decision classifier.* `internal/decide` asks cheap typed questions around
     runs, never inside them. The backends are rules, then a local
-    OpenAI-compatible server, then an opt-in claude haiku. It asks D1 (how did
+    OpenAI-compatible server. A claude haiku backend exists but is off, and
+    it answers only questions that opt in to leaving the machine; D1 and D2
+    don't opt in yet. It asks D1 (how did
     this run end?) after the completion loop's rules, and D2 (session labels)
     for advisor and retro. Both default to shadow, every call is audited in
     `decisions`, and with `SWARMERY_DECIDE_URL` unset nothing changes.

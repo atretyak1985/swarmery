@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -75,16 +76,26 @@ func LoadInput(db *sql.DB, phaseID int64, uuid string) (in Input, ok bool, reaso
 		return in, false, "the run has no surprise score", nil
 	}
 	in = Input{PhaseID: phaseID, SessionUUID: uuid, Surprise: *st}
-	var report string
+	var report, docPath string
 	err = db.QueryRow(`
-		SELECT e.workspace_task_id, e.name, COALESCE(e.completion_report, ''), COALESCE(t.external_id, '')
+		SELECT e.workspace_task_id, e.name, COALESCE(e.completion_report, ''), COALESCE(t.external_id, ''),
+		       COALESCE(e.doc_path, '')
 		  FROM epic_phases e LEFT JOIN tasks t ON t.id = e.workspace_task_id
-		 WHERE e.id = ?`, phaseID).Scan(&in.TaskID, &in.PhaseName, &report, &in.PlanID)
+		 WHERE e.id = ?`, phaseID).Scan(&in.TaskID, &in.PhaseName, &report, &in.PlanID, &docPath)
 	if errors.Is(err, sql.ErrNoRows) {
 		return in, false, "the phase no longer exists", nil
 	}
 	if err != nil {
 		return in, false, "", err
+	}
+	// Read the report from the DOC when it is readable: the completion_report
+	// column is refreshed by a debounced wsingest scan, which has not run yet on
+	// the run-end pass — it would still hold the PREVIOUS run's report, and the
+	// generation claim would then lock this run out of its own explanation.
+	if docPath != "" {
+		if b, rerr := os.ReadFile(docPath); rerr == nil {
+			report = CompletionReport(string(b))
+		}
 	}
 	if in.Divergence = ExtractDivergence(report); in.Divergence == "" {
 		return in, false, `the Completion Report has no "Where reality diverged" paragraph`, nil
