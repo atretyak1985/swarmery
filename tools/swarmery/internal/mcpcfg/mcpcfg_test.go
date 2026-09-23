@@ -275,6 +275,11 @@ func TestReaderRemoveValidation(t *testing.T) {
 // TestNewUsesRealExec is a smoke check that New() wires a runner that shells to
 // the real binary — gated so it never requires `claude` on the test host.
 func TestNewUsesRealExec(t *testing.T) {
+	// Opt-in: `claude mcp list` health-checks every configured MCP server, so
+	// on a developer machine each `go test ./...` spawned the whole MCP fleet.
+	if os.Getenv("SWARMERY_E2E") == "" {
+		t.Skip("set SWARMERY_E2E=1 to run the real-CLI integration smoke")
+	}
 	if _, err := exec.LookPath("claude"); err != nil {
 		t.Skip("claude not on PATH — skipping real-CLI integration smoke")
 	}
