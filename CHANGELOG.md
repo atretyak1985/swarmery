@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.6.1,
+  `/plugin update`, not through these tags. Current: `core` 3.8.0,
   `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
   `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
@@ -19,6 +19,44 @@ Two things ship from this repository on separate clocks:
 ## [Unreleased]
 
 ### Added
+
+- **Predictive learning loop + local decision classifier (shadow).** Swarmery
+  now learns from where its agents' expectations were wrong, even though the
+  model's weights do not change. Everything is advisory and local, and nothing
+  gates a run or a merge on it.
+  - *Forecasts.* A phase doc may carry a `## Forecast` block. The planner writes
+    a prior and the executor writes a posterior before its first edit, covering
+    areas, files, size and duration bands, outcome, risks and confidence. It is a
+    prediction, not a limit. A posterior written after the run's first edit is
+    stamped post hoc and excluded from calibration.
+  - *Actuals and surprise.* Every phase run records what it actually did
+    (`phase_actuals`): git numstat of the run branch, cost, outcome, verify
+    verdict, unexpected test failures, continuations and model fallback. A
+    deterministic surprise vector and a 0..1 index (`phase_surprise`) compare
+    that record with the forecast. A Plans chip and a "Forecast vs actual" tab
+    show the index; above `SWARMERY_SURPRISE_NOTIFY` it raises a notify event,
+    and an opt-in auto-verify can fire. The retro digest cites
+    `[E:phase:<id>]`.
+  - *Lessons.* A surprising run that explains its divergence yields 0–2
+    area-scoped lesson candidates, each citing evidence present in its input.
+    Only the operator's accept makes a lesson active. Active lessons are
+    injected into headless phase and plan prompts whose forecast areas overlap
+    them, under a hard token budget, and every injection is recorded. A lesson
+    can be promoted into the area's nested `CLAUDE.md` on a review branch.
+    Effectiveness (area surprise before vs after activation) drives ranking and
+    retirement proposals: ineffective, stale, unused or superseded. A proposal
+    auto-retires after 14 days without a response.
+  - *Calibration.* `/api/calibration` and `swarmery calibration` report forecast
+    accuracy per agent, model, effort and project, hiding groups under 20
+    samples. The monthly `model-upgrade` routine reads it.
+  - *Decision classifier.* `internal/decide` asks cheap typed questions around
+    runs, never inside them. The backends are rules, then a local
+    OpenAI-compatible server, then an opt-in claude haiku. It asks D1 (how did
+    this run end?) after the completion loop's rules, and D2 (session labels)
+    for advisor and retro. Both default to shadow, every call is audited in
+    `decisions`, and with `SWARMERY_DECIDE_URL` unset nothing changes.
+  - *Core.* The new read-only `area-lessons` skill, plus forecast contracts in
+    the planner and executor prompts (core 3.8.0).
 
 - **Opus 5.5 readiness.** Eight phases of work for a model that thinks on every
   turn and follows named stops. The short version: costs are honest again,
