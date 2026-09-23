@@ -65,14 +65,31 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 		minAge = 10 * time.Minute
 	}
 	cutoff := e.now().Add(-minAge).UTC().Format("2006-01-02T15:04:05.000Z")
+	// A session is DONE when every enabled D2 question has an error-free row — not
+	// just the outcome one: a pass that answered outcome and then timed out on
+	// failure_cause must come back for it. A session is GIVEN UP after
+	// d2MaxFailures errored calls, so one digest the backend can never answer
+	// does not stall every older session behind it forever.
+	enabled := make([]any, 0, 3)
+	for _, q := range []string{QD2TaskType, QD2Outcome, QD2Failure} {
+		if e.Mode(q) != ModeOff {
+			enabled = append(enabled, q)
+		}
+	}
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(enabled)), ",")
+	args := append([]any{cutoff}, enabled...)
+	args = append(args, len(enabled), QD2TaskType, QD2Outcome, QD2Failure, d2MaxFailures, batch)
 	rows, err := e.DB.QueryContext(ctx, `
 		SELECT s.session_uuid, COALESCE(s.custom_title, s.title, ''), COALESCE(s.started_at, ''),
 		       COALESCE(s.ended_at, ''), COALESCE(s.outcome, '')
 		  FROM sessions s
 		 WHERE s.ended_at IS NOT NULL AND s.ended_at <= ? AND s.hidden = 0
-		   AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.subject = s.session_uuid AND d.question_id = ? AND d.error = '')
+		   AND (SELECT COUNT(DISTINCT d.question_id) FROM decisions d
+		         WHERE d.subject = s.session_uuid AND d.error = '' AND d.question_id IN (`+ph+`)) < ?
+		   AND (SELECT COUNT(*) FROM decisions d
+		         WHERE d.subject = s.session_uuid AND d.error <> '' AND d.question_id IN (?, ?, ?)) < ?
 		 ORDER BY s.ended_at DESC
-		 LIMIT ?`, cutoff, QD2Outcome, batch)
+		 LIMIT ?`, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -97,13 +114,18 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 		n++
 		if failed := l.label(ctx, s); failed {
 			// The backend is down or misbehaving: stop this pass rather than
-			// burn one failed call per session. The session stays unlabelled
-			// (errored rows do not count as asked) and the next pass retries.
+			// burn one failed call per session. The session stays unlabelled and
+			// the next pass retries it, up to d2MaxFailures errored calls.
 			break
 		}
 	}
 	return n, nil
 }
+
+// d2MaxFailures is how many errored D2 calls a session may collect before the
+// labeler stops asking about it. Three passes (45 minutes at the default
+// cadence) is long enough to ride out a backend restart.
+const d2MaxFailures = 3
 
 // operatorOutcome maps the operator's own verdict (sessions.outcome) onto D2's
 // vocabulary — the rules backend's answer when it exists.

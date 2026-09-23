@@ -591,6 +591,11 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 			return "done", ""
 		}
 
+		// Measured BEFORE the classifier: its latency (up to the local backend's
+		// timeout) must never count against the time-left guard below, or a shadow
+		// call could turn a continuation into `partial`.
+		elapsed := budget.Elapsed(s.clock())
+
 		// D1 (phase 9): the rules reached `continue` — the one branch they leave
 		// ambiguous. The classifier may hand the run to the operator or stamp it
 		// blocked; any other answer (and every shadow/unconfigured call) lets the
@@ -607,7 +612,6 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 			return "partial", o.Detail
 		}
 
-		elapsed := budget.Elapsed(s.clock())
 		switch {
 		case attempt >= runcore.MaxContinuations:
 			d := fmt.Sprintf("%d of %d criteria ticked after %d continuations", done, total, attempt)

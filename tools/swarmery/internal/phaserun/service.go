@@ -1019,6 +1019,11 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 			return "done", ""
 		}
 
+		// Measured BEFORE the classifier: its latency (up to the local backend's
+		// timeout) must never count against the time-left guard below, or a shadow
+		// call could turn a continuation into `partial`.
+		elapsed := budget.Elapsed(s.clock())
+
 		// D1 (phase 9): the rules reached `continue` — the one branch they leave
 		// ambiguous. The classifier may hand the run to the operator or stamp it
 		// blocked; any other answer (and every shadow/unconfigured call) lets the
@@ -1037,7 +1042,6 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 
 		// From here the run stopped with work left. Three things can stop us
 		// continuing, and each is a different honest answer.
-		elapsed := budget.Elapsed(s.clock())
 		switch {
 		case attempt >= runcore.MaxContinuations:
 			detail := fmt.Sprintf("%d of %d criteria ticked after %d continuations", c.Done, c.Total, attempt)
