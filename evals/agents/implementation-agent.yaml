@@ -3,6 +3,7 @@
 # Hard-assert coverage grows as concrete output contracts are established in later phases.
 
 - description: implementation-agent reads the step spec before editing
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/implementation-agent.md
     task: >
@@ -12,6 +13,7 @@
       value: states it will read step_file first and work only within the step's declared scope, not invent unrelated changes
 
 - description: implementation-agent surfaces ambiguity instead of guessing
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/implementation-agent.md
     task: >
@@ -22,6 +24,7 @@
       value: flags the missing TTL / cache-key / store as assumptions to confirm rather than silently picking values
 
 - description: implementation-agent ticks phase-doc checkboxes before the completion ledger line (Progress contract)
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/implementation-agent.md
     task: >
