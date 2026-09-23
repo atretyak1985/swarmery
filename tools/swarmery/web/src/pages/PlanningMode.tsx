@@ -87,6 +87,53 @@ function modelShortName(id: string): string {
   return PLANNING_MODELS.find((m) => m.id === id)?.value ?? id;
 }
 
+// ── Planner effort selection ────────────────────────────────────────────────
+// The other half of "what does this interview cost": which brain, and how hard
+// it thinks. The options ARE the CLI's closed set (claudeflags.ValidEfforts), so
+// the picker cannot send a value the API would reject with a 400.
+//
+// `default` means SEND NO `effort` KEY, which hands the decision to the daemon's
+// own ladder: SWARMERY_PLANNING_EFFORT, then the planner's pinned default.
+//
+// What it does NOT mean is "cheap". A `claude -p` with no --effort runs at the
+// CLI's own default, xhigh — the DEEPEST setting there is. The daemon pins the
+// rung precisely so an un-picked wizard does not quietly pay that, and the UI
+// must not undo it by sending the literal word `default` (which the daemon folds
+// back to omission). The labels below say which end is which for that reason.
+// The concrete rung the daemon lands on when the picker sends no key —
+// planning.DefaultEffort. Named in the label rather than left as the word
+// "default", because "no effort sent" describes the HTTP body and would be read
+// as "the run is unpinned", which is the one thing it is not.
+const PLANNING_DEFAULT_EFFORT_LABEL = 'high';
+const PLANNING_EFFORTS = [
+  { value: 'default', label: `planner default — ${PLANNING_DEFAULT_EFFORT_LABEL} (no effort key sent)` },
+  { value: 'low', label: 'low — mechanical work' },
+  { value: 'medium', label: 'medium — scoped work' },
+  { value: 'high', label: 'high — planning' },
+  { value: 'xhigh', label: 'xhigh — deepest, slowest' },
+  { value: 'max', label: 'max — no ceiling' },
+] as const;
+type PlanningEffort = (typeof PLANNING_EFFORTS)[number]['value'];
+const DEFAULT_PLANNING_EFFORT: PlanningEffort = 'default';
+/** Its own key, beside the model's — the two are different decisions about the
+ * same money and must not share storage. */
+const EFFORT_STORAGE_KEY = 'swarmery.planning.effort';
+
+function isPlanningEffort(v: string | null): v is PlanningEffort {
+  return PLANNING_EFFORTS.some((e) => e.value === v);
+}
+
+/** Last-used choice; falls back to the default when storage is unavailable
+ * (Safari private mode throws on access, not just on write). */
+function readStoredEffort(): PlanningEffort {
+  try {
+    const v = localStorage.getItem(EFFORT_STORAGE_KEY);
+    return isPlanningEffort(v) ? v : DEFAULT_PLANNING_EFFORT;
+  } catch {
+    return DEFAULT_PLANNING_EFFORT;
+  }
+}
+
 /** Compact elapsed string ("3m 12s") since an RFC3339 instant. */
 function fmtElapsed(startedAt: string, nowMs: number): string {
   const s = Math.max(0, Math.floor((nowMs - new Date(startedAt).getTime()) / 1000));
@@ -101,6 +148,7 @@ export function PlanningMode(): JSX.Element {
   const [status, setStatus] = useState<PlanningStatus | null>(null);
   const [idea, setIdea] = useState('');
   const [plannerModel, setPlannerModel] = useState<PlanningModel>(readStoredModel);
+  const [plannerEffort, setPlannerEffort] = useState<PlanningEffort>(readStoredEffort);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -360,10 +408,21 @@ export function PlanningMode(): JSX.Element {
     setPlan(null);
     try {
       localStorage.setItem(MODEL_STORAGE_KEY, plannerModel);
+      localStorage.setItem(EFFORT_STORAGE_KEY, plannerEffort);
     } catch {
       // storage unavailable — the choice still applies to this run
     }
-    startPlanning(projectId, idea.trim(), plannerModel)
+    // `default` is not a value the API takes — it is the ABSENCE of a choice, so
+    // it must travel as undefined and drop the key entirely. Sending the word
+    // would reach claudeflags.NormalizeEffort, which folds it to "omit
+    // --effort", and an omitted --effort is the CLI's xhigh: the most expensive
+    // setting, arrived at by asking for the default.
+    startPlanning(
+      projectId,
+      idea.trim(),
+      plannerModel,
+      plannerEffort === 'default' ? undefined : plannerEffort,
+    )
       .then(() => {
         if (!aliveRef.current) return;
         // Optimistic flip BEFORE loadStatus so the stale-GET guard in
@@ -796,6 +855,22 @@ export function PlanningMode(): JSX.Element {
               {PLANNING_MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={plannerEffort}
+              disabled={busy}
+              onChange={(e) => {
+                if (isPlanningEffort(e.target.value)) setPlannerEffort(e.target.value);
+              }}
+              aria-label="planner effort"
+              title="how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
+              className="rounded-lg border border-line bg-field px-2 py-2 font-mono text-[11px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+            >
+              {PLANNING_EFFORTS.map((e) => (
+                <option key={e.value} value={e.value}>
+                  {e.label}
                 </option>
               ))}
             </select>

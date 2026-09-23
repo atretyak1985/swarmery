@@ -25,16 +25,23 @@ func Recost(db *sql.DB, t *Table) (RecostStats, error) {
 	var stats RecostStats
 
 	type row struct {
-		id              int64
-		model           string
-		in, out, cr, cw sql.NullInt64
+		id                          int64
+		model                       string
+		speed                       sql.NullString
+		in, out, cr, cw, cw5m, cw1h sql.NullInt64
 	}
 
 	// Buffer the rows first: the store uses a single-connection pool, so we
 	// cannot UPDATE while the SELECT cursor is still open.
+	//
+	// The TTL split and speed (migration 0075) are read alongside the legacy
+	// total so a recost can repair 1h-cache and fast-mode under-billing from
+	// stored state. Rows ingested before 0075 have NULL in all three and price
+	// exactly as they did before — repairing those needs a re-ingest, not a recost.
 	rows, err := db.Query(`
 		SELECT t.id, COALESCE(t.model, s.model, ''),
-		       t.tokens_in, t.tokens_out, t.tokens_cache_read, t.tokens_cache_write
+		       t.tokens_in, t.tokens_out, t.tokens_cache_read, t.tokens_cache_write,
+		       t.cache_write_5m_tokens, t.cache_write_1h_tokens, t.speed
 		FROM turns t JOIN sessions s ON s.id = t.session_id`)
 	if err != nil {
 		return stats, fmt.Errorf("recost: select turns: %w", err)
@@ -42,7 +49,8 @@ func Recost(db *sql.DB, t *Table) (RecostStats, error) {
 	var all []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.model, &r.in, &r.out, &r.cr, &r.cw); err != nil {
+		if err := rows.Scan(&r.id, &r.model, &r.in, &r.out, &r.cr, &r.cw,
+			&r.cw5m, &r.cw1h, &r.speed); err != nil {
 			rows.Close()
 			return stats, err
 		}
@@ -61,7 +69,7 @@ func Recost(db *sql.DB, t *Table) (RecostStats, error) {
 
 	for _, r := range all {
 		stats.Total++
-		turn := Turn{Model: r.model}
+		turn := Turn{Model: r.model, Speed: r.speed.String}
 		hasUsage := false
 		for _, f := range []struct {
 			src sql.NullInt64
@@ -69,6 +77,7 @@ func Recost(db *sql.DB, t *Table) (RecostStats, error) {
 		}{
 			{r.in, &turn.TokensIn}, {r.out, &turn.TokensOut},
 			{r.cr, &turn.TokensCacheRead}, {r.cw, &turn.TokensCacheWrite},
+			{r.cw5m, &turn.TokensCacheWrite5m}, {r.cw1h, &turn.TokensCacheWrite1h},
 		} {
 			if f.src.Valid {
 				v := f.src.Int64

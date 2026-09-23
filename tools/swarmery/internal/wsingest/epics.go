@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 )
 
 var (
@@ -80,6 +82,14 @@ type epicPhase struct {
 	// admission so an unknown value fails the run instead of being dropped by a scan
 	// that must never fail. "" when the doc declares nothing.
 	docModel string
+	// forecasts are the doc's `## Forecast` blocks (prior and/or posterior), in
+	// document order. nil for every doc that carries none, which is all of them
+	// until an author opts in. DATA, never a gate — see forecast.go.
+	forecasts []Forecast
+	// docHash is sha256 of the phase doc's bytes at this scan, stored on each
+	// forecast row so a later scoring pass can tell whether the forecast it grades
+	// is still the one in the doc. "" when the doc did not resolve.
+	docHash string
 }
 
 var (
@@ -391,6 +401,51 @@ func ParseModel(md string) string {
 	return ""
 }
 
+var (
+	// The phase doc's header table row: `| **Effort** | high |`.
+	docEffortRowRe = regexp.MustCompile(`(?i)^\|\s*\*\*Effort:?\*\*\s*\|\s*(.+?)\s*\|\s*$`)
+	// The prose header form, beside `**Model:**`: `**Effort:** high`.
+	docEffortLineRe = regexp.MustCompile(`(?i)^\s*\*\*Effort:\*\*\s*(.+?)\s*$`)
+)
+
+// ParseEffort returns the reasoning depth a phase doc DECLARES for its own runs
+// via an `**Effort:** high` header line or a `| **Effort** | high |` header
+// table row. Same scan, same bound and same contract as ParseModel — including
+// the header-block bound, which is load-bearing for the identical reason: every
+// phase doc in this workspace embeds a copy-paste agent prompt further down, and
+// an `**Effort:**` line quoted inside one is describing someone else's phase.
+//
+// "" when the doc declares nothing, which is what keeps a plan that never opted
+// in behaving exactly as it did before this field existed.
+//
+// The value is returned VERBATIM (trimmed, decoration stripped), NOT normalized
+// and NOT rejected here — see ParseModel for why the scan degrades and the
+// single resolution site judges (phaserun.resolveEffort).
+//
+// Pure; unit-tested.
+func ParseEffort(md string) string {
+	lines := strings.Split(md, "\n")
+	if len(lines) > docStatusHeaderLines {
+		lines = lines[:docStatusHeaderLines]
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		cell := ""
+		if m := docEffortRowRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			cell = m[1]
+		} else if m := docEffortLineRe.FindStringSubmatch(line); m != nil {
+			cell = m[1]
+		} else {
+			continue
+		}
+		// First Effort declaration wins, even when it is empty after trimming.
+		return strings.Trim(cell, docModelTrimSet)
+	}
+	return ""
+}
+
 // CountCheckboxes counts acceptance-criteria checkboxes in a doc, returning
 // (done, total). Pure; unit-tested. A doc with none yields (0, 0).
 //
@@ -421,54 +476,62 @@ func CountCheckboxes(text string) (done, total int) {
 	return done, total
 }
 
+// untickedLabelCap bounds one criterion's rendered label. Criteria run long —
+// a whole paragraph with an embedded command is common — and the consumer is a
+// continuation MESSAGE sent back into a session whose context window is already
+// at its largest, so the list has to identify each criterion, not restate it.
+const untickedLabelCap = 160
+
+// UntickedCheckboxes returns the LABEL of every unticked acceptance-criteria
+// checkbox, in document order, each trimmed of its `- [ ] ` marker, of markdown
+// emphasis, and to untickedLabelCap runes.
+//
+// It walks the SAME line walker CountCheckboxes and tickAllCheckboxes use, which
+// is the whole point of it living here rather than in the engine that wants it:
+// "how many are unticked" and "which ones are unticked" must be answers about
+// the same set of lines. A phase doc quoting a checklist inside a ``` fence has
+// bitten this codebase before (a shipped phase stuck at 7/11 forever), and a
+// second parser in phaserun would hand a continuation four criteria that live in
+// a markdown example and can never be ticked.
+//
+// Used by the run completion loop: when a cleanly-exited run leaves criteria
+// unticked, this is the list it is resumed with.
+func UntickedCheckboxes(text string) []string {
+	var out []string
+	forEachLineOutsideFences(text, func(_ int, line string) {
+		loc := checkboxRe.FindStringSubmatchIndex(line)
+		if loc == nil {
+			return
+		}
+		// loc[2]:loc[3] is the state character; anything at/after the match end is
+		// the label.
+		if strings.EqualFold(line[loc[2]:loc[3]], "x") {
+			return
+		}
+		label := strings.TrimSpace(line[loc[1]:])
+		label = strings.Trim(label, "*_` ")
+		if label == "" {
+			return
+		}
+		if r := []rune(label); len(r) > untickedLabelCap {
+			label = string(r[:untickedLabelCap]) + "…"
+		}
+		out = append(out, label)
+	})
+	return out
+}
+
 // forEachLineOutsideFences calls fn for every line that is not inside a fenced
-// code block. Fence tracking follows CommonMark's rule that a fence closes only on
-// a marker of the SAME character and at least the opening length, so a ```` block
-// quoting ``` markdown — exactly how a phase doc shows a generated template —
-// stays one block instead of toggling twice.
+// code block.
 //
 // The single line walker for both checkbox readers: counting and ticking MUST
 // agree about which lines are the doc's own, or an auto-tick would rewrite a
 // checkbox inside a code sample and the count would then disagree with the file.
+// It now lives in internal/mdfence because runcore's blocked-sentinel matcher
+// needs the same rule and cannot import this package (wsingest imports runcore);
+// the local name stays so every call site here reads as it always did.
 func forEachLineOutsideFences(text string, fn func(i int, line string)) {
-	var fenceChar byte
-	fenceLen := 0
-	for i, line := range strings.Split(text, "\n") {
-		if c, n := fenceMarker(line); n > 0 {
-			switch {
-			case fenceLen == 0:
-				fenceChar, fenceLen = c, n
-			case c == fenceChar && n >= fenceLen:
-				fenceChar, fenceLen = 0, 0
-			}
-			continue // the fence line itself is never content
-		}
-		if fenceLen == 0 {
-			fn(i, line)
-		}
-	}
-}
-
-// fenceMarker reports a line's fence character and run length, or (0, 0) when the
-// line does not open or close a fence. Up to three leading spaces are allowed, as
-// in CommonMark.
-func fenceMarker(line string) (byte, int) {
-	s := strings.TrimLeft(line, " ")
-	if len(line)-len(s) > 3 || s == "" {
-		return 0, 0
-	}
-	c := s[0]
-	if c != '`' && c != '~' {
-		return 0, 0
-	}
-	n := 0
-	for n < len(s) && s[n] == c {
-		n++
-	}
-	if n < 3 {
-		return 0, 0
-	}
-	return c, n
+	mdfence.ForEachLine(text, fn)
 }
 
 // phaseCols is the 0-based column layout of a phase-sequencing table; -1 means
@@ -703,6 +766,14 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
+		// A prior written into a doc that ALREADY reports its work done is not a
+		// prediction; parseCompletionReport above has the only fact that can say so,
+		// which is why it is threaded in rather than re-read.
+		phases[i].forecasts = ParseForecasts(string(body), phases[i].completionReport != "")
+		if len(phases[i].forecasts) > 0 {
+			sum := sha256.Sum256(body)
+			phases[i].docHash = hex.EncodeToString(sum[:])
+		}
 		if fi, err := os.Stat(abs); err == nil {
 			phases[i].docUpdatedAt = fi.ModTime().UTC().Format(time.RFC3339)
 		}
@@ -784,7 +855,19 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // a NULL doc_model until some OTHER byte of the plan changes, and rung 2 of the
 // phase-run ladder would silently not apply — the exact class of failure this
 // constant exists to prevent.
-const parserVersion = "v6"
+//
+// v7: phase_forecasts — the doc's `## Forecast` blocks (ParseForecasts, migration
+// 0079). Same reasoning as v6: without the bump, a plan whose author adds a
+// Forecast section to an ALREADY-INDEXED doc keeps zero forecast rows until some
+// other byte of the plan changes, and the learning loop would be measuring a
+// prediction the daemon never read.
+//
+// v8: phase_forecasts.post_hoc_reason plus the POSTERIOR ordering check
+// (ordering.go, migration 0080). Both are computed by the scan, so an
+// already-indexed plan keeps post_hoc_reason = '' and an unflagged posterior
+// until its bytes change — and a posterior written after the run's first edit is
+// exactly the row a stale parse would hand to calibration as trustworthy.
+const parserVersion = "v8"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1011,6 +1094,11 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
 			return err
 		}
+		// After the upsert, so the row (and therefore its id) exists whether this
+		// scan inserted it or updated it.
+		if err := applyForecasts(tx, taskID, p); err != nil {
+			return err
+		}
 	}
 
 	// A plan dir with no README is not a plan with no phases — it is a plan we
@@ -1077,10 +1165,129 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 	if err := logKeptRunningOrphans(tx, taskID, phases, carried); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(q, keep...); err != nil {
+	res, err := tx.Exec(q, keep...)
+	if err != nil {
 		return err
 	}
+	// phase_forecasts carries no foreign key (migration 0079, for the reasons
+	// 0077 spells out), so a deleted phase leaves its forecast rows behind. Sweep
+	// them here and ONLY here — the one place in the daemon that deletes a phase —
+	// and only when the prune actually removed something, so the common no-op
+	// rescan does not pay for a whole-table anti-join.
+	if n, err := res.RowsAffected(); err == nil && n > 0 {
+		if _, err := tx.Exec(
+			`DELETE FROM phase_forecasts
+			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// applyForecasts replaces one phase's phase_forecasts rows with what its doc
+// currently declares: delete the set, insert the parsed blocks in document order.
+//
+// REPLACE rather than upsert, unlike every other artifact in this file, because a
+// forecast has no natural key. (phase, kind) looks like one until a doc carries
+// two priors — a shape the format does not forbid and the lint is there to report,
+// not to silence by losing one of them. The rows are pure doc derivations with no
+// daemon-owned state on them, so churning their ids costs nothing; readers come
+// the other way, with a known phase id.
+//
+// A phase whose doc declares no forecast still runs the DELETE: removing the
+// `## Forecast` section from a doc must actually retract the forecast, the same
+// way deleting a `**Covers:**` line retracts the coverage claim.
+// THE POSTERIOR ORDERING CHECK runs here rather than in ParseForecasts because
+// it needs the phase's run session, which is daemon state on the epic_phases row
+// and not something the doc knows. It is re-derived on every scan of a changed
+// plan, which is what makes it self-healing: a plan scanned before its
+// transcript finished ingesting simply stores no flag, and the next scan that
+// touches the doc stamps it. Never the other way round — see ordering.go on why
+// absent evidence must not be read as guilt.
+func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
+	var phaseID int64
+	var runSessionUUID sql.NullString
+	err := tx.QueryRow(
+		`SELECT id, run_session_uuid FROM epic_phases WHERE workspace_task_id = ? AND doc_path = ?`,
+		taskID, p.docPath).Scan(&phaseID, &runSessionUUID)
+	if err == sql.ErrNoRows {
+		// Unreachable via applyEpics (the upsert above just wrote this row), and
+		// deliberately not fatal anyway: a forecast is data, never a fence, and the
+		// error return here rolls back the WHOLE plan's ingest — phases, checkboxes
+		// and all. Losing a guess is the correct trade against losing the plan.
+		log.Printf("warn: wsingest: task=%d no phase row for %s — forecasts skipped", taskID, p.docPath)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM phase_forecasts WHERE phase_id = ?`, phaseID); err != nil {
+		return err
+	}
+	// One read per phase, and only when the doc actually declares a posterior —
+	// the scan runs on a debounce over every plan on the machine, and the
+	// overwhelming majority of phases have nothing to ask about.
+	var ordering DocEditOrdering
+	if hasPosterior(p.forecasts) {
+		o, oerr := forecastOrdering(tx, runSessionUUID.String, p.docPath)
+		if oerr != nil {
+			// Same trade as the missing-phase-row branch above: losing a guess beats
+			// rolling back the plan's phases and checkboxes over one failed read.
+			log.Printf("warn: wsingest: task=%d forecast ordering for %s: %v", taskID, p.docPath, oerr)
+		} else {
+			ordering = o
+		}
+	}
+	for _, f := range p.forecasts {
+		areasJSON, err := jsonList(f.Areas)
+		if err != nil {
+			return err
+		}
+		filesJSON, err := jsonList(f.Files)
+		if err != nil {
+			return err
+		}
+		risksJSON, err := jsonList(f.Risks)
+		if err != nil {
+			return err
+		}
+		var confidence any // NULL, not 0, when the author said nothing readable
+		if f.Confidence != nil {
+			confidence = *f.Confidence
+		}
+		if f.Kind == ForecastPosterior && ordering.PostHoc() {
+			f.PostHoc, f.PostHocReason = true, PostHocAfterFirstEdit
+		}
+		postHoc := 0
+		if f.PostHoc {
+			postHoc = 1
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO phase_forecasts
+				(phase_id, kind, written_at, areas_json, files_json, size_band,
+				 duration_band, outcome, risks_json, confidence, post_hoc, doc_hash,
+				 post_hoc_reason)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			phaseID, f.Kind, f.WrittenAt, areasJSON, filesJSON, f.SizeBand,
+			f.DurationBand, f.Outcome, risksJSON, confidence, postHoc, p.docHash,
+			f.PostHocReason); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// jsonList marshals a string slice, spelling nil as `[]` rather than `null` —
+// the columns are NOT NULL DEFAULT '[]' and every reader ranges over the result.
+func jsonList(v []string) (string, error) {
+	if v == nil {
+		return "[]", nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // applySpec folds the parsed plan/spec.md criteria into the task's spec_criteria

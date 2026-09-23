@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
@@ -13,7 +14,15 @@ type RunSpec struct {
 	Prompt      string // the read-only verifier prompt (BuildPrompt output)
 	SessionUUID string // daemon-generated; passed as --session-id (explicit link)
 	Cwd         string // the task's worktree path — the process runs here
-	Model       string // optional --model override ("" = account default at the spawn layer; the service fills defaultModel before building the spec)
+	Model       string // optional --model override ("" = account default at the spawn layer; the service fills DefaultModel before building the spec)
+
+	// Resume makes this spawn a CONTINUATION of SessionUUID (`claude -r <uuid>`).
+	// One use only: a verifier that produced output but no VERDICT: line is asked
+	// once for the line it owed, in the session that already holds every piece of
+	// evidence it gathered. Re-running from scratch instead would pay for the whole
+	// read-only pass a second time and could reach a different conclusion, which is
+	// not a retry but a second opinion.
+	Resume bool
 
 	// Account is the Claude Code account key this run must execute under,
 	// resolved by the CALLER from the task's PROJECT — never from Cwd. Cwd is a
@@ -50,10 +59,25 @@ type Runner interface {
 // layer; ClaudeRunner uses this constant when the spec carries no ctx deadline.
 const claudeTimeout = 15 * time.Minute
 
-// defaultModel pins verifier runs whose task carries no model override: an
+// DefaultModel pins verifier runs whose task carries no model override: an
 // unset --model inherits the account default (Fable-5 here — 2× the Opus
 // price). Full ID, not an alias — aliases re-resolve over time.
-const defaultModel = "claude-opus-5-5"
+const DefaultModel = "claude-opus-5-5"
+
+// effortEnv is this spawn site's --effort knob; DefaultEffort is what it falls
+// back to. internal/claudeflags owns the resolution and the "off" escape hatch.
+//
+// medium, not the CLI's unpinned xhigh: the verifier's job is to run the checks
+// the task declared and read what they printed, then emit one verdict token.
+// That is a bounded, evidence-driven judgement, not open-ended reasoning — and
+// it runs after EVERY graded task, so it is one of the highest-frequency spawns
+// here. Phase 7 re-measures it.
+const (
+	effortEnv = "SWARMERY_VERIFY_EFFORT"
+	// DefaultEffort is exported so the defaults table test can pin it beside
+	// every other engine's.
+	DefaultEffort = "medium"
+)
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`
 // with cwd set to the worktree. Binary resolution is a plain PATH lookup — the
@@ -100,7 +124,11 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
+		Resume:      spec.Resume,
 		Model:       spec.Model,
+		// Resolved, never omitted: an absent --effort is the CLI's xhigh, paid on
+		// every graded task in the fleet.
+		Effort: claudeflags.Effort(effortEnv, DefaultEffort),
 		// --setting-sources project,local: skip user-level settings (global plugin
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.

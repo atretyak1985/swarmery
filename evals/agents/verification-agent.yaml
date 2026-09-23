@@ -3,6 +3,7 @@
 # Soft assert: llm-rubric for correct verdict + citing test count + honest NOT RUN
 
 - description: verification-agent emits the machine verdict grammar
+  providers: [haiku-tier]
   vars:
     system: file://../../plugins/core/agents/verification-agent.md
     task: >
@@ -15,6 +16,7 @@
       value: returns FAIL (not PASS, not INCONCLUSIVE) because tests failed, and cites the failing test count
 
 - description: verification-agent never counts an unrun check as PASS
+  providers: [haiku-tier]
   vars:
     system: file://../../plugins/core/agents/verification-agent.md
     task: >

@@ -27,6 +27,18 @@ type stubRunner struct {
 	block    chan struct{}
 	runFn    func(spec RunSpec) (*Run, error)
 	startErr error
+	// tickDB, when set, makes the DEFAULT stub run behave like a controller that
+	// drove the plan to completion: before returning exit 0 it ticks every
+	// acceptance checkbox in every phase doc of the fixture.
+	//
+	// It exists because "exit 0" stopped meaning "finished" (runcore.ClassifyEnd):
+	// a run whose phase docs still show unticked criteria is now resumed and
+	// finally stamped `partial`. That is the correct new behaviour and the wrong
+	// shape for the tests here that use the spawn purely to reach the exit path
+	// and assert worktree/slot/branch/stamp mechanics — those describe SUCCESSFUL
+	// runs, so the stub is made to leave behind what a successful run leaves
+	// behind rather than the gate being weakened. newTestService wires it.
+	tickDB *sql.DB
 }
 
 func (s *stubRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
@@ -35,6 +47,7 @@ func (s *stubRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	block := s.block
 	fn := s.runFn
 	startErr := s.startErr
+	tickDB := s.tickDB
 	s.mu.Unlock()
 	if block != nil {
 		select {
@@ -49,7 +62,56 @@ func (s *stubRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	if fn != nil {
 		return fn(spec)
 	}
+	if tickDB != nil {
+		tickEveryPhaseDoc(tickDB)
+	}
 	return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+}
+
+// tickEveryPhaseDoc rewrites every phase doc in the fixture with all of its
+// checkboxes ticked — what a controller that finished the plan leaves behind.
+func tickEveryPhaseDoc(db *sql.DB) {
+	rows, err := db.Query(`SELECT doc_path FROM epic_phases WHERE doc_path IS NOT NULL AND doc_path <> ''`)
+	if err != nil {
+		return
+	}
+	var paths []string
+	for rows.Next() {
+		var p string
+		if rows.Scan(&p) == nil {
+			paths = append(paths, p)
+		}
+	}
+	rows.Close()
+	for _, p := range paths {
+		body, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		out := make([]string, 0, 8)
+		for _, line := range strings.Split(string(body), "\n") {
+			out = append(out, strings.Replace(line, "- [ ] ", "- [x] ", 1))
+		}
+		_ = os.WriteFile(p, []byte(strings.Join(out, "\n")), 0o644)
+	}
+}
+
+// firstSpec is the ORIGINAL spawn's spec. Tests asserting what the run was
+// STARTED with must use this: lastSpec returns the continuation's spec whenever
+// the completion loop ran.
+func (s *stubRunner) firstSpec() RunSpec {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.specs) == 0 {
+		return RunSpec{}
+	}
+	return s.specs[0]
+}
+
+func (s *stubRunner) specCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.specs)
 }
 
 func (s *stubRunner) lastSpec() RunSpec {
@@ -96,6 +158,13 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 		Path:   "/wt/" + projectSlug + "/" + taskID,
 		Branch: "swarm/" + taskID,
 	}, nil
+}
+
+// Path mirrors worktree.Manager.Path — the checkout Acquire WOULD derive, named
+// without creating anything. planrun never lends a doc into a worktree, so
+// nothing in this engine reads it; it is here because the seam is shared.
+func (w *stubWt) Path(projectSlug, taskID string) (string, error) {
+	return "/wt/" + projectSlug + "/" + taskID, nil
 }
 
 func (w *stubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) error {
@@ -228,6 +297,11 @@ func mustExec(t *testing.T, db *sql.DB, q string, args ...any) {
 // run goroutine finishes) — deterministic end-state assertions. Tests that need
 // an in-flight run override Go with nil (real goroutine) + a blocking runner.
 func newTestService(db *sql.DB, r Runner, wt *stubWt) *Service {
+	// The default stub run is a SUCCESSFUL run: it leaves the phase docs ticked.
+	// See stubRunner.tickDB — exit 0 alone no longer proves completion.
+	if sr, ok := r.(*stubRunner); ok && sr.tickDB == nil && sr.runFn == nil {
+		sr.tickDB = db
+	}
 	s := NewService(db, r, wt)
 	s.UUID = func() string { return "uuid-1" }
 	s.Go = func(fn func()) { fn() }
@@ -521,6 +595,7 @@ func TestCancelStampsCancelled(t *testing.T) {
 	db, taskID, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
+	r.tickDB = db // a stub run that finished its plan — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine — the run must be observable in flight
 	s.UUID = func() string { return "uuid-1" }
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
@@ -826,6 +901,7 @@ func TestStart_CrashLeftoverWorktreeIsReusedNotRefused(t *testing.T) {
 	mgr := &worktree.Manager{Git: git, Root: root}
 
 	r := &stubRunner{}
+	r.tickDB = db // a stub run that finished its plan — exit 0 alone no longer proves it
 	s := NewService(db, r, mgr)
 	s.UUID = func() string { return "uuid-1" }
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
@@ -973,6 +1049,7 @@ func TestDeleteRunBranch_ErrRunning(t *testing.T) {
 	db, taskID, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
+	r.tickDB = db // a stub run that finished its plan — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine — run stays in flight
 	s.UUID = func() string { return "uuid-1" }
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // mkRepo marks dir as a git checkout for repopath.Resolve (which stats .git and
@@ -35,7 +37,7 @@ func TestStart_MultiRepoProject_AcquiresInDeclaredRepo(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil // exercise the REAL resolver — that is what is under test
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, repo) {
@@ -56,7 +58,7 @@ func TestStart_SingleRepoProject_UsesProjectPath(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, projectRoot) {
@@ -79,7 +81,7 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 	s.RepoRoot = nil
 
 	err := errors.New("")
-	if _, err = s.Start(p1, ""); !errors.Is(err, ErrNoRepoRoot) {
+	if _, err = s.Start(p1, "", ""); !errors.Is(err, ErrNoRepoRoot) {
 		t.Fatalf("Start err = %v, want ErrNoRepoRoot", err)
 	}
 	// The message replaces git's "fatal: not a git repository" — it has to name
@@ -97,18 +99,18 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 	if state != "idle" {
 		t.Errorf("run_state = %q, want it untouched at idle", state)
 	}
-	if _, err := s.Start(p1, ""); !errors.Is(err, ErrNoRepoRoot) {
+	if _, err := s.Start(p1, "", ""); !errors.Is(err, ErrNoRepoRoot) {
 		t.Errorf("second Start = %v, want ErrNoRepoRoot (the slot leaked)", err)
 	}
 }
 
 // The prompt orients the agent only when the worktree is NOT the project root.
 func TestBuildPromptIn_RepoNote(t *testing.T) {
-	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj")
+	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", runcore.Budget{})
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj")
+	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", runcore.Budget{})
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
 	}
@@ -149,7 +151,7 @@ func TestStart_MultiRepoRunInheritsProjectSettings(t *testing.T) {
 	s := newTestService(db, r, &stubWt{})
 	s.RepoRoot = nil
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := r.lastSpec().SettingsFile; got != settings {
@@ -173,7 +175,7 @@ func TestStart_DeclaredRepoIsRegisteredProject_AcquiresThere(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil // the REAL resolver, with the registry as its allow-list
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, other) {
@@ -195,7 +197,7 @@ func TestStart_DeclaredRepoOutsideUnregistered_Refuses(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil
 
-	_, err := s.Start(p1, "")
+	_, err := s.Start(p1, "", "")
 	if !errors.Is(err, ErrRepoOutsideProject) {
 		t.Fatalf("Start err = %v, want ErrRepoOutsideProject", err)
 	}

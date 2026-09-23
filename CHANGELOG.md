@@ -9,16 +9,39 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.1.0,
-  `infra-pack` 1.3.1, `architecture-pack` 1.2.0, `iot-pack` 1.2.1,
-  `uav-pack` 1.2.1, `web-pack` 1.2.1, `claude-eng-pack` 1.1.0,
-  `graphify-pack` 1.1.0, `lsp-pack` 1.0.0, `jira-pack` 0.6.1,
-  `design-pack` 0.4.0, `accounts-pack` 0.2.1. The marketplace's
-  `metadata.version` tracks `core`.
+  `/plugin update`, not through these tags. Current: `core` 3.6.1,
+  `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
+  `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
+  `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
+  `design-pack` 0.4.1, `accounts-pack` 0.3.2, `graft-pack` 0.1.0. The
+  marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
 
 ### Added
+
+- **Opus 5.5 readiness.** Eight phases of work for a model that thinks on every
+  turn and follows named stops. The short version: costs are honest again,
+  every headless run says out loud which model and how hard, "done" is decided
+  by evidence instead of an exit code, a safeguard downgrade is a visible event
+  rather than a silent one, and the prompt layer stopped asking Claude to
+  narrate its reasoning.
+  - *Cost.* Cache writes are priced per TTL — Claude Code writes 1h cache, and
+    billing all of it at the 5m rate under-charged every such write by 37.5%.
+    Fast-mode turns bill at their own `-fast` SKU. Old transcripts price exactly
+    as before.
+  - *Runs.* All 14 headless spawn sites pin `--model` and `--effort`; `routines`
+    had been sending no model at all, so every tick ran on the account default.
+    A run that exits 0 with criteria unticked and no blocked line is resumed in
+    the same session, at most twice, inside its own wall-clock budget.
+  - *Safeguards.* `model_refusal_fallback` is ingested, turns carry
+    `stop_reason`, and a run that ends in a refusal is stamped blocked with the
+    reason. The hooks stopped reporting a fallback on nearly every dispatch, and
+    stopped vetoing the downgrades they were never meant to block.
+  - *Prompts.* One stop/continue rule across `CLAUDE.md`, tech-lead,
+    implementation-agent and run-plan; subagent claims are accepted on evidence
+    rather than on an artifact existing; review returns blockers only. The
+    domain packs lost 23 `<thinking>` instructions and 97 `[PE/…]` tags.
 
 - **Three new packs.** `jira-pack` — ticket triage with mandatory reproduction,
   writeback and code delivery, gated by its own CI contract test.

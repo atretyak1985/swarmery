@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
@@ -303,11 +304,17 @@ func (e *DocModelError) Unwrap() error { return e.err }
 //     holds full IDs outside planning.Models (a "[1m]" context-window suffix, say);
 //     routing it through the validator would reject it and silently drop every phase
 //     run back to the account default — the exact failure this ladder exists to remove;
-//  4. otherwise "" — no --model flag.
+//  4. otherwise planning.DefaultModel.
 //
-// Rungs 1, 3 and 4 behave exactly as they did before rung 2 existed: a request model
-// still wins outright, and a doc that declares nothing (docModel == "") falls straight
-// through to the env knob.
+// Rung 4 used to be "" — no --model flag at all — which did NOT mean "some sensible
+// house default": it meant the ACCOUNT default, and on these accounts that is Fable,
+// at roughly twice the Opus price. So the one rung an operator never chooses, the one
+// every un-picked "Run phase" lands on, was the most expensive of the four. Every
+// other engine in this daemon already pins a full model ID for exactly that reason;
+// this rung brings phase runs in line with them.
+//
+// Rungs 1–3 are unchanged: a request model still wins outright, and a doc that
+// declares nothing (docModel == "") falls straight through to the env knob.
 func resolveModel(choice, docModel, docPath string) (string, error) {
 	if strings.TrimSpace(choice) != "" {
 		id, err := planning.ResolveModel(choice)
@@ -325,7 +332,70 @@ func resolveModel(choice, docModel, docPath string) (string, error) {
 		}
 		return id, nil
 	}
-	return strings.TrimSpace(os.Getenv(modelEnv)), nil
+	if env := strings.TrimSpace(os.Getenv(modelEnv)); env != "" {
+		return env, nil
+	}
+	return planning.DefaultModel, nil
+}
+
+// DocEffortError: the phase DOC declares an `**Effort:**` outside the CLI's
+// closed set. Rung 2's failure, and — exactly like DocModelError, for the same
+// reason — deliberately NOT rung 3's: a bad value in a DOCUMENT is a defect in
+// the plan and must name the file its author has to edit, while a bad value in
+// an ENV knob is an operator's typo that must degrade with a warning rather than
+// wedge every phase run on the machine.
+//
+// It also cannot be ignored: `claude --effort bogus` rejects the flag and the
+// process dies before the run starts, so a doc typo passed through verbatim
+// would surface as an unexplained dead phase instead of a named line to fix.
+type DocEffortError struct {
+	// Doc is the phase doc's absolute path — the whole point of this error type.
+	Doc string
+	// Declared is what the doc actually says, verbatim, so the author can grep
+	// for the line.
+	Declared string
+}
+
+func (e *DocEffortError) Error() string {
+	return fmt.Sprintf("phase doc %s declares **Effort:** %q, which is not a known effort (%s) — fix the line in the doc",
+		e.Doc, e.Declared, strings.Join(claudeflags.ValidEfforts(), ", "))
+}
+
+// resolveEffort walks the phase-run effort ladder and returns what reaches
+// --effort. It mirrors resolveModel rung for rung:
+//
+//  1. an operator choice on the request — validated, so a typo is a 400 before
+//     anything is acquired or stamped;
+//  2. otherwise the phase DOC's own `**Effort:** high` header
+//     (wsingest.ParseEffort) — validated too, failing as a *DocEffortError that
+//     names the document;
+//  3. otherwise SWARMERY_PHASERUN_EFFORT, then DefaultEffort — both through
+//     internal/claudeflags, which degrades an env typo with a warning.
+//
+// The one structural difference from the model ladder: the doc rung reads the
+// doc BODY the service already loaded, not a stamped column. doc_model exists
+// because the dashboard renders that chip on the plans page without opening the
+// file; nothing renders an effort chip yet, and adding a second doc-derived
+// column (plus the migration and the rescan that keeps it in sync) to serve one
+// reader that is already holding the bytes would be storage for its own sake.
+// If a chip ever needs it, ParseEffort is the same parser a scanner would call.
+func resolveEffort(choice, doc, docPath string) (string, error) {
+	if canonical, ok := claudeflags.NormalizeEffort(choice); !ok {
+		return "", fmt.Errorf("phase run effort: %w: %q (valid: %s)",
+			planning.ErrUnknownEffort, choice, strings.Join(claudeflags.ValidEfforts(), ", "))
+	} else if canonical != "" {
+		return canonical, nil
+	}
+	if declared := strings.TrimSpace(wsingest.ParseEffort(doc)); declared != "" {
+		canonical, ok := claudeflags.NormalizeEffort(declared)
+		if !ok {
+			return "", &DocEffortError{Doc: docPath, Declared: declared}
+		}
+		if canonical != "" {
+			return canonical, nil
+		}
+	}
+	return claudeflags.Effort(effortEnv, DefaultEffort), nil
 }
 
 // Start admits a run for a phase: gates (single-flight, deps, doc, path), then
@@ -334,9 +404,10 @@ func resolveModel(choice, docModel, docPath string) (string, error) {
 // immediately. The run's own goroutine owns exit stamping, worktree removal
 // (branch kept), and slot release.
 //
-// model is the operator's choice for THIS run ("" = none); resolveModel above
-// owns the ladder and is applied first, so a bad model costs nothing.
-func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err error) {
+// model and effort are the operator's choices for THIS run ("" = none, for
+// either). resolveModel and resolveEffort above own the two ladders and both run
+// before anything is acquired or stamped, so a bad value in either costs nothing.
+func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string, err error) {
 	// loadPhase is a pure READ — one SELECT, no stamp, no acquire — and rung 2 of
 	// the ladder lives on the row it returns (epic_phases.doc_model), so model
 	// resolution cannot precede it. It sits right after the already-running gates
@@ -381,6 +452,15 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 	doc, err := os.ReadFile(info.DocPath)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrNoDoc, info.DocPath)
+	}
+	// Effort is resolved HERE rather than beside the model above only because its
+	// rung 2 reads the doc's BODY (the model's reads a stamped column), and this
+	// is the first line that has the bytes. It is still an admission verdict: no
+	// slot has been taken, no worktree acquired and nothing stamped yet, so a
+	// typo on the request or in the document costs exactly what a bad model does.
+	runEffort, err := resolveEffort(effort, string(doc), info.DocPath)
+	if err != nil {
+		return "", err
 	}
 	// Resolve the repository BEFORE anything hands a path to git: projects.path is
 	// the project ROOT, which for a multi-repo project is not a checkout at all, and
@@ -480,13 +560,21 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 	// repo's HEAD has moved to since — and falling back to the branch would diff the
 	// branch against itself, which is empty by construction and grades landed work as
 	// "nothing was done".
+	// The run's wall clock, resolved ONCE and from the SAME instant run_started_at
+	// records: the prompt states it (so the executor can see how long it has,
+	// which is what stops a 4-hour window being spent re-deriving context), every
+	// continuation message quotes the elapsed side of it, and settle uses it as
+	// the deadline for the whole loop rather than giving each continuation a fresh
+	// full window. Reading the clock a second time would put the prompt's
+	// "started" a tick after the column's, for no gain.
+	budget := runcore.Budget{Timeout: timeoutFromEnv(), Started: s.clock()}
 	if _, err := s.DB.Exec(`
 		UPDATE epic_phases
 		   SET run_state='running', run_session_uuid=?, run_started_at=?,
 		       run_error=NULL, run_ended_at=NULL, run_branch=?,
 		       run_start_point=NULLIF(?, ''),
 		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL
-		 WHERE id=?`, uuid, s.ts(), branch, acq.StartPoint, phaseID); err != nil {
+		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, phaseID); err != nil {
 		// Worktree FIRST, slot LAST — the same invariant runAndHandle's defer
 		// enforces. Releasing the slot while the worktree still exists lets a
 		// concurrent Start warm-reuse (worktree invariant 4) the deterministic
@@ -518,7 +606,7 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 	if lendErr != nil {
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
 	}
-	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath)
+	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, budget)
 	spec := RunSpec{
 		Prompt:       prompt,
 		SessionUUID:  uuid,
@@ -527,21 +615,27 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 		ProjectPath:  info.ProjectPath,
 		// The ladder, already walked by resolveModel at the top of Start: the
 		// request's model (validated) → the phase DOC's **Model:** (validated) →
-		// SWARMERY_PHASERUN_MODEL (verbatim) → "", which emits no --model flag and
-		// inherits the account default.
+		// SWARMERY_PHASERUN_MODEL (verbatim) → planning.DefaultModel.
 		Model: runModel,
+		// The effort ladder, walked by resolveEffort once the doc was read: the
+		// request's effort → the doc's **Effort:** → SWARMERY_PHASERUN_EFFORT →
+		// DefaultEffort. Never empty unless an operator asked for "off".
+		Effort: runEffort,
 	}
 	if spec.SettingsFile != "" {
 		log.Printf("phaserun: phase=%d inheriting project settings %s (worktree is a checkout of %s)",
 			phaseID, spec.SettingsFile, info.RepoRoot)
 	}
-	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, phaseID, info, acq, spec, docRel) })
+	// A retry's timeline must show THIS run's decisions, not the previous
+	// attempt's — the same reason the checkbox interval resets both edges above.
+	runcore.ClearRunEvents(s.DB, Engine, phaseID)
+	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, phaseID, info, acq, spec, docRel, budget) })
 	return uuid, nil
 }
 
 // runAndHandle executes the run to completion, stamps the exit state, optionally
 // verifies the work, removes the worktree (branch kept), and always releases the slot.
-func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, releaseSlot func(), phaseID int64, info phaseInfo, acq worktree.Acquired, spec RunSpec, docRel string) {
+func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, releaseSlot func(), phaseID int64, info phaseInfo, acq worktree.Acquired, spec RunSpec, docRel string, budget runcore.Budget) {
 	// The terminal state, read by the defer below. Only a run that ENDED CLEANLY is
 	// worth grading: a cancelled or crashed executor may have left the tree mid-edit,
 	// and a verdict on that measures the interruption, not the work.
@@ -563,12 +657,19 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 	// The defer still calls it, guarded, so a panic between here and the switch
 	// cannot lose the report — the one artifact most worth not losing.
 	docReturned := false
+	// returnDocNow always copies. The completion loop needs a REPEATABLE
+	// copy-back: a continuation ticks further criteria inside the worktree, and
+	// the next iteration decides from the workspace copy, so a once-only closure
+	// would make every continuation invisible to the very check that ordered it.
+	returnDocNow := func() {
+		docReturned = true
+		worktree.ReturnPlanDocLogged(fmt.Sprintf("phaserun phase=%d", phaseID), acq.Path, docRel, info.DocPath)
+	}
 	returnDoc := func() {
 		if docReturned {
 			return
 		}
-		docReturned = true
-		worktree.ReturnPlanDocLogged(fmt.Sprintf("phaserun phase=%d", phaseID), acq.Path, docRel, info.DocPath)
+		returnDocNow()
 	}
 	defer func() {
 		cancel()
@@ -624,9 +725,13 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		endState = "failed"
 		s.stamp(phaseID, info.DocPath, "failed", msg)
 	default:
-		log.Printf("phaserun: phase=%d uuid=%s completed in %s", phaseID, spec.SessionUUID, res.Duration)
-		endState = "done"
-		s.stamp(phaseID, info.DocPath, "done", "")
+		// A clean exit is the START of the decision, not the end of it. settle
+		// reads the doc and the transcript, may resume the session, and hands back
+		// the state that is actually true: done, blocked, or partial.
+		log.Printf("phaserun: phase=%d uuid=%s exited 0 in %s, settling", phaseID, spec.SessionUUID, res.Duration)
+		state, detail := s.settle(ctx, phaseID, info, spec, budget, returnDocNow)
+		endState = state
+		s.stamp(phaseID, info.DocPath, state, detail)
 	}
 }
 
@@ -646,7 +751,14 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 // actual verification error, which is logged and dropped — a failed grade must never
 // turn a phase run that DID land work into a reported failure.
 func (s *Service) verifyRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string) {
-	if s.Verify == nil || endState != "done" || acq.Path == "" {
+	// `done` OR `partial`: both are exit-0 runs whose worktree is intact and whose
+	// diff is exactly what the verifier grades. `partial` only exists because the
+	// completion loop now distinguishes "finished" from "stopped with work left" —
+	// before it, that same run WAS `done` and was graded, and refusing to grade it
+	// now would silently drop verification from every run that needed a nudge.
+	// `blocked` and `failed` are excluded for the original reason: a run that
+	// stopped mid-edit is measuring the interruption, not the work.
+	if s.Verify == nil || acq.Path == "" || (endState != "done" && endState != "partial") {
 		return
 	}
 	// `off` (and the empty string a pre-0057 row carries) is the default: a plan that
@@ -698,6 +810,194 @@ func tickedInDoc(docPath string) (int, bool) {
 	}
 	done, _ := wsingest.CountCheckboxes(string(body))
 	return done, true
+}
+
+// criteria is what the phase doc says about its own completion at one instant:
+// how many acceptance checkboxes are ticked, how many there are, and the LABELS
+// of the ones that are not. ok=false when the doc cannot be read, and then the
+// completion loop refuses to conclude anything from it.
+type criteria struct {
+	Done     int
+	Total    int
+	Unticked []string
+}
+
+// criteriaInDoc reads the phase doc as it stands on disk right now. Same parser
+// as tickedInDoc — wsingest owns the format — so the number the loop decides on
+// and the number stamped into run_checkboxes_after can never disagree.
+//
+// It must be called AFTER the lent copy has been returned: the executor ticks
+// inside the worktree, so reading info.DocPath before the copy-back measures the
+// state the run STARTED in and would continue a phase that is already finished.
+func criteriaInDoc(docPath string) (criteria, bool) {
+	if docPath == "" {
+		return criteria{}, false
+	}
+	body, err := os.ReadFile(docPath)
+	if err != nil {
+		return criteria{}, false
+	}
+	done, total := wsingest.CountCheckboxes(string(body))
+	return criteria{Done: done, Total: total, Unticked: wsingest.UntickedCheckboxes(string(body))}, true
+}
+
+// blockedSentinel is the ending this engine's prompt asks for, echoed back in
+// every continuation so a nudged run is pointed at the vocabulary it was given
+// rather than at a second one invented by the harness.
+const blockedSentinel = "PHASE BLOCKED"
+
+// settle is the completion loop: it decides what a CLEANLY EXITED phase run
+// actually achieved, and resumes the same session when the answer is "not yet".
+//
+// The rule it replaces was `exit 0 ⇒ run_state='done'`. That rule is wrong for
+// the same reason on every run: `claude -p` exits 0 whenever the model ends its
+// turn, and a model running unattended ends its turn to report a milestone, to
+// name the next step, or to list decisions it made — all of which are exit 0 with
+// the work unfinished. The endings this engine's own prompt demands
+// (`PHASE DONE` / `PHASE BLOCKED:`) were written to the transcript and read by
+// nothing.
+//
+// Order of operations per iteration, all three load bearing:
+//
+//  1. Return the lent doc. The executor's ticks live in the worktree copy; every
+//     decision below is made from the workspace copy, so reading before the
+//     copy-back measures the PREVIOUS state.
+//  2. Read the criteria from the doc and the ending from the TRANSCRIPT
+//     (runcore.LastAssistantText). Neither alone is enough: the ticks cannot
+//     express "blocked", and the sentinel cannot be trusted about "done".
+//  3. Classify, and either settle or resume.
+//
+// Returns the run_state to stamp; the caller stamps it, because stamping is also
+// what every other exit path does and the two must stay in one place.
+func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spec RunSpec, budget runcore.Budget, returnDocNow func()) (state, detail string) {
+	for attempt := 0; ; attempt++ {
+		returnDocNow()
+
+		// The TRANSCRIPT is read first and classified first. A `PHASE BLOCKED:`
+		// ending is evidence in its own right and must win even when the document
+		// it refers to can no longer be read — the doc being renamed or rewritten
+		// mid-run (an operator edit, a plan revision) is exactly when a run is
+		// likeliest to end blocked, and it was precisely then that the old order
+		// returned `done` with a NULL run_error over `PHASE BLOCKED: <reason>`.
+		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
+
+		// The turn's stop_reason (migration 0078) is read from the same
+		// transcript and weighed beside the sentinel, not in a second machine:
+		// an Opus 5.5 safeguard ends the turn with stop_reason=refusal and the
+		// process still exits 0, so without this a refused run classifies as
+		// `continue` and the loop resumes the session straight back into the
+		// classifier — twice, at this run's pinned effort.
+		stop := runcore.LastStopReason(s.DB, spec.SessionUUID)
+		refusalCat := runcore.RefusalCategory(s.DB, spec.SessionUUID)
+
+		c, ok := criteriaInDoc(info.DocPath)
+		if !ok {
+			if reason, blocked := runcore.BlockedOrRefused(text, stop, refusalCat); blocked {
+				s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
+				log.Printf("phaserun: phase=%d uuid=%s blocked (doc %q unreadable): %s",
+					phaseID, spec.SessionUUID, info.DocPath, reason)
+				return "blocked", reason
+			}
+			// No doc and no blocked line: the tick count is UNKNOWN, and an unknown
+			// tick count is not evidence of completion. Continuing is impossible too
+			// (the unticked list would be empty — "0 criteria are still unticked,
+			// continue with them"), so the honest state is `partial` with the cause
+			// named, not the green stamp the exit code used to buy.
+			detail := fmt.Sprintf("phase doc unreadable at exit: %s", info.DocPath)
+			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
+			log.Printf("warning: phaserun: phase=%d uuid=%s partial: %s", phaseID, spec.SessionUUID, detail)
+			return "partial", detail
+		}
+
+		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total)
+		switch end {
+		case runcore.EndBlocked:
+			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
+			log.Printf("phaserun: phase=%d uuid=%s blocked: %s", phaseID, spec.SessionUUID, reason)
+			return "blocked", reason
+		case runcore.EndDone:
+			// Recorded only when the loop actually intervened. A run that finished
+			// on its first turn has no timeline worth showing, and writing one event
+			// per uneventful run would bury the continuations this table exists to
+			// surface.
+			if attempt > 0 {
+				s.event(phaseID, spec.SessionUUID, runcore.EventDone, attempt, fmt.Sprintf("%d/%d criteria ticked after %d continuations", c.Done, c.Total, attempt))
+			}
+			return "done", ""
+		}
+
+		// From here the run stopped with work left. Three things can stop us
+		// continuing, and each is a different honest answer.
+		elapsed := budget.Elapsed(s.clock())
+		switch {
+		case attempt >= runcore.MaxContinuations:
+			detail := fmt.Sprintf("%d of %d criteria ticked after %d continuations", c.Done, c.Total, attempt)
+			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
+			log.Printf("phaserun: phase=%d uuid=%s partial: %s", phaseID, spec.SessionUUID, detail)
+			return "partial", detail
+		case budget.Timeout > 0 && budget.Timeout-elapsed < runcore.MinContinuationWindow:
+			// Not enough wall clock left to be worth a billed turn. The guard used to
+			// be `elapsed >= budget.Timeout`, which let a run with seconds left spawn
+			// a continuation the deadline killed immediately — a spawn that cannot
+			// finish anything is pure spend. See runcore.MinContinuationWindow.
+			detail := fmt.Sprintf("%d of %d criteria ticked with less than %s left of the %s budget",
+				c.Done, c.Total, runcore.MinContinuationWindow, budget.Timeout)
+			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
+			return "partial", detail
+		}
+
+		msg := runcore.ContinuationMessage(c.Unticked, blockedSentinel, elapsed, budget.Timeout)
+		s.event(phaseID, spec.SessionUUID, runcore.EventContinuation, attempt+1, msg)
+		log.Printf("phaserun: phase=%d uuid=%s continuation %d/%d (%d/%d criteria ticked)",
+			phaseID, spec.SessionUUID, attempt+1, runcore.MaxContinuations, c.Done, c.Total)
+
+		// The continuation inherits the ENTIRE original spec — model, effort,
+		// permission mode, settings file, account, cwd — and changes exactly two
+		// fields. Re-deriving those values would be a second copy of the ladder
+		// phase 2 built, and an omitted --effort on a resume is not a cheap default
+		// but the CLI's xhigh.
+		cont := spec
+		cont.Resume = true
+		cont.Prompt = msg
+
+		// The deadline is the ORIGINAL run's, not a fresh window per continuation:
+		// the runner applies its own per-spawn timeout on top, and without this the
+		// worst case would be (1 + MaxContinuations) × the phase timeout.
+		cctx, ccancel := s.continuationContext(ctx, budget)
+		res, err := s.Run.Start(cctx, cont)
+		ccancel()
+		switch {
+		case errors.Is(ctx.Err(), context.Canceled):
+			return "failed", "cancelled"
+		case err != nil:
+			log.Printf("error: phaserun: phase=%d uuid=%s continuation could not start: %v", phaseID, spec.SessionUUID, err)
+			return "partial", "continuation could not start: " + err.Error()
+		case res == nil:
+			return "partial", "continuation returned no result"
+		case res.TimedOut:
+			return "partial", "continuation timed out"
+		case res.ExitCode != 0:
+			return "partial", fmt.Sprintf("continuation exited %d: %s", res.ExitCode, runcore.Tail(res.Stderr, 512))
+		}
+	}
+}
+
+// continuationContext bounds a continuation by the ORIGINAL run's wall clock. A
+// zero/unknown budget leaves the parent ctx alone (a no-op cancel is returned so
+// the caller's defer shape stays uniform), and an already-expired budget is
+// handled by settle before it gets here.
+func (s *Service) continuationContext(ctx context.Context, budget runcore.Budget) (context.Context, context.CancelFunc) {
+	if budget.Timeout <= 0 || budget.Started.IsZero() {
+		return ctx, func() {}
+	}
+	return context.WithDeadline(ctx, budget.Started.Add(budget.Timeout))
+}
+
+// event appends one completion-loop decision to run_events (migration 0077), so
+// the operator can see that a `partial` phase was nudged twice rather than
+// guessing from a single state column. Best-effort — see runcore.RecordRunEvent.
+func (s *Service) event(phaseID int64, uuid, kind string, attempt int, detail string) {
+	runcore.RecordRunEvent(s.DB, Engine, phaseID, uuid, kind, attempt, detail, s.ts())
 }
 
 // stamp writes the terminal run state; runError "" ⇒ NULL. run_ended_at is set on

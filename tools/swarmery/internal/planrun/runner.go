@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
@@ -53,6 +54,13 @@ type RunSpec struct {
 	// permissions and additionalDirectories — without it a multi-repo run has no
 	// core@swarmery, and the default agent does not exist.
 	SettingsFile string
+
+	// Resume makes this spawn a CONTINUATION of SessionUUID (`claude -r <uuid>`):
+	// the completion loop's nudge to an orchestrator that ended its turn with
+	// phase criteria still unticked. The service copies the original spec and
+	// changes only this and Prompt, so --agent, --settings and the account are
+	// unchanged; model and effort are re-resolved identically by this runner.
+	Resume bool
 
 	// ProjectPath is the plan's project — planInfo.ProjectPath (projects.path),
 	// the SAME value SettingsFile is derived from. Used ONLY to resolve the
@@ -78,9 +86,30 @@ type Run struct {
 const (
 	agentEnv   = "SWARMERY_PLANRUN_AGENT"
 	modelEnv   = "SWARMERY_PLANRUN_MODEL"
+	effortEnv  = "SWARMERY_PLANRUN_EFFORT"
 	timeoutEnv = "SWARMERY_PLANRUN_TIMEOUT"
 	permEnv    = "SWARMERY_PLANRUN_PERMISSION_MODE"
 )
+
+// DefaultEffort pins how hard a plan run's orchestrator thinks. A plan run is
+// the longest-lived shape this daemon has (an 8h window) and it spends that time
+// routing and verifying phases, so an unpinned --effort — the CLI's xhigh —
+// bought maximum reasoning depth on every turn of every one of them. high is the
+// deliberate choice; phase 7 re-measures it.
+const DefaultEffort = "high"
+
+// DefaultModel is the model a plan run uses when SWARMERY_PLANRUN_MODEL names
+// none. It was "" — no --model flag — which does NOT mean "a sensible house
+// default": it means the ACCOUNT default, which on these accounts is Fable, at
+// roughly twice the Opus price. So the path every un-picked "Run plan" took was
+// the most expensive one available, for eight hours at a time. Exported, like
+// DefaultAgent, so the API can tell the UI what an un-picked run will use.
+func DefaultModel() string {
+	if m := strings.TrimSpace(os.Getenv(modelEnv)); m != "" {
+		return m
+	}
+	return planning.DefaultModel
+}
 
 // fallbackAgent is the orchestrating agent a plan run is handed to when neither
 // the caller nor the environment names one. tech-lead is core's routing agent —
@@ -140,12 +169,17 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
+		Resume:      spec.Resume,
 		// Without a permission mode the orchestrator cannot write, run or commit —
 		// and it still exits 0. See internal/claudeflags.
 		PermissionMode: claudeflags.Mode(permEnv),
-		Agent:          spec.Agent,
-		Model:          strings.TrimSpace(os.Getenv(modelEnv)),
-		SettingsFile:   spec.SettingsFile,
+		Agent: spec.Agent,
+		Model: DefaultModel(),
+		// Without --effort the orchestrator thinks at the CLI's xhigh for every
+		// turn of an 8-hour window. Resolved through internal/claudeflags:
+		// SWARMERY_PLANRUN_EFFORT → SWARMERY_EFFORT → DefaultEffort.
+		Effort:       claudeflags.Effort(effortEnv, DefaultEffort),
+		SettingsFile: spec.SettingsFile,
 		// The account comes from spec.ProjectPath, never from Cwd: Cwd is the plan's
 		// acquired worktree, which has no .claude/settings.local.json of its own, so
 		// resolving it there would silently run the plan under the default account

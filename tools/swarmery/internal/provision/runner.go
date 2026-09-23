@@ -30,15 +30,26 @@ type Runner interface {
 // provision_jobs.error).
 const stderrTailBytes = 4096
 
-// defaultModel pins headless generator runs: without --model the CLI inherits
+// DefaultModel pins headless generator runs: without --model the CLI inherits
 // the account default (Fable-5 here — 2× the Opus price). Full ID, not an
 // alias — aliases re-resolve over time.
-const defaultModel = "claude-opus-5-5"
+const DefaultModel = "claude-opus-5-5"
 
 // permEnv is this spawn site's --permission-mode knob (internal/claudeflags owns
 // the resolution and the "off" escape hatch). Used by the generate step in
 // service.go, whose product is files on disk.
 const permEnv = "SWARMERY_PROVISION_PERMISSION_MODE"
+
+// effortEnv is this spawn site's --effort knob; internal/claudeflags owns the
+// resolution, the validation and the "off" escape hatch.
+const effortEnv = "SWARMERY_PROVISION_EFFORT"
+
+// DefaultEffort pins how hard a generator run thinks. A pack's generate action
+// reads a whole repository and writes a derived artifact (architecture-out/**
+// for the architecture pack) — real analysis, and one an operator waits on and
+// then trusts — so it is pinned high rather than down. Pinned at all because
+// the unpinned value is the CLI's xhigh, chosen by nobody. Phase 7 re-measures.
+const DefaultEffort = "high"
 
 // ClaudeRunner is the production Runner: it resolves the claude binary through
 // internal/claudebin, the same pattern internal/improve and every other

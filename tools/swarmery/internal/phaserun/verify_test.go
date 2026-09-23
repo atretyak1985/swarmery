@@ -67,7 +67,7 @@ func TestStartPersistsRunStartPoint(t *testing.T) {
 	wt := &stubWt{startPoint: "deadbeef123"}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	sp := phaseStartPoint(t, db, p1)
@@ -94,7 +94,7 @@ func TestVerifyRunsBeforeWorktreeRemoval(t *testing.T) {
 	wt.onRemove = func() { order = append(order, "remove") }
 	s.Verify = v
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	// Go is synchronous in the harness, so the run goroutine (and its defer) is done.
@@ -120,7 +120,7 @@ func TestVerifyRequestCarriesTheRunsFacts(t *testing.T) {
 	v := &stubVerifier{}
 	s.Verify = v
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	calls := v.calls()
@@ -149,7 +149,13 @@ func TestVerifyRequestCarriesTheRunsFacts(t *testing.T) {
 	if got.Title != "Phase 1 — Schema" {
 		t.Errorf("Title = %q, want the phase name", got.Title)
 	}
-	if !strings.Contains(got.Prompt, "- [ ] a") {
+	// `- [x] a`, not `- [ ] a`: verifyRun reads info.DocPath AFTER the executor's
+	// edits have been copied back (service.go's returnDoc ordering), so the
+	// verifier grades the document as it stands NOW — which is exactly what the
+	// service comment there promises. The stub run ticks the doc, so a successful
+	// run's verify request carries ticked criteria. Asserting the unticked form
+	// would be asserting that the verifier sees the pre-run document.
+	if !strings.Contains(got.Prompt, "- [x] a") {
 		t.Errorf("Prompt does not carry the phase doc's criteria:\n%s", got.Prompt)
 	}
 	if got.ProjectPath != "/repo/p" {
@@ -165,7 +171,7 @@ func TestVerifySkippedWhenDocDidNotOptIn(t *testing.T) {
 	v := &stubVerifier{}
 	s.Verify = v
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if n := len(v.calls()); n != 0 {
@@ -196,7 +202,7 @@ func TestVerifySkippedWhenRunDidNotEndCleanly(t *testing.T) {
 			v := &stubVerifier{}
 			s.Verify = v
 
-			if _, err := s.Start(p1, ""); err != nil {
+			if _, err := s.Start(p1, "", ""); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
 			if state, _, _, _ := phaseRow(t, db, p1); state != "failed" {
@@ -218,7 +224,7 @@ func TestVerifyErrorDoesNotFailTheRun(t *testing.T) {
 	setVerifyMode(t, db, p1, "normal")
 	s.Verify = &stubVerifier{err: errors.New("verifier could not start")}
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if state, _, _, runErr := phaseRow(t, db, p1); state != "done" || runErr.Valid {
@@ -238,7 +244,7 @@ func TestVerifyNotWiredIsSilent(t *testing.T) {
 	setVerifyMode(t, db, p1, "strict")
 	s.Verify = nil
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if state, _, _, _ := phaseRow(t, db, p1); state != "done" {

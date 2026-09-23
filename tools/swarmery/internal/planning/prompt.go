@@ -46,6 +46,7 @@ PHASE B — PLAN (only after the operator sends the PROCEED instruction):
 - Plan contents per the workspace convention (CLAUDE.md section 11 / core pack): plan/README.md (objective, real file paths, phase sequencing table, risks, Definition of Done) plus phase-N docs, each with a self-contained copy-paste agent prompt, measurable acceptance criteria, and — as the doc's LAST section — an empty ` + "`## Completion Report`" + ` stub for the executor to fill at phase end (the dashboard renders exactly that section as the phase's summary, so a doc without the stub leaves the operator with "no summary of the work written"). Honor every decision and the final running plan from the interview.
 - Before the phase docs, write plan/spec.md — the WHAT/WHY: a short problem statement, user stories, and an "## Acceptance criteria" section whose items are checkboxes shaped exactly ` + "`- [ ] **SC-1** — <criterion>`" + ` (stable SC-n ids, one behavior each).
 - Every phase doc's header block must carry a ` + "`**Covers:** SC-…`" + ` line naming the spec criteria that phase delivers; every SC id must be covered by at least one phase, and no phase may cover an id the spec does not declare.
+- Give every phase doc a ` + "`## Forecast`" + ` section just before ` + "`## Completion Report`" + `, holding one ` + "`kind: prior`" + ` yaml block in the shape documented in the core workspace-plans skill's ` + "`resources/plan-format.md`" + ` (areas is the only required key). It is a prediction, not a limit: do whatever the phase actually needs.
 - Do NOT implement anything and do NOT create git branches — planning only.
 - Finish your FINAL message with this exact line on its own:
   PLAN SAVED: <absolute path to the plan dir>
@@ -91,6 +92,11 @@ PHASE B — STAGE THE REVISION (only after the operator sends the PROCEED instru
   - {{.}}{{end}}{{else}} (none){{end}}
 - Every phase doc you write must keep its ` + "`## Completion Report`" + ` section as the LAST section (empty for a
   phase not yet executed, preserved verbatim for one that has run).
+- A phase doc you CREATE gets a ` + "`## Forecast`" + ` section just before that stub, holding one ` + "`kind: prior`" + ` yaml
+  block in the shape documented in the core workspace-plans skill's ` + "`resources/plan-format.md`" + `.
+  It is a prediction, not a limit: do whatever the phase actually needs.
+  A phase doc you UPDATE keeps the forecast it already carries unless the revision changes what the phase
+  will touch.
 - If you change the phase set, update the README phase-sequencing table in the same revision: every Doc cell
   must name a file that will exist after the revision, and every "Depends on" entry must name a phase number
   present in the table.

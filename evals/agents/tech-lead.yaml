@@ -4,6 +4,7 @@
 # config consulting, reviewer-before-commit gate)
 
 - description: tech-lead routes schema + endpoint work through architect before implementation
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/tech-lead.md
     task: >
@@ -17,6 +18,7 @@
       value: sequences design/schema work before endpoint implementation, and names an implementation executor for the endpoint
 
 - description: tech-lead keeps investigation read-only
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/tech-lead.md
     task: Investigate why telemetry ingestion latency doubled yesterday. Do not change anything yet.
@@ -25,6 +27,7 @@
       value: proposes a read-only diagnosis and does NOT propose editing files or applying fixes in this pass
 
 - description: tech-lead consults project config instead of assuming a stack
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/tech-lead.md
     task: What repositories does this project have, and where should new web work go?
@@ -33,6 +36,7 @@
       value: refers to reading the project's CLAUDE.md and/or .claude/project.json (repos, mainApp) rather than asserting a specific hard-coded repo list
 
 - description: tech-lead routes a bug to the debugger before any planner
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/tech-lead.md
     task: >
@@ -46,6 +50,7 @@
       value: routes to the debugger for root-cause analysis BEFORE dispatching the planner or any implementation agent; does not start with planning
 
 - description: tech-lead gates the diff behind an independent review before commit
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/tech-lead.md
     task: >
@@ -59,6 +64,7 @@
       value: requires a read-only code-reviewer pass over the diff before commit AND names the security-auditor because the change touches auth; does not commit on the executor's claims alone
 
 - description: tech-lead logs a 7-cell assessment ledger row after a delegation
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/tech-lead.md
     task: >
@@ -73,3 +79,54 @@
     # cell 5 (quality) is a bare 1-5 score
     - type: regex
       value: "[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|[^|\\n]+\\|\\s*[1-5]\\s*\\|"
+
+# --- core 3.6 delegation contract (phase 5) -----------------------------------
+# tech-lead.md "Delegation": a fan-out closes with one
+# `| agent | claim | evidence | accepted? |` table, and every delegate brief
+# ends with the same closing ask for an "Unverified:" list.
+
+- description: tech-lead closes a fan-out with the agent/claim/evidence/accepted table
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/tech-lead.md
+    task: >
+      Three delegates you dispatched in parallel have reported back.
+      @test-runner: "suite green" — pasted output `128 passed, 0 failed`.
+      @researcher: "the legacy exporter has no callers" — pasted a ripgrep sweep
+      over src/ and scripts/ showing zero hits.
+      @implementation-agent: "the migration is done" — its only evidence is that
+      migrations/0074_drop_legacy_exporter.sql now exists on disk.
+      Close the fan-out now. Emit the closing artifact your Delegation contract
+      requires, filled in with these three.
+  assert:
+    # hard — the exact 4-column header the contract specifies
+    - type: regex
+      # No inline (?i) — promptfoo compiles with `new RegExp(value)`, no flags.
+      value: "\\|\\s*[Aa]gent\\s*\\|\\s*[Cc]laim\\s*\\|\\s*[Ee]vidence\\s*\\|\\s*[Aa]ccepted\\??\\s*\\|"
+    # hard — the evidence column carries the delegates' actual output, not a restated claim
+    - type: contains
+      value: "128 passed"
+    - type: llm-rubric                      # soft — the judgment the table exists to record
+      value: >
+        the @implementation-agent row is NOT accepted outright — the response treats
+        "the file exists on disk" as insufficient evidence that the migration is right
+        and either rejects that row or accepts it only with an explicit caveat, while
+        the two rows backed by command output are accepted
+
+- description: tech-lead ends a delegate brief with the Unverified closing ask
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/tech-lead.md
+    task: >
+      You are about to dispatch @researcher to find out whether the legacy
+      exporter under src/export/ still has callers anywhere in the repo.
+      Write out the brief you will send, verbatim, exactly as the delegate
+      will receive it.
+  assert:
+    - type: contains                        # hard — the literal closing ask from the contract
+      value: "Unverified:"
+    - type: llm-rubric                      # soft
+      value: >
+        the brief ends by asking the delegate to list anything it could not confirm
+        under "Unverified:", and it hands over scoped context (task, artifacts, goal
+        condition, expected output) rather than a dump of the whole conversation

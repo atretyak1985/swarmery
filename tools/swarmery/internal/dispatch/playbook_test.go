@@ -80,7 +80,7 @@ func TestPlaybook_ModelFallbackCardThenPlaybookThenDefault(t *testing.T) {
 	}{
 		{"card override wins", playbookModel, cardModel, cardModel},
 		{"playbook model when the card is silent", playbookModel, "", playbookModel},
-		{"global default when both are silent", "", "", defaultModel},
+		{"global default when both are silent", "", "", DefaultModel},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

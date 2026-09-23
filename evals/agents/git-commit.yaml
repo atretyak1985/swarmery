@@ -4,6 +4,7 @@
 # Soft assert: llm-rubric for fix type, imperative mood, length
 
 - description: git-commit skill produces a conventional-commit subject
+  providers: [haiku-tier]
   vars:
     system: file://../../plugins/core/skills/git-commit/SKILL.md
     task: >
@@ -11,11 +12,15 @@
       crashed on empty payloads. Produce the commit message.
   assert:
     - type: regex
-      value: '(?m)^(feat|fix|refactor|chore|docs|test|perf|build|ci)(\(.+\))?!?:'   # hard — (?m): match the subject at line start even if a preamble precedes it
+      # hard — subject at line start even if a preamble precedes it. `(^|\n)` and
+      # not `(?m)^`: promptfoo compiles with `new RegExp(value)` and no flags, so
+      # an inline-flag prefix throws and scores the assertion failed.
+      value: '(^|\n)(feat|fix|refactor|chore|docs|test|perf|build|ci)(\(.+\))?!?:'
     - type: llm-rubric                                                              # soft
       value: subject uses the fix type, is imperative mood, and is under ~72 chars
 
 - description: git-commit skill derives scopes from project config
+  providers: [haiku-tier]
   vars:
     system: file://../../plugins/core/skills/git-commit/SKILL.md
     task: >
@@ -24,6 +29,6 @@
       Write the commit message.
   assert:
     - type: regex
-      value: "(?m)^[a-z]+\\((web-app)\\):"    # hard — scope must come from the provided commitScopes list
+      value: "(^|\\n)[a-z]+\\((web-app)\\):"    # hard — scope must come from the provided commitScopes list (no (?m), see above)
     - type: llm-rubric
       value: a conventional commit message with a type, the web-app scope, and an imperative subject line

@@ -206,7 +206,22 @@ export interface Session {
   /** Clean project display name (projects.name, base of the path); additive — null until healed. */
   projectName?: string | null;
   sessionUuid: string;
+  /** The FIRST assistant model of the transcript (`sessions.model`). */
   model: string | null;
+  /** The model of the session's NEWEST assistant turn. Null until it has one.
+   *
+   * A separate fact from `model`, not a replacement: a session an Opus 5.5
+   * safeguard moved onto an older model needs to show both ends of the move,
+   * and `model` alone reported the one it started on for the row's whole life. */
+  modelLast: string | null;
+  /** True when `modelLast` is a different family or generation from `model` —
+   * i.e. the session really changed model, as opposed to picking up a
+   * context-window marker (`claude-opus-5-5[1m]`) on the same one. */
+  modelChanged: boolean;
+  /** The session finished on a WEAKER model than it opened on. Narrower than
+   *  modelChanged, which has no direction: an operator escalating sonnet ->
+   *  opus changed model but did not fall back. The chip renders on THIS. */
+  modelFellBack: boolean;
   gitBranch: string | null;
   cwd: string | null;
   status: SessionStatus;
@@ -308,6 +323,18 @@ export interface Turn {
    * truncated; null for pre-0005 rows until `swarmery backfill --rebuild-text`.
    */
   text: string | null;
+  /**
+   * Why the turn ended (`turns.stop_reason`, migration 0078): `end_turn`,
+   * `tool_use`, `max_tokens`, `stop_sequence` or `refusal`. Null on user turns
+   * and on every turn ingested before that migration.
+   *
+   * That null doubles as an INGEST-VINTAGE MARKER, which is the only reason the
+   * Chat tab can tell the two causes of missing prose apart: a null-text
+   * assistant turn that carries a stop reason was written by a build that
+   * stores prose, so its missing text is a real fact about the turn (a
+   * thinking-only turn, or one a safeguard cut off) rather than a backfill gap.
+   */
+  stopReason: string | null;
 }
 
 /** Go: eventDTO — payload is raw JSON (json.RawMessage), decoded client-side. */
@@ -1958,6 +1985,12 @@ export interface PlanningStatus {
   /** Full model ID every turn of this wizard runs on (the first spawn and each
    * resume pass the same `--model`). Empty string when no wizard row exists. */
   model: string;
+  /** Reasoning depth every turn of this wizard runs at (the first spawn and each
+   * resume pass the same `--effort`). Always a RESOLVED rung — `low`…`max`,
+   * never `default` and never `""` when a wizard row exists, because an omitted
+   * `--effort` is the CLI's xhigh rather than anything cheaper. Empty string
+   * only when no wizard row exists. */
+  effort: string;
   /** The workspace task whose plan a `revise` wizard targets; null otherwise. */
   reviseTaskId: number | null;
   /** Why the LAST action did not go through (failed resume spawn, planner
@@ -3196,8 +3229,33 @@ export interface RoutineInput {
 
 // --- fusion phase 10: epic rollups + plan-doc editor --------------------------
 
-/** Direct phase-run lifecycle (interactive planning v2 phase 5). */
-export type PhaseRunState = 'idle' | 'running' | 'done' | 'failed';
+/** Direct phase-run lifecycle (interactive planning v2 phase 5).
+ *
+ * `blocked` and `partial` arrived with the run completion loop: all THREE of
+ * `done`/`blocked`/`partial` are clean (exit 0) endings, and which one a run got
+ * is decided from the doc's ticked criteria plus the run's final assistant text,
+ * never from the exit code. `partial` means the harness resumed the session up
+ * to twice and criteria were still unticked; `blocked` means the run itself said
+ * so, with the reason in `runError`. */
+export type PhaseRunState = 'idle' | 'running' | 'done' | 'failed' | 'blocked' | 'partial';
+
+/** One decision of the run completion loop (`run_events`, migration 0077).
+ *
+ * The timeline exists because `runState` collapses a decision CHAIN into one
+ * word: a `partial` phase that was nudged twice and progressed each time and one
+ * that stalled immediately read identically without it. Empty for the common
+ * case of a run that finished on its first turn. */
+export interface RunEvent {
+  id: number;
+  /** The resumed session — the same uuid as the run's own, for cross-linking. */
+  sessionUuid: string;
+  kind: 'continuation' | 'blocked' | 'partial' | 'done';
+  /** 1..2 for `continuation`; 0 otherwise. */
+  attempt: number;
+  /** The blocked reason, or the message the continuation was sent with. */
+  detail: string;
+  createdAt: string;
+}
 
 /** What a run ACHIEVED, derived server-side — mirrors internal/phasediag.OutcomeFromRow.
  *  Distinct from PhaseRunState, which only says how the process ended. */
@@ -3307,6 +3365,15 @@ export interface PhaseDiagnosis {
 }
 
 /** One epic phase — mirrors epicPhaseDTO in internal/api/epics.go. */
+/** Go: phaseModelUseDTO — one model a phase run actually used, and how many
+ * assistant turns it carried. The count is what makes the list readable: "42
+ * turns on opus 5.5, 3 on opus 4.1" says the run was nearly finished when the
+ * safeguard hit, which "two models" does not. */
+export interface PhaseModelUse {
+  model: string;
+  turns: number;
+}
+
 export interface EpicPhase {
   id: number;
   seq: number;
@@ -3342,6 +3409,19 @@ export interface EpicPhase {
    * `runSessionUuid`. Null when the phase never ran, when its session has not
    * been ingested yet, or when that session carries no model. */
   runModel: string | null;
+  /** Every model the run's session actually ran an assistant turn on, in the
+   * order they first appeared, with that model's turn count.
+   *
+   * `runModel` above is the FIRST of them and for most runs the only one. It
+   * stops being the only one exactly when it matters: a safeguard refusal moves
+   * the session onto an older model and the run continues there, so "the model
+   * this run used" was true of its first turn and false of its output.
+   * `[]` when the phase never ran or its session is not ingested. */
+  runModels: PhaseModelUse[];
+  /** True when the run ENDED on a weaker model than it started on. Not
+   * `runModels.length > 1`: a context-window marker or a rename produces two
+   * entries without any fallback having happened. */
+  runModelFellBack: boolean;
   /** The model the phase DOC asks for (`**Model:** opus` in its header —
    * `epic_phases.doc_model`). Null when the doc declares nothing.
    *
@@ -3355,8 +3435,13 @@ export interface EpicPhase {
    * offending text to fix it. */
   docModel: string | null;
   runStartedAt: string | null;
-  /** Failure detail (stderr tail / timeout / cancelled) when runState==='failed'. */
+  /** Failure detail (stderr tail / timeout / cancelled) when runState==='failed',
+   * the blocked reason when runState==='blocked', and the ticked-criteria count
+   * when runState==='partial'. */
   runError: string | null;
+  /** This run's completion-loop timeline — see RunEvent. Empty for a run that
+   * finished on its first turn, which is the overwhelmingly common case. */
+  runEvents: RunEvent[];
   /** Derived: what the run ACHIEVED, as opposed to how the process ended. A
    * `runState: 'done'` run that ticked nothing is `noop`, not `completed` — the
    * green chip keys on THIS, never on runState. */
@@ -3387,6 +3472,62 @@ export interface EpicPhase {
   /** Why the gate refused, in the operator's words; [] when complete. A list because
    *  one gate cites every reason it has. */
   completionBlockers: string[];
+  /** The doc's `## Forecast` blocks (migration 0079) — the PRIOR the planner wrote
+   *  and/or the POSTERIOR the executor wrote, in document order. [] for every phase
+   *  that declares none, which is all of them until an author opts in.
+   *
+   *  READ-ONLY DATA. Nothing above it consults a forecast and nothing may start to:
+   *  a forecast is a prediction to be scored later, not a contract a phase can
+   *  violate. Rendering it beside `completionState` must never read as a verdict. */
+  forecasts: PhaseForecast[];
+  /** What is wrong with those blocks — an unknown band, a confidence outside 0..1,
+   *  a forecast naming no areas, a posterior with no prior to score against.
+   *  Computed server-side in the read path, like `EpicSpec.unknownRefs`, and like it
+   *  refuses nothing. */
+  forecastLints: ForecastLint[];
+}
+
+/** One stored `## Forecast` block — mirrors phaseForecastDTO.
+ *
+ *  Every text field is VERBATIM, including a band this daemon does not recognise:
+ *  the operator cannot fix a typo the API has already hidden. Render the value as
+ *  written and let `forecastLints` say what is wrong with it. */
+export interface PhaseForecast {
+  /** 'prior' | 'posterior'; '' when the block declares no kind. */
+  kind: string;
+  /** RFC3339 as the author wrote it; '' when absent. */
+  writtenAt: string;
+  areas: string[];
+  files: string[];
+  /** XS | S | M | L | XL, verbatim. */
+  sizeBand: string;
+  /** '<30m' | '30-90m' | '90m-4h' | '>4h', verbatim. */
+  durationBand: string;
+  /** done | partial | blocked, verbatim. */
+  outcome: string;
+  risks: string[];
+  /** 0..1; null — NOT 0 — when the author said nothing readable. */
+  confidence: number | null;
+  /** True when this forecast cannot have been a prediction, so calibration
+   *  skips it. `postHocReason` says which observation decided that. */
+  postHoc: boolean;
+  /** '' when not post hoc; otherwise 'report-filled' (a prior in a doc whose
+   *  `## Completion Report` was already filled) or 'after-first-edit' (a
+   *  posterior the transcript shows was written after the run's first change to
+   *  another file). */
+  postHocReason: string;
+  /** sha256 of the phase doc at the scan that stored this row. */
+  docHash: string;
+}
+
+/** One problem with a phase's forecasts — mirrors wsingest.ForecastLint. */
+export interface ForecastLint {
+  /** The forecast the lint is about: 'prior' | 'posterior' | ''. */
+  kind: string;
+  /** Stable slug: unknown-kind | unknown-size-band | unknown-duration-band |
+   *  unknown-outcome | bad-confidence | missing-areas | posterior-without-prior. */
+  code: string;
+  message: string;
 }
 
 /** The completion gate's states (server-side internal/phasegate).
@@ -3498,10 +3639,13 @@ export type PlanRunMode = 'auto' | 'subagents' | 'inline';
 export interface PlanRun {
   agent: string | null;
   mode: PlanRunMode;
-  runState: 'idle' | 'running' | 'done' | 'failed';
+  /** Same six-state vocabulary as PhaseRunState, and for the same reason. */
+  runState: PhaseRunState;
   runSessionUuid: string | null;
   runStartedAt: string | null;
   runError: string | null;
+  /** This run's completion-loop timeline — see RunEvent. */
+  runEvents: RunEvent[];
 }
 
 /** GET/PUT/PATCH /api/epics/{taskId}/docs response body. */

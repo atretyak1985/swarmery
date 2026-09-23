@@ -986,7 +986,7 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			model = pb.model
 		}
 		if model == "" {
-			model = defaultModel
+			model = DefaultModel
 		}
 		// Agent is carried, never applied: ClaudeRunner.agentPrompt owns the single
 		// "@<agent>: " prefix site. Every stage of a playbook runs as the same agent
@@ -1274,27 +1274,37 @@ func (s *Service) linkSession(taskID int64, uuid string) {
 // routing).
 func (s *Service) classifyLastTurn(uuid string) Sentinel {
 	text := s.lastAssistantText(uuid)
-	if text == "" {
-		return Sentinel{}
+	if sent := ClassifySentinel(text); text != "" && sent.Kind != "" {
+		// The agent's OWN sentinel wins: it is the more specific account, and a
+		// refusal that still managed to write `BLOCKED: …` routes identically.
+		return sent
 	}
-	return ClassifySentinel(text)
+	// No sentinel — but a stop_reason of `refusal` is one all the same
+	// (migration 0078). An Opus 5.5 safeguard ends the turn with no sentinel,
+	// frequently with no text at all, and `claude -p` still exits 0: the final
+	// stage therefore landed in_review as a CLEAN run, and a non-final stage
+	// carried an empty {previous_stage_output} into the next billed stage of a
+	// chain that cannot progress. Route it to the blocked path the card already
+	// has, through the same Sentinel the sentinel reader produces rather than a
+	// parallel branch at the call site.
+	if detail, ok := runcore.RefusalDetail(
+		runcore.LastStopReason(s.DB, uuid), runcore.RefusalCategory(s.DB, uuid)); ok {
+		return Sentinel{Kind: "blocked", Line: blockedSentinel + " " + detail}
+	}
+	return Sentinel{}
 }
 
 // lastAssistantText returns a session's final assistant turn text (by uuid), or
 // "" when the session/transcript is not (yet) ingested. It feeds both sentinel
 // classification and the {previous_stage_output} of the next playbook stage — a
 // missing transcript degrades gracefully to an empty carry-forward.
+//
+// The query itself now lives in runcore.LastAssistantText: phaserun, planrun and
+// verify all needed the same read for the completion loop (phase 3), and this
+// was the copy they would otherwise have been cloned from. The method stays as a
+// one-line adapter so dispatch's two call sites keep reading as dispatch code.
 func (s *Service) lastAssistantText(uuid string) string {
-	var text sql.NullString
-	err := s.DB.QueryRow(`
-		SELECT tr.text
-		  FROM turns tr JOIN sessions se ON se.id = tr.session_id
-		 WHERE se.session_uuid=? AND tr.role='assistant' AND tr.text IS NOT NULL
-		 ORDER BY tr.seq DESC LIMIT 1`, uuid).Scan(&text)
-	if err != nil || !text.Valid {
-		return ""
-	}
-	return text.String
+	return runcore.LastAssistantText(s.DB, uuid)
 }
 
 // ── startup heal ──

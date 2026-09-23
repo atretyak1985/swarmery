@@ -22,6 +22,23 @@ import (
 // artifact that was never created.
 const permEnv = "SWARMERY_ROUTINES_PERMISSION_MODE"
 
+// effortEnv is this spawn site's --effort knob; internal/claudeflags owns the
+// resolution, the validation and the "off" escape hatch.
+const effortEnv = "SWARMERY_ROUTINES_EFFORT"
+
+// DefaultEffort pins how hard an ai-prompt step thinks when the step names no
+// depth. A routine is a scheduled chore against a prompt its author already
+// narrowed — refresh a doc, sweep a list, write a short report — so medium is
+// the fit; the unpinned alternative is the CLI's xhigh, paid on every tick of
+// every routine on the machine. Phase 7 re-measures it.
+const DefaultEffort = "medium"
+
+// DefaultModel pins an ai-prompt step that declares no `model:` of its own.
+// Before this, such a step passed NO --model — which does not mean "a house
+// default" but the ACCOUNT default, Fable here, at roughly twice the Opus
+// price. Scheduled work is exactly where that silently compounds.
+const DefaultModel = "claude-sonnet-5"
+
 // Runner is the ai-prompt boundary: it spawns one headless `claude -p` run in
 // the given cwd and returns raw stdout. Mocked in every test — no real claude
 // invocation outside production (mirrors improve.Runner / dispatch.Runner).
@@ -70,9 +87,12 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 	// unaffected.
 	args := []string{"-p", "--output-format", "text",
 		"--setting-sources", "project,local"}
-	if m := strings.TrimSpace(model); m != "" {
-		args = append(args, "--model", m)
+	m := strings.TrimSpace(model)
+	if m == "" {
+		m = DefaultModel
 	}
+	args = append(args, "--model", m)
+	args = append(args, claudeflags.EffortArgs(effortEnv, DefaultEffort)...)
 	args = append(args, claudeflags.PermissionModeArgs(permEnv)...)
 	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
 	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT

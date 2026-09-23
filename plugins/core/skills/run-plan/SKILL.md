@@ -37,6 +37,10 @@ never be delegated.
    never the agent's own worktree.
 6. One worktree per concurrent implementer on route P — parallel edits to one
    checkout corrupt each other.
+7. **Don't check in between phases** — the ledger is the status, and a progress
+   note belongs in the same message as the next dispatch. Stop and ask only when
+   a phase cannot continue without the operator, or at one of rule 4's
+   ASK-gated actions.
 
 # Resources
 

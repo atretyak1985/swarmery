@@ -41,10 +41,22 @@ import (
 const AdoptPollInterval = 5 * time.Second
 
 // AdoptedExitNote is what an engine stamps when an adopted run's process
-// disappears. The state is 'done' because the work's own evidence (checkbox
-// deltas, commits) answers whether anything landed — but the note must survive so
-// nobody later reads a clean exit into a run we never actually reaped.
+// disappears. The exit status is genuinely unknown — the orphan is not our child,
+// so there is no wait() to read — and the note must survive so nobody later reads
+// a clean exit into a run we never actually reaped.
+//
+// It is a NOTE, not a verdict: the state beside it is decided from the same
+// evidence the normal exit path uses (ticked criteria + the transcript's ending),
+// because "the daemon restarted" is not a reason for the phase's thesis to stop
+// holding.
 const AdoptedExitNote = "adopted after a daemon restart — exit status unknown"
+
+// AdoptedNotContinuedNote explains the one thing an adopted run CANNOT get: a
+// continuation. The continuation counter is in-memory and died with the previous
+// daemon, so resuming from here could push a run past MaxContinuations — the cap
+// is a money bound and must hold unconditionally. A survivor that would have been
+// nudged therefore settles `partial` and says so.
+const AdoptedNotContinuedNote = "adopted after daemon restart; not continued"
 
 // Candidate is one row left 'running' by a previous daemon.
 type Candidate struct {

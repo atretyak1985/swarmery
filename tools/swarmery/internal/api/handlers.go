@@ -133,7 +133,22 @@ type sessionDTO struct {
 	ProjectName *string `json:"projectName"`
 	SessionUUID string  `json:"sessionUuid"`
 	Model       *string `json:"model"`
-	GitBranch   *string `json:"gitBranch"`
+	// ModelLast is the model of the session's NEWEST assistant turn, and
+	// ModelChanged says it is a different tier from the one the session opened
+	// on. Model above is the FIRST model and stays that: the two are separate
+	// facts, and a session that fell back needs to show both — "started on X,
+	// finishing on Y" is the whole content of the chip. Null/false on a session
+	// with no assistant turn yet. See internal/api/session_model.go.
+	ModelLast    *string `json:"modelLast"`
+	ModelChanged bool    `json:"modelChanged"`
+	// ModelFellBack narrows ModelChanged to the direction that needs explaining:
+	// the session finished on a WEAKER model than it opened on. ModelChanged
+	// alone is direction-agnostic, and rendering "fell back to opus" over an
+	// operator escalating sonnet -> opus is the same crying-wolf this phase
+	// removed from the hooks. Same rule as a phase run's runModelFellBack —
+	// both call modelid.IsFallback, deliberately one function.
+	ModelFellBack bool `json:"modelFellBack"`
+	GitBranch    *string `json:"gitBranch"`
 	CWD         *string `json:"cwd"`
 	Status      string  `json:"status"`
 	StartedAt   string  `json:"startedAt"`
@@ -219,6 +234,13 @@ type turnDTO struct {
 	TokensCacheWrite *int64   `json:"tokensCacheWrite"`
 	CostUSD          *float64 `json:"costUsd"`
 	Text             *string  `json:"text"`
+	// StopReason is why the turn ended (migration 0078): end_turn, tool_use,
+	// max_tokens, stop_sequence, refusal. Null on user turns and on every turn
+	// ingested before that migration — which makes it double as the marker the
+	// Chat tab needs: a null-text assistant turn that HAS a stop reason was
+	// ingested by a build that stores prose, so its missing text is real, not a
+	// backfill gap.
+	StopReason *string `json:"stopReason"`
 }
 
 type eventDTO struct {
@@ -492,7 +514,7 @@ const sessionCols = `
 	         WHERE t.session_id = s.id AND t.role = 'user'
 	           AND t.text IS NOT NULL AND TRIM(t.text) != ''
 	         ORDER BY t.seq LIMIT 1),
-	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + sessionTerminalCols
+	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + sessionTerminalCols + sessionModelCols
 
 // sessionFrom is the FROM/JOIN tail shared by sessionSelect and the page CTE
 // built in listSessions, so both resolve rows — and the ?planTask predicate's
@@ -728,7 +750,8 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	// activity is surfaced via the subagent_start/stop events in the timeline.
 	rows, err := h.DB.Query(`
 		SELECT id, seq, role, message_id, model, started_at, ended_at,
-		       tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, text
+		       tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, text,
+		       stop_reason
 		FROM turns WHERE session_id = ? AND agent_name IS NULL ORDER BY seq`, d.ID)
 	if err != nil {
 		writeErr(w, err)
@@ -737,7 +760,8 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var t turnDTO
 		if err := rows.Scan(&t.ID, &t.Seq, &t.Role, &t.MessageID, &t.Model, &t.StartedAt, &t.EndedAt,
-			&t.TokensIn, &t.TokensOut, &t.TokensCacheRead, &t.TokensCacheWrite, &t.CostUSD, &t.Text); err != nil {
+			&t.TokensIn, &t.TokensOut, &t.TokensCacheRead, &t.TokensCacheWrite, &t.CostUSD, &t.Text,
+			&t.StopReason); err != nil {
 			rows.Close()
 			writeErr(w, err)
 			return
@@ -831,6 +855,7 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	// next to the projection that produced it.
 	var group sessionPlanGroupScan
 	var term sessionTerminalScan
+	var models sessionModelScan
 	dest := append([]any{&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
 		&s.Account,
@@ -840,11 +865,13 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 		&whyRaw,
 		&hoPath, &hoCreatedAt, &hoContextTokens}, group.dest()...)
 	dest = append(dest, term.dest()...)
+	dest = append(dest, models.dest()...)
 	if err := scan(dest...); err != nil {
 		return err
 	}
 	s.PlanGroup = group.dto()
 	s.Terminal = term.dto()
+	models.apply(s)
 	if whyRaw.Valid {
 		if w := summarizeWhy(whyRaw.String); w != "" {
 			s.Why = &w

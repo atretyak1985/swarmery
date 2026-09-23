@@ -393,7 +393,12 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 		return "", fmt.Errorf("worktree acquire: %w", err)
 	}
 
-	if err := s.stampStart(taskID, agent, string(runMode), uuid); err != nil {
+	// Resolved ONCE and from the SAME instant run_started_at records: the prompt
+	// states it, every continuation quotes the elapsed side of it, and settle uses
+	// it as the deadline for the whole loop instead of giving each nudge a fresh
+	// 8 hours.
+	budget := runcore.Budget{Timeout: runTimeout(), Started: s.clock()}
+	if err := s.stampStart(taskID, agent, string(runMode), uuid, budget.Started.UTC().Format(time.RFC3339)); err != nil {
 		// Worktree FIRST, slot LAST — the same invariant runAndHandle's defer
 		// enforces. Releasing the slot while the worktree still exists lets a
 		// concurrent Start warm-reuse (worktree invariant 4) the deterministic
@@ -414,7 +419,7 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	s.notify(taskID)
 
 	spec := RunSpec{
-		Prompt:       BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath),
+		Prompt:       BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, budget),
 		SessionUUID:  uuid,
 		Cwd:          acq.Path,
 		Agent:        agent,
@@ -425,7 +430,9 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 		log.Printf("planrun: plan=%d inheriting project settings %s (worktree is a checkout of %s)",
 			taskID, spec.SettingsFile, info.RepoRoot)
 	}
-	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, info, acq, spec) })
+	// A retry's timeline must show THIS run's decisions, not the last attempt's.
+	runcore.ClearRunEvents(s.DB, Engine, taskID)
+	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, info, acq, spec, budget) })
 	return uuid, nil
 }
 
@@ -441,7 +448,7 @@ func allComplete(phases []Phase) bool {
 
 // runAndHandle executes the run to completion, stamps the exit state, removes
 // the worktree (branch kept), and always releases the slot.
-func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, releaseSlot func(), info planInfo, acq worktree.Acquired, spec RunSpec) {
+func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, releaseSlot func(), info planInfo, acq worktree.Acquired, spec RunSpec, budget runcore.Budget) {
 	defer func() {
 		cancel()
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
@@ -478,13 +485,164 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		}
 		s.stamp(info.TaskID, "failed", msg)
 	default:
-		log.Printf("planrun: plan=%d uuid=%s completed in %s", info.TaskID, spec.SessionUUID, res.Duration)
-		s.stamp(info.TaskID, "done", "")
+		// A clean exit is where the decision STARTS. settle reads the phase docs
+		// and the transcript and may resume the session; see its comment for why
+		// exit 0 never meant "done" in the first place.
+		log.Printf("planrun: plan=%d uuid=%s exited 0 in %s, settling", info.TaskID, spec.SessionUUID, res.Duration)
+		state, detail := s.settle(ctx, info, spec, budget)
+		s.stamp(info.TaskID, state, detail)
 	}
 }
 
+// blockedSentinel is the ending this engine's prompt asks for; a continuation
+// quotes it back rather than inventing a second vocabulary. The `at phase <n>`
+// qualifier the contract adds is free-form to runcore.ClassifyEnd's matcher.
+const blockedSentinel = "PLAN BLOCKED at phase <n>"
+
+// planCriteria aggregates the plan's acceptance criteria across every phase doc
+// AS THEY STAND ON DISK RIGHT NOW.
+//
+// It re-reads the docs rather than trusting info.Phases, whose Done/Total were
+// read at admission — which is to say, before the run did anything. ok=false when
+// NO phase doc could be read at all: that is the "no evidence" case, and the loop
+// refuses to conclude from it. A plan where only some docs are readable still
+// decides, on the ones that are, because a plan run's job is spread across the
+// set and a single unreadable doc must not strand the other nine.
+//
+// Unticked labels are prefixed with their phase so the continuation message says
+// WHERE the work is — a bare criterion text is ambiguous across ten phase docs
+// that often word their gates identically ("typecheck passes").
+func planCriteria(phases []Phase) (done, total int, unticked []string, ok bool) {
+	for _, p := range phases {
+		body, err := os.ReadFile(p.DocPath)
+		if err != nil {
+			log.Printf("warning: planrun: phase %d doc %q unreadable while settling: %v", p.Seq, p.DocPath, err)
+			continue
+		}
+		ok = true
+		d, t := wsingest.CountCheckboxes(string(body))
+		done, total = done+d, total+t
+		for _, label := range wsingest.UntickedCheckboxes(string(body)) {
+			unticked = append(unticked, fmt.Sprintf("phase %d — %s", p.Seq, label))
+		}
+	}
+	return done, total, unticked, ok
+}
+
+// settle is the plan-run completion loop — phaserun.settle's twin, and
+// deliberately its twin rather than shared code: the two read their criteria from
+// different places (one lent document vs. a set of docs that never enter the
+// worktree), and the only part that IS the same rule — classify, cap, nudge —
+// already lives in runcore.
+//
+// Returns the run_state to stamp and its detail.
+func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budget runcore.Budget) (state, detail string) {
+	for attempt := 0; ; attempt++ {
+		// Transcript first, and classified first: a `PLAN BLOCKED at phase n:`
+		// ending is evidence on its own and must win even when no phase doc can be
+		// read — see phaserun.settle for the failure this ordering prevents.
+		text := runcore.LastAssistantText(s.DB, spec.SessionUUID)
+		// stop_reason beside the sentinel — see phaserun.settle. A plan run is
+		// the longer of the two and therefore the more expensive one to resume
+		// into a safeguard it has already tripped.
+		stop := runcore.LastStopReason(s.DB, spec.SessionUUID)
+		refusalCat := runcore.RefusalCategory(s.DB, spec.SessionUUID)
+
+		done, total, unticked, ok := planCriteria(info.Phases)
+		if !ok {
+			if reason, blocked := runcore.BlockedOrRefused(text, stop, refusalCat); blocked {
+				s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
+				log.Printf("planrun: plan=%d uuid=%s blocked (no readable phase doc): %s", info.TaskID, spec.SessionUUID, reason)
+				return "blocked", reason
+			}
+			// Nothing to measure and nothing to put in a continuation. An unknown
+			// tick count is not evidence of completion, so this settles `partial`
+			// with the cause named rather than stamping the old green `done`.
+			detail := fmt.Sprintf("no readable phase doc at exit (%d phases)", len(info.Phases))
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, detail)
+			log.Printf("warning: planrun: plan=%d uuid=%s partial: %s", info.TaskID, spec.SessionUUID, detail)
+			return "partial", detail
+		}
+
+		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, done, total)
+		switch end {
+		case runcore.EndBlocked:
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
+			log.Printf("planrun: plan=%d uuid=%s blocked: %s", info.TaskID, spec.SessionUUID, reason)
+			return "blocked", reason
+		case runcore.EndDone:
+			// Only when the loop intervened — see phaserun.settle for why an
+			// uneventful run writes no event.
+			if attempt > 0 {
+				s.event(info.TaskID, spec.SessionUUID, runcore.EventDone, attempt, fmt.Sprintf("%d/%d criteria ticked after %d continuations", done, total, attempt))
+			}
+			return "done", ""
+		}
+
+		elapsed := budget.Elapsed(s.clock())
+		switch {
+		case attempt >= runcore.MaxContinuations:
+			d := fmt.Sprintf("%d of %d criteria ticked after %d continuations", done, total, attempt)
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, d)
+			log.Printf("planrun: plan=%d uuid=%s partial: %s", info.TaskID, spec.SessionUUID, d)
+			return "partial", d
+		case budget.Timeout > 0 && budget.Timeout-elapsed < runcore.MinContinuationWindow:
+			// The twin of phaserun's guard, and for the same reason: a spawn with
+			// seconds left on the clock is killed by the deadline before it can
+			// finish anything, so it is pure spend. See runcore.MinContinuationWindow.
+			d := fmt.Sprintf("%d of %d criteria ticked with less than %s left of the %s budget",
+				done, total, runcore.MinContinuationWindow, budget.Timeout)
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, d)
+			return "partial", d
+		}
+
+		msg := runcore.ContinuationMessage(unticked, blockedSentinel, elapsed, budget.Timeout)
+		s.event(info.TaskID, spec.SessionUUID, runcore.EventContinuation, attempt+1, msg)
+		log.Printf("planrun: plan=%d uuid=%s continuation %d/%d (%d/%d criteria ticked)",
+			info.TaskID, spec.SessionUUID, attempt+1, runcore.MaxContinuations, done, total)
+
+		cont := spec
+		cont.Resume = true
+		cont.Prompt = msg
+
+		cctx, ccancel := continuationContext(ctx, budget)
+		res, err := s.Run.Start(cctx, cont)
+		ccancel()
+		switch {
+		case errors.Is(ctx.Err(), context.Canceled):
+			return "failed", "cancelled"
+		case err != nil:
+			log.Printf("error: planrun: plan=%d uuid=%s continuation could not start: %v", info.TaskID, spec.SessionUUID, err)
+			return "partial", "continuation could not start: " + err.Error()
+		case res == nil:
+			return "partial", "continuation returned no result"
+		case res.TimedOut:
+			return "partial", "continuation timed out"
+		case res.ExitCode != 0:
+			return "partial", fmt.Sprintf("continuation exited %d: %s", res.ExitCode, runcore.Tail(res.Stderr, 512))
+		}
+	}
+}
+
+// continuationContext bounds a continuation by the ORIGINAL run's wall clock,
+// so a plan that needs two nudges cannot spend 24 hours under an 8-hour budget.
+func continuationContext(ctx context.Context, budget runcore.Budget) (context.Context, context.CancelFunc) {
+	if budget.Timeout <= 0 || budget.Started.IsZero() {
+		return ctx, func() {}
+	}
+	return context.WithDeadline(ctx, budget.Started.Add(budget.Timeout))
+}
+
+// event appends one completion-loop decision to run_events (migration 0077).
+// Best-effort — see runcore.RecordRunEvent.
+func (s *Service) event(taskID int64, uuid, kind string, attempt int, detail string) {
+	runcore.RecordRunEvent(s.DB, Engine, taskID, uuid, kind, attempt, detail, s.ts())
+}
+
 // stampStart upserts the plan_runs row into the running state.
-func (s *Service) stampStart(taskID int64, agent, mode, uuid string) error {
+// startedAt is passed in rather than read here so the row's run_started_at and
+// the budget line in the prompt name the SAME instant.
+func (s *Service) stampStart(taskID int64, agent, mode, uuid, startedAt string) error {
 	_, err := s.DB.Exec(`
 		INSERT INTO plan_runs (workspace_task_id, agent, mode, run_state, run_session_uuid, run_started_at, run_error)
 		VALUES (?, ?, ?, 'running', ?, ?, NULL)
@@ -494,7 +652,7 @@ func (s *Service) stampStart(taskID int64, agent, mode, uuid string) error {
 			run_state        = 'running',
 			run_session_uuid = excluded.run_session_uuid,
 			run_started_at   = excluded.run_started_at,
-			run_error        = NULL`, taskID, agent, mode, uuid, s.ts())
+			run_error        = NULL`, taskID, agent, mode, uuid, startedAt)
 	return err
 }
 

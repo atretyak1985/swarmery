@@ -38,6 +38,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/pluginreq"
 )
 
@@ -195,7 +196,9 @@ func (h *Handler) runProbe(parent context.Context, dir string, probe pluginreq.P
 	// into every error it returns, so a prompt passed as an argument would come
 	// back inside the failure text and end up in the grey line under the form.
 	stdin := probe.Prompt + "\n\nCurrent partial configuration (JSON):\n" + string(value) + "\n"
-	stdout, err := h.Provision.Runner.Claude(ctx, dir, stdin, "-p", "--model", probeModel, "--output-format", "text")
+	probeArgs := append([]string{"-p", "--model", ProbeModel, "--output-format", "text"},
+		claudeflags.EffortArgs(ProbeEffortEnv, ProbeEffort)...)
+	stdout, err := h.Provision.Runner.Claude(ctx, dir, stdin, probeArgs...)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return probeOutcome{
@@ -230,10 +233,23 @@ func (h *Handler) runProbe(parent context.Context, dir string, probe pluginreq.P
 	return out
 }
 
-// probeModel pins the probe run. Without --model the CLI inherits the account
+// ProbeModel pins the probe run. Without --model the CLI inherits the account
 // default, which is not necessarily the cheap end of the lineup; the provision
 // pipeline pins for the same reason. Full ID, not an alias — aliases re-resolve.
-const probeModel = "claude-opus-5-5"
+const ProbeModel = "claude-opus-5-5"
+
+// ProbeEffort pins how hard the probe thinks, and ProbeEffortEnv is its knob
+// (internal/claudeflags owns the resolution and the "off" escape hatch).
+//
+// low, and this is the site where the unpinned default hurt most plainly: a
+// probe reads a couple of files and answers with a small JSON object of config
+// suggestions, while an omitted --effort means the CLI's xhigh — maximum
+// reasoning depth, with an operator holding a modal open waiting for it. Phase 7
+// re-measures the value.
+const (
+	ProbeEffort    = "low"
+	ProbeEffortEnv = "SWARMERY_PROBE_EFFORT"
+)
 
 // firstJSONObject returns the first balanced {…} in s, or nil.
 //

@@ -576,12 +576,16 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 					// metrics hook (wave C): price the turn from its usage +
 					// per-message model — the single cost integration point.
 					if u := m.Usage; u != nil {
+						write5m, write1h := u.cacheWriteSplit()
 						if c := cost.EnrichTurn(cost.Turn{
-							Model:            m.Model,
-							TokensIn:         &u.InputTokens,
-							TokensOut:        &u.OutputTokens,
-							TokensCacheRead:  &u.CacheReadInputTokens,
-							TokensCacheWrite: &u.CacheCreationInputTokens,
+							Model:              m.Model,
+							Speed:              u.Speed,
+							TokensIn:           &u.InputTokens,
+							TokensOut:          &u.OutputTokens,
+							TokensCacheRead:    &u.CacheReadInputTokens,
+							TokensCacheWrite:   &u.CacheCreationInputTokens,
+							TokensCacheWrite5m: &write5m,
+							TokensCacheWrite1h: &write1h,
 						}); c != nil {
 							if _, err := in.tx.Exec(
 								`UPDATE turns SET cost_usd = ? WHERE id = ?`, *c, turnID); err != nil {
@@ -595,6 +599,18 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 				// Later split line of the same message → extend the turn.
 				if _, err := in.tx.Exec(
 					`UPDATE turns SET ended_at = ? WHERE id = ?`, r.Timestamp, curTurnID); err != nil {
+					return err
+				}
+			}
+			// stop_reason (migration 0078) arrives on the LAST split line of a
+			// message and is null on the others, so it is written as its own
+			// update rather than at insert time: a turn opened by a line that
+			// carries no stop_reason must still learn it when the closing line
+			// lands. Only a non-empty value is ever written — NULL means "not
+			// known", never "end_turn".
+			if m.StopReason != "" && curTurnID != 0 {
+				if _, err := in.tx.Exec(
+					`UPDATE turns SET stop_reason = ? WHERE id = ?`, m.StopReason, curTurnID); err != nil {
 					return err
 				}
 			}
@@ -643,6 +659,26 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 						r.Timestamp, curTurnID); err != nil {
 						return err
 					}
+				}
+			case "model_refusal_fallback":
+				// A safeguard moved the session onto another model mid-work
+				// (docs/jsonl-format.md §"system subtypes"). This was in the
+				// "not ingested" bucket, which is why a session that silently
+				// finished on an older model looked identical to one that did
+				// not: sessions.model is the FIRST assistant model and nothing
+				// else recorded the change.
+				//
+				// The record's field set is not catalogued (one occurrence in
+				// the corpus), so the WHOLE raw line is kept as the payload and
+				// the readers take only what they can prove is there. Typed as
+				// its own event type rather than 'unknown' so the API can find
+				// it with an indexed lookup (idx_events_type).
+				if _, _, err := in.insertEvent(eventRow{
+					turnID: curTurnID, ts: r.Timestamp, typ: "model_fallback", status: "warn",
+					parentEventID: parentEventID,
+					payload:       map[string]any{"raw": json.RawMessage(r.raw)}, dedup: dedup,
+				}); err != nil {
+					return err
 				}
 			case "compact_boundary":
 				// Kept as payload-only event; design adds no dedicated type for it.
@@ -1165,15 +1201,25 @@ func (in *ingester) upsertTurn(seq int, role, messageID, model, ts string, u *us
 		return 0, false, err
 	}
 
-	var tin, tout, tcr, tcw any
+	// tcw is the flat legacy total; tcw5m/tcw1h are the same tokens split by
+	// TTL (migration 0075). Both are written: the total still answers every
+	// context-size query, the split is what prices the turn.
+	var tin, tout, tcr, tcw, tcw5m, tcw1h, speed any
 	if u != nil {
 		tin, tout, tcr, tcw = u.InputTokens, u.OutputTokens, u.CacheReadInputTokens, u.CacheCreationInputTokens
+		w5, w1h := u.cacheWriteSplit()
+		tcw5m, tcw1h = w5, w1h
+		if u.Speed != "" {
+			speed = u.Speed
+		}
 	}
 	res, err := in.tx.Exec(
 		`INSERT INTO turns (session_id, seq, role, message_id, model, started_at, ended_at,
-		                    tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, agent_name)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.sessionID, seq, role, nullStr(messageID), nullStr(model), ts, ts, tin, tout, tcr, tcw, nullStr(in.agentName))
+		                    tokens_in, tokens_out, tokens_cache_read, tokens_cache_write,
+		                    cache_write_5m_tokens, cache_write_1h_tokens, speed, agent_name)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.sessionID, seq, role, nullStr(messageID), nullStr(model), ts, ts,
+		tin, tout, tcr, tcw, tcw5m, tcw1h, speed, nullStr(in.agentName))
 	if err != nil {
 		return 0, false, fmt.Errorf("insert turn seq=%d: %w", seq, err)
 	}

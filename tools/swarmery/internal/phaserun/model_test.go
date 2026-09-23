@@ -24,7 +24,7 @@ func TestStart_RequestModelIsResolvedToFullID(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, "opus"); err != nil {
+	if _, err := s.Start(p1, "opus", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := r.lastSpec().Model; got != planning.DefaultModel {
@@ -42,7 +42,7 @@ func TestStart_UnknownRequestModelStartsNothing(t *testing.T) {
 	wt := &stubWt{}
 	s := newTestService(db, r, wt)
 
-	_, err := s.Start(p1, "gpt-9")
+	_, err := s.Start(p1, "gpt-9", "")
 	if !errors.Is(err, planning.ErrUnknownModel) {
 		t.Fatalf("Start err = %v, want planning.ErrUnknownModel", err)
 	}
@@ -70,7 +70,7 @@ func TestStart_EnvModelPassedVerbatim(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := r.lastSpec().Model; got != pinned {
@@ -78,18 +78,22 @@ func TestStart_EnvModelPassedVerbatim(t *testing.T) {
 	}
 }
 
-func TestStart_NoModelAnywhereEmitsNoFlag(t *testing.T) {
+func TestStart_NoModelAnywhereUsesTheHouseDefault(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	t.Setenv(modelEnv, "")
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	// "" is what makes runcore omit --model entirely (pinned argv-side by
-	// TestClaudeRunner_Start_DefaultNoModelFlag).
-	if got := r.lastSpec().Model; got != "" {
-		t.Errorf("RunSpec.Model = %q, want empty so no --model flag is emitted", got)
+	// This rung used to be "" — no --model flag at all — and that was the bug,
+	// not the feature: omitting --model does not fall back to a house default,
+	// it falls back to the ACCOUNT default, which is Fable at roughly twice the
+	// Opus price. So the one rung an operator never picks, and the one every
+	// un-picked "Run phase" lands on, was the most expensive of the four.
+	if got := r.lastSpec().Model; got != planning.DefaultModel {
+		t.Errorf("RunSpec.Model = %q, want %q — an empty model here means the account default (Fable), not a cheap one",
+			got, planning.DefaultModel)
 	}
 }

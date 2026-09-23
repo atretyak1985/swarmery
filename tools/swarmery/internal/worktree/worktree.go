@@ -110,6 +110,28 @@ func (m *Manager) resolveRoot() (string, error) {
 	return filepath.Join(home, DefaultRoot), nil
 }
 
+// Path is the checkout Acquire derives for (projectSlug, taskID): the
+// <root>/<slug>/<taskID> join, computed WITHOUT touching git or the filesystem.
+// Acquire itself calls it, so there is exactly one derivation of this layout.
+//
+// It is exported for the caller that has to find a worktree it never acquired.
+// Adoption (a run that outlived the daemon) holds no worktree.Acquired, and the
+// plan doc LENT into that checkout is the only copy carrying the orphan's ticks
+// and its Completion Report — so the adoption path has to name the path to copy
+// it back. Re-spelling the join at the call site would be a second copy of this
+// package's layout, which is the drift runcore's branch helpers exist to prevent
+// on the branch side.
+//
+// It answers for a path that may not exist: whether anything is there is the
+// caller's question, not this one's.
+func (m *Manager) Path(projectSlug, taskID string) (string, error) {
+	root, err := m.resolveRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, projectSlug, taskID), nil
+}
+
 // swarmPrefix namespaces every branch this package creates. It is also the
 // boundary guard: reclaim and delete refuse anything outside it (ErrRefusedBranch).
 const swarmPrefix = "swarm/"
@@ -151,11 +173,10 @@ func taskIDForBranch(branch string) string {
 //  5. stale-lock sweep before acquisition;
 //  6. (trailer format lives in trailer.go).
 func (m *Manager) Acquire(repoRoot, projectSlug, taskID string) (Acquired, error) {
-	root, err := m.resolveRoot()
+	path, err := m.Path(projectSlug, taskID)
 	if err != nil {
 		return Acquired{}, err
 	}
-	path := filepath.Join(root, projectSlug, taskID)
 	branch := branchName(taskID)
 
 	// Invariant 2: repo-root guard (runtime). Evaluate symlinks on both sides so

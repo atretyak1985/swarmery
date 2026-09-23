@@ -1347,13 +1347,31 @@ export function fetchPlanning(projectId: number): Promise<PlanningStatus> {
  * server's {error} text for inline display.
  */
 /** model is a planning short name (`opus` | `sonnet` | `fable`) or full ID;
- * omit it for the planner default. 400 on an unknown model. */
-export async function startPlanning(projectId: number, idea: string, model?: string): Promise<PlanningStart> {
-  if (MOCK) return mockApi.startPlanning(projectId, idea, model);
+ * omit it for the planner default. 400 on an unknown model.
+ *
+ * effort is a CLI rung (`low` | `medium` | `high` | `xhigh` | `max`); omit it
+ * for the planner's ladder. 400 on an unknown rung.
+ *
+ * Both are omitted from the BODY when undefined or empty, never sent as a
+ * placeholder word. That is load-bearing for effort in a way it is not for
+ * model: the daemon folds `"default"` (and `"off"`, and `"none"`) to "send no
+ * --effort", and a spawn with no --effort runs at the CLI's xhigh — the
+ * deepest, most expensive setting. So the picker's `default` option must reach
+ * here as `undefined` and drop the key, letting the daemon's own ladder decide. */
+export async function startPlanning(
+  projectId: number,
+  idea: string,
+  model?: string,
+  effort?: string,
+): Promise<PlanningStart> {
+  if (MOCK) return mockApi.startPlanning(projectId, idea, model, effort);
+  const body: { idea: string; model?: string; effort?: string } = { idea };
+  if (model !== undefined && model !== '') body.model = model;
+  if (effort !== undefined && effort !== '') body.effort = effort;
   const res = await fetch(`/api/projects/${String(projectId)}/planning`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(model !== undefined && model !== '' ? { idea, model } : { idea }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -2204,20 +2222,35 @@ function runConflictError(
  * does the daemon's never-validated SWARMERY_PHASERUN_MODEL take over. An empty
  * string is deliberately not sent either: the API treats absent and empty alike,
  * but only absent says "I did not choose" in a network log.
+ *
+ * `effort` is the same shape one rung over: an optional per-run reasoning depth
+ * (low | medium | high | xhigh | max; an unknown one is a 400), outranking the
+ * doc's own `**Effort:**` header (unknown there is a 409 naming the doc) and,
+ * below that, SWARMERY_PHASERUN_EFFORT and the engine default. Omitting it is
+ * NOT "cheap": the daemon pins a default precisely because a `claude -p` with no
+ * --effort runs at the CLI's xhigh, the deepest setting there is.
  */
 export async function runEpicPhase(
   taskId: number,
   phaseId: number,
   model?: string,
+  effort?: string,
 ): Promise<{ status: string; sessionUuid: string }> {
   if (MOCK) return { status: 'running', sessionUuid: 'mock-run-uuid' };
+  // Built field by field so an unchosen one is ABSENT rather than empty. The API
+  // treats absent and empty alike, but only absent says "I did not choose" in a
+  // network log — and the two rungs below each key (the doc's header, then the
+  // daemon's knob) are exactly what an absent key hands the decision to.
+  const payload: { model?: string; effort?: string } = {};
+  if (model !== undefined && model !== '') payload.model = model;
+  if (effort !== undefined && effort !== '') payload.effort = effort;
   const init: RequestInit =
-    model === undefined || model === ''
+    Object.keys(payload).length === 0
       ? { method: 'POST' }
       : {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model }),
+          body: JSON.stringify(payload),
         };
   const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run`, init);
   if (!res.ok) {

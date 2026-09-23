@@ -299,7 +299,7 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 	s.linkVerifySession(runID, uuid)
 	model := t.Model
 	if model == "" {
-		model = defaultModel
+		model = DefaultModel
 	}
 	spec := RunSpec{
 		// base, not the branch: BuildPrompt's third parameter has always been named
@@ -349,8 +349,28 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 					"This is a spawn or start-up failure, not an undecided verdict", run.ExitCode))
 		}
 		if !HasVerdictLine(run.Output) {
+			// The verifier did the work and forgot the one line the parser reads —
+			// the exact shape a modern model produces when it ends a turn with a
+			// narrative summary instead of the requested token. Ask ONCE, inside the
+			// same session, for only the missing line; everything it measured is
+			// still in that context, so this is cheap and cannot reach a conclusion
+			// from different evidence than the pass it already ran.
+			if verdict, reasons, ok := s.retryForVerdict(ctx, t, spec, run); ok {
+				switch verdict {
+				case VerdictPass:
+					return s.stampVerdict(t, runID, treeHash, VerdictPass, reasons, true /*cache*/)
+				case VerdictFail:
+					if err := s.stampVerdict(t, runID, treeHash, VerdictFail, reasons, true /*cache*/); err != nil {
+						return err
+					}
+					return t.onFail(reasons)
+				}
+				// An explicit INCONCLUSIVE from the retry is a real verdict, not a
+				// missing one: it falls through to ClassCouldNotConclude below.
+				return s.stampInconclusive(t, runID, treeHash, ClassCouldNotConclude, reasons)
+			}
 			return s.stampInconclusive(t, runID, treeHash, ClassNoVerdict, fmt.Sprintf(
-				"the verifier wrote %d bytes (exit code %d) but no VERDICT: line, so nothing could be read as a verdict",
+				"the verifier wrote %d bytes (exit code %d) but no VERDICT: line, and a follow-up asking for one produced none either",
 				len(run.Output), run.ExitCode))
 		}
 		return s.stampInconclusive(t, runID, treeHash, ClassCouldNotConclude, reasons)
@@ -571,6 +591,58 @@ const (
 	// The only class that is a statement about the WORK rather than the machinery.
 	ClassCouldNotConclude = "could-not-conclude"
 )
+
+// verdictRetryPrompt is the ONLY thing said to a verifier that produced a report
+// with no verdict line. It asks for the line and nothing else: no re-reading, no
+// re-running of checks, no revisiting of the evidence — the session still holds
+// all of it, and a follow-up that invited more work would be a second
+// verification at the price of one, able to disagree with the first.
+const verdictRetryPrompt = `Your report above has no VERDICT: line, so nothing could be read as a verdict.
+
+Do not re-read files and do not re-run any check. From the evidence you already gathered, reply with ONLY:
+- one bullet per reason (at most five), then
+- a final line, outside any code fence, of exactly: VERDICT: PASS | FAIL | INCONCLUSIVE
+
+INCONCLUSIVE is the honest answer when the evidence did not settle it. Do not invent one.`
+
+// retryForVerdict asks a verifier that wrote a report but no VERDICT: line for
+// the line it owed, ONCE, by resuming its own session.
+//
+// ok=false means the retry produced nothing usable (it could not start, timed
+// out, or again wrote no verdict line) and the caller must fall through to
+// ClassNoVerdict — which is what happened unconditionally before this existed.
+// There is no second attempt: a verifier that ignores this instruction twice is
+// not going to answer on the third ask, and every attempt is a billed turn on the
+// highest-frequency spawn in the fleet.
+//
+// The parse reads the retry's output CONCATENATED after the original's. The
+// reason bullets a model puts above its verdict are in the first message, the
+// verdict line is in the second, and ParseVerdict collects reasons on both sides
+// of the line it finds — so joining them is what makes the retry return the same
+// shape a single well-formed run would have.
+func (s *Service) retryForVerdict(ctx context.Context, t Target, spec RunSpec, first *Run) (Verdict, string, bool) {
+	retry := spec
+	retry.Resume = true
+	retry.Prompt = verdictRetryPrompt
+
+	run, err := s.Run.Run(ctx, retry)
+	switch {
+	case err != nil:
+		log.Printf("verify: %s: verdict retry could not run: %v", t.Key, err)
+		return VerdictInconclusive, "", false
+	case run == nil:
+		return VerdictInconclusive, "", false
+	case run.TimedOut:
+		log.Printf("verify: %s: verdict retry timed out", t.Key)
+		return VerdictInconclusive, "", false
+	case !HasVerdictLine(run.Output):
+		log.Printf("verify: %s: verdict retry produced no VERDICT: line either (%d bytes)", t.Key, len(run.Output))
+		return VerdictInconclusive, "", false
+	}
+	verdict, reasons := ParseVerdict(first.Output + "\n" + run.Output)
+	log.Printf("verify: %s: verdict recovered by one resume: %s", t.Key, verdict)
+	return verdict, reasons, true
+}
 
 // stampInconclusive is the fail-safe stamp: verdict inconclusive, run finalized,
 // NOTHING cached, NO fail follow-up. Used for every infra/ambiguity path.

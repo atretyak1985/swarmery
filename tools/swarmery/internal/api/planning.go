@@ -168,6 +168,11 @@ func (h *Handler) startPlanning(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Idea  string `json:"idea"`
 		Model string `json:"model"`
+		// Absent (or "") = the planner's own ladder. The dashboard sends NO key
+		// for its "default" option rather than the word "default", because the
+		// two are not the same request: claudeflags.NormalizeEffort folds
+		// "default" to omission, and an omitted --effort is the CLI's xhigh.
+		Effort string `json:"effort"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
@@ -182,9 +187,9 @@ func (h *Handler) startPlanning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid, err := planningSvc.Start(id, body.Idea, body.Model)
+	uuid, err := planningSvc.Start(id, body.Idea, body.Model, body.Effort)
 	switch {
-	case errors.Is(err, planning.ErrUnknownModel):
+	case errors.Is(err, planning.ErrUnknownModel), errors.Is(err, planning.ErrUnknownEffort):
 		writeClientErr(w, http.StatusBadRequest, err.Error())
 		return
 	case errors.Is(err, planning.ErrProjectNotFound):
@@ -265,6 +270,33 @@ func writeWizardErr(w http.ResponseWriter, err error) bool {
 // status back to awaiting_answer so the operator's action stays retryable —
 // keyed by the wizard's session uuid, so a stale resume's late failure can
 // never roll back a NEWER wizard the operator started meanwhile.
+// wizardResumeOrigin is the derived resume origin with the wizard's own pins
+// laid over it.
+//
+// The wizard's pinned MODEL rides along on every turn: the first spawn passed
+// --model, and a resume without it would silently switch the interview to the
+// account default mid-way. svc.Model is authoritative over what
+// lookupResumeOrigin would read off the sessions row — the wizard's pin is what
+// the interview AGREED to run as, while the sessions row only reports what the
+// last turn happened to use — so it is set explicitly rather than derived.
+//
+// The wizard's DEPTH is pinned the same way and for the same reason. It is not a
+// duplicate of the effort lookupResumeOrigin already filled: that one is the
+// resume site's generic default (ResumeEffort), which knows nothing about this
+// interview. svc.Effort is the depth the wizard was STARTED at, so it outranks
+// it — and it is never "", so this can only ever replace one pinned value with a
+// better-informed one, never fall back to omitting the flag (which would hand
+// the turn the CLI's xhigh, the most expensive setting there is).
+//
+// Split out of spawnWizardResume so the pin ladder is assertable without
+// spawning a process: what a resume WOULD carry is the whole claim.
+func wizardResumeOrigin(db *sql.DB, svc *planning.Service, uuid string) resumeOrigin {
+	o := lookupResumeOrigin(db, uuid)
+	o.Model = svc.Model(uuid)
+	o.Effort = svc.Effort(uuid)
+	return o
+}
+
 func (h *Handler) spawnWizardResume(w http.ResponseWriter, svc *planning.Service, uuid, text, okStatus string) {
 	var (
 		sid     int64
@@ -289,10 +321,8 @@ func (h *Handler) spawnWizardResume(w http.ResponseWriter, svc *planning.Service
 		writeClientErr(w, http.StatusConflict, msg)
 		return
 	}
-	// The wizard's pinned model rides along on every turn: the first spawn passed
-	// --model, and a resume without it would silently switch the interview to
-	// the account default mid-way.
-	started, err := startResume(sid, uuid, cwd.String, account.String, text, svc.Model(uuid), func(runErr error) {
+	wizardOrigin := wizardResumeOrigin(h.DB, svc, uuid)
+	started, err := startResume(sid, uuid, cwd.String, account.String, text, wizardOrigin, func(runErr error) {
 		// Runs after process exit, BEFORE the resume slot release. A failed or
 		// timed-out resume rolls back so the wizard is answerable again, WITH the
 		// process error as the reason — this is the one rollback the operator

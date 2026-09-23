@@ -54,7 +54,7 @@ var mustDetect = []string{
 
 func TestHeadlessSpawnSitesDecidePermissionMode(t *testing.T) {
 	root := moduleRoot(t)
-	var missing []string
+	var missing, missingEffort []string
 	seen := map[string]bool{}
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -82,13 +82,23 @@ func TestHeadlessSpawnSitesDecidePermissionMode(t *testing.T) {
 			if !ok || fn.Body == nil {
 				continue
 			}
-			lits, callsFlags := scanFunc(fn)
+			lits, calls := scanFunc(fn)
 			if !isHeadlessClaudeArgv(lits) {
 				continue
 			}
 			key := filepath.ToSlash(rel) + ":" + fn.Name.Name
 			seen[key] = true
-			if callsFlags || lits["--permission-mode"] {
+			// The second decision, and the reason this guard grew a twin: an
+			// omitted --effort is NOT the cheap default, it is the CLI's xhigh.
+			// A site that forgets it does not fail — it quietly runs every turn
+			// at maximum reasoning depth, which is the same shape of invisible
+			// loss the permission-mode guard was written for. Unlike that one,
+			// there is no read-only exemption: stdout-only sites think too, and
+			// a classification pass is exactly where xhigh is pure waste.
+			if !decidesEffort(calls) && !lits["--effort"] {
+				missingEffort = append(missingEffort, key)
+			}
+			if decidesPermissionMode(calls) || lits["--permission-mode"] {
 				continue
 			}
 			if _, allowed := readOnlySites[key]; allowed {
@@ -114,6 +124,22 @@ the argv, or — if the run's contract is stdout only — add the site to
 readOnlySites in this file with the reason.`, strings.Join(missing, "\n  "))
 	}
 
+	if len(missingEffort) > 0 {
+		sort.Strings(missingEffort)
+		t.Errorf(`headless claude spawn without an effort decision:
+
+  %s
+
+A headless run without --effort does not get a cheap default — it gets the CLI's
+own, which is xhigh, the DEEPEST setting. Every turn of that run then pays
+maximum reasoning tokens whether or not the work needed them, silently.
+
+Pass claudeflags.EffortArgs("SWARMERY_<SITE>_EFFORT", <SITE>.DefaultEffort) in a
+flat argv, or claudeflags.Effort(...) into runcore.Spec.Effort — and add the
+site's default to spawndefaults_test.go so the value is pinned, not incidental.`,
+			strings.Join(missingEffort, "\n  "))
+	}
+
 	for _, key := range mustDetect {
 		if !seen[key] {
 			t.Errorf("scanner no longer detects %q — the heuristic drifted, fix it before trusting this guard", key)
@@ -129,10 +155,18 @@ readOnlySites in this file with the reason.`, strings.Join(missing, "\n  "))
 	}
 }
 
-// scanFunc returns the string literals in fn and whether fn asks claudeflags for
-// its mode (either spelling: PermissionModeArgs or Mode).
-func scanFunc(fn *ast.FuncDecl) (lits map[string]bool, callsFlags bool) {
-	lits = map[string]bool{}
+// scanFunc returns the string literals in fn and which claudeflags helpers it
+// calls.
+//
+// It matches the SELECTOR, not just the package: `claudeflags.<anything>` used
+// to count as "this function decided its permission mode", which was harmless
+// while --permission-mode was the only thing this package resolved. It stopped
+// being harmless the moment sites began calling claudeflags.Effort — a site that
+// pinned its effort and forgot its permission mode would have been absolved by
+// the effort call alone, and the guard would have passed while the run could not
+// write a file. Two decisions, two separate proofs.
+func scanFunc(fn *ast.FuncDecl) (lits map[string]bool, calls map[string]bool) {
+	lits, calls = map[string]bool{}, map[string]bool{}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch v := n.(type) {
 		case *ast.BasicLit:
@@ -143,12 +177,25 @@ func scanFunc(fn *ast.FuncDecl) (lits map[string]bool, callsFlags bool) {
 			}
 		case *ast.SelectorExpr:
 			if id, ok := v.X.(*ast.Ident); ok && id.Name == "claudeflags" {
-				callsFlags = true
+				calls[v.Sel.Name] = true
 			}
 		}
 		return true
 	})
-	return lits, callsFlags
+	return lits, calls
+}
+
+// decidesPermissionMode: the function asks claudeflags for its mode, in either
+// spelling (PermissionModeArgs for flat argv, Mode for a runcore.Spec value).
+func decidesPermissionMode(calls map[string]bool) bool {
+	return calls["PermissionModeArgs"] || calls["Mode"]
+}
+
+// decidesEffort: the function asks claudeflags for its reasoning depth, in any
+// of its spellings (EffortArgs for flat argv, EffortArgsWith when the site also
+// honours an explicitly-set per-run override, Effort for a runcore.Spec value).
+func decidesEffort(calls map[string]bool) bool {
+	return calls["EffortArgs"] || calls["EffortArgsWith"] || calls["Effort"] || calls["NormalizeEffort"]
 }
 
 // isHeadlessClaudeArgv reports whether these literals build a headless claude

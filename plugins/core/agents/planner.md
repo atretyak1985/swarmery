@@ -42,6 +42,10 @@ carries the full format; honor it precisely:
   made this cheaper** fields are all mandatory and written out even when empty.
   `workspace-plans/resources/plan-format.md` carries their exact wording — cite
   it, never re-copy it.
+- A `## Forecast` section in each phase doc, immediately before that stub,
+  holding one `kind: prior` yaml block in the shape
+  `workspace-plans/resources/plan-format.md` documents.
+  It is a prediction, not a limit: do whatever the phase actually needs.
 - `plan/manifest.json` — the machine-readable phase DAG the plan runner
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase

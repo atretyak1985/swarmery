@@ -51,6 +51,7 @@ import type {
   BoardColumn,
   Epic,
   EpicPhase,
+  PhaseForecast,
   PhaseRunOutcome,
   PhaseVerifyVerdict,
   PlanRevision,
@@ -76,7 +77,7 @@ import {
   type RevisionStartError,
 } from '../api';
 import { fetchSystemItems } from '../api/system';
-import type { PlanRunMode } from '../api/types';
+import type { PlanRunMode, RunEvent } from '../api/types';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { useLiveUpdates } from '../lib/ws';
 import { Markdown } from '../lib/markdown';
@@ -414,17 +415,79 @@ function RunCompletedChip({ phase }: { phase: EpicPhase }): JSX.Element {
 // charge, and rung 2 of that ladder is the doc. Choosing a real model here is an
 // OVERRIDE of every doc on the plan — which is why the label says so, and why
 // each phase that declares one shows a `doc:` chip beside its Run button.
+/** The concrete model a `default` phase run ends up on when no doc and no env
+ * knob says otherwise — `planning.DefaultModel`, the last rung of
+ * `phaserun.resolveModel`.
+ *
+ * Named here rather than left implicit because "default" used to be a lie of
+ * omission: it meant NO --model flag, which is not a house default but the
+ * ACCOUNT default (Fable, ~2× the Opus price). The rung nobody picked was the
+ * most expensive one, and the picker said nothing about it. The daemon now pins
+ * this rung, and the label says which model that is. */
+const PHASE_RUN_DEFAULT_MODEL_LABEL = 'opus 5.5';
+
 const PHASE_RUN_MODELS = [
-  { value: 'default', label: 'per-doc / daemon default (no model sent)' },
-  { value: 'opus', label: 'opus 5 — default' },
+  { value: 'default', label: `per-doc, else ${PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)` },
+  // Labels name the GENERATION each alias resolves to today and what choosing
+  // it costs relative to opus 5.5, which is the rung `default` lands on. No
+  // entry says "default" any more: two of them did, the picker's own default is
+  // the first row, and a second thing calling itself the default is how an
+  // operator ends up overriding every doc on the plan by picking what they read
+  // as "leave it alone".
+  { value: 'opus', label: 'opus 5.5' },
   { value: 'sonnet', label: 'sonnet 5 — faster, cheaper' },
-  { value: 'fable', label: 'fable 5.1 — most capable, ~2× cost' },
+  // ~2.5x, not ~2x: fable 5 is $10/$50 per MTok against opus 5.5's $4/$20
+  // (tools/swarmery/config/pricing.json). The old figure was measured against
+  // opus 5, which cost $5/$25 — opus 5.5 got cheaper and the comparison moved.
+  { value: 'fable', label: 'fable 5.1 — most capable, ~2.5× cost' },
 ] as const;
 type PhaseRunModel = (typeof PHASE_RUN_MODELS)[number]['value'];
 const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
 /** Its OWN key — beside the planner's `swarmery.planning.model`, never shared:
  * the two choices are about different runs and different money. */
 const PHASE_RUN_MODEL_KEY = 'swarmery.phaserun.model';
+
+// ── Per-phase effort selection ──────────────────────────────────────────────
+// The second half of "what does this run cost": which brain, and how hard it
+// thinks. Its options ARE the CLI's closed set (claudeflags.ValidEfforts), so —
+// like the model picker — the UI cannot send a value the API would reject.
+//
+// `default` means SEND NO `effort` KEY, which hands the decision to the same
+// ladder the model takes: the phase DOC's own `**Effort:**` header first, then
+// SWARMERY_PHASERUN_EFFORT, then the engine's pinned default.
+//
+// What it does NOT mean is "cheap". A `claude -p` with no --effort runs at the
+// CLI's own default, xhigh — the DEEPEST setting — so before the daemon pinned
+// this rung, every un-picked phase run paid maximum reasoning tokens for up to
+// four hours. The labels below say which end is which for that reason.
+const PHASE_RUN_EFFORTS = [
+  { value: 'default', label: 'per-doc, else high (no effort sent)' },
+  { value: 'low', label: 'low — mechanical work' },
+  { value: 'medium', label: 'medium — scoped work' },
+  { value: 'high', label: 'high — implementation' },
+  { value: 'xhigh', label: 'xhigh — deepest, slowest' },
+  { value: 'max', label: 'max — no ceiling' },
+] as const;
+type PhaseRunEffort = (typeof PHASE_RUN_EFFORTS)[number]['value'];
+const DEFAULT_PHASE_RUN_EFFORT: PhaseRunEffort = 'default';
+/** Its own key, beside the model's — the two are different decisions about the
+ * same money and must not share storage. */
+const PHASE_RUN_EFFORT_KEY = 'swarmery.phaserun.effort';
+
+function isPhaseRunEffort(v: string | null): v is PhaseRunEffort {
+  return PHASE_RUN_EFFORTS.some((e) => e.value === v);
+}
+
+/** Last-used choice; falls back to the default when storage is unavailable
+ * (Safari private mode throws on access, not just on write). */
+function readStoredPhaseRunEffort(): PhaseRunEffort {
+  try {
+    const v = localStorage.getItem(PHASE_RUN_EFFORT_KEY);
+    return isPhaseRunEffort(v) ? v : DEFAULT_PHASE_RUN_EFFORT;
+  } catch {
+    return DEFAULT_PHASE_RUN_EFFORT;
+  }
+}
 
 function isPhaseRunModel(v: string | null): v is PhaseRunModel {
   return PHASE_RUN_MODELS.some((m) => m.value === v);
@@ -465,6 +528,26 @@ const MODEL_SHORT_NAMES: Record<string, string> = {
  * in flight would be a claim, not a record. */
 function RunModelChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
   if (phase.runModel === null || phase.runState === 'running') return null;
+  // A run that FELL BACK gets its own chip instead of the plain one. `runModel`
+  // is the session's first model, which for these runs is a true statement about
+  // the first turn and a false one about the output: an Opus 5.5 safeguard
+  // refusal moves the session onto an older model and the work continues there.
+  // The tooltip lists every model with its turn count, because "42 turns on opus
+  // 5.5, 3 on opus 4.1" says how much of the run the fallback actually touched.
+  const lastUse = phase.runModels[phase.runModels.length - 1];
+  if (phase.runModelFellBack && phase.runModels.length > 1 && lastUse !== undefined) {
+    const last = lastUse.model;
+    return (
+      <span
+        className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
+        data-tip={`this run changed model mid-flight: ${phase.runModels
+          .map((m) => `${m.model} (${m.turns} turn${m.turns === 1 ? '' : 's'})`)
+          .join(' → ')}`}
+      >
+        {phaseModelShortName(phase.runModel)} → fell back to {phaseModelShortName(last)}
+      </span>
+    );
+  }
   return (
     <span
       className="rounded border border-line px-1.5 py-px font-mono text-[9.5px] text-ink-dim"
@@ -554,6 +637,41 @@ function PhaseRunModelPicker({
         {PHASE_RUN_MODELS.map((m) => (
           <option key={m.value} value={m.value}>
             {m.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** The per-phase effort picker. Sits beside the model picker because the two
+ * answer one question together — which brain, and how hard it thinks — and
+ * neither is legible about cost without the other. */
+function PhaseRunEffortPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PhaseRunEffort;
+  onChange: (e: PhaseRunEffort) => void;
+  disabled: boolean;
+}): JSX.Element {
+  return (
+    <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+      effort
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          if (isPhaseRunEffort(e.target.value)) onChange(e.target.value);
+        }}
+        aria-label="phase run effort"
+        title="how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected."
+        className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+      >
+        {PHASE_RUN_EFFORTS.map((e) => (
+          <option key={e.value} value={e.value}>
+            {e.label}
           </option>
         ))}
       </select>
@@ -792,6 +910,9 @@ export function Plans(): JSX.Element {
   // three places that can start one — the phase row's Run button, the detail
   // panel's Retry and the diagnosis modal's Retry — cannot disagree about it.
   const [phaseRunModel, setPhaseRunModel] = useState<PhaseRunModel>(readStoredPhaseRunModel);
+  // The effort twin, owned here for the same reason: the three places that can
+  // start a run must not disagree about how hard it thinks either.
+  const [phaseRunEffort, setPhaseRunEffort] = useState<PhaseRunEffort>(readStoredPhaseRunEffort);
 
   const startRun = useCallback(
     (taskId: number, phaseId: number): void => {
@@ -799,11 +920,18 @@ export function Plans(): JSX.Element {
       setRunMsg(null);
       try {
         localStorage.setItem(PHASE_RUN_MODEL_KEY, phaseRunModel);
+        localStorage.setItem(PHASE_RUN_EFFORT_KEY, phaseRunEffort);
       } catch {
-        // storage unavailable — the choice still applies to this run
+        // storage unavailable — the choices still apply to this run
       }
-      // `default` means send no `model` key at all: undefined, not ''.
-      runEpicPhase(taskId, phaseId, phaseRunModel === 'default' ? undefined : phaseRunModel)
+      // `default` means send no key at all: undefined, not ''. For both, that is
+      // what hands the decision to the phase doc's own header line.
+      runEpicPhase(
+        taskId,
+        phaseId,
+        phaseRunModel === 'default' ? undefined : phaseRunModel,
+        phaseRunEffort === 'default' ? undefined : phaseRunEffort,
+      )
         .then(() => reload())
         .catch((e: unknown) => {
           failRunMsg(taskId)(e);
@@ -817,7 +945,7 @@ export function Plans(): JSX.Element {
         })
         .finally(() => setRunBusy(null));
     },
-    [reload, failRunMsg, phaseRunModel],
+    [reload, failRunMsg, phaseRunModel, phaseRunEffort],
   );
   const cancelRun = useCallback(
     (taskId: number, phaseId: number): void => {
@@ -1032,6 +1160,8 @@ export function Plans(): JSX.Element {
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
               phaseRunModel={phaseRunModel}
               onPhaseRunModel={setPhaseRunModel}
+              phaseRunEffort={phaseRunEffort}
+              onPhaseRunEffort={setPhaseRunEffort}
               planRunBusy={planRunBusy}
               onRunPlan={(agent, mode) => startPlanRun(activeEpic.taskId, agent, mode)}
               onCancelPlanRun={() => cancelPlanRun(activeEpic.taskId)}
@@ -1099,6 +1229,8 @@ function EpicDetail({
   onCancelRun,
   phaseRunModel,
   onPhaseRunModel,
+  phaseRunEffort,
+  onPhaseRunEffort,
   planRunBusy,
   onRunPlan,
   onCancelPlanRun,
@@ -1122,6 +1254,10 @@ function EpicDetail({
    * all spend the same way. */
   phaseRunModel: PhaseRunModel;
   onPhaseRunModel: (m: PhaseRunModel) => void;
+  /** How hard every per-phase run on this plan thinks — owned by the page for
+   * the same reason the model is. */
+  phaseRunEffort: PhaseRunEffort;
+  onPhaseRunEffort: (e: PhaseRunEffort) => void;
   planRunBusy: boolean;
   onRunPlan: (agent: string, mode: PlanRunMode) => void;
   onCancelPlanRun: () => void;
@@ -1313,10 +1449,15 @@ function EpicDetail({
               the WHOLE-PLAN run, which reads SWARMERY_PLANRUN_MODEL and is out of
               scope here (risk R3). Sitting here it governs exactly what it names —
               every per-phase Run/Retry below it, list or detail panel. */}
-          <div className="mb-2 flex items-center justify-end">
+          <div className="mb-2 flex items-center justify-end gap-3">
             <PhaseRunModelPicker
               value={phaseRunModel}
               onChange={onPhaseRunModel}
+              disabled={runBusy !== null || planRunning}
+            />
+            <PhaseRunEffortPicker
+              value={phaseRunEffort}
+              onChange={onPhaseRunEffort}
               disabled={runBusy !== null || planRunning}
             />
           </div>
@@ -1744,6 +1885,8 @@ function PhaseList({
                     Cancel + session link; a DONE phase retires the Run button
                     and offers ✓ summary (opens the details rail); idle/failed
                     offer Run/Retry. */}
+                <ContinuationChip events={p.runEvents} />
+
                 {p.runState === 'running' ? (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <span
@@ -2232,6 +2375,81 @@ function RailSection({ label, children }: { label: string; children: ReactNode }
   );
 }
 
+/** One forecast column — the prior or the posterior, whichever the doc carries.
+ *
+ * Every value is rendered VERBATIM, including a band the daemon does not
+ * recognise: the operator cannot fix a typo the UI has already normalised away.
+ * `forecastLints` below the columns is what says a value is wrong. */
+function ForecastColumn({ f }: { f: PhaseForecast }): JSX.Element {
+  const row = (label: string, value: string): JSX.Element | null =>
+    value === '' ? null : (
+      <div className="flex gap-1.5">
+        <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
+        <span className="break-words text-ink-dim">{value}</span>
+      </div>
+    );
+  return (
+    <div className="min-w-0 flex-1 rounded-md border border-line px-2.5 py-2 font-mono text-[10.5px]">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="uppercase tracking-wider text-ink">{f.kind === '' ? '(no kind)' : f.kind}</span>
+        {f.postHoc && (
+          <span
+            data-tip={
+              f.postHocReason === 'after-first-edit'
+                ? 'written to the doc after the run had already changed another file — not a prediction, so calibration skips it'
+                : 'written into a doc that already reported the work done — not a prediction, so calibration skips it'
+            }
+            className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px text-[9.5px] text-amber"
+          >
+            post hoc
+          </span>
+        )}
+      </div>
+      <div className="space-y-0.5">
+        {row('written', f.writtenAt)}
+        {row('size', f.sizeBand)}
+        {row('duration', f.durationBand)}
+        {row('outcome', f.outcome)}
+        {/* null, not 0: "the author said nothing" is not "certain it is wrong". */}
+        {f.confidence !== null && row('confidence', f.confidence.toFixed(2))}
+        {f.areas.length > 0 && row('areas', f.areas.join(', '))}
+        {f.files.length > 0 && row('files', f.files.join(', '))}
+        {f.risks.length > 0 && row('risks', f.risks.join(' · '))}
+      </div>
+    </div>
+  );
+}
+
+/** The phase's `## Forecast` blocks, prior and posterior side by side, plus the
+ * lints over them. READ-ONLY, and renders nothing at all when the doc declares
+ * no forecast — which is every phase until an author opts in.
+ *
+ * Deliberately NOT a verdict and deliberately placed away from the completion
+ * chips: a forecast is a prediction to be scored later, not something a phase
+ * can fail. A lint here says the block is unreadable, never that the work is. */
+function ForecastSection({ phase }: { phase: EpicPhase }): JSX.Element | null {
+  if (phase.forecasts.length === 0 && phase.forecastLints.length === 0) return null;
+  return (
+    <RailSection label="forecast">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {phase.forecasts.map((f, i) => (
+          <ForecastColumn key={`${f.kind}-${String(i)}`} f={f} />
+        ))}
+      </div>
+      {phase.forecastLints.length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          {phase.forecastLints.map((l, i) => (
+            <div key={`${l.code}-${String(i)}`} className="font-mono text-[10.5px] text-amber">
+              {l.kind === '' ? '' : `${l.kind}: `}
+              {l.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </RailSection>
+  );
+}
+
 /** Acceptance-criteria list with tick state (✓ done / ○ open). With `onToggle`
  * the rows become buttons that flip the criterion in the doc (the affordance
  * the retired doc modal owned); without it the list is read-only. */
@@ -2648,6 +2866,8 @@ function PhaseDetailPanel({
               <ChecksList checks={checks} onToggle={toggle} busyLine={busyLine} />
             )}
           </RailSection>
+
+          <ForecastSection phase={phase} />
 
           <RailSection label="doc">
             {doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}
@@ -3112,5 +3332,34 @@ function ProgressBar({
     >
       <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${String(pct)}%` }} />
     </div>
+  );
+}
+
+/** ContinuationChip surfaces the run completion loop's decisions (`run_events`,
+ * migration 0077) on the phase row.
+ *
+ * It renders NOTHING for a run that finished on its first turn, which is the
+ * overwhelmingly common case — the chip has to earn its space. It appears
+ * exactly when the harness had to intervene, because that is the fact `runState`
+ * alone cannot carry: a `partial` phase nudged twice that progressed each time
+ * and one that stalled on turn one read identically without it, and the
+ * difference is what says whether the phase doc or the executor is at fault.
+ *
+ * The tooltip carries each continuation's message, so the operator can see what
+ * the run was actually told rather than inferring it. */
+function ContinuationChip({ events }: { events: RunEvent[] }): JSX.Element | null {
+  const continuations = events.filter((e) => e.kind === 'continuation');
+  if (continuations.length === 0) return null;
+  const tip = continuations
+    .map((e) => `#${e.attempt}: ${e.detail.split('\n')[0]}`)
+    .join(' — ');
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
+      data-tip={`the run ended its turn with criteria unticked and was resumed ${continuations.length}× — ${tip}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      ↻ {continuations.length}
+    </span>
   );
 }

@@ -37,12 +37,23 @@ const drainGrace = 5 * time.Second
 // spawner_test.go pins it per engine rather than describing it in prose:
 //
 //	-p <prompt> --session-id <uuid> [--setting-sources S] [--permission-mode P]
-//	[--agent A] [--model M] [--settings F] [extra…]
+//	[--agent A] [--model M] [--effort E] [--settings F] [extra…]
+//
+// A Resume spec swaps the head for `-r <uuid> -p <prompt>` — the shape
+// internal/api's resumeArgs already emits — and keeps every remaining flag
+// byte-identical, because a continuation that silently changed model, effort or
+// permission mode would not be a continuation of the same run. Note in
+// particular what NOT emitting --effort would mean here: the CLI's unpinned
+// default is xhigh, so an "inherited" effort on a resume is the most expensive
+// rung, not a cheap one.
 //
 // Prompt and SessionUUID are NOT trimmed: they are values, not flags, and a
 // prompt's leading whitespace is the caller's business.
 func Args(spec Spec) []string {
 	args := []string{"-p", spec.Prompt, "--session-id", spec.SessionUUID}
+	if spec.Resume {
+		args = []string{"-r", spec.SessionUUID, "-p", spec.Prompt}
+	}
 	if s := strings.TrimSpace(spec.SettingSources); s != "" {
 		args = append(args, "--setting-sources", s)
 	}
@@ -60,6 +71,13 @@ func Args(spec Spec) []string {
 	}
 	if m := strings.TrimSpace(spec.Model); m != "" {
 		args = append(args, "--model", m)
+	}
+	// Beside --model, because the two answer one question together: which brain,
+	// and how hard it thinks. Omitting this does NOT pick a cheap default — the
+	// CLI's own is xhigh — so every engine resolves it through
+	// claudeflags.Effort and "" here means an explicit "off".
+	if e := strings.TrimSpace(spec.Effort); e != "" {
+		args = append(args, "--effort", e)
 	}
 	// After --agent deliberately: the settings file is what enables the plugin the
 	// agent ships in, and planrun emitted it last for that reason.
