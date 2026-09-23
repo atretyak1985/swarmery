@@ -160,6 +160,13 @@ func writeOnBranch(git worktree.Git, root, branch, dir, rel string, l Lesson) (s
 		}
 	}()
 
+	// Refuse any symlink on the way: os.Stat/ReadFile/WriteFile follow links, so a
+	// committed `CLAUDE.md -> /abs/path` (or a linked area directory) would write
+	// OUTSIDE this throwaway worktree — into the operator's checkout — and the
+	// cleanup below could not undo it.
+	if err := noSymlinks(wt, rel); err != nil {
+		return "", err
+	}
 	if st, err := os.Stat(filepath.Join(wt, filepath.FromSlash(dir))); err != nil || !st.IsDir() {
 		return "", fmt.Errorf("%w: area directory %q does not exist in %s", ErrInvalid, dir, root)
 	}
@@ -195,4 +202,29 @@ func writeOnBranch(git worktree.Git, root, branch, dir, rel string, l Lesson) (s
 	}
 	committed = true
 	return strings.TrimSpace(out), nil
+}
+
+// noSymlinks walks rel (slash-separated, relative to base) one segment at a time
+// and refuses when any existing segment — directory or the final file — is a
+// symlink. A segment that does not exist yet ends the walk: it will be created as
+// a plain file by the caller.
+func noSymlinks(base, rel string) error {
+	cur := base
+	for _, seg := range strings.Split(rel, "/") {
+		if seg == "" || seg == "." {
+			continue
+		}
+		cur = filepath.Join(cur, seg)
+		st, err := os.Lstat(cur)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if st.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%w: %s is a symlink in the repository — promotion writes only plain files", ErrInvalid, seg)
+		}
+	}
+	return nil
 }

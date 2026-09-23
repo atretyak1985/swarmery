@@ -422,8 +422,14 @@ func MarkRelied(db *sql.DB, uuid, transcript, report string, now time.Time) (int
 		if inR[id] {
 			where = append(where, "report")
 		}
-		res, err := db.Exec(`UPDATE lesson_uses SET relied_on = 1, relied_where = ?, relied_at = ?
-			WHERE session_uuid = ? AND lesson_id = ?`, strings.Join(where, ","), stamp(now), uuid, id)
+		// A report-only citation counts only when the report did not already cite
+		// the id before this run started (prior_in_report, see snapshotReport).
+		q := `UPDATE lesson_uses SET relied_on = 1, relied_where = ?, relied_at = ?
+			WHERE session_uuid = ? AND lesson_id = ?`
+		if !inT[id] {
+			q += ` AND prior_in_report = 0`
+		}
+		res, err := db.Exec(q, strings.Join(where, ","), stamp(now), uuid, id)
 		if err != nil {
 			return n, err
 		}
@@ -484,13 +490,38 @@ func (i *Injector) ForPhase(phaseID int64, uuid string) string {
 	sc, err := PhaseScope(i.DB, phaseID)
 	var taskID int64
 	_ = i.DB.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, phaseID).Scan(&taskID)
-	return i.inject(KindPhaseRun, phaseID, taskID, uuid, sc, err)
+	text := i.inject(KindPhaseRun, phaseID, taskID, uuid, sc, err)
+	if text != "" {
+		i.snapshotReport(phaseID, uuid)
+	}
+	return text
 }
 
 // ForPlan is planrun.Service.InjectLessons.
 func (i *Injector) ForPlan(taskID int64, uuid string) string {
 	sc, err := PlanScope(i.DB, taskID)
 	return i.inject(KindPlanRun, 0, taskID, uuid, sc, err)
+}
+
+// snapshotReport marks the injected lessons the phase doc's Completion Report
+// ALREADY cites — written by an earlier run — so a run that never touches the
+// report is not credited with its predecessor's citations. Best-effort: on any
+// error the run simply gets the old, more generous behaviour.
+func (i *Injector) snapshotReport(phaseID int64, uuid string) {
+	var docPath string
+	if err := i.DB.QueryRow(`SELECT doc_path FROM epic_phases WHERE id = ?`, phaseID).Scan(&docPath); err != nil || docPath == "" {
+		return
+	}
+	b, err := os.ReadFile(docPath)
+	if err != nil {
+		return
+	}
+	for id := range Cited(CompletionReport(string(b))) {
+		if _, err := i.DB.Exec(`UPDATE lesson_uses SET prior_in_report = 1 WHERE session_uuid = ? AND lesson_id = ?`, uuid, id); err != nil {
+			log.Printf("warning: lessons: uuid=%s snapshot report citations: %v", uuid, err)
+			return
+		}
+	}
 }
 
 // AfterPhaseRun is phaserun.Service.LessonCitations: mark the lessons the run

@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS lesson_uses (
   relied_on     INTEGER NOT NULL DEFAULT 0,   -- 1 when the run cited the id
   relied_where  TEXT    NOT NULL DEFAULT '',  -- 'transcript' | 'report' | 'transcript,report'
   relied_at     TEXT,
+  -- 1 when the id was ALREADY cited in the phase doc's Completion Report at
+  -- injection time (an earlier run wrote it): a report citation of such a lesson
+  -- is not evidence this run relied on it.
+  prior_in_report INTEGER NOT NULL DEFAULT 0,
   UNIQUE (session_uuid, lesson_id)
 );
 
