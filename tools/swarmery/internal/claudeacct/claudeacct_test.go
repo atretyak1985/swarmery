@@ -254,3 +254,19 @@ func TestValidKey(t *testing.T) {
 		}
 	}
 }
+
+// TestValidKeyIsLooserThanTheHookGate pins a DELIBERATE divergence: the
+// accounts-pack SessionStart hook (plugins/accounts-pack/hooks/
+// preflight-account.sh, valid_account_key) only lets [A-Za-z0-9._-] reach
+// additionalContext, while ValidKey accepts these — so the shell test that
+// asserts the hook stays silent for them proves a strictly tighter gate, and
+// this test fails loudly if ValidKey is ever tightened to match (making that
+// shell assertion vacuous). "a b" is on the hook's list too, but ValidKey
+// already rejects it (see TestValidKey).
+func TestValidKeyIsLooserThanTheHookGate(t *testing.T) {
+	for _, key := range []string{"a$b", "a;b", "a`b", "wörk", `"a"`} {
+		if !ValidKey(key) {
+			t.Errorf("ValidKey(%q) = false; the hook's stricter gate is only meaningful while Go accepts it", key)
+		}
+	}
+}

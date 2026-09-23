@@ -29,6 +29,8 @@ func isolate(t *testing.T) (home, sysDir string) {
 	mkdir(t, emptyPath)
 	t.Setenv("PATH", emptyPath)
 	t.Setenv("HOME", home)
+	// The shim dir defaults under the fake HOME; clear any ambient override.
+	t.Setenv("SWARMERY_BIN_DIR", "")
 
 	prev := systemProbeDirs
 	systemProbeDirs = []string{sysDir}
@@ -156,5 +158,144 @@ func TestResolveNotFound(t *testing.T) {
 	}
 	if want := "claude not found in PATH or common install locations"; err.Error() != want {
 		t.Errorf("ErrNotFound message = %q, want the message the ported resolver used: %q", err.Error(), want)
+	}
+}
+
+// ── the PATH shim is never the answer (risk R5) ─────────────────────────────
+//
+// plugins/accounts-pack installs a `claude` shim into ShimDir, which the
+// operator's profile puts FIRST on PATH. A daemon spawn that resolved it would
+// re-enter `swarmery account exec` and discard the account the Go code already
+// resolved. These cases pin every path around it.
+
+// shimDir points ShimDir at a fresh dir via SWARMERY_BIN_DIR and returns it.
+func shimDir(t *testing.T) string {
+	t.Helper()
+	d := filepath.Join(t.TempDir(), "shimbin")
+	mkdir(t, d)
+	t.Setenv("SWARMERY_BIN_DIR", d)
+	return d
+}
+
+func TestShimDirDefaultsUnderHome(t *testing.T) {
+	home, _ := isolate(t)
+	if got, want := ShimDir(), filepath.Join(home, ".swarmery", "bin"); got != want {
+		t.Errorf("ShimDir = %q, want %q", got, want)
+	}
+	t.Setenv("SWARMERY_BIN_DIR", "/x/y/")
+	if got := ShimDir(); got != "/x/y" {
+		t.Errorf("ShimDir with override = %q, want /x/y", got)
+	}
+}
+
+func TestResolveSkipsShimAsPathHit(t *testing.T) {
+	isolate(t)
+	shim := shimDir(t)
+	writeBin(t, shim, 0o755)
+	realDir := t.TempDir()
+	want := writeBin(t, realDir, 0o755)
+	t.Setenv("PATH", shim+string(os.PathListSeparator)+realDir)
+
+	got, err := Resolve()
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got != want {
+		t.Errorf("Resolve = %q, want the next PATH hit %q (the shim must be skipped)", got, want)
+	}
+}
+
+func TestResolveSkipsShimAsProbeCandidate(t *testing.T) {
+	home, sysDir := isolate(t)
+	// The shim dir IS the first probe dir.
+	t.Setenv("SWARMERY_BIN_DIR", sysDir)
+	writeBin(t, sysDir, 0o755)
+	want := writeBin(t, filepath.Join(home, ".local", "bin"), 0o755)
+
+	got, err := Resolve()
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got != want {
+		t.Errorf("Resolve = %q, want the next probe candidate %q", got, want)
+	}
+}
+
+func TestResolveSkipsSymlinkInsideShimDir(t *testing.T) {
+	home, _ := isolate(t)
+	shim := shimDir(t)
+	elsewhere := writeBin(t, t.TempDir(), 0o755)
+	if err := os.Symlink(elsewhere, filepath.Join(shim, "claude")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shim)
+	want := writeBin(t, filepath.Join(home, ".local", "bin"), 0o755)
+
+	got, err := Resolve()
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got != want {
+		t.Errorf("Resolve = %q, want %q (a symlink found in the shim dir is skipped)", got, want)
+	}
+}
+
+func TestResolveSkipsShimDirReachedThroughSymlinkedPathEntry(t *testing.T) {
+	isolate(t)
+	shim := shimDir(t)
+	writeBin(t, shim, 0o755)
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(shim, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", alias)
+
+	if got, err := Resolve(); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Resolve = %q, %v; want ErrNotFound (the alias dir IS the shim dir)", got, err)
+	}
+}
+
+func TestResolveHonoursOverrideIntoShimDir(t *testing.T) {
+	isolate(t)
+	shim := shimDir(t)
+	p := writeBin(t, shim, 0o755)
+	t.Setenv("SWARMERY_CLAUDE_BIN", p)
+
+	got, err := Resolve()
+	if err != nil || got != p {
+		t.Errorf("Resolve = %q, %v; want the explicit override %q honoured", got, err, p)
+	}
+}
+
+func TestResolveShimOnlyIsNotFound(t *testing.T) {
+	isolate(t)
+	shim := shimDir(t)
+	writeBin(t, shim, 0o755)
+	t.Setenv("PATH", shim)
+
+	got, err := Resolve()
+	if !errors.Is(err, ErrNotFound) || got != "" {
+		t.Errorf("Resolve = %q, %v; want ErrNotFound when the shim is the only candidate", got, err)
+	}
+}
+
+func TestLookPathSkippingShim(t *testing.T) {
+	isolate(t)
+	shim := shimDir(t)
+	inShim := writeBin(t, shim, 0o755)
+
+	if _, err := LookPathSkippingShim(inShim); err == nil {
+		t.Errorf("LookPathSkippingShim(%q) = nil error, want a refusal for a path in the shim dir", inShim)
+	}
+	realBin := writeBin(t, t.TempDir(), 0o755)
+	if got, err := LookPathSkippingShim(realBin); err != nil || got != realBin {
+		t.Errorf("LookPathSkippingShim(abs real) = %q, %v; want it verbatim", got, err)
+	}
+	t.Setenv("PATH", "relative/dir"+string(os.PathListSeparator)+shim)
+	if _, err := LookPathSkippingShim("claude"); err == nil {
+		t.Error("LookPathSkippingShim resolved through a relative PATH entry or the shim")
+	}
+	if UnderShimDir("") {
+		t.Error("UnderShimDir(\"\") = true")
 	}
 }

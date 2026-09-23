@@ -1,11 +1,11 @@
 ---
-description: Thin entry point for `/account [list|use <key>|clear|setup-shell [--uninstall]]` — shows which Claude Code account this project runs under and switches it. Every decision lives in the `swarmery account` CLI; no run logic lives here.
+description: Thin entry point for `/account [list|use <key>|clear|setup-shell [--shim] [--uninstall]]` — shows which Claude Code account this project runs under and switches it. Every decision lives in the `swarmery account` CLI; no run logic lives here.
 allowed-tools:
   - Bash
 docs:
   status: reviewed
-  source_sha: 8cf56a7fd34d
-  updated: 2026-08-07
+  source_sha: 86e69808a4f5
+  updated: 2026-09-23
 ---
 
 # /account — which account does this project run under?
@@ -17,6 +17,8 @@ docs:
 /account use <key>                    bind this project to an account
 /account clear                        drop the binding (back to the default account)
 /account setup-shell [--uninstall]    install/remove the `claude` shell function in your profile
+/account setup-shell --shim [--uninstall]
+                                      install/remove the `claude` PATH shim in ~/.swarmery/bin
 ```
 
 ## What it does — and does not do
@@ -86,13 +88,29 @@ first write and is idempotent.
 After installing, tell the operator the function applies to **new** shells
 (`source ~/.zshrc` for the current one).
 
+### `/account setup-shell --shim [--uninstall]`
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/install-shell-function.sh" --shim            # install the PATH shim
+"${CLAUDE_PLUGIN_ROOT}/bin/install-shell-function.sh" --shim-uninstall  # remove it
+```
+
+Writes `~/.swarmery/bin/claude` (mode 0755), which routes every `claude` found
+on PATH through `swarmery account exec` — including in shells opened before the
+function existed. It records the REAL binary's absolute path (resolved with
+`~/.swarmery/bin` stripped from PATH) and **refuses** to install when the only
+`claude` it can find is the shim itself; report that refusal as-is. It adds
+`~/.swarmery/bin` to PATH inside the marker block only when the profile does
+not already export it. Same consent rule as above: only when asked this turn.
+
 ## Argument parsing
 
 1. No arguments → the listing above.
 2. `use` → requires exactly one following token, the account key. Missing key →
    print usage and stop; never pick an account for the operator.
 3. `clear` → takes no further arguments.
-4. `setup-shell` → optional `--uninstall` or `--status`. Any other flag → usage
+4. `setup-shell` → optional `--uninstall` or `--status`, or `--shim` optionally
+   followed by `--uninstall` (→ `--shim-uninstall`). Any other flag → usage
    error, stop.
 5. Anything else → usage error, stop.
 
@@ -128,6 +146,7 @@ You have more than one Claude Code account installed on this machine and want to
 /account use <key>
 /account clear
 /account setup-shell [--uninstall]
+/account setup-shell --shim [--uninstall]
 ```
 
 Run it with no arguments to see the accounts and the project's effective one; the subcommands change the binding or the shell profile.
@@ -136,6 +155,7 @@ Run it with no arguments to see the accounts and the project's effective one; th
 
 - `<key>` — required for `use` only. The key of an account already installed on this machine; the CLI refuses unknown keys rather than guessing.
 - `--uninstall` — optional for `setup-shell`. Removes the `claude` shell function instead of installing it.
+- `--shim` — optional for `setup-shell`. Installs (or, with `--uninstall`, removes) the `claude` PATH shim in `~/.swarmery/bin`, which routes a `claude` from any profile-reading shell — even one opened before the function existed — through `swarmery account exec`.
 
 ## What you get back
 

@@ -23,6 +23,13 @@ func TestPlistGolden(t *testing.T) {
 			{Key: "SWARMERY_ONBOARD_ROOTS", Value: "/home/dev/projects"},
 			{Key: "SWARMERY_WORKSPACE_ROOT", Value: "/home/dev/swarmery-workspace"},
 		}, "plist_with_onboard.golden"},
+		// Risk R5: the daemon resolves the REAL claude through the baked
+		// override, never the accounts-pack PATH shim.
+		{"claude-bin bakes SWARMERY_CLAUDE_BIN", 0, []EnvVar{
+			{Key: "SWARMERY_ONBOARD_ROOTS", Value: "/home/dev/projects"},
+			{Key: "SWARMERY_WORKSPACE_ROOT", Value: "/home/dev/swarmery-workspace"},
+			{Key: "SWARMERY_CLAUDE_BIN", Value: "/opt/homebrew/bin/claude"},
+		}, "plist_with_claude_bin.golden"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

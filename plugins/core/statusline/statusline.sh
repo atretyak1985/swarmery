@@ -189,6 +189,33 @@ ACCT_CFG_DIR=""
 [ -z "$ACCT_CFG_DIR" ] && ACCT_CFG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 ACCOUNT_KEY="$(account_key_from_config_dir "$ACCT_CFG_DIR")"
 
+# ----- preflight cache: credential coverage for THIS session -----------------
+# The accounts-pack SessionStart preflight writes
+# $HOME/.swarmery/run/preflight/<session_id>.env with account=, estate=,
+# varsExpected=, varsPresent=, launch= (the lengths of the doctor Report's two
+# lists, under the Report's own spelling). Session id = the transcript's file
+# name without .jsonl — parameter expansion only, ZERO forks (see the chip
+# comment above). A missing, unreadable or malformed file leaves every PF_* empty,
+# and the render is then byte-identical to having no cache at all.
+PF_ESTATE=""; PF_EXPECTED=""; PF_PRESENT=""
+SESSION_ID="${TRANSCRIPT##*/}"; SESSION_ID="${SESSION_ID%.jsonl}"
+PF_FILE="$HOME/.swarmery/run/preflight/${SESSION_ID}.env"
+if [[ "$SESSION_ID" =~ ^[A-Za-z0-9_-]+$ ]] && [ -f "$PF_FILE" ] && [ -r "$PF_FILE" ]; then
+  pf_ok=1; pf_e=""; pf_x=""; pf_p=""
+  while IFS='=' read -r pf_k pf_v; do
+    case "$pf_k" in
+      estate)       pf_e="$pf_v" ;;
+      varsExpected) pf_x="$pf_v" ;;
+      varsPresent)  pf_p="$pf_v" ;;
+      account|launch|'') ;;
+      *) pf_ok=0 ;;
+    esac
+  done <"$PF_FILE"
+  [[ "$pf_e" =~ ^[A-Za-z0-9._-]*$ ]] || pf_ok=0
+  [[ "$pf_x" =~ ^[0-9]+$ && "$pf_p" =~ ^[0-9]+$ ]] || pf_ok=0
+  [ "$pf_ok" = 1 ] && [ "$pf_p" -le "$pf_x" ] && { PF_ESTATE="$pf_e"; PF_EXPECTED="$pf_x"; PF_PRESENT="$pf_p"; }
+fi
+
 # ----- palette (256-color) -------------------------------------------------
 C_RST=$'\033[0m'; C_B=$'\033[1m'
 BLUE=$'\033[38;5;39m'; CYAN=$'\033[38;5;44m'; TEAL=$'\033[38;5;43m'
@@ -466,8 +493,21 @@ BADGES=""
 [ -n "$EFFORT" ]       && BADGES="${BADGES} ${GREY}·${C_RST} ${ORANGE}▲${EFFORT}${C_RST}"
 [ "$THINKING" = "true" ] && BADGES="${BADGES} ${PURPLE}🧠${C_RST}"
 [ "$FAST" = "true" ]     && BADGES="${BADGES} ${YELLOW}⚡fast${C_RST}"
-[ -n "$ACCOUNT_KEY" ] && [ "$ACCOUNT_KEY" != "default" ] && \
-  BADGES="${BADGES} ${GREY}·${C_RST} ${CYAN}🪪${ACCOUNT_KEY}${C_RST}"
+# Account chip: a non-default account, a resolved estate, or a coverage gap
+# makes it render. Marker: RED ⚠0/n when none of n referenced MCP variables is
+# set, YELLOW ⚠p/n when some are. varsExpected=0 is a HEALTHY zero-credential
+# estate — the chip shows the estate and NO marker.
+PF_GAP=""
+if [ -n "$PF_EXPECTED" ] && [ "$PF_EXPECTED" -gt 0 ]; then
+  if [ "$PF_PRESENT" -eq 0 ]; then PF_GAP="${RED}⚠0/${PF_EXPECTED}${C_RST}"
+  elif [ "$PF_PRESENT" -lt "$PF_EXPECTED" ]; then PF_GAP="${YELLOW}⚠${PF_PRESENT}/${PF_EXPECTED}${C_RST}"; fi
+fi
+if [ -n "$ACCOUNT_KEY" ] && { [ "$ACCOUNT_KEY" != "default" ] || [ -n "$PF_ESTATE" ] || [ -n "$PF_GAP" ]; }; then
+  CHIP="🪪${ACCOUNT_KEY}"
+  [ -n "$PF_ESTATE" ] && CHIP="${CHIP}/${PF_ESTATE}"
+  BADGES="${BADGES} ${GREY}·${C_RST} ${CYAN}${CHIP}${C_RST}"
+  [ -n "$PF_GAP" ] && BADGES="${BADGES} ${PF_GAP}"
+fi
 NAME_PART=""
 # shellcheck disable=SC1111  # intentional typographic quotes around the session name
 [ -n "$SESSION_NAME" ] && NAME_PART="  ${GREY}“${SESSION_NAME}”${C_RST}"

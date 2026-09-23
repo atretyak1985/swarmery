@@ -9,10 +9,11 @@ package main
 //	swarmery account env    [--path <dir>]           the env line for a project (zero or one)
 //	swarmery account exec   [--path <dir>] -- <cmd…> run a command under a project's account
 //	swarmery account estate use|show|clear           declare, inspect, remove an estate root
+//	swarmery account doctor --fast [--json]          credential coverage, names only (account_doctor.go)
 //
 // # Two properties this file exists to preserve
 //
-//  1. NO DAEMON. which|use|clear|env|exec|estate read and write the binding
+//  1. NO DAEMON. which|use|clear|env|exec|doctor|estate read and write the binding
 //     file directly and never open a socket. The daemon is a dashboard, not a
 //     dependency: an operator whose terminal cannot switch accounts because a
 //     background service is stopped would rightly stop trusting the feature.
@@ -61,6 +62,10 @@ const accountUsage = `usage:
   swarmery account estate use <key> [--path <dir>]   declare <dir> as the root of estate <key>
   swarmery account estate show [--path <dir>]       the estate this path resolves to, and where it was declared
   swarmery account estate clear [--path <dir>]      remove the declaration AT <dir> (the account binding stays)
+  swarmery account doctor --fast [--json] [--path <dir>]
+                                                     read-only credential coverage for this path: the ${VAR}
+                                                     names its enabled packs reference, which are set, which
+                                                     are missing — names only, never a value
 
   --path defaults to the current directory. A binding lives in
   <path>/` + claudeacct.BindingFile + `; a path with none inherits the account
@@ -79,8 +84,8 @@ const accountUsage = `usage:
   listed pin. --keep-pins lists and clears nothing. With no flag, a terminal
   is asked; anything else only lists.
 
-  which|use|clear|env|exec|estate never contact the daemon — the terminal has
-  to keep working with swarmery stopped.`
+  which|use|clear|env|exec|doctor|estate never contact the daemon — the
+  terminal has to keep working with swarmery stopped.`
 
 // cmdAccount dispatches the `account` subcommands.
 func cmdAccount(args []string) error {
@@ -103,6 +108,8 @@ func cmdAccount(args []string) error {
 		return accountExec(rest)
 	case "estate":
 		return accountEstate(rest, os.Stdout, os.Stderr)
+	case "doctor":
+		return accountDoctor(rest, os.Stdout)
 	case "-h", "--help", "help":
 		fmt.Fprintln(os.Stderr, accountUsage)
 		return nil
@@ -598,8 +605,33 @@ func accountExec(args []string) error {
 	// running the command under the WRONG account while `swarmery account which`
 	// reports the right one.
 	//
+	// SWARMERY_LAUNCH_PATH is the launch MARKER the accounts-pack SessionStart
+	// preflight reads (via `account doctor`): it names the project this exec
+	// composed the environment for. It is appended HERE and nowhere else — not in
+	// claudeacct.EnvFor / SpawnEnv — so no daemon seam carries it. It is never a
+	// loop guard: the shim's guard is the absolute path in argv.
+	env := claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(dir))
+	env = append(withoutEnvKey(env, launchPathEnv), launchPathEnv+"="+dir)
+	//
 	// Returns only on failure — on success this process IS the command.
-	return syscall.Exec(bin, argv, claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(dir)))
+	return syscall.Exec(bin, argv, env)
+}
+
+// launchPathEnv is the marker accountExec sets for the child (see above).
+const launchPathEnv = "SWARMERY_LAUNCH_PATH"
+
+// withoutEnvKey drops every KEY=… entry for key, so the marker appended after
+// it is the only one execve hands down (libc getenv returns the FIRST match).
+// It copies: the caller's slice is never mutated.
+func withoutEnvKey(env []string, key string) []string {
+	out := make([]string, 0, len(env)+1)
+	prefix := key + "="
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, prefix) {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // resolveExecBin finds the executable `account exec` replaces itself with.
@@ -613,10 +645,25 @@ func accountExec(args []string) error {
 // claudebin.Resolve probes exactly that location (and the other common install
 // dirs), the same way every daemon spawn already finds the binary under launchd's
 // minimal PATH. Any other command name gets the plain PATH answer.
+//
+// Neither answer may be the accounts-pack PATH shim (claudebin.IsShim): the
+// shim execs `swarmery account exec`, so resolving to it would re-enter this
+// very function on every terminal launch (risk R5). The filter matches the
+// shim ONLY — a `claude` in the shim dir. Every other binary there (the
+// swarmery CLI itself: `account exec -- swarmery …`) resolves normally, by
+// bare name or absolute path. A shim hit is discarded and the search
+// continues past it; for "claude" the probe then runs as before.
 func resolveExecBin(name string) (string, error) {
 	bin, err := exec.LookPath(name)
-	if err == nil {
+	if err == nil && !claudebin.IsShim(bin) {
 		return bin, nil
+	}
+	if err == nil {
+		// The shim dir answered first; look past it.
+		bin, err = claudebin.LookPathSkippingShim(name)
+		if err == nil {
+			return bin, nil
+		}
 	}
 	if name == "claude" {
 		if probed, perr := claudebin.Resolve(); perr == nil {

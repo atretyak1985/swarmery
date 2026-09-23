@@ -95,9 +95,10 @@ The pack degrades honestly rather than silently: without the CLI on `PATH`,
 `claude-account.sh` prints one warning and runs the default account, and the
 shell function falls through to plain `claude`.
 
-## The two terminal surfaces
+## The terminal surfaces
 
-Pick one. They do the same thing and differ only in how much they take over.
+Pick one (the shim and the function also coexist). They do the same thing and
+differ only in how much they take over.
 
 ### 1. The explicit wrapper — `bin/claude-account.sh`
 
@@ -140,6 +141,39 @@ of the directory you are standing in. What it guarantees:
 Already-open shells keep the old definition until they are restarted
 (`source ~/.zshrc`, or `unset -f claude` after uninstalling).
 
+### 3. The PATH shim — `bin/install-shell-function.sh --shim`
+
+```bash
+bin/install-shell-function.sh --shim                  # write ~/.swarmery/bin/claude
+bin/install-shell-function.sh --shim --real-bin /abs/path/to/claude
+bin/install-shell-function.sh --shim-uninstall
+```
+
+zsh caches command locations: after `--shim`, run `rehash` (or open a new shell) so an already-open zsh finds the shim.
+
+A function only exists in shells that sourced the profile after it was
+installed. The shim is a file — `~/.swarmery/bin/claude` (or
+`$SWARMERY_BIN_DIR/claude`), mode `0755` — so every shell that has
+`~/.swarmery/bin` first on `PATH` routes `claude` through
+`swarmery account exec`, function or no function. What it guarantees:
+
+- it records the REAL binary's absolute path at install time, resolved with the
+  shim dir stripped from `PATH` and then the same probe list the daemon uses;
+  it **refuses** to install when that answer is the shim itself;
+- it hands `account exec` that absolute path, never the bare word `claude` —
+  that path is the only loop guard, so a nested `claude` after a `cd` re-resolves
+  against the new project. No environment variable is read as a guard;
+- fail-open: no `swarmery` on `PATH` execs the real binary directly with the
+  same argv and exit code; a recorded binary that moved is re-probed on `PATH`
+  minus the shim dir;
+- it adds `export PATH="$HOME/.swarmery/bin:$PATH"` inside the marker block
+  only when the profile does not already export that dir, and is idempotent.
+
+It is still `PATH`-bound: a launchd job, a cron line or an IDE task with its own
+`PATH` misses it — the SessionStart preflight below is the answer there.
+swarmery's own resolvers skip the shim dir, and `swarmery install --claude-bin`
+bakes the real binary into the daemon's plist.
+
 ## `/account`
 
 `commands/account.md` — list the accounts, show the effective one, switch it,
@@ -148,25 +182,44 @@ holds no logic of its own.
 
 ## Hooks
 
-`hooks/hooks.json` wires `SessionStart` → `hooks/warn-wrong-account.sh`, which
-warns when a session is running under an account other than the project's
-binding. The actual account comes from `$CLAUDE_CONFIG_DIR` (falling back to
-`$HOME/.claude`) — the same env Claude Code itself uses to pick a login, read
-straight from the hook's process environment, never from `transcript_path`
-(the SessionStart payload doesn't carry one). The binding comes from the
-hook's own `cwd` (falling back to `$CLAUDE_PROJECT_DIR`) resolving
-`<project>/.claude/settings.local.json` → `.swarmery.claudeAccount`.
+`hooks/hooks.json` wires `SessionStart` → `hooks/preflight-account.sh`, a
+credential **coverage** preflight. It runs
+`swarmery account doctor --fast --json --path <cwd>` (the hook's own `cwd`,
+falling back to `$CLAUDE_PROJECT_DIR`) under a 2-second watchdog and reads the
+report's camelCase fields: `varsExpected` — the `${VAR}` names the project's
+enabled plugins reference in their MCP configs; `varsPresent` — which of those
+are set in this session; `varsMissing` — the rest.
 
-It stays silent (no stdout, exit 0) when: there is no binding; the binding
-matches the actual account; the settings file is missing, unparseable, or
-`jq` is unavailable; or the stored binding fails the same validity check
-`swarmery` itself uses for a key (a hand-edited file can't smuggle arbitrary
-text into the model's context this way). On an actual mismatch it prints
-exactly one line of SessionStart hook JSON —
+It measures *which variables*, not *which account*: the failure it exists for is
+a session under the right account with none of its credentials, which an
+account-equality test can never see.
+
+**The only escalation is a non-empty `varsMissing`.** Zero credentials, an
+estate with no store file, no estate at all, or an empty `varsExpected` are all
+healthy and silent — a project may enable a dozen plugins that reference no
+`${VAR}`. On a gap it prints exactly one line of SessionStart hook JSON —
 `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"…"}}`
-— so Claude Code sees the warning from the first message of the session.
-Like every hook here it is fail-open — a hook that can fail is a hook that
-can block a session.
+— naming the missing variables (names only, never a value) and the cause:
+
+- the report's `daemon` is true (a swarmery daemon worktree) → the gap is in the
+  daemon's spawn seam;
+- `launchedViaSwarmery` is false (the session did not come through
+  `swarmery account exec`, which sets `SWARMERY_LAUNCH_PATH`) → exit and open a
+  new shell: MCP env is read once at process start and cannot be repaired
+  in-session;
+- otherwise → nothing supplies those names; add them to the estate's store.
+
+It stays silent (no stdout, exit 0) when `SWARMERY_SKIP_PREFLIGHT=1`, `jq` or
+`swarmery` is missing, the doctor fails, hangs or prints something that is not a
+report, or an account/estate key fails a character gate deliberately stricter
+than `swarmery`'s own (a hand-edited file can't smuggle text into the model's
+context). Every variable name must match `^[A-Za-z_][A-Za-z0-9_]*$` to reach it.
+Like every hook here it is fail-open.
+
+It also writes `~/.swarmery/run/preflight/<session_id>.env` (dir `0700`, file
+`0600`) — `account=`, `estate=`, `varsExpected=`, `varsPresent=` (list
+lengths) and `launch=` — which the core statusline reads to append `⚠p/n` to
+the account chip. No names or values go there.
 
 ## Per-account secrets
 
@@ -259,11 +312,15 @@ about the redundant set; anything else only lists.
 
 ## Known edges
 
-- **The wrong-account hook still reads the project root only.** `swarmery
-  account` walks up from the directory you pass (see "Estates"), so both
-  terminal surfaces now follow an ancestor's binding from a subdirectory too.
-  The SessionStart warning hook does not walk yet: it compares against the
-  binding at the hook's own `cwd` and stays silent when that directory has none.
+- **The shim and the function coexist; the function wins in shells that have
+  it.** A shell function shadows every `PATH` entry, so a shell that sourced the
+  function runs it; it calls `swarmery account exec -- claude`, whose resolver
+  skips the shim dir and finds the real binary — one resolution, not two. A
+  shell without the function (opened before it was installed, or one that
+  sources no rc file but reads the profile's `PATH`) gets the shim instead.
+- **The preflight walks like the CLI.** It asks `swarmery account doctor`, which
+  resolves the path with the same ancestor walk as every other `account`
+  subcommand, so a subdirectory inherits its ancestor's binding and estate.
 - **A running session keeps its account.** A binding decides what the *next*
   session starts under; nothing re-homes a live one.
 - **An empty delta inherits.** A project bound to the default account adds no

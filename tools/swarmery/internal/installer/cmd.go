@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/version"
 )
 
@@ -38,6 +40,10 @@ var installEnvKeys = []struct {
 	{flag: "statusline-src", env: "SWARMERY_STATUSLINE_SRC"},
 	{flag: "projects-roots", env: "SWARMERY_PROJECTS_ROOTS"},
 	{flag: "claude-config-dir", env: "CLAUDE_CONFIG_DIR", noShellEnv: true},
+	// The daemon must resolve the REAL claude, never the accounts-pack PATH
+	// shim: an explicit SWARMERY_CLAUDE_BIN short-circuits claudebin.Resolve
+	// before any PATH lookup (risk R5).
+	{flag: "claude-bin", env: "SWARMERY_CLAUDE_BIN"},
 }
 
 // CmdInstall implements
@@ -75,6 +81,9 @@ func CmdInstall(args []string) error {
 			"to a DIFFERENT (often empty) credential than the interactive shell uses, and every run "+
 			"fails with \"OAuth session expired\". Unlike the SWARMERY_* vars this one is never read "+
 			"from the installing shell — only this flag or the existing plist.")
+	claudeBin := fs.String("claude-bin", "",
+		"absolute path of the REAL claude executable baked into the plist (env: SWARMERY_CLAUDE_BIN) — "+
+			"resolve it with the accounts-pack shim dir (~/.swarmery/bin) stripped from PATH, never the shim itself")
 	fs.Parse(args)
 	if *port != -1 && (*port < 0 || *port > 65535) {
 		return fmt.Errorf("invalid port %d", *port)
@@ -96,7 +105,15 @@ func CmdInstall(args []string) error {
 		"projects-roots": *projectsRoots,
 
 		"claude-config-dir": *claudeConfigDir,
+		"claude-bin":        *claudeBin,
 	}, os.LookupEnv)
+	for _, e := range env {
+		if e.Key == "SWARMERY_CLAUDE_BIN" {
+			if err := validateClaudeBin(e.Value); err != nil {
+				return err
+			}
+		}
+	}
 	for _, k := range preserved {
 		fmt.Fprintf(os.Stdout, "  preserving %s from existing %s\n", k, sys.DefinitionKind())
 	}
@@ -163,6 +180,31 @@ func mergeInstallEnv(
 		preserved = append(preserved, k)
 	}
 	return env, preserved
+}
+
+// validateClaudeBin refuses a SWARMERY_CLAUDE_BIN (from --claude-bin, the
+// shell, or the existing definition) that the daemon could not use as the REAL
+// claude: it must be absolute, exist, be an executable non-directory, and not
+// live under the accounts-pack shim dir — the override short-circuits every
+// shim filter in claudebin.Resolve, so baking the shim in would loop every
+// daemon spawn back through `swarmery account exec` (risk R5).
+func validateClaudeBin(p string) error {
+	const hint = ` (pass --claude-bin "" to clear it)`
+	if !filepath.IsAbs(p) {
+		return fmt.Errorf("SWARMERY_CLAUDE_BIN %q is not an absolute path%s", p, hint)
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		return fmt.Errorf("SWARMERY_CLAUDE_BIN %q: %w%s", p, err, hint)
+	}
+	if fi.IsDir() || fi.Mode()&0o111 == 0 {
+		return fmt.Errorf("SWARMERY_CLAUDE_BIN %q is not an executable file%s", p, hint)
+	}
+	if claudebin.UnderShimDir(p) {
+		return fmt.Errorf("SWARMERY_CLAUDE_BIN %q is under the accounts-pack shim dir %s — name the real claude, never the shim%s",
+			p, claudebin.ShimDir(), hint)
+	}
+	return nil
 }
 
 // resolveInstallPort mirrors mergeInstallEnv for the special-cased port: an
