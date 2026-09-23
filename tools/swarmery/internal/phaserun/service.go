@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
@@ -303,11 +304,17 @@ func (e *DocModelError) Unwrap() error { return e.err }
 //     holds full IDs outside planning.Models (a "[1m]" context-window suffix, say);
 //     routing it through the validator would reject it and silently drop every phase
 //     run back to the account default — the exact failure this ladder exists to remove;
-//  4. otherwise "" — no --model flag.
+//  4. otherwise planning.DefaultModel.
 //
-// Rungs 1, 3 and 4 behave exactly as they did before rung 2 existed: a request model
-// still wins outright, and a doc that declares nothing (docModel == "") falls straight
-// through to the env knob.
+// Rung 4 used to be "" — no --model flag at all — which did NOT mean "some sensible
+// house default": it meant the ACCOUNT default, and on these accounts that is Fable,
+// at roughly twice the Opus price. So the one rung an operator never chooses, the one
+// every un-picked "Run phase" lands on, was the most expensive of the four. Every
+// other engine in this daemon already pins a full model ID for exactly that reason;
+// this rung brings phase runs in line with them.
+//
+// Rungs 1–3 are unchanged: a request model still wins outright, and a doc that
+// declares nothing (docModel == "") falls straight through to the env knob.
 func resolveModel(choice, docModel, docPath string) (string, error) {
 	if strings.TrimSpace(choice) != "" {
 		id, err := planning.ResolveModel(choice)
@@ -325,7 +332,70 @@ func resolveModel(choice, docModel, docPath string) (string, error) {
 		}
 		return id, nil
 	}
-	return strings.TrimSpace(os.Getenv(modelEnv)), nil
+	if env := strings.TrimSpace(os.Getenv(modelEnv)); env != "" {
+		return env, nil
+	}
+	return planning.DefaultModel, nil
+}
+
+// DocEffortError: the phase DOC declares an `**Effort:**` outside the CLI's
+// closed set. Rung 2's failure, and — exactly like DocModelError, for the same
+// reason — deliberately NOT rung 3's: a bad value in a DOCUMENT is a defect in
+// the plan and must name the file its author has to edit, while a bad value in
+// an ENV knob is an operator's typo that must degrade with a warning rather than
+// wedge every phase run on the machine.
+//
+// It also cannot be ignored: `claude --effort bogus` rejects the flag and the
+// process dies before the run starts, so a doc typo passed through verbatim
+// would surface as an unexplained dead phase instead of a named line to fix.
+type DocEffortError struct {
+	// Doc is the phase doc's absolute path — the whole point of this error type.
+	Doc string
+	// Declared is what the doc actually says, verbatim, so the author can grep
+	// for the line.
+	Declared string
+}
+
+func (e *DocEffortError) Error() string {
+	return fmt.Sprintf("phase doc %s declares **Effort:** %q, which is not a known effort (%s) — fix the line in the doc",
+		e.Doc, e.Declared, strings.Join(claudeflags.ValidEfforts(), ", "))
+}
+
+// resolveEffort walks the phase-run effort ladder and returns what reaches
+// --effort. It mirrors resolveModel rung for rung:
+//
+//  1. an operator choice on the request — validated, so a typo is a 400 before
+//     anything is acquired or stamped;
+//  2. otherwise the phase DOC's own `**Effort:** high` header
+//     (wsingest.ParseEffort) — validated too, failing as a *DocEffortError that
+//     names the document;
+//  3. otherwise SWARMERY_PHASERUN_EFFORT, then DefaultEffort — both through
+//     internal/claudeflags, which degrades an env typo with a warning.
+//
+// The one structural difference from the model ladder: the doc rung reads the
+// doc BODY the service already loaded, not a stamped column. doc_model exists
+// because the dashboard renders that chip on the plans page without opening the
+// file; nothing renders an effort chip yet, and adding a second doc-derived
+// column (plus the migration and the rescan that keeps it in sync) to serve one
+// reader that is already holding the bytes would be storage for its own sake.
+// If a chip ever needs it, ParseEffort is the same parser a scanner would call.
+func resolveEffort(choice, doc, docPath string) (string, error) {
+	if canonical, ok := claudeflags.NormalizeEffort(choice); !ok {
+		return "", fmt.Errorf("phase run effort: %w: %q (valid: %s)",
+			planning.ErrUnknownEffort, choice, strings.Join(claudeflags.ValidEfforts(), ", "))
+	} else if canonical != "" {
+		return canonical, nil
+	}
+	if declared := strings.TrimSpace(wsingest.ParseEffort(doc)); declared != "" {
+		canonical, ok := claudeflags.NormalizeEffort(declared)
+		if !ok {
+			return "", &DocEffortError{Doc: docPath, Declared: declared}
+		}
+		if canonical != "" {
+			return canonical, nil
+		}
+	}
+	return claudeflags.Effort(effortEnv, DefaultEffort), nil
 }
 
 // Start admits a run for a phase: gates (single-flight, deps, doc, path), then
@@ -334,9 +404,10 @@ func resolveModel(choice, docModel, docPath string) (string, error) {
 // immediately. The run's own goroutine owns exit stamping, worktree removal
 // (branch kept), and slot release.
 //
-// model is the operator's choice for THIS run ("" = none); resolveModel above
-// owns the ladder and is applied first, so a bad model costs nothing.
-func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err error) {
+// model and effort are the operator's choices for THIS run ("" = none, for
+// either). resolveModel and resolveEffort above own the two ladders and both run
+// before anything is acquired or stamped, so a bad value in either costs nothing.
+func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string, err error) {
 	// loadPhase is a pure READ — one SELECT, no stamp, no acquire — and rung 2 of
 	// the ladder lives on the row it returns (epic_phases.doc_model), so model
 	// resolution cannot precede it. It sits right after the already-running gates
@@ -381,6 +452,15 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 	doc, err := os.ReadFile(info.DocPath)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrNoDoc, info.DocPath)
+	}
+	// Effort is resolved HERE rather than beside the model above only because its
+	// rung 2 reads the doc's BODY (the model's reads a stamped column), and this
+	// is the first line that has the bytes. It is still an admission verdict: no
+	// slot has been taken, no worktree acquired and nothing stamped yet, so a
+	// typo on the request or in the document costs exactly what a bad model does.
+	runEffort, err := resolveEffort(effort, string(doc), info.DocPath)
+	if err != nil {
+		return "", err
 	}
 	// Resolve the repository BEFORE anything hands a path to git: projects.path is
 	// the project ROOT, which for a multi-repo project is not a checkout at all, and
@@ -527,9 +607,12 @@ func (s *Service) Start(phaseID int64, model string) (sessionUUID string, err er
 		ProjectPath:  info.ProjectPath,
 		// The ladder, already walked by resolveModel at the top of Start: the
 		// request's model (validated) → the phase DOC's **Model:** (validated) →
-		// SWARMERY_PHASERUN_MODEL (verbatim) → "", which emits no --model flag and
-		// inherits the account default.
+		// SWARMERY_PHASERUN_MODEL (verbatim) → planning.DefaultModel.
 		Model: runModel,
+		// The effort ladder, walked by resolveEffort once the doc was read: the
+		// request's effort → the doc's **Effort:** → SWARMERY_PHASERUN_EFFORT →
+		// DefaultEffort. Never empty unless an operator asked for "off".
+		Effort: runEffort,
 	}
 	if spec.SettingsFile != "" {
 		log.Printf("phaserun: phase=%d inheriting project settings %s (worktree is a checkout of %s)",

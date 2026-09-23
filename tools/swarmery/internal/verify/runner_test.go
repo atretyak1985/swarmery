@@ -46,7 +46,7 @@ func TestClaudeRunnerArgs(t *testing.T) {
 	// invisible to everything except an assertion like this one. Mirrors the
 	// verify/model case in internal/runcore/spawner_test.go.
 	got := strings.TrimSpace(string(out))
-	want := "-p hello --session-id u1 --setting-sources project,local --model opus"
+	want := "-p hello --session-id u1 --setting-sources project,local --model opus --effort " + DefaultEffort
 	if got != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}

@@ -29,7 +29,7 @@ func TestStartStampsRunBranch(t *testing.T) {
 	wt := &stubWt{}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	got := runBranchOf(t, db, p1)
@@ -50,7 +50,7 @@ func TestStartRefusesWhenPreviousRunBranchHasCommits(t *testing.T) {
 	wt := &stubWt{reclaimAheadBy: map[string]int{orphan: 2}}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	_, err := s.Start(p1, "")
+	_, err := s.Start(p1, "", "")
 	if !errors.Is(err, ErrBranchDirty) {
 		t.Fatalf("err = %v, want ErrBranchDirty", err)
 	}
@@ -80,7 +80,7 @@ func TestStartReclaimsEmptyPreviousRunBranch(t *testing.T) {
 	wt := &stubWt{}
 	s := newTestService(db, &stubRunner{}, wt)
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	reclaimed := wt.reclaimedList()

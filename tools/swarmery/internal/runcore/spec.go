@@ -38,7 +38,13 @@ type Spec struct {
 	SessionUUID string // --session-id: the daemon-generated explicit run↔session link
 	Cwd         string // the process's working directory (a worktree, or a project path for planning)
 
-	Model          string // --model; "" inherits the account default
+	Model string // --model; "" inherits the account default
+	// Effort is --effort. "" omits the flag, which does NOT mean "the cheap
+	// default": the CLI's own default is xhigh, the deepest setting, so an
+	// engine that leaves this empty pays maximum reasoning tokens on every turn.
+	// The resolution (site knob → cross-site knob → the engine's DefaultEffort)
+	// lives in internal/claudeflags, like PermissionMode's.
+	Effort         string
 	Agent          string // --agent; the "@name: " prompt mention is the CALLER's job, not this
 	PermissionMode string // --permission-mode; "" omits the flag (see internal/claudeflags)
 	SettingsFile   string // --settings; a project settings file lent to a worktree that cannot discover one

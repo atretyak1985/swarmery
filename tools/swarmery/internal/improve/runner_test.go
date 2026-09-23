@@ -72,10 +72,10 @@ func TestClaudeRunnerMissingBinary(t *testing.T) {
 // site would therefore have quietly dropped a level on the swap — pinning is
 // what makes the model change a price change and nothing else.
 func TestModelAndEffortPins(t *testing.T) {
-	if defaultModel != "claude-opus-5-5" {
-		t.Errorf("defaultModel = %q, want claude-opus-5-5", defaultModel)
+	if DefaultModel != "claude-opus-5-5" {
+		t.Errorf("DefaultModel = %q, want claude-opus-5-5", DefaultModel)
 	}
-	if defaultEffort != "high" {
-		t.Errorf("defaultEffort = %q, want high", defaultEffort)
+	if DefaultEffort != "high" {
+		t.Errorf("DefaultEffort = %q, want high", DefaultEffort)
 	}
 }

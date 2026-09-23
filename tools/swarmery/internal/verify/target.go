@@ -73,7 +73,7 @@ type Target struct {
 	// task title and prompt; for a phase, the phase name and its doc, which is where
 	// that phase's acceptance criteria live.
 	Title, Prompt string
-	// Model overrides the verifier's model ("" ⇒ defaultModel), and ProjectPath is
+	// Model overrides the verifier's model ("" ⇒ DefaultModel), and ProjectPath is
 	// the repo root the Claude account binding resolves from — never the worktree,
 	// which carries no settings of its own.
 	Model, ProjectPath string

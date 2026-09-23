@@ -1279,9 +1279,13 @@ func cmdServe(args []string) error {
 	// trajjudge config (advisory LLM-judge, best-effort; cap<=0 disables).
 	trajjudgeModel := os.Getenv("SWARMERY_TRAJJUDGE_MODEL")
 	if trajjudgeModel == "" {
-		// Full ID, not the "sonnet" alias — aliases re-resolve over time and the
-		// judged model is stored per verdict, so the pin keeps scores comparable.
-		trajjudgeModel = "claude-sonnet-5"
+		// The pin lives with the engine (trajjudge.DefaultModel) rather than here:
+		// a default only main.go knows is one no test can name, and the defaults
+		// table test in internal/claudeflags exists to stop exactly that drift.
+		// Still a full ID, not the "sonnet" alias — aliases re-resolve over time
+		// and the judged model is stored per verdict, so the pin keeps scores
+		// comparable.
+		trajjudgeModel = trajjudge.DefaultModel
 	}
 	// Minimum age of the newest verdict before another automatic batch may
 	// run (startup + 24h tick); the manual advise endpoint is not gated.
@@ -1530,7 +1534,9 @@ func cmdServe(args []string) error {
 	} else {
 		handoffModel := os.Getenv("SWARMERY_HANDOFF_MODEL")
 		if handoffModel == "" {
-			handoffModel = "claude-sonnet-5"
+			// The pin lives with the engine, for the reason above: a default only
+			// main.go knows is one the defaults table test cannot see.
+			handoffModel = handoff.DefaultModel
 		}
 		go func() {
 			runHandoff := func() {

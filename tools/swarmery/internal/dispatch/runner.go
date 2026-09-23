@@ -59,11 +59,26 @@ type Runner interface {
 // done over an untouched worktree.
 const permEnv = "SWARMERY_DISPATCH_PERMISSION_MODE"
 
-// defaultModel pins dispatched implementation runs whose task carries no model
+// DefaultModel pins dispatched implementation runs whose task carries no model
 // override: an unset --model inherits the account default (Fable-5 here — 5×
 // the Sonnet price). Executor tier — full ID, not an alias, because aliases
 // re-resolve over time.
-const defaultModel = "claude-sonnet-5"
+const DefaultModel = "claude-sonnet-5"
+
+// effortEnv is this spawn site's --effort knob; DefaultEffort is what it falls
+// back to. internal/claudeflags owns the resolution and the "off" escape hatch.
+//
+// medium, not the CLI's unpinned xhigh: a dispatched card is a scoped unit of
+// work whose contract already tells the executor what to do and how to verify
+// it, and the playbook's stage bodies narrow it further. The depth that pays
+// off on an open-ended plan is waste here, once per stage of every chain.
+// Phase 7 re-measures it.
+const (
+	effortEnv = "SWARMERY_DISPATCH_EFFORT"
+	// DefaultEffort is exported so the defaults table test can pin it beside
+	// every other engine's.
+	DefaultEffort = "medium"
+)
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`
 // with cwd set to the worktree. Binary resolution is a plain PATH lookup — the
@@ -172,6 +187,9 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
 		Model:       spec.Model,
+		// Resolved, never omitted: an absent --effort is not "the cheap default"
+		// but the CLI's xhigh, paid once per stage of every playbook chain.
+		Effort: claudeflags.Effort(effortEnv, DefaultEffort),
 		// Without this the executor cannot write, run or commit — and it still exits
 		// 0, so the task is stamped done over an empty diff. See internal/claudeflags
 		// (knob: SWARMERY_DISPATCH_PERMISSION_MODE).

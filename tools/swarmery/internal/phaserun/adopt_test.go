@@ -36,7 +36,7 @@ func TestHealStale_AdoptsSurvivingRun(t *testing.T) {
 		t.Errorf("phase with no live process: state=%q run_error=%q, want failed/daemon restart", state, runErr.String)
 	}
 	// The slot is held, so a Retry cannot put a second executor in the same worktree.
-	if _, err := s.Start(p1, ""); !errors.Is(err, ErrRunning) {
+	if _, err := s.Start(p1, "", ""); !errors.Is(err, ErrRunning) {
 		t.Errorf("Start on an adopted phase = %v, want ErrRunning", err)
 	}
 
@@ -54,7 +54,7 @@ func TestHealStale_AdoptsSurvivingRun(t *testing.T) {
 		t.Errorf("run_error = %q, want the unknown-exit note", runErr.String)
 	}
 	// Slot released — the phase can run again.
-	if _, err := s.Start(p1, ""); errors.Is(err, ErrRunning) {
+	if _, err := s.Start(p1, "", ""); errors.Is(err, ErrRunning) {
 		t.Error("slot still held after the adopted run ended")
 	}
 }

@@ -291,8 +291,14 @@ func (h *Handler) spawnWizardResume(w http.ResponseWriter, svc *planning.Service
 	}
 	// The wizard's pinned model rides along on every turn: the first spawn passed
 	// --model, and a resume without it would silently switch the interview to
-	// the account default mid-way.
-	started, err := startResume(sid, uuid, cwd.String, account.String, text, svc.Model(uuid), func(runErr error) {
+	// the account default mid-way. svc.Model is authoritative over what
+	// lookupResumeOrigin would read off the sessions row — the wizard's pin is
+	// what the interview AGREED to run as, while the sessions row only reports
+	// what the last turn happened to use — so it is set explicitly here rather
+	// than derived. The effort default rides along with it.
+	wizardOrigin := lookupResumeOrigin(h.DB, uuid)
+	wizardOrigin.Model = svc.Model(uuid)
+	started, err := startResume(sid, uuid, cwd.String, account.String, text, wizardOrigin, func(runErr error) {
 		// Runs after process exit, BEFORE the resume slot release. A failed or
 		// timed-out resume rolls back so the wizard is answerable again, WITH the
 		// process error as the reason — this is the one rollback the operator

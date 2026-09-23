@@ -391,6 +391,51 @@ func ParseModel(md string) string {
 	return ""
 }
 
+var (
+	// The phase doc's header table row: `| **Effort** | high |`.
+	docEffortRowRe = regexp.MustCompile(`(?i)^\|\s*\*\*Effort:?\*\*\s*\|\s*(.+?)\s*\|\s*$`)
+	// The prose header form, beside `**Model:**`: `**Effort:** high`.
+	docEffortLineRe = regexp.MustCompile(`(?i)^\s*\*\*Effort:\*\*\s*(.+?)\s*$`)
+)
+
+// ParseEffort returns the reasoning depth a phase doc DECLARES for its own runs
+// via an `**Effort:** high` header line or a `| **Effort** | high |` header
+// table row. Same scan, same bound and same contract as ParseModel — including
+// the header-block bound, which is load-bearing for the identical reason: every
+// phase doc in this workspace embeds a copy-paste agent prompt further down, and
+// an `**Effort:**` line quoted inside one is describing someone else's phase.
+//
+// "" when the doc declares nothing, which is what keeps a plan that never opted
+// in behaving exactly as it did before this field existed.
+//
+// The value is returned VERBATIM (trimmed, decoration stripped), NOT normalized
+// and NOT rejected here — see ParseModel for why the scan degrades and the
+// single resolution site judges (phaserun.resolveEffort).
+//
+// Pure; unit-tested.
+func ParseEffort(md string) string {
+	lines := strings.Split(md, "\n")
+	if len(lines) > docStatusHeaderLines {
+		lines = lines[:docStatusHeaderLines]
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		cell := ""
+		if m := docEffortRowRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			cell = m[1]
+		} else if m := docEffortLineRe.FindStringSubmatch(line); m != nil {
+			cell = m[1]
+		} else {
+			continue
+		}
+		// First Effort declaration wins, even when it is empty after trimming.
+		return strings.Trim(cell, docModelTrimSet)
+	}
+	return ""
+}
+
 // CountCheckboxes counts acceptance-criteria checkboxes in a doc, returning
 // (done, total). Pure; unit-tested. A doc with none yields (0, 0).
 //

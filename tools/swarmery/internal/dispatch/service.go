@@ -986,7 +986,7 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			model = pb.model
 		}
 		if model == "" {
-			model = defaultModel
+			model = DefaultModel
 		}
 		// Agent is carried, never applied: ClaudeRunner.agentPrompt owns the single
 		// "@<agent>: " prefix site. Every stage of a playbook runs as the same agent

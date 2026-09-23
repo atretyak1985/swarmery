@@ -414,8 +414,19 @@ function RunCompletedChip({ phase }: { phase: EpicPhase }): JSX.Element {
 // charge, and rung 2 of that ladder is the doc. Choosing a real model here is an
 // OVERRIDE of every doc on the plan — which is why the label says so, and why
 // each phase that declares one shows a `doc:` chip beside its Run button.
+/** The concrete model a `default` phase run ends up on when no doc and no env
+ * knob says otherwise — `planning.DefaultModel`, the last rung of
+ * `phaserun.resolveModel`.
+ *
+ * Named here rather than left implicit because "default" used to be a lie of
+ * omission: it meant NO --model flag, which is not a house default but the
+ * ACCOUNT default (Fable, ~2× the Opus price). The rung nobody picked was the
+ * most expensive one, and the picker said nothing about it. The daemon now pins
+ * this rung, and the label says which model that is. */
+const PHASE_RUN_DEFAULT_MODEL_LABEL = 'opus 5.5';
+
 const PHASE_RUN_MODELS = [
-  { value: 'default', label: 'per-doc / daemon default (no model sent)' },
+  { value: 'default', label: `per-doc, else ${PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)` },
   { value: 'opus', label: 'opus 5 — default' },
   { value: 'sonnet', label: 'sonnet 5 — faster, cheaper' },
   { value: 'fable', label: 'fable 5.1 — most capable, ~2× cost' },
@@ -425,6 +436,48 @@ const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
 /** Its OWN key — beside the planner's `swarmery.planning.model`, never shared:
  * the two choices are about different runs and different money. */
 const PHASE_RUN_MODEL_KEY = 'swarmery.phaserun.model';
+
+// ── Per-phase effort selection ──────────────────────────────────────────────
+// The second half of "what does this run cost": which brain, and how hard it
+// thinks. Its options ARE the CLI's closed set (claudeflags.ValidEfforts), so —
+// like the model picker — the UI cannot send a value the API would reject.
+//
+// `default` means SEND NO `effort` KEY, which hands the decision to the same
+// ladder the model takes: the phase DOC's own `**Effort:**` header first, then
+// SWARMERY_PHASERUN_EFFORT, then the engine's pinned default.
+//
+// What it does NOT mean is "cheap". A `claude -p` with no --effort runs at the
+// CLI's own default, xhigh — the DEEPEST setting — so before the daemon pinned
+// this rung, every un-picked phase run paid maximum reasoning tokens for up to
+// four hours. The labels below say which end is which for that reason.
+const PHASE_RUN_EFFORTS = [
+  { value: 'default', label: 'per-doc, else high (no effort sent)' },
+  { value: 'low', label: 'low — mechanical work' },
+  { value: 'medium', label: 'medium — scoped work' },
+  { value: 'high', label: 'high — implementation' },
+  { value: 'xhigh', label: 'xhigh — deepest, slowest' },
+  { value: 'max', label: 'max — no ceiling' },
+] as const;
+type PhaseRunEffort = (typeof PHASE_RUN_EFFORTS)[number]['value'];
+const DEFAULT_PHASE_RUN_EFFORT: PhaseRunEffort = 'default';
+/** Its own key, beside the model's — the two are different decisions about the
+ * same money and must not share storage. */
+const PHASE_RUN_EFFORT_KEY = 'swarmery.phaserun.effort';
+
+function isPhaseRunEffort(v: string | null): v is PhaseRunEffort {
+  return PHASE_RUN_EFFORTS.some((e) => e.value === v);
+}
+
+/** Last-used choice; falls back to the default when storage is unavailable
+ * (Safari private mode throws on access, not just on write). */
+function readStoredPhaseRunEffort(): PhaseRunEffort {
+  try {
+    const v = localStorage.getItem(PHASE_RUN_EFFORT_KEY);
+    return isPhaseRunEffort(v) ? v : DEFAULT_PHASE_RUN_EFFORT;
+  } catch {
+    return DEFAULT_PHASE_RUN_EFFORT;
+  }
+}
 
 function isPhaseRunModel(v: string | null): v is PhaseRunModel {
   return PHASE_RUN_MODELS.some((m) => m.value === v);
@@ -554,6 +607,41 @@ function PhaseRunModelPicker({
         {PHASE_RUN_MODELS.map((m) => (
           <option key={m.value} value={m.value}>
             {m.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** The per-phase effort picker. Sits beside the model picker because the two
+ * answer one question together — which brain, and how hard it thinks — and
+ * neither is legible about cost without the other. */
+function PhaseRunEffortPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PhaseRunEffort;
+  onChange: (e: PhaseRunEffort) => void;
+  disabled: boolean;
+}): JSX.Element {
+  return (
+    <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+      effort
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          if (isPhaseRunEffort(e.target.value)) onChange(e.target.value);
+        }}
+        aria-label="phase run effort"
+        title="how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected."
+        className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+      >
+        {PHASE_RUN_EFFORTS.map((e) => (
+          <option key={e.value} value={e.value}>
+            {e.label}
           </option>
         ))}
       </select>
@@ -792,6 +880,9 @@ export function Plans(): JSX.Element {
   // three places that can start one — the phase row's Run button, the detail
   // panel's Retry and the diagnosis modal's Retry — cannot disagree about it.
   const [phaseRunModel, setPhaseRunModel] = useState<PhaseRunModel>(readStoredPhaseRunModel);
+  // The effort twin, owned here for the same reason: the three places that can
+  // start a run must not disagree about how hard it thinks either.
+  const [phaseRunEffort, setPhaseRunEffort] = useState<PhaseRunEffort>(readStoredPhaseRunEffort);
 
   const startRun = useCallback(
     (taskId: number, phaseId: number): void => {
@@ -799,11 +890,18 @@ export function Plans(): JSX.Element {
       setRunMsg(null);
       try {
         localStorage.setItem(PHASE_RUN_MODEL_KEY, phaseRunModel);
+        localStorage.setItem(PHASE_RUN_EFFORT_KEY, phaseRunEffort);
       } catch {
-        // storage unavailable — the choice still applies to this run
+        // storage unavailable — the choices still apply to this run
       }
-      // `default` means send no `model` key at all: undefined, not ''.
-      runEpicPhase(taskId, phaseId, phaseRunModel === 'default' ? undefined : phaseRunModel)
+      // `default` means send no key at all: undefined, not ''. For both, that is
+      // what hands the decision to the phase doc's own header line.
+      runEpicPhase(
+        taskId,
+        phaseId,
+        phaseRunModel === 'default' ? undefined : phaseRunModel,
+        phaseRunEffort === 'default' ? undefined : phaseRunEffort,
+      )
         .then(() => reload())
         .catch((e: unknown) => {
           failRunMsg(taskId)(e);
@@ -817,7 +915,7 @@ export function Plans(): JSX.Element {
         })
         .finally(() => setRunBusy(null));
     },
-    [reload, failRunMsg, phaseRunModel],
+    [reload, failRunMsg, phaseRunModel, phaseRunEffort],
   );
   const cancelRun = useCallback(
     (taskId: number, phaseId: number): void => {
@@ -1032,6 +1130,8 @@ export function Plans(): JSX.Element {
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
               phaseRunModel={phaseRunModel}
               onPhaseRunModel={setPhaseRunModel}
+              phaseRunEffort={phaseRunEffort}
+              onPhaseRunEffort={setPhaseRunEffort}
               planRunBusy={planRunBusy}
               onRunPlan={(agent, mode) => startPlanRun(activeEpic.taskId, agent, mode)}
               onCancelPlanRun={() => cancelPlanRun(activeEpic.taskId)}
@@ -1099,6 +1199,8 @@ function EpicDetail({
   onCancelRun,
   phaseRunModel,
   onPhaseRunModel,
+  phaseRunEffort,
+  onPhaseRunEffort,
   planRunBusy,
   onRunPlan,
   onCancelPlanRun,
@@ -1122,6 +1224,10 @@ function EpicDetail({
    * all spend the same way. */
   phaseRunModel: PhaseRunModel;
   onPhaseRunModel: (m: PhaseRunModel) => void;
+  /** How hard every per-phase run on this plan thinks — owned by the page for
+   * the same reason the model is. */
+  phaseRunEffort: PhaseRunEffort;
+  onPhaseRunEffort: (e: PhaseRunEffort) => void;
   planRunBusy: boolean;
   onRunPlan: (agent: string, mode: PlanRunMode) => void;
   onCancelPlanRun: () => void;
@@ -1313,10 +1419,15 @@ function EpicDetail({
               the WHOLE-PLAN run, which reads SWARMERY_PLANRUN_MODEL and is out of
               scope here (risk R3). Sitting here it governs exactly what it names —
               every per-phase Run/Retry below it, list or detail panel. */}
-          <div className="mb-2 flex items-center justify-end">
+          <div className="mb-2 flex items-center justify-end gap-3">
             <PhaseRunModelPicker
               value={phaseRunModel}
               onChange={onPhaseRunModel}
+              disabled={runBusy !== null || planRunning}
+            />
+            <PhaseRunEffortPicker
+              value={phaseRunEffort}
+              onChange={onPhaseRunEffort}
               disabled={runBusy !== null || planRunning}
             />
           </div>

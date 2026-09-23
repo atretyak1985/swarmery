@@ -299,7 +299,7 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 	s.linkVerifySession(runID, uuid)
 	model := t.Model
 	if model == "" {
-		model = defaultModel
+		model = DefaultModel
 	}
 	spec := RunSpec{
 		// base, not the branch: BuildPrompt's third parameter has always been named

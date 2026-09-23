@@ -2204,20 +2204,35 @@ function runConflictError(
  * does the daemon's never-validated SWARMERY_PHASERUN_MODEL take over. An empty
  * string is deliberately not sent either: the API treats absent and empty alike,
  * but only absent says "I did not choose" in a network log.
+ *
+ * `effort` is the same shape one rung over: an optional per-run reasoning depth
+ * (low | medium | high | xhigh | max; an unknown one is a 400), outranking the
+ * doc's own `**Effort:**` header (unknown there is a 409 naming the doc) and,
+ * below that, SWARMERY_PHASERUN_EFFORT and the engine default. Omitting it is
+ * NOT "cheap": the daemon pins a default precisely because a `claude -p` with no
+ * --effort runs at the CLI's xhigh, the deepest setting there is.
  */
 export async function runEpicPhase(
   taskId: number,
   phaseId: number,
   model?: string,
+  effort?: string,
 ): Promise<{ status: string; sessionUuid: string }> {
   if (MOCK) return { status: 'running', sessionUuid: 'mock-run-uuid' };
+  // Built field by field so an unchosen one is ABSENT rather than empty. The API
+  // treats absent and empty alike, but only absent says "I did not choose" in a
+  // network log — and the two rungs below each key (the doc's header, then the
+  // daemon's knob) are exactly what an absent key hands the decision to.
+  const payload: { model?: string; effort?: string } = {};
+  if (model !== undefined && model !== '') payload.model = model;
+  if (effort !== undefined && effort !== '') payload.effort = effort;
   const init: RequestInit =
-    model === undefined || model === ''
+    Object.keys(payload).length === 0
       ? { method: 'POST' }
       : {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model }),
+          body: JSON.stringify(payload),
         };
   const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run`, init);
   if (!res.ok) {

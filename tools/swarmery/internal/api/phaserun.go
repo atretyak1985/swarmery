@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
@@ -129,18 +130,20 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	// reports for the no-body POST the run button has always sent, so it is not an
 	// error here — only malformed JSON is.
 	var body struct {
-		Model string `json:"model"`
+		Model  string `json:"model"`
+		Effort string `json:"effort"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
-	uuid, err := phaserunSvc.Start(phaseID, body.Model)
+	uuid, err := phaserunSvc.Start(phaseID, body.Model, body.Effort)
 	var depsErr *phaserun.DepsUnmetError
 	var dirtyErr *phaserun.BranchDirtyError
 	var noSlot *runcore.NoSlotError
 	var docModelErr *phaserun.DocModelError
+	var docEffortErr *phaserun.DocEffortError
 	// Start wraps the reclaim/acquire failures (fmt.Errorf("reclaim run branch:
 	// %w", …)), so errors.Is still matches through the wrap. Resolved BEFORE the
 	// switch and placed above the generic arm — an arm below `case err != nil` is
@@ -161,6 +164,18 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	// The only 400 on this path, and the only REQUEST-model arm: the request named a
 	// model outside planning.Models. Nothing was started — Start resolves before it
 	// acquires or stamps anything.
+	// The effort twin of the arm above, and placed beside it for the same reason:
+	// a bad value in a DOCUMENT names the document, a bad value on the REQUEST
+	// names the closed set. *DocEffortError wraps nothing, so arm order between
+	// these two is free — they are kept adjacent for readability only.
+	case errors.As(err, &docEffortErr):
+		writeConflictFields(w, codeDocEffortUnknown, docEffortErr.Error(), map[string]any{
+			"doc":      docEffortErr.Doc,
+			"declared": docEffortErr.Declared,
+		})
+	case errors.Is(err, planning.ErrUnknownEffort):
+		writeClientErr(w, http.StatusBadRequest,
+			"unknown effort: choose one of "+strings.Join(claudeflags.ValidEfforts(), ", "))
 	case errors.Is(err, planning.ErrUnknownModel):
 		writeClientErr(w, http.StatusBadRequest, "unknown model: choose one of opus, sonnet, fable")
 	case errors.Is(err, phaserun.ErrPhaseNotFound):
