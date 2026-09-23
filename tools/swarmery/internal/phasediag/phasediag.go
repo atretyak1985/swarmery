@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
@@ -366,7 +367,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 	//
 	// Only `fail`: pass is the silent normal, and inconclusive is an absence of
 	// evidence rather than something in the way.
-	if verdict.String == verdictFail {
+	if verdict.String == verdictFail && verdictIsCurrent(db, phaseID, verifyMode.String, startedAt) {
 		d.Blockers = append(d.Blockers, Blocker{
 			Kind:    KindVerifyFailed,
 			Summary: "Verification of this phase's work returned FAIL — the criteria it ticked were not confirmed",
@@ -679,4 +680,46 @@ func nullStr(s sql.NullString) *string {
 	}
 	v := s.String
 	return &v
+}
+
+// verdictIsCurrent reports whether a stored FAIL verdict belongs on the phase's
+// blocker list. A doc that asked for verification is graded on every run, so its
+// verdict is always current. A doc whose verify mode is off only ever gets a grade
+// from the opt-in surprise auto-verify (learning loop phase 13.5), and epic_phases
+// keeps that verdict across runs — so for such a doc the FAIL counts only when a
+// verification of this phase started during the current run. A later clean run
+// that was not surprising (and so was not graded) must not inherit the old FAIL.
+func verdictIsCurrent(db *sql.DB, phaseID int64, verifyMode string, runStartedAt sql.NullString) bool {
+	if verifyMode != "" && verifyMode != "off" {
+		return true
+	}
+	if !runStartedAt.Valid || runStartedAt.String == "" {
+		return true
+	}
+	started, err := parseStamp(runStartedAt.String)
+	if err != nil {
+		return true
+	}
+	var last sql.NullString
+	if err := db.QueryRow(`SELECT MAX(started_at) FROM verification_runs WHERE target_key = ?`,
+		"phase:"+strconv.FormatInt(phaseID, 10)).Scan(&last); err != nil || !last.Valid {
+		// No verification row at all (the verdict came from somewhere else, e.g. an
+		// older build): keep today's behaviour rather than hide a FAIL.
+		return err != nil || !last.Valid
+	}
+	// verification_runs stamps milliseconds and run_started_at whole seconds, so
+	// compare as times — as strings "…:00.5Z" would sort before "…:00Z". MAX() over
+	// same-width RFC3339 millisecond stamps is safe because every row shares a format.
+	v, err := parseStamp(last.String)
+	if err != nil {
+		return true
+	}
+	return !v.Before(started)
+}
+
+func parseStamp(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, nil
+	}
+	return time.Parse("2006-01-02 15:04:05", s)
 }

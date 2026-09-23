@@ -2,6 +2,7 @@ package surprise
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -88,7 +89,7 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 			case !ok || !known[name]:
 				warn = append(warn, fmt.Sprintf("%s: ignoring %q (want <component>=<weight>, component one of %s)",
 					EnvWeights, pair, strings.Join(Components, ", ")))
-			case err != nil || v < 0:
+			case err != nil || !(v >= 0) || math.IsInf(v, 1): // NaN and +Inf fail too
 				warn = append(warn, fmt.Sprintf("%s: ignoring %q (weight must be a number ≥ 0)", EnvWeights, pair))
 			default:
 				cfg.Weights[name] = v
@@ -120,7 +121,7 @@ func threshold(name, raw string) (v *float64, ok bool, warn string) {
 		return nil, true, ""
 	}
 	f, err := strconv.ParseFloat(raw, 64)
-	if err != nil || f < 0 || f > 1 {
+	if err != nil || !(f >= 0 && f <= 1) { // written so NaN fails too
 		return nil, false, fmt.Sprintf("%s: ignoring %q (want a number in 0..1, or off)", name, raw)
 	}
 	return &f, true, ""

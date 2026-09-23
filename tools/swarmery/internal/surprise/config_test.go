@@ -68,3 +68,11 @@ func TestConfigFromEnv(t *testing.T) {
 		t.Errorf("bad values = %v / %v (warn %v), want defaults kept with 2 warnings", c.NotifyAt, c.AutoVerifyAt, warn)
 	}
 }
+
+func TestNaNThresholdsAndWeightsAreIgnored(t *testing.T) {
+	for _, raw := range []string{"NaN", "nan", "+Inf"} {
+		if _, ok, warn := threshold("X", raw); ok || warn == "" {
+			t.Errorf("threshold(%q) accepted a non-number (ok=%v warn=%q)", raw, ok, warn)
+		}
+	}
+}
