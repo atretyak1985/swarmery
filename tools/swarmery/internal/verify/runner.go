@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
@@ -15,12 +16,11 @@ type RunSpec struct {
 	Cwd         string // the task's worktree path — the process runs here
 	Model       string // optional --model override ("" = account default at the spawn layer; the service fills defaultModel before building the spec)
 
-	// Account is the Claude Code account key this run must execute under,
-	// resolved by the CALLER from the task's PROJECT — never from Cwd. Cwd is a
-	// worktree, which carries no project settings file, so resolving it here
-	// would silently fall back to the default account (plan A3).
-	// "" means the default account and produces no env delta.
-	Account string
+	// Resolution is what this run executes under — the Claude Code account and
+	// the project's estate — resolved by the CALLER from the task's PROJECT path,
+	// never from Cwd (a worktree). The zero value resolves nothing and adds no
+	// env delta.
+	Resolution claudeacct.Resolution
 }
 
 // Run is the outcome of a completed verifier process. Unlike the dispatcher,
@@ -70,7 +70,7 @@ type ClaudeRunner struct {
 	Timeout time.Duration
 
 	// AccountVerdict, when set, is called after a run finishes with the account
-	// the run used ("" = the default account, spec.Account's own convention) and
+	// the run used ("" = the default account, Resolution.Account's own convention) and
 	// how its exit reads as a readiness verdict — a verifier already runs
 	// `claude` under the account's config dir, so its death demanding a login is
 	// a free authoritative probe. Optional: a nil hook leaves run behaviour
@@ -105,12 +105,10 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.
 		SettingSources: "project,local",
-		// The account comes from the SPEC, not from Cwd: Cwd is the task's worktree,
-		// which has no .claude/settings.local.json of its own, so resolving it there
-		// would silently verify under the default account (plan A3). The service
-		// resolves the binding from the project path. "" produces no env delta.
-		Account: spec.Account,
-		Timeout: timeout,
+		// The resolution comes from the SPEC, not from Cwd: Cwd is the task's
+		// worktree. The service resolves the project path once per run.
+		Resolution: spec.Resolution,
+		Timeout:    timeout,
 		// Unlike the dispatcher, verification READS stdout — the verdict lives in
 		// the transcript, so the parser needs all of it.
 		CaptureStdout: true,
@@ -144,5 +142,5 @@ func (r ClaudeRunner) reportVerdict(spec RunSpec, exitCode int, stdout, stderrTa
 	if r.AccountVerdict == nil {
 		return
 	}
-	r.AccountVerdict(spec.Account, claudeprobe.ClassifyExit(exitCode, stdout+"\n"+stderrTail))
+	r.AccountVerdict(spec.Resolution.Account, claudeprobe.ClassifyExit(exitCode, stdout+"\n"+stderrTail))
 }

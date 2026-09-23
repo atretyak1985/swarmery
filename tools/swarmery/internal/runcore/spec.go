@@ -20,14 +20,17 @@
 //   - The agent MENTION dispatch prefixes onto a prompt is prompt construction,
 //     not argv: it stays in dispatch. Spec.Agent is the `--agent` flag, which is
 //     a different mechanism (planrun uses it).
-//   - Account RESOLUTION stays with the caller (see AccountFor): only the env
-//     merge is shared, because which project a run belongs to is knowledge the
-//     spawn layer does not have.
+//   - RESOLUTION stays with the caller (see AccountFor): the caller knows which
+//     PROJECT a run belongs to and resolves it once into a claudeacct.Resolution
+//     (account + estate); the spawn layer only composes the env from it, because
+//     the run's Cwd is usually a worktree and says nothing about the project.
 package runcore
 
 import (
 	"context"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 )
 
 // Spec is the superset of the five engines' RunSpecs. A zero field means "omit
@@ -44,12 +47,19 @@ type Spec struct {
 	SettingsFile   string // --settings; a project settings file lent to a worktree that cannot discover one
 	SettingSources string // --setting-sources; dispatch/verify pass "project,local" to skip user-level settings
 
-	// Account is the claudeacct key this run executes under, resolved by the
-	// CALLER from the run's PROJECT — never from Cwd. Cwd is usually a worktree,
-	// which carries no .claude/settings.local.json, so resolving it here would
-	// silently fall back to the default account (plan A3). "" means the default
-	// account and produces no env delta. See AccountFor.
-	Account string
+	// Resolution is what this run executes under — the ACCOUNT (config dir) and
+	// the ESTATE (credential store) — resolved by the CALLER from the run's
+	// PROJECT path, never from Cwd (see AccountFor). The zero value means "nothing
+	// resolved": no env delta, the parent's environment passes through.
+	//
+	// It REPLACES the former bare account-key field on purpose: deleting that
+	// field breaks every old Spec literal that set it, so each seam had to be
+	// revisited when this landed. It does NOT make a seam that simply omits
+	// Resolution fail to compile — the zero value is legal Go and spawns with no
+	// env delta, and argv is identical either way. What guards that is the
+	// per-seam env tests (the runner_*estate/account tests), which assert the
+	// composed environment each seam actually hands its child.
+	Resolution claudeacct.Resolution
 
 	// ExtraArgs is appended verbatim after every flag above. No engine needs it
 	// today; it exists so a sixth frontend does not have to reopen Args.

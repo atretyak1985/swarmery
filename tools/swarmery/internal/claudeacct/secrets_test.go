@@ -21,6 +21,9 @@ import (
 func seedStore(t *testing.T, account, body string, mode os.FileMode) string {
 	t.Helper()
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
 	t.Setenv(secretsDirEnv, dir)
 	path := filepath.Join(dir, account+".env")
 	if err := os.WriteFile(path, []byte(body), mode); err != nil {
@@ -87,6 +90,9 @@ func TestSecretEnvForAccount_AcceptsOwnerOnlyStore(t *testing.T) {
 // normal case for almost every project on a machine.
 func TestSecretEnvForAccount_NilWhenThereIsNothingToLoad(t *testing.T) {
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
 	t.Setenv(secretsDirEnv, dir)
 
 	cases := []struct{ name, key string }{
@@ -111,13 +117,31 @@ func TestSecretEnvForAccount_NilWhenThereIsNothingToLoad(t *testing.T) {
 // not the missing file.
 func TestSecretsPath_RefusesUnsafeKeys(t *testing.T) {
 	t.Setenv(secretsDirEnv, t.TempDir())
-	for _, key := range []string{"", "default", ".", "..", "../other", "a/b", `a\b`, ".hidden", "a b"} {
+	for _, key := range []string{"", ".", "..", "../other", "a/b", `a\b`, ".hidden", "a b", "../../etc"} {
 		if got := SecretsPath(key); got != "" {
 			t.Errorf("SecretsPath(%q) = %q, want \"\"", key, got)
 		}
 	}
-	if got := SecretsPath("work"); got == "" {
-		t.Error(`SecretsPath("work") = "", want a path`)
+	// The STORE key is the project axis: "default" is a legal store name, and
+	// only the ACCOUNT layer (SecretEnvForAccount) still refuses it.
+	for _, key := range []string{"work", "default"} {
+		if got := SecretsPath(key); got == "" {
+			t.Errorf("SecretsPath(%q) = \"\", want a path", key)
+		}
+	}
+}
+
+// The default-account rejection survives in the back-compat ACCOUNT layer even
+// though SecretsPath no longer applies it: a default-bound project must not
+// start reading a default.env it never read before (no flag day). The STORE
+// layer reads the same file when an estate names it.
+func TestSecretEnvForAccount_DefaultRejectedStoreAccepted(t *testing.T) {
+	seedStore(t, "default", "SECRET_NAME=not-a-secret\n", secretsFileMode)
+	if got := SecretEnvForAccount("default"); got != nil {
+		t.Fatalf("SecretEnvForAccount(default) = %d entries, want nil — the account layer's rejection must stay", len(got))
+	}
+	if got := SecretEnvForStore("default"); len(got) != 1 {
+		t.Fatalf("SecretEnvForStore(default) = %d entries, want 1 — a store key is not an account key", len(got))
 	}
 }
 
@@ -191,6 +215,9 @@ func TestSecretEnvFor_ResolvesTheProjectBinding(t *testing.T) {
 // A store directory in place of a store file is ignored, loudly enough to see.
 func TestSecretEnvForAccount_IgnoresADirectory(t *testing.T) {
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
 	t.Setenv(secretsDirEnv, dir)
 	if err := os.Mkdir(filepath.Join(dir, "work.env"), secretsDirMode); err != nil {
 		t.Fatalf("mkdir: %v", err)

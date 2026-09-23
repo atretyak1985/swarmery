@@ -70,21 +70,26 @@ the daemon cannot disagree about which account a project uses:
 
 ```
 swarmery account list                              key, config dir, default?, connected?, plan
-swarmery account which [--path <dir>]              the effective account, and whether it came
-                                                   from a binding or from the default
-swarmery account use <key> [--path <dir>]          bind a project
-swarmery account clear [--path <dir>]              unbind it
+swarmery account which [--path <dir>]              the effective account, the rung that decided it
+                                                   (own pin, an ancestor's pin, or the default),
+                                                   the estate and its root, and any shadowed pin
+swarmery account use <key> [--path <dir>]          bind a directory (lists shadowing pins first;
+      [--clear-pins | --clear-pins=all | --keep-pins]  see "Estates" below)
+swarmery account clear [--path <dir>]              unbind it (an estate declared there stays)
 swarmery account env [--path <dir>]                zero or one line: CLAUDE_CONFIG_DIR=<dir>
-swarmery account exec [--path <dir>] -- <cmd ...>  run a command under the project's account
+swarmery account exec [--path <dir>] -- <cmd ...>  run a command under the project's account and estate
+swarmery account estate use <key> [--path <dir>]   declare <dir> as the root of estate <key>
+swarmery account estate show [--path <dir>]        the estate a path resolves to, and its root
+swarmery account estate clear [--path <dir>]       remove the declaration at <dir>
 ```
 
 `env` prints to your terminal, so it prints the config dir and nothing else.
 `exec` hands the environment to the child without printing it, so it is the one
-that also carries the account's secrets (see below). Both terminal surfaces in
-this pack use `exec` for exactly that reason.
+that also carries the MCP secrets (see below). Both terminal surfaces in this
+pack use `exec` for exactly that reason.
 
-`which`, `use`, `clear`, `env` and `exec` never contact the daemon. Your
-terminal has to keep working with swarmery stopped.
+`which`, `use`, `clear`, `env`, `exec` and `estate` never contact the daemon.
+Your terminal has to keep working with swarmery stopped.
 
 The pack degrades honestly rather than silently: without the CLI on `PATH`,
 `claude-account.sh` prints one warning and runs the default account, and the
@@ -187,8 +192,10 @@ Properties worth knowing:
 
 - **The mode is enforced.** A store file readable by group or other is refused
   outright — swarmery logs the path and the mode and loads *nothing*.
-- **It is per account.** A project bound to no account, or to the default one,
-  gets no variables at all, even when a store exists on the machine.
+- **An account-keyed store is per account.** A project bound to no account, or
+  to the default one, gets nothing from `<account>.env`, even when a store
+  exists on the machine. (An estate store — below — is keyed by the project
+  tree instead.)
 - **It never reaches stdout.** `swarmery account env` prints the config-dir line
   and nothing else; the store travels through `account exec` and through the
   daemon's spawns.
@@ -203,17 +210,60 @@ daemon's plist carries a `CLAUDE_CONFIG_DIR` (`swarmery install
 --claude-config-dir`): the spawn removes the inherited variable. A project with
 **no** binding inherits it — that is what the install flag is for.
 
+### Estates: credentials keyed by the project tree, not by the payer
+
+Which subscription pays for tokens has nothing to do with the credentials a
+tree's MCP servers need. So the binding file carries a second, optional field:
+
+```jsonc
+// <estate-root>/.claude/settings.local.json
+{ "swarmery": { "claudeAccount": "<payer>", "estate": "<store>" } }
+```
+
+Write it with `swarmery account estate use <store> --path <estate-root>` — never
+by hand. It does three independent things:
+
+1. it makes `<estate-root>` the **estate root**: every directory below it
+   resolves to it;
+2. it selects `<SWARMERY_SECRETS_DIR or ~/.swarmery/secrets>/<store>.env` as the
+   credential store, **when that file exists**;
+3. it selects `<estate-root>/.claude/settings.json` as the estate's settings
+   file, when that file exists.
+
+**An estate with no credential store is a healthy state** — it supplies zero
+credentials and raises nothing.
+
+Resolution walks up from the project: the project's own binding, then each
+ancestor, stopping before your home directory. The **account** is taken from
+the first rung that pins one; the **estate** from the first rung that declares
+one — independently. A sub-repo pinned to a different payer therefore still
+gets its estate's credentials. `swarmery account which` prints the rung, the
+estate and root, and any ancestor pin the winning rung shadows.
+
+Precedence: the account-keyed `<account>.env` is read first (back-compat), the
+estate's `<store>.env` second, and the **estate wins** any name both define —
+the composed environment holds exactly one entry per name.
+
+Nested estates **subtract, they do not accumulate**: an `estate` declared deeper
+replaces the ancestor's store and settings file wholesale; nothing is merged.
+
+A daemon worktree (`~/.swarmery/worktrees/…`) resolves through its source
+checkout, read from the worktree's own `.git` file.
+
+`swarmery account use <key> --path <estate-root>` lists every descendant pin
+that would shadow the write, before writing. `--clear-pins` clears only the pins
+that already equal `<key>` (redundant ones); a pin that disagrees is left in
+place and named as a deliberate divergence. `--clear-pins=all` clears every
+listed pin. `--keep-pins` clears nothing. With no flag a terminal is asked
+about the redundant set; anything else only lists.
+
 ## Known edges
 
-- **The binding is read from the project root only.** It lives in
-  `<project>/.claude/settings.local.json` and is not searched for in parent
-  directories, so both terminal surfaces follow the binding when your shell sits
-  at the project root, and give you the default account from a subdirectory.
-  `claude-account.sh` does not avoid this: it prefers `CLAUDE_PROJECT_DIR`, and
-  Claude Code exports that variable to **hook processes**, not to your login
-  shell — from your own terminal the wrapper always falls back to `$PWD`. Run
-  either surface from the project root, or pass the root explicitly with
-  `swarmery account exec --path <root> -- claude`.
+- **The wrong-account hook still reads the project root only.** `swarmery
+  account` walks up from the directory you pass (see "Estates"), so both
+  terminal surfaces now follow an ancestor's binding from a subdirectory too.
+  The SessionStart warning hook does not walk yet: it compares against the
+  binding at the hook's own `cwd` and stays silent when that directory has none.
 - **A running session keeps its account.** A binding decides what the *next*
   session starts under; nothing re-homes a live one.
 - **An empty delta inherits.** A project bound to the default account adds no

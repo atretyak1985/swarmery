@@ -90,13 +90,13 @@ func TestPlannerUnboundSpawnEnvIsByteIdenticalToOsEnviron(t *testing.T) {
 	cwd := t.TempDir()
 
 	base := os.Environ()
-	got := append(os.Environ(), claudeacct.EnvFor(cwd)...) // the spawn line, verbatim
+	got := claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(cwd)) // the spawn line, verbatim
 	if len(got) != len(base) {
 		t.Fatalf("env length %d, want %d (an unbound spawn must add nothing)", len(got), len(base))
 	}
 	for i := range base {
 		if got[i] != base[i] {
-			t.Errorf("env[%d] = %q, want %q", i, got[i], base[i])
+			t.Errorf("env[%d] = %s=…, want %s=… (values withheld: this is the real environment)", i, strings.SplitN(got[i], "=", 2)[0], strings.SplitN(base[i], "=", 2)[0])
 		}
 	}
 }

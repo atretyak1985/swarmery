@@ -130,15 +130,14 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// The planner writes: a plan dir with README/spec/phase docs, and nothing
 		// else it does matters if that write is denied. See internal/claudeflags.
 		PermissionMode: claudeflags.Mode(permEnv),
-		// Resolving the account from cwd is correct HERE — and only here and in
-		// provision. A planner run's Cwd is the PROJECT path (see RunSpec.Cwd), so it
-		// carries the project's .claude/settings.local.json. dispatch and verify look
-		// the same but are not: their Cwd is a worktree with no settings file, which
-		// is why they take the key from the caller instead (plan A3).
-		// An unbound project resolves to "" and produces no env delta, so cmd.Env is
-		// then a byte-identical copy of os.Environ().
-		Account: claudeacct.Binding(spec.Cwd),
-		Timeout: timeout,
+		// Resolving from cwd is correct HERE — and only here and in provision. A
+		// planner run's Cwd is the PROJECT path (see RunSpec.Cwd), so the walk from
+		// it finds the project's account and estate. dispatch and verify look the
+		// same but are not: their Cwd is a worktree, which is why they take the
+		// resolution from the caller instead. An unbound project with no estate
+		// adds nothing, so cmd.Env is then a byte-identical copy of os.Environ().
+		Resolution: claudeacct.Resolve(spec.Cwd),
+		Timeout:    timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})

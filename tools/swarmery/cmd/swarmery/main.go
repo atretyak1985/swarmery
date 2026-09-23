@@ -246,9 +246,10 @@ func usage() {
                                    re-enable a detached project: merge the swarmery entries back
                                    into settings.json, restore project.json from .bak, reinstall
                                    hooks (idempotent; the inverse of offboard)
-  swarmery account list|which|use|clear|env|exec [--path <dir>]
-                                   multi-account terminal surface: which account a project runs
-                                   under, bind/clear it, print its env line, run a command under it
+  swarmery account list|which|use|clear|env|exec|estate [--path <dir>]
+                                   multi-account terminal surface: which account and estate a
+                                   project runs under, bind/clear it, declare an estate root,
+                                   print its env line, run a command under it
                                    (never contacts the daemon)
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;

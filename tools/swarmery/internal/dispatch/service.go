@@ -938,15 +938,14 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 
 	stages := pb.stages
 
-	// The Claude account every stage of this task runs under, resolved ONCE from
-	// the PROJECT path. It cannot be resolved at the spawn site: that runs with
-	// cwd=acq.Path (the worktree), and a worktree carries no
-	// .claude/settings.local.json, so resolving there would silently yield the
-	// default account (plan A3). "" = unbound project = default account = no env
-	// delta. Read once rather than per stage: every stage of one playbook belongs
-	// to the same project, and a re-read mid-chain could split one task across two
-	// accounts if the operator rebinds while it runs.
-	account := claudeacct.Binding(c.ProjectPath)
+	// What every stage of this task runs under — the Claude account and the
+	// project's estate — resolved ONCE from the PROJECT path. It is not resolved
+	// at the spawn site: that runs with cwd=acq.Path (the worktree), which says
+	// nothing about the project. An unbound project resolves to no account = no
+	// config-dir delta. Read once rather than per stage: every stage of one
+	// playbook belongs to the same project, and a re-read mid-chain could split
+	// one task across two accounts if the operator rebinds while it runs.
+	resolution := claudeacct.Resolve(c.ProjectPath)
 
 	var prevOutput string
 	for i, st := range stages {
@@ -994,7 +993,7 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 		// holds for the permission mode: it is the recipe's, so every stage of the
 		// chain gets it ("" ⇒ the runner falls back to the global knob).
 		spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: acq.Path, Model: model,
-			Agent: c.Agent.String, Account: account, PermissionMode: pb.permissionMode}
+			Agent: c.Agent.String, Resolution: resolution, PermissionMode: pb.permissionMode}
 
 		run, err := s.runStage(spec)
 		if err != nil {

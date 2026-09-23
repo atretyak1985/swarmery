@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
@@ -25,12 +26,11 @@ type RunSpec struct {
 	// playbook parse time — an unknown mode makes `claude` refuse to start.
 	PermissionMode string
 
-	// Account is the Claude Code account key this run must execute under,
-	// resolved by the CALLER from the task's PROJECT — never from Cwd. Cwd is a
-	// worktree, which carries no project settings file, so resolving it here
-	// would silently fall back to the default account (plan A3).
-	// "" means the default account and produces no env delta.
-	Account string
+	// Resolution is what this run executes under — the Claude Code account and
+	// the project's estate — resolved by the CALLER from the task's PROJECT path,
+	// never from Cwd: Cwd is a worktree, and the service resolves the project once
+	// per playbook. The zero value resolves nothing and adds no env delta.
+	Resolution claudeacct.Resolution
 }
 
 // Run is the outcome of a completed dispatched process.
@@ -72,7 +72,7 @@ const defaultModel = "claude-sonnet-5"
 // an argument (not stdin) so --session-id positioning is unambiguous.
 type ClaudeRunner struct {
 	// AccountVerdict, when set, is called after a run finishes with the account
-	// the run used ("" = the default account, spec.Account's own convention) and
+	// the run used ("" = the default account, Resolution.Account's own convention) and
 	// how its exit reads as a readiness verdict — a dispatched run already runs
 	// `claude` under the account's config dir, so its death demanding a login is
 	// a free authoritative probe. Optional: a nil hook leaves run behaviour
@@ -180,11 +180,9 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.
 		SettingSources: "project,local",
-		// Account comes from the SPEC, not from Cwd: Cwd is the task's worktree,
-		// which has no .claude/settings.local.json of its own, so resolving it there
-		// would silently run the task under the default account (plan A3). The
-		// service resolves the binding from the project path once per playbook.
-		Account:         spec.Account,
+		// The resolution comes from the SPEC, not from Cwd: Cwd is the task's
+		// worktree. The service resolves the project path once per playbook.
+		Resolution:      spec.Resolution,
 		StdoutTailBytes: tailBytes,
 		// No Timeout: the dispatcher's stage ctx owns cancellation (runStage).
 	})
@@ -218,5 +216,5 @@ func (r ClaudeRunner) reportVerdict(spec RunSpec, exitCode int, stdoutTail, stde
 	if r.AccountVerdict == nil {
 		return
 	}
-	r.AccountVerdict(spec.Account, claudeprobe.ClassifyExit(exitCode, stdoutTail+"\n"+stderrTail))
+	r.AccountVerdict(spec.Resolution.Account, claudeprobe.ClassifyExit(exitCode, stdoutTail+"\n"+stderrTail))
 }

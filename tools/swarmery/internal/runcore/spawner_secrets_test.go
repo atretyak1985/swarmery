@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 )
 
 const (
@@ -36,9 +38,19 @@ const (
 // account's store, 0600.
 func seedSecretStore(t *testing.T, account string) {
 	t.Helper()
-	dir := t.TempDir()
-	t.Setenv("SWARMERY_SECRETS_DIR", dir)
 	t.Setenv("HOME", t.TempDir())
+	seedSecretStoreNamed(t, account)
+}
+
+// seedSecretStoreNamed writes one store (an account's or an estate's — the file
+// shape is the same) into a fresh SWARMERY_SECRETS_DIR, leaving HOME alone.
+func seedSecretStoreNamed(t *testing.T, account string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
+	t.Setenv("SWARMERY_SECRETS_DIR", dir)
 	// The test process must not already carry the variable, or the negative case
 	// would pass for the wrong reason.
 	os.Unsetenv(secretVar)
@@ -56,7 +68,7 @@ func seedSecretStore(t *testing.T, account string) {
 func childSecret(t *testing.T, account string) string {
 	t.Helper()
 	res, err := ClaudeRunner{Engine: "test"}.Start(context.Background(), Spec{
-		Prompt: "p", SessionUUID: "u-secret-" + account, Cwd: t.TempDir(), Account: account,
+		Prompt: "p", SessionUUID: "u-secret-" + account, Cwd: t.TempDir(), Resolution: claudeacct.Resolution{Account: account},
 		Bin:           fakeBin(t, `printf '%s\n' "${`+secretVar+`-`+absentMarker+`}"`+"\n"),
 		Timeout:       30 * time.Second,
 		CaptureStdout: true,

@@ -153,13 +153,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// Already resolved by the service (request → doc → env → none); "" emits no flag.
 		Model:        spec.Model,
 		SettingsFile: spec.SettingsFile,
-		// The account comes from spec.ProjectPath, never from Cwd: Cwd is the
-		// phase's acquired worktree, which has no .claude/settings.local.json of its
-		// own, so resolving it there would silently run the phase under the default
-		// account (plan A3). An empty/unbound project resolves to "" and produces no
-		// env delta, so cmd.Env stays a byte-identical copy of os.Environ().
-		Account: runcore.AccountFor(spec.ProjectPath),
-		Timeout: timeout,
+		// The resolution comes from spec.ProjectPath, never from Cwd: Cwd is the
+		// phase's acquired worktree. An empty path resolves nothing and an
+		// unbound, estate-less project adds nothing, so cmd.Env then stays a
+		// byte-identical copy of os.Environ().
+		Resolution: runcore.AccountFor(spec.ProjectPath),
+		Timeout:    timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})

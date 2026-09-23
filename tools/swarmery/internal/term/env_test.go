@@ -3,6 +3,7 @@ package term
 import (
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -39,7 +40,7 @@ func TestStartWithEmptyEnvLeavesEnvUnchanged(t *testing.T) {
 	defer s.Close()
 
 	if got := st.lastEnv(); len(got) != 0 {
-		t.Errorf("starter got env %v, want none", got)
+		t.Errorf("starter got env names %v (values withheld: it may be the real environment), want none", envNames(got))
 	}
 }
 
@@ -48,8 +49,18 @@ func TestStartWithEmptyEnvLeavesEnvUnchanged(t *testing.T) {
 func TestPtyEnvNilMatchesLegacyEnvironment(t *testing.T) {
 	want := append(os.Environ(), "TERM=xterm-256color")
 	if got := ptyEnv(nil); !slices.Equal(got, want) {
-		t.Fatalf("ptyEnv(nil) =\n  %v\nwant\n  %v", got, want)
+		t.Fatalf("ptyEnv(nil) names =\n  %v\nwant\n  %v\n(values withheld: this is the real environment)", envNames(got), envNames(want))
 	}
+}
+
+// envNames is env with every VALUE dropped — what a failure message may print
+// for a slice built on the real os.Environ(), which can hold live tokens.
+func envNames(env []string) []string {
+	out := make([]string, len(env))
+	for i, kv := range env {
+		out[i], _, _ = strings.Cut(kv, "=")
+	}
+	return out
 }
 
 // A caller-supplied env is used AS the environment — not appended to the

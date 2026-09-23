@@ -5,83 +5,128 @@ package claudeacct
 // five System-project runners behind internal/systemspawn (improve,
 // retroanalysis, trajjudge, handoff, extract), the dashboard's resume and
 // terminal dock, and `swarmery account exec` — hands its base environment and
-// the account key here and uses the result verbatim. Before this file each site
-// appended its own delta, and the secret store (secrets.go) reached only two of
-// them while the README promised "same store, same key" everywhere.
+// a Resolution (resolve.go) here and uses the result verbatim.
+//
+// The delta, in this order (resolvedDelta):
+//
+//  1. the config dir for the resolved ACCOUNT (Resolution.EnvLines);
+//  2. the ACCOUNT's store <account>.env — the back-compat layer, unchanged: a
+//     machine with only an account-keyed store keeps working as before;
+//  3. the ESTATE's store <estate>.env, when that file exists.
+//
+// then collapsed BY NAME keeping the LAST writer, so the delta holds at most one
+// entry per variable name. THE ESTATE WINS A NAME COLLISION, because it is
+// appended after the account store. The collapse is load-bearing: `swarmery
+// account exec` hands the array to a raw execve(2), where a libc getenv()
+// returns the FIRST match, while os/exec normalises to last-wins — a duplicated
+// name would make the terminal and the daemon resolve one variable differently.
 //
 // Three account states, three answers:
 //
-//   - UNBOUND (key ""): the base is returned unchanged. Whatever the parent
-//     carries — including a CLAUDE_CONFIG_DIR baked into the daemon's plist by
-//     `swarmery install --claude-config-dir` — is what the child sees. That is
-//     the documented meaning of the flag: "the account every daemon-spawned run
-//     uses when a project has NO binding".
-//   - EXPLICITLY DEFAULT (key "default"): the base WITHOUT CLAUDE_CONFIG_DIR. The
-//     CLI selects ~/.claude by the variable's ABSENCE, so an explicit binding to
-//     the default account must remove an inherited one — otherwise a project the
-//     operator deliberately pinned to the default account would silently run
-//     under the daemon's baked account while `swarmery account which` says
-//     "default". No delta expresses "unset", which is why this is a whole-env
-//     function and not a delta function.
-//   - BOUND (any other key): the base minus every key the delta sets, then the
-//     delta — the config dir first, the account's secret store after it. Exactly
-//     one entry per key, because execve(2) copies the array verbatim and a libc
-//     getenv() returns the FIRST match, so a stale CLAUDE_CONFIG_DIR exported by
-//     the caller's shell would otherwise win over the binding (os/exec normalises
-//     to last-wins; raw execve does not — the merge makes both agree).
+//   - UNBOUND (Account ""): whatever the parent carries — including a
+//     CLAUDE_CONFIG_DIR baked into the daemon's plist by `swarmery install
+//     --claude-config-dir` — is what the child sees. That is the documented
+//     meaning of the flag: "the account every daemon-spawned run uses when a
+//     project has NO binding". With no estate store either, base is returned
+//     as-is (same backing array).
+//   - EXPLICITLY DEFAULT (Account "default"): the base WITHOUT
+//     CLAUDE_CONFIG_DIR. The CLI selects ~/.claude by the variable's ABSENCE,
+//     so an explicit binding to the default account must remove an inherited
+//     one — otherwise a project the operator deliberately pinned to the default
+//     account would silently run under the daemon's baked account while
+//     `swarmery account which` says "default". No delta expresses "unset",
+//     which is why this is a whole-env function and not a delta function. The
+//     estate's secrets are still appended: the payer does not decide them.
+//   - BOUND (any other key): the base minus every name the delta sets, then the
+//     delta. Exactly one entry per name, because execve copies the array
+//     verbatim and a stale CLAUDE_CONFIG_DIR exported by the caller's shell
+//     would otherwise win over the binding.
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
-// spawnDelta is the env DELTA for one account key — EnvForAccount followed by
-// SecretEnvForAccount. nil for "" and for the default account. Unexported on
-// purpose: a delta cannot express "unset", so every seam goes through SpawnEnv.
-func spawnDelta(key string) []string {
-	return append(EnvForAccount(key), SecretEnvForAccount(key)...)
+// resolvedDelta is the env DELTA for one resolution — see the file header for
+// the order and the collapse. Unexported on purpose: a delta cannot express
+// "unset", so every seam goes through SpawnEnvResolved.
+func resolvedDelta(r Resolution) []string {
+	delta := append(r.EnvLines(), SecretEnvForAccount(r.Account)...)
+	delta = append(delta, SecretEnvForStore(r.Estate)...)
+	return collapseLastWins(delta)
 }
 
-// SpawnEnv returns the environment a child launched for account key runs under,
+// collapseLastWins keeps, for every name, only its LAST entry, in the order those
+// last entries appear. A delta with no repeated name is returned unchanged.
+func collapseLastWins(delta []string) []string {
+	last := make(map[string]int, len(delta))
+	for i, kv := range delta {
+		last[envKey(kv)] = i
+	}
+	if len(last) == len(delta) {
+		return delta
+	}
+	out := make([]string, 0, len(last))
+	for i, kv := range delta {
+		if last[envKey(kv)] == i {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// SpawnEnvResolved returns the environment a child launched under r runs with,
 // derived from base (normally os.Environ()). See the file header for the three
-// cases. base is returned as-is — same backing array — for an unbound key, so a
-// spawn that resolves no account stays a byte-identical passthrough.
-func SpawnEnv(base []string, key string) []string {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return base
-	}
-	if key == ingest.DefaultAccount {
-		return withoutKeys(base, map[string]struct{}{configDirEnv: {}})
-	}
-	delta := spawnDelta(key)
-	if len(delta) == 0 {
-		return base
-	}
-	drop := make(map[string]struct{}, len(delta))
+// account cases. base is returned as-is — same backing array — when there is
+// nothing to add and nothing to remove, so a spawn that resolves nothing stays a
+// byte-identical passthrough.
+func SpawnEnvResolved(base []string, r Resolution) []string {
+	delta := resolvedDelta(r)
+	drop := make(map[string]struct{}, len(delta)+1)
 	for _, kv := range delta {
 		drop[envKey(kv)] = struct{}{}
 	}
-	return append(withoutKeys(base, drop), delta...)
+	if strings.TrimSpace(r.Account) == ingest.DefaultAccount {
+		drop[configDirEnv] = struct{}{}
+	}
+	kept := withoutKeys(base, drop)
+	if len(delta) == 0 {
+		return kept
+	}
+	// Clip so the append can never write into base's spare capacity.
+	return append(slices.Clip(kept), delta...)
 }
 
-// SpawnEnvFor resolves projectPath's binding and delegates to SpawnEnv.
+// SpawnEnv is SpawnEnvResolved for a caller that holds only an ACCOUNT key and
+// no project path — no estate is resolved, so only the account layer applies.
+func SpawnEnv(base []string, key string) []string {
+	key = strings.TrimSpace(key)
+	return SpawnEnvResolved(base, Resolution{
+		Account:        key,
+		DefaultProfile: key == "" || key == ingest.DefaultAccount,
+	})
+}
+
+// SpawnEnvFor resolves projectPath on both axes (Resolve) and delegates to
+// SpawnEnvResolved.
 //
-// The empty-path guard is load-bearing, not defensive style: Binding joins its
-// argument with ".claude/settings.local.json" unconditionally, so Binding("")
-// would read that RELATIVE path against the daemon's own working directory and
+// The empty-path guard is load-bearing, not defensive style: a binding path is
+// joined onto its argument unconditionally, so "" would read the RELATIVE
+// .claude/settings.local.json against the daemon's own working directory and
 // silently bind the child to whatever unrelated settings file sits there. ""
 // means "no project" and must return base untouched.
 //
-// Daemon sites whose cwd is a WORKTREE (dispatch, verify, planrun, phaserun)
-// must not call this with the worktree path — a worktree carries no binding
-// file — they hold the resolved key already and call SpawnEnv.
+// A path under the daemon's worktree root resolves through its source checkout
+// (worktreesrc.go), so a worktree cwd is no longer a silent "default account";
+// the key-carrying engines still resolve once from the PROJECT path and pass the
+// Resolution down, which is the contract runcore.Spec enforces.
 func SpawnEnvFor(base []string, projectPath string) []string {
 	if strings.TrimSpace(projectPath) == "" {
 		return base
 	}
-	return SpawnEnv(base, Binding(projectPath))
+	return SpawnEnvResolved(base, Resolve(projectPath))
 }
 
 // withoutKeys copies base minus every entry whose name is in drop. base itself

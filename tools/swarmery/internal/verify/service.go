@@ -309,10 +309,9 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 		Cwd:         t.WorktreePath,
 		Model:       model,
 		// Resolved from the PROJECT path, never from Cwd: Cwd is the run's
-		// worktree and carries no .claude/settings.local.json, so a cwd-side
-		// resolve would silently verify under the default account (plan A3).
-		// "" = unbound project = default account = no env delta.
-		Account: claudeacct.Binding(t.ProjectPath),
+		// worktree and says nothing about the project. Account and estate both
+		// come from the project's walk; an unbound project adds no env delta.
+		Resolution: claudeacct.Resolve(t.ProjectPath),
 	}
 	run, rerr := s.Run.Run(ctx, spec)
 	if rerr != nil {

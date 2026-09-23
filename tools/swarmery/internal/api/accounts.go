@@ -634,9 +634,24 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := claudeacct.SetBinding(path, key); err != nil {
-		// SetBinding refuses an invalid key and an unparseable settings file;
-		// both are the operator's to fix, neither is a server fault.
-		writeClientErr(w, http.StatusBadRequest, err.Error())
+		// SetBinding refuses an invalid key and an unparseable settings file
+		// (400), and an existing file the walk ignores — group/other-writable,
+		// not yours, oversize — which it will not rewrite into a trusted one
+		// (409, the state of that file conflicts with the write). All are the
+		// operator's to fix, none is a server fault.
+		status := http.StatusBadRequest
+		if errors.Is(err, claudeacct.ErrUntrustedSettings) {
+			status = http.StatusConflict
+		}
+		writeClientErr(w, status, err.Error())
+		return
+	}
+	// Read it back: a binding written into a file the walk ignores (an
+	// untrusted file SetBinding had nothing to rewrite) is not in effect, and
+	// reporting success would show the operator an account nothing runs under.
+	// The file is theirs to fix — a client error, like the refusals above.
+	if err := claudeacct.VerifyBinding(path, key); err != nil {
+		writeClientErr(w, http.StatusConflict, err.Error())
 		return
 	}
 	writeJSON(w, bindingRow(path), nil)
