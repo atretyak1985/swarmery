@@ -193,7 +193,7 @@ func looksLikePath(t string) bool {
 func (s *forecastScope) expects(loci []string) bool {
 	for _, l := range loci {
 		for _, a := range s.Areas {
-			if segContains(l, normLocus(a)) {
+			if na := normLocus(a); segContains(l, na) || tailOverlaps(na, l) {
 				return true
 			}
 		}
@@ -209,6 +209,23 @@ func (s *forecastScope) expects(loci []string) bool {
 			if strings.Contains(rl, low) || (len(base) >= 3 && strings.Contains(rl, base)) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// tailOverlaps reports whether the area ends with the locus's leading segments: a
+// repo-root area (`tools/app/internal/store`) against a module-relative locus
+// (`internal/store`, `internal/store/x_test.go`) that a runner printed from
+// inside the module. Leaning toward "expected" is the safe direction here.
+func tailOverlaps(area, locus string) bool {
+	if area == "" || locus == "" {
+		return false
+	}
+	as, ls := strings.Split(area, "/"), strings.Split(locus, "/")
+	for k := min(len(as), len(ls)); k >= 1; k-- {
+		if strings.Join(as[len(as)-k:], "/") == strings.Join(ls[:k], "/") {
+			return true
 		}
 	}
 	return false

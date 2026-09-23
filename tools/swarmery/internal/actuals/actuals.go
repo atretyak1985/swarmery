@@ -607,9 +607,14 @@ func (r *Recorder) Store(a Actuals) error {
 		ON CONFLICT(session_uuid) DO UPDATE SET
 			phase_id = excluded.phase_id, run_state = excluded.run_state,
 			branch = excluded.branch, start_point = excluded.start_point,
-			files_json = excluded.files_json, areas_json = excluded.areas_json,
-			area_depth = excluded.area_depth, lines_added = excluded.lines_added,
-			lines_removed = excluded.lines_removed, size_band = excluded.size_band,
+			-- A pass that could not read the diff (branch deleted or merged since the
+			-- previous pass) keeps the measured diff instead of erasing it to unknown.
+			files_json = COALESCE(excluded.files_json, phase_actuals.files_json),
+			areas_json = COALESCE(excluded.areas_json, phase_actuals.areas_json),
+			area_depth = excluded.area_depth,
+			lines_added = COALESCE(excluded.lines_added, phase_actuals.lines_added),
+			lines_removed = COALESCE(excluded.lines_removed, phase_actuals.lines_removed),
+			size_band = COALESCE(excluded.size_band, phase_actuals.size_band),
 			duration_s = excluded.duration_s, cost_usd = excluded.cost_usd,
 			outcome = excluded.outcome, verify_verdict = excluded.verify_verdict,
 			test_failures = excluded.test_failures,
