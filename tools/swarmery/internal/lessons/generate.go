@@ -160,8 +160,10 @@ func (g *Generator) generate(ctx context.Context, in Input) (Outcome, error) {
 // persist writes one validated lesson, linking it to an existing identity
 // instead of duplicating it (14.5):
 //
-//   - a surprise lesson with the same norm_title that is still a candidate or
-//     active absorbs this run as one more recurrence (no new row);
+//   - a surprise lesson with the same norm_title that is a candidate, active,
+//     dismissed or merged absorbs this run as one more recurrence (no new row;
+//     a merged one forwards it to its merge target) — the operator's review
+//     is remembered, and only a retired lesson may be proposed again;
 //   - a retro lesson with the same norm_title is recorded as linked_norm_title
 //     on the new candidate, so the review queue offers the merge first.
 //
@@ -173,11 +175,26 @@ func (g *Generator) persist(in Input, seq int, c Candidate) (linked bool, err er
 		return false, fmt.Errorf("%w: the title folds to an empty identity", ErrInvalid)
 	}
 	now := g.now().UTC().Format(time.RFC3339)
+	// The operator's review is remembered: a title the operator already merged
+	// follows the merge to its target, and a dismissed or retro-merged one absorbs
+	// the recurrence on its own row instead of coming back as a fresh candidate.
+	// Only a RETIRED lesson may be proposed again — it recurring is news.
 	var existing int64
-	err = g.DB.QueryRow(`SELECT id FROM surprise_lessons
-		WHERE norm_title = ? AND status IN ('candidate', 'active') ORDER BY id LIMIT 1`, norm).Scan(&existing)
+	var status string
+	var mergedInto sql.NullInt64
+	err = g.DB.QueryRow(`SELECT id, status, merged_into_id FROM surprise_lessons
+		WHERE norm_title = ? AND status IN ('candidate', 'active', 'merged', 'dismissed')
+		ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'candidate' THEN 1 WHEN 'merged' THEN 2 ELSE 3 END, id
+		LIMIT 1`, norm).Scan(&existing, &status, &mergedInto)
 	switch {
 	case err == nil:
+		if status == StatusMerged && mergedInto.Valid {
+			var tgtStatus string
+			if e := g.DB.QueryRow(`SELECT status FROM surprise_lessons WHERE id = ?`, mergedInto.Int64).
+				Scan(&tgtStatus); e == nil && (tgtStatus == StatusCandidate || tgtStatus == StatusActive) {
+				existing = mergedInto.Int64
+			}
+		}
 		return true, addRecurrence(g.DB, existing, in.SessionUUID, c.Evidence, now)
 	case !errors.Is(err, sql.ErrNoRows):
 		return false, err

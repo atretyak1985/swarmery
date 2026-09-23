@@ -400,8 +400,20 @@ func Merge(db *sql.DB, id int64, target MergeTarget, now time.Time) (Lesson, err
 		if tgt.Status != StatusCandidate && tgt.Status != StatusActive {
 			return cur, fmt.Errorf("%w: merge target %d is %s", ErrInvalid, tgt.ID, tgt.Status)
 		}
-		if err := addRecurrence(db, tgt.ID, cur.SourcePhaseRun, cur.Evidence, ts); err != nil {
-			return cur, err
+		// Every run the candidate had already absorbed moves with it, not only its
+		// source run: a merge must not shrink the recurrence record.
+		runs := cur.RecurrenceRuns
+		if len(runs) == 0 {
+			runs = []string{cur.SourcePhaseRun}
+		}
+		for i, r := range runs {
+			ev := cur.Evidence
+			if i > 0 {
+				ev = nil
+			}
+			if err := addRecurrence(db, tgt.ID, r, ev, ts); err != nil {
+				return cur, err
+			}
 		}
 		res, err := db.Exec(`UPDATE surprise_lessons SET status = 'merged', merged_into_id = ?, updated_at = ?
 			WHERE id = ? AND status = 'candidate'`, tgt.ID, ts, id)
