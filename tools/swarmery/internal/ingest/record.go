@@ -44,6 +44,47 @@ type usage struct {
 	OutputTokens             int64 `json:"output_tokens"`
 	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+
+	// CacheCreation is the per-TTL breakdown of CacheCreationInputTokens
+	// (docs/jsonl-format.md §6). The two TTLs bill at different rates — a 1h
+	// write costs 2x input against 1.25x for a 5m write — so the flat total
+	// alone cannot price a turn. Absent on older transcripts; see cacheWriteSplit.
+	CacheCreation *cacheCreation `json:"cache_creation"`
+
+	// Speed is the account speed mode of this message ("standard" / "fast").
+	// Fast is a separate SKU at 2x standard rates, priced via the "<model>-fast"
+	// row in config/pricing.json.
+	Speed string `json:"speed"`
+}
+
+// cacheCreation is usage.cache_creation — cache writes split by TTL.
+type cacheCreation struct {
+	Ephemeral5m int64 `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1h int64 `json:"ephemeral_1h_input_tokens"`
+}
+
+// cacheWriteSplit returns this turn's cache writes as (5m, 1h).
+//
+// When the transcript carries no cache_creation object the whole flat
+// cache_creation_input_tokens total is attributed to the 5m bucket. That is
+// what every pre-split transcript was already priced at, so re-ingesting old
+// history through this path reproduces its existing cost exactly.
+func (u *usage) cacheWriteSplit() (fiveMin, oneHour int64) {
+	if u == nil {
+		return 0, 0
+	}
+	if u.CacheCreation == nil {
+		return u.CacheCreationInputTokens, 0
+	}
+	fiveMin, oneHour = u.CacheCreation.Ephemeral5m, u.CacheCreation.Ephemeral1h
+	// A TTL bucket we do not know about yet (a future ephemeral_*_input_tokens
+	// field) would otherwise disappear from the bill entirely. Attribute the
+	// unaccounted remainder to 5m: the cheapest write rate, so the estimate
+	// stays conservative rather than dropping the tokens on the floor.
+	if rest := u.CacheCreationInputTokens - fiveMin - oneHour; rest > 0 {
+		fiveMin += rest
+	}
+	return fiveMin, oneHour
 }
 
 // contentBlock is one element of assistant content (§5) or a user tool_result (§4b).
