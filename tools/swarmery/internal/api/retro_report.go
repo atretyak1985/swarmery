@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retrodigest"
 )
 
@@ -46,6 +47,9 @@ type retroReportDTO struct {
 	// Surprises: the window's phase runs that landed furthest from their
 	// forecast (learning loop phase 13), cited in the digest as [E:phase:<id>].
 	Surprises retroSurprisesDTO `json:"surprises"`
+	// Labels: D2 session-label tallies (phase 9), fleet-wide windows only;
+	// omitted when nothing is labelled.
+	Labels []decide.LabelCount `json:"labels,omitempty"`
 
 	// Partial is true when at least one section failed; PartialSections names
 	// them. An empty section with partial=false is genuinely empty.
@@ -136,6 +140,15 @@ func (h *Handler) buildRetroReport(dr dateRange, pf string, pargs []any, project
 	} else {
 		out.Surprises = surprises
 	}
+	// Session labels are fleet-wide: a project-scoped report must not quote
+	// other projects' sessions, and the labels table has no project column.
+	if project == "" {
+		if labels, err := decide.LabelCounts(h.DB, out.From, out.To); err != nil {
+			fail("labels", err)
+		} else {
+			out.Labels = labels
+		}
+	}
 	sort.Strings(out.PartialSections)
 	return out
 }
@@ -217,6 +230,9 @@ func reportToDigest(rep retroReportDTO) retrodigest.Report {
 			PhaseID: su.PhaseID, Plan: su.Plan, Phase: su.Phase,
 			Index: su.Index, Top: su.Top, Summary: su.Summary,
 		})
+	}
+	for _, l := range rep.Labels {
+		out.Labels = append(out.Labels, retrodigest.LabelCount{Field: l.Field, Value: l.Value, Count: l.Count})
 	}
 	for _, rc := range rep.Recommendations.Recommendations {
 		out.Recommendations = append(out.Recommendations, retrodigest.Recommendation{

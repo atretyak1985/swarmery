@@ -1068,6 +1068,13 @@ func r9FatSessions(db *sql.DB, win window) ([]finding, error) {
 		if label == "" {
 			label = uuid[:min(8, len(uuid))]
 		}
+		ev := map[string]any{
+			"window":        win,
+			"counts":        map[string]int{"context_tokens": int(ctxTokens)},
+			"cost_usd":      cost,
+			"context_limit": R9ContextTokens,
+			"cost_limit":    R9CostUSD,
+		}
 		out = append(out, finding{
 			rule:       "R9",
 			targetKind: "session",
@@ -1076,17 +1083,20 @@ func r9FatSessions(db *sql.DB, win window) ([]finding, error) {
 			detail: fmt.Sprintf(
 				"Session %q reached ~%dk tokens of context and cost $%.2f. Every continuation re-reads that whole context — the dominant cost driver. Split the work into shorter sessions, /compact when the window fills, or move recurring monitoring to a routine that reads state with a fresh small context.",
 				label, ctxTokens/1000, cost),
-			evidence: map[string]any{
-				"window":        win,
-				"counts":        map[string]int{"context_tokens": int(ctxTokens)},
-				"cost_usd":      cost,
-				"context_limit": R9ContextTokens,
-				"cost_limit":    R9CostUSD,
-			},
+			evidence: ev,
 		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	rows.Close()
+	// D2 labels (phase 9), only when the classifier has labelled the session.
+	// Read AFTER the result set is closed: the store runs on one connection, and
+	// a query issued while rows are open would wait on itself forever.
+	for i := range out {
+		if lb := sessionLabels(db, out[i].target); lb != nil {
+			out[i].evidence["labels"] = lb
+		}
 	}
 	if total > len(out) {
 		log.Printf("advisor R9: %d fat sessions in-window, surfacing the %d most expensive (%d not shown)",

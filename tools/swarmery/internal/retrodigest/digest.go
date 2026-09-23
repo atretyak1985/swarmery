@@ -58,6 +58,10 @@ type Report struct {
 	// landed furthest from its forecast (internal/surprise). The caller passes
 	// the top ones already; the digest sorts them.
 	Surprises []Surprise
+	// Labels are D2's session-label tallies (internal/decide, phase 9). Read
+	// when present: an empty slice adds no section, so a fleet without the
+	// classifier gets the same digest byte for byte.
+	Labels []LabelCount
 
 	// Partial names the sections whose query failed upstream. They render as
 	// an explicit warning so the reader never mistakes a failed section for
@@ -180,6 +184,13 @@ type Surprise struct {
 	Index   float64
 	Top     string // the component that contributed most; "" when none did
 	Summary string // the scorer's one-sentence account
+}
+
+// LabelCount is one (field, value) tally of classifier session labels.
+type LabelCount struct {
+	Field string
+	Value string
+	Count int64
 }
 
 // section is one rendered block: a head that always survives, an item list
@@ -342,6 +353,9 @@ func Build(r Report, limit int) (string, bool) {
 		buildLessons(r.Lessons),
 		buildTasks(r.Tasks),
 		buildSurprises(r.Surprises),
+	}
+	if len(r.Labels) > 0 {
+		sections = append(sections, buildLabels(r.Labels))
 	}
 
 	full := header
@@ -670,6 +684,21 @@ func buildSurprises(surprises []Surprise) section {
 // citeSessions renders a sorted, deduped, capped list of session citations.
 // The cap keeps one noisy error group from crowding out whole sections.
 const maxSessionCites = 5
+
+// buildLabels renders the classifier's session-label tallies. Advisory: the
+// labels come from a small local model, and the heading says so.
+func buildLabels(labels []LabelCount) section {
+	sec := section{
+		name:  "labels",
+		prio:  prioSurprises,
+		head:  "\n## Session labels (local classifier, advisory)\n\n",
+		empty: "_(no labelled sessions)_\n",
+	}
+	for _, l := range labels {
+		sec.items = append(sec.items, fmt.Sprintf("- %s = %s: %d sessions\n", l.Field, oneLine(l.Value), l.Count))
+	}
+	return sec
+}
 
 func citeSessions(uuids []string) string {
 	if len(uuids) == 0 {

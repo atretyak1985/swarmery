@@ -39,6 +39,7 @@ var readOnlySites = map[string]string{
 	"internal/handoff/runner.go:Run":                "the model returns handoff prose on stdout; internal/handoff/handoff.go does the os.WriteFile",
 	"internal/extract/runner.go:Run":                "classification pass — stdout JSON only, the caller persists the rows",
 	"internal/trajjudge/trajjudge.go:Run":           "advisory judge — stdout verdict only, persisted by the daemon",
+	"internal/decide/claude.go:spawnClaude":         "decision classifier (phase 9) — stdout JSON answer only, internal/decide persists the decisions row",
 	"internal/api/project_config_probe.go:runProbe": "documented non-writing probe: it returns config suggestions and nothing else",
 }
 

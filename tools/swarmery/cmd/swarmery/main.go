@@ -43,6 +43,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/economics"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/evals"
@@ -2094,6 +2095,43 @@ func cmdServe(args []string) error {
 		log.Printf("warning: planrun heal on startup: %v", err)
 	}
 	api.AttachPlanRun(planrunSvc)
+
+	// Learning loop phase 9: the local decision classifier. It works AROUND
+	// Claude runs, never inside them — D1 is consulted only on the settle loop's
+	// ambiguous branch (after the rules), D2 labels finished sessions for
+	// analytics. Both default to shadow; with SWARMERY_DECIDE_URL unset (and the
+	// claude backend off, its default) the engine is inert and nothing changes.
+	decideCfg, decideWarn := decide.ConfigFromEnv(os.Getenv)
+	for _, w := range decideWarn {
+		log.Printf("warn: %s", w)
+	}
+	decideEng := decide.New(db, decideCfg)
+	decideEng.OnNeedsOperator = func(n decide.NeedsOperator) {
+		notifier.Emit(notify.Event{
+			Type:  notify.EventRunNeedsOperator,
+			Title: fmt.Sprintf("%s %d needs you", n.Engine, n.SubjectID),
+			Body:  n.Detail,
+		})
+	}
+	phaserunSvc.Decide = decideEng
+	planrunSvc.Decide = decideEng
+	api.AttachDecide(decideEng)
+	log.Printf("decide: %s", decideCfg)
+	if decideEng.Configured() {
+		go func() {
+			labeler := &decide.Labeler{E: decideEng}
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for {
+				if n, err := labeler.Run(context.Background()); err != nil {
+					log.Printf("warning: decide: d2 labeler: %v", err)
+				} else if n > 0 {
+					log.Printf("decide: d2 labeled %d sessions", n)
+				}
+				<-ticker.C
+			}
+		}()
+	}
 
 	buildStart := time.Now()
 	// The board derives each captured card's expiry from the same TTL the

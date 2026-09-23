@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
@@ -116,6 +117,13 @@ func (e *DepsUnmetError) Is(target error) bool { return target == ErrDepsUnmet }
 // plan_updated publisher) is keyed by the WORKSPACE task id so the Plans page
 // refetches on run edges.
 type Service struct {
+	// Decide is the local decision classifier (learning-loop phase 9, D1). It is
+	// consulted ONLY on the ambiguous branch of settle — a clean exit, criteria
+	// unticked, no blocked line, stop_reason end_turn — AFTER the rules ran, and
+	// only an ACTIVE answer changes anything. nil, no SWARMERY_DECIDE_URL, or
+	// shadow mode ⇒ settle behaves exactly as it did without it.
+	Decide *decide.Engine
+
 	DB  *sql.DB
 	Wt  runcore.WorktreeManager // shared worktree mechanics (runcore's seam)
 	Run Runner
@@ -951,6 +959,9 @@ const blockedSentinel = "PHASE BLOCKED"
 // Returns the run_state to stamp; the caller stamps it, because stamping is also
 // what every other exit path does and the two must stay in one place.
 func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spec RunSpec, budget runcore.Budget, returnDocNow func()) (state, detail string) {
+	// D1 ground truth (phase 9.3): what a continuation achieved, recorded
+	// against the decision taken just before it. No-op without a classifier.
+	d1 := s.Decide.Tracker()
 	for attempt := 0; ; attempt++ {
 		returnDocNow()
 
@@ -991,6 +1002,7 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 		}
 
 		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total)
+		d1.Observe(string(end), c.Done)
 		switch end {
 		case runcore.EndBlocked:
 			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
@@ -1005,6 +1017,22 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 				s.event(phaseID, spec.SessionUUID, runcore.EventDone, attempt, fmt.Sprintf("%d/%d criteria ticked after %d continuations", c.Done, c.Total, attempt))
 			}
 			return "done", ""
+		}
+
+		// D1 (phase 9): the rules reached `continue` — the one branch they leave
+		// ambiguous. The classifier may hand the run to the operator or stamp it
+		// blocked; any other answer (and every shadow/unconfigured call) lets the
+		// rules' continuation stand.
+		switch o := d1.Decide(ctx, decide.D1Input{Engine: Engine, SubjectID: phaseID, SessionUUID: spec.SessionUUID,
+			LastText: text, StopReason: stop, Done: c.Done, Total: c.Total, Attempt: attempt}); o.Action {
+		case decide.StampBlocked:
+			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, o.Detail)
+			log.Printf("phaserun: phase=%d uuid=%s blocked by classifier: %s", phaseID, spec.SessionUUID, o.Detail)
+			return "blocked", o.Detail
+		case decide.NotifyOperator:
+			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, o.Detail)
+			log.Printf("phaserun: phase=%d uuid=%s handed to operator by classifier: %s", phaseID, spec.SessionUUID, o.Detail)
+			return "partial", o.Detail
 		}
 
 		// From here the run stopped with work left. Three things can stop us

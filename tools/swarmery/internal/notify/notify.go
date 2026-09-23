@@ -35,12 +35,16 @@ const (
 	// SWARMERY_SURPRISE_NOTIFY. At most once per run — the scorer claims the
 	// notification on its row before emitting. Advisory: nothing gates on it.
 	EventPhaseSurprise = "phase_surprise"
+	// EventRunNeedsOperator fires when the decision classifier (internal/decide,
+	// D1, ACTIVE mode only) stops a phase/plan run from being continued and
+	// hands it to the operator instead. Off unless D1 is switched to active.
+	EventRunNeedsOperator = "run_needs_operator"
 )
 
 // KnownEvents lists every valid --notify-events entry.
 var KnownEvents = []string{
 	EventApprovalRequested, EventApprovalExpired, EventSessionCompleted, EventSessionError,
-	EventPluginDrift, EventPhaseSurprise,
+	EventPluginDrift, EventPhaseSurprise, EventRunNeedsOperator,
 }
 
 // Body templates (--notify-template).
