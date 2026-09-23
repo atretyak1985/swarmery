@@ -30,12 +30,17 @@ const (
 	// keeps firing refreshes its row in place — so a standing problem is
 	// announced once, not every scan tick.
 	EventPluginDrift = "plugin_drift"
+	// EventPhaseSurprise fires when a finished phase run's surprise score
+	// (internal/surprise: forecast vs measured actuals) first reaches
+	// SWARMERY_SURPRISE_NOTIFY. At most once per run — the scorer claims the
+	// notification on its row before emitting. Advisory: nothing gates on it.
+	EventPhaseSurprise = "phase_surprise"
 )
 
 // KnownEvents lists every valid --notify-events entry.
 var KnownEvents = []string{
 	EventApprovalRequested, EventApprovalExpired, EventSessionCompleted, EventSessionError,
-	EventPluginDrift,
+	EventPluginDrift, EventPhaseSurprise,
 }
 
 // Body templates (--notify-template).
@@ -214,6 +219,7 @@ var ntfyTags = map[string]string{
 	EventApprovalExpired:   "hourglass",
 	EventSessionCompleted:  "white_check_mark",
 	EventSessionError:      "rotating_light",
+	EventPhaseSurprise:     "eyes",
 }
 
 func ntfyPriority(eventType string) string {

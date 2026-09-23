@@ -304,7 +304,7 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 	spec := RunSpec{
 		// base, not the branch: BuildPrompt's third parameter has always been named
 		// startPoint (prompt.go) — we are finally passing what it asked for.
-		Prompt:      BuildPrompt(t.Title, t.Prompt, base, t.Strictness),
+		Prompt:      BuildPrompt(t.Title, WithFocusHint(t.Prompt, t.FocusHint), base, t.Strictness),
 		SessionUUID: uuid,
 		Cwd:         t.WorktreePath,
 		Model:       model,
@@ -394,6 +394,7 @@ func (s *Service) VerifyPhase(ctx context.Context, req runcore.PhaseVerifyReques
 		StartPoint:   req.StartPoint,
 		Title:        req.Title,
 		Prompt:       req.Prompt,
+		FocusHint:    req.FocusHint,
 		ProjectPath:  req.ProjectPath,
 		Strictness:   StrictnessFromMode(req.Mode),
 		Stamp: func(v Verdict, detail string) error {

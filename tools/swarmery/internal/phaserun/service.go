@@ -154,6 +154,14 @@ type Service struct {
 	// not wired: the unit tests' state, and a daemon that never records actuals.
 	// ADVISORY: the callee must never fail or block the run — it logs and returns.
 	Actuals func(phaseID int64, sessionUUID, repoRoot string)
+	// SurpriseVerify asks, after Actuals has measured and scored the run, whether
+	// the run surprised the learning loop enough to be verified even though its
+	// doc never asked (internal/surprise, learning-loop phase 13), and with what
+	// focus hint. nil, or ok=false, ⇒ no auto-verification — the default: the
+	// daemon's scorer answers false unless SWARMERY_SURPRISE_AUTOVERIFY_AT is set.
+	// ADVISORY like the scorer: the verdict it produces is information on the
+	// phase, and phasegate never gates on a verdict for a doc whose own mode is off.
+	SurpriseVerify func(phaseID int64, sessionUUID string) (focusHint string, ok bool)
 	// Slots is the DAEMON-WIDE run registry and budget (internal/runcore): the
 	// per-phase single-flight gate AND — new — a bound this engine never had. A
 	// phase run used to be limited by nothing at all: ten phases started from the
@@ -709,6 +717,9 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		if s.Actuals != nil {
 			s.Actuals(phaseID, spec.SessionUUID, info.RepoRoot)
 		}
+		// After the score (Actuals computes it), before the worktree goes: an
+		// auto-verification grades the worktree exactly as verifyRun does.
+		s.surpriseVerifyRun(phaseID, spec.SessionUUID, info, acq, endState)
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
 		// 'running', so the DB gate in Start is open; releasing the single-flight
 		// slot before the (git shell-out, tens of ms) removal opens a window where a
@@ -819,6 +830,49 @@ func (s *Service) verifyRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 		ProjectPath:     info.ProjectPath,
 	}); err != nil {
 		log.Printf("error: phaserun: phase=%d verify: %v", phaseID, err)
+	}
+}
+
+// surpriseVerifyRun is the opt-in auto-verification of a SURPRISING run (learning
+// loop phase 13.5): a run whose surprise score reached SWARMERY_SURPRISE_AUTOVERIFY_AT
+// is graded by the same read-only verifier verifyRun uses, with the surprise summary
+// as a focus hint, even though its doc did not ask. Same ordering contract as
+// verifyRun (blocking, before removeWorktree — the worktree is the subject) and the
+// same skips, plus one: a doc that opted into verification was already graded by
+// verifyRun, and grading the same tree twice would buy nothing.
+//
+// The verdict lands on the phase like any verdict. For a doc whose own verify mode is
+// off, phasegate never gates on it — the grade is information, not a fence.
+func (s *Service) surpriseVerifyRun(phaseID int64, sessionUUID string, info phaseInfo, acq worktree.Acquired, endState string) {
+	if s.Verify == nil || s.SurpriseVerify == nil || acq.Path == "" || (endState != "done" && endState != "partial") {
+		return
+	}
+	if info.VerifyMode != "" && info.VerifyMode != wsingest.VerifyOff {
+		return
+	}
+	hint, ok := s.SurpriseVerify(phaseID, sessionUUID)
+	if !ok {
+		return
+	}
+	doc, err := os.ReadFile(info.DocPath)
+	if err != nil {
+		log.Printf("warning: phaserun: phase=%d surprise verify skipped, doc %q unreadable: %v", phaseID, info.DocPath, err)
+		return
+	}
+	log.Printf("phaserun: phase=%d surprise auto-verify worktree=%q", phaseID, acq.Path)
+	if err := s.Verify.VerifyPhase(context.Background(), runcore.PhaseVerifyRequest{
+		PhaseID:         phaseID,
+		WorkspaceTaskID: info.WorkspaceTaskID,
+		Mode:            wsingest.VerifyNormal,
+		WorktreePath:    acq.Path,
+		Branch:          acq.Branch,
+		StartPoint:      acq.StartPoint,
+		Title:           info.Name,
+		Prompt:          string(doc),
+		ProjectPath:     info.ProjectPath,
+		FocusHint:       hint,
+	}); err != nil {
+		log.Printf("error: phaserun: phase=%d surprise verify: %v", phaseID, err)
 	}
 }
 

@@ -72,6 +72,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/spawnpath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/staleness"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskcap"
@@ -482,7 +483,20 @@ func cmdActuals(args []string) error {
 	if *verbose {
 		opts.Log = os.Stdout
 	}
-	st, err := actuals.NewRecorder(db, git).Backfill(opts)
+	// Each run the backfill records is scored against its forecast as it lands
+	// (learning loop phase 13); the rescore below then covers runs whose actuals
+	// already existed. Backfilled scores raise no attention and request no
+	// verification — they are history.
+	surpriseCfg, surpriseWarn := surprise.ConfigFromEnv(os.Getenv)
+	for _, w := range surpriseWarn {
+		fmt.Fprintln(os.Stderr, "warn:", w)
+	}
+	scorer := surprise.NewScorer(db, surpriseCfg)
+	rec := actuals.NewRecorder(db, git)
+	if !*dryRun {
+		rec.OnRecorded = scorer.AfterActuals
+	}
+	st, err := rec.Backfill(opts)
 	if err != nil {
 		return err
 	}
@@ -496,6 +510,16 @@ func cmdActuals(args []string) error {
 		"  skipped — branch no longer exists: %d\n  failed: %d\n",
 		*dbPath, st.Scanned, verb, st.Recorded, st.AlreadyRecorded, st.InFlight, st.NoBranch,
 		st.NoStartPoint, st.NoRepo, st.BranchGone, st.Failed)
+	if *dryRun {
+		return nil
+	}
+	sst, err := scorer.Backfill()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("surprise rescore\n  runs with actuals: %d\n  scored: %d\n"+
+		"  not scored — no forecast or nothing measurable: %d\n  failed: %d\n",
+		sst.Scanned, sst.Scored, sst.Unscorable, sst.Failed)
 	return nil
 }
 
@@ -1343,7 +1367,7 @@ func cmdServe(args []string) error {
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
 	notifyEvents := fs.String("notify-events", envOr("SWARMERY_NOTIFY_EVENTS", notify.EventApprovalRequested),
-		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error (env: SWARMERY_NOTIFY_EVENTS)")
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise (env: SWARMERY_NOTIFY_EVENTS)")
 	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
 		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
 	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
@@ -2020,7 +2044,38 @@ func cmdServe(args []string) error {
 	// verdict, test failures, continuations, fallback), measured again once the
 	// transcript ingest has caught up. Advisory: the recorder logs and returns, so
 	// a measurement failure never changes how a run is reported.
-	phaserunSvc.Actuals = actuals.NewRecorder(db, wtMgr.Git).AfterRun
+	//
+	// Learning loop phase 13: every time a run's actuals are stored, the run is
+	// scored against its forecast (phase_surprise). Attention is ROUTED, never
+	// enforced: a score at or above SWARMERY_SURPRISE_NOTIFY (default 0.6) raises a
+	// phase_surprise WS frame (notch + dashboard) and a webhook when that event is
+	// enabled, once per run; SWARMERY_SURPRISE_AUTOVERIFY_AT (unset = off) opts in
+	// to verifying a surprising run with the summary as the verifier's focus hint.
+	surpriseCfg, surpriseWarn := surprise.ConfigFromEnv(os.Getenv)
+	for _, w := range surpriseWarn {
+		log.Printf("warn: %s", w)
+	}
+	scorer := surprise.NewScorer(db, surpriseCfg)
+	scorer.Attention = func(a surprise.Attention) {
+		if bus != nil {
+			bus.Publish(ingest.Notification{Type: ingest.NotePhaseSurprise, TaskID: a.WorkspaceTaskID, PhaseID: a.PhaseID})
+		}
+		notifier.Emit(notify.Event{
+			Type:  notify.EventPhaseSurprise,
+			Title: fmt.Sprintf("Phase surprise %.2f: %s", a.Index, a.PhaseName),
+			Body:  strings.TrimPrefix(a.PlanTitle+" — "+a.Summary, " — "),
+		})
+	}
+	scorer.Changed = func(taskID int64) {
+		if bus != nil {
+			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
+		}
+	}
+	log.Printf("surprise scoring: %s", surpriseCfg)
+	recorder := actuals.NewRecorder(db, wtMgr.Git)
+	recorder.OnRecorded = scorer.AfterActuals
+	phaserunSvc.Actuals = recorder.AfterRun
+	phaserunSvc.SurpriseVerify = scorer.AutoVerifyHint
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same
 	// boundary the worktree manager uses.
 	api.AttachPhaseDiag(wtMgr.Git, wtMgr)

@@ -1250,12 +1250,26 @@ export interface RetroReport {
   lessons: RetroLessonsResp;
   tasks: RetroTasksResp;
   recommendations: RecommendationsResp;
+  /** The window's most surprising phase runs (learning loop phase 13). */
+  surprises: { surprises: RetroSurprise[] };
   /**
    * True when at least one section's query failed. Those sections come back
    * EMPTY, not zero — `partialSections` names them so the UI can say so.
    */
   partial: boolean;
   partialSections: string[];
+}
+
+/** One scored phase run in a retro window — mirrors retroSurpriseDTO. */
+export interface RetroSurprise {
+  phaseId: number;
+  plan: string;
+  phase: string;
+  index: number;
+  top: string;
+  summary: string;
+  sessionUuid: string;
+  computedAt: string;
 }
 
 /** Lifecycle of a saved system analysis (migration 0061). */
@@ -1593,7 +1607,8 @@ export type WSMessageType =
   | 'system_item_updated'
   | 'task_updated'
   | 'plan_updated'
-  | 'task_deleted';
+  | 'task_deleted'
+  | 'phase_surprise';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -1606,7 +1621,23 @@ export type WSMessage =
   | { type: 'task_updated'; payload: BoardTask }
   | { type: 'plan_updated'; payload: { taskId: number; projectId: number } }
   /** A board row was permanently deleted — ids only, the row cannot be hydrated. */
-  | { type: 'task_deleted'; payload: { taskId: number; projectId: number } };
+  | { type: 'task_deleted'; payload: { taskId: number; projectId: number } }
+  /** A finished phase run's surprise score first reached SWARMERY_SURPRISE_NOTIFY
+   *  (learning loop phase 13). Advisory attention, at most once per run. */
+  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention };
+
+/** Payload of the phase_surprise WS frame. */
+export interface PhaseSurpriseAttention {
+  taskId: number;
+  projectId: number;
+  phaseId: number;
+  phaseName: string;
+  planTitle: string;
+  sessionUuid: string;
+  index: number;
+  top: string;
+  summary: string;
+}
 
 // --- Fusion phase 1: task board — additive contracts --------------------------
 
@@ -3485,6 +3516,79 @@ export interface EpicPhase {
    *  Computed server-side in the read path, like `EpicSpec.unknownRefs`, and like it
    *  refuses nothing. */
   forecastLints: ForecastLint[];
+  /** The learning loop's forecast-vs-actual score of the CURRENT run (migration
+   *  0082, internal/surprise). null — never a zero score — when that run was not
+   *  scored: no forecast, no actuals, or nothing measurable. ADVISORY: nothing
+   *  consults it for completion, and a run is never refused on it. */
+  surprise: PhaseSurprise | null;
+}
+
+/** Surprise components — the keys of `PhaseSurprise.components`. */
+export type SurpriseComponent =
+  | 'unexpected_areas'
+  | 'missed_areas'
+  | 'size_miss'
+  | 'duration_miss'
+  | 'outcome_miss'
+  | 'test_surprise'
+  | 'overconfidence';
+
+/** What was compared with what — mirrors surprise.Detail. */
+export interface PhaseSurpriseDetail {
+  forecastKind: string;
+  forecastPostHoc: boolean;
+  forecastAreas: string[];
+  /** null when the run's diff was not measured. */
+  actualAreas: string[] | null;
+  unexpectedAreas: string[];
+  missedAreas: string[];
+  matchedAreas: string[];
+  forecastSize: string;
+  actualSize: string;
+  sizeDistance: number | null;
+  forecastDuration: string;
+  actualDuration: string;
+  actualDurationS: number | null;
+  durationDistance: number | null;
+  forecastOutcome: string;
+  /** phasediag outcome: completed | partial | noop | failed. */
+  actualOutcome: string;
+  testFailuresUnexpected: number | null;
+  confidence: number | null;
+  majorMiss: boolean;
+}
+
+/** Prior → posterior delta: how much reading the code changed the expectation. */
+export interface PhaseSurpriseRevision {
+  index: number;
+  areasAdded: string[];
+  areasDropped: string[];
+  sizeShift: number | null;
+  durationShift: number | null;
+  priorOutcome: string;
+  posteriorOutcome: string;
+  confidenceDelta: number | null;
+}
+
+/** One stored phase_surprise row — mirrors surprise.Stored. */
+export interface PhaseSurprise {
+  /** Headline 0..1: weighted sum of the measurable components, clipped. */
+  index: number;
+  /** Largest weighted contribution; '' when the index is 0. */
+  top: SurpriseComponent | '';
+  /** 0..1 per component; null = not measurable (NOT zero). */
+  components: Partial<Record<SurpriseComponent, number | null>>;
+  weights: Partial<Record<SurpriseComponent, number>>;
+  detail: PhaseSurpriseDetail;
+  revision: PhaseSurpriseRevision | null;
+  summary: string;
+  phaseId: number;
+  sessionUuid: string;
+  forecastDocHash: string;
+  actualsSource: string;
+  notifiedAt: string | null;
+  autoVerifyAt: string | null;
+  computedAt: string;
 }
 
 /** One stored `## Forecast` block — mirrors phaseForecastDTO.

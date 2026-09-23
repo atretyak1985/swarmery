@@ -118,6 +118,25 @@ type Recorder struct {
 	After func(d time.Duration, f func())
 	// Now is the clock (test seam; nil ⇒ time.Now).
 	Now func() time.Time
+	// OnRecorded is called after a run's row is stored — by the run-end pass, the
+	// settled pass and the backfill alike — with the source that wrote it. The
+	// daemon wires internal/surprise here, so a run is (re)scored against its
+	// forecast every time its actuals change. nil ⇒ nothing downstream. Advisory:
+	// a panic in the callee is recovered and logged.
+	OnRecorded func(phaseID int64, sessionUUID, source string)
+}
+
+// recorded runs the OnRecorded hook, never letting it fail the caller.
+func (r *Recorder) recorded(a Actuals) {
+	if r.OnRecorded == nil {
+		return
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			log.Printf("error: actuals: phase=%d uuid=%s downstream hook panicked: %v", a.PhaseID, a.SessionUUID, p)
+		}
+	}()
+	r.OnRecorded(a.PhaseID, a.SessionUUID, a.Source)
 }
 
 // NewRecorder builds a Recorder with production defaults.
@@ -181,7 +200,11 @@ func (r *Recorder) Record(phaseID int64, sessionUUID, repoRoot, source string, e
 		return a, err
 	}
 	a.Source = source
-	return a, r.Store(a)
+	if err := r.Store(a); err != nil {
+		return a, err
+	}
+	r.recorded(a)
+	return a, nil
 }
 
 // runRow is the epic_phases read Compute starts from.

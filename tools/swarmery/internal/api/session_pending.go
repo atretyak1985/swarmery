@@ -88,6 +88,7 @@ var pendingSessionExempt = map[string]string{
 	"retro_analyses.planning_session_uuid": "a copy of planning_sessions.session_uuid stamped on the analysis it planned; the planning row is the source",
 	"run_events.session_uuid":             "a copy of the RUN's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each completion-loop decision so an event can be cross-linked to the transcript; those two run rows are the sources, and an event never exists without one",
 	"phase_actuals.session_uuid":           "a copy of epic_phases.run_session_uuid stamped on the measured-run row as its natural key; written only AFTER the run ended, so the phase row is the source and was already answering for the uuid while the run was live",
+	"phase_surprise.session_uuid":          "a copy of phase_actuals.session_uuid (itself epic_phases.run_session_uuid) keying the run's forecast-vs-actual score; written only after the run's actuals exist, so the phase row is the source",
 }
 
 // pendingSessionDTO is the 202 body for GET /api/sessions/{uuid}. `pending` is the

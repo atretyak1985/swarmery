@@ -140,6 +140,7 @@ func (r *Recorder) Backfill(opts BackfillOptions) (BackfillStats, error) {
 				logf("phase %d: store failed: %v", c.id, err)
 				continue
 			}
+			r.recorded(a)
 		}
 		st.Recorded++
 	}

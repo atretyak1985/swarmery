@@ -43,6 +43,9 @@ type retroReportDTO struct {
 	Lessons         retroLessonsDTO    `json:"lessons"`
 	Tasks           retroTasksDTO      `json:"tasks"`
 	Recommendations recommendationsDTO `json:"recommendations"`
+	// Surprises: the window's phase runs that landed furthest from their
+	// forecast (learning loop phase 13), cited in the digest as [E:phase:<id>].
+	Surprises retroSurprisesDTO `json:"surprises"`
 
 	// Partial is true when at least one section failed; PartialSections names
 	// them. An empty section with partial=false is genuinely empty.
@@ -85,6 +88,7 @@ func (h *Handler) buildRetroReport(dr dateRange, pf string, pargs []any, project
 		Lessons:         retroLessonsDTO{Lessons: []retroLessonDTO{}},
 		Tasks:           retroTasksDTO{Tasks: []retroTaskDTO{}},
 		Recommendations: recommendationsDTO{Recommendations: []recommendationDTO{}},
+		Surprises:       retroSurprisesDTO{Surprises: []retroSurpriseDTO{}},
 		Friction: frictionDTO{
 			DeniedTools: []frictionDeniedDTO{},
 			ErrorGroups: []frictionErrGroupDTO{},
@@ -126,6 +130,11 @@ func (h *Handler) buildRetroReport(dr dateRange, pf string, pargs []any, project
 		fail("recommendations", err)
 	} else {
 		out.Recommendations = recs
+	}
+	if surprises, err := h.buildRetroSurprises(dr, pf, pargs); err != nil {
+		fail("surprises", err)
+	} else {
+		out.Surprises = surprises
 	}
 	sort.Strings(out.PartialSections)
 	return out
@@ -201,6 +210,12 @@ func reportToDigest(rep retroReportDTO) retrodigest.Report {
 			EstimatedHours: t.EstimatedHours, ActualHours: t.ActualHours,
 			VariancePct: t.VariancePct, Loops: t.Loops, Delegations: t.Delegations,
 			VerdictOK: t.Verdicts.OK, VerdictRedisp: t.Verdicts.Redispatch,
+		})
+	}
+	for _, su := range rep.Surprises.Surprises {
+		out.Surprises = append(out.Surprises, retrodigest.Surprise{
+			PhaseID: su.PhaseID, Plan: su.Plan, Phase: su.Phase,
+			Index: su.Index, Top: su.Top, Summary: su.Summary,
 		})
 	}
 	for _, rc := range rep.Recommendations.Recommendations {

@@ -196,6 +196,18 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 			return nil, nil
 		}
 		payload = p
+	case ingest.NotePhaseSurprise:
+		// learning loop phase 13: the attention frame — a finished phase run whose
+		// surprise score crossed SWARMERY_SURPRISE_NOTIFY. Hydrated from the stored
+		// score so the notch can say what surprised us without a second request.
+		p, err := h.phaseSurprisePayload(n.PhaseID)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, nil
+		}
+		payload = p
 	default:
 		return nil, errors.New("unknown notification type " + n.Type)
 	}
