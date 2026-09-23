@@ -207,9 +207,13 @@ daemon's plist carries a `CLAUDE_CONFIG_DIR` (`swarmery install
 
 - **The binding is read from the project root only.** It lives in
   `<project>/.claude/settings.local.json` and is not searched for in parent
-  directories, so the shell function follows the binding when your shell sits at
-  the project root. Deeper down you get the default account; `claude-account.sh`
-  avoids this by preferring `CLAUDE_PROJECT_DIR`.
+  directories, so both terminal surfaces follow the binding when your shell sits
+  at the project root, and give you the default account from a subdirectory.
+  `claude-account.sh` does not avoid this: it prefers `CLAUDE_PROJECT_DIR`, and
+  Claude Code exports that variable to **hook processes**, not to your login
+  shell — from your own terminal the wrapper always falls back to `$PWD`. Run
+  either surface from the project root, or pass the root explicitly with
+  `swarmery account exec --path <root> -- claude`.
 - **A running session keeps its account.** A binding decides what the *next*
   session starts under; nothing re-homes a live one.
 - **An empty delta inherits.** A project bound to the default account adds no

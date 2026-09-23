@@ -121,8 +121,13 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	//
 	// SpawnEnv is the single composition every swarmery spawn uses: the account's
 	// config dir, then its secret store — the ONLY channel for MCP credentials
-	// here, because a headless spawn passes --setting-sources project,local, under
-	// which a settings `env` block does not expand ${VAR} at all. It also removes
+	// that works on every seam. A settings `env` block cannot replace it: of the
+	// three setting sources it expands only under `user`, which is account-keyed,
+	// and the eight seams that pass --setting-sources project,local shut that tier
+	// off entirely. (planning, planrun and phaserun pass no --setting-sources, so
+	// the user tier is live for them — a leak to close, never a channel to rely
+	// on; a --settings file's env block also expands, but only where a seam
+	// passes one.) It also removes
 	// an inherited CLAUDE_CONFIG_DIR for a project EXPLICITLY bound to the default
 	// account, so a config dir baked into the daemon's plist cannot override the
 	// operator's binding. An unbound project gets os.Environ() back untouched.
