@@ -170,9 +170,16 @@ func TestAttentionThresholdAndOnce(t *testing.T) {
 	s.Attention = func(a Attention) { got = append(got, a) }
 	var changed []int64
 	s.Changed = func(id int64) { changed = append(changed, id) }
+	// Phase 14's hook sees every stored score, with its source; the lesson
+	// generator (not the scorer) decides eligibility and idempotency.
+	var scored []string
+	s.Scored = func(st *Stored, source string) { scored = append(scored, st.SessionUUID+"/"+source) }
 
 	s.AfterActuals(p, runUUID, "run-end")
 	s.AfterActuals(p, runUUID, "run-end-settled") // the settled recompute
+	if len(scored) != 2 || scored[1] != runUUID+"/run-end-settled" {
+		t.Fatalf("Scored hook calls = %v", scored)
+	}
 	if len(got) != 1 {
 		t.Fatalf("attention raised %d times, want exactly once per run", len(got))
 	}

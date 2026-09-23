@@ -53,6 +53,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/logbuf"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
@@ -2073,6 +2074,24 @@ func cmdServe(args []string) error {
 		}
 	}
 	log.Printf("surprise scoring: %s", surpriseCfg)
+	// Learning loop phase 14: a run at or above the surprise attention threshold
+	// whose Completion Report explains the gap ("Where reality diverged") gets
+	// 0–2 lesson CANDIDATES from a cheap headless pass, in the background, once
+	// per run. SWARMERY_LESSONS=off disables it; default on, because it only
+	// spends tokens on a surprise. A candidate never reaches a run until the
+	// operator accepts it on the Lessons page.
+	lessonCfg, lessonWarn := lessons.ConfigFromEnv(os.Getenv, surpriseCfg.NotifyAt)
+	for _, w := range lessonWarn {
+		log.Printf("warn: %s", w)
+	}
+	lessonGen := lessons.NewGenerator(db, lessonCfg)
+	lessonGen.Changed = func(taskID int64) {
+		if bus != nil {
+			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
+		}
+	}
+	scorer.Scored = lessonGen.AfterScore
+	log.Printf("lesson candidates: %s", lessonCfg)
 	recorder := actuals.NewRecorder(db, wtMgr.Git)
 	recorder.OnRecorded = scorer.AfterActuals
 	phaserunSvc.Actuals = recorder.AfterRun

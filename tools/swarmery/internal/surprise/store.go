@@ -44,6 +44,11 @@ type Scorer struct {
 	// Changed is called with the phase's workspace task id after a score is
 	// written or removed, so the Plans page refetches (plan_updated). nil ⇒ none.
 	Changed func(taskID int64)
+	// Scored receives every stored score with the actuals source that produced
+	// it (learning-loop phase 14: lesson candidates). It must return quickly —
+	// the daemon's hook only decides eligibility and hands the work to a
+	// goroutine. nil ⇒ none.
+	Scored func(st *Stored, source string)
 }
 
 // NewScorer builds a Scorer with the given configuration.
@@ -131,6 +136,9 @@ func (s *Scorer) AfterActuals(phaseID int64, sessionUUID, source string) {
 	}
 	if st != nil && source != sourceBackfill {
 		s.attend(st)
+	}
+	if st != nil && s.Scored != nil {
+		s.Scored(st, source)
 	}
 	if s.Changed != nil && source != sourceBackfill {
 		if taskID, err := s.taskOf(phaseID); err == nil {

@@ -40,6 +40,7 @@ var readOnlySites = map[string]string{
 	"internal/extract/runner.go:Run":                "classification pass — stdout JSON only, the caller persists the rows",
 	"internal/trajjudge/trajjudge.go:Run":           "advisory judge — stdout verdict only, persisted by the daemon",
 	"internal/decide/claude.go:spawnClaude":         "decision classifier (phase 9) — stdout JSON answer only, internal/decide persists the decisions row",
+	"internal/lessons/runner.go:Run":                "lesson candidates (phase 14) — stdout JSON only, internal/lessons validates and persists the rows",
 	"internal/api/project_config_probe.go:runProbe": "documented non-writing probe: it returns config suggestions and nothing else",
 }
 

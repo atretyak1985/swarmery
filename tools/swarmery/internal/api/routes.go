@@ -115,6 +115,14 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("PUT /api/decisions/{question}/mode", requireLocalOrigin(h.putDecisionMode))
 	mux.HandleFunc("POST /api/decisions/{id}/ground-truth", requireLocalOrigin(h.postDecisionTruth))
 	mux.HandleFunc("GET /api/decisions/labels/{uuid}", h.sessionDecisionLabels)
+	// lessons from surprise (phase 14): the operator's review queue. Accept is the
+	// only path by which a lesson becomes active.
+	mux.HandleFunc("GET /api/lessons", h.listLessons)
+	mux.HandleFunc("PATCH /api/lessons/{id}", requireLocalOrigin(h.editLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/accept", requireLocalOrigin(h.acceptLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/merge", requireLocalOrigin(h.mergeLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/dismiss", requireLocalOrigin(h.dismissLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/retire", requireLocalOrigin(h.retireLesson))
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)

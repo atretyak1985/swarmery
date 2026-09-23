@@ -1,0 +1,286 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  acceptLesson,
+  dismissLesson,
+  editLesson,
+  fetchLessons,
+  type Lesson,
+  type LessonMatch,
+  type LessonStatus,
+  mergeLesson,
+  retireLesson,
+} from '../api/lessons';
+
+const FILTERS: { value: LessonStatus | undefined; label: string }[] = [
+  { value: 'candidate', label: 'candidates' },
+  { value: 'active', label: 'active' },
+  { value: undefined, label: 'all' },
+];
+
+const BTN = 'rounded border border-line px-2 py-px font-mono text-[11px] text-ink-dim hover:text-ink';
+const BTN_PRIMARY = 'rounded border border-brand px-2 py-px font-mono text-[11px] text-brand';
+
+function matchLabel(m: LessonMatch): string {
+  const where = m.kind === 'retro' ? `retro ×${String(m.count)}` : `lesson #${String(m.lessonId ?? 0)}`;
+  return `${m.exact ? '= ' : '≈ '}${m.title} (${where})`;
+}
+
+function EditForm({
+  lesson,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  lesson: Lesson;
+  busy: boolean;
+  onSave: (title: string, guidance: string, areas: string[]) => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const [title, setTitle] = useState(lesson.title);
+  const [guidance, setGuidance] = useState(lesson.guidance);
+  const [areas, setAreas] = useState(lesson.areaGlobs.join(', '));
+  return (
+    <form
+      className="mt-2 grid gap-2 text-[12px]"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(
+          title,
+          guidance,
+          areas
+            .split(',')
+            .map((a) => a.trim())
+            .filter((a) => a !== ''),
+        );
+      }}
+    >
+      <label className="grid gap-0.5">
+        <span className="text-ink-dim">title</span>
+        <input
+          className="rounded border border-line bg-transparent px-2 py-1 text-ink"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </label>
+      <label className="grid gap-0.5">
+        <span className="text-ink-dim">guidance (one sentence)</span>
+        <input
+          className="rounded border border-line bg-transparent px-2 py-1 text-ink"
+          value={guidance}
+          onChange={(e) => setGuidance(e.target.value)}
+        />
+      </label>
+      <label className="grid gap-0.5">
+        <span className="text-ink-dim">area globs (comma-separated)</span>
+        <input
+          className="rounded border border-line bg-transparent px-2 py-1 font-mono text-ink"
+          value={areas}
+          onChange={(e) => setAreas(e.target.value)}
+        />
+      </label>
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy} className={BTN_PRIMARY}>
+          save
+        </button>
+        <button type="button" onClick={onCancel} className={BTN}>
+          cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function LessonCard({
+  lesson,
+  busy,
+  act,
+}: {
+  lesson: Lesson;
+  busy: boolean;
+  act: (run: () => Promise<Lesson>) => void;
+}): JSX.Element {
+  const [editing, setEditing] = useState(false);
+  const isCandidate = lesson.status === 'candidate';
+  return (
+    <li className="rounded border border-line p-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-ink">{lesson.title}</div>
+        <div className="shrink-0 font-mono text-[10px] text-ink-dim">
+          {lesson.status}
+          {lesson.surpriseIndex !== null && ` · surprise ${lesson.surpriseIndex.toFixed(2)}`}
+          {lesson.recurrences > 1 && ` · seen ${String(lesson.recurrences)}×`}
+        </div>
+      </div>
+      <p className="mt-1 text-[12px] text-ink">{lesson.guidance}</p>
+      <div className="mt-1 flex flex-wrap gap-1 font-mono text-[10px] text-ink-dim">
+        {lesson.areaGlobs.map((g) => (
+          <span key={g} className="rounded border border-line px-1">
+            {g}
+          </span>
+        ))}
+      </div>
+      {lesson.cause !== '' && (
+        <p className="mt-1 text-[11px] text-ink-dim">
+          <span className="text-ink">cause:</span> {lesson.cause}
+        </p>
+      )}
+      <div className="mt-1 font-mono text-[10px] text-ink-dim">
+        evidence: {lesson.evidence.join(' · ')}
+      </div>
+      <div className="mt-1 font-mono text-[10px] text-ink-dim">
+        {lesson.planId} · {lesson.phaseName}
+        {lesson.linkedNormTitle !== '' && ` · linked to "${lesson.linkedNormTitle}"`}
+      </div>
+      {lesson.sourceParagraph !== '' && (
+        <details className="mt-1 text-[11px] text-ink-dim">
+          <summary className="cursor-pointer">where reality diverged</summary>
+          <p className="mt-1 whitespace-pre-wrap">{lesson.sourceParagraph}</p>
+        </details>
+      )}
+      {editing ? (
+        <EditForm
+          lesson={lesson}
+          busy={busy}
+          onCancel={() => setEditing(false)}
+          onSave={(title, guidance, areaGlobs) => {
+            setEditing(false);
+            act(() => editLesson(lesson.id, { title, guidance, areaGlobs }));
+          }}
+        />
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {isCandidate && (
+            <button
+              type="button"
+              disabled={busy}
+              className={BTN_PRIMARY}
+              onClick={() => act(() => acceptLesson(lesson.id))}
+            >
+              accept
+            </button>
+          )}
+          {(isCandidate || lesson.status === 'active') && (
+            <button type="button" disabled={busy} className={BTN} onClick={() => setEditing(true)}>
+              edit
+            </button>
+          )}
+          {isCandidate &&
+            lesson.matches.map((m) => (
+              <button
+                key={`${m.kind}:${m.normTitle}:${String(m.lessonId ?? 0)}`}
+                type="button"
+                disabled={busy}
+                className={BTN}
+                title="merge this candidate into the existing lesson"
+                onClick={() =>
+                  act(() =>
+                    mergeLesson(
+                      lesson.id,
+                      m.kind === 'retro' ? { normTitle: m.normTitle } : { lessonId: m.lessonId ?? 0 },
+                    ),
+                  )
+                }
+              >
+                merge into {matchLabel(m)}
+              </button>
+            ))}
+          {isCandidate && (
+            <button
+              type="button"
+              disabled={busy}
+              className={BTN}
+              onClick={() => act(() => dismissLesson(lesson.id, 'dismissed by operator'))}
+            >
+              dismiss
+            </button>
+          )}
+          {lesson.status === 'active' && (
+            <button
+              type="button"
+              disabled={busy}
+              className={BTN}
+              onClick={() => act(() => retireLesson(lesson.id, 'retired by operator'))}
+            >
+              retire
+            </button>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Lessons — the review queue for lessons learned from surprising runs
+ *  (learning-loop phase 14). Nothing becomes active without an accept here. */
+export function Lessons(): JSX.Element {
+  const [filter, setFilter] = useState<LessonStatus | undefined>('candidate');
+  const [items, setItems] = useState<Lesson[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback((f: LessonStatus | undefined) => {
+    fetchLessons(f)
+      .then((ls) => {
+        setItems(ls);
+        setErr(null);
+      })
+      .catch((e: unknown) => setErr(String(e)));
+  }, []);
+
+  useEffect(() => {
+    load(filter);
+  }, [filter, load]);
+
+  const act = useCallback(
+    (run: () => Promise<Lesson>) => {
+      setBusy(true);
+      run()
+        .then(() => load(filter))
+        .catch((e: unknown) => setErr(String(e)))
+        .finally(() => setBusy(false));
+    },
+    [filter, load],
+  );
+
+  return (
+    <div className="p-6">
+      <h1 className="text-lg text-ink">Lessons</h1>
+      <p className="mt-1 max-w-2xl text-[12px] text-ink-dim">
+        When a phase run lands far from its forecast and its report explains why, a cheap model
+        proposes up to two lessons, each citing evidence from that run. A candidate reaches future
+        runs only after you accept it here. Merge it into an existing lesson when it repeats one.
+      </p>
+      <fieldset className="mt-3 inline-flex gap-1" aria-label="filter lessons by status">
+        {FILTERS.map((f) => (
+          <button
+            key={f.label}
+            type="button"
+            aria-pressed={filter === f.value}
+            onClick={() => setFilter(f.value)}
+            className={`rounded border px-1.5 py-px font-mono text-[10px] ${
+              filter === f.value ? 'border-brand text-brand' : 'border-line text-ink-dim hover:text-ink'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </fieldset>
+      {err !== null && (
+        <div role="alert" className="mt-3 text-[12px] text-red">
+          {err}
+        </div>
+      )}
+      {items === null && err === null && <div className="mt-4 text-ink-dim">loading…</div>}
+      {items !== null && items.length === 0 && (
+        <div className="mt-4 text-[12px] text-ink-dim">No lessons here.</div>
+      )}
+      {items !== null && items.length > 0 && (
+        <ul className="mt-4 grid max-w-3xl gap-3">
+          {items.map((l) => (
+            <LessonCard key={l.id} lesson={l} busy={busy} act={act} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

@@ -84,6 +84,13 @@ func r11RecurringLesson(db *sql.DB, win window) ([]finding, error) {
 		if g.action != "" {
 			ev["latest_action"] = g.action
 		}
+		// Learning-loop phase 14.5: a surprise-born lesson with the same identity
+		// is the same lesson, not a new one. Link it here so the recommendation
+		// points the operator at the reviewable candidate (area + guidance)
+		// instead of letting the two live side by side as duplicates.
+		if ids := surpriseLessonIDs(db, g.norm); len(ids) > 0 {
+			ev["surprise_lessons"] = ids
+		}
 		out = append(out, finding{
 			rule:       "R11",
 			targetKind: "skill",
@@ -116,6 +123,27 @@ func r11Detail(g lessonGroup) string {
 		detail += fmt.Sprintf(" Latest action: %s.", capRunes(g.action, 160))
 	}
 	return detail + " A lesson learned this often belongs in the procedure the next run reads, not in a finished task's retro."
+}
+
+// surpriseLessonIDs returns the candidate/active surprise lessons (migration
+// 0084) carrying an identity. Inlined (not imported from internal/lessons) so
+// the advisor keeps no dependency on the generator. Best-effort: a read error
+// leaves the finding without the link rather than failing the rule.
+func surpriseLessonIDs(db *sql.DB, norm string) []int64 {
+	rows, err := db.Query(`SELECT id FROM surprise_lessons
+		WHERE norm_title = ? AND status IN ('candidate', 'active') ORDER BY id`, norm)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // lessonGroups folds the window's lessons by norm_title, newest task first.
