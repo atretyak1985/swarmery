@@ -106,11 +106,11 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 
 // The prompt orients the agent only when the worktree is NOT the project root.
 func TestBuildPromptIn_RepoNote(t *testing.T) {
-	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", runcore.Budget{})
+	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "", runcore.Budget{})
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", runcore.Budget{})
+	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", "", runcore.Budget{})
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
 	}
@@ -210,5 +210,40 @@ func TestStart_DeclaredRepoOutsideUnregistered_Refuses(t *testing.T) {
 	}
 	if state != "idle" {
 		t.Fatalf("run_state = %q after a refused admission, want idle", state)
+	}
+}
+
+// The prompt orients the agent about additionalDirectories only when the
+// project declares them: without it a phase declared itself blocked on paths
+// the sandbox would have allowed (ported from PR #374).
+func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"permissions":{"additionalDirectories":["/proj/sibling-a","/proj/sibling-b"]}}`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".claude", "settings.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", filepath.Join(projectRoot, "app"), projectRoot, "", runcore.Budget{})
+	for _, want := range []string{"ADDITIONAL ACCESS:", "/proj/sibling-a", "/proj/sibling-b"} {
+		if !strings.Contains(withDirs, want) {
+			t.Errorf("prompt missing %q when additionalDirectories is declared:\n%s", want, withDirs)
+		}
+	}
+	// The worktree's own settings.json wins over the project's.
+	wt := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(wt, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".claude", "settings.json"), []byte(`{"permissions":{"additionalDirectories":["/wt/only"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fromWt := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", projectRoot, projectRoot, wt, runcore.Budget{})
+	if !strings.Contains(fromWt, "/wt/only") || strings.Contains(fromWt, "/proj/sibling-a") {
+		t.Errorf("worktree settings should take precedence:\n%s", fromWt)
+	}
+	if noDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "", runcore.Budget{}); strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
+		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }

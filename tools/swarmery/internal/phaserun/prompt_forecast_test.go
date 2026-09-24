@@ -46,7 +46,7 @@ func TestPromptForecastContract(t *testing.T) {
 	if n := strings.Count(got, "HOW YOUR TURN ENDS"); n != 1 {
 		t.Errorf("HOW YOUR TURN ENDS appears %d times, want exactly 1", n)
 	}
-	if n := strings.Count(BuildPromptIn("d", "d", "x", "", "", runcore.Budget{}), notALimit); n != 1 {
+	if n := strings.Count(BuildPromptIn("d", "d", "x", "", "", "", runcore.Budget{}), notALimit); n != 1 {
 		t.Errorf("BuildPromptIn: forecast sentence appears %d times, want exactly 1", n)
 	}
 }

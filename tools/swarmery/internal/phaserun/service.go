@@ -655,7 +655,7 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	if lendErr != nil {
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
 	}
-	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, budget)
+	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, budget)
 	// After run_session_uuid is stamped (so every lesson_uses row names a run the
 	// pending-session registry already answers for) and before the spawn.
 	if s.InjectLessons != nil {

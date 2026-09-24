@@ -345,6 +345,70 @@ func SameDir(a, b string) bool {
 	return resolve(a) == resolve(b)
 }
 
+// AdditionalDirs returns permissions.additionalDirectories from whichever
+// settings.json a run will actually have — the worktree's own copy when
+// syncUntrackedConfig placed one, else the project's — the same precedence
+// InheritedSettings already encodes. Read errors and a missing file both
+// answer nil: this is for prompt orientation only, never an access decision
+// (Claude Code itself reads and enforces the same file at runtime).
+func AdditionalDirs(projectPath, worktreePath string) []string {
+	path := ""
+	if worktreePath != "" {
+		candidate := filepath.Join(worktreePath, ".claude", "settings.json")
+		if _, err := os.Stat(candidate); err == nil {
+			path = candidate
+		}
+	}
+	if path == "" && projectPath != "" {
+		candidate := filepath.Join(projectPath, ".claude", "settings.json")
+		if _, err := os.Stat(candidate); err == nil {
+			path = candidate
+		}
+	}
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var parsed struct {
+		Permissions struct {
+			AdditionalDirectories []string `json:"additionalDirectories"`
+		} `json:"permissions"`
+	}
+	if json.Unmarshal(data, &parsed) != nil {
+		return nil
+	}
+	return parsed.Permissions.AdditionalDirectories
+}
+
+// AdditionalDirsNote renders the orientation block telling a headless run that
+// its worktree's "ONE root" is not absolute when the project also declares
+// permissions.additionalDirectories — or "" when there is nothing to add.
+//
+// Without this, the phase/plan prompt's opening line ("this worktree is your
+// ONE root... refused by the sandbox") reads as unconditional, so an agent
+// with genuine additionalDirectories access to a sibling repo never attempts
+// it and self-reports blocked on a path the sandbox would have allowed
+// (project Skygor, 2026-09-17: a phase needing sk-next + sk-control-box +
+// dk-infrastructure stopped cold despite additionalDirectories granting all
+// three, because nothing told the agent they were reachable).
+func AdditionalDirsNote(projectPath, worktreePath string) string {
+	dirs := AdditionalDirs(projectPath, worktreePath)
+	if len(dirs) == 0 {
+		return ""
+	}
+	lines := make([]string, len(dirs))
+	for i, d := range dirs {
+		lines[i] = "  - " + d
+	}
+	return fmt.Sprintf(
+		"ADDITIONAL ACCESS: beyond your worktree root, this project's permissions.additionalDirectories also grants you read/write access to:\n%s\n"+
+			"These are declared, not refused — the sandbox allows them, so use them if the document's tasks require it.\n\n",
+		strings.Join(lines, "\n"))
+}
+
 // InheritedSettings names the project settings file a run should be handed on
 // the command line, or "" when it needs none.
 //
