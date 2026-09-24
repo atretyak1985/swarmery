@@ -18,6 +18,8 @@ Two things ship from this repository on separate clocks:
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-24
+
 ### Added
 
 - **Predictive learning loop + local decision classifier (shadow).** Swarmery
@@ -196,5 +198,6 @@ First tagged release of the control plane, with binaries for
 - The marketplace itself: `core` plus the first domain packs, the workspace CLI
   (`agent-work.sh`), the neutrality ratchet, and the overlay schema.
 
-[Unreleased]: https://github.com/atretyak1985/swarmery/compare/swarmery-v0.2.0...HEAD
+[Unreleased]: https://github.com/atretyak1985/swarmery/compare/swarmery-v0.2.1...HEAD
+[0.2.1]: https://github.com/atretyak1985/swarmery/compare/swarmery-v0.2.0...swarmery-v0.2.1
 [0.2.0]: https://github.com/atretyak1985/swarmery/releases/tag/swarmery-v0.2.0
