@@ -1,6 +1,6 @@
 ---
 name: session-closeout
-version: "1.0.0"
+version: "1.1.0"
 owner: "swarmery-core"
 description: "Use this skill when closing a finished task — writing the SUMMARY.md final report, the phase-09 retrospective, and task documentation in the workspace task dir. Don't use it for mid-task status updates or commit messages."
 color: yellow
@@ -31,7 +31,14 @@ and the delegation ledger. A task closed without them is invisible work.
    match it, not synonyms). Read `{task-dir}/logs/agents.md` (7-cell ledger)
    first — its quality/mistakes cells are the evidence base. Format:
    `resources/retrospective-format.md`.
-3. **Archive** when every criterion is met:
+3. **`{task-dir}/plan/SUMMARY.md`** (≤120 lines) — for plan-driven tasks: the
+   plain-language overview the dashboard shows at the top of the plan's
+   Summary tab, above the per-phase reports. Written for the operator, not
+   for an engineer: what the task was in plain words, what was built and how
+   it works, where to see it, the headline numbers, what is left and what the
+   operator has to do. No commit hashes or file paths in the body. Format:
+   `resources/plan-summary-format.md`.
+4. **Archive** when every criterion is met:
    `bash "${CLAUDE_PLUGIN_ROOT}/bin/agent-work.sh" complete {task-id}`. Never
    archive with unmet criteria or a missing SUMMARY.md — escalate instead.
 
@@ -43,7 +50,7 @@ self-improvement loop.
 
 ## What it does
 
-Carries the closing-artifact contract for a finished task: the seven-section `SUMMARY.md`, the machine-parseable retrospective, and the archive step — the formats the dashboard and the retro/advisor loop actually ingest.
+Carries the closing-artifact contract for a finished task: the seven-section `SUMMARY.md`, the plain-language `plan/SUMMARY.md` overview, the machine-parseable retrospective, and the archive step — the formats the dashboard and the retro/advisor loop actually ingest.
 
 ## When to use it
 
@@ -51,7 +58,7 @@ At the end of any orchestrated or plan-driven task: the last checkbox is ticked,
 
 ## How to invoke
 
-`@core:tech-lead` and `@core:implementation-agent` load it via `skills:` at close-out; load it manually when finishing a task by hand and follow `resources/summary-format.md` + `resources/retrospective-format.md`.
+`@core:tech-lead` and `@core:implementation-agent` load it via `skills:` at close-out; load it manually when finishing a task by hand and follow `resources/summary-format.md`, `resources/plan-summary-format.md` and `resources/retrospective-format.md`.
 
 ## Worked example
 
