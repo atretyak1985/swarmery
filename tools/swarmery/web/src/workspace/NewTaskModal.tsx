@@ -19,9 +19,10 @@
 // the remainder becomes the title; an unknown name is left in the text so
 // nothing is silently dropped.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentRosterRow, BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { createBoardTask } from '../api';
+import { ConfirmDialog } from '../components/ui';
 import { AgentHint, AgentSelect, useAgentRoster } from './AgentPicker';
 import { COLUMN_LABELS, LANE_TITLES, laneOf, TASK_MODELS, TASK_PRIORITIES } from './boardModel';
 import { PlaybookHint, PlaybookSelect, usePlaybooks } from './PlaybookPicker';
@@ -84,6 +85,7 @@ export function NewTaskModal({
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const { playbooks } = usePlaybooks(projectId);
   const { agents, loading: rosterLoading } = useAgentRoster(projectId, projectSlug);
@@ -109,13 +111,47 @@ export function NewTaskModal({
     titleRef.current?.focus();
   }, []);
 
+  // Which advanced values are no longer at their default. Named, not counted:
+  // the disclosure is the only trace a collapsed override leaves, and "3 set"
+  // would tell the operator that something is off without saying what.
+  const overrides: string[] = [
+    ...(agent !== '' ? ['agent'] : []),
+    ...(priority !== 'normal' ? ['priority'] : []),
+    ...(model !== 'default' ? ['model'] : []),
+    ...(playbook !== '' ? ['playbook'] : []),
+    ...(fileScope.length > 0 ? ['file scope'] : []),
+    ...(dependencies.length > 0 ? ['dependencies'] : []),
+    ...(labels.length > 0 ? ['labels'] : []),
+    ...(column !== 'triage' ? ['column'] : []),
+  ];
+
+  // Anything the operator would have to retype: a title, a prompt, or an
+  // advanced override. Closing over any of this asks first instead of
+  // silently discarding it — Escape and the backdrop are the easiest ways
+  // to lose a half-written task, so they are the ones that need a guard.
+  const dirty = title.trim() !== '' || prompt.trim() !== '' || overrides.length > 0;
+
+  const requestClose = useCallback((): void => {
+    if (busy) return;
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onClose();
+  }, [busy, dirty, onClose]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !busy) onClose();
+      if (e.key !== 'Escape' || busy) return;
+      if (confirmDiscard) {
+        setConfirmDiscard(false);
+        return;
+      }
+      requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
+  }, [busy, confirmDiscard, requestClose]);
 
   // Focus trap: Tab cycles inside the dialog instead of escaping to the board
   // behind it. Queried live so controls that appear/disable mid-edit count.
@@ -137,20 +173,6 @@ export function NewTaskModal({
       first.focus();
     }
   };
-
-  // Which advanced values are no longer at their default. Named, not counted:
-  // the disclosure is the only trace a collapsed override leaves, and "3 set"
-  // would tell the operator that something is off without saying what.
-  const overrides: string[] = [
-    ...(agent !== '' ? ['agent'] : []),
-    ...(priority !== 'normal' ? ['priority'] : []),
-    ...(model !== 'default' ? ['model'] : []),
-    ...(playbook !== '' ? ['playbook'] : []),
-    ...(fileScope.length > 0 ? ['file scope'] : []),
-    ...(dependencies.length > 0 ? ['dependencies'] : []),
-    ...(labels.length > 0 ? ['labels'] : []),
-    ...(column !== 'triage' ? ['column'] : []),
-  ];
 
   const submit = (): void => {
     const t = title.trim();
@@ -190,7 +212,7 @@ export function NewTaskModal({
       role="dialog"
       aria-modal="true"
       aria-label="New task"
-      onClick={busy ? undefined : onClose}
+      onClick={busy ? undefined : requestClose}
     >
       <div
         ref={dialogRef}
@@ -202,7 +224,7 @@ export function NewTaskModal({
           <span className="font-display text-[14px] font-bold text-ink">New task</span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={busy}
             aria-label="close"
             className="ml-auto text-[15px] leading-none text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
@@ -378,7 +400,9 @@ export function NewTaskModal({
             go find — and it tracks that select when advanced changes it, so it
             can never promise Inbox and deliver a dispatch. Cancelling is the ×,
             Escape, or the backdrop: three ways out already, none of them a
-            button that competes with the one that does the work. */}
+            button that competes with the one that does the work. Any of the
+            three asks first once there's a title, a prompt, or an advanced
+            override to lose — see `requestClose`. */}
         <div className="mt-4 flex justify-end">
           <button
             type="button"
@@ -390,6 +414,17 @@ export function NewTaskModal({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        title="Discard new task?"
+        confirmLabel="discard"
+        danger
+        onConfirm={onClose}
+        onCancel={() => setConfirmDiscard(false)}
+      >
+        The title, prompt, and any advanced settings you've entered will be lost.
+      </ConfirmDialog>
     </div>
   );
 }
