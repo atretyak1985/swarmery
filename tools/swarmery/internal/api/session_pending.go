@@ -86,6 +86,12 @@ var pendingSessionSources = []pendingSessionSource{
 var pendingSessionExempt = map[string]string{
 	"sessions.session_uuid":                "the ingested session row itself — a hit here is a 200, not a pending answer",
 	"retro_analyses.planning_session_uuid": "a copy of planning_sessions.session_uuid stamped on the analysis it planned; the planning row is the source",
+	"run_events.session_uuid":              "a copy of the RUN's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each completion-loop decision so an event can be cross-linked to the transcript; those two run rows are the sources, and an event never exists without one",
+	"phase_actuals.session_uuid":           "a copy of epic_phases.run_session_uuid stamped on the measured-run row as its natural key; written only AFTER the run ended, so the phase row is the source and was already answering for the uuid while the run was live",
+	"decisions.session_uuid":               "a copy of the run's or session's uuid stamped on a classifier call (internal/decide, phase 9); D1 rows are written only after a run exits (epic_phases/plan_runs are the sources) and D2 rows only for sessions that already ended and were ingested",
+	"session_labels.session_uuid":          "D2 labels are written only for sessions that already ended and are ingested, so the sessions row itself answers for the uuid",
+	"phase_surprise.session_uuid":          "a copy of phase_actuals.session_uuid (itself epic_phases.run_session_uuid) keying the run's forecast-vs-actual score; written only after the run's actuals exist, so the phase row is the source",
+	"lesson_uses.session_uuid":             "a copy of the run's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each lesson a run's prompt carried (internal/lessons, phase 15); written in the same Start that stamps the run row, so those two run rows are the sources",
 }
 
 // pendingSessionDTO is the 202 body for GET /api/sessions/{uuid}. `pending` is the

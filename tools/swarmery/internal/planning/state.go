@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procfind"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // Wizard statuses — the closed set persisted in planning_sessions.status.
@@ -113,7 +114,12 @@ type WizardStatus struct {
 	Mode        string  `json:"mode"`   // plan|revise; "" when no wizard row
 	// Model is the full model ID every turn of this wizard runs on (see Models);
 	// "" when no wizard row.
-	Model           string            `json:"model"`
+	Model string `json:"model"`
+	// Effort is the reasoning depth every turn of this wizard runs at (see
+	// ResolveEffort); "" when no wizard row. Never the literal "default" — what
+	// is stored and reported is the RESOLVED rung, because an unpinned run does
+	// not think less, it thinks at the CLI's own xhigh.
+	Effort          string            `json:"effort"`
 	ReviseTaskId    *int64            `json:"reviseTaskId"`
 	CurrentQuestion *PlanningQuestion `json:"currentQuestion"`
 	RunningPlan     *PlanningSummary  `json:"runningPlan"`
@@ -142,15 +148,16 @@ type wizardRow struct {
 	reviseTaskID    sql.NullInt64
 	lastError       sql.NullString
 	model           sql.NullString
+	effort          sql.NullString
 }
 
-const wizardCols = `id, project_id, session_uuid, status, running_plan, current_question, raw_reply, plan_dir, created_at, updated_at, mode, revise_task_id, last_error, model`
+const wizardCols = `id, project_id, session_uuid, status, running_plan, current_question, raw_reply, plan_dir, created_at, updated_at, mode, revise_task_id, last_error, model, effort`
 
 func scanWizard(scan func(...any) error) (*wizardRow, error) {
 	var r wizardRow
 	err := scan(&r.id, &r.projectID, &r.uuid, &r.status, &r.runningPlan,
 		&r.currentQuestion, &r.rawReply, &r.planDir, &r.createdAt, &r.updatedAt,
-		&r.mode, &r.reviseTaskID, &r.lastError, &r.model)
+		&r.mode, &r.reviseTaskID, &r.lastError, &r.model, &r.effort)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -212,17 +219,10 @@ func (s *Service) processAlive(projectID int64, uuid string) bool {
 // lastAssistantText. Note: turns.text is text blocks ONLY — ingest drops
 // thinking blocks entirely (migration 0005), so the persisted "reasoning" is
 // the pre-JSON analysis prose, never extended thinking.
+// The query lives in runcore.LastAssistantText — one reader for every engine
+// that asks "what did this session say last".
 func (s *Service) lastAssistantText(uuid string) string {
-	var text sql.NullString
-	err := s.DB.QueryRow(`
-		SELECT tr.text
-		  FROM turns tr JOIN sessions se ON se.id = tr.session_id
-		 WHERE se.session_uuid=? AND tr.role='assistant' AND tr.text IS NOT NULL
-		 ORDER BY tr.seq DESC LIMIT 1`, uuid).Scan(&text)
-	if err != nil || !text.Valid {
-		return ""
-	}
-	return text.String
+	return runcore.LastAssistantText(s.DB, uuid)
 }
 
 // extractPlanDir pulls the absolute path off the LAST "PLAN SAVED:" line.
@@ -696,10 +696,14 @@ func (s *Service) WizardSnapshot(projectID int64) (WizardStatus, error) {
 		Status:      row.status,
 		Mode:        row.mode,
 		Model:       DefaultModel,
+		Effort:      DefaultEffort,
 		History:     []WizardTurn{},
 	}
 	if row.model.Valid && row.model.String != "" {
 		st.Model = row.model.String
+	}
+	if row.effort.Valid && row.effort.String != "" {
+		st.Effort = row.effort.String
 	}
 	if row.reviseTaskID.Valid {
 		v := row.reviseTaskID.Int64

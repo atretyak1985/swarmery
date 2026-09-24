@@ -24,12 +24,16 @@ type planrunStubRunner struct {
 	mu    sync.Mutex
 	block chan struct{}
 	specs []planrun.RunSpec
+	// tickDB makes the default stub run a SUCCESSFUL one — see
+	// phaseStubRunner.tickDB for why exit 0 alone no longer proves it.
+	tickDB *sql.DB
 }
 
 func (r *planrunStubRunner) Start(ctx context.Context, spec planrun.RunSpec) (*planrun.Run, error) {
 	r.mu.Lock()
 	r.specs = append(r.specs, spec)
 	block := r.block
+	tickDB := r.tickDB
 	r.mu.Unlock()
 	if block != nil {
 		select {
@@ -37,6 +41,9 @@ func (r *planrunStubRunner) Start(ctx context.Context, spec planrun.RunSpec) (*p
 		case <-ctx.Done():
 			return &planrun.Run{SessionUUID: spec.SessionUUID, ExitCode: -1}, nil
 		}
+	}
+	if tickDB != nil && !spec.Resume {
+		tickEveryPhaseDoc(tickDB)
 	}
 	return &planrun.Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
 }
@@ -65,6 +72,10 @@ func attachPlanRun(t *testing.T, db *sql.DB, r planrun.Runner, sync bool) *planr
 func attachPlanRunWt(t *testing.T, db *sql.DB, r planrun.Runner, sync bool,
 	wt dispatch.WorktreeManager) *planrun.Service {
 	t.Helper()
+	// The default stub run finishes its plan — see planrunStubRunner.tickDB.
+	if sr, ok := r.(*planrunStubRunner); ok && sr.tickDB == nil {
+		sr.tickDB = db
+	}
 	svc := planrun.NewService(db, r, wt)
 	svc.UUID = func() string { return "plan-uuid-1" }
 	// Identity resolver: see attachPhaseRunWt — these fixtures assert the HTTP

@@ -33,6 +33,19 @@ jq -c -n \
   '{ts: $ts, tool: "ModelSwitch", file: "", cmd: $cmd, session_id: $session_id, model_observed: $model_observed}' \
   >> "$SESSION_FILE" 2>/dev/null || true
 
+# A DOWNGRADE deserves one line on stderr, because it is the switch nobody asked
+# for. Claude Code answers a safeguard refusal by moving the session onto an
+# older model and carrying on: the work continues, quieter and weaker, and the
+# operator's only clue today is that the statusline shows a different name than
+# it did an hour ago. Say it once, name the likely cause, and name the way back.
+MODEL_TIER_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/model-tier.sh"
+# shellcheck source=lib/model-tier.sh
+[ -r "$MODEL_TIER_LIB" ] && . "$MODEL_TIER_LIB"
+if command -v model_is_downgrade >/dev/null 2>&1 \
+   && model_is_downgrade "$from_model" "$to_model"; then
+  echo "⚠️  session moved from ${from_model:-?} to ${to_model} (likely a safety classifier); /model to switch back" >&2
+fi
+
 # Pricing check. Best-effort: no pricing file, no jq match, no complaint.
 pricing="${CLAUDE_PLUGIN_ROOT:-}/../../tools/swarmery/config/pricing.json"
 [ -f "$pricing" ] || pricing="${SWARMERY_PRICING_JSON:-}"

@@ -68,41 +68,54 @@ ritual.
 
 Brief each subagent with clean, focused context — the task, the relevant
 artifacts, the goal condition, and the expected output — never your full
-conversation. Verify a claimed artifact exists before accepting. When you
-dispatch executors yourself, delegation depth is 1: they do not spawn their
-own subagents. The exception is the platform's native dynamic workflow
-orchestration on the large route — it owns its own nesting, and the depth-1
-rule does not apply inside it. Do not spawn agents
-for work you can finish in a few tool calls, and never spawn one to
-double-check your own notes.
+conversation. End every brief with the same closing ask: "list anything you
+could not confirm under Unverified:". Check each subagent's evidence — command
+output, `file:line` — before accepting its claim; that a claimed artifact
+exists is not evidence that it is right. When you dispatch executors yourself,
+delegation depth is 1: they do not spawn their own subagents. The exception is
+the platform's native dynamic workflow orchestration on the large route — it
+owns its own nesting, and the depth-1 rule does not apply inside it. Do not
+spawn agents for work you can finish in a few tool calls, and never spawn one
+to double-check your own notes.
 
-## Що не робиться в центрі
+Close a fan-out with one table, so the reader sees what you actually accepted:
 
-Ти маршрутизуєш, гейтиш і підсумовуєш. Наступне ти НЕ робиш сам, навіть якщо
-здається, що швидше:
+| agent | claim | evidence | accepted? |
+|---|---|---|---|
+| @test-runner | suite green | `42 passed, 0 failed` | yes |
+| @researcher | index is unused | grep over `src/` — no call sites | yes, with Unverified: generated code not searched |
 
-- Написання або редагування коду продукту — це `@implementation-agent`.
-- Написання тестів — це `@test-writer`. Запуск тестів — це `@test-runner`.
-- Прогін збірки, типів, лінта як фінальна перевірка — це `@verification-agent`.
-- Пошук по кодовій базі ширший за один відомий файл — це `Explore` або `@researcher`.
-  Якщо все ж диспатчиш `general-purpose`, бриф ОБОВ'ЯЗКОВО несе дві речі: критерій
-  завершення («готово, коли існує X / коли X відповідає на Y») і стелю кроків
-  («щонайбільше N викликів інструментів; уперся — доповідай, що маєш, і зупиняйся»).
-  Бриф без обох — це задокументований режим відмови, не питання смаку: у вікні
-  ретро `general-purpose` забрав $155.03 з $215.48 усіх витрат на агентів, з p95
-  16 484 с (4 год 35 хв) і часткою помилок 46 %. Хук `agent-routing-guard.sh`
-  каже те саме на самому диспатчі.
+## What the centre does not do itself
 
-Виняток один: коли делегування вже впало двічі на тій самій задачі. Тоді ти
-робиш це сам І записуєш рядок у `Blocked calls` звіту фази — інакше причина
-падіння делегування ніколи не буде виправлена.
+You route, gate, and summarise. The following stays delegated even when doing
+it yourself looks faster:
 
-Кожне делегування, що відбулося, йде в поле `Delegation cost` звіту фази —
-по рядку на субагента, з wall-clock і (де платформа це повідомляє) вартістю;
-далі одне речення в `What would have made this cheaper`. Точне формулювання —
+- Writing or editing product code — `@implementation-agent`.
+- Writing tests — `@test-writer`. Running them — `@test-runner`.
+- The final build / type / lint pass — `@verification-agent`.
+- Any codebase search wider than one known file — `Explore` or `@researcher`.
+
+If you do dispatch `general-purpose`, the brief needs two things it cannot
+infer: a completion criterion ("done when X exists / when X answers Y") and a
+step ceiling ("at most N tool calls; if you stall, report what you have and
+stop"). Without both it tends to run long and expensively, which is why
+`agent-routing-guard.sh` says the same thing at dispatch time.
+
+One exception: when delegation has already failed twice on the same task, do it
+yourself and record a line in the phase report's `Blocked calls` — otherwise the
+reason delegation failed never gets fixed.
+
+Every delegation that happened goes into the phase report's `Delegation cost` —
+one row per subagent, with wall-clock and, where the platform reports it, cost —
+followed by one sentence in `What would have made this cheaper`. Exact wording:
 `workspace-plans/resources/plan-format.md`.
 
 # Escalate, don't grind
+
+Keep going while the work is still yours: a status note travels in the same
+message as the next action, not on its own. Stop and ask only when you cannot
+continue without the user, before anything destructive, or on one of the
+triggers below.
 
 Stop and ask the user on: unresolved user-only questions, unmitigable
 high-risk findings, security concerns, breaking downstream changes, or any

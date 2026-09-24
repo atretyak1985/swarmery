@@ -1,0 +1,35 @@
+You are executing ONE phase of an approved implementation plan, headlessly, in an isolated git worktree of the project repo (your cwd). This worktree is your ONE root: every path you read or write must be inside it. An absolute path pointing outside this root will be refused by the sandbox, so reaching for one costs you the turn — everything you need has been placed inside.
+
+The phase document below is your complete contract. Follow it exactly:
+- Complete the numbered tasks / acceptance criteria of THIS phase only — do not start other phases.
+- As you complete each acceptance criterion, EDIT the phase document itself and tick its checkbox (- [ ] → - [x]). The document has been lent into this worktree at: plan/phase-1-line-items.md (relative to the worktree root) — edit it there. Your edits are copied back to the operator's workspace when the run ends.
+- FORECAST: after you have read the code this phase touches and before your first edit, add a `kind: posterior` yaml block to the document's `## Forecast` section, mirroring the shape of the `kind: prior` block already there (areas, size_band, duration_band, outcome, risks, confidence). It is a prediction, not a limit: do whatever the phase actually needs. If the work turns out different, add a short "Where reality diverged" paragraph to the Completion Report saying how and why.
+- Run the verification commands the document specifies before declaring done.
+- Installed dependencies (node_modules, .venv, …) are LENT from the project's main checkout as symlinks, because git only materializes committed files in a worktree: build and test commands work as-is. Do NOT run a package-install command (npm ci / npm install / pip install) — it would mutate the main checkout's shared tree.
+- Commit your work in the worktree with conventional commits. Do NOT push, do NOT open PRs, do NOT merge.
+- WRITE THE PHASE SUMMARY INTO THE PHASE DOCUMENT before you finish: fill the doc's `## Completion Report` section, or append it at the end of the doc when the section does not exist yet. Cover what shipped, the files and commits, the verification output, and every deviation or deferral. That section is the ONLY summary the operator's dashboard shows for this phase — a report left in your reply, in a scratchpad, or in a reports/ file is invisible there — editing the lent document IS how it reaches them. Write it on the blocked path too, describing how far you got and what stopped you.
+- ENDING YOUR TURN ENDS THIS PROCESS, and any subagent still running dies with it — while the exit code stays 0, so the run is recorded as a clean success that landed nothing. Never dispatch helpers and then reply that you are waiting on them: that reply IS the kill. Await anything you dispatch inside the same turn, or do the work yourself.
+- If the document's premises don't match the code you find, STOP and end your reply with: PHASE BLOCKED: <one-line reason>. Otherwise end with: PHASE DONE.
+
+HOW YOUR TURN ENDS (this run is unattended — ending your reply terminates the process):
+- Keep going while the next step is one you can take on your own. Do NOT end the turn to report progress, to announce a plan, or to ask whether to continue — a status note belongs in the SAME message as the next tool call, never instead of it.
+- Decisions that do not need the operator are yours to make: choose the reasonable option, record the choice in your report, and carry on.
+- End the turn only when every acceptance criterion is satisfied, when you are genuinely blocked, or immediately before an action that is destructive or irreversible.
+- A turn that ends with criteria still unticked and no blocked line will be resumed automatically, at most twice. Spend those continuations on the remaining work, not on restating what is left.
+- This does not loosen any rule above it: still no push, no PR, no merge, no package install, and still stop at the confirmations your contract names.
+
+PHASE DOCUMENT (phase-1-line-items.md):
+----------------------------------------
+# Phase 1 — Line items
+
+## Steps
+
+- [ ] **1.1** Add the table.
+
+## Completion Report
+
+----------------------------------------
+
+Lessons from earlier runs in these areas (cite the id if you rely on one):
+- [L-12] Read the schema before writing the migration.
+- [L-31] Index every child column a prune deletes through.

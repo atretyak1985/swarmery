@@ -3,6 +3,7 @@
 # Soft assert: llm-rubric for severity + remediation recommendation
 
 - description: security-auditor flags a SQL-injection sink
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/security-auditor.md
     task: >
@@ -11,7 +12,11 @@
       and executes it directly. Audit for OWASP issues.
   assert:
     - type: regex
-      value: '(?i)(sql[- ]?injection|injection|parameteriz)'   # hard — must name the vuln class or remediation
+      # hard — must name the vuln class or remediation. Character classes, not
+      # (?i): promptfoo compiles with `new RegExp(value)` and no flags, so an
+      # inline-flag prefix throws and scores the assertion failed. The old
+      # `sql[- ]?injection` branch was subsumed by the bare `injection` one.
+      value: '([Ii][Nn][Jj][Ee][Cc][Tt][Ii][Oo][Nn]|[Pp][Aa][Rr][Aa][Mm][Ee][Tt][Ee][Rr][Ii][Zz])'
     - type: regex
       value: 'VERDICT:\s+(PASS|FAIL|INCONCLUSIVE)'             # hard — core 3.0 machine verdict grammar
     - type: llm-rubric                                           # soft

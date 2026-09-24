@@ -1,0 +1,43 @@
+-- 0080: phase_forecasts.post_hoc_reason — WHICH observation decided a forecast
+-- cannot have been a prediction.
+--
+-- Opus 5.5 / learning-loop phase 11. 0079 shipped `post_hoc` with exactly one
+-- producer: a PRIOR sitting in a doc whose `## Completion Report` was already
+-- filled. Phase 11 adds a second, independent producer for the other kind — a
+-- POSTERIOR whose transcript shows it was written to the phase doc AFTER the
+-- run's first change to some other file. Both answer the same operator question
+-- ("is this forecast trustworthy enough to score?") about different kinds, so
+-- they share the `post_hoc` flag rather than splitting into two columns that
+-- every consumer would have to remember to OR together. Phase 16 scores
+-- calibration on `WHERE post_hoc = 0`, one predicate, and that predicate is
+-- correct for priors and posteriors alike.
+--
+-- What would have been LOST by sharing one bare flag is which evidence fired,
+-- and that is exactly what an operator needs to act: a `report-filled` prior is
+-- a planning-hygiene problem (someone backfilled a prediction), an
+-- `after-first-edit` posterior is an execution-order problem (the executor
+-- started editing before it predicted). This column keeps them distinguishable
+-- without making the calibration filter compound.
+--
+-- VOCABULARY, not a CHECK constraint, for 0079's stated reason: the scan must
+-- never fail on a value, and a new reason added by a later phase must not
+-- require a table rebuild.
+--   ''                  — not post hoc
+--   'report-filled'     — prior, doc's Completion Report was already filled
+--   'after-first-edit'  — posterior, written after the run's first file change
+--
+-- BACKFILL. Every existing post_hoc = 1 row was set by the only producer that
+-- existed when it was written, so its reason is 'report-filled' by construction.
+-- Rows are re-derived on the next scan of a changed plan anyway (applyForecasts
+-- replaces a phase's whole forecast set), so this backfill only matters for
+-- plans that never change again — which is precisely the history the learning
+-- loop reads.
+--
+-- WHY 0080. migrate.go applies unapplied files in FILENAME order, so a new
+-- migration takes the next number above the highest existing one (0079,
+-- phase_forecasts). Re-using a lower slot would order differently on a fresh
+-- database than on a migrated one — see 0074's note.
+
+ALTER TABLE phase_forecasts ADD COLUMN post_hoc_reason TEXT NOT NULL DEFAULT '';
+
+UPDATE phase_forecasts SET post_hoc_reason = 'report-filled' WHERE post_hoc = 1;

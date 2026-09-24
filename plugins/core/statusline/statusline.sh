@@ -28,10 +28,18 @@
 #                      $HOME file is deliberately NOT used as a fallback then),
 #                      else $HOME/.claude.json. Pure local read: no network,
 #                      no credentials, no cache needed.
-#       Model        : JSON .model.display_name           (e.g. "Opus 5")
+#       Model        : JSON .model.display_name           (e.g. "Opus 5.5")
 #       Style        : JSON .output_style.name            (e.g. "Explanatory")
-#       ▲<effort>    : JSON .effort.level                 (high / medium / low)
-#       🧠           : shown when JSON .thinking.enabled == true
+#       ▲<effort>    : JSON .effort.level
+#                      (low / medium / high / xhigh / max — the five the CLI
+#                      accepts; the badge prints whatever the harness reports,
+#                      so a sixth level would show up rather than vanish)
+#       🧠off        : shown when JSON .thinking.enabled == FALSE.
+#                      Inverted deliberately: extended thinking is ON by default
+#                      on the models this fleet runs, so a badge for the default
+#                      marked every session and told the reader nothing. The
+#                      state worth a glyph is the one that changes the output —
+#                      thinking switched off.
 #       ⚡fast       : shown when JSON .fast_mode == true
 #       “session”    : JSON .session_name (the auto/explicit session title)
 #
@@ -448,7 +456,9 @@ PWD_SHORT="$(basename "$CWD")"
 # Header badges: effort level, thinking, fast-mode, then the session name.
 BADGES=""
 [ -n "$EFFORT" ]       && BADGES="${BADGES} ${GREY}·${C_RST} ${ORANGE}▲${EFFORT}${C_RST}"
-[ "$THINKING" = "true" ] && BADGES="${BADGES} ${PURPLE}🧠${C_RST}"
+# Only the explicit "false" — an ABSENT field means the harness did not report
+# thinking at all, which is not the same as reporting it off and must stay silent.
+[ "$THINKING" = "false" ] && BADGES="${BADGES} ${PURPLE}🧠off${C_RST}"
 [ "$FAST" = "true" ]     && BADGES="${BADGES} ${YELLOW}⚡fast${C_RST}"
 [ -n "$ACCOUNT_KEY" ] && [ "$ACCOUNT_KEY" != "default" ] && \
   BADGES="${BADGES} ${GREY}·${C_RST} ${CYAN}🪪${ACCOUNT_KEY}${C_RST}"

@@ -131,12 +131,10 @@ looking at before the verdict means anything.
 
 # Platform
 
-- Model: opus, effort: high — sufficient for orchestrating several
-  MCP tool families (Atlassian + local board API) and a repo-side reproduction
-  run in one pass, without the heaviest reasoning tier reserved for
-  multi-repo, multi-plan orchestration.
-- Tools: inherits all available tools; actions bounded by
-  `permissionMode: acceptEdits`. Primarily: the Atlassian MCP tools resolved
+- This run orchestrates several MCP tool families (Atlassian plus the local
+  board API) alongside a repo-side reproduction, and it is expected to finish
+  in one pass rather than hand work back between them.
+- Tools: inherits all available tools. Primarily: the Atlassian MCP tools resolved
   and prefix-pinned by `jira-access-preflight` (never call a second prefix
   mid-run, even if two channels are live — see that skill), Bash (running
   `jira.repro.setup`/`jira.repro.test` via `testing`), Read/Grep (searching
@@ -353,14 +351,14 @@ policy for ad-hoc queries, one broad always-auto policy scoped to an explicit
 ```
 /jira-fix ABC-142
 ```
-<thinking>
+<why>
 Resolve config → preflight → mint/move the board card → read the ticket in
 full, run `jira.repro.setup` then `jira.repro.test`, plus the ticket's own
 repro steps if it names a more specific one → classify. Say the command exits
 0 and the reported crash does not occur: verdict is `cannot-reproduce`, so
 `jira-writeback` posts `comment-cannot-reproduce.md` first, then attempts the
 QA transition, and the board card moves to `done`.
-</thinking>
+</why>
 ```
 ```
 
@@ -368,7 +366,7 @@ QA transition, and the board card moves to `done`.
 ```
 /jira-fix ABC-139
 ```
-<thinking>
+<why>
 The ticket is typed `Task` and reads "disable the `<control>` until every
 `<unit>` reports `<terminal-state>`" — imperative, acceptance-criteria shaped,
 no steps to reproduce and no complaint about current behavior. Class: `change`.
@@ -389,7 +387,7 @@ returns `PASS` with that test present in the diff, commit
 `feat(<scope>): … [ABC-139]`, PR, then `comment-change-summary.md` pairing each
 criterion with its test, then the QA transition. Board card lands in
 `in_review`.
-</thinking>
+</why>
 </example>
 
 <example>

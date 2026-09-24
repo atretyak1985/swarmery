@@ -4,6 +4,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
@@ -26,7 +27,9 @@ You are running unattended inside a dedicated git worktree on branch {{.Branch}}
 - Do not push, do not create PRs, do not switch branches.
 {{if .TaskDoc}}- THIS CARD HAS A PLAN DOCUMENT, lent into this worktree at {{.TaskDoc}} (relative to the worktree root) — edit it there. Tick its acceptance checkboxes (- [ ] → - [x]) as you satisfy them, and fill its ` + "`## Completion Report`" + ` section before you finish: what shipped, the files and commits, the verification output, and every deviation or deferral. That section is the ONLY summary the operator's dashboard shows for this card — a report left in your reply or in a scratchpad file is invisible there. Your edits to this file are copied back to the operator's workspace when the run ends, so editing it here IS how the report reaches them. Write it on the blocked path too, describing how far you got and what stopped you.
 {{else}}- THIS CARD HAS NO PLAN DOCUMENT, so write your report to {{.ReportPath}} (relative to the worktree root) — create the file — before you finish: what shipped, the files and commits, the verification output, and every deviation or deferral. That file is the ONLY summary the operator's dashboard shows for this card — a report left in your reply or in a scratchpad file is invisible there. It is read back into the card when the run ends, so writing it here IS how the report reaches the operator. Write it on the blocked path too, describing how far you got and what stopped you.
-{{end}}--- END CONTRACT ---`))
+{{end}}
+{{.TurnContract}}
+--- END CONTRACT ---`))
 
 // contractData is the template payload.
 type contractData struct {
@@ -41,6 +44,13 @@ type contractData struct {
 	// rendering an instruction about a file that does not exist — which is what
 	// makes a mint failure genuinely non-fatal instead of merely non-crashing.
 	TaskDoc string
+	// TurnContract is runcore's standing instruction on how an unattended turn
+	// ends, rendered here so the dispatcher's contract states it in the same
+	// words phaserun and planrun do. Dispatch carries NO budget line: unlike a
+	// phase or plan run, a dispatched stage's deadline lives with the dispatcher
+	// (runcore.Spec.Timeout is 0 for this engine — the stage's ctx owns
+	// cancellation), so there is no wall clock here that could honestly be stated.
+	TurnContract string
 	// ReportPath is the WORKTREE-RELATIVE destination the no-doc branch names.
 	// It is never blank when TaskDoc is: a card without a plan doc still owes
 	// the operator a summary, and the doc branch's text rendered with an empty
@@ -86,11 +96,12 @@ func BuildStagePromptDoc(stageBody, branch, taskID, taskDoc string, fileScope []
 	// contract absent, which the caller would still spawn — acceptable, and
 	// unreachable).
 	_ = contractTemplate.Execute(&b, contractData{
-		Branch:     branch,
-		TaskID:     taskID,
-		FileScope:  scopeText(fileScope),
-		TaskDoc:    taskDoc,
-		ReportPath: worktree.ReportPath,
+		Branch:       branch,
+		TaskID:       taskID,
+		FileScope:    scopeText(fileScope),
+		TaskDoc:      taskDoc,
+		TurnContract: runcore.TurnContract(runcore.Budget{}),
+		ReportPath:   worktree.ReportPath,
 	})
 	return b.String()
 }

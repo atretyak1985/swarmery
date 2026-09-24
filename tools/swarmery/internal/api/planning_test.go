@@ -311,3 +311,55 @@ func TestStartPlanning_Model(t *testing.T) {
 		t.Errorf("status model = %q, want claude-sonnet-5", st.Model)
 	}
 }
+
+// Effort is model's twin on the start request: an unknown rung is a 400, a known
+// one is stored and surfaced, and an ABSENT key means the planner's ladder — not
+// omission. The absent case is the one that matters: the dashboard's "default"
+// option sends no key at all, and if that were ever stored as "" the resume
+// would spawn with no --effort and run at the CLI's xhigh.
+func TestStartPlanning_Effort(t *testing.T) {
+	srv, _, svc := serverWithPlanning(t, &planStubRunner{})
+
+	bad := postPlanningJSON(t, srv.URL+"/api/projects/1/planning",
+		map[string]string{"idea": "x", "effort": "ludicrous"})
+	bad.Body.Close()
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown effort = %d, want 400", bad.StatusCode)
+	}
+
+	ok := postPlanningJSON(t, srv.URL+"/api/projects/1/planning",
+		map[string]string{"idea": "x", "effort": "low"})
+	ok.Body.Close()
+	if ok.StatusCode != http.StatusAccepted {
+		t.Fatalf("low = %d, want 202", ok.StatusCode)
+	}
+	if got := svc.Effort("uuid-api"); got != "low" {
+		t.Errorf("stored effort = %q, want low", got)
+	}
+	st, err := svc.WizardSnapshot(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Effort != "low" {
+		t.Errorf("status effort = %q, want low", st.Effort)
+	}
+}
+
+// No effort key at all — what the UI's "default" option sends — resolves to the
+// engine default and is STORED as that, never as "".
+func TestStartPlanning_EffortAbsentResolvesToDefault(t *testing.T) {
+	srv, _, svc := serverWithPlanning(t, &planStubRunner{})
+
+	ok := postPlanningJSON(t, srv.URL+"/api/projects/1/planning", map[string]string{"idea": "x"})
+	ok.Body.Close()
+	if ok.StatusCode != http.StatusAccepted {
+		t.Fatalf("no effort key = %d, want 202", ok.StatusCode)
+	}
+	got := svc.Effort("uuid-api")
+	if got == "" {
+		t.Fatal("stored effort = \"\" — that omits --effort and runs at the CLI's xhigh")
+	}
+	if got != planning.DefaultEffort {
+		t.Errorf("stored effort = %q, want %q", got, planning.DefaultEffort)
+	}
+}

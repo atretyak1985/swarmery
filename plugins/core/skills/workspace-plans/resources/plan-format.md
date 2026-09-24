@@ -42,6 +42,7 @@ Status: Pending
 ## Acceptance Criteria
 - [ ] {measurable criterion with its verification command}
 ## Notes
+## Forecast                   ← optional; see "## Forecast" below
 ## Completion Report          ← empty stub, ALWAYS the last section
 ```
 
@@ -136,6 +137,55 @@ The WHAT/WHY: short problem statement, user stories, and an
 spec.md exists, every phase doc MUST carry a `**Covers:** SC-…` line; every
 SC id must be covered by ≥1 phase and no phase may cover an undeclared id —
 the platform lints coverage.
+
+## `## Forecast` (optional, in a phase doc, before `## Completion Report`)
+
+A small prediction the platform stores and later scores. It is DATA, never a
+gate: no run is refused and no phase is incomplete for diverging from one, or
+for lacking one. A block the platform cannot read is a lint on a plan that
+still ingests.
+
+````markdown
+## Forecast
+
+```yaml
+kind: prior            # prior (planner) | posterior (executor)
+written_at: 2026-09-23T10:12:00Z
+areas: [internal/ingest, internal/cost]                    # REQUIRED
+files: [internal/ingest/record.go, config/pricing.json]    # optional, globs ok
+size_band: M           # XS <20 lines | S <100 | M <400 | L <1500 | XL
+duration_band: 30-90m  # <30m | 30-90m | 90m-4h | >4h
+outcome: done          # done | partial | blocked
+risks: ["migration touches turns table", "recost path diverges"]
+confidence: 0.7        # 0..1, how sure the whole forecast holds
+```
+````
+
+A doc may carry both a prior and a posterior — two fenced blocks in one
+section, told apart by `kind`. The planner writes the prior. The executor
+writes the posterior **after it has read the code the phase touches and before
+its first edit** — that is the last moment at which it is still a prediction.
+It is a prediction, not a limit: do whatever the phase actually needs. When the
+work turns out different, the Completion Report carries a short "Where reality
+diverged" paragraph saying how and why.
+
+Linted (shown on the phase, never enforced): an unrecognized `kind`,
+`size_band`, `duration_band` or `outcome`; a `confidence` that is not a number
+in 0..1; a forecast with no `areas`; a posterior with no prior to score
+against.
+
+**Post hoc.** A forecast is flagged post hoc when it cannot have been a
+prediction, and post-hoc forecasts are excluded from calibration. Two
+independent observations set the flag, and the phase shows which one did:
+
+| Reason | Applies to | Evidence |
+|---|---|---|
+| `report-filled` | prior | The doc's `## Completion Report` was already filled when the prior appeared. |
+| `after-first-edit` | posterior | The run's transcript shows the posterior was written to the doc after the run's first change to some other file. |
+
+Neither is a gate. A post-hoc forecast still ingests, still renders, and still
+lets its phase run; the only consequence is that the learning loop does not
+score it.
 
 ## Verification hooks for planners
 

@@ -33,7 +33,7 @@ func TestStart_DocModelUsedWhenRequestHasNone(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got, want := r.lastSpec().Model, planning.Models["sonnet"]; got != want {
@@ -50,7 +50,7 @@ func TestStart_DocModelAcceptsFullID(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got, want := r.lastSpec().Model, planning.Models["fable"]; got != want {
@@ -65,7 +65,7 @@ func TestStart_RequestModelOverridesDocModel(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, "opus"); err != nil {
+	if _, err := s.Start(p1, "opus", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := r.lastSpec().Model; got != planning.DefaultModel {
@@ -84,7 +84,7 @@ func TestStart_RequestModelWinsOverAnUnknownDocModel(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, "sonnet"); err != nil {
+	if _, err := s.Start(p1, "sonnet", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got, want := r.lastSpec().Model, planning.Models["sonnet"]; got != want {
@@ -105,7 +105,7 @@ func TestStart_UnknownDocModelStartsNothing(t *testing.T) {
 	wt := &stubWt{}
 	s := newTestService(db, r, wt)
 
-	_, err := s.Start(p1, "")
+	_, err := s.Start(p1, "", "")
 	var docErr *DocModelError
 	if !errors.As(err, &docErr) {
 		t.Fatalf("Start err = %v (%T), want *DocModelError", err, err)
@@ -152,7 +152,7 @@ func TestStart_NoDocModelFallsThroughToEnvVerbatim(t *testing.T) {
 	s := newTestService(db, r, &stubWt{})
 
 	// doc_model deliberately left at its NULL default.
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := r.lastSpec().Model; got != pinned {
@@ -160,7 +160,11 @@ func TestStart_NoDocModelFallsThroughToEnvVerbatim(t *testing.T) {
 	}
 }
 
-// Rung 4, unchanged: nothing anywhere ⇒ no --model flag.
+// A whitespace-only declaration is "no opinion", so the ladder falls THROUGH it
+// to rung 4 — which is now planning.DefaultModel rather than no flag at all (see
+// TestStart_NoModelAnywhereUsesTheHouseDefault for why). What this test still
+// pins is the fall-through itself: a blank line must not be refused as "unknown
+// model ''", and must not be treated as a declaration.
 func TestStart_EmptyDocModelIsNoOpinion(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	t.Setenv(modelEnv, "")
@@ -170,10 +174,11 @@ func TestStart_EmptyDocModelIsNoOpinion(t *testing.T) {
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if got := r.lastSpec().Model; got != "" {
-		t.Errorf("RunSpec.Model = %q, want empty so no --model flag is emitted", got)
+	if got := r.lastSpec().Model; got != planning.DefaultModel {
+		t.Errorf("RunSpec.Model = %q, want the rung-4 default %q — a blank declaration must fall through, not declare",
+			got, planning.DefaultModel)
 	}
 }

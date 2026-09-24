@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // mkRepo marks dir as a git checkout for repopath.Resolve (which stats .git and
@@ -192,11 +194,11 @@ func TestDeleteRunBranch_UsesResolvedRepo(t *testing.T) {
 func TestBuildPromptIn_RepoNote(t *testing.T) {
 	phases := []Phase{{Seq: 1, Name: "P1", DocPath: "/plan/phase-1.md", Total: 1}}
 
-	multi := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj")
+	multi := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", runcore.Budget{})
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj", "/proj")
+	solo := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj", "/proj", runcore.Budget{})
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
 	}

@@ -9,15 +9,22 @@ package phaserun
 // stub-testable.
 //
 // Knobs (all optional):
+//   - SWARMERY_PHASERUN_EFFORT  the FALLBACK reasoning depth for a run whose
+//     request named none AND whose phase doc declares no **Effort:** header — the
+//     last rung before DefaultEffort. Unlike the model knob it IS validated
+//     (internal/claudeflags): --effort takes a closed set of five values, an unknown
+//     one makes the CLI reject the flag and the spawn die before the run starts, so
+//     passing a typo through verbatim would turn it into a dead phase. Set it to
+//     "off" to pass no --effort at all and inherit the CLI's xhigh.
 //   - SWARMERY_PHASERUN_MODEL   the FALLBACK model for a run whose request named
 //     none AND whose phase doc declares no **Model:** header — the LAST rung before
-//     "no --model at all". The service reads it (one resolution site) and puts it on
+//     planning.DefaultModel. The service reads it (one resolution site) and puts it on
 //     RunSpec.Model; the runner itself no longer touches the environment. It is
 //     passed as --model VERBATIM and is never validated — unlike the two rungs above
 //     it, both checked against the dashboard's closed model set. An operator pins a
 //     full ID here, including forms that set does not know (e.g. a "[1m]"
 //     context-window suffix), and validating it would silently drop every run back
-//     to the account default. Pin full model IDs, not aliases — aliases re-resolve
+//     to planning.DefaultModel. Pin full model IDs, not aliases — aliases re-resolve
 //     over time. A model on the request outranks it, and so does one declared by the
 //     phase doc; see Service.Start for the whole ladder.
 //   - SWARMERY_PHASERUN_TIMEOUT Go duration bounding one phase run (default 4h).
@@ -69,6 +76,22 @@ type RunSpec struct {
 	// account default.
 	Model string
 
+	// Effort is the already-resolved reasoning depth for this run, passed as
+	// --effort. The service owns its ladder too (request effort → the phase
+	// doc's **Effort:** → SWARMERY_PHASERUN_EFFORT → DefaultEffort), so the
+	// runner only forwards it. Unlike Model, "" here is an explicit "off" rather
+	// than a shrug: an omitted --effort means the CLI's xhigh, and a 4-hour
+	// phase run at maximum depth is the most expensive shape this daemon has.
+	Effort string
+
+	// Resume makes this spawn a CONTINUATION of SessionUUID (`claude -r <uuid>`)
+	// instead of a fresh session: the completion loop's nudge to a run that ended
+	// its turn with acceptance criteria still unticked. The service builds it by
+	// COPYING the original spec and setting only this and Prompt, so the
+	// continuation keeps the same model, effort, permission mode, settings file
+	// and account — an unpinned --effort on a resume would be the CLI's xhigh.
+	Resume bool
+
 	// ProjectPath is the phase's project — phaseInfo.ProjectPath (projects.path),
 	// the SAME value SettingsFile is derived from. Used ONLY to resolve the
 	// Claude account this run must execute under: Cwd is the acquired
@@ -102,9 +125,18 @@ const phaseRunTimeout = 4 * time.Hour
 // t.Setenv reaching into the spawn.
 const (
 	modelEnv   = "SWARMERY_PHASERUN_MODEL"
+	effortEnv  = "SWARMERY_PHASERUN_EFFORT"
 	timeoutEnv = "SWARMERY_PHASERUN_TIMEOUT"
 	permEnv    = "SWARMERY_PHASERUN_PERMISSION_MODE"
 )
+
+// DefaultEffort pins how hard a phase run thinks when neither the request nor
+// the phase doc nor SWARMERY_PHASERUN_EFFORT says otherwise. A phase is real
+// implementation work — read the code, edit it, run the checks, commit — so it
+// is pinned high rather than down; the point of pinning it at all is that the
+// CLI's unpinned default is xhigh, and four hours at maximum depth is this
+// daemon's most expensive run shape. Phase 7 re-measures this value.
+const DefaultEffort = "high"
 
 // timeoutFromEnv reads SWARMERY_PHASERUN_TIMEOUT, falling back to the default on
 // an unset or unusable value (an operator typo must not mean "no timeout").
@@ -146,12 +178,15 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
+		Resume:      spec.Resume,
 		// Without a permission mode the run cannot write, cannot run its
 		// verification command and cannot commit — and it still exits 0. See
 		// internal/claudeflags for the resolution and its escape hatch.
 		PermissionMode: claudeflags.Mode(permEnv),
-		// Already resolved by the service (request → doc → env → none); "" emits no flag.
-		Model:        spec.Model,
+		// Already resolved by the service (request → doc → env → planning.DefaultModel).
+		Model: spec.Model,
+		// Also already resolved by the service (request → doc → env → DefaultEffort).
+		Effort:       spec.Effort,
 		SettingsFile: spec.SettingsFile,
 		// The account comes from spec.ProjectPath, never from Cwd: Cwd is the
 		// phase's acquired worktree, which has no .claude/settings.local.json of its

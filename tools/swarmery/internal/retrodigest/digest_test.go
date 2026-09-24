@@ -55,6 +55,12 @@ func sample() Report {
 			{ID: 3, Rule: "R1", TargetKind: "tool", Target: "Bash", DedupKey: "R1:Bash",
 				Title: "Denied repeatedly", Detail: "", Status: "accepted"},
 		},
+		Surprises: []Surprise{
+			{PhaseID: 12, Plan: "Learning loop", Phase: "Surprise scoring", Index: 0.4,
+				Top: "outcome_miss", Summary: "surprise 0.40 — top: outcome_miss"},
+			{PhaseID: 31, Plan: "Other plan", Phase: "Areas\nphase", Index: 0.8,
+				Top: "unexpected_areas", Summary: "surprise 0.80 — top: unexpected_areas"},
+		},
 	}
 }
 
@@ -90,6 +96,7 @@ func TestBuildCarriesEveryCitationKind(t *testing.T) {
 		cite(KindSession, "s-a"),
 		cite(KindTask, "2026-08-20-thing"),
 		cite(KindLesson, "2026-08-20-thing#1"),
+		cite(KindPhase, "12"),
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("digest is missing citation %s", want)
@@ -98,7 +105,7 @@ func TestBuildCarriesEveryCitationKind(t *testing.T) {
 }
 
 // markerRe must stay in lockstep with the validator in internal/retroanalysis.
-var markerRe = regexp.MustCompile(`\[E:(agent|rec|error_group|session|task|lesson):[^\]\s][^\]]*\]`)
+var markerRe = regexp.MustCompile(`\[E:(agent|rec|error_group|session|task|lesson|phase):[^\]\s][^\]]*\]`)
 
 func TestEveryMarkerMatchesTheValidatorGrammar(t *testing.T) {
 	md, _ := Build(sample(), 30720)
@@ -274,6 +281,7 @@ func TestBuildOnEmptyReport(t *testing.T) {
 		"Nothing in this window was denied and no error fired.",
 		"No task in this window recorded a lesson.",
 		"No workspace task in this window carried a parsed artifact.",
+		"No phase run in this window was scored against a forecast.",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("empty digest is missing the honest %q line:\n%s", want, md)
@@ -311,4 +319,17 @@ func TestOneLineFlattensMultilineProse(t *testing.T) {
 		}
 	}
 	t.Errorf("a multi-line detail was not flattened onto one list line:\n%s", md)
+}
+
+// Surprises render most surprising first, one line each, citing the phase.
+func TestSurprisesRenderMostSurprisingFirst(t *testing.T) {
+	md, _ := Build(sample(), 30720)
+	hi := strings.Index(md, cite(KindPhase, "31"))
+	lo := strings.Index(md, cite(KindPhase, "12"))
+	if hi < 0 || lo < 0 || hi > lo {
+		t.Errorf("phase 31 (0.80) should precede phase 12 (0.40):\n%s", md)
+	}
+	if !strings.Contains(md, "- Other plan / Areas phase — surprise 0.80 (top: unexpected_areas)") {
+		t.Errorf("surprise line not rendered as expected:\n%s", md)
+	}
 }

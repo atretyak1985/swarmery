@@ -17,6 +17,8 @@ import { ThemeProvider } from './lib/theme';
 import { UsageDataProvider } from './lib/usageData';
 import { Loading } from './components/ui';
 import { Approvals } from './pages/Approvals';
+import { Decisions } from './pages/Decisions';
+import { Lessons } from './pages/Lessons';
 import { Overview } from './pages/Overview';
 import { Projects } from './pages/Projects';
 import { Sessions } from './pages/Sessions';
@@ -165,6 +167,9 @@ const router = createBrowserRouter([
               </Suspense>
             ),
           },
+          // Decision classifier (learning-loop phase 9) — per-question stats.
+          { path: 'decisions', element: <Decisions /> },
+          { path: 'lessons', element: <Lessons /> },
           // Agent Hub — roster (/agents) + selected agent (/agents/:id). One
           // component serves both; the :id is the selected registry agent.
           {

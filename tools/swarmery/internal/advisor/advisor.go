@@ -149,6 +149,7 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 		{"R9", func() ([]finding, error) { return r9FatSessions(db, win) }},
 		{"R10", func() ([]finding, error) { return r10MemoryIndex(db, win) }},
 		{"R11", func() ([]finding, error) { return r11RecurringLesson(db, win) }},
+		{"R12", func() ([]finding, error) { return r12LessonBudget(db, win) }},
 	}
 	// fired records every (rule, target) this pass produced, so the sweep below
 	// can tell "the condition is gone" from "the rule never ran".
@@ -191,6 +192,7 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 //   - R8 and R9 name one specific agent trajectory or one session in the window.
 //   - R10 re-reads the auto-memory index off disk and re-counts it, so a
 //     consolidated index simply stops firing.
+//   - R12 re-counts the active lesson store, so retiring lessons stops it.
 //
 // Every other rule (R1–R6) is a rate over stored events, where "did not fire"
 // is ambiguous: the problem may have been fixed, or the tool may simply not
@@ -199,7 +201,7 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 // cannot be the discriminator here. Absence of data is not evidence of repair,
 // so a rate rule's ACCEPTED row is never closed by this sweep — adoption and
 // verification own those, and they will say so with numbers.
-var selfCheckingRules = map[string]bool{"R7": true, "R8": true, "R9": true, "R10": true}
+var selfCheckingRules = map[string]bool{"R7": true, "R8": true, "R9": true, "R10": true, "R12": true}
 
 // resolveVanished closes recommendations whose condition no longer reproduces.
 //
@@ -985,6 +987,11 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 		// always use windows of the same length (WindowDays).
 		v, ok, verr := lessonTaskCount(db, target, win)
 		return "lesson_task_count", v, ok, verr
+	case "R12":
+		// R12 (lesson store budget) re-counts the active lessons its target
+		// names — the whole store or one area. Lower is better.
+		v, ok, verr := r12Metric(db, target)
+		return "active_lessons", v, ok, verr
 	default:
 		return "", 0, false, fmt.Errorf("unknown rule %q", rule)
 	}

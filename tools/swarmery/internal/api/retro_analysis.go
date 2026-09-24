@@ -180,7 +180,9 @@ func (h *Handler) planFromRetroAnalysis(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	uuid, err := planningSvc.Start(body.ProjectID, idea, "")
+	// No picker on this path (the improver's accepted analysis plans itself), so
+	// both the model and the depth take the planner's own defaults.
+	uuid, err := planningSvc.Start(body.ProjectID, idea, "", "")
 	switch {
 	case errors.Is(err, planning.ErrProjectNotFound):
 		writeClientErr(w, http.StatusNotFound, "project not found")

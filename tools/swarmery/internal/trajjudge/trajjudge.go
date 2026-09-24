@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/systemspawn"
 )
 
@@ -219,13 +220,34 @@ func persist(db *sql.DB, sessionID int64, agent, model string, j judgment, now t
 	return err
 }
 
-// ClaudeRunner runs `claude -p --model <id> --output-format text` with the
-// prompt on stdin. Binary resolution is a plain PATH lookup (same as
+// DefaultModel pins judge runs that carry no override. It used to live in
+// cmd/swarmery/main.go beside the SWARMERY_TRAJJUDGE_MODEL read, where the
+// defaults table test could not see it — and a default no test can name is a
+// default that drifts. Full ID, not an alias: aliases re-resolve over time.
+const DefaultModel = "claude-sonnet-5"
+
+// DefaultEffort pins how hard the trajectory judge thinks. It scores a finished
+// transcript against a fixed rubric and emits five numbers plus a short review —
+// bounded, rubric-driven reading, not open-ended reasoning — and it runs as a
+// periodic BATCH over many sessions, so depth here multiplies. Pinned low; the
+// unpinned alternative is the CLI's xhigh on every session in the batch. Phase 7
+// re-measures it.
+const DefaultEffort = "low"
+
+// effortEnv is this spawn site's --effort knob; internal/claudeflags owns the
+// resolution, the validation and the "off" escape hatch.
+const effortEnv = "SWARMERY_TRAJJUDGE_EFFORT"
+
+// ClaudeRunner runs `claude -p --model <id> --effort <e> --output-format text`
+// with the prompt on stdin. Binary resolution is a plain PATH lookup (same as
 // internal/toolproc). One of three twins — internal/improve.ClaudeRunner,
 // internal/trajjudge.ClaudeRunner, and internal/handoff.ClaudeRunner — keep the
 // flag order, stdin, System-cwd chdir, and stderr handling in lockstep.
 type ClaudeRunner struct {
+	// Model overrides DefaultModel when non-empty (SWARMERY_TRAJJUDGE_MODEL).
 	Model string
+	// Effort overrides the resolved default when non-empty.
+	Effort string
 }
 
 func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
@@ -237,10 +259,21 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 		return "", err
 	}
 
+	model := r.Model
+	if model == "" {
+		model = DefaultModel
+	}
 	// --setting-sources project,local: skip user-level settings (global plugin
 	// stack) — headless runs don't need them; project plugins and OAuth are
 	// unaffected. Keep the flag order identical to the improve twin.
-	cmd := exec.CommandContext(ctx, bin, "-p", "--model", r.Model, "--output-format", "text", "--setting-sources", "project,local")
+	//
+	// --effort is APPENDED, not interpolated into a fixed slot: an operator who
+	// sets this site's knob to claudeflags.OmitEffort resolves it to "", and a
+	// fixed slot spawned `--effort ""`, which the CLI rejects outright.
+	args := []string{"-p", "--model", model}
+	args = append(args, claudeflags.EffortArgsWith(r.Effort, effortEnv, DefaultEffort)...)
+	args = append(args, "--output-format", "text", "--setting-sources", "project,local")
+	cmd := exec.CommandContext(ctx, bin, args...)
 	// Cwd and account in one decision, both taken from the System project home:
 	// see internal/systemspawn for why they are inseparable and why a missing
 	// home means neither.

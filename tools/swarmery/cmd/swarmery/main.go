@@ -36,12 +36,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/actuals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/economics"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/evals"
@@ -51,6 +54,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/logbuf"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
@@ -64,6 +68,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
@@ -71,6 +76,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/spawnpath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/staleness"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskcap"
@@ -114,8 +120,12 @@ func main() {
 		err = cmdRoutine(os.Args[2:])
 	case "stale":
 		err = cmdStale(os.Args[2:])
+	case "actuals":
+		err = cmdActuals(os.Args[2:])
 	case "economics":
 		err = cmdEconomics(os.Args[2:])
+	case "calibration":
+		err = cmdCalibration(os.Args[2:])
 	case "backup":
 		err = cmdBackup(os.Args[2:])
 	case "prune":
@@ -187,11 +197,22 @@ func usage() {
                     [--notify-telegram-chat <id>]
   swarmery recost   [--db <path>]
   swarmery stale [--db <path>] [--project <id>] [--all]
+  swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]
+                                   best-effort: record phase_actuals for past phase runs whose
+                                   run branch still exists (latest run per phase only); every
+                                   other run is skipped and counted by reason
   swarmery economics [--db <path>] [--since <YYYY-MM-DD>] [--until <YYYY-MM-DD>]
-                    [--project <id>] [--json]
+                    [--project <id>] [--json] [--current-model]
                                    token economy of the agent system: cost per completed task,
                                    cache efficiency, delegation cost, wasted work, model mix
-                                   (read-only; safe while the daemon is serving)
+                                   (read-only; safe while the daemon is serving).
+                                   --current-model prints ONLY the model id with the most
+                                   assistant turns in the last 30 days, for scripts.
+  swarmery calibration [--db <path>] [--by <dims>] [--json]
+                                   forecast calibration and mean surprise per group
+                                   (dims: agent,model,effort,project; default model,effort —
+                                   the model-upgrade routine's comparison column). Groups under
+                                   20 non-post-hoc samples are hidden. Read-only.
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
@@ -438,6 +459,81 @@ func cmdRecost(args []string) error {
 	return nil
 }
 
+// cmdActuals is `swarmery actuals backfill`: measure past phase runs the daemon
+// ended before it recorded actuals (learning loop phase 12). Only a phase's
+// LATEST run is reachable (epic_phases keeps one), and only while its branch
+// exists; every other run is skipped and counted, never guessed. Idempotent: a
+// run that already has a row is left alone unless --force.
+func cmdActuals(args []string) error {
+	const usageLine = "usage: swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]"
+	if len(args) == 0 || args[0] != "backfill" {
+		return errors.New(usageLine)
+	}
+	fs := flag.NewFlagSet("actuals backfill", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	force := fs.Bool("force", false, "recompute runs that already have a phase_actuals row")
+	dryRun := fs.Bool("dry-run", false, "measure and report, store nothing")
+	verbose := fs.Bool("verbose", false, "print one line per skipped or failed run")
+	fs.Parse(args[1:])
+	if fs.NArg() != 0 {
+		return errors.New(usageLine)
+	}
+
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	git := worktree.ExecGit{}
+	// RunRoot is phaserun's own repository resolution, so the backfill looks for
+	// each branch in the repo the run actually committed it to. The runner and the
+	// worktree manager are never touched by RunRoot.
+	resolver := phaserun.NewService(db, nil, nil)
+	opts := actuals.BackfillOptions{RepoRoot: resolver.RunRoot, Force: *force, DryRun: *dryRun}
+	if *verbose {
+		opts.Log = os.Stdout
+	}
+	// Each run the backfill records is scored against its forecast as it lands
+	// (learning loop phase 13); the rescore below then covers runs whose actuals
+	// already existed. Backfilled scores raise no attention and request no
+	// verification — they are history.
+	surpriseCfg, surpriseWarn := surprise.ConfigFromEnv(os.Getenv)
+	for _, w := range surpriseWarn {
+		fmt.Fprintln(os.Stderr, "warn:", w)
+	}
+	scorer := surprise.NewScorer(db, surpriseCfg)
+	rec := actuals.NewRecorder(db, git)
+	if !*dryRun {
+		rec.OnRecorded = scorer.AfterActuals
+	}
+	st, err := rec.Backfill(opts)
+	if err != nil {
+		return err
+	}
+	verb := "recorded"
+	if *dryRun {
+		verb = "measurable (dry run, nothing stored)"
+	}
+	fmt.Printf("actuals backfill %s\n  phase runs scanned: %d\n  %s: %d\n  already recorded: %d\n"+
+		"  skipped — still running / never finished: %d\n  skipped — no run branch recorded: %d\n"+
+		"  skipped — no start point (pre-0057 run): %d\n  skipped — repository unresolved: %d\n"+
+		"  skipped — branch no longer exists: %d\n  failed: %d\n",
+		*dbPath, st.Scanned, verb, st.Recorded, st.AlreadyRecorded, st.InFlight, st.NoBranch,
+		st.NoStartPoint, st.NoRepo, st.BranchGone, st.Failed)
+	if *dryRun {
+		return nil
+	}
+	sst, err := scorer.Backfill()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("surprise rescore\n  runs with actuals: %d\n  scored: %d\n"+
+		"  not scored — no forecast or nothing measurable: %d\n  failed: %d\n",
+		sst.Scanned, sst.Scored, sst.Unscorable, sst.Failed)
+	return nil
+}
+
 // cmdModelEval aggregates the advisory trajectory judgments into one dated,
 // gateable verdict for a SUBJECT model — the model the agents were running on,
 // not the judge. See internal/modeleval for why those must stay distinct.
@@ -558,9 +654,11 @@ func cmdEconomics(args []string) error {
 	until := fs.String("until", "", "upper bound, YYYY-MM-DD inclusive")
 	project := fs.Int64("project", 0, "project id filter (0 = all)")
 	asJSON := fs.Bool("json", false, "emit the report as JSON instead of text")
+	currentModel := fs.Bool("current-model", false,
+		"print only the model id the fleet ran the most assistant turns on in the last 30 days")
 	fs.Parse(args)
 	if fs.NArg() != 0 {
-		return fmt.Errorf("usage: swarmery economics [--db <path>] [--since <d>] [--until <d>] [--project <id>] [--json]")
+		return fmt.Errorf("usage: swarmery economics [--db <path>] [--since <d>] [--until <d>] [--project <id>] [--json] [--current-model]")
 	}
 
 	db, err := store.Open(*dbPath)
@@ -569,6 +667,28 @@ func cmdEconomics(args []string) error {
 	}
 	defer db.Close()
 
+	// --current-model short-circuits the whole report: its one consumer is
+	// config/routines/model-upgrade.json, which needs a bare id to interpolate
+	// and nothing else. It answers on stdout or FAILS — never silently, which is
+	// the behaviour that let a routine call a nonexistent flag for months.
+	if *currentModel {
+		model, turns, ok, err := economics.CurrentModel(db)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("economics: no assistant turns in the last %d days — nothing to call the current model",
+				economics.CurrentModelWindowDays)
+		}
+		if *asJSON {
+			return json.NewEncoder(os.Stdout).Encode(map[string]any{
+				"model": model, "turns": turns, "windowDays": economics.CurrentModelWindowDays,
+			})
+		}
+		fmt.Fprintln(os.Stdout, model)
+		return nil
+	}
+
 	rep, err := economics.Compute(db, economics.Options{
 		Since: *since, Until: *until, ProjectID: *project,
 	})
@@ -576,6 +696,34 @@ func cmdEconomics(args []string) error {
 		return err
 	}
 	return economics.Render(os.Stdout, rep, *asJSON)
+}
+
+// cmdCalibration prints forecast calibration and mean surprise per group
+// (internal/calibration). Read-only; the monthly model-upgrade routine runs it
+// by model/effort as one more comparison column.
+func cmdCalibration(args []string) error {
+	fs := flag.NewFlagSet("calibration", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	by := fs.String("by", "model,effort", "comma-separated dimensions: agent, model, effort, project")
+	asJSON := fs.Bool("json", false, "emit the report as JSON instead of text")
+	fs.Parse(args)
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: swarmery calibration [--db <path>] [--by <dims>] [--json]")
+	}
+	dims, err := calibration.ParseDims(*by)
+	if err != nil {
+		return err
+	}
+	db, err := store.Open(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	rep, err := calibration.Compute(db, dims, calibration.MinSamples)
+	if err != nil {
+		return err
+	}
+	return calibration.Render(os.Stdout, rep, *asJSON)
 }
 
 // cmdStale lists tasks that CLAIM to be running but show no sign of it, with the
@@ -1258,7 +1406,7 @@ func cmdServe(args []string) error {
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
 	notifyEvents := fs.String("notify-events", envOr("SWARMERY_NOTIFY_EVENTS", notify.EventApprovalRequested),
-		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error (env: SWARMERY_NOTIFY_EVENTS)")
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise (env: SWARMERY_NOTIFY_EVENTS)")
 	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
 		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
 	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
@@ -1279,9 +1427,13 @@ func cmdServe(args []string) error {
 	// trajjudge config (advisory LLM-judge, best-effort; cap<=0 disables).
 	trajjudgeModel := os.Getenv("SWARMERY_TRAJJUDGE_MODEL")
 	if trajjudgeModel == "" {
-		// Full ID, not the "sonnet" alias — aliases re-resolve over time and the
-		// judged model is stored per verdict, so the pin keeps scores comparable.
-		trajjudgeModel = "claude-sonnet-5"
+		// The pin lives with the engine (trajjudge.DefaultModel) rather than here:
+		// a default only main.go knows is one no test can name, and the defaults
+		// table test in internal/claudeflags exists to stop exactly that drift.
+		// Still a full ID, not the "sonnet" alias — aliases re-resolve over time
+		// and the judged model is stored per verdict, so the pin keeps scores
+		// comparable.
+		trajjudgeModel = trajjudge.DefaultModel
 	}
 	// Minimum age of the newest verdict before another automatic batch may
 	// run (startup + 24h tick); the manual advise endpoint is not gated.
@@ -1530,7 +1682,9 @@ func cmdServe(args []string) error {
 	} else {
 		handoffModel := os.Getenv("SWARMERY_HANDOFF_MODEL")
 		if handoffModel == "" {
-			handoffModel = "claude-sonnet-5"
+			// The pin lives with the engine, for the reason above: a default only
+			// main.go knows is one the defaults table test cannot see.
+			handoffModel = handoff.DefaultModel
 		}
 		go func() {
 			runHandoff := func() {
@@ -1924,6 +2078,116 @@ func cmdServe(args []string) error {
 	// the verdict lands on epic_phases as an INPUT to the phase's diagnosis (D5), never
 	// as a second status. Every plan that does not ask keeps today's behaviour.
 	phaserunSvc.Verify = verifySvc
+	// Learning loop phase 12: every finished phase run records what it actually
+	// did (phase_actuals — files/areas/lines from its branch, cost, outcome,
+	// verdict, test failures, continuations, fallback), measured again once the
+	// transcript ingest has caught up. Advisory: the recorder logs and returns, so
+	// a measurement failure never changes how a run is reported.
+	//
+	// Learning loop phase 13: every time a run's actuals are stored, the run is
+	// scored against its forecast (phase_surprise). Attention is ROUTED, never
+	// enforced: a score at or above SWARMERY_SURPRISE_NOTIFY (default 0.6) raises a
+	// phase_surprise WS frame (notch + dashboard) and a webhook when that event is
+	// enabled, once per run; SWARMERY_SURPRISE_AUTOVERIFY_AT (unset = off) opts in
+	// to verifying a surprising run with the summary as the verifier's focus hint.
+	surpriseCfg, surpriseWarn := surprise.ConfigFromEnv(os.Getenv)
+	for _, w := range surpriseWarn {
+		log.Printf("warn: %s", w)
+	}
+	scorer := surprise.NewScorer(db, surpriseCfg)
+	scorer.Attention = func(a surprise.Attention) {
+		if bus != nil {
+			bus.Publish(ingest.Notification{Type: ingest.NotePhaseSurprise, TaskID: a.WorkspaceTaskID, PhaseID: a.PhaseID})
+		}
+		notifier.Emit(notify.Event{
+			Type:  notify.EventPhaseSurprise,
+			Title: fmt.Sprintf("Phase surprise %.2f: %s", a.Index, a.PhaseName),
+			Body:  strings.TrimPrefix(a.PlanTitle+" — "+a.Summary, " — "),
+		})
+	}
+	scorer.Changed = func(taskID int64) {
+		if bus != nil {
+			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
+		}
+	}
+	log.Printf("surprise scoring: %s", surpriseCfg)
+	// Learning loop phase 14: a run at or above the surprise attention threshold
+	// whose Completion Report explains the gap ("Where reality diverged") gets
+	// 0–2 lesson CANDIDATES from a cheap headless pass, in the background, once
+	// per run. SWARMERY_LESSONS=off disables it; default on, because it only
+	// spends tokens on a surprise. A candidate never reaches a run until the
+	// operator accepts it on the Lessons page.
+	lessonCfg, lessonWarn := lessons.ConfigFromEnv(os.Getenv, surpriseCfg.NotifyAt)
+	for _, w := range lessonWarn {
+		log.Printf("warn: %s", w)
+	}
+	lessonGen := lessons.NewGenerator(db, lessonCfg)
+	lessonGen.Changed = func(taskID int64) {
+		if bus != nil {
+			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
+		}
+	}
+	// Learning loop phase 9: the local decision classifier. It works AROUND
+	// Claude runs, never inside them — D1 is consulted only on the settle loop's
+	// ambiguous branch (after the rules), D2 labels finished sessions and D3
+	// (step 14.3) labels why a surprising run diverged, both for analytics. All
+	// default to shadow; with SWARMERY_DECIDE_URL unset (and the claude backend
+	// off, its default) the engine is inert and nothing changes. Built here,
+	// before the scorer hook below, so the hook is assigned exactly once.
+	decideCfg, decideWarn := decide.ConfigFromEnv(os.Getenv)
+	for _, w := range decideWarn {
+		log.Printf("warn: %s", w)
+	}
+	decideEng := decide.New(db, decideCfg)
+	decideEng.OnNeedsOperator = func(n decide.NeedsOperator) {
+		notifier.Emit(notify.Event{
+			Type:  notify.EventRunNeedsOperator,
+			Title: fmt.Sprintf("%s %d needs you", n.Engine, n.SubjectID),
+			Body:  n.Detail,
+		})
+	}
+	causeClf := &lessons.CauseClassifier{DB: db, E: decideEng, Threshold: lessonCfg.Threshold}
+	scorer.Scored = func(st *surprise.Stored, source string) {
+		lessonGen.AfterScore(st, source)
+		causeClf.AfterScore(st, source)
+	}
+	log.Printf("lesson candidates: %s", lessonCfg)
+	recorder := actuals.NewRecorder(db, wtMgr.Git)
+	recorder.OnRecorded = scorer.AfterActuals
+	phaserunSvc.Actuals = recorder.AfterRun
+	phaserunSvc.SurpriseVerify = scorer.AutoVerifyHint
+	// Learning loop phase 15: ACTIVE lessons whose areas overlap a run's prior
+	// forecast are appended to the headless phase/plan prompt (never to MEMORY.md,
+	// never through a hook), within SWARMERY_LESSON_BUDGET_TOKENS, and recorded in
+	// lesson_uses; citations are detected after the run.
+	lessonBudget, budgetWarn := lessons.BudgetFromEnv(os.Getenv)
+	for _, w := range budgetWarn {
+		log.Printf("warn: %s", w)
+	}
+	lessonInjector := lessons.NewInjector(db, lessonBudget)
+	phaserunSvc.InjectLessons = lessonInjector.ForPhase
+	phaserunSvc.LessonCitations = lessonInjector.AfterPhaseRun
+	log.Printf("lesson injection: budget=%d tokens", lessonBudget)
+	// Learning loop phase 16: re-measure every active lesson's effectiveness
+	// (median area surprise before vs after activation) and PROPOSE retirements
+	// (ineffective, stale, unused 60 days, superseded) into the Lessons page's
+	// queue. A proposal the operator leaves unanswered for
+	// SWARMERY_LESSON_AUTO_RETIRE_DAYS (default 14) is retired by this pass.
+	verifyCfg, verifyWarn := lessons.VerifyConfigFromEnv(os.Getenv)
+	for _, w := range verifyWarn {
+		log.Printf("warn: %s", w)
+	}
+	api.AttachLessonVerify(verifyCfg)
+	lessonVerifier := lessons.NewVerifier(db, wtMgr.Git, repopath.Resolve, verifyCfg)
+	log.Printf("lesson verification: %s", verifyCfg)
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for {
+			lessonVerifier.RunLogged()
+			<-ticker.C
+		}
+	}()
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same
 	// boundary the worktree manager uses.
 	api.AttachPhaseDiag(wtMgr.Git, wtMgr)
@@ -1933,6 +2197,8 @@ func cmdServe(args []string) error {
 	// worktree.Manager as dispatch/verify/phaserun; same startup heal posture.
 	planrunSvc := planrun.NewService(db, planrun.ClaudeRunner{}, wtMgr)
 	planrunSvc.Slots = runSlots // the one daemon-wide budget (see runSlots above)
+	planrunSvc.InjectLessons = lessonInjector.ForPlan
+	planrunSvc.LessonCitations = lessonInjector.AfterPlanRun
 	// Read-only git seam, through the same boundary the worktree manager uses: it
 	// NAMES the base a dirty-branch refusal counted commits against, and answers
 	// whether a run branch existed before DeleteRunBranch removed it. Without it
@@ -1942,6 +2208,28 @@ func cmdServe(args []string) error {
 		log.Printf("warning: planrun heal on startup: %v", err)
 	}
 	api.AttachPlanRun(planrunSvc)
+
+	// The decision classifier (built above, beside the surprise scorer) reaches
+	// the run engines' settle loops and the Decisions page here.
+	phaserunSvc.Decide = decideEng
+	planrunSvc.Decide = decideEng
+	api.AttachDecide(decideEng)
+	log.Printf("decide: %s", decideCfg)
+	if decideEng.Configured() {
+		go func() {
+			labeler := &decide.Labeler{E: decideEng}
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for {
+				if n, err := labeler.Run(context.Background()); err != nil {
+					log.Printf("warning: decide: d2 labeler: %v", err)
+				} else if n > 0 {
+					log.Printf("decide: d2 labeled %d sessions", n)
+				}
+				<-ticker.C
+			}
+		}()
+	}
 
 	buildStart := time.Now()
 	// The board derives each captured card's expiry from the same TTL the

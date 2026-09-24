@@ -8,10 +8,38 @@ description: swarmery core agent regression suite
 prompts:
   - file://prompts/agent-chat.json
 
+# Two tiers, matched to the `model:` frontmatter of the agent each suite
+# exercises — an opus-tier contract that is only ever measured on Haiku is not
+# measured at all. Every test case declares which tier it runs on via
+# `providers: [<label>]`; a case that declares none runs on BOTH (costly but
+# never silently wrong). Unknown labels fail the run at load time.
 providers:
+  # Haiku tier — agents with `model: haiku` (verification-agent) and the skills,
+  # which carry no `model:` of their own. No `effort` (Haiku 4.5 rejects it).
   - id: anthropic:messages:claude-haiku-4-5-20251001
+    label: haiku-tier
     config:
       max_tokens: 1024
+
+  # Opus tier — agents with `model: opus`. No `thinking` block: Opus 5.5 runs
+  # adaptive thinking when `thinking` is omitted, and thinking tokens are drawn
+  # from `max_tokens`, so the 1024 ceiling above would truncate every answer.
+  # `effort` maps to `output_config.effort` on the wire.
+  #
+  # `effort: high` mirrors the value those agents currently carry in frontmatter
+  # — it is phase 2's provisional default, NOT a swept result. Step 7.2's sweep
+  # (deferred: needs a funded ANTHROPIC_API_KEY) adds sibling providers at
+  # `low`/`medium` with their own labels and compares pass rate, output tokens
+  # and latency before anything is locked in.
+  - id: anthropic:messages:claude-opus-5-5
+    label: opus-tier
+    config:
+      max_tokens: 16000
+      effort: high
+      # Keep model reasoning out of `output` so the no-reasoning-in-output
+      # assertions measure the visible answer even if `thinking.display` is
+      # ever turned up.
+      showThinking: false
 
 defaultTest:
   options:
@@ -27,7 +55,9 @@ tests:
   - file://agents/planner.yaml
   - file://agents/verification-agent.yaml
   - file://agents/implementation-agent.yaml
+  - file://agents/code-reviewer.yaml
   - file://agents/security-auditor.yaml
   - file://agents/git-commit.yaml
   - file://agents/guardrails.yaml
   - file://agents/jira-task-runner.yaml
+  - file://agents/no-reasoning-in-output.yaml

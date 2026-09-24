@@ -159,8 +159,13 @@ func (s *Service) run(ctx context.Context, jobID int64, projectPath, pack string
 	// nothing — not even inside its own cwd — while still exiting 0. Without the
 	// flag the job reports "generated" over an artifact that does not exist, and
 	// Fresh() then reruns it on every toggle. See internal/claudeflags.
-	genArgs := append([]string{"-p", "--model", defaultModel, "--output-format", "text"},
-		claudeflags.PermissionModeArgs(permEnv)...)
+	//
+	// --effort is pinned for the twin reason: an omitted one is not a cheap
+	// default but the CLI's xhigh, so every pack generation was paying maximum
+	// reasoning depth without anyone having chosen it.
+	genArgs := append([]string{"-p", "--model", DefaultModel, "--output-format", "text"},
+		claudeflags.EffortArgs(effortEnv, DefaultEffort)...)
+	genArgs = append(genArgs, claudeflags.PermissionModeArgs(permEnv)...)
 	if _, err := s.Runner.Claude(gctx, projectPath, act.Prompt, genArgs...); err != nil {
 		s.set(jobID, "failed", "", err.Error(), true)
 		return err

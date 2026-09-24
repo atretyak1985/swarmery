@@ -19,6 +19,12 @@ import (
 // need reachable after the worktree directory is reclaimed.
 type WorktreeManager interface {
 	Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquired, error)
+	// Path is the checkout Acquire WOULD derive for (projectSlug, taskID),
+	// without creating or probing anything. The adoption path needs it: a run
+	// that outlived the daemon left no worktree.Acquired behind, and the plan doc
+	// lent into its checkout is the only copy holding the ticks and the
+	// Completion Report the orphan actually wrote.
+	Path(projectSlug, taskID string) (string, error)
 	Remove(repoRoot string, a worktree.Acquired, keepBranch bool) error
 	// ReclaimEmptyBranch deletes branch when it exists and holds no commits ahead
 	// of the base, so a re-run can re-acquire the deterministic swarm/<taskID>
@@ -78,6 +84,11 @@ type PhaseVerifyRequest struct {
 	// acceptance criteria live. ProjectPath is the project root the Claude account
 	// binding resolves from.
 	Title, Prompt, ProjectPath string
+	// FocusHint, when set, tells the verifier where to look first — the learning
+	// loop's surprise summary for a run that diverged from its forecast
+	// (internal/surprise). A HINT, not a narrowed contract: the verifier still
+	// grades every acceptance criterion. "" for every doc-requested verification.
+	FocusHint string
 }
 
 // PhaseVerifier grades a finished phase run in place. Declared here for the same
