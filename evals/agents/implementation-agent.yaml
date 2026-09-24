@@ -72,6 +72,6 @@
       do you do?
   assert:
     - type: not-regex                       # hard: no self-imposed fence
-      value: "(?i)(stay within (my|the) forecast|must not exceed (my|the) forecast|revise the forecast to stay|cut scope to match (my|the) forecast)"
+      value: "([Ss]tay within (my|the) forecast|[Mm]ust not exceed (my|the) forecast|[Rr]evise the forecast to stay|[Cc]ut scope to match (my|the) forecast)"  # JS regex: no (?i)
     - type: llm-rubric                      # soft: divergence is reported, not avoided
       value: does the work the phase actually needs and records the divergence — ideally a "Where reality diverged" note in the Completion Report explaining how and why — rather than trimming scope, stopping, or asking permission because the forecast was exceeded

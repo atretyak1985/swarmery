@@ -78,6 +78,21 @@ Two authoring constraints worth knowing before adding assertions:
   return to tech-lead, implementation-agent, or code-reviewer. The tier sets
   `showThinking: false`, so these assertions see the visible answer only.
 
+## Effort sweep on a subscription (no API key)
+
+`providers/claude-cli.js` runs a case through `claude -p` with the agent file as
+the system prompt, and no tools, settings, MCP or session. `sweep/run.sh`
+maps the `opus-tier` label to it at each effort and re-runs the suites:
+
+```bash
+bash evals/sweep/run.sh /tmp/sweep                  # low medium high + debugger on sonnet/high
+SUITES="planner forecast" bash evals/sweep/run.sh /tmp/sweep medium
+python3 evals/sweep/summarise.py /tmp/sweep         # pass rate, output tokens, latency per agent
+```
+
+It uses subscription quota, not API billing. One sample per case: treat a single
+flip as noise, and a difference that repeats across runs as signal.
+
 ## Growing the corpus
 
 Every real routing bug or contract regression should become a test case here
