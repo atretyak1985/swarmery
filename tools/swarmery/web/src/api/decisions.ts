@@ -90,6 +90,18 @@ const MOCK_DECISIONS: DecisionsResponse = {
       agreement: null,
       histogram: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     },
+    {
+      questionId: 'd3.divergence_cause',
+      mode: 'shadow',
+      threshold: 0.6,
+      calls: 9,
+      errors: 0,
+      acted: 0,
+      withTruth: 0,
+      agreed: 0,
+      agreement: null,
+      histogram: [0, 0, 0, 1, 1, 2, 2, 2, 1, 0],
+    },
   ],
 };
 

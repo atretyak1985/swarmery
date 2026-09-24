@@ -29,7 +29,7 @@ func TestDecisionsEndpoints(t *testing.T) {
 
 	var got decisionsResponse
 	getJSON(t, srv.URL+"/api/decisions", &got)
-	if got.Configured || len(got.Questions) != 4 || got.Questions[0].QuestionID != "d1.run_end" || got.Questions[0].Mode != "shadow" {
+	if got.Configured || len(got.Questions) != 5 || got.Questions[0].QuestionID != "d1.run_end" || got.Questions[0].Mode != "shadow" {
 		t.Fatalf("summary = %+v", got)
 	}
 

@@ -14,6 +14,7 @@ const LABELS: Record<string, string> = {
   'd2.task_type': 'D2 · task type',
   'd2.outcome': 'D2 · outcome',
   'd2.failure_cause': 'D2 · failure cause',
+  'd3.divergence_cause': 'D3 · why a run diverged from its forecast',
 };
 
 function pct(v: number | null): string {
