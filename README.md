@@ -104,6 +104,20 @@ Work artifacts — plans, task dirs, retrospectives — land under `$HOME/swarme
 by default; point it anywhere with `SWARMERY_WORKSPACE_ROOT` (daemon) / `AGENT_WORKSPACE_ROOT`
 (plugins).
 
+> [!TIP]
+> **Ignore `.serena/` and `.swarmery/` machine-wide, not per project.** `.serena/` (Serena
+> MCP language-server state, `lsp-pack`) and `.swarmery/` (this repo's own plan-doc lending
+> into a phase-run worktree — `internal/worktree/plandoc.go` — torn down with the worktree,
+> never meant to survive) can both land inside *any* onboarded project's tree, not just the
+> one you first notice it in. Neither is gitignored by default, so a broad `git add -A` — or
+> a headless run's own commit — can sweep one in for real; it has happened. Add both to your
+> **global** git ignore instead of each project's own tracked `.gitignore`:
+> ```
+> **/.serena/
+> **/.swarmery/
+> ```
+> Git reads `~/.config/git/ignore` by default with no `core.excludesfile` config needed.
+
 ### 2 — Route permission prompts to the dashboard (optional)
 
 ```bash
