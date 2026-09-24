@@ -14,6 +14,7 @@ import { fetchProjects, fetchProjectsHealth, patchProject } from '../api';
 import { fmtAgo, fmtCost, fmtTokens } from '../lib/format';
 import { displaySlug } from '../lib/projectSlug';
 import { usePageSearch } from '../lib/pageSearch';
+import { isOnboarded, loadOnboardedOnly, saveOnboardedOnly } from '../lib/onboardedFilter';
 import { ProjectName } from '../components/ProjectName';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
 import { PageSearchInput } from '../components/PageSearchInput';
@@ -291,6 +292,7 @@ export function Projects(): JSX.Element {
   const [health, setHealth] = useState<ProjectHealth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [onboardedOnly, setOnboardedOnly] = useState(loadOnboardedOnly);
   const [tag, setTag] = useState<string | null>(null);
   const query = usePageSearch();
 
@@ -312,14 +314,23 @@ export function Projects(): JSX.Element {
     load();
   }, [load]);
 
-  const managed = (projects ?? []).filter((p) => p.plugin?.managed).length;
+  // isOnboarded() scans the full list per call (umbrella-nesting check), so
+  // computing membership once into a Set beats calling it once for the count
+  // and again per row in the `visible` filter below.
+  const onboardedIds = new Set(
+    (projects ?? []).filter((p) => isOnboarded(p, projects ?? [])).map((p) => p.id),
+  );
+  const onboardedCount = onboardedIds.size;
   const allTags = [...new Set((projects ?? []).flatMap((p) => p.tags))].sort();
   // Server order is pinned-first already; the tag filter + header name search
   // narrow client-side.
   const matchesName = (name: string | null, slug: string): boolean =>
     query === '' || name?.toLowerCase().includes(query) === true || slug.toLowerCase().includes(query);
   const visible = (projects ?? []).filter(
-    (p) => (tag === null || p.tags.includes(tag)) && matchesName(p.name, p.slug),
+    (p) =>
+      (!onboardedOnly || onboardedIds.has(p.id)) &&
+      (tag === null || p.tags.includes(tag)) &&
+      matchesName(p.name, p.slug),
   );
   // The System project (daemon telemetry runs, ~/.swarmery) is demoted out of
   // the main list into a collapsed section below it; same split in health.
@@ -335,19 +346,33 @@ export function Projects(): JSX.Element {
         <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
           Projects
         </h1>
-        <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="accent-brand"
-          />
-          show archived
-        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
+            <input
+              type="checkbox"
+              checked={onboardedOnly}
+              onChange={(e) => {
+                setOnboardedOnly(e.target.checked);
+                saveOnboardedOnly(e.target.checked);
+              }}
+              className="accent-brand"
+            />
+            onboarded only
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="accent-brand"
+            />
+            show archived
+          </label>
+        </div>
       </div>
       <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
         {projects !== null
-          ? `${String(regular.length)} project${regular.length === 1 ? '' : 's'} · ${String(managed)} managed`
+          ? `${String(regular.length)} project${regular.length === 1 ? '' : 's'} · ${String(onboardedCount)} onboarded`
           : ' '}
       </div>
 
