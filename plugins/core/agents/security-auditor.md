@@ -2,7 +2,7 @@
 name: security-auditor
 description: Read-only security review — OWASP Top 10 sweep with evidence, STRIDE threat modeling on the project's domain, and severity-ranked findings ending in a machine-parseable verdict.
 model: opus
-effort: high
+effort: medium
 color: red
 tools: Read, Glob, Grep, TodoWrite, WebFetch, WebSearch
 maxTurns: 30

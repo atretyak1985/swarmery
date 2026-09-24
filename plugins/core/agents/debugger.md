@@ -1,8 +1,8 @@
 ---
 name: debugger
 description: Root-cause analysis and minimal fixes — bugs, build and type errors, CI failures, and performance regressions. Diagnoses first, fixes surgically, proves the fix with a regression test.
-model: sonnet
-effort: high
+model: opus
+effort: medium
 color: orange
 maxTurns: 40
 skills:

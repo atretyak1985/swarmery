@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Read-only review of a diff, a change set, or a whole subsystem — correctness, silent failures, contract alignment, plan conformance, and code quality — returning severity-ranked file:line findings and a single machine-parseable verdict.
 model: opus
-effort: high
+effort: medium
 color: red
 tools: Read, Glob, Grep, TodoWrite
 maxTurns: 30

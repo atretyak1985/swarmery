@@ -2,7 +2,7 @@
 name: tech-lead
 description: Orchestrate development work — understand the task, surface unknowns, route by size to the right executors, gate quality with an independent review, and close with a summary.
 model: opus
-effort: high
+effort: medium
 memory: project
 color: purple
 maxTurns: 200
