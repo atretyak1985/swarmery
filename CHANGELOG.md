@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.9.0,
+  `/plugin update`, not through these tags. Current: `core` 3.9.1,
   `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
   `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
@@ -17,6 +17,12 @@ Two things ship from this repository on separate clocks:
   marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
+
+### Fixed
+
+- **`agent-work.sh` on Linux (core 3.9.1).** Task mtimes are read with the
+  probed `stat` dialect instead of an `||` fallback that GNU `stat -f` never
+  reached, so `list`/`index` stop reporting filesystem blocks as dates (#373).
 
 ### Changed
 
