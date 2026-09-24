@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.9.1,
+  `/plugin update`, not through these tags. Current: `core` 3.9.2,
   `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
   `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
@@ -17,6 +17,14 @@ Two things ship from this repository on separate clocks:
   marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
+
+### Added
+
+- **Plain-language plan summary (core 3.9.2).** `session-closeout` now also
+  writes `plan/SUMMARY.md`: the overview the dashboard shows at the top of a
+  plan's Summary tab. It covers what the task was, what was built and how it
+  works, where to see it, and what is left, written for the operator rather than
+  as an engineering record (`resources/plan-summary-format.md`).
 
 ### Fixed
 
