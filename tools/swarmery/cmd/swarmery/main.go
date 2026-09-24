@@ -1405,8 +1405,8 @@ func cmdServe(args []string) error {
 		"AskUserQuestion dashboard-answer wire form: updated-input (hook updatedInput injection, spike-verified default) or deny-message (fallback: deny carrying the answers as the message)")
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
-	notifyEvents := fs.String("notify-events", envOr("SWARMERY_NOTIFY_EVENTS", notify.EventApprovalRequested),
-		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise (env: SWARMERY_NOTIFY_EVENTS)")
+	notifyEvents := fs.String("notify-events", notify.EventsSetting(os.Getenv),
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise, run_needs_operator (default: approval_requested,run_needs_operator; env: SWARMERY_NOTIFY_EVENTS replaces the default)")
 	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
 		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
 	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
