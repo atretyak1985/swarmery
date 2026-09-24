@@ -161,7 +161,7 @@ PLAN README:
 // template with string data cannot fail, so the (unreachable) error is ignored
 // (same posture as planning.BuildPrompt / phaserun.BuildPrompt).
 func BuildPrompt(planDir, readme string, phases []Phase, mode Mode) string {
-	return BuildPromptIn(planDir, readme, phases, mode, "", "", runcore.Budget{})
+	return BuildPromptIn(planDir, readme, phases, mode, "", "", "", runcore.Budget{})
 }
 
 // BuildPromptIn is BuildPrompt with the run's repository context: repoRoot is the
@@ -178,7 +178,7 @@ func BuildPrompt(planDir, readme string, phases []Phase, mode Mode) string {
 // once by the service so the prompt, every continuation message and the
 // completion loop's deadline all read the same clock. A zero Budget renders no
 // budget line (BuildPrompt's shape).
-func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, projectPath string, budget runcore.Budget) string {
+func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, projectPath, worktreePath string, budget runcore.Budget) string {
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
 		PlanDir       string
@@ -187,14 +187,20 @@ func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, 
 		Manifest      string
 		Readme        string
 		TurnContract  string
-	}{planDir, repoNote(repoRoot, projectPath), modeDirective(mode), manifest(phases), readme, runcore.TurnContract(budget)})
+	}{planDir, repoNote(repoRoot, projectPath, worktreePath), modeDirective(mode), manifest(phases), readme, runcore.TurnContract(budget)})
 	return b.String()
 }
 
-// repoNote renders the multi-repo orientation block, or "" when the run's
-// repository IS the project root (the single-repo case, where the note would only
-// add noise).
-func repoNote(repoRoot, projectPath string) string {
+// repoNote renders the multi-repo orientation block plus, when the project
+// declares extra reachable paths, repopath.AdditionalDirsNote — "" when
+// neither applies.
+func repoNote(repoRoot, projectPath, worktreePath string) string {
+	return multiRepoNote(repoRoot, projectPath) + repopath.AdditionalDirsNote(projectPath, worktreePath)
+}
+
+// multiRepoNote is the orientation block, or "" when the run's repository IS
+// the project root (the single-repo case, where the note would only add noise).
+func multiRepoNote(repoRoot, projectPath string) string {
 	// repopath.SameDir, not a Clean comparison: the resolved root has been through
 	// EvalSymlinks and projects.path has not, so on a symlinked path a single-repo
 	// run would otherwise be handed a note telling it it is somewhere it is not.

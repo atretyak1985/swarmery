@@ -435,7 +435,7 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 		taskID, agent, runMode, uuid, acq.Path, len(info.Phases))
 	s.notify(taskID)
 
-	prompt := BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, budget)
+	prompt := BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, acq.Path, budget)
 	if s.InjectLessons != nil {
 		prompt += s.InjectLessons(taskID, uuid)
 	}
