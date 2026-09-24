@@ -823,6 +823,28 @@ func microPlansEnabled() bool {
 	return true
 }
 
+// liveWorkspaceRoot resolves the SINGLE workspace root to mint a project's
+// micro-plans into, for a project mapped by more than one workspace row.
+//
+// Deliberately NOT candidates()'s c.WorkspaceRoot (workspaceOnePerProject /
+// MIN(root_path)): that tie-break exists only to stop workspaceOnePerProject's
+// LEFT JOIN from listing a card once per mapped workspace (see its own doc
+// comment, and PR #383's review-follow-up note) — MIN is an arbitrary
+// deterministic pick for THAT purpose, with no relationship to which namespace
+// is actually live. Minting into the wrong one recreates the exact split this
+// function's own contract (see below) promises cannot happen, so it resolves
+// its own answer: the most recently scanned workspace, the best signal
+// available of which mapping wsingest currently considers current.
+func (s *Service) liveWorkspaceRoot(projectID int64) string {
+	var root string
+	if err := s.DB.QueryRow(
+		`SELECT root_path FROM workspaces WHERE project_id = ? ORDER BY last_scanned DESC, id DESC LIMIT 1`,
+		projectID).Scan(&root); err != nil {
+		return ""
+	}
+	return root
+}
+
 // mintMicroPlan writes the card's micro-plan and returns its phase-doc path, or ""
 // when there is none (feature off, no workspace root wired, or a mint that failed).
 //
@@ -831,7 +853,7 @@ func microPlansEnabled() bool {
 // the dir on its next pass and stays the only writer of those rows, so there is one
 // path from a dir to a row and no way for the two to disagree.
 //
-// That invariant is why the namespace dir is taken from c.WorkspaceRoot
+// That invariant is why the namespace dir is taken from liveWorkspaceRoot
 // (workspaces.root_path) whenever the project HAS one, instead of rebuilding it
 // as <WorkspaceRoot>/<ProjectSlug>. ProjectSlug is the registry slug — derived
 // from the project path with '/'→'-' — while onboarding carves the namespace
@@ -846,7 +868,7 @@ func (s *Service) mintMicroPlan(c candidate, repoRoot string) string {
 	if s.WorkspaceRoot == "" || !microPlansEnabled() {
 		return ""
 	}
-	wsDir := c.WorkspaceRoot
+	wsDir := s.liveWorkspaceRoot(c.ProjectID)
 	if wsDir == "" {
 		wsDir = filepath.Join(s.WorkspaceRoot, c.ProjectSlug)
 	}
