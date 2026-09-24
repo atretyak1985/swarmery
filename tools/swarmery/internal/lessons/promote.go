@@ -69,17 +69,21 @@ var safeArea = regexp.MustCompile(`^[A-Za-z0-9_.@+][A-Za-z0-9_.@+-]*(/[A-Za-z0-9
 
 func AreaDir(area string) (string, error) {
 	n := surprise.NormArea(area)
-	if n == "" {
-		n = "."
+	if n == "" || n == "." {
+		return ".", nil // the repository root: a constant, nothing of the input survives
 	}
 	// An allow-list, not a deny-list: the area comes from an API body and ends up
 	// both in a filesystem path and in `git add`/`git commit` argv. A substring
 	// `..` check (not only a whole `..` segment) and no leading `-` keep it inside
-	// the worktree and out of git's option parser.
-	if n != "." && (strings.Contains(n, "..") || !safeArea.MatchString(n)) {
-		return "", fmt.Errorf("%w: area %q leaves the repository or has characters a directory name here may not use", ErrInvalid, area)
+	// the worktree and out of git's option parser. Two unconditional guards, not
+	// one compound condition, so every later use of n is dominated by both.
+	if strings.Contains(n, "..") {
+		return "", fmt.Errorf("%w: area %q leaves the repository", ErrInvalid, area)
 	}
-	if last := path.Base(n); n != "." && path.Ext(last) != "" && !strings.HasPrefix(last, ".") {
+	if !safeArea.MatchString(n) {
+		return "", fmt.Errorf("%w: area %q has characters a directory name here may not use", ErrInvalid, area)
+	}
+	if last := path.Base(n); path.Ext(last) != "" && !strings.HasPrefix(last, ".") {
 		n = path.Dir(n)
 	}
 	return n, nil
