@@ -607,7 +607,7 @@ func (h *Handler) planRunsByTask() (map[int64]*planRunDTO, error) {
 	// single-connection deadlock this ordering avoids.
 	rows.Close()
 	for taskID, dto := range out {
-		dto.RunEvents = runcore.RunEvents(h.DB, planrun.Engine, taskID)
+		dto.RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, planrun.Engine, taskID))
 	}
 	return out, nil
 }
@@ -864,7 +864,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	forecasts := h.phaseForecasts(taskID) // same rule, same reason: one query, cursor closed
 	surprises := h.phaseSurprises(taskID) // and again
 	for i := range phases {
-		phases[i].RunEvents = runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID)
+		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]
 		if used == nil {
 			used = []phaseModelUseDTO{} // [] not null: the UI maps over it
@@ -1327,4 +1327,13 @@ func writePlanDocErr(w http.ResponseWriter, err error) {
 	default:
 		writeErr(w, err)
 	}
+}
+
+// runEventsOrEmpty keeps runEvents a JSON array: a run with no timeline encodes
+// as [] not null, because the Plans page filters over it unconditionally.
+func runEventsOrEmpty(evs []runcore.RunEvent) []runcore.RunEvent {
+	if evs == nil {
+		return []runcore.RunEvent{}
+	}
+	return evs
 }

@@ -3546,8 +3546,9 @@ function ProgressBar({
  *
  * The tooltip carries each continuation's message, so the operator can see what
  * the run was actually told rather than inferring it. */
-function ContinuationChip({ events }: { events: RunEvent[] }): JSX.Element | null {
-  const continuations = events.filter((e) => e.kind === 'continuation');
+function ContinuationChip({ events }: { events: RunEvent[] | null }): JSX.Element | null {
+  // A daemon older than the [] guard sends null for an empty timeline.
+  const continuations = (events ?? []).filter((e) => e.kind === 'continuation');
   if (continuations.length === 0) return null;
   const tip = continuations
     .map((e) => `#${e.attempt}: ${e.detail.split('\n')[0]}`)
