@@ -22,6 +22,42 @@
 
 import { useState } from 'react';
 
+// navigator.clipboard does not exist at all on a non-secure origin (plain
+// HTTP on anything but localhost/127.0.0.1 — a LAN hostname like
+// `swarmery.local` counts as non-secure even though it resolves to
+// loopback, because Chrome's secure-context check is on the literal
+// hostname, not where it resolves). The old `?.writeText(id)` here silently
+// short-circuited the whole chain in that case — no error, no copy, no
+// visual change, just a dead button. execCommand('copy') is deprecated but
+// still works everywhere the Clipboard API doesn't, so it's the fallback,
+// not the primary path.
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through to the legacy path below
+    }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.top = '-1000px';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  document.body.removeChild(textarea);
+  return ok;
+}
+
 export function CopyIdBadge({
   id,
   label,
@@ -48,16 +84,11 @@ export function CopyIdBadge({
         // navigating, or closing whatever that ancestor does on click.
         e.stopPropagation();
         e.preventDefault();
-        // navigator.clipboard is undefined on non-secure origins (plain-HTTP
-        // LAN) — optional-chain to a no-op instead of throwing; the id stays
-        // visible and selectable either way.
-        void navigator.clipboard
-          ?.writeText(id)
-          .then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          })
-          .catch(() => {});
+        void copyText(id).then((ok) => {
+          if (!ok) return;
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
       }}
       aria-label={`copy id: ${id}`}
       data-tip={`copy ${label ?? 'id'}: ${id}`}
