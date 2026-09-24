@@ -345,27 +345,6 @@ func SameDir(a, b string) bool {
 	return resolve(a) == resolve(b)
 }
 
-// InheritedSettings names the project settings file a run should be handed on
-// the command line, or "" when it needs none.
-//
-// A worktree is never the project directory: Claude Code discovers
-// .claude/settings.json by walking up from cwd, and a worktree lives under
-// ~/.swarmery/worktrees/…, so it inherits nothing from the project. That is
-// invisible while a project keeps its .claude/ committed INSIDE the repo the
-// worktree is cut from — the checkout carries it. It stops being invisible the
-// moment the run root is a sub-repo: project Skygor declares core@swarmery in
-// /Volumes/Work/Skygor/.claude/settings.json, the run happens in a checkout of
-// sk-next, and the plan run died with "--agent 'tech-lead' not found" because the
-// plugin that ships that agent was never enabled for the session (2026-07-30).
-//
-// Rules, in order:
-//   - repoRoot == projectPath ⇒ "". The run IS a checkout of the project repo;
-//     whatever it carries is what the project chose to commit, and lending it a
-//     second copy would change behaviour for every existing project.
-//   - the worktree already has .claude/settings.json ⇒ "". The repo made its own
-//     statement, and it is the more specific one — same precedence rule the phase
-//     doc gets over the plan README.
-//   - otherwise the project's settings file, when it exists.
 // AdditionalDirs returns permissions.additionalDirectories from whichever
 // settings.json a run will actually have — the worktree's own copy when
 // syncUntrackedConfig placed one, else the project's — the same precedence
@@ -430,6 +409,27 @@ func AdditionalDirsNote(projectPath, worktreePath string) string {
 		strings.Join(lines, "\n"))
 }
 
+// InheritedSettings names the project settings file a run should be handed on
+// the command line, or "" when it needs none.
+//
+// A worktree is never the project directory: Claude Code discovers
+// .claude/settings.json by walking up from cwd, and a worktree lives under
+// ~/.swarmery/worktrees/…, so it inherits nothing from the project. That is
+// invisible while a project keeps its .claude/ committed INSIDE the repo the
+// worktree is cut from — the checkout carries it. It stops being invisible the
+// moment the run root is a sub-repo: project Skygor declares core@swarmery in
+// /Volumes/Work/Skygor/.claude/settings.json, the run happens in a checkout of
+// sk-next, and the plan run died with "--agent 'tech-lead' not found" because the
+// plugin that ships that agent was never enabled for the session (2026-07-30).
+//
+// Rules, in order:
+//   - repoRoot == projectPath ⇒ "". The run IS a checkout of the project repo;
+//     whatever it carries is what the project chose to commit, and lending it a
+//     second copy would change behaviour for every existing project.
+//   - the worktree already has .claude/settings.json ⇒ "". The repo made its own
+//     statement, and it is the more specific one — same precedence rule the phase
+//     doc gets over the plan README.
+//   - otherwise the project's settings file, when it exists.
 func InheritedSettings(projectPath, repoRoot, worktreePath string) string {
 	if projectPath == "" || repoRoot == "" || SameDir(projectPath, repoRoot) {
 		return ""

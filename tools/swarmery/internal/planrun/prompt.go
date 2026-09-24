@@ -195,7 +195,7 @@ func repoNote(repoRoot, projectPath, worktreePath string) string {
 		note = fmt.Sprintf(
 			"REPOSITORY: your worktree is a checkout of `%s` (%s), ONE repository inside the project root %s.\n"+
 				"Paths in this plan may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
-				"Do NOT create a `%s/` directory to make such a path resolve.\n",
+				"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
 			name, repoRoot, projectPath, name, name)
 	}
 	return note + repopath.AdditionalDirsNote(projectPath, worktreePath)
