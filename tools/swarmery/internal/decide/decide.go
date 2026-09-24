@@ -4,7 +4,8 @@
 //
 // THE RULE OF THIS PACKAGE: it works AROUND Claude runs, never inside them. It
 // may inform what the control plane does after a run has ended (D1: continue,
-// notify, stamp blocked) and add analytics labels to finished sessions (D2). It
+// notify, stamp blocked), add analytics labels to finished sessions (D2), and
+// label why a scored phase run diverged from its forecast (D3, analytics). It
 // is never consulted by a hook, never prunes context, never picks a tool, a
 // model or an effort. Every question defaults to `shadow` (decide and log, do
 // not act), and with no backend configured every entry point is a no-op, so the
@@ -424,8 +425,8 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 	cfg := Config{
 		URL:        strings.TrimSpace(getenv("SWARMERY_DECIDE_URL")),
 		Model:      strings.TrimSpace(getenv("SWARMERY_DECIDE_MODEL")),
-		Modes:      map[string]Mode{"d1": ModeShadow, "d2": ModeShadow},
-		Thresholds: map[string]float64{"d1": 0.85, "d2": 0.6},
+		Modes:      map[string]Mode{"d1": ModeShadow, "d2": ModeShadow, "d3": ModeShadow},
+		Thresholds: map[string]float64{"d1": 0.85, "d2": 0.6, "d3": 0.6},
 	}
 	if cfg.Model == "" {
 		cfg.Model = DefaultLocalModel
@@ -438,7 +439,7 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 	default:
 		warn = append(warn, "SWARMERY_DECIDE_CLAUDE: unknown value, the claude backend stays off")
 	}
-	for _, fam := range []string{"d1", "d2"} {
+	for _, fam := range []string{"d1", "d2", "d3"} {
 		key := "SWARMERY_DECIDE_" + strings.ToUpper(fam)
 		if raw := getenv(key); strings.TrimSpace(raw) != "" {
 			if m, ok := ParseMode(raw); ok {
@@ -465,8 +466,9 @@ func (c Config) String() string {
 	if c.URL != "" {
 		local = c.URL + " model=" + c.Model
 	}
-	return fmt.Sprintf("local=%s claude=%t d1=%s(%.2f) d2=%s(%.2f)",
-		local, c.Claude, c.Modes["d1"], c.Thresholds["d1"], c.Modes["d2"], c.Thresholds["d2"])
+	return fmt.Sprintf("local=%s claude=%t d1=%s(%.2f) d2=%s(%.2f) d3=%s(%.2f)",
+		local, c.Claude, c.Modes["d1"], c.Thresholds["d1"], c.Modes["d2"], c.Thresholds["d2"],
+		c.Modes["d3"], c.Thresholds["d3"])
 }
 
 // New builds the engine. Local exists only with a URL; Claude only when

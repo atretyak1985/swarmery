@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -556,5 +557,66 @@ func TestLabeler(t *testing.T) {
 	n, _ = (&Labeler{E: e}).Run(context.Background())
 	if n != 1 || s.calls != 1 {
 		t.Errorf("failing backend: labelled %d with %d calls, want 1/1", n, s.calls)
+	}
+}
+
+func TestD3_ModesAndRuleView(t *testing.T) {
+	db := openDB(t)
+	in := D3Input{SessionUUID: "u3", PhaseName: "P", Summary: "s", TopComponent: "size_miss",
+		Divergence: "The code was not what the plan assumed.", ModelFallback: true}
+
+	// Unconfigured and off: no call, no row.
+	if out := (&Engine{DB: db}).D3(context.Background(), in); out.Asked {
+		t.Fatal("unconfigured engine asked D3")
+	}
+	s := &stub{name: BackendLocal, a: Answer{Value: "code-differs", Confidence: 0.9, Calibrated: true}}
+	off := &Engine{DB: db, Local: s, DefaultModes: map[string]Mode{"d3": ModeOff}}
+	if out := off.D3(context.Background(), in); out.Asked || s.calls != 0 {
+		t.Fatal("D3 asked while off")
+	}
+
+	// Shadow: asked and recorded with the fallback as the rules' view, no label.
+	shadow := &Engine{DB: db, Local: s}
+	out := shadow.D3(context.Background(), in)
+	if !out.Asked || out.Label != "" || out.DecisionID == 0 || out.Err != nil {
+		t.Fatalf("shadow = %+v", out)
+	}
+	var rule, mode string
+	if err := db.QueryRow(`SELECT rule_value, mode FROM decisions WHERE id = ?`, out.DecisionID).Scan(&rule, &mode); err != nil {
+		t.Fatal(err)
+	}
+	if rule != "model-fallback" || mode != "shadow" {
+		t.Fatalf("row rule=%q mode=%q", rule, mode)
+	}
+
+	// Active: the answer at/above the threshold, unknown below it, "" on error.
+	active := &Engine{DB: db, Local: s, DefaultModes: map[string]Mode{"d3": ModeActive}, Thresholds: map[string]float64{"d3": 0.6}}
+	if out := active.D3(context.Background(), in); out.Label != "code-differs" {
+		t.Fatalf("active label = %q", out.Label)
+	}
+	s.a = Answer{Value: "code-differs", Confidence: 0.5, Calibrated: true}
+	if out := active.D3(context.Background(), in); out.Label != LabelUnknown {
+		t.Fatalf("below threshold label = %q", out.Label)
+	}
+	s.a, s.err = Answer{}, errors.New("down")
+	if out := active.D3(context.Background(), in); out.Label != "" || out.Err == nil {
+		t.Fatalf("errored call = %+v", out)
+	}
+	// An answer outside the taxonomy is a failed call, never a label.
+	s.a, s.err = Answer{Value: "gremlins", Confidence: 0.99, Calibrated: true}, nil
+	if out := active.D3(context.Background(), in); out.Label != "" || out.Err == nil {
+		t.Fatalf("out-of-taxonomy answer = %+v", out)
+	}
+}
+
+func TestConfigFromEnv_D3(t *testing.T) {
+	env := map[string]string{"SWARMERY_DECIDE_D3": "active", "SWARMERY_DECIDE_D3_THRESHOLD": "0.7"}
+	cfg, warn := ConfigFromEnv(func(k string) string { return env[k] })
+	if cfg.Modes["d3"] != ModeActive || cfg.Thresholds["d3"] != 0.7 || len(warn) != 0 ||
+		!strings.Contains(cfg.String(), "d3=active(0.70)") {
+		t.Fatalf("cfg=%+v warn=%v str=%s", cfg, warn, cfg.String())
+	}
+	if !slices.Contains(KnownQuestions, QD3Cause) {
+		t.Fatal("D3 missing from the Decisions page's question list")
 	}
 }

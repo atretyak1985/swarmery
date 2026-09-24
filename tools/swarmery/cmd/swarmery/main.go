@@ -2127,7 +2127,30 @@ func cmdServe(args []string) error {
 			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
 		}
 	}
-	scorer.Scored = lessonGen.AfterScore
+	// Learning loop phase 9: the local decision classifier. It works AROUND
+	// Claude runs, never inside them — D1 is consulted only on the settle loop's
+	// ambiguous branch (after the rules), D2 labels finished sessions and D3
+	// (step 14.3) labels why a surprising run diverged, both for analytics. All
+	// default to shadow; with SWARMERY_DECIDE_URL unset (and the claude backend
+	// off, its default) the engine is inert and nothing changes. Built here,
+	// before the scorer hook below, so the hook is assigned exactly once.
+	decideCfg, decideWarn := decide.ConfigFromEnv(os.Getenv)
+	for _, w := range decideWarn {
+		log.Printf("warn: %s", w)
+	}
+	decideEng := decide.New(db, decideCfg)
+	decideEng.OnNeedsOperator = func(n decide.NeedsOperator) {
+		notifier.Emit(notify.Event{
+			Type:  notify.EventRunNeedsOperator,
+			Title: fmt.Sprintf("%s %d needs you", n.Engine, n.SubjectID),
+			Body:  n.Detail,
+		})
+	}
+	causeClf := &lessons.CauseClassifier{DB: db, E: decideEng, Threshold: lessonCfg.Threshold}
+	scorer.Scored = func(st *surprise.Stored, source string) {
+		lessonGen.AfterScore(st, source)
+		causeClf.AfterScore(st, source)
+	}
 	log.Printf("lesson candidates: %s", lessonCfg)
 	recorder := actuals.NewRecorder(db, wtMgr.Git)
 	recorder.OnRecorded = scorer.AfterActuals
@@ -2186,23 +2209,8 @@ func cmdServe(args []string) error {
 	}
 	api.AttachPlanRun(planrunSvc)
 
-	// Learning loop phase 9: the local decision classifier. It works AROUND
-	// Claude runs, never inside them — D1 is consulted only on the settle loop's
-	// ambiguous branch (after the rules), D2 labels finished sessions for
-	// analytics. Both default to shadow; with SWARMERY_DECIDE_URL unset (and the
-	// claude backend off, its default) the engine is inert and nothing changes.
-	decideCfg, decideWarn := decide.ConfigFromEnv(os.Getenv)
-	for _, w := range decideWarn {
-		log.Printf("warn: %s", w)
-	}
-	decideEng := decide.New(db, decideCfg)
-	decideEng.OnNeedsOperator = func(n decide.NeedsOperator) {
-		notifier.Emit(notify.Event{
-			Type:  notify.EventRunNeedsOperator,
-			Title: fmt.Sprintf("%s %d needs you", n.Engine, n.SubjectID),
-			Body:  n.Detail,
-		})
-	}
+	// The decision classifier (built above, beside the surprise scorer) reaches
+	// the run engines' settle loops and the Decisions page here.
 	phaserunSvc.Decide = decideEng
 	planrunSvc.Decide = decideEng
 	api.AttachDecide(decideEng)

@@ -19,7 +19,7 @@ const (
 )
 
 // KnownQuestions is every question the dashboard lists, in display order.
-var KnownQuestions = []string{QD1, QD2TaskType, QD2Outcome, QD2Failure}
+var KnownQuestions = []string{QD1, QD2TaskType, QD2Outcome, QD2Failure, QD3Cause}
 
 // Label vocabularies (fixed taxonomies). LabelUnknown is the below-threshold
 // safe default.
