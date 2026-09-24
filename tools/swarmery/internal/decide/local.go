@@ -23,10 +23,12 @@ const LocalTimeout = 5 * time.Second
 // answer's first token when the server returns them, otherwise the answer is
 // marked uncalibrated.
 type Local struct {
-	URL     string
-	Model   string
-	Client  *http.Client  // nil ⇒ http.DefaultClient
-	Timeout time.Duration // 0 ⇒ LocalTimeout
+	URL        string
+	Model      string
+	NoSchema   bool          // omit response_format (Config.NoSchema)
+	UserSuffix string        // appended to the question (Config.UserSuffix)
+	Client     *http.Client  // nil ⇒ http.DefaultClient
+	Timeout    time.Duration // 0 ⇒ LocalTimeout
 }
 
 func (l *Local) Name() string { return BackendLocal }
@@ -112,31 +114,41 @@ func (l *Local) Ask(ctx context.Context, q Question) (Answer, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	body, err := json.Marshal(map[string]any{
-		"model":           l.Model,
-		"temperature":     0,
-		"max_tokens":      64,
-		"logprobs":        true,
-		"top_logprobs":    5,
-		"response_format": schemaFor(q),
+	user := userPrompt(q)
+	if l.UserSuffix != "" {
+		user += "\n\n" + l.UserSuffix
+	}
+	req := map[string]any{
+		"model":        l.Model,
+		"temperature":  0,
+		"max_tokens":   64,
+		"logprobs":     true,
+		"top_logprobs": 5,
 		"messages": []chatMessage{
 			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt(q)},
+			{Role: "user", Content: user},
 		},
-	})
+	}
+	// Without the schema the system prompt alone asks for {"answer": …}, and
+	// parseAnswer already maps the value onto the options (an off-list value is
+	// an error, never a guess).
+	if !l.NoSchema {
+		req["response_format"] = schemaFor(q)
+	}
+	body, err := json.Marshal(req)
 	if err != nil {
 		return Answer{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, l.endpoint(), bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, l.endpoint(), bytes.NewReader(body))
 	if err != nil {
 		return Answer{}, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Content-Type", "application/json")
 	client := l.Client
 	if client == nil {
 		client = http.DefaultClient
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return Answer{}, err
 	}
