@@ -277,14 +277,7 @@ type phaseInfo struct {
 // .claude/project.json. repopath.Resolve appends ProjectPath as the last
 // candidate, which is what keeps every single-repo project resolving as before.
 func (s *Service) runRoot(info phaseInfo) (string, error) {
-	var cells []string
-	if strings.TrimSpace(info.Repo) != "" {
-		cells = append(cells, info.Repo)
-	}
-	if info.WorkspaceRoot != "" {
-		cells = append(cells, repopath.FileHints(filepath.Join(info.WorkspaceRoot, "overlay", "project.json"))...)
-	}
-	cells = append(cells, repopath.FileHints(filepath.Join(info.ProjectPath, ".claude", "project.json"))...)
+	cells := repopath.Cells(info.ProjectPath, info.WorkspaceRoot, info.Repo)
 
 	resolve := s.RepoRoot
 	if resolve == nil {
