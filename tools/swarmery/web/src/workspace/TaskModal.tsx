@@ -72,6 +72,7 @@ export function TaskModal({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && !confirming) {
+        commit();
         onClose();
         return;
       }

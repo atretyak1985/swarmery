@@ -15,7 +15,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { PluginConfigProbe, ProjectPluginRow } from '../api/types';
 import { ConfigValidationError, probeProjectConfig, putProjectConfig } from '../api';
-import { ErrorBox } from './ui';
+import { ConfirmDialog, ErrorBox } from './ui';
 
 /** The subset of JSON Schema the contract allows (Phase 1): string / integer
  * leaves, object nesting, required + default + minimum. Everything else on
@@ -226,10 +226,22 @@ export function PluginConfigModal({
   const [value, setValue] = useState<FormValue>(
     isRecord(row.configCurrent) ? (row.configCurrent as FormValue) : {},
   );
+  const initialValueRef = useRef(value);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'editing' });
   const busy = phase.kind === 'saving';
+  const dirty = JSON.stringify(value) !== JSON.stringify(initialValueRef.current);
+
+  function requestClose(): void {
+    if (busy) return;
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onClose();
+  }
   const firstPath = useMemo(() => (schema !== undefined ? firstLeafPath(schema) : null), [schema]);
   const knownLeaves = useMemo(() => (schema !== undefined ? leafPaths(schema) : []), [schema]);
   const filledCount = knownLeaves.filter((dotted) => !isEmptyValue(valueAt(value, dotted))).length;
@@ -320,7 +332,12 @@ export function PluginConfigModal({
   useEffect(() => () => probeAbort.current?.abort(), []);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-    if (e.key === 'Escape' && !busy) onClose();
+    if (e.key !== 'Escape' || busy) return;
+    if (confirmDiscard) {
+      setConfirmDiscard(false);
+      return;
+    }
+    requestClose();
   }
 
   async function save(): Promise<void> {
@@ -369,7 +386,7 @@ export function PluginConfigModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={busy ? undefined : onClose}
+      onClick={busy ? undefined : requestClose}
       onKeyDown={onKeyDown}
     >
       <div
@@ -453,7 +470,7 @@ export function PluginConfigModal({
                 <span className="flex gap-2">
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={requestClose}
                     disabled={busy}
                     className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
                   >
@@ -484,6 +501,17 @@ export function PluginConfigModal({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        title="Discard changes?"
+        confirmLabel="discard"
+        danger
+        onConfirm={onClose}
+        onCancel={() => setConfirmDiscard(false)}
+      >
+        Your edits to this plugin's configuration will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

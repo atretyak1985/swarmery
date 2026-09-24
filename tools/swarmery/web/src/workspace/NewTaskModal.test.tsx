@@ -232,3 +232,33 @@ describe('NewTaskModal — POST body', () => {
     expect(posted[0]?.['boardColumn']).toBe('todo');
   });
 });
+
+describe('NewTaskModal — discard guard', () => {
+  it('confirms on Escape once dirty, a second Escape dismisses the confirm, and confirming discard closes', async () => {
+    const onClose = vi.fn();
+    render(
+      <NewTaskModal projectId={1} projectSlug="p" onCreated={() => {}} onClose={onClose} />,
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText('title')).toBeDefined();
+    });
+
+    fireEvent.change(screen.getByLabelText('title'), { target: { value: 'a new task' } });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(await screen.findByText('Discard new task?')).toBeDefined();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // A second Escape dismisses the confirm, not the modal — the title survives.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByText('Discard new task?')).toBeNull();
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('title') as HTMLInputElement).value).toBe('a new task');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.click(await screen.findByRole('button', { name: 'discard' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+});

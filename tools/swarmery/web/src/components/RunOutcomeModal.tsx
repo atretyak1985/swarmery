@@ -26,6 +26,7 @@ import {
 } from '../api';
 import { fmtElapsed } from '../lib/format';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
+import { ConfirmDialog } from './ui';
 
 /** The reason a revise wizard starts from: the diagnosis itself, restated as
  * prose the planner can act on. Composed from what the daemon PROVED (outcome,
@@ -134,6 +135,7 @@ export function RunOutcomeModal({
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [confirmDiscardRevise, setConfirmDiscardRevise] = useState(false);
 
   // Revise-plan flow (plan-revision phase 4): the diagnosis is exactly the
   // moment the operator knows the PLAN is wrong, so the modal can hand it to a
@@ -174,25 +176,38 @@ export function RunOutcomeModal({
   // Esc closes, except while a branch delete is in flight. While the delete is
   // ARMED it disarms instead of closing — Esc is the universal "back out", and
   // closing the whole modal on it would leave the user unsure whether the branch
-  // survived.
+  // survived. Same collapse-then-close ladder backs the backdrop click via
+  // `requestClose`, plus a guard on the typed revise reason at the point where
+  // the modal would actually unmount.
+  const requestClose = useCallback((): void => {
+    if (busy || reviseBusy) return;
+    if (confirmingDelete) {
+      setConfirmingDelete(false);
+      return;
+    }
+    if (revising) {
+      setRevising(false);
+      return;
+    }
+    if (reviseReason.trim() !== '') {
+      setConfirmDiscardRevise(true);
+      return;
+    }
+    onClose();
+  }, [busy, reviseBusy, confirmingDelete, revising, reviseReason, onClose]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape' || busy || reviseBusy) return;
-      if (confirmingDelete) {
-        setConfirmingDelete(false);
+      if (confirmDiscardRevise) {
+        setConfirmDiscardRevise(false);
         return;
       }
-      // Same back-out ladder as the armed delete: Esc collapses the revise
-      // panel (typed reason kept) before it closes the whole modal.
-      if (revising) {
-        setRevising(false);
-        return;
-      }
-      onClose();
+      requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, reviseBusy, confirmingDelete, revising, onClose]);
+  }, [busy, reviseBusy, confirmDiscardRevise, requestClose]);
 
   const startRevise = (): void => {
     const reason = reviseReason.trim();
@@ -313,7 +328,7 @@ export function RunOutcomeModal({
       role="dialog"
       aria-modal="true"
       aria-label="Phase run diagnosis"
-      onClick={busy ? undefined : onClose}
+      onClick={busy ? undefined : requestClose}
     >
       <div
         className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-line bg-surface px-4 py-4"
@@ -542,14 +557,25 @@ export function RunOutcomeModal({
           </button>
           <button
             type="button"
-            onClick={onClose}
-            disabled={busy}
+            onClick={requestClose}
+            disabled={busy || reviseBusy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
             Close
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDiscardRevise}
+        title="Discard revise reason?"
+        confirmLabel="discard"
+        danger
+        onConfirm={onClose}
+        onCancel={() => setConfirmDiscardRevise(false)}
+      >
+        The reason you wrote for revising this plan will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

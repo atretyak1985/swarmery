@@ -6,7 +6,7 @@
 // /api/routines{,/{id}/runs}; the global project scope (useScope) filters the
 // list the same way Retro/Analytics do.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Routine, RoutineInput, RoutineRun, RoutineStep, RoutineStepType } from '../api/types';
 import {
   createRoutine,
@@ -406,9 +406,50 @@ function RoutineEditor({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const initialSnapshotRef = useRef({
+    name: seed?.name ?? '',
+    projectId: seed?.projectId ?? null,
+    cronExpr: seed?.cronExpr ?? '',
+    catchUp: seed?.catchUp ?? 'skip',
+    timeoutSec: seed?.timeoutSec ?? 900,
+    webhook: seed?.hasWebhook ?? false,
+    steps: seed?.steps ?? [blankStep('command')],
+  });
 
   const cronOk = cronLooksValid(cronExpr);
   const canSave = name.trim() !== '' && steps.length > 0 && cronOk && !saving;
+
+  // The post-save "copy the webhook token" view already persisted server-side —
+  // gated on token === null so it never nags on a state that has nothing left
+  // to lose.
+  const dirty =
+    token === null &&
+    JSON.stringify({ name, projectId, cronExpr, catchUp, timeoutSec, webhook, steps }) !==
+      JSON.stringify(initialSnapshotRef.current);
+
+  const requestClose = useCallback((): void => {
+    if (saving) return;
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    onClose();
+  }, [saving, dirty, onClose]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || saving) return;
+      if (confirmDiscard) {
+        setConfirmDiscard(false);
+        return;
+      }
+      requestClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [saving, confirmDiscard, requestClose]);
 
   const save = async (): Promise<void> => {
     setSaving(true);
@@ -443,7 +484,7 @@ function RoutineEditor({
       role="dialog"
       aria-modal="true"
       aria-label={isNew ? 'new routine' : 'edit routine'}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         className="flex h-full w-full max-w-lg flex-col border-l border-line bg-surface"
@@ -455,7 +496,7 @@ function RoutineEditor({
           </span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="close"
             className="rounded-lg border border-line px-2.5 py-1 font-mono text-[12px] text-ink-dim hover:text-ink"
           >
@@ -585,7 +626,7 @@ function RoutineEditor({
         <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-lg border border-line px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 hover:bg-surface2"
           >
             Cancel
@@ -600,6 +641,17 @@ function RoutineEditor({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        title={isNew ? 'Discard new routine?' : 'Discard changes?'}
+        confirmLabel="discard"
+        danger
+        onConfirm={onClose}
+        onCancel={() => setConfirmDiscard(false)}
+      >
+        The name, schedule, and steps you've entered will be lost.
+      </ConfirmDialog>
     </div>
   );
 }
