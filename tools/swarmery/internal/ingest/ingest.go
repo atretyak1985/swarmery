@@ -1195,6 +1195,24 @@ func (in *ingester) upsertTurn(seq int, role, messageID, model, ts string, u *us
 			in.sessionID, ts).Scan(&id)
 	}
 	if err == nil {
+		// A replay (backfill --rebuild-text) is the only way rows ingested before
+		// migration 0075 learn their TTL split and speed, which `swarmery recost`
+		// then prices. Fill only a still-NULL split: live ingest never re-matches
+		// a turn it already split, so this costs nothing on the hot path.
+		if u != nil {
+			w5, w1h := u.cacheWriteSplit()
+			var speed any
+			if u.Speed != "" {
+				speed = u.Speed
+			}
+			if _, err := in.tx.Exec(
+				`UPDATE turns SET cache_write_5m_tokens = ?, cache_write_1h_tokens = ?,
+				                  speed = COALESCE(speed, ?)
+				 WHERE id = ? AND cache_write_5m_tokens IS NULL AND cache_write_1h_tokens IS NULL`,
+				w5, w1h, speed, id); err != nil {
+				return 0, false, fmt.Errorf("backfill cache split turn=%d: %w", id, err)
+			}
+		}
 		return id, false, nil
 	}
 	if err != sql.ErrNoRows {

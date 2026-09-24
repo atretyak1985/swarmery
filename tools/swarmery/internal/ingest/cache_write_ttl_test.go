@@ -180,3 +180,56 @@ func TestIngestStoresCacheWriteTTLAndSpeed(t *testing.T) {
 		t.Errorf("re-ingest changed the 1h turn: %+v", again)
 	}
 }
+
+// TestRebuildTextBackfillsCacheWriteSplit pins the only repair path for rows
+// ingested before migration 0075: their split and speed are NULL and their
+// lines are already consumed, so `backfill --rebuild-text` replays from byte 0
+// and the matched turn must learn its split (which `swarmery recost` prices).
+// A split that is already known is never overwritten by a replay.
+func TestRebuildTextBackfillsCacheWriteSplit(t *testing.T) {
+	db := testDB(t)
+	root := t.TempDir()
+	projDir := filepath.Join(root, "-tmp-ttlproj")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(projDir, "ttl-session.jsonl")
+	if err := os.WriteFile(path, []byte(ttlSessionFixture()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := File(db, path); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	// Simulate pre-0075 rows for two turns; msg_TTL03 keeps a sentinel split
+	// that the replay must leave alone.
+	if _, err := db.Exec(`UPDATE turns SET cache_write_5m_tokens = NULL, cache_write_1h_tokens = NULL, speed = NULL
+	                       WHERE message_id IN ('msg_TTL01', 'msg_TTL02')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE turns SET cache_write_5m_tokens = 7, cache_write_1h_tokens = 9
+	                       WHERE message_id = 'msg_TTL03'`); err != nil {
+		t.Fatal(err)
+	}
+
+	if stats := RebuildText(t.Context(), db, []string{root}); stats.Files != 1 || stats.Errors != 0 {
+		t.Fatalf("rebuild stats = %+v, want 1 file / 0 errors", stats)
+	}
+
+	read := func(msgID string) (w5m, w1h sql.NullInt64, speed sql.NullString) {
+		t.Helper()
+		if err := db.QueryRow(`SELECT cache_write_5m_tokens, cache_write_1h_tokens, speed
+		                         FROM turns WHERE message_id = ?`, msgID).Scan(&w5m, &w1h, &speed); err != nil {
+			t.Fatalf("read turn %s: %v", msgID, err)
+		}
+		return
+	}
+	if w5m, w1h, speed := read("msg_TTL01"); w5m.Int64 != 0 || !w5m.Valid || w1h.Int64 != 1_000_000 || speed.String != "standard" {
+		t.Errorf("1h turn after replay = (%v, %v, %v), want (0, 1000000, standard)", w5m, w1h, speed)
+	}
+	if _, _, speed := read("msg_TTL02"); speed.String != "fast" {
+		t.Errorf("fast turn speed after replay = %v, want fast", speed)
+	}
+	if w5m, w1h, _ := read("msg_TTL03"); w5m.Int64 != 7 || w1h.Int64 != 9 {
+		t.Errorf("known split was overwritten by the replay: (%v, %v), want (7, 9)", w5m, w1h)
+	}
+}
