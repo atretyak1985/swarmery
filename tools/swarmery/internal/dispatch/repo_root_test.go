@@ -108,3 +108,76 @@ func sameDir(t *testing.T, a, b string) bool {
 	}
 	return ra == rb
 }
+
+// A removal targets the repository the worktree was actually cut from, read from
+// the worktree's own `.git` file, not a fresh resolve: when project.json's
+// mainApp changes while a card runs, re-resolving points at the other repo, whose
+// `git worktree remove` fails and leaks the worktree.
+func TestRemoveWorktreeFor_UsesTheWorktreesOwnRepo(t *testing.T) {
+	db := testDB(t)
+	umbrella := t.TempDir()
+	started := mkRepo(t, filepath.Join(umbrella, "sk-next"))
+	mkRepo(t, filepath.Join(umbrella, "sk-other"))
+	if err := os.MkdirAll(filepath.Join(umbrella, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// mainApp now names a DIFFERENT repo than the one the worktree came from.
+	if err := os.WriteFile(filepath.Join(umbrella, ".claude", "project.json"),
+		[]byte(`{"mainApp":"sk-other"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO projects(id, path, slug, first_seen) VALUES(2, ?, 'umbrella', '2026-01-01T00:00:00Z')`,
+		umbrella); err != nil {
+		t.Fatal(err)
+	}
+	// A linked worktree of `started`: <wt>/.git names <started>/.git/worktrees/card.
+	wtPath := filepath.Join(t.TempDir(), "card")
+	if err := os.MkdirAll(filepath.Join(started, ".git", "worktrees", "card"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(wtPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitFile := "gitdir: " + filepath.Join(started, ".git", "worktrees", "card") + "\n"
+	if err := os.WriteFile(filepath.Join(wtPath, ".git"), []byte(gitFile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wt := &stubWt{}
+	s := newTestService(t, db, &stubRunner{}, wt)
+	id := insertTask(t, db, "T-moved", taskOpts{projectID: 2})
+	if _, err := db.Exec(`UPDATE tasks SET worktree_path=?, branch='swarm/T-moved' WHERE id=?`, wtPath, id); err != nil {
+		t.Fatal(err)
+	}
+
+	s.RemoveWorktreeFor(id)
+
+	wt.mu.Lock()
+	defer wt.mu.Unlock()
+	if len(wt.removeRoots) != 1 || !sameDir(t, wt.removeRoots[0], started) {
+		t.Fatalf("Remove repoRoot = %v, want the worktree's own repo %q", wt.removeRoots, started)
+	}
+}
+
+// workspaces.project_id is not UNIQUE: a project mapped by two workspace rows
+// must still yield each card once, or the scheduler would consider it twice.
+func TestCandidates_TwoWorkspacesForOneProject_ListCardOnce(t *testing.T) {
+	db := testDB(t)
+	for i, slug := range []string{"ws-a", "ws-b"} {
+		if _, err := db.Exec(`INSERT INTO workspaces(slug, root_path, project_id) VALUES(?, ?, 1)`,
+			slug, filepath.Join(t.TempDir(), slug)); err != nil {
+			t.Fatalf("insert workspace %d: %v", i, err)
+		}
+	}
+	s := newTestService(t, db, &stubRunner{}, &stubWt{})
+	insertTask(t, db, "T-once", taskOpts{})
+
+	cands, err := s.candidates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 1 {
+		t.Fatalf("candidates = %d, want 1 (one per card, not one per workspace)", len(cands))
+	}
+}

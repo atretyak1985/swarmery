@@ -64,6 +64,7 @@ type stubWt struct {
 	acquired     []string // task ids acquired
 	acquireRoots []string // repoRoot Acquire was actually called with, one per acquired id
 	removed      []string // task ids (via branch) removed
+	removeRoots  []string // repoRoot Remove was actually called with, one per removal
 	acquireErr   error
 	commits      map[string][]string // external id → trailer-bearing commit SHAs
 	commitsErr   error               // when set, the progress signal is UNREADABLE
@@ -96,6 +97,7 @@ func (w *stubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) e
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.removed = append(w.removed, a.Branch)
+	w.removeRoots = append(w.removeRoots, repoRoot)
 	return nil
 }
 

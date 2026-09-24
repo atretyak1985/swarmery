@@ -404,14 +404,16 @@ func provenanceBlock(quote string, files []string) string {
 func (s *Service) candidates() ([]candidate, error) {
 	// LEFT JOIN workspaces: the overlay's project.json is a repo-hint source, and a
 	// project with no workspace mapped must still be a candidate (the join is
-	// advisory) — same posture as phaserun/planrun's loadPhase.
+	// advisory) — same posture as phaserun/planrun's loadPhase. Joined through
+	// workspaceOnePerProject: workspaces.project_id is not UNIQUE, and a plain join
+	// would list a card once per mapped workspace.
 	rows, err := s.DB.Query(`
 		SELECT t.id, COALESCE(t.external_id,''), COALESCE(t.title,''), t.project_id, p.slug, p.path,
 		       w.root_path,
 		       t.prompt, t.model, t.agent, t.playbook, t.priority, t.created_at, t.file_scope, t.dependencies,
 		       COALESCE(t.origin_quote,''), COALESCE(t.origin_files,'')
 		  FROM tasks t JOIN projects p ON p.id = t.project_id
-		  LEFT JOIN workspaces w ON w.project_id = p.id
+		  LEFT JOIN ` + workspaceOnePerProject + ` w ON w.project_id = p.id
 		 WHERE t.source='queue' AND t.board_column='todo'
 		   AND t.paused=0 AND t.user_paused=0`)
 	if err != nil {
@@ -635,6 +637,13 @@ func (s *Service) liveWorktreeCount() (int, error) {
 
 // ── admission ──
 
+// workspaceOnePerProject is the workspaces relation with at most one row per
+// project (the lowest root_path, so the choice is deterministic).
+// workspaces.project_id carries no UNIQUE constraint, and joining the table
+// directly would repeat a card once per workspace mapped to its project.
+const workspaceOnePerProject = `(SELECT project_id, MIN(root_path) AS root_path
+		  FROM workspaces WHERE project_id IS NOT NULL GROUP BY project_id)`
+
 // runRoot resolves the repository a dispatched card runs in: a board card
 // declares no Repo cell of its own (unlike a phase doc), so the only hints are
 // the workspace overlay's project.json and the checkout's own
@@ -654,11 +663,17 @@ func (s *Service) runRoot(projectPath, workspaceRoot string) (string, error) {
 	return repopath.ResolveTrusted(projectPath, runcore.RegisteredRoots(s.DB), cells...)
 }
 
-// resolvedRepoRoot is runRoot for a worktree-REMOVAL call site: best-effort by
-// construction (removeWorktree already logs-and-continues on any failure), so a
-// resolution error falls back to projectPath rather than skipping the removal —
-// the same degraded answer every call site gave before runRoot existed.
-func (s *Service) resolvedRepoRoot(projectPath, workspaceRoot string) string {
+// resolvedRepoRoot is the repository a worktree-REMOVAL call site targets. The
+// worktree's own `.git` file comes first: it names the repo the worktree was
+// actually cut from, which re-resolving through runRoot would not if
+// project.json's mainApp changed while the card ran. Then runRoot, then
+// projectPath — best-effort by construction (removeWorktree already
+// logs-and-continues on any failure), the same degraded answer every call site
+// gave before runRoot existed.
+func (s *Service) resolvedRepoRoot(projectPath, workspaceRoot, wtPath string) string {
+	if repo, ok := repopath.WorktreeRepo(wtPath); ok {
+		return repo
+	}
 	if repoRoot, err := s.runRoot(projectPath, workspaceRoot); err == nil {
 		return repoRoot
 	}
@@ -1236,7 +1251,7 @@ func (s *Service) finishDone(c candidate, line string) {
 	} else if n > 0 {
 		log.Printf("dispatch: task %d done — ticked %d phase checkbox(es)", c.ID, n)
 	}
-	s.removeWorktree(s.resolvedRepoRoot(c.ProjectPath, c.WorkspaceRoot), wtpath.String, branch.String)
+	s.removeWorktree(s.resolvedRepoRoot(c.ProjectPath, c.WorkspaceRoot, wtpath.String), wtpath.String, branch.String)
 	s.notify(c.ID)
 }
 
@@ -1277,7 +1292,7 @@ func (s *Service) RemoveWorktreeFor(taskID int64) {
 	err := s.DB.QueryRow(`
 		SELECT p.path, t.branch, t.worktree_path, w.root_path
 		  FROM tasks t JOIN projects p ON p.id=t.project_id
-		  LEFT JOIN workspaces w ON w.project_id = p.id
+		  LEFT JOIN `+workspaceOnePerProject+` w ON w.project_id = p.id
 		 WHERE t.id=? AND t.worktree_path IS NOT NULL`, taskID).Scan(&repoPath, &branch, &wtpath, &wsRoot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return // no live worktree
@@ -1286,7 +1301,7 @@ func (s *Service) RemoveWorktreeFor(taskID int64) {
 		log.Printf("error: dispatch: lookup worktree for removal (task %d): %v", taskID, err)
 		return
 	}
-	s.removeWorktree(s.resolvedRepoRoot(repoPath, wsRoot.String), wtpath.String, branch.String)
+	s.removeWorktree(s.resolvedRepoRoot(repoPath, wsRoot.String, wtpath.String), wtpath.String, branch.String)
 	if _, err := s.DB.Exec(`UPDATE tasks SET worktree_path=NULL WHERE id=?`, taskID); err != nil {
 		log.Printf("error: dispatch: clear worktree_path (task %d): %v", taskID, err)
 	}

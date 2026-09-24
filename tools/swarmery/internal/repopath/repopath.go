@@ -343,6 +343,44 @@ func Cells(projectPath, workspaceRoot string, declared ...string) []string {
 	return cells
 }
 
+// WorktreeRepo reports the repository a linked git worktree was cut from, read
+// from the worktree's own `.git` file (`gitdir: <repo>/.git/worktrees/<name>`,
+// absolute or relative to the worktree). It is the one answer that cannot drift:
+// a removal resolved through Cells again would follow a project.json edited
+// mid-run to a different repository, whose `git worktree remove` then fails and
+// leaks the worktree. ok is false for anything that is not a readable linked
+// worktree; callers fall back to resolving.
+func WorktreeRepo(wtPath string) (string, bool) {
+	if strings.TrimSpace(wtPath) == "" {
+		return "", false
+	}
+	data, err := os.ReadFile(filepath.Join(wtPath, ".git"))
+	if err != nil {
+		return "", false // a directory .git (a main checkout) or no worktree at all
+	}
+	line := strings.TrimSpace(string(data))
+	gitdir, found := strings.CutPrefix(line, "gitdir:")
+	if !found {
+		return "", false
+	}
+	gitdir = strings.TrimSpace(gitdir)
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(wtPath, gitdir)
+	}
+	gitdir = filepath.Clean(gitdir)
+	// <repo>/.git/worktrees/<name> — anything else is not a layout we can vouch for.
+	worktrees := filepath.Dir(gitdir)
+	dotGit := filepath.Dir(worktrees)
+	if filepath.Base(worktrees) != "worktrees" || filepath.Base(dotGit) != ".git" {
+		return "", false
+	}
+	repo := filepath.Dir(dotGit)
+	if fi, err := os.Stat(dotGit); err != nil || !fi.IsDir() {
+		return "", false
+	}
+	return repo, true
+}
+
 // SameDir reports whether two paths name the same directory, comparing them
 // AFTER symlink resolution.
 //
