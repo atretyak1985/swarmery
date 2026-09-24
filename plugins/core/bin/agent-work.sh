@@ -15,6 +15,39 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ── Portable stat / date ──────────────────────────────────────────
+# `stat` is two tools wearing one name: BSD/macOS spells mtime `-f %m`, GNU
+# spells it `-c %Y`. GNU's `-f` is NOT an error — it prints filesystem status
+# and exits 0 — so an `||` chain with `-f` first never reaches its fallback on
+# Linux and hands that block to its caller. Same trap in reverse for `date -r`,
+# which takes an epoch on BSD but means "reference file" on GNU.
+# So: probe the OUTPUT once here, never an exit code, and route every caller
+# through these helpers. Guarded by scripts/tests/portable-shell.test.sh.
+case "$(stat -c %Y "$SCRIPT_DIR" 2>/dev/null)" in
+    ''|*[!0-9]*) _STAT_KIND=bsd ;;
+    *)           _STAT_KIND=gnu ;;
+esac
+
+# Format flags for `find … -exec stat "${_STAT_MN[@]}" {} +` — a shell function
+# cannot be -exec'd, so the dialect has to travel as argv. Emits "<epoch> <path>".
+if [ "$_STAT_KIND" = gnu ]; then _STAT_MN=(-c '%Y %n'); else _STAT_MN=(-f '%m %N'); fi
+
+# Epoch mtime of a path; 0 when unreadable.
+_mtime() {
+    local m
+    if [ "$_STAT_KIND" = gnu ]; then m="$(stat -c %Y "$1" 2>/dev/null)"
+    else m="$(stat -f %m "$1" 2>/dev/null)"; fi
+    case "$m" in ''|*[!0-9]*) echo 0 ;; *) echo "$m" ;; esac
+}
+
+# YYYY-MM-DD of a path's mtime; "?" when unreadable.
+_mtime_date() {
+    local m; m="$(_mtime "$1")"
+    if [ "$m" = 0 ]; then echo "?"; return 0; fi
+    if [ "$_STAT_KIND" = gnu ]; then date -d "@${m}" +%Y-%m-%d 2>/dev/null || echo "?"
+    else date -r "${m}" +%Y-%m-%d 2>/dev/null || echo "?"; fi
+}
+
 # ── Workspace resolution ──────────────────────────────────────────
 # swarmery model (preferred): a sibling swarmery-workspace/ namespaced by project.
 #   AGENT_WORKSPACE_ROOT — path to the workspace repo (default: $HOME/swarmery-workspace)
@@ -100,8 +133,7 @@ _id_from_dir() {
 # (a plain rc=1 here would kill the whole script under set -e before it could print).
 _latest_id_in() {
     local root="$1" dir
-    dir=$( { find "$root" -mindepth 4 -maxdepth 4 -type d -exec stat -f '%m %N' {} + 2>/dev/null \
-             || find "$root" -mindepth 4 -maxdepth 4 -type d -exec stat -c '%Y %n' {} + 2>/dev/null; } \
+    dir=$(find "$root" -mindepth 4 -maxdepth 4 -type d -exec stat "${_STAT_MN[@]}" {} + 2>/dev/null \
         | sort -rn | head -1 | sed -E 's|^[0-9]+ ||')
     [ -n "$dir" ] || return 0
     _id_from_dir "$dir"
@@ -360,7 +392,7 @@ cmd_index() {
             local rel; rel=${dir#"${WORKSPACE_DIR}/"}
             local typ; typ=$(_readme_field "${dir}README.md" "Тип")
             local st; st=$(_readme_field "${dir}README.md" "Статус")
-            local mtime; mtime=$(stat -f '%Sm' -t '%Y-%m-%d' "$dir" 2>/dev/null || date -r "$(stat -c %Y "$dir" 2>/dev/null || echo 0)" +%Y-%m-%d 2>/dev/null || echo "?")
+            local mtime; mtime=$(_mtime_date "$dir")
             echo "| [${id}](${rel}README.md) | ${typ} | ${st} | ${mtime} |"
         done
         echo ""
