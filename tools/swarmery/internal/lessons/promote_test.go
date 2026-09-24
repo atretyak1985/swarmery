@@ -64,8 +64,10 @@ func TestAreaDir(t *testing.T) {
 			t.Errorf("AreaDir(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	if _, err := AreaDir("../elsewhere"); !errors.Is(err, ErrInvalid) {
-		t.Errorf("AreaDir(../elsewhere) err = %v, want ErrInvalid", err)
+	for _, bad := range []string{"../elsewhere", "a/../../b", "-rf", "a/-x", "a b", "a;b", "a\\b", "a/..b"} {
+		if _, err := AreaDir(bad); !errors.Is(err, ErrInvalid) {
+			t.Errorf("AreaDir(%q) err = %v, want ErrInvalid", bad, err)
+		}
 	}
 }
 

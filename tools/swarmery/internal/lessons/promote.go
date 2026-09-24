@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -62,15 +63,21 @@ func PromoteBranch(id int64) string { return fmt.Sprintf("swarm/lesson-L%d", id)
 // receives the lesson: the glob cut at its first wildcard segment (the phase-13
 // normalization), a trailing file name dropped. "." is the repo root. An entry
 // that climbs out of the repo is invalid.
+// safeArea is what a promotable area directory may look like: slash-separated
+// segments of word characters, dots, dashes, @ and +, never starting with `-`.
+var safeArea = regexp.MustCompile(`^[A-Za-z0-9_.@+][A-Za-z0-9_.@+-]*(/[A-Za-z0-9_.@+][A-Za-z0-9_.@+-]*)*$`)
+
 func AreaDir(area string) (string, error) {
 	n := surprise.NormArea(area)
 	if n == "" {
 		n = "."
 	}
-	for _, seg := range strings.Split(n, "/") {
-		if seg == ".." {
-			return "", fmt.Errorf("%w: area %q leaves the repository", ErrInvalid, area)
-		}
+	// An allow-list, not a deny-list: the area comes from an API body and ends up
+	// both in a filesystem path and in `git add`/`git commit` argv. A substring
+	// `..` check (not only a whole `..` segment) and no leading `-` keep it inside
+	// the worktree and out of git's option parser.
+	if n != "." && (strings.Contains(n, "..") || !safeArea.MatchString(n)) {
+		return "", fmt.Errorf("%w: area %q leaves the repository or has characters a directory name here may not use", ErrInvalid, area)
 	}
 	if last := path.Base(n); n != "." && path.Ext(last) != "" && !strings.HasPrefix(last, ".") {
 		n = path.Dir(n)
