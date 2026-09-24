@@ -56,7 +56,9 @@ Two things ship from this repository on separate clocks:
     don't opt in yet. It asks D1 (how did
     this run end?) after the completion loop's rules, and D2 (session labels)
     for advisor and retro. Both default to shadow, every call is audited in
-    `decisions`, and with `SWARMERY_DECIDE_URL` unset nothing changes.
+    `decisions`, and with `SWARMERY_DECIDE_URL` unset nothing changes. A
+    third question, D3 (why did a surprising run diverge?), labels the run's
+    own divergence paragraph; it is shadow by default (`SWARMERY_DECIDE_D3`).
   - *Core.* The new read-only `area-lessons` skill, plus forecast contracts in
     the planner and executor prompts (core 3.8.0).
 
@@ -69,7 +71,8 @@ Two things ship from this repository on separate clocks:
   - *Cost.* Cache writes are priced per TTL — Claude Code writes 1h cache, and
     billing all of it at the 5m rate under-charged every such write by 37.5%.
     Fast-mode turns bill at their own `-fast` SKU. Old transcripts price exactly
-    as before.
+    as before until `swarmery backfill --rebuild-text` replays them to learn
+    their split, after which `swarmery recost` reprices them.
   - *Runs.* All 14 headless spawn sites pin `--model` and `--effort`; `routines`
     had been sending no model at all, so every tick ran on the account default.
     A run that exits 0 with criteria unticked and no blocked line is resumed in
