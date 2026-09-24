@@ -13,7 +13,7 @@ import { refreshReadiness } from '../lib/accountReadiness';
 import { ExplainPair } from './Explain';
 import { TerminalPathNote } from './TerminalPathNote';
 import { UsageConnect } from './usage/UsageConnect';
-import { ErrorBox } from './ui';
+import { ConfirmDialog, ErrorBox } from './ui';
 
 type Stage =
   | { kind: 'form' }
@@ -39,9 +39,11 @@ export function CreateAccountModal({
   // The embedded Connect came out CLI-ready — swap the flow for the terminal
   // path note. The manual command stays visible until then.
   const [resolved, setResolved] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   if (!open) return null;
   const busy = stage.kind === 'saving';
+  const dirty = stage.kind === 'form' && key.trim() !== '';
 
   function reset(): void {
     setKey('');
@@ -51,14 +53,23 @@ export function CreateAccountModal({
     setResolved(false);
   }
 
-  function close(): void {
+  function requestClose(): void {
     if (busy) return;
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
     reset();
     onClose();
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-    if (e.key === 'Escape' && !busy) close();
+    if (e.key !== 'Escape' || busy) return;
+    if (confirmDiscard) {
+      setConfirmDiscard(false);
+      return;
+    }
+    requestClose();
   }
 
   async function submit(): Promise<void> {
@@ -90,7 +101,7 @@ export function CreateAccountModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={busy ? undefined : close}
+      onClick={busy ? undefined : requestClose}
       onKeyDown={onKeyDown}
     >
       <div
@@ -134,7 +145,7 @@ export function CreateAccountModal({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={close}
+                onClick={requestClose}
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
@@ -211,6 +222,20 @@ export function CreateAccountModal({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        title="Discard account key?"
+        confirmLabel="discard"
+        danger
+        onConfirm={() => {
+          reset();
+          onClose();
+        }}
+        onCancel={() => setConfirmDiscard(false)}
+      >
+        The account key you typed will be lost.
+      </ConfirmDialog>
     </div>
   );
 }
