@@ -620,3 +620,29 @@ func TestConfigFromEnv_D3(t *testing.T) {
 		t.Fatal("D3 missing from the Decisions page's question list")
 	}
 }
+
+// LM Studio's reasoning parser strips the braces off a Qwen3 thinking model's
+// schema-constrained reply. The grammar still bounded the value, so a bare or
+// half-stripped option is the answer, and its logprob still gives confidence.
+func TestLocal_BraceStrippedReplyStillAnswers(t *testing.T) {
+	for _, content := range []string{`done`, `"done"`, `answer": "done`} {
+		t.Run(content, func(t *testing.T) {
+			f := &fakeServer{reply: func(map[string]any) (int, any) {
+				i := strings.Index(content, "done")
+				return 200, chat(content, []lp{
+					{tok: content[:i], lp: 0},
+					{tok: "done", lp: math.Log(0.8), alts: map[string]float64{"done": math.Log(0.8), "report": math.Log(0.2)}},
+					{tok: content[i+len("done"):], lp: 0},
+				})
+			}}
+			srv := f.start(t)
+			a, err := (&Local{URL: srv.URL}).Ask(context.Background(), d1Question())
+			if err != nil {
+				t.Fatalf("Ask: %v", err)
+			}
+			if a.Value != D1Done || !a.Calibrated || math.Abs(a.Confidence-0.8) > 1e-6 {
+				t.Errorf("answer = %+v, want calibrated done at 0.8", a)
+			}
+		})
+	}
+}

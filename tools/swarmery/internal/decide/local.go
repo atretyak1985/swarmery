@@ -172,6 +172,12 @@ func (l *Local) Ask(ctx context.Context, q Question) (Answer, error) {
 func parseAnswer(q Question, content string) (string, error) {
 	start, end := strings.IndexByte(content, '{'), strings.LastIndexByte(content, '}')
 	if start < 0 || end <= start {
+		// LM Studio's reasoning parser strips the braces off a Qwen3 thinking
+		// model's structured reply, leaving `done` or `answer": "done`. The
+		// grammar still constrained the value, so a bare option is accepted.
+		if v, ok := q.canonical(bareValue(content)); ok {
+			return v, nil
+		}
 		return "", fmt.Errorf("no JSON object in reply %q", truncate(content, 120))
 	}
 	var obj struct {
@@ -249,7 +255,12 @@ func optionProbs(q Question, content string, toks []tokenLogprob, value string) 
 func answerValueOffset(content string) int {
 	i := strings.Index(content, `"answer"`)
 	if i < 0 {
-		return -1
+		// A brace-stripped reply (see parseAnswer): the value is the first
+		// non-space, non-quote character after any `answer":` remnant.
+		if strings.ContainsRune(content, '{') || bareValue(content) == "" {
+			return -1
+		}
+		return strings.Index(content, bareValue(content))
 	}
 	j := i + len(`"answer"`)
 	for j < len(content) && (content[j] == ' ' || content[j] == ':' || content[j] == '\n' || content[j] == '\t') {
@@ -281,4 +292,14 @@ func optionFor(q Question, frag, value string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// bareValue is the answer value of a reply whose JSON braces were stripped:
+// `done`, `"done"` or `answer": "done` all yield `done`.
+func bareValue(content string) string {
+	v := strings.TrimSpace(content)
+	if i := strings.Index(v, "answer"); i >= 0 {
+		v = strings.TrimLeft(v[i+len("answer"):], "\": \t\n")
+	}
+	return strings.Trim(v, "\" \t\n")
 }
