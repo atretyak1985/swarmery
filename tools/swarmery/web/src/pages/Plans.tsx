@@ -84,6 +84,7 @@ import { fmtAgo, fmtCost, fmtDateTime, fmtElapsed } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
 import { scopePlanSessions, type PlanSessionScope } from '../lib/planSessionScope';
 import { Empty, ErrorBox, Loading } from '../components/ui';
+import { CopyIdBadge } from '../components/CopyIdBadge';
 import { RunOutcomeModal } from '../components/RunOutcomeModal';
 import { PlanBranchDirtyModal, type PlanBranchDirty } from '../components/PlanBranchDirtyModal';
 import { RevisionReview, ORIGIN_LABEL } from './planning/RevisionReview';
@@ -1102,12 +1103,24 @@ export function Plans(): JSX.Element {
               <Empty>no {filter} plans</Empty>
             ) : (
               filtered.map((e) => (
-                <button
+                // A real <button> can't host CopyIdBadge's own nested <button> (invalid
+                // HTML, React warns) — this row becomes a div/role="button" instead,
+                // matching the same click-and-Enter/Space idiom TaskCard already uses,
+                // so the id chip can sit inside it as an independently-clickable control.
+                <div
                   key={e.taskId}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelected(e.taskId)}
+                  onKeyDown={(ev) => {
+                    if (ev.target !== ev.currentTarget) return;
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault();
+                      setSelected(e.taskId);
+                    }
+                  }}
                   aria-current={selected === e.taskId}
-                  className={`block w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                  className={`block w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
                     selected === e.taskId
                       ? 'border-line-strong bg-surface2'
                       : 'border-line bg-surface/40 hover:border-line-strong'
@@ -1127,13 +1140,19 @@ export function Plans(): JSX.Element {
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 font-mono text-[10px] text-ink-faint">
-                    {e.startedAt !== null ? e.startedAt.slice(0, 10) : e.externalId}
-                    {' · '}
-                    {e.phases.length} phase{e.phases.length === 1 ? '' : 's'}
+                  <div className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+                    {/* The chip shrinks and ellipsizes before the row scrolls — a
+                        `yyyy-mm-dd-slug` plan id can run past this column's width,
+                        and copying still copies the FULL id regardless of how much
+                        of it is visually truncated. */}
+                    <CopyIdBadge id={e.externalId} label="plan" truncate className="min-w-0 flex-1" />
+                    {e.startedAt !== null && <span className="shrink-0">{e.startedAt.slice(0, 10)}</span>}
+                    <span className="shrink-0">
+                      {e.phases.length} phase{e.phases.length === 1 ? '' : 's'}
+                    </span>
                   </div>
                   <ProgressBar done={e.rollup.done} total={e.rollup.total} className="mt-2" />
-                </button>
+                </div>
               ))
             )}
           </div>
@@ -1362,6 +1381,7 @@ function EpicDetail({
           >
             {epic.status}
           </span>
+          <CopyIdBadge id={epic.externalId} label="plan" className="shrink-0" />
         </div>
         <span className="shrink-0 font-mono text-[11px] text-ink-dim">
           {epic.rollup.done}/{epic.rollup.total} ({Math.round(epic.rollup.pct)}%)
@@ -2881,6 +2901,7 @@ function PlanDetailPanel({
             >
               {epic.status}
             </span>
+            <CopyIdBadge id={epic.externalId} label="plan" />
             <span className="font-mono text-[10px] text-ink-faint">
               {epic.rollup.done}/{epic.rollup.total} ({Math.round(epic.rollup.pct)}%)
             </span>

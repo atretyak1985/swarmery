@@ -27,6 +27,7 @@
 
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { CopyIdBadge } from '../components/CopyIdBadge';
 import type { BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { useSessionHref } from '../lib/sessionHref';
 import type { AttentionSignal, AttentionTone, SourceLine } from './boardModel';
@@ -535,9 +536,7 @@ export function TaskCard({
       {signal !== null && <SignalRow signal={signal} />}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-faint">
-          {task.externalId}
-        </span>
+        <CopyIdBadge id={task.externalId} label="task" />
         {task.model !== null && (
           <span className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-dim">
             {task.model}
