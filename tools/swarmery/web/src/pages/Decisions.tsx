@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   fetchDecisions,
+  fetchLabelQueue,
+  postGroundTruth,
   putDecisionMode,
   type DecideMode,
   type DecisionsResponse,
   type QuestionStats,
+  type QueueItem,
 } from '../api/decisions';
 
 const MODES: DecideMode[] = ['off', 'shadow', 'active'];
@@ -92,6 +96,136 @@ function Row({
   );
 }
 
+/** One queued decision: the model's answer, a one-click confirm, and a picker
+ *  for the right answer when the model was wrong. */
+function QueueRow({
+  item,
+  onLabel,
+}: {
+  item: QueueItem;
+  onLabel: (item: QueueItem, value: string) => void;
+}): JSX.Element {
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+      <span className="min-w-44 text-ink-dim">{LABELS[item.questionId] ?? item.questionId}</span>
+      <span className="font-mono text-ink">{item.answer}</span>
+      {item.confidence !== null && (
+        <span className="font-mono text-[10px] text-ink-dim">{pct(item.confidence)}</span>
+      )}
+      <button
+        type="button"
+        onClick={() => onLabel(item, item.answer)}
+        className="rounded border border-line px-1.5 py-px font-mono text-[10px] text-ink-dim hover:border-green hover:text-green"
+      >
+        ✓ correct
+      </button>
+      <label className="inline-flex items-center gap-1 font-mono text-[10px] text-ink-dim">
+        <span>or it was</span>
+        <select
+          aria-label={`correct answer for ${item.questionId}`}
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value !== '') onLabel(item, e.target.value);
+          }}
+          className="rounded border border-line bg-surface px-1 py-px text-ink"
+        >
+          <option value="">choose…</option>
+          {item.options
+            .filter((o) => o !== item.answer)
+            .map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+        </select>
+      </label>
+    </li>
+  );
+}
+
+/** The labelling queue: answered decisions with no ground truth yet, grouped by
+ *  the session they judge. The decisions table stores an input hash, never the
+ *  input, so the operator judges from the session itself (the link). Every
+ *  label feeds the agreement column above. */
+function LabelQueue({ onLabelled }: { onLabelled: () => void }): JSX.Element {
+  const [items, setItems] = useState<QueueItem[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchLabelQueue()
+      .then(setItems)
+      .catch((e: unknown) => setErr(String(e)));
+  }, []);
+
+  const groups = useMemo(() => {
+    const byKey = new Map<string, QueueItem[]>();
+    for (const it of items ?? []) {
+      const key = it.sessionUuid !== '' ? it.sessionUuid : it.subject;
+      byKey.set(key, [...(byKey.get(key) ?? []), it]);
+    }
+    return [...byKey.entries()];
+  }, [items]);
+
+  const onLabel = useCallback(
+    (item: QueueItem, value: string) => {
+      setErr(null);
+      postGroundTruth(item.id, value)
+        .then(() => {
+          setItems((cur) => (cur ?? []).filter((i) => i.id !== item.id));
+          onLabelled();
+        })
+        .catch((e: unknown) => setErr(String(e)));
+    },
+    [onLabelled],
+  );
+
+  return (
+    <section className="mt-8">
+      <h2 className="text-[13px] text-ink">Label queue</h2>
+      <p className="mt-1 max-w-2xl text-[12px] text-ink-dim">
+        What the model answered, waiting for what actually happened. Open the session, then confirm
+        the answer or pick the right one. Agreement above counts only labelled rows.
+      </p>
+      {err !== null && (
+        <div role="alert" className="mt-2 text-[12px] text-red">
+          {err}
+        </div>
+      )}
+      {items === null && err === null && <div className="mt-3 text-ink-dim">loading…</div>}
+      {items !== null && items.length === 0 && (
+        <div className="mt-3 text-[12px] text-ink-dim">Nothing to label.</div>
+      )}
+      <div className="mt-3 space-y-3 text-[12px]">
+        {groups.map(([key, group]) => {
+          const first = group[0];
+          if (first === undefined) return null;
+          return (
+            <div key={key} className="rounded-lg border border-line bg-surface/40 px-3 py-2">
+              <div className="flex items-baseline gap-2">
+                {first.sessionUuid !== '' ? (
+                  <Link to={`/sessions/${first.sessionUuid}`} className="truncate text-ink hover:text-brand">
+                    {first.sessionTitle !== '' ? first.sessionTitle : first.sessionUuid}
+                  </Link>
+                ) : (
+                  <span className="truncate font-mono text-ink">{first.subject}</span>
+                )}
+                <span className="shrink-0 font-mono text-[10px] text-ink-faint">
+                  {first.createdAt.slice(0, 16).replace('T', ' ')}
+                </span>
+              </div>
+              <ul>
+                {group.map((it) => (
+                  <QueueRow key={it.id} item={it} onLabel={onLabel} />
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /** Decisions — the local classifier's per-question accuracy and mode switch
  *  (learning-loop phase 9). Advisory: nothing here gates a run. */
 export function Decisions(): JSX.Element {
@@ -100,6 +234,12 @@ export function Decisions(): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    fetchDecisions()
+      .then(setData)
+      .catch((e: unknown) => setErr(String(e)));
+  }, []);
+
+  const refresh = useCallback(() => {
     fetchDecisions()
       .then(setData)
       .catch((e: unknown) => setErr(String(e)));
@@ -151,6 +291,7 @@ export function Decisions(): JSX.Element {
               ))}
             </tbody>
           </table>
+          <LabelQueue onLabelled={refresh} />
         </>
       )}
     </div>

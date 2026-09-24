@@ -158,3 +158,64 @@ export async function fetchSessionLabels(uuid: string): Promise<SessionLabel | n
   const body = await jsonOrThrow<{ labels: SessionLabel | null }>(await fetch(path), `GET ${path}`);
   return body.labels;
 }
+
+/** One answered, not-yet-labelled decision (GET /api/decisions/queue). */
+export interface QueueItem {
+  id: number;
+  questionId: string;
+  subject: string;
+  sessionUuid: string;
+  sessionTitle: string;
+  answer: string;
+  confidence: number | null;
+  createdAt: string;
+  /** The question's closed answer set: what ground truth may be. */
+  options: string[];
+}
+
+const MOCK_QUEUE: QueueItem[] = [
+  {
+    id: 3,
+    questionId: 'd2.task_type',
+    subject: 'mock-session-1',
+    sessionUuid: 'mock-session-1',
+    sessionTitle: 'Refactor the parser into three files',
+    answer: 'refactor',
+    confidence: 0.97,
+    createdAt: '2026-09-24T18:10:00Z',
+    options: ['feature', 'bugfix', 'refactor', 'docs', 'research', 'review', 'ops', 'planning', 'other'],
+  },
+  {
+    id: 2,
+    questionId: 'd2.outcome',
+    subject: 'mock-session-1',
+    sessionUuid: 'mock-session-1',
+    sessionTitle: 'Refactor the parser into three files',
+    answer: 'shipped',
+    confidence: 0.81,
+    createdAt: '2026-09-24T18:10:00Z',
+    options: ['shipped', 'partial', 'abandoned', 'failed'],
+  },
+];
+
+/** GET /api/decisions/queue — answered decisions awaiting ground truth, newest first. */
+export async function fetchLabelQueue(limit = 100): Promise<QueueItem[]> {
+  if (MOCK) return MOCK_QUEUE;
+  const path = `/api/decisions/queue?limit=${String(limit)}`;
+  const body = await jsonOrThrow<{ items: QueueItem[] }>(await fetch(path), `GET ${path}`);
+  return body.items;
+}
+
+/** POST /api/decisions/{id}/ground-truth — the operator's answer for one decision. */
+export async function postGroundTruth(id: number, value: string): Promise<void> {
+  if (MOCK) return;
+  const path = `/api/decisions/${String(id)}/ground-truth`;
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) {
+    throw new Error(`POST ${path}: ${String(res.status)} ${await res.text()}`);
+  }
+}
