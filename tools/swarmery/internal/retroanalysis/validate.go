@@ -33,7 +33,7 @@ const maxChangeSectionLen = 6000
 // markerRe matches one citation marker. The kind vocabulary is the twin of
 // internal/retrodigest's — keep the two in lockstep; a kind the digest can
 // emit but this rejects would fail every honest analysis.
-var markerRe = regexp.MustCompile(`\[E:(agent|rec|error_group|session|task|lesson):([^\]\s][^\]]*)\]`)
+var markerRe = regexp.MustCompile(`\[E:(agent|rec|error_group|session|task|lesson|phase):([^\]\s][^\]]*)\]`)
 
 // Validate checks one analysis against the output contract and returns how
 // many distinct citations it carries.

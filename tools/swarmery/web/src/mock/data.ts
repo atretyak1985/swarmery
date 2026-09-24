@@ -19,6 +19,7 @@ import type {
   PhaseBlocker,
   PhaseDiagnosis,
   PhaseForecast,
+  PhaseSurprise,
   PlanDoc,
   Playbook,
   PlanRevision,
@@ -1468,6 +1469,71 @@ const MOCK_FORECAST_BAD_LINTS: ForecastLint[] = [
   { kind: 'prior', code: 'missing-areas', message: 'forecast declares no areas — nothing to score a run against' },
 ];
 
+/** Phase 2's run scored against its forecast pair — so the offline Plans page
+ * renders the surprise chip and the "Forecast vs actual" tab. */
+const MOCK_SURPRISE: PhaseSurprise = {
+  index: 0.64,
+  top: 'outcome_miss',
+  components: {
+    unexpected_areas: 0.3333,
+    missed_areas: 0,
+    size_miss: 0.5,
+    duration_miss: 0,
+    outcome_miss: 1,
+    test_surprise: 0,
+    overconfidence: null,
+  },
+  weights: {
+    unexpected_areas: 0.2,
+    missed_areas: 0.1,
+    size_miss: 0.15,
+    duration_miss: 0.1,
+    outcome_miss: 0.25,
+    test_surprise: 0.1,
+    overconfidence: 0.1,
+  },
+  detail: {
+    forecastKind: 'prior',
+    forecastPostHoc: false,
+    forecastAreas: ['internal/cost', 'internal/ingest'],
+    actualAreas: ['internal/cost', 'internal/ingest', 'web/src'],
+    unexpectedAreas: ['web/src'],
+    missedAreas: [],
+    matchedAreas: ['internal/cost', 'internal/ingest'],
+    forecastSize: 'M',
+    actualSize: 'L',
+    sizeDistance: 1,
+    forecastDuration: '30-90m',
+    actualDuration: '30-90m',
+    actualDurationS: 3120,
+    durationDistance: 0,
+    forecastOutcome: 'done',
+    actualOutcome: 'partial',
+    testFailuresUnexpected: 0,
+    confidence: null,
+    majorMiss: true,
+  },
+  revision: {
+    index: 0.5833,
+    areasAdded: ['internal/api'],
+    areasDropped: [],
+    sizeShift: 1,
+    durationShift: 1,
+    priorOutcome: 'done',
+    posteriorOutcome: 'partial',
+    confidenceDelta: -0.3,
+  },
+  summary:
+    'surprise 0.64 — top: outcome_miss; unexpected areas web/src; size M→L; forecast done, run partial',
+  phaseId: 102,
+  sessionUuid: 'mock-run-2',
+  forecastDocHash: 'a1b2c3d4',
+  actualsSource: 'run-end-settled',
+  notifiedAt: '2026-09-23T14:02:00Z',
+  autoVerifyAt: null,
+  computedAt: '2026-09-23T14:02:00Z',
+};
+
 // fusion phase 10: one demo epic for project 3 (swarmery) with a diamond
 // dependency shape (1 → 2,3 → 4) so the phase timeline + rollup render offline.
 const mockEpicPhase = (
@@ -1502,6 +1568,8 @@ const mockEpicPhase = (
   // phase declares none, which is the normal state.
   forecasts: seq === 2 ? MOCK_FORECAST_PAIR : seq === 3 ? MOCK_FORECAST_BAD : [],
   forecastLints: seq === 3 ? MOCK_FORECAST_BAD_LINTS : [],
+  // Phase 2's run was scored; every other phase has no score (null, never 0).
+  surprise: seq === 2 ? MOCK_SURPRISE : null,
   id,
   seq,
   name,
@@ -2470,6 +2538,7 @@ export const mockApi = {
         lessons,
         tasks,
         recommendations,
+        surprises: { surprises: [] },
         partial: false,
         partialSections: [],
       },

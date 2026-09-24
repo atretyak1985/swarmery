@@ -109,6 +109,30 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// retro improvement loop: per-agent scorecards + friction board (retro.go);
 	// phase 2 adds the artifact-backed lessons feed + estimation table.
 	mux.HandleFunc("GET /api/retro/agents", h.retroAgents)
+	// decision classifier (phase 9): per-question stats, mode switch, operator
+	// ground truth, and a session's D2 labels.
+	mux.HandleFunc("GET /api/decisions", h.decisionsSummary)
+	mux.HandleFunc("PUT /api/decisions/{question}/mode", requireLocalOrigin(h.putDecisionMode))
+	mux.HandleFunc("POST /api/decisions/{id}/ground-truth", requireLocalOrigin(h.postDecisionTruth))
+	mux.HandleFunc("GET /api/decisions/labels/{uuid}", h.sessionDecisionLabels)
+	// lessons from surprise (phase 14): the operator's review queue. Accept is the
+	// only path by which a lesson becomes active.
+	mux.HandleFunc("GET /api/lessons", h.listLessons)
+	mux.HandleFunc("PATCH /api/lessons/{id}", requireLocalOrigin(h.editLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/accept", requireLocalOrigin(h.acceptLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/merge", requireLocalOrigin(h.mergeLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/dismiss", requireLocalOrigin(h.dismissLesson))
+	mux.HandleFunc("POST /api/lessons/{id}/retire", requireLocalOrigin(h.retireLesson))
+	// phase 15.4: graduate an active lesson into the consumer repo's nested
+	// CLAUDE.md — a commit on a NEW branch, never the checked-out one.
+	mux.HandleFunc("POST /api/lessons/{id}/promote", requireLocalOrigin(h.promoteLesson))
+	// phase 16: the retirement queue (proposed, never silent — confirm or keep;
+	// unanswered proposals auto-retire after the documented window) and the
+	// forecast calibration view (groups under 20 samples are never returned).
+	mux.HandleFunc("GET /api/lessons/retirements", h.listRetirements)
+	mux.HandleFunc("POST /api/lessons/retirements/{id}/confirm", requireLocalOrigin(h.confirmRetirement))
+	mux.HandleFunc("POST /api/lessons/retirements/{id}/keep", requireLocalOrigin(h.keepLesson))
+	mux.HandleFunc("GET /api/calibration", h.calibration)
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)

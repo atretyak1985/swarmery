@@ -9,6 +9,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/extract"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/handoff"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
@@ -68,6 +69,7 @@ func TestEverySpawnSiteDeclaresAModelAndAnEffort(t *testing.T) {
 		// Mechanical passes over material the prompt already contains.
 		{"handoff", handoff.DefaultEffort, handoff.DefaultModel},
 		{"trajjudge", trajjudge.DefaultEffort, trajjudge.DefaultModel},
+		{"lessons", lessons.DefaultEffort, lessons.DefaultModel},
 		{"probe", api.ProbeEffort, api.ProbeModel},
 	} {
 		t.Run(tc.site, func(t *testing.T) {
@@ -107,6 +109,7 @@ func TestPinnedDefaultsAreTheAgreedValues(t *testing.T) {
 		{"probe", api.ProbeEffort, "low"},
 		{"handoff", handoff.DefaultEffort, "low"},
 		{"trajjudge", trajjudge.DefaultEffort, "low"},
+		{"lessons", lessons.DefaultEffort, "low"},
 		{"extract", extract.DefaultEffort, "medium"},
 		{"dispatch", dispatch.DefaultEffort, "medium"},
 		{"verify", verify.DefaultEffort, "medium"},

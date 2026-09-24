@@ -323,6 +323,200 @@ function VerifyVerdictChip({ phase }: { phase: EpicPhase }): JSX.Element | null 
   );
 }
 
+/** Human label for a surprise component key: `outcome_miss` → `outcome miss`. */
+function surpriseLabel(top: string): string {
+  return top === '' ? 'as forecast' : top.replace(/_/g, ' ');
+}
+
+/** Colour by index: calm below 0.3, needs-a-look below 0.6, attention above. */
+function surpriseCls(index: number): string {
+  if (index >= 0.6) return 'border-red/40 bg-red/10 text-red';
+  if (index >= 0.3) return 'border-amber/40 bg-amber/10 text-amber';
+  return 'border-green/40 bg-green/10 text-green';
+}
+
+/** The learning loop's surprise chip (phase 13): how far the current run landed
+ * from its forecast, labelled with the component that contributed most. ADVISORY —
+ * it sits beside the run chips and never changes what they say. A run with no
+ * forecast reads "no forecast", never a zero score; a phase that never ran shows
+ * nothing. */
+function SurpriseChip({ phase, onOpen }: { phase: EpicPhase; onOpen?: () => void }): JSX.Element | null {
+  const s = phase.surprise;
+  if (s === null) {
+    if (phase.runEndedAt === null || phase.forecasts.length > 0) return null;
+    return (
+      <span
+        className="rounded border border-line px-1.5 py-px font-mono text-[9.5px] text-ink-faint"
+        data-tip="this phase declares no ## Forecast, so its run has nothing to be scored against"
+      >
+        no forecast
+      </span>
+    );
+  }
+  const label = `surprise ${s.index.toFixed(2)} · ${surpriseLabel(s.top)}`;
+  const cls = `rounded border px-1.5 py-px font-mono text-[9.5px] ${surpriseCls(s.index)}`;
+  if (onOpen === undefined)
+    return (
+      <span className={cls} data-tip={s.summary}>
+        {label}
+      </span>
+    );
+  return (
+    <button
+      type="button"
+      className={`${cls} transition-opacity hover:opacity-80`}
+      data-tip={`${s.summary} — click for forecast vs actual`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** The Completion Report's "Where reality diverged" paragraph, when the executor
+ * wrote one: the heading/label line (with any text after the label) plus the
+ * lines up to the next blank line or heading. null when absent. */
+function extractDivergence(report: string | null): string | null {
+  if (report === null) return null;
+  const lines = report.split('\n');
+  const at = lines.findIndex((l) => /where reality diverged/i.test(l));
+  if (at < 0) return null;
+  const out: string[] = [];
+  const first = (lines[at] ?? '')
+    .replace(/^#+\s*/, '')
+    .replace(/\*{0,2}where reality diverged\*{0,2}\s*[:.—-]?\s*\*{0,2}/i, '')
+    .trim();
+  if (first !== '') out.push(first);
+  for (const line of lines.slice(at + 1)) {
+    if (/^#/.test(line)) break;
+    if (line.trim() === '') {
+      if (out.length > 0) break;
+      continue;
+    }
+    out.push(line);
+  }
+  return out.length > 0 ? out.join('\n') : null;
+}
+
+/** Detail tab "Forecast vs actual" (learning loop phase 13): the scored forecast
+ * beside what the current run measurably did — areas diff, size / duration bands,
+ * outcome, the component vector — and the executor's own account of where
+ * reality diverged. READ-ONLY and advisory. */
+function ForecastVsActual({ phase }: { phase: EpicPhase }): JSX.Element {
+  const s = phase.surprise;
+  const divergence = extractDivergence(phase.completionReport);
+  if (s === null) {
+    const why =
+      phase.forecasts.length === 0
+        ? 'no forecast — this phase declares no ## Forecast, so there is nothing to score its run against'
+        : phase.runEndedAt === null
+          ? 'not run yet — a score appears once a run of this phase has finished and been measured'
+          : 'not scored — the run’s actuals are not recorded yet, or nothing about it was measurable';
+    return (
+      <>
+        <div className="font-mono text-[11.5px] text-ink-faint">{why}</div>
+        {divergence !== null && (
+          <RailSection label="where reality diverged">
+            <Markdown text={divergence} />
+          </RailSection>
+        )}
+      </>
+    );
+  }
+  const d = s.detail;
+  const row = (label: string, forecast: string, actual: string, miss: boolean): JSX.Element => (
+    <div className="flex gap-2">
+      <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
+      <span className="text-ink-dim">{forecast === '' ? '—' : forecast}</span>
+      <span className="text-ink-faint">→</span>
+      <span className={miss ? 'text-amber' : 'text-ink-dim'}>{actual === '' ? '—' : actual}</span>
+    </div>
+  );
+  const areaList = (label: string, items: string[], cls: string): JSX.Element | null =>
+    items.length === 0 ? null : (
+      <div className="flex gap-2">
+        <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
+        <span className={`break-words ${cls}`}>{items.join(', ')}</span>
+      </div>
+    );
+  const components = Object.entries(s.components) as [string, number | null | undefined][];
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className={`rounded border px-1.5 py-px font-mono text-[10px] ${surpriseCls(s.index)}`}>
+          surprise {s.index.toFixed(2)} · {surpriseLabel(s.top)}
+        </span>
+        <span className="font-mono text-[10px] text-ink-faint">
+          scored against the {d.forecastKind}
+          {d.forecastPostHoc ? ' (post hoc — excluded from calibration)' : ''} · advisory, never a gate
+        </span>
+      </div>
+      <RailSection label="bands & outcome">
+        <div className="space-y-0.5 font-mono text-[10.5px]">
+          {row('size', d.forecastSize, d.actualSize, (d.sizeDistance ?? 0) > 0)}
+          {row('duration', d.forecastDuration, d.actualDuration, (d.durationDistance ?? 0) > 0)}
+          {row('outcome', d.forecastOutcome, d.actualOutcome, (s.components.outcome_miss ?? 0) > 0)}
+          {d.confidence !== null && row('confidence', d.confidence.toFixed(2), d.majorMiss ? 'major miss' : 'held', d.majorMiss)}
+        </div>
+      </RailSection>
+      <RailSection label="areas">
+        {d.actualAreas === null ? (
+          <div className="font-mono text-[10.5px] text-ink-faint">the run’s diff was not measured</div>
+        ) : (
+          <div className="space-y-0.5 font-mono text-[10.5px]">
+            {areaList('unexpected', d.unexpectedAreas, 'text-red')}
+            {areaList('missed', d.missedAreas, 'text-amber')}
+            {areaList('as forecast', d.matchedAreas, 'text-green')}
+            {d.unexpectedAreas.length + d.missedAreas.length + d.matchedAreas.length === 0 && (
+              <div className="text-ink-faint">no areas to compare</div>
+            )}
+          </div>
+        )}
+      </RailSection>
+      <RailSection label="surprise vector">
+        <div className="space-y-0.5 font-mono text-[10.5px]">
+          {components.map(([name, v]) => (
+            <div key={name} className="flex gap-2">
+              <span className={`w-[120px] shrink-0 ${name === s.top ? 'text-ink' : 'text-ink-faint'}`}>
+                {surpriseLabel(name)}
+              </span>
+              {/* null is "not measurable", never zero. */}
+              <span className="text-ink-dim">{v === null || v === undefined ? 'n/a' : v.toFixed(2)}</span>
+              <span className="text-ink-faint">× {(s.weights[name as keyof typeof s.weights] ?? 0).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      </RailSection>
+      {s.revision !== null && (
+        <RailSection label="prior → posterior">
+          <div className="space-y-0.5 font-mono text-[10.5px] text-ink-dim">
+            <div>revision {s.revision.index.toFixed(2)} — how much reading the code changed the expectation</div>
+            {s.revision.areasAdded.length > 0 && <div>areas added: {s.revision.areasAdded.join(', ')}</div>}
+            {s.revision.areasDropped.length > 0 && <div>areas dropped: {s.revision.areasDropped.join(', ')}</div>}
+            {s.revision.priorOutcome !== s.revision.posteriorOutcome && (
+              <div>
+                outcome {s.revision.priorOutcome || '—'} → {s.revision.posteriorOutcome || '—'}
+              </div>
+            )}
+          </div>
+        </RailSection>
+      )}
+      <RailSection label="where reality diverged">
+        {divergence === null ? (
+          <div className="font-mono text-[10.5px] text-ink-faint">
+            the Completion Report carries no “Where reality diverged” paragraph
+          </div>
+        ) : (
+          <Markdown text={divergence} />
+        )}
+      </RailSection>
+    </>
+  );
+}
+
 /** Run/Retry button styling — keyed on the OUTCOME, so a retry after a
  * ticked-nothing run reads amber like its chip instead of neutral brand. */
 function runButtonCls(outcome: PhaseRunOutcome): string {
@@ -717,7 +911,7 @@ type PlanDetailTab = 'plan' | 'spec' | 'summary' | 'revisions' | 'edit';
 /** Phase-details tab ids. All three always exist — a phase with nothing shipped
  * yet still shows Summary (with an empty note) rather than hiding the tab, which
  * is what made "where do I read the summary?" a dead end. */
-type PhaseDetailTab = 'phase' | 'summary' | 'edit';
+type PhaseDetailTab = 'phase' | 'summary' | 'forecast' | 'edit';
 
 /** What the inline detail panel shows: one phase's details, or the plan's (both
  * tabbed). `null` means "no details — show the phase list".
@@ -1886,6 +2080,7 @@ function PhaseList({
                     and offers ✓ summary (opens the details rail); idle/failed
                     offer Run/Retry. */}
                 <ContinuationChip events={p.runEvents} />
+                <SurpriseChip phase={p} onOpen={() => onOpenPhase(p.seq, 'forecast')} />
 
                 {p.runState === 'running' ? (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -2790,6 +2985,7 @@ function PhaseDetailPanel({
             <RunModelChip phase={phase} />
             <DocModelChip phase={phase} picked={phaseRunModel} />
             <VerifyVerdictChip phase={phase} />
+            <SurpriseChip phase={phase} onOpen={() => onTab('forecast')} />
             <span className="font-mono text-[10px] text-ink-faint">
               {phase.checkboxesDone}/{phase.checkboxesTotal || 0}
             </span>
@@ -2838,6 +3034,8 @@ function PhaseDetailPanel({
         />
       ) : activeTab === 'summary' ? (
         <PhaseSummary phase={phase} doc={doc} />
+      ) : activeTab === 'forecast' ? (
+        <ForecastVsActual phase={phase} />
       ) : (
         <>
           {phase.runState === 'failed' && (
@@ -2881,6 +3079,7 @@ function PhaseDetailPanel({
 const PHASE_TABS: { id: PhaseDetailTab; label: string }[] = [
   { id: 'phase', label: 'Phase' },
   { id: 'summary', label: 'Summary' },
+  { id: 'forecast', label: 'Forecast vs actual' },
   { id: 'edit', label: 'Edit' },
 ];
 

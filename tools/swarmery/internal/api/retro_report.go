@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retrodigest"
 )
 
@@ -43,6 +44,12 @@ type retroReportDTO struct {
 	Lessons         retroLessonsDTO    `json:"lessons"`
 	Tasks           retroTasksDTO      `json:"tasks"`
 	Recommendations recommendationsDTO `json:"recommendations"`
+	// Surprises: the window's phase runs that landed furthest from their
+	// forecast (learning loop phase 13), cited in the digest as [E:phase:<id>].
+	Surprises retroSurprisesDTO `json:"surprises"`
+	// Labels: D2 session-label tallies (phase 9), fleet-wide windows only;
+	// omitted when nothing is labelled.
+	Labels []decide.LabelCount `json:"labels,omitempty"`
 
 	// Partial is true when at least one section failed; PartialSections names
 	// them. An empty section with partial=false is genuinely empty.
@@ -85,6 +92,7 @@ func (h *Handler) buildRetroReport(dr dateRange, pf string, pargs []any, project
 		Lessons:         retroLessonsDTO{Lessons: []retroLessonDTO{}},
 		Tasks:           retroTasksDTO{Tasks: []retroTaskDTO{}},
 		Recommendations: recommendationsDTO{Recommendations: []recommendationDTO{}},
+		Surprises:       retroSurprisesDTO{Surprises: []retroSurpriseDTO{}},
 		Friction: frictionDTO{
 			DeniedTools: []frictionDeniedDTO{},
 			ErrorGroups: []frictionErrGroupDTO{},
@@ -126,6 +134,20 @@ func (h *Handler) buildRetroReport(dr dateRange, pf string, pargs []any, project
 		fail("recommendations", err)
 	} else {
 		out.Recommendations = recs
+	}
+	if surprises, err := h.buildRetroSurprises(dr, pf, pargs); err != nil {
+		fail("surprises", err)
+	} else {
+		out.Surprises = surprises
+	}
+	// Session labels are fleet-wide: a project-scoped report must not quote
+	// other projects' sessions, and the labels table has no project column.
+	if project == "" {
+		if labels, err := decide.LabelCounts(h.DB, out.From, out.To); err != nil {
+			fail("labels", err)
+		} else {
+			out.Labels = labels
+		}
 	}
 	sort.Strings(out.PartialSections)
 	return out
@@ -202,6 +224,15 @@ func reportToDigest(rep retroReportDTO) retrodigest.Report {
 			VariancePct: t.VariancePct, Loops: t.Loops, Delegations: t.Delegations,
 			VerdictOK: t.Verdicts.OK, VerdictRedisp: t.Verdicts.Redispatch,
 		})
+	}
+	for _, su := range rep.Surprises.Surprises {
+		out.Surprises = append(out.Surprises, retrodigest.Surprise{
+			PhaseID: su.PhaseID, Plan: su.Plan, Phase: su.Phase,
+			Index: su.Index, Top: su.Top, Summary: su.Summary,
+		})
+	}
+	for _, l := range rep.Labels {
+		out.Labels = append(out.Labels, retrodigest.LabelCount{Field: l.Field, Value: l.Value, Count: l.Count})
 	}
 	for _, rc := range rep.Recommendations.Recommendations {
 		out.Recommendations = append(out.Recommendations, retrodigest.Recommendation{

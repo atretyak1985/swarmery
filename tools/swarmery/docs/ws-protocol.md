@@ -38,7 +38,23 @@ type WSMessage =
   // plans-page-lifecycle phase 1 — epics:
   | { type: 'plan_updated'; payload: { taskId: number; projectId: number } }
   // board task delete:
-  | { type: 'task_deleted'; payload: { taskId: number; projectId: number } };
+  | { type: 'task_deleted'; payload: { taskId: number; projectId: number } }
+  // learning loop phase 13 — attention:
+  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention };
+```
+
+### `phase_surprise` (learning loop phase 13)
+
+Emitted at most once per phase run, when the run's forecast-vs-actual surprise
+score (`internal/surprise`, table `phase_surprise`) first reaches
+`SWARMERY_SURPRISE_NOTIFY` (default 0.6; `off` disables). Advisory — nothing
+gates on it. Payload: `{taskId, projectId, phaseId, phaseName, planTitle,
+sessionUuid, index, top, summary}`. The notch currently ignores it (unknown
+frames are skipped by design); the dashboard refetches the plan on the
+`plan_updated` that accompanies every score change.
+
+```json
+{"type":"phase_surprise","payload":{"taskId":42,"projectId":1,"phaseId":7,"phaseName":"Surprise scoring","planTitle":"Learning loop","sessionUuid":"9f22…","index":0.72,"top":"outcome_miss","summary":"surprise 0.72 — top: outcome_miss; forecast done, run partial"}}
 ```
 
 `Session` and `Event` are byte-for-byte the same JSON DTOs the REST API

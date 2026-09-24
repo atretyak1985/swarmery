@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -122,6 +123,13 @@ func (e *PlanSpansReposError) Is(target error) bool { return target == ErrPlanSp
 // plan_updated publisher) is keyed by the workspace task id so the Plans page
 // refetches on run edges.
 type Service struct {
+	// Decide is the local decision classifier (learning-loop phase 9, D1). It is
+	// consulted ONLY on the ambiguous branch of settle — a clean exit, criteria
+	// unticked, no blocked line, stop_reason end_turn — AFTER the rules ran, and
+	// only an ACTIVE answer changes anything. nil, no SWARMERY_DECIDE_URL, or
+	// shadow mode ⇒ settle behaves exactly as it did without it.
+	Decide *decide.Engine
+
 	DB  *sql.DB
 	Wt  runcore.WorktreeManager // shared worktree mechanics (runcore's seam)
 	Run Runner
@@ -139,6 +147,15 @@ type Service struct {
 	Go       func(func())     // async-spawn seam (nil ⇒ real `go`); mirrors phaserun.Go
 	// Notify emits plan_updated for the plan at run edges. nil ⇒ no live nudge.
 	Notify func(taskID int64)
+	// InjectLessons returns the text appended to the run's prompt: the active
+	// lessons whose areas overlap the priors of the plan's phases, within the
+	// token budget, each recorded in lesson_uses (internal/lessons, learning-loop
+	// phase 15). "" ⇒ the prompt is byte-identical to one without injection.
+	// nil ⇒ not wired (the unit tests' state).
+	InjectLessons func(taskID int64, sessionUUID string) string
+	// LessonCitations marks, after the run, the injected lessons its transcript
+	// cited. ADVISORY: it logs and returns. nil ⇒ off.
+	LessonCitations func(taskID int64, sessionUUID string)
 	// FindRun locates the live process of a run by its session uuid (adopt.go).
 	// nil ⇒ a ps scan. Test seam: adoption must be exercisable without spawning.
 	FindRun func(sessionUUID string) (int, bool)
@@ -418,8 +435,12 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 		taskID, agent, runMode, uuid, acq.Path, len(info.Phases))
 	s.notify(taskID)
 
+	prompt := BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, budget)
+	if s.InjectLessons != nil {
+		prompt += s.InjectLessons(taskID, uuid)
+	}
 	spec := RunSpec{
-		Prompt:       BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, budget),
+		Prompt:       prompt,
 		SessionUUID:  uuid,
 		Cwd:          acq.Path,
 		Agent:        agent,
@@ -451,6 +472,9 @@ func allComplete(phases []Phase) bool {
 func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, releaseSlot func(), info planInfo, acq worktree.Acquired, spec RunSpec, budget runcore.Budget) {
 	defer func() {
 		cancel()
+		if s.LessonCitations != nil {
+			s.LessonCitations(info.TaskID, spec.SessionUUID)
+		}
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
 		// 'running', so the DB gate in Start is open; releasing the single-flight
 		// slot before the (git shell-out, tens of ms) removal opens a window where a
@@ -537,6 +561,9 @@ func planCriteria(phases []Phase) (done, total int, unticked []string, ok bool) 
 //
 // Returns the run_state to stamp and its detail.
 func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budget runcore.Budget) (state, detail string) {
+	// D1 ground truth (phase 9.3): what a continuation achieved, recorded
+	// against the decision taken just before it. No-op without a classifier.
+	d1 := s.Decide.Tracker()
 	for attempt := 0; ; attempt++ {
 		// Transcript first, and classified first: a `PLAN BLOCKED at phase n:`
 		// ending is evidence on its own and must win even when no phase doc can be
@@ -565,6 +592,7 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 		}
 
 		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, done, total)
+		d1.Observe(string(end), done)
 		switch end {
 		case runcore.EndBlocked:
 			s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
@@ -579,7 +607,27 @@ func (s *Service) settle(ctx context.Context, info planInfo, spec RunSpec, budge
 			return "done", ""
 		}
 
+		// Measured BEFORE the classifier: its latency (up to the local backend's
+		// timeout) must never count against the time-left guard below, or a shadow
+		// call could turn a continuation into `partial`.
 		elapsed := budget.Elapsed(s.clock())
+
+		// D1 (phase 9): the rules reached `continue` — the one branch they leave
+		// ambiguous. The classifier may hand the run to the operator or stamp it
+		// blocked; any other answer (and every shadow/unconfigured call) lets the
+		// rules' continuation stand.
+		switch o := d1.Decide(ctx, decide.D1Input{Engine: Engine, SubjectID: info.TaskID, SessionUUID: spec.SessionUUID,
+			LastText: text, StopReason: stop, Done: done, Total: total, Attempt: attempt}); o.Action {
+		case decide.StampBlocked:
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventBlocked, 0, o.Detail)
+			log.Printf("planrun: plan=%d uuid=%s blocked by classifier: %s", info.TaskID, spec.SessionUUID, o.Detail)
+			return "blocked", o.Detail
+		case decide.NotifyOperator:
+			s.event(info.TaskID, spec.SessionUUID, runcore.EventPartial, attempt, o.Detail)
+			log.Printf("planrun: plan=%d uuid=%s handed to operator by classifier: %s", info.TaskID, spec.SessionUUID, o.Detail)
+			return "partial", o.Detail
+		}
+
 		switch {
 		case attempt >= runcore.MaxContinuations:
 			d := fmt.Sprintf("%d of %d criteria ticked after %d continuations", done, total, attempt)

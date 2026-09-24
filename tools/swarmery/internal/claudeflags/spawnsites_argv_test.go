@@ -11,6 +11,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/extract"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/handoff"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/trajjudge"
 )
@@ -61,6 +62,10 @@ func effortSites() []effortSite {
 		{"trajjudge", "SWARMERY_TRAJJUDGE_EFFORT", trajjudge.DefaultEffort,
 			func(ctx context.Context, o string) (string, error) {
 				return trajjudge.ClaudeRunner{Effort: o}.Run(ctx, "p")
+			}},
+		{"lessons", "SWARMERY_LESSON_EFFORT", lessons.DefaultEffort,
+			func(ctx context.Context, o string) (string, error) {
+				return lessons.ClaudeRunner{Effort: o}.Run(ctx, "p")
 			}},
 	}
 }

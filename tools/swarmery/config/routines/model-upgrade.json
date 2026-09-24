@@ -48,6 +48,13 @@
       "continueOnFailure": true
     },
     {
+      "type": "command",
+      "name": "calibration by model/effort",
+      "command": "swarmery calibration --by model,effort",
+      "timeoutSec": 300,
+      "continueOnFailure": true
+    },
+    {
       "type": "ai-prompt",
       "name": "effort re-sweep",
       "prompt": "Re-derive the reasoning effort each agent should run at, for the model the fleet is on TODAY. Read every plugins/*/agents/*.md frontmatter and list the agents whose declared effort no longer matches what its work needs: name the agent, its current effort, the effort you would set, and the evidence (what the agent actually does, and what a run at the current effort cost or missed). A newer model moves this line in BOTH directions -- a stronger model makes a high-effort pin wasteful on routine work, and a cheaper one makes a low pin a false economy on judgment work -- so report reductions and increases alike. Change nothing: this step produces the list the card below triages. Report only agents you have read, and say plainly when you have no evidence either way.",
@@ -58,7 +65,7 @@
       "type": "create-task",
       "name": "file a card when something drifted",
       "taskTitle": "Monthly model-upgrade review",
-      "taskPrompt": "The monthly model-upgrade routine finished. Read its routine_runs detail, then triage: (1) does the changelog digest name anything core relies on or reimplements? (2) did the prompt audit find instructions that no longer earn their place? (3) did modeleval return anything other than pass? Close this card with either the changes made or an explicit 'no drift this month' — an unanswered card is the failure mode this routine exists to prevent.",
+      "taskPrompt": "The monthly model-upgrade routine finished. Read its routine_runs detail, then triage: (1) does the changelog digest name anything core relies on or reimplements? (2) did the prompt audit find instructions that no longer earn their place? (3) did modeleval return anything other than pass? (4) in the calibration step, does any model/effort pair show a worse mean surprise, outcome accuracy or calibration gap than the pair the fleet runs on today? Groups under 20 samples are hidden, so a missing pair means not enough data, not a good result. Close this card with either the changes made or an explicit 'no drift this month' — an unanswered card is the failure mode this routine exists to prevent.",
       "boardColumn": "triage"
     }
   ]

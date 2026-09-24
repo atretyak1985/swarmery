@@ -11,9 +11,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/gitstat"
 )
 
 // Exec is the git/gh + filesystem boundary of the apply pipeline. Real code
@@ -400,43 +401,23 @@ func isAgentFile(p string) bool {
 // changed paths. Callers pass --no-renames, so every row is exactly
 // "added\tdeleted\tpath" with a single path column (no `old => new` rename
 // token), and core.quotepath=false keeps that path verbatim rather than quoting
-// non-ASCII bytes. It is fail-CLOSED: any row with fewer than three
-// tab-separated columns is a hard error, not a silent skip.
+// non-ASCII bytes.
 //
-// The row is split on TABs, never on whitespace: git does not quote spaces in
-// numstat paths, so a whitespace split would truncate `plugins/a/x.md y.md` to
-// its last token — two rows could then both parse to the target path and smuggle
-// an extra file past checkPathScope. Everything after the second TAB is the path
-// VERBATIM (spaces included); only a trailing CR is stripped, because trimming
-// spaces would corrupt a path that legitimately ends in one.
+// The grammar itself — TAB split (never whitespace: a whitespace split would
+// truncate `plugins/a/x.md y.md` to its last token, so two rows could both parse
+// to the target path and smuggle an extra file past checkPathScope), fail-CLOSED
+// on a row with fewer than three columns — lives in internal/gitstat, shared with
+// the phase-run actuals that measure a run branch with the same command.
 func parseNumstat(out string) (paths []string, total int, err error) {
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSuffix(line, "\r")
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		fields := strings.SplitN(line, "\t", 3)
-		if len(fields) < 3 || fields[2] == "" {
-			return nil, 0, fmt.Errorf("malformed numstat line %q", line)
-		}
-		paths = append(paths, fields[2])
-		add := parseCount(fields[0])
-		del := parseCount(fields[1])
-		total += add + del
-	}
-	return paths, total, nil
-}
-
-// parseCount reads a numstat count; "-" (binary) is 0.
-func parseCount(s string) int {
-	if s == "-" {
-		return 0
-	}
-	n, err := strconv.Atoi(s)
+	files, err := gitstat.ParseNumstat(out)
 	if err != nil {
-		return 0
+		return nil, 0, err
 	}
-	return n
+	added, removed := gitstat.Totals(files)
+	if len(files) == 0 {
+		return nil, 0, nil
+	}
+	return gitstat.Paths(files), added + removed, nil
 }
 
 // branchName derives the deterministic branch {kind}-improve/{slug}-{yyyymmdd}

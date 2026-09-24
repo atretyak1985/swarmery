@@ -40,6 +40,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -179,6 +180,15 @@ type epicPhaseDTO struct {
 	// to show the operator, never a thing that can refuse an ingest or a run. A
 	// plan whose every forecast fails every rule still indexes and still runs.
 	ForecastLints []wsingest.ForecastLint `json:"forecastLints"`
+	// Surprise is the learning loop's comparison of the forecast with what the
+	// CURRENT run measurably did (internal/surprise, migration 0082): the vector,
+	// the headline index 0..1 and its top component, the areas diff, bands and
+	// outcomes. Null — never a zero score — when the run was not scored: no
+	// forecast, no actuals, or nothing measurable.
+	//
+	// ADVISORY, like the forecast: nothing in CompletionState, CompletionBlockers
+	// or RunOutcome consults it, and nothing may start to.
+	Surprise *surprise.Stored `json:"surprise"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -299,8 +309,8 @@ type linkedSessionDTO struct {
 
 // planRunDTO is the plan_runs row for one epic.
 type planRunDTO struct {
-	Agent    *string `json:"agent"`
-	Mode     string  `json:"mode"` // auto | subagents | inline
+	Agent *string `json:"agent"`
+	Mode  string  `json:"mode"` // auto | subagents | inline
 	// RunState: idle | running | done | failed | blocked | partial. The last two
 	// arrived with the completion loop (phase 3) — they are both CLEAN exits, and
 	// which one it was is decided from the plan's ticked criteria and the run's
@@ -852,6 +862,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	// closed, never one per phase inside the loop.
 	usage := h.phaseRunModels(taskID)
 	forecasts := h.phaseForecasts(taskID) // same rule, same reason: one query, cursor closed
+	surprises := h.phaseSurprises(taskID) // and again
 	for i := range phases {
 		phases[i].RunEvents = runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID)
 		used := usage[phases[i].ID]
@@ -862,6 +873,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		fs := forecasts[phases[i].ID]
 		phases[i].Forecasts = forecastDTOs(fs)
 		phases[i].ForecastLints = wsingest.LintForecasts(forecastsOnly(fs))
+		phases[i].Surprise = surprises[phases[i].ID]
 	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100
@@ -886,17 +898,18 @@ func forecastDTOs(fs []storedForecast) []phaseForecastDTO {
 	out := make([]phaseForecastDTO, 0, len(fs))
 	for _, f := range fs {
 		out = append(out, phaseForecastDTO{
-			Kind:         f.Kind,
-			WrittenAt:    f.WrittenAt,
-			Areas:        nonNilStrs(f.Areas),
-			Files:        nonNilStrs(f.Files),
-			SizeBand:     f.SizeBand,
-			DurationBand: f.DurationBand,
-			Outcome:      f.Outcome,
-			Risks:        nonNilStrs(f.Risks),
-			Confidence:   f.Confidence,
-			PostHoc:      f.PostHoc,
-			DocHash:      f.DocHash,
+			Kind:          f.Kind,
+			WrittenAt:     f.WrittenAt,
+			Areas:         nonNilStrs(f.Areas),
+			Files:         nonNilStrs(f.Files),
+			SizeBand:      f.SizeBand,
+			DurationBand:  f.DurationBand,
+			Outcome:       f.Outcome,
+			Risks:         nonNilStrs(f.Risks),
+			Confidence:    f.Confidence,
+			PostHoc:       f.PostHoc,
+			PostHocReason: f.PostHocReason,
+			DocHash:       f.DocHash,
 		})
 	}
 	return out

@@ -24,6 +24,7 @@ import { sessionState, useNowMs } from '../lib/sessionState';
 import { useLiveUpdates } from '../lib/ws';
 import { ExplainPair } from '../components/Explain';
 import { OutcomePicker } from '../components/OutcomePicker';
+import { SessionLabelChips } from '../components/SessionLabelChips';
 import { TaskChip } from '../components/TaskChip';
 import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
@@ -598,6 +599,7 @@ export function SessionDetailPage(): JSX.Element {
                   confidence={detail.taskConfidence}
                 />
               )}
+              <SessionLabelChips uuid={detail.sessionUuid} />
               <ExplainPair id="session-outcome">
                 <OutcomePicker value={detail.outcome ?? null} onChange={setOutcome} />
               </ExplainPair>

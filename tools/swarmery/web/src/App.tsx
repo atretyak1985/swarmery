@@ -216,6 +216,8 @@ function AppShell(): JSX.Element {
       items: [
         { to: '/analytics', glyph: '▦', label: 'Analytics' },
         { to: '/retro', glyph: '↺', label: 'Retro', ...badgeFor(proposedRecs) },
+        { to: '/decisions', glyph: '◇', label: 'Decisions' },
+        { to: '/lessons', glyph: '✎', label: 'Lessons' },
       ],
     },
   ];

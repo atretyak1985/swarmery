@@ -84,6 +84,11 @@ type PhaseVerifyRequest struct {
 	// acceptance criteria live. ProjectPath is the project root the Claude account
 	// binding resolves from.
 	Title, Prompt, ProjectPath string
+	// FocusHint, when set, tells the verifier where to look first — the learning
+	// loop's surprise summary for a run that diverged from its forecast
+	// (internal/surprise). A HINT, not a narrowed contract: the verifier still
+	// grades every acceptance criterion. "" for every doc-requested verification.
+	FocusHint string
 }
 
 // PhaseVerifier grades a finished phase run in place. Declared here for the same

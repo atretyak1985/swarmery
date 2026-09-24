@@ -75,3 +75,18 @@ func BuildPrompt(title, prompt, startPoint string, strictness Strictness) string
 	})
 	return b.String()
 }
+
+// focusHintHeading labels the learning loop's hint inside the contract text, so
+// the verifier can tell the hint from the criteria it grades.
+const focusHintHeading = "FOCUS HINT (advisory — where this run diverged from its forecast; look here first, but grade EVERY criterion above):"
+
+// WithFocusHint appends a focus hint to a verification contract. An empty hint
+// returns the contract unchanged, so every verification that carries none (all of
+// them, unless surprise auto-verification is enabled) renders byte-identically.
+func WithFocusHint(contract, hint string) string {
+	hint = strings.TrimSpace(hint)
+	if hint == "" {
+		return contract
+	}
+	return strings.TrimRight(contract, "\n") + "\n\n" + focusHintHeading + "\n" + hint
+}

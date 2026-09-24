@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
@@ -116,6 +117,13 @@ func (e *DepsUnmetError) Is(target error) bool { return target == ErrDepsUnmet }
 // plan_updated publisher) is keyed by the WORKSPACE task id so the Plans page
 // refetches on run edges.
 type Service struct {
+	// Decide is the local decision classifier (learning-loop phase 9, D1). It is
+	// consulted ONLY on the ambiguous branch of settle — a clean exit, criteria
+	// unticked, no blocked line, stop_reason end_turn — AFTER the rules ran, and
+	// only an ACTIVE answer changes anything. nil, no SWARMERY_DECIDE_URL, or
+	// shadow mode ⇒ settle behaves exactly as it did without it.
+	Decide *decide.Engine
+
 	DB  *sql.DB
 	Wt  runcore.WorktreeManager // shared worktree mechanics (runcore's seam)
 	Run Runner
@@ -146,6 +154,32 @@ type Service struct {
 	// wires it from the verify service). See verifyRun for the ordering contract: it
 	// runs BEFORE the worktree is reclaimed, because the worktree is the subject.
 	Verify runcore.PhaseVerifier
+	// Actuals records what a finished run actually did — files, lines, cost,
+	// outcome, verdict (internal/actuals, learning-loop phase 12). Called from the
+	// run's exit path AFTER stamp and verifyRun, so the row it reads carries this
+	// run's terminal state and verdict, and BEFORE the slot is released, so no new
+	// run can overwrite the row (or clear its run_events) mid-measurement. nil ⇒
+	// not wired: the unit tests' state, and a daemon that never records actuals.
+	// ADVISORY: the callee must never fail or block the run — it logs and returns.
+	Actuals func(phaseID int64, sessionUUID, repoRoot string)
+	// SurpriseVerify asks, after Actuals has measured and scored the run, whether
+	// the run surprised the learning loop enough to be verified even though its
+	// doc never asked (internal/surprise, learning-loop phase 13), and with what
+	// focus hint. nil, or ok=false, ⇒ no auto-verification — the default: the
+	// daemon's scorer answers false unless SWARMERY_SURPRISE_AUTOVERIFY_AT is set.
+	// ADVISORY like the scorer: the verdict it produces is information on the
+	// phase, and phasegate never gates on a verdict for a doc whose own mode is off.
+	SurpriseVerify func(phaseID int64, sessionUUID string) (focusHint string, ok bool)
+	// InjectLessons returns the text appended to the run's prompt: the active
+	// lessons whose areas overlap the phase's prior forecast, within the token
+	// budget, each already recorded in lesson_uses (internal/lessons, learning-loop
+	// phase 15). "" ⇒ nothing appended, so the prompt is byte-identical to a run
+	// without injection. nil ⇒ not wired (the unit tests' state).
+	InjectLessons func(phaseID int64, sessionUUID string) string
+	// LessonCitations marks, after the run, the injected lessons the executor
+	// cited ("[L-12]") in its transcript or in the returned doc's Completion
+	// Report. ADVISORY: it logs and returns, never failing the run. nil ⇒ off.
+	LessonCitations func(phaseID int64, sessionUUID, docPath string)
 	// Slots is the DAEMON-WIDE run registry and budget (internal/runcore): the
 	// per-phase single-flight gate AND — new — a bound this engine never had. A
 	// phase run used to be limited by nothing at all: ten phases started from the
@@ -261,6 +295,20 @@ func (s *Service) runRoot(info phaseInfo) (string, error) {
 		}
 	}
 	return resolve(info.ProjectPath, cells...)
+}
+
+// RunRoot resolves the repository a phase's runs execute in, by the same rules
+// Start applies — so a reader measuring a past run (internal/actuals' backfill)
+// looks for its branch where the run actually committed it.
+func (s *Service) RunRoot(phaseID int64) (string, error) {
+	info, err := s.loadPhase(phaseID)
+	if err != nil {
+		return "", err
+	}
+	if info.ProjectPath == "" {
+		return "", ErrNoPath
+	}
+	return s.runRoot(info)
 }
 
 // DocModelError: the phase DOC declares a `**Model:**` this daemon does not know.
@@ -573,8 +621,9 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		   SET run_state='running', run_session_uuid=?, run_started_at=?,
 		       run_error=NULL, run_ended_at=NULL, run_branch=?,
 		       run_start_point=NULLIF(?, ''),
-		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL
-		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, phaseID); err != nil {
+		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL,
+		       run_effort=NULLIF(?, '')
+		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, runEffort, phaseID); err != nil {
 		// Worktree FIRST, slot LAST — the same invariant runAndHandle's defer
 		// enforces. Releasing the slot while the worktree still exists lets a
 		// concurrent Start warm-reuse (worktree invariant 4) the deterministic
@@ -607,6 +656,11 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
 	}
 	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, budget)
+	// After run_session_uuid is stamped (so every lesson_uses row names a run the
+	// pending-session registry already answers for) and before the spawn.
+	if s.InjectLessons != nil {
+		prompt += s.InjectLessons(phaseID, uuid)
+	}
 	spec := RunSpec{
 		Prompt:       prompt,
 		SessionUUID:  uuid,
@@ -682,6 +736,19 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// sequence, and it is why verification lives in the defer at all rather than
 		// after the switch: every exit path has to pass through it in this order.
 		s.verifyRun(phaseID, info, acq, endState)
+		// After the verdict, before the slot: see the Actuals field. The branch
+		// survives removeWorktree (keepBranch), so the order against it is free.
+		if s.Actuals != nil {
+			s.Actuals(phaseID, spec.SessionUUID, info.RepoRoot)
+		}
+		// Next to the actuals recorder: the doc has been returned, so its
+		// Completion Report is the executor's.
+		if s.LessonCitations != nil {
+			s.LessonCitations(phaseID, spec.SessionUUID, info.DocPath)
+		}
+		// After the score (Actuals computes it), before the worktree goes: an
+		// auto-verification grades the worktree exactly as verifyRun does.
+		s.surpriseVerifyRun(phaseID, spec.SessionUUID, info, acq, endState)
 		// Worktree FIRST, slot LAST. stamp() has already moved the row off
 		// 'running', so the DB gate in Start is open; releasing the single-flight
 		// slot before the (git shell-out, tens of ms) removal opens a window where a
@@ -795,6 +862,49 @@ func (s *Service) verifyRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 	}
 }
 
+// surpriseVerifyRun is the opt-in auto-verification of a SURPRISING run (learning
+// loop phase 13.5): a run whose surprise score reached SWARMERY_SURPRISE_AUTOVERIFY_AT
+// is graded by the same read-only verifier verifyRun uses, with the surprise summary
+// as a focus hint, even though its doc did not ask. Same ordering contract as
+// verifyRun (blocking, before removeWorktree — the worktree is the subject) and the
+// same skips, plus one: a doc that opted into verification was already graded by
+// verifyRun, and grading the same tree twice would buy nothing.
+//
+// The verdict lands on the phase like any verdict. For a doc whose own verify mode is
+// off, phasegate never gates on it — the grade is information, not a fence.
+func (s *Service) surpriseVerifyRun(phaseID int64, sessionUUID string, info phaseInfo, acq worktree.Acquired, endState string) {
+	if s.Verify == nil || s.SurpriseVerify == nil || acq.Path == "" || (endState != "done" && endState != "partial") {
+		return
+	}
+	if info.VerifyMode != "" && info.VerifyMode != wsingest.VerifyOff {
+		return
+	}
+	hint, ok := s.SurpriseVerify(phaseID, sessionUUID)
+	if !ok {
+		return
+	}
+	doc, err := os.ReadFile(info.DocPath)
+	if err != nil {
+		log.Printf("warning: phaserun: phase=%d surprise verify skipped, doc %q unreadable: %v", phaseID, info.DocPath, err)
+		return
+	}
+	log.Printf("phaserun: phase=%d surprise auto-verify worktree=%q", phaseID, acq.Path)
+	if err := s.Verify.VerifyPhase(context.Background(), runcore.PhaseVerifyRequest{
+		PhaseID:         phaseID,
+		WorkspaceTaskID: info.WorkspaceTaskID,
+		Mode:            wsingest.VerifyNormal,
+		WorktreePath:    acq.Path,
+		Branch:          acq.Branch,
+		StartPoint:      acq.StartPoint,
+		Title:           info.Name,
+		Prompt:          string(doc),
+		ProjectPath:     info.ProjectPath,
+		FocusHint:       hint,
+	}); err != nil {
+		log.Printf("error: phaserun: phase=%d surprise verify: %v", phaseID, err)
+	}
+}
+
 // tickedInDoc counts the acceptance criteria ticked in the phase doc as it stands
 // on disk right now, through the SAME parser that defines
 // epic_phases.checkboxes_done (wsingest.CountCheckboxes) — never a second copy of
@@ -870,6 +980,9 @@ const blockedSentinel = "PHASE BLOCKED"
 // Returns the run_state to stamp; the caller stamps it, because stamping is also
 // what every other exit path does and the two must stay in one place.
 func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spec RunSpec, budget runcore.Budget, returnDocNow func()) (state, detail string) {
+	// D1 ground truth (phase 9.3): what a continuation achieved, recorded
+	// against the decision taken just before it. No-op without a classifier.
+	d1 := s.Decide.Tracker()
 	for attempt := 0; ; attempt++ {
 		returnDocNow()
 
@@ -910,6 +1023,7 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 		}
 
 		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total)
+		d1.Observe(string(end), c.Done)
 		switch end {
 		case runcore.EndBlocked:
 			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, reason)
@@ -926,9 +1040,29 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 			return "done", ""
 		}
 
+		// Measured BEFORE the classifier: its latency (up to the local backend's
+		// timeout) must never count against the time-left guard below, or a shadow
+		// call could turn a continuation into `partial`.
+		elapsed := budget.Elapsed(s.clock())
+
+		// D1 (phase 9): the rules reached `continue` — the one branch they leave
+		// ambiguous. The classifier may hand the run to the operator or stamp it
+		// blocked; any other answer (and every shadow/unconfigured call) lets the
+		// rules' continuation stand.
+		switch o := d1.Decide(ctx, decide.D1Input{Engine: Engine, SubjectID: phaseID, SessionUUID: spec.SessionUUID,
+			LastText: text, StopReason: stop, Done: c.Done, Total: c.Total, Attempt: attempt}); o.Action {
+		case decide.StampBlocked:
+			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, o.Detail)
+			log.Printf("phaserun: phase=%d uuid=%s blocked by classifier: %s", phaseID, spec.SessionUUID, o.Detail)
+			return "blocked", o.Detail
+		case decide.NotifyOperator:
+			s.event(phaseID, spec.SessionUUID, runcore.EventPartial, attempt, o.Detail)
+			log.Printf("phaserun: phase=%d uuid=%s handed to operator by classifier: %s", phaseID, spec.SessionUUID, o.Detail)
+			return "partial", o.Detail
+		}
+
 		// From here the run stopped with work left. Three things can stop us
 		// continuing, and each is a different honest answer.
-		elapsed := budget.Elapsed(s.clock())
 		switch {
 		case attempt >= runcore.MaxContinuations:
 			detail := fmt.Sprintf("%d of %d criteria ticked after %d continuations", c.Done, c.Total, attempt)
