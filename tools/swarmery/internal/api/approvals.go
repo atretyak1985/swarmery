@@ -98,7 +98,7 @@ func isLocalOrigin(origin string) bool {
 		return false
 	}
 	switch u.Hostname() {
-	case "localhost", "127.0.0.1", "::1":
+	case "localhost", "127.0.0.1", "::1", "swarmery":
 		return true
 	}
 	return false
