@@ -273,7 +273,8 @@ func usage() {
                                    (never contacts the daemon)
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;
-       'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT)
+       'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;
+       unset: serve reads ~/.claude/projects only, backfill behaves as 'auto')
        SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC
        SWARMERY_SETTINGS_OVERLAYS (descriptor of settings files that also apply to given project
        roots; default ~/.swarmery/overlays.json — missing = repo-only plugin detection)
@@ -314,6 +315,22 @@ func defaultProjectsRoots() []string {
 		return []string{v}
 	}
 	return []string{defaultClaudeProjectsRoot()}
+}
+
+// cliDefaultProjectsRoots is the roots default for one-shot CLI subcommands
+// that read transcripts (backfill). With neither SWARMERY_PROJECTS_ROOTS nor
+// SWARMERY_PROJECTS_ROOT set it behaves as "auto" — a shell never carries the
+// launchd plist's SWARMERY_PROJECTS_ROOTS=auto, and a manual replay that
+// silently skipped a second account's ~/.claude-<acct>/projects is the bug
+// this exists for. Anything configured is honoured exactly as the daemon does.
+// serve keeps defaultProjectsRoots (configure nothing → ~/.claude/projects).
+func cliDefaultProjectsRoots() []string {
+	if os.Getenv("SWARMERY_PROJECTS_ROOTS") == "" && os.Getenv("SWARMERY_PROJECTS_ROOT") == "" {
+		if roots := claudeacct.ProjectsRoots(); len(roots) > 0 {
+			return roots
+		}
+	}
+	return defaultProjectsRoots()
 }
 
 // defaultClaudeProjectsRoot is the stock single root: ~/.claude/projects.
@@ -374,8 +391,15 @@ func (r *rootsFlag) Set(v string) error {
 	return nil
 }
 
+// pipelineFlags registers the ingest flags with the daemon's roots default.
 func pipelineFlags(fs *flag.FlagSet) *ingest.Config {
-	cfg := &ingest.Config{Exclude: defaultExclude(), ProjectsRoots: defaultProjectsRoots()}
+	return pipelineFlagsWithRoots(fs, defaultProjectsRoots())
+}
+
+// pipelineFlagsWithRoots registers the ingest flags with roots as the
+// --projects-root default.
+func pipelineFlagsWithRoots(fs *flag.FlagSet, roots []string) *ingest.Config {
+	cfg := &ingest.Config{Exclude: defaultExclude(), ProjectsRoots: roots}
 	fs.Var(&rootsFlag{vals: &cfg.ProjectsRoots}, "projects-root",
 		"Claude Code projects root(s) to ingest — comma-separated, repeatable "+
 			"(env: SWARMERY_PROJECTS_ROOTS, 'auto' = every ~/.claude*/projects; "+
@@ -1045,8 +1069,9 @@ func cmdBackfill(args []string) error {
 	dbPath := dbFlag(fs)
 	rebuildText := fs.Bool("rebuild-text", false,
 		"re-read all transcripts from byte 0 to fill turns.text for pre-0005 rows (idempotent; dedup absorbs the replay)")
-	cfg := pipelineFlags(fs)
+	cfg := pipelineFlagsWithRoots(fs, cliDefaultProjectsRoots())
 	fs.Parse(args)
+	fmt.Printf("backfill: roots = %s\n", strings.Join(cfg.ProjectsRoots, ", "))
 
 	db, err := store.Open(*dbPath)
 	if err != nil {
