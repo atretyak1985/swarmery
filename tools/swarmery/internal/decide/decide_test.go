@@ -703,3 +703,31 @@ func TestConfigFromEnv_SchemaAndSuffix(t *testing.T) {
 		t.Errorf("bad value: cfg.NoSchema=%v warn=%v, want schema kept on with one warning", cfg.NoSchema, warn)
 	}
 }
+
+// SWARMERY_DECIDE_TIMEOUT reaches the local backend: an LM Studio model the
+// server unloaded after idling needs ~12 s to load, so the 5 s default failed
+// the first call of every pass after a quiet stretch.
+func TestConfigFromEnv_Timeout(t *testing.T) {
+	env := map[string]string{"SWARMERY_DECIDE_URL": "http://x/v1", "SWARMERY_DECIDE_TIMEOUT": "30s"}
+	cfg, warn := ConfigFromEnv(func(k string) string { return env[k] })
+	if cfg.Timeout != 30*time.Second || len(warn) != 0 {
+		t.Fatalf("cfg.Timeout = %v warn = %v, want 30s", cfg.Timeout, warn)
+	}
+	if !strings.Contains(cfg.String(), "timeout=30s") {
+		t.Errorf("startup line hides the timeout: %s", cfg.String())
+	}
+	if l, ok := New(nil, cfg).Local.(*Local); !ok || l.Timeout != 30*time.Second {
+		t.Errorf("New did not carry the timeout into the local backend: %+v", l)
+	}
+	for _, bad := range []string{"soon", "0s", "-1s", "10m"} {
+		env["SWARMERY_DECIDE_TIMEOUT"] = bad
+		if cfg, warn := ConfigFromEnv(func(k string) string { return env[k] }); cfg.Timeout != 0 || len(warn) != 1 {
+			t.Errorf("%q: Timeout=%v warn=%v, want the default kept with one warning", bad, cfg.Timeout, warn)
+		}
+	}
+	// Unset keeps the 5 s default in the backend.
+	delete(env, "SWARMERY_DECIDE_TIMEOUT")
+	if cfg, _ := ConfigFromEnv(func(k string) string { return env[k] }); cfg.Timeout != 0 {
+		t.Errorf("unset: Timeout=%v, want 0 (⇒ LocalTimeout)", cfg.Timeout)
+	}
+}
