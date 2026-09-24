@@ -2122,6 +2122,11 @@ func cmdServe(args []string) error {
 		log.Printf("warn: %s", w)
 	}
 	lessonGen := lessons.NewGenerator(db, lessonCfg)
+	if n, err := lessonGen.Recover(); err != nil {
+		log.Printf("warning: lessons: recover interrupted generations: %v", err)
+	} else if n > 0 {
+		log.Printf("lessons: %d generation(s) interrupted by a restart marked failed (one retry allowed)", n)
+	}
 	lessonGen.Changed = func(taskID int64) {
 		if bus != nil {
 			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
