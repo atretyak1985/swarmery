@@ -2,7 +2,7 @@
 name: planner
 description: Break work of any size into an executable workspace plan — phase docs with falsifiable acceptance criteria, self-contained executor prompts, and dependency sequencing the dashboard can track.
 model: opus
-effort: high
+effort: medium
 color: cyan
 maxTurns: 40
 skills:

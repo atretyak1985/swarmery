@@ -26,11 +26,11 @@ providers:
   # from `max_tokens`, so the 1024 ceiling above would truncate every answer.
   # `effort` maps to `output_config.effort` on the wire.
   #
-  # `effort: high` mirrors the value those agents currently carry in frontmatter
-  # — it is phase 2's provisional default, NOT a swept result. Step 7.2's sweep
-  # (deferred: needs a funded ANTHROPIC_API_KEY) adds sibling providers at
-  # `low`/`medium` with their own labels and compares pass rate, output tokens
-  # and latency before anything is locked in.
+  # `effort: high` is the ceiling of the fleet's efforts: the step-7.2 sweep
+  # (evals/sweep/run.sh, on a subscription via providers/claude-cli.js) set
+  # tech-lead / planner / code-reviewer / security-auditor / debugger to
+  # `medium` and kept implementation-agent and architect at `high`. Re-run the
+  # sweep, not this tier, to move an agent's effort.
   - id: anthropic:messages:claude-opus-5-5
     label: opus-tier
     config:
@@ -58,6 +58,8 @@ tests:
   - file://agents/code-reviewer.yaml
   - file://agents/security-auditor.yaml
   - file://agents/git-commit.yaml
+  - file://agents/forecast.yaml
+  - file://agents/debugger.yaml
   - file://agents/guardrails.yaml
   - file://agents/jira-task-runner.yaml
   - file://agents/no-reasoning-in-output.yaml

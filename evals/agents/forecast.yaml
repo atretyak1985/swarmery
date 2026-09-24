@@ -1,0 +1,50 @@
+# forecast field validity (plan phase 11.4). The structural cases (a prior
+# block exists and sits before the stub; the posterior comes before the first
+# edit; a forecast is never a scope limit) live in planner.yaml and
+# implementation-agent.yaml. This case checks the prior's FIELDS.
+#
+# planner.md deliberately cites plan-format.md for the key names instead of
+# copying them, and an eval run has no tools to read that file, so the task
+# hands the format over — as a real run would read it. Without it the planner
+# (correctly) refuses to invent keys.
+
+- description: planner's prior forecast carries valid fields from the documented format
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/planner.md
+    task: |
+      Write the full markdown of ONE phase doc for this phase: "add a
+      `favorite` boolean to order line items — migration in db/migrations/,
+      the field on the LineItem DTO in api/line_items.ts, and a toggle in
+      web/src/LineItemRow.tsx". Single repo, context already gathered.
+      Output only the phase doc.
+
+      You have already read workspace-plans/resources/plan-format.md; its
+      Forecast block format is:
+
+      ```yaml
+      kind: prior            # prior (planner) | posterior (executor)
+      written_at: 2026-09-23T10:12:00Z
+      areas: [internal/ingest, internal/cost]                    # REQUIRED
+      files: [internal/ingest/record.go, config/pricing.json]    # optional, globs ok
+      size_band: M           # XS <20 lines | S <100 | M <400 | L <1500 | XL
+      duration_band: 30-90m  # <30m | 30-90m | 90m-4h | >4h
+      outcome: done          # done | partial | blocked
+      risks: ["migration touches turns table", "recost path diverges"]
+      confidence: 0.7        # 0..1, how sure the whole forecast holds
+      ```
+  assert:
+    - type: regex                           # hard: a prior block exists
+      value: "kind:\\s*prior"
+    - type: regex                           # hard: areas is the one required field, naming this phase's places
+      value: "areas:\\s*\\[[^\\]]*(db/migrations|api|web)[^\\]]*\\]"
+    - type: regex                           # hard: size band from the closed set
+      value: "size_band:\\s*(XS|S|M|L|XL)\\b"
+    - type: regex                           # hard: outcome from the closed set
+      value: "outcome:\\s*(done|partial|blocked)\\b"
+    - type: regex                           # hard: confidence is a number in 0..1
+      value: "confidence:\\s*(0(\\.\\d+)?|1(\\.0+)?)\\b"
+    - type: regex                           # hard: Forecast sits before the stub
+      value: "## Forecast[\\s\\S]*## Completion Report"
+    - type: not-regex                       # hard: never a fence. JS regex: no (?i)
+      value: "([Mm]ust|[Ss]hould) (stay|remain|keep) within (the |its )?forecast|[Dd]o not exceed (the )?forecast|[Ll]imit (yourself|the work) to (the )?forecast"

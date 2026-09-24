@@ -1,0 +1,53 @@
+# debugger contract — diagnose before fixing, fix minimally, prove the fix with
+# a regression test. Used by plan step 7.3 to compare opus/medium against
+# sonnet/high; the cases run on whichever tier the sweep config maps.
+
+- description: debugger names the root cause before proposing a fix
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/debugger.md
+    task: |
+      CI fails intermittently (about 1 run in 5) on this Go test:
+
+      --- FAIL: TestRunReportsATimeoutAsSuch (1.62s)
+          run_test.go:88: err = exit status 1, want a timeout error
+
+      The test starts a stub shell script and gives Run a 1.5s deadline:
+
+          stub := writeStub(t, "#!/bin/sh\nsleep 5\n")
+          _, err := Run(ctx, Spec{Cmd: stub, Timeout: 1500 * time.Millisecond})
+
+      The test passes every time when run alone and fails only under
+      `go test ./...` on the shared CI runner. Diagnose it and propose the fix.
+  assert:
+    - type: llm-rubric
+      value: >
+        States a root-cause hypothesis BEFORE proposing any fix, and that
+        hypothesis is load-dependent timing — the 1.5s deadline racing with how
+        the stub process starts, is killed, or reports its exit under a loaded
+        runner — rather than blaming the production code without evidence. Any
+        specific mechanism in that family is acceptable, and so is proposing a
+        quick experiment to confirm it before fixing.
+    - type: llm-rubric
+      value: >
+        The fix is scoped to the diagnosed cause (a test-timing change, or a
+        targeted change to how Run classifies a deadline kill if that is the
+        diagnosis) rather than a broad rewrite, and it says how the fix will be
+        shown to work (e.g. repeated runs with -count, -race, or under load).
+
+- description: debugger insists on a regression test that fails before the fix
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/debugger.md
+    task: >
+      A user reports that `formatBytes(1024)` in src/util/format.ts returns
+      "1024 B" instead of "1.0 KB". The function uses `if (n > 1024)` to pick
+      the KB branch. Fix it.
+  assert:
+    - type: regex                           # hard: the off-by-one boundary is named
+      value: ">=\\s*1024"
+    - type: llm-rubric
+      value: >
+        Adds or describes a regression test for exactly the boundary (1024 →
+        "1.0 KB"), states that it fails before the fix and passes after, and
+        keeps the code change to the comparison operator.

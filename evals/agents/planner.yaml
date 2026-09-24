@@ -63,8 +63,9 @@
       value: "## Forecast"
     - type: regex                           # hard: a prior block, not a bare heading
       value: "kind:\\s*prior"
-    - type: regex                           # hard: areas is the one required key
-      value: "areas:"
+    # Field validity (areas, bands, confidence) is checked in forecast.yaml, which
+    # hands over plan-format.md: planner.md cites it rather than copying keys, so
+    # without the file the planner rightly refuses to invent them.
     - type: llm-rubric                      # soft: ordering inside the doc
       value: places the Forecast section immediately before "## Completion Report", and keeps Completion Report as the very last section
 
@@ -78,6 +79,6 @@
       four files. What does your plan tell the executor to do, and why?
   assert:
     - type: not-regex                       # hard: no scope-fence wording
-      value: "(?i)(stay within (your |the )?forecast|must not exceed the forecast|limited to the forecast|do not exceed the (forecast|size_band))"
+      value: "([Ss]tay within (your |the )?forecast|[Mm]ust not exceed the forecast|[Ll]imited to the forecast|[Dd]o not exceed the (forecast|size_band))"  # JS regex: no (?i)
     - type: llm-rubric                      # soft: the mitigation itself
       value: says the executor does whatever the phase actually needs and that the forecast is a prediction rather than a budget or a limit — it does not tell the executor to cut scope, split the phase, or ask permission merely because the work exceeded the forecast

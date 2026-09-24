@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.8.0,
+  `/plugin update`, not through these tags. Current: `core` 3.9.0,
   `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
   `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
@@ -17,6 +17,17 @@ Two things ship from this repository on separate clocks:
   marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
+
+### Changed
+
+- **Agent effort from a measured sweep (core 3.9.0).** An Opus 5.5 effort sweep
+  over the eval suites (low / medium / high) set: tech-lead, planner,
+  code-reviewer and security-auditor to `medium` (same pass rate as `high`,
+  25–35% fewer output tokens); implementation-agent stays `high` (the only
+  effort that passed the checkbox-progress contract in both runs); debugger
+  moves from sonnet/high to opus/medium (100% vs 0%); architect stays `high`
+  (no suite yet). The sweep runs on a Claude subscription via
+  `evals/providers/claude-cli.js` and `evals/sweep/run.sh`.
 
 ## [0.2.1] - 2026-09-24
 
