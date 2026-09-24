@@ -646,3 +646,60 @@ func TestLocal_BraceStrippedReplyStillAnswers(t *testing.T) {
 		})
 	}
 }
+
+// SWARMERY_DECIDE_SCHEMA=off drops response_format and SWARMERY_DECIDE_USER_SUFFIX
+// reaches the question: the combination that makes LM Studio's MLX Qwen3 answer
+// multi-token options in full (`"ref` truncation with the enum schema; an empty
+// reply without it, the budget spent on hidden thinking).
+func TestLocal_NoSchemaAndSuffix(t *testing.T) {
+	f := &fakeServer{reply: func(map[string]any) (int, any) {
+		return 200, chat("\n\n{\"answer\": \"report-with-next-step\"}", []lp{
+			{tok: "\n\n", lp: 0}, {tok: `{"`, lp: 0}, {tok: `answer`, lp: 0}, {tok: `":`, lp: 0}, {tok: ` "`, lp: 0},
+			{tok: `report`, lp: math.Log(0.7), alts: map[string]float64{"report": math.Log(0.7), "blocked": math.Log(0.3)}},
+			{tok: `-with-next-step"}`, lp: 0},
+		})
+	}}
+	srv := f.start(t)
+	a, err := (&Local{URL: srv.URL, NoSchema: true, UserSuffix: "/no_think"}).Ask(context.Background(), d1Question())
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if a.Value != D1Report || !a.Calibrated || math.Abs(a.Confidence-0.7) > 1e-6 {
+		t.Errorf("answer = %+v, want calibrated report-with-next-step at 0.7", a)
+	}
+	if _, has := f.last["response_format"]; has {
+		t.Error("response_format sent although NoSchema is set")
+	}
+	msgs, _ := json.Marshal(f.last["messages"])
+	if !strings.Contains(string(msgs), `/no_think`) {
+		t.Errorf("user suffix missing from the request: %s", msgs)
+	}
+
+	// The default request is unchanged: schema on, no suffix.
+	f2 := &fakeServer{reply: func(map[string]any) (int, any) { return 200, chat(`{"answer":"done"}`, nil) }}
+	srv2 := f2.start(t)
+	if _, err := (&Local{URL: srv2.URL}).Ask(context.Background(), d1Question()); err != nil {
+		t.Fatalf("default Ask: %v", err)
+	}
+	if _, has := f2.last["response_format"]; !has {
+		t.Error("default request lost its response_format")
+	}
+}
+
+func TestConfigFromEnv_SchemaAndSuffix(t *testing.T) {
+	env := map[string]string{"SWARMERY_DECIDE_URL": "http://x/v1", "SWARMERY_DECIDE_SCHEMA": "off", "SWARMERY_DECIDE_USER_SUFFIX": " /no_think "}
+	cfg, warn := ConfigFromEnv(func(k string) string { return env[k] })
+	if !cfg.NoSchema || cfg.UserSuffix != "/no_think" || len(warn) != 0 {
+		t.Fatalf("cfg = %+v warn = %v", cfg, warn)
+	}
+	if s := cfg.String(); !strings.Contains(s, "schema=off") || !strings.Contains(s, `suffix="/no_think"`) {
+		t.Errorf("startup line hides the knobs: %s", s)
+	}
+	if l, ok := New(nil, cfg).Local.(*Local); !ok || !l.NoSchema || l.UserSuffix != "/no_think" {
+		t.Errorf("New did not carry the knobs into the local backend: %+v", l)
+	}
+	env["SWARMERY_DECIDE_SCHEMA"] = "maybe"
+	if cfg, warn := ConfigFromEnv(func(k string) string { return env[k] }); cfg.NoSchema || len(warn) != 1 {
+		t.Errorf("bad value: cfg.NoSchema=%v warn=%v, want schema kept on with one warning", cfg.NoSchema, warn)
+	}
+}

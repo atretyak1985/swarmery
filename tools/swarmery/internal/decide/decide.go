@@ -408,8 +408,17 @@ func tail(s string, n int) string {
 
 // Config is the env-derived configuration.
 type Config struct {
-	URL        string
-	Model      string
+	URL   string
+	Model string
+	// NoSchema drops response_format from local requests
+	// (SWARMERY_DECIDE_SCHEMA=off). Some servers mishandle a json_schema enum:
+	// LM Studio's MLX builds end the reply at the first unique prefix of the
+	// value (`"ref` for refactor), which fails every multi-token answer.
+	NoSchema bool
+	// UserSuffix is appended to every local question
+	// (SWARMERY_DECIDE_USER_SUFFIX), e.g. Qwen3's `/no_think` soft switch: a
+	// thinking model otherwise spends the reply budget on hidden reasoning.
+	UserSuffix string
 	Claude     bool
 	Modes      map[string]Mode
 	Thresholds map[string]float64
@@ -425,6 +434,7 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 	cfg := Config{
 		URL:        strings.TrimSpace(getenv("SWARMERY_DECIDE_URL")),
 		Model:      strings.TrimSpace(getenv("SWARMERY_DECIDE_MODEL")),
+		UserSuffix: strings.TrimSpace(getenv("SWARMERY_DECIDE_USER_SUFFIX")),
 		Modes:      map[string]Mode{"d1": ModeShadow, "d2": ModeShadow, "d3": ModeShadow},
 		Thresholds: map[string]float64{"d1": 0.85, "d2": 0.6, "d3": 0.6},
 	}
@@ -432,6 +442,13 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 		cfg.Model = DefaultLocalModel
 	}
 	var warn []string
+	switch strings.ToLower(strings.TrimSpace(getenv("SWARMERY_DECIDE_SCHEMA"))) {
+	case "0", "off", "false", "no":
+		cfg.NoSchema = true
+	case "", "1", "on", "true", "yes":
+	default:
+		warn = append(warn, "SWARMERY_DECIDE_SCHEMA: unknown value, the schema stays on")
+	}
 	switch strings.ToLower(strings.TrimSpace(getenv("SWARMERY_DECIDE_CLAUDE"))) {
 	case "1", "on", "true", "yes":
 		cfg.Claude = true
@@ -465,6 +482,12 @@ func (c Config) String() string {
 	local := "off"
 	if c.URL != "" {
 		local = c.URL + " model=" + c.Model
+		if c.NoSchema {
+			local += " schema=off"
+		}
+		if c.UserSuffix != "" {
+			local += fmt.Sprintf(" suffix=%q", c.UserSuffix)
+		}
 	}
 	return fmt.Sprintf("local=%s claude=%t d1=%s(%.2f) d2=%s(%.2f) d3=%s(%.2f)",
 		local, c.Claude, c.Modes["d1"], c.Thresholds["d1"], c.Modes["d2"], c.Thresholds["d2"],
@@ -476,7 +499,7 @@ func (c Config) String() string {
 func New(db *sql.DB, cfg Config) *Engine {
 	e := &Engine{DB: db, DefaultModes: cfg.Modes, Thresholds: cfg.Thresholds}
 	if cfg.URL != "" {
-		e.Local = &Local{URL: cfg.URL, Model: cfg.Model}
+		e.Local = &Local{URL: cfg.URL, Model: cfg.Model, NoSchema: cfg.NoSchema, UserSuffix: cfg.UserSuffix}
 	}
 	if cfg.Claude {
 		e.Claude = &Claude{}
