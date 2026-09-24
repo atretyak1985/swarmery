@@ -47,6 +47,36 @@ func (g *Generator) now() time.Time {
 	return time.Now()
 }
 
+// staleAfter is how old a 'running' generation must be before Recover treats
+// it as orphaned by a restart. Twice generateTimeout, so a live one is never hit.
+const staleAfter = 10 * time.Minute
+
+// The error texts that carry the restart-recovery state of a generation row.
+const (
+	errInterrupted      = "interrupted by restart"
+	errRetrying         = "retrying after restart"
+	errRetryInterrupted = "interrupted by restart (retry exhausted)"
+)
+
+// Recover fails every generation left 'running' by a daemon that stopped
+// mid-call, so the run is not blocked from lessons for ever: a first
+// interruption becomes errInterrupted (claimable once more by the next scoring
+// pass), an interrupted retry becomes errRetryInterrupted (final). Call once at
+// startup, before any scoring pass.
+func (g *Generator) Recover() (int64, error) {
+	now := g.now().UTC()
+	res, err := g.DB.Exec(`UPDATE lesson_generations
+		SET state = 'failed', finished_at = ?,
+			error = CASE WHEN error = ? THEN ? ELSE ? END
+		WHERE state = 'running' AND created_at < ?`,
+		now.Format(time.RFC3339), errRetrying, errRetryInterrupted, errInterrupted,
+		now.Add(-staleAfter).Format(time.RFC3339))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // Outcome reports one Generate call.
 type Outcome struct {
 	Skipped  string      // non-empty ⇒ nothing was claimed or spent, and why
@@ -93,7 +123,8 @@ func (g *Generator) eligible(index float64) bool {
 
 // Generate runs one generation synchronously. Idempotent per run: the first
 // call that finds the run eligible claims it in lesson_generations, and every
-// later call is a no-op (Skipped), whatever the first one's result was.
+// later call is a no-op (Skipped), whatever the first one's result was — with
+// one exception: a claim a restart interrupted (Recover) may be taken once more.
 func (g *Generator) Generate(ctx context.Context, phaseID int64, uuid string) (Outcome, error) {
 	in, ok, reason, err := LoadInput(g.DB, phaseID, uuid)
 	if err != nil {
@@ -106,8 +137,16 @@ func (g *Generator) Generate(ctx context.Context, phaseID int64, uuid string) (O
 		return Outcome{Skipped: "below the surprise threshold, or generation is off"}, nil
 	}
 	now := g.now().UTC().Format(time.RFC3339)
+	// The claim also takes over a row a restart interrupted (Recover), exactly
+	// once: the retry claim tags the row errRetrying, which Recover turns into
+	// errRetryInterrupted — never errInterrupted — so it is not claimable again.
+	// A genuine model failure keeps its own error text and is never retried.
 	res, err := g.DB.Exec(`INSERT INTO lesson_generations (source_phase_run, phase_id, state, model, created_at)
-		VALUES (?, ?, 'running', ?, ?) ON CONFLICT(source_phase_run) DO NOTHING`, uuid, phaseID, g.Cfg.Model, now)
+		VALUES (?, ?, 'running', ?, ?)
+		ON CONFLICT(source_phase_run) DO UPDATE SET state = 'running', error = ?, model = excluded.model,
+			created_at = excluded.created_at, finished_at = NULL
+		WHERE lesson_generations.state = 'failed' AND lesson_generations.error = ?`,
+		uuid, phaseID, g.Cfg.Model, now, errRetrying, errInterrupted)
 	if err != nil {
 		return Outcome{}, err
 	}

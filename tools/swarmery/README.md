@@ -200,3 +200,16 @@ honor it:
 Exclusion gates row *creation* only — rows that already exist are never
 deleted by code; remove them with a one-off SQL cleanup. Set
 `SWARMERY_EXCLUDE=''` to disable.
+
+## Notifications (webhook)
+
+`--notify-url` (env `SWARMERY_NOTIFY_URL`) turns on an outbound webhook;
+`--notify-template` picks the body shape (`generic`, `ntfy`, `telegram`).
+`--notify-events` (env `SWARMERY_NOTIFY_EVENTS`) chooses what is sent — any
+comma-separated mix of `approval_requested`, `approval_expired`,
+`session_completed`, `session_error`, `plugin_drift`, `phase_surprise`,
+`run_needs_operator`. The default is `approval_requested,run_needs_operator`:
+the two moments a human is blocking work (a pending tool approval, a headless
+run that stopped to ask the operator). An explicit value **replaces** the
+default rather than extending it, so keep both names in the list when adding
+others.

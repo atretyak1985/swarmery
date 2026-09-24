@@ -15,7 +15,6 @@ package phaserun
 import (
 	"fmt"
 	"log"
-	"path/filepath"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procgroup"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
@@ -154,7 +153,7 @@ func (s *Service) settleAdopted(phaseID int64, uuid string, info phaseInfo) (sta
 // Adoption holds no worktree.Acquired (this daemon never acquired anything), so
 // the checkout is re-derived from the pair Start handed Acquire: the project slug
 // and runcore.PhaseTaskName(phaseID). The lent copy's location inside it is
-// LendPlanDoc's own contract, PlanDocDir/<basename>.
+// LendPlanDoc's own contract, worktree.LentPlanDocRel.
 //
 // The bool is whether the copy-back could be ATTEMPTED at all — false only when
 // the worktree path cannot be named, which is the one case in which the caller
@@ -170,7 +169,7 @@ func (s *Service) returnAdoptedDoc(phaseID int64, info phaseInfo) bool {
 		return false
 	}
 	worktree.ReturnPlanDocLogged(fmt.Sprintf("phaserun adopted phase=%d", phaseID),
-		wtPath, filepath.Join(worktree.PlanDocDir, filepath.Base(info.DocPath)), info.DocPath)
+		wtPath, worktree.LentPlanDocRel(info.DocPath), info.DocPath)
 	return true
 }
 
