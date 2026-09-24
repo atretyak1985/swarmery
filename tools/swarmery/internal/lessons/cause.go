@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
@@ -32,6 +33,10 @@ type CauseClassifier struct {
 	Now func() time.Time
 	// Go runs the background classification (test seam; nil ⇒ a goroutine).
 	Go func(func())
+	// inflight claims a run while its call is out: a slow run-end call and the
+	// settled rescore two minutes later must not both ask (the decisions table
+	// only records the answer once the call returns).
+	inflight sync.Map
 }
 
 func (c *CauseClassifier) now() time.Time {
@@ -72,8 +77,13 @@ func (c *CauseClassifier) AfterScore(st *surprise.Stored, source string) {
 
 // Classify runs one classification synchronously and returns the D3 outcome
 // (Asked=false when the run was skipped). Idempotent per run: a run with an
-// error-free D3 decision, or causeMaxFailures errored ones, is not asked again.
+// error-free D3 decision, or causeMaxFailures errored ones, is not asked again,
+// and a run whose call is still out is skipped.
 func (c *CauseClassifier) Classify(ctx context.Context, phaseID int64, uuid string) (decide.D3Outcome, error) {
+	if _, busy := c.inflight.LoadOrStore(uuid, struct{}{}); busy {
+		return decide.D3Outcome{}, nil
+	}
+	defer c.inflight.Delete(uuid)
 	var ok, failed int
 	if err := c.DB.QueryRowContext(ctx, `SELECT
 		COALESCE(SUM(CASE WHEN error = '' THEN 1 ELSE 0 END), 0),

@@ -236,3 +236,53 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+// blockingStub holds its call until released, so a second Classify can race it.
+type blockingStub struct {
+	entered chan struct{}
+	release chan struct{}
+	calls   int
+}
+
+func (s *blockingStub) Name() string { return decide.BackendLocal }
+func (s *blockingStub) Ask(context.Context, decide.Question) (decide.Answer, error) {
+	s.calls++
+	s.entered <- struct{}{}
+	<-s.release
+	return decide.Answer{Value: "other", Confidence: 0.9, Calibrated: true}, nil
+}
+
+func TestClassifySkipsARunWhoseCallIsStillOut(t *testing.T) {
+	db := openDB(t)
+	phaseID := seedRun(t, db, "u-race", 0.8, report)
+	b := &blockingStub{entered: make(chan struct{}), release: make(chan struct{})}
+	c := newClassifier(db, b, decide.ModeShadow)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = c.Classify(context.Background(), phaseID, "u-race")
+	}()
+	<-b.entered // the first call is out, nothing recorded yet
+	second := make(chan decide.D3Outcome, 1)
+	go func() {
+		out, _ := c.Classify(context.Background(), phaseID, "u-race")
+		second <- out
+	}()
+	select {
+	case out := <-second:
+		if out.Asked {
+			t.Fatalf("second classify while the first is out asked: %+v", out)
+		}
+	case <-b.entered:
+		close(b.release)
+		t.Fatal("second classify asked the backend while the first call was still out")
+	case <-time.After(5 * time.Second):
+		close(b.release)
+		t.Fatal("second classify did not return")
+	}
+	close(b.release)
+	<-done
+	if n, _, _ := d3Decisions(t, db, "u-race"); n != 1 || b.calls != 1 {
+		t.Fatalf("decisions=%d calls=%d, want 1 and 1", n, b.calls)
+	}
+}
