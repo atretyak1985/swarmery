@@ -990,18 +990,10 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 	// dashboard renders the workspace copy's `## Completion Report` and nothing
 	// else, so a report that stays in the worktree is work that shipped reading
 	// as "no summary of the work written". The defer is what makes "every path"
-	// true without auditing each return.
-	defer worktree.ReturnPlanDocLogged(fmt.Sprintf("dispatch task=%d", c.ID), acq.Path, docRel, taskDoc)
-
-	// A card WITHOUT a plan doc has no workspace file to return, so the contract
-	// points it at worktree.ReportPath instead and this reads that back onto the
-	// card. Same deal as the return trip above, and deferred for the same reason:
-	// the contract asks for a report on the blocked path too, and the report about
-	// why work stopped is the one most worth not losing. Instructing an agent to
-	// write a file nobody reads would be worse than saying nothing.
-	if docRel == "" {
-		defer s.collectDoclessReport(c.ID, acq.Path)
-	}
+	// true without auditing each return. A daemon restart is the one exit no defer
+	// survives; adoption and the startup heal take the same trip through
+	// returnOrphanOutput (adopt.go).
+	defer s.returnRunOutput(c.ID, fmt.Sprintf("dispatch task=%d", c.ID), acq.Path, docRel, taskDoc)
 
 	stages := pb.stages
 
@@ -1174,6 +1166,24 @@ func stageExitMsg(run *Run, timeout time.Duration) string {
 		msg += ": " + run.Stderr
 	}
 	return msg
+}
+
+// returnRunOutput brings a run's written summary home — the ONE return trip both
+// the normal exit (runPlaybook's defer) and an orphan (returnOrphanOutput) take.
+//
+// With a lent plan doc (docRel != "") the worktree copy goes back over the
+// workspace document via worktree.ReturnPlanDocLogged. A card WITHOUT one has no
+// workspace file to return, so the contract points it at worktree.ReportPath
+// instead and this reads that back onto the card. Both halves run on the blocked
+// path too: the contract asks for a report there, and the report about why work
+// stopped is the one most worth not losing. Instructing an agent to write a file
+// nobody reads would be worse than saying nothing.
+func (s *Service) returnRunOutput(id int64, what, wtPath, docRel, taskDoc string) {
+	if docRel == "" {
+		s.collectDoclessReport(id, wtPath)
+		return
+	}
+	worktree.ReturnPlanDocLogged(what, wtPath, docRel, taskDoc)
 }
 
 // collectDoclessReport moves the worktree's report file onto the card's
@@ -1393,6 +1403,10 @@ func (s *Service) HealStale() error {
 		// Best-effort: a failed probe must not leave tasks stuck in_progress.
 		log.Printf("error: swarmery dispatch: adoption probe: %v", err)
 	}
+	// A run that died WITH the previous daemon never ran runPlaybook's return
+	// defer either, and the re-admission this requeue leads to lends the stale
+	// workspace doc back over the report it left behind — so bring it home first.
+	s.returnHealedOutput(adopted)
 	// worktree_path IS NOT NULL is the dispatcher-OWNERSHIP guard, and it is load
 	// bearing: source='queue' alone stopped meaning "a dispatcher run" once
 	// internal/taskcap began minting captured session cards on the board with that
