@@ -419,6 +419,11 @@ type Config struct {
 	// (SWARMERY_DECIDE_USER_SUFFIX), e.g. Qwen3's `/no_think` soft switch: a
 	// thinking model otherwise spends the reply budget on hidden reasoning.
 	UserSuffix string
+	// Timeout bounds one local call (SWARMERY_DECIDE_TIMEOUT, a Go duration;
+	// 0 ⇒ LocalTimeout). A server that unloads an idle model (LM Studio's JIT
+	// TTL) needs ~12 s to load it again, so the first call of every pass after an
+	// idle stretch failed at 5 s.
+	Timeout    time.Duration
 	Claude     bool
 	Modes      map[string]Mode
 	Thresholds map[string]float64
@@ -448,6 +453,13 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 	case "", "1", "on", "true", "yes":
 	default:
 		warn = append(warn, "SWARMERY_DECIDE_SCHEMA: unknown value, the schema stays on")
+	}
+	if raw := strings.TrimSpace(getenv("SWARMERY_DECIDE_TIMEOUT")); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 && d <= 5*time.Minute {
+			cfg.Timeout = d
+		} else {
+			warn = append(warn, fmt.Sprintf("SWARMERY_DECIDE_TIMEOUT=%q: want a duration in (0, 5m], using %s", raw, LocalTimeout))
+		}
 	}
 	switch strings.ToLower(strings.TrimSpace(getenv("SWARMERY_DECIDE_CLAUDE"))) {
 	case "1", "on", "true", "yes":
@@ -488,6 +500,9 @@ func (c Config) String() string {
 		if c.UserSuffix != "" {
 			local += fmt.Sprintf(" suffix=%q", c.UserSuffix)
 		}
+		if c.Timeout > 0 {
+			local += " timeout=" + c.Timeout.String()
+		}
 	}
 	return fmt.Sprintf("local=%s claude=%t d1=%s(%.2f) d2=%s(%.2f) d3=%s(%.2f)",
 		local, c.Claude, c.Modes["d1"], c.Thresholds["d1"], c.Modes["d2"], c.Thresholds["d2"],
@@ -499,7 +514,7 @@ func (c Config) String() string {
 func New(db *sql.DB, cfg Config) *Engine {
 	e := &Engine{DB: db, DefaultModes: cfg.Modes, Thresholds: cfg.Thresholds}
 	if cfg.URL != "" {
-		e.Local = &Local{URL: cfg.URL, Model: cfg.Model, NoSchema: cfg.NoSchema, UserSuffix: cfg.UserSuffix}
+		e.Local = &Local{URL: cfg.URL, Model: cfg.Model, NoSchema: cfg.NoSchema, UserSuffix: cfg.UserSuffix, Timeout: cfg.Timeout}
 	}
 	if cfg.Claude {
 		e.Claude = &Claude{}
