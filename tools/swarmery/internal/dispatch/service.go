@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -775,7 +776,7 @@ func (s *Service) admit(c candidate) bool {
 	pb := s.resolvePlaybook(c)
 
 	// Spawn the run. The goroutine owns exit handling + slot release.
-	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc) })
+	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc, repoRoot) })
 	return true
 }
 
@@ -829,11 +830,27 @@ func microPlansEnabled() bool {
 // plan it materialized. No workspace task ROW is written here: wsingest discovers
 // the dir on its next pass and stays the only writer of those rows, so there is one
 // path from a dir to a row and no way for the two to disagree.
+//
+// That invariant is why the namespace dir is taken from c.WorkspaceRoot
+// (workspaces.root_path) whenever the project HAS one, instead of rebuilding it
+// as <WorkspaceRoot>/<ProjectSlug>. ProjectSlug is the registry slug — derived
+// from the project path with '/'→'-' — while onboarding carves the namespace
+// under the operator's kebab slug, and upstream documents the two as never
+// matching (internal/onboard/onboard.go). Rebuilding therefore minted the plan
+// into a SECOND tree beside the real one; wsingest then indexed that tree as its
+// own workspace and project, and the card and its micro-plan ended up attributed
+// to different projects — exactly the disagreement this function promises cannot
+// happen. The <root>/<slug> spelling survives only as the fallback for a project
+// with no workspace row, where no carved dir exists to prefer.
 func (s *Service) mintMicroPlan(c candidate, repoRoot string) string {
 	if s.WorkspaceRoot == "" || !microPlansEnabled() {
 		return ""
 	}
-	dir, err := taskdir.MintMicroPlan(s.WorkspaceRoot, c.ProjectSlug, taskdir.Card{
+	wsDir := c.WorkspaceRoot
+	if wsDir == "" {
+		wsDir = filepath.Join(s.WorkspaceRoot, c.ProjectSlug)
+	}
+	dir, err := taskdir.MintMicroPlanIn(wsDir, taskdir.Card{
 		ExternalID: c.ExternalID,
 		Title:      c.Title,
 		Prompt:     c.Prompt,
@@ -973,7 +990,7 @@ func (s *Service) failAdmission(id int64, msg string) {
 // A single-stage playbook (the default) walks this loop exactly once, so its
 // behavior is byte-for-byte the pre-playbook runAndHandle: link → sentinel →
 // exit-code routing → pokeVerify.
-func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc string) {
+func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc, repoRoot string) {
 	defer s.clearActive(c.ID)
 
 	// Lend the card's micro-plan doc INTO the worktree and quote it by its
@@ -1015,6 +1032,20 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 	// accounts if the operator rebinds while it runs.
 	account := claudeacct.Binding(c.ProjectPath)
 
+	// SettingsFile lends the project's own .claude/settings.json when repoRoot
+	// resolved this run into a SUB-repo of a multi-repo project: that worktree
+	// carries no settings of its own, so the plugin stack — including whatever
+	// ships c.Agent — would otherwise be silently unreachable and the run would
+	// proceed as an unresolved @mention rather than fail (phaserun and planrun
+	// guard the same case via repopath.InheritedSettings). "" in the common
+	// single-repo case, where the worktree IS a checkout of the project.
+	settingsFile := repopath.InheritedSettings(c.ProjectPath, repoRoot, acq.Path)
+	if settingsFile != "" {
+		log.Printf("dispatch: task=%d inheriting project settings %s (worktree is a checkout of %s)",
+			c.ID, settingsFile, repoRoot)
+	}
+	note := repoNote(repoRoot, c.ProjectPath, acq.Path)
+
 	var prevOutput string
 	for i, st := range stages {
 		last := i == len(stages)-1
@@ -1035,7 +1066,7 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			PreviousStageOutput: prevOutput,
 			TaskDoc:             docRel,
 		}
-		prompt := BuildStagePromptDoc(playbooks.Render(st.body, vars), acq.Branch, c.ExternalID, docRel, c.FileScope)
+		prompt := note + BuildStagePromptDoc(playbooks.Render(st.body, vars), acq.Branch, c.ExternalID, docRel, c.FileScope)
 		if i == 0 {
 			// Record the exact text the runner is about to see, so the card can
 			// answer "what was this task actually told?" — the body, the
@@ -1061,7 +1092,8 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 		// holds for the permission mode: it is the recipe's, so every stage of the
 		// chain gets it ("" ⇒ the runner falls back to the global knob).
 		spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: acq.Path, Model: model,
-			Agent: c.Agent.String, Account: account, PermissionMode: pb.permissionMode}
+			Agent: c.Agent.String, Account: account, PermissionMode: pb.permissionMode,
+			SettingsFile: settingsFile}
 
 		run, err := s.runStage(spec)
 		if err != nil {

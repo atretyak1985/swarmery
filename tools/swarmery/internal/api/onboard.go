@@ -9,6 +9,7 @@ package api
 // DISABLED (opt-in, safe default on shared machines).
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 )
 
@@ -134,9 +137,55 @@ func (h *Handler) onboardProject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+
+	// Register the project under the slug that was just onboarded. Without this
+	// onboarding writes files and stops: the row is minted later by the ingester
+	// under its path-derived slug, so the dashboard names the project one thing
+	// while .claude/project.json, AGENT_PROJECT and the carved workspace name it
+	// another. Non-fatal by design — the files are already on disk and correct,
+	// so a registry stumble is reported as a step, never as a failed onboarding.
+	steps := res.Steps
+	outcome, rerr := setOnboardedSlugTx(h.DB, target, req.Slug, time.Now().UTC().Format("2006-01-02T15:04:05.000Z"))
+	switch {
+	case rerr != nil:
+		steps = append(steps, fmt.Sprintf("⚠ registered on disk but not in swarmery: %v", rerr))
+	case outcome == ingest.SlugConflict:
+		steps = append(steps, fmt.Sprintf(
+			"⚠ another project already answers to %q in swarmery — it keeps the name, this one stays on its path-derived slug", req.Slug))
+	default:
+		steps = append(steps, fmt.Sprintf("✓ registered in swarmery as %q", req.Slug))
+	}
+
 	writeJSONStatus(w, http.StatusCreated, onboardResponse{
-		Slug: req.Slug, Path: target, WorkspaceRoot: wsRoot, Steps: res.Steps,
+		Slug: req.Slug, Path: target, WorkspaceRoot: wsRoot, Steps: steps,
 	})
+}
+
+// setOnboardedSlugTx wraps ingest.SetOnboardedSlug in its own transaction.
+//
+// SetOnboardedSlug is check-then-act (probe the slug's current owner, then
+// UPDATE) with no atomicity of its own — db is *sql.DB there, not *sql.Tx, by
+// design (every other caller, including every test, passes a plain db). Two
+// nearly-simultaneous onboards of DIFFERENT directories claiming the SAME slug
+// can therefore both read "unclaimed" before either writes, and both pass the
+// SlugConflict gate that exists to prevent exactly this — projects.slug carries
+// no unique index, so nothing at the DB layer would catch it either. A single
+// transaction here closes that window; nothing about the race is reachable
+// through SetOnboardedSlug's own unit tests, which never open two connections.
+func setOnboardedSlugTx(db *sql.DB, path, slug, now string) (ingest.SlugOutcome, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return ingest.SlugConflict, err
+	}
+	outcome, err := ingest.SetOnboardedSlug(tx, path, slug, now)
+	if err != nil {
+		tx.Rollback()
+		return outcome, err
+	}
+	if err := tx.Commit(); err != nil {
+		return outcome, err
+	}
+	return outcome, nil
 }
 
 // resolveUnderRoots returns the cleaned absolute target path only if it lives

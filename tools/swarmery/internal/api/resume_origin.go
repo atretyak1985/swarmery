@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 )
@@ -47,8 +48,9 @@ type resumeOrigin struct {
 	// Not the same decision as SettingSources, and not interchangeable with it:
 	// --setting-sources says WHICH tiers of the discovered stack to load, while
 	// --settings lends a run a settings file it could never have discovered.
-	// planrun and phaserun cut their worktrees under ~/.swarmery, from which
-	// nothing walks up to the project's .claude/settings.json, so both pass one
+	// dispatch, planrun and phaserun all cut their worktrees under ~/.swarmery,
+	// from which nothing walks up to the project's .claude/settings.json, so all
+	// three pass one when the run root is a multi-repo sub-repo
 	// (repopath.InheritedSettings). A resume that dropped it lost the project's
 	// enabled plugins — and with them the agent those plugins ship, which is why
 	// an origin that cannot recover its settings file emits no --agent either.
@@ -116,10 +118,22 @@ func lookupResumeOrigin(db *sql.DB, sessionUUID string) resumeOrigin {
 	case db.QueryRow(
 		`SELECT agent FROM tasks WHERE dispatch_session_uuid = ?`, sessionUUID,
 	).Scan(&agent) == nil:
-		// dispatch: the card's agent, and dispatch's pinned setting sources. It
-		// lends no --settings file, so there is none to recover.
-		o.Agent = strings.TrimSpace(agent.String)
+		// dispatch: the card's agent, and dispatch's pinned setting sources — both
+		// unconditional, since every dispatch spawn carries "project,local"
+		// regardless of whether a settings file was lent. A multi-repo card's
+		// worktree IS a sub-repo checkout though, same shape as planrun, so its
+		// --agent is only resolvable with the project's settings.json lent
+		// alongside it (repopath.InheritedSettings). The two are paired the same
+		// way planrun's are: a resume that cannot recover the file drops the
+		// agent rather than emit --agent against a worktree with nothing to
+		// resolve it.
 		o.SettingSources = swarmerySettingSources
+		file, ok := dispatch.ResumeSettingsFile(db, sessionUUID, cwd.String)
+		if !ok {
+			break
+		}
+		o.Agent = strings.TrimSpace(agent.String)
+		o.SettingsFile = file
 	case db.QueryRow(
 		`SELECT agent FROM plan_runs WHERE run_session_uuid = ?`, sessionUUID,
 	).Scan(&agent) == nil:

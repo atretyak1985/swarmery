@@ -189,3 +189,54 @@ func TestLookupResumeOrigin_PlanRunDropsAgentWhenSettingsAreUnrecoverable(t *tes
 		t.Errorf("model = %q, want the session's own — the model rung never depends on the settings file", o.Model)
 	}
 }
+
+// dispatch is the OTHER engine that pairs --agent with a lent --settings, the
+// same inseparable pairing as a plan run (see TestLookupResumeOrigin_PlanRun*
+// above) — added after dispatch gained a resolved run root and the ability to
+// lend a multi-repo card's project settings file, which this branch's resume
+// origin had not caught up to (it used to assume dispatch lent no settings
+// file at all, which was true before that change).
+func TestLookupResumeOrigin_DispatchCarriesAgentWithItsSettings(t *testing.T) {
+	t.Setenv(resumeEffortEnv, "")
+	t.Setenv(claudeflags.EffortEnv, "")
+
+	db, projectPath, settingsFile, _ := originFixture(t)
+	if err := os.WriteFile(filepath.Join(projectPath, ".claude", "project.json"),
+		[]byte(`{"mainApp":"app"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustExecT(t, db, `INSERT INTO tasks (project_id, title, prompt, status, created_at, source, external_id, agent, dispatch_session_uuid)
+		VALUES (1, 'Card', 'do it', 'running', '2026-09-20T10:00:00Z', 'queue', 'T-1', 'tech-lead', 'u-dispatch')`)
+	session(t, db, "u-dispatch", t.TempDir())
+
+	o := lookupResumeOrigin(db, "u-dispatch")
+	if o.Agent != "tech-lead" || o.SettingsFile != settingsFile {
+		t.Errorf("origin = %+v, want agent tech-lead WITH settings %q", o, settingsFile)
+	}
+	if o.SettingSources != swarmerySettingSources {
+		t.Errorf("setting sources = %q, want %q — dispatch pins this unconditionally, unlike planrun", o.SettingSources, swarmerySettingSources)
+	}
+}
+
+// …and when the settings file cannot be recovered — here because the project
+// root declares no mainApp and is not itself a git checkout, so runRoot cannot
+// resolve a repo — the agent goes with it, same posture as a plan run's drop
+// case. --setting-sources stays: it is unconditional for dispatch, not paired
+// with the settings file the way --agent is.
+func TestLookupResumeOrigin_DispatchDropsAgentWhenSettingsAreUnrecoverable(t *testing.T) {
+	t.Setenv(resumeEffortEnv, "")
+	t.Setenv(claudeflags.EffortEnv, "")
+
+	db, _, _, _ := originFixture(t)
+	mustExecT(t, db, `INSERT INTO tasks (project_id, title, prompt, status, created_at, source, external_id, agent, dispatch_session_uuid)
+		VALUES (1, 'Card', 'do it', 'running', '2026-09-20T10:00:00Z', 'queue', 'T-2', 'tech-lead', 'u-dispatch-broken')`)
+	session(t, db, "u-dispatch-broken", t.TempDir())
+
+	o := lookupResumeOrigin(db, "u-dispatch-broken")
+	if o.Agent != "" || o.SettingsFile != "" {
+		t.Errorf("origin = %+v, want NEITHER flag: an agent without its settings stack cannot resolve", o)
+	}
+	if o.SettingSources != swarmerySettingSources {
+		t.Errorf("setting sources = %q, want %q even with the agent dropped — unconditional for dispatch", o.SettingSources, swarmerySettingSources)
+	}
+}

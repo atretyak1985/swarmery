@@ -1,9 +1,12 @@
 package dispatch
 
 import (
+	"fmt"
+	"path/filepath"
 	"strings"
 	"text/template"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -104,6 +107,37 @@ func BuildStagePromptDoc(stageBody, branch, taskID, taskDoc string, fileScope []
 		ReportPath:   worktree.ReportPath,
 	})
 	return b.String()
+}
+
+// repoNote renders the multi-repo orientation block plus, when the project
+// declares extra reachable paths, repopath.AdditionalDirsNote — "" when
+// neither applies. Mirrors phaserun's/planrun's repoNote (same parameter
+// order, repoRoot before projectPath — multiRepoNote's SameDir guard is
+// symmetric, so a swap would compile and silently name the umbrella as the
+// checkout): dispatch gained resolved-repo-root support (runRoot) without also
+// telling the agent what changed, so a card that lands in a sub-repo of a
+// multi-repo project ran with no orientation at all (a phase/plan run in the
+// same situation has carried this note since 2026-07-30/2026-09-17).
+func repoNote(repoRoot, projectPath, worktreePath string) string {
+	return multiRepoNote(repoRoot, projectPath) + repopath.AdditionalDirsNote(projectPath, worktreePath)
+}
+
+// multiRepoNote is the orientation block, or "" when the run's repository IS
+// the project root (where the note would only add noise).
+func multiRepoNote(repoRoot, projectPath string) string {
+	// repopath.SameDir, not a Clean comparison: the resolved root has been
+	// through EvalSymlinks and projects.path has not, so on a symlinked path a
+	// single-repo run would otherwise be handed a note telling it it is
+	// somewhere it is not.
+	if repoRoot == "" || projectPath == "" || repopath.SameDir(repoRoot, projectPath) {
+		return ""
+	}
+	name := filepath.Base(repoRoot)
+	return fmt.Sprintf(
+		"REPOSITORY: your worktree is a checkout of `%s` (%s), ONE repository inside the project root %s.\n"+
+			"Paths in the task or this card's plan document may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
+			"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
+		name, repoRoot, projectPath, name, name)
 }
 
 // BuildPrompt is the single-stage convenience wrapper (task body + contract),
