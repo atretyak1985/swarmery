@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "cliVersion": "2.1.280",
+  "measuredAt": "2026-09-23T08:40:49Z",
+  "method": "claude mcp list detail line (token-free)",
+  "facts": {
+    "G2": {
+      "verdict": "pass",
+      "observed": {
+        "literal_survives": true
+      },
+      "value": "fixture-not-a-real-credential"
+    }
+  }
+}

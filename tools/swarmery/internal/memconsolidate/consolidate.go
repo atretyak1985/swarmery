@@ -54,13 +54,16 @@ import (
 // internal/api/memory.go's kindAutoMemory root calls AutoMemoryDirIn rather
 // than mirroring it, so there is one resolver and not two.
 //
-// The slug here is claudeproj.Slug, NOT ingest.SlugForPath. They agree for any
-// dot-free path, which is how they drifted apart unnoticed; they disagree the
-// moment a project lives under a dot-directory (`/Users/dev/.local/src/acme`),
-// and there the ingest encoding names a directory Claude Code never created —
-// so the stat fails, the advisor concludes the project has no auto-memory and
-// the dashboard shows an empty root. See internal/claudeproj for which slug
-// answers which question.
+// The slug here is claudeproj.Slug, NOT ingest.SlugForPath. The two diverge on
+// EVERY character outside [A-Za-z0-9/]: claudeproj.Slug rewrites all of them to
+// '-', while the DB slug rewrites '/' alone. A dot-directory
+// (`/Users/dev/.local/src/acme`) is merely the first case anyone noticed — '_',
+// '+', space, brackets and every non-ASCII character diverge the same way. They
+// coincide only for a path built entirely from [A-Za-z0-9/], which is how they
+// drifted apart unnoticed. Where they diverge, the ingest encoding names a
+// directory Claude Code never created — so the stat fails, the advisor
+// concludes the project has no auto-memory and the dashboard shows an empty
+// root. See internal/claudeproj for which slug answers which question.
 
 // claudeDir is the resolved ~/.claude root. SetClaudeDir overrides it (the
 // daemon's --claude-dir, and tests).
