@@ -113,6 +113,7 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// ground truth, and a session's D2 labels.
 	mux.HandleFunc("GET /api/decisions", h.decisionsSummary)
 	mux.HandleFunc("PUT /api/decisions/{question}/mode", requireLocalOrigin(h.putDecisionMode))
+	mux.HandleFunc("GET /api/decisions/queue", h.decisionsQueue)
 	mux.HandleFunc("POST /api/decisions/{id}/ground-truth", requireLocalOrigin(h.postDecisionTruth))
 	mux.HandleFunc("GET /api/decisions/labels/{uuid}", h.sessionDecisionLabels)
 	// lessons from surprise (phase 14): the operator's review queue. Accept is the
