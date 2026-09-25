@@ -2,23 +2,35 @@ package runcore
 
 // G7 census: exactly which spawn seams pass --setting-sources.
 //
-// Eight seams run `claude` with --setting-sources project,local, which switches
+// Twelve seams run `claude` with --setting-sources project,local, which switches
 // the `user` settings tier off for that child: its pluginConfigs and its env
 // block stop reaching the run. Work that reasons per seam — which ones need
 // project config delivered by --settings, which ones keep the account's user
-// tier live — is planned against exactly these eight (fact G7 in the
-// account-switch estate plan's ground-truth table). A ninth seam landing
+// tier live — is planned against exactly these twelve (fact G7 in the
+// account-switch estate plan's ground-truth table). A thirteenth seam landing
 // silently would make that per-seam table wrong with nothing going red, so this
 // test pins the set and names the file that joined or left it.
 //
+// The census was written against eight seams and re-measured on main on
+// 2026-09-25, when four files had joined and none had left:
+//
+//	api/resume.go        -> set A
+//	decide/claude.go     -> set A
+//	lessons/runner.go    -> set A
+//	api/resume_origin.go -> set B
+//
+// Set A went 6 -> 9, set B went 2 -> 3, so A ∪ B went 8 -> 12. All four also
+// mention the flag, and the mention set is A ∪ B ∪ mention-only, so no
+// mention-only entry changed.
+//
 // It pins TWO sets, not one, because "files containing the flag" is measurably
-// the wrong census — it counts eleven files, three of which are not seams:
+// the wrong census — it counts fifteen files, three of which are not seams:
 //
 //	A  files carrying the flag as a Go STRING LITERAL, outside internal/runcore
-//	   (where Args emits it from Spec.SettingSources): the six raw-argv runners.
-//	B  files assigning Spec.SettingSources: dispatch and verify.
+//	   (where Args emits it from Spec.SettingSources): the nine raw-argv runners.
+//	B  files assigning Spec.SettingSources: dispatch, verify and resume-origin.
 //
-// A ∪ B is G7's eight. A third assertion pins every file that MENTIONS the flag
+// A ∪ B is G7's twelve. A third assertion pins every file that MENTIONS the flag
 // at all — A, B, and the three that only document or emit it — so a new seam
 // that spells the flag some other way (a shared constant, a comment-described
 // helper) still names itself here instead of slipping past both sets.
@@ -48,9 +60,12 @@ const censusFlag = "--setting-sources"
 
 // censusRawArgv is set A: the runners that append the flag to a raw argv.
 var censusRawArgv = []string{
+	"internal/api/resume.go",
+	"internal/decide/claude.go",
 	"internal/extract/runner.go",
 	"internal/handoff/runner.go",
 	"internal/improve/runner.go",
+	"internal/lessons/runner.go",
 	"internal/retroanalysis/runner.go",
 	"internal/routines/runner.go",
 	"internal/trajjudge/trajjudge.go",
@@ -58,6 +73,7 @@ var censusRawArgv = []string{
 
 // censusSpecField is set B: the engines that set Spec.SettingSources.
 var censusSpecField = []string{
+	"internal/api/resume_origin.go",
 	"internal/dispatch/runner.go",
 	"internal/verify/runner.go",
 }
@@ -124,8 +140,8 @@ func TestSettingSourceSeamCensus(t *testing.T) {
 	all = append(all, censusMentionOnly...)
 	censusAssert(t, "of files mentioning "+censusFlag+" at all", mentions, all)
 
-	if n := len(censusRawArgv) + len(censusSpecField); n != 8 {
-		t.Fatalf("G7 is eight seams; the census lists %d", n)
+	if n := len(censusRawArgv) + len(censusSpecField); n != 12 {
+		t.Fatalf("G7 is twelve seams; the census lists %d", n)
 	}
 }
 
