@@ -11,9 +11,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
@@ -89,6 +91,57 @@ func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// trustedOrigins is the OPT-IN allow-list of extra browser origins that pass
+// requireLocalOrigin, parsed from SWARMERY_TRUSTED_ORIGINS. Empty by default,
+// and deliberately so: the daemon controls no name beyond the loopback ones.
+// A bare friendly hostname like "swarmery" resolves wherever the resolver says
+// — a DNS search domain can expand it to swarmery.<corp>, and a page served
+// from THAT host would then pass the CSRF fence. So an alias is trusted only
+// when the operator names it, and it is matched as a full origin
+// (scheme://host[:port]): trusting http://swarmery:7777 does not also trust
+// https://swarmery:9999.
+var trustedOrigins map[string]bool
+
+// AttachTrustedOrigins installs the opt-in allow-list (startup, before serve).
+// Entries that are not http(s) origins are dropped rather than half-matched.
+func AttachTrustedOrigins(origins []string) {
+	m := make(map[string]bool, len(origins))
+	for _, o := range origins {
+		if n, ok := normalizeOrigin(o); ok {
+			m[n] = true
+		}
+	}
+	trustedOrigins = m
+}
+
+// normalizeOrigin reduces an origin to lowercase scheme://host[:port] with the
+// scheme's default port dropped (browsers omit it), or reports false when the
+// string is not an http(s) origin.
+func normalizeOrigin(origin string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(origin))
+	if err != nil {
+		return "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return "", false
+	}
+	port := u.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return scheme + "://" + host, true
+}
+
 func isLocalOrigin(origin string) bool {
 	u, err := url.Parse(origin)
 	if err != nil {
@@ -98,10 +151,11 @@ func isLocalOrigin(origin string) bool {
 		return false
 	}
 	switch u.Hostname() {
-	case "localhost", "127.0.0.1", "::1", "swarmery":
+	case "localhost", "127.0.0.1", "::1":
 		return true
 	}
-	return false
+	n, ok := normalizeOrigin(origin)
+	return ok && trustedOrigins[n]
 }
 
 // ── POST /api/hooks/permission-request (long-poll) ───────────────────────────
