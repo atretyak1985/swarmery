@@ -219,7 +219,7 @@ func (h *Handler) bindingsByAccount() (map[string][]string, error) {
 		if err := rows.Scan(&path); err != nil {
 			return nil, err
 		}
-		if key := claudeacct.Binding(path); key != "" {
+		if key := claudeacct.BindingForDisplay(path); key != "" {
 			out[key] = append(out[key], path)
 		}
 	}
@@ -320,7 +320,7 @@ func shellQuoteIfNeeded(s string) string {
 
 // bindingRow reads a project's binding and resolves what it means.
 func bindingRow(path string) accountBindingDTO {
-	bound := claudeacct.Binding(path)
+	bound := claudeacct.BindingForDisplay(path)
 	row := accountBindingDTO{Account: bound, Effective: bound, Source: bindingSourceBinding}
 	if bound == "" {
 		row.Effective, row.Source = ingest.DefaultAccount, bindingSourceDefault
