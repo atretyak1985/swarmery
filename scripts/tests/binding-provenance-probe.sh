@@ -31,17 +31,25 @@
 #       --case clone|tarball --account <key> --estate <key> \
 #       --prefix <NAME_PREFIX> --dir <parent> [--swarmery <bin>] [--keep]
 #
-#   --account   the account key the fixture's binding names.
+#   --account   the account key the fixture's binding names. Validated with the
+#               rules of claudeacct.ValidKey, so the probe never measures a key
+#               the binary would reject anyway.
 #   --estate    the estate key written alongside it, so the fixture matches the
-#               shape a real project commits.
-#   --prefix    the NAME prefix counted in the child environment. An argument and
-#               never a literal, so no project's variable naming is baked in.
+#               shape a real project commits. Validated the same way.
+#   --prefix    the NAME prefix counted in the child environment (letters, digits
+#               and _ only). An argument and never a literal, so no project's
+#               variable naming is baked in.
 #   --dir       an empty parent directory for the fixture. Refused when it sits
 #               inside a git work tree, or under a Claude Code config dir.
 #   --swarmery  the binary under test. Defaults to the installed one, so the
 #               same command measures before and after an install.
 #   --keep      leave the fixture behind for inspection.
 set -uo pipefail
+
+# Every git command below — the work-tree refusal included — must describe the
+# directory it is pointed at. An inherited GIT_DIR (a hook context, say) would
+# make the refusal fail open and could add the fixture to another repository.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_CEILING_DIRECTORIES
 
 case_name=""
 account=""
@@ -62,7 +70,7 @@ while [ $# -gt 0 ]; do
     --dir)      parent="${2:-}"; shift 2 ;;
     --swarmery) swarmery_bin="${2:-}"; shift 2 ;;
     --keep)     keep=1; shift ;;
-    -h|--help)  sed -n '1,45p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)  sed -n '1,46p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)          die "unknown argument: $1" ;;
   esac
 done
@@ -75,6 +83,23 @@ esac
 [ -n "$estate" ]  || die "--estate is required"
 [ -n "$prefix" ]  || die "--prefix is required"
 [ -n "$parent" ]  || die "--dir is required"
+
+# valid_key mirrors claudeacct.ValidKey: not empty, not . or .., no leading dot,
+# no / or \, no .., no whitespace or control characters.
+valid_key() {
+  case "$1" in
+    ''|.|..|.*|*/*|*\\*|*..*|*[[:space:][:cntrl:]]*) return 1 ;;
+  esac
+}
+valid_key "$account" || die "--account is not a valid account key: $account"
+valid_key "$estate"  || die "--estate is not a valid key: $estate"
+case "$prefix" in
+  *[!A-Za-z0-9_]*) die "--prefix must be letters, digits and _ only: $prefix" ;;
+esac
+
+# json_string quotes a validated key for the fixture's JSON. valid_key already
+# refuses \ and control characters, so " is the one character left to escape.
+json_string() { printf '"%s"' "${1//\"/\\\"}"; }
 
 # ── refusals ────────────────────────────────────────────────────────────────
 # Both are about where the fixture would LAND, so they run before anything is
@@ -115,8 +140,8 @@ trap cleanup EXIT
 # without -f the commit would silently be empty and the probe would measure the
 # untracked case while reporting the clone one.
 mkdir -p "$src/.claude" || die "cannot create $src/.claude"
-printf '{\n  "swarmery": {\n    "claudeAccount": "%s",\n    "estate": "%s"\n  }\n}\n' \
-  "$account" "$estate" > "$src/.claude/settings.local.json"
+printf '{\n  "swarmery": {\n    "claudeAccount": %s,\n    "estate": %s\n  }\n}\n' \
+  "$(json_string "$account")" "$(json_string "$estate")" > "$src/.claude/settings.local.json"
 
 git -C "$src" init -q . >/dev/null 2>&1 || die "git init failed in $src"
 git -C "$src" add -f -- .claude/settings.local.json >/dev/null 2>&1 \
@@ -162,9 +187,11 @@ printf 'case=%s\n' "$case_name"
 # prefixCount — how many variables whose NAME starts with the prefix the child
 # received. A count, never a name, never a value. `grep -c` exits 1 on zero
 # matches, so the fallback keeps `set -o pipefail` from turning "clean" into a
-# blank field.
+# blank field. The prefix travels as a positional argument, never spliced into
+# the script text the child shell parses.
+# shellcheck disable=SC2016  # $1 is the CHILD shell's positional parameter.
 prefix_count=$("${probe_env[@]}" "$swarmery_bin" account exec --path "$subject" -- \
-  sh -c "env | grep -c \"^${prefix}\"" 2>/dev/null) || prefix_count=""
+  sh -c 'env | grep -c "^$1"' _ "$prefix" 2>/dev/null) || prefix_count=""
 case "$prefix_count" in ''|*[!0-9]*) prefix_count=0 ;; esac
 printf 'prefixCount=%s\n' "$prefix_count"
 

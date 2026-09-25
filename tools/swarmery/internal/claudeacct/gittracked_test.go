@@ -87,6 +87,51 @@ func writeAt(t *testing.T, path, body string) {
 	}
 }
 
+// bindingBody is what writeBinding writes, for fixtures that put the binding at
+// a path — or under a spelling — of their own.
+func bindingBody(key string) string {
+	return fmt.Sprintf(`{"%s":{"%s":%q}}`+"\n", bindingNamespace, bindingField, key)
+}
+
+// symlink creates link -> target, where target is used verbatim (relative
+// targets stay relative).
+func symlink(t *testing.T, target, link string) {
+	t.Helper()
+	mkdirs(t, filepath.Dir(link))
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// realPath is p with every symlink resolved — the spelling the probe hands git.
+func realPath(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// cloneOf builds a source repository with build, COMMITS addPaths in it, and
+// returns a `git clone` of it: the leak's real arrival path, with the
+// core.ignorecase and core.precomposeunicode a clone sets on this filesystem.
+// src and the clone are siblings (<parent>/src, <parent>/clone), so build can
+// place a neighbour at filepath.Join(filepath.Dir(src), …) and link to it
+// relatively.
+func cloneOf(t *testing.T, build func(src string), addPaths ...string) string {
+	t.Helper()
+	parent := t.TempDir()
+	src := filepath.Join(parent, "src")
+	mkdirs(t, src)
+	runGit(t, src, "init", "-q", ".")
+	build(src)
+	runGit(t, src, append([]string{"add", "-f", "--"}, addPaths...)...)
+	runGit(t, src, "commit", "-qm", "commit what the clone will carry")
+	runGit(t, parent, "clone", "-q", "src", "clone")
+	return filepath.Join(parent, "clone")
+}
+
 // markerHook returns the path of an executable that CREATES marker when run,
 // and the marker path. It stands in for anything a repository could make git
 // spawn — an fsmonitor, a hook. The marker's absence is the assertion.
@@ -303,9 +348,14 @@ func TestGitTrackStateTable(t *testing.T) {
 
 func wantVerdict(t *testing.T, path string, want trackVerdict) {
 	t.Helper()
-	if got := probeGitTracked(path); got != want {
+	if got := verdictOf(path); got != want {
 		t.Fatalf("probeGitTracked(%s) = %s, want %s", path, got, want)
 	}
+}
+
+// verdictOf is the verdict half of a probe.
+func verdictOf(path string) trackVerdict {
+	return probeGitTracked(path).verdict
 }
 
 // ── the pure classifier ──────────────────────────────────────────────────────
@@ -353,6 +403,36 @@ func TestClassifyGitProbe(t *testing.T) {
 			"fatal: cannot use bare repository '/proj/.claude' (safe.bareRepository is 'explicit')\n",
 			nil, trackUnknown,
 		},
+		{
+			// A warning ahead of the fatal line (an unreadable global config,
+			// say) is not the answer: git died on the no-repository line.
+			"warning-before-not-a-repo-is-not-a-repo", 128,
+			"warning: unable to access '/home/x/.config/git/attributes': Permission denied\n" +
+				"fatal: not a git repository (or any of the parent directories): .git\n",
+			nil, trackNotRepo,
+		},
+		{
+			"trace-before-not-a-repo-is-not-a-repo", 128,
+			"12:00:00.000000 git.c:463               trace: built-in: git ls-files --error-unmatch\n" +
+				"fatal: not a git repository (or any parent up to mount point /Volumes/x)\n" +
+				"Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).\n",
+			nil, trackNotRepo,
+		},
+		{
+			// Only the FIRST fatal line counts — git dies on it — so the
+			// no-repository wording after another fatal error is not an answer.
+			"not-a-repo-after-another-fatal-is-unknown", 128,
+			"fatal: detected dubious ownership in repository at '/x'\n" +
+				"fatal: not a git repository (or any of the parent directories): .git\n",
+			nil, trackUnknown,
+		},
+		{
+			// A .git FILE whose gitdir is gone: a different sentence, no "(or any".
+			"dangling-gitfile-is-unknown", 128,
+			"fatal: not a git repository: /nonexistent/nowhere\n",
+			nil, trackUnknown,
+		},
+		{"exit-128-without-a-fatal-line-is-unknown", 128, "warning: something odd\n", nil, trackUnknown},
 		{"exit-1-without-the-text-is-unknown", 1, "", nil, trackUnknown},
 		{"exit-1-with-other-text-is-unknown", 1, "fatal: index file corrupt\n", nil, trackUnknown},
 		{"usage-error-is-unknown", 129, "usage: git ls-files [<options>] [<file>...]\n", nil, trackUnknown},
@@ -597,7 +677,7 @@ func TestWarnOncePerPath(t *testing.T) {
 	if !strings.Contains(out, bindingPath(repoA)) {
 		t.Errorf("the warning does not name the path %s:\n%s", bindingPath(repoA), out)
 	}
-	if !strings.Contains(out, "git rm --cached") {
+	if !strings.Contains(out, "rm --cached -- settings.local.json") {
 		t.Errorf("the warning does not carry the fix:\n%s", out)
 	}
 	if strings.Contains(out, planted) {
@@ -691,6 +771,13 @@ func TestBindingForDisplayAgreesWithBinding(t *testing.T) {
 			writeBinding(t, dir, "work")
 			return dir
 		},
+		"tracked-symlink-hop": func(t *testing.T) string {
+			return cloneOf(t, func(src string) {
+				other := filepath.Join(filepath.Dir(src), "other")
+				writeBinding(t, other, "work")
+				symlink(t, "../other/.claude", filepath.Join(src, ".claude"))
+			}, ".claude")
+		},
 		"missing-file": func(t *testing.T) string { return t.TempDir() },
 		"broken-json": func(t *testing.T) string {
 			dir := t.TempDir()
@@ -727,6 +814,9 @@ func TestGitProbeEnvDropsEveryRedirection(t *testing.T) {
 		"GIT_CONFIG_KEY_17", "GIT_CONFIG_VALUE_17",
 		"GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS",
 		"GIT_NOGLOB_PATHSPECS", "GIT_ICASE_PATHSPECS",
+		// The trace family, by prefix: its lines land ahead of git's fatal one.
+		"GIT_TRACE", "GIT_TRACE_SETUP", "GIT_TRACE_PACKET",
+		"GIT_TRACE2", "GIT_TRACE2_PERF", "GIT_TRACE2_EVENT",
 	}
 	base := []string{"PATH=/usr/bin", "HOME=/home/x"}
 	for _, name := range dropped {
@@ -735,8 +825,8 @@ func TestGitProbeEnvDropsEveryRedirection(t *testing.T) {
 	got := gitProbeEnv(base)
 
 	for _, name := range dropped {
-		if countPrefix(got, name+"=") != 0 {
-			t.Errorf("%s survived the scrub — it can re-point the probe at another repository", name)
+		if countPrefix(got, name+"=poison") != 0 {
+			t.Errorf("%s survived the scrub — it can re-point the probe or put lines ahead of its answer", name)
 		}
 	}
 	for _, kept := range []string{"PATH=/usr/bin", "HOME=/home/x"} {
@@ -744,9 +834,312 @@ func TestGitProbeEnvDropsEveryRedirection(t *testing.T) {
 			t.Errorf("%s did not survive the scrub; the probe needs the ordinary environment", kept)
 		}
 	}
-	for _, pinned := range []string{"LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0"} {
+	for _, pinned := range []string{
+		"LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0",
+		// Pinned, not just dropped: trace2 targets can come from global config.
+		"GIT_TRACE2=0", "GIT_TRACE2_EVENT=0", "GIT_TRACE2_PERF=0",
+	} {
 		if countPrefix(got, pinned) != 1 {
 			t.Errorf("the probe environment is missing %s", pinned)
+		}
+	}
+}
+
+// Trace output lands on stderr AHEAD of the fatal line the verdict is read
+// from. A not-a-repo that git has to decide — here an empty .git above the
+// project, which the Go pre-check cannot tell from a real one — must stay
+// not-a-repo whatever the caller traces, and the probe itself must not trace.
+func TestTraceEnvKeepsNotARepo(t *testing.T) {
+	root := t.TempDir()
+	mkdirs(t, filepath.Join(root, ".git"))
+	path := writeBinding(t, filepath.Join(root, "proj"), "work")
+	check := func(t *testing.T) {
+		t.Helper()
+		r := runGitProbe(filepath.Dir(path), filepath.Base(path))
+		first := strings.SplitN(strings.TrimSpace(r.stderr), "\n", 2)[0]
+		if !strings.HasPrefix(first, "fatal:") {
+			t.Errorf("the probe's stderr starts with %q, want git's fatal line — tracing reached the probe", first)
+		}
+		wantVerdict(t, path, trackNotRepo)
+	}
+	t.Run("clean-env", check)
+	for _, name := range []string{"GIT_TRACE", "GIT_TRACE_SETUP", "GIT_TRACE2", "GIT_TRACE2_PERF", "GIT_TRACE2_EVENT"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(name, "1")
+			check(t)
+		})
+	}
+	// trace2 targets can also come from the global config, where no env scrub
+	// reaches; the pinned GIT_TRACE2*=0 outranks them.
+	t.Run("trace2-from-global-config", func(t *testing.T) {
+		home := t.TempDir()
+		writeAt(t, filepath.Join(home, ".gitconfig"),
+			"[trace2]\n\tnormalTarget = 1\n\tperfTarget = 1\n\teventTarget = 1\n")
+		t.Setenv("HOME", home)
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+		check(t)
+	})
+}
+
+// ── provenance through spelling and symlink hops ─────────────────────────────
+
+// wantIgnored asserts the gate's whole effect on a project: no binding, and
+// not one name from the account's store. The caller seeds the store.
+func wantIgnored(t *testing.T, project string) {
+	t.Helper()
+	if got := Binding(project); got != "" {
+		t.Errorf("Binding = %q, want \"\" — verdict %s: a binding the clone carried chose the account",
+			got, verdictOf(bindingPath(project)))
+	}
+	if n := len(SecretEnvFor(project)); n != 0 {
+		t.Errorf("SecretEnvFor length = %d, want 0 — the account's store was unlocked", n)
+	}
+}
+
+// wantHonoured is the other side: the binding counts and the store opens.
+func wantHonoured(t *testing.T, project, key string) {
+	t.Helper()
+	if got := Binding(project); got != key {
+		t.Errorf("Binding = %q, want %q (verdict %s)", got, key, verdictOf(bindingPath(project)))
+	}
+	if n := len(SecretEnvFor(project)); n != 1 {
+		t.Errorf("SecretEnvFor length = %d, want 1", n)
+	}
+}
+
+// A clone that commits the binding under a spelling the filesystem folds onto
+// settings.local.json. Binding() opens it through the lookup spelling, so git
+// must be asked about the name the directory really stores: git's icase folds
+// ASCII only, and APFS also folds U+017F 'ſ' onto 's'. A row skips on a
+// filesystem that does not fold its spelling.
+func TestProvenanceOnDiskName(t *testing.T) {
+	for _, rel := range []string{
+		".claude/ſettings.local.json", // U+017F LATIN SMALL LETTER LONG S
+		".CLAUDE/settings.local.json",
+		".claude/SETTINGS.LOCAL.JSON",
+	} {
+		t.Run(rel, func(t *testing.T) {
+			fakeHome(t)
+			resetWarnOnce(t)
+			seedProbeStore(t, "work")
+			clone := cloneOf(t, func(src string) {
+				writeAt(t, filepath.Join(src, filepath.FromSlash(rel)), bindingBody("work"))
+			}, rel)
+			if _, err := os.Stat(bindingPath(clone)); err != nil {
+				t.Skipf("this filesystem does not fold %q onto %s: %v", rel, BindingFile, err)
+			}
+			wantIgnored(t, clone)
+			wantVerdict(t, bindingPath(clone), trackTracked)
+		})
+	}
+}
+
+// A clone can reach a binding it never committed by committing the LINK: a
+// .claude that points at another project's .claude, or a settings.local.json
+// that points at another project's file. The binding over there is the
+// operator's own — untracked, or outside any repository — and is honoured
+// THERE; reached through a tracked link it must be ignored.
+func TestProvenanceTrackedSymlinkHop(t *testing.T) {
+	rows := []struct {
+		name   string
+		commit string // the link the clone commits
+		target func(other string) string
+	}{
+		{".claude->absolute", ".claude", func(o string) string { return filepath.Join(o, ".claude") }},
+		{".claude->relative", ".claude", func(string) string { return "../other/.claude" }},
+		{".CLAUDE->absolute", ".CLAUDE", func(o string) string { return filepath.Join(o, ".claude") }},
+		{"file->absolute", ".claude/settings.local.json", func(o string) string { return bindingPath(o) }},
+		{"file->relative", ".claude/settings.local.json", func(string) string {
+			return "../../other/.claude/settings.local.json"
+		}},
+	}
+	for _, victim := range []string{"victim-not-a-repo", "victim-untracked-in-repo"} {
+		for _, r := range rows {
+			t.Run(victim+"/"+r.name, func(t *testing.T) {
+				fakeHome(t)
+				resetWarnOnce(t)
+				seedProbeStore(t, "work")
+				var other string
+				clone := cloneOf(t, func(src string) {
+					other = filepath.Join(filepath.Dir(src), "other")
+					mkdirs(t, other)
+					if victim == "victim-untracked-in-repo" {
+						runGit(t, other, "init", "-q", ".")
+					}
+					writeBinding(t, other, "work")
+					symlink(t, r.target(other), filepath.Join(src, filepath.FromSlash(r.commit)))
+				}, r.commit)
+				if _, err := os.Stat(bindingPath(clone)); err != nil {
+					t.Skipf("the clone does not reach a binding through %s on this filesystem: %v", r.commit, err)
+				}
+				// Precondition: the borrowed binding is live where it belongs.
+				wantHonoured(t, other, "work")
+				wantIgnored(t, clone)
+			})
+		}
+	}
+}
+
+// The links the hop rule must NOT catch: ones the operator made, which no
+// repository tracks. The first row is D5's skygor shape.
+func TestProvenanceUntrackedSymlinkHopHonoured(t *testing.T) {
+	// A binding outside every repository, for the rows below to link to.
+	elsewhere := func(t *testing.T) string {
+		dir := t.TempDir()
+		writeBinding(t, dir, "work")
+		return dir
+	}
+	rows := map[string]func(t *testing.T) string{
+		// <ws>/code is not a repository; its .claude is an absolute link into
+		// <ws>/code/general/agents, a repository whose .gitignore lists
+		// settings.local.json.
+		"skygor-shape": func(t *testing.T) string {
+			code := filepath.Join(t.TempDir(), "code")
+			agents := filepath.Join(code, "general", "agents")
+			mkdirs(t, agents)
+			runGit(t, agents, "init", "-q", ".")
+			writeAt(t, filepath.Join(agents, ".gitignore"), "settings.local.json\n")
+			runGit(t, agents, "add", "-f", "--", ".gitignore")
+			runGit(t, agents, "commit", "-qm", "ignore the machine-local settings")
+			writeAt(t, filepath.Join(agents, "settings.local.json"), bindingBody("work"))
+			symlink(t, agents, filepath.Join(code, ".claude"))
+			return code
+		},
+		"gitignored-.claude-link-in-a-repo": func(t *testing.T) string {
+			repo := newRepo(t)
+			writeAt(t, filepath.Join(repo, ".gitignore"), ".claude\n")
+			runGit(t, repo, "add", "-f", "--", ".gitignore")
+			runGit(t, repo, "commit", "-qm", "ignore .claude")
+			symlink(t, filepath.Join(elsewhere(t), ".claude"), filepath.Join(repo, ".claude"))
+			return repo
+		},
+		"untracked-.claude-link-in-a-repo": func(t *testing.T) string {
+			repo := newRepo(t)
+			symlink(t, filepath.Join(elsewhere(t), ".claude"), filepath.Join(repo, ".claude"))
+			return repo
+		},
+		"untracked-file-link-in-a-repo": func(t *testing.T) string {
+			repo := newRepo(t)
+			symlink(t, bindingPath(elsewhere(t)), bindingPath(repo))
+			return repo
+		},
+	}
+	for name, build := range rows {
+		t.Run(name, func(t *testing.T) {
+			fakeHome(t)
+			resetWarnOnce(t)
+			seedProbeStore(t, "work")
+			project := build(t)
+			wantHonoured(t, project, "work")
+		})
+	}
+}
+
+// A path the probe cannot resolve — a dangling link, a .claude that vanished
+// between the read and the probe — is unknown, never not-a-repo: fail closed,
+// with the git-status remedy rather than an untrack that cannot apply.
+func TestUnresolvableIsUnknown(t *testing.T) {
+	dangling := t.TempDir()
+	symlink(t, filepath.Join(dangling, "gone.json"), bindingPath(dangling))
+	gone := filepath.Join(t.TempDir(), ".claude", "settings.local.json")
+	for _, path := range []string{bindingPath(dangling), gone} {
+		f := probeGitTracked(path)
+		if f.verdict != trackUnknown {
+			t.Errorf("probeGitTracked(%s) = %s, want unknown", path, f.verdict)
+		}
+		if why := distrustReason(f); !strings.Contains(why, " status") || strings.Contains(why, "rm --cached") {
+			t.Errorf("reason for an unresolvable path = %q, want the git-status remedy", why)
+		}
+	}
+}
+
+// The display cache keys on the hops as well as the resolved file: two projects
+// whose links share one target reach the SAME file, and only one of the links
+// is tracked. Keyed on the file alone, the second project would be answered
+// from the first one's entry.
+func TestDisplayCacheKeyIncludesHops(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	resetDisplayCache(t)
+
+	var shared string
+	borrowed := cloneOf(t, func(src string) {
+		shared = filepath.Join(filepath.Dir(src), "shared")
+		writeBinding(t, shared, "work")
+		symlink(t, filepath.Join(shared, ".claude"), filepath.Join(src, ".claude"))
+	}, ".claude")
+	honest := t.TempDir()
+	symlink(t, filepath.Join(shared, ".claude"), filepath.Join(honest, ".claude"))
+
+	if got := BindingForDisplay(honest); got != "work" {
+		t.Fatalf("BindingForDisplay(untracked link) = %q, want %q", got, "work")
+	}
+	if got := BindingForDisplay(borrowed); got != "" {
+		t.Errorf("BindingForDisplay(tracked link to the same file) = %q, want \"\" — answered from another project's cache entry", got)
+	}
+	if got := BindingForDisplay(shared); got != "work" {
+		t.Errorf("BindingForDisplay(the file's own project) = %q, want %q", got, "work")
+	}
+}
+
+// The WARN's remedy follows the verdict. `git rm --cached` fixes a TRACKED entry
+// and nothing else — for a tracked link it names the link — while an unknown
+// verdict sends the operator to `git status`. The logged path is absolute even
+// for Binding("."), and the stale "re-run account use" step is gone.
+func TestWarnRemedyPerVerdict(t *testing.T) {
+	t.Run("tracked-file", func(t *testing.T) {
+		fakeHome(t)
+		resetWarnOnce(t)
+		repo := newRepo(t)
+		writeBinding(t, repo, "work")
+		runGit(t, repo, "add", "-f", "--", ".claude/settings.local.json")
+		runGit(t, repo, "commit", "-qm", "commit the binding")
+		t.Chdir(repo)
+		out := captureLog(t, func() { Binding(".") })
+		dir := realPath(t, filepath.Join(repo, ".claude"))
+		wantLog(t, out,
+			[]string{"IGNORING binding in " + bindingPath(repo), "git -C " + dir + " rm --cached -- settings.local.json"},
+			[]string{" status", "re-run"})
+	})
+	t.Run("tracked-link", func(t *testing.T) {
+		fakeHome(t)
+		resetWarnOnce(t)
+		clone := cloneOf(t, func(src string) {
+			writeBinding(t, filepath.Join(filepath.Dir(src), "other"), "work")
+			symlink(t, "../other/.claude", filepath.Join(src, ".claude"))
+		}, ".claude")
+		out := captureLog(t, func() { Binding(clone) })
+		dir := realPath(t, clone)
+		wantLog(t, out,
+			[]string{"IGNORING binding in " + bindingPath(clone), "git -C " + dir + " rm --cached -- .claude"},
+			[]string{" status", "re-run"})
+	})
+	t.Run("unknown", func(t *testing.T) {
+		fakeHome(t)
+		resetWarnOnce(t)
+		// A .git FILE whose gitdir is gone: git answers with an error, not a
+		// verdict, and the file is in no index for `git rm --cached` to fix.
+		project := t.TempDir()
+		writeAt(t, filepath.Join(project, ".git"), "gitdir: /nonexistent/nowhere\n")
+		writeBinding(t, project, "work")
+		out := captureLog(t, func() { Binding(project) })
+		dir := realPath(t, filepath.Join(project, ".claude"))
+		wantLog(t, out,
+			[]string{"IGNORING binding in " + bindingPath(project), "git -C " + dir + " status"},
+			[]string{"rm --cached", "re-run"})
+	})
+}
+
+func wantLog(t *testing.T, out string, has, lacks []string) {
+	t.Helper()
+	for _, s := range has {
+		if !strings.Contains(out, s) {
+			t.Errorf("the warning lacks %q:\n%s", s, out)
+		}
+	}
+	for _, s := range lacks {
+		if strings.Contains(out, s) {
+			t.Errorf("the warning carries %q:\n%s", s, out)
 		}
 	}
 }

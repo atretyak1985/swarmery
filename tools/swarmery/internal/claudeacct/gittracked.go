@@ -30,6 +30,21 @@ package claudeacct
 // honoured here — that residual is closed for credentials by the store anchor
 // (Lock 2), not by this file.
 //
+// # What "the file" is
+//
+// Two things a clone can commit reach a binding without committing the binding
+// file itself, and both count as provenance:
+//
+//   - a SPELLING the filesystem folds and git does not. APFS folds U+017F 'ſ'
+//     onto 's'; git's icase folds ASCII only. So git is asked about the name the
+//     directory really stores (onDiskName), never the caller's lookup spelling.
+//   - a SYMLINK HOP. A committed `.claude -> <another project>/.claude`, or a
+//     committed settings.local.json link, borrows a binding the operator wrote
+//     for a different directory. Each hop that is a symlink is probed as a LINK,
+//     in the repository that contains it; tracked or unknown means ignored. An
+//     untracked link, or one outside any repository, is the operator's own —
+//     the multi-repo overlay shape — and the probe moves on to the target.
+//
 // # Why git is asked, and why it is caged while being asked
 //
 // "Is this file tracked?" is not answerable from the file alone: the answer
@@ -47,13 +62,15 @@ package claudeacct
 //     settings directory belongs (that refusal classifies as unknown, i.e. the
 //     binding is ignored);
 //   - gitProbeEnv drops every GIT_* variable that could re-point discovery,
-//     the index, or config at another repository;
+//     the index, or config at another repository, and switches tracing off so
+//     nothing lands on stderr ahead of the line the verdict is read from;
 //   - ls-files runs no filters, no diff driver and no pager, and the whole probe
 //     is bounded by a 2 s timeout.
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -75,6 +92,12 @@ const (
 	trackNotRepo
 	trackTracked
 )
+
+// honoured reports whether a binding with this verdict may count. Untracked and
+// not-a-repo are the only two, so anything new or unforeseen is ignored.
+func (v trackVerdict) honoured() bool {
+	return v == trackUntracked || v == trackNotRepo
+}
 
 func (v trackVerdict) String() string {
 	switch v {
@@ -151,25 +174,30 @@ var distrustedGitVars = map[string]struct{}{
 	"GIT_PROXY_COMMAND":                {},
 }
 
-// distrustedGitVarPrefixes covers the numbered config pairs — GIT_CONFIG_KEY_0,
-// GIT_CONFIG_VALUE_0, … — which are unbounded in count and so cannot be listed.
-// They are the most direct redirection of all: a single pair sets core.fsmonitor
-// to any executable.
-var distrustedGitVarPrefixes = []string{"GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"}
+// distrustedGitVarPrefixes covers the families that cannot be listed name by
+// name. The numbered config pairs — GIT_CONFIG_KEY_0, GIT_CONFIG_VALUE_0, … —
+// are the most direct redirection of all: a single pair sets core.fsmonitor to
+// any executable. The trace family — GIT_TRACE, GIT_TRACE_SETUP, GIT_TRACE2,
+// GIT_TRACE2_PERF, … — writes lines to stderr ahead of the one the verdict is
+// read from, which turned a genuine not-a-repo into unknown.
+var distrustedGitVarPrefixes = []string{"GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_", "GIT_TRACE"}
 
-// gitProbeEnv is base minus every distrusted variable, plus the three the probe
+// gitProbeEnv is base minus every distrusted variable, plus the ones the probe
 // wants pinned: a C locale (so git's messages are the ones classifyGitProbe
-// matches, whatever the operator's LANG is), no opportunistic index rewrite, and
-// no credential prompt.
+// matches, whatever the operator's LANG is), no opportunistic index rewrite, no
+// credential prompt, and trace2 off — pinned rather than merely dropped, because
+// trace2 targets can also come from the operator's global config, and the
+// variable outranks it.
 func gitProbeEnv(base []string) []string {
-	out := make([]string, 0, len(base)+3)
+	out := make([]string, 0, len(base)+6)
 	for _, kv := range base {
 		if isDistrustedGitVar(envKey(kv)) {
 			continue
 		}
 		out = append(out, kv)
 	}
-	return append(out, "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	return append(out, "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0",
+		"GIT_TRACE2=0", "GIT_TRACE2_EVENT=0", "GIT_TRACE2_PERF=0")
 }
 
 func isDistrustedGitVar(name string) bool {
@@ -246,13 +274,28 @@ func classifyGitProbe(exitCode int, stderr string, runErr error) trackVerdict {
 		return trackTracked
 	case exitCode == 1 && strings.Contains(stderr, gitUntrackedMarker):
 		return trackUntracked
-	case exitCode == 128 && strings.HasPrefix(strings.TrimSpace(stderr), gitNotRepoPrefix):
+	case exitCode == 128 && strings.HasPrefix(fatalLine(stderr), gitNotRepoPrefix):
 		return trackNotRepo
 	}
 	// Everything left is a git that did not answer the question: dubious
 	// ownership, a refused bare repository, an exit 1 with some other text, a
 	// corrupt index. Unknown, and therefore ignored.
 	return trackUnknown
+}
+
+// fatalLine is the first stderr line that starts with "fatal:" — the one git
+// died on — or "". Lines before it are skipped rather than read as the answer:
+// a warning about an unreadable global config, or a trace line the env scrub
+// did not reach, must not turn a genuine not-a-repo into unknown. Only the FIRST
+// fatal line counts, so a no-repository wording after some other fatal error
+// never classifies as not-a-repo.
+func fatalLine(stderr string) string {
+	for _, line := range strings.Split(stderr, "\n") {
+		if line = strings.TrimSpace(line); strings.HasPrefix(line, "fatal:") {
+			return line
+		}
+	}
+	return ""
 }
 
 // hasGitAncestor reports whether dir or any ancestor holds a .git entry. Lstat,
@@ -275,55 +318,152 @@ func hasGitAncestor(dir string) bool {
 	}
 }
 
-// resolveProbePath is the canonical absolute path of the binding file.
+// resolveProbePath is the canonical absolute path of path.
 //
-// EvalSymlinks first, because the multi-repo overlay shape points .claude at a
-// directory in ANOTHER repository — the question "is it tracked?" is about the
-// file's real location, never about the link. Abs after it, because Binding("")
-// hands over the RELATIVE ".claude/settings.local.json"; without Abs the probe's
-// -C would be "." and the answer would describe the daemon's own cwd.
+// Abs, because Binding("") hands over the RELATIVE ".claude/settings.local.json";
+// without it the probe's -C would be "." and the answer would describe the
+// daemon's own cwd. EvalSymlinks AFTER it, so the cwd's part of a relative path
+// is resolved too — Binding(".") and Binding(abs) then name one file — and
+// because the multi-repo overlay shape points .claude at a directory in ANOTHER
+// repository: whether the file is tracked is a question about its real location
+// (the links on the way are asked about separately, by symlinkHops).
 func resolveProbePath(path string) (string, bool) {
-	real, err := filepath.EvalSymlinks(path)
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", false
 	}
-	abs, err := filepath.Abs(real)
+	real, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return "", false
 	}
-	return abs, true
+	return real, true
 }
 
-// probeGitTracked classifies one binding file, running git only when the
-// pre-check says a repository could plausibly contain it.
-func probeGitTracked(path string) trackVerdict {
+// trackFinding is one probe's conclusion: the verdict, and the entry git was
+// asked about — a directory plus the name that directory stores. For a tracked
+// symlink hop that entry is the LINK, not the binding file, and the warning's
+// remedy has to name it.
+type trackFinding struct {
+	verdict   trackVerdict
+	dir, name string
+}
+
+// probeGitTracked classifies one binding file: first every symlink hop on its
+// path, each as a link in the repository that contains it, then the file at its
+// real location. The first entry that may not be honoured decides.
+func probeGitTracked(path string) trackFinding {
+	hops, ok := symlinkHops(path)
+	if !ok {
+		return unresolvedFinding(path)
+	}
+	for _, link := range hops {
+		parent, ok := resolveProbePath(filepath.Dir(link))
+		if !ok {
+			return unresolvedFinding(link)
+		}
+		if f := probeEntry(parent, filepath.Base(link)); !f.verdict.honoured() {
+			return f
+		}
+	}
 	abs, ok := resolveProbePath(path)
 	if !ok {
-		return trackUnknown // unresolvable: fail closed
+		return unresolvedFinding(path) // unresolvable: fail closed
 	}
-	dir, name := filepath.Dir(abs), filepath.Base(abs)
-	if !hasGitAncestor(dir) {
-		return trackNotRepo
-	}
-	r := runGitProbe(dir, name)
-	return classifyGitProbe(r.exitCode, r.stderr, r.err)
+	return probeEntry(filepath.Dir(abs), filepath.Base(abs))
 }
 
-// distrustReason is the operator-facing half of a verdict: "" when the binding
-// may be honoured, the reason when it may not. Untracked and not-a-repo are the
-// only two honoured verdicts, so anything new or unforeseen is ignored.
+// symlinkHops lists, as absolute paths, the entries on the binding's own path
+// that are symlinks: <project>/.claude and the binding file itself — the two a
+// project's repository can commit. ok is false when either cannot be inspected.
+// The components above <project> are the operator's choice of path, not hops.
+func symlinkHops(path string) ([]string, bool) {
+	var hops []string
+	for _, p := range []string{filepath.Dir(path), path} {
+		info, err := os.Lstat(p)
+		if err != nil {
+			return nil, false
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, false
+		}
+		hops = append(hops, abs)
+	}
+	return hops, true
+}
+
+// probeEntry asks about one entry of an already-resolved directory, running git
+// only when the pre-check says a repository could plausibly contain it.
+func probeEntry(dir, name string) trackFinding {
+	if !hasGitAncestor(dir) {
+		return trackFinding{trackNotRepo, dir, name}
+	}
+	name = onDiskName(dir, name)
+	r := runGitProbe(dir, name)
+	return trackFinding{classifyGitProbe(r.exitCode, r.stderr, r.err), dir, name}
+}
+
+// unresolvedFinding is the fail-closed answer for a path that cannot be
+// resolved: unknown, with the remedy pointed at its lexical directory.
+func unresolvedFinding(path string) trackFinding {
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	return trackFinding{trackUnknown, filepath.Dir(path), filepath.Base(path)}
+}
+
+// onDiskName is the name dir really stores for the entry reached as dir/name.
+//
+// A folding filesystem opens `settings.local.json` for an entry stored as
+// `ſettings.local.json` (APFS folds U+017F onto 's'), and git's icase, which
+// folds ASCII only, does not match the one against the other — asked about the
+// lookup spelling, git would call a committed file untracked. The exact name
+// wins when the directory stores it (a folding filesystem cannot also hold a
+// folded twin); otherwise the entry that IS the same file. Falls back to name
+// when the directory cannot be listed.
+func onDiskName(dir, name string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return name
+	}
+	for _, e := range entries {
+		if e.Name() == name {
+			return name
+		}
+	}
+	want, err := os.Lstat(filepath.Join(dir, name))
+	if err != nil {
+		return name
+	}
+	for _, e := range entries {
+		if info, err := os.Lstat(filepath.Join(dir, e.Name())); err == nil && os.SameFile(info, want) {
+			return e.Name()
+		}
+	}
+	return name
+}
+
+// distrustReason is the operator-facing half of a finding: "" when the binding
+// may be honoured, otherwise the reason AND that verdict's own remedy. Tracked:
+// untrack the entry. Unknown: ask git why it cannot answer — `git rm --cached`
+// cannot fix a file git never tracked, so it is not offered there.
 //
 // The reason never quotes the file's CONTENTS — not the account key, not a
 // store name. It is written into a log the operator may paste anywhere.
-func distrustReason(v trackVerdict) string {
-	switch v {
-	case trackUntracked, trackNotRepo:
+func distrustReason(f trackFinding) string {
+	if f.verdict.honoured() {
 		return ""
-	case trackTracked:
-		return "it is tracked by git, so it can have arrived from a clone, a pull or a teammate's commit"
-	default:
-		return "git could not say whether it is tracked, and an unclassifiable binding is not trusted"
 	}
+	entry := filepath.Join(f.dir, f.name)
+	if f.verdict == trackTracked {
+		return fmt.Sprintf("git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
+			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, f.dir, f.name)
+	}
+	return fmt.Sprintf("git could not say whether %s is tracked, and an unclassifiable binding is not trusted. "+
+		"To see why git cannot answer, run: git -C %s status", entry, f.dir)
 }
 
 // bindingDistrusted is the gate Binding() calls. It probes FRESH every time:
@@ -333,33 +473,50 @@ func bindingDistrusted(path string) string {
 	return distrustReason(probeGitTracked(path))
 }
 
-// distrustedWarned is the warn-once ledger, keyed by resolved absolute path. One
-// line per path per process: Binding() is called on every spawn and on several
-// dashboard endpoints, so a line per CALL would bury the operator's log — and a
-// warning nobody reads is not a warning.
+// probeKey identifies what a verdict describes: the symlink hops on the path
+// plus the resolved file. The hops belong in it because two projects whose
+// links share one target reach the same file, and only one of those links may
+// be tracked.
+func probeKey(path string) (string, bool) {
+	abs, ok := resolveProbePath(path)
+	if !ok {
+		return "", false
+	}
+	hops, ok := symlinkHops(path)
+	if !ok {
+		return "", false
+	}
+	return strings.Join(append(hops, abs), "\x00"), true
+}
+
+// distrustedWarned is the warn-once ledger, keyed by probeKey. One line per path
+// per process: Binding() is called on every spawn and on several dashboard
+// endpoints, so a line per CALL would bury the operator's log — and a warning
+// nobody reads is not a warning.
 // A POINTER, so a test can swap in a fresh ledger; go vet rejects assigning a
 // zero sync.Map over one (copylocks).
 var distrustedWarned = &sync.Map{}
 
 func logDistrusted(path, why string) {
-	key := path
-	if abs, ok := resolveProbePath(path); ok {
-		key = abs
+	key, ok := probeKey(path)
+	if !ok {
+		key = path
 	}
 	if _, seen := distrustedWarned.LoadOrStore(key, struct{}{}); seen {
 		return
 	}
-	log.Printf("claudeacct: IGNORING binding in %s — %s. "+
-		"Running under the default account with no account secrets. "+
-		"To make it count, untrack it: git rm --cached %s, then re-run `swarmery account use <key>`.",
-		path, why, path)
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	log.Printf("claudeacct: IGNORING binding in %s (running under the default account, with no account secrets) — %s.",
+		path, why)
 }
 
 // ── the display-only verdict cache ───────────────────────────────────────────
 
-// displayEntry is one cached verdict plus the identity of the file it describes.
+// displayEntry is one cached finding plus the identity of the file it describes.
 type displayEntry struct {
-	verdict trackVerdict
+	finding trackFinding
 	size    int64
 	modTime time.Time
 	at      time.Time
@@ -367,12 +524,12 @@ type displayEntry struct {
 
 var (
 	displayCacheMu sync.Mutex
-	displayCache   = map[string]displayEntry{}
+	displayCache   = map[string]displayEntry{} // keyed by probeKey
 
-	// displayCacheTTL bounds staleness. Keying on (realpath, size, mtime) is not
-	// enough on its own: `git add` and `git rm --cached` change the INDEX and
-	// leave the file untouched, so the verdict can flip with no observable file
-	// change. The TTL is what makes the dashboard notice.
+	// displayCacheTTL bounds staleness. Keying on (hops, realpath, size, mtime)
+	// is not enough on its own: `git add` and `git rm --cached` change the INDEX
+	// and leave the file untouched, so the verdict can flip with no observable
+	// file change. The TTL is what makes the dashboard notice.
 	displayCacheTTL = 60 * time.Second
 
 	// displayNow is the clock, as a var so a test can expire the TTL without
@@ -385,30 +542,30 @@ var (
 // indexed project on every request and would otherwise start a git process per
 // project per page load. No spawn path may use it.
 func bindingDistrustedCached(path string) string {
-	abs, ok := resolveProbePath(path)
+	key, ok := probeKey(path)
 	if !ok {
 		return bindingDistrusted(path)
 	}
-	info, err := os.Stat(abs)
+	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return bindingDistrusted(path) // nothing stable to key on
 	}
 	now := displayNow()
 
 	displayCacheMu.Lock()
-	e, hit := displayCache[abs]
+	e, hit := displayCache[key]
 	fresh := hit && e.size == info.Size() && e.modTime.Equal(info.ModTime()) &&
 		now.Sub(e.at) < displayCacheTTL
 	displayCacheMu.Unlock()
 	if fresh {
-		return distrustReason(e.verdict)
+		return distrustReason(e.finding)
 	}
 
-	v := probeGitTracked(path)
+	f := probeGitTracked(path)
 	displayCacheMu.Lock()
-	displayCache[abs] = displayEntry{verdict: v, size: info.Size(), modTime: info.ModTime(), at: now}
+	displayCache[key] = displayEntry{finding: f, size: info.Size(), modTime: info.ModTime(), at: now}
 	displayCacheMu.Unlock()
-	return distrustReason(v)
+	return distrustReason(f)
 }
 
 // BindingForDisplay answers exactly what Binding answers, through the verdict
