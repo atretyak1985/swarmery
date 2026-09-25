@@ -234,7 +234,7 @@ func usage() {
   swarmery sysscan  [--db <path>] [--claude-dir <dir>] [--overlays-dir <dir>]
                                    one-shot system-config scan (agents/skills/hooks/commands)
   swarmery install  [--port <n>] [--onboard-roots <dirs>] [--workspace-root <dir>] [--statusline-src <dir>]
-                    [--projects-roots <dirs|auto>]
+                    [--projects-roots <dirs|auto>] [--trusted-origins <origins>]
                                    auto-start (launchd on macOS, systemd --user on Linux); bakes SWARMERY_* into the service definition
                                    (--onboard-roots enables POST /api/projects/onboard + the dashboard button;
                                    --projects-roots auto makes every ~/.claude*/projects account visible)
@@ -276,6 +276,8 @@ func usage() {
        'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;
        unset: serve reads ~/.claude/projects only, backfill behaves as 'auto')
        SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC
+       SWARMERY_TRUSTED_ORIGINS (comma-separated extra browser origins, scheme://host[:port], that
+       pass the cross-origin fence on writes; empty = localhost/127.0.0.1/::1 only)
        SWARMERY_SETTINGS_OVERLAYS (descriptor of settings files that also apply to given project
        roots; default ~/.swarmery/overlays.json — missing = repo-only plugin detection)
        SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT
@@ -1247,6 +1249,23 @@ func onboardRoots() []string {
 	return out
 }
 
+// trustedOrigins parses SWARMERY_TRUSTED_ORIGINS (comma-separated browser
+// origins, scheme://host[:port]) into the opt-in extra-origin allow-list for
+// the D4 CSRF fence. Empty/unset ⇒ only localhost/127.0.0.1/::1 pass.
+func trustedOrigins() []string {
+	v := os.Getenv("SWARMERY_TRUSTED_ORIGINS")
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	var out []string
+	for _, o := range strings.Split(v, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 // cmdOnboard bootstraps a new consumer project via the shared onboard package —
 // the CLI twin of the control-plane onboarding endpoint and the delegation
 // target of scripts/init.sh when this binary is on PATH.
@@ -1788,6 +1807,10 @@ func cmdServe(args []string) error {
 		Notifier:       notifier,
 	})
 	api.AttachApprovals(svc)
+	// D4 CSRF fence: the loopback origins are built in; any friendly alias the
+	// daemon is reached by (http://swarmery:7777 behind a hosts entry, a compose
+	// service name) is trusted only when the operator opts it in here.
+	api.AttachTrustedOrigins(trustedOrigins())
 	go svc.RunSweeper(context.Background())
 
 	// phase 4: system — GET /api/system/overlays reads overlays/*/project.json

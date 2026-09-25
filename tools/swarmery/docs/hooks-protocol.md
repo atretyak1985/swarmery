@@ -22,6 +22,13 @@ Every behavior below is grounded in the live spike
 - Both endpoints are localhost-trust like the rest of the API (D4): no auth in v1;
   state-changing endpoints reject cross-origin browser `Origin` headers. The shim
   sends no `Origin`.
+- Only `localhost`, `127.0.0.1` and `::1` are trusted origins by default. Reaching the
+  dashboard by a friendly alias (a `/etc/hosts` entry, a compose service name) needs that
+  alias opted in explicitly: `SWARMERY_TRUSTED_ORIGINS=http://swarmery:7777` (comma-separated,
+  `swarmery install --trusted-origins …` bakes it into the service definition). Entries are
+  matched as full origins — scheme, host and port — because the daemon controls no name beyond
+  the loopback ones: a bare `swarmery` can be expanded by a DNS search domain to a host someone
+  else serves, and that page would otherwise pass the fence.
 - Errors follow the existing API convention: non-2xx with `{"error": string}`.
   The shim treats **any** transport or non-contract response as fail-open (below).
 

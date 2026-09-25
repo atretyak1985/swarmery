@@ -361,6 +361,9 @@ func (h *Handler) scanColumn(query string) []string {
 // isStrictLocalOrigin requires a present, parseable, http/https, localhost Origin.
 // Unlike isLocalOrigin (which lets an ABSENT origin through for the hook shim),
 // an empty Origin is rejected: the terminal is only ever opened from the SPA.
+// The SPA is also served from any origin the operator opted into via
+// SWARMERY_TRUSTED_ORIGINS, so the same allow-list applies here — otherwise a
+// dashboard reached by a trusted alias gets working writes but a dead terminal.
 func isStrictLocalOrigin(origin string) bool {
 	if origin == "" {
 		return false
@@ -376,5 +379,6 @@ func isStrictLocalOrigin(origin string) bool {
 	case "localhost", "127.0.0.1", "::1":
 		return true
 	}
-	return false
+	n, ok := normalizeOrigin(origin)
+	return ok && trustedOrigins[n]
 }
