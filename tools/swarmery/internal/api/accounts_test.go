@@ -712,6 +712,35 @@ func TestProjectAccountBindsAnUnOnboardedProject(t *testing.T) {
 	}
 }
 
+// TestProjectAccountReportsAnIgnoredBinding: a PUT whose binding the provenance
+// gate then ignores still writes the file, but the answer must say the binding
+// is not in effect and why — not a bare 200 that reads as success.
+func TestProjectAccountReportsAnIgnoredBinding(t *testing.T) {
+	attachHomeAccounts(t, ingest.DefaultAccount, "nabu-org")
+	project := t.TempDir()
+	// A .git FILE whose gitdir is gone: git answers with an error, not a
+	// verdict, so the binding is unclassifiable and ignored (fail closed).
+	if err := os.WriteFile(filepath.Join(project, ".git"), []byte("gitdir: /nonexistent/nowhere\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, srv := accountsTestDB(t, "project-account-ignored.db", project)
+
+	status, body := acctDo(t, http.MethodPut, srv.URL+"/api/projects/1/account", `{"account":"nabu-org"}`)
+	if status != http.StatusOK {
+		t.Fatalf("PUT = %d, want 200\n%s", status, body)
+	}
+	var row accountBindingDTO
+	if err := json.Unmarshal([]byte(body), &row); err != nil {
+		t.Fatalf("decode: %v\n%s", err, body)
+	}
+	if row.Source != bindingSourceDefault || row.Effective != ingest.DefaultAccount {
+		t.Errorf("row = %+v, want the default account in effect", row)
+	}
+	if !strings.Contains(row.IgnoredReason, "not trusted") {
+		t.Errorf("ignoredReason = %q, want the gate's reason", row.IgnoredReason)
+	}
+}
+
 // ── guards ─────────────────────────────────────────────────────────────────
 
 // TestAccountsStateChangingRoutesRejectCrossOrigin: all three writes carry the

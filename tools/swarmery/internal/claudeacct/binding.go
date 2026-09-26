@@ -50,6 +50,10 @@ func Binding(projectPath string) string {
 	if !ValidKey(key) {
 		return ""
 	}
+	if why := bindingDistrusted(bindingPath(projectPath)); why != "" {
+		logDistrusted(bindingPath(projectPath), why)
+		return ""
+	}
 	return key
 }
 

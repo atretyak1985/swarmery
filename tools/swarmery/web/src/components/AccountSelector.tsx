@@ -173,6 +173,11 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
             {sourceLabel}
           </span>
         </div>
+        {binding.ignoredReason && (
+          <p className="mt-2 text-[11.5px] leading-snug text-ink-dim">
+            binding ignored: {binding.ignoredReason}
+          </p>
+        )}
 
         <div className="mt-3 flex flex-col gap-2">
           {options.map((option) => (
