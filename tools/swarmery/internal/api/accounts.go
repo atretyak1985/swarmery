@@ -178,6 +178,11 @@ type accountBindingDTO struct {
 	// project pinned to the default account, and mean different things the day
 	// the default changes — which is exactly why the UI is given both.
 	Source string `json:"source"`
+	// IgnoredReason is set when the settings file DOES name an account but the
+	// provenance gate ignores it (a git-tracked binding, or one git could not
+	// classify) — the project then runs under the default account, and a PUT
+	// that wrote the binding would otherwise answer 200 with no hint why.
+	IgnoredReason string `json:"ignoredReason,omitempty"`
 }
 
 // ── shared helpers ─────────────────────────────────────────────────────────
@@ -320,8 +325,8 @@ func shellQuoteIfNeeded(s string) string {
 
 // bindingRow reads a project's binding and resolves what it means.
 func bindingRow(path string) accountBindingDTO {
-	bound := claudeacct.BindingForDisplay(path)
-	row := accountBindingDTO{Account: bound, Effective: bound, Source: bindingSourceBinding}
+	bound, ignored := claudeacct.BindingForDisplayWithReason(path)
+	row := accountBindingDTO{Account: bound, Effective: bound, Source: bindingSourceBinding, IgnoredReason: ignored}
 	if bound == "" {
 		row.Effective, row.Source = ingest.DefaultAccount, bindingSourceDefault
 	}

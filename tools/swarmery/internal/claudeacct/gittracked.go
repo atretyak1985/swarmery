@@ -645,20 +645,30 @@ func bindingDistrustedCached(path string) string {
 // parse below is Binding's, and TestBindingForDisplayAgreesWithBinding pins the
 // two answers together so the duplication cannot drift.
 func BindingForDisplay(projectPath string) string {
+	key, _ := BindingForDisplayWithReason(projectPath)
+	return key
+}
+
+// BindingForDisplayWithReason is BindingForDisplay plus WHY a binding the file
+// does carry is not in effect: ignoredReason is non-empty exactly when the file
+// names a valid key and the provenance gate ignored it, so the dashboard can
+// say why a binding it just wrote did not take. The reason names paths and the
+// remedy, never the file's contents.
+func BindingForDisplayWithReason(projectPath string) (key, ignoredReason string) {
 	path := bindingPath(projectPath)
 	_, root, _, err := readSettings(path)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	ns, _ := root[bindingNamespace].(map[string]any)
-	key, _ := ns[bindingField].(string)
+	key, _ = ns[bindingField].(string)
 	key = strings.TrimSpace(key)
 	if !ValidKey(key) {
-		return ""
+		return "", ""
 	}
 	if why := bindingDistrustedCached(path); why != "" {
 		logDistrusted(path, why)
-		return ""
+		return "", why
 	}
-	return key
+	return key, ""
 }

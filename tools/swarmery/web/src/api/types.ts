@@ -3139,6 +3139,9 @@ export interface AccountBinding {
   effective: string;
   configDir: string;
   source: 'binding' | 'default';
+  /** Set when the settings file names an account but the provenance gate
+   * ignores it (git tracks it, or git could not classify it). */
+  ignoredReason?: string;
 }
 
 // --- Project overview (GET /api/projects/{id}/overview, Canvas v2 phase 1) ----
