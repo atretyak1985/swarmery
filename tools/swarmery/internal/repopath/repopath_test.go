@@ -279,7 +279,9 @@ func TestInheritedSettings(t *testing.T) {
 
 	// Changing this case would alter behaviour for every single-repo project in
 	// the registry, which is exactly what the run-root fallback exists to avoid.
-	t.Run("single-repo run inherits nothing", func(t *testing.T) {
+	// G8: ground truth for the account-switch estate plan — a single-repo run
+	// inherits nothing, so a composer must read the project settings file by path.
+	t.Run("G8 single-repo run inherits nothing", func(t *testing.T) {
 		if got := InheritedSettings(project, project, worktree); got != "" {
 			t.Fatalf("InheritedSettings = %q, want \"\"", got)
 		}

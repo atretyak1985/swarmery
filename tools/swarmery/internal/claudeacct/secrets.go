@@ -7,19 +7,36 @@ package claudeacct
 //
 // The MCP servers a plugin ships reference their credentials as ${VAR}, and the
 // CLI expands those. A measurement across every route and every
-// --setting-sources value established three rules:
+// --setting-sources value established three rules. Re-measured 2026-09-23
+// against CLI 2.1.280 by scripts/tests/cc-channel-probe.sh; the record is
+// tools/swarmery/docs/claude-cli-config-channels.md.
 //
 //  1. the parent process environment expands ${VAR} EVERYWHERE — every route,
 //     every setting-source combination;
-//  2. a settings `env` block expands only for a plugin-shipped .mcp.json AND
-//     only under the `user` setting source. Every daemon spawn passes
-//     `project,local`, so a settings `env` block is silently inert there;
-//  3. inside a daemon-cut worktree the SOURCE checkout's settings.local.json
-//     shadows the worktree's own copy, so a per-worktree override is not even
-//     expressible.
+//  2. of the three setting sources, a settings `env` block expands for a
+//     plugin-shipped .mcp.json ONLY under `user` — i.e. only out of
+//     <configDir>/settings.json, which makes it an ACCOUNT-KEYED channel. (A
+//     --settings file's env block expands too, under every --setting-sources
+//     value; planrun and phaserun pass --settings only for a multi-repo
+//     project — when repopath.InheritedSettings returns a path — and no other
+//     seam passes one.)
+//     Note what this does NOT say: it is NOT true that every daemon spawn
+//     closes the user tier. Twelve seams pass --setting-sources project,local
+//     and there the block is inert; but planning, planrun and phaserun pass NO
+//     --setting-sources at all (they build a runcore.Spec with SettingSources
+//     empty, and runcore.Args emits the flag only when it is non-empty), so on
+//     those three the user tier is live and the account's env block DOES reach
+//     the child;
+//  3. a daemon-cut worktree inherits nothing from the checkout by any CLI rule —
+//     it lives under ~/.swarmery/worktrees/, outside the project tree. What it
+//     carries is what internal/worktree/configsync.go COPIED in at Acquire
+//     time, and copyMissing leaves an existing worktree file alone, so the
+//     worktree's own copy wins whenever it has one.
 //
-// Rules 2 and 3 are why credentials must never be written into a
-// settings.local.json. Rule 1 is what this file builds on.
+// Rule 2 is why credentials must never be written into a settings file: the
+// only setting source that expands them is the tier keyed to the account, and a
+// --settings file is still a credential at rest on disk. Rule 1 is what this
+// file builds on.
 //
 // # Why a per-account store and not the launchd plist
 //
