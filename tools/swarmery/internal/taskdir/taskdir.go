@@ -72,8 +72,23 @@ func Slug(externalID string) string {
 // caller wants to find it again. Callers that cannot know it read
 // tasks.workspace_dir instead, which is why that column exists.
 func Dir(wsRoot, project string, externalID string, now time.Time) string {
+	return DirIn(filepath.Join(wsRoot, project), externalID, now)
+}
+
+// DirIn is Dir addressed by the project's workspace namespace dir itself
+// (workspaces.root_path) instead of <wsRoot> + <project>.
+//
+// The two spellings are NOT interchangeable in general. <wsRoot>/<project>
+// reconstructs the namespace from a slug, and the daemon holds two slugs that
+// upstream documents as never matching (internal/onboard/onboard.go: the
+// registry slug is path-derived, the onboarding slug is the operator's kebab
+// name). Onboarding carves the namespace under the ONBOARDING slug, so a caller
+// holding only the registry slug rebuilds a path that does not exist and mints
+// a second tree beside the real one. A caller that already knows the namespace
+// dir must therefore pass it through unchanged rather than re-deriving it.
+func DirIn(wsDir string, externalID string, now time.Time) string {
 	d := now.UTC()
-	return filepath.Join(wsRoot, project, "workspace", "working",
+	return filepath.Join(wsDir, "workspace", "working",
 		fmt.Sprintf("%04d", d.Year()), fmt.Sprintf("%02d", int(d.Month())), fmt.Sprintf("%02d", d.Day()),
 		Slug(externalID))
 }
@@ -91,11 +106,21 @@ func MintMicroPlan(wsRoot, project string, card Card, now time.Time) (string, er
 	if wsRoot == "" || project == "" {
 		return "", fmt.Errorf("taskdir: workspace root and project are required")
 	}
+	return MintMicroPlanIn(filepath.Join(wsRoot, project), card, now)
+}
+
+// MintMicroPlanIn is MintMicroPlan addressed by the workspace namespace dir
+// itself — see DirIn for why a caller that already holds that dir must not
+// rebuild it from a slug.
+func MintMicroPlanIn(wsDir string, card Card, now time.Time) (string, error) {
+	if wsDir == "" {
+		return "", fmt.Errorf("taskdir: workspace dir is required")
+	}
 	if strings.TrimSpace(card.ExternalID) == "" {
 		return "", fmt.Errorf("taskdir: card has no external id")
 	}
 
-	dir := Dir(wsRoot, project, card.ExternalID, now)
+	dir := DirIn(wsDir, card.ExternalID, now)
 	if fi, err := os.Stat(dir); err == nil {
 		if !fi.IsDir() {
 			return "", fmt.Errorf("taskdir: %s exists and is not a directory", dir)

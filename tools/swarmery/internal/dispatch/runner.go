@@ -31,6 +31,14 @@ type RunSpec struct {
 	// would silently fall back to the default account (plan A3).
 	// "" means the default account and produces no env delta.
 	Account string
+
+	// SettingsFile names a project settings file to lend the run on the command
+	// line, or "" when it needs none — set via repopath.InheritedSettings when
+	// Cwd is a worktree cut from a SUB-repo of a multi-repo project (the
+	// project's own .claude/settings.json, which enables the plugin stack, is
+	// otherwise unreachable from that worktree; phaserun and planrun guard the
+	// same case). "" is the common single-repo case and changes nothing.
+	SettingsFile string
 }
 
 // Run is the outcome of a completed dispatched process.
@@ -203,6 +211,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// would silently run the task under the default account (plan A3). The
 		// service resolves the binding from the project path once per playbook.
 		Account:         spec.Account,
+		SettingsFile:    spec.SettingsFile,
 		StdoutTailBytes: tailBytes,
 		// No Timeout: the dispatcher's stage ctx owns cancellation (runStage).
 	})

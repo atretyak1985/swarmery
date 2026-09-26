@@ -3,6 +3,7 @@ package dispatch
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -91,6 +92,113 @@ func TestAdmit_NoRepoRoot_SurfacesDispatchErrorAndAcquiresNothing(t *testing.T) 
 	}
 	if dispatchErr == "" {
 		t.Error("dispatch_error is empty, want it to name what repopath tried")
+	}
+}
+
+// The gap runRoot's resolve left open: resolving the correct sub-repo checkout
+// for worktree.Acquire is not enough on its own. The worktree IS a checkout of
+// sk-next, not of the umbrella project, so it carries no .claude/settings.json —
+// the plugin stack that ships c.Agent is otherwise unreachable from it, and the
+// run proceeds as an unresolved @mention instead of failing loudly. phaserun and
+// planrun already lend the project's settings.json via repopath.InheritedSettings
+// for exactly this case; dispatch must too, plus tell the agent what happened.
+func TestRunPlaybook_MultiRepoSubCheckout_LendsSettingsAndOrientsPrompt(t *testing.T) {
+	db := testDB(t)
+	umbrella := t.TempDir()
+	mkRepo(t, filepath.Join(umbrella, "sk-next"))
+	if err := os.MkdirAll(filepath.Join(umbrella, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(umbrella, ".claude", "project.json"),
+		[]byte(`{"mainApp":"sk-next"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	settingsPath := filepath.Join(umbrella, ".claude", "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO projects(id, path, slug, first_seen) VALUES(2, ?, 'umbrella', '2026-01-01T00:00:00Z')`,
+		umbrella); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &stubRunner{}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	insertTask(t, db, "T-multi", taskOpts{projectID: 2})
+
+	s.Schedule()
+
+	if r.count() != 1 {
+		t.Fatalf("runs = %d, want 1", r.count())
+	}
+	spec := r.spec(0)
+	if !sameDir(t, spec.SettingsFile, settingsPath) {
+		t.Errorf("SettingsFile = %q, want the project's own %q", spec.SettingsFile, settingsPath)
+	}
+	if !strings.Contains(spec.Prompt, "REPOSITORY: your worktree is a checkout of") {
+		t.Errorf("prompt carries no multi-repo orientation note:\n%s", spec.Prompt)
+	}
+}
+
+// The regression every existing (single-repo) project depends on: repoRoot ==
+// projectPath there, so neither SettingsFile nor the orientation note should
+// appear — lending a redundant settings file or an unsolicited REPOSITORY note
+// would change behaviour for every project that isn't multi-repo.
+func TestRunPlaybook_SingleRepoProject_NoSettingsFileOrNote(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	insertTask(t, db, "T-solo", taskOpts{})
+
+	s.Schedule()
+
+	if r.count() != 1 {
+		t.Fatalf("runs = %d, want 1", r.count())
+	}
+	spec := r.spec(0)
+	if spec.SettingsFile != "" {
+		t.Errorf("SettingsFile = %q, want \"\" for a single-repo project", spec.SettingsFile)
+	}
+	if strings.Contains(spec.Prompt, "REPOSITORY:") {
+		t.Errorf("prompt carries an unsolicited multi-repo note:\n%s", spec.Prompt)
+	}
+}
+
+// repoNote is two independent blocks (multiRepoNote + AdditionalDirsNote), and
+// the second fires for ANY project declaring permissions.additionalDirectories
+// — single-repo included, same as phaserun/planrun. The test above never
+// exercises this half (its fixture project has no settings.json, so the block
+// is absent for an unrelated reason); this pins the half it left accidental.
+func TestRunPlaybook_SingleRepoProject_AdditionalDirsNoteStillApplies(t *testing.T) {
+	db := testDB(t)
+	var projectPath string
+	if err := db.QueryRow(`SELECT path FROM projects WHERE id=1`).Scan(&projectPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectPath, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectPath, ".claude", "settings.json"),
+		[]byte(`{"permissions":{"additionalDirectories":["/srv/shared-lib"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &stubRunner{}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	insertTask(t, db, "T-solo", taskOpts{})
+
+	s.Schedule()
+
+	if r.count() != 1 {
+		t.Fatalf("runs = %d, want 1", r.count())
+	}
+	spec := r.spec(0)
+	if strings.Contains(spec.Prompt, "REPOSITORY:") {
+		t.Errorf("prompt carries an unsolicited multi-repo note:\n%s", spec.Prompt)
+	}
+	if !strings.Contains(spec.Prompt, "ADDITIONAL ACCESS") || !strings.Contains(spec.Prompt, "/srv/shared-lib") {
+		t.Errorf("prompt carries no additionalDirectories note despite the project declaring one:\n%s", spec.Prompt)
 	}
 }
 
