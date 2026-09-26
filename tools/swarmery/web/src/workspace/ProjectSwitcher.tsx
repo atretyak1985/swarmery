@@ -41,10 +41,10 @@ export function ProjectSwitcher({
     // The current project always stays in the list even when the onboarded-
     // only filter would otherwise drop it — this is a NAVIGATION control, and
     // hiding the project the operator is standing in from its own switcher
-    // (e.g. a sub-repo demoted by the umbrella-nesting check below) would
+    // (e.g. a sub-repo the daemon demoted under its umbrella) would
     // strand them with no way back short of "All projects →".
     const base = onboardedOnly
-      ? projects.filter((p) => p.id === current?.id || isOnboarded(p, projects))
+      ? projects.filter((p) => p.id === current?.id || isOnboarded(p))
       : projects;
     const rows = q === ''
       ? base

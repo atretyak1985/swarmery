@@ -314,31 +314,34 @@ export function Projects(): JSX.Element {
     load();
   }, [load]);
 
-  // isOnboarded() scans the full list per call (umbrella-nesting check), so
-  // computing membership once into a Set beats calling it once for the count
-  // and again per row in the `visible` filter below.
-  const onboardedIds = new Set(
-    (projects ?? []).filter((p) => isOnboarded(p, projects ?? [])).map((p) => p.id),
-  );
+  const onboardedIds = new Set((projects ?? []).filter((p) => isOnboarded(p)).map((p) => p.id));
   const onboardedCount = onboardedIds.size;
   const allTags = [...new Set((projects ?? []).flatMap((p) => p.tags))].sort();
   // Server order is pinned-first already; the tag filter + header name search
   // narrow client-side.
   const matchesName = (name: string | null, slug: string): boolean =>
     query === '' || name?.toLowerCase().includes(query) === true || slug.toLowerCase().includes(query);
-  const visible = (projects ?? []).filter(
-    (p) =>
-      (!onboardedOnly || onboardedIds.has(p.id)) &&
-      (tag === null || p.tags.includes(tag)) &&
-      matchesName(p.name, p.slug),
-  );
+  const matchesTagAndName = (p: { tags: string[]; name: string | null; slug: string }): boolean =>
+    (tag === null || p.tags.includes(tag)) && matchesName(p.name, p.slug);
+  // The onboarded-only filter never applies to the System project: it is
+  // never onboarded by definition, and it already has its own demoted section.
+  const passesOnboarded = (p: { id: number; isSystem: boolean }): boolean =>
+    !onboardedOnly || p.isSystem || onboardedIds.has(p.id);
+  const visible = (projects ?? []).filter((p) => passesOnboarded(p) && matchesTagAndName(p));
   // The System project (daemon telemetry runs, ~/.swarmery) is demoted out of
   // the main list into a collapsed section below it; same split in health.
   const regular = visible.filter((p) => !p.isSystem);
   const system = visible.filter((p) => p.isSystem);
-  const visibleHealth = (health ?? []).filter(
-    (h) => !h.isSystem && (tag === null || h.tags.includes(tag)) && matchesName(h.name, h.slug),
-  );
+  // Rows the onboarded-only filter alone is hiding — named in the empty state
+  // so "nothing onboarded yet" never reads as "no projects at all".
+  const hiddenByOnboarded = onboardedOnly
+    ? (projects ?? []).filter((p) => !p.isSystem && !onboardedIds.has(p.id) && matchesTagAndName(p)).length
+    : 0;
+  const toggleOnboardedOnly = (value: boolean): void => {
+    setOnboardedOnly(value);
+    saveOnboardedOnly(value);
+  };
+  const visibleHealth = (health ?? []).filter((h) => !h.isSystem && passesOnboarded(h) && matchesTagAndName(h));
 
   return (
     <div className="px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px] desk:pb-28">
@@ -351,10 +354,7 @@ export function Projects(): JSX.Element {
             <input
               type="checkbox"
               checked={onboardedOnly}
-              onChange={(e) => {
-                setOnboardedOnly(e.target.checked);
-                saveOnboardedOnly(e.target.checked);
-              }}
+              onChange={(e) => toggleOnboardedOnly(e.target.checked)}
               className="accent-brand"
             />
             onboarded only
@@ -385,7 +385,20 @@ export function Projects(): JSX.Element {
       {projects === null && error === null && <Loading label="projects…" />}
       {projects !== null && regular.length === 0 && (
         <Empty>
-          {query !== '' ? (
+          {hiddenByOnboarded > 0 ? (
+            <>
+              {String(hiddenByOnboarded)} project{hiddenByOnboarded === 1 ? '' : 's'} hidden as not
+              onboarded —{' '}
+              <button
+                type="button"
+                onClick={() => toggleOnboardedOnly(false)}
+                className="font-mono text-ink underline underline-offset-2 hover:text-brand"
+              >
+                untick onboarded only
+              </button>{' '}
+              to see them
+            </>
+          ) : query !== '' ? (
             <>no projects match the current filter — try a different search or clear it</>
           ) : tag !== null ? (
             <>
