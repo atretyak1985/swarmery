@@ -45,7 +45,14 @@ swarmery account which --path "${CLAUDE_PROJECT_DIR:-$PWD}"
 
 Report both: the table of installed accounts (key, config dir, default?,
 connected?, plan) and the account this project effectively runs under. `source:
-binding` means someone chose it; `source: default` means nobody did.
+binding` means someone chose it. `source: default` means nobody did, or that the
+binding file was ignored.
+
+If `which` prints a warning on stderr that the binding was ignored, relay that line
+verbatim. It names the cause. The usual one is a `settings.local.json` that git
+tracks: swarmery deliberately ignores a committed binding. The fix is
+`git rm --cached .claude/settings.local.json` plus a gitignore entry. Do not
+suggest re-running `use`: it would write the same tracked file again.
 
 `connected: unknown` is not `no` — it means credential resolution is switched
 off (`SWARMERY_USAGE_OAUTH=0`), so the question was never asked.

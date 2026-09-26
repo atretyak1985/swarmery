@@ -9,14 +9,26 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.9.2,
+  `/plugin update`, not through these tags. Current: `core` 3.9.3,
   `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
   `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
-  `design-pack` 0.4.1, `accounts-pack` 0.3.2, `graft-pack` 0.1.0. The
+  `design-pack` 0.4.1, `accounts-pack` 0.3.4, `graft-pack` 0.1.0. The
   marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
+
+### Security
+
+- **A binding file tracked by git no longer picks the account (#392).** Every
+  consumer of the binding now ignores a `.claude/settings.local.json` that git
+  tracks: spawns, `swarmery account which|env|exec` and the dashboard. The
+  project runs under the default account and gets no secret-store variables.
+  The check fails closed. It also covers every symlink on the way to the file,
+  and it is ignored the same way when git is missing, times out after 2 s or
+  errors. The warning names the cause, and the dashboard's account card shows it
+  (`ignoredReason` on the binding DTO). Docs: `accounts-pack` 0.3.4 (README
+  Known edges, `/account`).
 
 ### Added
 
@@ -26,8 +38,34 @@ Two things ship from this repository on separate clocks:
   works, where to see it, and what is left, written for the operator rather than
   as an engineering record (`resources/plan-summary-format.md`).
 
+- **An "onboarded only" filter on the Projects page (#388).** It is on by default.
+  The daemon computes a per-project `onboarded` bit (on `GET /api/projects`):
+  the project is managed and not nested under another managed project. `/`,
+  `$HOME` and the onboarding roots never count as that parent. When the filter
+  hides everything, the empty state says how many projects are hidden. The
+  Health table follows the filter, and the System project stays visible.
+- **Channel probes G1–G3 and a `--setting-sources` census (#393).** They cover
+  which config channels Claude Code actually reads for plugin MCP servers, and
+  which twelve daemon spawn seams close the user settings tier. Details:
+  `tools/swarmery/docs/claude-cli-config-channels.md`.
+
 ### Fixed
 
+- **Micro-plans go into the onboarded workspace (#386).** A dispatched card's
+  micro-plan used to go into a duplicate tree. It now goes into the project's own
+  workspace namespace: the most recently scanned mapping, the same one its repo
+  is resolved from. The path is fenced to the workspace root, with
+  `<root>/<slug>` as the fallback. Dashboard onboarding registers a new project
+  under the onboarding slug, and it never renames an existing project's slug,
+  because worktree names and session attribution depend on it.
+- **Modal exits no longer lose typed input silently (#389).** All eight
+  dashboard modals now go through one `useDiscardGuard` hook, and "dirty" means
+  "differs from the opened or pre-filled value". The confirm dialog takes focus,
+  keeps Tab inside itself, and closes only itself on Esc or a backdrop click.
+  The task modal closes only once its save has succeeded.
+- **The statusline's memory count uses Claude Code's own project-directory
+  encoding (#393, core 3.9.3).** Memory is no longer counted for the wrong
+  account.
 - **`agent-work.sh` on Linux (core 3.9.1).** Task mtimes are read with the
   probed `stat` dialect instead of an `||` fallback that GNU `stat -f` never
   reached, so `list`/`index` stop reporting filesystem blocks as dates (#373).

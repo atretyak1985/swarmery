@@ -22,7 +22,7 @@ The account list is **not** discovered from credentials — it is the same list 
 pipeline reads transcripts from. Each configured projects root (`SWARMERY_PROJECTS_ROOTS`;
 `auto` globs `~/.claude*/projects` once at daemon startup) is one account: the root's parent
 directory is that account's config dir, and the account's name is derived from that
-directory's name — `~/.claude` → `default`, `~/.claude-nabu-org` → `nabu-org`. This is the
+directory's name — `~/.claude` → `default`, `~/.claude-work` → `work`. This is the
 same key session rows are stamped with, so a usage card and a session badge always agree on
 what an account means.
 
@@ -453,5 +453,7 @@ eval "$(swarmery account env)"    # or export CLAUDE_CONFIG_DIR into this shell
 ```
 
 `which|use|clear|env|exec` never contact the daemon, so they keep working with swarmery
-stopped. The accounts pack's `/account setup-shell` installs a shell wrapper that applies
+stopped. If `which` reports `source: default` although the file names an account, check the
+warning on stderr. A `settings.local.json` that git tracks is ignored on purpose (see
+*Account binding* in the concepts doc). Untrack it with `git rm --cached` and gitignore it. The accounts pack's `/account setup-shell` installs a shell wrapper that applies
 the binding automatically per directory.
