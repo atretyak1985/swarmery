@@ -249,6 +249,16 @@ describe('autosave and its conflict guard', () => {
     expect((screen.getByLabelText('title') as HTMLTextAreaElement).value).toBe('my rename');
   });
 
+  it('commits a typed-but-unblurred edit before Escape closes the modal', () => {
+    const onPatch = vi.fn(async () => makeTask({ title: 'typed then escaped' }));
+    renderModal(makeTask(), onPatch);
+    fireEvent.change(screen.getByLabelText('title'), {
+      target: { value: 'typed then escaped' },
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onPatch).toHaveBeenCalledWith({ title: 'typed then escaped' });
+  });
+
   it('still saves an untouched-by-the-server field after an unrelated frame', () => {
     const onPatch = vi.fn(async () => makeTask());
     const { rerender } = renderModal(makeTask(), onPatch);

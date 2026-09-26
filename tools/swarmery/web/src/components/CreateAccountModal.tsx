@@ -13,7 +13,8 @@ import { refreshReadiness } from '../lib/accountReadiness';
 import { ExplainPair } from './Explain';
 import { TerminalPathNote } from './TerminalPathNote';
 import { UsageConnect } from './usage/UsageConnect';
-import { ErrorBox } from './ui';
+import { ConfirmDialog, ErrorBox } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 type Stage =
   | { kind: 'form' }
@@ -40,9 +41,6 @@ export function CreateAccountModal({
   // path note. The manual command stays visible until then.
   const [resolved, setResolved] = useState(false);
 
-  if (!open) return null;
-  const busy = stage.kind === 'saving';
-
   function reset(): void {
     setKey('');
     setStage({ kind: 'form' });
@@ -51,14 +49,23 @@ export function CreateAccountModal({
     setResolved(false);
   }
 
-  function close(): void {
-    if (busy) return;
+  function resetAndClose(): void {
     reset();
     onClose();
   }
 
+  // Dirty = the key differs from the empty value the form opens with. Called
+  // before the `open` early return (hook order); the guard clears its own
+  // confirm on discard, so a reopened modal starts on a clean form.
+  const busy = stage.kind === 'saving';
+  const discard = useDiscardGuard(stage.kind === 'form' && key.trim() !== '', resetAndClose, {
+    disabled: busy,
+  });
+
+  if (!open) return null;
+
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-    if (e.key === 'Escape' && !busy) close();
+    if (e.key === 'Escape') discard.requestClose();
   }
 
   async function submit(): Promise<void> {
@@ -90,7 +97,7 @@ export function CreateAccountModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={busy ? undefined : close}
+      onClick={discard.requestClose}
       onKeyDown={onKeyDown}
     >
       <div
@@ -134,7 +141,7 @@ export function CreateAccountModal({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={close}
+                onClick={discard.requestClose}
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
@@ -211,6 +218,15 @@ export function CreateAccountModal({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title="Discard account key?"
+        confirmLabel="discard"
+        danger
+      >
+        The account key you typed will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

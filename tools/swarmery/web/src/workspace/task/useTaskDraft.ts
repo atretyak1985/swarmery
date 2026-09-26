@@ -136,6 +136,12 @@ export interface TaskDraftState {
   setField: DraftSetter;
   /** Saves every dirty field, or refuses with a conflict/validation message. */
   commit: () => void;
+  /** `commit` that reports back: resolves true once nothing is left unsaved
+   * (saved, or nothing to save), false when the save was refused or failed —
+   * the message is then in `saveError`. Waits out a save already in flight. */
+  save: () => Promise<boolean>;
+  /** The draft holds an edit the server does not have yet. */
+  dirty: boolean;
   saving: boolean;
   /** The last save error — a server message, a conflict, or a validation refusal. */
   saveError: string | null;
@@ -185,17 +191,24 @@ export function useTaskDraft(
     setDraft(next);
   }, []);
 
-  const commit = useCallback((): void => {
+  // The save in flight, if any. A close request right after a blur must wait
+  // for the blur's PATCH rather than race it with a second one (the baseline
+  // only moves when the first resolves, so both would send the same fields).
+  const inflight = useRef<Promise<boolean> | null>(null);
+
+  const save = useCallback(async (): Promise<boolean> => {
+    const pending = inflight.current;
+    if (pending !== null && !(await pending)) return false;
     const cur = draftRef.current;
     const base = baseRef.current;
     const dirty = dirtyKeys(cur, base);
     if (dirty.length === 0) {
       setSaveError(null);
-      return;
+      return true;
     }
     if (cur.title.trim() === '' || cur.prompt.trim() === '') {
       setSaveError('title and prompt cannot be empty');
-      return;
+      return false;
     }
     // The baseline is what the draft was seeded from; `seedDraft(task)` is what
     // the server holds now. A field in both lists is a field two people edited.
@@ -203,11 +216,11 @@ export function useTaskDraft(
     const conflicts = dirty.filter((k) => !eq(serverNow[k], base[k]));
     if (conflicts.length > 0) {
       setSaveError(conflictMessage(conflicts));
-      return;
+      return false;
     }
     setSaving(true);
     setSaveError(null);
-    onPatch(draftPatch(cur, dirty))
+    const request = onPatch(draftPatch(cur, dirty))
       .then((saved) => {
         // The save moved the baseline: what the server holds now is what the
         // next commit measures against, so an edit made while this was in
@@ -216,10 +229,25 @@ export function useTaskDraft(
         // and any field the server normalized arrives through the reconcile
         // effect above when the board pushes the updated row.
         baseRef.current = seedDraft(saved);
+        return true;
       })
-      .catch((e: unknown) => setSaveError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setSaving(false));
+      .catch((e: unknown) => {
+        setSaveError(e instanceof Error ? e.message : String(e));
+        return false;
+      })
+      .finally(() => {
+        setSaving(false);
+        if (inflight.current === request) inflight.current = null;
+      });
+    inflight.current = request;
+    return request;
   }, [onPatch, task]);
 
-  return { draft, setField, commit, saving, saveError };
+  const commit = useCallback((): void => {
+    void save();
+  }, [save]);
+
+  const dirty = dirtyKeys(draft, baseRef.current).length > 0;
+
+  return { draft, setField, commit, save, dirty, saving, saveError };
 }

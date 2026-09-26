@@ -8,10 +8,12 @@
 // select's change and on ⌘S — the Save button is gone, which is what lets
 // TaskActions have a single primary.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { BoardTask } from '../api/types';
 import type { PatchBoardTaskInput } from '../api';
+import { ConfirmDialog } from '../components/ui';
+import { useDiscardGuard } from '../components/useDiscardGuard';
 import { fmtAgo } from '../lib/format';
 import { useAgentRoster } from './AgentPicker';
 import { stateLabel } from './boardModel';
@@ -51,7 +53,7 @@ export function TaskModal({
   const { playbooks } = usePlaybooks(task.projectId);
   const { agents } = useAgentRoster(task.projectId, task.projectSlug);
   const openTerminal = useWorkspaceTerminal();
-  const { draft, setField, commit, saveError } = useTaskDraft(task, onPatch);
+  const { draft, setField, commit, save, dirty, saveError } = useTaskDraft(task, onPatch);
   // The tab is offered only for a card with a run behind it; `active` keeps the
   // body honest if that history vanishes underneath a selected tab.
   const logged = hasRunLog(task);
@@ -67,12 +69,30 @@ export function TaskModal({
     setTab('brief');
   }, [task.id]);
 
+  // Every exit (Esc, backdrop, ×) SAVES FIRST and closes only once the save has
+  // landed. A save refused on a conflict or failed on the network keeps the
+  // modal open with the reason on screen — closing first would drop the edit
+  // and the error together. A second exit while that unsaved edit is still
+  // showing its error asks before discarding it, so the operator is never stuck
+  // in a modal whose save cannot succeed.
+  const discard = useDiscardGuard(dirty && saveError !== null, onClose);
+  const guardedClose = discard.requestClose;
+  const requestClose = useCallback((): void => {
+    if (dirty && saveError !== null) {
+      guardedClose();
+      return;
+    }
+    void save().then((ok) => {
+      if (ok) onClose();
+    });
+  }, [dirty, saveError, guardedClose, save, onClose]);
+
   // Escape closes the modal — but not while a confirm is up, or one key would
   // dismiss both layers. ⌘S is the explicit save for an edit not yet blurred.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && !confirming) {
-        onClose();
+        requestClose();
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
@@ -82,12 +102,12 @@ export function TaskModal({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose, confirming, commit]);
+  }, [requestClose, confirming, commit]);
 
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-bg/70 p-4"
-      role="dialog" aria-modal="true" aria-label="task detail" onClick={onClose}
+      role="dialog" aria-modal="true" aria-label="task detail" onClick={requestClose}
     >
       <div
         className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-line bg-bg shadow-[0_0_40px_rgba(0,0,0,0.5)]"
@@ -109,7 +129,7 @@ export function TaskModal({
             </Link>
           )}
           <button
-            ref={closeRef} type="button" onClick={onClose} aria-label="close"
+            ref={closeRef} type="button" onClick={requestClose} aria-label="close"
             className="ml-auto text-[15px] leading-none text-ink-dim transition-colors hover:text-ink"
           >
             ×
@@ -145,6 +165,15 @@ export function TaskModal({
 
         <TaskActions task={task} onPatch={onPatch} onDelete={onDelete} onClose={onClose} onConfirming={setConfirming} />
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title="Discard unsaved edit?"
+        confirmLabel="discard"
+        danger
+      >
+        This edit was not saved: {saveError}
+      </ConfirmDialog>
     </div>
   );
 }
