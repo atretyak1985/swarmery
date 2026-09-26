@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,9 +13,19 @@ import (
 // ('p') the test project carries.
 func carveWorkspace(t *testing.T, db *sql.DB, slug, rootPath string, projectID int64) {
 	t.Helper()
+	carveWorkspaceAt(t, db, slug, rootPath, projectID, "2026-09-19T00:00:00Z")
+}
+
+// carveWorkspaceAt is carveWorkspace with an explicit last_scanned, creating the
+// namespace dir on disk as onboarding does.
+func carveWorkspaceAt(t *testing.T, db *sql.DB, slug, rootPath string, projectID int64, scanned string) {
+	t.Helper()
+	if err := os.MkdirAll(rootPath, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", rootPath, err)
+	}
 	if _, err := db.Exec(
 		`INSERT INTO workspaces(slug, root_path, project_id, last_scanned)
-		 VALUES(?, ?, ?, '2026-09-19T00:00:00Z')`, slug, rootPath, projectID); err != nil {
+		 VALUES(?, ?, ?, ?)`, slug, rootPath, projectID, scanned); err != nil {
 		t.Fatalf("carve workspace %s: %v", slug, err)
 	}
 }
@@ -74,32 +85,32 @@ func TestMintMicroPlan_FallsBackToRegistrySlugWhenNoWorkspaceMapped(t *testing.T
 // fanned out) now lives on the workspaceOnePerProject fix itself:
 // TestCandidates_TwoWorkspacesForOneProject_ListCardOnce in repo_root_test.go.
 
-// When a project maps to two workspace rows, mintMicroPlan must NOT trust
-// candidates()'s c.WorkspaceRoot: workspaceOnePerProject picks MIN(root_path)
-// to stop the LEFT JOIN from listing a card twice (PR #383's review
-// follow-up), an arbitrary lexicographic pick with no relationship to which
-// namespace is actually live. Minting into the wrong one recreates the exact
-// split this whole feature exists to close — the older, stale namespace here
-// sorts before the live one, so a naive reuse of c.WorkspaceRoot would pick it.
+// When a project maps to two workspace rows, workspaceOnePerProject picks ONE
+// for both runRoot (the repo overlay) and mintMicroPlan: the most recently
+// scanned. The stale namespace here sorts first lexicographically, so the old
+// MIN(root_path) rule would have picked it.
 func TestMintMicroPlan_PrefersTheMostRecentlyScannedWorkspaceWhenProjectHasTwo(t *testing.T) {
 	db := testDB(t)
 	r := &stubRunner{}
 	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
 	s.WorkspaceRoot = t.TempDir()
 
-	// "a-stale" sorts before "z-live" lexicographically — MIN(root_path) would
-	// pick the stale one; last_scanned says the live one is current.
 	stale := filepath.Join(s.WorkspaceRoot, "a-stale")
 	live := filepath.Join(s.WorkspaceRoot, "z-live")
-	if _, err := db.Exec(
-		`INSERT INTO workspaces(slug, root_path, project_id, last_scanned) VALUES('a-stale', ?, 1, '2026-01-01T00:00:00Z')`,
-		stale); err != nil {
-		t.Fatalf("carve stale workspace: %v", err)
+	carveWorkspaceAt(t, db, "a-stale", stale, 1, "2026-01-01T00:00:00Z")
+	carveWorkspaceAt(t, db, "z-live", live, 1, "2026-09-20T00:00:00Z")
+
+	// The shared rule, observed where runRoot reads it.
+	insertTask(t, db, "T-probe", taskOpts{})
+	cands, err := s.candidates()
+	if err != nil || len(cands) != 1 {
+		t.Fatalf("candidates = %d (%v), want 1", len(cands), err)
 	}
-	if _, err := db.Exec(
-		`INSERT INTO workspaces(slug, root_path, project_id, last_scanned) VALUES('z-live', ?, 1, '2026-09-20T00:00:00Z')`,
-		live); err != nil {
-		t.Fatalf("carve live workspace: %v", err)
+	if cands[0].WorkspaceRoot != live {
+		t.Fatalf("candidate WorkspaceRoot (runRoot's input) = %q, want the live %q", cands[0].WorkspaceRoot, live)
+	}
+	if _, err := db.Exec(`DELETE FROM tasks`); err != nil {
+		t.Fatal(err)
 	}
 
 	id := insertTask(t, db, "T-42", taskOpts{})
@@ -110,7 +121,56 @@ func TestMintMicroPlan_PrefersTheMostRecentlyScannedWorkspaceWhenProjectHasTwo(t
 	if !strings.HasPrefix(dir, live+string(filepath.Separator)) {
 		t.Fatalf("micro-plan landed outside the live workspace.\n got: %q\nwant under: %q", dir, live)
 	}
-	if strings.HasPrefix(dir, stale+string(filepath.Separator)) {
-		t.Fatalf("micro-plan minted into the stale workspace %q — MIN(root_path) leaked into the write path", stale)
+}
+
+// workspaces.root_path comes straight from the DB; a mapping that points
+// OUTSIDE the configured workspace root must never be written to.
+func TestMintMicroPlan_RefusesAWorkspaceOutsideTheRoot(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	s.WorkspaceRoot = t.TempDir()
+
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	carveWorkspace(t, db, "elsewhere", outside, 1)
+
+	id := insertTask(t, db, "T-42", taskOpts{})
+	s.Schedule()
+	waitFor(t, func() bool { return column(t, db, id) != "todo" })
+
+	dir := workspaceDirOf(t, s, id)
+	if strings.HasPrefix(dir, outside+string(filepath.Separator)) {
+		t.Fatalf("micro-plan minted outside the workspace root: %q", dir)
+	}
+	if want := filepath.Join(s.WorkspaceRoot, "p"); !strings.HasPrefix(dir, want+string(filepath.Separator)) {
+		t.Fatalf("fallback not used.\n got: %q\nwant under: %q", dir, want)
+	}
+}
+
+// A mapped namespace that no longer exists on disk is not recreated from a DB
+// row; the mint falls back to the default location.
+func TestMintMicroPlan_FallsBackWhenTheMappedWorkspaceIsGone(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	s.WorkspaceRoot = t.TempDir()
+
+	gone := filepath.Join(s.WorkspaceRoot, "removed-namespace")
+	if _, err := db.Exec(
+		`INSERT INTO workspaces(slug, root_path, project_id, last_scanned) VALUES('removed-namespace', ?, 1, '2026-09-19T00:00:00Z')`,
+		gone); err != nil {
+		t.Fatal(err)
+	}
+
+	id := insertTask(t, db, "T-42", taskOpts{})
+	s.Schedule()
+	waitFor(t, func() bool { return column(t, db, id) != "todo" })
+
+	dir := workspaceDirOf(t, s, id)
+	if strings.HasPrefix(dir, gone+string(filepath.Separator)) {
+		t.Fatalf("micro-plan minted into a namespace that no longer exists: %q", dir)
+	}
+	if want := filepath.Join(s.WorkspaceRoot, "p"); !strings.HasPrefix(dir, want+string(filepath.Separator)) {
+		t.Fatalf("fallback not used.\n got: %q\nwant under: %q", dir, want)
 	}
 }

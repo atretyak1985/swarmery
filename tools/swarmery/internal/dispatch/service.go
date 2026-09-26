@@ -339,7 +339,9 @@ type candidate struct {
 	// phaserun/planrun's ProjectPath vs RepoRoot split).
 	ProjectPath string
 	// WorkspaceRoot is the workspace namespace dir (workspaces.root_path), home of
-	// overlay/project.json — one of runRoot's repo-hint sources. "" when unmapped.
+	// overlay/project.json — one of runRoot's repo-hint sources — and the dir the
+	// card's micro-plan is minted into. Picked by workspaceOnePerProject. "" when
+	// unmapped.
 	WorkspaceRoot string
 	Prompt        string
 	Model         sql.NullString
@@ -639,11 +641,23 @@ func (s *Service) liveWorktreeCount() (int, error) {
 // ── admission ──
 
 // workspaceOnePerProject is the workspaces relation with at most one row per
-// project (the lowest root_path, so the choice is deterministic).
-// workspaces.project_id carries no UNIQUE constraint, and joining the table
-// directly would repeat a card once per workspace mapped to its project.
-const workspaceOnePerProject = `(SELECT project_id, MIN(root_path) AS root_path
-		  FROM workspaces WHERE project_id IS NOT NULL GROUP BY project_id)`
+// project. workspaces.project_id carries no UNIQUE constraint, and joining the
+// table directly would repeat a card once per workspace mapped to its project.
+//
+// The row kept is the most recently scanned one (last_scanned DESC, then the
+// newest id, so the choice stays deterministic; a never-scanned NULL sorts
+// last) — the best signal of which mapping wsingest currently considers live.
+// It is THE single rule for "which workspace does this project use": runRoot
+// reads its overlay project.json from it and mintMicroPlan mints into it, so a
+// card's repo and its micro-plan can never come from two different workspace
+// rows. (It used to be MIN(root_path), an arbitrary lexicographic pick that
+// could name a stale namespace.)
+const workspaceOnePerProject = `(SELECT w1.project_id, w1.root_path
+		  FROM workspaces w1
+		 WHERE w1.project_id IS NOT NULL
+		   AND w1.id = (SELECT w2.id FROM workspaces w2
+		                 WHERE w2.project_id = w1.project_id
+		                 ORDER BY w2.last_scanned DESC, w2.id DESC LIMIT 1))`
 
 // runRoot resolves the repository a dispatched card runs in: a board card
 // declares no Repo cell of its own (unlike a phase doc), so the only hints are
@@ -823,26 +837,26 @@ func microPlansEnabled() bool {
 	return true
 }
 
-// liveWorkspaceRoot resolves the SINGLE workspace root to mint a project's
-// micro-plans into, for a project mapped by more than one workspace row.
-//
-// Deliberately NOT candidates()'s c.WorkspaceRoot (workspaceOnePerProject /
-// MIN(root_path)): that tie-break exists only to stop workspaceOnePerProject's
-// LEFT JOIN from listing a card once per mapped workspace (see its own doc
-// comment, and PR #383's review-follow-up note) — MIN is an arbitrary
-// deterministic pick for THAT purpose, with no relationship to which namespace
-// is actually live. Minting into the wrong one recreates the exact split this
-// function's own contract (see below) promises cannot happen, so it resolves
-// its own answer: the most recently scanned workspace, the best signal
-// available of which mapping wsingest currently considers current.
-func (s *Service) liveWorkspaceRoot(projectID int64) string {
-	var root string
-	if err := s.DB.QueryRow(
-		`SELECT root_path FROM workspaces WHERE project_id = ? ORDER BY last_scanned DESC, id DESC LIMIT 1`,
-		projectID).Scan(&root); err != nil {
-		return ""
+// workspaceDirUnder reports whether dir is an existing directory inside root.
+// Both are symlink-resolved first, so a symlinked workspace root (macOS /var →
+// /private/var) neither false-rejects nor lets a symlink smuggle the write out.
+func workspaceDirUnder(dir, root string) bool {
+	rd, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
 	}
-	return root
+	if fi, err := os.Stat(rd); err != nil || !fi.IsDir() {
+		return false
+	}
+	rr, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rr, rd)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
 }
 
 // mintMicroPlan writes the card's micro-plan and returns its phase-doc path, or ""
@@ -853,8 +867,9 @@ func (s *Service) liveWorkspaceRoot(projectID int64) string {
 // the dir on its next pass and stays the only writer of those rows, so there is one
 // path from a dir to a row and no way for the two to disagree.
 //
-// That invariant is why the namespace dir is taken from liveWorkspaceRoot
-// (workspaces.root_path) whenever the project HAS one, instead of rebuilding it
+// That invariant is why the namespace dir is taken from c.WorkspaceRoot
+// (workspaces.root_path, picked by workspaceOnePerProject — the same row runRoot
+// resolved the repo from) whenever the project HAS one, instead of rebuilding it
 // as <WorkspaceRoot>/<ProjectSlug>. ProjectSlug is the registry slug — derived
 // from the project path with '/'→'-' — while onboarding carves the namespace
 // under the operator's kebab slug, and upstream documents the two as never
@@ -864,13 +879,24 @@ func (s *Service) liveWorkspaceRoot(projectID int64) string {
 // to different projects — exactly the disagreement this function promises cannot
 // happen. The <root>/<slug> spelling survives only as the fallback for a project
 // with no workspace row, where no carved dir exists to prefer.
+//
+// workspaces.root_path is read straight from the DB, so it is fenced before any
+// write: a mapped dir that no longer exists, or that is not inside the
+// configured s.WorkspaceRoot, is logged and ignored in favour of the fallback —
+// the daemon never mints outside its own workspace tree.
 func (s *Service) mintMicroPlan(c candidate, repoRoot string) string {
 	if s.WorkspaceRoot == "" || !microPlansEnabled() {
 		return ""
 	}
-	wsDir := s.liveWorkspaceRoot(c.ProjectID)
+	fallback := filepath.Join(s.WorkspaceRoot, c.ProjectSlug)
+	wsDir := c.WorkspaceRoot
+	if wsDir != "" && !workspaceDirUnder(wsDir, s.WorkspaceRoot) {
+		log.Printf("warning: dispatch: task=%d mapped workspace %q is missing or outside the workspace root %q — minting under %q instead",
+			c.ID, wsDir, s.WorkspaceRoot, fallback)
+		wsDir = ""
+	}
 	if wsDir == "" {
-		wsDir = filepath.Join(s.WorkspaceRoot, c.ProjectSlug)
+		wsDir = fallback
 	}
 	dir, err := taskdir.MintMicroPlanIn(wsDir, taskdir.Card{
 		ExternalID: c.ExternalID,
