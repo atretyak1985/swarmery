@@ -616,8 +616,8 @@ func TestUnacceptedExtractedCardIsNotSwept(t *testing.T) {
 // Without --model the CLI inherits the account default, which is the expensive
 // one; an alias would silently re-resolve over time.
 func TestModelPin(t *testing.T) {
-	if defaultModel != "claude-opus-5-5" {
-		t.Errorf("defaultModel = %q, want claude-opus-5-5", defaultModel)
+	if DefaultModel != "claude-opus-5-5" {
+		t.Errorf("DefaultModel = %q, want claude-opus-5-5", DefaultModel)
 	}
 }
 
@@ -625,8 +625,8 @@ func TestModelPin(t *testing.T) {
 // overkill for a mechanical classification pass (Opus 5.5 holds quality at
 // medium at a fraction of the tokens).
 func TestEffortPin(t *testing.T) {
-	if defaultEffort != "medium" {
-		t.Errorf("defaultEffort = %q, want medium", defaultEffort)
+	if DefaultEffort != "medium" {
+		t.Errorf("DefaultEffort = %q, want medium", DefaultEffort)
 	}
 }
 

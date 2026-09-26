@@ -28,6 +28,11 @@ const (
 	// the row is gone by the time the frame is built — so it carries ids only
 	// (Notification.TaskID + ProjectID) and the client drops the card by id.
 	NoteTaskDeleted = "task_deleted"
+	// learning loop phase 13 — attention (additive): published by the daemon's
+	// surprise scorer when a finished phase run's surprise score first reaches
+	// SWARMERY_SURPRISE_NOTIFY (at most once per run). Carries TaskID (the
+	// workspace task) + PhaseID; the WS layer hydrates the stored score.
+	NotePhaseSurprise = "phase_surprise"
 )
 
 // Notification is one ingest event on the internal bus. It carries row ids
@@ -47,6 +52,8 @@ type Notification struct {
 	// cannot be re-read, so its owning project rides along on the notification
 	// instead of being looked up by the WS layer.
 	ProjectID int64 // projects.id
+	// learning loop phase 13 (additive): set for phase_surprise only.
+	PhaseID int64 // epic_phases.id
 }
 
 // Bus is a minimal fan-out pub/sub channel for ingest notifications.

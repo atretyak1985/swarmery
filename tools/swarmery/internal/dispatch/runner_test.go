@@ -80,7 +80,7 @@ func TestClaudeRunnerModelFlag(t *testing.T) {
 	}
 	got := strings.TrimSpace(string(out))
 	want := "-p hello --session-id u3 --setting-sources project,local --permission-mode " +
-		claudeflags.DefaultMode + " --model sonnet"
+		claudeflags.DefaultMode + " --model sonnet --effort " + DefaultEffort
 	if got != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}

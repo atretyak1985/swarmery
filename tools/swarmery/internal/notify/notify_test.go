@@ -39,8 +39,8 @@ func TestWithDefaultsEvents(t *testing.T) {
 		events []string
 		want   []string
 	}{
-		{"nil → default", nil, []string{EventApprovalRequested}},
-		{"whitespace-only → default", []string{" ", "\t", ""}, []string{EventApprovalRequested}},
+		{"nil → default", nil, []string{EventApprovalRequested, EventRunNeedsOperator}},
+		{"whitespace-only → default", []string{" ", "\t", ""}, []string{EventApprovalRequested, EventRunNeedsOperator}},
 		{"entries trimmed, empties dropped",
 			[]string{" session_error ", "", "approval_expired"},
 			[]string{EventSessionError, EventApprovalExpired}},
@@ -50,6 +50,31 @@ func TestWithDefaultsEvents(t *testing.T) {
 		if strings.Join(got, ",") != strings.Join(c.want, ",") {
 			t.Errorf("%s: Events = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestEventsSetting(t *testing.T) {
+	env := func(v string) func(string) string {
+		return func(key string) string {
+			if key == "SWARMERY_NOTIFY_EVENTS" {
+				return v
+			}
+			return ""
+		}
+	}
+	if got, want := EventsSetting(env("")), "approval_requested,run_needs_operator"; got != want {
+		t.Errorf("unset env: EventsSetting = %q, want exactly %q", got, want)
+	}
+	if got, want := EventsSetting(env("session_error")), "session_error"; got != want {
+		t.Errorf("env set: EventsSetting = %q, want %q (env replaces the default)", got, want)
+	}
+	// The resolved default must survive Config parsing unchanged and validate.
+	cfg := Config{URL: "http://x", Events: strings.Split(EventsSetting(env("")), ",")}.withDefaults()
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("default events do not validate: %v", err)
+	}
+	if strings.Join(cfg.Events, ",") != "approval_requested,run_needs_operator" {
+		t.Errorf("default Config.Events = %v", cfg.Events)
 	}
 }
 

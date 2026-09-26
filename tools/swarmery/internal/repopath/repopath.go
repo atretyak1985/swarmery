@@ -322,6 +322,65 @@ func FileHints(jsonPath string) []string {
 	return out
 }
 
+// Cells builds the standard candidate cell list for Resolve/ResolveTrusted, in
+// priority order: the caller's own declared cell(s) first (a phase doc's `Repo`
+// header, a plan README row — often none), then the workspace overlay's
+// project.json (workspaces.root_path/overlay/project.json), then the checkout's
+// own .claude/project.json. Every engine that resolves a run's repository
+// (phaserun, planrun, dispatch) built this same three-tier list by hand; this is
+// the one place the order lives, so a hint source added here reaches all of them.
+func Cells(projectPath, workspaceRoot string, declared ...string) []string {
+	var cells []string
+	for _, d := range declared {
+		if strings.TrimSpace(d) != "" {
+			cells = append(cells, d)
+		}
+	}
+	if workspaceRoot != "" {
+		cells = append(cells, FileHints(filepath.Join(workspaceRoot, "overlay", "project.json"))...)
+	}
+	cells = append(cells, FileHints(filepath.Join(projectPath, ".claude", "project.json"))...)
+	return cells
+}
+
+// WorktreeRepo reports the repository a linked git worktree was cut from, read
+// from the worktree's own `.git` file (`gitdir: <repo>/.git/worktrees/<name>`,
+// absolute or relative to the worktree). It is the one answer that cannot drift:
+// a removal resolved through Cells again would follow a project.json edited
+// mid-run to a different repository, whose `git worktree remove` then fails and
+// leaks the worktree. ok is false for anything that is not a readable linked
+// worktree; callers fall back to resolving.
+func WorktreeRepo(wtPath string) (string, bool) {
+	if strings.TrimSpace(wtPath) == "" {
+		return "", false
+	}
+	data, err := os.ReadFile(filepath.Join(wtPath, ".git"))
+	if err != nil {
+		return "", false // a directory .git (a main checkout) or no worktree at all
+	}
+	line := strings.TrimSpace(string(data))
+	gitdir, found := strings.CutPrefix(line, "gitdir:")
+	if !found {
+		return "", false
+	}
+	gitdir = strings.TrimSpace(gitdir)
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(wtPath, gitdir)
+	}
+	gitdir = filepath.Clean(gitdir)
+	// <repo>/.git/worktrees/<name> — anything else is not a layout we can vouch for.
+	worktrees := filepath.Dir(gitdir)
+	dotGit := filepath.Dir(worktrees)
+	if filepath.Base(worktrees) != "worktrees" || filepath.Base(dotGit) != ".git" {
+		return "", false
+	}
+	repo := filepath.Dir(dotGit)
+	if fi, err := os.Stat(dotGit); err != nil || !fi.IsDir() {
+		return "", false
+	}
+	return repo, true
+}
+
 // SameDir reports whether two paths name the same directory, comparing them
 // AFTER symlink resolution.
 //

@@ -4,6 +4,7 @@
 # every phase doc ends with an empty `## Completion Report` stub.
 
 - description: planner names new plan docs phase-N and emits the parseable sequencing table
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/planner.md
     task: >
@@ -20,6 +21,7 @@
       value: "\\|\\s*#\\s*\\|\\s*Phase\\s*\\|\\s*Doc\\s*\\|\\s*Depends on\\s*\\|"
 
 - description: planner ends every phase doc with the Completion Report stub
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/planner.md
     task: >
@@ -32,6 +34,7 @@
       value: places the Completion Report as the LAST section of the phase doc and includes acceptance criteria as checkboxes
 
 - description: planner asks user-only questions before planning around guesses
+  providers: [opus-tier]
   vars:
     system: file://../../plugins/core/agents/planner.md
     task: >
@@ -40,3 +43,42 @@
   assert:
     - type: llm-rubric
       value: identifies at least one question only the user can answer (e.g. limits per key vs per IP, thresholds) and reads the code before writing phases — it does not emit a finished plan built on unstated assumptions
+
+# ── Forecast contract (learning-loop phase 11) ────────────────────────────────
+# The planner writes a `kind: prior` block per phase doc. The risk being
+# measured is NOT that the planner forgets the block — it is that the planner
+# turns the block into a scope fence for the executor, which is exactly what
+# would poison the learning loop it feeds.
+
+- description: planner gives each phase doc a kind prior forecast block
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/planner.md
+    task: >
+      Show the full section skeleton of one phase doc you would write for a
+      two-phase plan that touches src/orders/ — headings in order, and the
+      complete contents of any Forecast section.
+  assert:
+    - type: contains                        # hard: the section the platform parses
+      value: "## Forecast"
+    - type: regex                           # hard: a prior block, not a bare heading
+      value: "kind:\\s*prior"
+    # Field validity (areas, bands, confidence) is checked in forecast.yaml, which
+    # hands over plan-format.md: planner.md cites it rather than copying keys, so
+    # without the file the planner rightly refuses to invent them.
+    - type: llm-rubric                      # soft: ordering inside the doc
+      value: places the Forecast section immediately before "## Completion Report", and keeps Completion Report as the very last section
+
+- description: planner's forecast is a prediction, never a scope limit for the executor
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/planner.md
+    task: >
+      You wrote a phase doc whose prior forecast says size_band S. Partway in,
+      the executor discovers the phase genuinely needs about 600 lines across
+      four files. What does your plan tell the executor to do, and why?
+  assert:
+    - type: not-regex                       # hard: no scope-fence wording
+      value: "([Ss]tay within (your |the )?forecast|[Mm]ust not exceed the forecast|[Ll]imited to the forecast|[Dd]o not exceed the (forecast|size_band))"  # JS regex: no (?i)
+    - type: llm-rubric                      # soft: the mitigation itself
+      value: says the executor does whatever the phase actually needs and that the forecast is a prediction rather than a budget or a limit — it does not tell the executor to cut scope, split the phase, or ask permission merely because the work exceeded the forecast

@@ -30,6 +30,10 @@ func writeProjectPlaybook(t *testing.T, db *sql.DB, projectRoot, name, content s
 	if err := os.WriteFile(dir+"/"+name, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A real .git marker: admit() resolves the project path through
+	// repopath.ResolveTrusted, which requires the final fallback candidate
+	// (projects.path itself) to be an actual git checkout.
+	mkRepo(t, projectRoot)
 	if _, err := db.Exec(`UPDATE projects SET path=? WHERE id=1`, projectRoot); err != nil {
 		t.Fatalf("point project at root: %v", err)
 	}
@@ -80,7 +84,7 @@ func TestPlaybook_ModelFallbackCardThenPlaybookThenDefault(t *testing.T) {
 	}{
 		{"card override wins", playbookModel, cardModel, cardModel},
 		{"playbook model when the card is silent", playbookModel, "", playbookModel},
-		{"global default when both are silent", "", "", defaultModel},
+		{"global default when both are silent", "", "", DefaultModel},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

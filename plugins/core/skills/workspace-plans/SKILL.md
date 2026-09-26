@@ -29,6 +29,9 @@ deviates from the format ships work the operator cannot see.
   no heredoc, `python3 -` or `node -e` — see `resources/plan-format.md`),
   `- [ ]` acceptance criteria checkable by command or boolean inspection, and
   an empty `## Completion Report` section as the LAST section.
+- A `## Forecast` section in each phase doc, immediately before that stub,
+  holding one `kind: prior` yaml block (see `resources/plan-format.md`).
+  It is a prediction, not a limit: do whatever the phase actually needs.
 - `plan/manifest.json` — machine-readable phase DAG (must pass
   `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — <criterion>` lines; then
@@ -36,6 +39,12 @@ deviates from the format ships work the operator cannot see.
   linted).
 
 # Executor duties
+
+After reading the code the phase touches and before your first edit, add a
+`kind: posterior` block beside the prior in `## Forecast` — the
+prediction-not-a-limit rule above applies unchanged — and if the work then
+diverges from it, say how and why in a short "Where reality diverged"
+paragraph of the Completion Report.
 
 Tick each satisfied criterion `- [ ]` → `- [x]` immediately after verifying
 it — progress is derived only from these checkboxes. When a phase's last

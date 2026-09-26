@@ -86,7 +86,7 @@ func LendPlanDoc(worktreePath, docPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read plan doc %s: %w", docPath, err)
 	}
-	rel := filepath.Join(PlanDocDir, filepath.Base(docPath))
+	rel := LentPlanDocRel(docPath)
 	dst := filepath.Join(worktreePath, rel)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return "", fmt.Errorf("create %s in worktree: %w", PlanDocDir, err)
@@ -95,6 +95,14 @@ func LendPlanDoc(worktreePath, docPath string) (string, error) {
 		return "", fmt.Errorf("write plan doc into worktree: %w", err)
 	}
 	return rel, nil
+}
+
+// LentPlanDocRel is where LendPlanDoc puts docPath, relative to the worktree
+// root. It is exported for the callers that must find a lent copy WITHOUT the
+// value LendPlanDoc returned — a run adopted after a daemon restart, whose
+// in-memory docRel died with the previous process.
+func LentPlanDocRel(docPath string) string {
+	return filepath.Join(PlanDocDir, filepath.Base(docPath))
 }
 
 // ReturnPlanDoc copies the worktree's copy back over the workspace document

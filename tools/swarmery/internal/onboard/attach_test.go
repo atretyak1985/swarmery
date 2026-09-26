@@ -156,6 +156,15 @@ func TestAttachFreshDirActsLikeOnboard(t *testing.T) {
 	if pj["name"] != "my-app" {
 		t.Errorf("project.json name = %v, want my-app", pj["name"])
 	}
+
+	// Attach is as much a first-time-managed entry point as Run: a project
+	// telemetry has never seen must get the same workspace-scanner pin, or
+	// the phantom-project bug this exists to prevent still happens on the
+	// attach path (see writeCodePathOverlay's doc comment).
+	overlay := readSettings(t, filepath.Join(wsRoot, "my-app", "overlay", "project.json"))
+	if overlay["codePath"] != dir {
+		t.Errorf("overlay codePath = %v, want %v", overlay["codePath"], dir)
+	}
 }
 
 func TestAttachIdempotent(t *testing.T) {

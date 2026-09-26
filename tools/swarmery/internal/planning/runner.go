@@ -29,6 +29,10 @@ type RunSpec struct {
 	SessionUUID string // daemon-generated; passed as --session-id (explicit link)
 	Cwd         string // the project path — the process runs here (hooks active)
 	Model       string // full model ID for --model; "" falls back to the runner's default
+	// Effort is the operator's reasoning-depth choice for --effort ("" falls
+	// back through SWARMERY_PLANNING_EFFORT to DefaultEffort). Rung 1 of the
+	// effort ladder, the twin of Model's.
+	Effort string
 }
 
 // Run is the outcome of a completed planner process.
@@ -48,6 +52,39 @@ const planTimeout = 20 * time.Minute
 // default (Fable-5 here — 2× the Opus price). Full ID, not an alias — aliases
 // re-resolve over time.
 const DefaultModel = "claude-opus-5-5"
+
+// DefaultEffort pins how hard a planner run thinks. Without --effort the CLI
+// inherits its own xhigh default, which is the deepest setting there is —
+// planning IS the reasoning-heavy engine, so this is one of the few sites where
+// that would not have been waste, but it must still be EXPLICIT: an unpinned
+// site silently re-prices itself whenever the CLI changes its default. high is
+// the deliberate choice (phase 7 re-measures it against xhigh).
+const DefaultEffort = "high"
+
+// effortEnv is this spawn site's --effort knob; internal/claudeflags owns the
+// resolution, the validation and the "off" escape hatch.
+const effortEnv = "SWARMERY_PLANNING_EFFORT"
+
+// ResolveEffort maps an operator's choice to what reaches --effort: the choice
+// (validated), else SWARMERY_PLANNING_EFFORT, else DefaultEffort. Exported so
+// the api layer can reject a typo with a 400 before a run is dispatched, and so
+// the dashboard can show the depth an un-picked run will actually use.
+func ResolveEffort(choice string) (string, error) {
+	canonical, ok := claudeflags.NormalizeEffort(choice)
+	if !ok {
+		return "", fmt.Errorf("%w: %q (valid: %s)", ErrUnknownEffort, choice,
+			strings.Join(claudeflags.ValidEfforts(), ", "))
+	}
+	if canonical != "" {
+		return canonical, nil
+	}
+	return claudeflags.Effort(effortEnv, DefaultEffort), nil
+}
+
+// ErrUnknownEffort: the requested effort is outside the CLI's closed set (400 at
+// the api layer). The twin of ErrUnknownModel, and separate from it so a caller
+// can tell the operator which of the two fields they mistyped.
+var ErrUnknownEffort = errors.New("unknown effort")
 
 // Models is the closed set an operator may plan with, keyed by the short name
 // the dashboard shows and valued by the full ID that reaches --model. The
@@ -102,6 +139,9 @@ type ClaudeRunner struct {
 	Timeout time.Duration
 	// Model overrides DefaultModel when non-empty and the spec carries none.
 	Model string
+	// Effort overrides the resolved default when non-empty and the spec carries
+	// none. The twin of Model.
+	Effort string
 }
 
 // Start maps this engine's RunSpec onto runcore.Spec and its Result back onto
@@ -121,12 +161,27 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	if model == "" {
 		model = DefaultModel
 	}
+	effort := spec.Effort
+	if effort == "" {
+		effort = r.Effort
+	}
+	// Unvalidated values cannot reach the CLI: an unknown one would make the
+	// spawn die before the run starts. NormalizeEffort folds a known value and
+	// reports an unknown one, which falls through to the knob/default ladder.
+	if canonical, ok := claudeflags.NormalizeEffort(effort); ok && canonical != "" {
+		effort = canonical
+	} else {
+		effort = claudeflags.Effort(effortEnv, DefaultEffort)
+	}
 
 	res, err := runcore.ClaudeRunner{Engine: "planning"}.Start(ctx, runcore.Spec{
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
 		Cwd:         spec.Cwd,
 		Model:       model,
+		// Without --effort the CLI thinks at xhigh on every turn of a 20-minute
+		// planner run. Resolved, never omitted by accident.
+		Effort: effort,
 		// The planner writes: a plan dir with README/spec/phase docs, and nothing
 		// else it does matters if that write is denied. See internal/claudeflags.
 		PermissionMode: claudeflags.Mode(permEnv),

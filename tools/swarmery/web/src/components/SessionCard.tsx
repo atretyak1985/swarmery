@@ -3,6 +3,7 @@ import type { Session } from '../api/types';
 import { fmtSpan, fmtTime } from '../lib/format';
 import { accountLabel } from '../lib/sessionAccount';
 import { useSessionHref } from '../lib/sessionHref';
+import { modelShortName, sessionModelFallback } from '../lib/sessionModelChip';
 import { sessionState, useNowMs, type SessionState } from '../lib/sessionState';
 import { ExplainPair } from './Explain';
 import { KillButton, killSlotKind } from './KillButton';
@@ -86,6 +87,44 @@ function AccountBadge({ session }: { session: Session }): JSX.Element | null {
       className="shrink-0 rounded-full border border-line-strong bg-surface2 px-[7px] py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-dim"
     >
       {label}
+    </span>
+  );
+}
+
+/** The session's model, and — when it moved — BOTH ends of the move.
+ *
+ * `session.model` is the FIRST assistant model of the transcript, which for a
+ * session an Opus 5.5 safeguard pushed onto an older model is a true statement
+ * about the first turn and a false one about the output. The daemon has carried
+ * `modelLast`/`modelChanged` for exactly this and nothing rendered them, so the
+ * row kept showing the model the session started on for its whole life.
+ *
+ * Markup and wording are the phase-run chip's (Plans.tsx RunModelChip) on
+ * purpose: a reader who has learnt "amber → fell back to" on a phase run should
+ * not have to learn it again on the session that produced it. */
+function SessionModelCell({ session }: { session: Session }): JSX.Element {
+  const moved = sessionModelFallback(session);
+  if (moved !== null) {
+    // Amber and "fell back to" are reserved for a move DOWN — the thing that
+    // explains a weaker answer. A move up is still worth showing, but in the
+    // neutral accent and neutral wording, or the chip cries wolf on every
+    // deliberate escalation.
+    const cls = moved.fellBack
+      ? 'border-amber/40 bg-amber/10 text-amber'
+      : 'border-ink-faint/40 bg-ink-faint/10 text-ink-faint';
+    return (
+      <span
+        className={`truncate rounded border px-1.5 py-px font-mono text-[9.5px] ${cls}`}
+        data-tip={`this session changed model mid-flight: started on ${moved.from}, its newest turn ran on ${moved.to}`}
+      >
+        {modelShortName(moved.from)} {moved.fellBack ? '→ fell back to' : '→ changed to'}{' '}
+        {modelShortName(moved.to)}
+      </span>
+    );
+  }
+  return (
+    <span className="truncate font-mono text-[11px] text-ink-faint">
+      {session.model ?? '—'}
     </span>
   );
 }
@@ -418,9 +457,7 @@ export function SessionCard({
             </span>
           )}
         </span>
-        <span className="truncate font-mono text-[11px] text-ink-faint">
-          {session.model ?? '—'}
-        </span>
+        <SessionModelCell session={session} />
         <RowChip tone={tone} suffix={chipSuffix(session, tone)} />
       </div>
     </div>

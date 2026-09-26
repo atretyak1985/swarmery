@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // Phase is one entry of the plan manifest handed to the executor: enough for it
@@ -147,6 +148,8 @@ Constraints this run adds on top of the skill, because THERE IS NO HUMAN in this
 - When a phase's last criterion is ticked, WRITE THAT PHASE'S SUMMARY INTO ITS OWN PHASE DOC: fill the doc's ` + "`## Completion Report`" + ` section, or append it at the end of the doc when the section does not exist yet — what shipped, files and commits, verification output, deviations, and anything DEFERRED. That section is the ONLY per-phase summary the operator's dashboard shows; the run ledger and any reports/ file are invisible there, so this is in addition to them, never instead. A phase left with no Completion Report is not finished.
 - When every phase is finished, end with: PLAN DONE.
 
+{{.TurnContract}}
+
 PHASE MANIFEST (current state — phases marked DONE are already landed; skip them):
 {{.Manifest}}
 PLAN README:
@@ -158,7 +161,7 @@ PLAN README:
 // template with string data cannot fail, so the (unreachable) error is ignored
 // (same posture as planning.BuildPrompt / phaserun.BuildPrompt).
 func BuildPrompt(planDir, readme string, phases []Phase, mode Mode) string {
-	return BuildPromptIn(planDir, readme, phases, mode, "", "", "")
+	return BuildPromptIn(planDir, readme, phases, mode, "", "", "", runcore.Budget{})
 }
 
 // BuildPromptIn is BuildPrompt with the run's repository context: repoRoot is the
@@ -170,7 +173,12 @@ func BuildPrompt(planDir, readme string, phases []Phase, mode Mode) string {
 // the worktree that same file is "src/components/x.tsx". Without this note an
 // agent "fixes" the mismatch by creating a nested sk-next/ directory and writes
 // the whole phase into a tree nobody reads.
-func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, projectPath, worktreePath string) string {
+//
+// budget states this run's wall clock and start instant (step 3.5), resolved
+// once by the service so the prompt, every continuation message and the
+// completion loop's deadline all read the same clock. A zero Budget renders no
+// budget line (BuildPrompt's shape).
+func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, projectPath, worktreePath string, budget runcore.Budget) string {
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
 		PlanDir       string
@@ -178,7 +186,8 @@ func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, 
 		ModeDirective string
 		Manifest      string
 		Readme        string
-	}{planDir, repoNote(repoRoot, projectPath, worktreePath), modeDirective(mode), manifest(phases), readme})
+		TurnContract  string
+	}{planDir, repoNote(repoRoot, projectPath, worktreePath), modeDirective(mode), manifest(phases), readme, runcore.TurnContract(budget)})
 	return b.String()
 }
 
@@ -186,17 +195,22 @@ func BuildPromptIn(planDir, readme string, phases []Phase, mode Mode, repoRoot, 
 // declares extra reachable paths, repopath.AdditionalDirsNote — "" when
 // neither applies.
 func repoNote(repoRoot, projectPath, worktreePath string) string {
-	note := ""
+	return multiRepoNote(repoRoot, projectPath) + repopath.AdditionalDirsNote(projectPath, worktreePath)
+}
+
+// multiRepoNote is the orientation block, or "" when the run's repository IS
+// the project root (the single-repo case, where the note would only add noise).
+func multiRepoNote(repoRoot, projectPath string) string {
 	// repopath.SameDir, not a Clean comparison: the resolved root has been through
 	// EvalSymlinks and projects.path has not, so on a symlinked path a single-repo
 	// run would otherwise be handed a note telling it it is somewhere it is not.
-	if repoRoot != "" && projectPath != "" && !repopath.SameDir(repoRoot, projectPath) {
-		name := filepath.Base(repoRoot)
-		note = fmt.Sprintf(
-			"REPOSITORY: your worktree is a checkout of `%s` (%s), ONE repository inside the project root %s.\n"+
-				"Paths in this plan may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
-				"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
-			name, repoRoot, projectPath, name, name)
+	if repoRoot == "" || projectPath == "" || repopath.SameDir(repoRoot, projectPath) {
+		return ""
 	}
-	return note + repopath.AdditionalDirsNote(projectPath, worktreePath)
+	name := filepath.Base(repoRoot)
+	return fmt.Sprintf(
+		"REPOSITORY: your worktree is a checkout of `%s` (%s), ONE repository inside the project root %s.\n"+
+			"Paths in this plan may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
+			"Do NOT create a `%s/` directory to make such a path resolve.\n",
+		name, repoRoot, projectPath, name, name)
 }

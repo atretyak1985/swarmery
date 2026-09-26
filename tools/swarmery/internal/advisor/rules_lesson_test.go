@@ -242,3 +242,26 @@ func TestR11NotSelfChecking(t *testing.T) {
 		t.Fatal("R11 must NOT be self-checking — absence of retros is not evidence of repair")
 	}
 }
+
+// TestR11LinksSurpriseLessons (learning-loop 14.5): a surprise-born lesson with
+// the recurring identity is linked from the finding's evidence, so the operator
+// reviews one lesson instead of two duplicates. Dismissed ones are not linked.
+func TestR11LinksSurpriseLessons(t *testing.T) {
+	db := testDB(t)
+	seedLessonTask(t, db, 1, "2026-07-20-task-a", 1, syncLesson(syncTitle, ""))
+	seedLessonTask(t, db, 2, "2026-07-19-task-b", 2, syncLesson(syncTitle, ""))
+	seedLessonTask(t, db, 3, "2026-07-18-task-c", 3, syncLesson(syncTitle, ""))
+	for _, st := range []string{"candidate", "dismissed"} {
+		mustExec(t, db, `INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, norm_title,
+			guidance, status, created_at, updated_at) VALUES (?, 1, 1, ?, ?, 'g', ?, 'now', 'now')`,
+			"run-"+st, syncTitle, syncNorm, st)
+	}
+	fs, err := r11RecurringLesson(db, evalWindow())
+	if err != nil || len(fs) != 1 {
+		t.Fatalf("findings = %+v, %v", fs, err)
+	}
+	ids, ok := fs[0].evidence["surprise_lessons"].([]int64)
+	if !ok || len(ids) != 1 || ids[0] != 1 {
+		t.Fatalf("surprise_lessons evidence = %#v, want [1]", fs[0].evidence["surprise_lessons"])
+	}
+}

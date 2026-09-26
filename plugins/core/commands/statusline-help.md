@@ -24,7 +24,7 @@ copy, see `docs/ONBOARDING.md` "Statusline"; wired via the `statusLine` key in
    ```bash
    SL="$CLAUDE_PROJECT_DIR/.claude/statusline/statusline.sh"
    [ -f "$SL" ] || SL="$CLAUDE_PROJECT_DIR/plugins/core/statusline/statusline.sh"
-   printf '%s' '{"version":"2.1.170","model":{"id":"claude-opus-5[1m]","display_name":"Opus 5 (1M context)"},"output_style":{"name":"Explanatory"},"workspace":{"current_dir":"'"$CLAUDE_PROJECT_DIR"'","project_dir":"'"$CLAUDE_PROJECT_DIR"'"},"cwd":"'"$CLAUDE_PROJECT_DIR"'","context_window":{"used_percentage":15},"rate_limits":{"five_hour":{"used_percentage":8,"resets_at":2000000000},"seven_day":{"used_percentage":20,"resets_at":2000600000}},"cost":{"total_cost_usd":5.04,"total_duration_ms":2792000,"total_lines_added":299,"total_lines_removed":6}}' | bash "$SL"
+   printf '%s' '{"version":"2.1.170","model":{"id":"claude-opus-5-5[1m]","display_name":"Opus 5.5 (1M context)"},"output_style":{"name":"Explanatory"},"workspace":{"current_dir":"'"$CLAUDE_PROJECT_DIR"'","project_dir":"'"$CLAUDE_PROJECT_DIR"'"},"cwd":"'"$CLAUDE_PROJECT_DIR"'","context_window":{"used_percentage":15},"rate_limits":{"five_hour":{"used_percentage":8,"resets_at":2000000000},"seven_day":{"used_percentage":20,"resets_at":2000600000}},"cost":{"total_cost_usd":5.04,"total_duration_ms":2792000,"total_lines_added":299,"total_lines_removed":6}}' | bash "$SL"
    ```
 
    (This is a synthetic payload for illustration — the real statusline uses the

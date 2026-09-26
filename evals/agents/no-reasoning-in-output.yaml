@@ -1,0 +1,91 @@
+# no-reasoning-in-output suite (core 3.6, phase 5/6).
+#
+# What regressed and what this guards: plugins/core/templates/verbose-instructions.md
+# used to demand narrated reasoning in the visible answer — "Always start with a
+# plan", an "I'm going to [action] / Plan: 1,2,3 / Reasoning: [why] / Let me
+# start…" preamble, then a "Step N: [what I'm doing now]" line per step. Phase 5
+# deleted it (commit d76c817): on a thinking model that scaffolding duplicates
+# adaptive thinking, burns output tokens, and invites a reasoning_extraction
+# refusal. Nothing may reintroduce it, in core or in the packs.
+#
+# Reading the assertions: the opus-tier provider sets `showThinking: false`, so
+# `output` is the visible answer only — a model reasoning block can never satisfy
+# or trip these on its own.
+#
+# Hard assert: not-regex for internal/system reasoning tags leaking into the
+# response (Opus-family models can emit these when reasoning is mishandled —
+# unambiguous, so a hard assert is right).
+# Soft assert: llm-rubric — "is this narration or is it the answer?" is judgment,
+# and a keyword ban would fire on legitimate prose.
+
+- description: tech-lead answers without a narrated plan-and-reasoning preamble
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/tech-lead.md
+    task: >
+      The CSV export endpoint returns a 500 for orders with more than 10,000
+      line items. Which executor do you dispatch first, and why that one?
+  assert:
+    - type: not-regex                       # hard — no internal/system tags in the response
+      # No inline (?i): promptfoo compiles this with `new RegExp(value)` and no
+      # flags, so an inline-flag prefix is a SyntaxError and scores the assertion
+      # failed. Case tolerance goes in character classes instead.
+      value: "</?([Tt]hinking|[Rr]easoning|[Ss]cratchpad|[Ii]nternal_monologue)\\s*>"
+    - type: llm-rubric                      # soft
+      value: >
+        answers the question directly. It does NOT open with a narrated scaffold before
+        the answer — no "I'm going to…", no numbered "Plan:" of its own upcoming steps,
+        no separate "Reasoning:" section, no "Step 1: what I'm doing now" narration.
+        Naming the executor and giving the reason for that choice in prose is the answer,
+        not narration, and counts as passing.
+
+- description: implementation-agent answers without narrating each step as it goes
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/implementation-agent.md
+    task: >
+      step_file=plan/phase-2-add-rate-limit.md. The phase doc asks you to add a
+      per-IP rate limit to one existing route handler and run the repo's
+      typecheck. Begin.
+  assert:
+    - type: not-regex                       # hard
+      # No inline (?i): promptfoo compiles this with `new RegExp(value)` and no
+      # flags, so an inline-flag prefix is a SyntaxError and scores the assertion
+      # failed. Case tolerance goes in character classes instead.
+      value: "</?([Tt]hinking|[Rr]easoning|[Ss]cratchpad|[Ii]nternal_monologue)\\s*>"
+    - type: llm-rubric                      # soft
+      value: >
+        gets on with the work or states what it needs. It does NOT emit the deleted
+        verbose-instructions scaffold — a "Plan:" block plus a "Files to modify:" list
+        plus a "Reasoning:" section plus "Let me start…" before doing anything, or a
+        "Step N: [what I'm doing now]" line narrating each action.
+
+- description: code-reviewer emits findings and a verdict, not a reasoning transcript
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/code-reviewer.md
+    task: |
+      Review this diff. It is the whole change.
+
+      --- a/src/lib/auth/session.ts
+      +++ b/src/lib/auth/session.ts
+      @@ -22,7 +22,7 @@ export async function requireSession(req: Request) {
+         const token = req.headers.get("authorization")?.replace("Bearer ", "")
+      -  if (!token) throw new UnauthorizedError()
+      +  if (!token) return null
+         return verify(token)
+       }
+  assert:
+    - type: not-regex                       # hard
+      # No inline (?i): promptfoo compiles this with `new RegExp(value)` and no
+      # flags, so an inline-flag prefix is a SyntaxError and scores the assertion
+      # failed. Case tolerance goes in character classes instead.
+      value: "</?([Tt]hinking|[Rr]easoning|[Ss]cratchpad|[Ii]nternal_monologue)\\s*>"
+    - type: regex                           # hard — still ends on the machine verdict, nothing after
+      value: "VERDICT: (PASS|FAIL|INCONCLUSIVE)\\s*$"
+    - type: llm-rubric                      # soft
+      value: >
+        the body is findings — file:line, what is wrong, how to show it fails — followed
+        by the verdict line. It is NOT a transcript of the reviewer working the problem
+        out ("first I'll look at…", "now let me consider…", "let me check whether…")
+        before arriving at the findings.

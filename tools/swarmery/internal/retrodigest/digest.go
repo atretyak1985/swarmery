@@ -15,7 +15,7 @@
 //     a field, not time.Now().
 //   - Citations. Every evidence line ends in at least one marker of the form
 //     [E:<kind>:<id>], kind ∈ {agent, rec, error_group, session, task,
-//     lesson}. The improver agent may only cite ids it finds here, and
+//     lesson, phase}. The improver agent may only cite ids it finds here, and
 //     internal/retroanalysis validates its output against that vocabulary.
 package retrodigest
 
@@ -34,6 +34,9 @@ const (
 	KindSession    = "session"
 	KindTask       = "task"
 	KindLesson     = "lesson"
+	// KindPhase cites one plan phase (epic_phases.id) by its forecast-vs-actual
+	// surprise score (learning loop phase 13).
+	KindPhase = "phase"
 )
 
 // Report is the storage-free shape of one /retro window. Field names mirror
@@ -51,6 +54,14 @@ type Report struct {
 	Lessons         []Lesson
 	Tasks           []Task
 	Recommendations []Recommendation
+	// Surprises are the window's most surprising phase runs — where a run
+	// landed furthest from its forecast (internal/surprise). The caller passes
+	// the top ones already; the digest sorts them.
+	Surprises []Surprise
+	// Labels are D2's session-label tallies (internal/decide, phase 9). Read
+	// when present: an empty slice adds no section, so a fleet without the
+	// classifier gets the same digest byte for byte.
+	Labels []LabelCount
 
 	// Partial names the sections whose query failed upstream. They render as
 	// an explicit warning so the reader never mistakes a failed section for
@@ -164,6 +175,24 @@ type Recommendation struct {
 	Sessions []string
 }
 
+// Surprise is one scored phase run: how far it landed from its forecast.
+// PhaseID is its citation id.
+type Surprise struct {
+	PhaseID int64
+	Plan    string // the plan's title
+	Phase   string // the phase's name
+	Index   float64
+	Top     string // the component that contributed most; "" when none did
+	Summary string // the scorer's one-sentence account
+}
+
+// LabelCount is one (field, value) tally of classifier session labels.
+type LabelCount struct {
+	Field string
+	Value string
+	Count int64
+}
+
 // section is one rendered block: a head that always survives, an item list
 // that can be trimmed, and the priority that decides who is dropped first when
 // even fair shares do not fit.
@@ -185,11 +214,14 @@ type section struct {
 // conclusions and agents are the raw health signal, so they survive longest;
 // the estimation table is the first thing an improver can do without.
 const (
-	prioTasks    = 1
-	prioLessons  = 2
-	prioFriction = 3
-	prioAgents   = 4
-	prioRecs     = 5
+	// Surprises go first under pressure: each is a single-run signal, where
+	// every other section aggregates many runs.
+	prioSurprises = 0
+	prioTasks     = 1
+	prioLessons   = 2
+	prioFriction  = 3
+	prioAgents    = 4
+	prioRecs      = 5
 )
 
 // truncMarker is appended verbatim when whole sections were dropped; %d is the
@@ -320,6 +352,10 @@ func Build(r Report, limit int) (string, bool) {
 		buildFriction(r.Friction),
 		buildLessons(r.Lessons),
 		buildTasks(r.Tasks),
+		buildSurprises(r.Surprises),
+	}
+	if len(r.Labels) > 0 {
+		sections = append(sections, buildLabels(r.Labels))
 	}
 
 	full := header
@@ -620,9 +656,49 @@ func buildTasks(tasks []Task) section {
 	return sec
 }
 
+func buildSurprises(surprises []Surprise) section {
+	sec := section{name: "surprises", prio: prioSurprises,
+		head:  "\n## Forecast surprises\n\n",
+		empty: "No phase run in this window was scored against a forecast.\n"}
+
+	rows := append([]Surprise(nil), surprises...)
+	sort.Slice(rows, func(i, j int) bool {
+		// Most surprising first; the phase id is the total-order tie-break.
+		if rows[i].Index != rows[j].Index {
+			return rows[i].Index > rows[j].Index
+		}
+		return rows[i].PhaseID < rows[j].PhaseID
+	})
+	for _, s := range rows {
+		top := s.Top
+		if top == "" {
+			top = "none"
+		}
+		sec.items = append(sec.items, fmt.Sprintf("- %s / %s — surprise %.2f (top: %s): %s %s\n",
+			oneLine(s.Plan), oneLine(s.Phase), s.Index, top, oneLine(s.Summary),
+			cite(KindPhase, itoa(s.PhaseID))))
+	}
+	return sec
+}
+
 // citeSessions renders a sorted, deduped, capped list of session citations.
 // The cap keeps one noisy error group from crowding out whole sections.
 const maxSessionCites = 5
+
+// buildLabels renders the classifier's session-label tallies. Advisory: the
+// labels come from a small local model, and the heading says so.
+func buildLabels(labels []LabelCount) section {
+	sec := section{
+		name:  "labels",
+		prio:  prioSurprises,
+		head:  "\n## Session labels (local classifier, advisory)\n\n",
+		empty: "_(no labelled sessions)_\n",
+	}
+	for _, l := range labels {
+		sec.items = append(sec.items, fmt.Sprintf("- %s = %s: %d sessions\n", l.Field, oneLine(l.Value), l.Count))
+	}
+	return sec
+}
 
 func citeSessions(uuids []string) string {
 	if len(uuids) == 0 {

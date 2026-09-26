@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // mkRepo marks dir as a git checkout for repopath.Resolve (which stats .git and
@@ -192,38 +194,13 @@ func TestDeleteRunBranch_UsesResolvedRepo(t *testing.T) {
 func TestBuildPromptIn_RepoNote(t *testing.T) {
 	phases := []Phase{{Seq: 1, Name: "P1", DocPath: "/plan/phase-1.md", Total: 1}}
 
-	multi := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", "")
+	multi := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", "", runcore.Budget{})
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj", "/proj", "")
+	solo := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj", "/proj", "", runcore.Budget{})
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
-	}
-}
-
-// Same additional-access orientation as phaserun's TestBuildPromptIn_AdditionalDirsNote
-// — the two run surfaces must not differ about telling the agent what it can reach.
-func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
-	phases := []Phase{{Seq: 1, Name: "P1", DocPath: "/plan/phase-1.md", Total: 1}}
-	projectRoot := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	settings := filepath.Join(projectRoot, ".claude", "settings.json")
-	body := `{"permissions":{"additionalDirectories":["/proj/sk-control-box"]}}`
-	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	withDirs := BuildPromptIn("/plan", "readme", phases, ModeAuto, filepath.Join(projectRoot, "app"), projectRoot, "")
-	if !strings.Contains(withDirs, "ADDITIONAL ACCESS:") || !strings.Contains(withDirs, "/proj/sk-control-box") {
-		t.Errorf("prompt missing additional-access note when additionalDirectories is declared:\n%s", withDirs)
-	}
-
-	noDirs := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", "")
-	if strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
-		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }
 
@@ -338,5 +315,25 @@ func TestStart_DeclaredRepoIsRegisteredProject_AcquiresThere(t *testing.T) {
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, other) {
 		t.Fatalf("Acquire repoRoot = %q, want %q", got, other)
+	}
+}
+
+// Same additional-access orientation as phaserun: the two run surfaces must not
+// differ about what the agent can reach (ported from PR #374).
+func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
+	phases := []Phase{{Seq: 1, Name: "P1", DocPath: "/plan/phase-1.md", Total: 1}}
+	projectRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectRoot, ".claude", "settings.json"), []byte(`{"permissions":{"additionalDirectories":["/proj/sibling-a"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withDirs := BuildPromptIn("/plan", "readme", phases, ModeAuto, filepath.Join(projectRoot, "app"), projectRoot, "", runcore.Budget{})
+	if !strings.Contains(withDirs, "ADDITIONAL ACCESS:") || !strings.Contains(withDirs, "/proj/sibling-a") {
+		t.Errorf("prompt missing additional-access note when additionalDirectories is declared:\n%s", withDirs)
+	}
+	if noDirs := BuildPromptIn("/plan", "readme", phases, ModeAuto, "/proj/app", "/proj", "", runcore.Budget{}); strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
+		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }

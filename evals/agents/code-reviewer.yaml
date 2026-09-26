@@ -1,0 +1,136 @@
+# code-reviewer output-contract suite (core 3.6, phase 5).
+#
+# The contract under test, from plugins/core/agents/code-reviewer.md "Output":
+#   - list ONLY problems you would block the merge for, ranked P0/P1, each with
+#     file:line and how to show it fails;
+#   - at most ONE line after the findings for a non-blocking note, marked as
+#     non-blocking — "one line is the whole budget";
+#   - zero findings is a legitimate result, said plainly, not padded;
+#   - exactly one final line `VERDICT: PASS | FAIL | INCONCLUSIVE`, nothing after it.
+#
+# Hard asserts: regex (verdict grammar anchored at end of output, severity rank,
+# file:line evidence), contains (the literal "non-blocking" marker).
+# Soft asserts: llm-rubric (is a given item genuinely merge-blocking? — judgment).
+#
+# Diff fixtures use literal block scalars (|) — a folded scalar (>) would join
+# the diff lines into a paragraph and destroy the thing under review.
+
+- description: code-reviewer reports only merge blockers and demotes nits to one non-blocking line
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/code-reviewer.md
+    task: |
+      Review this diff. It is the whole change.
+
+      --- a/src/lib/export/writer.ts
+      +++ b/src/lib/export/writer.ts
+      @@ -78,12 +78,20 @@
+      +export async function finishExport(job: ExportJob, body: Buffer) {
+      +  const key = `exports/${job.id}.csv`
+      +  try {
+      +    await s3.putObject({ Bucket: BUCKET, Key: key, Body: body })
+      +  } catch (e) {
+      +    // upload flakes sometimes
+      +  }
+      +  await db.update(jobs).set({ status: 'done', url: presign(key) }).where(eq(jobs.id, job.id))
+      +  return presign(key)
+      +}
+
+      --- a/src/lib/export/format.ts
+      +++ b/src/lib/export/format.ts
+      @@ -12,6 +12,9 @@
+      +// returns the header row
+      +export function hdr(cols: string[]) {
+      +  return cols.join(",") + "\n";
+      +}
+  assert:
+    # hard — exactly one verdict line, and nothing after it
+    - type: regex
+      value: "VERDICT: (PASS|FAIL|INCONCLUSIVE)\\s*$"
+    - type: contains
+      value: "VERDICT: FAIL"
+    # hard — findings are severity-ranked P0/P1
+    - type: regex
+      value: "\\bP[01]\\b"
+    # hard — the surviving nit is explicitly flagged as not blocking
+    - type: icontains
+      value: "non-blocking"
+    - type: llm-rubric                      # soft — which items deserve blocker status is judgment
+      value: >
+        the swallowed upload error in writer.ts is reported as a blocking finding with a
+        file:line and a concrete way to show it fails (the job reports done and hands back
+        a URL for an object that was never uploaded); the cosmetic points about format.ts
+        (the terse name `hdr`, the redundant comment, the inconsistent semicolons) are NOT
+        listed as findings — at most one of them appears, on a single line marked as
+        non-blocking
+
+- description: code-reviewer says zero findings plainly instead of inventing work
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/code-reviewer.md
+    task: |
+      Review this diff. It is the whole change.
+
+      --- a/src/lib/orders/limits.ts
+      +++ b/src/lib/orders/limits.ts
+      @@ -1,3 +1,9 @@
+      +/** Largest page size the orders list endpoint will serve. */
+      +export const MAX_PAGE_SIZE = 100;
+      +
+      +export function clampPageSize(requested: number): number {
+      +  if (!Number.isFinite(requested) || requested < 1) return 1;
+      +  return Math.min(Math.trunc(requested), MAX_PAGE_SIZE);
+      +}
+
+      --- a/src/lib/orders/limits.test.ts
+      +++ b/src/lib/orders/limits.test.ts
+      @@ -0,0 +1,8 @@
+      +import { clampPageSize, MAX_PAGE_SIZE } from "./limits";
+      +
+      +test("clamps out-of-range and non-finite input", () => {
+      +  expect(clampPageSize(0)).toBe(1);
+      +  expect(clampPageSize(Number.NaN)).toBe(1);
+      +  expect(clampPageSize(10000)).toBe(MAX_PAGE_SIZE);
+      +  expect(clampPageSize(25.7)).toBe(25);
+      +});
+  assert:
+    - type: regex                           # hard — verdict grammar, nothing after it
+      value: "VERDICT: PASS\\s*$"
+    - type: llm-rubric                      # soft
+      value: >
+        states plainly that there is nothing it would block the merge for, and does not
+        manufacture a severity-ranked finding out of style, naming, or hypothetical
+        future concerns in order to look useful
+
+- description: code-reviewer backs each blocker with file:line and a way to show it fails
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/code-reviewer.md
+    task: |
+      Review this diff, lead with contract alignment. It is the whole change.
+
+      --- a/src/lib/db/schema.ts
+      +++ b/src/lib/db/schema.ts
+      @@ -40,6 +40,7 @@ export const devices = pgTable("devices", {
+         id: uuid("id").primaryKey(),
+      +  batteryPct: integer("battery_pct"),
+       });
+
+      --- a/src/app/api/devices/route.ts
+      +++ b/src/app/api/devices/route.ts
+      @@ -18,7 +18,7 @@ export async function GET() {
+      -  return Response.json(rows)
+      +  return Response.json(rows.map((r) => ({ ...r, battery: r.battery_pct })))
+       }
+  assert:
+    - type: regex                           # hard — verdict grammar, nothing after it
+      value: "VERDICT: (PASS|FAIL|INCONCLUSIVE)\\s*$"
+    - type: regex                           # hard — a file:line citation, not a vague pointer
+      value: "[\\w./-]+\\.(ts|tsx|js|py|go|sql):\\d+"
+    - type: llm-rubric                      # soft
+      value: >
+        names the concrete mismatch — the Drizzle column is exposed on the row object as
+        `batteryPct`, so `r.battery_pct` is undefined and every device serialises
+        `battery: undefined` — and says how to show it fails (call GET /api/devices, or
+        the type error on `r.battery_pct`); it does not merely observe that the names
+        "look inconsistent"

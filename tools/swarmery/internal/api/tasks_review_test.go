@@ -104,6 +104,9 @@ func (w *reviewStubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch b
 	return nil
 }
 
+func (w *reviewStubWt) Path(projectSlug, taskID string) (string, error) {
+	return "/wt/" + projectSlug + "/" + taskID, nil
+}
 func (w *reviewStubWt) ReclaimEmptyBranch(repoRoot, branch string) (int, error) { return 0, nil }
 
 func (w *reviewStubWt) DeleteBranch(repoRoot, branch string) (bool, error) {

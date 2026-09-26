@@ -13,10 +13,13 @@ import type {
   EpicPhase,
   Event,
   FileChange,
+  ForecastLint,
   HealthResponse,
   PermissionRequest,
   PhaseBlocker,
   PhaseDiagnosis,
+  PhaseForecast,
+  PhaseSurprise,
   PlanDoc,
   Playbook,
   PlanRevision,
@@ -218,6 +221,9 @@ const MOCK_HANDOFF_MARKDOWN = `# Handoff: migrate email templates to the provide
 
 export const mockSessions: Session[] = [
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 1,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -245,6 +251,9 @@ export const mockSessions: Session[] = [
     },
   },
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 2,
     projectId: 2,
     projectSlug: 'example-app',
@@ -263,6 +272,9 @@ export const mockSessions: Session[] = [
     account: 'nabu-org',
   },
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 3,
     projectId: 3,
     projectSlug: 'swarmery',
@@ -284,6 +296,9 @@ export const mockSessions: Session[] = [
     taskConfidence: 0.92,
   },
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 4,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -301,6 +316,9 @@ export const mockSessions: Session[] = [
     costUsd: 0.11,
   },
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 5,
     projectId: 1,
     projectSlug: 'orders-api',
@@ -322,6 +340,9 @@ export const mockSessions: Session[] = [
     taskConfidence: 0.74,
   },
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 6,
     projectId: 4,
     projectSlug: 'docs-site',
@@ -339,6 +360,9 @@ export const mockSessions: Session[] = [
     costUsd: 0.19,
   },
   {
+    modelLast: null,
+    modelChanged: false,
+    modelFellBack: false,
     id: 7,
     projectId: 2,
     projectSlug: 'example-app',
@@ -640,6 +664,7 @@ Ready for the full suite whenever you are.`;
 
 const s1Turns: Turn[] = [
   {
+    stopReason: null,
     id: 11,
     seq: 1,
     role: 'user',
@@ -655,6 +680,7 @@ const s1Turns: Turn[] = [
     text: 'Port the order-confirmation and vendor-notify templates to the provider v2 API. Keep backwards compatibility with old event payloads.',
   },
   {
+    stopReason: null,
     id: 12,
     seq: 2,
     role: 'assistant',
@@ -670,6 +696,7 @@ const s1Turns: Turn[] = [
     text: s1AssistantText,
   },
   {
+    stopReason: null,
     id: 13,
     seq: 3,
     role: 'user',
@@ -685,6 +712,7 @@ const s1Turns: Turn[] = [
     text: 'Looks good — run the full suite and commit.',
   },
   {
+    stopReason: null,
     id: 14,
     seq: 4,
     role: 'assistant',
@@ -975,6 +1003,7 @@ const s1FileChanges: FileChange[] = [
 
 const s2Turns: Turn[] = [
   {
+    stopReason: null,
     id: 21,
     seq: 1,
     role: 'user',
@@ -990,6 +1019,7 @@ const s2Turns: Turn[] = [
     text: 'Analyze the agent system and summarize orchestration.',
   },
   {
+    stopReason: null,
     id: 22,
     seq: 2,
     role: 'assistant',
@@ -1095,6 +1125,7 @@ function simpleDetail(session: Session, events: Event[], turns: Turn[]): Session
 
 function promptTurn(id: number, seq: number, ts: string, text: string | null): Turn {
   return {
+    stopReason: null,
     id,
     seq,
     role: seq % 2 === 1 ? 'user' : 'assistant',
@@ -1382,6 +1413,127 @@ let mockBoard: BoardTask[] = [
 const MOCK_PRIORITIES = new Set(['urgent', 'high', 'normal', 'low']);
 let mockBoardSeq = 9200;
 
+/** A clean prior/posterior pair, and a malformed block with the lints it earns —
+ * the two forecast shapes the Plans rail has to render offline. */
+const MOCK_FORECAST_PAIR: PhaseForecast[] = [
+  {
+    kind: 'prior',
+    writtenAt: '2026-09-23T10:12:00Z',
+    areas: ['internal/ingest', 'internal/cost'],
+    files: ['internal/ingest/record.go'],
+    sizeBand: 'M',
+    durationBand: '30-90m',
+    outcome: 'done',
+    risks: ['migration touches the turns table'],
+    confidence: 0.7,
+    postHoc: false,
+    postHocReason: '',
+    docHash: 'a1b2c3d4',
+  },
+  {
+    kind: 'posterior',
+    writtenAt: '2026-09-23T13:40:00Z',
+    areas: ['internal/ingest', 'internal/cost', 'internal/api'],
+    files: [],
+    sizeBand: 'L',
+    durationBand: '90m-4h',
+    outcome: 'partial',
+    risks: [],
+    confidence: 0.4,
+    postHoc: true,
+    postHocReason: 'after-first-edit',
+    docHash: 'a1b2c3d4',
+  },
+];
+
+const MOCK_FORECAST_BAD: PhaseForecast[] = [
+  {
+    kind: 'prior',
+    writtenAt: '',
+    areas: [],
+    files: [],
+    sizeBand: 'ENORMOUS',
+    durationBand: '',
+    outcome: '',
+    risks: [],
+    confidence: 3.5,
+    postHoc: true,
+    postHocReason: 'report-filled',
+    docHash: 'e5f6a7b8',
+  },
+];
+
+const MOCK_FORECAST_BAD_LINTS: ForecastLint[] = [
+  { kind: 'prior', code: 'unknown-size-band', message: 'size_band "ENORMOUS" is not one of XS, S, M, L, XL' },
+  { kind: 'prior', code: 'bad-confidence', message: 'confidence 3.5 is outside 0..1' },
+  { kind: 'prior', code: 'missing-areas', message: 'forecast declares no areas — nothing to score a run against' },
+];
+
+/** Phase 2's run scored against its forecast pair — so the offline Plans page
+ * renders the surprise chip and the "Forecast vs actual" tab. */
+const MOCK_SURPRISE: PhaseSurprise = {
+  index: 0.64,
+  top: 'outcome_miss',
+  components: {
+    unexpected_areas: 0.3333,
+    missed_areas: 0,
+    size_miss: 0.5,
+    duration_miss: 0,
+    outcome_miss: 1,
+    test_surprise: 0,
+    overconfidence: null,
+  },
+  weights: {
+    unexpected_areas: 0.2,
+    missed_areas: 0.1,
+    size_miss: 0.15,
+    duration_miss: 0.1,
+    outcome_miss: 0.25,
+    test_surprise: 0.1,
+    overconfidence: 0.1,
+  },
+  detail: {
+    forecastKind: 'prior',
+    forecastPostHoc: false,
+    forecastAreas: ['internal/cost', 'internal/ingest'],
+    actualAreas: ['internal/cost', 'internal/ingest', 'web/src'],
+    unexpectedAreas: ['web/src'],
+    missedAreas: [],
+    matchedAreas: ['internal/cost', 'internal/ingest'],
+    forecastSize: 'M',
+    actualSize: 'L',
+    sizeDistance: 1,
+    forecastDuration: '30-90m',
+    actualDuration: '30-90m',
+    actualDurationS: 3120,
+    durationDistance: 0,
+    forecastOutcome: 'done',
+    actualOutcome: 'partial',
+    testFailuresUnexpected: 0,
+    confidence: null,
+    majorMiss: true,
+  },
+  revision: {
+    index: 0.5833,
+    areasAdded: ['internal/api'],
+    areasDropped: [],
+    sizeShift: 1,
+    durationShift: 1,
+    priorOutcome: 'done',
+    posteriorOutcome: 'partial',
+    confidenceDelta: -0.3,
+  },
+  summary:
+    'surprise 0.64 — top: outcome_miss; unexpected areas web/src; size M→L; forecast done, run partial',
+  phaseId: 102,
+  sessionUuid: 'mock-run-2',
+  forecastDocHash: 'a1b2c3d4',
+  actualsSource: 'run-end-settled',
+  notifiedAt: '2026-09-23T14:02:00Z',
+  autoVerifyAt: null,
+  computedAt: '2026-09-23T14:02:00Z',
+};
+
 // fusion phase 10: one demo epic for project 3 (swarmery) with a diamond
 // dependency shape (1 → 2,3 → 4) so the phase timeline + rollup render offline.
 const mockEpicPhase = (
@@ -1409,6 +1561,15 @@ const mockEpicPhase = (
     >
   >,
 ): EpicPhase => ({
+  runModels: [],
+  runModelFellBack: false,
+  // Phase 2 demos the prior/posterior pair and phase 3 a malformed block, so the
+  // offline Plans page renders both halves of the forecast section; every other
+  // phase declares none, which is the normal state.
+  forecasts: seq === 2 ? MOCK_FORECAST_PAIR : seq === 3 ? MOCK_FORECAST_BAD : [],
+  forecastLints: seq === 3 ? MOCK_FORECAST_BAD_LINTS : [],
+  // Phase 2's run was scored; every other phase has no score (null, never 0).
+  surprise: seq === 2 ? MOCK_SURPRISE : null,
   id,
   seq,
   name,
@@ -1431,6 +1592,9 @@ const mockEpicPhase = (
   boardColumn: null,
   runState: 'idle',
   runSessionUuid: null,
+  // The completion loop's timeline. Empty by default because that IS the common
+  // case: a run only accrues events when the harness had to nudge it.
+  runEvents: [],
   // Which model the last run used, read from its session — a phase that never
   // ran has nothing to say, so `null` is the honest default here.
   runModel: null,
@@ -1614,6 +1778,7 @@ const mockEpics: Epic[] = [
       runSessionUuid: 'mock-plan-run-uuid',
       runStartedAt: '2026-07-24T09:00:00Z',
       runError: null,
+      runEvents: [],
     },
     phases: [
       mockEpicPhase(11, 1, 'Ingest: plan dir scanner', [], 4, 4, {
@@ -1814,6 +1979,7 @@ const mockPlanningIdle: PlanningStatus = {
   planDir: null,
   mode: '',
   model: '',
+  effort: '',
   reviseTaskId: null,
   lastError: null,
 };
@@ -2372,6 +2538,7 @@ export const mockApi = {
         lessons,
         tasks,
         recommendations,
+        surprises: { surprises: [] },
         partial: false,
         partialSections: [],
       },
@@ -2800,7 +2967,12 @@ export const mockApi = {
     return mockPlanning[projectId] ?? mockPlanningIdle;
   },
 
-  async startPlanning(projectId: number, _idea: string, model?: string): Promise<PlanningStart> {
+  async startPlanning(
+    projectId: number,
+    _idea: string,
+    model?: string,
+    effort?: string,
+  ): Promise<PlanningStart> {
     await delay(120);
     const uuid = `mock-plan-${String(projectId)}-${String(Date.now())}`;
     // Jump straight to the awaiting_answer wizard: 2 answered history turns +
@@ -2817,6 +2989,9 @@ export const mockApi = {
       runningPlan: mockPlanSummary,
       mode: 'plan',
       model: model === 'sonnet' ? 'claude-sonnet-5' : model === 'fable' ? 'claude-fable-5-1' : 'claude-opus-5-5',
+      // Mirrors the daemon: an un-picked effort is STORED as the resolved engine
+      // default, never as '' (which would mean "send no --effort" → xhigh).
+      effort: effort !== undefined && effort !== '' ? effort : 'high',
       history: [
         ...mockPlanHistory,
         { seq: 3, question: mockPlanQuestion, answer: null, reasoning: '' },

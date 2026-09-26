@@ -1,0 +1,29 @@
+-- 0078: turns.stop_reason — WHY the model stopped, not just that it did.
+--
+-- Opus 5.5 / learning-loop phase 4. The Anthropic API puts `stop_reason` on
+-- every assistant message (`end_turn`, `tool_use`, `max_tokens`, `refusal`,
+-- `stop_sequence`) and Claude Code writes it through verbatim into the JSONL
+-- (docs/jsonl-format.md §5). internal/ingest decoded `model`, `id`, `role`,
+-- `content` and `usage` out of that message and dropped the field on the floor.
+--
+-- The one that costs money is `refusal`. Opus 5.5 ships bio/cyber and
+-- reasoning-extraction safeguards: a flagged message ends the turn with
+-- stop_reason=refusal and Claude Code moves the session onto an older model
+-- (the `system/model_refusal_fallback` record, ingested alongside this as an
+-- events row of type 'model_fallback'). Under `claude -p` that is a CLEAN EXIT
+-- with code 0, so phaserun/planrun/dispatch classified it exactly like a model
+-- that simply ended its turn — `done` if the doc happened to be fully ticked,
+-- `continue` otherwise, which spends two more billed turns re-triggering the
+-- same safeguard. runcore.ClassifyRunEnd now reads this column and stamps
+-- `blocked`, beside the `PHASE BLOCKED:` sentinel rather than in a second
+-- decision path: a refusal is evidence of the same kind.
+--
+-- NULLABLE, and NULL means "not known", never "end_turn". Every turn ingested
+-- before this migration has NULL, and the readers treat NULL as no evidence —
+-- so no historical run changes state without a re-ingest.
+--
+-- NO INDEX. The only reader asks for ONE session's newest assistant turn, which
+-- is already served by turns(session_id, seq); a low-cardinality index here
+-- would be the unindexed-FK-child shape that wedged the retention prune
+-- (0073_fk_child_indexes) with nothing to show for it.
+ALTER TABLE turns ADD COLUMN stop_reason TEXT;

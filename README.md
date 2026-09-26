@@ -104,6 +104,20 @@ Work artifacts — plans, task dirs, retrospectives — land under `$HOME/swarme
 by default; point it anywhere with `SWARMERY_WORKSPACE_ROOT` (daemon) / `AGENT_WORKSPACE_ROOT`
 (plugins).
 
+> [!TIP]
+> **Ignore `.serena/` and `.swarmery/` machine-wide, not per project.** `.serena/` (Serena
+> MCP language-server state, `lsp-pack`) and `.swarmery/` (this repo's own plan-doc lending
+> into a phase-run worktree — `internal/worktree/plandoc.go` — torn down with the worktree,
+> never meant to survive) can both land inside *any* onboarded project's tree, not just the
+> one you first notice it in. Neither is gitignored by default, so a broad `git add -A` — or
+> a headless run's own commit — can sweep one in for real; it has happened. Add both to your
+> **global** git ignore instead of each project's own tracked `.gitignore`:
+> ```
+> **/.serena/
+> **/.swarmery/
+> ```
+> Git reads `~/.config/git/ignore` by default with no `core.excludesfile` config needed.
+
 ### 2 — Route permission prompts to the dashboard (optional)
 
 ```bash
@@ -174,7 +188,7 @@ the native Claude Code plugin mechanism — **semver-versioned**, **namespaced**
 <!-- BEGIN generated:packs -->
 | Plugin | What's inside |
 |---|---|
-| **`core`** | The vendor-neutral framework every consumer enables: 13 judgment-style agents (tech-lead, planner, architect, implementation-agent, code-reviewer, … — see `plugins/core/AGENTS.md`), 36 progressively-disclosed skills, 8 commands, lifecycle/safety hooks, the statusline, and the project-aware `agent-work` workspace CLI. |
+| **`core`** | The vendor-neutral framework every consumer enables: 13 judgment-style agents (tech-lead, planner, architect, implementation-agent, code-reviewer, … — see `plugins/core/AGENTS.md`), 37 progressively-disclosed skills, 8 commands, lifecycle/safety hooks, the statusline, and the project-aware `agent-work` workspace CLI. |
 | `uav-pack` | UAV/drone domain pack: MAVLink-style telemetry, mission planning, embedded/edge runtime. |
 | `iot-pack` | IoT domain pack: BLE communication, device telemetry, health-metrics processing. |
 | `web-pack` | Web/marketing domain pack: SEO, i18n, landing-page CRO, Figma-to-code styling. |

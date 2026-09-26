@@ -38,6 +38,9 @@ build-once/deploy-anywhere rules.
   modes, and a worked example.
 - Read `resources/checklists.md` for the rule set matching `repo_type` — web app,
   device/edge, service config, and the 12-factor build rules.
+- Read `resources/sandbox-preflight.md` when the run edits files from a git
+  worktree isolate: one operation per Bash call, and the checks to make before
+  the first read or write.
 
 # How to use
 

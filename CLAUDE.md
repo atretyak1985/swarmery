@@ -95,6 +95,28 @@ On a name collision, a consumer's project-local component overrides the plugin's
 
 Agents look in `${CLAUDE_PROJECT_DIR}/.claude/templates/` first, then fall back to `${CLAUDE_PLUGIN_ROOT}/templates/`. Generic templates ship with core; project-specific ones stay with the project.
 
+## Working rhythm
+
+Keep going while the work is still yours to do. When a step does not need the
+operator, take it — a status note belongs in the same message as the next
+action, never in a message of its own. Stop and ask only when you genuinely
+cannot continue without the operator (an unresolved product decision, a missing
+credential, the same blocker surviving two honest attempts), or before anything
+destructive: deleting data, force-pushing, rewriting history, or changing
+something outside this repository.
+
+"Keep going" moves you through the work, never through a gate. Commits,
+pushes, MRs, migrations and deploys stay the operator's call whenever they
+already were, and permission prompts stay on.
+
+Close a run with these four headings, each written out even when the answer is
+"none":
+
+- **Blocked on me** — what needs the operator, and what it unblocks.
+- **Changed** — files touched, and why.
+- **Found** — what the work revealed that nobody asked about.
+- **Unverified** — what you could not confirm, and what would confirm it.
+
 ## Self-hosting (dogfooding)
 
 This repo is itself a swarmery consumer: `.claude/` is a **plain committed directory**
@@ -124,3 +146,4 @@ breaking the `/plugin update` distribution path all consumers rely on.
 
 - Conventional commits (`feat:`, `refactor!:`, `chore:`); semver bumps in `plugin.json` accompany plugin changes, with the marketplace `metadata.version` tracking the core version.
 - Every real agent routing bug or output-contract regression should become a promptfoo test case in `evals/` (prefer `contains`/`regex` for hard contracts, `llm-rubric` for judgment calls).
+- Every PR against this repo fills `.github/PULL_REQUEST_TEMPLATE.md` in full — GitHub only pre-populates it for a same-repo PR; `gh pr create` from a fork needs `--body-file` pointed at that same template, filled in, not skipped. The **Gates** section takes pasted command output, not "should pass" — run the commands in the template (`scripts/scan-flavor.sh`, `scripts/docgen/apply-counts.sh --check`, `scripts/docgen/check-coverage.sh`, `scripts/validate-agent-refs.sh`, `scripts/tests/*.test.sh`, plus `tools/swarmery`'s `make build && make test` when that tree is touched) and paste the real result for each.

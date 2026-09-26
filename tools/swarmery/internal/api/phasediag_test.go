@@ -33,6 +33,10 @@ func (s *phaseWtStub) Acquire(repoRoot, projectSlug, taskID string) (worktree.Ac
 	return worktree.Acquired{Path: "/wt/" + projectSlug + "/" + taskID, Branch: "swarm/" + taskID}, nil
 }
 
+func (s *phaseWtStub) Path(projectSlug, taskID string) (string, error) {
+	return "/wt/" + projectSlug + "/" + taskID, nil
+}
+
 func (s *phaseWtStub) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) error { return nil }
 
 func (s *phaseWtStub) ReclaimEmptyBranch(repoRoot, branch string) (int, error) {

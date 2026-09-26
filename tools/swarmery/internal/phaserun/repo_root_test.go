@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 // mkRepo marks dir as a git checkout for repopath.Resolve (which stats .git and
@@ -35,7 +37,7 @@ func TestStart_MultiRepoProject_AcquiresInDeclaredRepo(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil // exercise the REAL resolver — that is what is under test
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, repo) {
@@ -56,7 +58,7 @@ func TestStart_SingleRepoProject_UsesProjectPath(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, projectRoot) {
@@ -79,7 +81,7 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 	s.RepoRoot = nil
 
 	err := errors.New("")
-	if _, err = s.Start(p1, ""); !errors.Is(err, ErrNoRepoRoot) {
+	if _, err = s.Start(p1, "", ""); !errors.Is(err, ErrNoRepoRoot) {
 		t.Fatalf("Start err = %v, want ErrNoRepoRoot", err)
 	}
 	// The message replaces git's "fatal: not a git repository" — it has to name
@@ -97,48 +99,20 @@ func TestStart_NoRepoRoot_RefusesAndLeavesNoState(t *testing.T) {
 	if state != "idle" {
 		t.Errorf("run_state = %q, want it untouched at idle", state)
 	}
-	if _, err := s.Start(p1, ""); !errors.Is(err, ErrNoRepoRoot) {
+	if _, err := s.Start(p1, "", ""); !errors.Is(err, ErrNoRepoRoot) {
 		t.Errorf("second Start = %v, want ErrNoRepoRoot (the slot leaked)", err)
 	}
 }
 
 // The prompt orients the agent only when the worktree is NOT the project root.
 func TestBuildPromptIn_RepoNote(t *testing.T) {
-	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "")
+	multi := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "", runcore.Budget{})
 	if !strings.Contains(multi, "REPOSITORY:") || !strings.Contains(multi, "`app/src/...`") {
 		t.Errorf("multi-repo prompt is missing the orientation block:\n%s", multi)
 	}
-	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", "")
+	solo := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj", "/proj", "", runcore.Budget{})
 	if strings.Contains(solo, "REPOSITORY:") {
 		t.Error("single-repo prompt should not carry the orientation block")
-	}
-}
-
-// The prompt orients the agent about additionalDirectories only when the
-// project declares them — the fix for the exact silent-block symptom this
-// package's own header comment names: a phase declared blocked, believing
-// the sandbox would refuse paths that additionalDirectories actually granted.
-func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
-	projectRoot := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	settings := filepath.Join(projectRoot, ".claude", "settings.json")
-	body := `{"permissions":{"additionalDirectories":["/proj/sk-control-box","/proj/dk-infrastructure"]}}`
-	if err := os.WriteFile(settings, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	withDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", filepath.Join(projectRoot, "app"), projectRoot, "")
-	for _, want := range []string{"ADDITIONAL ACCESS:", "/proj/sk-control-box", "/proj/dk-infrastructure"} {
-		if !strings.Contains(withDirs, want) {
-			t.Errorf("prompt missing %q when additionalDirectories is declared:\n%s", want, withDirs)
-		}
-	}
-
-	noDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "")
-	if strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
-		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }
 
@@ -177,7 +151,7 @@ func TestStart_MultiRepoRunInheritsProjectSettings(t *testing.T) {
 	s := newTestService(db, r, &stubWt{})
 	s.RepoRoot = nil
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := r.lastSpec().SettingsFile; got != settings {
@@ -201,7 +175,7 @@ func TestStart_DeclaredRepoIsRegisteredProject_AcquiresThere(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil // the REAL resolver, with the registry as its allow-list
 
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if got := wt.lastAcquireRoot(); !sameDir(t, got, other) {
@@ -223,7 +197,7 @@ func TestStart_DeclaredRepoOutsideUnregistered_Refuses(t *testing.T) {
 	s := newTestService(db, &stubRunner{}, wt)
 	s.RepoRoot = nil
 
-	_, err := s.Start(p1, "")
+	_, err := s.Start(p1, "", "")
 	if !errors.Is(err, ErrRepoOutsideProject) {
 		t.Fatalf("Start err = %v, want ErrRepoOutsideProject", err)
 	}
@@ -236,5 +210,40 @@ func TestStart_DeclaredRepoOutsideUnregistered_Refuses(t *testing.T) {
 	}
 	if state != "idle" {
 		t.Fatalf("run_state = %q after a refused admission, want idle", state)
+	}
+}
+
+// The prompt orients the agent about additionalDirectories only when the
+// project declares them: without it a phase declared itself blocked on paths
+// the sandbox would have allowed (ported from PR #374).
+func TestBuildPromptIn_AdditionalDirsNote(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"permissions":{"additionalDirectories":["/proj/sibling-a","/proj/sibling-b"]}}`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".claude", "settings.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", filepath.Join(projectRoot, "app"), projectRoot, "", runcore.Budget{})
+	for _, want := range []string{"ADDITIONAL ACCESS:", "/proj/sibling-a", "/proj/sibling-b"} {
+		if !strings.Contains(withDirs, want) {
+			t.Errorf("prompt missing %q when additionalDirectories is declared:\n%s", want, withDirs)
+		}
+	}
+	// The worktree's own settings.json wins over the project's.
+	wt := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(wt, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".claude", "settings.json"), []byte(`{"permissions":{"additionalDirectories":["/wt/only"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fromWt := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", projectRoot, projectRoot, wt, runcore.Budget{})
+	if !strings.Contains(fromWt, "/wt/only") || strings.Contains(fromWt, "/proj/sibling-a") {
+		t.Errorf("worktree settings should take precedence:\n%s", fromWt)
+	}
+	if noDirs := BuildPromptIn("/plan/phase-1.md", "phase-1.md", "body", "/proj/app", "/proj", "", runcore.Budget{}); strings.Contains(noDirs, "ADDITIONAL ACCESS:") {
+		t.Error("prompt should not carry the additional-access note when no settings.json is found")
 	}
 }

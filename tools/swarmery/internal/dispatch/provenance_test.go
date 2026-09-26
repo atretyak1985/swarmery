@@ -24,8 +24,11 @@ func preMigrationDB(t *testing.T) *sql.DB {
 	if err := store.MigrateUpTo(db, 65); err != nil {
 		t.Fatalf("migrate through 0065: %v", err)
 	}
+	// A real .git marker: admit() resolves the project path through
+	// repopath.ResolveTrusted before reaching the (stubbed) worktree manager.
+	repo := mkRepo(t, filepath.Join(t.TempDir(), "p"))
 	if _, err := db.Exec(
-		`INSERT INTO projects(id, path, slug, first_seen) VALUES(1,'/repo/p','p','2026-01-01T00:00:00Z')`); err != nil {
+		`INSERT INTO projects(id, path, slug, first_seen) VALUES(1,?,'p','2026-01-01T00:00:00Z')`, repo); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(

@@ -30,12 +30,35 @@ const (
 	// keeps firing refreshes its row in place — so a standing problem is
 	// announced once, not every scan tick.
 	EventPluginDrift = "plugin_drift"
+	// EventPhaseSurprise fires when a finished phase run's surprise score
+	// (internal/surprise: forecast vs measured actuals) first reaches
+	// SWARMERY_SURPRISE_NOTIFY. At most once per run — the scorer claims the
+	// notification on its row before emitting. Advisory: nothing gates on it.
+	EventPhaseSurprise = "phase_surprise"
+	// EventRunNeedsOperator fires when the decision classifier (internal/decide,
+	// D1, ACTIVE mode only) stops a phase/plan run from being continued and
+	// hands it to the operator instead. Off unless D1 is switched to active.
+	EventRunNeedsOperator = "run_needs_operator"
 )
 
 // KnownEvents lists every valid --notify-events entry.
 var KnownEvents = []string{
 	EventApprovalRequested, EventApprovalExpired, EventSessionCompleted, EventSessionError,
-	EventPluginDrift,
+	EventPluginDrift, EventPhaseSurprise, EventRunNeedsOperator,
+}
+
+// DefaultEvents is the event set sent when neither --notify-events nor
+// SWARMERY_NOTIFY_EVENTS names one: the two moments a human is blocking work
+// (a pending approval, a headless run handed to the operator).
+var DefaultEvents = []string{EventApprovalRequested, EventRunNeedsOperator}
+
+// EventsSetting resolves the --notify-events default: SWARMERY_NOTIFY_EVENTS
+// when set (it replaces the default, never extends it), else DefaultEvents.
+func EventsSetting(getenv func(string) string) string {
+	if v := getenv("SWARMERY_NOTIFY_EVENTS"); v != "" {
+		return v
+	}
+	return strings.Join(DefaultEvents, ",")
 }
 
 // Body templates (--notify-template).
@@ -64,7 +87,7 @@ type Event struct {
 // Config tunes a Notifier; zero values fall back to defaults.
 type Config struct {
 	URL          string        // receiver URL (required)
-	Events       []string      // enabled event types (default: approval_requested)
+	Events       []string      // enabled event types (default: DefaultEvents)
 	Template     string        // generic | ntfy | telegram (default: generic)
 	TelegramChat string        // chat_id — required when Template == telegram
 	Timeout      time.Duration // per-POST timeout (default 5s)
@@ -86,7 +109,7 @@ func (c Config) withDefaults() Config {
 		}
 	}
 	if len(events) == 0 {
-		events = []string{EventApprovalRequested}
+		events = append([]string(nil), DefaultEvents...)
 	}
 	c.Events = events
 	if c.Timeout <= 0 {
@@ -214,6 +237,7 @@ var ntfyTags = map[string]string{
 	EventApprovalExpired:   "hourglass",
 	EventSessionCompleted:  "white_check_mark",
 	EventSessionError:      "rotating_light",
+	EventPhaseSurprise:     "eyes",
 }
 
 func ntfyPriority(eventType string) string {

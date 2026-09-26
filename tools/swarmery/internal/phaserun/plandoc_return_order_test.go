@@ -44,7 +44,7 @@ func TestRunStampsTheCriteriaTheExecutorActuallyTicked(t *testing.T) {
 	}}
 
 	s := newTestService(db, r, &stubWt{pathOverride: wtPath})
-	if _, err := s.Start(p1, ""); err != nil {
+	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 

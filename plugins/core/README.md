@@ -32,8 +32,8 @@ Agent roster and ownership metadata live in `AGENTS.md`, not here.
 | PreCompact | `pre-compact.sh` | Warns that the context window is about to be compacted | — |
 | PostCompact | `post-compact.sh` | Confirms the compaction | — |
 | Notification | `notify-completion.sh` | Context-rich desktop notification | — |
-| PreModelSwitch | `pre-model-switch.sh` | **Blocks (exit 2)** a switch onto a model with no recorded validation | `SWARMERY_ALLOW_UNVALIDATED_MODEL`, `SWARMERY_PORT` |
-| PostModelSwitch | `post-model-switch.sh` | Records that the session's model changed | `SWARMERY_SESSION_FILE` |
+| PreModelSwitch | `pre-model-switch.sh` | **Blocks (exit 2)** a switch UP onto a model with no recorded validation. A switch DOWN (weaker family or older generation) always passes — that is the shape of a safeguard fallback, and blocking one strands the session | `SWARMERY_ALLOW_UNVALIDATED_MODEL`, `SWARMERY_PORT`, `SWARMERY_MODEL_SWITCH_PAYLOAD_LOG` |
+| PostModelSwitch | `post-model-switch.sh` | Records that the session's model changed, and warns once when the change was a downgrade | `SWARMERY_SESSION_FILE` |
 
 ## Shipped but not wired
 

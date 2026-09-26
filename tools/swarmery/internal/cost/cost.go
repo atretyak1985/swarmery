@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 
@@ -17,12 +18,15 @@ import (
 )
 
 // ModelPrice is USD per 1M tokens for one model.
-// cache_write is the 5-minute-TTL write rate (see config/pricing.json _meta).
+// CacheWrite is the 5-minute-TTL write rate, CacheWrite1h the 1-hour-TTL rate
+// (see config/pricing.json _meta). The two are different SKUs — 1.25x input
+// against 2x input — and Claude Code writes both.
 type ModelPrice struct {
-	Input      float64 `json:"input"`
-	Output     float64 `json:"output"`
-	CacheRead  float64 `json:"cache_read"`
-	CacheWrite float64 `json:"cache_write"`
+	Input        float64 `json:"input"`
+	Output       float64 `json:"output"`
+	CacheRead    float64 `json:"cache_read"`
+	CacheWrite   float64 `json:"cache_write"`
+	CacheWrite1h float64 `json:"cache_write_1h"`
 }
 
 // Table is a loaded pricing table. Immutable after Load.
@@ -44,6 +48,24 @@ func Load(raw []byte) (*Table, error) {
 		if _, ok := t.Models[target]; !ok {
 			return nil, fmt.Errorf("pricing table: fallback_prefixes[%q] points at unknown model %q", prefix, target)
 		}
+	}
+	// A model row with no cache_write_1h would price every 1h write at $0 —
+	// silently CHEAPER than the truth, which is the one direction a cost table
+	// must never fail in. Fall the bucket back to the 5m rate (under-bills by
+	// the 5m/1h spread, but stays the same order of magnitude) and name the
+	// rows so the gap gets closed in the table rather than in the arithmetic.
+	var missing []string
+	for id, p := range t.Models {
+		if p.CacheWrite1h == 0 && p.CacheWrite > 0 {
+			p.CacheWrite1h = p.CacheWrite
+			t.Models[id] = p
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		log.Printf("warn: cost: no cache_write_1h for %s — 1h cache writes billed at the 5m rate (add cache_write_1h to config/pricing.json)",
+			strings.Join(missing, ", "))
 	}
 	return &t, nil
 }
@@ -104,11 +126,43 @@ func Default() *Table {
 // Opus 5 rates. Without the strip the id is simply unknown and goes unpriced;
 // with a sibling model whose id is a prefix of it, unknown turns into wrong.
 func (t *Table) PriceFor(model string) (ModelPrice, bool) {
+	return t.PriceForSpeed(model, "")
+}
+
+// PriceForSpeed resolves a model id to its price at the given usage.speed
+// ("standard" / "fast" / "" when the transcript predates the field).
+//
+// Fast mode is a separate SKU at 2x standard, carried by a sibling
+// "<model>-fast" row. The lookup runs on the RESOLVED pricing key, not on the
+// raw id: a date-suffixed id like "claude-opus-5-5-20260922" has no
+// "...-20260922-fast" row, and appending -fast to it would fall back through
+// the "claude-opus-5-5-" prefix straight onto STANDARD rates while looking
+// like a successful fast lookup. Resolving first ("claude-opus-5-5") and then
+// asking for "claude-opus-5-5-fast" either hits the fast SKU exactly or misses
+// loudly.
+func (t *Table) PriceForSpeed(model, speed string) (ModelPrice, bool) {
+	key, ok := t.resolveKey(model)
+	if !ok {
+		return ModelPrice{}, false
+	}
+	if speed == "fast" && !strings.HasSuffix(key, "-fast") {
+		if p, ok := t.Models[key+"-fast"]; ok {
+			return p, true
+		}
+		warnMissingFastSKU(key)
+	}
+	return t.Models[key], true
+}
+
+// resolveKey maps a transcript model id onto a key in Models: exact match
+// first, then the longest matching entry in fallback_prefixes. See PriceFor
+// for why the trailing context-window marker is stripped before either lookup.
+func (t *Table) resolveKey(model string) (string, bool) {
 	if i := strings.IndexByte(model, '['); i > 0 {
 		model = model[:i]
 	}
-	if p, ok := t.Models[model]; ok {
-		return p, true
+	if _, ok := t.Models[model]; ok {
+		return model, true
 	}
 	best := ""
 	for prefix := range t.FallbackPrefixes {
@@ -117,19 +171,38 @@ func (t *Table) PriceFor(model string) (ModelPrice, bool) {
 		}
 	}
 	if best != "" {
-		return t.Models[t.FallbackPrefixes[best]], true
+		return t.FallbackPrefixes[best], true
 	}
-	return ModelPrice{}, false
+	return "", false
 }
 
 // Turn is the minimal usage view of one turns row needed for pricing.
 // Nil token pointers mirror SQL NULLs (user turns carry no usage).
 type Turn struct {
-	Model            string
-	TokensIn         *int64
-	TokensOut        *int64
-	TokensCacheRead  *int64
-	TokensCacheWrite *int64
+	Model           string
+	Speed           string // usage.speed: "standard" / "fast" / "" (unknown)
+	TokensIn        *int64
+	TokensOut       *int64
+	TokensCacheRead *int64
+
+	// TokensCacheWrite is the flat cache-write total. It prices the turn only
+	// when the TTL split below is absent (pre-0075 rows, transcripts with no
+	// cache_creation object); otherwise the split is authoritative and this
+	// field is carried for continuity of the legacy column.
+	TokensCacheWrite   *int64
+	TokensCacheWrite5m *int64
+	TokensCacheWrite1h *int64
+}
+
+// cacheWriteBuckets returns the (5m, 1h) token counts to bill this turn on.
+// With neither split field set the legacy total is billed entirely at the 5m
+// rate — exactly how it was priced before the split existed, so re-pricing old
+// rows never moves their cost.
+func (turn Turn) cacheWriteBuckets() (fiveMin, oneHour int64) {
+	if turn.TokensCacheWrite5m == nil && turn.TokensCacheWrite1h == nil {
+		return deref(turn.TokensCacheWrite), 0
+	}
+	return deref(turn.TokensCacheWrite5m), deref(turn.TokensCacheWrite1h)
 }
 
 // EnrichTurn computes the USD cost of one turn, or nil when the turn cannot
@@ -141,18 +214,21 @@ type Turn struct {
 // The full float is returned; round only at display time.
 func (t *Table) EnrichTurn(turn Turn) *float64 {
 	if turn.TokensIn == nil && turn.TokensOut == nil &&
-		turn.TokensCacheRead == nil && turn.TokensCacheWrite == nil {
+		turn.TokensCacheRead == nil && turn.TokensCacheWrite == nil &&
+		turn.TokensCacheWrite5m == nil && turn.TokensCacheWrite1h == nil {
 		return nil
 	}
-	p, ok := t.PriceFor(turn.Model)
+	p, ok := t.PriceForSpeed(turn.Model, turn.Speed)
 	if !ok {
 		warnUnknownModel(turn.Model)
 		return nil
 	}
+	write5m, write1h := turn.cacheWriteBuckets()
 	c := float64(deref(turn.TokensIn))/1e6*p.Input +
 		float64(deref(turn.TokensOut))/1e6*p.Output +
 		float64(deref(turn.TokensCacheRead))/1e6*p.CacheRead +
-		float64(deref(turn.TokensCacheWrite))/1e6*p.CacheWrite
+		float64(write5m)/1e6*p.CacheWrite +
+		float64(write1h)/1e6*p.CacheWrite1h
 	return &c
 }
 
@@ -162,7 +238,19 @@ func EnrichTurn(turn Turn) *float64 {
 	return Default().EnrichTurn(turn)
 }
 
-var warnedModels sync.Map
+var (
+	warnedModels  sync.Map
+	warnedFastSKU sync.Map
+)
+
+// warnMissingFastSKU logs once per model per process when a fast-mode turn has
+// no "<model>-fast" row. The turn is billed at standard rates, which UNDER-bills
+// it by 2x — named here rather than left silent.
+func warnMissingFastSKU(key string) {
+	if _, seen := warnedFastSKU.LoadOrStore(key, true); !seen {
+		log.Printf("warn: cost: speed=fast turn on %q has no %q row — billed at standard rates (2x under-billed; add the fast SKU to config/pricing.json and run `swarmery recost`)", key, key+"-fast")
+	}
+}
 
 // warnUnknownModel logs once per unknown model per process (avoids log spam
 // on transcripts with thousands of turns).

@@ -18,7 +18,7 @@ func TestStart_AlreadyRunningOutranksABadModel(t *testing.T) {
 	s := newTestService(db, r, &stubWt{})
 
 	for _, req := range []string{"", "gpt-9"} {
-		if _, err := s.Start(p1, req); !errors.Is(err, ErrRunning) {
+		if _, err := s.Start(p1, req, ""); !errors.Is(err, ErrRunning) {
 			t.Errorf("Start(model=%q) err = %v, want ErrRunning — the bad model masked the live run", req, err)
 		}
 	}

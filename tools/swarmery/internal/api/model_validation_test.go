@@ -49,6 +49,29 @@ func TestModelValidationEndpoint(t *testing.T) {
 		}
 	})
 
+	// The context-window marker is a REQUEST property, not a different model.
+	// modeleval.Evaluate bases the id before it writes, so the row above is the
+	// row a 1M-window session must find; if the read side does not base too, the
+	// hook's lookup of `…-5-5[1m]/validation` 404s, the gate reads that as "no
+	// recorded validation" and blocks a model the operator has already validated.
+	t.Run("a context-marked id resolves to the same row", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/models/claude-opus-6[1m]/validation", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+		}
+		var got map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got["verdict"] != "pass" {
+			t.Errorf("verdict = %v, want pass — both spellings are one model", got["verdict"])
+		}
+		if got["model"] != "claude-opus-6" {
+			t.Errorf("model = %v, want the based id claude-opus-6", got["model"])
+		}
+	})
+
 	t.Run("never evaluated is 404, not a default", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/models/claude-opus-9/validation", nil))

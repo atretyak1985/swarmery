@@ -170,8 +170,17 @@ type Status struct {
 // model is the operator's choice (a Models short name or full ID; "" = the
 // default). It is resolved BEFORE the slot is taken and stored on the wizard
 // row, so the resume turns run on the same model as the first one.
-func (s *Service) Start(projectID int64, idea, model string) (sessionUUID string, err error) {
+//
+// effort is the same decision about depth ("" = the default, resolved through
+// SWARMERY_PLANNING_EFFORT to DefaultEffort). Stored resolved for the same
+// reason as model, and with one extra edge: the caller's "" must never reach
+// --effort as omission, because an unpinned claude run thinks at xhigh.
+func (s *Service) Start(projectID int64, idea, model, effort string) (sessionUUID string, err error) {
 	modelID, err := ResolveModel(model)
+	if err != nil {
+		return "", err
+	}
+	effortID, err := ResolveEffort(effort)
 	if err != nil {
 		return "", err
 	}
@@ -209,18 +218,18 @@ func (s *Service) Start(projectID int64, idea, model string) (sessionUUID string
 	// mode='plan' explicitly, never via the column default — the two modes must
 	// be distinguishable in the row itself, not by which code path inserted it.
 	if _, err := s.DB.Exec(
-		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, model, created_at, updated_at)
-		 VALUES(?,?,?,?,?,?,?,?)`,
-		projectID, uuid, StatusGenerating, idea, ModePlan, modelID, now, now); err != nil {
+		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, model, effort, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,?,?)`,
+		projectID, uuid, StatusGenerating, idea, ModePlan, modelID, effortID, now, now); err != nil {
 		// Non-fatal: the run still executes; the wizard just has no durable row
 		// (OnSessionTurns will no-op on the uuid miss).
 		log.Printf("error: planning: insert wizard row project=%d uuid=%s: %v", projectID, uuid, err)
 	}
 
-	log.Printf("planning: start project=%d uuid=%s cwd=%q model=%s (%d chars idea)", projectID, uuid, path.String, modelID, len(idea))
+	log.Printf("planning: start project=%d uuid=%s cwd=%q model=%s effort=%s (%d chars idea)", projectID, uuid, path.String, modelID, effortID, len(idea))
 	s.notify(projectID) // active=true → page shows the run
 
-	spec := RunSpec{Prompt: BuildPrompt(idea, s.WorkspaceRoot), SessionUUID: uuid, Cwd: path.String, Model: modelID}
+	spec := RunSpec{Prompt: BuildPrompt(idea, s.WorkspaceRoot), SessionUUID: uuid, Cwd: path.String, Model: modelID, Effort: effortID}
 	s.spawn(func() { s.runAndHandle(ctx, cancel, projectID, spec) })
 	return uuid, nil
 }
@@ -342,10 +351,15 @@ func (s *Service) StartRevise(taskID int64, reason string, triggerPhaseID *int64
 	if s.markCancelled(projectID) {
 		log.Printf("planning: project=%d superseded an open wizard (revise)", projectID)
 	}
+	// A revise has no picker of its own, so it takes the resolved default rather
+	// than a literal — stamping "" here would make every resume of a revise fall
+	// through to the resume site's generic depth instead of the planner's.
+	// ResolveEffort("") cannot fail: the empty choice IS the default rung.
+	reviseEffort, _ := ResolveEffort("")
 	if _, err := s.DB.Exec(
-		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, revise_task_id, model, created_at, updated_at)
-		 VALUES(?,?,?,?,?,?,?,?,?)`,
-		projectID, uuid, StatusGenerating, reason, ModeRevise, taskID, DefaultModel, now, now); err != nil {
+		`INSERT INTO planning_sessions(project_id, session_uuid, status, idea, mode, revise_task_id, model, effort, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		projectID, uuid, StatusGenerating, reason, ModeRevise, taskID, DefaultModel, reviseEffort, now, now); err != nil {
 		// Non-fatal, mirroring Start: the run still executes; OnSessionTurns
 		// no-ops on the uuid miss and no revision can be staged for it.
 		log.Printf("error: planning: insert revise wizard row task=%d uuid=%s: %v", taskID, uuid, err)
@@ -370,7 +384,7 @@ func (s *Service) StartRevise(taskID int64, reason string, triggerPhaseID *int64
 		taskID, projectID, uuid, planDir, scratchDir)
 	s.notify(projectID)
 
-	spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: projPath.String, Model: DefaultModel}
+	spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: projPath.String, Model: DefaultModel, Effort: reviseEffort}
 	s.spawn(func() { s.runAndHandle(ctx, cancel, projectID, spec) })
 	return uuid, nil
 }
@@ -389,6 +403,32 @@ func (s *Service) Model(sessionUUID string) string {
 		return model.String
 	}
 	return DefaultModel
+}
+
+// Effort returns the reasoning depth a wizard's resume turns must run at: the
+// rung stamped on its planning_sessions row, or the resolved planner default
+// when the row predates the column (0076) or does not exist.
+//
+// Never "". That is the whole point of the function rather than a raw column
+// read: "" reaches the spawn as NO --effort, and an unpinned claude run thinks
+// at xhigh — the deepest, most expensive setting. A legacy row must therefore
+// land on the planner's ladder (SWARMERY_PLANNING_EFFORT, then DefaultEffort),
+// not on omission.
+func (s *Service) Effort(sessionUUID string) string {
+	var effort sql.NullString
+	err := s.DB.QueryRow(`SELECT effort FROM planning_sessions WHERE session_uuid = ?`, sessionUUID).Scan(&effort)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("error: planning: read effort uuid=%s: %v", sessionUUID, err)
+	}
+	// Re-resolved rather than returned raw: a value written by an older build
+	// (or hand-edited) must still be validated before it can reach the CLI, and
+	// an unknown one degrades to the ladder instead of killing the spawn.
+	resolved, rerr := ResolveEffort(effort.String)
+	if rerr != nil {
+		log.Printf("error: planning: stored effort uuid=%s: %v", sessionUUID, rerr)
+		resolved, _ = ResolveEffort("")
+	}
+	return resolved
 }
 
 // readSeedDocs loads every phase/step doc of the plan dir (sorted, README

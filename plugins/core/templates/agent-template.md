@@ -3,7 +3,7 @@ name: <agent-name>
 description: <one-line trigger description — what work this agent should handle; this is the routing signal, make it distinct from every sibling agent>
 model: <opus | sonnet | haiku>            # ALIASES ONLY — pinned ids fail the reference-integrity CI gate
 # Rationale: <why this model — what reasoning, cost, or speed property is needed>
-effort: <low | medium | high>             # omit for haiku
+effort: <low | medium | high | xhigh | max>   # CI-checked closed set; omit for haiku
 color: <purple | blue | cyan | green | yellow | orange | teal | red | pink>
 maxTurns: <number>                        # optional; omit for system default
 memory: project                           # optional — only when the agent must learn across sessions

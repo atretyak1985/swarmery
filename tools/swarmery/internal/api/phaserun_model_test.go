@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 )
 
 // phaserunModelEnv is internal/phaserun's fallback knob, spelled out here because
@@ -51,9 +53,12 @@ func TestPhaseRun_OptionalBody_StartsRunAsBefore(t *testing.T) {
 			if len(specs) != 1 {
 				t.Fatalf("dispatched %d runs, want 1", len(specs))
 			}
-			// No model anywhere ⇒ no --model flag, the account default.
-			if specs[0].Model != "" {
-				t.Errorf("RunSpec.Model = %q, want empty", specs[0].Model)
+			// No model anywhere ⇒ the house default. What this test is really
+			// about is the BODY being optional — an absent, empty or `{}` body
+			// must start the run exactly as the no-body button always did — so
+			// it asserts the ladder's bottom rung rather than a literal.
+			if specs[0].Model != planning.DefaultModel {
+				t.Errorf("RunSpec.Model = %q, want the rung-4 default %q", specs[0].Model, planning.DefaultModel)
 			}
 		})
 	}

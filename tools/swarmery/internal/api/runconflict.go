@@ -58,6 +58,16 @@ const (
 	// daemon default — is the bug internal/dispatch/service.go:979 records for
 	// playbook `model:` chips, where the UI showed a model no run ever used.
 	codeDocModelUnknown = "doc-model-unknown"
+	// codeDocEffortUnknown: the phase doc's `**Effort:**` header names a value
+	// outside the CLI's closed set (low, medium, high, xhigh, max). The exact twin
+	// of codeDocModelUnknown — a 409 rather than a 400 because the operator did not
+	// type it, with `doc` and `declared` in the body so the client can point at the
+	// line. Refused at admission, before the slot, the worktree and any stamp.
+	//
+	// Not survivable by falling back: `claude --effort bogus` rejects the flag and
+	// the process dies before the run starts, so an unvalidated declaration would
+	// surface as an unexplained dead phase instead of a named line to fix.
+	codeDocEffortUnknown = "doc-effort-unknown"
 	// codePlanSpansRepos: a plan run executes in ONE worktree, and this plan's
 	// unfinished phases name several repos. Plan-run-only; the phase surface has no
 	// such condition (a phase is one repo by construction).

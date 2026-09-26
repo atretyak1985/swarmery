@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,8 +34,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/modelid"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
@@ -76,6 +83,22 @@ type epicPhaseDTO struct {
 	// no second copy to drift. Null when the phase has never run, when the run's
 	// session has not been ingested yet, or when that session carries no model.
 	RunModel *string `json:"runModel"`
+	// RunModels is every model the run's session actually ran an assistant turn
+	// on, in the order they first appeared, with that model's turn count.
+	//
+	// RunModel above (sessions.model) is the FIRST of them, and for most runs it
+	// is the only one — the list is then a single entry and the UI shows what it
+	// always did. It stops being the only one exactly when it matters: an Opus
+	// 5.5 safeguard refusal moves the session onto an older model and the run
+	// carries on there, so "the model this run used" was a true statement about
+	// its first turn and a false one about its output. Empty when the phase has
+	// never run or its session is not ingested.
+	RunModels []phaseModelUseDTO `json:"runModels"`
+	// RunModelFellBack is true when the LAST of those models is a weaker family
+	// or an older generation than the first — i.e. the list is not just a
+	// rename or a context-window marker. This, not len(RunModels) > 1, is what
+	// the "fell back to X" chip renders on.
+	RunModelFellBack bool `json:"runModelFellBack"`
 	// The model the phase DOC asks for (`**Model:** opus`, epic_phases.doc_model,
 	// migration 0069) — rung 2 of the ladder. Null when the doc declares nothing.
 	//
@@ -114,6 +137,16 @@ type epicPhaseDTO struct {
 	VerifyMode    string  `json:"verifyMode"`
 	VerifyVerdict *string `json:"verifyVerdict"`
 	VerifyDetail  *string `json:"verifyDetail"`
+	// RunEvents is this run's completion-loop timeline (migration 0077): the
+	// continuations the harness sent, and the decision it settled on.
+	//
+	// It exists because RunState collapses a decision CHAIN into one word. A phase
+	// that reads `partial` may have been nudged twice and made progress each time,
+	// or stalled on the first turn and repeated itself — the operator cannot tell,
+	// and the difference is exactly what says whether the phase doc or the executor
+	// is at fault. Empty (and omitted from the UI) for the overwhelmingly common
+	// case of a run that finished on its first turn.
+	RunEvents []runcore.RunEvent `json:"runEvents"`
 	// THE completion gate's answer: complete | unverified | incomplete
 	// (internal/phasegate). Distinct from RunOutcome, which reports whether work
 	// landed, and from VerifyVerdict, which reports the grade: this reports whether
@@ -128,6 +161,59 @@ type epicPhaseDTO struct {
 	// because one gate cites every reason it has, rather than several gates each
 	// refusing for its own.
 	CompletionBlockers []string `json:"completionBlockers"`
+	// Forecasts are the doc's `## Forecast` blocks (migration 0079): the PRIOR the
+	// planner wrote and/or the POSTERIOR the executor wrote, in document order.
+	// Empty for every phase that declares none, which is all of them until an
+	// author opts in.
+	//
+	// READ-ONLY DATA, deliberately absent from every field above it: nothing in
+	// CompletionState, CompletionBlockers or RunOutcome consults a forecast, and
+	// nothing may start to. A forecast is a prediction to be scored later, not a
+	// contract a phase can violate.
+	Forecasts []phaseForecastDTO `json:"forecasts"`
+	// ForecastLints is what is wrong with those blocks — an unknown band, a
+	// confidence outside 0..1, a forecast naming no areas, a posterior with no
+	// prior to score against.
+	//
+	// Computed in the READ path from the stored rows, exactly like the spec
+	// rollup's `unknownRefs` beside it, and for the same reason: a lint is a thing
+	// to show the operator, never a thing that can refuse an ingest or a run. A
+	// plan whose every forecast fails every rule still indexes and still runs.
+	ForecastLints []wsingest.ForecastLint `json:"forecastLints"`
+	// Surprise is the learning loop's comparison of the forecast with what the
+	// CURRENT run measurably did (internal/surprise, migration 0082): the vector,
+	// the headline index 0..1 and its top component, the areas diff, bands and
+	// outcomes. Null — never a zero score — when the run was not scored: no
+	// forecast, no actuals, or nothing measurable.
+	//
+	// ADVISORY, like the forecast: nothing in CompletionState, CompletionBlockers
+	// or RunOutcome consults it, and nothing may start to.
+	Surprise *surprise.Stored `json:"surprise"`
+}
+
+// phaseForecastDTO is one stored `## Forecast` block. Every text field is
+// VERBATIM — the value the author wrote, not a normalized band — because the
+// operator cannot fix a typo the API has already hidden (the same decision
+// epic_phases.doc_model carries).
+type phaseForecastDTO struct {
+	Kind         string   `json:"kind"`      // prior | posterior; "" when the block declares none
+	WrittenAt    string   `json:"writtenAt"` // RFC3339 as written; "" when absent
+	Areas        []string `json:"areas"`
+	Files        []string `json:"files"`
+	SizeBand     string   `json:"sizeBand"`
+	DurationBand string   `json:"durationBand"`
+	Outcome      string   `json:"outcome"`
+	Risks        []string `json:"risks"`
+	// null, not 0, when the author said nothing readable — see migration 0079.
+	Confidence *float64 `json:"confidence"`
+	// True when this forecast cannot have been a prediction, so calibration must
+	// not score it. PostHocReason says which observation decided that:
+	// "report-filled" (a prior in a doc whose `## Completion Report` was already
+	// filled) or "after-first-edit" (a posterior the run's transcript shows was
+	// written after the run's first change to another file). "" when not post hoc.
+	PostHoc       bool   `json:"postHoc"`
+	PostHocReason string `json:"postHocReason"`
+	DocHash       string `json:"docHash"`
 }
 
 // epicRollupDTO is a checkbox rollup across all of an epic's phases.
@@ -223,12 +309,18 @@ type linkedSessionDTO struct {
 
 // planRunDTO is the plan_runs row for one epic.
 type planRunDTO struct {
-	Agent          *string `json:"agent"`
-	Mode           string  `json:"mode"`     // auto | subagents | inline
-	RunState       string  `json:"runState"` // idle | running | done | failed
+	Agent *string `json:"agent"`
+	Mode  string  `json:"mode"` // auto | subagents | inline
+	// RunState: idle | running | done | failed | blocked | partial. The last two
+	// arrived with the completion loop (phase 3) — they are both CLEAN exits, and
+	// which one it was is decided from the plan's ticked criteria and the run's
+	// final assistant text, never from the exit code.
+	RunState       string  `json:"runState"`
 	RunSessionUUID *string `json:"runSessionUuid"`
 	RunStartedAt   *string `json:"runStartedAt"`
 	RunError       *string `json:"runError"`
+	// RunEvents is this run's completion-loop timeline — see epicPhaseDTO.RunEvents.
+	RunEvents []runcore.RunEvent `json:"runEvents"`
 }
 
 // wsPlanPayload is the plan_updated WS payload (frozen once shipped) — a thin
@@ -508,7 +600,16 @@ func (h *Handler) planRunsByTask() (map[int64]*planRunDTO, error) {
 		}
 		out[taskID] = &dto
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// After the cursor is closed, never inside the loop — see loadPhases for the
+	// single-connection deadlock this ordering avoids.
+	rows.Close()
+	for taskID, dto := range out {
+		dto.RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, planrun.Engine, taskID))
+	}
+	return out, nil
 }
 
 // specCriteriaByTask loads every spec_criteria row keyed by workspace task id,
@@ -746,10 +847,205 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		rollup.Total += p.CheckboxesTotal
 		phases = append(phases, p)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, epicRollupDTO{}, nil, err
+	}
+	// The run_events read happens AFTER this result set is closed, never inside
+	// the loop above, and that is not a style preference: the store runs on a
+	// single SQLite connection, so issuing a second query while these rows are
+	// still open takes the only connection the outer cursor is holding and the
+	// handler deadlocks until the test binary's 10-minute panic timeout. (Observed
+	// exactly that way on the first draft of this change.) The explicit Close is
+	// what makes the ordering true — the deferred one runs far too late.
+	rows.Close()
+	// Same rule, same reason: one query for the whole task AFTER the cursor is
+	// closed, never one per phase inside the loop.
+	usage := h.phaseRunModels(taskID)
+	forecasts := h.phaseForecasts(taskID) // same rule, same reason: one query, cursor closed
+	surprises := h.phaseSurprises(taskID) // and again
+	for i := range phases {
+		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
+		used := usage[phases[i].ID]
+		if used == nil {
+			used = []phaseModelUseDTO{} // [] not null: the UI maps over it
+		}
+		phases[i].RunModels, phases[i].RunModelFellBack = used, fellBack(used)
+		fs := forecasts[phases[i].ID]
+		phases[i].Forecasts = forecastDTOs(fs)
+		phases[i].ForecastLints = wsingest.LintForecasts(forecastsOnly(fs))
+		phases[i].Surprise = surprises[phases[i].ID]
+	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100
 	}
-	return phases, rollup, covers, rows.Err()
+	return phases, rollup, covers, nil
+}
+
+// storedForecast is a phase_forecasts row: the parsed forecast wsingest owns the
+// shape of, plus the doc hash the scan stamped on it. doc_hash lives here rather
+// than on wsingest.Forecast because it is not part of the FORMAT — the parser
+// cannot know it, the scan derives it from the file it read, and only a later
+// scoring pass (is the forecast I am grading still the one in the doc?) cares.
+type storedForecast struct {
+	wsingest.Forecast
+	DocHash string
+}
+
+// forecastDTOs renders stored forecasts for the wire. Always a non-nil slice:
+// the UI maps over it, and "this phase declares no forecast" is [] rather than
+// null for the same reason CompletionBlockers is.
+func forecastDTOs(fs []storedForecast) []phaseForecastDTO {
+	out := make([]phaseForecastDTO, 0, len(fs))
+	for _, f := range fs {
+		out = append(out, phaseForecastDTO{
+			Kind:          f.Kind,
+			WrittenAt:     f.WrittenAt,
+			Areas:         nonNilStrs(f.Areas),
+			Files:         nonNilStrs(f.Files),
+			SizeBand:      f.SizeBand,
+			DurationBand:  f.DurationBand,
+			Outcome:       f.Outcome,
+			Risks:         nonNilStrs(f.Risks),
+			Confidence:    f.Confidence,
+			PostHoc:       f.PostHoc,
+			PostHocReason: f.PostHocReason,
+			DocHash:       f.DocHash,
+		})
+	}
+	return out
+}
+
+// forecastsOnly strips the storage wrapper so the lint sees exactly the parsed
+// shape it is written against.
+func forecastsOnly(fs []storedForecast) []wsingest.Forecast {
+	out := make([]wsingest.Forecast, 0, len(fs))
+	for _, f := range fs {
+		out = append(out, f.Forecast)
+	}
+	return out
+}
+
+func nonNilStrs(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
+}
+
+// phaseForecasts returns, per phase id of this task, the `## Forecast` blocks
+// wsingest stored for it, in document order.
+//
+// One query for the whole task, called only AFTER the phase cursor is closed —
+// the store runs on a single SQLite connection and a second query issued while
+// that cursor is open deadlocks the handler (see the note at the call site).
+//
+// Errors degrade to an empty map, like phaseRunModels: a forecast is a decoration
+// on a page that must still render, and it is the one field on the row that must
+// never be able to take the Plans page down.
+func (h *Handler) phaseForecasts(taskID int64) map[int64][]storedForecast {
+	out := map[int64][]storedForecast{}
+	rows, err := h.DB.Query(`
+		SELECT f.phase_id, f.kind, f.written_at, f.areas_json, f.files_json,
+		       f.size_band, f.duration_band, f.outcome, f.risks_json,
+		       f.confidence, f.post_hoc, f.doc_hash, f.post_hoc_reason
+		  FROM phase_forecasts f
+		  JOIN epic_phases e ON e.id = f.phase_id
+		 WHERE e.workspace_task_id = ?
+		 ORDER BY f.phase_id, f.id`, taskID)
+	if err != nil {
+		log.Printf("warning: epics: phase forecasts unreadable (task %d): %v", taskID, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			phaseID                         int64
+			s                               storedForecast
+			areasJSON, filesJSON, risksJSON string
+			confidence                      sql.NullFloat64
+			postHoc                         int
+		)
+		if err := rows.Scan(&phaseID, &s.Kind, &s.WrittenAt, &areasJSON, &filesJSON,
+			&s.SizeBand, &s.DurationBand, &s.Outcome, &risksJSON,
+			&confidence, &postHoc, &s.DocHash, &s.PostHocReason); err != nil {
+			log.Printf("warning: epics: phase forecast row (task %d): %v", taskID, err)
+			return out
+		}
+		s.Areas, s.Files, s.Risks = decodeStrList(areasJSON), decodeStrList(filesJSON), decodeStrList(risksJSON)
+		if confidence.Valid {
+			v := confidence.Float64
+			s.Confidence = &v
+		}
+		s.PostHoc = postHoc != 0
+		out[phaseID] = append(out[phaseID], s)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("warning: epics: phase forecasts (task %d): %v", taskID, err)
+	}
+	return out
+}
+
+// phaseModelUseDTO is one model a phase run actually used, and how many
+// assistant turns it carried. The count is what makes the list readable: "42
+// turns on opus 5.5, 3 on opus 4.1" says the run was nearly finished when the
+// safeguard hit, which "two models" does not.
+type phaseModelUseDTO struct {
+	Model string `json:"model"`
+	Turns int    `json:"turns"`
+}
+
+// phaseRunModels returns, per phase id of this task, the models its run session
+// used in FIRST-APPEARANCE order.
+//
+// Chronological rather than heaviest-first on purpose: the last element is "what
+// this run finished on", which is the number the chip shows, and a
+// frequency-ordered list would put it anywhere. Errors degrade to an empty map —
+// this is a decoration on a page that must still render.
+func (h *Handler) phaseRunModels(taskID int64) map[int64][]phaseModelUseDTO {
+	out := map[int64][]phaseModelUseDTO{}
+	rows, err := h.DB.Query(`
+		SELECT e.id, tr.model, COUNT(*) AS turns, MIN(tr.seq) AS first_seq
+		  FROM epic_phases e
+		  JOIN sessions se ON se.session_uuid = e.run_session_uuid
+		  JOIN turns tr ON tr.session_id = se.id
+		 WHERE e.workspace_task_id = ?
+		   AND tr.role = 'assistant' AND tr.model IS NOT NULL AND tr.model <> ''
+		 GROUP BY e.id, tr.model
+		 ORDER BY e.id, first_seq`, taskID)
+	if err != nil {
+		log.Printf("warning: epics: phase run models unreadable (task %d): %v", taskID, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			phaseID  int64
+			model    string
+			turns    int
+			firstSeq int64
+		)
+		if err := rows.Scan(&phaseID, &model, &turns, &firstSeq); err != nil {
+			log.Printf("warning: epics: phase run model row unreadable (task %d): %v", taskID, err)
+			return out
+		}
+		out[phaseID] = append(out[phaseID], phaseModelUseDTO{Model: model, Turns: turns})
+	}
+	return out
+}
+
+// fellBack reports whether a run ENDED on a weaker model than it started on.
+//
+// Not len(use) > 1: `claude-opus-5-5` and `claude-opus-5-5[1m]` are two rows for
+// one model (the bracket is a context-window marker, not a model), and a rename
+// or a date suffix would likewise light a chip that claims something untrue.
+func fellBack(use []phaseModelUseDTO) bool {
+	if len(use) < 2 {
+		return false
+	}
+	// The direction rule lives in modelid.IsFallback, not here: the session row
+	// renders the same claim off the same two ids, and two copies of "is this
+	// weaker" is how one surface starts calling an escalation a fallback.
+	return modelid.IsFallback(use[0].Model, use[len(use)-1].Model)
 }
 
 // decodeIntList parses a JSON array of ints; [] on empty/garbage.
@@ -1031,4 +1327,13 @@ func writePlanDocErr(w http.ResponseWriter, err error) {
 	default:
 		writeErr(w, err)
 	}
+}
+
+// runEventsOrEmpty keeps runEvents a JSON array: a run with no timeline encodes
+// as [] not null, because the Plans page filters over it unconditionally.
+func runEventsOrEmpty(evs []runcore.RunEvent) []runcore.RunEvent {
+	if evs == nil {
+		return []runcore.RunEvent{}
+	}
+	return evs
 }
