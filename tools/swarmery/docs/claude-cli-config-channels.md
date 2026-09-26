@@ -1,6 +1,6 @@
 # Claude CLI config channels for plugin MCP servers — measured
 
-**CLI version:** 2.1.282 (Claude Code), `~/.local/bin/claude`
+**CLI version:** 2.1.282 (Claude Code), `~/.local/bin/claude` — re-measured with no drift; the committed baseline (`internal/channelprobe/baseline.json`) was recorded on 2.1.280
 **Date measured:** 2026-09-25
 **Method:** `scripts/tests/cc-channel-probe.sh` — a scratch project and a scratch
 `CLAUDE_CONFIG_DIR` under `mktemp -d`, deleted afterwards, and a throwaway plugin

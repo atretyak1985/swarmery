@@ -21,7 +21,7 @@ package claudeacct
 //     project — when repopath.InheritedSettings returns a path — and no other
 //     seam passes one.)
 //     Note what this does NOT say: it is NOT true that every daemon spawn
-//     closes the user tier. Eight seams pass --setting-sources project,local
+//     closes the user tier. Twelve seams pass --setting-sources project,local
 //     and there the block is inert; but planning, planrun and phaserun pass NO
 //     --setting-sources at all (they build a runcore.Spec with SettingSources
 //     empty, and runcore.Args emits the flag only when it is non-empty), so on

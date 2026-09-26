@@ -141,7 +141,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	// config dir, then its secret store — the ONLY channel for MCP credentials
 	// that works on every seam. A settings `env` block cannot replace it: of the
 	// three setting sources it expands only under `user`, which is account-keyed,
-	// and the eight seams that pass --setting-sources project,local shut that tier
+	// and the twelve seams that pass --setting-sources project,local shut that tier
 	// off entirely. (planning, planrun and phaserun pass no --setting-sources, so
 	// the user tier is live for them — a leak to close, never a channel to rely
 	// on; a --settings file's env block also expands, but only where a seam

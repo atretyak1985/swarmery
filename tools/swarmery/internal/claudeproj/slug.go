@@ -83,7 +83,7 @@ const maxSlugLen = 200
 //
 // # What the estate says
 //
-// Every directory under `~/.claude/projects` and `~/.claude-insart/projects`,
+// Every directory under `~/.claude/projects` and every `~/.claude-<account>/projects`,
 // re-encoded from every distinct `cwd` AND `relocatedCwd` its transcripts
 // record: on 2026-09-21, 91 directories, 67 resolvable, and this rule
 // reproduced 67/67 where the old '/'-and-'.' rule reproduced 64/67; re-measured
