@@ -94,6 +94,10 @@ type projectDTO struct {
 	// .claude/settings.json; null when the project ships no readable settings
 	// (telemetry-only — discovered from ~/.claude transcripts but not onboarded).
 	Plugin *projectscan.PluginState `json:"plugin"`
+	// Onboarded: managed AND independently onboarded — not a sub-repo that
+	// inherited an umbrella's settings, and never "/", $HOME, the System dir
+	// or an onboarding root. See project_onboarded.go.
+	Onboarded bool `json:"onboarded"`
 }
 
 // projectDetailDTO is GET /api/projects/{id}: the enriched row plus its local
@@ -361,6 +365,7 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 		}
 		projects = append(projects, p)
 	}
+	markOnboarded(projects, roots)
 	writeJSON(w, projects, rows.Err())
 }
 
@@ -396,6 +401,10 @@ func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows.Close()
+	if err := h.markOnboardedOne(&proj, onboardCfg.Roots); err != nil {
+		writeErr(w, err)
+		return
+	}
 
 	components, _ := projectscan.ReadComponents(proj.Path) // never errors
 	recent, err := h.recentSessions(id)
