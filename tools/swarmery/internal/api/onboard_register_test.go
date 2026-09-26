@@ -41,6 +41,18 @@ func onboardServerWithDB(t *testing.T, cfg OnboardConfig) (*httptest.Server, *sq
 	return srv, db
 }
 
+// resolvedTempDir is t.TempDir() with symlinks resolved. resolveUnderRoots
+// stores the symlink-resolved target (on macOS /var → /private/var), so a test
+// that looks the row up by the unresolved path would find nothing.
+func resolvedTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temp dir: %v", err)
+	}
+	return dir
+}
+
 func onboardDir(t *testing.T, root, name string) string {
 	t.Helper()
 	dir := filepath.Join(root, name)
@@ -63,7 +75,7 @@ func steps(out map[string]any) string {
 }
 
 func TestOnboardRegistersProjectUnderTheOnboardingSlug(t *testing.T) {
-	root, ws := t.TempDir(), t.TempDir()
+	root, ws := resolvedTempDir(t), resolvedTempDir(t)
 	proj := onboardDir(t, root, "my-project")
 	srv, db := onboardServerWithDB(t, OnboardConfig{Roots: []string{root}, WorkspaceRoot: ws})
 
@@ -82,19 +94,32 @@ func TestOnboardRegistersProjectUnderTheOnboardingSlug(t *testing.T) {
 	}
 }
 
-// Re-onboarding an existing project must rename its row, never fork it.
-func TestOnboardRenamesAPathDerivedRowInPlace(t *testing.T) {
-	root, ws := t.TempDir(), t.TempDir()
+// Re-onboarding a project the ingester already registered must NOT rename its
+// row: projects.slug names the project's worktree folders
+// (<worktrees>/<projects.slug>/<task>), and both CanonicalProjectPath and
+// phaserun's adopt path resolve by it — a rename would orphan every worktree cut
+// before it. The row keeps its slug, stays the one and only row for the path,
+// and onboarding still succeeds and says so.
+func TestOnboardKeepsAnExistingRowsSlug(t *testing.T) {
+	root, ws := resolvedTempDir(t), resolvedTempDir(t)
 	proj := onboardDir(t, root, "my-project")
 	srv, db := onboardServerWithDB(t, OnboardConfig{Roots: []string{root}, WorkspaceRoot: ws})
 
 	// The ingester got there first, as it does whenever a session ran before
 	// onboarding.
-	if _, _, err := ingest.UpsertProject(db, proj, "2026-09-19T00:00:00.000Z", "2026-09-19T00:00:00.000Z"); err != nil {
+	seededID, _, err := ingest.UpsertProject(db, proj, "2026-09-19T00:00:00.000Z", "2026-09-19T00:00:00.000Z")
+	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	var seededSlug, seededName string
+	if err := db.QueryRow(`SELECT slug, name FROM projects WHERE id = ?`, seededID).Scan(&seededSlug, &seededName); err != nil {
+		t.Fatal(err)
+	}
+	if seededSlug == "my-project" {
+		t.Fatalf("precondition: seeded slug already equals the onboarding slug")
+	}
 
-	doJSON(t, http.MethodPost, srv.URL+"/api/projects/onboard",
+	out := doJSON(t, http.MethodPost, srv.URL+"/api/projects/onboard",
 		map[string]any{"slug": "my-project", "path": proj}, http.StatusCreated)
 
 	var n int
@@ -102,14 +127,28 @@ func TestOnboardRenamesAPathDerivedRowInPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != 1 {
-		t.Fatalf("projects = %d, want 1 — onboarding forked the row instead of renaming it", n)
+		t.Fatalf("projects = %d, want 1 — onboarding forked the row", n)
 	}
-	var slug string
-	if err := db.QueryRow(`SELECT slug FROM projects WHERE path = ?`, proj).Scan(&slug); err != nil {
+	var id int64
+	var slug, name string
+	if err := db.QueryRow(`SELECT id, slug, name FROM projects WHERE path = ?`, proj).Scan(&id, &slug, &name); err != nil {
 		t.Fatal(err)
 	}
-	if slug != "my-project" {
-		t.Fatalf("slug = %q, want %q", slug, "my-project")
+	if id != seededID {
+		t.Fatalf("row id = %d, want the seeded %d", id, seededID)
+	}
+	if slug != seededSlug {
+		t.Fatalf("slug = %q, want the existing %q — onboarding renamed project identity in place", slug, seededSlug)
+	}
+	if name != seededName {
+		t.Errorf("name = %q, want %q", name, seededName)
+	}
+	if !strings.Contains(steps(out), "keeps its existing slug") {
+		t.Errorf("kept slug not reported in steps:\n%s", steps(out))
+	}
+	// The files half (the rest of onboarding) still happened.
+	if _, err := os.Stat(filepath.Join(proj, ".claude", "settings.json")); err != nil {
+		t.Errorf("onboarding files not written: %v", err)
 	}
 }
 
@@ -118,7 +157,7 @@ func TestOnboardRenamesAPathDerivedRowInPlace(t *testing.T) {
 // state that made by-slug resolution a coin flip. Onboarding still succeeds:
 // the files on disk are correct and are the point of the call.
 func TestOnboardReportsSlugConflictWithoutStealingIt(t *testing.T) {
-	root, ws := t.TempDir(), t.TempDir()
+	root, ws := resolvedTempDir(t), resolvedTempDir(t)
 	first := onboardDir(t, root, "taken")
 	second := onboardDir(t, root, "second")
 	srv, db := onboardServerWithDB(t, OnboardConfig{Roots: []string{root}, WorkspaceRoot: ws})

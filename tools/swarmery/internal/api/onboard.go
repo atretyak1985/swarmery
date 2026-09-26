@@ -152,6 +152,11 @@ func (h *Handler) onboardProject(w http.ResponseWriter, r *http.Request) {
 	case outcome == ingest.SlugConflict:
 		steps = append(steps, fmt.Sprintf(
 			"⚠ another project already answers to %q in swarmery — it keeps the name, this one stays on its path-derived slug", req.Slug))
+	case outcome == ingest.SlugKept:
+		// Never renamed in place: projects.slug names this project's worktree
+		// folders, and worktree/session attribution resolves by it.
+		steps = append(steps, fmt.Sprintf(
+			"✓ already registered in swarmery — it keeps its existing slug (worktrees are named after it), not %q", req.Slug))
 	default:
 		steps = append(steps, fmt.Sprintf("✓ registered in swarmery as %q", req.Slug))
 	}
@@ -164,7 +169,7 @@ func (h *Handler) onboardProject(w http.ResponseWriter, r *http.Request) {
 // setOnboardedSlugTx wraps ingest.SetOnboardedSlug in its own transaction.
 //
 // SetOnboardedSlug is check-then-act (probe the slug's current owner, then
-// UPDATE) with no atomicity of its own — db is *sql.DB there, not *sql.Tx, by
+// INSERT) with no atomicity of its own — db is *sql.DB there, not *sql.Tx, by
 // design (every other caller, including every test, passes a plain db). Two
 // nearly-simultaneous onboards of DIFFERENT directories claiming the SAME slug
 // can therefore both read "unclaimed" before either writes, and both pass the

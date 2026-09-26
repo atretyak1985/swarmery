@@ -32,9 +32,12 @@ func TestSetOnboardedSlug_MintsRowWhenUnseen(t *testing.T) {
 	}
 }
 
-// The case that produced the split: the ingester saw a session first and minted
-// the row under the path-derived slug. Onboarding must rename it, not fork it.
-func TestSetOnboardedSlug_RenamesPathDerivedRow(t *testing.T) {
+// The ingester saw a session first and minted the row under the path-derived
+// slug. Onboarding must NOT rename it: projects.slug names the project's
+// worktree folders and CanonicalProjectPath / phaserun adopt resolve by it, so a
+// rename would orphan every worktree cut before it. The row keeps its slug and
+// is not forked.
+func TestSetOnboardedSlug_KeepsAnExistingRowsSlug(t *testing.T) {
 	db := testDB(t)
 	if _, _, err := UpsertProject(db, "/home/dev/skygor", onboardTS, onboardTS); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -47,14 +50,22 @@ func TestSetOnboardedSlug_RenamesPathDerivedRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetOnboardedSlug: %v", err)
 	}
-	if out != SlugSet {
-		t.Fatalf("outcome = %v, want SlugSet", out)
+	if out != SlugKept {
+		t.Fatalf("outcome = %v, want SlugKept", out)
 	}
-	if got := slugOf(t, db, "/home/dev/skygor"); got != "skygor" {
-		t.Fatalf("slug = %q, want %q", got, "skygor")
+	if got := slugOf(t, db, "/home/dev/skygor"); got != "-home-dev-skygor" {
+		t.Fatalf("slug = %q, want the existing %q — renamed in place", got, "-home-dev-skygor")
 	}
 	if n := count(t, db, `SELECT COUNT(*) FROM projects`); n != 1 {
-		t.Fatalf("projects = %d, want 1 — the row was forked, not renamed", n)
+		t.Fatalf("projects = %d, want 1 — the row was forked", n)
+	}
+	// A worktree cut under the existing slug must still resolve to the project.
+	prev := worktreeRootOverride
+	worktreeRootOverride = "/tmp/worktrees"
+	t.Cleanup(func() { worktreeRootOverride = prev })
+	wt := "/tmp/worktrees/-home-dev-skygor/task-1"
+	if got := CanonicalProjectPath(db, wt); got != "/home/dev/skygor" {
+		t.Fatalf("CanonicalProjectPath(%s) = %q, want the project path", wt, got)
 	}
 }
 

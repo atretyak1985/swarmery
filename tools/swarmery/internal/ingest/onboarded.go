@@ -26,9 +26,9 @@ import (
 type SlugOutcome int
 
 const (
-	// SlugSet — the project row now carries the onboarding slug.
+	// SlugSet — a NEW project row was minted carrying the onboarding slug.
 	SlugSet SlugOutcome = iota
-	// SlugUnchanged — the row already carried it.
+	// SlugUnchanged — the existing row already carried it.
 	SlugUnchanged
 	// SlugConflict — a DIFFERENT project already answers to that slug, so
 	// nothing was written. projects.slug has no unique index (projects.path is
@@ -36,12 +36,24 @@ const (
 	// make every by-slug lookup a coin flip — the exact failure this whole
 	// alignment exists to remove.
 	SlugConflict
+	// SlugKept — a row for this path already existed under a different slug and
+	// KEEPS it. projects.slug is project identity, not a display label: worktree
+	// folders are named <worktrees>/<projects.slug>/<task>, and both
+	// CanonicalProjectPath (which resolves a worktree cwd by that folder name)
+	// and phaserun's adopt path (which rebuilds a worktree path from
+	// ProjectSlug) look rows up by it. Renaming in place would orphan every
+	// worktree cut before the rename — their sessions would mint phantom
+	// project rows, and an in-flight phase run could not be re-adopted after a
+	// daemon restart.
+	SlugKept
 )
 
-// SetOnboardedSlug aligns the registry slug of the project at path with the
-// slug onboarding just used, minting the project row when the ingester has not
-// seen a session there yet (the common case: onboarding usually runs BEFORE the
-// first session).
+// SetOnboardedSlug registers the project at path under the slug onboarding just
+// used, minting the project row when the ingester has not seen a session there
+// yet (the common case: onboarding usually runs BEFORE the first session).
+//
+// It only ever sets the slug on a row it MINTS. An existing row keeps its slug
+// (SlugKept) — see SlugKept for why a rename is unsafe.
 //
 // Safe to re-run: UpsertProject never rewrites slug after INSERT, and no other
 // code path updates the column, so the value set here survives every later
@@ -51,53 +63,37 @@ func SetOnboardedSlug(q dbtx, path, slug, now string) (SlugOutcome, error) {
 		return SlugConflict, fmt.Errorf("ingest: path and slug are required")
 	}
 
-	var ownerPath string
-	err := q.QueryRow(`SELECT path FROM projects WHERE slug = ?`, slug).Scan(&ownerPath)
+	// An existing row for this exact path is never renamed.
+	var existing string
+	err := q.QueryRow(`SELECT slug FROM projects WHERE path = ?`, path).Scan(&existing)
 	switch {
-	case err == nil && ownerPath != path:
-		return SlugConflict, nil
-	case err != nil && err != sql.ErrNoRows:
-		return SlugConflict, err
-	}
-
-	id, err := upsertExactProject(q, path, now, now)
-	if err != nil {
-		return SlugConflict, err
-	}
-
-	res, err := q.Exec(`UPDATE projects SET slug = ? WHERE id = ? AND slug <> ?`, slug, id, slug)
-	if err != nil {
-		return SlugConflict, err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	case err == nil && existing == slug:
 		return SlugUnchanged, nil
+	case err == nil:
+		return SlugKept, nil
+	case err != sql.ErrNoRows:
+		return SlugConflict, err
 	}
-	return SlugSet, nil
-}
 
-// upsertExactProject resolves or creates the projects row for path, WITHOUT
-// UpsertProject's ancestor-canonicalization fallback (CanonicalProjectPath).
-// That fallback exists to attribute a session's satellite cwd (a dispatcher
-// worktree, an in-repo subdirectory) to its parent project during ingest — but
-// onboarding names one specific directory, and reusing the fallback here would
-// let a pre-existing ancestor row (e.g. a project umbrella dir the ingester
-// already saw a session under) get renamed to the onboarded slug instead of a
-// row for the directory actually onboarded ever being created.
-func upsertExactProject(q dbtx, path, firstSeen, lastActivity string) (int64, error) {
-	var id int64
-	err := q.QueryRow(`SELECT id FROM projects WHERE path = ?`, path).Scan(&id)
+	var ownerPath string
+	err = q.QueryRow(`SELECT path FROM projects WHERE slug = ?`, slug).Scan(&ownerPath)
 	switch {
 	case err == nil:
-		return id, nil
+		return SlugConflict, nil
 	case err != sql.ErrNoRows:
-		return 0, err
+		return SlugConflict, err
 	}
-	res, err := q.Exec(
+
+	// Insert by the exact path, WITHOUT UpsertProject's ancestor-
+	// canonicalization fallback (CanonicalProjectPath). That fallback exists to
+	// attribute a session's satellite cwd (a dispatcher worktree, an in-repo
+	// subdirectory) to its parent project during ingest — but onboarding names
+	// one specific directory, and a pre-existing ancestor row must not stand in
+	// for it.
+	if _, err := q.Exec(
 		`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
-		path, SlugForPath(path), projectNameFor(path), firstSeen, lastActivity)
-	if err != nil {
-		return 0, fmt.Errorf("insert project: %w", err)
+		path, slug, projectNameFor(path), now, now); err != nil {
+		return SlugConflict, fmt.Errorf("insert project: %w", err)
 	}
-	id, _ = res.LastInsertId()
-	return id, nil
+	return SlugSet, nil
 }
