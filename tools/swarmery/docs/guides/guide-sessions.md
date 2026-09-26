@@ -113,8 +113,10 @@ keychain and has no file at all. The answer is three-valued: connected, not
 connected, or unknown when the question could not be asked.
 
 A project is bound to an account through its `.claude/settings.local.json`, which is
-machine-local and gitignored — your teammate's checkout is unaffected. On a
-single-account machine the picker does not appear at all.
+machine-local and gitignored — your teammate's checkout is unaffected. A binding
+file that git **tracks** is ignored: the project runs under the default account, and
+the picker shows why underneath. On a single-account machine the picker does not
+appear at all.
 
 ## Approvals
 
