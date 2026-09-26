@@ -14,6 +14,7 @@ import { ExplainPair } from './Explain';
 import { TerminalPathNote } from './TerminalPathNote';
 import { UsageConnect } from './usage/UsageConnect';
 import { ConfirmDialog, ErrorBox } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 type Stage =
   | { kind: 'form' }
@@ -39,11 +40,6 @@ export function CreateAccountModal({
   // The embedded Connect came out CLI-ready — swap the flow for the terminal
   // path note. The manual command stays visible until then.
   const [resolved, setResolved] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-
-  if (!open) return null;
-  const busy = stage.kind === 'saving';
-  const dirty = stage.kind === 'form' && key.trim() !== '';
 
   function reset(): void {
     setKey('');
@@ -53,23 +49,23 @@ export function CreateAccountModal({
     setResolved(false);
   }
 
-  function requestClose(): void {
-    if (busy) return;
-    if (dirty) {
-      setConfirmDiscard(true);
-      return;
-    }
+  function resetAndClose(): void {
     reset();
     onClose();
   }
 
+  // Dirty = the key differs from the empty value the form opens with. Called
+  // before the `open` early return (hook order); the guard clears its own
+  // confirm on discard, so a reopened modal starts on a clean form.
+  const busy = stage.kind === 'saving';
+  const discard = useDiscardGuard(stage.kind === 'form' && key.trim() !== '', resetAndClose, {
+    disabled: busy,
+  });
+
+  if (!open) return null;
+
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-    if (e.key !== 'Escape' || busy) return;
-    if (confirmDiscard) {
-      setConfirmDiscard(false);
-      return;
-    }
-    requestClose();
+    if (e.key === 'Escape') discard.requestClose();
   }
 
   async function submit(): Promise<void> {
@@ -101,7 +97,7 @@ export function CreateAccountModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={busy ? undefined : requestClose}
+      onClick={discard.requestClose}
       onKeyDown={onKeyDown}
     >
       <div
@@ -145,7 +141,7 @@ export function CreateAccountModal({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={requestClose}
+                onClick={discard.requestClose}
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
@@ -224,15 +220,10 @@ export function CreateAccountModal({
       </div>
 
       <ConfirmDialog
-        open={confirmDiscard}
+        {...discard.confirmProps}
         title="Discard account key?"
         confirmLabel="discard"
         danger
-        onConfirm={() => {
-          reset();
-          onClose();
-        }}
-        onCancel={() => setConfirmDiscard(false)}
       >
         The account key you typed will be lost.
       </ConfirmDialog>

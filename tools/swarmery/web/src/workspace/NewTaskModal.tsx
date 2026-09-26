@@ -19,10 +19,11 @@
 // the remainder becomes the title; an unknown name is left in the text so
 // nothing is silently dropped.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AgentRosterRow, BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { createBoardTask } from '../api';
-import { ConfirmDialog } from '../components/ui';
+import { ConfirmDialog, containTab } from '../components/ui';
+import { useDiscardGuard } from '../components/useDiscardGuard';
 import { AgentHint, AgentSelect, useAgentRoster } from './AgentPicker';
 import { COLUMN_LABELS, LANE_TITLES, laneOf, TASK_MODELS, TASK_PRIORITIES } from './boardModel';
 import { PlaybookHint, PlaybookSelect, usePlaybooks } from './PlaybookPicker';
@@ -85,7 +86,9 @@ export function NewTaskModal({
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // What the form was pre-filled with (the `?compose=` seed, once parsed): the
+  // discard guard measures edits against this, not against empty.
+  const [seed, setSeed] = useState({ title: initialText.trim(), agent: '' });
 
   const { playbooks } = usePlaybooks(projectId);
   const { agents, loading: rosterLoading } = useAgentRoster(projectId, projectSlug);
@@ -102,6 +105,7 @@ export function NewTaskModal({
     if (parsed.agent === '') return;
     setAgent(parsed.agent);
     setTitle(parsed.title);
+    setSeed({ title: parsed.title, agent: parsed.agent });
     // The deep link SET something the collapsed form does not show. Open the
     // section rather than dispatch to an agent the operator never saw named.
     setAdvanced(true);
@@ -126,52 +130,31 @@ export function NewTaskModal({
   ];
 
   // Anything the operator would have to retype: a title, a prompt, or an
-  // advanced override. Closing over any of this asks first instead of
-  // silently discarding it — Escape and the backdrop are the easiest ways
-  // to lose a half-written task, so they are the ones that need a guard.
-  const dirty = title.trim() !== '' || prompt.trim() !== '' || overrides.length > 0;
-
-  const requestClose = useCallback((): void => {
-    if (busy) return;
-    if (dirty) {
-      setConfirmDiscard(true);
-      return;
-    }
-    onClose();
-  }, [busy, dirty, onClose]);
+  // advanced override that differs from what the form opened with (a deep-link
+  // seed counts as the starting point, not as an edit). Closing over any of this
+  // asks first instead of silently discarding it — Escape and the backdrop are
+  // the easiest ways to lose a half-written task, so they need the guard.
+  const dirty =
+    title.trim() !== seed.title ||
+    prompt.trim() !== '' ||
+    agent !== seed.agent ||
+    overrides.some((o) => o !== 'agent');
+  const discard = useDiscardGuard(dirty, onClose, { disabled: busy });
+  const { requestClose } = discard;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || busy) return;
-      if (confirmDiscard) {
-        setConfirmDiscard(false);
-        return;
-      }
-      requestClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, confirmDiscard, requestClose]);
+  }, [requestClose]);
 
   // Focus trap: Tab cycles inside the dialog instead of escaping to the board
-  // behind it. Queried live so controls that appear/disable mid-edit count.
+  // behind it (the shared containment helper, queried live per keypress).
   const trapTab = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (e.key !== 'Tab') return;
     const root = dialogRef.current;
-    if (root === null) return;
-    const focusable = [
-      ...root.querySelectorAll<HTMLElement>('input, select, textarea, button, a[href]'),
-    ].filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (first === undefined || last === undefined) return;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
+    if (root !== null) containTab(e.nativeEvent, root);
   };
 
   const submit = (): void => {
@@ -212,7 +195,7 @@ export function NewTaskModal({
       role="dialog"
       aria-modal="true"
       aria-label="New task"
-      onClick={busy ? undefined : requestClose}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -416,12 +399,10 @@ export function NewTaskModal({
       </div>
 
       <ConfirmDialog
-        open={confirmDiscard}
+        {...discard.confirmProps}
         title="Discard new task?"
         confirmLabel="discard"
         danger
-        onConfirm={onClose}
-        onCancel={() => setConfirmDiscard(false)}
       >
         The title, prompt, and any advanced settings you've entered will be lost.
       </ConfirmDialog>

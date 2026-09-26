@@ -27,6 +27,7 @@ import {
 import { fmtElapsed } from '../lib/format';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { ConfirmDialog } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 /** The reason a revise wizard starts from: the diagnosis itself, restated as
  * prose the planner can act on. Composed from what the daemon PROVED (outcome,
@@ -135,7 +136,6 @@ export function RunOutcomeModal({
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
-  const [confirmDiscardRevise, setConfirmDiscardRevise] = useState(false);
 
   // Revise-plan flow (plan-revision phase 4): the diagnosis is exactly the
   // moment the operator knows the PLAN is wrong, so the modal can hand it to a
@@ -173,12 +173,22 @@ export function RunOutcomeModal({
     };
   }, [load]);
 
+  // The revise reason is pre-filled from the diagnosis when the panel opens, so
+  // "dirty" means it differs from THAT text (or from '' before it was filled) —
+  // an untouched pre-fill is not the operator's writing and must not nag.
+  const diag = phase.kind === 'ready' ? phase.diag : null;
+  const reasonBaseline = diag !== null ? diagnosisReason(diag).trim() : '';
+  const reasonNow = reviseReason.trim();
+  const reviseDirty = reasonNow !== '' && reasonNow !== reasonBaseline;
+  const discard = useDiscardGuard(reviseDirty, onClose, { disabled: busy || reviseBusy });
+
   // Esc closes, except while a branch delete is in flight. While the delete is
   // ARMED it disarms instead of closing — Esc is the universal "back out", and
   // closing the whole modal on it would leave the user unsure whether the branch
-  // survived. Same collapse-then-close ladder backs the backdrop click via
-  // `requestClose`, plus a guard on the typed revise reason at the point where
-  // the modal would actually unmount.
+  // survived. The same collapse-then-close ladder backs the backdrop click and
+  // the Close button; only the final step — the modal unmounting — goes
+  // through the discard guard.
+  const guardedClose = discard.requestClose;
   const requestClose = useCallback((): void => {
     if (busy || reviseBusy) return;
     if (confirmingDelete) {
@@ -189,25 +199,16 @@ export function RunOutcomeModal({
       setRevising(false);
       return;
     }
-    if (reviseReason.trim() !== '') {
-      setConfirmDiscardRevise(true);
-      return;
-    }
-    onClose();
-  }, [busy, reviseBusy, confirmingDelete, revising, reviseReason, onClose]);
+    guardedClose();
+  }, [busy, reviseBusy, confirmingDelete, revising, guardedClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || busy || reviseBusy) return;
-      if (confirmDiscardRevise) {
-        setConfirmDiscardRevise(false);
-        return;
-      }
-      requestClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, reviseBusy, confirmDiscardRevise, requestClose]);
+  }, [requestClose]);
 
   const startRevise = (): void => {
     const reason = reviseReason.trim();
@@ -228,7 +229,6 @@ export function RunOutcomeModal({
       .finally(() => setReviseBusy(false));
   };
 
-  const diag = phase.kind === 'ready' ? phase.diag : null;
   const chip = OUTCOME_CHIP[diag?.runOutcome ?? 'idle'];
   // The branch is only reclaimable when the daemon actually proved it dirty —
   // offering the delete otherwise would invite destroying an unrelated branch. The
@@ -567,12 +567,10 @@ export function RunOutcomeModal({
       </div>
 
       <ConfirmDialog
-        open={confirmDiscardRevise}
+        {...discard.confirmProps}
         title="Discard revise reason?"
         confirmLabel="discard"
         danger
-        onConfirm={onClose}
-        onCancel={() => setConfirmDiscardRevise(false)}
       >
         The reason you wrote for revising this plan will be lost.
       </ConfirmDialog>

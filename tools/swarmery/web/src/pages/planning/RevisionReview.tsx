@@ -17,6 +17,7 @@ import { applyRevision, fetchRevision, rejectRevision, type RevisionApplyError }
 import { fmtDateTime } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
 import { ConfirmDialog, ErrorBox, Loading } from '../../components/ui';
+import { useDiscardGuard } from '../../components/useDiscardGuard';
 import { DiffBlock } from '../system/ItemDetail';
 
 const ACTION_CHIP: Record<RevisionAction, string> = {
@@ -305,23 +306,15 @@ function DecisionDialog({
   onConfirm: (note: string) => void;
 }): JSX.Element {
   const [note, setNote] = useState('');
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const primaryRef = useRef<HTMLButtonElement | null>(null);
   const noteRef = useRef<HTMLTextAreaElement | null>(null);
   // Remember the trigger so focus returns to it on close (WCAG 2.2 §2.4.3).
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
-  const dirty = withNote && note.trim() !== '';
-
-  const requestClose = useCallback((): void => {
-    if (busy) return;
-    if (dirty) {
-      setConfirmDiscard(true);
-      return;
-    }
-    onClose();
-  }, [busy, dirty, onClose]);
+  // Dirty = the note differs from the empty value it opens with.
+  const discard = useDiscardGuard(withNote && note.trim() !== '', onClose, { disabled: busy });
+  const { requestClose } = discard;
 
   useEffect(() => {
     previouslyFocused.current =
@@ -338,12 +331,9 @@ function DecisionDialog({
       'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
+        // The discard confirm, when up, claims Esc in its own capture listener
+        // before this one ever sees it.
         e.preventDefault();
-        if (busy) return;
-        if (confirmDiscard) {
-          setConfirmDiscard(false);
-          return;
-        }
         requestClose();
         return;
       }
@@ -372,7 +362,7 @@ function DecisionDialog({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, confirmDiscard, requestClose]);
+  }, [requestClose]);
 
   return (
     <div
@@ -380,7 +370,7 @@ function DecisionDialog({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={busy ? undefined : requestClose}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -431,12 +421,10 @@ function DecisionDialog({
       </div>
 
       <ConfirmDialog
-        open={confirmDiscard}
+        {...discard.confirmProps}
         title="Discard note?"
         confirmLabel="discard"
         danger
-        onConfirm={onClose}
-        onCancel={() => setConfirmDiscard(false)}
       >
         The note you typed will be lost.
       </ConfirmDialog>

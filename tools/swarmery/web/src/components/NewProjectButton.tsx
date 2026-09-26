@@ -7,10 +7,11 @@
 // endpoint is fenced to an allow-list server-side; when disabled the form shows
 // how to enable it instead of failing on submit.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchOnboardConfig, onboardProject } from '../api';
 import type { OnboardConfig, OnboardResponse } from '../api/types';
 import { ConfirmDialog } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 const PACKS = ['web-pack', 'iot-pack', 'uav-pack', 'infra-pack', 'lsp-pack'] as const;
 
@@ -51,7 +52,6 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<OnboardResponse | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   useEffect(() => {
     fetchOnboardConfig()
@@ -65,30 +65,20 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
   const enabled = cfg?.enabled ?? false;
   const canSubmit = enabled && slugValid && path.trim() !== '' && !busy;
 
+  // Dirty = any field differs from the empty form it opens with. After a
+  // successful onboard there is nothing left to lose.
   const dirty =
     done === null && (slug.trim() !== '' || path.trim() !== '' || workspaceRoot.trim() !== '' || packs.size > 0);
-
-  const requestClose = useCallback((): void => {
-    if (busy) return;
-    if (dirty) {
-      setConfirmDiscard(true);
-      return;
-    }
-    onClose();
-  }, [busy, dirty, onClose]);
+  const discard = useDiscardGuard(dirty, onClose, { disabled: busy });
+  const { requestClose } = discard;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || busy) return;
-      if (confirmDiscard) {
-        setConfirmDiscard(false);
-        return;
-      }
-      requestClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, confirmDiscard, requestClose]);
+  }, [requestClose]);
 
   function togglePack(p: string): void {
     setPacks((prev) => {
@@ -118,7 +108,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
       role="dialog"
       aria-modal="true"
       aria-label="New project"
-      onClick={busy ? undefined : requestClose}
+      onClick={requestClose}
     >
       <div
         className="w-full max-w-md rounded-xl border border-line bg-surface px-4 py-4"
@@ -260,12 +250,10 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
       </div>
 
       <ConfirmDialog
-        open={confirmDiscard}
+        {...discard.confirmProps}
         title="Discard new project?"
         confirmLabel="discard"
         danger
-        onConfirm={onClose}
-        onCancel={() => setConfirmDiscard(false)}
       >
         The slug, path, workspace root, and pack selections you&apos;ve entered will be lost.
       </ConfirmDialog>

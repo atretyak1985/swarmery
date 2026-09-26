@@ -16,6 +16,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { PluginConfigProbe, ProjectPluginRow } from '../api/types';
 import { ConfigValidationError, probeProjectConfig, putProjectConfig } from '../api';
 import { ConfirmDialog, ErrorBox } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 /** The subset of JSON Schema the contract allows (Phase 1): string / integer
  * leaves, object nesting, required + default + minimum. Everything else on
@@ -150,6 +151,11 @@ function leafPaths(schema: SchemaNode, prefix: string[] = []): string[] {
 
 /** Reads a dotted path out of the form value — the same addressing the server
  * uses for `needs`, `fields`, and its `problems` lines. */
+/** A leaf as the dirty check compares it: every empty spelling is ''. */
+function leafText(value: unknown): string {
+  return isEmptyValue(value) ? '' : String(value);
+}
+
 function valueAt(value: unknown, dotted: string): unknown {
   let cur: unknown = value;
   for (const segment of dotted.split('.')) {
@@ -226,26 +232,23 @@ export function PluginConfigModal({
   const [value, setValue] = useState<FormValue>(
     isRecord(row.configCurrent) ? (row.configCurrent as FormValue) : {},
   );
-  const initialValueRef = useRef(value);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // What "unchanged" means for the discard guard: the value the modal opened
+  // with, plus whatever the probe filled in on its own (a suggestion the
+  // operator never touched is not an edit they would lose).
+  const [baseline, setBaseline] = useState<FormValue>(value);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'editing' });
   const busy = phase.kind === 'saving';
-  const dirty = JSON.stringify(value) !== JSON.stringify(initialValueRef.current);
-
-  function requestClose(): void {
-    if (busy) return;
-    if (dirty) {
-      setConfirmDiscard(true);
-      return;
-    }
-    onClose();
-  }
   const firstPath = useMemo(() => (schema !== undefined ? firstLeafPath(schema) : null), [schema]);
   const knownLeaves = useMemo(() => (schema !== undefined ? leafPaths(schema) : []), [schema]);
   const filledCount = knownLeaves.filter((dotted) => !isEmptyValue(valueAt(value, dotted))).length;
   const errorCount = Object.keys(fieldErrors).length;
+  // Compared leaf by leaf with empties normalised, so typing into a field and
+  // clearing it again (which leaves `{a: ''}` where the form opened with `{}`)
+  // reads as clean.
+  const dirty = knownLeaves.some((dotted) => leafText(valueAt(value, dotted)) !== leafText(valueAt(baseline, dotted)));
+  const discard = useDiscardGuard(dirty, onClose, { disabled: busy });
   // The scrolling field body — held so a rejected save can bring the first
   // complaint back into view.
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -289,6 +292,9 @@ export function PluginConfigModal({
         const { next, filled } = fillEmptyFrom(valueRef.current, res.suggestions, knownLeaves);
         setValue(next);
         setAutoFilled(filled);
+        setBaseline((prev) =>
+          filled.reduce((acc, dotted) => setAt(acc, dotted.split('.'), valueAt(next, dotted)), prev),
+        );
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
@@ -332,12 +338,7 @@ export function PluginConfigModal({
   useEffect(() => () => probeAbort.current?.abort(), []);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-    if (e.key !== 'Escape' || busy) return;
-    if (confirmDiscard) {
-      setConfirmDiscard(false);
-      return;
-    }
-    requestClose();
+    if (e.key === 'Escape') discard.requestClose();
   }
 
   async function save(): Promise<void> {
@@ -386,7 +387,7 @@ export function PluginConfigModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onClick={busy ? undefined : requestClose}
+      onClick={discard.requestClose}
       onKeyDown={onKeyDown}
     >
       <div
@@ -470,7 +471,7 @@ export function PluginConfigModal({
                 <span className="flex gap-2">
                   <button
                     type="button"
-                    onClick={requestClose}
+                    onClick={discard.requestClose}
                     disabled={busy}
                     className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
                   >
@@ -503,12 +504,10 @@ export function PluginConfigModal({
       </div>
 
       <ConfirmDialog
-        open={confirmDiscard}
+        {...discard.confirmProps}
         title="Discard changes?"
         confirmLabel="discard"
         danger
-        onConfirm={onClose}
-        onCancel={() => setConfirmDiscard(false)}
       >
         Your edits to this plugin's configuration will be lost.
       </ConfirmDialog>

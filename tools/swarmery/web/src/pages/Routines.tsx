@@ -6,7 +6,7 @@
 // /api/routines{,/{id}/runs}; the global project scope (useScope) filters the
 // list the same way Retro/Analytics do.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Routine, RoutineInput, RoutineRun, RoutineStep, RoutineStepType } from '../api/types';
 import {
   createRoutine,
@@ -21,6 +21,7 @@ import { findProject } from '../lib/projectSlug';
 import { ScopeChip } from '../components/ScopeChip';
 import { useScope } from '../lib/scope';
 import { ConfirmDialog, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
+import { useDiscardGuard } from '../components/useDiscardGuard';
 import { ProjectName } from '../components/ProjectName';
 
 /* ---------------------------------------------------------------- cron help */
@@ -406,50 +407,30 @@ function RoutineEditor({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
-  const initialSnapshotRef = useRef({
-    name: seed?.name ?? '',
-    projectId: seed?.projectId ?? null,
-    cronExpr: seed?.cronExpr ?? '',
-    catchUp: seed?.catchUp ?? 'skip',
-    timeoutSec: seed?.timeoutSec ?? 900,
-    webhook: seed?.hasWebhook ?? false,
-    steps: seed?.steps ?? [blankStep('command')],
-  });
+  // The form as it opened, captured from the initial state on the first render
+  // so the dirty check compares against exactly what the fields were seeded with.
+  const snapshot = JSON.stringify({ name, projectId, cronExpr, catchUp, timeoutSec, webhook, steps });
+  const [initialSnapshot] = useState(snapshot);
 
   const cronOk = cronLooksValid(cronExpr);
   const canSave = name.trim() !== '' && steps.length > 0 && cronOk && !saving;
 
-  // The post-save "copy the webhook token" view already persisted server-side —
-  // gated on token === null so it never nags on a state that has nothing left
-  // to lose.
-  const dirty =
-    token === null &&
-    JSON.stringify({ name, projectId, cronExpr, catchUp, timeoutSec, webhook, steps }) !==
-      JSON.stringify(initialSnapshotRef.current);
-
-  const requestClose = useCallback((): void => {
-    if (saving) return;
-    if (dirty) {
-      setConfirmDiscard(true);
-      return;
-    }
-    onClose();
-  }, [saving, dirty, onClose]);
+  // Dirty = the form differs from how it opened. The post-save "copy the
+  // webhook token" view already persisted server-side — gated on token === null
+  // so it never nags on a state that has nothing left to lose.
+  const discard = useDiscardGuard(token === null && snapshot !== initialSnapshot, onClose, {
+    disabled: saving,
+  });
+  const { requestClose } = discard;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || saving) return;
-      if (confirmDiscard) {
-        setConfirmDiscard(false);
-        return;
-      }
-      requestClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [saving, confirmDiscard, requestClose]);
+  }, [requestClose]);
 
   const save = async (): Promise<void> => {
     setSaving(true);
@@ -643,12 +624,10 @@ function RoutineEditor({
       </div>
 
       <ConfirmDialog
-        open={confirmDiscard}
+        {...discard.confirmProps}
         title={isNew ? 'Discard new routine?' : 'Discard changes?'}
         confirmLabel="discard"
         danger
-        onConfirm={onClose}
-        onCancel={() => setConfirmDiscard(false)}
       >
         The name, schedule, and steps you've entered will be lost.
       </ConfirmDialog>
