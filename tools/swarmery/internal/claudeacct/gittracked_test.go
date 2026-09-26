@@ -608,7 +608,7 @@ func TestBindingFailsClosedWhenGitCannotAnswer(t *testing.T) {
 // ── path shapes ──────────────────────────────────────────────────────────────
 
 // Binding(".") and Binding("") hand the probe a RELATIVE path. Without the Abs
-// in resolveProbePath the probe's -C would be "." — the daemon's own working
+// in linkChain the probe's -C would be "." — the daemon's own working
 // directory — and the verdict would describe an unrelated repository.
 func TestBindingRelativePath(t *testing.T) {
 	t.Run("tracked", func(t *testing.T) {
@@ -1141,5 +1141,113 @@ func wantLog(t *testing.T, out string, has, lacks []string) {
 		if strings.Contains(out, s) {
 			t.Errorf("the warning carries %q:\n%s", s, out)
 		}
+	}
+}
+
+// ── every link on the resolution chain ───────────────────────────────────────
+
+// chainFixture is <parent>/{victim,agents,project}: victim is a repository
+// whose binding is its operator's own (untracked); agents is a SHARED repository
+// that commits commitPath as a link to linkTarget; project's .claude is an
+// UNTRACKED absolute link to projectTarget(agents). Only the committed link in
+// agents connects project to victim's binding.
+func chainFixture(t *testing.T, commitPath, linkTarget string, projectTarget func(agents string) string) (victim, project string) {
+	t.Helper()
+	parent := t.TempDir()
+	victim = filepath.Join(parent, "victim")
+	mkdirs(t, victim)
+	runGit(t, victim, "init", "-q", ".")
+	writeBinding(t, victim, "work")
+
+	agents := filepath.Join(parent, "agents")
+	mkdirs(t, agents)
+	runGit(t, agents, "init", "-q", ".")
+	symlink(t, linkTarget, filepath.Join(agents, filepath.FromSlash(commitPath)))
+	runGit(t, agents, "add", "-f", "--", commitPath)
+	runGit(t, agents, "commit", "-qm", "commit a link into another project")
+
+	project = filepath.Join(parent, "project")
+	symlink(t, projectTarget(agents), filepath.Join(project, ".claude"))
+	return victim, project
+}
+
+// Two hops: project/.claude -> agents/.claude (the operator's link), and
+// agents/.claude -> ../victim/.claude, COMMITTED in the shared repository. The
+// second link is not on the binding's lexical path, so a check of only the
+// lexical entries never sees it.
+func TestProvenanceTwoHopChain(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	seedProbeStore(t, "work")
+	victim, project := chainFixture(t, ".claude", "../victim/.claude",
+		func(agents string) string { return filepath.Join(agents, ".claude") })
+	wantHonoured(t, victim, "work") // precondition: it is victim's own binding
+	wantIgnored(t, project)
+}
+
+// An intermediate DIRECTORY of a link's target is itself a committed link:
+// project/.claude -> agents/cfg/.claude, where agents commits cfg -> ../victim.
+func TestProvenanceIntermediateDirLink(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	seedProbeStore(t, "work")
+	victim, project := chainFixture(t, "cfg", "../victim",
+		func(agents string) string { return filepath.Join(agents, "cfg", ".claude") })
+	wantHonoured(t, victim, "work")
+	wantIgnored(t, project)
+}
+
+// A symlink loop terminates, fails closed, and SAYS it was a loop rather than
+// sending the operator to a `git status` that cannot explain it.
+func TestProvenanceSymlinkLoop(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	seedProbeStore(t, "work")
+	parent := t.TempDir()
+	symlink(t, "b", filepath.Join(parent, "loop", "a"))
+	symlink(t, "a", filepath.Join(parent, "loop", "b"))
+	project := filepath.Join(parent, "project")
+	symlink(t, filepath.Join(parent, "loop", "a"), filepath.Join(project, ".claude"))
+
+	f := probeGitTracked(bindingPath(project))
+	if f.verdict != trackUnknown {
+		t.Fatalf("verdict = %s, want unknown", f.verdict)
+	}
+	if why := distrustReason(f); !strings.Contains(why, "symlink loop") {
+		t.Errorf("reason = %q, want it to name the symlink loop", why)
+	}
+}
+
+// A git that gives no verdict still fails closed, but the warning says WHICH
+// failure it was: "run git status" is useless advice when git is not there.
+func TestUnknownReasonNamesTheGitFailure(t *testing.T) {
+	t.Run("git-not-on-PATH", func(t *testing.T) {
+		fakeHome(t)
+		resetWarnOnce(t)
+		seedProbeStore(t, "work")
+		repo := newRepo(t)
+		writeBinding(t, repo, "work")
+		t.Setenv("PATH", "") // the REAL runner, with nothing to find git in
+		wantIgnored(t, repo)
+		resetWarnOnce(t)
+		out := captureLog(t, func() { Binding(repo) })
+		wantLog(t, out, []string{"git not found on PATH", "install git"}, []string{" status"})
+	})
+	for _, c := range []struct {
+		name, want string
+		res        gitProbeResult
+	}{
+		{"timeout", "git timed out after 2s", gitProbeResult{exitCode: -1, err: context.DeadlineExceeded}},
+		{"git-error", "fatal: detected dubious ownership", gitProbeResult{exitCode: 128, stderr: "fatal: detected dubious ownership in repository at '/x'\n"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fakeHome(t)
+			resetWarnOnce(t)
+			repo := newRepo(t)
+			writeBinding(t, repo, "work")
+			stubProbe(t, c.res)
+			out := captureLog(t, func() { Binding(repo) })
+			wantLog(t, out, []string{c.want, " status"}, nil)
+		})
 	}
 }

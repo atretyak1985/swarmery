@@ -40,8 +40,12 @@ package claudeacct
 //     directory really stores (onDiskName), never the caller's lookup spelling.
 //   - a SYMLINK HOP. A committed `.claude -> <another project>/.claude`, or a
 //     committed settings.local.json link, borrows a binding the operator wrote
-//     for a different directory. Each hop that is a symlink is probed as a LINK,
-//     in the repository that contains it; tracked or unknown means ignored. An
+//     for a different directory — and so does a link further down the chain,
+//     committed in a SHARED repository the operator's own link points into
+//     (agents/.claude -> ../victim/.claude, or a directory agents/cfg -> …).
+//     EVERY link the resolution follows, directory components of each target
+//     included, is probed as a LINK in the repository that contains it (see
+//     linkChain); tracked or unknown means ignored, and so does a loop. An
 //     untracked link, or one outside any repository, is the operator's own —
 //     the multi-repo overlay shape — and the probe moves on to the target.
 //
@@ -318,101 +322,157 @@ func hasGitAncestor(dir string) bool {
 	}
 }
 
-// resolveProbePath is the canonical absolute path of path.
+// maxLinkHops bounds the chain walk, as the kernel's own ELOOP limit does: a
+// symlink loop — or a chain nobody could mean — fails closed instead of spinning.
+const maxLinkHops = 40
+
+// errLinkLoop is the chain walk giving up on maxLinkHops.
+var errLinkLoop = fmt.Errorf("a symlink loop, or a chain of more than %d links", maxLinkHops)
+
+// linkHop is one symlink on the binding's resolution chain: the directory that
+// holds it, already free of symlinks, and the name that directory stores.
+type linkHop struct{ dir, name string }
+
+func (h linkHop) path() string { return filepath.Join(h.dir, h.name) }
+
+// linkChain resolves path the way the kernel would, one component at a time,
+// and returns EVERY symlink it followed on the way plus the real path it ended
+// at. Every link counts — not just the lexical <project>/.claude and the file:
+// a link's target can itself be, or run through, a link that ANOTHER repository
+// commits (agents/.claude -> ../victim/.claude, or agents/cfg -> ../victim), and
+// each of those borrows a binding the operator wrote for somewhere else.
 //
-// Abs, because Binding("") hands over the RELATIVE ".claude/settings.local.json";
-// without it the probe's -C would be "." and the answer would describe the
-// daemon's own cwd. EvalSymlinks AFTER it, so the cwd's part of a relative path
-// is resolved too — Binding(".") and Binding(abs) then name one file — and
-// because the multi-repo overlay shape points .claude at a directory in ANOTHER
-// repository: whether the file is tracked is a question about its real location
-// (the links on the way are asked about separately, by symlinkHops).
-func resolveProbePath(path string) (string, bool) {
+// The project directory and everything above it are the operator's choice of
+// path, not hops: they are resolved with EvalSymlinks and never probed. Abs
+// comes first because Binding("") hands over the RELATIVE
+// ".claude/settings.local.json"; without it the probe's -C would describe the
+// daemon's own cwd.
+//
+// Any Lstat or Readlink failure, and more than maxLinkHops links, is an error:
+// the caller fails closed.
+func linkChain(path string) ([]linkHop, string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return "", false
+		return nil, "", err
 	}
-	real, err := filepath.EvalSymlinks(abs)
+	cur, err := filepath.EvalSymlinks(filepath.Dir(filepath.Dir(abs)))
 	if err != nil {
-		return "", false
+		return nil, "", err
 	}
-	return real, true
+	todo := []string{filepath.Base(filepath.Dir(abs)), filepath.Base(abs)}
+	var hops []linkHop
+	for len(todo) > 0 {
+		c := todo[0]
+		todo = todo[1:]
+		switch c {
+		case "", ".":
+			continue
+		case "..":
+			cur = filepath.Dir(cur) // cur is real, so its parent is the real parent
+			continue
+		}
+		next := filepath.Join(cur, c)
+		info, err := os.Lstat(next)
+		if err != nil {
+			return nil, "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			cur = next
+			continue
+		}
+		if len(hops) == maxLinkHops {
+			return nil, "", errLinkLoop
+		}
+		hops = append(hops, linkHop{cur, c})
+		target, err := os.Readlink(next)
+		if err != nil {
+			return nil, "", err
+		}
+		if filepath.IsAbs(target) {
+			cur = filepath.VolumeName(target) + string(filepath.Separator)
+		}
+		todo = append(strings.Split(target, string(filepath.Separator)), todo...)
+	}
+	return hops, cur, nil
 }
 
 // trackFinding is one probe's conclusion: the verdict, and the entry git was
 // asked about — a directory plus the name that directory stores. For a tracked
 // symlink hop that entry is the LINK, not the binding file, and the warning's
-// remedy has to name it.
+// remedy has to name it. detail, set only for an unknown verdict, is WHY it is
+// unknown: git missing, git timing out, git's own error, an unresolvable path.
 type trackFinding struct {
 	verdict   trackVerdict
 	dir, name string
+	detail    string
 }
 
 // probeGitTracked classifies one binding file: first every symlink hop on its
-// path, each as a link in the repository that contains it, then the file at its
-// real location. The first entry that may not be honoured decides.
+// resolution chain, each as a link in the repository that contains it, then the
+// file at its real location. The first entry that may not be honoured decides.
 func probeGitTracked(path string) trackFinding {
-	hops, ok := symlinkHops(path)
-	if !ok {
-		return unresolvedFinding(path)
+	hops, real, err := linkChain(path)
+	if err != nil {
+		return unresolvedFinding(path, err) // unresolvable: fail closed
 	}
-	for _, link := range hops {
-		parent, ok := resolveProbePath(filepath.Dir(link))
-		if !ok {
-			return unresolvedFinding(link)
-		}
-		if f := probeEntry(parent, filepath.Base(link)); !f.verdict.honoured() {
+	for _, h := range hops {
+		if f := probeEntry(h.dir, h.name); !f.verdict.honoured() {
 			return f
 		}
 	}
-	abs, ok := resolveProbePath(path)
-	if !ok {
-		return unresolvedFinding(path) // unresolvable: fail closed
-	}
-	return probeEntry(filepath.Dir(abs), filepath.Base(abs))
-}
-
-// symlinkHops lists, as absolute paths, the entries on the binding's own path
-// that are symlinks: <project>/.claude and the binding file itself — the two a
-// project's repository can commit. ok is false when either cannot be inspected.
-// The components above <project> are the operator's choice of path, not hops.
-func symlinkHops(path string) ([]string, bool) {
-	var hops []string
-	for _, p := range []string{filepath.Dir(path), path} {
-		info, err := os.Lstat(p)
-		if err != nil {
-			return nil, false
-		}
-		if info.Mode()&os.ModeSymlink == 0 {
-			continue
-		}
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return nil, false
-		}
-		hops = append(hops, abs)
-	}
-	return hops, true
+	return probeEntry(filepath.Dir(real), filepath.Base(real))
 }
 
 // probeEntry asks about one entry of an already-resolved directory, running git
 // only when the pre-check says a repository could plausibly contain it.
 func probeEntry(dir, name string) trackFinding {
 	if !hasGitAncestor(dir) {
-		return trackFinding{trackNotRepo, dir, name}
+		return trackFinding{verdict: trackNotRepo, dir: dir, name: name}
 	}
 	name = onDiskName(dir, name)
 	r := runGitProbe(dir, name)
-	return trackFinding{classifyGitProbe(r.exitCode, r.stderr, r.err), dir, name}
+	f := trackFinding{verdict: classifyGitProbe(r.exitCode, r.stderr, r.err), dir: dir, name: name}
+	if f.verdict == trackUnknown {
+		f.detail = gitFailureDetail(r)
+	}
+	return f
+}
+
+// gitNotFound is the detail for a git the probe could not start at all — the
+// one unknown whose remedy is not `git status`.
+const gitNotFound = "git not found on PATH"
+
+// gitFailureDetail names why git gave no verdict, specifically enough to act
+// on: a missing git and a hung one need different fixes than a repository git
+// refuses to read.
+func gitFailureDetail(r gitProbeResult) string {
+	switch {
+	case errors.Is(r.err, exec.ErrNotFound):
+		return gitNotFound
+	case errors.Is(r.err, context.DeadlineExceeded):
+		return fmt.Sprintf("git timed out after %s", gitProbeTimeout)
+	case r.err != nil:
+		return r.err.Error()
+	}
+	if line := fatalLine(r.stderr); line != "" {
+		return line
+	}
+	for _, line := range strings.Split(r.stderr, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			return line
+		}
+	}
+	return fmt.Sprintf("git exited %d", r.exitCode)
 }
 
 // unresolvedFinding is the fail-closed answer for a path that cannot be
 // resolved: unknown, with the remedy pointed at its lexical directory.
-func unresolvedFinding(path string) trackFinding {
-	if abs, err := filepath.Abs(path); err == nil {
+func unresolvedFinding(path string, err error) trackFinding {
+	if abs, aerr := filepath.Abs(path); aerr == nil {
 		path = abs
 	}
-	return trackFinding{trackUnknown, filepath.Dir(path), filepath.Base(path)}
+	return trackFinding{verdict: trackUnknown, dir: filepath.Dir(path), name: filepath.Base(path),
+		detail: "the path cannot be resolved: " + err.Error()}
 }
 
 // onDiskName is the name dir really stores for the entry reached as dir/name.
@@ -462,8 +522,16 @@ func distrustReason(f trackFinding) string {
 		return fmt.Sprintf("git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
 			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, f.dir, f.name)
 	}
-	return fmt.Sprintf("git could not say whether %s is tracked, and an unclassifiable binding is not trusted. "+
-		"To see why git cannot answer, run: git -C %s status", entry, f.dir)
+	detail := f.detail
+	if detail == "" {
+		detail = "no reason recorded"
+	}
+	if detail == gitNotFound {
+		return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
+			"To make it count, install git or put it on the daemon's PATH", entry, detail)
+	}
+	return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
+		"To see why git cannot answer, run: git -C %s status", entry, detail, f.dir)
 }
 
 // bindingDistrusted is the gate Binding() calls. It probes FRESH every time:
@@ -478,15 +546,15 @@ func bindingDistrusted(path string) string {
 // links share one target reach the same file, and only one of those links may
 // be tracked.
 func probeKey(path string) (string, bool) {
-	abs, ok := resolveProbePath(path)
-	if !ok {
+	hops, real, err := linkChain(path)
+	if err != nil {
 		return "", false
 	}
-	hops, ok := symlinkHops(path)
-	if !ok {
-		return "", false
+	parts := make([]string, 0, len(hops)+1)
+	for _, h := range hops {
+		parts = append(parts, h.path())
 	}
-	return strings.Join(append(hops, abs), "\x00"), true
+	return strings.Join(append(parts, real), "\x00"), true
 }
 
 // distrustedWarned is the warn-once ledger, keyed by probeKey. One line per path
