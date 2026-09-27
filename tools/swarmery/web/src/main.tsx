@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense } from 'react';
+import { lazy, StrictMode, Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   createBrowserRouter,
@@ -7,6 +7,7 @@ import {
   Navigate,
   Outlet,
   RouterProvider,
+  useLocation,
   useParams,
   useRouteError,
 } from 'react-router-dom';
@@ -65,18 +66,16 @@ const SystemShell = lazy(() =>
 const WorkspaceShell = lazy(() =>
   import('./workspace/WorkspaceShell').then((m) => ({ default: m.WorkspaceShell })),
 );
-const Board = lazy(() => import('./pages/Board').then((m) => ({ default: m.Board })));
 const ProjectOverview = lazy(() =>
   import('./pages/ProjectOverview').then((m) => ({ default: m.ProjectOverview })),
 );
 const ProjectSettings = lazy(() =>
   import('./pages/ProjectSettings').then((m) => ({ default: m.ProjectSettings })),
 );
-const Plans = lazy(() => import('./pages/Plans').then((m) => ({ default: m.Plans })));
-const PlanningMode = lazy(() =>
-  import('./pages/PlanningMode').then((m) => ({ default: m.PlanningMode })),
+// Plans place: New plan · Plans · Board · Playbooks (each tab body lazy inside).
+const PlansPlace = lazy(() =>
+  import('./pages/plans/PlansPlace').then((m) => ({ default: m.PlansPlace })),
 );
-const Playbooks = lazy(() => import('./pages/Playbooks').then((m) => ({ default: m.Playbooks })));
 const Memory = lazy(() => import('./pages/Memory').then((m) => ({ default: m.Memory })));
 const ScopedSerena = lazy(() =>
   import('./workspace/ScopedPages').then((m) => ({ default: m.ScopedSerena })),
@@ -134,6 +133,23 @@ function ProjectHealthRedirect({ tab }: { tab: 'cost' | 'agents' }): JSX.Element
   const { scope } = useScope();
   if (scope !== slug) return null;
   return <Navigate to={`/p/${slug}/health?tab=${tab}`} replace />;
+}
+
+/** /p/:slug/{planning,board,playbooks} → a Plans tab, keeping the rest of the
+ * query (PlanningMode consumes ?idea=). Same scope wait as ProjectHealthRedirect. */
+function ProjectPlansRedirect({ tab }: { tab: 'new' | 'board' | 'playbooks' }): JSX.Element | null {
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { search } = useLocation();
+  // Snapshot the query of the first render: the workspace provider's
+  // setScope rewrites the URL to ?scope=<slug> before scope settles, which
+  // would drop ?idea= (PlanningMode's hand-off) from a later `search`.
+  const [initialSearch] = useState(search);
+  const { scope } = useScope();
+  if (scope !== slug) return null;
+  const q = new URLSearchParams(initialSearch);
+  q.delete('scope');
+  q.set('tab', tab);
+  return <Navigate to={`/p/${slug}/plans?${q.toString()}`} replace />;
 }
 
 /** Route-level error boundary. Without one, react-router replaces the whole SPA
@@ -291,10 +307,10 @@ const router = createBrowserRouter([
         element: ws(<WorkspaceShell />),
         children: [
           { index: true, element: ws(<Today detail={ws(<ProjectOverview />)} />) },
-          { path: 'board', element: ws(<Board />) },
-          { path: 'planning', element: ws(<PlanningMode />) },
-          { path: 'plans', element: ws(<Plans />) },
-          { path: 'playbooks', element: ws(<Playbooks />) },
+          { path: 'plans', element: ws(<PlansPlace />) },
+          { path: 'planning', element: <ProjectPlansRedirect tab="new" /> },
+          { path: 'board', element: <ProjectPlansRedirect tab="board" /> },
+          { path: 'playbooks', element: <ProjectPlansRedirect tab="playbooks" /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
           { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
