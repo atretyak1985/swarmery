@@ -590,6 +590,7 @@ function Segmented<T extends string>({
 }
 
 function Controls({
+  showRange = true,
   metric,
   pivot,
   preset,
@@ -601,6 +602,8 @@ function Controls({
   onFrom,
   onTo,
 }: {
+  /** False when a parent (Health) owns the date range. */
+  showRange?: boolean;
   metric: AnalyticsMetric;
   pivot: AnalyticsDimension;
   preset: number | null;
@@ -627,39 +630,41 @@ function Controls({
         <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">By</span>
         <Segmented options={pivotOptions} value={pivot} onChange={onPivot} />
       </label>
-      <div className="flex items-center gap-1.5">
-        {PRESETS.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onPreset(n)}
-            className={`rounded-[7px] border px-[9px] py-[5px] font-mono text-[11px] transition-colors ${
-              preset === n
-                ? 'border-brand/40 bg-brand/10 text-brand'
-                : 'border-line-strong text-ink-dim hover:text-ink'
-            }`}
-          >
-            {n}d
-          </button>
-        ))}
-        <span className="mx-1 h-4 w-px bg-line" aria-hidden="true" />
-        <input
-          type="date"
-          value={from}
-          max={to}
-          onChange={(e) => onFrom(e.target.value)}
-          className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-[11px] text-ink-dim"
-        />
-        <span className="font-mono text-[11px] text-ink-faint">→</span>
-        <input
-          type="date"
-          value={to}
-          min={from}
-          max={isoDay()}
-          onChange={(e) => onTo(e.target.value)}
-          className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-[11px] text-ink-dim"
-        />
-      </div>
+      {showRange && (
+        <div className="flex items-center gap-1.5">
+          {PRESETS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onPreset(n)}
+              className={`rounded-[7px] border px-[9px] py-[5px] font-mono text-[11px] transition-colors ${
+                preset === n
+                  ? 'border-brand/40 bg-brand/10 text-brand'
+                  : 'border-line-strong text-ink-dim hover:text-ink'
+              }`}
+            >
+              {n}d
+            </button>
+          ))}
+          <span className="mx-1 h-4 w-px bg-line" aria-hidden="true" />
+          <input
+            type="date"
+            value={from}
+            max={to}
+            onChange={(e) => onFrom(e.target.value)}
+            className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-[11px] text-ink-dim"
+          />
+          <span className="font-mono text-[11px] text-ink-faint">→</span>
+          <input
+            type="date"
+            value={to}
+            min={from}
+            max={isoDay()}
+            onChange={(e) => onTo(e.target.value)}
+            className="rounded-md border border-line bg-surface px-2 py-1 font-mono text-[11px] text-ink-dim"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1219,13 +1224,24 @@ function FirstPassTile(): JSX.Element | null {
 
 /* ----- screen ----- */
 
-export function Analytics(): JSX.Element {
+/**
+ * Without props: the standalone /analytics page. With `range` (the Health
+ * "Cost & tokens" tab, Canvas v3 phase 5): no H1, the date presets and inputs
+ * are hidden and every query follows the given from/to; metric, pivot and
+ * matrix controls stay.
+ */
+export function Analytics({
+  range: outerRange,
+}: { range?: { from: string; to: string } } = {}): JSX.Element {
   const today = isoDay();
   const [metric, setMetric] = useState<AnalyticsMetric>('cost');
   const [pivot, setPivot] = useState<AnalyticsDimension>('project');
   const [preset, setPreset] = useState<number | null>(14);
-  const [from, setFrom] = useState<string>(addDays(today, -13));
-  const [to, setTo] = useState<string>(today);
+  const [ownFrom, setFrom] = useState<string>(addDays(today, -13));
+  const [ownTo, setTo] = useState<string>(today);
+  const from = outerRange?.from ?? ownFrom;
+  const to = outerRange?.to ?? ownTo;
+  const embedded = outerRange !== undefined;
   const { scope } = useScope();
 
   const [series, setSeries] = useState<TimeseriesResp | null>(null);
@@ -1332,16 +1348,25 @@ export function Analytics(): JSX.Element {
     }).toString();
 
   return (
-    <div className="px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]">
-      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <h1 className="font-display text-[26px] leading-none font-medium tracking-[-0.01em] desk:text-[30px]">
-          Analytics
-        </h1>
-        <span className="font-mono text-[11px] text-ink-faint">{rangeLabel}</span>
-      </div>
+    <div
+      className={
+        embedded
+          ? 'px-4 pt-5 pb-10 desk:px-7 desk:pb-[60px]'
+          : 'px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]'
+      }
+    >
+      {!embedded && (
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <h1 className="font-display text-[26px] leading-none font-medium tracking-[-0.01em] desk:text-[30px]">
+            Analytics
+          </h1>
+          <span className="font-mono text-[11px] text-ink-faint">{rangeLabel}</span>
+        </div>
+      )}
 
-      <div className="mt-[18px]">
+      <div className={embedded ? '' : 'mt-[18px]'}>
         <Controls
+          showRange={!embedded}
           metric={metric}
           pivot={pivot}
           preset={preset}

@@ -36,14 +36,12 @@ import { Routines } from './pages/Routines';
 import { Today } from './pages/today/Today';
 import './index.css';
 
-// Analytics pulls in Recharts — lazy-load it so that weight stays out of the
-// initial bundle (only fetched when the route is visited).
-const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
+// Health (Canvas v3 phase 5) absorbs /analytics and /retro as tabs. Lazy, and
+// it lazy-loads those two pages itself (Analytics pulls in Recharts), so their
+// weight stays out of the initial bundle.
+const Health = lazy(() => import('./pages/health/Health').then((m) => ({ default: m.Health })));
 
-// Retro follows the same lazy pattern — fetched only when visited.
-const Retro = lazy(() => import('./pages/Retro').then((m) => ({ default: m.Retro })));
-
-// Agent Hub (fusion phase 17) — lazy like Analytics/Retro so the fleet initial
+// Agent Hub (fusion phase 17) — lazy like Health so the fleet initial
 // bundle stays unchanged. Serves both /agents (fleet) and /p/:slug/agents.
 const AgentHub = lazy(() => import('./pages/AgentHub').then((m) => ({ default: m.AgentHub })));
 
@@ -125,6 +123,15 @@ function ProjectApprovalsRedirect(): JSX.Element | null {
   return <Navigate to={`/p/${slug}/inbox?tab=approvals`} replace />;
 }
 
+/** /p/:slug/{analytics,retro} → a Health tab. Same scope wait as
+ * ProjectApprovalsRedirect, or the provider's ?scope= write drops ?tab=. */
+function ProjectHealthRedirect({ tab }: { tab: 'cost' | 'agents' }): JSX.Element | null {
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { scope } = useScope();
+  if (scope !== slug) return null;
+  return <Navigate to={`/p/${slug}/health?tab=${tab}`} replace />;
+}
+
 /** Route-level error boundary. Without one, react-router replaces the whole SPA
  * with its default error screen — recoverable only by pressing Back — for any
  * unmatched path. That is reachable from ordinary content: lib/markdown.tsx
@@ -171,22 +178,17 @@ const router = createBrowserRouter([
           { path: 'projects', element: <Projects /> },
           // Legacy detail route → redirect into project-workspace mode.
           { path: 'projects/:id', element: <ProjectDetailRedirect /> },
+          // Health (Canvas v3 phase 5): the retired pages land on their tab.
           {
-            path: 'analytics',
+            path: 'health',
             element: (
-              <Suspense fallback={<Loading label="analytics…" />}>
-                <Analytics />
+              <Suspense fallback={<Loading label="health…" />}>
+                <Health />
               </Suspense>
             ),
           },
-          {
-            path: 'retro',
-            element: (
-              <Suspense fallback={<Loading label="retro…" />}>
-                <Retro />
-              </Suspense>
-            ),
-          },
+          { path: 'analytics', element: <Navigate to="/health?tab=cost" replace /> },
+          { path: 'retro', element: <Navigate to="/health?tab=agents" replace /> },
           // Decision classifier (learning-loop phase 9) — per-question stats.
           { path: 'decisions', element: <Decisions /> },
           { path: 'lessons', element: <Lessons /> },
@@ -286,22 +288,9 @@ const router = createBrowserRouter([
           { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
           { path: 'approvals', element: <ProjectApprovalsRedirect /> },
           { path: 'approvals/manage', element: ws(<Approvals />) },
-          {
-            path: 'analytics',
-            element: (
-              <Suspense fallback={<Loading label="analytics…" />}>
-                <Analytics />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'retro',
-            element: (
-              <Suspense fallback={<Loading label="retro…" />}>
-                <Retro />
-              </Suspense>
-            ),
-          },
+          { path: 'health', element: ws(<Health />) },
+          { path: 'analytics', element: <ProjectHealthRedirect tab="cost" /> },
+          { path: 'retro', element: <ProjectHealthRedirect tab="agents" /> },
           // Agent Hub, project-scoped (rollups narrowed to :slug via the route).
           { path: 'agents', element: ws(<AgentHub />) },
           { path: 'agents/:id', element: ws(<AgentHub />) },

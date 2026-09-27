@@ -46,7 +46,7 @@ describe('nav model', () => {
       ['inbox', '/inbox', '/p/shop/inbox'],
       ['sessions', '/sessions', '/p/shop/sessions'],
       ['plans', '/projects', '/p/shop/plans'],
-      ['health', '/analytics', '/p/shop/analytics'],
+      ['health', '/health', '/p/shop/health'],
       ['learning', '/lessons', '/lessons'],
       ['knowledge', '/projects', '/p/shop/memory'],
       ['system', '/system', '/p/shop/system'],

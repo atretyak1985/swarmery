@@ -116,12 +116,12 @@ describe('buildLoop', () => {
     expect(project).toEqual([
       '/p/orders-api/plans',
       '/p/orders-api/sessions',
-      '/p/orders-api/analytics',
+      '/p/orders-api/health',
       '/p/orders-api/inbox',
       '/lessons?tab=proof',
     ]);
     const fleet = buildLoop(ZERO, null).map((s) => s.href);
-    expect(fleet).toEqual(['/projects', '/sessions', '/analytics', '/inbox', '/lessons?tab=proof']);
+    expect(fleet).toEqual(['/projects', '/sessions', '/health', '/inbox', '/lessons?tab=proof']);
     expect(buildLoop(ZERO, null, 'billing')[0]?.href).toBe('/p/billing/plans');
   });
 });
