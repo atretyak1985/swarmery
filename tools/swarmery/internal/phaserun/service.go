@@ -347,6 +347,14 @@ func (e *DocModelError) Unwrap() error { return e.err }
 //     run back to the account default — the exact failure this ladder exists to remove;
 //  4. otherwise planning.DefaultModel.
 //
+// Between rungs 2 and 3 sits the complexity router's pick: routed is its FULL
+// model ID (route.ModelID owns the alias map — haiku is deliberately not in
+// planning.Models, so this rung must NOT pass through planning.ResolveModel)
+// and is "" unless SWARMERY_ROUTE_PHASERUN=active, which leaves the ladder
+// above exactly as it was. It is not re-validated here: the policy it came
+// from was validated at load, through the same map. An explicit request or doc
+// model always beats it; it beats the env knob and the default.
+//
 // Rung 4 used to be "" — no --model flag at all — which did NOT mean "some sensible
 // house default": it meant the ACCOUNT default, and on these accounts that is Fable,
 // at roughly twice the Opus price. So the one rung an operator never chooses, the one
@@ -356,7 +364,7 @@ func (e *DocModelError) Unwrap() error { return e.err }
 //
 // Rungs 1–3 are unchanged: a request model still wins outright, and a doc that
 // declares nothing (docModel == "") falls straight through to the env knob.
-func resolveModel(choice, docModel, docPath string) (string, error) {
+func resolveModel(choice, docModel, docPath, routed string) (string, error) {
 	if strings.TrimSpace(choice) != "" {
 		id, err := planning.ResolveModel(choice)
 		if err != nil {
@@ -372,6 +380,9 @@ func resolveModel(choice, docModel, docPath string) (string, error) {
 			return "", &DocModelError{Doc: docPath, Declared: declared, err: err}
 		}
 		return id, nil
+	}
+	if r := strings.TrimSpace(routed); r != "" {
+		return r, nil
 	}
 	if env := strings.TrimSpace(os.Getenv(modelEnv)); env != "" {
 		return env, nil
@@ -413,6 +424,13 @@ func (e *DocEffortError) Error() string {
 //  3. otherwise SWARMERY_PHASERUN_EFFORT, then DefaultEffort — both through
 //     internal/claudeflags, which degrades an env typo with a warning.
 //
+// Between rungs 2 and 3 sits the complexity router's effort (routed; "" unless
+// SWARMERY_ROUTE_PHASERUN=active), mirroring the model ladder: the request and
+// the doc beat it, it beats the env knob and the default. It is normalised like
+// every other rung; a value that does not normalise to a real effort simply
+// falls through to rung 3 rather than failing a run the operator never asked
+// the router to own.
+//
 // The one structural difference from the model ladder: the doc rung reads the
 // doc BODY the service already loaded, not a stamped column. doc_model exists
 // because the dashboard renders that chip on the plans page without opening the
@@ -420,7 +438,7 @@ func (e *DocEffortError) Error() string {
 // column (plus the migration and the rescan that keeps it in sync) to serve one
 // reader that is already holding the bytes would be storage for its own sake.
 // If a chip ever needs it, ParseEffort is the same parser a scanner would call.
-func resolveEffort(choice, doc, docPath string) (string, error) {
+func resolveEffort(choice, doc, docPath, routed string) (string, error) {
 	if canonical, ok := claudeflags.NormalizeEffort(choice); !ok {
 		return "", fmt.Errorf("phase run effort: %w: %q (valid: %s)",
 			planning.ErrUnknownEffort, choice, strings.Join(claudeflags.ValidEfforts(), ", "))
@@ -435,6 +453,9 @@ func resolveEffort(choice, doc, docPath string) (string, error) {
 		if canonical != "" {
 			return canonical, nil
 		}
+	}
+	if canonical, ok := claudeflags.NormalizeEffort(routed); ok && canonical != "" {
+		return canonical, nil
 	}
 	return claudeflags.Effort(effortEnv, DefaultEffort), nil
 }
@@ -478,7 +499,13 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// is told to edit a document while the actual reason is "wait". Still ahead
 	// of every step that leaves a trace (slot, worktree, run_state), so an
 	// unknown model is an admission verdict and nothing else.
-	runModel, err := resolveModel(model, info.DocModel, info.DocPath)
+	//
+	// The complexity router is consulted first because in active mode it is a
+	// rung of both ladders below (request → doc → ROUTE → env → default). Pure
+	// reads only — scoring leaves no trace, so a refused Start still leaves none;
+	// off consults nothing at all.
+	rt := s.routePhase(phaseID)
+	runModel, err := resolveModel(model, info.DocModel, info.DocPath, rt.model)
 	if err != nil {
 		return "", err
 	}
@@ -499,7 +526,7 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// is the first line that has the bytes. It is still an admission verdict: no
 	// slot has been taken, no worktree acquired and nothing stamped yet, so a
 	// typo on the request or in the document costs exactly what a bad model does.
-	runEffort, err := resolveEffort(effort, string(doc), info.DocPath)
+	runEffort, err := resolveEffort(effort, string(doc), info.DocPath, rt.effort)
 	if err != nil {
 		return "", err
 	}
@@ -662,11 +689,14 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		ProjectPath:  info.ProjectPath,
 		// The ladder, already walked by resolveModel at the top of Start: the
 		// request's model (validated) → the phase DOC's **Model:** (validated) →
-		// SWARMERY_PHASERUN_MODEL (verbatim) → planning.DefaultModel.
+		// the router's pick (active only, full ID) → SWARMERY_PHASERUN_MODEL
+		// (verbatim) → planning.DefaultModel.
 		Model: runModel,
 		// The effort ladder, walked by resolveEffort once the doc was read: the
-		// request's effort → the doc's **Effort:** → SWARMERY_PHASERUN_EFFORT →
-		// DefaultEffort. Never empty unless an operator asked for "off".
+		// request's effort → the doc's **Effort:** → the router's pick (active
+		// only) → SWARMERY_PHASERUN_EFFORT → DefaultEffort. Never empty unless an
+		// operator asked for "off". Continuations copy this whole spec, so they
+		// inherit both picks.
 		Effort: runEffort,
 	}
 	if spec.SettingsFile != "" {
@@ -676,11 +706,11 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// A retry's timeline must show THIS run's decisions, not the previous
 	// attempt's — the same reason the checkbox interval resets both edges above.
 	runcore.ClearRunEvents(s.DB, Engine, phaseID)
-	// Complexity routing (shadow): recorded HERE, once the run is admitted and
-	// its model/effort ladders have been walked, so a refused Start leaves no
-	// row and the record names exactly what spec carries. Never changes spec;
-	// off ⇒ nothing computed or written.
-	s.recordRoute(phaseID, model, info, spec)
+	// Complexity routing: recorded HERE, once the run is admitted and its
+	// model/effort ladders have been walked, so a refused Start leaves no row and
+	// the record names exactly what spec carries. Never changes spec; off ⇒
+	// nothing computed or written.
+	s.recordRoute(phaseID, model, effort, string(doc), info, spec, rt)
 	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, phaseID, info, acq, spec, docRel, budget) })
 	return uuid, nil
 }

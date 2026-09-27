@@ -31,7 +31,7 @@ func TestResolveEffort_RequestWins(t *testing.T) {
 	t.Setenv(effortEnv, "medium")
 	t.Setenv(claudeflags.EffortEnv, "")
 
-	got, err := resolveEffort("max", docWithEffort, "/plan/phase-3.md")
+	got, err := resolveEffort("max", docWithEffort, "/plan/phase-3.md", "")
 	if err != nil {
 		t.Fatalf("resolveEffort: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestResolveEffort_DocBeatsEnv(t *testing.T) {
 	t.Setenv(effortEnv, "medium")
 	t.Setenv(claudeflags.EffortEnv, "")
 
-	got, err := resolveEffort("", docWithEffort, "/plan/phase-3.md")
+	got, err := resolveEffort("", docWithEffort, "/plan/phase-3.md", "")
 	if err != nil {
 		t.Fatalf("resolveEffort: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestResolveEffort_EnvBeatsDefault(t *testing.T) {
 	t.Setenv(effortEnv, "medium")
 	t.Setenv(claudeflags.EffortEnv, "")
 
-	got, err := resolveEffort("", "# Phase 3\n\nno declaration here\n", "/plan/phase-3.md")
+	got, err := resolveEffort("", "# Phase 3\n\nno declaration here\n", "/plan/phase-3.md", "")
 	if err != nil {
 		t.Fatalf("resolveEffort: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestResolveEffort_FallsBackToDefault(t *testing.T) {
 	t.Setenv(effortEnv, "")
 	t.Setenv(claudeflags.EffortEnv, "")
 
-	got, err := resolveEffort("", "# Phase 3\n\nnothing\n", "/plan/phase-3.md")
+	got, err := resolveEffort("", "# Phase 3\n\nnothing\n", "/plan/phase-3.md", "")
 	if err != nil {
 		t.Fatalf("resolveEffort: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestResolveEffort_UnknownRequestValueIsRejected(t *testing.T) {
 	t.Setenv(effortEnv, "")
 	t.Setenv(claudeflags.EffortEnv, "")
 
-	_, err := resolveEffort("ludicrous", docWithEffort, "/plan/phase-3.md")
+	_, err := resolveEffort("ludicrous", docWithEffort, "/plan/phase-3.md", "")
 	if !errors.Is(err, planning.ErrUnknownEffort) {
 		t.Fatalf("err = %v, want ErrUnknownEffort", err)
 	}
@@ -112,7 +112,7 @@ func TestResolveEffort_UnknownDocValueNamesTheDoc(t *testing.T) {
 	t.Setenv(claudeflags.EffortEnv, "")
 
 	doc := "# Phase 3\n\n**Effort:** ludicrous\n\n## Context\n"
-	_, err := resolveEffort("", doc, "/plan/phase-3.md")
+	_, err := resolveEffort("", doc, "/plan/phase-3.md", "")
 
 	var docErr *DocEffortError
 	if !errors.As(err, &docErr) {
@@ -132,7 +132,7 @@ func TestResolveEffort_BlankDocDeclarationFallsThrough(t *testing.T) {
 	t.Setenv(effortEnv, "")
 	t.Setenv(claudeflags.EffortEnv, "")
 
-	got, err := resolveEffort("", "# Phase 3\n\n**Effort:** ``\n\n## Context\n", "/plan/phase-3.md")
+	got, err := resolveEffort("", "# Phase 3\n\n**Effort:** ``\n\n## Context\n", "/plan/phase-3.md", "")
 	if err != nil {
 		t.Fatalf("resolveEffort: %v", err)
 	}

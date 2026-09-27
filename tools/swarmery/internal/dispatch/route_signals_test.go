@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
@@ -184,7 +183,7 @@ func runOnce(t *testing.T, mode string, prep func(db *sql.DB, id int64)) ([]RunS
 func argvOf(spec RunSpec) []string {
 	return runcore.Args(runcore.Spec{
 		Prompt: agentPrompt(spec), SessionUUID: spec.SessionUUID, Model: spec.Model,
-		Effort:         claudeflags.Effort(effortEnv, DefaultEffort),
+		Effort:         runEffort(spec),
 		PermissionMode: permissionMode(spec.PermissionMode), SettingSources: "project,local",
 		SettingsFile: spec.SettingsFile,
 	})
@@ -293,24 +292,20 @@ func TestRouteRecording_RungsFollowTheLadder(t *testing.T) {
 	}
 }
 
-func TestRouteRecording_ActiveRecordsAsShadowAndBadPolicySkips(t *testing.T) {
-	specsActive, db, _ := runOnce(t, "active", nil)
-	var mode string
-	var applied int
-	if err := db.QueryRow(`SELECT mode, applied FROM route_decisions`).Scan(&mode, &applied); err != nil {
-		t.Fatal(err)
-	}
-	if mode != "shadow" || applied != 0 {
-		t.Errorf("active before phase 4: mode=%q applied=%d, want shadow/0", mode, applied)
-	}
-	specsOff, _, _ := runOnce(t, "off", nil)
-	if !reflect.DeepEqual(specsActive, specsOff) {
-		t.Error("active changed the spawn before it is implemented")
-	}
-
+// An unreadable policy routes nothing in EITHER mode that consults it: no row,
+// and — in active — the spawn falls back to the pre-router ladders, so a
+// policy typo can never change what runs. (Active applying a readable policy
+// is pinned in route_active_test.go.)
+func TestRouteRecording_BadPolicySkips(t *testing.T) {
 	t.Setenv(route.EnvPolicy, "/does/not/exist.json")
-	_, db2, _ := runOnce(t, "shadow", nil)
-	if n := routeRows(t, db2); n != 0 {
-		t.Errorf("unreadable policy wrote %d rows, want 0 (logged and skipped)", n)
+	for _, mode := range []string{"shadow", "active"} {
+		specs, db, _ := runOnce(t, mode, nil)
+		if n := routeRows(t, db); n != 0 {
+			t.Errorf("mode=%s: unreadable policy wrote %d rows, want 0 (logged and skipped)", mode, n)
+		}
+		off, _, _ := runOnce(t, "off", nil)
+		if !reflect.DeepEqual(specs, off) {
+			t.Errorf("mode=%s with an unreadable policy changed the spawn\n got %+v\n off %+v", mode, specs, off)
+		}
 	}
 }

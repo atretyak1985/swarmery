@@ -155,6 +155,32 @@ func TestRecord_RejectsIncompleteRows(t *testing.T) {
 	}
 }
 
+func TestRecord_RouteRungAppliedConsistency(t *testing.T) {
+	db := openStore(t)
+	base := Row{Surface: SurfaceDispatch, Subject: "task:1"}
+	for name, tc := range map[string]struct {
+		mode    Mode
+		applied bool
+		rung    string
+		wantErr bool
+	}{
+		"shadow applied":          {ModeShadow, true, RungDefault, true},
+		"shadow route rung":       {ModeShadow, false, RungRoute, true},
+		"active route unapplied":  {ModeActive, false, RungRoute, true},
+		"active route applied":    {ModeActive, true, RungRoute, false},
+		"active card, effort ran": {ModeActive, true, RungCard, false},
+		"active nothing applied":  {ModeActive, false, RungCard, false},
+		"shadow plain":            {ModeShadow, false, RungDefault, false},
+	} {
+		r := base
+		r.Mode, r.Applied, r.WonRung = tc.mode, tc.applied, tc.rung
+		err := Record(db, r)
+		if tc.wantErr != errors.Is(err, errRowInconsistent) {
+			t.Errorf("%s: err = %v, wantErr %v", name, err, tc.wantErr)
+		}
+	}
+}
+
 func TestRecord_ReportsDBError(t *testing.T) {
 	db := openStore(t)
 	db.Close()

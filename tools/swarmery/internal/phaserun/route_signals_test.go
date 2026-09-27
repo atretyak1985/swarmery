@@ -123,18 +123,21 @@ func TestRouteSignals_UnknownPhaseIsAllUnknown(t *testing.T) {
 
 func TestRouteSignals_ModelRung(t *testing.T) {
 	t.Setenv(modelEnv, "")
-	if r := modelRung("opus", "sonnet"); r != route.RungRequest {
+	if r := modelRung("opus", "sonnet", "x"); r != route.RungRequest {
 		t.Errorf("request rung = %q", r)
 	}
-	if r := modelRung("", "sonnet"); r != route.RungDoc {
+	if r := modelRung("", "sonnet", "x"); r != route.RungDoc {
 		t.Errorf("doc rung = %q", r)
 	}
-	if r := modelRung("", ""); r != route.RungDefault {
+	if r := modelRung("", "", ""); r != route.RungDefault {
 		t.Errorf("default rung = %q", r)
 	}
 	t.Setenv(modelEnv, "claude-opus-5[1m]")
-	if r := modelRung("", ""); r != route.RungEnv {
+	if r := modelRung("", "", ""); r != route.RungEnv {
 		t.Errorf("env rung = %q", r)
+	}
+	if r := modelRung("", "", route.ModelHaiku); r != route.RungRoute {
+		t.Errorf("route rung = %q, want it above env", r)
 	}
 }
 
@@ -264,24 +267,19 @@ func TestRouteRecording_RequestRungAndRefusedStartWritesNothing(t *testing.T) {
 	}
 }
 
-func TestRouteRecording_ActiveRecordsAsShadowAndBadPolicySkips(t *testing.T) {
-	active, db, _ := startOnce(t, "active", "", "")
-	var mode string
-	var applied int
-	if err := db.QueryRow(`SELECT mode, applied FROM route_decisions`).Scan(&mode, &applied); err != nil {
-		t.Fatal(err)
-	}
-	if mode != "shadow" || applied != 0 {
-		t.Errorf("active before phase 4: mode=%q applied=%d", mode, applied)
-	}
-	off, _, _ := startOnce(t, "off", "", "")
-	if !reflect.DeepEqual(active, off) {
-		t.Error("active changed the spawn before it is implemented")
-	}
-
+// An unreadable policy routes nothing in either consulting mode: no row, and in
+// active the spawn keeps its pre-router ladders. (Active applying a readable
+// policy is pinned in route_active_test.go.)
+func TestRouteRecording_BadPolicySkips(t *testing.T) {
 	t.Setenv(route.EnvPolicy, "/does/not/exist.json")
-	_, db2, _ := startOnce(t, "shadow", "", "")
-	if n := routeRowCount(t, db2); n != 0 {
-		t.Errorf("unreadable policy wrote %d rows, want 0", n)
+	for _, mode := range []string{"shadow", "active"} {
+		specs, db, _ := startOnce(t, mode, "", "")
+		if n := routeRowCount(t, db); n != 0 {
+			t.Errorf("mode=%s: unreadable policy wrote %d rows, want 0", mode, n)
+		}
+		off, _, _ := startOnce(t, "off", "", "")
+		if !reflect.DeepEqual(specs, off) {
+			t.Errorf("mode=%s with an unreadable policy changed the spawn", mode)
+		}
 	}
 }

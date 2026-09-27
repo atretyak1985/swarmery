@@ -8,7 +8,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // routeModeEnv is this surface's complexity-router knob: off | shadow | active,
@@ -141,52 +143,113 @@ func phaseHistory(db *sql.DB, projectID int64) (fails, total int, err error) {
 	return fails, total, rows.Err()
 }
 
+// phaseRoute is the router's answer for one phase run, computed once at
+// admission before the model and effort ladders are walked.
+type phaseRoute struct {
+	mode     route.Mode // off ⇒ nothing below is set
+	ok       bool       // a decision exists: shadow|active and the policy loaded
+	signals  route.Signals
+	decision route.Decision
+	// The route rungs, "" unless active: model is a FULL ID (route.ModelID), so
+	// resolveModel never has to know that haiku is not in planning.Models.
+	model  string
+	effort string
+}
+
+// routePhase scores the phase and, in active mode, turns the decision into its
+// route rungs. Off consults nothing. An unloadable policy is logged and routes
+// nothing — the run keeps its pre-router ladders and no row is written. A pick
+// that cannot run drops only its own rung, never the run.
+func (s *Service) routePhase(phaseID int64) phaseRoute {
+	rt := phaseRoute{mode: route.ModeFromEnv(routeModeEnv)}
+	if rt.mode == route.ModeOff {
+		return rt
+	}
+	policy, err := route.LoadPolicy(os.Getenv(route.EnvPolicy))
+	if err != nil {
+		log.Printf("error: phaserun: route policy phase=%d: %v", phaseID, err)
+		return rt
+	}
+	rt.ok = true
+	rt.signals = signalsForPhase(s.DB, phaseID)
+	rt.decision = route.Decide(rt.signals, policy)
+	if rt.mode != route.ModeActive {
+		return rt
+	}
+	if id, err := route.ModelID(rt.decision.Model); err == nil {
+		rt.model = id
+	} else {
+		log.Printf("warning: phaserun: phase=%d route model %q unusable, skipping the route model rung: %v", phaseID, rt.decision.Model, err)
+	}
+	if e, ok := claudeflags.NormalizeEffort(rt.decision.Effort); ok && e != "" {
+		rt.effort = e
+	} else {
+		log.Printf("warning: phaserun: phase=%d route effort %q unusable, skipping the route effort rung", phaseID, rt.decision.Effort)
+	}
+	return rt
+}
+
 // modelRung names which rung of resolveModel's ladder produced the run's model.
 // It mirrors resolveModel's order exactly and is only ever called after
 // resolveModel succeeded, so a rung that would have errored cannot be named.
-func modelRung(choice, docModel string) string {
+// routed is the route rung's value ("" unless active).
+func modelRung(choice, docModel, routed string) string {
 	switch {
 	case strings.TrimSpace(choice) != "":
 		return route.RungRequest
 	case strings.TrimSpace(docModel) != "":
 		return route.RungDoc
+	case strings.TrimSpace(routed) != "":
+		return route.RungRoute
 	case strings.TrimSpace(os.Getenv(modelEnv)) != "":
 		return route.RungEnv
 	}
 	return route.RungDefault
 }
 
-// recordRoute scores the phase run and writes one route_decisions row — in
-// shadow, with applied=0 and used_* holding what resolveModel/resolveEffort put
-// on the spawn. It never changes the spawn; every failure is logged and
-// swallowed. The router's pick_model is recorded as the alias it chose and is
-// deliberately NOT resolved through planning.ResolveModel here (that closed set
-// has no haiku); mapping a pick onto a runnable ID belongs to active mode.
-func (s *Service) recordRoute(phaseID int64, choice string, info phaseInfo, spec RunSpec) {
-	mode := route.ModeFromEnv(routeModeEnv)
-	switch mode {
-	case route.ModeOff:
-		return
-	case route.ModeActive:
-		log.Printf("warning: phaserun: %s=active is not implemented yet; recording in shadow", routeModeEnv)
-		mode = route.ModeShadow
+// effortRung names which rung of resolveEffort's ladder produced the run's
+// effort, mirroring it exactly (a request or doc value that normalises to ""
+// falls through there, so it falls through here). Only called after
+// resolveEffort succeeded. Used for route_decisions.applied — won_rung is the
+// model rung only.
+func effortRung(choice, doc, routed string) string {
+	if c, _ := claudeflags.NormalizeEffort(choice); c != "" {
+		return route.RungRequest
 	}
-	policy, err := route.LoadPolicy(os.Getenv(route.EnvPolicy))
-	if err != nil {
-		log.Printf("error: phaserun: route policy phase=%d: %v", phaseID, err)
+	if c, _ := claudeflags.NormalizeEffort(wsingest.ParseEffort(doc)); c != "" {
+		return route.RungDoc
+	}
+	if c, ok := claudeflags.NormalizeEffort(routed); ok && c != "" {
+		return route.RungRoute
+	}
+	return route.RungEnv // env or default: claudeflags does not say which
+}
+
+// recordRoute writes the phase run's route_decisions row: the decision beside
+// what resolveModel/resolveEffort put on the spawn. In shadow the row says
+// applied=0 and used_* are the pre-router picks; in active, applied says
+// whether the router's model or effort won its ladder and won_rung names the
+// model rung (route when the router's model ran). It never changes the spawn;
+// every failure is logged and swallowed. pick_model is recorded as the alias
+// the router chose; used_model is the full ID that ran.
+func (s *Service) recordRoute(phaseID int64, choice, effortChoice, doc string, info phaseInfo, spec RunSpec, rt phaseRoute) {
+	if !rt.ok {
 		return
 	}
-	sig := signalsForPhase(s.DB, phaseID)
+	rung := modelRung(choice, info.DocModel, rt.model)
+	applied := rt.mode == route.ModeActive &&
+		(rung == route.RungRoute || effortRung(effortChoice, doc, rt.effort) == route.RungRoute)
 	if err := route.Record(s.DB, route.Row{
 		Surface:     route.SurfacePhaseRun,
 		Subject:     route.SubjectPhase(phaseID),
 		SessionUUID: spec.SessionUUID,
-		Mode:        mode,
-		Signals:     sig,
-		Decision:    route.Decide(sig, policy),
+		Mode:        rt.mode,
+		Signals:     rt.signals,
+		Decision:    rt.decision,
+		Applied:     applied,
 		UsedModel:   spec.Model,
 		UsedEffort:  spec.Effort,
-		WonRung:     modelRung(choice, info.DocModel),
+		WonRung:     rung,
 		// CreatedAt left zero (⇒ wall clock): s.clock() is the run's measurement
 		// clock, and an extra read here would shift run_ended_at under a stepping
 		// test clock for a record that has nothing to do with the run's interval.

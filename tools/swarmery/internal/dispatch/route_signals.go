@@ -163,11 +163,83 @@ func cardHistory(db *sql.DB, projectID int64) (fails, total int, err error) {
 	return fails, total, rows.Err()
 }
 
+// routeRungs are the values the router's rungs offer one card's ladders. All
+// three are "" unless the surface is ACTIVE — off and shadow never put a route
+// value on a spawn, which is what keeps both byte-identical to pre-router
+// dispatch. model is a full ID (route.ModelID), never an alias.
+type routeRungs struct {
+	model    string
+	effort   string
+	playbook string
+}
+
+// cardRoute is the router's answer for one card, computed once at admission,
+// before its playbook resolves (the route rung sits in the playbook ladder).
+type cardRoute struct {
+	mode     route.Mode // off ⇒ nothing below is set
+	ok       bool       // a decision exists: mode is shadow|active and the policy loaded
+	signals  route.Signals
+	decision route.Decision
+	rungs    routeRungs // active only
+}
+
+// routeCard scores the card and, in active mode, turns the decision into its
+// route rungs. Off consults nothing; an unloadable policy is logged and routes
+// nothing (the card runs on the pre-router ladders and no row is written),
+// because a routing problem must never cost the run.
+func (s *Service) routeCard(c candidate) cardRoute {
+	rt := cardRoute{mode: route.ModeFromEnv(routeModeEnv)}
+	if rt.mode == route.ModeOff {
+		return rt
+	}
+	policy, err := route.LoadPolicy(os.Getenv(route.EnvPolicy))
+	if err != nil {
+		log.Printf("error: dispatch: route policy (task %d): %v", c.ID, err)
+		return rt
+	}
+	rt.ok = true
+	rt.signals = signalsFor(c, s.DB)
+	rt.decision = route.Decide(rt.signals, policy)
+	if rt.mode == route.ModeActive {
+		rt.rungs = activeRungs(c.ID, rt.decision)
+	}
+	return rt
+}
+
+// activeRungs maps a decision onto the values its rungs offer the spawn. Each
+// part is checked on its own and a bad one only drops THAT rung (the next rung
+// down takes over): the router is an optimisation, and a pick that cannot run
+// must degrade to the pre-router choice rather than to a dead spawn.
+//
+// review-heavy is refused here as well as in route.Decide: it is a human
+// opt-in, and this is the last line before a playbook reaches the card.
+func activeRungs(taskID int64, d route.Decision) routeRungs {
+	var r routeRungs
+	if id, err := route.ModelID(d.Model); err == nil {
+		r.model = id
+	} else {
+		log.Printf("warning: dispatch: task=%d route model %q unusable, skipping the route model rung: %v", taskID, d.Model, err)
+	}
+	if e, ok := claudeflags.NormalizeEffort(d.Effort); ok && e != "" {
+		r.effort = e
+	} else {
+		log.Printf("warning: dispatch: task=%d route effort %q unusable, skipping the route effort rung", taskID, d.Effort)
+	}
+	switch pb := strings.ToLower(strings.TrimSpace(d.Playbook)); pb {
+	case route.PlaybookStandard, route.PlaybookPlanFirst:
+		r.playbook = pb
+	case "":
+	default:
+		log.Printf("warning: dispatch: task=%d route playbook %q is not auto-selectable, skipping the route playbook rung", taskID, d.Playbook)
+	}
+	return r
+}
+
 // stageModel is the dispatch MODEL ladder, most specific first: the card's own
-// override, then the recipe's declared model, then DefaultModel. It returns the
-// winning rung beside the value so the route record names which one ran.
-// runPlaybook spawns with exactly this value, so the record cannot drift from
-// the spawn.
+// override, then the recipe's declared model, then the router's pick (active
+// only), then DefaultModel. It returns the winning rung beside the value so the
+// route record names which one ran. runPlaybook spawns with exactly this value,
+// so the record cannot drift from the spawn.
 func stageModel(c candidate, pb resolvedPlaybook) (model, rung string) {
 	if m := c.Model.String; m != "" {
 		return m, route.RungCard
@@ -175,40 +247,44 @@ func stageModel(c candidate, pb resolvedPlaybook) (model, rung string) {
 	if pb.model != "" {
 		return pb.model, route.RungPlaybook
 	}
+	if pb.route.model != "" {
+		return pb.route.model, route.RungRoute
+	}
 	return DefaultModel, route.RungDefault
 }
 
-// recordRoute computes the card's signals, asks the router, and writes one
-// route_decisions row — in shadow, with applied=0 and the used_* columns taken
-// from the ladders that actually drive the spawn. It never changes the spawn,
-// and a failure anywhere here is logged and swallowed: routing is advisory.
-func (s *Service) recordRoute(c candidate, pb resolvedPlaybook, sessionUUID string) {
-	mode := route.ModeFromEnv(routeModeEnv)
-	switch mode {
-	case route.ModeOff:
+// stageEffort is the dispatch EFFORT ladder's top rung: the router's pick in
+// active mode, else "" — which hands the choice to runEffort's
+// SWARMERY_DISPATCH_EFFORT → DefaultEffort, exactly the pre-router resolution.
+// The route rung sits ABOVE the env knob here (unlike phaserun's) because
+// dispatch has no request or doc rung: the knob is a machine-wide default, and
+// the router's per-card judgement is the more specific of the two.
+func stageEffort(pb resolvedPlaybook) string { return pb.route.effort }
+
+// recordRoute writes the card's route_decisions row: the decision beside what
+// the ladders actually put on the spawn. In shadow the row says applied=0 and
+// used_* equal the pre-router picks; in active it says whether any route rung
+// won (applied) and names the model rung (won_rung=route when the router's
+// model ran). It never changes the spawn, and a failure is logged and
+// swallowed: routing is advisory.
+func (s *Service) recordRoute(c candidate, pb resolvedPlaybook, rt cardRoute, sessionUUID string) {
+	if !rt.ok {
 		return
-	case route.ModeActive:
-		// Applying a pick is not wired on this surface yet; record what ran.
-		log.Printf("warning: dispatch: %s=active is not implemented yet; recording in shadow", routeModeEnv)
-		mode = route.ModeShadow
 	}
-	policy, err := route.LoadPolicy(os.Getenv(route.EnvPolicy))
-	if err != nil {
-		log.Printf("error: dispatch: route policy (task %d): %v", c.ID, err)
-		return
-	}
-	sig := signalsFor(c, s.DB)
 	model, rung := stageModel(c, pb)
+	effort := stageEffort(pb)
+	applied := rt.mode == route.ModeActive && (rung == route.RungRoute || effort != "" || pb.routed)
 	if err := route.Record(s.DB, route.Row{
 		Surface:     route.SurfaceDispatch,
 		Subject:     route.SubjectTask(c.ID),
 		SessionUUID: sessionUUID,
-		Mode:        mode,
-		Signals:     sig,
-		Decision:    route.Decide(sig, policy),
+		Mode:        rt.mode,
+		Signals:     rt.signals,
+		Decision:    rt.decision,
+		Applied:     applied,
 		UsedModel:   model,
 		// The same resolution ClaudeRunner.Start performs for every stage.
-		UsedEffort:   claudeflags.Effort(effortEnv, DefaultEffort),
+		UsedEffort:   runEffort(RunSpec{Effort: effort}),
 		UsedPlaybook: pb.name,
 		WonRung:      rung,
 		CreatedAt:    s.clock(),

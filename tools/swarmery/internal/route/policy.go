@@ -247,6 +247,32 @@ func (l Ladder) validate() error {
 // planning.Models is the planner's closed set and has no haiku in it.
 const modelAliasHaiku = "haiku"
 
+// ModelHaiku is the full ID the haiku alias spawns with. A full ID, not the
+// alias, for the reason every engine pins one: an alias re-resolves over time,
+// so the same route decision would silently change model between releases.
+const ModelHaiku = "claude-haiku-4-5-20251001"
+
+// ModelID maps a pick's model alias onto the full ID a spawn is handed.
+//
+// This package owns the map rather than planning.Models because haiku must
+// stay OUT of that set: planning.Models is the planner's model picker, and a
+// router tier that runs on haiku is no reason to offer haiku for writing plans.
+// Every other alias (and a full ID already) resolves exactly as the planner
+// resolves it, so a route pick of "opus" and a request for "opus" can never
+// name two different models.
+func ModelID(alias string) (string, error) {
+	a := strings.ToLower(strings.TrimSpace(alias))
+	if a == "" {
+		// planning.ResolveModel would answer "" with its DefaultModel; a pick
+		// with no model is a broken pick, never a request for the default.
+		return "", fmt.Errorf("%w: empty pick", planning.ErrUnknownModel)
+	}
+	if a == modelAliasHaiku || a == ModelHaiku {
+		return ModelHaiku, nil
+	}
+	return planning.ResolveModel(a) // already wraps planning.ErrUnknownModel
+}
+
 // normalize canonicalizes one tier pick: a known effort (never "off" — a tier
 // that omits --effort would silently inherit the CLI's xhigh), a model the
 // daemon can run, and an auto-selectable playbook (never review-heavy).
@@ -258,13 +284,13 @@ func (k *Pick) normalize() error {
 	k.Effort = effort
 
 	model := strings.ToLower(strings.TrimSpace(k.Model))
-	if model != modelAliasHaiku {
-		if model == "" {
-			return fmt.Errorf("model: required")
-		}
-		if _, err := planning.ResolveModel(model); err != nil {
-			return fmt.Errorf("model: %w", err)
-		}
+	if model == "" {
+		return fmt.Errorf("model: required")
+	}
+	// The same map active mode spawns through, so a policy that loads is a
+	// policy whose every tier can actually run.
+	if _, err := ModelID(model); err != nil {
+		return fmt.Errorf("model: %w", err)
 	}
 	k.Model = model
 

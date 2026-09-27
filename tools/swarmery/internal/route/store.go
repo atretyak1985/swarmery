@@ -38,12 +38,18 @@ type Row struct {
 	Mode        Mode   // shadow | active — never off: off records nothing
 	Signals     Signals
 	Decision    Decision
-	// Applied is true only when the decision's pick reached the spawn.
+	// Applied is true when ANY part of the decision's pick reached the spawn —
+	// its model, its effort or its playbook won its ladder. Only active mode
+	// can set it; a shadow row is always applied=0. Compare used_* with pick_*
+	// to see which parts ran.
 	Applied      bool
 	UsedModel    string
 	UsedEffort   string
 	UsedPlaybook string
-	WonRung      string
+	// WonRung is the rung of the MODEL ladder that produced UsedModel — one
+	// token, so the effort and playbook rungs are not recorded here. RungRoute
+	// means the router's model pick ran, which implies Applied.
+	WonRung string
 	// CreatedAt defaults to time.Now when zero.
 	CreatedAt time.Time
 }
@@ -71,11 +77,21 @@ type signalsDoc struct {
 // errRowIncomplete is returned for a row missing a key column.
 var errRowIncomplete = errors.New("route: decision row needs surface, subject and a shadow|active mode")
 
+// errRowInconsistent is returned for a row whose applied flag and won_rung
+// contradict its mode: a shadow row that claims the pick ran, or a route rung
+// that did not count as applied. Refusing it keeps the report's applied split
+// honest instead of trusting every caller to get it right.
+var errRowInconsistent = errors.New("route: applied/won_rung contradict the mode (shadow never applies; won_rung=route implies applied)")
+
 // Record inserts one route_decisions row. Callers log a failure and carry on:
 // a routing record is advisory and must never fail the run it describes.
 func Record(db *sql.DB, r Row) error {
 	if r.Surface == "" || r.Subject == "" || (r.Mode != ModeShadow && r.Mode != ModeActive) {
 		return errRowIncomplete
+	}
+	if (r.Mode == ModeShadow && (r.Applied || r.WonRung == RungRoute)) ||
+		(r.WonRung == RungRoute && !r.Applied) {
+		return errRowInconsistent
 	}
 	risks := r.Signals.RiskPaths
 	if risks == nil {

@@ -192,3 +192,44 @@ func TestModeFromEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestModelID(t *testing.T) {
+	for in, want := range map[string]string{
+		"haiku":                   ModelHaiku,
+		" Haiku ":                 ModelHaiku,
+		ModelHaiku:                ModelHaiku,
+		"opus":                    planning.Models["opus"],
+		"sonnet":                  planning.Models["sonnet"],
+		planning.Models["sonnet"]: planning.Models["sonnet"],
+	} {
+		got, err := ModelID(in)
+		if err != nil || got != want {
+			t.Errorf("ModelID(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "  ", "gpt-9"} {
+		if _, err := ModelID(bad); !errors.Is(err, planning.ErrUnknownModel) {
+			t.Errorf("ModelID(%q) err = %v, want ErrUnknownModel", bad, err)
+		}
+	}
+	// Every default tier pick must be spawnable, or active mode has a dead tier.
+	p := DefaultPolicy()
+	for _, k := range []Pick{p.Tiers.S, p.Tiers.M, p.Tiers.L, p.Tiers.XL} {
+		if _, err := ModelID(k.Model); err != nil {
+			t.Errorf("default tier model %q: %v", k.Model, err)
+		}
+	}
+	if _, ok := planning.Models["haiku"]; ok {
+		t.Error("haiku leaked into planning.Models — it would appear in the planner's picker")
+	}
+}
+
+func TestPolicyAcceptsFullHaikuID(t *testing.T) {
+	got, err := LoadPolicy(writePolicy(t, `{"tiers": {"S": {"model": "`+ModelHaiku+`"}}}`))
+	if err != nil {
+		t.Fatalf("LoadPolicy: %v", err)
+	}
+	if got.Tiers.S.Model != ModelHaiku {
+		t.Errorf("S model = %q", got.Tiers.S.Model)
+	}
+}
