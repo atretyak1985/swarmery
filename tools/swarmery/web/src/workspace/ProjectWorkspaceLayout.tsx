@@ -81,7 +81,8 @@ function WorkspaceInner(): JSX.Element {
   // Does the active route own its vertical scroll? Declared on the route itself
   // (main.tsx `handle: { fill: true }`), never matched on the pathname here.
   const fill = useFillRoute();
-  const { inboxCount, liveSessions } = useSidebarSignals();
+  // Inbox badge counts this project's waiting decisions, not the fleet's.
+  const { inboxCount, liveSessions } = useSidebarSignals(slug);
 
   const counts = useMemo(() => boardCounts(board.tasks), [board.tasks]);
   const subPath = activeSubPath(pathname, slug);

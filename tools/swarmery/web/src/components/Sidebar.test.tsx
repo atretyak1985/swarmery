@@ -149,7 +149,7 @@ describe('Sidebar', () => {
 
 function SignalsProbe(): JSX.Element {
   const s = useSidebarSignals();
-  return <output>{`${s.pendingCount}|${s.inboxCount}|${String(s.liveSessions)}`}</output>;
+  return <output>{`${s.inboxCount}|${String(s.liveSessions)}`}</output>;
 }
 
 describe('useSidebarSignals', () => {
@@ -162,6 +162,6 @@ describe('useSidebarSignals', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByRole('status').textContent).toBe('2|5|true');
+    expect(screen.getByRole('status').textContent).toBe('5|true');
   });
 });

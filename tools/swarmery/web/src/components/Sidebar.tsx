@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { fetchApprovals, fetchStatsOverview } from '../api';
+import { fetchStatsOverview } from '../api';
 import type { WSMessage } from '../api/types';
 import { ProjectSwitcher } from '../workspace/ProjectSwitcher';
 import { isoDay } from '../lib/format';
@@ -30,8 +30,6 @@ import { useLiveUpdates } from '../lib/ws';
 import { CommandPalette } from './CommandPalette';
 
 export interface SidebarSignals {
-  /** Pending approvals (fleet-wide), also fed to ProjectApprovalsSection. */
-  pendingCount: number;
   /** The Inbox badge: every waiting decision, all six sources (useInboxItems). */
   inboxCount: number;
   /** At least one session is running or waiting on the operator. */
@@ -41,23 +39,17 @@ export interface SidebarSignals {
 /**
  * The sidebar's live signals. REST is the source of truth (mount + reconnect
  * resync); the shared WS stream is the low-latency hint in between
- * (docs/ws-protocol.md). Pending approvals are held as a SET of ids so a
- * permission_resolved arriving twice (own action + fan-out) stays idempotent.
+ * (docs/ws-protocol.md).
  *
  * The Inbox badge is the Inbox's own count — the same six-source aggregate the
- * page renders (pages/inbox/useInboxItems.ts), for `scope` (null = fleet).
+ * page renders (pages/inbox/useInboxItems.ts), for `scope` (null = fleet). That
+ * hook already refetches on permission_* frames, so approvals need no set here.
  */
 export function useSidebarSignals(scope: string | null = null): SidebarSignals {
-  const [pendingIds, setPendingIds] = useState<ReadonlySet<number>>(new Set());
   const [live, setLive] = useState(false);
   const inbox = useInboxItems(scope);
   const reloadInbox = inbox.reload;
 
-  const syncPending = useCallback((): void => {
-    fetchApprovals('pending')
-      .then((list) => setPendingIds(new Set(list.map((r) => r.id))))
-      .catch(() => setPendingIds(new Set())); // approvals API absent → no badge
-  }, []);
   const syncLive = useCallback((): void => {
     // `active` / `waiting_approval` count sessions in that state NOW (not
     // day-scoped — internal/api/stats.go activeSessions).
@@ -65,7 +57,6 @@ export function useSidebarSignals(scope: string | null = null): SidebarSignals {
       .then((o) => setLive(o.active + o.waiting_approval > 0))
       .catch(() => setLive(false));
   }, []);
-  useEffect(syncPending, [syncPending]);
   useEffect(syncLive, [syncLive]);
 
   // Accept/Dismiss/Analyze on Retro change the waiting count: refetch whenever
@@ -90,16 +81,7 @@ export function useSidebarSignals(scope: string | null = null): SidebarSignals {
   );
   const onMessage = useCallback(
     (msg: WSMessage): void => {
-      if (msg.type === 'permission_requested') {
-        setPendingIds((prev) => new Set(prev).add(msg.payload.id));
-      } else if (msg.type === 'permission_resolved') {
-        setPendingIds((prev) => {
-          if (!prev.has(msg.payload.id)) return prev;
-          const next = new Set(prev);
-          next.delete(msg.payload.id);
-          return next;
-        });
-      } else if (msg.type === 'session_started' || msg.type === 'session_updated') {
+      if (msg.type === 'session_started' || msg.type === 'session_updated') {
         if (liveTimer.current !== null) clearTimeout(liveTimer.current);
         liveTimer.current = setTimeout(syncLive, 2000);
       }
@@ -108,14 +90,9 @@ export function useSidebarSignals(scope: string | null = null): SidebarSignals {
     [syncLive],
   );
   // Reconnect / 60s reconcile: every WS-driven signal may have drifted.
-  const resync = useCallback((): void => {
-    syncPending();
-    syncLive();
-  }, [syncPending, syncLive]);
-  useLiveUpdates(onMessage, resync);
+  useLiveUpdates(onMessage, syncLive);
 
-  const pendingCount = pendingIds.size;
-  return { pendingCount, inboxCount: inbox.count, liveSessions: live };
+  return { inboxCount: inbox.count, liveSessions: live };
 }
 
 /** Global ⌘K / Ctrl+K → command palette. Window-level so it works from any
