@@ -47,14 +47,29 @@ func seedCard(t *testing.T, db *sql.DB, c card) int64 {
 // seedSession ingests a session with one turn per cost (nil = an unpriced turn).
 func seedSession(t *testing.T, db *sql.DB, uuid string, costs ...*float64) {
 	t.Helper()
+	seedSessionAt(t, db, uuid, settleT0, costs...)
+}
+
+// seedSessionAt is seedSession with an explicit start; it returns sessions.id.
+func seedSessionAt(t *testing.T, db *sql.DB, uuid string, start time.Time, costs ...*float64) int64 {
+	t.Helper()
 	seedProject(t, db)
+	at := start.UTC().Format(time.RFC3339)
 	res := mustExec(t, db, `INSERT INTO sessions (project_id, session_uuid, status, started_at)
-		VALUES (1, ?, 'completed', '2026-09-27T10:00:00Z')`, uuid)
+		VALUES (1, ?, 'completed', ?)`, uuid, at)
 	sid, _ := res.LastInsertId()
 	for i, c := range costs {
 		mustExec(t, db, `INSERT INTO turns (session_id, seq, role, started_at, cost_usd)
-			VALUES (?, ?, 'assistant', '2026-09-27T10:00:00Z', ?)`, sid, i+1, c)
+			VALUES (?, ?, 'assistant', ?, ?)`, sid, i+1, at, c)
 	}
+	return sid
+}
+
+// linkStage links a session to a card the way dispatch links each stage.
+func linkStage(t *testing.T, db *sql.DB, taskID, sessionID int64, source string) {
+	t.Helper()
+	mustExec(t, db, `INSERT INTO task_sessions (task_id, session_id, link_source, confidence)
+		VALUES (?, ?, ?, 1.0)`, taskID, sessionID, source)
 }
 
 func f(v float64) *float64 { return &v }
@@ -316,6 +331,119 @@ func TestSettle_BatchBound(t *testing.T) {
 	}
 	if n, err := settleAt(db, now); err != nil || n != 1 {
 		t.Fatalf("second call settled %d (%v), want 1", n, err)
+	}
+}
+
+// A full batch of rows that never settle must not starve the refresh window:
+// a settled row's late verdict still lands.
+func TestSettle_StuckRowsDoNotStarveRefresh(t *testing.T) {
+	db := openStore(t)
+	id := seedCard(t, db, card{status: "needs_review", column: "in_review", uuid: "u-review"})
+	recordAt(t, db, SurfaceDispatch, SubjectTask(id), "u-review", settleT0)
+	if n, err := settleAt(db, settleT0.Add(time.Hour)); err != nil || n != 1 {
+		t.Fatalf("first settle = %d, %v", n, err)
+	}
+
+	// SettleBatch phase runs still "running" forever: the phase's current run is
+	// theirs and no actuals are ever recorded, so every one stays NULL.
+	phase := seedPhase(t, db, "p-stuck")
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < SettleBatch; i++ {
+		if _, err := tx.Exec(`INSERT INTO route_decisions (surface, subject, session_uuid, mode, signals_json,
+			score, tier, pick_model, pick_effort, created_at)
+			VALUES ('phaserun', ?, 'p-stuck', 'shadow', '{}', 0, 'S', 'haiku', 'low', ?)`,
+			SubjectPhase(phase), settleT0.Add(2*time.Hour).Format(createdAtFormat)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	mustExec(t, db, `INSERT INTO verification_runs (target_key, task_id, status, started_at)
+		VALUES (?, ?, 'fail', '2026-09-27T12:30:00Z')`, SubjectTask(id), id)
+	if _, err := settleAt(db, settleT0.Add(3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if c := readCols(t, db, SubjectTask(id), "u-review"); c.verify.String != "fail" {
+		t.Errorf("late verdict = %v, want fail (refresh starved by stuck rows)", c.verify)
+	}
+	var stuck int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM route_decisions WHERE outcome IS NULL`).Scan(&stuck); err != nil {
+		t.Fatal(err)
+	}
+	if stuck != SettleBatch {
+		t.Errorf("stuck rows = %d, want %d still NULL", stuck, SettleBatch)
+	}
+}
+
+// A multi-stage run's cost is every stage's session, bounded by the next run.
+func TestSettle_DispatchCostSumsEveryStage(t *testing.T) {
+	db := openStore(t)
+	id := seedCard(t, db, card{status: "needs_review", column: "in_review", uuid: "r2-s1"})
+
+	// Run 1: two stages, then run 2 replaces it an hour later.
+	recordAt(t, db, SurfaceDispatch, SubjectTask(id), "r1-s1", settleT0)
+	linkStage(t, db, id, seedSessionAt(t, db, "r1-s1", settleT0.Add(time.Minute), f(0.25)), "explicit")
+	linkStage(t, db, id, seedSessionAt(t, db, "r1-s2", settleT0.Add(30*time.Minute), f(0.5), nil), "explicit")
+
+	// Run 2: two stages; a heuristic link in its window is a guess, not a stage.
+	recordAt(t, db, SurfaceDispatch, SubjectTask(id), "r2-s1", settleT0.Add(time.Hour))
+	linkStage(t, db, id, seedSessionAt(t, db, "r2-s1", settleT0.Add(61*time.Minute), f(2)), "explicit")
+	linkStage(t, db, id, seedSessionAt(t, db, "r2-s2", settleT0.Add(90*time.Minute), f(1)), "explicit")
+	linkStage(t, db, id, seedSessionAt(t, db, "guess", settleT0.Add(95*time.Minute), f(100)), "heuristic")
+
+	// A card whose stage sessions carry no priced turn: unknown, not 0.
+	empty := seedCard(t, db, card{status: "done", column: "done", uuid: "e-s1"})
+	recordAt(t, db, SurfaceDispatch, SubjectTask(empty), "e-s1", settleT0)
+	linkStage(t, db, empty, seedSessionAt(t, db, "e-s1", settleT0.Add(time.Minute)), "explicit")
+	linkStage(t, db, empty, seedSessionAt(t, db, "e-s2", settleT0.Add(time.Hour), nil), "explicit")
+
+	if _, err := settleAt(db, settleT0.Add(3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if c := readCols(t, db, SubjectTask(id), "r1-s1"); c.outcome.String != OutcomeSuperseded || c.cost.Float64 != 0.75 {
+		t.Errorf("run 1 = %v cost %v, want superseded 0.75 (both stages, not run 2's)", c.outcome, c.cost)
+	}
+	if c := readCols(t, db, SubjectTask(id), "r2-s1"); !c.cost.Valid || c.cost.Float64 != 3 {
+		t.Errorf("run 2 cost = %v, want 3 (both stages, no heuristic link)", c.cost)
+	}
+	if c := readCols(t, db, SubjectTask(empty), "e-s1"); c.outcome.String != OutcomeDone || c.cost.Valid {
+		t.Errorf("unpriced stages = %v cost %v, want done with NULL cost", c.outcome, c.cost)
+	}
+}
+
+// A run replaced by one that left no route row (mode off) must not take the
+// successor's verdict or sessions; until the successor is ingested, both stay
+// unknown.
+func TestSettle_SupersededWithoutNextRow(t *testing.T) {
+	db := openStore(t)
+	id := seedCard(t, db, card{status: "needs_review", column: "in_review", uuid: "later"})
+	recordAt(t, db, SurfaceDispatch, SubjectTask(id), "early", settleT0)
+	linkStage(t, db, id, seedSessionAt(t, db, "early", settleT0.Add(time.Minute), f(0.3)), "explicit")
+	mustExec(t, db, `INSERT INTO verification_runs (target_key, task_id, status, started_at)
+		VALUES (?, ?, 'pass', '2026-09-27T11:30:00Z')`, SubjectTask(id), id)
+
+	if _, err := settleAt(db, settleT0.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	c := readCols(t, db, SubjectTask(id), "early")
+	if c.outcome.String != OutcomeSuperseded || c.verify.Valid || c.cost.Valid {
+		t.Errorf("successor not ingested = %v/%v/%v, want superseded with NULL verdict and cost",
+			c.outcome, c.verify, c.cost)
+	}
+
+	// The successor lands: its start closes this run's window.
+	linkStage(t, db, id, seedSessionAt(t, db, "later", settleT0.Add(time.Hour), f(5)), "explicit")
+	if _, err := settleAt(db, settleT0.Add(3*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	c = readCols(t, db, SubjectTask(id), "early")
+	if c.verify.Valid || !c.cost.Valid || c.cost.Float64 != 0.3 {
+		t.Errorf("successor ingested = verdict %v cost %v, want NULL verdict and 0.3", c.verify, c.cost)
 	}
 }
 

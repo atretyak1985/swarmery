@@ -52,7 +52,13 @@ const (
 	OutcomeDeleted    = "deleted"
 )
 
-// SettleBatch bounds one Settle call; NULL rows go first, newest first.
+// SettleBatch bounds each of the two reads one Settle call makes — unsettled
+// rows and refresh-window rows — newest first, so one call touches at most
+// 2×SettleBatch rows. The reads are separate on purpose: under one shared LIMIT
+// the unsettled rows sort first, and rows that never settle (a phase run whose
+// actuals were never recorded, a card requeued and never re-dispatched) would
+// eventually fill it and starve every refresh — late verdicts and costs would
+// then never land.
 const SettleBatch = 500
 
 // SettleRefresh is how long a settled row keeps being re-read.
@@ -75,7 +81,8 @@ type settled struct {
 	cost    sql.NullFloat64
 }
 
-// Settle settles up to SettleBatch rows and returns how many it changed.
+// Settle settles up to SettleBatch unsettled rows, refreshes up to SettleBatch
+// refresh-window rows, and returns how many it changed.
 func Settle(db *sql.DB) (int, error) { return settleAt(db, time.Now()) }
 
 func settleAt(db *sql.DB, now time.Time) (int, error) {
@@ -104,16 +111,33 @@ func settleAt(db *sql.DB, now time.Time) (int, error) {
 	return n, nil
 }
 
-// settleCandidates reads the batch up front: the store runs on ONE connection,
-// so no other query may run while these rows are open.
+// settleCandidates reads the whole batch up front — unsettled rows, then
+// refresh-window rows, each under its own SettleBatch bound (see SettleBatch).
+// The store runs on ONE connection, so no other query may run while rows are
+// open: each read is drained and closed before the next one and before any row
+// is processed.
 func settleCandidates(db *sql.DB, now time.Time) ([]settleRow, error) {
 	cutoff := now.Add(-SettleRefresh).UTC().Format(createdAtFormat)
+	unsettled, err := readCandidates(db, `outcome IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	refresh, err := readCandidates(db, `outcome IS NOT NULL AND outcome_at >= ?`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	return append(unsettled, refresh...), nil
+}
+
+// readCandidates runs one bounded, newest-first read of route_decisions and
+// drains it. where is one of settleCandidates' two fixed predicates.
+func readCandidates(db *sql.DB, where string, args ...any) ([]settleRow, error) {
 	rows, err := db.Query(`
 		SELECT id, surface, subject, session_uuid, created_at, outcome, verify_status, cost_usd
 		  FROM route_decisions
-		 WHERE outcome IS NULL OR outcome_at >= ?
-		 ORDER BY (outcome IS NOT NULL), id DESC
-		 LIMIT ?`, cutoff, SettleBatch)
+		 WHERE `+where+`
+		 ORDER BY id DESC
+		 LIMIT ?`, append(args, SettleBatch)...)
 	if err != nil {
 		return nil, fmt.Errorf("route: settle candidates: %w", err)
 	}
@@ -204,50 +228,82 @@ func dispatchOutcome(db *sql.DB, r settleRow, taskID int64) (settled, error) {
 	default:
 		s.outcome = cardOutcome(status, column, paused != 0, errMsg)
 	}
-	if s.verify, err = runVerdict(db, r); err != nil {
+	end, known, err := runEnd(db, r, cur, s.outcome == OutcomeSuperseded)
+	if err != nil || !known {
+		// !known: a successor run exists but its start is not ingested yet, so
+		// nothing after created_at can be attributed to THIS run. Verdict and cost
+		// stay unknown; the refresh window fills them once the successor lands.
 		return s, err
 	}
-	s.cost, err = sessionCost(db, r.sessionUUID)
+	if s.verify, err = runVerdict(db, r, end); err != nil {
+		return s, err
+	}
+	s.cost, err = runCost(db, r, taskID, end)
 	return s, err
 }
 
-// runVerdict is the latest terminal verification of THIS run: on the row's
-// target, started at or after the row and before the subject's next row.
-// julianday() compares the two tables' differently-precise timestamps.
-func runVerdict(db *sql.DB, r settleRow) (sql.NullString, error) {
-	var next string
-	err := db.QueryRow(`SELECT created_at FROM route_decisions WHERE subject = ? AND id > ? ORDER BY id LIMIT 1`,
-		r.subject, r.id).Scan(&next)
+// runEnd is where this run's window closes: the created_at of the subject's
+// next route_decisions row, or "" (open-ended) when there is none.
+//
+// A superseded run with no next row was replaced by a run that left no row
+// (routing mode was off for it). An open window would then attribute the
+// successor's verdict and sessions to this run, so the window closes at the
+// successor's own first session start instead — cur is its uuid. known=false
+// when that session is not ingested yet. cur == "" means no successor has been
+// admitted, so the window stays open.
+func runEnd(db *sql.DB, r settleRow, cur string, superseded bool) (end string, known bool, err error) {
+	err = db.QueryRow(`SELECT created_at FROM route_decisions WHERE subject = ? AND id > ? ORDER BY id LIMIT 1`,
+		r.subject, r.id).Scan(&end)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return sql.NullString{}, fmt.Errorf("route: settle %s next run: %w", r.subject, err)
+		return "", false, fmt.Errorf("route: settle %s next run: %w", r.subject, err)
 	}
+	if end != "" || !superseded || cur == "" {
+		return end, true, nil
+	}
+	err = db.QueryRow(`SELECT started_at FROM sessions WHERE session_uuid = ?`, cur).Scan(&end)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", false, nil
+	case err != nil:
+		return "", false, fmt.Errorf("route: settle %s successor start: %w", r.subject, err)
+	}
+	return end, true, nil
+}
+
+// runVerdict is the latest terminal verification of THIS run: on the row's
+// target, started at or after the row and before end ("" = open-ended).
+// julianday() compares the two tables' differently-precise timestamps.
+func runVerdict(db *sql.DB, r settleRow, end string) (sql.NullString, error) {
 	var v sql.NullString
-	err = db.QueryRow(`
+	err := db.QueryRow(`
 		SELECT status FROM verification_runs
 		 WHERE target_key = ? AND status IN ('pass','fail','inconclusive')
 		   AND julianday(started_at) >= julianday(?)
 		   AND (? = '' OR julianday(started_at) < julianday(?))
-		 ORDER BY id DESC LIMIT 1`, r.subject, r.createdAt, next, next).Scan(&v)
+		 ORDER BY id DESC LIMIT 1`, r.subject, r.createdAt, end, end).Scan(&v)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return sql.NullString{}, fmt.Errorf("route: settle %s verdict: %w", r.subject, err)
 	}
 	return v, nil
 }
 
-// sessionCost is SUM(turns.cost_usd) of the run's first session. NULL when the
-// session is not ingested or no turn carries a cost. Stages 2+ of a playbook
-// mint their own sessions and are NOT counted — a known undercount for
-// multi-stage cards, stated rather than guessed around.
-func sessionCost(db *sql.DB, uuid string) (sql.NullFloat64, error) {
+// runCost is SUM(turns.cost_usd) over every session of THIS run: the row's own
+// session, plus every session explicitly linked to the card (task_sessions,
+// which dispatch writes for each playbook stage — stages 2+ mint their own
+// uuids) whose start falls in [created_at, end). Heuristic links are guesses
+// from cwd/path overlap and are not counted. NULL when no session is ingested
+// or no turn carries a cost: unknown, never 0.
+func runCost(db *sql.DB, r settleRow, taskID int64, end string) (sql.NullFloat64, error) {
 	var c sql.NullFloat64
-	if uuid == "" {
-		return c, nil
-	}
 	err := db.QueryRow(`
 		SELECT SUM(tu.cost_usd) FROM turns tu JOIN sessions s ON s.id = tu.session_id
-		 WHERE s.session_uuid = ?`, uuid).Scan(&c)
+		 WHERE (? <> '' AND s.session_uuid = ?)
+		    OR (s.id IN (SELECT session_id FROM task_sessions WHERE task_id = ? AND link_source = 'explicit')
+		        AND julianday(s.started_at) >= julianday(?)
+		        AND (? = '' OR julianday(s.started_at) < julianday(?)))`,
+		r.sessionUUID, r.sessionUUID, taskID, r.createdAt, end, end).Scan(&c)
 	if err != nil {
-		return c, fmt.Errorf("route: settle cost %s: %w", uuid, err)
+		return c, fmt.Errorf("route: settle %s cost: %w", r.subject, err)
 	}
 	return c, nil
 }
