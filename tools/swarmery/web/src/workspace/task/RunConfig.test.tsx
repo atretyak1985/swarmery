@@ -16,11 +16,41 @@
 // web/tsconfig.json EXCLUDES *.test.tsx, so `npm run build` does NOT type-check
 // this file — the runner reports type errors as runtime failures instead.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { RouteDecision } from '../../api/route';
 import type { Playbook } from '../../api/types';
-import { RunConfig, runConfigSummary } from './RunConfig';
+import { RunConfig, routeLine, runConfigSummary } from './RunConfig';
 import type { TaskDraft } from './useTaskDraft';
+
+const fetchRouteDecision = vi.fn();
+vi.mock('../../api/route', () => ({
+  fetchRouteDecision: (...args: unknown[]) => fetchRouteDecision(...args),
+}));
+
+function makeDecision(over: Partial<RouteDecision> = {}): RouteDecision {
+  return {
+    surface: 'dispatch',
+    subject: 'task:7',
+    mode: 'shadow',
+    score: 35,
+    tier: 'M',
+    pickModel: 'sonnet',
+    pickEffort: 'medium',
+    pickPlaybook: 'standard',
+    reasons: ['file_scope=7 (+20)', 'deps=1 (+15)'],
+    applied: false,
+    usedModel: 'opus',
+    usedEffort: 'high',
+    usedPlaybook: 'plan-first',
+    wonRung: 'card',
+    outcome: null,
+    verifyStatus: null,
+    costUsd: null,
+    createdAt: '2026-09-27T21:00:00.000Z',
+    ...over,
+  };
+}
 
 function makePlaybook(over: Partial<Playbook> = {}): Playbook {
   return {
@@ -50,7 +80,56 @@ function makeDraft(over: Partial<TaskDraft> = {}): TaskDraft {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  fetchRouteDecision.mockReset();
+});
+
+describe('routeLine', () => {
+  it('reads tier · pick · playbook, then which existing rung ran in shadow', () => {
+    expect(routeLine(makeDecision())).toBe('Route: M · sonnet/medium · standard (shadow — card model won)');
+  });
+
+  it('drops the playbook on a phase run and says so when the pick was applied', () => {
+    expect(
+      routeLine(makeDecision({ surface: 'phaserun', pickPlaybook: '', mode: 'active', applied: true, tier: 'S', pickModel: 'haiku', pickEffort: 'low' })),
+    ).toBe('Route: S · haiku/low (active — route applied)');
+  });
+});
+
+describe('RunConfig route line', () => {
+  const props = {
+    draft: makeDraft(),
+    setField: vi.fn(),
+    commit: vi.fn(),
+    playbooks: [makePlaybook()],
+    agents: [],
+  };
+
+  it('shows the latest decision read-only, with the reasons on hover', async () => {
+    fetchRouteDecision.mockResolvedValue(makeDecision());
+    render(<RunConfig {...props} taskId={7} />);
+    const line = await screen.findByTestId('route-line');
+    expect(fetchRouteDecision).toHaveBeenCalledWith('task:7');
+    expect(line.textContent).toBe('Route: M · sonnet/medium · standard (shadow — card model won)');
+    expect(line.getAttribute('title')).toBe('file_scope=7 (+20)\ndeps=1 (+15)');
+    // Read-only: nothing in it is a control.
+    expect(line.querySelector('button, select, input')).toBeNull();
+  });
+
+  it('renders no line for a card the router never saw', async () => {
+    fetchRouteDecision.mockResolvedValue(null);
+    render(<RunConfig {...props} taskId={8} />);
+    await waitFor(() => expect(fetchRouteDecision).toHaveBeenCalledWith('task:8'));
+    expect(screen.queryByTestId('route-line')).toBeNull();
+  });
+
+  it('does not fetch at all without a task id', () => {
+    render(<RunConfig {...props} />);
+    expect(fetchRouteDecision).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('route-line')).toBeNull();
+  });
+});
 
 describe('runConfigSummary', () => {
   const playbooks = [makePlaybook(), makePlaybook({ name: 'plan-first', model: 'opus' })];
