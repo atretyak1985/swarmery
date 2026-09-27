@@ -8,7 +8,8 @@
  * buttons, and a raised tone (#1B1E24) for hover fills, active nav, prompt
  * bubbles and inline code.
  * Hairlines: graphite (#23262E) default, a stronger interactive variant
- * (#2A2E37) for chips/menus/fields, and a soft inner divider (#1C1F26).
+ * (#2A2E37) for chips/menus/fields, a strongest (#3A3F4A) for the active nav
+ * row, and a soft inner divider (#1C1F26).
  * Ink: WARM cream scale from #ECE7DF down to a faint #5C616B for mono labels.
  * Brand accent: amber #E8A13A — links, active nav, tabs, wordmark mark, cost.
  * Status set stays SEMANTIC: green = running/ok, amber = waiting/approval,
@@ -26,6 +27,7 @@
   --color-line: #23262e; /* default graphite border */
   --color-line-strong: #2a2e37; /* stronger — chips, menus, field borders */
   --color-line-soft: #1c1f26; /* softer inner row divider */
+  --color-line-stronger: #3a3f4a; /* strongest — active nav row (Canvas v3) */
 
   /* ---- ink scale (warm cream) ---- */
   --color-ink: #ece7df; /* primary text */
@@ -131,6 +133,7 @@
   --color-line: #ded5c4; /* default hairline */
   --color-line-strong: #cbbfa8; /* stronger — chips, menus, field borders */
   --color-line-soft: #e6dfd0; /* softer inner row divider */
+  --color-line-stronger: #a59370; /* strongest — active nav row */
 
   /* ---- ink scale (dark warm ink, mirrors the cream scale's roles) ---- */
   --color-ink: #2a2620; /* primary text */
@@ -192,6 +195,7 @@
   --color-line: #1f2b38;
   --color-line-strong: #2a3946;
   --color-line-soft: #16202a;
+  --color-line-stronger: #405562;
   --color-brand: #4fb0e8;
   --color-brand-mark: #4fb0e8;
   --color-green: #48c9a0;
@@ -217,6 +221,7 @@
   --color-line: #c8d8e2;
   --color-line-strong: #aec4d2;
   --color-line-soft: #d8e4ec;
+  --color-line-stronger: #7a9cb2;
   --color-ink: #132029;
   --color-ink-2: #39505f;
   --color-ink-3: #516777;
@@ -249,6 +254,7 @@
   --color-line: #1e2c24;
   --color-line-strong: #293a30;
   --color-line-soft: #16221c;
+  --color-line-stronger: #3f5648;
   --color-brand: #5fc98a;
   --color-brand-mark: #5fc98a;
   --color-green: #5fc98a;
@@ -275,6 +281,7 @@
   --color-line: #c8dcc8;
   --color-line-strong: #aec8ae;
   --color-line-soft: #d8e6d8;
+  --color-line-stronger: #7aa07a;
   --color-ink: #16241c;
   --color-ink-2: #3c5244;
   --color-ink-3: #53695b;
@@ -307,6 +314,7 @@
   --color-line: #2e2224;
   --color-line-strong: #3a2c2e;
   --color-line-soft: #241a1c;
+  --color-line-stronger: #524042;
   --color-brand: #f08a5a;
   --color-brand-mark: #f08a5a;
   --color-green: #58c08a;
@@ -333,6 +341,7 @@
   --color-line: #e4cabd;
   --color-line-strong: #d2b0a0;
   --color-line-soft: #ecd8cc;
+  --color-line-stronger: #ae7c66;
   --color-ink: #291c16;
   --color-ink-2: #5f463c;
   --color-ink-3: #775b51;
@@ -365,6 +374,7 @@
   --color-line: #262c31;
   --color-line-strong: #333a41;
   --color-line-soft: #1c2126;
+  --color-line-stronger: #4d5661;
   --color-ink: #e6e8ea;
   --color-ink-2: #c2c6ca;
   --color-ink-3: #969ba1;
@@ -395,6 +405,7 @@
   --color-line: #d4d8dc;
   --color-line-strong: #bcc2c8;
   --color-line-soft: #e0e3e6;
+  --color-line-stronger: #8c96a0;
   --color-ink: #1e2226;
   --color-ink-2: #464c52;
   --color-ink-3: #5d646b;
@@ -427,6 +438,7 @@
   --color-line: #2c2420;
   --color-line-strong: #3a2e28;
   --color-line-soft: #221c18;
+  --color-line-stronger: #564238;
   --color-brand: #e87a4a;
   --color-brand-mark: #e87a4a;
   --color-green: #58c08a;
@@ -453,6 +465,7 @@
   --color-line: #e0cebf;
   --color-line-strong: #ccb4a2;
   --color-line-soft: #e8dccf;
+  --color-line-stronger: #a48068;
   --color-ink: #241c16;
   --color-ink-2: #544940;
   --color-ink-3: #69594e;

@@ -47,8 +47,9 @@ export function ProjectWorkspaceProvider({ children }: { children: ReactNode }):
     if (slug !== '' && scope !== slug) setScope(slug);
   }, [slug, scope, setScope]);
 
-  // Remember the last-visited project so the header ModeToggle's Projects
-  // segment reopens it. Only the raw :slug is persisted (never a placeholder).
+  // Remember the last-visited project so the sidebar's project-only places
+  // (Plans, Knowledge) reopen it under All projects. Only the raw :slug is
+  // persisted (never a placeholder).
   useEffect(() => {
     if (slug !== '') saveLastProject(slug);
   }, [slug]);
