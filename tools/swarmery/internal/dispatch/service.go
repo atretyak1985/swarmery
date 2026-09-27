@@ -780,14 +780,25 @@ func (s *Service) admit(c candidate) bool {
 
 	s.notify(c.ID)
 
-	// Resolve the playbook (fusion phase 13): NULL ⇒ an auto-profile picks one and
-	// stamps it back on the card; unknown ⇒ the classic single-stage flow. The
-	// resolved stage list drives how many sequential headless runs execute in this
-	// one worktree; the recipe's model/permission knobs shape every spawn. The
-	// first stage reuses the pre-generated uuid recorded above (so the task↔session
-	// link already points at stage 1); later stages mint their own uuids inside
+	// Complexity routing: score the card ONCE, before its playbook resolves,
+	// because in active mode the router is a rung of the playbook ladder itself
+	// (card → route → autoProfile) as well as of the model and effort ladders.
+	// off ⇒ nothing computed; shadow ⇒ decided and recorded, never applied.
+	rt := s.routeCard(c)
+
+	// Resolve the playbook (fusion phase 13): NULL ⇒ the router (active) or an
+	// auto-profile picks one and stamps it back on the card; unknown ⇒ the classic
+	// single-stage flow. The resolved stage list drives how many sequential
+	// headless runs execute in this one worktree; the recipe's model/permission
+	// knobs — and the router's model/effort rungs — shape every spawn. The first
+	// stage reuses the pre-generated uuid recorded above (so the task↔session link
+	// already points at stage 1); later stages mint their own uuids inside
 	// runPlaybook.
-	pb := s.resolvePlaybook(c)
+	pb := s.resolvePlaybook(c, rt.rungs.playbook)
+	pb.route = rt.rungs
+
+	// Record the decision beside what the ladders chose, before the first stage.
+	s.recordRoute(c, pb, rt, uuid)
 
 	// Spawn the run. The goroutine owns exit handling + slot release.
 	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc, repoRoot) })
@@ -929,9 +940,17 @@ type resolvedStage struct {
 // permission mode belong to the RECIPE, not to one step of it, so they are
 // resolved once here and applied to each stage identically.
 type resolvedPlaybook struct {
+	name           string // the recipe that runs, as the registry names it ("" = implicit single stage)
 	stages         []resolvedStage
-	model          string // recipe's declared --model ("" = fall through to card/default)
+	model          string // recipe's declared --model ("" = fall through to route/default)
 	permissionMode string // recipe's --permission-mode ("" = inherit the global knob)
+	// routed: the router's playbook rung chose this recipe (active mode, card
+	// named none). Recorded as part of route_decisions.applied.
+	routed bool
+	// route: the router's model/effort rungs, "" unless active. Carried here,
+	// beside the recipe's own knobs, because they shape EVERY stage of the chain
+	// identically — the same reason the recipe's model is resolved once.
+	route routeRungs
 }
 
 // resolvePlaybook returns the resolved recipe for a candidate. With no registry
@@ -941,8 +960,11 @@ type resolvedPlaybook struct {
 // renders each with the per-run var map (incl. previous_stage_output).
 //
 // A card that never chose a playbook gets one auto-selected here and STAMPED
-// back onto the row, so the board shows the recipe that actually ran.
-func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
+// back onto the row, so the board shows the recipe that actually ran. The
+// ladder is card → routePlaybook (the router's pick, "" unless active) →
+// autoProfile; a card's explicit choice always wins, and the router can only
+// ever offer standard or plan-first (see activeRungs).
+func (s *Service) resolvePlaybook(c candidate, routePlaybook string) resolvedPlaybook {
 	single := resolvedPlaybook{stages: []resolvedStage{{name: "implement", body: buildDispatchPrompt(c)}}}
 	if s.Playbooks == nil {
 		return single
@@ -953,8 +975,13 @@ func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
 	// silently ran 'standard'. Pick explicitly, then record the pick.
 	name := strings.TrimSpace(c.Playbook.String)
 	chosen := name == ""
+	routed := false
 	if chosen {
-		name = autoProfile(c.Prompt, c.Dependencies)
+		if routePlaybook != "" {
+			name, routed = routePlaybook, true
+		} else {
+			name = autoProfile(c.Prompt, c.Dependencies)
+		}
 	}
 
 	pb, ok := s.Playbooks.Get(c.ProjectPath, name)
@@ -971,7 +998,7 @@ func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
 	for _, st := range pb.Stages {
 		out = append(out, resolvedStage{name: st.Name, body: st.Body})
 	}
-	return resolvedPlaybook{stages: out, model: pb.Model, permissionMode: pb.PermissionMode}
+	return resolvedPlaybook{name: pb.Name, stages: out, model: pb.Model, permissionMode: pb.PermissionMode, routed: routed}
 }
 
 // autoProfileThreshold is the prompt size above which a card is treated as
@@ -1115,24 +1142,23 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			s.recordDispatchedPrompt(c.ID, prompt)
 		}
 		// Model precedence, most specific first: the card's own override, then the
-		// recipe's declared model, then the global default. The middle step is what
-		// makes the `model:` frontmatter knob real — it parsed and rendered as a UI
-		// chip since phase 13 while dispatch ignored it, so the chip named a model
-		// no run ever used.
-		model := c.Model.String
-		if model == "" {
-			model = pb.model
-		}
-		if model == "" {
-			model = DefaultModel
-		}
+		// recipe's declared model, then the router's pick (active mode only), then
+		// the global default. The recipe step is what makes the `model:`
+		// frontmatter knob real — it parsed and rendered as a UI chip since phase 13
+		// while dispatch ignored it, so the chip named a model no run ever used.
+		// stageModel owns the ladder so the route record names exactly the model
+		// this spawn gets.
+		model, _ := stageModel(c, pb)
 		// Agent is carried, never applied: ClaudeRunner.agentPrompt owns the single
 		// "@<agent>: " prefix site. Every stage of a playbook runs as the same agent
 		// — the selection belongs to the card, not to one recipe step. The same
 		// holds for the permission mode: it is the recipe's, so every stage of the
-		// chain gets it ("" ⇒ the runner falls back to the global knob).
+		// chain gets it ("" ⇒ the runner falls back to the global knob) — and for
+		// the effort: the router's pick when active, else "" so the runner resolves
+		// SWARMERY_DISPATCH_EFFORT → DefaultEffort exactly as before.
 		spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: acq.Path, Model: model,
-			Agent: c.Agent.String, Account: account, PermissionMode: pb.permissionMode,
+			Effort: stageEffort(pb),
+			Agent:  c.Agent.String, Account: account, PermissionMode: pb.permissionMode,
 			SettingsFile: settingsFile}
 
 		run, err := s.runStage(spec)

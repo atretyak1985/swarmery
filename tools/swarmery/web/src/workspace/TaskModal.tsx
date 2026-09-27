@@ -153,7 +153,10 @@ export function TaskModal({
           {active === 'brief' ? (
             <>
               <TaskBrief task={task} draft={draft} setField={setField} commit={commit} />
-              <RunConfig draft={draft} setField={setField} commit={commit} playbooks={playbooks} agents={agents} />
+              <RunConfig
+                draft={draft} setField={setField} commit={commit} playbooks={playbooks} agents={agents}
+                taskId={task.id}
+              />
             </>
           ) : (
             <RunLog task={task} onOpenTerminal={terminal} />
