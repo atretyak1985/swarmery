@@ -22,7 +22,6 @@ import { Loading } from './components/ui';
 import { Approvals } from './pages/Approvals';
 import { Inbox } from './pages/inbox/Inbox';
 import { Overview } from './pages/Overview';
-import { Projects } from './pages/Projects';
 import { Sessions } from './pages/Sessions';
 import { SessionDetailPage } from './pages/SessionDetail';
 import { Settings } from './pages/Settings';
@@ -31,7 +30,6 @@ import { Architecture } from './pages/Architecture';
 import { Serena } from './pages/Serena';
 import { Graphify } from './pages/Graphify';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
-import { Routines } from './pages/Routines';
 import { Today } from './pages/today/Today';
 import './index.css';
 
@@ -76,15 +74,10 @@ const ProjectSettings = lazy(() =>
 const PlansPlace = lazy(() =>
   import('./pages/plans/PlansPlace').then((m) => ({ default: m.PlansPlace })),
 );
-const Memory = lazy(() => import('./pages/Memory').then((m) => ({ default: m.Memory })));
-const ScopedSerena = lazy(() =>
-  import('./workspace/ScopedPages').then((m) => ({ default: m.ScopedSerena })),
-);
-const ScopedGraphify = lazy(() =>
-  import('./workspace/ScopedPages').then((m) => ({ default: m.ScopedGraphify })),
-);
-const ScopedArchitecture = lazy(() =>
-  import('./workspace/ScopedPages').then((m) => ({ default: m.ScopedArchitecture })),
+// Knowledge place (Canvas v3 phase 8): Memory · Architecture · Serena ·
+// Graphify · Docs, each tab body lazy inside.
+const Knowledge = lazy(() =>
+  import('./pages/knowledge/Knowledge').then((m) => ({ default: m.Knowledge })),
 );
 
 /** Pathless root layout: shared providers (project scope + palette colors) for
@@ -135,9 +128,11 @@ function ProjectHealthRedirect({ tab }: { tab: 'cost' | 'agents' }): JSX.Element
   return <Navigate to={`/p/${slug}/health?tab=${tab}`} replace />;
 }
 
-/** /p/:slug/{planning,board,playbooks} → a Plans tab, keeping the rest of the
- * query (PlanningMode consumes ?idea=). Same scope wait as ProjectHealthRedirect. */
-function ProjectPlansRedirect({ tab }: { tab: 'new' | 'board' | 'playbooks' }): JSX.Element | null {
+/** /p/:slug/<retired page> → a tab of a project place, keeping the rest of the
+ * query (PlanningMode consumes ?idea=). Same scope wait as ProjectHealthRedirect.
+ * Serves Plans (planning/board/playbooks) and Knowledge (memory/architecture/
+ * serena/graphify). */
+function ProjectTabRedirect({ place, tab }: { place: 'plans' | 'knowledge'; tab: string }): JSX.Element | null {
   const { slug = '' } = useParams<{ slug: string }>();
   const { search } = useLocation();
   // Snapshot the query of the first render: the workspace provider's
@@ -149,7 +144,7 @@ function ProjectPlansRedirect({ tab }: { tab: 'new' | 'board' | 'playbooks' }): 
   const q = new URLSearchParams(initialSearch);
   q.delete('scope');
   q.set('tab', tab);
-  return <Navigate to={`/p/${slug}/plans?${q.toString()}`} replace />;
+  return <Navigate to={`/p/${slug}/${place}?${q.toString()}`} replace />;
 }
 
 /** Route-level error boundary. Without one, react-router replaces the whole SPA
@@ -195,7 +190,9 @@ const router = createBrowserRouter([
           { path: 'approvals/manage', element: <Approvals /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
-          { path: 'projects', element: <Projects /> },
+          // Settings (Canvas v3 phase 8) absorbs the project list as a tab; the
+          // "no last project → /projects" fallback lands there through this.
+          { path: 'projects', element: <Navigate to="/settings?tab=projects" replace /> },
           // Legacy detail route → redirect into project-workspace mode.
           { path: 'projects/:id', element: <ProjectDetailRedirect /> },
           // Health (Canvas v3 phase 5): the retired pages land on their tab.
@@ -265,8 +262,9 @@ const router = createBrowserRouter([
               </Suspense>
             ),
           },
-          // System — single destination, tabs Agents/Toolkit/Hooks/Insights.
-          // Splat so the shell can own /system/:tab (+ /system/agents/:id).
+          // System — single destination, tabs Agents/Skills/Plugins/Hooks/
+          // Routines/Insights. Splat so the shell can own /system/:tab (+
+          // /system/agents/:id); it redirects the retired /system/toolkit.
           {
             path: 'system/*',
             element: (
@@ -283,7 +281,7 @@ const router = createBrowserRouter([
               </Suspense>
             ),
           },
-          { path: 'routines', element: <Routines /> },
+          { path: 'routines', element: <Navigate to="/system/routines" replace /> },
           // The fill handle below marks embedded pages: the shell stops
           // scrolling and the page fills the leftover height, scrolling inside
           // its own pane instead of under a second scrollbar (lib/fillRoute.ts).
@@ -308,9 +306,9 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: ws(<Today detail={ws(<ProjectOverview />)} />) },
           { path: 'plans', element: ws(<PlansPlace />) },
-          { path: 'planning', element: <ProjectPlansRedirect tab="new" /> },
-          { path: 'board', element: <ProjectPlansRedirect tab="board" /> },
-          { path: 'playbooks', element: <ProjectPlansRedirect tab="playbooks" /> },
+          { path: 'planning', element: <ProjectTabRedirect place="plans" tab="new" /> },
+          { path: 'board', element: <ProjectTabRedirect place="plans" tab="board" /> },
+          { path: 'playbooks', element: <ProjectTabRedirect place="plans" tab="playbooks" /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
           { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
@@ -331,12 +329,16 @@ const router = createBrowserRouter([
           // System shell (tabs), project-scoped — the workspace "System" item.
           { path: 'system', element: ws(<SystemShell />) },
           { path: 'system/*', element: ws(<SystemShell />) },
-          // Fill mode, project-scoped — same contract as the global trio above.
-          { path: 'architecture', element: ws(<ScopedArchitecture />), handle: { fill: true } },
-          { path: 'serena', element: ws(<ScopedSerena />), handle: { fill: true } },
-          { path: 'graphify', element: ws(<ScopedGraphify />), handle: { fill: true } },
+          // Knowledge (Canvas v3 phase 8): a fill route — its tab bodies scroll
+          // inside their own pane. The retired project pages land on their tab;
+          // the fleet /serena, /graphify, /architecture and /docs above are NOT
+          // redirected (glossary deep links resolve to /docs/:slug).
+          { path: 'knowledge', element: ws(<Knowledge />), handle: { fill: true } },
+          { path: 'memory', element: <ProjectTabRedirect place="knowledge" tab="memory" /> },
+          { path: 'architecture', element: <ProjectTabRedirect place="knowledge" tab="architecture" /> },
+          { path: 'serena', element: <ProjectTabRedirect place="knowledge" tab="serena" /> },
+          { path: 'graphify', element: <ProjectTabRedirect place="knowledge" tab="graphify" /> },
           { path: 'settings', element: ws(<ProjectSettings />) },
-          { path: 'memory', element: ws(<Memory />) },
         ],
       },
     ],
