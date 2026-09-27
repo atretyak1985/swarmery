@@ -91,6 +91,7 @@ var pendingSessionExempt = map[string]string{
 	"decisions.session_uuid":               "a copy of the run's or session's uuid stamped on a classifier call (internal/decide, phase 9); D1 rows are written only after a run exits (epic_phases/plan_runs are the sources) and D2 rows only for sessions that already ended and were ingested",
 	"session_labels.session_uuid":          "D2 labels are written only for sessions that already ended and are ingested, so the sessions row itself answers for the uuid",
 	"phase_surprise.session_uuid":          "a copy of phase_actuals.session_uuid (itself epic_phases.run_session_uuid) keying the run's forecast-vs-actual score; written only after the run's actuals exist, so the phase row is the source",
+	"route_decisions.session_uuid":         "a copy of the run's uuid (tasks.dispatch_session_uuid for a card, epic_phases.run_session_uuid for a phase) stamped on the complexity-routing decision at spawn (internal/route); those run rows are the sources and answer for the uuid while the run is live",
 	"lesson_uses.session_uuid":             "a copy of the run's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each lesson a run's prompt carried (internal/lessons, phase 15); written in the same Start that stamps the run row, so those two run rows are the sources",
 }
 
