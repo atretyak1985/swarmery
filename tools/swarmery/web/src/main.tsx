@@ -33,6 +33,7 @@ import { Serena } from './pages/Serena';
 import { Graphify } from './pages/Graphify';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
 import { Routines } from './pages/Routines';
+import { Today } from './pages/today/Today';
 import './index.css';
 
 // Analytics pulls in Recharts — lazy-load it so that weight stays out of the
@@ -158,7 +159,8 @@ const router = createBrowserRouter([
         path: '/',
         element: <App />,
         children: [
-          { index: true, element: <Overview /> },
+          // Today (Canvas v3 phase 4): the loop map over the old command deck.
+          { index: true, element: <Today detail={<Overview />} /> },
           // Inbox (Canvas v3 phase 3) replaces /approvals as the place; the old
           // page keeps rules + history at approvals/manage.
           { path: 'inbox', element: <Inbox />, handle: { fill: true } },
@@ -274,7 +276,7 @@ const router = createBrowserRouter([
         path: '/p/:slug',
         element: ws(<WorkspaceShell />),
         children: [
-          { index: true, element: ws(<ProjectOverview />) },
+          { index: true, element: ws(<Today detail={ws(<ProjectOverview />)} />) },
           { path: 'board', element: ws(<Board />) },
           { path: 'planning', element: ws(<PlanningMode />) },
           { path: 'plans', element: ws(<Plans />) },
