@@ -250,10 +250,9 @@ effort is the top dispatch effort rung, every `active` dispatch row is
 `applied=1`. `haiku` resolves to its full model ID inside `internal/route`; it
 is deliberately not offered in the planner's model picker.
 
-Known limits: a multi-stage card (`plan-first`) counts the cost of its first
-stage's session only, so plan-first looks cheaper in the report than it is; the
-composer's resume takes its effort from `SWARMERY_RESUME_EFFORT`, not from the
-routed effort.
+A card's cost sums every playbook stage's session inside the run's window
+(explicitly linked sessions only). Known limit: the composer's resume takes its
+effort from `SWARMERY_RESUME_EFFORT`, not from the routed effort.
 
 ### Shadow → active runbook
 
