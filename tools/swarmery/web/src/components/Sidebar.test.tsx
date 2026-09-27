@@ -9,7 +9,7 @@
 //      project list when none was ever opened.
 //   3. Sessions shows a live dot only while a session is live.
 //   4. ⌘K / Ctrl+K opens the command palette (the sidebar owns the listener).
-//   5. useSidebarSignals feeds Inbox = pending approvals + proposed recs.
+//   5. useSidebarSignals feeds Inbox = the Inbox's own count (useInboxItems).
 //
 // Dev-only suite (web/tsconfig.json excludes *.test.tsx). Run with
 //   npx vitest run src/components/Sidebar.test.tsx
@@ -22,11 +22,15 @@ import { Sidebar, useSidebarSignals } from './Sidebar';
 
 vi.mock('../api', () => ({
   fetchApprovals: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
-  fetchRecommendations: vi.fn(async () => ({ recommendations: [{ id: 7 }, { id: 8 }, { id: 9 }] })),
   fetchStatsOverview: vi.fn(async () => ({ active: 1, waiting_approval: 0 })),
 }));
 
 vi.mock('../lib/ws', () => ({ useLiveUpdates: () => undefined }));
+
+// The badge is the Inbox's six-source aggregate; its own suite covers the sources.
+vi.mock('../pages/inbox/useInboxItems', () => ({
+  useInboxItems: () => ({ items: [], count: 5, loading: false, errors: [], reload: () => undefined }),
+}));
 
 // The palette is its own feature; here it only has to appear.
 vi.mock('./CommandPalette', () => ({
@@ -149,7 +153,7 @@ function SignalsProbe(): JSX.Element {
 }
 
 describe('useSidebarSignals', () => {
-  it('sums pending approvals and proposed recommendations into the Inbox count', async () => {
+  it('takes the Inbox count from useInboxItems', async () => {
     render(
       <MemoryRouter>
         <SignalsProbe />

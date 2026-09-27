@@ -10,8 +10,9 @@
 // so one table serves both shells. nav.test.ts asserts every path routed in
 // main.tsx is claimed by exactly one place — add a route, extend a `segments`.
 //
-// hrefs point at today's routes; later phases repoint them (Inbox → /inbox,
-// Health → /health, Learning → /learning, Knowledge → /p/:slug/knowledge).
+// hrefs point at today's routes; later phases repoint them (Health → /health,
+// Learning → /learning, Knowledge → /p/:slug/knowledge). Inbox is /inbox since
+// phase 3.
 
 export type PlaceId =
   | 'today'
@@ -63,7 +64,9 @@ interface PlaceDef {
 
 const DEFS: readonly PlaceDef[] = [
   { id: 'today', glyph: '◉', label: 'Today', section: 'main', projectOnly: false, path: '', segments: [''] },
-  { id: 'inbox', glyph: '☐', label: 'Inbox', section: 'main', projectOnly: false, path: 'approvals', segments: ['approvals'] },
+  // Inbox owns /approvals too: it redirects here, and approvals/manage keeps
+  // the rules + history page (phase 3).
+  { id: 'inbox', glyph: '☐', label: 'Inbox', section: 'main', projectOnly: false, path: 'inbox', segments: ['inbox', 'approvals'] },
   { id: 'sessions', glyph: '❯', label: 'Sessions', section: 'main', projectOnly: false, path: 'sessions', segments: ['sessions'] },
   {
     id: 'plans',

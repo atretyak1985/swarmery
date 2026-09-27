@@ -43,7 +43,7 @@ describe('nav model', () => {
   it('builds hrefs per scope', () => {
     const cases: [PlaceId, string, string][] = [
       ['today', '/', '/p/shop'],
-      ['inbox', '/approvals', '/p/shop/approvals'],
+      ['inbox', '/inbox', '/p/shop/inbox'],
       ['sessions', '/sessions', '/p/shop/sessions'],
       ['plans', '/projects', '/p/shop/plans'],
       ['health', '/analytics', '/p/shop/analytics'],

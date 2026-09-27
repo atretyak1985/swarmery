@@ -1,0 +1,128 @@
+// The Inbox's data: six existing fetchers, aggregated client-side (Canvas v3
+// D3 — there is no inbox endpoint). Promise.allSettled, so one failing source is a
+// "couldn't load <kind>" row, never a blank Inbox.
+//
+// Scope: under a project only approvals and advisor recommendations narrow
+// (their APIs take a project); lessons, proposals, the classifier queue and
+// retirements are fleet-wide by nature and the page labels them so.
+//
+// Refetch: the shared WS stream (lib/ws.ts) on permission_* frames and
+// task_updated, debounced so a burst of frames is one refetch of six calls,
+// plus the reconnect/reconcile resync.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  fetchApprovals,
+  fetchProjectRecommendations,
+  fetchProposals,
+  fetchRecommendations,
+} from '../../api';
+import { fetchLabelQueue } from '../../api/decisions';
+import { fetchLessons, fetchRetirements } from '../../api/lessons';
+import type { WSMessage } from '../../api/types';
+import { useLiveUpdates } from '../../lib/ws';
+import { sortItems, toItems, type InboxItem, type InboxKind, type InboxSources } from './inboxModel';
+
+export interface InboxState {
+  items: InboxItem[];
+  count: number;
+  loading: boolean;
+  /** Sources whose fetch failed on the latest load. */
+  errors: InboxKind[];
+  reload: () => void;
+}
+
+/** Kinds that stay fleet-wide under a project scope. */
+export const FLEET_WIDE_KINDS: ReadonlySet<InboxKind> = new Set([
+  'lesson',
+  'proposal',
+  'classifier',
+  'retire',
+]);
+
+const REFETCH_DEBOUNCE_MS = 400;
+
+function value<T>(r: PromiseSettledResult<T>): T | undefined {
+  return r.status === 'fulfilled' ? r.value : undefined;
+}
+
+async function loadSources(scope: string | null): Promise<{ src: InboxSources; errors: InboxKind[] }> {
+  const [approvals, lessons, recs, proposals, classifier, retirements] = await Promise.allSettled([
+    fetchApprovals('pending', scope),
+    fetchLessons('candidate'),
+    scope === null ? fetchRecommendations('proposed') : fetchProjectRecommendations(scope, 'proposed'),
+    fetchProposals('proposed,needs_target'),
+    fetchLabelQueue(),
+    fetchRetirements(),
+  ]);
+  const errors: InboxKind[] = [];
+  const settled: [PromiseSettledResult<unknown>, InboxKind][] = [
+    [approvals, 'approval'],
+    [lessons, 'lesson'],
+    [recs, 'advisor'],
+    [proposals, 'proposal'],
+    [classifier, 'classifier'],
+    [retirements, 'retire'],
+  ];
+  for (const [r, kind] of settled) if (r.status === 'rejected') errors.push(kind);
+  return {
+    src: {
+      approvals: value(approvals),
+      lessons: value(lessons),
+      recommendations: value(recs)?.recommendations,
+      proposals: value(proposals)?.proposals,
+      classifier: value(classifier),
+      retirements: value(retirements),
+    },
+    errors,
+  };
+}
+
+export function useInboxItems(scope: string | null): InboxState {
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [errors, setErrors] = useState<InboxKind[]>([]);
+  const [loading, setLoading] = useState(true);
+  // Drops a slow response that lands after a newer load (or a scope switch).
+  const generation = useRef(0);
+
+  const reload = useCallback((): void => {
+    generation.current += 1;
+    const mine = generation.current;
+    void loadSources(scope).then(({ src, errors: failed }) => {
+      if (mine !== generation.current) return;
+      setItems(sortItems(toItems(src)));
+      setErrors(failed);
+      setLoading(false);
+    });
+  }, [scope]);
+
+  useEffect(() => {
+    setLoading(true);
+    reload();
+  }, [reload]);
+
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const onMessage = useCallback(
+    (msg: WSMessage): void => {
+      if (
+        msg.type !== 'permission_requested' &&
+        msg.type !== 'permission_resolved' &&
+        msg.type !== 'task_updated'
+      ) {
+        return;
+      }
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = setTimeout(reload, REFETCH_DEBOUNCE_MS);
+    },
+    [reload],
+  );
+  useLiveUpdates(onMessage, reload);
+
+  return { items, count: items.length, loading, errors, reload };
+}

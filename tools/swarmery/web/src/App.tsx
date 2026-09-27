@@ -5,10 +5,9 @@
 // scroll. Mobile drops the sidebar for a flat fixed bottom nav fed by the same
 // nav model.
 //
-// The Inbox row carries the only nav badge — pending approvals (REST resync +
-// WS permission_requested/permission_resolved over the shared connection) plus
-// proposed advisor recommendations — and Sessions a green dot while any session
-// is live (useSidebarSignals).
+// The Inbox row carries the only nav badge — the Inbox's own six-source count
+// (pages/inbox/useInboxItems.ts, via useSidebarSignals; the shell fetches no
+// badge of its own) — and Sessions a green dot while any session is live.
 
 import { useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';

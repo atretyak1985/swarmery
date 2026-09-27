@@ -18,20 +18,21 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { fetchApprovals, fetchRecommendations, fetchStatsOverview } from '../api';
+import { fetchApprovals, fetchStatsOverview } from '../api';
 import type { WSMessage } from '../api/types';
 import { ProjectSwitcher } from '../workspace/ProjectSwitcher';
 import { isoDay } from '../lib/format';
 import { loadLastProject } from '../lib/lastProject';
 import { PLACES, placesIn, resolvePlaceHref, type Place } from '../lib/nav';
 import { useScope } from '../lib/scope';
+import { useInboxItems } from '../pages/inbox/useInboxItems';
 import { useLiveUpdates } from '../lib/ws';
 import { CommandPalette } from './CommandPalette';
 
 export interface SidebarSignals {
   /** Pending approvals (fleet-wide), also fed to ProjectApprovalsSection. */
   pendingCount: number;
-  /** The Inbox badge: pending approvals + proposed advisor recommendations. */
+  /** The Inbox badge: every waiting decision, all six sources (useInboxItems). */
   inboxCount: number;
   /** At least one session is running or waiting on the operator. */
   liveSessions: boolean;
@@ -42,21 +43,20 @@ export interface SidebarSignals {
  * resync); the shared WS stream is the low-latency hint in between
  * (docs/ws-protocol.md). Pending approvals are held as a SET of ids so a
  * permission_resolved arriving twice (own action + fan-out) stays idempotent.
+ *
+ * The Inbox badge is the Inbox's own count — the same six-source aggregate the
+ * page renders (pages/inbox/useInboxItems.ts), for `scope` (null = fleet).
  */
-export function useSidebarSignals(): SidebarSignals {
+export function useSidebarSignals(scope: string | null = null): SidebarSignals {
   const [pendingIds, setPendingIds] = useState<ReadonlySet<number>>(new Set());
-  const [proposedRecs, setProposedRecs] = useState(0);
   const [live, setLive] = useState(false);
+  const inbox = useInboxItems(scope);
+  const reloadInbox = inbox.reload;
 
   const syncPending = useCallback((): void => {
     fetchApprovals('pending')
       .then((list) => setPendingIds(new Set(list.map((r) => r.id))))
       .catch(() => setPendingIds(new Set())); // approvals API absent → no badge
-  }, []);
-  const syncProposed = useCallback((): void => {
-    fetchRecommendations('proposed')
-      .then((r) => setProposedRecs(r.recommendations.length))
-      .catch(() => setProposedRecs(0));
   }, []);
   const syncLive = useCallback((): void => {
     // `active` / `waiting_approval` count sessions in that state NOW (not
@@ -66,10 +66,9 @@ export function useSidebarSignals(): SidebarSignals {
       .catch(() => setLive(false));
   }, []);
   useEffect(syncPending, [syncPending]);
-  useEffect(syncProposed, [syncProposed]);
   useEffect(syncLive, [syncLive]);
 
-  // Accept/Dismiss/Analyze on Retro change the proposed count: refetch whenever
+  // Accept/Dismiss/Analyze on Retro change the waiting count: refetch whenever
   // navigation crosses a /retro boundary (fleet or project), as the old badge did.
   const { pathname } = useLocation();
   const onRetro = /\/retro(\/|$)/.test(pathname);
@@ -77,8 +76,8 @@ export function useSidebarSignals(): SidebarSignals {
   useEffect(() => {
     if (prevOnRetro.current === onRetro) return;
     prevOnRetro.current = onRetro;
-    syncProposed();
-  }, [onRetro, syncProposed]);
+    reloadInbox();
+  }, [onRetro, reloadInbox]);
 
   // Session lifecycle messages are frequent (every turn updates the row), so
   // the live-dot recount is debounced rather than run per message.
@@ -116,7 +115,7 @@ export function useSidebarSignals(): SidebarSignals {
   useLiveUpdates(onMessage, resync);
 
   const pendingCount = pendingIds.size;
-  return { pendingCount, inboxCount: pendingCount + proposedRecs, liveSessions: live };
+  return { pendingCount, inboxCount: inbox.count, liveSessions: live };
 }
 
 /** Global ⌘K / Ctrl+K → command palette. Window-level so it works from any
