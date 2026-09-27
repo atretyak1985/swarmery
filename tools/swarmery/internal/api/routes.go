@@ -134,6 +134,10 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/confirm", requireLocalOrigin(h.confirmRetirement))
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/keep", requireLocalOrigin(h.keepLesson))
 	mux.HandleFunc("GET /api/calibration", h.calibration)
+	// complexity routing phase 3 (route.go): the shadow report beside the
+	// calibration view (same n<20 gate) and one subject's latest decision.
+	mux.HandleFunc("GET /api/route/report", h.routeReport)
+	mux.HandleFunc("GET /api/route/decision", h.routeDecision)
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)
