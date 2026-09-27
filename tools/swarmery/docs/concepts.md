@@ -175,6 +175,24 @@ dispatched runs, verification, planning, the terminal dock, the `claude` shell f
 the binding when it starts a process; a run already in flight keeps the account it started with
 until it finishes. Changing the binding is therefore always safe, and never instant.
 
+**A binding that git tracks is ignored.** The binding file is meant to be machine-local. A
+repository that commits `.claude/settings.local.json` would otherwise choose the account, and
+unlock that account's secret store, for everyone who clones it. So swarmery checks where the
+file comes from before it trusts it:
+- **Honoured:** a file that git does not track, including a gitignored one, and a file that is
+  not inside any repository.
+- **Ignored:** a file that git tracks. The project then runs under the default account, with no
+  secret-store variables.
+- **Symlinks:** every symlink on the way to the file is checked in its own repository. A
+  committed link cannot borrow another project's untracked binding.
+- **Can't tell:** if git is missing from `PATH`, times out after 2 s, or reports an error, the
+  binding is also ignored. Swarmery fails closed rather than guessing.
+
+Swarmery logs one warning per path, naming the cause (for example `git not found on PATH`). The
+account card on the project's settings page shows the same reason under the picker. A launch is
+never blocked: the run just goes out under the default account. To fix it, untrack the file
+(`git rm --cached .claude/settings.local.json`) and gitignore it.
+
 **The default is absence.** A project with no binding gets no `CLAUDE_CONFIG_DIR` at all and
 behaves byte-for-byte as it did before multi-account existed. Removing an account that projects
 still point at is allowed; those projects fall back to the default account and the settings page

@@ -8,6 +8,8 @@ cloud, no account, no telemetry.
 **Dashboard** (see the repo-root [README](../../README.md#the-dashboard) for screenshots):
 
 - **Command deck** — triage view: what's working vs. waiting, availability/cost/quality headlines, today's activity feed, and an approvals rail.
+- **Projects** — every project swarmery has seen. By default only onboarded ones are listed; untick *onboarded only* for the rest. Each project has settings, including packs, plugin config and the Claude account it runs under. Guide: [docs/guides/guide-getting-started.md](docs/guides/guide-getting-started.md).
+- **Board** — Inbox → Working → Review. A card you run is dispatched to a headless agent in its own worktree, with a one-phase micro-plan in the project's workspace. Guide: [docs/guides/guide-board.md](docs/guides/guide-board.md).
 - **Sessions** — every session across all projects, filterable by project and status; each opens to **Chat · Timeline · Diffs**.
 - **Analytics** — cost/tokens/runs over time by project or model, with a per-project breakdown and an agent × project cross-tab.
 - **Approvals** — pending `AskUserQuestion` and permission requests with inline approve/deny and expiry timers.

@@ -67,7 +67,7 @@
     {
       "name": "accounts-pack",
       "source": "./plugins/accounts-pack",
-      "description": "Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it — /account, a shell wrapper, an optional shell function, and a wrong-account warning. Opt-in; requires the swarmery CLI."
+      "description": "Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it — /account, a shell wrapper, an optional shell function, and a wrong-account warning. The binding is machine-local, and a binding file committed to git is ignored. Opt-in; requires the swarmery CLI."
     },
     {
       "name": "design-pack",

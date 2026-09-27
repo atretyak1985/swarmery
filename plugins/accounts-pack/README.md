@@ -221,3 +221,15 @@ daemon's plist carries a `CLAUDE_CONFIG_DIR` (`swarmery install
   applies — the same rule every other swarmery spawner follows.
 - **The binding file is machine-local** (`settings.local.json`, gitignored):
   two people on one repo can legitimately use different accounts.
+- **A binding that git tracks is ignored.** If a repository commits
+  `.claude/settings.local.json`, `swarmery` (every spawn, `account which|env|exec`,
+  the `claude` shell function and the dashboard) ignores it. The project runs under
+  the default account with no secret-store variables. The same happens when the
+  file's origin can't be established: git is missing from `PATH`, the check times
+  out after 2 s, or git reports an error. Every symlink on the way to the file is
+  checked too. swarmery logs one warning per path with the cause, and the
+  dashboard's account card shows it. To fix it, run `git rm --cached` on the file
+  and gitignore it.
+  - **The SessionStart hook doesn't know about this rule.** It reads the file
+    directly, so for a tracked binding it can warn that the session runs under the
+    "wrong" account, even though swarmery deliberately ignored that binding.
