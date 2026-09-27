@@ -1367,6 +1367,19 @@ type phaseState struct {
 	runStartPoint sql.NullString
 	verifyVerdict sql.NullString
 	verifyDetail  sql.NullString
+	// The --effort the run was spawned with (0086), stamped at run start; calibration
+	// reads it back per run, so it must follow the run across a rename.
+	runEffort sql.NullString
+}
+
+// runDerivedPhaseTables hold one row per RUN (keyed on its session uuid) and name the
+// phase by epic_phases.id with no foreign key (0081/0082/0084/0085). When a rename
+// replaces the phase row, carryAcrossRenames re-keys them onto the replacement;
+// otherwise the orphan sweep in applyEpics deletes the first two outright and the
+// lesson tables are left pointing at a phase that no longer exists. phase_forecasts is
+// deliberately absent: it is re-derived from the doc on every scan.
+var runDerivedPhaseTables = []string{
+	"phase_actuals", "phase_surprise", "surprise_lessons", "lesson_generations", "lesson_uses",
 }
 
 // carriesState reports whether the row holds anything a rescan must not lose.
@@ -1386,7 +1399,7 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 		SELECT id, seq, doc_path, run_state, run_session_uuid, run_started_at,
 		       run_ended_at, run_error, run_branch, run_checkboxes_before,
 		       run_checkboxes_after, activated_at, activated_board_task_id,
-		       run_start_point, verify_verdict, verify_detail
+		       run_start_point, verify_verdict, verify_detail, run_effort
 		  FROM epic_phases
 		 WHERE workspace_task_id = ?`, taskID)
 	if err != nil {
@@ -1400,7 +1413,7 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 			&p.runStartedAt, &p.runEndedAt, &p.runError, &p.runBranch,
 			&p.runCheckboxesBefore, &p.runCheckboxesAfter, &p.activatedAt,
 			&p.activatedBoardTaskID,
-			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail); err != nil {
+			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail, &p.runEffort); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -1461,13 +1474,28 @@ func carryAcrossRenames(tx *sql.Tx, taskID int64, phases []epicPhase, before []p
 			   SET run_state=?, run_session_uuid=?, run_started_at=?, run_ended_at=?,
 			       run_error=?, run_branch=?, run_checkboxes_before=?,
 			       run_checkboxes_after=?, activated_at=?, activated_board_task_id=?,
-			       run_start_point=?, verify_verdict=?, verify_detail=?
+			       run_start_point=?, verify_verdict=?, verify_detail=?, run_effort=?
 			 WHERE workspace_task_id = ? AND doc_path = ?`,
 			old.runState, old.runSessionUUID, old.runStartedAt, old.runEndedAt,
 			old.runError, old.runBranch, old.runCheckboxesBefore, old.runCheckboxesAfter,
 			old.activatedAt, old.activatedBoardTaskID,
-			old.runStartPoint, old.verifyVerdict, old.verifyDetail, taskID, dst.docPath); err != nil {
+			old.runStartPoint, old.verifyVerdict, old.verifyDetail, old.runEffort,
+			taskID, dst.docPath); err != nil {
 			return nil, err
+		}
+		// Re-key the run-derived rows onto the replacement BEFORE the prune and its
+		// orphan sweep run. The destination row is brand new, so it holds none yet and
+		// every table's UNIQUE key (session-based, never phase_id) stays satisfied.
+		var dstID int64
+		if err := tx.QueryRow(
+			`SELECT id FROM epic_phases WHERE workspace_task_id = ? AND doc_path = ?`,
+			taskID, dst.docPath).Scan(&dstID); err != nil {
+			return nil, err
+		}
+		for _, table := range runDerivedPhaseTables {
+			if _, err := tx.Exec(`UPDATE `+table+` SET phase_id = ? WHERE phase_id = ?`, dstID, old.id); err != nil {
+				return nil, err
+			}
 		}
 		drained = append(drained, old.docPath)
 		log.Printf("wsingest: task=%d phase seq=%d carried run state across rename %s → %s (run_state=%s)",

@@ -209,3 +209,56 @@ func TestApplyEpicsCarriedSourceIsPrunedWhileRunning(t *testing.T) {
 		t.Error("the drained source row survived — two rows now claim the same run")
 	}
 }
+
+// THE archive regression (task 554): `agent-work.sh archive` moves the task dir from
+// workspace/working/… to workspace/archive/…, which changes every phase doc_path while
+// the workspace task id stays put. The carry handed the run columns to the new rows but
+// dropped run_effort (0086), and the run-derived tables keyed on the OLD phase id
+// (phase_actuals, phase_surprise, and the lesson tables born from them) were left
+// pointing at a deleted row — the first two then removed outright by the orphan sweep.
+func TestApplyEpicsCarryKeepsEffortAndActuals(t *testing.T) {
+	db := carryFixture(t)
+	const (
+		oldPath = "/ws/p/workspace/working/2026/09/20/epic/plan/phase-1-build.md"
+		newPath = "/ws/p/workspace/archive/2026/09/20/epic/plan/phase-1-build.md"
+	)
+	seedPhase(t, db, 1, "Phase 1", oldPath, "done", "uuid-1", "swarm/phase-1")
+	mustExec(t, db, `UPDATE epic_phases SET run_effort='high' WHERE doc_path=?`, oldPath)
+	var oldID int64
+	if err := db.QueryRow(`SELECT id FROM epic_phases WHERE doc_path=?`, oldPath).Scan(&oldID); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, db, `INSERT INTO phase_actuals (phase_id, session_uuid, computed_at)
+		VALUES (?, 'uuid-1', '2026-09-20T10:00:00Z')`, oldID)
+	mustExec(t, db, `INSERT INTO phase_surprise (phase_id, session_uuid, surprise_index, computed_at)
+		VALUES (?, 'uuid-1', 0.7, '2026-09-20T10:00:00Z')`, oldID)
+	mustExec(t, db, `INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, guidance, created_at, updated_at)
+		VALUES ('uuid-1', ?, 1, 'Lesson', 'Do the thing.', '2026-09-20T10:00:00Z', '2026-09-20T10:00:00Z')`, oldID)
+	mustExec(t, db, `INSERT INTO lesson_generations (source_phase_run, phase_id, state, created_at)
+		VALUES ('uuid-1', ?, 'done', '2026-09-20T10:00:00Z')`, oldID)
+	mustExec(t, db, `INSERT INTO lesson_uses (session_uuid, run_kind, phase_id, task_id, lesson_id, rank, injected_at)
+		VALUES ('uuid-1', 'phaserun', ?, ?, 7, 1, '2026-09-20T10:00:00Z')`, oldID, carryTaskID)
+
+	applyPhases(t, db, []epicPhase{phase(1, "Phase 1", newPath)})
+
+	var newID int64
+	var effort sql.NullString
+	if err := db.QueryRow(`SELECT id, run_effort FROM epic_phases WHERE workspace_task_id=? AND doc_path=?`,
+		carryTaskID, newPath).Scan(&newID, &effort); err != nil {
+		t.Fatalf("archived row: %v", err)
+	}
+	if newID == oldID {
+		t.Fatalf("new row reused id %d — the fixture no longer exercises a rename", oldID)
+	}
+	if effort.String != "high" {
+		t.Errorf("run_effort = %v, want high — calibration reads the run's effort from this column", effort)
+	}
+	for _, table := range []string{"phase_actuals", "phase_surprise", "surprise_lessons", "lesson_generations", "lesson_uses"} {
+		if n := count(t, db, `SELECT COUNT(*) FROM `+table+` WHERE phase_id=?`, newID); n != 1 {
+			t.Errorf("%s rows on the new phase id = %d, want 1", table, n)
+		}
+		if n := count(t, db, `SELECT COUNT(*) FROM `+table+` WHERE phase_id=?`, oldID); n != 0 {
+			t.Errorf("%s rows still on the old phase id = %d, want 0", table, n)
+		}
+	}
+}
