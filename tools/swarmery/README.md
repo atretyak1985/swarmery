@@ -215,3 +215,53 @@ the two moments a human is blocking work (a pending tool approval, a headless
 run that stopped to ask the operator). An explicit value **replaces** the
 default rather than extending it, so keep both names in the list when adding
 others.
+
+## Complexity routing
+
+Before a board card or a plan phase spawns, the daemon scores how complex it is
+(prompt size, dependencies, risky paths, the planner's forecast, project
+history), maps the score to a tier `S`/`M`/`L`/`XL`, and picks a **model**,
+**effort** and — for cards — **playbook** from a per-tier policy
+(`internal/route`). Every pick is written to `route_decisions` with its signals,
+score, reasons, what actually ran and which rung won; outcomes, verify verdicts
+and cost are joined in lazily. Lessons (`/lessons`) → calibration → **routing** tab shows the
+per-tier and per-model outcome and cost; a group stays hidden until it has 20
+runs.
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_ROUTE_DISPATCH` | `off` \| `shadow` \| `active` | `shadow` | Board-card dispatch. `shadow` records the pick and changes nothing; `active` applies it where nobody chose explicitly; `off` skips the router entirely. An invalid value logs a warning and means `shadow`. |
+| `SWARMERY_ROUTE_PHASERUN` | `off` \| `shadow` \| `active` | `shadow` | Plan phase runs, same semantics. |
+| `SWARMERY_ROUTE_POLICY` | path to a JSON file | unset (in-code `DefaultPolicy`) | Overrides weights, tier cut-offs and per-tier picks. A set path that cannot be read or parsed is an error: the router records nothing and spawns keep their `off` values. |
+
+In `active` the route pick takes the slot just above the env/default rung and
+never beats an explicit choice:
+
+- dispatch model: card → playbook `model:` → **route** → default;
+  effort: **route** → `SWARMERY_DISPATCH_EFFORT` → default;
+  playbook: card → **route** (else the old length/deps heuristic; `review-heavy`
+  is never picked automatically);
+- phase model / effort: request → doc `**Model:**` / `**Effort:**` → **route**
+  → env → default.
+
+`applied=1` on a row means *any* route rung won (model, effort or playbook);
+`won_rung` names the rung that won the **model** ladder only. Because route
+effort is the top dispatch effort rung, every `active` dispatch row is
+`applied=1`. `haiku` resolves to its full model ID inside `internal/route`; it
+is deliberately not offered in the planner's model picker.
+
+A card's cost sums every playbook stage's session inside the run's window
+(explicitly linked sessions only). Known limit: the composer's resume takes its
+effort from `SWARMERY_RESUME_EFFORT`, not from the routed effort.
+
+### Shadow → active runbook
+
+1. Leave both surfaces on `shadow` (the default) for at least two weeks.
+2. Open Lessons (`/lessons`) → calibration → routing tab. Flip a surface only when every
+   visible tier has n ≥ 20 and tier `S`'s failure rate is not worse than the
+   model it replaces (the "picked vs ran" table is the evidence).
+3. Set `SWARMERY_ROUTE_DISPATCH=active` (and/or `SWARMERY_ROUTE_PHASERUN=active`)
+   in the daemon env, then `make install`.
+4. Roll back by setting the surface to `off` — identical to pre-feature
+   behaviour, pinned argv-for-argv by `TestRouteOffGolden` — or back to
+   `shadow` to keep recording.
