@@ -6,6 +6,7 @@ import {
   fetchCalibration,
 } from '../api/calibration';
 import { UI_TERMS } from '../lib/glossary';
+import { RoutingReport } from './RoutingReport';
 
 /** "How honest forecasts are" — the dictionary word, sentence-cased. */
 const HEADING = `${UI_TERMS.calibration.ui.charAt(0).toUpperCase()}${UI_TERMS.calibration.ui.slice(1)}`;
@@ -39,9 +40,42 @@ function Curve({ group }: { group: CalibrationGroup }): JSX.Element {
   );
 }
 
+const VIEWS = [
+  ['forecast', 'forecast calibration'],
+  ['routing', 'routing'],
+] as const;
+
+/** Calibration and its sibling, the routing report: two answers to "did the
+ *  up-front guess match what happened", behind one pair of tabs. Both apply
+ *  the same n<20 gate. */
+export function CalibrationPanel(): JSX.Element {
+  const [view, setView] = useState<'forecast' | 'routing'>('forecast');
+  return (
+    <div className="mt-8">
+      <div role="tablist" aria-label="calibration views" className="flex gap-1 border-b border-line">
+        {VIEWS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`border-b px-2.5 py-1 font-mono text-[10.5px] tracking-[0.08em] uppercase transition-colors ${
+              view === id ? 'border-brand text-brand' : 'border-transparent text-ink-faint hover:text-ink-dim'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'forecast' ? <ForecastCalibration /> : <RoutingReport />}
+    </div>
+  );
+}
+
 /** Calibration — how well forecasts predicted, per agent/model/effort/project
  *  (learning-loop phase 16.4). Groups under the sample gate are never drawn. */
-export function CalibrationPanel(): JSX.Element {
+function ForecastCalibration(): JSX.Element {
   const [set, setSet] = useState(0);
   const [rep, setRep] = useState<CalibrationReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -58,7 +92,7 @@ export function CalibrationPanel(): JSX.Element {
 
   const shown = rep === null ? [] : visibleGroups(rep);
   return (
-    <section className="mt-8 max-w-3xl" aria-labelledby="calibration-heading">
+    <section className="mt-2 max-w-3xl" aria-labelledby="calibration-heading">
       <h2 id="calibration-heading" className="flex items-baseline gap-2 text-sm font-normal text-ink">
         {HEADING}
         <span className="font-mono text-[10px] text-ink-faint">{UI_TERMS.calibration.code}</span>
