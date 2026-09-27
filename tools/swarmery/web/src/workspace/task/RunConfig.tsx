@@ -19,7 +19,8 @@
 // `agent` prefixing the persona onto every stage, are both facts you could
 // previously only learn from internal/dispatch/service.go.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { fetchRouteDecision, type RouteDecision } from '../../api/route';
 import type { AgentRosterRow, Playbook, TaskPriority } from '../../api/types';
 import { AgentHint, AgentSelect } from '../AgentPicker';
 import { TASK_MODELS, TASK_PRIORITIES } from '../boardModel';
@@ -68,6 +69,41 @@ export function runConfigSummary(choice: RunConfigChoice, playbooks: readonly Pl
   return `${playbook} · ${modelPhrase(choice, playbooks)} · ${agent}`;
 }
 
+/**
+ * The complexity router's last decision for this card, read-only:
+ * "Route: M · sonnet/medium · standard (shadow — card model won)".
+ *
+ * In shadow the pick never reached the spawn, so the parenthesis names which
+ * rung of the EXISTING ladder chose the model that actually ran — the thing a
+ * reader comparing the pick with the run needs to know. Pure and exported.
+ */
+export function routeLine(d: RouteDecision): string {
+  const parts = [d.tier, `${d.pickModel}/${d.pickEffort}`];
+  if (d.pickPlaybook !== '') parts.push(d.pickPlaybook);
+  const why = d.applied ? 'route applied' : `${d.wonRung === '' ? 'ladder' : d.wonRung} model won`;
+  return `Route: ${parts.join(' · ')} (${d.mode} — ${why})`;
+}
+
+/** The card's latest route decision; null until one exists (or without an id). */
+function useRouteDecision(taskId: number | undefined): RouteDecision | null {
+  const [decision, setDecision] = useState<RouteDecision | null>(null);
+  useEffect(() => {
+    setDecision(null);
+    if (taskId === undefined) return;
+    let live = true;
+    fetchRouteDecision(`task:${String(taskId)}`)
+      .then((d) => {
+        if (live) setDecision(d);
+      })
+      // Advisory: a failed read hides the line rather than alarming the reader.
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [taskId]);
+  return decision;
+}
+
 /** What each knob does and which one wins — the answer service.go used to hold. */
 function KnobExplainer(): JSX.Element {
   return (
@@ -86,6 +122,7 @@ export function RunConfig({
   commit,
   playbooks,
   agents,
+  taskId,
 }: {
   draft: TaskDraft;
   setField: DraftSetter;
@@ -93,10 +130,13 @@ export function RunConfig({
   commit: () => void;
   playbooks: Playbook[];
   agents: AgentRosterRow[];
+  /** The card's id — enables the read-only route line once it has a decision. */
+  taskId?: number;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const summary = runConfigSummary(draft, playbooks);
+  const route = useRouteDecision(taskId);
   // Every control below writes the draft and saves in the same handler: a
   // <select> or a chip has no "finished editing" moment a blur could stand for.
   const set: DraftSetter = (key, value) => {
@@ -120,6 +160,16 @@ export function RunConfig({
           {open ? '▾' : '▸'}
         </span>
       </button>
+
+      {route !== null && (
+        <div
+          data-testid="route-line"
+          title={route.reasons.join('\n')}
+          className="truncate border-t border-line px-2.5 py-1 font-mono text-[10px] text-ink-dim"
+        >
+          {routeLine(route)}
+        </div>
+      )}
 
       {open && (
         <div className="flex flex-col gap-3 border-t border-line px-2.5 py-2.5">
