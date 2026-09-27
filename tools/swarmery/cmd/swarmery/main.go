@@ -69,6 +69,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
@@ -2239,6 +2240,16 @@ func cmdServe(args []string) error {
 		for {
 			lessonVerifier.RunLogged()
 			<-ticker.C
+		}
+	}()
+	// Complexity routing phase 3: settle route_decisions outcomes once at start
+	// (runs that ended while the daemon was down); GET /api/route/report settles
+	// again on every request. Pull-based, bounded, advisory — a failure is logged.
+	go func() {
+		if n, err := route.Settle(db); err != nil {
+			log.Printf("warn: route settle at start: %v", err)
+		} else if n > 0 {
+			log.Printf("route: settled %d decision row(s) at start", n)
 		}
 	}()
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same
