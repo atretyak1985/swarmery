@@ -676,6 +676,11 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// A retry's timeline must show THIS run's decisions, not the previous
 	// attempt's — the same reason the checkbox interval resets both edges above.
 	runcore.ClearRunEvents(s.DB, Engine, phaseID)
+	// Complexity routing (shadow): recorded HERE, once the run is admitted and
+	// its model/effort ladders have been walked, so a refused Start leaves no
+	// row and the record names exactly what spec carries. Never changes spec;
+	// off ⇒ nothing computed or written.
+	s.recordRoute(phaseID, model, info, spec)
 	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, phaseID, info, acq, spec, docRel, budget) })
 	return uuid, nil
 }

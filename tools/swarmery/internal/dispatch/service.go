@@ -789,6 +789,11 @@ func (s *Service) admit(c candidate) bool {
 	// runPlaybook.
 	pb := s.resolvePlaybook(c)
 
+	// Complexity routing (shadow): score the card once, before its first stage,
+	// and record the router's pick beside what the ladders above chose. Never
+	// changes the spawn; off ⇒ nothing computed or written.
+	s.recordRoute(c, pb, uuid)
+
 	// Spawn the run. The goroutine owns exit handling + slot release.
 	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc, repoRoot) })
 	return true
@@ -929,6 +934,7 @@ type resolvedStage struct {
 // permission mode belong to the RECIPE, not to one step of it, so they are
 // resolved once here and applied to each stage identically.
 type resolvedPlaybook struct {
+	name           string // the recipe that runs, as the registry names it ("" = implicit single stage)
 	stages         []resolvedStage
 	model          string // recipe's declared --model ("" = fall through to card/default)
 	permissionMode string // recipe's --permission-mode ("" = inherit the global knob)
@@ -971,7 +977,7 @@ func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
 	for _, st := range pb.Stages {
 		out = append(out, resolvedStage{name: st.Name, body: st.Body})
 	}
-	return resolvedPlaybook{stages: out, model: pb.Model, permissionMode: pb.PermissionMode}
+	return resolvedPlaybook{name: pb.Name, stages: out, model: pb.Model, permissionMode: pb.PermissionMode}
 }
 
 // autoProfileThreshold is the prompt size above which a card is treated as
@@ -1118,14 +1124,9 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 		// recipe's declared model, then the global default. The middle step is what
 		// makes the `model:` frontmatter knob real — it parsed and rendered as a UI
 		// chip since phase 13 while dispatch ignored it, so the chip named a model
-		// no run ever used.
-		model := c.Model.String
-		if model == "" {
-			model = pb.model
-		}
-		if model == "" {
-			model = DefaultModel
-		}
+		// no run ever used. stageModel owns the ladder so the route record names
+		// exactly the model this spawn gets.
+		model, _ := stageModel(c, pb)
 		// Agent is carried, never applied: ClaudeRunner.agentPrompt owns the single
 		// "@<agent>: " prefix site. Every stage of a playbook runs as the same agent
 		// — the selection belongs to the card, not to one recipe step. The same
