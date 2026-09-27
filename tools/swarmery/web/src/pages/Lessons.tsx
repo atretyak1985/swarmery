@@ -338,8 +338,10 @@ function LessonCard({
 }
 
 /** Lessons — the review queue for lessons learned from surprising runs
- *  (learning-loop phase 14). Nothing becomes active without an accept here. */
-export function Lessons(): JSX.Element {
+ *  (learning-loop phase 14). Nothing becomes active without an accept here.
+ *  `embedded` renders it as Learning's Lessons tab: no page heading or padding,
+ *  and no calibration panel (that is its own "Forecast honesty" tab). */
+export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
   const [filter, setFilter] = useState<LessonStatus | undefined>('candidate');
   const [items, setItems] = useState<Lesson[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -370,9 +372,9 @@ export function Lessons(): JSX.Element {
   );
 
   return (
-    <div className="p-6">
-      <h1 className="text-lg text-ink">Lessons</h1>
-      <p className="mt-1 max-w-2xl text-[12px] text-ink-dim">
+    <div className={embedded ? '' : 'p-6'}>
+      {!embedded && <h1 className="text-lg text-ink">Lessons</h1>}
+      <p className={`${embedded ? '' : 'mt-1 '}max-w-2xl text-[12px] text-ink-dim`}>
         When a phase run lands far from its forecast and its report explains why, a cheap model
         proposes up to two lessons, each citing evidence from that run. A candidate reaches future
         runs only after you accept it here. Merge it into an existing lesson when it repeats one.
@@ -412,7 +414,7 @@ export function Lessons(): JSX.Element {
           ))}
         </ul>
       )}
-      <CalibrationPanel />
+      {!embedded && <CalibrationPanel />}
     </div>
   );
 }

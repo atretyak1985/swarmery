@@ -5,6 +5,10 @@ import {
   type CalibrationReport,
   fetchCalibration,
 } from '../api/calibration';
+import { UI_TERMS } from '../lib/glossary';
+
+/** "How honest forecasts are" — the dictionary word, sentence-cased. */
+const HEADING = `${UI_TERMS.calibration.ui.charAt(0).toUpperCase()}${UI_TERMS.calibration.ui.slice(1)}`;
 
 const DIM_SETS: { dims: CalibrationDim[]; label: string }[] = [
   { dims: ['model', 'effort'], label: 'model / effort' },
@@ -55,8 +59,9 @@ export function CalibrationPanel(): JSX.Element {
   const shown = rep === null ? [] : visibleGroups(rep);
   return (
     <section className="mt-8 max-w-3xl" aria-labelledby="calibration-heading">
-      <h2 id="calibration-heading" className="text-sm text-ink">
-        Forecast calibration
+      <h2 id="calibration-heading" className="flex items-baseline gap-2 text-sm font-normal text-ink">
+        {HEADING}
+        <span className="font-mono text-[10px] text-ink-faint">{UI_TERMS.calibration.code}</span>
       </h2>
       <p className="mt-1 text-[12px] text-ink-dim">
         How often forecasts held, by group. Area hit is matched areas over every area either side
