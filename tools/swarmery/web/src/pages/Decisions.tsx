@@ -96,42 +96,6 @@ function Row({
   );
 }
 
-/** Shown while no local model is configured: says the feature is optional and
- *  how to turn it on, instead of a bare env-var name. */
-function SetupCard(): JSX.Element {
-  return (
-    <section
-      aria-labelledby="decisions-setup-title"
-      className="mt-4 max-w-2xl rounded border border-line p-4 text-[12px]"
-    >
-      <h2 id="decisions-setup-title" className="text-ink">
-        No local model configured — this is optional
-      </h2>
-      <p className="mt-1 text-ink-dim">
-        Everything else in swarmery works without it. Until a model is set up, no question below is
-        asked and runs settle by the deterministic rules alone.
-      </p>
-      <ol className="mt-3 list-decimal space-y-1 pl-5 text-ink-dim">
-        <li>
-          Run an OpenAI-compatible model server: LM Studio (<code>localhost:1234</code>), Ollama (
-          <code>localhost:11434/v1</code>), llama.cpp or vLLM. A 7–14B instruct model is enough.
-        </li>
-        <li>
-          Set <code>SWARMERY_DECIDE_URL</code> and <code>SWARMERY_DECIDE_MODEL</code> in the
-          daemon&apos;s environment.
-        </li>
-        <li>Restart the daemon. Every question starts in shadow: logged, never acted on.</li>
-      </ol>
-      <Link
-        to="/docs/guide-decisions"
-        className="mt-3 inline-block text-brand transition-opacity hover:opacity-80"
-      >
-        Setup guide →
-      </Link>
-    </section>
-  );
-}
-
 /** One queued decision: the model's answer, a one-click confirm, and a picker
  *  for the right answer when the model was wrong. */
 function QueueRow({
@@ -305,14 +269,11 @@ export function Decisions(): JSX.Element {
       {data === null && err === null && <div className="mt-4 text-ink-dim">loading…</div>}
       {data !== null && (
         <>
-          {data.configured ? (
-            <div className="mt-3 font-mono text-[11px] text-ink-dim">
-              backend: {data.local ? 'local' : ''}
-              {data.claude ? ' + claude' : ''}
-            </div>
-          ) : (
-            <SetupCard />
-          )}
+          <div className="mt-3 font-mono text-[11px] text-ink-dim">
+            backend: {data.configured ? '' : 'not configured (SWARMERY_DECIDE_URL unset)'}
+            {data.local ? 'local' : ''}
+            {data.claude ? ' + claude' : ''}
+          </div>
           <table className="mt-4 w-full text-left text-[12px]">
             <thead className="text-ink-dim">
               <tr>
