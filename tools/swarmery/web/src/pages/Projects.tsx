@@ -287,7 +287,9 @@ function TagFilter({
 
 /* ----- screen ----- */
 
-export function Projects(): JSX.Element {
+/** `embedded` (Settings → Projects tab, phase 8): the Settings page owns the
+ * heading and the page padding; the filters and the list render unchanged. */
+export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [health, setHealth] = useState<ProjectHealth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -344,11 +346,13 @@ export function Projects(): JSX.Element {
   const visibleHealth = (health ?? []).filter((h) => !h.isSystem && passesOnboarded(h) && matchesTagAndName(h));
 
   return (
-    <div className="px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px] desk:pb-28">
+    <div className={embedded ? 'pt-4 pb-20 desk:pb-28' : 'px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px] desk:pb-28'}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
-          Projects
-        </h1>
+        {!embedded && (
+          <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
+            Projects
+          </h1>
+        )}
         <div className="flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
             <input

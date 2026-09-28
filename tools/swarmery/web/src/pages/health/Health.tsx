@@ -13,6 +13,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react
 import { useParams, useSearchParams } from 'react-router-dom';
 import {
   type AnalyticsRange,
+  fetchProjectRecommendations,
   fetchProposals,
   fetchRecommendations,
   fetchRetroAgents,
@@ -116,15 +117,18 @@ export function Health(): JSX.Element {
   }, [range]);
   useEffect(load, [load]);
 
-  // Decisions are not windowed: loaded once per mount.
+  // Decisions are not windowed: loaded once per scope. On a project page the
+  // recommendations are the project's own, as on the project Today, so the
+  // strip counts match the project Inbox it links to.
   useEffect(() => {
-    fetchRecommendations([...OPEN_RECS, ...VERIFIED_RECS, ...GATHERING_RECS].join(','))
+    const status = [...OPEN_RECS, ...VERIFIED_RECS, ...GATHERING_RECS].join(',');
+    (projectSlug === null ? fetchRecommendations(status) : fetchProjectRecommendations(projectSlug, status))
       .then((r) => setRecs(r.recommendations))
       .catch(() => setRecs(null));
     fetchProposals(OPEN_PROPOSALS.join(','))
       .then((r) => setProposals(r.proposals))
       .catch(() => setProposals(null));
-  }, []);
+  }, [projectSlug]);
 
   const cells = useMemo<StatusCell[]>(() => {
     const out: StatusCell[] = [];

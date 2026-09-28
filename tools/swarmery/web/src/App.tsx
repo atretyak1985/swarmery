@@ -1,6 +1,6 @@
 // App shell: a full-width top header (SW◆RMERY wordmark at left, and a live
 // daemon status at right) with a bottom border. Below it, the one Sidebar
-// (components/Sidebar.tsx — Canvas v3: project switcher on top, nine places
+// (components/Sidebar.tsx — Canvas v3: project switcher on top, ten places
 // from lib/nav.ts, ⌘K at the bottom) in its All-projects state; <main> owns the
 // scroll. Mobile drops the sidebar for a flat fixed bottom nav fed by the same
 // nav model.

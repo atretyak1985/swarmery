@@ -22,7 +22,7 @@ function place(id: PlaceId) {
 }
 
 describe('nav model', () => {
-  it('defines exactly the nine places, grouped main / improve / bottom', () => {
+  it('defines exactly the ten places, grouped main / improve / bottom', () => {
     expect(PLACES.map((p) => p.id)).toEqual([
       'today',
       'inbox',
@@ -31,12 +31,13 @@ describe('nav model', () => {
       'health',
       'learning',
       'knowledge',
+      'docs',
       'system',
       'settings',
     ]);
     expect(placesIn('main').map((p) => p.label)).toEqual(['Today', 'Inbox', 'Sessions', 'Plans']);
     expect(placesIn('improve').map((p) => p.label)).toEqual(['Health', 'Learning', 'Knowledge']);
-    expect(placesIn('bottom').map((p) => p.label)).toEqual(['System', 'Settings']);
+    expect(placesIn('bottom').map((p) => p.label)).toEqual(['Docs', 'System', 'Settings']);
     expect(PLACES.filter((p) => p.projectOnly).map((p) => p.id)).toEqual(['plans', 'knowledge']);
   });
 
@@ -48,7 +49,9 @@ describe('nav model', () => {
       ['plans', '/projects', '/p/shop/plans'],
       ['health', '/health', '/p/shop/health'],
       ['learning', '/learning', '/p/shop/learning'],
-      ['knowledge', '/projects', '/p/shop/memory'],
+      ['knowledge', '/projects', '/p/shop/knowledge'],
+      // Docs is fleet-wide: a project scope does not change where it goes.
+      ['docs', '/docs', '/docs'],
       ['system', '/system', '/p/shop/system'],
       ['settings', '/settings', '/p/shop/settings'],
     ];
@@ -60,7 +63,7 @@ describe('nav model', () => {
 
   it('resolves project-only places through the last project under All projects', () => {
     expect(resolvePlaceHref(place('plans'), null, 'shop')).toBe('/p/shop/plans');
-    expect(resolvePlaceHref(place('knowledge'), null, 'shop')).toBe('/p/shop/memory');
+    expect(resolvePlaceHref(place('knowledge'), null, 'shop')).toBe('/p/shop/knowledge');
     expect(resolvePlaceHref(place('plans'), null, null)).toBe('/projects');
     // In a project, the last project is irrelevant.
     expect(resolvePlaceHref(place('plans'), 'cart', 'shop')).toBe('/p/cart/plans');
@@ -108,7 +111,7 @@ describe('nav coverage of src/main.tsx', () => {
       ['/p/shop/playbooks', 'plans'],
       ['/p/shop/planning', 'plans'],
       ['/p/shop/serena', 'knowledge'],
-      ['/docs/guide', 'knowledge'],
+      ['/docs/guide', 'docs'],
       ['/routines', 'system'],
       ['/agents/7', 'system'],
       ['/projects', 'settings'],
