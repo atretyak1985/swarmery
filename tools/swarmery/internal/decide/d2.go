@@ -131,10 +131,33 @@ const d2MaxFailures = 3
 // vocabulary — the rules backend's answer when it exists.
 var operatorOutcome = map[string]string{"success": "shipped", "fail": "failed", "abandoned": "abandoned"}
 
+// d2Digest is the evidence every D2 question reads: title, the session's time
+// window, the ship-evidence block, then the tail of the last assistant
+// message. The window line deliberately avoids a bare `ended:` key — a small
+// model echoed it back as an off-list outcome.
+func d2Digest(db *sql.DB, s d2Session) string {
+	return fmt.Sprintf("title: %s\nsession window: %s → %s\n%slast assistant message (tail):\n%s",
+		s.title, s.started, s.ended, shipEvidence(db, s.uuid, s.outcome),
+		tail(runcore.LastAssistantText(db, s.uuid), d2DigestBytes))
+}
+
+// D2 prompts. The option lists stay fixed; the outcome prompt defines each
+// option against the evidence block so "stopped talking" is not read as
+// "abandoned" when the work landed.
+const (
+	d2TaskTypePrompt = "What kind of task was this coding session?"
+	d2OutcomePrompt  = "How did the session end? Judge by the evidence block first. " +
+		"shipped = work was committed, pushed or merged, or every phase criterion was ticked; " +
+		"partial = some work landed but not all of it; " +
+		"abandoned = the session stopped with no landed work and no failure; " +
+		"failed = the work was attempted and did not work."
+	d2FailurePrompt = "If the session did not ship, what was the main cause? " +
+		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped)"
+)
+
 func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 	e := l.E
-	digest := fmt.Sprintf("title: %s\nstarted: %s\nended: %s\nlast assistant message (tail):\n%s",
-		s.title, s.started, s.ended, tail(runcore.LastAssistantText(e.DB, s.uuid), d2DigestBytes))
+	digest := d2Digest(e.DB, s)
 	ask := func(id, prompt string, opts []string, rule string) string {
 		mode := e.Mode(id)
 		if failed || mode == ModeOff {
@@ -151,9 +174,9 @@ func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 		}
 		return a.Value
 	}
-	taskType := ask(QD2TaskType, "What kind of task was this coding session?", TaskTypes, "")
-	outcome := ask(QD2Outcome, "How did the session end?", Outcomes, operatorOutcome[s.outcome])
-	cause := ask(QD2Failure, "If the session did not ship, what was the main cause? (none if it shipped)", FailureCauses, "")
+	taskType := ask(QD2TaskType, d2TaskTypePrompt, TaskTypes, "")
+	outcome := ask(QD2Outcome, d2OutcomePrompt, Outcomes, operatorOutcome[s.outcome])
+	cause := ask(QD2Failure, d2FailurePrompt, FailureCauses, "")
 	if failed || e.Mode(QD2Outcome) != ModeActive {
 		return failed
 	}
