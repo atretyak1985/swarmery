@@ -1,8 +1,9 @@
-// Workspace project switcher (fusion phase 4): the control at the top of the
-// project-workspace sidebar. A trigger showing the current project, opening a
-// dropdown with a search input + filtered project list + an "All projects →"
-// link back to the global fleet view. Selecting a project navigates to
-// /p/{slug} (preserving the current sub-route tab where possible). Distinct
+// Project switcher (fusion phase 4; Canvas v3 artboard 2b): the control at the
+// top of the one Sidebar (components/Sidebar.tsx), in both shells. A trigger
+// showing the scope — a project, or "All projects" (currentSlug null, the fleet
+// shell) — opening a dropdown with a search input + filtered project list + an
+// "All projects →" link back to the fleet view. Selecting a project navigates
+// to /p/{slug} (preserving the current sub-route tab where possible). Distinct
 // from the header ProjectDropdown (that filters fleet scope; this NAVIGATES).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +21,8 @@ export function ProjectSwitcher({
   subPath,
 }: {
   projects: Project[];
-  currentSlug: string;
+  /** The project in scope, or null for All projects (no project). */
+  currentSlug: string | null;
   subPath: string;
 }): JSX.Element {
   const navigate = useNavigate();
@@ -34,7 +36,9 @@ export function ProjectSwitcher({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const current = findProject(projects, currentSlug);
-  const label = current !== null ? projectLabel(current.name, current.slug) : currentSlug;
+  const allProjects = currentSlug === null;
+  const label =
+    current !== null ? projectLabel(current.name, current.slug) : (currentSlug ?? 'All projects');
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -104,14 +108,18 @@ export function ProjectSwitcher({
             focusOption(1);
           }
         }}
-        className="flex w-full items-center gap-2 rounded-[10px] border border-line-strong bg-field px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface2 aria-expanded:border-[#4a4e58] aria-expanded:bg-surface2"
+        className="flex w-full items-center gap-2 rounded-[9px] border border-line-strong bg-field px-[10px] py-[7px] text-left transition-colors hover:border-line-strong hover:bg-surface2 aria-expanded:border-[#4a4e58] aria-expanded:bg-surface2"
       >
+        {/* Project swatch (artboard 2b: a 7px square with 2px corners); the
+            All-projects state shows a neutral hollow swatch instead. */}
         <span
           aria-hidden="true"
-          className="h-[8px] w-[8px] shrink-0 rounded-full"
-          style={{ backgroundColor: colorFor(current?.slug ?? currentSlug) }}
+          className={`h-[7px] w-[7px] shrink-0 rounded-[2px] ${allProjects ? 'border border-ink-faint' : ''}`}
+          style={allProjects ? undefined : { backgroundColor: colorFor(current?.slug ?? currentSlug) }}
         />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">{label}</span>
+        <span className="min-w-0 flex-1 truncate font-display text-[13px] leading-[normal] font-semibold text-ink">
+          {label}
+        </span>
         <span aria-hidden="true" className="text-[9px] text-ink-faint">
           ▾
         </span>

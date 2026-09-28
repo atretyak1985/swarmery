@@ -1,7 +1,8 @@
-// Last-visited project slug (mode toggle): the Projects segment of the header
-// ModeToggle reopens the last project the user was in. Persisted in localStorage
-// under `swarmery.lastProject`, written when a project workspace resolves its
-// slug (ProjectContext) and read by the ModeToggle. Guarded try/catch — private
+// Last-visited project slug: under All projects the sidebar's project-only
+// places (Plans, Knowledge — lib/nav.ts) reopen the last project the user was
+// in. Persisted in localStorage under `swarmery.lastProject`, written when a
+// project workspace resolves its slug (ProjectContext) and read by
+// components/Sidebar.tsx. Guarded try/catch — private
 // mode / disabled storage degrades to "no last project" (→ the Projects list),
 // the same idiom as lib/scope.tsx.
 
