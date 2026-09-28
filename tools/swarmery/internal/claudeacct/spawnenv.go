@@ -2,9 +2,9 @@ package claudeacct
 
 // The ONE place that composes the environment a swarmery-launched `claude` runs
 // under. Every spawn site — the five runcore engines, routines, provision, the
-// five System-project runners behind internal/systemspawn (improve,
-// retroanalysis, trajjudge, handoff, extract), the dashboard's resume and
-// terminal dock, and `swarmery account exec` — hands its base environment and
+// seven System-project runners behind internal/systemspawn (decide, extract,
+// handoff, improve, lessons, retroanalysis, trajjudge), the dashboard's resume
+// and terminal dock, and `swarmery account exec` — hands its base environment and
 // a Resolution (resolve.go) here and uses the result verbatim.
 //
 // The delta, in this order (resolvedDelta):

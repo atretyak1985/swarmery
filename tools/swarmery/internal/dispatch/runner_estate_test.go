@@ -80,6 +80,11 @@ func TestRunPlaybook_ResolvesTheProjectsAccountAndEstate(t *testing.T) {
 	if err := claudeacct.SetBinding(proj, "default"); err != nil {
 		t.Fatal(err)
 	}
+	// admit() resolves the project path through repopath.ResolveTrusted, which
+	// requires projects.path to be a git checkout. mkRepo's bare .git directory
+	// is not a repository git recognises, so the bindings above stay not-a-repo
+	// for the provenance gate rather than turning tracked or indeterminate.
+	mkRepo(t, proj)
 
 	db := testDB(t)
 	if _, err := db.Exec(`UPDATE projects SET path=? WHERE id=1`, proj); err != nil {

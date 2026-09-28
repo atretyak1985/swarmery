@@ -1,6 +1,6 @@
 package store
 
-// The account_quota and account_limit_hits rows (0075): the per-account quota
+// The account_quota and account_limit_hits rows (0089): the per-account quota
 // HEADROOM the daemon's poller records, and the durable history of every
 // observed usage-limit hit. Package-level functions over *sql.DB, exactly like
 // account_runnable.go.

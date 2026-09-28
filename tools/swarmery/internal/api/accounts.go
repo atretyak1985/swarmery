@@ -662,13 +662,19 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, status, err.Error())
 		return
 	}
-	// Read it back: a binding written into a file the walk ignores (an
-	// untrusted file SetBinding had nothing to rewrite) is not in effect, and
-	// reporting success would show the operator an account nothing runs under.
-	// The file is theirs to fix — a client error, like the refusals above.
-	if err := claudeacct.VerifyBinding(path, key); err != nil {
-		writeClientErr(w, http.StatusConflict, err.Error())
-		return
+	// A binding the provenance gate ignores (a git-tracked or unclassifiable
+	// file) is answered 200 with a row whose IgnoredReason says why and how to
+	// fix it — the dashboard renders that, so it never reads as success.
+	row := bindingRow(path)
+	// Otherwise read it back: a binding written into a file the walk ignores
+	// (an untrusted file SetBinding had nothing to rewrite) is not in effect,
+	// and reporting success would show the operator an account nothing runs
+	// under. The file is theirs to fix — a client error, like the refusals above.
+	if row.IgnoredReason == "" {
+		if err := claudeacct.VerifyBinding(path, key); err != nil {
+			writeClientErr(w, http.StatusConflict, err.Error())
+			return
+		}
 	}
-	writeJSON(w, bindingRow(path), nil)
+	writeJSON(w, row, nil)
 }

@@ -1,4 +1,4 @@
--- 0075: the per-account QUOTA signal and a durable record of every usage-limit
+-- 0089: the per-account QUOTA signal and a durable record of every usage-limit
 -- hit — the trigger for every account switch, which until now the system did
 -- not store anywhere (account_runnable, 0054, answers only "can the CLI log in").
 --
@@ -21,10 +21,12 @@
 -- vocabulary ('session' | 'weekly' | 'model' | ''), label is the usage
 -- endpoint's own window label, and source/engine are fixed tags.
 --
--- WHY 0075. The number was reserved for this change up front: migrate.go applies
--- unapplied files in FILENAME order, so a slot two changes both take yields two
--- different schemas with no error (see 0074's header). Tests match this file by
--- NAME (%_account_quota.sql), never by the number.
+-- WHY 0089. The branch that wrote this file had reserved an earlier slot, but
+-- main filled that slot (turns_cache_write_ttl) and every number up to 0088
+-- while the branch was unmerged, so the merge renumbered it to main's highest
+-- + 1. Two files claiming one version stop the daemon (migrate.go), and a slot
+-- two changes both take would otherwise yield two schemas (see 0074's header).
+-- Tests match this file by NAME (%_account_quota.sql), never by the number.
 --
 -- Purely additive: two CREATE TABLEs and two CREATE INDEXes. No ALTER, no
 -- rebuild, no foreign key, no backfill — no existing row is touched.
