@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -87,10 +88,49 @@ func TestRunCapsEachStreamToItsTail(t *testing.T) {
 	}
 }
 
+// expiringCtx is a context whose deadline the test fires by hand: Done closes
+// and Err turns DeadlineExceeded exactly when expire is called, which is what
+// Run and exec.CommandContext see when a real timeout lapses.
+type expiringCtx struct {
+	context.Context
+	done chan struct{}
+	once sync.Once
+}
+
+func newExpiringCtx() *expiringCtx {
+	return &expiringCtx{Context: context.Background(), done: make(chan struct{})}
+}
+
+func (c *expiringCtx) Done() <-chan struct{} { return c.done }
+
+func (c *expiringCtx) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+
+func (c *expiringCtx) expire() { c.once.Do(func() { close(c.done) }) }
+
+// The deadline fires only once the child has printed. A wall-clock timeout
+// raced the child's own start: under load (the full suite beside it) the shell
+// had not reached its echo within 1.5s, and stdout came back "(empty)".
 func TestRunReportsATimeoutAsSuch(t *testing.T) {
-	bin := stub(t, `echo 'still working'; exec sleep 30`)
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
+	printed := filepath.Join(t.TempDir(), "printed")
+	bin := stub(t, `echo 'still working'; : > '`+printed+`'; exec sleep 30`)
+	ctx := newExpiringCtx()
+	go func() {
+		// Bounded, so a stub that never prints fails the assertions below
+		// instead of hanging the package.
+		for end := time.Now().Add(30 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+			if _, err := os.Stat(printed); err == nil {
+				break
+			}
+		}
+		ctx.expire()
+	}()
 	_, err := Run(ctx, exec.CommandContext(ctx, bin), "p")
 	if err == nil {
 		t.Fatal("want a timeout error")
