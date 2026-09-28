@@ -530,3 +530,17 @@ export type StepConceptId = {
 
 /** The step-carrying subset, so <HowItWorks> reads a non-optional array. */
 export const STEP_CONCEPTS: Record<StepConceptId, StepConcept> = RAW;
+
+/** Code → UI vocabulary (Canvas v3 artboard 1). The code name stays as a small caption. */
+export const UI_TERMS = {
+  surprise: { code: 'surprise index', ui: 'off-plan', hint: 'how far the run landed from the plan' },
+  prior: { code: 'prior', ui: "planner's guess", hint: '' },
+  posterior: { code: 'posterior', ui: 'after reading the code', hint: '' },
+  shadow: { code: 'shadow', ui: 'watching', hint: '' },
+  active: { code: 'active', ui: 'acting', hint: '' },
+  agreement: { code: 'agreement', ui: 'matches you', hint: '' },
+  groundTruth: { code: 'ground truth', ui: 'what actually happened', hint: '' },
+  recommendation: { code: 'recommendation', ui: 'the Advisor noticed…', hint: '' },
+  retirement: { code: 'retirement', ui: 'stop using this lesson?', hint: '' },
+  calibration: { code: 'calibration', ui: 'how honest forecasts are', hint: '' },
+} as const;

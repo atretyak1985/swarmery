@@ -4,19 +4,22 @@ import {
   createBrowserRouter,
   isRouteErrorResponse,
   Link,
+  Navigate,
   Outlet,
   RouterProvider,
+  useParams,
   useRouteError,
 } from 'react-router-dom';
 import { App } from './App';
 import { TooltipLayer } from './components/Tooltip';
 import { PageSearchProvider } from './lib/pageSearch';
 import { ProjectColorProvider } from './lib/projectColors';
-import { ScopeProvider } from './lib/scope';
+import { ScopeProvider, useScope } from './lib/scope';
 import { ThemeProvider } from './lib/theme';
 import { UsageDataProvider } from './lib/usageData';
 import { Loading } from './components/ui';
 import { Approvals } from './pages/Approvals';
+import { Inbox } from './pages/inbox/Inbox';
 import { Decisions } from './pages/Decisions';
 import { Lessons } from './pages/Lessons';
 import { Overview } from './pages/Overview';
@@ -30,6 +33,7 @@ import { Serena } from './pages/Serena';
 import { Graphify } from './pages/Graphify';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
 import { Routines } from './pages/Routines';
+import { Today } from './pages/today/Today';
 import './index.css';
 
 // Analytics pulls in Recharts — lazy-load it so that weight stays out of the
@@ -110,6 +114,17 @@ function ws(node: JSX.Element): JSX.Element {
   return <Suspense fallback={<Loading label="workspace…" />}>{node}</Suspense>;
 }
 
+/** /p/:slug/approvals → the project Inbox's approvals tab. Waits for the global
+ * scope to settle on this project first: on a cold visit ProjectWorkspaceProvider
+ * calls setScope(slug) in the same commit, and its setSearchParams (built from the
+ * pre-redirect query) would otherwise overwrite ?tab=approvals with ?scope=. */
+function ProjectApprovalsRedirect(): JSX.Element | null {
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { scope } = useScope();
+  if (scope !== slug) return null;
+  return <Navigate to={`/p/${slug}/inbox?tab=approvals`} replace />;
+}
+
 /** Route-level error boundary. Without one, react-router replaces the whole SPA
  * with its default error screen — recoverable only by pressing Back — for any
  * unmatched path. That is reachable from ordinary content: lib/markdown.tsx
@@ -144,8 +159,13 @@ const router = createBrowserRouter([
         path: '/',
         element: <App />,
         children: [
-          { index: true, element: <Overview /> },
-          { path: 'approvals', element: <Approvals /> },
+          // Today (Canvas v3 phase 4): the loop map over the old command deck.
+          { index: true, element: <Today detail={<Overview />} /> },
+          // Inbox (Canvas v3 phase 3) replaces /approvals as the place; the old
+          // page keeps rules + history at approvals/manage.
+          { path: 'inbox', element: <Inbox />, handle: { fill: true } },
+          { path: 'approvals', element: <Navigate to="/inbox?tab=approvals" replace /> },
+          { path: 'approvals/manage', element: <Approvals /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
           { path: 'projects', element: <Projects /> },
@@ -256,14 +276,16 @@ const router = createBrowserRouter([
         path: '/p/:slug',
         element: ws(<WorkspaceShell />),
         children: [
-          { index: true, element: ws(<ProjectOverview />) },
+          { index: true, element: ws(<Today detail={ws(<ProjectOverview />)} />) },
           { path: 'board', element: ws(<Board />) },
           { path: 'planning', element: ws(<PlanningMode />) },
           { path: 'plans', element: ws(<Plans />) },
           { path: 'playbooks', element: ws(<Playbooks />) },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
-          { path: 'approvals', element: ws(<Approvals />) },
+          { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
+          { path: 'approvals', element: <ProjectApprovalsRedirect /> },
+          { path: 'approvals/manage', element: ws(<Approvals />) },
           {
             path: 'analytics',
             element: (

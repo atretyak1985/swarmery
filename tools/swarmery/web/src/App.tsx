@@ -5,17 +5,15 @@
 // scroll. Mobile drops the sidebar for a flat fixed bottom nav fed by the same
 // nav model.
 //
-// The Inbox row carries the only nav badge — pending approvals (REST resync +
-// WS permission_requested/permission_resolved over the shared connection) plus
-// proposed advisor recommendations — and Sessions a green dot while any session
-// is live (useSidebarSignals).
+// The Inbox row carries the only nav badge — the Inbox's own six-source count
+// (pages/inbox/useInboxItems.ts, via useSidebarSignals; the shell fetches no
+// badge of its own) — and Sessions a green dot while any session is live.
 
 import { useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { MOCK } from './api';
 import { AccountReadyBanner } from './components/AccountReadyBanner';
 import { NewProjectButton } from './components/NewProjectButton';
-import { ProjectApprovalsSection } from './components/ProjectApprovalsSection';
 import { MobileNav, Sidebar, useSidebarSignals } from './components/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
 import { UsageChip } from './components/usage/UsageChip';
@@ -24,7 +22,6 @@ import { useHealth, versionLabel, versionTitle } from './lib/health';
 import { PluginDriftBadge } from './components/PluginDriftBadge';
 import { loadPrefs, useBrowserNotifications, type NotifyPrefs } from './lib/notifications';
 import { NotifyPrefsContext } from './lib/notifyPrefsContext';
-import { useScope } from './lib/scope';
 
 /* The global project-scope dropdown no longer lives in this rail. It was a
  * shell-level control for a page-level filter: it sat above the nav on every
@@ -47,11 +44,10 @@ function AppShell(): JSX.Element {
   const [notifyPrefs, setNotifyPrefs] = useState<NotifyPrefs>(loadPrefs);
   useBrowserNotifications(notifyPrefs);
   const { health, unreachable } = useHealth();
-  const { scope, scopeProject } = useScope();
   // Does the active route own its vertical scroll? Declared on the route itself
   // (main.tsx `handle: { fill: true }`), never matched on the pathname here.
   const fill = useFillRoute();
-  const { pendingCount, inboxCount, liveSessions } = useSidebarSignals();
+  const { inboxCount, liveSessions } = useSidebarSignals();
 
   const daemonOk = !unreachable;
 
@@ -110,15 +106,7 @@ function AppShell(): JSX.Element {
 
       <div className="flex min-h-0 flex-1">
         {/* Desktop sidebar (212px, desk and up) in its All-projects state. */}
-        <Sidebar slug={null} inboxCount={inboxCount} liveSessions={liveSessions}>
-          {scope !== null && (
-            <ProjectApprovalsSection
-              scope={scope}
-              scopeSlug={scopeProject?.slug ?? scope}
-              totalPending={pendingCount}
-            />
-          )}
-        </Sidebar>
+        <Sidebar slug={null} inboxCount={inboxCount} liveSessions={liveSessions} />
 
         {/* Fill routes (lib/fillRoute.ts) own their own scroll: this container
             hands it over — overflow-hidden plus the flex/min-h-0 chain the page
