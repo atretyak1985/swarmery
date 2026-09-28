@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense } from 'react';
+import { lazy, StrictMode, Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   createBrowserRouter,
@@ -7,6 +7,7 @@ import {
   Navigate,
   Outlet,
   RouterProvider,
+  useLocation,
   useParams,
   useRouteError,
 } from 'react-router-dom';
@@ -20,8 +21,6 @@ import { UsageDataProvider } from './lib/usageData';
 import { Loading } from './components/ui';
 import { Approvals } from './pages/Approvals';
 import { Inbox } from './pages/inbox/Inbox';
-import { Decisions } from './pages/Decisions';
-import { Lessons } from './pages/Lessons';
 import { Overview } from './pages/Overview';
 import { Projects } from './pages/Projects';
 import { Sessions } from './pages/Sessions';
@@ -36,14 +35,18 @@ import { Routines } from './pages/Routines';
 import { Today } from './pages/today/Today';
 import './index.css';
 
-// Analytics pulls in Recharts — lazy-load it so that weight stays out of the
-// initial bundle (only fetched when the route is visited).
-const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
+// Health (Canvas v3 phase 5) absorbs /analytics and /retro as tabs. Lazy, and
+// it lazy-loads those two pages itself (Analytics pulls in Recharts), so their
+// weight stays out of the initial bundle.
+const Health = lazy(() => import('./pages/health/Health').then((m) => ({ default: m.Health })));
 
-// Retro follows the same lazy pattern — fetched only when visited.
-const Retro = lazy(() => import('./pages/Retro').then((m) => ({ default: m.Retro })));
+// Learning (Canvas v3 phase 6) absorbs /lessons and /decisions as tabs. Lazy
+// like Health; one component serves /learning and /p/:slug/learning.
+const Learning = lazy(() =>
+  import('./pages/learning/Learning').then((m) => ({ default: m.Learning })),
+);
 
-// Agent Hub (fusion phase 17) — lazy like Analytics/Retro so the fleet initial
+// Agent Hub (fusion phase 17) — lazy like Health so the fleet initial
 // bundle stays unchanged. Serves both /agents (fleet) and /p/:slug/agents.
 const AgentHub = lazy(() => import('./pages/AgentHub').then((m) => ({ default: m.AgentHub })));
 
@@ -63,18 +66,16 @@ const SystemShell = lazy(() =>
 const WorkspaceShell = lazy(() =>
   import('./workspace/WorkspaceShell').then((m) => ({ default: m.WorkspaceShell })),
 );
-const Board = lazy(() => import('./pages/Board').then((m) => ({ default: m.Board })));
 const ProjectOverview = lazy(() =>
   import('./pages/ProjectOverview').then((m) => ({ default: m.ProjectOverview })),
 );
 const ProjectSettings = lazy(() =>
   import('./pages/ProjectSettings').then((m) => ({ default: m.ProjectSettings })),
 );
-const Plans = lazy(() => import('./pages/Plans').then((m) => ({ default: m.Plans })));
-const PlanningMode = lazy(() =>
-  import('./pages/PlanningMode').then((m) => ({ default: m.PlanningMode })),
+// Plans place: New plan · Plans · Board · Playbooks (each tab body lazy inside).
+const PlansPlace = lazy(() =>
+  import('./pages/plans/PlansPlace').then((m) => ({ default: m.PlansPlace })),
 );
-const Playbooks = lazy(() => import('./pages/Playbooks').then((m) => ({ default: m.Playbooks })));
 const Memory = lazy(() => import('./pages/Memory').then((m) => ({ default: m.Memory })));
 const ScopedSerena = lazy(() =>
   import('./workspace/ScopedPages').then((m) => ({ default: m.ScopedSerena })),
@@ -125,6 +126,32 @@ function ProjectApprovalsRedirect(): JSX.Element | null {
   return <Navigate to={`/p/${slug}/inbox?tab=approvals`} replace />;
 }
 
+/** /p/:slug/{analytics,retro} → a Health tab. Same scope wait as
+ * ProjectApprovalsRedirect, or the provider's ?scope= write drops ?tab=. */
+function ProjectHealthRedirect({ tab }: { tab: 'cost' | 'agents' }): JSX.Element | null {
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { scope } = useScope();
+  if (scope !== slug) return null;
+  return <Navigate to={`/p/${slug}/health?tab=${tab}`} replace />;
+}
+
+/** /p/:slug/{planning,board,playbooks} → a Plans tab, keeping the rest of the
+ * query (PlanningMode consumes ?idea=). Same scope wait as ProjectHealthRedirect. */
+function ProjectPlansRedirect({ tab }: { tab: 'new' | 'board' | 'playbooks' }): JSX.Element | null {
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { search } = useLocation();
+  // Snapshot the query of the first render: the workspace provider's
+  // setScope rewrites the URL to ?scope=<slug> before scope settles, which
+  // would drop ?idea= (PlanningMode's hand-off) from a later `search`.
+  const [initialSearch] = useState(search);
+  const { scope } = useScope();
+  if (scope !== slug) return null;
+  const q = new URLSearchParams(initialSearch);
+  q.delete('scope');
+  q.set('tab', tab);
+  return <Navigate to={`/p/${slug}/plans?${q.toString()}`} replace />;
+}
+
 /** Route-level error boundary. Without one, react-router replaces the whole SPA
  * with its default error screen — recoverable only by pressing Back — for any
  * unmatched path. That is reachable from ordinary content: lib/markdown.tsx
@@ -171,25 +198,28 @@ const router = createBrowserRouter([
           { path: 'projects', element: <Projects /> },
           // Legacy detail route → redirect into project-workspace mode.
           { path: 'projects/:id', element: <ProjectDetailRedirect /> },
+          // Health (Canvas v3 phase 5): the retired pages land on their tab.
           {
-            path: 'analytics',
+            path: 'health',
             element: (
-              <Suspense fallback={<Loading label="analytics…" />}>
-                <Analytics />
+              <Suspense fallback={<Loading label="health…" />}>
+                <Health />
               </Suspense>
             ),
           },
+          { path: 'analytics', element: <Navigate to="/health?tab=cost" replace /> },
+          { path: 'retro', element: <Navigate to="/health?tab=agents" replace /> },
+          // Learning (Canvas v3 phase 6): the retired pages land on their tab.
           {
-            path: 'retro',
+            path: 'learning',
             element: (
-              <Suspense fallback={<Loading label="retro…" />}>
-                <Retro />
+              <Suspense fallback={<Loading label="learning…" />}>
+                <Learning />
               </Suspense>
             ),
           },
-          // Decision classifier (learning-loop phase 9) — per-question stats.
-          { path: 'decisions', element: <Decisions /> },
-          { path: 'lessons', element: <Lessons /> },
+          { path: 'lessons', element: <Navigate to="/learning?tab=lessons" replace /> },
+          { path: 'decisions', element: <Navigate to="/learning?tab=classifier" replace /> },
           // Agent Hub — roster (/agents) + selected agent (/agents/:id). One
           // component serves both; the :id is the selected registry agent.
           {
@@ -277,31 +307,19 @@ const router = createBrowserRouter([
         element: ws(<WorkspaceShell />),
         children: [
           { index: true, element: ws(<Today detail={ws(<ProjectOverview />)} />) },
-          { path: 'board', element: ws(<Board />) },
-          { path: 'planning', element: ws(<PlanningMode />) },
-          { path: 'plans', element: ws(<Plans />) },
-          { path: 'playbooks', element: ws(<Playbooks />) },
+          { path: 'plans', element: ws(<PlansPlace />) },
+          { path: 'planning', element: <ProjectPlansRedirect tab="new" /> },
+          { path: 'board', element: <ProjectPlansRedirect tab="board" /> },
+          { path: 'playbooks', element: <ProjectPlansRedirect tab="playbooks" /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
           { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
           { path: 'approvals', element: <ProjectApprovalsRedirect /> },
           { path: 'approvals/manage', element: ws(<Approvals />) },
-          {
-            path: 'analytics',
-            element: (
-              <Suspense fallback={<Loading label="analytics…" />}>
-                <Analytics />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'retro',
-            element: (
-              <Suspense fallback={<Loading label="retro…" />}>
-                <Retro />
-              </Suspense>
-            ),
-          },
+          { path: 'health', element: ws(<Health />) },
+          { path: 'analytics', element: <ProjectHealthRedirect tab="cost" /> },
+          { path: 'retro', element: <ProjectHealthRedirect tab="agents" /> },
+          { path: 'learning', element: ws(<Learning />) },
           // Agent Hub, project-scoped (rollups narrowed to :slug via the route).
           { path: 'agents', element: ws(<AgentHub />) },
           { path: 'agents/:id', element: ws(<AgentHub />) },

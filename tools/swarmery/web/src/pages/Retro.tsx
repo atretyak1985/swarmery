@@ -25,6 +25,7 @@ import type {
   Session,
 } from '../api/types';
 import {
+  type AnalyticsRange,
   applyProposal,
   createApprovalRule,
   fetchFirstPassRates,
@@ -1542,12 +1543,30 @@ function fmtSec(s: number | null): string {
 
 /* ----- screen ----- */
 
-export function Retro(): JSX.Element {
+/** One Health tab's slice of this page (Canvas v3 phase 5). */
+export type RetroSection = 'agents' | 'friction' | 'estimates' | 'advisor';
+
+/**
+ * Without props: the standalone /retro page, unchanged. With `section`: the
+ * body of one Health tab — no H1, no range row, no HowItWorks, and only the
+ * fetches that section renders. `range` replaces the page's own from/to.
+ */
+export function Retro({
+  section,
+  range: outerRange,
+}: { section?: RetroSection; range?: AnalyticsRange } = {}): JSX.Element {
   const today = isoDay();
   const [preset, setPreset] = useState<number | null>(14);
-  const [from, setFrom] = useState<string>(addDays(today, -13));
-  const [to, setTo] = useState<string>(today);
+  const [ownFrom, setFrom] = useState<string>(addDays(today, -13));
+  const [ownTo, setTo] = useState<string>(today);
+  const from = outerRange?.from ?? ownFrom;
+  const to = outerRange?.to ?? ownTo;
   const { scope } = useScope();
+  const embedded = section !== undefined;
+  const wantAgents = section === undefined || section === 'agents';
+  const wantFriction = section === undefined || section === 'friction';
+  const wantEstimates = section === undefined || section === 'estimates';
+  const wantAdvisor = section === undefined || section === 'advisor';
 
   const [agents, setAgents] = useState<RetroAgentsResp | null>(null);
   const [friction, setFriction] = useState<RetroFrictionResp | null>(null);
@@ -1592,82 +1611,100 @@ export function Retro(): JSX.Element {
 
   const load = useCallback((): void => {
     setError(null);
-    fetchRetroAgents(range)
-      .then(setAgents)
-      .catch((e: unknown) => setError(String(e)));
-    fetchRetroFriction(range)
-      .then(setFriction)
-      .catch(() => setFriction(null));
-    // Cleared before the refetch, not just on failure: both feeds describe a
-    // WINDOW, so keeping the previous range's rows on screen while the new ones
-    // are in flight is the cross-window disagreement the eager grouped fetch
-    // below exists to prevent — only inside one range instead of across two.
-    setLessons(null);
-    setLessonsFailed(false);
-    setLessonGroups(null);
-    setLessonGroupsFailed(false);
-    fetchRetroLessons(range)
-      .then((r) => setLessons(r.lessons))
-      .catch(() => setLessonsFailed(true));
-    // Fetched alongside the flat feed rather than on first toggle: both views
-    // must describe the SAME window, and a lazy second fetch would let them
-    // straddle an ingest tick and disagree about what the range contained.
-    fetchRetroLessonGroups(range)
-      .then((r) => setLessonGroups(r.groups))
-      .catch(() => setLessonGroupsFailed(true));
-    fetchRetroTasks(range)
-      .then((r) => setTaskRows(r.tasks))
-      .catch(() => setTaskRows(null));
-    // Trajectory anti-pattern kinds per agent (best-effort).
-    fetchFirstPassRates()
-      .then((rows) => {
-        const m: Record<string, string[]> = {};
-        for (const r of rows) {
-          if (r.kinds.length > 0) m[r.agent] = r.kinds;
-        }
-        setTrajectoryKindsMap(m);
-      })
-      .catch(() => setTrajectoryKindsMap({}));
-  }, [range]);
+    if (wantAgents) {
+      fetchRetroAgents(range)
+        .then(setAgents)
+        .catch((e: unknown) => setError(String(e)));
+    }
+    if (wantFriction) {
+      fetchRetroFriction(range)
+        .then(setFriction)
+        .catch(() => setFriction(null));
+    }
+    if (wantEstimates) {
+      // Cleared before the refetch, not just on failure: both feeds describe a
+      // WINDOW, so keeping the previous range's rows on screen while the new ones
+      // are in flight is the cross-window disagreement the eager grouped fetch
+      // below exists to prevent — only inside one range instead of across two.
+      setLessons(null);
+      setLessonsFailed(false);
+      setLessonGroups(null);
+      setLessonGroupsFailed(false);
+      fetchRetroLessons(range)
+        .then((r) => setLessons(r.lessons))
+        .catch(() => setLessonsFailed(true));
+      // Fetched alongside the flat feed rather than on first toggle: both views
+      // must describe the SAME window, and a lazy second fetch would let them
+      // straddle an ingest tick and disagree about what the range contained.
+      fetchRetroLessonGroups(range)
+        .then((r) => setLessonGroups(r.groups))
+        .catch(() => setLessonGroupsFailed(true));
+      fetchRetroTasks(range)
+        .then((r) => setTaskRows(r.tasks))
+        .catch(() => setTaskRows(null));
+    }
+    if (wantAgents) {
+      // Trajectory anti-pattern kinds per agent (best-effort).
+      fetchFirstPassRates()
+        .then((rows) => {
+          const m: Record<string, string[]> = {};
+          for (const r of rows) {
+            if (r.kinds.length > 0) m[r.agent] = r.kinds;
+          }
+          setTrajectoryKindsMap(m);
+        })
+        .catch(() => setTrajectoryKindsMap({}));
+    }
+  }, [range, wantAgents, wantFriction, wantEstimates]);
 
   useEffect(load, [load]);
 
   const rangeLabel = `${fmtDayShort(from)} → ${fmtDayShort(to)}`;
 
   return (
-    <div className="px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]">
-      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <h1 className="font-display text-[26px] leading-none font-medium tracking-[-0.01em] desk:text-[30px]">
-          Retro
-        </h1>
-        <span className="font-mono text-[11px] text-ink-faint">{rangeLabel}</span>
-      </div>
+    <div
+      className={
+        embedded
+          ? 'px-4 pt-1 pb-10 desk:px-7 desk:pb-[60px]'
+          : 'px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]'
+      }
+    >
+      {!embedded && (
+        <>
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <h1 className="font-display text-[26px] leading-none font-medium tracking-[-0.01em] desk:text-[30px]">
+              Retro
+            </h1>
+            <span className="font-mono text-[11px] text-ink-faint">{rangeLabel}</span>
+          </div>
 
-      <div className="mt-[18px]">
-        <RangeControls
-          preset={preset}
-          from={from}
-          to={to}
-          onPreset={applyPreset}
-          onFrom={(d) => {
-            setPreset(null);
-            setFrom(d);
-          }}
-          onTo={(d) => {
-            setPreset(null);
-            setTo(d);
-          }}
-        />
-        <HowItWorks id="retro-page" className="mt-5 max-w-[80ch]" />
-      </div>
+          <div className="mt-[18px]">
+            <RangeControls
+              preset={preset}
+              from={from}
+              to={to}
+              onPreset={applyPreset}
+              onFrom={(d) => {
+                setPreset(null);
+                setFrom(d);
+              }}
+              onTo={(d) => {
+                setPreset(null);
+                setTo(d);
+              }}
+            />
+            <HowItWorks id="retro-page" className="mt-5 max-w-[80ch]" />
+          </div>
+        </>
+      )}
 
-      <RetroImproveCard range={range} />
+      {wantAdvisor && <RetroImproveCard range={range} />}
 
-      {agents !== null && <RetroLeadCard data={agents} />}
+      {wantAgents && agents !== null && <RetroLeadCard data={agents} />}
 
-      <RecommendationsRail />
+      {wantAdvisor && <RecommendationsRail />}
 
-      <ProposalsRail reloadKey={proposalsKey} />
+      {wantAdvisor && <ProposalsRail reloadKey={proposalsKey} />}
 
       {improveRow !== null && (
         <ImproveModal
@@ -1679,7 +1716,7 @@ export function Retro(): JSX.Element {
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
 
-      {agents === null && error === null ? (
+      {!wantAgents ? null : agents === null && error === null ? (
         <Loading label="retro…" />
       ) : agents !== null ? (
         <>
@@ -1705,23 +1742,27 @@ export function Retro(): JSX.Element {
         </>
       ) : null}
 
-      {scope !== null ? <JudgmentsSection project={scope} /> : <JudgmentsSection />}
+      {wantAgents && (scope !== null ? <JudgmentsSection project={scope} /> : <JudgmentsSection />)}
 
       {/* Rendered unconditionally. Gating on `lessons !== null` unmounted the
           feed on every refetch, which silently threw away the operator's group
           toggle and filter text; LessonsFeed owns the loading and error copy
           instead. */}
-      <SectionTitle>
-        Lessons learned <Explain id="retro-lessons" />
-      </SectionTitle>
-      <LessonsFeed
-        lessons={lessons}
-        groups={lessonGroups}
-        lessonsFailed={lessonsFailed}
-        groupsFailed={lessonGroupsFailed}
-      />
+      {wantEstimates && (
+        <>
+          <SectionTitle>
+            Lessons learned <Explain id="retro-lessons" />
+          </SectionTitle>
+          <LessonsFeed
+            lessons={lessons}
+            groups={lessonGroups}
+            lessonsFailed={lessonsFailed}
+            groupsFailed={lessonGroupsFailed}
+          />
+        </>
+      )}
 
-      {taskRows !== null && (
+      {wantEstimates && taskRows !== null && (
         <>
           <SectionTitle>
             Estimation accuracy <Explain id="retro-estimation" />
@@ -1732,7 +1773,7 @@ export function Retro(): JSX.Element {
         </>
       )}
 
-      {friction !== null && (
+      {wantFriction && friction !== null && (
         <>
           <SectionTitle>
             Friction board <Explain id="retro-friction" />
