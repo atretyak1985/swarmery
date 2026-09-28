@@ -97,3 +97,29 @@ func TestResolveIgnoresTerminalRows(t *testing.T) {
 		t.Errorf("verified row became %q", got)
 	}
 }
+
+// A resolved condition that COMES BACK is proposed again, on a fresh row —
+// the contract resolveVanished states ("if the condition returns the rule
+// re-proposes it"). Live, upsert had no case for `resolved`, so recommendation
+// 89 (R3) failed every pass with `unknown status "resolved"`, and because Run
+// returns on the first upsert error, R4–R12, adoption, verification and the
+// resolve sweep itself never ran again.
+func TestResolvedConditionThatReturnsIsReproposed(t *testing.T) {
+	db := testDB(t)
+	seedOpenRec(t, db, "R1", "tool", "Bash", "resolved")
+	seedDenied(t, db, "Bash", R1MinDenied+2, 0)
+
+	if _, err := Run(db, testNow); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var total, resolved, proposed int
+	if err := db.QueryRow(`SELECT COUNT(*),
+			SUM(status = 'resolved'), SUM(status = 'proposed')
+		  FROM recommendations WHERE rule = 'R1' AND target = 'Bash'`).Scan(&total, &resolved, &proposed); err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || resolved != 1 || proposed != 1 {
+		t.Errorf("R1/Bash rows: total=%d resolved=%d proposed=%d, want the resolved row kept and one fresh proposed row",
+			total, resolved, proposed)
+	}
+}
