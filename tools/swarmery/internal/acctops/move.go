@@ -733,11 +733,19 @@ func (r MoveReport) ResumeCommand() string {
 	return "swarmery account exec --path " + shellQuote(path) + " -- claude --resume " + r.UUID
 }
 
-// ResumeAccountNote says, when the resume path does not resolve to the target
-// account, how to bind it — "" when it already does or the path is unknown.
+// ResumeAccountNote says what stands between the resume command and the moved
+// session: a path that is not an existing directory (a mistyped --cwd, or a
+// recorded cwd whose worktree is gone), or a path that resolves to another
+// account, with how to bind it. "" when the path is fine or unknown.
 func (r MoveReport) ResumeAccountNote() string {
 	if r.Cwd == "" {
 		return ""
+	}
+	// Checked first: binding a path that does not exist cannot help, and the
+	// account note alone read as if the path were fine.
+	if fi, err := os.Stat(r.Cwd); err != nil || !fi.IsDir() {
+		return fmt.Sprintf("%s is not an existing directory — the resume command cannot run there; "+
+			"rerun with --cwd <the directory the session ran in>", r.Cwd)
 	}
 	got := claudeacct.Resolve(r.Cwd).Account
 	if got == "" {
