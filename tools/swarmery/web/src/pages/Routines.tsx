@@ -646,7 +646,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /* -------------------------------------------------------------------- page */
 
-export function Routines(): JSX.Element {
+/** `embedded` (System → Routines tab): the shell owns the page heading and the
+ * scope chip, so only the description line and the create action render. */
+export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
   const { scope, projects } = useScope();
   const scopeProjectId = useMemo(() => {
     if (scope === null) return undefined;
@@ -683,10 +685,10 @@ export function Routines(): JSX.Element {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
+    <div className={embedded ? 'max-w-4xl pb-6' : 'mx-auto max-w-4xl px-4 py-6'}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-[18px] font-bold text-ink">Routines</h1>
+          {!embedded && <h1 className="font-display text-[18px] font-bold text-ink">Routines</h1>}
           <p className="mt-0.5 font-mono text-[11px] text-ink-faint">
             Scheduled automation — cron / webhook / manual, with typed steps and run history.
           </p>
@@ -703,9 +705,11 @@ export function Routines(): JSX.Element {
       {/* This page has no filter row of its own — the scope chip gets its own
           line under the header rather than being stranded in the middle of the
           justify-between title bar. `scope` already narrows fetchRoutines. */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <ScopeChip />
-      </div>
+      {!embedded && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <ScopeChip />
+        </div>
+      )}
 
       <div className="mt-5">
         {err !== null && <ErrorBox message={err} />}

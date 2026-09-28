@@ -48,7 +48,7 @@ describe('nav model', () => {
       ['plans', '/projects', '/p/shop/plans'],
       ['health', '/health', '/p/shop/health'],
       ['learning', '/learning', '/p/shop/learning'],
-      ['knowledge', '/projects', '/p/shop/memory'],
+      ['knowledge', '/projects', '/p/shop/knowledge'],
       ['system', '/system', '/p/shop/system'],
       ['settings', '/settings', '/p/shop/settings'],
     ];
@@ -60,7 +60,7 @@ describe('nav model', () => {
 
   it('resolves project-only places through the last project under All projects', () => {
     expect(resolvePlaceHref(place('plans'), null, 'shop')).toBe('/p/shop/plans');
-    expect(resolvePlaceHref(place('knowledge'), null, 'shop')).toBe('/p/shop/memory');
+    expect(resolvePlaceHref(place('knowledge'), null, 'shop')).toBe('/p/shop/knowledge');
     expect(resolvePlaceHref(place('plans'), null, null)).toBe('/projects');
     // In a project, the last project is irrelevant.
     expect(resolvePlaceHref(place('plans'), 'cart', 'shop')).toBe('/p/cart/plans');

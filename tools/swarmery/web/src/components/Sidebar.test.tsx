@@ -100,7 +100,7 @@ describe('Sidebar', () => {
       expect(row(name).className).not.toContain('opacity-60');
     }
     expect(row('Plans').getAttribute('href')).toBe('/p/shop/plans');
-    expect(row('Knowledge').getAttribute('href')).toBe('/p/shop/memory');
+    expect(row('Knowledge').getAttribute('href')).toBe('/p/shop/knowledge');
   });
 
   it('sends project-only places to the project list when no project was ever opened', () => {

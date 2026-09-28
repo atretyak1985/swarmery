@@ -1,26 +1,33 @@
-// System shell — the single top-level "System" destination that hosts the four
-// sections (Agents · Toolkit · Hooks · Insights) as TABS, restoring the earlier
-// one-item-in-the-sidebar shape. It is a thin OUTER tab bar over the existing
-// hub pages: the Agents tab embeds <AgentHub>, the other three embed <SystemHub>
-// (Toolkit → the skills/commands/templates catalog, Hooks, Insights). Nothing is
-// reimplemented — both hubs gained an `embedded` mode that suppresses their own
-// heading/role-nav and hands URL ownership to this shell.
+// System shell — the single top-level "System" destination that hosts its
+// sections (Agents · Skills · Plugins · Hooks · Routines · Insights) as TABS. It
+// is a thin OUTER tab bar over existing pages: Agents embeds <AgentHub>; Skills
+// (the skills/commands/templates catalog, formerly "Toolkit"), Hooks and
+// Insights embed <SystemHub>; Routines embeds <Routines embedded> (phase 8,
+// /routines redirects here); Plugins embeds <ProjectPlugins> under a project and
+// an empty state in the fleet. Nothing is reimplemented — the embedded pages
+// suppress their own heading and hand URL ownership to this shell.
 //
-// Routing: /system/:tab (fleet) and /p/:slug/system/:tab (workspace), where tab ∈
-// agents|toolkit|hooks|insights. The active tab is the first path segment after
-// /system; each embedded hub keeps its own detail sub-tabs on ?tab= and (for
-// Agents) its selection in the /system/agents/:id path via the routeBase we pass.
-// Bare /system (or /p/:slug/system) redirects to the Agents tab.
+// Routing: /system/:tab (fleet) and /p/:slug/system/:tab (workspace). The active
+// tab is the first path segment after /system; each embedded hub keeps its own
+// detail sub-tabs on ?tab= and (for Agents) its selection in the
+// /system/agents/:id path via the routeBase we pass. Bare /system redirects to
+// Agents; the retired /system/toolkit(/…) lands on Skills.
+//
+// Canvas v3 2a lists no Hooks tab; it is kept on purpose (dropping it would
+// remove a working view) — a recorded deviation, not an oversight.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { SystemHubSummary, SystemSummary } from '../api/types';
 import { fetchSystemHubSummary } from '../api/systemHub';
 import { fetchSystemSummary } from '../api/system';
+import { ProjectPlugins } from '../components/ProjectPlugins';
 import { ScopeChip } from '../components/ScopeChip';
+import { Empty, Loading } from '../components/ui';
 import { useProjectScope, useScope } from '../lib/scope';
 import { useLiveUpdates } from '../lib/ws';
 import { AgentHub } from './AgentHub';
+import { Routines } from './Routines';
 import { SystemHub } from './SystemHub';
 import { FiltersRow } from './system/shared';
 
@@ -30,14 +37,23 @@ import { FiltersRow } from './system/shared';
  * effective catalog is listed. */
 type OriginScope = 'global' | 'project' | null;
 
-type SystemTab = 'agents' | 'toolkit' | 'hooks' | 'insights';
-const TABS: SystemTab[] = ['agents', 'toolkit', 'hooks', 'insights'];
+type SystemTab = 'agents' | 'skills' | 'plugins' | 'hooks' | 'routines' | 'insights';
+const TABS: SystemTab[] = ['agents', 'skills', 'plugins', 'hooks', 'routines', 'insights'];
 const TAB_LABELS: Record<SystemTab, string> = {
   agents: 'Agents',
-  toolkit: 'Toolkit',
+  skills: 'Skills',
+  plugins: 'Plugins',
   hooks: 'Hooks',
+  routines: 'Routines',
   insights: 'Insights',
 };
+
+/** Retired tab slugs → their new home (phase 8 renamed Toolkit to Skills). */
+const RENAMED_TABS: Record<string, SystemTab> = { toolkit: 'skills' };
+
+/** Tabs without per-row origin scope: the origin chips are hidden there rather
+ * than rendered inert. */
+const NO_ORIGIN_FILTER: ReadonlySet<SystemTab> = new Set(['plugins', 'routines', 'insights']);
 
 function parseTab(value: string | undefined): SystemTab | null {
   return (TABS as string[]).includes(value ?? '') ? (value as SystemTab) : null;
@@ -46,6 +62,7 @@ function parseTab(value: string | undefined): SystemTab | null {
 export function SystemShell(): JSX.Element {
   const params = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { scope } = useScope();
 
   // Workspace mount (/p/:slug/system/*) carries the slug; fleet mode uses the
@@ -79,8 +96,9 @@ export function SystemShell(): JSX.Element {
 
   // Active tab = first path segment after the base (params['*'] is the splat).
   const splat = params['*'] ?? '';
-  const firstSeg = splat.split('/')[0];
+  const [firstSeg = '', ...restSegs] = splat.split('/');
   const tab = parseTab(firstSeg);
+  const renamed = RENAMED_TABS[firstSeg];
 
   // Tab-bar count badges (agents · toolkit total · hooks · insights) from the
   // hub summary; live-refreshed on registry edits like the hubs themselves.
@@ -141,17 +159,33 @@ export function SystemShell(): JSX.Element {
   const badges: Record<SystemTab, number | undefined> = useMemo(
     () =>
       summary === null
-        ? { agents: undefined, toolkit: undefined, hooks: undefined, insights: undefined }
+        ? {
+            agents: undefined,
+            skills: undefined,
+            plugins: undefined,
+            hooks: undefined,
+            routines: undefined,
+            insights: undefined,
+          }
         : {
             agents: summary.agents,
-            toolkit: summary.skills + summary.commands + summary.templates,
+            skills: summary.skills + summary.commands + summary.templates,
+            // The hub summary carries no plugin or routine count.
+            plugins: undefined,
             hooks: summary.hooks,
+            routines: undefined,
             insights: summary.insights,
           },
     [summary],
   );
 
-  // Bare /system → Agents tab (default). `replace` so back doesn't loop.
+  // Retired /system/toolkit(/…) → the same place under Skills, keeping any
+  // deeper selection and the query. `replace` so back doesn't loop.
+  if (renamed !== undefined) {
+    const rest = restSegs.length > 0 ? `/${restSegs.join('/')}` : '';
+    return <Navigate to={{ pathname: `${base}/${renamed}${rest}`, search: location.search }} replace />;
+  }
+  // Bare /system → Agents tab (default).
   if (tab === null) {
     return <Navigate to={`${base}/agents`} replace />;
   }
@@ -170,7 +204,7 @@ export function SystemShell(): JSX.Element {
           embedded hub, so the chip belongs here rather than in each hub. */}
       <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
         <ScopeChip />
-        {tab !== 'insights' && (
+        {!NO_ORIGIN_FILTER.has(tab) && (
           <FiltersRow inline scope={originScope} onScope={setOriginScope} />
         )}
         {docs !== null && docs.total > 0 && (
@@ -227,6 +261,7 @@ export function SystemShell(): JSX.Element {
           tab={tab}
           base={base}
           scopeRef={scopeRef}
+          projectId={scopeSlug}
           projectScoped={projectScoped}
           originScope={originScope}
         />
@@ -243,11 +278,15 @@ function SystemTabPanel({
   tab,
   base,
   scopeRef,
+  projectId,
   projectScoped,
   originScope,
 }: {
   tab: SystemTab;
   base: string;
+  /** Resolved numeric project id (as a string) for the Plugins tab, or null
+   * while resolving / in the fleet. */
+  projectId: string | null;
   /** Project REFERENCE (URL slug / global scope value), not a resolved id —
    * each hub resolves it and gates its own fetches while that is in flight. */
   scopeRef: string | null;
@@ -269,9 +308,31 @@ function SystemTabPanel({
       />
     );
   }
-  // Toolkit → skills (with the skills/commands/templates sub-pills); Hooks and
-  // Insights map straight to their SystemHub categories.
-  const forceCategory = tab === 'toolkit' ? 'skills' : tab; // 'hooks' | 'insights'
+  if (tab === 'routines') {
+    return (
+      <div className="h-full overflow-y-auto">
+        <Routines embedded />
+      </div>
+    );
+  }
+  if (tab === 'plugins') {
+    // Plugins are enabled per project: the fleet has no single list to show.
+    if (!projectScoped) {
+      return <Empty>Plugins are enabled per project — pick one in the switcher.</Empty>;
+    }
+    return (
+      <div className="h-full overflow-y-auto">
+        {projectId === null ? (
+          <Loading label="plugins…" />
+        ) : (
+          <ProjectPlugins projectId={Number(projectId)} />
+        )}
+      </div>
+    );
+  }
+  // Skills (with the skills/commands/templates sub-pills), Hooks and Insights
+  // map straight to their SystemHub categories.
+  const forceCategory = tab; // 'skills' | 'hooks' | 'insights'
   return (
     <SystemHub
       embedded
