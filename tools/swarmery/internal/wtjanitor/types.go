@@ -6,8 +6,9 @@ import "time"
 type Verdict string
 
 const (
-	// VerdictSkip: a veto fired (main checkout, live process, too young, or a
-	// fresh index.lock). Nothing was touched and nothing is wrong.
+	// VerdictSkip: a veto fired (main checkout, `git worktree lock`, live
+	// process, too young, or a fresh index.lock). Nothing was touched and
+	// nothing is wrong.
 	VerdictSkip Verdict = "skip"
 	// VerdictKeepUnmerged: the branch carries commits reachable from no other
 	// ref. Never removed — this is the swarm/plan-147 case.
@@ -42,6 +43,9 @@ type Worktree struct {
 	// only so its branch counts as checked out; nothing inside it is observed,
 	// and it is never classified, journalled or removed.
 	Foreign bool
+	// Locked reports a `git worktree lock` on the checkout — the operator's
+	// explicit "keep this". It vetoes the sweep, and nothing inside is observed.
+	Locked bool
 }
 
 // Decision pairs a verdict with the reason string the sweep journal records.

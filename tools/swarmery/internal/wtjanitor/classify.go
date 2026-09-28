@@ -17,6 +17,12 @@ func Classify(repoRoot string, wt Worktree, g Git, now time.Time, minIdle time.D
 	if wt.IsMain {
 		return Decision{VerdictSkip, "main checkout"}, nil
 	}
+	// `git worktree lock` is the operator saying "keep this". Without the veto
+	// the sweep reached `git worktree remove`, git refused, and the journal got
+	// a failed "redundant" row every tick.
+	if wt.Locked {
+		return Decision{VerdictSkip, "locked (git worktree lock)"}, nil
+	}
 	if wt.Live {
 		return Decision{VerdictSkip, "live process or session"}, nil
 	}

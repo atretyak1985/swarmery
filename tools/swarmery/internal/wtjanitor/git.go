@@ -81,7 +81,7 @@ func (RepoGit) List(repoRoot string) ([]Worktree, error) {
 	res := make([]Worktree, 0, len(entries))
 	for i, e := range entries {
 		// `git worktree list` always prints the MAIN checkout first.
-		res = append(res, Worktree{Path: e.Path, Branch: e.Branch, IsMain: i == 0})
+		res = append(res, Worktree{Path: e.Path, Branch: e.Branch, IsMain: i == 0, Locked: e.Locked})
 	}
 	return res, nil
 }
@@ -101,7 +101,7 @@ func (g RepoGit) Inspect(repoRoot string, live Liveness, owned func(path string)
 	}
 	res := make([]Worktree, 0, len(entries))
 	for _, e := range entries {
-		wt := Worktree{Path: e.Path, Branch: e.Branch, IsMain: e.IsMain}
+		wt := Worktree{Path: e.Path, Branch: e.Branch, IsMain: e.IsMain, Locked: e.Locked}
 		if wt.IsMain {
 			res = append(res, wt)
 			continue
@@ -111,6 +111,12 @@ func (g RepoGit) Inspect(repoRoot string, live Liveness, owned func(path string)
 		// operator's feet every tick.
 		if owned != nil && !owned(e.Path) {
 			wt.Foreign = true
+			res = append(res, wt)
+			continue
+		}
+		// Locked by the operator: Classify vetoes it before reading anything
+		// else, so observing it would only take its index.lock for nothing.
+		if wt.Locked {
 			res = append(res, wt)
 			continue
 		}
