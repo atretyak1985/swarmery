@@ -1386,6 +1386,22 @@ func systemBase() string {
 	return filepath.Join(home, ".swarmery")
 }
 
+// homeDirOverride pins the home dir in tests; empty means os.UserHomeDir().
+var homeDirOverride string
+
+// homeDir is the dir the ancestor rule refuses, together with every ancestor
+// of it; empty only when the home dir is unresolvable.
+func homeDir() string {
+	if homeDirOverride != "" {
+		return homeDirOverride
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(home)
+}
+
 // SystemDir exposes the System project dir to other packages (the API layer
 // flags that projects row isSystem so the dashboard can demote it). Empty
 // only when the home dir is unresolvable.
@@ -1416,17 +1432,39 @@ func SetOnboardRoots(roots []string) {
 }
 
 // CanonicalProjectPath maps a raw session cwd to the path of the registered
-// project it belongs to, so satellite cwds never mint phantom project rows:
-//   - a dispatcher worktree <root>/<parentSlug>/<task> resolves to the
-//     project whose slug is the first segment under the worktree root;
-//   - a subdirectory of a registered project resolves to that project
-//     (deepest registered ancestor wins), skipping archived rows and
-//     configured onboarding roots — see the ancestor query below.
+// project it belongs to — the "which project owns this cwd" lookup the
+// handoff and drift endpoints share with attribution:
+//   - a cwd that is itself a registered project resolves to that row,
+//     archived or not, so a registered ancestor never captures it;
+//   - anything else goes through the satellite rules of parentProjectPath
+//     (cwd "/", dispatcher worktrees, in-repo subdirectories).
 //
 // Unknown paths return unchanged — attribution never invents projects
 // (except cwd "/", which maps to the System dir; UpsertProject mints that
 // row on first sight).
 func CanonicalProjectPath(q dbtx, path string) string {
+	if path != "/" { // "/" always maps to the System dir, even over a legacy "/" row
+		var id int64
+		if err := q.QueryRow(`SELECT id FROM projects WHERE path = ?`, path).Scan(&id); err == nil {
+			return path
+		}
+	}
+	return parentProjectPath(q, path)
+}
+
+// parentProjectPath folds a satellite cwd into the registered project that
+// owns it, never answering with a row registered at path itself — the heal
+// asks it where an EXISTING row belongs, and UpsertProject asks it once its
+// own exact lookup has missed:
+//   - cwd "/" maps to the System dir;
+//   - a dispatcher worktree <root>/<parentSlug>/<task> resolves to the
+//     project whose slug is the first segment under the worktree root;
+//   - a subdirectory of a registered project resolves to that project
+//     (deepest registered ancestor wins), skipping archived rows, configured
+//     onboarding roots and the home dir — see the ancestor query below.
+//
+// No match returns path unchanged.
+func parentProjectPath(q dbtx, path string) string {
 	if path == "/" {
 		if s := systemBase(); s != "" {
 			return s
@@ -1441,18 +1479,26 @@ func CanonicalProjectPath(q dbtx, path string) string {
 			}
 		}
 	}
-	// Deepest registered ancestor wins, with two rows barred from ever being
-	// the target:
+	// Deepest registered ancestor wins, with three kinds of row barred from
+	// ever being the target:
 	//   - archived = 1: archiving a row is the operator saying "stop using
 	//     this project"; without the filter an archived trap row keeps
 	//     swallowing new cwds and archiving cannot defuse it;
 	//   - an onboarding root: a parent dir of many repos, never a project in
-	//     the attribution sense (see onboardRootsOverride).
-	// Both bans are ancestor-rule-only — UpsertProject's exact-path lookup
-	// still resolves an archived project or an onboarding root that really
-	// did host a session, so no existing row loses its own sessions.
+	//     the attribution sense (see onboardRootsOverride);
+	//   - the home dir and every ancestor of it: the same trap with no
+	//     configuration to name it — one session started at cwd=$HOME is
+	//     enough to mint the row, and the next heal then folds every unpinned
+	//     project on the machine into it.
+	// All three bans are ancestor-rule-only — the exact-path lookup still
+	// resolves an archived project, an onboarding root or the home dir that
+	// really did host a session, so no existing row loses its own sessions.
 	query := `SELECT path FROM projects WHERE ? LIKE path || '/%' AND archived = 0`
 	args := []any{path}
+	if home := homeDir(); home != "" {
+		query += ` AND path != ? AND ? NOT LIKE path || '/%'`
+		args = append(args, home, home)
+	}
 	if len(onboardRootsOverride) > 0 {
 		query += ` AND path NOT IN (?` + strings.Repeat(`, ?`, len(onboardRootsOverride)-1) + `)`
 		for _, r := range onboardRootsOverride {
@@ -1479,7 +1525,7 @@ func UpsertProject(q dbtx, path, firstSeen, lastActivity string) (id int64, crea
 		// Not registered under this exact path — attribute satellite cwds
 		// (dispatcher worktrees, in-repo subdirectories, cwd "/") to their
 		// canonical project instead of minting a phantom row.
-		if canon := CanonicalProjectPath(q, path); canon != path {
+		if canon := parentProjectPath(q, path); canon != path {
 			if err := q.QueryRow(`SELECT id FROM projects WHERE path = ?`, canon).Scan(&id); err == nil {
 				return id, false, nil
 			}
@@ -1601,7 +1647,7 @@ func HealProjectAttribution(db *sql.DB) (int, error) {
 
 	moved := 0
 	for _, p := range projs {
-		canon := CanonicalProjectPath(db, p.path)
+		canon := parentProjectPath(db, p.path)
 		if canon == p.path {
 			continue
 		}

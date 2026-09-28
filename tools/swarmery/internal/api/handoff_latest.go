@@ -29,7 +29,9 @@ const handoffMaxAge = 14 * 24 * time.Hour
 // (ingest.CanonicalProjectPath), which is what mints sessions.project_id in the
 // first place: a dispatcher worktree and an in-repo subdirectory both resolve
 // to their parent project, so a session started in a worktree still finds the
-// brief written for the repo.
+// brief written for the repo — while a cwd that is itself a registered project
+// resolves to that project, never to a registered ancestor (a row minted by
+// one session at cwd=$HOME would otherwise hand its brief to every repo).
 //
 // 204, never 404 or 500, whenever there is simply nothing to inject: no project
 // row, no handoff row, or a row whose file has since been deleted or become
