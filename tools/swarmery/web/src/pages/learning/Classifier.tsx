@@ -186,9 +186,35 @@ export function Classifier({ inboxHref }: { inboxHref: string }): JSX.Element {
           make sense.
         </p>
         {data !== null && !data.configured && (
-          <p className="mt-3 text-[12px] text-amber">
-            The classifier is not configured (SWARMERY_DECIDE_URL is unset), so no question is asked yet.
-          </p>
+          <section
+            aria-labelledby="classifier-setup-title"
+            className="mt-3 max-w-[60ch] rounded border border-line p-4 text-[12px]"
+          >
+            <h2 id="classifier-setup-title" className="text-ink">
+              No local model configured — this is optional
+            </h2>
+            <p className="mt-1 text-ink-dim">
+              Everything else in swarmery works without it. Until a model is set up, no question is
+              asked and runs settle by the deterministic rules alone.
+            </p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-ink-dim">
+              <li>
+                Run an OpenAI-compatible model server: LM Studio (<code>localhost:1234</code>), Ollama (
+                <code>localhost:11434/v1</code>), llama.cpp or vLLM. A 7–14B instruct model is enough.
+              </li>
+              <li>
+                Set <code>SWARMERY_DECIDE_URL</code> and <code>SWARMERY_DECIDE_MODEL</code> in the
+                daemon&apos;s environment.
+              </li>
+              <li>Restart the daemon. Every question starts in shadow: logged, never acted on.</li>
+            </ol>
+            <Link
+              to="/docs/guide-decisions"
+              className="mt-3 inline-block text-brand transition-opacity hover:opacity-80"
+            >
+              Setup guide →
+            </Link>
+          </section>
         )}
         {err !== null && (
           <div role="alert" className="mt-3 text-[12px] text-red">
