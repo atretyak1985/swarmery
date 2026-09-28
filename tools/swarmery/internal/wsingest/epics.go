@@ -1206,7 +1206,8 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 // two priors — a shape the format does not forbid and the lint is there to report,
 // not to silence by losing one of them. The rows are pure doc derivations with no
 // daemon-owned state on them, so churning their ids costs nothing; readers come
-// the other way, with a known phase id.
+// the other way, with a known phase id. The one exception is a prior's
+// report-filled verdict, which survives the replace — see vettedPriors.
 //
 // A phase whose doc declares no forecast still runs the DELETE: removing the
 // `## Forecast` section from a doc must actually retract the forecast, the same
@@ -1232,6 +1233,12 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		log.Printf("warn: wsingest: task=%d no phase row for %s — forecasts skipped", taskID, p.docPath)
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+	// Read BEFORE the delete: the rows about to be replaced are the only record
+	// of what an earlier scan saw.
+	vetted, err := vettedPriors(tx, phaseID, p.forecasts)
 	if err != nil {
 		return err
 	}
@@ -1272,6 +1279,12 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		if f.Kind == ForecastPosterior && ordering.PostHoc() {
 			f.PostHoc, f.PostHocReason = true, PostHocAfterFirstEdit
 		}
+		// report-filled is a verdict on the doc as it was when the prior FIRST
+		// appeared, not as it is now: a prior an earlier scan stored as a genuine
+		// prediction keeps that verdict once the run fills the Completion Report.
+		if f.PostHocReason == PostHocReportFilled && vetted[f.WrittenAt] {
+			f.PostHoc, f.PostHocReason = false, ""
+		}
 		postHoc := 0
 		if f.PostHoc {
 			postHoc = 1
@@ -1289,6 +1302,54 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		}
 	}
 	return nil
+}
+
+// vettedPriors returns the written_at of every PRIOR this phase already has stored
+// with post_hoc = 0 — priors an earlier scan saw while the Completion Report was
+// still empty, i.e. genuine predictions.
+//
+// WHY. ParseForecasts derives report-filled from the doc's CURRENT state, and
+// applyForecasts replaces the rows on every scan of a changed plan. Without this
+// memory the phase run filling its own report flips every legitimate prior to
+// post_hoc = 1, so "phases with a non-post-hoc prior" shrinks as phases execute
+// and calibration only ever sees phases that never ran.
+//
+// KEYED ON written_at, the author's own timestamp: doc_hash changes precisely
+// when the report fills, so it cannot identify "the same prior". A prior whose
+// written_at is edited after the report filled is a new prior and is judged
+// afresh; one first seen in an already-reported doc (a backfill) has no vetted
+// row and keeps post_hoc = 1.
+//
+// Queried only when this scan would mark a prior report-filled — the common
+// scan has nothing to rescue. An error is returned, not degraded to "no memory":
+// the DELETE that follows would then erase the only evidence irreversibly.
+func vettedPriors(tx *sql.Tx, phaseID int64, fs []Forecast) (map[string]bool, error) {
+	need := false
+	for _, f := range fs {
+		if f.PostHocReason == PostHocReportFilled {
+			need = true
+			break
+		}
+	}
+	if !need {
+		return nil, nil
+	}
+	rows, err := tx.Query(`
+		SELECT written_at FROM phase_forecasts
+		 WHERE phase_id = ? AND kind = ? AND post_hoc = 0`, phaseID, ForecastPrior)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var w string
+		if err := rows.Scan(&w); err != nil {
+			return nil, err
+		}
+		out[w] = true
+	}
+	return out, rows.Err()
 }
 
 // jsonList marshals a string slice, spelling nil as `[]` rather than `null` —
@@ -1367,6 +1428,19 @@ type phaseState struct {
 	runStartPoint sql.NullString
 	verifyVerdict sql.NullString
 	verifyDetail  sql.NullString
+	// The --effort the run was spawned with (0086), stamped at run start; calibration
+	// reads it back per run, so it must follow the run across a rename.
+	runEffort sql.NullString
+}
+
+// runDerivedPhaseTables hold one row per RUN (keyed on its session uuid) and name the
+// phase by epic_phases.id with no foreign key (0081/0082/0084/0085). When a rename
+// replaces the phase row, carryAcrossRenames re-keys them onto the replacement;
+// otherwise the orphan sweep in applyEpics deletes the first two outright and the
+// lesson tables are left pointing at a phase that no longer exists. phase_forecasts is
+// deliberately absent: it is re-derived from the doc on every scan.
+var runDerivedPhaseTables = []string{
+	"phase_actuals", "phase_surprise", "surprise_lessons", "lesson_generations", "lesson_uses",
 }
 
 // carriesState reports whether the row holds anything a rescan must not lose.
@@ -1386,7 +1460,7 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 		SELECT id, seq, doc_path, run_state, run_session_uuid, run_started_at,
 		       run_ended_at, run_error, run_branch, run_checkboxes_before,
 		       run_checkboxes_after, activated_at, activated_board_task_id,
-		       run_start_point, verify_verdict, verify_detail
+		       run_start_point, verify_verdict, verify_detail, run_effort
 		  FROM epic_phases
 		 WHERE workspace_task_id = ?`, taskID)
 	if err != nil {
@@ -1400,7 +1474,7 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 			&p.runStartedAt, &p.runEndedAt, &p.runError, &p.runBranch,
 			&p.runCheckboxesBefore, &p.runCheckboxesAfter, &p.activatedAt,
 			&p.activatedBoardTaskID,
-			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail); err != nil {
+			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail, &p.runEffort); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -1461,13 +1535,28 @@ func carryAcrossRenames(tx *sql.Tx, taskID int64, phases []epicPhase, before []p
 			   SET run_state=?, run_session_uuid=?, run_started_at=?, run_ended_at=?,
 			       run_error=?, run_branch=?, run_checkboxes_before=?,
 			       run_checkboxes_after=?, activated_at=?, activated_board_task_id=?,
-			       run_start_point=?, verify_verdict=?, verify_detail=?
+			       run_start_point=?, verify_verdict=?, verify_detail=?, run_effort=?
 			 WHERE workspace_task_id = ? AND doc_path = ?`,
 			old.runState, old.runSessionUUID, old.runStartedAt, old.runEndedAt,
 			old.runError, old.runBranch, old.runCheckboxesBefore, old.runCheckboxesAfter,
 			old.activatedAt, old.activatedBoardTaskID,
-			old.runStartPoint, old.verifyVerdict, old.verifyDetail, taskID, dst.docPath); err != nil {
+			old.runStartPoint, old.verifyVerdict, old.verifyDetail, old.runEffort,
+			taskID, dst.docPath); err != nil {
 			return nil, err
+		}
+		// Re-key the run-derived rows onto the replacement BEFORE the prune and its
+		// orphan sweep run. The destination row is brand new, so it holds none yet and
+		// every table's UNIQUE key (session-based, never phase_id) stays satisfied.
+		var dstID int64
+		if err := tx.QueryRow(
+			`SELECT id FROM epic_phases WHERE workspace_task_id = ? AND doc_path = ?`,
+			taskID, dst.docPath).Scan(&dstID); err != nil {
+			return nil, err
+		}
+		for _, table := range runDerivedPhaseTables {
+			if _, err := tx.Exec(`UPDATE `+table+` SET phase_id = ? WHERE phase_id = ?`, dstID, old.id); err != nil {
+				return nil, err
+			}
 		}
 		drained = append(drained, old.docPath)
 		log.Printf("wsingest: task=%d phase seq=%d carried run state across rename %s → %s (run_state=%s)",

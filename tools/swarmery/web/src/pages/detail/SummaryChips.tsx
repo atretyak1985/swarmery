@@ -6,6 +6,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Event } from '../../api/types';
+import { AGENT_GROUP_THRESHOLD } from '../../lib/calltree';
 import { pickString, subagentDescription, skillName } from '../../lib/payload';
 
 interface AgentChip {
@@ -14,14 +15,12 @@ interface AgentChip {
   /** Agent type — the registry name the chip links to (label may be a description). */
   type: string;
   count: number;
-  /** Native tooltip: the task descriptions hidden behind an aggregated chip. */
+  /** Tooltip (`data-tip`): the task descriptions hidden behind an aggregated chip. */
   title: string | null;
 }
 
-/** With this many agents or fewer, label chips by description (WHO did WHAT). */
-const DESCRIBE_ALL_THRESHOLD = 4;
-
-function deriveAgents(events: Event[]): AgentChip[] {
+/** Agent chips for the session; exported for unit tests. */
+export function deriveAgents(events: Event[]): AgentChip[] {
   const starts: { type: string; description: string | null }[] = [];
   for (const event of events) {
     if (event.type !== 'subagent_start') continue;
@@ -33,7 +32,7 @@ function deriveAgents(events: Event[]): AgentChip[] {
   }
 
   // Small sessions: one chip per agent, labeled by its task description.
-  if (starts.length <= DESCRIBE_ALL_THRESHOLD) {
+  if (starts.length <= AGENT_GROUP_THRESHOLD) {
     return starts.map(({ type, description }) => ({
       name: description ?? type,
       type,
@@ -43,7 +42,7 @@ function deriveAgents(events: Event[]): AgentChip[] {
   }
 
   // Larger sessions: keep chips compact by aggregating per type, but expose
-  // the individual task descriptions via a native tooltip.
+  // the individual task descriptions via the tooltip.
   const byType = new Map<string, { count: number; descriptions: string[] }>();
   for (const { type, description } of starts) {
     const entry = byType.get(type) ?? { count: 0, descriptions: [] };
