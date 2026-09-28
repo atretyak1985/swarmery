@@ -79,7 +79,7 @@ func TestDocsListAndDetail(t *testing.T) {
 }
 
 // TestDocsGuidesOrder pins the three-band nav order the dashboard rail relies
-// on: guides (docOrder 0–3) ahead of the pinned reference docs (10–14), and
+// on: guides (docOrder 0–4) ahead of the pinned reference docs (10–14), and
 // both ahead of anything unpinned, which falls back to alphabetical.
 //
 // The rail groups client-side on the `guide-` slug prefix, so this ordering is

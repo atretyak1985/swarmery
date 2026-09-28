@@ -51,7 +51,7 @@ export interface AgentNode {
   children: CallNode[];
 }
 
-/** More than GROUP_THRESHOLD same-type runs in one container fold into this. */
+/** More than AGENT_GROUP_THRESHOLD same-type runs in one container fold into this. */
 export interface AgentGroupNode {
   kind: 'agent-group';
   type: string;
@@ -64,8 +64,11 @@ export interface AgentGroupNode {
 
 export type CallNode = ToolNode | SkillNode | AgentNode | AgentGroupNode;
 
-/** Same UX threshold as SummaryChips' DESCRIBE_ALL_THRESHOLD. */
-const GROUP_THRESHOLD = 4;
+/**
+ * Agent runs above this many fold into one aggregated entry — shared by the
+ * call tree (per type, per container) and SummaryChips (per session).
+ */
+export const AGENT_GROUP_THRESHOLD = 4;
 
 /** Distinct per-tool arg samples kept for the hover tooltip. */
 const SAMPLE_LIMIT = 3;
@@ -207,7 +210,7 @@ function buildScope(scope: Event[], childrenOf: Map<number, Event[]>): CallNode[
   return groupRuns(root.list);
 }
 
-/** Fold >GROUP_THRESHOLD same-type agent runs of one container into a group. */
+/** Fold >AGENT_GROUP_THRESHOLD same-type agent runs of one container into a group. */
 function groupRuns(list: CallNode[]): CallNode[] {
   const perType = new Map<string, number>();
   for (const node of list) {
@@ -216,7 +219,7 @@ function groupRuns(list: CallNode[]): CallNode[] {
   const groups = new Map<string, AgentGroupNode>();
   const out: CallNode[] = [];
   for (const node of list) {
-    if (node.kind !== 'agent' || (perType.get(node.type) ?? 0) <= GROUP_THRESHOLD) {
+    if (node.kind !== 'agent' || (perType.get(node.type) ?? 0) <= AGENT_GROUP_THRESHOLD) {
       out.push(node);
       continue;
     }

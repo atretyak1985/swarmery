@@ -35,7 +35,7 @@ type docDetailDTO struct {
 // reading order, then the reference docs (onboarding → concepts → workflow →
 // extending → neutrality); anything else sorts alphabetically after both.
 //
-// The two bands are numbered 0–3 and 10–14 rather than 0–8 so a guide or a
+// The two bands are numbered 0–4 and 10–14 rather than 0–9 so a guide or a
 // reference doc can be slotted in later without renumbering the other band.
 // The `guide-` prefix is load-bearing beyond ordering: the dashboard rail
 // groups on it (web/src/pages/docsRail.ts), and it is what survives the
@@ -45,6 +45,7 @@ var docOrder = map[string]int{
 	"guide-board":           1,
 	"guide-plans":           2,
 	"guide-sessions":        3,
+	"guide-decisions":       4,
 
 	"onboarding": 10,
 	"concepts":   11,
@@ -123,7 +124,7 @@ func docRank(slug string) int {
 	}
 	// Unpinned docs sort after every pinned one, then alphabetically among
 	// themselves. This MUST NOT be len(docOrder): the pins are banded (guides
-	// 0–3, reference 10–14) with gaps for future entries, so a count is not an
+	// 0–4, reference 10–14) with gaps for future entries, so a count is not an
 	// upper bound — at 9 entries it would have sorted unpinned docs ahead of
 	// the whole reference band.
 	return math.MaxInt
