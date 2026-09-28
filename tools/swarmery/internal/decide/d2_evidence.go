@@ -1,0 +1,209 @@
+package decide
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+	"path"
+	"strings"
+)
+
+// d2EvidenceBashRows bounds how many successful git/gh Bash calls one session's
+// evidence scan reads. A session past it is long; its counts are a floor.
+const d2EvidenceBashRows = 2000
+
+// shipEvidence is D2's deterministic "did the work land" block: commits, push
+// and PR activity from successful Bash calls, files edited, the phase run the
+// session drove (if any) and the operator's own verdict (if set). The last
+// assistant message alone cannot tell a shipped session from an abandoned
+// one; this can.
+//
+// A DB error never fails labelling: the failing line is dropped with a
+// warning and the rest is still emitted, so the block is never empty.
+func shipEvidence(db *sql.DB, uuid, operatorOutcome string) string {
+	var b strings.Builder
+	b.WriteString("evidence:\n")
+	if g, err := gitActivity(db, uuid); err != nil {
+		log.Printf("warning: decide: d2 git evidence for %s: %v", uuid, err)
+	} else {
+		fmt.Fprintf(&b, "commits: %d\npushed: %s\npr opened: %d, pr merged: %d\n",
+			g.commits, yesNo(g.pushes > 0), g.prsOpened, g.prsMerged)
+	}
+	var files, adds, dels int
+	if err := db.QueryRow(`
+		SELECT COUNT(DISTINCT file_path), COALESCE(SUM(additions), 0), COALESCE(SUM(deletions), 0)
+		  FROM file_changes
+		 WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)`, uuid).
+		Scan(&files, &adds, &dels); err != nil {
+		log.Printf("warning: decide: d2 file evidence for %s: %v", uuid, err)
+	} else {
+		fmt.Fprintf(&b, "files edited: %d (+%d/-%d)\n", files, adds, dels)
+	}
+	if line, err := phaseRunLine(db, uuid); err != nil {
+		log.Printf("warning: decide: d2 phase-run evidence for %s: %v", uuid, err)
+	} else if line != "" {
+		b.WriteString(line)
+	}
+	if operatorOutcome != "" {
+		fmt.Fprintf(&b, "operator verdict: %s\n", operatorOutcome)
+	}
+	return b.String()
+}
+
+// gitTally counts the landing actions of a session's successful Bash calls.
+type gitTally struct {
+	commits, pushes, prsOpened, prsMerged int
+}
+
+// gitActivity tallies git commit/push and gh pr create/merge across the
+// session's Bash calls that exited ok. An errored call (nothing to commit, a
+// rejected push, a failed merge) landed nothing and is not counted.
+func gitActivity(db *sql.DB, uuid string) (gitTally, error) {
+	var t gitTally
+	rows, err := db.Query(`
+		SELECT cmd FROM (
+		  SELECT COALESCE(json_extract(payload, '$.input.command'), '') AS cmd
+		    FROM events
+		   WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)
+		     AND type = 'tool_call' AND tool_name = 'Bash' AND status = 'ok'
+		) WHERE cmd LIKE '%git%' OR cmd LIKE '%gh%'
+		LIMIT ?`, uuid, d2EvidenceBashRows)
+	if err != nil {
+		return t, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cmd string
+		if err := rows.Scan(&cmd); err != nil {
+			return t, err
+		}
+		t.add(cmd)
+	}
+	return t, rows.Err()
+}
+
+// add classifies every simple command of one shell command line.
+func (t *gitTally) add(cmd string) {
+	for _, seg := range shellSegments(cmd) {
+		switch landingAction(seg) {
+		case "commit":
+			t.commits++
+		case "push":
+			t.pushes++
+		case "pr-create":
+			t.prsOpened++
+		case "pr-merge":
+			t.prsMerged++
+		}
+	}
+}
+
+// shellSegments splits a command line on the shell's list and pipe operators
+// and newlines. Quoting is ignored: a separator inside a commit message only
+// produces a fragment that classifies as nothing.
+func shellSegments(cmd string) []string {
+	return strings.FieldsFunc(cmd, func(r rune) bool {
+		return r == '&' || r == '|' || r == ';' || r == '\n'
+	})
+}
+
+// landingAction names the landing action a simple command performs: "commit",
+// "push", "pr-create", "pr-merge", or "" for anything else. It skips leading
+// VAR=value assignments, subshell/group openers and git's global options
+// (`git -C dir commit`, `git -c k=v push`).
+func landingAction(seg string) string {
+	f := strings.Fields(strings.TrimLeft(strings.TrimSpace(seg), "({ "))
+	for len(f) > 0 && isAssignment(f[0]) {
+		f = f[1:]
+	}
+	if len(f) < 2 {
+		return ""
+	}
+	switch path.Base(f[0]) {
+	case "git":
+		switch verb, _ := firstVerb(f[1:], gitArgOpts); verb {
+		case "commit", "push":
+			return verb
+		}
+	case "gh":
+		if verb, i := firstVerb(f[1:], ghArgOpts); verb == "pr" {
+			switch sub, _ := firstVerb(f[i+2:], ghArgOpts); sub {
+			case "create":
+				return "pr-create"
+			case "merge":
+				return "pr-merge"
+			}
+		}
+	}
+	return ""
+}
+
+// Global options that take a separate value, per CLI.
+var (
+	gitArgOpts = map[string]bool{"-C": true, "-c": true, "--git-dir": true, "--work-tree": true, "--namespace": true}
+	ghArgOpts  = map[string]bool{"-R": true, "--repo": true}
+)
+
+// firstVerb is the first non-option token and its index, skipping the value of
+// each option in withArg (`-C dir`); `--opt=value` forms carry their own
+// value. ("", len(toks)) when there is none.
+func firstVerb(toks []string, withArg map[string]bool) (string, int) {
+	for i := 0; i < len(toks); i++ {
+		tok := toks[i]
+		if !strings.HasPrefix(tok, "-") {
+			return tok, i
+		}
+		if withArg[tok] {
+			i++
+		}
+	}
+	return "", len(toks)
+}
+
+// isAssignment reports a leading `NAME=value` environment assignment.
+func isAssignment(tok string) bool {
+	eq := strings.IndexByte(tok, '=')
+	if eq <= 0 {
+		return false
+	}
+	for i, r := range tok[:eq] {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || i > 0 && r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// phaseRunLine describes the plan phase this session ran, or "" when it ran
+// none. Criteria prefer the count recorded at the end of the run over the
+// doc's current count, which a later run may have moved.
+func phaseRunLine(db *sql.DB, uuid string) (string, error) {
+	var state string
+	var done, total int
+	var before, after sql.NullInt64
+	err := db.QueryRow(`
+		SELECT COALESCE(run_state, ''), checkboxes_done, checkboxes_total, run_checkboxes_before, run_checkboxes_after
+		  FROM epic_phases WHERE run_session_uuid = ? ORDER BY id DESC LIMIT 1`, uuid).
+		Scan(&state, &done, &total, &before, &after)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if after.Valid {
+		done = int(after.Int64)
+	}
+	line := fmt.Sprintf("phase run: %s, criteria %d/%d ticked", state, done, total)
+	if before.Valid {
+		line += fmt.Sprintf(" (%d before the run)", before.Int64)
+	}
+	return line + "\n", nil
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
