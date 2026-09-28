@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -91,6 +92,21 @@ func TestDriftContextIgnoresResolvedFindings(t *testing.T) {
 
 	if got := h.driftContext(path); got != "" {
 		t.Errorf("context = %q, want empty for a resolved finding", got)
+	}
+}
+
+// A registered ancestor row (live: one session run at cwd=$HOME) must not
+// capture the project's own cwd — the lookup would then match findings
+// against the ancestor's path and this project's error would go silent.
+func TestDriftContextExactProjectWinsOverAncestor(t *testing.T) {
+	h, db, path := driftHandler(t)
+	execSQL(t, db, `INSERT INTO projects (path, slug, name, first_seen) VALUES (?, 'parent', 'parent', '2026-09-28T00:00:00Z')`,
+		filepath.Dir(path))
+	seedFinding(t, db, pluginTarget("core@swarmery", path), "plugin_enabled_not_installed",
+		"error", "enabled here, but not installed", "")
+
+	if got := h.driftContext(path); !strings.Contains(got, "core@swarmery") {
+		t.Errorf("context = %q, want this project's finding — the ancestor row captured its cwd", got)
 	}
 }
 

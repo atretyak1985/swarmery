@@ -18,6 +18,14 @@ package ingest
 //   - an archived row is never an ancestor-rule target (so archiving a trap
 //     row actually defuses it);
 //   - a pinned row is never folded away by the heal.
+//
+// …and the same trap one level up (one session started at cwd=$HOME minted a
+// projects row for the home dir, and the next restart's heal folded 22
+// unpinned projects — the System row among them — into it and deleted them):
+//   - the home dir, and every ancestor of it, is never an ancestor-rule target;
+//   - a cwd that IS a registered project resolves to that project even when a
+//     registered ancestor exists (exact row first), which is what the
+//     handoff and drift lookups need.
 
 import (
 	"testing"
@@ -74,8 +82,10 @@ func TestUpsertProjectSubdirCwdAttributesToAncestor(t *testing.T) {
 
 func TestUpsertProjectDeepestAncestorWins(t *testing.T) {
 	db := testDB(t)
-	seedProject(t, db, "/Volumes/Work")
+	// Inner first: seeded the other way round, the ancestor rule would fold
+	// the inner path into the outer row and there would be one row to win.
 	inner := seedProject(t, db, "/Volumes/Work/swarmery")
+	seedProject(t, db, "/Volumes/Work")
 
 	id, _, err := UpsertProject(db, "/Volumes/Work/swarmery/web", "2026-07-26T00:00:00.000Z", "")
 	if err != nil {
@@ -297,6 +307,95 @@ func TestHealProjectAttributionSkipsPinnedRow(t *testing.T) {
 	}
 	if n := count(t, db, `SELECT COUNT(*) FROM sessions WHERE project_id = ?`, parent); n != 1 {
 		t.Errorf("parent sessions = %d, want 1 (unpinned row re-pointed)", n)
+	}
+}
+
+// setHomeDir pins the home dir the ancestor rule refuses, for one test (the
+// var is process-global, like worktreeRootOverride).
+func setHomeDir(t *testing.T, dir string) {
+	t.Helper()
+	old := homeDirOverride
+	homeDirOverride = dir
+	t.Cleanup(func() { homeDirOverride = old })
+}
+
+func TestCanonicalProjectPathNeverFoldsIntoHome(t *testing.T) {
+	db := testDB(t)
+	setHomeDir(t, "/Users/dev")
+
+	// The trap rows: one session once ran at cwd=$HOME, another at /Users.
+	home := seedProject(t, db, "/Users/dev")
+	users := seedProject(t, db, "/Users")
+
+	if got := CanonicalProjectPath(db, "/Users/dev/projects/am"); got != "/Users/dev/projects/am" {
+		t.Errorf("cwd under the home dir = %q, want it unchanged", got)
+	}
+	if got := CanonicalProjectPath(db, "/Users/other/repo"); got != "/Users/other/repo" {
+		t.Errorf("cwd under an ancestor of the home dir = %q, want it unchanged", got)
+	}
+	// …so a repo under the home dir mints its OWN row instead of folding in.
+	id, created, err := UpsertProject(db, "/Users/dev/projects/am", "2026-09-28T00:00:00.000Z", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created || id == home || id == users {
+		t.Errorf("repo under the home dir: id=%d created=%v, want a fresh row (home id=%d)", id, created, home)
+	}
+	// The home row still owns a session that really ran at cwd=$HOME.
+	if again, created, err := UpsertProject(db, "/Users/dev", "2026-09-28T00:00:00.000Z", ""); err != nil || created || again != home {
+		t.Errorf("home cwd: id=%d created=%v err=%v, want the home row %d", again, created, err, home)
+	}
+	// A real project under the home dir is still a valid ancestor.
+	if got := CanonicalProjectPath(db, "/Users/dev/projects/am/web"); got != "/Users/dev/projects/am" {
+		t.Errorf("subdir of a repo under the home dir = %q, want /Users/dev/projects/am", got)
+	}
+}
+
+func TestHealProjectAttributionNeverMergesIntoHome(t *testing.T) {
+	db := testDB(t)
+	setHomeDir(t, "/Users/dev")
+
+	// Real projects first, then the trap row minted by a later cwd=$HOME session.
+	am := seedProject(t, db, "/Users/dev/projects/am")
+	tools := seedProject(t, db, "/Users/dev/.local/tools")
+	seedProject(t, db, "/Users/dev")
+	mustExecT(t, db, `INSERT INTO sessions (project_id, session_uuid, started_at) VALUES (?, 'u-am', '2026-09-20T00:00:00.000Z')`, am)
+
+	moved, err := HealProjectAttribution(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != 0 {
+		t.Errorf("moved = %d, want 0 — nothing may fold into the home dir", moved)
+	}
+	for _, id := range []int64{am, tools} {
+		if n := count(t, db, `SELECT COUNT(*) FROM projects WHERE id = ?`, id); n != 1 {
+			t.Errorf("project %d was merged away into the home dir", id)
+		}
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM sessions WHERE project_id = ?`, am); n != 1 {
+		t.Errorf("am sessions = %d, want 1 (kept)", n)
+	}
+}
+
+func TestCanonicalProjectPathExactRowWinsOverAncestor(t *testing.T) {
+	db := testDB(t)
+	// Inner first (see TestUpsertProjectDeepestAncestorWins), then an
+	// ancestor registered by a later session.
+	seedProject(t, db, "/Volumes/Work/swarmery")
+	seedProject(t, db, "/Volumes/Work")
+
+	if got := CanonicalProjectPath(db, "/Volumes/Work/swarmery"); got != "/Volumes/Work/swarmery" {
+		t.Errorf("registered cwd = %q, want its own row, not the ancestor", got)
+	}
+	if got := CanonicalProjectPath(db, "/Volumes/Work/swarmery/web"); got != "/Volumes/Work/swarmery" {
+		t.Errorf("subdir = %q, want the deepest registered ancestor", got)
+	}
+	// An archived exact row still resolves to itself, as in UpsertProject:
+	// archiving stops a row from swallowing others, never from owning its own.
+	mustExecT(t, db, `UPDATE projects SET archived = 1 WHERE path = ?`, "/Volumes/Work/swarmery")
+	if got := CanonicalProjectPath(db, "/Volumes/Work/swarmery"); got != "/Volumes/Work/swarmery" {
+		t.Errorf("archived registered cwd = %q, want its own row", got)
 	}
 }
 

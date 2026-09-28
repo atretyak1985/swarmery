@@ -170,3 +170,51 @@ func TestLatestHandoffIgnoresStaleBriefs(t *testing.T) {
 		t.Fatalf("a %s-old brief: status = %d, want 204", handoffMaxAge, resp.StatusCode)
 	}
 }
+
+// A registered project never serves an ANCESTOR row's brief: one session run
+// at a parent dir (live: cwd=$HOME) mints a projects row that is a strict
+// ancestor of every repo on the machine, and resolving by ancestor alone then
+// injected that session's brief — another project's work — into every repo.
+func TestLatestHandoffExactProjectWinsOverAncestor(t *testing.T) {
+	srv, db := handoffTestServer(t)
+
+	own := filepath.Join(t.TempDir(), "u-ho-1.md")
+	if err := os.WriteFile(own, []byte("# own brief\n"), 0o644); err != nil {
+		t.Fatalf("write brief: %v", err)
+	}
+	foreign := filepath.Join(t.TempDir(), "u-ho-anc.md")
+	if err := os.WriteFile(foreign, []byte("# another project's brief\n"), 0o644); err != nil {
+		t.Fatalf("write brief: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO projects (id, path, slug, name, first_seen, last_activity)
+		 VALUES (2, '/tmp', '-tmp', 'tmp', '2026-09-28T00:00:00Z', '2026-09-28T00:00:00Z')`); err != nil {
+		t.Fatalf("insert ancestor project: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO sessions (id, project_id, session_uuid, status, started_at, source)
+		 VALUES (2, 2, 'u-ho-anc', 'active', '2026-09-28T00:00:00Z', 'jsonl')`); err != nil {
+		t.Fatalf("insert ancestor session: %v", err)
+	}
+	// The ancestor's brief is the NEWER one, so only the resolver can keep it out.
+	if _, err := db.Exec(`INSERT INTO handoffs (session_id, path, context_tokens, created_at)
+		VALUES (1, ?, 100000, ?), (2, ?, 300000, ?)`,
+		own, handoffStamp(-3*time.Hour), foreign, handoffStamp(-1*time.Hour)); err != nil {
+		t.Fatalf("insert handoffs: %v", err)
+	}
+
+	for _, cwd := range []string{"/tmp/hp", "/tmp/hp/apps/web"} {
+		resp := latestHandoffGet(t, srv.URL, cwd)
+		var got struct {
+			SessionUUID string `json:"session_uuid"`
+		}
+		err := json.NewDecoder(resp.Body).Decode(&got)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || err != nil {
+			t.Fatalf("cwd %s: status = %d, decode err = %v", cwd, resp.StatusCode, err)
+		}
+		if got.SessionUUID != "u-ho-1" {
+			t.Errorf("cwd %s: session_uuid = %q, want u-ho-1 — the ancestor's brief leaked in", cwd, got.SessionUUID)
+		}
+	}
+}
