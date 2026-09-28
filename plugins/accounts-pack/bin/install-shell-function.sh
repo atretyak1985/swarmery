@@ -497,7 +497,9 @@ if [ -z "$PROFILE" ]; then
 fi
 
 TMP=""
-cleanup() { [ -n "$TMP" ] && rm -f "$TMP"; }
+# `if`, not `[ … ] && rm`: when a mode falls off the end of the script, this
+# trap's status becomes the script's, and a bare `&&` with TMP unset is 1.
+cleanup() { if [ -n "$TMP" ]; then rm -f "$TMP"; fi; }
 trap cleanup EXIT
 
 # ── modes ───────────────────────────────────────────────────────────────────

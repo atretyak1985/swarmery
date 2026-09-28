@@ -305,5 +305,16 @@ else bad "16 re-probe skips a symlink to the shim and a second shim dir" "7, [lo
 mv "$W/claude.moved" "$REALDIR/claude"
 inst "$REALDIR:$BASEPATH" --shim-uninstall --profile "$W/rc-ok" >/dev/null 2>&1
 
+# ── 17. success exits 0 even when no temp file was made ─────────────────────
+# The EXIT trap is the last thing to run when a mode falls off the end of the
+# script; with TMP never set, its status must not become the script's.
+: >"$W/rc-none"
+inst "$REALDIR:$BASEPATH" --status --profile "$W/rc-none" >/dev/null 2>&1; rc=$?
+if [ "$rc" -eq 0 ]; then ok
+else bad "17 --status exits 0" "0" "$rc"; fi
+inst "$REALDIR:$BASEPATH" --shim-uninstall --profile "$W/rc-none" >/dev/null 2>&1; rc=$?
+if [ "$rc" -eq 0 ]; then ok
+else bad "17b --shim-uninstall with nothing to remove exits 0" "0" "$rc"; fi
+
 printf 'accounts-shim: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
