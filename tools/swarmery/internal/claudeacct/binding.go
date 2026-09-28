@@ -359,46 +359,63 @@ const (
 	TrustMalformed     = "malformed"      // not a JSON object
 	TrustHardLinked    = "hard-linked"    // more than one link to the inode
 	TrustOutsideRoot   = "outside-root"   // not a file inside the given root (ReadTrustedSettingsWithin)
+	TrustAbsoluteLink  = "absolute-link"  // reached through an ABSOLUTE symlink, even one resolving inside the root
 )
 
-// testHookBeforeOpen and testHookAfterOpen let a test swap directories exactly
-// between ReadTrustedSettingsWithin's containment check and its open, and between
-// the open and the re-check. Always nil outside tests.
+// testHookBeforeOpen and testHookAfterOpen let a test swap directories right
+// before and right after ReadTrustedSettingsWithin's open. Always nil outside
+// tests.
 var testHookBeforeOpen, testHookAfterOpen func()
 
 // ReadTrustedSettingsWithin is ReadTrustedSettings for a file that must lie
-// inside root — an estate's settings file inside its estate root. Containment is
-// checked twice: before the open (WithinRoot on the path), and AFTER it, against
-// the descriptor actually held: the path's parent is resolved again, must still
-// lie inside root, and the entry there must be the very inode that was opened
-// (os.SameFile). O_NOFOLLOW guards only the final component, so without the
-// second check a .claude directory swapped for a symlink between the two steps
-// could hand the reader a file from outside the root. reason is TrustOutsideRoot
-// for either failure, "" for an absent file.
+// inside root — an estate's settings file inside its estate root. The open goes
+// through os.Root: an openat walk from a descriptor on root that refuses every
+// component, and every symlink, that would leave the tree — so no directory swap
+// at any moment can hand the reader a file from outside, which a check-then-open
+// by path could not promise. os.Root follows a symlink only when it is RELATIVE
+// and stays inside; an absolute link is refused even when it resolves inside the
+// root (reason TrustAbsoluteLink). A symlink as the FINAL component is refused as
+// TrustSymlink, the rule the binding walk applies. The opened file then passes
+// the same checks as ReadTrustedSettings. reason is "" for an absent file.
 func ReadTrustedSettingsWithin(path, root string) (map[string]any, string) {
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
 		return nil, ""
 	}
-	if !WithinRoot(path, root) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || rel == ".." || filepath.IsAbs(rel) ||
+		strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return nil, TrustOutsideRoot
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, TrustUnreadable
+	}
+	defer r.Close()
+	if li, err := r.Lstat(rel); err == nil && li.Mode()&os.ModeSymlink != 0 {
+		return nil, TrustSymlink
 	}
 	if testHookBeforeOpen != nil {
 		testHookBeforeOpen()
 	}
-	return readTrusted(path, func(held os.FileInfo) string {
-		if testHookAfterOpen != nil {
-			testHookAfterOpen()
+	f, err := r.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if testHookAfterOpen != nil {
+		testHookAfterOpen()
+	}
+	if err != nil {
+		switch {
+		case os.IsNotExist(err):
+			return nil, ""
+		// os.Root's escape error is unexported; its text is pinned by the tests.
+		case strings.Contains(err.Error(), "path escapes from parent"):
+			if WithinRoot(path, root) {
+				return nil, TrustAbsoluteLink
+			}
+			return nil, TrustOutsideRoot
 		}
-		dir, err := filepath.EvalSymlinks(filepath.Dir(path))
-		if err != nil || !WithinRoot(dir, root) {
-			return TrustOutsideRoot
-		}
-		linked, err := os.Lstat(filepath.Join(dir, filepath.Base(path)))
-		if err != nil || !os.SameFile(linked, held) {
-			return TrustOutsideRoot
-		}
-		return ""
-	})
+		return nil, TrustUnreadable
+	}
+	defer f.Close()
+	return readTrustedFile(f)
 }
 
 // ReadTrustedSettings is the one trusted settings loader, exported for readers
@@ -408,13 +425,6 @@ func ReadTrustedSettingsWithin(path, root string) (map[string]any, string) {
 // an unusable one. Otherwise root is nil and reason is exactly one of the Trust*
 // codes above. A reason never carries any of the file's contents.
 func ReadTrustedSettings(path string) (root map[string]any, reason string) {
-	return readTrusted(path, nil)
-}
-
-// readTrusted is the loader's one body. check, when non-nil, runs against the
-// OPENED file's FileInfo after the ownership checks and before the read; a
-// non-empty result refuses the file with that reason.
-func readTrusted(path string, check func(held os.FileInfo) string) (root map[string]any, reason string) {
 	f, err := openNoFollow(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -426,6 +436,13 @@ func readTrusted(path string, check func(held os.FileInfo) string) (root map[str
 		return nil, TrustUnreadable
 	}
 	defer f.Close()
+	return readTrustedFile(f)
+}
+
+// readTrustedFile is the loader's one set of checks, made on the OPENED file so
+// nothing can be swapped in between: regular, not group/other-writable, owned
+// by this user, one link, at most maxSettingsBytes, a JSON object.
+func readTrustedFile(f *os.File) (root map[string]any, reason string) {
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, TrustUnreadable
@@ -445,11 +462,6 @@ func readTrusted(path string, check func(held os.FileInfo) string) (root map[str
 	// hard link planted here would pass every other check as the operator's own.
 	if n, ok := fileNlink(fi); !ok || n > 1 {
 		return nil, TrustHardLinked
-	}
-	if check != nil {
-		if r := check(fi); r != "" {
-			return nil, r
-		}
 	}
 	raw, ok, err := readCapped(f, maxSettingsBytes)
 	if err != nil {

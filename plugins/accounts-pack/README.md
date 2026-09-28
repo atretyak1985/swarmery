@@ -114,12 +114,15 @@ subcommand. The splice happens only when all three of these hold:
 - you did not pass `--settings` or `--settings=…` yourself. Your own flag
   always wins.
 
-When the estate's settings file is unusable — outside the estate root, a
-symlink, not owned by you, group- or other-writable, over 1 MiB, malformed, or
-one of the three keys not a JSON object — `exec` prints exactly one line to
+When the estate's settings file is unusable — outside the estate root, reached
+through an absolute symlink (a link inside the estate must be relative), itself
+a symlink, hard-linked, not owned by you, group- or other-writable, over 1 MiB,
+malformed, or one of the three keys not a JSON object — `exec` prints exactly one line to
 stderr, `swarmery: project settings not composed (<reason>); running without
 them`, and runs the command without the flag. `swarmery account env` still
-prints zero or one `CLAUDE_CONFIG_DIR=` line and nothing about settings.
+prints zero or one `CLAUDE_CONFIG_DIR=` line and nothing about settings. A
+binding file (`.claude/settings.local.json`) that is hard-linked is ignored the
+same way a symlinked one is, and `swarmery account which` says why.
 
 `which`, `use`, `clear`, `env`, `exec`, `estate`, `switch` and `move-session`
 never contact the daemon (`switch` and `move-session` read its database without

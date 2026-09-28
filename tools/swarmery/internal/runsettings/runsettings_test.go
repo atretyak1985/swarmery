@@ -299,12 +299,12 @@ func TestComposeDropsEscapingSymlink(t *testing.T) {
 		}
 	})
 
-	t.Run("a .claude directory linked inside the root (EstateRoot = project root)", func(t *testing.T) {
+	t.Run("a .claude directory linked inside the root, relatively (EstateRoot = project root)", func(t *testing.T) {
 		isolate(t)
 		captureLog(t)
 		root := t.TempDir()
 		writeJSON(t, filepath.Join(root, "general", "agents", "settings.json"), good)
-		if err := os.Symlink(filepath.Join(root, "general", "agents"), filepath.Join(root, ".claude")); err != nil {
+		if err := os.Symlink(filepath.Join("general", "agents"), filepath.Join(root, ".claude")); err != nil {
 			t.Fatal(err)
 		}
 		res := claudeacct.Resolution{EstateRoot: root, SettingsFile: filepath.Join(root, ".claude", "settings.json"), EstateAdmitted: true}
@@ -314,6 +314,20 @@ func TestComposeDropsEscapingSymlink(t *testing.T) {
 		}
 		if got := readComposed(t, p); got["pluginConfigs"] == nil {
 			t.Errorf("composed %v, want pluginConfigs", got)
+		}
+	})
+
+	t.Run("a .claude linked inside the root by an ABSOLUTE link", func(t *testing.T) {
+		isolate(t)
+		captureLog(t)
+		root := t.TempDir()
+		writeJSON(t, filepath.Join(root, "general", "agents", "settings.json"), good)
+		if err := os.Symlink(filepath.Join(root, "general", "agents"), filepath.Join(root, ".claude")); err != nil {
+			t.Fatal(err)
+		}
+		res := claudeacct.Resolution{EstateRoot: root, SettingsFile: filepath.Join(root, ".claude", "settings.json"), EstateAdmitted: true}
+		if got, reason := ComposeQuiet(res, Inputs{}); got != "" || reason != claudeacct.TrustAbsoluteLink {
+			t.Errorf("absolute in-root link: (%q, %q), want (\"\", %q)", got, reason, claudeacct.TrustAbsoluteLink)
 		}
 	})
 

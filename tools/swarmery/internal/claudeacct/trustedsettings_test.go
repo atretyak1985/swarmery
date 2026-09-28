@@ -196,6 +196,28 @@ func TestReadTrustedSettingsWithinClosesTheSwapRace(t *testing.T) {
 		testHookBeforeOpen = func() { swapOut(t, claude, outside) }
 		testHookAfterOpen = func() { swapBack(t, claude) }
 		got, reason := ReadTrustedSettingsWithin(filepath.Join(claude, "settings.json"), root)
+		// Refused either way: os.Root's walk saw the escaping link. Swapped back,
+		// the path resolves inside again, so the reason names the absolute link.
+		if got != nil || (reason != TrustOutsideRoot && reason != TrustAbsoluteLink) {
+			t.Errorf("got %v, %q; want nil and a containment refusal", got, reason)
+		}
+	})
+	t.Run("a relative link out of the root swapped in before the open", func(t *testing.T) {
+		root, claude, outside := setup(t)
+		rel, err := filepath.Rel(root, outside)
+		if err != nil {
+			t.Fatal(err)
+		}
+		testHookBeforeOpen = func() {
+			if err := os.Rename(claude, claude+".real"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(rel, claude); err != nil {
+				t.Fatal(err)
+			}
+		}
+		testHookAfterOpen = nil
+		got, reason := ReadTrustedSettingsWithin(filepath.Join(claude, "settings.json"), root)
 		if got != nil || reason != TrustOutsideRoot {
 			t.Errorf("got %v, %q; want nil, %q", got, reason, TrustOutsideRoot)
 		}
@@ -206,6 +228,61 @@ func TestReadTrustedSettingsWithinClosesTheSwapRace(t *testing.T) {
 		got, reason := ReadTrustedSettingsWithin(filepath.Join(claude, "settings.json"), root)
 		if reason != "" || got["inside"] != true {
 			t.Errorf("got %v, %q; want the inside file", got, reason)
+		}
+	})
+}
+
+// The link shapes os.Root allows and refuses, pinned: a RELATIVE link that stays
+// inside the root is followed; an ABSOLUTE one is refused even when it resolves
+// inside (absolute-link, so the operator is told why); a link as the final
+// component is refused as symlink, as for bindings.
+func TestReadTrustedSettingsWithinLinkShapes(t *testing.T) {
+	t.Cleanup(func() { testHookBeforeOpen, testHookAfterOpen = nil, nil })
+	body := []byte(`{"pluginConfigs":{}}`)
+	mkRoot := func(t *testing.T) string {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, "general", "agents"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "general", "agents", "settings.json"), body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+	t.Run("relative .claude link inside the root", func(t *testing.T) {
+		root := mkRoot(t)
+		if err := os.Symlink(filepath.Join("general", "agents"), filepath.Join(root, ".claude")); err != nil {
+			t.Fatal(err)
+		}
+		if got, reason := ReadTrustedSettingsWithin(filepath.Join(root, ".claude", "settings.json"), root); got == nil || reason != "" {
+			t.Errorf("got %v, %q; want the file", got, reason)
+		}
+	})
+	t.Run("absolute .claude link inside the root", func(t *testing.T) {
+		root := mkRoot(t)
+		if err := os.Symlink(filepath.Join(root, "general", "agents"), filepath.Join(root, ".claude")); err != nil {
+			t.Fatal(err)
+		}
+		if got, reason := ReadTrustedSettingsWithin(filepath.Join(root, ".claude", "settings.json"), root); got != nil || reason != TrustAbsoluteLink {
+			t.Errorf("got %v, %q; want nil, %q", got, reason, TrustAbsoluteLink)
+		}
+	})
+	t.Run("final component is a link inside the root", func(t *testing.T) {
+		root := mkRoot(t)
+		if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join("..", "general", "agents", "settings.json"), filepath.Join(root, ".claude", "settings.json")); err != nil {
+			t.Fatal(err)
+		}
+		if got, reason := ReadTrustedSettingsWithin(filepath.Join(root, ".claude", "settings.json"), root); got != nil || reason != TrustSymlink {
+			t.Errorf("got %v, %q; want nil, %q", got, reason, TrustSymlink)
+		}
+	})
+	t.Run("absent file", func(t *testing.T) {
+		root := t.TempDir()
+		if got, reason := ReadTrustedSettingsWithin(filepath.Join(root, ".claude", "settings.json"), root); got != nil || reason != "" {
+			t.Errorf("got %v, %q; want nil, \"\"", got, reason)
 		}
 	})
 }
