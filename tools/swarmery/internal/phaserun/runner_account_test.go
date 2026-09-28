@@ -161,9 +161,13 @@ func TestStartEmptyProjectPathGuardsAccountResolution(t *testing.T) {
 	}
 
 	// The guard now lives in runcore.AccountFor (one copy for the phase and plan
-	// spawn sites); the env delta it feeds must still be nil for an empty path.
-	if got := claudeacct.EnvForAccount(runcore.AccountFor("")); got != nil {
-		t.Errorf("EnvForAccount(AccountFor(\"\")) = %v, want nil — an empty project path must never reach Binding", got)
+	// spawn sites): an empty path yields the ZERO Resolution, and the env it
+	// composes is the base, untouched.
+	if got := runcore.AccountFor(""); got != (claudeacct.Resolution{}) {
+		t.Errorf("AccountFor(\"\") = %+v, want the zero Resolution — an empty project path must never reach a binding file", got)
+	}
+	if base := []string{"PATH=/usr/bin"}; len(claudeacct.SpawnEnvResolved(base, runcore.AccountFor(""))) != 1 {
+		t.Errorf("an empty project path composed an env delta")
 	}
 
 	got := childConfigDir(t, RunSpec{Cwd: t.TempDir(), ProjectPath: ""})
@@ -178,13 +182,13 @@ func TestStartEmptyProjectPathGuardsAccountResolution(t *testing.T) {
 // PWD/SHLVL/_ of its own, so the full environment can only be compared here.
 func TestUnboundSpawnEnvIsByteIdenticalToOsEnviron(t *testing.T) {
 	base := os.Environ()
-	got := append(os.Environ(), claudeacct.EnvForAccount(runcore.AccountFor(t.TempDir()))...) // the spawn line, verbatim; an unbound project adds nothing
+	got := claudeacct.SpawnEnvResolved(os.Environ(), runcore.AccountFor(t.TempDir())) // the spawn line, verbatim; an unbound project adds nothing
 	if len(got) != len(base) {
 		t.Fatalf("env length %d, want %d (an unbound spawn must add nothing)", len(got), len(base))
 	}
 	for i := range base {
 		if got[i] != base[i] {
-			t.Errorf("env[%d] = %q, want %q", i, got[i], base[i])
+			t.Errorf("env[%d] = %s=…, want %s=… (values withheld: this is the real environment)", i, strings.SplitN(got[i], "=", 2)[0], strings.SplitN(base[i], "=", 2)[0])
 		}
 	}
 }

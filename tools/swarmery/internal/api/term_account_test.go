@@ -204,7 +204,7 @@ func TestResolveTermCwdWorktreeUnboundProjectYieldsNoAccount(t *testing.T) {
 	}
 
 	if got := termAccountEnv(projectPath); !slices.Equal(got, os.Environ()) {
-		t.Errorf("env = %v, want the daemon's own environment byte for byte for an unbound project", got)
+		t.Errorf("env names = %v (values withheld: this is the real environment), want the daemon's own environment byte for byte for an unbound project", envNames(got))
 	}
 }
 
@@ -230,7 +230,7 @@ func TestResolveTermCwdOrphanedWorktreeTaskYieldsNoAccount(t *testing.T) {
 
 	got := termAccountEnv(projectPath) // must not panic
 	if got != nil {
-		t.Errorf("env = %v, want nil (no project ⇒ the daemon's own environment), cwd = %v", got, cwd)
+		t.Errorf("env names = %v (values withheld: it may be the real environment), want nil (no project ⇒ the daemon's own environment), cwd = %v", envNames(got), cwd)
 	}
 }
 
@@ -270,6 +270,6 @@ func TestTermAccountEnvGuardsEmptyProjectPath(t *testing.T) {
 	}
 
 	if got := termAccountEnv(""); got != nil {
-		t.Errorf("termAccountEnv(\"\") = %v, want nil — it must never resolve a binding for an empty project path", got)
+		t.Errorf("termAccountEnv(\"\") names = %v (values withheld: it may be the real environment), want nil — it must never resolve a binding for an empty project path", envNames(got))
 	}
 }

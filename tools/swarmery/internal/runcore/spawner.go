@@ -131,14 +131,14 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, bin, Args(spec)...)
 	cmd.Dir = spec.Cwd
-	// The env delta comes from the resolved KEY, never from cmd.Dir: cmd.Dir is
-	// usually a worktree, which has no .claude/settings.local.json of its own, so
-	// claudeacct.EnvFor(cmd.Dir) here would resolve nothing and silently run under
-	// the default account (plan A3). EnvForAccount("") returns nil, so an unbound
-	// project's cmd.Env is a byte-identical copy of os.Environ().
+	// The env comes from the caller's RESOLUTION, never from cmd.Dir: cmd.Dir is
+	// usually a worktree, and the caller resolved the run's PROJECT once — account
+	// and estate — before building the Spec. A zero Resolution adds nothing, so an
+	// unresolved run's cmd.Env is a byte-identical copy of os.Environ().
 	//
-	// SpawnEnv is the single composition every swarmery spawn uses: the account's
-	// config dir, then its secret store — the ONLY channel for MCP credentials
+	// SpawnEnvResolved is the single composition every swarmery spawn uses: the
+	// account's config dir, the account's store (back-compat), then the ESTATE's
+	// store, which wins a name collision — the ONLY channel for MCP credentials
 	// that works on every seam. A settings `env` block cannot replace it: of the
 	// three setting sources it expands only under `user`, which is account-keyed,
 	// and the twelve seams that pass --setting-sources project,local shut that tier
@@ -149,7 +149,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	// an inherited CLAUDE_CONFIG_DIR for a project EXPLICITLY bound to the default
 	// account, so a config dir baked into the daemon's plist cannot override the
 	// operator's binding. An unbound project gets os.Environ() back untouched.
-	cmd.Env = claudeacct.SpawnEnv(os.Environ(), spec.Account)
+	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), spec.Resolution)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -211,20 +211,21 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	return res, nil
 }
 
-// AccountFor is the account-resolution guard the phase/plan spawn sites need:
-// claudeacct.Binding joins its argument with ".claude/settings.local.json"
-// unconditionally, so EnvFor("") would resolve that RELATIVE path against the
-// daemon's OWN working directory and bind the run to whatever unrelated settings
-// file happens to sit there. An empty projectPath must short-circuit to "" before
-// Binding is ever called.
+// AccountFor resolves a run's PROJECT path into the Resolution its Spec
+// carries — account and estate, through claudeacct.Resolve's walk. The empty-path
+// guard is load-bearing: a binding path is joined onto its argument
+// unconditionally, so "" would be read as a RELATIVE path against the daemon's
+// OWN working directory and bind the run to whatever unrelated settings file
+// happens to sit there. An empty projectPath short-circuits to the zero
+// Resolution before any file is read.
 //
-// Callers that already know the key (dispatch, verify — they resolve it once per
-// task from the project path) skip this and set Spec.Account directly.
-func AccountFor(projectPath string) string {
+// Callers that resolve once per task themselves (dispatch, verify, planning)
+// call claudeacct.Resolve directly and set Spec.Resolution.
+func AccountFor(projectPath string) claudeacct.Resolution {
 	if projectPath == "" {
-		return ""
+		return claudeacct.Resolution{}
 	}
-	return claudeacct.Binding(projectPath)
+	return claudeacct.Resolve(projectPath)
 }
 
 // tailBuffer is an io.Writer keeping only the last max bytes written — enough for

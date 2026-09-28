@@ -25,6 +25,11 @@ type record struct {
 	Message          json.RawMessage `json:"message"`
 	ToolUseResult    json.RawMessage `json:"toolUseResult"`
 	Error            json.RawMessage `json:"error"` // system api_error
+	// IsAPIErrorMessage marks the synthetic assistant record Claude Code writes
+	// for an API-level failure (a usage limit, an auth failure). It gates the
+	// limit detector (limits.go): quoted marker text in ordinary prose never
+	// carries it.
+	IsAPIErrorMessage bool `json:"isApiErrorMessage"`
 
 	raw []byte // the raw line, for unknown-type payloads and uuid-less hashing
 }

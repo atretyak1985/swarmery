@@ -587,6 +587,45 @@ func TestFetchRefreshesWithoutScopes(t *testing.T) {
 	}
 }
 
+// A NoRefresh client never touches the token endpoint: an expired stored token
+// is reported as TokenExpired with no request at all, and a 401 is not retried
+// with a refresh.
+func TestFetchNoRefreshNeverRefreshes(t *testing.T) {
+	s := newStub(t, serveJSON(fixture(t, "usage-full.json")), nil)
+	creds := testCreds()
+	creds.ExpiresAt = testNow.Add(-time.Hour).UnixMilli()
+	c, _ := newClient(s, creds)
+	c.NoRefresh = true
+
+	p := c.Fetch(context.Background())
+	wantSetupCard(t, p, HintLogin, "expired")
+	if !p.TokenExpired {
+		t.Error("TokenExpired not set for an expired token on a NoRefresh client")
+	}
+	if strings.Contains(p.Error, fakeAccess) || strings.Contains(p.Error, fakeRefresh) {
+		t.Error("a token reached the error line")
+	}
+	s.mu.Lock()
+	if s.refreshCalls != 0 || s.usageCalls != 0 {
+		t.Errorf("refresh calls %d, usage calls %d — want 0/0", s.refreshCalls, s.usageCalls)
+	}
+	s.mu.Unlock()
+
+	s401 := newStub(t, func(_ int, w http.ResponseWriter) { w.WriteHeader(http.StatusUnauthorized) }, nil)
+	c401, _ := newClient(s401, testCreds())
+	c401.NoRefresh = true
+	p = c401.Fetch(context.Background())
+	wantSetupCard(t, p, HintLogin, "auth rejected")
+	if p.TokenExpired {
+		t.Error("a rejected (unexpired) token reported as expired")
+	}
+	s401.mu.Lock()
+	defer s401.mu.Unlock()
+	if s401.refreshCalls != 0 || s401.usageCalls != 1 {
+		t.Errorf("401: refresh calls %d, usage calls %d — want 0/1", s401.refreshCalls, s401.usageCalls)
+	}
+}
+
 func TestFetchExpiredTokenFailures(t *testing.T) {
 	t.Run("no refresh token", func(t *testing.T) {
 		s := newStub(t, serveJSON([]byte(`{}`)), nil)

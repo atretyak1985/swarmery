@@ -64,7 +64,7 @@ func TestVerifySpawnUnboundAccountLeavesChildEnvUntouched(t *testing.T) {
 func TestVerifySpawnDefaultAccountKeyProducesNoDelta(t *testing.T) {
 	unsetConfigDir(t)
 	t.Setenv("HOME", t.TempDir())
-	got := childConfigDir(t, RunSpec{Prompt: "p", SessionUUID: "acct-default", Account: "default"}, t.TempDir())
+	got := childConfigDir(t, RunSpec{Prompt: "p", SessionUUID: "acct-default", Resolution: claudeacct.Resolution{Account: "default"}}, t.TempDir())
 	if got != unsetMarker {
 		t.Errorf("default account produced CLAUDE_CONFIG_DIR=%q, want no variable at all", got)
 	}
@@ -75,7 +75,7 @@ func TestVerifySpawnBoundAccountSetsConfigDir(t *testing.T) {
 	unsetConfigDir(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	got := childConfigDir(t, RunSpec{Prompt: "p", SessionUUID: "acct-bound", Account: "nabu-org"}, t.TempDir())
+	got := childConfigDir(t, RunSpec{Prompt: "p", SessionUUID: "acct-bound", Resolution: claudeacct.Resolution{Account: "nabu-org"}}, t.TempDir())
 	if want := filepath.Join(home, ".claude-nabu-org"); got != want {
 		t.Errorf("child CLAUDE_CONFIG_DIR = %q, want %q", got, want)
 	}
@@ -97,7 +97,7 @@ func TestVerifySpawnAppliesAccountWhenCwdHasNoProjectSettings(t *testing.T) {
 		t.Fatalf("precondition: EnvFor(worktree) = %v, want nil — the trap this test guards is gone", env)
 	}
 
-	got := childConfigDir(t, RunSpec{Prompt: "p", SessionUUID: "acct-worktree", Account: "nabu-org"}, worktree)
+	got := childConfigDir(t, RunSpec{Prompt: "p", SessionUUID: "acct-worktree", Resolution: claudeacct.Resolution{Account: "nabu-org"}}, worktree)
 	if want := filepath.Join(home, ".claude-nabu-org"); got != want {
 		t.Errorf("worktree run CLAUDE_CONFIG_DIR = %q, want %q — the account was resolved from cwd, not from the spec", got, want)
 	}
@@ -127,7 +127,7 @@ func TestVerifyAccountVerdictHookNoLoginExit(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	fakeClaudeRunner(t, `echo 'Not logged in · Please run /login'; exit 1`)
 	run, calls, account, result := runWithVerdictHook(t,
-		RunSpec{Prompt: "p", SessionUUID: "verdict-nl", Account: "nabu-org"})
+		RunSpec{Prompt: "p", SessionUUID: "verdict-nl", Resolution: claudeacct.Resolution{Account: "nabu-org"}})
 	if run.ExitCode != 1 {
 		t.Fatalf("exit code = %d, want 1", run.ExitCode)
 	}
@@ -149,7 +149,7 @@ func TestVerifyAccountVerdictHookOrdinaryFailure(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	fakeClaudeRunner(t, `echo "verifier blew up" 1>&2; exit 3`)
 	_, calls, _, result := runWithVerdictHook(t,
-		RunSpec{Prompt: "p", SessionUUID: "verdict-fail", Account: "nabu-org"})
+		RunSpec{Prompt: "p", SessionUUID: "verdict-fail", Resolution: claudeacct.Resolution{Account: "nabu-org"}})
 	if calls != 1 {
 		t.Fatalf("hook calls = %d, want 1", calls)
 	}
@@ -165,7 +165,7 @@ func TestVerifyNilAccountVerdictHookLeavesRunUnchanged(t *testing.T) {
 	unsetConfigDir(t)
 	t.Setenv("HOME", t.TempDir())
 	fakeClaudeRunner(t, `echo 'Not logged in · Please run /login'; echo "boom" 1>&2; exit 1`)
-	spec := RunSpec{Prompt: "p", SessionUUID: "verdict-nil", Account: "nabu-org"}
+	spec := RunSpec{Prompt: "p", SessionUUID: "verdict-nil", Resolution: claudeacct.Resolution{Account: "nabu-org"}}
 
 	spec.Cwd = t.TempDir()
 	bare, err := ClaudeRunner{Timeout: 30 * time.Second}.Run(context.Background(), spec)
@@ -190,7 +190,7 @@ func TestVerifyUnboundSpawnEnvIsByteIdenticalToOsEnviron(t *testing.T) {
 	}
 	for i := range base {
 		if got[i] != base[i] {
-			t.Errorf("env[%d] = %q, want %q", i, got[i], base[i])
+			t.Errorf("env[%d] = %s=…, want %s=… (values withheld: this is the real environment)", i, strings.SplitN(got[i], "=", 2)[0], strings.SplitN(base[i], "=", 2)[0])
 		}
 	}
 }

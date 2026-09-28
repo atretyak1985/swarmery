@@ -70,6 +70,14 @@ type Client struct {
 	// refreshed-token cache below is per credential and must not be shared.
 	Src Source
 
+	// NoRefresh makes the client strictly read-only towards the OAuth token
+	// endpoint: an expired stored token is reported (Provider.TokenExpired)
+	// instead of refreshed, and a 401/403 is not retried with a refresh. A
+	// background poller sets it — a refresh there rotates the refresh token
+	// behind the CLI's back for no operator-visible reason. The zero value (the
+	// dashboard's clients) keeps the refresh behaviour.
+	NoRefresh bool
+
 	// sleep is the retry-backoff seam; tests replace it so a 429 path costs no
 	// wall-clock time. nil means time.Sleep.
 	sleep func(time.Duration)
@@ -200,12 +208,16 @@ func (c *Client) loginCommand() string {
 type fail struct {
 	msg  string
 	hint *Hint
+	// tokenExpired marks the NoRefresh outcome: the stored token is expired
+	// and this client will not refresh it.
+	tokenExpired bool
 }
 
 // apply encodes a failure on the provider. A hinted failure is "not connected
 // yet" (StatusNoAuth), everything else is a real error.
 func (p *Provider) apply(f *fail) {
 	p.Error = f.msg
+	p.TokenExpired = f.tokenExpired
 	if f.hint != nil {
 		p.Status, p.Hint = StatusNoAuth, f.hint
 		return
@@ -303,6 +315,14 @@ func (c *Client) resolveToken(ctx context.Context, creds *Creds) (token string, 
 	if !c.tokenExpired(creds.ExpiresAt) {
 		return creds.AccessToken, false, nil
 	}
+	if c.NoRefresh {
+		return "", false, &fail{
+			msg:          "Claude token expired — not refreshing it here; run `claude` to renew the login",
+			tokenExpired: true,
+			hint: c.loginHint(creds, HintLogin, "Claude login expired",
+				"The stored token has expired, and this reader never refreshes a token itself."),
+		}
+	}
 	if creds.RefreshToken == "" {
 		return "", false, &fail{
 			msg: "Claude token expired and no refresh token — run `claude` to re-login",
@@ -343,7 +363,7 @@ func (c *Client) fetchUsage(ctx context.Context, creds *Creds, token string, ref
 
 		switch {
 		case status == http.StatusUnauthorized, status == http.StatusForbidden:
-			if creds.RefreshToken != "" && !refreshed {
+			if creds.RefreshToken != "" && !refreshed && !c.NoRefresh {
 				if tok, ok := c.refresh(ctx, creds); ok {
 					token, refreshed = tok, true
 					continue

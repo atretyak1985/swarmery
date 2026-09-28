@@ -24,6 +24,16 @@ func TestClassifyExit(t *testing.T) {
 		{"exit 1 with unrelated output", 1, "Error: something else entirely", StatusUnknown, ReasonUnrecognised},
 		{"exit 1 with empty output", 1, "", StatusUnknown, ReasonUnrecognised},
 		{"other nonzero exit", 3, "explosion", StatusUnknown, ReasonUnrecognised},
+		// The two auth-failure shapes measured on transcript error records.
+		{"login expired line", 1, "Login expired · Please run /login", StatusNoLogin, ReasonNoLogin},
+		{"oauth refresh failure", 1, "Failed to authenticate: OAuth session expired and could not be refreshed", StatusNoLogin, ReasonNoLogin},
+		// The four measured usage-limit shapes, at a non-zero exit.
+		{"session limit", 1, limitSession, StatusLimited, ReasonRateLimited},
+		{"spend limit", 1, limitSpend, StatusLimited, ReasonRateLimited},
+		{"model limit", 1, limitModel, StatusLimited, ReasonRateLimited},
+		{"TUI usage limit line", 1, "Usage limit reached", StatusLimited, ReasonRateLimited},
+		// Contract regression guard: exit 0 stays ready even with a limit marker.
+		{"clean exit outranks a limit marker", 0, limitSession, StatusReady, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -35,5 +45,35 @@ func TestClassifyExit(t *testing.T) {
 				t.Errorf("reason = %q, want %q", got.Reason, tc.wantReason)
 			}
 		})
+	}
+}
+
+const (
+	limitSession = "You've hit your session limit · resets 1:30am (Europe/Kiev)"
+	limitSpend   = "You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your weekly limit resets Sep 14 at 5pm (Europe/Kiev)"
+	limitModel   = "You've reached your Fable 5 limit. Run /usage-credits to continue or switch models with /model."
+)
+
+func TestLimitScope(t *testing.T) {
+	cases := []struct {
+		output    string
+		wantScope string
+		wantOK    bool
+	}{
+		{limitSession, "session", true},
+		{limitSpend, "weekly", true},
+		{limitModel, "model", true},
+		{"banner\nUsage limit reached\n", "", true},
+		{"You've reached your destination", "", false},
+		{"Not logged in", "", false},
+		{"", "", false},
+		// Typographic apostrophe is NOT the measured shape.
+		{"You’ve hit your session limit", "", false},
+	}
+	for _, tc := range cases {
+		scope, ok := LimitScope(tc.output)
+		if scope != tc.wantScope || ok != tc.wantOK {
+			t.Errorf("LimitScope(%q) = (%q, %v), want (%q, %v)", tc.output, scope, ok, tc.wantScope, tc.wantOK)
+		}
 	}
 }

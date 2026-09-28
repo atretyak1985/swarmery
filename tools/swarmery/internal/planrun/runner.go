@@ -173,20 +173,19 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// Without a permission mode the orchestrator cannot write, run or commit —
 		// and it still exits 0. See internal/claudeflags.
 		PermissionMode: claudeflags.Mode(permEnv),
-		Agent: spec.Agent,
-		Model: DefaultModel(),
+		Agent:          spec.Agent,
+		Model:          DefaultModel(),
 		// Without --effort the orchestrator thinks at the CLI's xhigh for every
 		// turn of an 8-hour window. Resolved through internal/claudeflags:
 		// SWARMERY_PLANRUN_EFFORT → SWARMERY_EFFORT → DefaultEffort.
 		Effort:       claudeflags.Effort(effortEnv, DefaultEffort),
 		SettingsFile: spec.SettingsFile,
-		// The account comes from spec.ProjectPath, never from Cwd: Cwd is the plan's
-		// acquired worktree, which has no .claude/settings.local.json of its own, so
-		// resolving it there would silently run the plan under the default account
-		// (plan A3). An empty/unbound project resolves to "" and produces no env
-		// delta, so cmd.Env stays a byte-identical copy of os.Environ().
-		Account: runcore.AccountFor(spec.ProjectPath),
-		Timeout: timeout,
+		// The resolution comes from spec.ProjectPath, never from Cwd: Cwd is the
+		// plan's acquired worktree. An empty path resolves nothing and an unbound,
+		// estate-less project adds nothing, so cmd.Env then stays a byte-identical
+		// copy of os.Environ().
+		Resolution: runcore.AccountFor(spec.ProjectPath),
+		Timeout:    timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})

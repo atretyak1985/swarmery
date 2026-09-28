@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 )
 
 const bakedConfigDir = "/baked/by/launchd/.claude-work"
@@ -23,7 +25,7 @@ const bakedConfigDir = "/baked/by/launchd/.claude-work"
 func childConfigDir(t *testing.T, account string) string {
 	t.Helper()
 	res, err := ClaudeRunner{Engine: "test"}.Start(context.Background(), Spec{
-		Prompt: "p", SessionUUID: "u-cfg-" + account, Cwd: t.TempDir(), Account: account,
+		Prompt: "p", SessionUUID: "u-cfg-" + account, Cwd: t.TempDir(), Resolution: claudeacct.Resolution{Account: account},
 		Bin:           fakeBin(t, `printf '%s\n' "${CLAUDE_CONFIG_DIR-`+absentMarker+`}"`+"\n"),
 		Timeout:       30 * time.Second,
 		CaptureStdout: true,

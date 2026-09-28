@@ -38,6 +38,9 @@ const (
 func seedSecretStore(t *testing.T, account string) string {
 	t.Helper()
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
 	t.Setenv(secretsDirVar, dir)
 	path := filepath.Join(dir, account+".env")
 	if err := os.WriteFile(path, []byte(storeSecretVar+"="+storeSecretValue+"\n"), 0o600); err != nil {

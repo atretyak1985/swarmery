@@ -291,6 +291,11 @@ func runnableDTOFields(v store.AccountRunnable) (*bool, string, string) {
 	case claudeprobe.StatusNoLogin:
 		no := false
 		return &no, v.Reason, checkedAt
+	case claudeprobe.StatusLimited:
+		// A usage limit says nothing about the login — a limited account IS
+		// logged in — so it must never render as false ("not ready"). runtruth
+		// never stores it here; this arm pins the meaning should a row carry it.
+		return nil, v.Reason, checkedAt
 	default:
 		return nil, v.Reason, checkedAt
 	}
@@ -526,6 +531,12 @@ func (h *Handler) runAccountProbe(key, dir, source string) (store.AccountRunnabl
 			CheckedAt: time.Now().UTC(),
 			Source:    source,
 		}
+		// A usage limit says nothing about the login (a limited account IS
+		// logged in), so it never overwrites the stored runnable verdict; the
+		// caller still gets this run's answer.
+		if res.Status == claudeprobe.StatusLimited {
+			return row, nil
+		}
 		if err := store.PutAccountRunnable(h.DB, key, row.Status, row.Reason, row.Source, row.CheckedAt); err != nil {
 			return store.AccountRunnable{}, err
 		}
@@ -639,9 +650,24 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := claudeacct.SetBinding(path, key); err != nil {
-		// SetBinding refuses an invalid key and an unparseable settings file;
-		// both are the operator's to fix, neither is a server fault.
-		writeClientErr(w, http.StatusBadRequest, err.Error())
+		// SetBinding refuses an invalid key and an unparseable settings file
+		// (400), and an existing file the walk ignores — group/other-writable,
+		// not yours, oversize — which it will not rewrite into a trusted one
+		// (409, the state of that file conflicts with the write). All are the
+		// operator's to fix, none is a server fault.
+		status := http.StatusBadRequest
+		if errors.Is(err, claudeacct.ErrUntrustedSettings) {
+			status = http.StatusConflict
+		}
+		writeClientErr(w, status, err.Error())
+		return
+	}
+	// Read it back: a binding written into a file the walk ignores (an
+	// untrusted file SetBinding had nothing to rewrite) is not in effect, and
+	// reporting success would show the operator an account nothing runs under.
+	// The file is theirs to fix — a client error, like the refusals above.
+	if err := claudeacct.VerifyBinding(path, key); err != nil {
+		writeClientErr(w, http.StatusConflict, err.Error())
 		return
 	}
 	writeJSON(w, bindingRow(path), nil)

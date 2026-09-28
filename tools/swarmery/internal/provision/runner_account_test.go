@@ -132,7 +132,7 @@ func TestProvisionUnboundSpawnEnvIsByteIdenticalToOsEnviron(t *testing.T) {
 	}
 	for i := range base {
 		if got[i] != base[i] {
-			t.Errorf("env[%d] = %q, want %q", i, got[i], base[i])
+			t.Errorf("env[%d] = %s=…, want %s=… (values withheld: this is the real environment)", i, strings.SplitN(got[i], "=", 2)[0], strings.SplitN(base[i], "=", 2)[0])
 		}
 	}
 }

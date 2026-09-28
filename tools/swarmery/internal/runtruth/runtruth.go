@@ -35,12 +35,13 @@ type Recorder struct {
 	now func() time.Time
 
 	mu        sync.Mutex
-	lastWrite map[string]time.Time // account key → last successful write
+	lastWrite map[string]time.Time // account key → last successful verdict write
+	lastHit   map[string]time.Time // account key → last limit-hit row written
 }
 
 // NewRecorder returns a Recorder writing through db.
 func NewRecorder(db *sql.DB) *Recorder {
-	return &Recorder{db: db, now: time.Now, lastWrite: map[string]time.Time{}}
+	return &Recorder{db: db, now: time.Now, lastWrite: map[string]time.Time{}, lastHit: map[string]time.Time{}}
 }
 
 // Record is the AccountVerdict hook body: it reads one finished run's
@@ -56,17 +57,29 @@ func NewRecorder(db *sql.DB) *Recorder {
 //     stored no-login, which it clears back to ready: the operator logged in
 //     outside the dashboard, and healing that false alarm is strictly better
 //     than leaving it on screen.
+//   - limited is NOT a login verdict and never reaches account_runnable: a
+//     limited account is logged in, and storing 'limited' there would render a
+//     working account as "unknown" the moment it hits a limit. It appends one
+//     account_limit_hits row (source 'run', empty record_uuid) instead, under
+//     the same debounceWindow — tracked in its own map, so a limit hit never
+//     suppresses a following login verdict. The hook carries no session uuid,
+//     so the row's session_uuid is empty; the transcript detector (internal/ingest)
+//     records the same hit with its session and record uuid.
 //   - unknown is never written. An ordinary task failure is not evidence about
 //     the account, and mapping it to unknown would erase a good verdict.
 //   - At most one write per account per debounceWindow.
 //   - Nothing from the run's output reaches this function; only the account
 //     key and the classified status are ever logged.
 func (rec *Recorder) Record(account string, r claudeprobe.Result) {
-	if r.Status == claudeprobe.StatusUnknown {
-		return
-	}
 	if account == "" {
 		account = ingest.DefaultAccount
+	}
+	if r.Status == claudeprobe.StatusLimited {
+		rec.recordLimit(account)
+		return
+	}
+	if r.Status == claudeprobe.StatusUnknown {
+		return
 	}
 
 	rec.mu.Lock()
@@ -93,4 +106,24 @@ func (rec *Recorder) Record(account string, r claudeprobe.Result) {
 		return
 	}
 	rec.lastWrite[account] = now
+}
+
+// recordLimit appends one run-sourced limit hit for account, at most once per
+// debounceWindow. It never touches account_runnable.
+func (rec *Recorder) recordLimit(account string) {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	now := rec.now()
+	if last, ok := rec.lastHit[account]; ok && now.Sub(last) < debounceWindow {
+		return
+	}
+	if _, err := store.InsertAccountLimitHit(rec.db, store.LimitHit{
+		Account:    account,
+		ObservedAt: now.UTC().Format(time.RFC3339),
+		Source:     "run",
+	}); err != nil {
+		log.Printf("warning: runtruth: write limit hit account=%s: %v", account, err)
+		return
+	}
+	rec.lastHit[account] = now
 }

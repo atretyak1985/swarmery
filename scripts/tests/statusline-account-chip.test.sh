@@ -108,5 +108,72 @@ else
   bad "(d) SWARMERY_USAGE_OAUTH=0 -> chip still present" "🪪work present" "$OUT_D"
 fi
 
+# ── (e) preflight cache: coverage marker on the chip ─────────────────────────
+# render_pf <script> <cacheContentOrEmpty> -> render with a hermetic HOME holding
+# (or not) $HOME/.swarmery/run/preflight/<sid>.env, a transcript under that
+# HOME's default config dir (account "default"), and a `swarmery` first on PATH
+# that touches a sentinel if it is ever executed.
+PF_HOME="$WORK/pfhome"
+SENT_BIN="$WORK/sentbin"; mkdir -p "$SENT_BIN"
+SENTINEL="$WORK/swarmery-was-run"
+printf '#!/bin/sh\ntouch "%s"\n' "$SENTINEL" >"$SENT_BIN/swarmery"; chmod +x "$SENT_BIN/swarmery"
+PF_SID="0b5e55ed-phase4-sid"
+PF_TRANSCRIPT="$PF_HOME/.claude/projects/-outside-repo/$PF_SID.jsonl"
+render_pf() {
+  local script="$1" cache="$2" tmp stdin_json out
+  rm -rf "$PF_HOME"; mkdir -p "$PF_HOME/.swarmery/run/preflight"
+  [ -n "$cache" ] && printf '%s\n' "$cache" >"$PF_HOME/.swarmery/run/preflight/$PF_SID.env"
+  tmp="$(mktemp -d)"
+  stdin_json="$(printf '{"model":{"display_name":"Claude"},"workspace":{"current_dir":"%s","project_dir":"%s"},"transcript_path":"%s"}' \
+    "$OUTSIDE_REPO" "$OUTSIDE_REPO" "$PF_TRANSCRIPT")"
+  out="$(
+    unset CLAUDE_CONFIG_DIR SWARMERY_USAGE_OAUTH SWARMERY_STATUSLINE_FABLE
+    printf '%s' "$stdin_json" | HOME="$PF_HOME" PATH="$SENT_BIN:$PATH" TMPDIR="$tmp" bash "$script" 2>/dev/null
+  )"
+  rm -rf "$tmp"
+  printf '%s' "$out"
+}
+first_line() { printf '%s\n' "$1" | head -1; }
+
+L="$(first_line "$(render_pf "$STATUSLINE" "$(printf 'account=default\nestate=acme\nvarsExpected=13\nvarsPresent=0\nlaunch=0')")")"
+if printf '%s' "$L" | grep -qF '🪪default/acme' && printf '%s' "$L" | grep -qF '⚠0/13'; then ok
+else bad "(e1) default + estate + 0/13 -> chip and RED 0/13" "🪪default/acme … ⚠0/13" "$L"; fi
+
+L="$(first_line "$(render_pf "$STATUSLINE" "$(printf 'account=default\nestate=acme\nvarsExpected=13\nvarsPresent=5\nlaunch=1')")")"
+if printf '%s' "$L" | grep -qF '⚠5/13'; then ok
+else bad "(e2) partial coverage -> YELLOW 5/13" "⚠5/13" "$L"; fi
+
+L="$(first_line "$(render_pf "$STATUSLINE" "$(printf 'account=default\nestate=acme\nvarsExpected=13\nvarsPresent=13\nlaunch=1')")")"
+if printf '%s' "$L" | grep -qF '🪪default/acme' && ! printf '%s' "$L" | grep -qF '⚠'; then ok
+else bad "(e3) complete coverage -> chip, no marker" "🪪default/acme, no ⚠" "$L"; fi
+
+L="$(first_line "$(render_pf "$STATUSLINE" "$(printf 'account=default\nestate=acme\nvarsExpected=0\nvarsPresent=0\nlaunch=0')")")"
+if printf '%s' "$L" | grep -qF '🪪default/acme' && ! printf '%s' "$L" | grep -qF '⚠'; then ok
+else bad "(e4) zero-credential estate (0/0) is healthy -> chip, NO marker" "🪪default/acme, no ⚠" "$L"; fi
+
+# no cache / malformed cache -> byte-identical to the pre-change script
+OLD_NOCACHE="$(render_pf "$OLD_STATUSLINE" "")"
+NEW_NOCACHE="$(render_pf "$STATUSLINE" "")"
+D="$(diff <(printf '%s\n' "$OLD_NOCACHE") <(printf '%s\n' "$NEW_NOCACHE") 2>&1 || true)"
+if [ -z "$D" ]; then ok
+else bad "(e5) no cache file -> render byte-identical to the old script" "empty diff" "$D"; fi
+for junk in 'varsExpected=13' "$(printf 'estate=a b\nvarsExpected=1\nvarsPresent=0')" "$(printf 'estate=x\nvarsExpected=many\nvarsPresent=0')" "$(printf 'evil=1\nvarsExpected=2\nvarsPresent=0')"; do
+  # A fresh old render right before each new one: the TIME line moves with the
+  # clock, so a baseline taken minutes earlier can differ for no code reason.
+  OLD_NOW="$(render_pf "$OLD_STATUSLINE" "")"
+  NEW_JUNK="$(render_pf "$STATUSLINE" "$junk")"
+  D="$(diff <(printf '%s\n' "$OLD_NOW") <(printf '%s\n' "$NEW_JUNK") 2>&1 || true)"
+  if [ -z "$D" ]; then ok
+  else bad "(e6) malformed cache -> byte-identical to no cache" "empty diff" "$D"; fi
+done
+
+# (e7) the statusline never executes swarmery
+if [ ! -e "$SENTINEL" ]; then ok
+else bad "(e7) a swarmery first on PATH is never executed by a render" "no sentinel" "sentinel touched"; fi
+
+# (e8) one name per fact: no snake_case alias in either shell consumer
+if ! grep -qE 'vars_expected|vars_present|vars_missing' "$STATUSLINE" "$ROOT/plugins/accounts-pack/hooks/preflight-account.sh"; then ok
+else bad "(e8) no snake_case alias" "0 matches" "matches"; fi
+
 printf 'statusline-account-chip: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
