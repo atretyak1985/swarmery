@@ -309,6 +309,15 @@ func fileOwner(fi os.FileInfo) (int, bool) {
 	return int(st.Uid), true
 }
 
+// fileNlink is fi's hard-link count; ok=false where the platform does not say.
+func fileNlink(fi os.FileInfo) (uint64, bool) {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return uint64(st.Nlink), true
+}
+
 // openNoFollow opens path read-only, refusing a symlink as its FINAL component
 // (ELOOP) and never blocking on a FIFO swapped in under it.
 func openNoFollow(path string) (*os.File, error) {
@@ -348,7 +357,49 @@ const (
 	TrustTooLarge      = "too-large"      // more than maxSettingsBytes
 	TrustUnreadable    = "unreadable"     // open, stat or read failed
 	TrustMalformed     = "malformed"      // not a JSON object
+	TrustHardLinked    = "hard-linked"    // more than one link to the inode
+	TrustOutsideRoot   = "outside-root"   // not a file inside the given root (ReadTrustedSettingsWithin)
 )
+
+// testHookBeforeOpen and testHookAfterOpen let a test swap directories exactly
+// between ReadTrustedSettingsWithin's containment check and its open, and between
+// the open and the re-check. Always nil outside tests.
+var testHookBeforeOpen, testHookAfterOpen func()
+
+// ReadTrustedSettingsWithin is ReadTrustedSettings for a file that must lie
+// inside root — an estate's settings file inside its estate root. Containment is
+// checked twice: before the open (WithinRoot on the path), and AFTER it, against
+// the descriptor actually held: the path's parent is resolved again, must still
+// lie inside root, and the entry there must be the very inode that was opened
+// (os.SameFile). O_NOFOLLOW guards only the final component, so without the
+// second check a .claude directory swapped for a symlink between the two steps
+// could hand the reader a file from outside the root. reason is TrustOutsideRoot
+// for either failure, "" for an absent file.
+func ReadTrustedSettingsWithin(path, root string) (map[string]any, string) {
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		return nil, ""
+	}
+	if !WithinRoot(path, root) {
+		return nil, TrustOutsideRoot
+	}
+	if testHookBeforeOpen != nil {
+		testHookBeforeOpen()
+	}
+	return readTrusted(path, func(held os.FileInfo) string {
+		if testHookAfterOpen != nil {
+			testHookAfterOpen()
+		}
+		dir, err := filepath.EvalSymlinks(filepath.Dir(path))
+		if err != nil || !WithinRoot(dir, root) {
+			return TrustOutsideRoot
+		}
+		linked, err := os.Lstat(filepath.Join(dir, filepath.Base(path)))
+		if err != nil || !os.SameFile(linked, held) {
+			return TrustOutsideRoot
+		}
+		return ""
+	})
+}
 
 // ReadTrustedSettings is the one trusted settings loader, exported for readers
 // outside this package (internal/runsettings reads an estate's settings file with
@@ -357,6 +408,13 @@ const (
 // an unusable one. Otherwise root is nil and reason is exactly one of the Trust*
 // codes above. A reason never carries any of the file's contents.
 func ReadTrustedSettings(path string) (root map[string]any, reason string) {
+	return readTrusted(path, nil)
+}
+
+// readTrusted is the loader's one body. check, when non-nil, runs against the
+// OPENED file's FileInfo after the ownership checks and before the read; a
+// non-empty result refuses the file with that reason.
+func readTrusted(path string, check func(held os.FileInfo) string) (root map[string]any, reason string) {
 	f, err := openNoFollow(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -382,6 +440,16 @@ func ReadTrustedSettings(path string) (root map[string]any, reason string) {
 	}
 	if uid, ok := fileOwner(fi); !ok || uid != currentUID() {
 		return nil, TrustNotOwned
+	}
+	// A second link to the inode means the file also lives somewhere else — a
+	// hard link planted here would pass every other check as the operator's own.
+	if n, ok := fileNlink(fi); !ok || n > 1 {
+		return nil, TrustHardLinked
+	}
+	if check != nil {
+		if r := check(fi); r != "" {
+			return nil, r
+		}
 	}
 	raw, ok, err := readCapped(f, maxSettingsBytes)
 	if err != nil {
@@ -418,6 +486,9 @@ func untrustedSettings(path string) string {
 	}
 	if uid, ok := fileOwner(fi); !ok || uid != currentUID() {
 		return fmt.Sprintf("%s is not owned by you, so the walk ignores it", path)
+	}
+	if n, ok := fileNlink(fi); ok && n > 1 {
+		return fmt.Sprintf("%s is hard-linked (%d links), so the walk ignores it", path, n)
 	}
 	return ""
 }

@@ -129,3 +129,28 @@ func TestPruneRemovesOnlyStaleFiles(t *testing.T) {
 		t.Fatalf("missing dir: removed %d", n)
 	}
 }
+
+// A file already at the content-addressed name is reused only if it IS what the
+// name claims: the same bytes, 0600, owned by this user. Anything else is
+// replaced through the temp-file-and-rename path.
+func TestStoreRewritesAFileThatIsNotItsOwn(t *testing.T) {
+	isolate(t)
+	b := []byte(`{"pluginConfigs":{}}` + "\n")
+	p := write(b)
+	if err := os.WriteFile(p, []byte(`{"planted":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if again := write(b); again != p {
+		t.Fatalf("path changed: %s vs %s", again, p)
+	}
+	if raw, _ := os.ReadFile(p); string(raw) != string(b) {
+		t.Fatalf("tampered content was reused: %q", raw)
+	}
+	if err := os.Chmod(p, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	write(b)
+	if fi, err := os.Stat(p); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("a 0644 file was reused: %v %v", fi.Mode().Perm(), err)
+	}
+}

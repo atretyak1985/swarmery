@@ -41,6 +41,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -56,11 +57,9 @@ var EstateKeys = [...]string{"pluginConfigs", "enabledPlugins", "extraKnownMarke
 // into a run would freeze it.
 const keySwarmery = "swarmery"
 
-// Reasons the composer adds to claudeacct's Trust* codes.
-const (
-	reasonOutsideRoot = "outside-root"
-	reasonWrongType   = "wrong-type:" // + the EstateKeys key whose value is not an object
-)
+// reasonWrongType is the one reason the composer adds to claudeacct's Trust*
+// codes, + the EstateKeys key whose value is not a JSON object.
+const reasonWrongType = "wrong-type:"
 
 // Inputs is what a spawn site hands the composer. There is no project, repo or
 // worktree path: the composer reads no file there.
@@ -187,18 +186,12 @@ func compose(engine string, res claudeacct.Resolution, in Inputs, quiet bool) (s
 	return path, ""
 }
 
-// loadEstate reads res.SettingsFile if it lies inside res.EstateRoot, through
-// the one trusted loader. (nil, "") means the file is gone.
+// loadEstate reads res.SettingsFile through the one trusted loader, and only if
+// it lies inside res.EstateRoot — checked before the open and again against the
+// descriptor held, so a .claude swapped for a symlink in between cannot hand an
+// account's settings.json to flag precedence. (nil, "") means the file is gone.
 func loadEstate(res claudeacct.Resolution) (map[string]any, string) {
-	if _, err := os.Lstat(res.SettingsFile); os.IsNotExist(err) {
-		return nil, ""
-	}
-	// Containment first: a .claude symlinked out of the root would otherwise
-	// hand an account's settings.json to flag precedence.
-	if !claudeacct.WithinRoot(res.SettingsFile, res.EstateRoot) {
-		return nil, reasonOutsideRoot
-	}
-	return claudeacct.ReadTrustedSettings(res.SettingsFile)
+	return claudeacct.ReadTrustedSettingsWithin(res.SettingsFile, res.EstateRoot)
 }
 
 // filterEstate copies exactly the EstateKeys present in root, verbatim, after
@@ -255,7 +248,17 @@ func logCompose(engine, path, estateRoot string, file map[string]any, lent int, 
 	logOnce("compose\x00"+engine+"\x00"+path, fmt.Sprintf(
 		"runsettings: engine=%s settings=%s estate=%s pluginConfigs=%d enabledPlugins=%d extraKnownMarketplaces=%d lent=%d dropped=%s",
 		engine, path, estateRoot, countOf(file["pluginConfigs"]), countOf(file["enabledPlugins"]),
-		countOf(file["extraKnownMarketplaces"]), lent, strings.Join(dropped, ",")))
+		countOf(file["extraKnownMarketplaces"]), lent, quoteNames(dropped)))
+}
+
+// quoteNames renders key NAMES for the log with %q: they come from a settings
+// file, and a name carrying a newline must not be able to forge a log line.
+func quoteNames(names []string) string {
+	q := make([]string, len(names))
+	for i, n := range names {
+		q[i] = strconv.Quote(n)
+	}
+	return strings.Join(q, ",")
 }
 
 func countOf(v any) int {

@@ -1,12 +1,14 @@
 package runsettings
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -64,7 +66,7 @@ func write(b []byte) string {
 	}
 	sum := sha256.Sum256(b)
 	path := filepath.Join(dir, hex.EncodeToString(sum[:])+".json")
-	if fi, err := os.Lstat(path); err == nil && fi.Mode().IsRegular() {
+	if reusable(path, b) {
 		now := time.Now()
 		_ = os.Chtimes(path, now, now)
 		return path
@@ -139,4 +141,20 @@ func Prune(maxAge time.Duration) (removed int) {
 		log.Printf("runsettings: pruned %d composed settings file(s) older than %s", removed, maxAge)
 	}
 	return removed
+}
+
+// reusable reports whether the file already at path IS what its name claims: a
+// regular file, mode 0600, owned by this user, holding exactly b. Anything else
+// — a planted or tampered file, a loosened mode — is replaced through the
+// temp-file-and-rename path instead of being handed to a run.
+func reusable(path string, b []byte) bool {
+	fi, err := os.Lstat(path)
+	if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 || fi.Size() != int64(len(b)) {
+		return false
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Geteuid() {
+		return false
+	}
+	raw, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(raw, b)
 }

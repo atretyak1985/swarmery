@@ -124,3 +124,88 @@ func TestWithinRoot(t *testing.T) {
 		t.Error("an empty root admits nothing")
 	}
 }
+
+// A hard link planted beside a binding or an estate settings file would pass as
+// the operator's own file; the loader refuses any inode with more than one link.
+func TestReadTrustedSettingsRefusesHardLinks(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "account-settings.json")
+	if err := os.WriteFile(outside, []byte(`{"pluginConfigs":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "settings.json")
+	if err := os.Link(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if root, reason := ReadTrustedSettings(link); root != nil || reason != TrustHardLinked {
+		t.Errorf("hard link: (root!=nil=%v, %q), want (false, %q)", root != nil, reason, TrustHardLinked)
+	}
+	if msg := untrustedSettings(link); !strings.Contains(msg, "hard-linked") {
+		t.Errorf("untrustedSettings = %q, want it to name the hard link", msg)
+	}
+}
+
+// ReadTrustedSettingsWithin re-checks AFTER the open that the inode it holds is
+// the one linked inside root, so swapping .claude for a symlink between the
+// containment check and the open cannot hand it a file from outside.
+func TestReadTrustedSettingsWithinClosesTheSwapRace(t *testing.T) {
+	setup := func(t *testing.T) (root, claude, outside string) {
+		root = t.TempDir()
+		claude = filepath.Join(root, ".claude")
+		if err := os.MkdirAll(claude, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(claude, "settings.json"), []byte(`{"inside":true}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		outside = t.TempDir()
+		if err := os.WriteFile(filepath.Join(outside, "settings.json"), []byte(`{"outside":true}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return root, claude, outside
+	}
+	swapOut := func(t *testing.T, claude, outside string) {
+		if err := os.Rename(claude, claude+".real"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, claude); err != nil {
+			t.Fatal(err)
+		}
+	}
+	swapBack := func(t *testing.T, claude string) {
+		if err := os.Remove(claude); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(claude+".real", claude); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { testHookBeforeOpen, testHookAfterOpen = nil, nil })
+
+	t.Run("swapped out before the open and left out", func(t *testing.T) {
+		root, claude, outside := setup(t)
+		testHookBeforeOpen = func() { swapOut(t, claude, outside) }
+		testHookAfterOpen = nil
+		got, reason := ReadTrustedSettingsWithin(filepath.Join(claude, "settings.json"), root)
+		if got != nil || reason != TrustOutsideRoot {
+			t.Errorf("got %v, %q; want nil, %q", got, reason, TrustOutsideRoot)
+		}
+	})
+	t.Run("swapped out before the open and back after it", func(t *testing.T) {
+		root, claude, outside := setup(t)
+		testHookBeforeOpen = func() { swapOut(t, claude, outside) }
+		testHookAfterOpen = func() { swapBack(t, claude) }
+		got, reason := ReadTrustedSettingsWithin(filepath.Join(claude, "settings.json"), root)
+		if got != nil || reason != TrustOutsideRoot {
+			t.Errorf("got %v, %q; want nil, %q", got, reason, TrustOutsideRoot)
+		}
+	})
+	t.Run("no swap reads the inside file", func(t *testing.T) {
+		root, claude, _ := setup(t)
+		testHookBeforeOpen, testHookAfterOpen = nil, nil
+		got, reason := ReadTrustedSettingsWithin(filepath.Join(claude, "settings.json"), root)
+		if reason != "" || got["inside"] != true {
+			t.Errorf("got %v, %q; want the inside file", got, reason)
+		}
+	})
+}

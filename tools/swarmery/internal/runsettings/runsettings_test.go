@@ -407,3 +407,20 @@ func TestSpliceTerminal(t *testing.T) {
 		}
 	}
 }
+
+// Dropped key NAMES come from the estate file, so they are quoted in the log: a
+// name carrying a newline cannot forge a second log line.
+func TestComposeQuotesDroppedKeyNames(t *testing.T) {
+	isolate(t)
+	buf := captureLog(t)
+	Compose("dispatch", estate(t, map[string]any{
+		"pluginConfigs":                    map[string]any{},
+		"evil\nrunsettings: engine=forged": 1,
+	}), Inputs{})
+	if n := strings.Count(buf.String(), "\n"); n != 1 {
+		t.Fatalf("log = %q: %d lines, want exactly one", buf.String(), n)
+	}
+	if !strings.Contains(buf.String(), `"evil\nrunsettings: engine=forged"`) {
+		t.Errorf("the dropped name is not quoted: %q", buf.String())
+	}
+}
