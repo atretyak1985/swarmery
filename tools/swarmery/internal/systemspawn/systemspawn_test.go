@@ -226,11 +226,16 @@ func TestAttachCarriesOnlyTheSystemProjectsEstate(t *testing.T) {
 	dir := systemHome(t)
 	home := filepath.Dir(dir)
 
+	repo := filepath.Join(home, "projects", "repo")
 	store := t.TempDir()
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so each store is anchored at its own declaring directory —
+	// the negative half below then fails for the right reason (the System run
+	// resolves only the System project's estate), not for want of an anchor.
 	for name, body := range map[string]string{
-		"sys":  "SYS_ESTATE_TOKEN=system\n",
-		"repo": "REPO_ESTATE_TOKEN=repo\n",
-		"home": "HOME_ESTATE_TOKEN=home\n",
+		"sys":  "# swarmery-root: " + dir + "\nSYS_ESTATE_TOKEN=system\n",
+		"repo": "# swarmery-root: " + repo + "\nREPO_ESTATE_TOKEN=repo\n",
+		"home": "# swarmery-root: " + home + "\nHOME_ESTATE_TOKEN=home\n",
 	} {
 		if err := os.WriteFile(filepath.Join(store, name+".env"), []byte(body), 0o600); err != nil {
 			t.Fatalf("write store: %v", err)
@@ -241,7 +246,6 @@ func TestAttachCarriesOnlyTheSystemProjectsEstate(t *testing.T) {
 	}
 	t.Setenv("SWARMERY_SECRETS_DIR", store)
 
-	repo := filepath.Join(home, "projects", "repo")
 	for _, decl := range []struct{ dir, key string }{{dir, "sys"}, {repo, "repo"}, {home, "home"}} {
 		if err := claudeacct.SetEstate(decl.dir, decl.key); err != nil {
 			t.Fatalf("SetEstate(%s): %v", decl.dir, err)

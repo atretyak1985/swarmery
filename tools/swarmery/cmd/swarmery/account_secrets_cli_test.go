@@ -52,6 +52,22 @@ func seedSecretStore(t *testing.T, account string) string {
 	return dir
 }
 
+// anchorCLIStore appends `# swarmery-root: <root>` to <storeDir>/<key>.env —
+// D5's store anchor, which the operator writes and swarmery never does.
+func anchorCLIStore(t *testing.T, storeDir, key, root string) {
+	t.Helper()
+	f, err := os.OpenFile(filepath.Join(storeDir, key+".env"), os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("# swarmery-root: " + root + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // `account env` stays the CONFIG-DIR line and nothing else, even when the bound
 // account has a fully populated secret store. Not the name, not the value, not
 // a count, not a hint.

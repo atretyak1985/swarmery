@@ -82,7 +82,9 @@ case "$SWARMERY" in
 esac
 [ -x "$SWARMERY" ] || exit 0
 
-# ── run the doctor under a portable 2 s watchdog (no GNU `timeout` on macOS) ──
+# ── run the doctor under a portable 3 s watchdog (no GNU `timeout` on macOS) ──
+# 3 s, not 2: `doctor --fast` resolves the path, and resolution now runs the
+# provenance probe (a `git ls-files`) at every rung that declares a binding.
 OUT_FILE="$(mktemp 2>/dev/null)" || exit 0
 trap 'rm -f "$OUT_FILE"' EXIT
 "$SWARMERY" account doctor --fast --json --path "$PROJECT_DIR" \
@@ -90,7 +92,7 @@ trap 'rm -f "$OUT_FILE"' EXIT
 DOCTOR_PID=$!
 # The watchdog's own stdio goes to /dev/null: a sleeper that inherited this
 # hook's stdout would hold Claude Code's pipe open for the full timeout.
-( sleep 2; kill -9 "$DOCTOR_PID" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
+( sleep 3; kill -9 "$DOCTOR_PID" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
 WATCHDOG_PID=$!
 wait "$DOCTOR_PID" 2>/dev/null
 DOCTOR_RC=$?

@@ -105,10 +105,13 @@ func TestAccountEstateUseIsSurgical(t *testing.T) {
 		t.Errorf("unparseable file rewritten: %q", raw)
 	}
 
-	// A store that exists is described by a COUNT, never a name.
-	seedSecretStore(t, "demo")
+	// A store that exists is described by a COUNT, never a name. (D5: it is
+	// anchored at the declaring directory, so it is admitted.)
+	storeDir := seedSecretStore(t, "demo")
+	target := t.TempDir()
+	anchorCLIStore(t, storeDir, "demo", target)
 	out.Reset()
-	if err := accountEstate([]string{"use", "demo", "--path", t.TempDir()}, &out, io.Discard); err != nil {
+	if err := accountEstate([]string{"use", "demo", "--path", target}, &out, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "credential store present: 1 names") || strings.Contains(out.String(), storeSecretVar) {
@@ -468,16 +471,18 @@ func TestAccountExecEstateWinsACollision(t *testing.T) {
 	if err := os.Chmod(secrets, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
 		t.Fatal(err)
 	}
+	root := filepath.Join(home, "projects", "acme")
 	for name, value := range map[string]string{"work": "from-account", "acme": "from-estate"} {
 		p := filepath.Join(secrets, name+".env")
-		if err := os.WriteFile(p, []byte(storeSecretVar+"="+value+"\n"), 0o600); err != nil {
+		// D5: both stores anchored at the estate root, so the collision is
+		// between two ADMITTED stores and the estate must still win it.
+		if err := os.WriteFile(p, []byte("# swarmery-root: "+root+"\n"+storeSecretVar+"="+value+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Chmod(p, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	root := filepath.Join(home, "projects", "acme")
 	if err := claudeacct.SetBinding(root, "work"); err != nil {
 		t.Fatal(err)
 	}

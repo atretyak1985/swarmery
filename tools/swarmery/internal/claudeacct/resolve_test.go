@@ -167,6 +167,7 @@ func TestResolve_EstateRootIsProjectPath(t *testing.T) {
 	proj := filepath.Join(home, "projects", "code")
 	declare(t, proj, map[string]any{"estate": "code"})
 	writeFile(t, filepath.Join(proj, ".claude", "settings.json"), "{}\n")
+	anchorStore(t, "code", proj) // D5: only an admitted estate contributes its settings file
 
 	r := Resolve(proj)
 	if r.Estate != "code" || r.EstateRoot != proj {
@@ -206,6 +207,7 @@ func TestResolve_EstateRootSymlinked(t *testing.T) {
 	if err := os.Symlink(agents, filepath.Join(root, ".claude")); err != nil {
 		t.Fatal(err)
 	}
+	anchorStore(t, "sky", root) // D5: only an admitted estate contributes its settings file
 	proj := filepath.Join(root, "app")
 	mkdirs(t, filepath.Join(proj, ".claude"))
 	if err := os.Symlink(filepath.Join(root, ".claude", "settings.json"), filepath.Join(proj, ".claude", "settings.json")); err != nil {
@@ -251,6 +253,8 @@ func TestResolve_NestedEstateReplaces(t *testing.T) {
 	declare(t, inner, map[string]any{"estate": "inner"})
 	proj := filepath.Join(inner, "p")
 	mkdirs(t, proj)
+	anchorStore(t, "outer", outer) // D5: an unanchored estate contributes no settings file
+	anchorStore(t, "inner", inner)
 
 	r := Resolve(proj)
 	if r.Estate != "inner" || r.EstateRoot != inner {
@@ -279,6 +283,8 @@ func TestResolve_NestedEstateDoesNotMerge(t *testing.T) {
 	declare(t, inner, map[string]any{"estate": "inner"})
 	proj := filepath.Join(inner, "p")
 	mkdirs(t, proj)
+	anchorStore(t, "outer", outer) // D5: an estate store releases only when rooted
+	anchorStore(t, "inner", inner)
 
 	r := Resolve(proj)
 	if n := len(resolvedDelta(r)); n != 1 {
@@ -299,6 +305,9 @@ func TestResolve_EstateWithoutStore(t *testing.T) {
 	seedStores(t, map[string]string{"work": "WORK_ONE=a\n"})
 	root := filepath.Join(home, "projects", "demo")
 	declare(t, root, map[string]any{"claudeAccount": "work", "estate": "demo"})
+	// The account store is anchored at the root, so the only thing left to be
+	// silent about is the store-less estate (a rootless ACCOUNT store WARNs).
+	anchorStore(t, "work", root)
 
 	var r Resolution
 	var withEstate, without []string

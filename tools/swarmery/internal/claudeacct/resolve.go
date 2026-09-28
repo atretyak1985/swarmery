@@ -59,6 +59,17 @@ package claudeacct
 // A path under the daemon's worktree root (<home>/.swarmery/worktrees/…) sits
 // outside every project tree, so Resolve first maps it back to its SOURCE
 // checkout (worktreesrc.go) and walks from there.
+//
+// # The two locks (D5)
+//
+// Lock 1 — provenance — runs at EVERY rung, inside namespaceAt: a binding file
+// that git tracks (or whose status git cannot tell) declares nothing, for every
+// field of the `swarmery` object and every key, `default` included. The rung
+// reads as "nothing declared here", the walk goes on, and the reason is kept in
+// IgnoredNote. Lock 2 — the store anchor (storeroot.go) — decides which stores
+// a resolution receives: AccountStoreAdmitted, EstateAdmitted, AdmissionNote.
+// SettingsFile is set only for an admitted estate, so every consumer of it (a
+// settings composer, the doctor, an overlay) inherits the gate.
 
 import (
 	"errors"
@@ -129,6 +140,45 @@ type Resolution struct {
 	// is unexported on purpose and MUST NEVER reach a printer: surfaces report a
 	// COUNT of names (CredentialCount), never a store path.
 	envPath string
+
+	// AccountStoreAdmitted is true when a spawn under this resolution receives
+	// the account's store <Account>.env (storeroot.go's release table).
+	AccountStoreAdmitted bool
+	// EstateAdmitted is true when the estate's store is ROOTED and admits
+	// EstateRoot: only then do its credentials and SettingsFile flow.
+	EstateAdmitted bool
+	// AdmissionNote is one line per store that has something to say, in the
+	// wording `swarmery account which` prints ("<key>.env admitted by root <r>",
+	// "not admitted by <key>.env roots", "<key>.env rootless", "estate <key>
+	// unanchored"). Paths and reasons only — never a store's contents.
+	AdmissionNote string
+	// IgnoredNote is one "<binding path>\t<reason>" line per rung whose binding
+	// Lock 1 ignored; IgnoredRungs parses it. Never the file's contents.
+	IgnoredNote string
+
+	// cwdAccount and cwdAccountRoot are what the directory itself resolved the
+	// account to, kept by WithAccount so the forced rule can compare keys. Both
+	// strings: Resolution must stay comparable with ==.
+	cwdAccount, cwdAccountRoot string
+}
+
+// IgnoredRung is one rung whose binding the provenance gate ignored.
+type IgnoredRung struct {
+	Path   string // the binding file
+	Reason string // why, with the remedy — never the file's contents
+}
+
+// IgnoredRungs lists the rungs Lock 1 ignored, nearest first.
+func (r Resolution) IgnoredRungs() []IgnoredRung {
+	if r.IgnoredNote == "" {
+		return nil
+	}
+	var out []IgnoredRung
+	for _, line := range strings.Split(r.IgnoredNote, "\n") {
+		p, why, _ := strings.Cut(line, "\t")
+		out = append(out, IgnoredRung{Path: p, Reason: why})
+	}
+	return out
 }
 
 // Resolve resolves projectPath on both axes. See the file header for the walk
@@ -140,9 +190,16 @@ func Resolve(projectPath string) Resolution {
 		return Resolution{Source: SourceNone, DefaultProfile: true}
 	}
 	path := cleanAbs(projectPath)
-	walkFrom, cands, nss := candidates(path)
+	walkFrom, cands, nss, ignored := candidates(path)
 
 	r := Resolution{Source: SourceDefault}
+	var notes []string
+	for i, why := range ignored {
+		if why != "" {
+			notes = append(notes, bindingPath(cands[i])+"\t"+why)
+		}
+	}
+	r.IgnoredNote = strings.Join(notes, "\n")
 	// Scan 1 — the ACCOUNT: the first candidate whose claudeAccount is valid.
 	for i, ns := range nss {
 		if key := validField(ns, bindingField); key != "" {
@@ -166,8 +223,11 @@ func Resolve(projectPath string) Resolution {
 	}
 
 	r.setAccountDerived()
+	r.applyAdmission()
 	if r.Estate != "" {
-		if f := filepath.Join(r.EstateRoot, filepath.FromSlash(ProjectSettingsFile)); isRegularFile(f) {
+		// Only an ADMITTED estate contributes its settings file: an estate its
+		// store does not anchor is unanchored — zero credentials AND no settings.
+		if f := filepath.Join(r.EstateRoot, filepath.FromSlash(ProjectSettingsFile)); r.EstateAdmitted && isRegularFile(f) {
 			r.SettingsFile = f
 			// Against the path the walk ran from: for a daemon worktree that is
 			// its SOURCE checkout, whose settings file is the project's own.
@@ -184,15 +244,39 @@ func Resolve(projectPath string) Resolution {
 	return r
 }
 
+// applyAdmission fills the admission fields from storeroot.go's release table.
+func (r *Resolution) applyAdmission() {
+	a := admit(*r)
+	r.AccountStoreAdmitted = a.accountReleased
+	r.EstateAdmitted = a.estateReleased
+	var notes []string
+	for _, n := range []string{a.accountNote, a.estateNote} {
+		if n != "" {
+			notes = append(notes, n)
+		}
+	}
+	r.AdmissionNote = strings.Join(notes, "\n")
+}
+
 // WithAccount forces the payer and keeps the estate: the resolution a spawn
 // needs when the ACCOUNT is already decided elsewhere (a resumed session must
 // run under the config dir that wrote its transcript) but the ESTATE still has
 // to come from the directory. Source becomes SourceForced and AccountRoot "".
+//
+// What the directory itself resolved the account to is KEPT: the forced rule
+// releases the account's store only when the directory independently resolves
+// the same key under a rung that store admits (storeroot.go). A foreign binding
+// that re-homed a session onto an account therefore never unlocks that
+// account's store by being resumed.
 func (r Resolution) WithAccount(key string) Resolution {
+	if r.Source != SourceForced {
+		r.cwdAccount, r.cwdAccountRoot = r.Account, r.AccountRoot
+	}
 	r.Account = strings.TrimSpace(key)
 	r.Source = SourceForced
 	r.AccountRoot = ""
 	r.setAccountDerived()
+	r.applyAdmission()
 	return r
 }
 
@@ -207,7 +291,7 @@ func (r Resolution) EnvLines() []string {
 // supplies — 0 for no estate and for an estate with no store, both healthy. A
 // count is the only thing about a store a surface may print.
 func (r Resolution) CredentialCount() int {
-	if r.envPath == "" {
+	if r.envPath == "" || !r.EstateAdmitted {
 		return 0
 	}
 	return len(secretEnvFromFile(r.envPath))
@@ -219,6 +303,11 @@ func (r Resolution) CredentialCount() int {
 // directory). The verdict comes from the loader's own checks (openStore), so a
 // surface can never call "present" a store no spawn will read. The reason names
 // neither the store's path nor anything in it; nothing is logged.
+//
+// A store the loader would read but whose roots do not admit the estate root —
+// or that carries no root line at all — is StoreUnadmitted, with the
+// admission line as its reason: it supplies zero credentials, and the operator
+// has a line to add, not a file to repair.
 func (r Resolution) CredentialStore() (state StoreState, reason string) {
 	if r.envPath == "" {
 		return StoreAbsent, ""
@@ -226,6 +315,13 @@ func (r Resolution) CredentialStore() (state StoreState, reason string) {
 	f, c := openStore(r.envPath)
 	if f != nil {
 		f.Close()
+	}
+	if c.State == StorePresent && !r.EstateAdmitted {
+		sr := readStoreRoots(r.envPath)
+		if sr.rooted {
+			return StoreUnadmitted, notAdmittedLine(r.Estate)
+		}
+		return StoreUnadmitted, unanchoredLine(r.Estate) + ": " + r.Estate + ".env carries no root line"
 	}
 	return c.State, c.Reason
 }
@@ -254,7 +350,7 @@ func Shadowed(projectPath string) []AncestorPin {
 	if strings.TrimSpace(projectPath) == "" {
 		return nil
 	}
-	_, cands, nss := candidates(cleanAbs(projectPath))
+	_, cands, nss, _ := candidates(cleanAbs(projectPath))
 	won := -1
 	var winner string
 	for i, ns := range nss {
@@ -277,19 +373,21 @@ func Shadowed(projectPath string) []AncestorPin {
 
 // candidates is the ladder for path — walked from its source checkout when path
 // is under the daemon's worktree root — and each rung's `swarmery` namespace
-// (nil where nothing is declared or the file is unreadable). walkFrom is the
+// (nil where nothing is declared or the file is unreadable), and for each rung
+// the reason Lock 1 ignored its binding ("" where it did not). walkFrom is the
 // path the ladder starts at.
-func candidates(path string) (walkFrom string, cands []string, nss []map[string]any) {
+func candidates(path string) (walkFrom string, cands []string, nss []map[string]any, ignored []string) {
 	walkFrom = path
 	if src := sourceCheckout(path); src != "" {
 		walkFrom = src
 	}
 	cands = ladder(walkFrom)
 	nss = make([]map[string]any, len(cands))
+	ignored = make([]string, len(cands))
 	for i, dir := range cands {
-		nss[i] = namespaceAt(dir)
+		nss[i], ignored[i] = namespaceAt(dir)
 	}
-	return walkFrom, cands, nss
+	return walkFrom, cands, nss, ignored
 }
 
 // DeclarationUnreadable says why a declaration written into dir's binding file
@@ -313,7 +411,7 @@ func DeclarationUnreadable(dir string) string {
 		}
 		return fmt.Sprintf("%s is not a rung the walk reads (the filesystem root, or a directory not owned by you)", path)
 	}
-	return untrustedSettings(bindingPath(path))
+	return bindingUntrusted(bindingPath(path))
 }
 
 // setAccountDerived recomputes the fields that follow from Account.
@@ -389,13 +487,28 @@ func ownRung(dir string) bool {
 // namespaceAt returns the `swarmery` object of dir's binding file, or nil for a
 // missing, unparseable, untrusted (readTrustedSettings) or namespace-less file —
 // all of which mean "nothing declared here", never an error.
-func namespaceAt(dir string) map[string]any {
-	root := readTrustedSettings(bindingPath(dir))
+//
+// Lock 1 runs HERE, so every reader of a rung — both Resolve scans, Shadowed,
+// Estate — sees only provenance-clean bindings: a file that carries a
+// `swarmery` object and that git tracks (or whose status git cannot tell) reads
+// as nothing declared, and ignored says why. The probe runs only for a file
+// that exists and carries the namespace — never for a missing file, and never
+// on a relative path (dir is always an absolute ladder rung). It logs nothing:
+// the WARN is the composer's (spawnenv.go), once per path per process.
+func namespaceAt(dir string) (ns map[string]any, ignored string) {
+	path := bindingPath(dir)
+	root := readTrustedSettings(path)
 	if root == nil {
-		return nil
+		return nil, ""
 	}
-	ns, _ := root[bindingNamespace].(map[string]any)
-	return ns
+	ns, _ = root[bindingNamespace].(map[string]any)
+	if ns == nil {
+		return nil, ""
+	}
+	if why := bindingIgnoredReason(path); why != "" {
+		return nil, why
+	}
+	return ns, ""
 }
 
 // validField is one string field of a namespace, trimmed and gated by ValidKey

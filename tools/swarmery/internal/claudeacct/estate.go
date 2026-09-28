@@ -24,7 +24,8 @@ func Estate(dir string) (key, root string) {
 	if strings.TrimSpace(dir) == "" {
 		return "", "" // never read a RELATIVE binding path against the process cwd
 	}
-	if key = validField(namespaceAt(dir), estateField); key == "" {
+	ns, _ := namespaceAt(dir)
+	if key = validField(ns, estateField); key == "" {
 		return "", ""
 	}
 	return key, filepath.Clean(dir)
@@ -56,6 +57,11 @@ func SetEstate(dir, key string) error {
 		return err
 	}
 	ns, _ := root[bindingNamespace].(map[string]any)
+	// Lock 1, as SetBinding: a tracked or unclassifiable target is refused on
+	// set and clear, and left byte-identical.
+	if err := refuseDistrustedTarget(path, existed); err != nil {
+		return err
+	}
 
 	if key == "" {
 		if ns == nil {
@@ -100,4 +106,29 @@ func RevertEstate(dir, prev string, existedBefore bool) error {
 		return fmt.Errorf("remove %s: %w", path, err)
 	}
 	return nil
+}
+
+// EstateSettingsTracked says why dir's .claude/settings.json — the file an
+// estate hands every descendant (Resolution.SettingsFile) — may not become an
+// estate's settings without the operator's explicit say-so: git tracks it, so
+// its keys are whatever the repository ships, or git cannot tell. "" when the
+// file is absent, untracked, or outside any repository.
+func EstateSettingsTracked(dir string) string {
+	if strings.TrimSpace(dir) == "" {
+		return ""
+	}
+	path := filepath.Join(cleanAbs(dir), filepath.FromSlash(ProjectSettingsFile))
+	if _, err := os.Lstat(path); err != nil {
+		return ""
+	}
+	f := probeGitTracked(path)
+	switch {
+	case f.verdict.honoured():
+		return ""
+	case f.verdict == trackTracked:
+		return fmt.Sprintf("git tracks %s, so the estate's settings would be whatever the repository ships",
+			filepath.Join(f.dir, f.name))
+	default:
+		return fmt.Sprintf("git cannot say whether %s is tracked (%s)", filepath.Join(f.dir, f.name), f.detail)
+	}
 }

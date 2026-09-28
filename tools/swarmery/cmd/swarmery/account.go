@@ -261,19 +261,34 @@ func accountWhich(args []string, out io.Writer) error {
 		fmt.Fprintf(out, "estate:     %s (root %s)\n", r.Estate, r.EstateRoot)
 	}
 	fmt.Fprintf(out, "config dir: %s\n", orDash(configDir))
-	// The project's own binding file exists but no reader trusts it: whatever it
-	// declares is NOT in effect above. Said by path and reason, never contents.
-	if why := claudeacct.BindingFileUntrusted(dir); why != "" {
+	// Every rung whose binding the provenance gate ignored (D5 Lock 1): whatever
+	// it declares is NOT in effect above. Said by path and reason, never contents.
+	ownBinding := filepath.Join(dir, filepath.FromSlash(claudeacct.BindingFile))
+	ownIgnored := false
+	for _, ig := range r.IgnoredRungs() {
+		ownIgnored = ownIgnored || ig.Path == ownBinding
+		fmt.Fprintf(out, "ignored:    %s — %s\n", ig.Path, ig.Reason)
+	}
+	// The project's own binding file exists but no reader trusts it (mode, owner,
+	// type — or provenance, already said above).
+	if why := claudeacct.BindingFileUntrusted(dir); why != "" && !ownIgnored {
 		fmt.Fprintf(out, "ignored:    %s\n", why)
+	}
+	// Which stores a spawn here receives, and why (D5 Lock 2).
+	if r.AdmissionNote != "" {
+		for _, line := range strings.Split(r.AdmissionNote, "\n") {
+			fmt.Fprintf(out, "admission:  %s\n", line)
+		}
 	}
 	for _, s := range claudeacct.Shadowed(dir) {
 		fmt.Fprintf(out, "shadowed:   %s says %s\n", s.Dir, s.Account)
 	}
 	if !installed {
 		// The dir is still reported above (it is where a spawn WOULD point), but
-		// silence about its absence would read as "nothing is wrong here".
-		fmt.Fprintf(os.Stderr,
-			"warning: no config dir for account %q on this machine — a session started here "+
+		// silence about its absence would read as "nothing is wrong here". On
+		// stdout like everything else `which` says, so one capture holds it all.
+		fmt.Fprintf(out,
+			"warning:    no config dir for account %q on this machine — a session started here "+
 				"would land in a directory with no login in it\n", key)
 	}
 	return nil
@@ -431,11 +446,31 @@ func accountUse(args []string, out, errOut io.Writer, in *os.File) error {
 
 	configDir, _ := configDirOf(key)
 	fmt.Fprintf(out, "bound %s → %s (%s)\n", dir, key, configDir)
+	// D5: the payer is written whatever the roots say, but a ROOTED store that
+	// does not admit this path releases none of its credentials here. Say so
+	// once, with the exact line that would admit it — swarmery never writes it.
+	if note := unadmittedNote(dir, key); note != "" {
+		fmt.Fprintln(out, note)
+	}
 	if len(failed) > 0 {
 		return fmt.Errorf("%d pin(s) could not be cleared and still shadow the binding: %s — see the skipped pin lines above",
 			len(failed), strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// unadmittedNote is the one line `use` prints when key's store is rooted and
+// does not admit dir: the payer changed, the credentials did not follow.
+func unadmittedNote(dir, key string) string {
+	if key == ingest.DefaultAccount {
+		return ""
+	}
+	rooted, admitted, add := claudeacct.StoreAdmits(key, dir)
+	if !rooted || admitted {
+		return ""
+	}
+	return fmt.Sprintf("%s pays with %s but receives 0 of %s.env's credentials; to release them add: %s",
+		dir, key, key, add)
 }
 
 // clearPinsFlag is --clear-pins: a BOOL-shaped flag (bare = selective) that
@@ -720,11 +755,13 @@ func accountEstate(args []string, out, errOut io.Writer) error {
 func estateUse(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("account estate use", flag.ExitOnError)
 	path := pathFlag(fs)
+	allowTracked := fs.Bool("allow-tracked-settings", false,
+		"declare the estate even though git tracks <dir>/.claude/settings.json (its keys then travel with every clone)")
 	positional, flagArgs := splitPositional(args)
 	fs.Parse(flagArgs)
 	rest := append(append([]string{}, positional...), fs.Args()...)
 	if len(rest) != 1 {
-		return errors.New("usage: swarmery account estate use <key> [--path <dir>]")
+		return errors.New("usage: swarmery account estate use <key> [--path <dir>] [--allow-tracked-settings]")
 	}
 	key := strings.TrimSpace(rest[0])
 	if !claudeacct.ValidKey(key) {
@@ -740,6 +777,12 @@ func estateUse(args []string, out io.Writer) error {
 	// byte is written, rather than left on disk looking effective.
 	if why := claudeacct.DeclarationUnreadable(dir); why != "" {
 		return fmt.Errorf("refusing to declare estate %s at %s: the declaration would never be read — %s", key, dir, why)
+	}
+	// An estate's settings file is what the estate hands every descendant. One
+	// that git tracks arrived with the repository, so it is refused unless the
+	// operator says so in the argv.
+	if why := claudeacct.EstateSettingsTracked(dir); why != "" && !*allowTracked {
+		return fmt.Errorf("refusing to declare estate %s at %s: %s — pass --allow-tracked-settings to declare it anyway", key, dir, why)
 	}
 	prev, _ := claudeacct.Estate(dir)
 	existedBefore := claudeacct.BindingFileExists(dir)
@@ -759,6 +802,13 @@ func estateUse(args []string, out io.Writer) error {
 		return fmt.Errorf("%s — the declaration was reverted", msg)
 	}
 	fmt.Fprintf(out, "estate %s declared at %s (%s)\n", key, dir, storeSummary(r))
+	// Unanchored: the declaration stands, and nothing flows until the store
+	// names this root. One line, with the exact root line to add. (A store the
+	// loader REFUSES has its own fix, already named above.)
+	if state, _ := r.CredentialStore(); !r.EstateAdmitted && state != claudeacct.StoreRefused {
+		fmt.Fprintf(out, "estate %s is unanchored — it supplies 0 credentials and no estate settings until %s.env carries: %s\n",
+			key, key, claudeacct.RootLineFor(dir))
+	}
 	return nil
 }
 
@@ -772,6 +822,8 @@ func storeSummary(r claudeacct.Resolution) string {
 		return fmt.Sprintf("credential store present: %d names", r.CredentialCount())
 	case claudeacct.StoreRefused:
 		return fmt.Sprintf("credential store REFUSED: %s — it supplies 0 credentials until that is fixed", why)
+	case claudeacct.StoreUnadmitted:
+		return fmt.Sprintf("credential store not admitted: %s — it supplies 0 credentials", why)
 	default:
 		return "no credential store on this machine — it supplies 0 credentials"
 	}

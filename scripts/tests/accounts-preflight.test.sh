@@ -177,8 +177,8 @@ else bad "(i4) SWARMERY_SKIP_PREFLIGHT=1 -> silent" "'' exit 0" "'$HOOK_OUT' exi
 SECONDS=0
 run_hook "$R_GAP" "$PROJ" STUB_MODE=hang
 elapsed=$SECONDS
-if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ] && [ "$elapsed" -lt 3 ]; then ok
-else bad "(i5) swarmery sleeps 30 -> returns under 3 s, silent" "<3s '' exit 0" "${elapsed}s '$HOOK_OUT' exit $HOOK_EXIT"; fi
+if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ] && [ "$elapsed" -lt 4 ]; then ok
+else bad "(i5) swarmery sleeps 30 -> returns under 4 s, silent" "<4s '' exit 0" "${elapsed}s '$HOOK_OUT' exit $HOOK_EXIT"; fi
 
 # ── (j) the character gate stays stricter than claudeacct.ValidKey ────────────
 # shellcheck disable=SC2016  # literal $ and backtick are the point

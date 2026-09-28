@@ -75,7 +75,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -223,6 +222,10 @@ type gitProbeResult struct {
 	exitCode int
 	stderr   string
 	err      error
+	// stdout is `ls-files -s -z`'s index entries ("<mode> <sha> <stage>\t<path>"
+	// records, NUL-separated) — how an exit 0 is told apart from a match on
+	// CHILDREN of the name asked about (exactEntry).
+	stdout string
 }
 
 // runGitProbe is a package var so a test can count invocations and stand in for
@@ -237,16 +240,16 @@ var runGitProbe = func(dir, name string) gitProbeResult {
 		"-c", "core.hooksPath=/dev/null",
 		"-c", "safe.bareRepository=explicit",
 		"-C", dir,
-		"ls-files", "--error-unmatch", "--", ":(icase,literal)"+name,
+		"ls-files", "-s", "-z", "--error-unmatch", "--", ":(icase,literal)"+name,
 	)
 	cmd.Dir = dir
 	cmd.Env = gitProbeEnv(os.Environ())
-	cmd.Stdout = io.Discard
-	var stderr strings.Builder
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	res := gitProbeResult{exitCode: -1, stderr: stderr.String()}
+	res := gitProbeResult{exitCode: -1, stderr: stderr.String(), stdout: stdout.String()}
 	switch {
 	case err == nil:
 		res.exitCode = 0
@@ -432,10 +435,30 @@ func probeEntry(dir, name string) trackFinding {
 	name = onDiskName(dir, name)
 	r := runGitProbe(dir, name)
 	f := trackFinding{verdict: classifyGitProbe(r.exitCode, r.stderr, r.err), dir: dir, name: name}
+	// A pathspec for a directory name also matches every tracked file UNDER it:
+	// a `.claude` the operator replaced with an untracked link, over an index
+	// that still tracks `.claude/settings.json`, is not a tracked link. Only an
+	// entry that IS the name counts. An exit 0 with no entries read (a stub)
+	// stays tracked — the fail-closed side.
+	if f.verdict == trackTracked && r.stdout != "" && !exactEntry(r.stdout, name) {
+		f.verdict = trackUntracked
+	}
 	if f.verdict == trackUnknown {
 		f.detail = gitFailureDetail(r)
 	}
 	return f
+}
+
+// exactEntry reports whether `ls-files -s -z` output lists name itself (not
+// only paths below it). The pathspec was case-insensitive, so the comparison
+// is too (ASCII folding, as git's icase does).
+func exactEntry(lsFiles, name string) bool {
+	for _, rec := range strings.Split(lsFiles, "\x00") {
+		if _, path, ok := strings.Cut(rec, "\t"); ok && strings.EqualFold(path, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // gitNotFound is the detail for a git the probe could not start at all — the
@@ -520,7 +543,7 @@ func distrustReason(f trackFinding) string {
 	entry := filepath.Join(f.dir, f.name)
 	if f.verdict == trackTracked {
 		return fmt.Sprintf("git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
-			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, f.dir, f.name)
+			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, shellQuote(f.dir), shellQuote(f.name))
 	}
 	detail := f.detail
 	if detail == "" {
@@ -531,7 +554,28 @@ func distrustReason(f trackFinding) string {
 			"To make it count, install git or put it on the daemon's PATH", entry, detail)
 	}
 	return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
-		"To see why git cannot answer, run: git -C %s status", entry, detail, f.dir)
+		"To see why git cannot answer, run: git -C %s status", entry, detail, shellQuote(f.dir))
+}
+
+// shellQuote makes s safe to paste into a POSIX shell: returned as-is when it
+// holds only characters no shell treats specially, else wrapped in single
+// quotes, with each embedded single quote closed, escaped and reopened. The
+// remedy the WARN prints is meant to be copied.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	safe := true
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_@%+=:,./-", r)) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // bindingDistrusted is the gate Binding() calls. It probes FRESH every time:
@@ -539,6 +583,23 @@ func distrustReason(f trackFinding) string {
 // decision.
 func bindingDistrusted(path string) string {
 	return distrustReason(probeGitTracked(path))
+}
+
+// bindingIgnoredReason is bindingDistrusted with the verdict named first —
+// "tracked by git" or "git cannot classify it" — for the surfaces that list the
+// rungs a resolution ignored (`swarmery account which`). Probes fresh, like
+// bindingDistrusted: Resolve runs it on the launch path.
+func bindingIgnoredReason(path string) string {
+	f := probeGitTracked(path)
+	why := distrustReason(f)
+	if why == "" {
+		return ""
+	}
+	label := "git cannot classify it"
+	if f.verdict == trackTracked {
+		label = "tracked by git"
+	}
+	return label + " — " + why
 }
 
 // probeKey identifies what a verdict describes: the symlink hops on the path
@@ -576,7 +637,9 @@ func logDistrusted(path, why string) {
 	if abs, err := filepath.Abs(path); err == nil {
 		path = abs
 	}
-	log.Printf("claudeacct: IGNORING binding in %s (running under the default account, with no account secrets) — %s.",
+	// No full stop after why: it ends in a command meant to be copied, and a
+	// trailing period would be pasted with it.
+	log.Printf("claudeacct: IGNORING binding in %s (running under the default account, with no account secrets) — %s",
 		path, why)
 }
 
@@ -656,8 +719,10 @@ func BindingForDisplay(projectPath string) string {
 // remedy, never the file's contents.
 func BindingForDisplayWithReason(projectPath string) (key, ignoredReason string) {
 	path := bindingPath(projectPath)
-	_, root, _, err := readSettings(path)
-	if err != nil {
+	// The READ side's loader, as Binding uses: a symlinked, group-writable,
+	// foreign-owned or oversize file declares nothing on screen either.
+	root := readTrustedSettings(path)
+	if root == nil {
 		return "", ""
 	}
 	ns, _ := root[bindingNamespace].(map[string]any)

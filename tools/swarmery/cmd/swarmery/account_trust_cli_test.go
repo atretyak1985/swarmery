@@ -264,10 +264,12 @@ func TestAccountEstateReportsARefusedStore(t *testing.T) {
 	if !strings.Contains(show.String(), "REFUSED: the store directory's mode 0755") {
 		t.Errorf("estate show with an open store dir = %q", show.String())
 	}
-	// Present, for contrast: the count is printed.
+	// Present, for contrast: the count is printed. (D5: anchored at the
+	// declaring directory, so it is admitted.)
 	if err := os.Chmod(storeDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	anchorCLIStore(t, storeDir, "acme", dir)
 	show.Reset()
 	if err := accountEstate([]string{"show", "--path", dir}, &show, io.Discard); err != nil {
 		t.Fatal(err)

@@ -313,6 +313,8 @@ func (r SwitchReport) Lines() []string {
 		out = append(out, fmt.Sprintf("credentials: %d from %s", r.Credentials, r.CredentialStore))
 	case claudeacct.StoreRefused:
 		out = append(out, fmt.Sprintf("credentials: 0 (store refused: %s)", r.StoreReason))
+	case claudeacct.StoreUnadmitted:
+		out = append(out, fmt.Sprintf("credentials: 0 (store not admitted: %s)", r.StoreReason))
 	default:
 		out = append(out, "credentials: 0 (no store file — not an error)")
 	}

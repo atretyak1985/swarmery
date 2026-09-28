@@ -163,7 +163,12 @@ func TestSpawnEnvResolved_EstateWinsCollision(t *testing.T) {
 		"work": "SHARED=from-account\nACCOUNT_ONLY=a\n",
 		"acme": "SHARED=from-estate\nESTATE_ONLY=e\n",
 	})
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so the estate here has a root the store names.
+	estateRoot := t.TempDir()
+	anchorStore(t, "acme", estateRoot)
 	r := Resolution{Account: "work", Estate: "acme"}
+	r.EstateRoot = estateRoot
 
 	delta := resolvedDelta(r)
 	if got := entriesNamed(delta, "SHARED"); !slices.Equal(got, []string{"SHARED=from-estate"}) {
@@ -192,7 +197,7 @@ func TestSpawnEnvResolved_EstateWinsCollision(t *testing.T) {
 	}
 
 	// Default payer: the config dir is dropped, the estate is still carried.
-	env = SpawnEnvResolved([]string{configDirEnv + "=" + bakedDir, "PATH=/usr/bin"}, Resolution{Account: "default", Estate: "acme"})
+	env = SpawnEnvResolved([]string{configDirEnv + "=" + bakedDir, "PATH=/usr/bin"}, Resolution{Account: "default", Estate: "acme", EstateRoot: estateRoot})
 	if len(configDirEntries(env)) != 0 {
 		t.Fatalf("default payer kept a config dir: %v", configDirEntries(env))
 	}
@@ -201,7 +206,7 @@ func TestSpawnEnvResolved_EstateWinsCollision(t *testing.T) {
 	}
 	// Unbound payer with an estate: the inherited config dir passes, the estate
 	// is added.
-	env = SpawnEnvResolved([]string{configDirEnv + "=" + bakedDir}, Resolution{Estate: "acme"})
+	env = SpawnEnvResolved([]string{configDirEnv + "=" + bakedDir}, Resolution{Estate: "acme", EstateRoot: estateRoot})
 	if got := configDirEntries(env); !slices.Equal(got, []string{configDirEnv + "=" + bakedDir}) {
 		t.Fatalf("unbound payer config dir = %v, want the inherited one", got)
 	}
@@ -269,6 +274,7 @@ func TestSpawnEnvFor_ComposesTheInheritedEstate(t *testing.T) {
 	proj := filepath.Join(root, "deployment", "src", "php")
 	declare(t, root, map[string]any{"claudeAccount": "work", "estate": "acme"})
 	declare(t, proj, map[string]any{"claudeAccount": "default"})
+	anchorStore(t, "acme", root) // D5: an estate store releases only when rooted
 
 	env := SpawnEnvFor([]string{configDirEnv + "=" + bakedDir}, proj)
 	if len(configDirEntries(env)) != 0 {

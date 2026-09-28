@@ -71,6 +71,13 @@ func Binding(projectPath string) string {
 // Clearing a binding that is not there — and setting the one already stored —
 // touch the file not at all, so SetBinding never reformats a settings file it
 // has nothing to say about.
+//
+// A binding file git TRACKS (or whose status git cannot tell) is refused on
+// set AND clear, naming the path, the reason and the fix: the readers ignore
+// it (Lock 1), so a write there would be reported as done while changing
+// nothing — and a clear would edit a file that belongs to the repository. The
+// file is left byte-identical. A file that does not exist yet is never probed:
+// the one this writes is untracked by construction.
 func SetBinding(projectPath, account string) error {
 	account = strings.TrimSpace(account)
 	if account != "" && !ValidKey(account) {
@@ -83,6 +90,9 @@ func SetBinding(projectPath, account string) error {
 		return err
 	}
 	ns, _ := root[bindingNamespace].(map[string]any)
+	if err := refuseDistrustedTarget(path, existed); err != nil {
+		return err
+	}
 
 	if account == "" {
 		if ns == nil {
@@ -109,6 +119,36 @@ func SetBinding(projectPath, account string) error {
 	return writeSettings(path, raw, root, existed)
 }
 
+// ErrTrackedBinding is wrapped by every binding write refused because git
+// tracks the target file, or cannot say whether it does (Lock 1).
+var ErrTrackedBinding = errors.New("binding file is not machine-local")
+
+// refuseDistrustedTarget is the writers' half of Lock 1. It probes an EXISTING
+// file that carries our namespace or would receive it (a missing file is never
+// probed), and refuses with the gate's own reason and remedy.
+func refuseDistrustedTarget(path string, existed bool) error {
+	if !existed {
+		return nil
+	}
+	if why := bindingDistrusted(path); why != "" {
+		return fmt.Errorf("%w: refusing to write %s — %s", ErrTrackedBinding, path, why)
+	}
+	return nil
+}
+
+// bindingUntrusted is untrustedSettings plus Lock 1: why an EXISTING binding
+// file declares nothing any reader sees — its mode, owner or type, or its
+// provenance. "" when it is absent or would be read.
+func bindingUntrusted(path string) string {
+	if why := untrustedSettings(path); why != "" {
+		return why
+	}
+	if _, err := os.Lstat(path); err != nil {
+		return ""
+	}
+	return bindingDistrusted(path)
+}
+
 // VerifyBinding reads the binding at projectPath back after a write and reports
 // an error when it is not `want` — the writer's last line of defence against a
 // write that "succeeded" into a file the READ side ignores. The typical cause is
@@ -126,18 +166,22 @@ func VerifyBinding(projectPath, want string) error {
 		return fmt.Errorf("the binding %s was written but does not take effect: %s — "+
 			"fix the file (chmod go-w it, or replace one you do not own) and retry", want, why)
 	}
+	if why := bindingDistrusted(path); why != "" {
+		return fmt.Errorf("the binding %s was written but does not take effect: %s", want, why)
+	}
 	return fmt.Errorf("the binding %s was written to %s but reads back as %q", want, path, got)
 }
 
 // BindingFileUntrusted says why projectPath's OWN binding file exists but is
 // ignored by every reader (a symlink, not a regular file, writable by group or
-// other, over the size cap, not owned by you) — "" when it is absent or would
-// be read. The reason names the path, never the contents.
+// other, over the size cap, not owned by you — or tracked by git, or of a
+// status git cannot tell: Lock 1) — "" when it is absent or would be read. The
+// reason names the path, never the contents.
 func BindingFileUntrusted(projectPath string) string {
 	if strings.TrimSpace(projectPath) == "" {
 		return ""
 	}
-	return untrustedSettings(bindingPath(projectPath))
+	return bindingUntrusted(bindingPath(projectPath))
 }
 
 // BindingFileExists reports whether projectPath's binding file exists at all

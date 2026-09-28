@@ -123,7 +123,10 @@ func TestResumeKeepsTheRowsAccountAndTakesTheCwdsEstate(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("SWARMERY_SECRETS_DIR", secrets)
-	if err := os.WriteFile(filepath.Join(secrets, "acme.env"), []byte(resumeStoreVar+"=marker\n"), 0o600); err != nil {
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root (the cwd below resolves through its source checkout to it).
+	if err := os.WriteFile(filepath.Join(secrets, "acme.env"),
+		[]byte("# swarmery-root: "+filepath.Join(home, "projects", "acme")+"\n"+resumeStoreVar+"=marker\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(filepath.Join(secrets, "acme.env"), 0o600); err != nil {

@@ -531,11 +531,15 @@ func TestStart_SpecResolutionReachesChildEnv(t *testing.T) {
 	}
 	// The ESTATE's store — named "acme", not "work": the account has no store.
 	seedSecretStoreNamed(t, "acme")
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so the store names the root the Resolution carries.
+	estateRoot := t.TempDir()
+	anchorStoreAt(t, "acme", estateRoot)
 
 	res, err := ClaudeRunner{Engine: "test"}.Start(context.Background(), Spec{
 		Prompt: "p", SessionUUID: "u-resolution", Cwd: t.TempDir(),
-		Resolution: claudeacct.Resolution{Account: "work", Estate: "acme"},
-		Bin: fakeBin(t, `printf '%s|%s\n' "${`+secretVar+`-`+absentMarker+`}" "${CLAUDE_CONFIG_DIR-`+absentMarker+`}"`+"\n"),
+		Resolution:    claudeacct.Resolution{Account: "work", Estate: "acme", EstateRoot: estateRoot},
+		Bin:           fakeBin(t, `printf '%s|%s\n' "${`+secretVar+`-`+absentMarker+`}" "${CLAUDE_CONFIG_DIR-`+absentMarker+`}"`+"\n"),
 		Timeout:       30 * time.Second,
 		CaptureStdout: true,
 	})

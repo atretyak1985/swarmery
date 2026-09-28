@@ -32,7 +32,9 @@ func TestPlannerCarriesTheProjectsEstateStore(t *testing.T) {
 	t.Setenv("SWARMERY_SECRETS_DIR", secrets)
 	os.Unsetenv(estateVar)
 	store := filepath.Join(secrets, "acme.env")
-	if err := os.WriteFile(store, []byte(estateVar+"="+estateMarker+"\n"), 0o600); err != nil {
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so the store names the fixture root it serves.
+	if err := os.WriteFile(store, []byte("# swarmery-root: "+filepath.Join(home, "projects", "acme")+"\n"+estateVar+"="+estateMarker+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(store, 0o600); err != nil {

@@ -10,9 +10,19 @@ package claudeacct
 // The delta, in this order (resolvedDelta):
 //
 //  1. the config dir for the resolved ACCOUNT (Resolution.EnvLines);
-//  2. the ACCOUNT's store <account>.env — the back-compat layer, unchanged: a
-//     machine with only an account-keyed store keeps working as before;
-//  3. the ESTATE's store <estate>.env, when that file exists.
+//  2. the ACCOUNT's store <account>.env — the back-compat layer — when the
+//     release table admits it (storeroot.go): a rootless store keeps today's
+//     behaviour, a rooted one reaches only the trees its root lines name;
+//  3. the ESTATE's store <estate>.env, only when it is ROOTED and admits the
+//     estate root. An unanchored estate contributes nothing.
+//
+// Admission is decided HERE again, from the resolution's rungs and the stores
+// on disk — never read back from the Resolution's admission fields — so a
+// hand-built Resolution cannot claim a store its rungs do not earn.
+//
+// Two WARNs are logged here and nowhere else, each once per path per process:
+// the binding a rung's provenance ignored (Lock 1), and an account store
+// released only because it carries no root line (store-rootless).
 //
 // then collapsed BY NAME keeping the LAST writer, so the delta holds at most one
 // entry per variable name. THE ESTATE WINS A NAME COLLISION, because it is
@@ -43,8 +53,10 @@ package claudeacct
 //     would otherwise win over the binding.
 
 import (
+	"log"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
@@ -53,9 +65,37 @@ import (
 // the order and the collapse. Unexported on purpose: a delta cannot express
 // "unset", so every seam goes through SpawnEnvResolved.
 func resolvedDelta(r Resolution) []string {
-	delta := append(r.EnvLines(), SecretEnvForAccount(r.Account)...)
-	delta = append(delta, SecretEnvForStore(r.Estate)...)
+	for _, ig := range r.IgnoredRungs() {
+		logDistrusted(ig.Path, ig.Reason)
+	}
+	a := admit(r)
+	delta := r.EnvLines()
+	if a.accountReleased {
+		if a.accountRootlessWarn != "" {
+			warnRootlessOnce(a.accountRootlessWarn, r.Account)
+		}
+		delta = append(delta, SecretEnvForAccount(r.Account)...)
+	}
+	if a.estateReleased {
+		delta = append(delta, SecretEnvForStore(r.Estate)...)
+	}
 	return collapseLastWins(delta)
+}
+
+// rootlessWarned is the store-rootless warn-once ledger, keyed by store path.
+// A pointer so a test can swap in a fresh one.
+var rootlessWarned = &sync.Map{}
+
+// warnRootlessOnce logs, once per store per process, that an account store was
+// released with no root line to bound it. It names the path and the fix,
+// never a variable.
+func warnRootlessOnce(path, key string) {
+	if _, seen := rootlessWarned.LoadOrStore(path, struct{}{}); seen {
+		return
+	}
+	log.Printf("claudeacct: store-rootless: %s carries no \"%s\" line, so it is released to every directory "+
+		"bound to %s; to confine it, add one line per tree it serves: %s <abs path>",
+		path, "# "+storeRootMarker, strings.TrimSpace(key), "# "+storeRootMarker)
 }
 
 // collapseLastWins keeps, for every name, only its LAST entry, in the order those

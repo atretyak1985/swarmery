@@ -215,6 +215,11 @@ const (
 	// symlink, a mode open beyond its owner, a foreign owner, an open store
 	// directory, …). Zero credentials, and the operator has something to fix.
 	StoreRefused
+	// StoreUnadmitted: the loader would read it, but its root lines do not admit
+	// the estate root asking for it — or, for an estate store, it carries none
+	// (the unanchored state, D5). Zero credentials; the fix is a root line in
+	// the store, which only the operator writes.
+	StoreUnadmitted
 )
 
 // storeCheck is the loader's verdict on one store file.

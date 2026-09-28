@@ -92,7 +92,9 @@ func TestTermAccountEnvCarriesTheProjectsEstate(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("SWARMERY_SECRETS_DIR", store)
-	if err := os.WriteFile(filepath.Join(store, "acme.env"), []byte("ESTATE_TOKEN=e\n"), 0o600); err != nil {
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root.
+	if err := os.WriteFile(filepath.Join(store, "acme.env"), []byte("# swarmery-root: "+root+"\nESTATE_TOKEN=e\n"), 0o600); err != nil {
 		t.Fatalf("seed store: %v", err)
 	}
 

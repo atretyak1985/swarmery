@@ -31,7 +31,10 @@ func TestVerifySpawnCarriesTheEstateStore(t *testing.T) {
 	t.Setenv("SWARMERY_SECRETS_DIR", dir)
 	os.Unsetenv(estateVar)
 	p := filepath.Join(dir, "acme.env")
-	if err := os.WriteFile(p, []byte(estateVar+"="+estateMarker+"\n"), 0o600); err != nil {
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so the store names the root the Resolution carries.
+	estateRoot := t.TempDir()
+	if err := os.WriteFile(p, []byte("# swarmery-root: "+estateRoot+"\n"+estateVar+"="+estateMarker+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(p, 0o600); err != nil {
@@ -40,7 +43,7 @@ func TestVerifySpawnCarriesTheEstateStore(t *testing.T) {
 	fakeClaudeRunner(t, `printf '%s\n' "${`+estateVar+`-`+unsetMarker+`}"; exit 0`)
 	run, err := ClaudeRunner{Timeout: 30 * time.Second}.Run(context.Background(), RunSpec{
 		Prompt: "p", SessionUUID: "estate-run", Cwd: t.TempDir(),
-		Resolution: claudeacct.Resolution{Account: "default", Estate: "acme"},
+		Resolution: claudeacct.Resolution{Account: "default", Estate: "acme", EstateRoot: estateRoot},
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)

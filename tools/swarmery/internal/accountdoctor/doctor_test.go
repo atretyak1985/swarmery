@@ -370,7 +370,8 @@ func TestFastEstateStoreCountsNames(t *testing.T) {
 	mustWrite(t, filepath.Join(proj, ".claude", "settings.local.json"), `{"swarmery":{"estate":"doctorstore"}}`, 0o644)
 	const planted = "zzq-store-planted-value"
 	store := filepath.Join(f.secrets, "doctorstore.env")
-	mustWrite(t, store, "DOCTOR_S_ONE="+planted+"\nDOCTOR_S_TWO="+planted+"\n", 0o600)
+	// D5: the store is anchored at the estate root, so it is admitted.
+	mustWrite(t, store, "# swarmery-root: "+proj+"\nDOCTOR_S_ONE="+planted+"\nDOCTOR_S_TWO="+planted+"\n", 0o600)
 	if err := os.Chmod(f.secrets, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -384,6 +385,33 @@ func TestFastEstateStoreCountsNames(t *testing.T) {
 	}
 	if strings.Contains(mustJSON(t, rep), planted) {
 		t.Error("the report carries a store VALUE")
+	}
+}
+
+// An estate its store does not admit — rootless, or rooted elsewhere — counts
+// nothing and releases no settings file: the doctor reports what a spawn
+// would actually receive (D5).
+func TestFastEstateNotAdmittedCountsNothing(t *testing.T) {
+	f := newFixture(t)
+	proj := t.TempDir()
+	mustWrite(t, filepath.Join(proj, ".claude", "settings.local.json"), `{"swarmery":{"estate":"doctorstore"}}`, 0o644)
+	mustWrite(t, filepath.Join(proj, ".claude", "settings.json"), `{"enabledPlugins":{"x@y":true}}`, 0o644)
+	store := filepath.Join(f.secrets, "doctorstore.env")
+	if err := os.Chmod(f.secrets, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"rootless":         "DOCTOR_S_ONE=x\n",
+		"rooted elsewhere": "# swarmery-root: " + t.TempDir() + "\nDOCTOR_S_ONE=x\n",
+	} {
+		mustWrite(t, store, body, 0o600)
+		rep, err := Fast(Options{Path: proj})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rep.Credentials != 0 || rep.SettingsFile != "" {
+			t.Errorf("%s: credentials = %d settingsFile = %q, want 0 and \"\"", name, rep.Credentials, rep.SettingsFile)
+		}
 	}
 }
 

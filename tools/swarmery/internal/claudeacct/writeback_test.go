@@ -240,7 +240,12 @@ func TestCredentialStore_ThreeStates(t *testing.T) {
 	})
 	t.Run("present", func(t *testing.T) {
 		seedStores(t, map[string]string{"acme": "ACME_NAME=acme-value\n"})
+		anchorStore(t, "acme", root) // D5: present means admitted
 		check(t, StorePresent, "")
+	})
+	t.Run("unanchored", func(t *testing.T) {
+		seedStores(t, map[string]string{"acme": "ACME_NAME=acme-value\n"})
+		check(t, StoreUnadmitted, "estate acme unanchored")
 	})
 	t.Run("file mode", func(t *testing.T) {
 		dir := seedStores(t, map[string]string{"acme": "ACME_NAME=acme-value\n"})

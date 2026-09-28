@@ -269,8 +269,21 @@ func TestSwitchCredentialCountOnly(t *testing.T) {
 	}
 	assertNoSecretShape(t, lines)
 
+	// A rootless estate store is unanchored (D5): it supplies nothing, and the
+	// report says so rather than counting names no spawn would receive.
 	store := filepath.Join(secrets, "tmpfixture.env")
 	if err := os.WriteFile(store, []byte("FIXTURE_ONE=fixture-value-1\nFIXTURE_TWO=fixture-value-2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep, err = Switch(SwitchOptions{Key: "default", Estate: root, Force: true, DryRun: true, DBPath: noDB(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countPrefix(rep.Lines(), "credentials: 0 (store not admitted: estate tmpfixture unanchored"); n != 1 {
+		t.Errorf("unanchored store line missing\n%s", joined(rep.Lines()))
+	}
+	// Anchored at the estate root, it is admitted and counted.
+	if err := os.WriteFile(store, []byte("# swarmery-root: "+root+"\nFIXTURE_ONE=fixture-value-1\nFIXTURE_TWO=fixture-value-2\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	rep, err = Switch(SwitchOptions{Key: "default", Estate: root, Force: true, DryRun: true, DBPath: noDB(t)})

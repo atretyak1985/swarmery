@@ -386,6 +386,7 @@ func TestResolve_WorktreeDedupsAgainstItsSource(t *testing.T) {
 	src := filepath.Join(home, "projects", "code")
 	declare(t, src, map[string]any{"estate": "code"})
 	writeFile(t, filepath.Join(src, ".claude", "settings.json"), "{}\n")
+	anchorStore(t, "code", src) // D5: only an admitted estate contributes its settings file
 	wt := wtPath(home, src, "phase-2")
 	linkWorktree(t, src, wt, "phase-2")
 

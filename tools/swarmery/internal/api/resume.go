@@ -159,6 +159,13 @@ func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64,
 	// account store, estate store; an inherited CLAUDE_CONFIG_DIR removed for an
 	// explicit default account — and hands os.Environ() back untouched when
 	// neither axis adds anything.
+	//
+	// This is a forced composition site (D5): WithAccount forces the payer, and
+	// the account's store is released only when the cwd INDEPENDENTLY resolves
+	// the same key under a rung that store admits (or the store is rootless) —
+	// so a session a foreign binding once re-homed onto an account never
+	// unlocks that account's credentials by being resumed. The estate still
+	// comes from the cwd, admitted by its own store's roots.
 	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(cwd).WithAccount(account))
 	// Own process group: a daemon restart (make install / launchd job stop)
 	// SIGKILLs the daemon's process group — without this, every in-flight

@@ -22,8 +22,10 @@ const (
 	estateMarker = "estate-delivered"
 )
 
-// seedEstateStore writes <name>.env (0600) into a fresh secrets dir.
-func seedEstateStore(t *testing.T, name string) {
+// seedEstateStore writes <name>.env (0600) into a fresh secrets dir, anchored
+// at root: D5 releases an estate store only when ROOTED and its roots admit the
+// estate root.
+func seedEstateStore(t *testing.T, name, root string) {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
@@ -32,7 +34,7 @@ func seedEstateStore(t *testing.T, name string) {
 	t.Setenv("SWARMERY_SECRETS_DIR", dir)
 	os.Unsetenv(estateVar)
 	p := filepath.Join(dir, name+".env")
-	if err := os.WriteFile(p, []byte(estateVar+"="+estateMarker+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(p, []byte("# swarmery-root: "+root+"\n"+estateVar+"="+estateMarker+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(p, 0o600); err != nil {
@@ -45,11 +47,12 @@ func seedEstateStore(t *testing.T, name string) {
 func TestSpawnCarriesTheEstateStore(t *testing.T) {
 	unsetConfigDir(t)
 	t.Setenv("HOME", t.TempDir())
-	seedEstateStore(t, "acme")
+	estateRoot := t.TempDir()
+	seedEstateStore(t, "acme", estateRoot)
 	fakeClaude(t, `printf '%s\n' "${`+estateVar+`-`+unsetMarker+`}" > "$PWD/estate.txt"; exit 0`)
 	cwd := t.TempDir()
 	spec := RunSpec{Prompt: "p", SessionUUID: "estate-run", Cwd: cwd,
-		Resolution: claudeacct.Resolution{Account: "default", Estate: "acme"}}
+		Resolution: claudeacct.Resolution{Account: "default", Estate: "acme", EstateRoot: estateRoot}}
 	if _, err := (ClaudeRunner{}).Start(context.Background(), spec); err != nil {
 		t.Fatalf("Start: %v", err)
 	}

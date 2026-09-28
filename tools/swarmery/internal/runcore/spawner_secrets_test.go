@@ -63,6 +63,23 @@ func seedSecretStoreNamed(t *testing.T, account string) {
 	}
 }
 
+// anchorStoreAt appends `# swarmery-root: <root>` to store <key>.env in the
+// current SWARMERY_SECRETS_DIR (D5's store anchor).
+func anchorStoreAt(t *testing.T, key, root string) {
+	t.Helper()
+	path := filepath.Join(os.Getenv("SWARMERY_SECRETS_DIR"), key+".env")
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("# swarmery-root: " + root + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // childSecret runs the real ClaudeRunner against a fake `claude` that reports
 // what IT saw, and returns that.
 func childSecret(t *testing.T, account string) string {

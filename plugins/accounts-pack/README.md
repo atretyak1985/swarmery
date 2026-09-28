@@ -263,6 +263,10 @@ Properties worth knowing:
   by the account the binding named.
 - **swarmery never writes it.** Put the file there yourself, `chmod 600` it, and
   keep it out of every repo.
+- **It can name the trees it serves.** A line `# swarmery-root: <absolute path>`
+  (a comment to every older loader) anchors the store: it is then released only
+  to a project inside one of the trees its root lines name. See "Trust: two
+  locks" below.
 
 A project bound **explicitly** to `default` runs under `~/.claude` even when the
 daemon's plist carries a `CLAUDE_CONFIG_DIR` (`swarmery install
@@ -285,12 +289,15 @@ by hand. It does three independent things:
 1. it makes `<estate-root>` the **estate root**: every directory below it
    resolves to it;
 2. it selects `<SWARMERY_SECRETS_DIR or ~/.swarmery/secrets>/<store>.env` as the
-   credential store, **when that file exists**;
+   credential store, **when that file exists and one of its `# swarmery-root:`
+   lines names a tree containing `<estate-root>`**;
 3. it selects `<estate-root>/.claude/settings.json` as the estate's settings
-   file, when that file exists.
+   file, when that file exists — again only for an estate its store admits.
 
-**An estate with no credential store is a healthy state** — it supplies zero
-credentials and raises nothing.
+**An estate whose store is missing, or carries no root line, is _unanchored_**:
+it supplies zero credentials and no estate settings, and that is never an error.
+`swarmery account estate use` says so in one line and prints the exact root
+line to add; `swarmery account which` prints `estate <key> unanchored`.
 
 Resolution walks up from the project: the project's own binding, then each
 ancestor, stopping before your home directory. The **account** is taken from
@@ -316,6 +323,44 @@ place and named as a deliberate divergence. `--clear-pins=all` clears every
 listed pin. `--keep-pins` clears nothing. With no flag a terminal is asked
 about the redundant set; anything else only lists.
 
+### Trust: two locks
+
+Two things decide what a directory is actually given, and neither can be
+widened by a file someone else wrote:
+
+- **Lock 1 — provenance.** A binding file that git **tracks** (or whose status
+  git cannot establish) declares nothing — for every field of the `swarmery`
+  object and every key, `default` included — at every rung of the walk. It
+  arrived with a clone, a pull or a teammate's commit, so it may not choose the
+  payer or the credentials. The rung reads as "nothing declared here", the walk
+  continues, and `swarmery account which` prints an `ignored:` line with the
+  reason and the fix (`git rm --cached`). Every writer (`use`, `clear`, `estate
+  use|clear`, `switch`) refuses such a file on set and on clear and leaves it
+  byte-identical. A binding file that is itself a **symlink** is never read; a
+  symlinked `.claude` **directory** is read, and every link on the way is checked
+  the same way.
+- **Lock 2 — the store anchor.** A store carrying `# swarmery-root:` lines is
+  released only to a directory inside one of those trees (compared as resolved
+  files, never as string prefixes). An **estate** store must be anchored, or it
+  releases nothing (the unanchored state above). An **account** store without
+  root lines keeps working as before and logs one `store-rootless` warning per
+  process. `swarmery account use` still writes a payer whose store does not
+  admit the path — the payer is gated by Lock 1 only — and prints the root line
+  that would release the credentials.
+
+`swarmery account which` prints one `admission:` line per store: `<key>.env
+admitted by root <root>`, `not admitted by <key>.env roots`, `<key>.env
+rootless`, or `estate <key> unanchored`.
+
+Two consequences worth knowing:
+
+- **An extracted archive or a copied tree outside every root** can still switch
+  the *payer* with an untracked binding (Lock 1 cannot tell it from yours), but
+  it receives no name from an anchored store and no estate settings.
+- **The dashboard's account terminal** holds only an account key and no project
+  path, so an anchored account store is not released there. A project-scoped
+  terminal resolves (and is admitted) from its project.
+
 ## Known edges
 
 - **The shim and the function coexist; the function wins in shells that have
@@ -334,15 +379,11 @@ about the redundant set; anything else only lists.
   applies — the same rule every other swarmery spawner follows.
 - **The binding file is machine-local** (`settings.local.json`, gitignored):
   two people on one repo can legitimately use different accounts.
-- **A binding that git tracks is ignored.** If a repository commits
-  `.claude/settings.local.json`, `swarmery` (every spawn, `account which|env|exec`,
-  the `claude` shell function and the dashboard) ignores it. The project runs under
-  the default account with no secret-store variables. The same happens when the
-  file's origin can't be established: git is missing from `PATH`, the check times
-  out after 2 s, or git reports an error. Every symlink on the way to the file is
-  checked too. swarmery logs one warning per path with the cause, and the
-  dashboard's account card shows it. To fix it, run `git rm --cached` on the file
-  and gitignore it.
-  - **The SessionStart hook doesn't know about this rule.** It reads the file
-    directly, so for a tracked binding it can warn that the session runs under the
-    "wrong" account, even though swarmery deliberately ignored that binding.
+- **A binding that git tracks is ignored** (Lock 1, above). If a repository
+  commits `.claude/settings.local.json`, `swarmery` (every spawn, every rung of
+  the walk, `account which|env|exec|doctor`, the `claude` shell function, the
+  preflight hook and the dashboard) ignores it. The same happens when the file's
+  origin can't be established: git is missing from `PATH`, the check times out
+  after 2 s, or git reports an error. swarmery logs one warning per path with the
+  cause and a shell-quoted remedy, and the dashboard's account card shows it. To
+  fix it, run `git rm --cached` on the file and gitignore it.
