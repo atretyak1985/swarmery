@@ -94,7 +94,7 @@ func (RepoGit) List(repoRoot string) ([]Worktree, error) {
 // working repository (node_modules and all) to compute an mtime nothing looks
 // at. Same for a registered path that is gone from disk — every observation
 // would fail, and prune is what fixes that, not inspection.
-func (g RepoGit) Inspect(repoRoot string, live Liveness) ([]Worktree, error) {
+func (g RepoGit) Inspect(repoRoot string, live Liveness, owned func(path string) bool) ([]Worktree, error) {
 	entries, err := g.List(repoRoot)
 	if err != nil {
 		return nil, err
@@ -103,6 +103,14 @@ func (g RepoGit) Inspect(repoRoot string, live Liveness) ([]Worktree, error) {
 	for _, e := range entries {
 		wt := Worktree{Path: e.Path, Branch: e.Branch, IsMain: e.IsMain}
 		if wt.IsMain {
+			res = append(res, wt)
+			continue
+		}
+		// Not the janitor's: listed so its branch counts as checked out, but
+		// never observed — `git status` would take its index.lock under an
+		// operator's feet every tick.
+		if owned != nil && !owned(e.Path) {
+			wt.Foreign = true
 			res = append(res, wt)
 			continue
 		}

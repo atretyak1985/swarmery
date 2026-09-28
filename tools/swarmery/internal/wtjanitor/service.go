@@ -18,7 +18,7 @@ const DefaultMinIdle = 30 * time.Minute
 // observe the facts Classify needs.
 type Inspector interface {
 	Git
-	Inspect(repoRoot string, live Liveness) ([]Worktree, error)
+	Inspect(repoRoot string, live Liveness, owned func(path string) bool) ([]Worktree, error)
 }
 
 // Remover is the destructive boundary — separated so tests can assert that a
@@ -115,7 +115,10 @@ type Service struct {
 	MinIdle time.Duration
 	// OnlyRepo limits a sweep to one repository path ("" = every project).
 	OnlyRepo string
-	Remover  Remover
+	// DaemonRoot is worktree.Manager's root; checkouts under it are the
+	// daemon's own and in scope. "" leaves only the harness's agent worktrees.
+	DaemonRoot string
+	Remover    Remover
 	// now is a test seam.
 	now func() time.Time
 }
@@ -139,13 +142,21 @@ func (s *Service) Sweep(dryRun bool) (Result, error) {
 		return res, err
 	}
 	for _, r := range repos {
-		wts, ierr := s.Git.Inspect(r.path, s.Live)
+		owned := func(p string) bool { return agentOwned(r.path, s.DaemonRoot, p) }
+		wts, ierr := s.Git.Inspect(r.path, s.Live, owned)
 		if ierr != nil {
 			log.Printf("wtjanitor: inspect %s: %v", r.path, ierr)
 			res.Errors++
 			continue
 		}
 		for _, wt := range wts {
+			// Ownership is decided before anything else and is re-checked here
+			// rather than trusted to the Inspector: a foreign worktree is never
+			// classified, journalled or handed to the Remover. It stays in wts so
+			// sweepBranches still sees its branch as checked out.
+			if wt.Foreign || (!wt.IsMain && !owned(wt.Path)) {
+				continue
+			}
 			res.Inspected++
 			s.sweepOne(r, wt, dryRun, &res)
 		}

@@ -110,6 +110,12 @@ func (m *Manager) resolveRoot() (string, error) {
 	return filepath.Join(home, DefaultRoot), nil
 }
 
+// RootDir is resolveRoot for callers outside the package: the directory every
+// checkout this manager acquires lives under.
+func (m *Manager) RootDir() (string, error) {
+	return m.resolveRoot()
+}
+
 // Path is the checkout Acquire derives for (projectSlug, taskID): the
 // <root>/<slug>/<taskID> join, computed WITHOUT touching git or the filesystem.
 // Acquire itself calls it, so there is exactly one derivation of this layout.

@@ -198,7 +198,7 @@ func TestInspect_MainPlusAddedWorktree(t *testing.T) {
 	wtPath := filepath.Join(t.TempDir(), "wt-a")
 	run("worktree", "add", "-q", "-b", "worktree-agent-a", wtPath)
 
-	got, err := RepoGit{}.Inspect(repo, noLive{})
+	got, err := RepoGit{}.Inspect(repo, noLive{}, nil)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
@@ -238,12 +238,47 @@ func TestInspect_SkipsVanishedDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := RepoGit{}.Inspect(repo, noLive{})
+	got, err := RepoGit{}.Inspect(repo, noLive{}, nil)
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
 	if len(got) != 1 || !got[0].IsMain {
 		t.Errorf("Inspect = %+v, want only the main checkout", got)
+	}
+}
+
+// A real repository with an operator worktree and a harness agent worktree side
+// by side under .claude/worktrees. The agent one is observed; the operator's is
+// listed as Foreign — so its branch still counts as checked out — but nothing
+// is observed inside it (no `git status`, no walk). The repository comes from
+// t.TempDir(), which on macOS is a symlinked path — the live machine's shape.
+func TestInspect_OwnershipFilterSkipsForeignWorktrees(t *testing.T) {
+	repo, run := testRepo(t)
+	foreign := filepath.Join(repo, ".claude", "worktrees", "feature-x")
+	agent := filepath.Join(repo, ".claude", "worktrees", "agent-ab12")
+	run("worktree", "add", "-q", "-b", "feature-x", foreign)
+	run("worktree", "add", "-q", "-b", "worktree-agent-ab12", agent)
+	write(t, filepath.Join(foreign, "scratch.txt"), "operator work\n")
+
+	owned := func(p string) bool { return agentOwned(repo, "", p) }
+	got, err := RepoGit{}.Inspect(repo, noLive{}, owned)
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	byBranch := map[string]Worktree{}
+	for _, wt := range got {
+		if !wt.IsMain {
+			byBranch[wt.Branch] = wt
+		}
+	}
+	if len(byBranch) != 2 {
+		t.Fatalf("non-main worktrees = %+v, want feature-x and worktree-agent-ab12", byBranch)
+	}
+	if f := byBranch["feature-x"]; !f.Foreign || f.Dirty != nil || !f.NewestMTime.IsZero() {
+		t.Errorf("operator worktree = %+v, want Foreign with nothing observed", f)
+	}
+	if a := byBranch["worktree-agent-ab12"]; a.Foreign || a.NewestMTime.IsZero() {
+		t.Errorf("agent worktree = %+v, want owned and observed", a)
 	}
 }
 

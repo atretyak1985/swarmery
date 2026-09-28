@@ -17,6 +17,17 @@
 //   - redundant     — clean, or every dirty path's blob is already in git
 //   - salvage       — holds content found nowhere in git
 //
+// # Scope: agent worktrees only
+//
+// Ownership is decided before any veto or verdict (owner.go). The janitor owns
+// <repo>/.claude/worktrees/agent-<hex> and anything strictly below the daemon's
+// worktree root, and nothing else. Every other worktree git reports — an
+// operator's feature checkout above all, even one under .claude/worktrees with
+// its branch pushed — is listed as Foreign so its branch still counts as
+// checked out, and is otherwise invisible: not observed, not classified, not
+// journalled, never removed. Clean with no commits of its own is "redundant"
+// by content and can still be somebody's working copy.
+//
 // # Veto order is load-bearing
 //
 // Main checkout, then live process/session, then a fresh index.lock, then the

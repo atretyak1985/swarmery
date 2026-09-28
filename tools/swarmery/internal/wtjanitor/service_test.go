@@ -47,10 +47,13 @@ func (r *recordingRemover) Prune(repoRoot string) error {
 
 func (r *recordingRemover) calls() int { return len(r.removed) + len(r.branches) }
 
-// stubInspector serves fixed worktrees and answers blob checks from a map.
+// stubInspector serves fixed worktrees and answers blob checks from a map. It
+// deliberately does NOT apply the ownership filter it is handed — it records it
+// — so the Service's own refusal is what the foreign-worktree tests exercise.
 type stubInspector struct {
 	wts   []Worktree
 	inGit map[string]bool
+	owned func(path string) bool
 }
 
 func (s *stubInspector) BlobInGit(_, _, repoRelPath string) (bool, error) {
@@ -60,7 +63,8 @@ func (s *stubInspector) BlobInGit(_, _, repoRelPath string) (bool, error) {
 // Inspect mirrors RepoGit.Inspect's one behavioural detail the tests depend on:
 // it CONSULTS the liveness seam per worktree. Without that the pre-removal
 // re-check would be the first call and a flip could never be modelled.
-func (s *stubInspector) Inspect(_ string, live Liveness) ([]Worktree, error) {
+func (s *stubInspector) Inspect(_ string, live Liveness, owned func(path string) bool) ([]Worktree, error) {
+	s.owned = owned
 	out := make([]Worktree, 0, len(s.wts))
 	for _, wt := range s.wts {
 		busy, err := live.Busy(wt.Path)
@@ -115,8 +119,8 @@ func svc(t *testing.T, db *sql.DB, insp *stubInspector, rem Remover, live Livene
 // sweepable is a worktree every veto passes and nothing keeps.
 func sweepable() Worktree {
 	return Worktree{
-		Path:        "/repo/.claude/worktrees/agent-x",
-		Branch:      "worktree-agent-x",
+		Path:        "/repo/.claude/worktrees/agent-a1f",
+		Branch:      "worktree-agent-a1f",
 		NewestMTime: time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC),
 	}
 }
@@ -177,13 +181,15 @@ func TestSweep_KeepUnmergedDestroysNothing(t *testing.T) {
 func TestSweep_FailedSalvageKeepsTheWorktree(t *testing.T) {
 	db := testDB(t)
 	wt := sweepable()
-	wt.Path = filepath.Join(t.TempDir(), "not-a-repo") // Salvage will fail: no git here
+	root := t.TempDir()
+	wt.Path = filepath.Join(root, "not-a-repo") // Salvage will fail: no git here
 	if err := os.MkdirAll(wt.Path, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	wt.Dirty = []string{"unique.txt"}
 	rem := &recordingRemover{}
 	s := svc(t, db, &stubInspector{wts: []Worktree{wt}, inGit: map[string]bool{}}, rem, idleLive{})
+	s.DaemonRoot = root // an owned path, so the sweep reaches the salvage
 	if _, err := s.Sweep(false); err != nil {
 		t.Fatalf("Sweep: %v", err)
 	}
@@ -312,6 +318,75 @@ func TestSweep_RemoverErrorIsJournalledAndCounted(t *testing.T) {
 }
 
 /* ---------- salvage integration (real git) ---------- */
+
+// The 2026-09-28 regression: an operator's feature worktree under
+// <repo>/.claude/worktrees, clean and with its branch pushed, is "redundant" to
+// the classifier. Ownership is decided BEFORE classification, so it is never
+// handed to the remover and never journalled — every tick would otherwise add a
+// row about a worktree the janitor has no business judging.
+func TestSweep_NeverTouchesAWorktreeItDoesNotOwn(t *testing.T) {
+	db := testDB(t)
+	rem := &recordingRemover{}
+	foreign := sweepable()
+	foreign.Path = "/repo/.claude/worktrees/account-switch-estate"
+	foreign.Branch = "feat/account-switch-estate"
+	agent := sweepable()
+	insp := &stubInspector{wts: []Worktree{foreign, agent}}
+	res, err := svc(t, db, insp, rem, idleLive{}).Sweep(false)
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(rem.removed) != 1 || rem.removed[0] != agent.Path {
+		t.Fatalf("removed = %v, want only the agent worktree %s", rem.removed, agent.Path)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM worktree_sweeps WHERE path = ?`, foreign.Path).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("journal holds %d rows for a worktree the janitor does not own, want 0", n)
+	}
+	if res.Inspected != 1 {
+		t.Errorf("Inspected = %d, want 1 (the foreign worktree is not inspected)", res.Inspected)
+	}
+}
+
+// The filter must reach Inspect, so the real inspector never runs `git status`
+// (and so never takes an index.lock) inside an operator's worktree.
+func TestSweep_HandsInspectTheOwnershipFilter(t *testing.T) {
+	db := testDB(t)
+	insp := &stubInspector{wts: []Worktree{sweepable()}}
+	if _, err := svc(t, db, insp, &recordingRemover{}, idleLive{}).Sweep(true); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if insp.owned == nil {
+		t.Fatal("Inspect received no ownership filter")
+	}
+	if insp.owned("/repo/.claude/worktrees/account-switch-estate") {
+		t.Error("the filter owns an operator worktree")
+	}
+	if !insp.owned("/repo/.claude/worktrees/agent-a1f") {
+		t.Error("the filter does not own a harness agent worktree")
+	}
+}
+
+// The daemon's own task checkouts live under its worktree root, not under the
+// repository, and stay in scope.
+func TestSweep_RemovesADaemonWorktreeUnderTheDaemonRoot(t *testing.T) {
+	db := testDB(t)
+	rem := &recordingRemover{}
+	wt := sweepable()
+	wt.Path = "/home/u/.swarmery/worktrees/repo/plan-1"
+	wt.Branch = "swarm/plan-1"
+	s := svc(t, db, &stubInspector{wts: []Worktree{wt}}, rem, idleLive{})
+	s.DaemonRoot = "/home/u/.swarmery/worktrees"
+	if _, err := s.Sweep(false); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(rem.removed) != 1 || rem.removed[0] != wt.Path {
+		t.Errorf("removed = %v, want the daemon worktree %s", rem.removed, wt.Path)
+	}
+}
 
 func TestSalvage_RescuesContentThenTheWorktreeGoes(t *testing.T) {
 	repo, run := testRepo(t)

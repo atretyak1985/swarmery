@@ -38,6 +38,10 @@ type Worktree struct {
 	LockFresh bool
 	// Live reports a process cwd'd inside, or a non-terminal session bound to it.
 	Live bool
+	// Foreign marks a worktree the janitor does not own (owner.go). It is listed
+	// only so its branch counts as checked out; nothing inside it is observed,
+	// and it is never classified, journalled or removed.
+	Foreign bool
 }
 
 // Decision pairs a verdict with the reason string the sweep journal records.
