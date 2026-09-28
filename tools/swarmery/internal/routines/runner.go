@@ -12,6 +12,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // permEnv is this spawn site's --permission-mode knob (internal/claudeflags owns
@@ -87,6 +88,18 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 	// unaffected.
 	args := []string{"-p", "--output-format", "text",
 		"--setting-sources", "project,local"}
+	// ONE resolution for a project-scoped routine (cwd IS the project's real
+	// directory, see below) feeds both the env and the settings composer. A
+	// GLOBAL routine has cwd "" and resolves nothing: no flag, env untouched.
+	var res claudeacct.Resolution
+	if cwd != "" {
+		res = claudeacct.Resolve(cwd)
+		// The admitted estate's EstateKeys through --settings, after the
+		// --setting-sources pair. No admitted estate ⇒ "" ⇒ no flag.
+		if f := runsettings.Compose("routines", res, runsettings.Inputs{}); f != "" {
+			args = append(args, "--settings", f)
+		}
+	}
 	m := strings.TrimSpace(model)
 	if m == "" {
 		m = DefaultModel
@@ -113,8 +126,13 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 	// claudeacct.Binding (which would otherwise read a RELATIVE settings file
 	// under the daemon's own cwd). An unbound project gets os.Environ() back
 	// untouched; a bound one gets its config dir AND its secret store — the same
-	// composition every other swarmery spawn uses.
-	cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), cwd)
+	// composition every other swarmery spawn uses. SpawnEnvResolved over the
+	// resolution above is exactly what SpawnEnvFor(os.Environ(), cwd) computed.
+	if cwd == "" {
+		cmd.Env = os.Environ()
+	} else {
+		cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), res)
+	}
 	cmd.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

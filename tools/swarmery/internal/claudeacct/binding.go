@@ -332,27 +332,68 @@ func readCapped(f *os.File, limit int64) (raw []byte, ok bool, err error) {
 // must not choose the account or the credentials this user's spawn runs with.
 // The checks are made on the OPENED file, so nothing can be swapped in between.
 func readTrustedSettings(path string) map[string]any {
+	root, _ := ReadTrustedSettings(path)
+	return root
+}
+
+// The reason codes ReadTrustedSettings returns for a present file it refuses.
+// They are a contract: internal/runsettings puts them in its WARN line and in
+// the one stderr line `swarmery account exec` prints, and operators grep them.
+const (
+	TrustSymlink       = "symlink"        // the final path component is a link
+	TrustNotRegular    = "not-regular"    // a directory, FIFO, device or socket
+	TrustNotOwned      = "not-owned"      // owned by another uid
+	TrustGroupWritable = "group-writable" // mode carries g+w
+	TrustOtherWritable = "other-writable" // mode carries o+w
+	TrustTooLarge      = "too-large"      // more than maxSettingsBytes
+	TrustUnreadable    = "unreadable"     // open, stat or read failed
+	TrustMalformed     = "malformed"      // not a JSON object
+)
+
+// ReadTrustedSettings is the one trusted settings loader, exported for readers
+// outside this package (internal/runsettings reads an estate's settings file with
+// the SAME rules the walk applies to a binding file). reason is "" when the file
+// was read — and also when nothing exists at path, because an absent file is not
+// an unusable one. Otherwise root is nil and reason is exactly one of the Trust*
+// codes above. A reason never carries any of the file's contents.
+func ReadTrustedSettings(path string) (root map[string]any, reason string) {
 	f, err := openNoFollow(path)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, ""
+		}
+		if fi, lerr := os.Lstat(path); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return nil, TrustSymlink
+		}
+		return nil, TrustUnreadable
 	}
 	defer f.Close()
 	fi, err := f.Stat()
-	if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&settingsUntrustedBits != 0 {
-		return nil
+	if err != nil {
+		return nil, TrustUnreadable
+	}
+	switch perm := fi.Mode().Perm(); {
+	case !fi.Mode().IsRegular():
+		return nil, TrustNotRegular
+	case perm&0o020 != 0:
+		return nil, TrustGroupWritable
+	case perm&0o002 != 0:
+		return nil, TrustOtherWritable
 	}
 	if uid, ok := fileOwner(fi); !ok || uid != currentUID() {
-		return nil
+		return nil, TrustNotOwned
 	}
 	raw, ok, err := readCapped(f, maxSettingsBytes)
-	if err != nil || !ok {
-		return nil
+	if err != nil {
+		return nil, TrustUnreadable
 	}
-	var root map[string]any
-	if json.Unmarshal(raw, &root) != nil {
-		return nil
+	if !ok {
+		return nil, TrustTooLarge
 	}
-	return root
+	if json.Unmarshal(raw, &root) != nil || root == nil {
+		return nil, TrustMalformed
+	}
+	return root, ""
 }
 
 // untrustedSettings reports why an EXISTING settings file would be ignored by

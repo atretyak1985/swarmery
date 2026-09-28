@@ -69,7 +69,7 @@ type Spec struct {
 	Effort         string
 	Agent          string // --agent; the "@name: " prompt mention is the CALLER's job, not this
 	PermissionMode string // --permission-mode; "" omits the flag (see internal/claudeflags)
-	SettingsFile   string // --settings; a project settings file lent to a worktree that cannot discover one
+	SettingsFile   string // --settings; runsettings.Compose's result — the admitted estate's EstateKeys, the lent project file (Fallback), or both
 	SettingSources string // --setting-sources; dispatch/verify pass "project,local" to skip user-level settings
 
 	// Resolution is what this run executes under — the ACCOUNT (config dir) and

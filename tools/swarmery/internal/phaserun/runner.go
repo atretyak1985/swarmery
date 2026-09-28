@@ -51,6 +51,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // Runner is the spawn seam the service depends on.
@@ -174,6 +175,15 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		timeout = timeoutFromEnv()
 	}
 
+	// ONE resolution for this spawn, from spec.ProjectPath (never Cwd, which is
+	// the acquired worktree): it feeds both the env (Resolution below) and the
+	// settings composer, so D5's git probe runs once.
+	resolution := runcore.AccountFor(spec.ProjectPath)
+	// The lent project file (spec.SettingsFile) is the Fallback: with no admitted
+	// estate Compose returns it verbatim, so argv is byte-identical to before;
+	// with one, the estate's EstateKeys are added to what the lent file lacks.
+	settingsFile := runsettings.Compose("phaserun", resolution, runsettings.Inputs{Fallback: spec.SettingsFile})
+
 	res, err := runcore.ClaudeRunner{Engine: "phaserun"}.Start(ctx, runcore.Spec{
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
@@ -187,12 +197,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		Model: spec.Model,
 		// Also already resolved by the service (request → doc → env → DefaultEffort).
 		Effort:       spec.Effort,
-		SettingsFile: spec.SettingsFile,
+		SettingsFile: settingsFile,
 		// The resolution comes from spec.ProjectPath, never from Cwd: Cwd is the
 		// phase's acquired worktree. An empty path resolves nothing and an
 		// unbound, estate-less project adds nothing, so cmd.Env then stays a
 		// byte-identical copy of os.Environ().
-		Resolution: runcore.AccountFor(spec.ProjectPath),
+		Resolution: resolution,
 		Timeout:    timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).

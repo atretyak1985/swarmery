@@ -196,6 +196,20 @@ func (s storeRoots) admitsPhysical(p string) string {
 	}
 }
 
+// WithinRoot reports whether path lies inside root (root itself included), by
+// the same resolved-file comparison Lock 2's admission uses: EvalSymlinks(path),
+// then it and each of its ancestors against the resolved root with os.SameFile —
+// never a string prefix, which would admit the sibling /x/ae-evil for /x/ae and
+// miss an APFS case variant. False for an empty or unresolvable path or root.
+// internal/runsettings uses it to refuse an estate settings file that a symlink
+// carries out of its estate.
+func WithinRoot(path, root string) bool {
+	if strings.TrimSpace(root) == "" {
+		return false
+	}
+	return admits(path, []string{root}) != ""
+}
+
 // admits is the admission test: rr = EvalSymlinks(rung); rr and each of its
 // ancestors, nearest first, against each resolved root, by os.SameFile. An
 // empty or unresolvable rung is never admitted.

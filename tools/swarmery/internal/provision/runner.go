@@ -14,6 +14,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // Runner executes the claude binary. It is the ONLY seam that touches a real
@@ -65,6 +66,19 @@ func (ClaudeRunner) Claude(ctx context.Context, dir, stdin string, args ...strin
 		return "", err
 	}
 
+	// ONE resolution for this spawn when dir names a project, feeding both the
+	// env (below) and the settings composer. The admitted estate's composed
+	// settings are PREPENDED: every provision call is a subcommand (`plugin
+	// install …`, `plugin marketplace …`) and --settings is a ROOT option, which
+	// the CLI parses only before the subcommand. dir=="" names no project (see
+	// below): no resolution, no flag.
+	var res claudeacct.Resolution
+	if dir != "" {
+		res = claudeacct.Resolve(dir)
+		if f := runsettings.Compose("provision", res, runsettings.Inputs{}); f != "" {
+			args = append([]string{"--settings", f}, args...)
+		}
+	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	// Resolving the account from `dir` is correct HERE — and only here and in
 	// planning. A provision run's dir IS the project path, so it carries the
@@ -82,7 +96,13 @@ func (ClaudeRunner) Claude(ctx context.Context, dir, stdin string, args ...strin
 		cmd.Dir = dir
 	}
 	// An unbound project ⇒ a byte-identical copy of os.Environ().
-	cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
+	// SpawnEnvResolved over the resolution above is exactly what
+	// SpawnEnvFor(os.Environ(), dir) computed.
+	if dir == "" {
+		cmd.Env = os.Environ()
+	} else {
+		cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), res)
+	}
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}

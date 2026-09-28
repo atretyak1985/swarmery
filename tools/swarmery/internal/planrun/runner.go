@@ -35,6 +35,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // Runner is the spawn seam the service depends on.
@@ -165,6 +166,15 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		timeout = runTimeout()
 	}
 
+	// ONE resolution for this spawn, from spec.ProjectPath (never Cwd, which is
+	// the acquired worktree): it feeds both the env (Resolution below) and the
+	// settings composer, so D5's git probe runs once.
+	resolution := runcore.AccountFor(spec.ProjectPath)
+	// The lent project file (spec.SettingsFile) is the Fallback: with no admitted
+	// estate Compose returns it verbatim, so argv is byte-identical to before;
+	// with one, the estate's EstateKeys are added to what the lent file lacks.
+	settingsFile := runsettings.Compose("planrun", resolution, runsettings.Inputs{Fallback: spec.SettingsFile})
+
 	res, err := runcore.ClaudeRunner{Engine: "planrun"}.Start(ctx, runcore.Spec{
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
@@ -179,12 +189,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// turn of an 8-hour window. Resolved through internal/claudeflags:
 		// SWARMERY_PLANRUN_EFFORT → SWARMERY_EFFORT → DefaultEffort.
 		Effort:       claudeflags.Effort(effortEnv, DefaultEffort),
-		SettingsFile: spec.SettingsFile,
+		SettingsFile: settingsFile,
 		// The resolution comes from spec.ProjectPath, never from Cwd: Cwd is the
 		// plan's acquired worktree. An empty path resolves nothing and an unbound,
 		// estate-less project adds nothing, so cmd.Env then stays a byte-identical
 		// copy of os.Environ().
-		Resolution: runcore.AccountFor(spec.ProjectPath),
+		Resolution: resolution,
 		Timeout:    timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).

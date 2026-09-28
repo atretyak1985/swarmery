@@ -30,6 +30,11 @@ type RunSpec struct {
 	// never from Cwd (a worktree). The zero value resolves nothing and adds no
 	// env delta.
 	Resolution claudeacct.Resolution
+
+	// SettingsFile is passed as --settings when non-empty: runsettings.Compose's
+	// result — the admitted estate's EstateKeys — composed by the CALLER from the
+	// same resolution. "" (no admitted estate) passes none, as before.
+	SettingsFile string
 }
 
 // Run is the outcome of a completed verifier process. Unlike the dispatcher,
@@ -135,8 +140,9 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		SettingSources: "project,local",
 		// The resolution comes from the SPEC, not from Cwd: Cwd is the task's
 		// worktree. The service resolves the project path once per run.
-		Resolution: spec.Resolution,
-		Timeout:    timeout,
+		Resolution:   spec.Resolution,
+		SettingsFile: spec.SettingsFile,
+		Timeout:      timeout,
 		// Unlike the dispatcher, verification READS stdout — the verdict lives in
 		// the transcript, so the parser needs all of it.
 		CaptureStdout: true,

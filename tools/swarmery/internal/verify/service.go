@@ -14,6 +14,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procfind"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procgroup"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -301,6 +302,7 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 	if model == "" {
 		model = DefaultModel
 	}
+	resolution := claudeacct.Resolve(t.ProjectPath)
 	spec := RunSpec{
 		// base, not the branch: BuildPrompt's third parameter has always been named
 		// startPoint (prompt.go) — we are finally passing what it asked for.
@@ -311,7 +313,10 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 		// Resolved from the PROJECT path, never from Cwd: Cwd is the run's
 		// worktree and says nothing about the project. Account and estate both
 		// come from the project's walk; an unbound project adds no env delta.
-		Resolution: claudeacct.Resolve(t.ProjectPath),
+		Resolution: resolution,
+		// The admitted estate's EstateKeys through --settings, composed from the
+		// SAME resolution; no admitted estate ⇒ "" ⇒ no flag, exactly as before.
+		SettingsFile: runsettings.Compose("verify", resolution, runsettings.Inputs{}),
 	}
 	run, rerr := s.Run.Run(ctx, spec)
 	if rerr != nil {

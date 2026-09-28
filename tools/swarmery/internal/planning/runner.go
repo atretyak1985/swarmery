@@ -11,6 +11,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // Runner is the headless-claude boundary for a planner run. ClaudeRunner is
@@ -174,6 +175,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		effort = claudeflags.Effort(effortEnv, DefaultEffort)
 	}
 
+	resolution := claudeacct.Resolve(spec.Cwd)
 	res, err := runcore.ClaudeRunner{Engine: "planning"}.Start(ctx, runcore.Spec{
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
@@ -191,8 +193,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// same but are not: their Cwd is a worktree, which is why they take the
 		// resolution from the caller instead. An unbound project with no estate
 		// adds nothing, so cmd.Env is then a byte-identical copy of os.Environ().
-		Resolution: claudeacct.Resolve(spec.Cwd),
-		Timeout:    timeout,
+		Resolution: resolution,
+		// The admitted estate's EstateKeys through --settings, composed from the
+		// SAME resolution (spec.Cwd IS the project path here, see above). No
+		// admitted estate ⇒ "" ⇒ no flag, argv byte-identical to before.
+		SettingsFile: runsettings.Compose("planning", resolution, runsettings.Inputs{}),
+		Timeout: timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})

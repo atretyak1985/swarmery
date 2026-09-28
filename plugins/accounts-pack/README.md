@@ -92,6 +92,35 @@ swarmery account move-session <uuid> --to <key>    copy a session into <key>'s c
 that also carries the MCP secrets (see below). Both terminal surfaces in this
 pack use `exec` for exactly that reason.
 
+`exec` also hands the estate's plugin settings to `claude`. Claude Code reads
+`pluginConfigs` only from user settings and from the `--settings` flag, never
+from a project's own `.claude/settings.json`. So when the path is under an estate
+that its store ADMITS (the `# swarmery-root:` line), `exec` builds one settings
+file from exactly one source, the estate root's `.claude/settings.json`, and
+copies only its `pluginConfigs`, `enabledPlugins` and `extraKnownMarketplaces`.
+Every other key — `env`, `permissions`, `hooks`, `apiKeyHelper`,
+`enabledMcpjsonServers`, the `swarmery` binding — is dropped by name: a
+`--settings` file is applied without the workspace-trust dialog, so nothing else
+may ride in it. Claude Code still loads the project's own settings files itself.
+The file is written `0600` to `~/.swarmery/run/settings/<sha256>.json`
+(`SWARMERY_RUN_DIR` moves it) and passed as `--settings <file>` right after
+`argv[0]`. `--settings` is a root option, so it has to come before any
+subcommand. The splice happens only when all three of these hold:
+
+- the command is `claude`, compared by base name — nothing is composed for any
+  other command;
+- the path resolves to an admitted estate that ships a settings file, so any
+  other project runs exactly as before;
+- you did not pass `--settings` or `--settings=…` yourself. Your own flag
+  always wins.
+
+When the estate's settings file is unusable — outside the estate root, a
+symlink, not owned by you, group- or other-writable, over 1 MiB, malformed, or
+one of the three keys not a JSON object — `exec` prints exactly one line to
+stderr, `swarmery: project settings not composed (<reason>); running without
+them`, and runs the command without the flag. `swarmery account env` still
+prints zero or one `CLAUDE_CONFIG_DIR=` line and nothing about settings.
+
 `which`, `use`, `clear`, `env`, `exec`, `estate`, `switch` and `move-session`
 never contact the daemon (`switch` and `move-session` read its database without
 migrating it).

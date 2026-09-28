@@ -18,6 +18,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskdir"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
@@ -1097,7 +1098,6 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 	// playbook belongs to the same project, and a re-read mid-chain could split
 	// one task across two accounts if the operator rebinds while it runs.
 	resolution := claudeacct.Resolve(c.ProjectPath)
-
 	// SettingsFile lends the project's own .claude/settings.json when repoRoot
 	// resolved this run into a SUB-repo of a multi-repo project: that worktree
 	// carries no settings of its own, so the plugin stack — including whatever
@@ -1105,11 +1105,17 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 	// proceed as an unresolved @mention rather than fail (phaserun and planrun
 	// guard the same case via repopath.InheritedSettings). "" in the common
 	// single-repo case, where the worktree IS a checkout of the project.
-	settingsFile := repopath.InheritedSettings(c.ProjectPath, repoRoot, acq.Path)
-	if settingsFile != "" {
+	lent := repopath.InheritedSettings(c.ProjectPath, repoRoot, acq.Path)
+	if lent != "" {
 		log.Printf("dispatch: task=%d inheriting project settings %s (worktree is a checkout of %s)",
-			c.ID, settingsFile, repoRoot)
+			c.ID, lent, repoRoot)
 	}
+	// The admitted estate's EstateKeys through --settings (internal/runsettings),
+	// composed beside the resolution and for the same once-per-playbook reason:
+	// a lent file goes verbatim and the estate fills only the keys it lacks. No
+	// admitted estate ⇒ the lent value unchanged ("" in the common case), exactly
+	// as before.
+	settingsFile := runsettings.Compose("dispatch", resolution, runsettings.Inputs{Fallback: lent})
 	note := repoNote(repoRoot, c.ProjectPath, acq.Path)
 
 	var prevOutput string

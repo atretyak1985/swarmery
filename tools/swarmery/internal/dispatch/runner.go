@@ -40,12 +40,14 @@ type RunSpec struct {
 	// per playbook. The zero value resolves nothing and adds no env delta.
 	Resolution claudeacct.Resolution
 
-	// SettingsFile names a project settings file to lend the run on the command
-	// line, or "" when it needs none — set via repopath.InheritedSettings when
-	// Cwd is a worktree cut from a SUB-repo of a multi-repo project (the
-	// project's own .claude/settings.json, which enables the plugin stack, is
-	// otherwise unreachable from that worktree; phaserun and planrun guard the
-	// same case). "" is the common single-repo case and changes nothing.
+	// SettingsFile is the file the run receives as --settings, or "" for none:
+	// runsettings.Compose's result, composed by the CALLER beside the resolution,
+	// once per playbook. Its Fallback is the project settings file lent via
+	// repopath.InheritedSettings when Cwd is a worktree cut from a SUB-repo of a
+	// multi-repo project (the project's own .claude/settings.json, which enables
+	// the plugin stack, is otherwise unreachable from that worktree; phaserun and
+	// planrun guard the same case); an admitted estate adds its EstateKeys on top.
+	// "" is the common single-repo case without an estate and changes nothing.
 	SettingsFile string
 }
 

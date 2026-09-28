@@ -48,6 +48,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	// Aliased: this package already has a `usage()` function (main.go's help
 	// text), and the import would shadow it for the whole file.
 	usagepkg "github.com/atretyak1985/swarmery/tools/swarmery/internal/usage"
@@ -667,16 +668,41 @@ func accountExec(args []string) error {
 	// running the command under the WRONG account while `swarmery account which`
 	// reports the right one.
 	//
+	// ONE resolution feeds the environment and the settings splice (a second
+	// Resolve would run D5's git probe twice).
+	res := claudeacct.Resolve(dir)
 	// SWARMERY_LAUNCH_PATH is the launch MARKER the accounts-pack SessionStart
 	// preflight reads (via `account doctor`): it names the project this exec
 	// composed the environment for. It is appended HERE and nowhere else — not in
 	// claudeacct.EnvFor / SpawnEnv — so no daemon seam carries it. It is never a
 	// loop guard: the shim's guard is the absolute path in argv.
-	env := claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(dir))
+	env := claudeacct.SpawnEnvResolved(os.Environ(), res)
 	env = append(withoutEnvKey(env, launchPathEnv), launchPathEnv+"="+dir)
+	argv = spliceSettings(argv, res, os.Stderr)
 	//
 	// Returns only on failure — on success this process IS the command.
 	return syscall.Exec(bin, argv, env)
+}
+
+// composeQuiet is the terminal composer; a package var only so a test can
+// prove it is never called for a non-claude argv[0].
+var composeQuiet = runsettings.ComposeQuiet
+
+// spliceSettings is the terminal twin of the daemon seams (internal/runsettings):
+// the admitted estate's EstateKeys ride as --settings right after argv[0].
+// argv[0] is checked FIRST — nothing is composed for any other command — and a
+// caller's own --settings always wins (SpliceTerminal). When the estate's file is
+// unusable, exactly one line goes to stderr and the command runs without the
+// flag; stdout is never touched, and nothing is logged.
+func spliceSettings(argv []string, res claudeacct.Resolution, stderr io.Writer) []string {
+	if len(argv) == 0 || filepath.Base(argv[0]) != "claude" {
+		return argv
+	}
+	f, reason := composeQuiet(res, runsettings.Inputs{})
+	if reason != "" {
+		fmt.Fprintf(stderr, "swarmery: project settings not composed (%s); running without them\n", reason)
+	}
+	return runsettings.SpliceTerminal(argv, f)
 }
 
 // launchPathEnv is the marker accountExec sets for the child (see above).
