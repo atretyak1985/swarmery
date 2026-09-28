@@ -107,7 +107,7 @@ implementation plan for the provider-resolution details.
 
 It runs every read this agent would run for real — config, tracker access, the ticket itself,
 the reproduction command, the transition list — and shows you the proposed fix and comment
-without writing anything to Jira, the `/board`, or git. Review that output before you ever
+without writing anything to Jira, the swarmery board, or git. Review that output before you ever
 run the same ticket without `--dry-run`.
 
 **This agent is autonomous (`autonomy: auto`).** Once `.claude/project.json`'s `jira` block is
@@ -116,7 +116,7 @@ confirmation prompt** — there is no human gate anywhere in its flow:
 
 - posting a comment to a real Jira ticket (`addCommentToJiraIssue`);
 - transitioning a real Jira ticket's status (`transitionJiraIssue`);
-- creating or moving a `/board` card (`swarmery-board-card`'s `POST`/`PATCH`);
+- creating or moving a swarmery board card — dashboard Plans → Board (`swarmery-board-card`'s `POST`/`PATCH`);
 - on the `needs-fix` path only: creating an isolated git branch/worktree, writing code and
   tests into it, `git push`, and opening a PR (`jira-delivery`) — gated on a green
   `@verification-agent` verdict, but never on human approval.

@@ -89,10 +89,10 @@ Use *abandoned* for work you walked away from. It is a different signal from *fa
 
 A playbook is a selectable execution recipe: an ordered chain of stages, each run as its own headless pass, all sharing the task's single [worktree](#task-worktree). A playbook is a markdown file — frontmatter plus one or more `## Stage:` sections.
 
-1. **Pick a recipe on the board.** Every board task can select a playbook in its drawer or at quick-entry. No selection means *auto*: at dispatch the daemon profiles the card — a prompt over 1500 characters or any declared dependency earns `plan-first`, everything else runs `standard` — and stamps the choice back onto the row, so the card's chip always names the recipe that actually ran. `review-heavy` is never auto-selected; it stays a deliberate opt-in.
+1. **Pick a recipe on the board** (Plans → Board). Every board task can select a playbook in its drawer or at quick-entry. No selection means *auto*: at dispatch the daemon profiles the card — a prompt over 1500 characters or any declared dependency earns `plan-first`, everything else runs `standard` — and stamps the choice back onto the row, so the card's chip always names the recipe that actually ran. `review-heavy` is never auto-selected; it stays a deliberate opt-in.
 2. **Stages run sequentially.** `{task_prompt}` injects the task text and `{previous_stage_output}` hands one stage's full reply to the next. That is how `plan-first` feeds its plan into the implementation stage, and how `review-heavy` critiques the diff it just produced. The full set of template variables is `{task_prompt}`, `{previous_stage_output}`, `{start_point}`, `{branch}`, `{task_id}` and `{file_scope}`. An unrecognised one is rejected at parse time, so a typo fails on load instead of reaching a live prompt as literal `{typo}` — but only when it *looks* like a variable. Validation treats a brace pair as a placeholder solely when it wraps a bare lowercase `[a-z0-9_]` token, which is what lets prose and JSON braces through untouched; the cost is that `{Typo}` is read as prose and passes silently.
 3. **The verify knob sets the bar.** See [Verify level](#verify-level).
-4. **Make it your own.** Three built-ins ship inside the daemon and are read-only: `standard`, `plan-first`, `review-heavy`. *Duplicate to project* copies the markdown into `<project>/.claude/playbooks/`, where the prompts become editable; a project file with the same name overrides the built-in — the graduation rule, same as any other component. Frontmatter takes `name`, `description`, `verify`, and two optional run knobs: `model` (the card's own model override still wins over it, and the global default is the last resort) and `permission_mode` (`bypassPermissions` | `acceptEdits` | `default`; omitted inherits the daemon's global knob). A fourth built-in, `quick-fix`, was retired — it shipped byte-identical to `standard` and is now an alias: the name still resolves, so stored cards keep working, but it is no longer offered and a write of it stores `standard`.
+4. **Make it your own.** Three built-ins ship inside the daemon and are read-only: `standard`, `plan-first`, `review-heavy`. *Duplicate to project* on Plans → Playbooks copies the markdown into `<project>/.claude/playbooks/`, where the prompts become editable; a project file with the same name overrides the built-in — the graduation rule, same as any other component. Frontmatter takes `name`, `description`, `verify`, and two optional run knobs: `model` (the card's own model override still wins over it, and the global default is the last resort) and `permission_mode` (`bypassPermissions` | `acceptEdits` | `default`; omitted inherits the daemon's global knob). A fourth built-in, `quick-fix`, was retired — it shipped byte-identical to `standard` and is now an alias: the name still resolves, so stored cards keep working, but it is no longer offered and a write of it stores `standard`.
 
 ## Verify level
 
@@ -136,12 +136,12 @@ That default is scoped by the surrounding design rather than by the flag: the th
 
 ## Planning Mode
 
-A headless planner interviews you one question at a time and writes a phased plan into the private workspace.
+A headless planner interviews you one question at a time and writes a phased plan into the private workspace. It lives on the **New plan** tab of a project's Plans place (`/p/<slug>/plans?tab=new`).
 
 1. **Describe the idea.** A headless planner session starts in this project's repo — it sees the code, `CLAUDE.md`, and the core-pack planning agents.
 2. **Answer structured questions.** One question at a time; pick an option or write your own, while the running plan rebuilds beside it after every answer. If a reply fails the structured-protocol parse, the page falls back to showing the raw prose with a free-text box that answers through the same endpoint, so the interview never dead-ends.
 3. **Refine or proceed.** "Refine" steers the plan and the questions that follow; "Continue with the plan" ends the interview and the planner writes the full plan.
-4. **The plan lands in the workspace.** A `plan/README.md` (objective, real file paths, phase sequencing table, risks, Definition of Done) plus `phase-N` docs with acceptance checkboxes are written to the private workspace — never into the repo — and appear on the Plans page within seconds.
+4. **The plan lands in the workspace.** A `plan/README.md` (objective, real file paths, phase sequencing table, risks, Definition of Done) plus `phase-N` docs with acceptance checkboxes are written to the private workspace — never into the repo — and appear on the **Plans** tab within seconds.
 
 ## Claude account
 
@@ -200,12 +200,16 @@ shows a dismiss-only warning listing them.
 
 ## Retro page
 
-The page you go to when you want the agent system to get *better*, not just to see what it did.
-Everything on it is one window — 14 local days by default — folded out of session transcripts,
-events and workspace artifacts that are already in SQLite. Nothing here is sampled or estimated
-from elsewhere.
+The retro loop, which the dashboard shows as the **Health** place (`/health`; the old `/retro`
+address redirects there). It is where you go when you want the agent system to get *better*,
+not just to see what it did. Everything on it is one window — 14 local days by default —
+folded out of session transcripts, events and workspace artifacts that are already in SQLite.
+Nothing here is sampled or estimated from elsewhere.
 
-It is organised as one loop:
+Health's tabs split it by question: **Agents** holds the KPI card and the scorecards,
+**Friction** the friction board, **Estimates** the estimation table and the lessons feed,
+**Advisor** the recommendations and proposals, and **Cost & tokens** the spend over time.
+Together they form one loop:
 
 1. **Measure.** The KPI card, the scorecards, the friction board, the lessons feed and the
    estimation table describe the window from five angles.
@@ -362,8 +366,10 @@ Where the system stalls rather than fails.
 ## Lessons learned
 
 Lessons your own retrospectives recorded, parsed from `09-retrospective.md` docs in the private
-workspace and joined to the tasks that produced them. This is written knowledge — by agents and by
-you — not something inferred from telemetry, which makes it the one block on the page that can
+workspace and joined to the tasks that produced them. They are listed on Health → Estimates. (Not
+to be confused with Learning → **Lessons**, the review queue for lessons the daemon proposes from
+runs that landed far from their forecast.) This is written knowledge — by agents and by
+you — not something inferred from telemetry, which makes it the one block in Health that can
 tell you *why*.
 
 Filtered on the task's start date, newest first, capped at 100. An empty feed means the tasks in

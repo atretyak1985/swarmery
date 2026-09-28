@@ -5,18 +5,21 @@ React SPA. It indexes session transcripts from `~/.claude/projects/` into local
 SQLite and serves a live dashboard at `http://localhost:7777`. Fully local — no
 cloud, no account, no telemetry.
 
-**Dashboard** (see the repo-root [README](../../README.md#the-dashboard) for screenshots):
+**Dashboard** — ten places in one sidebar, each for all projects or one
+(`/p/<slug>/…`). Walkthrough: [docs/guides/guide-dashboard.md](docs/guides/guide-dashboard.md);
+screenshots: [docs/TOUR.md](../../docs/TOUR.md).
 
-- **Command deck** — triage view: what's working vs. waiting, availability/cost/quality headlines, today's activity feed, and an approvals rail.
-- **Projects** — every project swarmery has seen. By default only onboarded ones are listed; untick *onboarded only* for the rest. Each project has settings, including packs, plugin config and the Claude account it runs under. Guide: [docs/guides/guide-getting-started.md](docs/guides/guide-getting-started.md).
-- **Board** — Inbox → Working → Review. A card you run is dispatched to a headless agent in its own worktree, with a one-phase micro-plan in the project's workspace. Guide: [docs/guides/guide-board.md](docs/guides/guide-board.md).
-- **Sessions** — every session across all projects, filterable by project and status; each opens to **Chat · Timeline · Diffs**.
-- **Analytics** — cost/tokens/runs over time by project or model, with a per-project breakdown and an agent × project cross-tab.
-- **Approvals** — pending `AskUserQuestion` and permission requests with inline approve/deny and expiry timers.
-- **System** — the full Claude config graph (agents · skills · hooks · commands · overlays) across global and project scopes, with lint badges and version history.
-- **Retro** — agent-system retrospectives: per-agent health scorecards, a friction board, a lessons feed parsed from workspace retrospectives, and a heuristics-only advisor with a tracked recommendation lifecycle (`proposed → accepted → adopted → verified`). Full guide: [docs/retro.md](docs/retro.md).
-- **Usage** — the header's `◔` chip and its modal: the operator's live Claude subscription quota (5-hour session, weekly, per-model weekly) read from their own local `claude` login, with a pace marker against elapsed window time. Full guide: [docs/usage.md](docs/usage.md).
-- **Docs** — the framework docs (onboarding · extending · neutrality · retro) rendered in-app.
+- **Today** — the home: this week's loop (Plan → Run → Measure → Learn → Change), what waits on you, what runs now, and the day in detail (wait time, per-project lanes, notable sessions).
+- **Inbox** — every decision waiting on the operator: permission requests and `AskUserQuestion`, lessons, advisor recommendations, agent-change proposals, classifier checks. Rules and history at `/approvals/manage`.
+- **Sessions** — every session across all projects, day-grouped and live; each opens to **Chat · Timeline · Diffs**. Guide: [docs/guides/guide-sessions.md](docs/guides/guide-sessions.md).
+- **Plans** — New plan (Planning Mode) · Plans · Board · Playbooks. A board card you run is dispatched to a headless agent in its own worktree, with a one-phase micro-plan in the project's workspace. Guide: [docs/guides/guide-plans.md](docs/guides/guide-plans.md).
+- **Health** — Overview · Agents · Friction · Estimates · Advisor · Cost & tokens over one date range: per-agent scorecards, the friction board, a deterministic advisor with a tracked recommendation lifecycle (`proposed → accepted → adopted → verified`), and cost analytics. Reference: [docs/retro.md](docs/retro.md).
+- **Learning** — Lessons · The classifier · Forecast honesty · Proof. Classifier setup: [docs/guides/guide-decisions.md](docs/guides/guide-decisions.md).
+- **Knowledge** — a project's Memory, Architecture map, and the Serena / Graphify dashboards.
+- **Docs** — the guides and reference docs, rendered in-app.
+- **System** — the full Claude config graph across global, project and plugin-cache scopes: Agents · Skills · Plugins · Hooks · Routines · Insights, with lint badges and version history.
+- **Settings** — Appearance · Accounts · Notifications · Projects. Only onboarded projects are listed by default; untick *onboarded only* for the rest. A project's own settings (packs, plugin config, account) are at `/p/<slug>/settings`. Guide: [docs/guides/guide-getting-started.md](docs/guides/guide-getting-started.md).
+- **Usage** — the header's `◔` chip and its modal: the operator's live Claude subscription quota (5-hour session, weekly, per-model weekly) read from their own local `claude` login, with a pace marker against elapsed window time. Reference: [docs/usage.md](docs/usage.md).
 
 Design reference: [swarmery-design.md](swarmery-design.md) ·
 [UI mockup](docs/design/swarmery-ui-mockup.html).
@@ -224,7 +227,7 @@ history), maps the score to a tier `S`/`M`/`L`/`XL`, and picks a **model**,
 **effort** and — for cards — **playbook** from a per-tier policy
 (`internal/route`). Every pick is written to `route_decisions` with its signals,
 score, reasons, what actually ran and which rung won; outcomes, verify verdicts
-and cost are joined in lazily. Lessons (`/lessons`) → calibration → **routing** tab shows the
+and cost are joined in lazily. Learning → **Forecast honesty** → **routing** (`/learning?tab=honesty`) shows the
 per-tier and per-model outcome and cost; a group stays hidden until it has 20
 runs.
 
@@ -257,7 +260,7 @@ effort from `SWARMERY_RESUME_EFFORT`, not from the routed effort.
 ### Shadow → active runbook
 
 1. Leave both surfaces on `shadow` (the default) for at least two weeks.
-2. Open Lessons (`/lessons`) → calibration → routing tab. Flip a surface only when every
+2. Open Learning → Forecast honesty → routing (`/learning?tab=honesty`). Flip a surface only when every
    visible tier has n ≥ 20 and tier `S`'s failure rate is not worse than the
    model it replaces (the "picked vs ran" table is the evidence).
 3. Set `SWARMERY_ROUTE_DISPATCH=active` (and/or `SWARMERY_ROUTE_PHASERUN=active`)

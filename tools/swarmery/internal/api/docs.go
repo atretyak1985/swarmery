@@ -42,7 +42,7 @@ type docDetailDTO struct {
 // Makefile flattening guides into the flat embed root.
 var docOrder = map[string]int{
 	"guide-getting-started": 0,
-	"guide-board":           1,
+	"guide-dashboard":       1,
 	"guide-plans":           2,
 	"guide-sessions":        3,
 	"guide-decisions":       4,

@@ -1,14 +1,16 @@
 # Retro — agent-system retrospectives & the improvement loop
 
-The Retro section (`/retro` in the dashboard sidebar) answers one question: **how is the
-agent system performing, and what should we change?** It turns the telemetry the daemon
+The retro loop — the dashboard's **Health** place (`/health`; the old `/retro` address
+redirects there) — answers one question: **how is the agent system performing, and what
+should we change?** It turns the telemetry the daemon
 already collects — plus the artifacts the agent workflow writes to the workspace — into
 per-agent health scorecards, a friction board, a lessons feed, and concrete,
 heuristics-only improvement recommendations with a tracked lifecycle
 (`proposed → accepted → adopted → verified`).
 
-No LLM is involved anywhere in this pipeline: every number and every recommendation is a
-deterministic fold over SQLite.
+No LLM is involved in the numbers or the recommendations: every one is a deterministic fold
+over SQLite. Models are called only by the explicit **Improve** actions (an agent rewrite,
+or the whole-system analysis) and by the daily trajectory judge — see the Concepts doc.
 
 ---
 
@@ -35,26 +37,27 @@ warn-and-skip, never a scan failure):
   inside mistakes is re-joined. Out-of-range loops (outside 0..99) and quality
   (outside 1..5) degrade to NULL without dropping the row.
 
-## 2. Page tour
+## 2. Where it lives in the dashboard
 
-- **Recommendations rail** (top) — the advisor's output; see §4–5.
-- **Health strip** — orchestrator (`main`) cost, total subagent runs, total errors for the
-  selected range, each with a vs-previous-window arrow.
-- **Agent scorecards** — one card per agent, sorted by runs: runs (+prev delta),
-  error rate, success rate, cost, p95 duration, re-dispatch chip, evals chip.
-- **Friction board** — most-denied tools with a one-click `+ rule` (creates an
-  auto-approve rule), recurring error groups (expandable, with sample sessions),
-  approval-wait stats.
-- **Lessons feed** — every parsed lesson across all tasks, newest first, with a
-  client-side filter. The `action` chip is the point: it is the reusable instruction.
-- **Estimation accuracy** — per task: estimated vs actual hours, variance badge
-  (green ≤ ±20 %, amber ≤ ±50 %, red beyond), loop count, delegation verdict split.
+Health's tabs split the loop by question; the status strip on top carries one date range
+for all of them.
 
-Range presets (7/14/30/90 d) and the header project scope apply to everything.
+| Tab | What it holds |
+|---|---|
+| **Overview** | One sentence about the fleet, the agents that moved it, and the friction removable right now |
+| **Agents** | The **health strip** — orchestrator (`main`) cost, total subagent runs, total errors, each with a vs-previous-window arrow — and the **agent scorecards**: one card per agent, sorted by runs: runs (+prev delta), error rate, success rate, cost, p95 duration, re-dispatch chip, evals chip |
+| **Friction** | The **friction board** — most-denied tools with a one-click `+ rule` (creates an auto-approve rule), recurring error groups (expandable, with sample sessions), approval-wait stats |
+| **Estimates** | **Estimation accuracy** — per task: estimated vs actual hours, variance badge (green ≤ ±20 %, amber ≤ ±50 %, red beyond), loop count, delegation verdict split — and the **lessons feed**: every parsed lesson across all tasks, newest first, with a client-side filter and the **Group by lesson** view (§7). The `action` chip is the point: it is the reusable instruction |
+| **Advisor** | The **recommendations** — the advisor's output (§4–5) — and the agent/skill change **proposals** awaiting a decision |
+| **Cost & tokens** | Cost, tokens, runs and cache over time |
+
+Range presets (7/14/30/90 d) and the project scope (the sidebar's project switcher)
+apply to everything. Open recommendations and proposals also land in the **Inbox**
+(its *advisor* and *proposals* tabs), which is where the sidebar's only badge counts them.
 
 ## 3. Metric definitions
 
-Aggregation grains deliberately mirror the Analytics page and the advisor, so a number
+Aggregation grains deliberately mirror Health → Cost & tokens and the advisor, so a number
 cited by a recommendation matches what the pages show.
 
 | Metric | Definition |
@@ -98,7 +101,7 @@ session ids.
 `<claude-dir>/projects/<slug>/memory/MEMORY.md` is loaded into **every** conversation in the
 project, so its bytes are re-read on every turn forever and every line describing finished work
 is rent paid for nothing. R10 measures that, deterministically and without an LLM: it reads the
-index off disk each pass (the same auto-memory root the Memory page uses), parses its
+index off disk each pass (the same auto-memory root Knowledge → Memory uses), parses its
 `- [Title](file.md) — hook` lines, and classifies each hook as **closed** when it carries a
 closed marker (`DONE|MERGED|CLOSED|SHIPPED|RESOLVED|LIVE`) and **no** open marker
 (`OPEN`, `open:`, `tail =`, `impl open`, `awaits`). A line carrying both is an open tail and
@@ -115,7 +118,7 @@ index simply stops firing and the row is `resolved` automatically. `target_kind`
 notification, not a measured improvement.
 
 Acting on it is `swarmery memory consolidate --project <path> [--dry-run]`, or the
-**Consolidate index** panel on the project's Memory page (`POST /api/memory/consolidate`).
+**Consolidate index** panel on the project's Knowledge → Memory tab (`POST /api/memory/consolidate`).
 Consolidation moves a closed entry's topic file to `memory/closed/`, stamps it
 `closed_at` + `status: closed`, moves its index line to `memory/closed/INDEX.md`, and removes it
 from `MEMORY.md`. Moving the **file** is the load-bearing half — a file left in `memory/` is
@@ -156,7 +159,7 @@ rows over a trailing window, so a fortnight with no retrospectives looks exactly
 in which the lesson was finally absorbed, and closing an `accepted` row on that would be guessing.
 A `proposed` row is still swept when the rule goes quiet, and re-proposed if the lesson returns.
 
-The same fold backs the Retro page's **Group by lesson** toggle — see `?group=1` in §7.
+The same fold backs the **Group by lesson** toggle on Health → Estimates — see `?group=1` in §7.
 
 ### Skill proposals — what R11 turns into
 
@@ -178,7 +181,7 @@ can go wrong, and both end in a row you can see rather than in silence:
 | names `skills/<name>` that a pack ships | proposal `proposed`, `target_path` set, diff generated |
 | names no skill, or one no pack ships | proposal **`needs_target`**, `target_path` empty, no model run |
 
-A `needs_target` row is real evidence with an unknown file: the Retro page shows it with the
+A `needs_target` row is real evidence with an unknown file: Health → Advisor shows it with the
 reason on the card, the target cell reading `no target file — dismissing is the only transition`,
 and a **Dismiss** button. Dismissing is the only transition it has — approving
 is refused, because there is nothing to apply. There is no target picker in this phase; if one is
@@ -226,13 +229,14 @@ proposed ──Accept──▶ accepted ──(auto)──▶ adopted ──(aut
 - All transitions are predicate-guarded — a dismiss racing the 24 h run cannot be
   resurrected, and the API returns 409 on conflicting PATCHes.
 
-The `Retro` sidebar badge shows the count of `proposed` recommendations.
+Proposed recommendations are counted in the Inbox (sidebar badge, *advisor* tab) and in
+the Advisor tab's `N open` count.
 
 ## 6. Working with Retro — playbooks
 
 ### Daily loop
 
-1. Open `/retro` when the badge is non-zero.
+1. Open the Inbox's *advisor* tab (or Health → Advisor) when it has something open.
 2. Expand `evidence` on new cards; follow sample session ids when in doubt.
 3. **Accept** what you will fix, **Dismiss** noise (it returns in 30 days if real).
 4. Make the fix (prompt edit, approval rule, convention, infra).
@@ -311,7 +315,7 @@ return the same order; limit 100 groups. `count` is **distinct tasks**, `title` 
 occurrence carried no `**Action**:` line), `tasks` is newest first. Rows with an empty
 `norm_title` are excluded — grouping by the "not folded yet" marker would pile every unrelated
 pre-0070 lesson into one bogus, high-count group at the top of exactly the view meant to show
-what recurs. At `count ≥ 3` the Retro page's **Group by lesson** view marks the row amber: that
+what recurs. At `count ≥ 3` the **Group by lesson** view marks the row amber: that
 is the same threshold R11 fires on.
 
 ## 8. Storage

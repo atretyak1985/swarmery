@@ -11,9 +11,9 @@ docs:
 
 # Purpose
 
-`jira-task-runner` mirrors its own progress on the swarmery `/board` so a human watching the
-board sees the same lifecycle the run is going through, without that card ever being able to
-trigger a second, competing run of the same job. This skill is the only place that talks to
+`jira-task-runner` mirrors its own progress on the swarmery board (dashboard Plans → Board) so a
+human watching the board sees the same lifecycle the run is going through, without that card
+ever being able to trigger a second, competing run of the same job. This skill is the only place that talks to
 `/api/board/tasks`; every other jira-pack skill treats the card as a side effect of this one.
 
 # The load-bearing rule: this skill never sets `boardColumn: "todo"`
@@ -194,7 +194,7 @@ Any example in this skill uses only `<jira-base-url>`-style placeholders, `<KEY>
 
 ## What it does
 
-This skill is the only place in jira-pack that talks to the swarmery board API. It mirrors a ticket run as a card on `/board` so a person watching the board sees the same lifecycle the run is going through. Crucially, it mints the card straight into `triage` and never into `todo` — a `todo` card is dispatchable, and the dispatcher would spawn a second agent racing the current run on the same ticket.
+This skill is the only place in jira-pack that talks to the swarmery board API. It mirrors a ticket run as a card on the swarmery board (Plans → Board) so a person watching the board sees the same lifecycle the run is going through. Crucially, it mints the card straight into `triage` and never into `todo` — a `todo` card is dispatchable, and the dispatcher would spawn a second agent racing the current run on the same ticket.
 
 ## When to use it
 

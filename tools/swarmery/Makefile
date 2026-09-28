@@ -76,7 +76,7 @@ endif
 # with it. find matching nothing is simply a no-op — and adding a guide still
 # needs no Makefile edit.
 copy-docs:
-	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_SRC)/PLUGINS.md docs/concepts.md docs/retro.md docs/usage.md $(DOCS_DST)/
+	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_SRC)/PLUGINS.md docs/concepts.md docs/retro.md docs/usage.md docs/api-project-config.md $(DOCS_DST)/
 	find docs/guides -maxdepth 1 -name 'guide-*.md' -exec cp {} $(DOCS_DST)/ \;
 
 # dev: run the API daemon and the vite dev server (proxying /api to :7777)

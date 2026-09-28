@@ -1,9 +1,9 @@
 // Docs screen (Canvas v2, vertical-rail variant): a left sidebar with a mono
-// filter box on top and the docs grouped under GUIDES / FORMATS / PROTOCOLS
-// mono section labels — active doc amber-tinted, each row showing title over
-// its FILE.md. Beside it the reading grid: the article (mono group eyebrow ·
-// serif H1 · "swarmery/docs/<FILE>" subline · markdown body · prev/next footer)
-// and an "On this page" rail built from the doc's own `##` headings. Routes:
+// filter box on top and the docs grouped under GUIDES / REFERENCE / FORMATS /
+// PROTOCOLS mono section labels (the rule lives in ./docsRail.ts) — active doc
+// amber-tinted, each row showing title over its FILE.md. Beside it the
+// reading grid: the article (mono group eyebrow · serif H1 ·
+// "swarmery/docs/<FILE>" subline · markdown body · prev/next footer) and an "On this page" rail built from the doc's own `##` headings. Routes:
 // /docs (first doc) and /docs/{slug}; every doc switch is a router navigation,
 // never local state. The markdown body's own leading H1 is stripped — the page
 // title comes from the doc meta.
@@ -28,6 +28,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import type { DocDetail, DocMeta } from '../api/types';
 import { fetchDoc, fetchDocs } from '../api';
 import { Markdown } from '../lib/markdown';
+import { GROUP_ORDER, groupOf } from './docsRail';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 
 /** Drop a leading `# Title` line — the pane renders its own heading. */
@@ -38,22 +39,6 @@ function stripLeadingH1(markdown: string): { title: string | null; body: string 
   const m = /^#\s+(.*)$/.exec(lines[i] ?? '');
   if (m === null) return { title: null, body: markdown };
   return { title: m[1] ?? null, body: lines.slice(i + 1).join('\n') };
-}
-
-/* ----- groups: derived from the file name, never from the daemon ----- */
-
-type DocGroupName = 'Guides' | 'Formats' | 'Protocols';
-
-/** Section order in the rail. A group with no docs at all is dropped before
- * render — the self-hosted daemon serves doc sets where two of the three are
- * empty. */
-const GROUP_ORDER: readonly DocGroupName[] = ['Guides', 'Formats', 'Protocols'];
-
-function groupOf(file: string): DocGroupName {
-  const f = file.toLowerCase();
-  if (f.includes('protocol')) return 'Protocols';
-  if (f.includes('format') || f.includes('config')) return 'Formats';
-  return 'Guides';
 }
 
 /* ----- table of contents ----- */

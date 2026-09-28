@@ -48,7 +48,7 @@ control plane's verify engine parses.
 
 ## Model tiers (the cost ladder)
 
-Each agent runs on the cheapest tier that fits — visible on the **Analytics** page and
+Each agent runs on the cheapest tier that fits — visible on the dashboard's **Health → Cost & tokens** tab and
 in each session's cost header. Models are always aliases (`opus`/`sonnet`/`haiku`), so
 model rotations never strand the fleet.
 
@@ -60,7 +60,7 @@ model rotations never strand the fleet.
 
 ## Human-in-the-loop gates
 
-The workflow pauses for you — surfaced in the control plane's **Approvals** queue —
+The workflow pauses for you — surfaced in the control plane's **Inbox** —
 before: git commits/pushes · database migrations · breaking API changes ·
 security-sensitive changes · production deployments. Risky actions get a structured
 go/no-go from the `guardrails` skill (Impact × Reversibility; Critical never

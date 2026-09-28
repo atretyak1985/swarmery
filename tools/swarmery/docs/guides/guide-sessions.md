@@ -123,12 +123,14 @@ appear at all.
 When an agent needs permission, that request can come to you instead of sitting in a
 terminal you are not looking at. Claude Code's `PermissionRequest` hook forwards it
 to the daemon, the daemon holds the request open while the hook long-polls, and you
-approve or deny from the dashboard — or your phone.
+approve or deny from the dashboard's **Inbox** (the *approvals* tab, or the
+*all* list beside every other decision waiting on you) — or from your phone.
 
 Requests are project-scoped in the list, deduplicated so a retried identical call
 does not stack up, and capped per session so a runaway agent cannot flood the queue.
 Every decision keeps its row, including automatic ones, so there is always an audit
-trail of what was allowed and why.
+trail of what was allowed and why. Rules and that history live one link away
+from the Inbox, at `/approvals/manage`.
 
 The default window is ten minutes. What happens at the end of it is the important
 part: a timed-out request is **neither approved nor denied** — it expires, the hook
@@ -144,7 +146,7 @@ the normal prompt, never into a silent yes.
 
 ## The retro loop
 
-The daemon also watches its own performance. A deterministic advisor — no model in
+The daemon also watches its own performance, and shows it on **Health**. A deterministic advisor — no model in
 the loop — evaluates rules over a trailing fourteen-day window and raises evidenced
 recommendations: denied tools, agent error rates, recurring errors, re-dispatch
 churn, stale improvements, cache regressions, stale architecture maps, trajectory
@@ -155,10 +157,15 @@ Recommendations have a lifecycle — proposed, accepted or dismissed, adopted, t
 verified against real activity: each rule has a floor below which it refuses to
 conclude anything, so a quiet fortnight can never be mistaken for an improvement.
 
-Per-agent scorecards sit alongside them: runs, error rate, success rate, cost and p95
+Recommendations appear on **Health → Advisor** and in the Inbox. Per-agent
+scorecards sit on **Health → Agents**: runs, error rate, success rate, cost and p95
 duration for each agent over the same window. Where a recommendation targets an
 agent, the loop can go one step further and draft an actual change to that agent as a
 reviewable diff, which you approve or reject.
+
+What the loop learns from individual runs — lessons from runs that missed their
+forecast, and how honest forecasts are — lives on **Learning**. The Retro reference
+doc defines every metric and rule.
 
 ## Cheat sheet
 
@@ -166,10 +173,11 @@ reviewable diff, which you approve or reject.
 |---|---|
 | `/sessions` | Every session, live, with cost and status |
 | `/sessions/{id}` | Chat, timeline, diffs, and what the session used |
-| `/approvals` | Pending permission requests and the decision history |
-| `/analytics` | Cost, tokens, runs and cache over time |
-| `/retro` | Agent scorecards, recommendations, proposed changes |
-| `/settings` | Accounts, and everything machine-wide |
+| `/inbox?tab=approvals` | Pending permission requests |
+| `/approvals/manage` | Auto-approval rules and the decision history |
+| `/health?tab=cost` | Cost, tokens, runs and cache over time |
+| `/health?tab=agents`, `?tab=advisor` | Agent scorecards; recommendations and proposed changes |
+| `/settings?tab=accounts` | Your Claude accounts; the other tabs cover the rest of the machine |
 
 | Environment variable | Default | Effect |
 |---|---|---|
