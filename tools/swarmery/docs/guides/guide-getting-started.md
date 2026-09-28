@@ -7,22 +7,22 @@ touching saves a lot of confusion later.
 > The **marketplace** is a set of Claude Code plugins — agents, skills, commands and
 > hooks — that your projects install and that run inside your Claude Code sessions.
 > The **control plane** is a local Go daemon with an embedded React dashboard that
-> *watches* those sessions and gives you a board, plans, analytics and docs at
-> `http://localhost:7777`. You can run either one without the other. They meet only
+> *watches* those sessions and gives you an inbox, plans, health metrics and docs
+> at `http://localhost:7777`. You can run either one without the other. They meet only
 > through the files Claude Code already writes to disk.
 
 ```stats
-12 | plugins in the marketplace | hot
-59 | Go packages in the daemon
-172 | HTTP API routes
-12 | docs served at /docs
+13 | plugins in the marketplace | hot
+89 | Go packages in the daemon
+202 | HTTP API routes
+14 | docs served at /docs
 ```
 
 ## What is swarmery
 
-The marketplace ships one vendor-neutral **`core`** plugin plus eleven opt-in domain
+The marketplace ships one vendor-neutral **`core`** plugin plus twelve opt-in domain
 packs (`uav-pack`, `iot-pack`, `web-pack`, `infra-pack`, `lsp-pack`,
-`claude-eng-pack`, `graphify-pack`, `architecture-pack`, `jira-pack`,
+`claude-eng-pack`, `graft-pack`, `graphify-pack`, `architecture-pack`, `jira-pack`,
 `accounts-pack`, `design-pack`). Nothing project-specific is baked into the
 plugins: every consumer supplies its own flavor at runtime through a
 `.claude/project.json` overlay, which is why the same `core` works for a drone
@@ -84,7 +84,7 @@ steps say so. The slug is the project's identity: dispatch worktrees are named
 after it, and sessions from those worktrees are attributed back through it, so
 renaming it in place would orphan them.
 
-**The Projects page lists onboarded projects by default.** A project counts as
+**Settings → Projects lists onboarded projects by default.** A project counts as
 onboarded when it has its own swarmery config and doesn't just sit inside another
 onboarded project. That leaves out a multi-repo umbrella's sub-repos, which carry a
 copied `settings.json`. `/`, `$HOME` and the onboarding roots never count as that
@@ -92,8 +92,8 @@ parent, so enabling core at user scope doesn't hide your projects. The daemon
 decides this (the `onboarded` field on `GET /api/projects`).
 
 Untick **onboarded only** to see everything. When the filter hides every project,
-the page says how many are hidden and offers to untick it. The Health table
-follows the same filter, and the System project stays visible. The choice is
+the page says how many are hidden and offers to untick it. The System project
+stays visible. The choice is
 remembered in the browser.
 
 You never have to add the marketplace by hand: writing that registration into
@@ -143,7 +143,8 @@ Point it elsewhere with `SWARMERY_PROJECTS_ROOTS`; change the port with
 ## Pack toggles and provisioning
 
 You do not have to hand-edit JSON to turn a pack on. In the dashboard, open a
-project and use the **plugins** card. The toggle performs merge-only surgery on
+project and use the plugin toggles on its **Settings** (`/p/<slug>/settings`) or on
+**System → Plugins**. The toggle performs merge-only surgery on
 that project's `.claude/settings.json` — it writes a `settings.json.bak` first, and
 it refuses to overwrite a file it cannot parse. `core` is locked on.
 
@@ -171,10 +172,15 @@ restart`, so you can see what happened and re-run it deliberately.
 Start a Claude Code session in the onboarded project and let it work for a few
 minutes. Then look at the dashboard:
 
+- **Today** — what is live, and what is waiting on you.
 - **Sessions** — every transcript, live, with cost and token accounting.
-- **Board** — cards captured from your sessions' own TODO items, waiting in Inbox.
-- **Plans** — phase documents and their progress, read straight from the workspace.
+- **Plans → Board** — cards captured from your sessions' own TODO items, waiting in
+  the board's Inbox lane.
+- **Plans → Plans** — phase documents and their progress, read straight from the
+  workspace.
 - **Docs** — this page.
+
+The [dashboard guide](guide-dashboard.md) walks through all ten places in the sidebar.
 
 A captured card is a *proposal*, not a commitment. Here is the whole journey a card
 can take once you accept it:
@@ -182,8 +188,8 @@ can take once you accept it:
 ```figure card-lifecycle
 ```
 
-The board guide covers each lane, the admission gates and the review exits in
-detail.
+The [Plans guide](guide-plans.md) covers each board lane, the admission gates and the review exits
+in detail.
 
 ## Cheat sheet
 

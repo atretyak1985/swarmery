@@ -44,12 +44,12 @@ open http://localhost:7777
 ## What it does
 
 - **See everything** — every session across every project, live: tool calls, diffs, cost, sub-agents, errors.
-- **Stop being the bottleneck** — approve or deny permission prompts from one queue; turn a recurring prompt into an auto-approve rule.
-- **Delegate, don't babysit** — run a card from Inbox; a headless agent moves it through Working to Review in its own git worktree, and a verifier grades the result.
+- **Stop being the bottleneck** — approve or deny permission prompts from one Inbox; turn a recurring prompt into an auto-approve rule.
+- **Delegate, don't babysit** — run a card from the board (Plans → Board); a headless agent moves it through Working to Review in its own git worktree, and a verifier grades the result.
 - **Improve the system, not the prompt** — per-agent scorecards, a rule-based advisor, and agent-rewrite proposals you review as a diff.
 - **Ship agents once** — a real Claude Code plugin marketplace: `core` + opt-in domain packs, semver'd, adopted with `/plugin update`.
 
-Full tour of every screen: [docs/TOUR.md](docs/TOUR.md)
+Full tour of every place in the dashboard: [docs/TOUR.md](docs/TOUR.md)
 
 ## Follow the build
 
@@ -124,7 +124,7 @@ by default; point it anywhere with `SWARMERY_WORKSPACE_ROOT` (daemon) / `AGENT_W
 swarmery hooks install       # installs the PreToolUse / Stop hook shim
 ```
 
-Now every permission request and `AskUserQuestion` appears in the **Approvals** queue with the
+Now every permission request and `AskUserQuestion` appears in the dashboard's **Inbox** with the
 full context, wherever you are. The shim is **fail-open**: if the daemon is down it exits
 silently and Claude Code prompts you in the terminal as usual.
 
@@ -147,9 +147,8 @@ The CLI `swarmery onboard` always works.
 
 ---
 
-**A screen-by-screen tour of every view — Command deck, Sessions, Approvals,
-Analytics, Retro, Board, Planning, Plans, Architecture, Memory, Terminal —
-lives in [docs/TOUR.md](docs/TOUR.md).**
+**A place-by-place tour of the dashboard — Today, Inbox, Sessions, Plans, Health,
+Learning, Knowledge, Docs, System, Settings — lives in [docs/TOUR.md](docs/TOUR.md).**
 
 ---
 
@@ -158,7 +157,7 @@ lives in [docs/TOUR.md](docs/TOUR.md).**
 ```mermaid
 flowchart LR
     CC["Claude Code session"] -->|JSONL transcript| ING[Ingest]
-    CC -->|PreToolUse hook| APPR[Approvals]
+    CC -->|PreToolUse hook| APPR[Inbox approvals]
     ING --> DB[(local SQLite)]
     APPR --> DB
     DB --> UI["Dashboard :7777"]
@@ -167,7 +166,7 @@ flowchart LR
     DISP -->|git worktree| AGENT["headless claude -p"]
     AGENT --> VER[Verify]
     VER --> DB
-    DB --> ADV[Retro advisor]
+    DB --> ADV[Health advisor]
     ADV -->|agent-rewrite proposal| REVIEW["you review the diff"]
     REVIEW --> PLUGINS["plugins/** → /plugin update"]
     PLUGINS --> CC

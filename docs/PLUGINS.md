@@ -11,7 +11,7 @@ The swarmery marketplace ships one mandatory **core** plugin and eleven opt-in p
 
 Per project, three equivalent ways:
 
-1. **Control-plane dashboard** — open the project (`/projects/:id`) → **plugins** card → flip the toggle. The daemon performs merge-only surgery on the project's `.claude/settings.json` (`enabledPlugins["<pack>@swarmery"]`), backs the file up to `settings.json.bak`, and never overwrites a malformed file. `core` is locked there — its lifecycle (hooks, statusline, project.json) belongs to attach/detach.
+1. **Control-plane dashboard** — open the project's **Settings** (`/p/<slug>/settings`), or **System → Plugins** inside the project, and flip the toggle. The daemon performs merge-only surgery on the project's `.claude/settings.json` (`enabledPlugins["<pack>@swarmery"]`), backs the file up to `settings.json.bak`, and never overwrites a malformed file. `core` is locked there — its lifecycle (hooks, statusline, project.json) belongs to attach/detach.
 2. **Bootstrap** — `scripts/init.sh` writes the initial `settings.json` with core plus the packs you pick.
 3. **By hand** — add `"<pack>@swarmery": true` under `enabledPlugins` in the project's `.claude/settings.json`.
 
@@ -78,9 +78,9 @@ A component in a project's own `.claude/` **wins** over a plugin component with 
 - **Serena web dashboard** — live view of the active config, tool usage, execution queue and logs.
 
 **How to work with it.**
-1. Enable `lsp-pack` for the project (plugins card).
+1. Enable `lsp-pack` for the project (plugin toggles).
 2. New Claude Code sessions in that project get the `serena` MCP tools automatically.
-3. **Dashboard sidebar → TOOLS → Serena**: pick the project, press **start** — the swarmery daemon launches a managed serena process (SSE transport, web dashboard on) and embeds its dashboard once it reports running; **stop** terminates the whole process group. State, log tail and errors are shown honestly while starting/failed. The daemon kills all serena children on shutdown.
+3. **Dashboard → Knowledge → Serena** (inside the project): press **start** — the swarmery daemon launches a managed serena process (SSE transport, web dashboard on) and embeds its dashboard once it reports running; **stop** terminates the whole process group. State, log tail and errors are shown honestly while starting/failed. The daemon kills all serena children on shutdown.
 
 ---
 
@@ -106,7 +106,7 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 
 **How to work with it.**
 1. Enable `graft-pack` for the project, then run `graft build` once in the repo.
-2. **Dashboard sidebar → TOOLS → Graft**: the project's index with its node/edge counts and build time. `available: false` there means the pack is on but the CLI is missing.
+2. **No dashboard page yet**: the daemon reports each project's index — node/edge counts and build time — in the `graft` section of `GET /api/tools`. `available: false` there means the pack is on but the CLI is missing.
 3. Keep it fresh: `graft check` fails when the index lags the code, and a plain `graft build` is incremental. A stale graph's silence looks exactly like "nothing depends on this", which is the one failure mode worth watching for.
 
 **If both graft-pack and graphify-pack are on**, they do not conflict — different directories, different hooks. Note that a project already wired by `graft init` carries graft's own hook entries in its `.claude/settings.json`; remove those when enabling the pack, or every prompt is processed twice.
@@ -127,7 +127,7 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 
 **How to work with it.**
 1. Enable `graphify-pack` for the project; run `/graphify` once in the repo to build the graph.
-2. **Dashboard sidebar → TOOLS → Graphify**: pick the project — the static `graph.html` visualization renders inline (served read-only by the daemon from `graphify-out/`). If only `graph.json` exists you'll get a hint to rebuild without `--no-viz`; graphs over 5000 nodes need `GRAPHIFY_VIZ_NODE_LIMIT` raised.
+2. **Dashboard → Knowledge → Graphify** (inside the project): the static `graph.html` visualization renders inline (served read-only by the daemon from `graphify-out/`). If only `graph.json` exists you'll get a hint to rebuild without `--no-viz`; graphs over 5000 nodes need `GRAPHIFY_VIZ_NODE_LIMIT` raised.
 3. Keep it fresh after refactors: `graphify update .` (add `--force` after mass deletions).
 
 ---
@@ -145,9 +145,9 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 - **Artifacts** land in `architecture-out/` (git-ignored by convention).
 
 **How to work with it.**
-1. Enable `architecture-pack` for the project (plugins card or `settings.json`).
+1. Enable `architecture-pack` for the project (plugin toggles or `settings.json`).
 2. Run `/architecture-map` — or let any orchestration agent trigger it when a fresh map is needed.
-3. **Dashboard sidebar → TOOLS → Architecture**: the swarmery daemon serves `architecture-map.json` and `architecture-map.html` read-only; the page embeds the viewer or shows a "run /architecture-map first" hint when the artifacts are absent.
+3. **Dashboard → Knowledge → Architecture** (inside the project): the swarmery daemon serves `architecture-map.json` and `architecture-map.html` read-only; the page embeds the viewer or shows a "run /architecture-map first" hint when the artifacts are absent.
 
 ---
 
@@ -205,15 +205,15 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 
 | Plugin | Kind | Needs on the machine | Dashboard surface |
 |---|---|---|---|
-| core | mandatory baseline | — | everything (sessions, plugins card, …) |
-| lsp-pack | tool (Serena MCP) | `serena` (uv) | sidebar **Serena** page: start/stop + embedded dashboard |
-| graphify-pack | tool (knowledge graph) | `graphify` CLI (uv) | sidebar **Graphify** page: embedded `graph.html` |
-| graft-pack | tool (context graph) | `graft` CLI (npm) | sidebar **Graft** page: index size + freshness |
-| architecture-pack | tool (architecture map) | — | sidebar **Architecture** page: embedded `architecture-map.html` |
+| core | mandatory baseline | — | everything (sessions, plugin toggles, …) |
+| lsp-pack | tool (Serena MCP) | `serena` (uv) | Knowledge → **Serena**: start/stop + embedded dashboard |
+| graphify-pack | tool (knowledge graph) | `graphify` CLI (uv) | Knowledge → **Graphify**: embedded `graph.html` |
+| graft-pack | tool (context graph) | `graft` CLI (npm) | no page — `GET /api/tools` reports index size + freshness |
+| architecture-pack | tool (architecture map) | — | Knowledge → **Architecture**: embedded `architecture-map.html` |
 | uav-pack | domain | — | — |
 | iot-pack | domain | — | — |
 | web-pack | domain | — | — |
 | infra-pack | domain | — | — |
 | claude-eng-pack | meta | — | — |
 
-The TOOLS section of the sidebar appears only while at least one project has the corresponding pack enabled.
+Knowledge is a per-project place: its Serena, Graphify and Architecture tabs show the project's own tool state, with a hint when the pack is off or the artifacts are missing. The fleet-wide `/serena`, `/graphify` and `/architecture` pages remain for picking any project.

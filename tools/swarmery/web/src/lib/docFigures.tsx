@@ -258,7 +258,7 @@ function CardLifecycleFigure(): JSX.Element {
  * SOURCE OF TRUTH: `Service.Schedule` in internal/dispatch/service.go. This array
  * is a hand-written English restatement of that sequence — nothing enforces the
  * match, so reordering, adding or removing a gate there means editing this list
- * (and docs/guides/guide-board.md, which narrates the same nine). */
+ * (and docs/guides/guide-plans.md, which narrates the same nine). */
 const GATES: string[] = [
   'The global dispatch switch, and the dispatcher pause',
   'Projects on the locked-down preset — refused, stamped into dispatchError',

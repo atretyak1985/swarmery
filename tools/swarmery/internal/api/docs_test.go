@@ -94,7 +94,7 @@ func TestDocsGuidesOrder(t *testing.T) {
 		"zzz.md":                {Data: []byte("# Zulu\n")},
 		"onboarding.md":         {Data: []byte("# Onboarding\n")},
 		"aaa.md":                {Data: []byte("# Alpha\n")},
-		"guide-board.md":        {Data: []byte("# The board\n")},
+		"guide-plans.md":        {Data: []byte("# Plans and the board\n")},
 		"neutrality.md":         {Data: []byte("# Neutrality\n")},
 		"guide-getting-started": {Data: []byte("not markdown, must be ignored\n")},
 	})
@@ -104,7 +104,7 @@ func TestDocsGuidesOrder(t *testing.T) {
 	}
 	getJSON(t, srv.URL+"/api/docs", &list)
 
-	want := []string{"guide-board", "onboarding", "neutrality", "aaa", "zzz"}
+	want := []string{"guide-plans", "onboarding", "neutrality", "aaa", "zzz"}
 	if len(list) != len(want) {
 		t.Fatalf("docs = %d, want %d (%+v)", len(list), len(want), list)
 	}

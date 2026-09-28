@@ -1,35 +1,27 @@
-// Grouping rule for the /docs rail: illustrated Guides above the Reference
-// docs. Pure, and deliberately separate from Docs.tsx so it can be unit-tested
-// without mounting the page.
+// Grouping rule for the /docs rail: illustrated Guides first, then the
+// Reference docs, then the wire Formats and Protocols. Pure, and deliberately
+// separate from Docs.tsx so it can be unit-tested without mounting the page.
 //
-// The split is CLIENT-SIDE, on the slug prefix, because /api/docs response
+// The split is CLIENT-SIDE, on the file name, because /api/docs response
 // shapes are frozen by the parity contract ({slug,title,file} — internal/api/
 // docs.go). No group field is added server-side; the daemon only pins the
 // order (docOrder), and `guide-` is the prefix the Makefile's flattening
 // preserves.
 
-import type { DocMeta } from '../api/types';
-
-/** The slug prefix that marks a doc as an illustrated guide. */
+/** The file-name prefix that marks a doc as an illustrated guide. */
 export const GUIDE_PREFIX = 'guide-';
 
-export interface DocGroup {
-  label: string;
-  items: DocMeta[];
-}
+export type DocGroupName = 'Guides' | 'Reference' | 'Formats' | 'Protocols';
 
-/** Split the doc list into rail groups, preserving the server's order within
- * each group.
- *
- * Empty groups are dropped, which is what makes a fresh clone or CI build
- * degrade gracefully: with no guides embedded the rail is a single Reference
- * list, exactly the flat rail that shipped before guides existed — and with
- * no docs at all it is empty, leaving Docs.tsx's "no docs published by the
- * daemon" state reachable and unchanged. */
-export function groupDocs(docs: DocMeta[]): DocGroup[] {
-  const groups: DocGroup[] = [
-    { label: 'Guides', items: docs.filter((d) => d.slug.startsWith(GUIDE_PREFIX)) },
-    { label: 'Reference', items: docs.filter((d) => !d.slug.startsWith(GUIDE_PREFIX)) },
-  ];
-  return groups.filter((g) => g.items.length > 0);
+/** Section order in the rail. A group with no docs at all is dropped before
+ * render — most doc sets leave Formats and Protocols empty. */
+export const GROUP_ORDER: readonly DocGroupName[] = ['Guides', 'Reference', 'Formats', 'Protocols'];
+
+/** The rail group a doc belongs to, from its file name. */
+export function groupOf(file: string): DocGroupName {
+  const f = file.toLowerCase();
+  if (f.startsWith(GUIDE_PREFIX)) return 'Guides';
+  if (f.includes('protocol')) return 'Protocols';
+  if (f.includes('format') || f.includes('config')) return 'Formats';
+  return 'Reference';
 }

@@ -2,11 +2,12 @@
 
 Some questions the daemon faces are small and closed: *did this run stop because it
 is blocked, or because it reported progress?*, *was this session a feature or a
-bugfix?* Paying a frontier model for a one-word answer is waste. The **Decisions**
-page is where a small classifier running on your own machine answers them instead.
+bugfix?* Paying a frontier model for a one-word answer is waste. **Learning → The
+classifier** is where a small classifier running on your own machine answers them
+instead.
 
-**This is optional.** Swarmery does everything else without it — sessions, the board,
-plans, runs, approvals, cost. With no local model configured the classifier is
+**This is optional.** Swarmery does everything else without it — sessions, plans,
+the board, runs, approvals, cost. With no local model configured the classifier is
 switched off entirely and the daemon behaves exactly as it did before the feature
 existed. Set it up when you want the extra labels, not before.
 
@@ -110,19 +111,23 @@ grep 'decide: local=' ~/.swarmery/logs/swarmery.err.log | tail -1
 
 `local=off` means `SWARMERY_DECIDE_URL` did not reach the daemon.
 
-The Decisions page header switches from *not configured* to `backend: local`. Calls
-start appearing as runs finish and the 15-minute D2 pass reaches your sessions. A
-non-zero **errors** column usually means the server is not running or the model id is
-wrong.
+The classifier tab stops showing *No local model configured*. Calls start
+appearing as runs finish and the 15-minute D2 pass reaches your sessions. A question
+whose status sentence reports errors usually means the server is not running or the
+model id is wrong.
 
 ## Shadow first, active later
 
-Every question starts in **shadow**: it is asked, the answer is logged, and nothing
-acts on it. That is how you find out whether a model is good enough before trusting
-it.
+The mode switch on each question reads **off · watching · acting** — the dashboard's
+words for the `off`, `shadow` and `active` values of the environment variables.
 
-- **agreement** is the share of answers that matched what actually happened, over the
-  decisions that have a ground truth. D1 records its own: when a run was continued,
+Every question starts in **shadow** (*watching*): it is asked, the answer is logged,
+and nothing acts on it. Its answers wait in the Inbox's **classifier** tab for you to
+check — that is how you find out whether a model is good enough before trusting it.
+
+- **agreement** (*matches you*) is the share of answers that matched what actually
+  happened, over the decisions that have a ground truth — including the ones you
+  checked. D1 records its own: when a run was continued,
   the next run's end says whether continuing was right.
 - **confidence** is a histogram of how sure the model was. Confidence is *calibrated*
   only when the server returns token log-probabilities; whether it does depends on the
@@ -131,11 +136,11 @@ it.
 
 Only D1 changes behaviour when active, and it fails safe: below the threshold, or
 uncalibrated, it does not continue the run — it stops and notifies you. Promote a
-question with the mode switch on its row once its agreement is high; the switch
+question to *acting* with its mode switch once its agreement is high; the switch
 overrides the environment default for that one question.
 
 ## Turning it off
 
 Unset `SWARMERY_DECIDE_URL` and restart the daemon, or set a single question to `off`
-on the Decisions page. The logged decisions stay in the database; nothing else depends
+on Learning → The classifier. The logged decisions stay in the database; nothing else depends
 on them.
