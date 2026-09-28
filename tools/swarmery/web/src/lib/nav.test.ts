@@ -22,7 +22,7 @@ function place(id: PlaceId) {
 }
 
 describe('nav model', () => {
-  it('defines exactly the nine places, grouped main / improve / bottom', () => {
+  it('defines exactly the ten places, grouped main / improve / bottom', () => {
     expect(PLACES.map((p) => p.id)).toEqual([
       'today',
       'inbox',
@@ -31,12 +31,13 @@ describe('nav model', () => {
       'health',
       'learning',
       'knowledge',
+      'docs',
       'system',
       'settings',
     ]);
     expect(placesIn('main').map((p) => p.label)).toEqual(['Today', 'Inbox', 'Sessions', 'Plans']);
     expect(placesIn('improve').map((p) => p.label)).toEqual(['Health', 'Learning', 'Knowledge']);
-    expect(placesIn('bottom').map((p) => p.label)).toEqual(['System', 'Settings']);
+    expect(placesIn('bottom').map((p) => p.label)).toEqual(['Docs', 'System', 'Settings']);
     expect(PLACES.filter((p) => p.projectOnly).map((p) => p.id)).toEqual(['plans', 'knowledge']);
   });
 
@@ -49,6 +50,8 @@ describe('nav model', () => {
       ['health', '/health', '/p/shop/health'],
       ['learning', '/learning', '/p/shop/learning'],
       ['knowledge', '/projects', '/p/shop/knowledge'],
+      // Docs is fleet-wide: a project scope does not change where it goes.
+      ['docs', '/docs', '/docs'],
       ['system', '/system', '/p/shop/system'],
       ['settings', '/settings', '/p/shop/settings'],
     ];
@@ -108,7 +111,7 @@ describe('nav coverage of src/main.tsx', () => {
       ['/p/shop/playbooks', 'plans'],
       ['/p/shop/planning', 'plans'],
       ['/p/shop/serena', 'knowledge'],
-      ['/docs/guide', 'knowledge'],
+      ['/docs/guide', 'docs'],
       ['/routines', 'system'],
       ['/agents/7', 'system'],
       ['/projects', 'settings'],

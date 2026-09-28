@@ -2,7 +2,7 @@
 //
 // The one sidebar (Canvas v3 phase 1). The claims:
 //
-//   1. It renders the nine places in both scopes, and exactly one numeric badge
+//   1. It renders the ten places in both scopes, and exactly one numeric badge
 //      (Inbox) — every other nav badge was retired with the old rails.
 //   2. Under All projects the project-only places (Plans, Knowledge) are still
 //      there, dimmed, and link through the last-visited project — or to the
@@ -67,14 +67,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Sidebar', () => {
-  it('renders the nine places in both scopes', () => {
-    const labels = ['Today', 'Inbox', 'Sessions', 'Plans', 'Health', 'Learning', 'Knowledge', 'System', 'Settings'];
+  it('renders the ten places in both scopes', () => {
+    const labels = ['Today', 'Inbox', 'Sessions', 'Plans', 'Health', 'Learning', 'Knowledge', 'Docs', 'System', 'Settings'];
     renderSidebar({ slug: null });
     for (const label of labels) expect(row(label)).toBeTruthy();
     cleanup();
     renderSidebar({ slug: 'shop' }, '/p/shop');
     for (const label of labels) expect(row(label)).toBeTruthy();
     expect(row('Plans').getAttribute('href')).toBe('/p/shop/plans');
+    expect(row('Docs').getAttribute('href')).toBe('/docs');
   });
 
   it('shows exactly one numeric badge, on Inbox', () => {
