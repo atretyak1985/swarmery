@@ -1206,7 +1206,8 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 // two priors — a shape the format does not forbid and the lint is there to report,
 // not to silence by losing one of them. The rows are pure doc derivations with no
 // daemon-owned state on them, so churning their ids costs nothing; readers come
-// the other way, with a known phase id.
+// the other way, with a known phase id. The one exception is a prior's
+// report-filled verdict, which survives the replace — see vettedPriors.
 //
 // A phase whose doc declares no forecast still runs the DELETE: removing the
 // `## Forecast` section from a doc must actually retract the forecast, the same
@@ -1232,6 +1233,12 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		log.Printf("warn: wsingest: task=%d no phase row for %s — forecasts skipped", taskID, p.docPath)
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+	// Read BEFORE the delete: the rows about to be replaced are the only record
+	// of what an earlier scan saw.
+	vetted, err := vettedPriors(tx, phaseID, p.forecasts)
 	if err != nil {
 		return err
 	}
@@ -1272,6 +1279,12 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		if f.Kind == ForecastPosterior && ordering.PostHoc() {
 			f.PostHoc, f.PostHocReason = true, PostHocAfterFirstEdit
 		}
+		// report-filled is a verdict on the doc as it was when the prior FIRST
+		// appeared, not as it is now: a prior an earlier scan stored as a genuine
+		// prediction keeps that verdict once the run fills the Completion Report.
+		if f.PostHocReason == PostHocReportFilled && vetted[f.WrittenAt] {
+			f.PostHoc, f.PostHocReason = false, ""
+		}
 		postHoc := 0
 		if f.PostHoc {
 			postHoc = 1
@@ -1289,6 +1302,54 @@ func applyForecasts(tx *sql.Tx, taskID int64, p epicPhase) error {
 		}
 	}
 	return nil
+}
+
+// vettedPriors returns the written_at of every PRIOR this phase already has stored
+// with post_hoc = 0 — priors an earlier scan saw while the Completion Report was
+// still empty, i.e. genuine predictions.
+//
+// WHY. ParseForecasts derives report-filled from the doc's CURRENT state, and
+// applyForecasts replaces the rows on every scan of a changed plan. Without this
+// memory the phase run filling its own report flips every legitimate prior to
+// post_hoc = 1, so "phases with a non-post-hoc prior" shrinks as phases execute
+// and calibration only ever sees phases that never ran.
+//
+// KEYED ON written_at, the author's own timestamp: doc_hash changes precisely
+// when the report fills, so it cannot identify "the same prior". A prior whose
+// written_at is edited after the report filled is a new prior and is judged
+// afresh; one first seen in an already-reported doc (a backfill) has no vetted
+// row and keeps post_hoc = 1.
+//
+// Queried only when this scan would mark a prior report-filled — the common
+// scan has nothing to rescue. An error is returned, not degraded to "no memory":
+// the DELETE that follows would then erase the only evidence irreversibly.
+func vettedPriors(tx *sql.Tx, phaseID int64, fs []Forecast) (map[string]bool, error) {
+	need := false
+	for _, f := range fs {
+		if f.PostHocReason == PostHocReportFilled {
+			need = true
+			break
+		}
+	}
+	if !need {
+		return nil, nil
+	}
+	rows, err := tx.Query(`
+		SELECT written_at FROM phase_forecasts
+		 WHERE phase_id = ? AND kind = ? AND post_hoc = 0`, phaseID, ForecastPrior)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var w string
+		if err := rows.Scan(&w); err != nil {
+			return nil, err
+		}
+		out[w] = true
+	}
+	return out, rows.Err()
 }
 
 // jsonList marshals a string slice, spelling nil as `[]` rather than `null` —
