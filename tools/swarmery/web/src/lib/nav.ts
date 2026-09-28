@@ -1,11 +1,11 @@
-// The single navigation model (Canvas v3, artboards 2a/2b): nine places in one
+// The single navigation model (Canvas v3, artboards 2a/2b): ten places in one
 // sidebar, shared by the fleet shell (App.tsx), the project shell
 // (workspace/ProjectWorkspaceLayout.tsx) and both mobile navs. It replaces the
 // two per-shell nav arrays and the Sessions/Projects mode toggle.
 //
 // A place is a DESTINATION, not a route: each one claims every page it absorbs
 // (Health owns /analytics and /retro, Knowledge owns memory/architecture/serena/
-// graphify/docs, …), so the sidebar highlights the right row on every routed
+// graphify, …), so the sidebar highlights the right row on every routed
 // path. `match` is checked against the path with any `/p/:slug` prefix removed,
 // so one table serves both shells. nav.test.ts asserts every path routed in
 // main.tsx is claimed by exactly one place — add a route, extend a `segments`.
@@ -14,6 +14,8 @@
 // and /retro redirect into it), Learning is /learning since phase 6 (/lessons
 // and /decisions redirect into it), Knowledge is /p/:slug/knowledge since phase
 // 8, whose System absorbs /routines and whose Settings absorbs /projects.
+// Docs is its own fleet place above System: it documents swarmery itself, not
+// what a project knows, so it left Knowledge's tabs.
 
 export type PlaceId =
   | 'today'
@@ -23,6 +25,7 @@ export type PlaceId =
   | 'health'
   | 'learning'
   | 'knowledge'
+  | 'docs'
   | 'system'
   | 'settings';
 
@@ -96,10 +99,13 @@ const DEFS: readonly PlaceDef[] = [
     projectOnly: true,
     path: 'knowledge',
     // /p/:slug/{memory,architecture,serena,graphify} redirect into knowledge
-    // (phase 8); the fleet /docs, /serena, /graphify, /architecture pages stay
-    // routed (glossary deep links resolve to /docs/:slug) and stay claimed here.
-    segments: ['knowledge', 'memory', 'architecture', 'serena', 'graphify', 'docs'],
+    // (phase 8); the fleet /serena, /graphify, /architecture pages stay routed
+    // and stay claimed here.
+    segments: ['knowledge', 'memory', 'architecture', 'serena', 'graphify'],
   },
+  // Fleet-wide docs about swarmery itself: /docs and /docs/:slug (glossary deep
+  // links) exist only in the fleet shell, so the row ignores the project scope.
+  { id: 'docs', glyph: '§', label: 'Docs', section: 'bottom', projectOnly: false, path: 'docs', fleetOnly: true, segments: ['docs'] },
   {
     id: 'system',
     glyph: '☷',

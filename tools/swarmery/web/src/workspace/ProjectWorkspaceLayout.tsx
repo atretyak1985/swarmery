@@ -1,7 +1,7 @@
 // Project-workspace layout (fusion phase 4): the frame of project mode. The one
 // Sidebar (components/Sidebar.tsx — Canvas v3) scoped to this project, with
 // the ProjectSwitcher on top; a StatusBar at the bottom, and an <Outlet/> for
-// the active tab. The nine places come from lib/nav.ts, shared with the fleet
+// the active tab. The ten places come from lib/nav.ts, shared with the fleet
 // shell; pages a place absorbs (Serena / Graphify / Architecture under
 // Knowledge, Board / Playbooks / Planning under Plans, Retro under Health) stay
 // routed and highlight their place — see the route table in main.tsx.

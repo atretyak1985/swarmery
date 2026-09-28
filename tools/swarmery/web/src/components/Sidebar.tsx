@@ -5,7 +5,7 @@
 // per-shell rails and the Sessions/Projects mode toggle: the project switcher on
 // top IS the scope control now.
 //
-// Rows come from lib/nav.ts — nine places in three groups (main, Improve, the
+// Rows come from lib/nav.ts — ten places in three groups (main, Improve, the
 // bottom cluster). Project-only places (Plans, Knowledge) stay visible under All
 // projects, dimmed, and resolve through the last-visited project so muscle
 // memory never breaks. Exactly one numeric badge (Inbox) and one live dot
