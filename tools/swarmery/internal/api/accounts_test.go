@@ -88,6 +88,13 @@ func attachHomeAccounts(t *testing.T, accounts ...string) (string, map[string]st
 		if err := os.MkdirAll(root, 0o700); err != nil {
 			t.Fatalf("create %s: %v", root, err)
 		}
+		// A real account has logged in: its .claude.json carries oauthAccount
+		// (a rootless store is released from a binding only for such an account).
+		if a != ingest.DefaultAccount {
+			if err := os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(`{"oauthAccount":{"accountUuid":"test"}}`+"\n"), 0o600); err != nil {
+				t.Fatalf("seed login for %s: %v", a, err)
+			}
+		}
 		dirs[a] = dir
 		roots = append(roots, root)
 	}

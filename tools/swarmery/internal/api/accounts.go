@@ -657,7 +657,7 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 		// (409, the state of that file conflicts with the write). All are the
 		// operator's to fix, none is a server fault.
 		status := http.StatusBadRequest
-		if errors.Is(err, claudeacct.ErrUntrustedSettings) {
+		if errors.Is(err, claudeacct.ErrUntrustedSettings) || errors.Is(err, claudeacct.ErrTrackedBinding) {
 			status = http.StatusConflict
 		}
 		writeClientErr(w, status, err.Error())

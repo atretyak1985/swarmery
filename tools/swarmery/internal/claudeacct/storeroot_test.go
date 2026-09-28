@@ -45,18 +45,29 @@ func anchorStore(t *testing.T, key string, roots ...string) string {
 	return path
 }
 
-// installAccount makes key a real account in the (fake) home — a config dir
-// with projects/, which is what Discover reports and what F2's rule requires
-// before a ROOTLESS store is released through the account route.
+// installAccount makes key a real, logged-in account in the (fake) home — a
+// config dir with projects/ (what Discover reports) and a .claude.json whose
+// oauthAccount is non-empty (what a login writes). A ROOTLESS store is
+// released from a rung only for such an account.
 func installAccount(t *testing.T, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		dir := installAccountNoLogin(t, key)
+		writeAt(t, filepath.Join(dir, ".claude.json"), `{"firstStartTime":"x","oauthAccount":{"accountUuid":"test"}}`+"\n")
+	}
+}
+
+// installAccountNoLogin is what one unauthenticated `claude` run leaves behind:
+// the config dir and projects/, and no login.
+func installAccountNoLogin(t *testing.T, key string) string {
 	t.Helper()
 	h, err := userHomeDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range keys {
-		mkdirs(t, filepath.Join(h, ".claude-"+key, "projects"))
-	}
+	dir := filepath.Join(h, ".claude-"+key)
+	mkdirs(t, filepath.Join(dir, "projects"))
+	return dir
 }
 
 // resetRootlessWarn gives a test a fresh store-rootless warn-once ledger.
@@ -682,10 +693,17 @@ func TestRootlessStoreNotReleasedForANonAccountKey(t *testing.T) {
 	if n := namesWithPrefix(SpawnEnvResolved(nil, r), "INS_"); n != 0 {
 		t.Fatalf("a non-account key pulled %d names from a rootless store", n)
 	}
-	if r.AccountStoreAdmitted || !strings.Contains(r.AdmissionNote, "no account on this machine") {
+	if r.AccountStoreAdmitted || !strings.Contains(r.AdmissionNote, "no logged-in account") {
 		t.Fatalf("admitted %v, note %q", r.AccountStoreAdmitted, r.AdmissionNote)
 	}
-	// Once ins IS an account, the rootless store keeps today's behaviour.
+	// Round 2: R13 lets the binding pick ~/.claude-ins as the payer, and one
+	// unauthenticated run there creates its projects/ — still not an account.
+	dir := installAccountNoLogin(t, "ins")
+	writeAt(t, filepath.Join(dir, ".claude.json"), `{"firstStartTime":"x","machineID":"m","userID":"u"}`+"\n")
+	if n := namesWithPrefix(SpawnEnvResolved(nil, Resolve(tarball)), "INS_"); n != 0 {
+		t.Fatalf("a config dir with no login unlocked %d names", n)
+	}
+	// Once ins IS a logged-in account, the rootless store keeps today's behaviour.
 	installAccount(t, "ins")
 	if n := namesWithPrefix(SpawnEnvResolved(nil, Resolve(tarball)), "INS_"); n != 2 {
 		t.Fatalf("a real account's rootless store composed %d names, want 2", n)
@@ -751,5 +769,68 @@ func TestTooBroadRootAdmitsNothing(t *testing.T) {
 	mkdirs(t, filepath.Join(home, "projects", "ae"))
 	if _, why := usableRoot(filepath.Join(home, "projects", "ae")); why != "" {
 		t.Errorf("a project root was refused: %q", why)
+	}
+}
+
+// The login check reads only a top-level, non-empty oauthAccount object, from
+// a regular file the current user owns, wherever the key sits in a large file.
+func TestHasOAuthAccount(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		writeAt(t, p, body)
+		return p
+	}
+	big := `{"projects":{"a":"` + strings.Repeat("x", 3<<20) + `"},"oauthAccount":{"accountUuid":"u"}}`
+	for name, tc := range map[string]struct {
+		body string
+		want bool
+	}{
+		"logged-in":       {`{"oauthAccount":{"accountUuid":"u"}}`, true},
+		"key after 3 MiB": {big, true},
+		"unauthenticated": {`{"firstStartTime":"x","machineID":"m","userID":"u"}`, false},
+		"empty object":    {`{"oauthAccount":{}}`, false},
+		"not an object":   {`{"oauthAccount":"yes"}`, false},
+		"nested only":     {`{"projects":{"oauthAccount":{"x":1}}}`, false},
+		"not json":        {`oauthAccount`, false},
+		"top-level array": {`[{"oauthAccount":{"x":1}}]`, false},
+	} {
+		if got := hasOAuthAccount(write(strings.ReplaceAll(name, " ", "-")+".json", tc.body)); got != tc.want {
+			t.Errorf("%s: hasOAuthAccount = %v, want %v", name, got, tc.want)
+		}
+	}
+	target := write("real.json", `{"oauthAccount":{"accountUuid":"u"}}`)
+	link := filepath.Join(dir, "link.json")
+	symlink(t, target, link)
+	if hasOAuthAccount(link) {
+		t.Error("a symlinked .claude.json counted as a login")
+	}
+	if hasOAuthAccount(filepath.Join(dir, "missing.json")) {
+		t.Error("a missing file counted as a login")
+	}
+}
+
+// Round 2 P3: `root/link/../sibling` is physically beside the link's target,
+// not at root/sibling where a lexical Clean would put it.
+func TestPhysicalDotDotAfterLinkIsNotAdmitted(t *testing.T) {
+	home := fakeHome(t)
+	root := filepath.Join(home, "projects", "ae")
+	outside := filepath.Join(home, "outside")
+	mkdirs(t, outside, filepath.Join(home, "sibling"))
+	declare(t, root, map[string]any{"estate": "ae"})
+	seedStores(t, map[string]string{"ae": "AE_ONE=1\n"})
+	anchorStore(t, "ae", root)
+	symlink(t, outside, filepath.Join(root, "out"))
+
+	p := root + string(filepath.Separator) + "out" + string(filepath.Separator) + ".." + string(filepath.Separator) + "sibling"
+	r := Resolve(p)
+	if r.Estate != "ae" {
+		t.Fatalf("precondition: the lexical ladder reaches the estate root: %+v", r)
+	}
+	if r.EstateAdmitted {
+		t.Fatal("a path physically at ~/sibling was admitted through `link/..`")
+	}
+	if n := namesWithPrefix(SpawnEnvResolved(nil, r), "AE_"); n != 0 {
+		t.Fatalf("composed %d names", n)
 	}
 }

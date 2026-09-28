@@ -186,9 +186,13 @@ func TestAttachBoundReplacesInheritedConfigDir(t *testing.T) {
 func TestAttachBoundCarriesTheAccountSecretStore(t *testing.T) {
 	unsetConfigDir(t)
 	dir := systemHome(t)
-	// A rootless store is released through the account route only for a real
-	// account on this machine (a config dir with projects/).
+	// A rootless store is released from a binding only for a logged-in account
+	// on this machine (a config dir with projects/ and a login in .claude.json).
 	if err := os.MkdirAll(filepath.Join(filepath.Dir(dir), ".claude-nabu-org", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(dir), ".claude-nabu-org", ".claude.json"),
+		[]byte(`{"oauthAccount":{"accountUuid":"test"}}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := claudeacct.SetBinding(dir, "nabu-org"); err != nil {

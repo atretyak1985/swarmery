@@ -40,6 +40,14 @@ func fakeHome(t *testing.T, accounts ...string) string {
 		if err := os.MkdirAll(filepath.Join(home, dir, "projects"), 0o700); err != nil {
 			t.Fatalf("seed account %q: %v", key, err)
 		}
+		// A real account has logged in: its .claude.json carries oauthAccount.
+		// (A rootless store is released from a binding only for such an account.)
+		if key != "default" {
+			if err := os.WriteFile(filepath.Join(home, dir, ".claude.json"),
+				[]byte(`{"oauthAccount":{"accountUuid":"test"}}`+"\n"), 0o600); err != nil {
+				t.Fatalf("seed login for %q: %v", key, err)
+			}
+		}
 	}
 	return home
 }

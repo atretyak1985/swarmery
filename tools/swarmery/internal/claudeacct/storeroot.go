@@ -36,7 +36,9 @@ package claudeacct
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,17 +179,20 @@ func (s storeRoots) admits(rung string) string {
 // yet (the ladder lets a not-yet-created project inherit its ancestors): such a
 // path is physically wherever its nearest EXISTING ancestor resolves, so that
 // ancestor is what is tested.
+//
+// p is taken as given, never lexically cleaned: `root/link/../x` is physically
+// wherever link's target's parent holds x, and only the kernel's walk (Lstat,
+// EvalSymlinks) knows that; filepath.Clean would put it at root/x.
 func (s storeRoots) admitsPhysical(p string) string {
-	p = cleanAbs(p)
 	for {
 		if _, err := os.Lstat(p); err == nil {
 			return admits(p, s.roots)
 		}
-		parent := filepath.Dir(p)
-		if parent == p {
+		i := strings.LastIndexByte(strings.TrimRight(p, string(filepath.Separator)), filepath.Separator)
+		if i <= 0 {
 			return ""
 		}
-		p = parent
+		p = p[:i]
 	}
 }
 
@@ -198,7 +203,13 @@ func admits(rung string, roots []string) string {
 	if strings.TrimSpace(rung) == "" || len(roots) == 0 {
 		return ""
 	}
-	rr, err := filepath.EvalSymlinks(cleanAbs(rung))
+	// Absolute paths go to EvalSymlinks as given: it resolves each link before
+	// applying a following "..", which a lexical Clean would not.
+	p := rung
+	if !filepath.IsAbs(p) {
+		p = cleanAbs(p)
+	}
+	rr, err := filepath.EvalSymlinks(p)
 	if err != nil {
 		return ""
 	}
@@ -279,10 +290,15 @@ type admission struct {
 //   - A rooted store must admit the rung AND the resolved path the walk ran
 //     from: the ladder climbs logical ancestors, so `<root>/link -> ~/outside`
 //     would otherwise put a physically foreign directory under the root.
-//   - A rootless store is released through the ACCOUNT route only for a key
-//     that is a real account on this machine (Discover): the store namespace is
-//     shared, and a binding naming an estate key as its "account" must not pull
-//     an unanchored estate store out that way.
+//   - A rootless store is released through the ACCOUNT route from a RUNG only
+//     for a key whose account has completed a login on this machine
+//     (accountLoggedIn): the store namespace is shared, and a binding naming an
+//     estate key as its "account" must not pull an unanchored estate store out
+//     that way. A config dir merely existing is not enough — R13 lets such a
+//     binding pick the payer, and one unauthenticated `claude` run under it
+//     creates <dir>/projects. The key-only route (the dashboard's account
+//     terminal, where the operator picked a discovered account) is not a rung
+//     and keeps today's behaviour.
 func admit(r Resolution) admission {
 	var a admission
 	if key := strings.TrimSpace(r.Account); key != "" && key != ingest.DefaultAccount {
@@ -307,8 +323,8 @@ func admit(r Resolution) admission {
 		case forcedMismatch:
 			a.accountNote = fmt.Sprintf("%s not released: the account is forced, and this directory resolves %s",
 				key+".env", orDefault(r.cwdAccount))
-		case !sr.rooted && !accountInstalled(key):
-			a.accountNote = fmt.Sprintf("%s.env rootless, and %s is no account on this machine — not released", key, key)
+		case !sr.rooted && rung != "" && !accountLoggedIn(key):
+			a.accountNote = fmt.Sprintf("%s.env rootless, and %s is no logged-in account on this machine — not released", key, key)
 		case !sr.rooted:
 			a.accountReleased = true
 			a.accountNote = rootlessLine(key)
@@ -345,13 +361,56 @@ func admit(r Resolution) admission {
 	return a
 }
 
-// accountInstalled reports whether key is an account with a config dir on this
-// machine (Discover).
-func accountInstalled(key string) bool {
+// accountLoggedIn reports whether key is an account on this machine that has
+// completed a login: Discover finds its config dir, and that dir's
+// .claude.json — a regular file owned by the current user — carries a
+// non-empty top-level `oauthAccount` object, which the CLI writes at login and
+// an unauthenticated run does not. The file can be large, so it is scanned
+// token by token, never read whole; any doubt answers false.
+func accountLoggedIn(key string) bool {
 	for _, a := range Discover() {
-		if a.Key == key {
-			return true
+		if a.Key == key && !a.IsDefault {
+			return hasOAuthAccount(filepath.Join(a.ConfigDir, ".claude.json"))
 		}
+	}
+	return false
+}
+
+// maxProfileBytes bounds how much of a .claude.json the login check reads.
+const maxProfileBytes = 64 << 20
+
+func hasOAuthAccount(path string) bool {
+	f, err := openNoFollow(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	if uid, ok := fileOwner(fi); !ok || uid != currentUID() {
+		return false
+	}
+	dec := json.NewDecoder(io.LimitReader(f, maxProfileBytes))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return false
+	}
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		name, _ := t.(string)
+		if name != "oauthAccount" {
+			var skip json.RawMessage
+			if dec.Decode(&skip) != nil {
+				return false
+			}
+			continue
+		}
+		var v map[string]any
+		return dec.Decode(&v) == nil && len(v) > 0
 	}
 	return false
 }

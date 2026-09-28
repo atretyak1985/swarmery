@@ -260,7 +260,13 @@ func accountWhich(args []string, out io.Writer) error {
 	if r.Estate != "" {
 		fmt.Fprintf(out, "estate:     %s (root %s)\n", r.Estate, r.EstateRoot)
 	}
-	fmt.Fprintf(out, "config dir: %s\n", orDash(configDir))
+	if inherited := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); r.Account == "" && inherited != "" {
+		// Nothing binds this path, so a spawn here keeps whatever config dir it
+		// inherits — say so rather than print the default's.
+		fmt.Fprintf(out, "config dir: %s (inherited from this environment — no binding decides it)\n", inherited)
+	} else {
+		fmt.Fprintf(out, "config dir: %s\n", orDash(configDir))
+	}
 	// Every rung whose binding the provenance gate ignored (D5 Lock 1): whatever
 	// it declares is NOT in effect above. Said by path and reason, never contents.
 	ownBinding := filepath.Join(dir, filepath.FromSlash(claudeacct.BindingFile))

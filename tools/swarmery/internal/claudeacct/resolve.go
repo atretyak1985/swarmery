@@ -232,6 +232,11 @@ func Resolve(projectPath string) Resolution {
 	// paths, as it always was).
 	if r.AccountRoot != "" || r.Estate != "" {
 		r.physical = walkFrom
+		if walkFrom == path {
+			// The caller's own spelling, made absolute but NOT cleaned: a `..`
+			// after a symlink is resolved physically by admission, not lexically.
+			r.physical = rawAbs(projectPath)
+		}
 	}
 	r.setAccountDerived()
 	r.applyAdmission()
@@ -534,6 +539,17 @@ func validField(ns map[string]any, field string) string {
 		return ""
 	}
 	return v
+}
+
+// rawAbs makes p absolute without cleaning it (filepath.Abs cleans).
+func rawAbs(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	if wd, err := os.Getwd(); err == nil {
+		return wd + string(filepath.Separator) + p
+	}
+	return cleanAbs(p)
 }
 
 // cleanAbs is filepath.Abs with the error folded into a Clean: resolution never
