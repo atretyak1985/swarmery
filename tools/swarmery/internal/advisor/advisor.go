@@ -336,8 +336,11 @@ func upsert(db *sql.DB, f finding, now time.Time, stats *Stats) error {
 		}
 		stats.Proposed++
 		return nil
-	case "verified":
-		// Closed permanently → fresh row with the next numeric suffix.
+	case "verified", "resolved":
+		// Closed → fresh row with the next numeric suffix. For `resolved` this is
+		// the promise resolveVanished makes ("if the condition returns the rule
+		// re-proposes it"); re-opening the resolved row in place instead would
+		// erase the one signal that state exists for — that it did go away once.
 		var n int64
 		if err := db.QueryRow(`SELECT COUNT(*) FROM recommendations WHERE rule = ? AND target = ?`,
 			f.rule, f.target).Scan(&n); err != nil {

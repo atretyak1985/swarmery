@@ -30,8 +30,10 @@
 //
 // # Veto order is load-bearing
 //
-// Main checkout, then live process/session, then a fresh index.lock, then the
-// idle floor — each is checked before anything about the CONTENT is considered.
+// Main checkout, then a `git worktree lock`, then live process/session, then a
+// fresh index.lock, then the idle floor — each is checked before anything about
+// the CONTENT is considered. A locked worktree, like the main checkout, is not
+// even observed.
 // A worktree someone paused in five minutes ago must not be removed just
 // because its files happen to be committed elsewhere, and a live one must not
 // even be inspected. Reordering these is a safety regression, not a style

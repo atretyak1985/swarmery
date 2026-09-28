@@ -12,11 +12,12 @@ import "time"
 // drift apart and start disagreeing about what exists.
 
 // Entry is one parsed `git worktree list --porcelain` record. It carries the
-// two fields git actually emits per record and the parser actually keeps: the
-// checkout path, and the short branch name ("" for a detached HEAD).
+// fields the parser keeps: the checkout path, the short branch name ("" for a
+// detached HEAD), and whether `git worktree lock` holds the checkout.
 type Entry struct {
 	Path   string
 	Branch string
+	Locked bool
 }
 
 // ParseWorktreeList parses `git worktree list --porcelain` output through this
@@ -27,7 +28,7 @@ func ParseWorktreeList(out string) []Entry {
 	parsed := parseWorktreeList(out)
 	entries := make([]Entry, 0, len(parsed))
 	for _, e := range parsed {
-		entries = append(entries, Entry{Path: e.path, Branch: e.branch})
+		entries = append(entries, Entry{Path: e.path, Branch: e.branch, Locked: e.locked})
 	}
 	return entries
 }

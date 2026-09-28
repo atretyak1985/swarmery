@@ -49,6 +49,21 @@ func TestClassify_MainCheckoutIsNeverTouched(t *testing.T) {
 	}
 }
 
+// An operator's `git worktree lock` is a veto of its own: the lock says "keep
+// this", so the sweep must not get as far as a removal git would refuse.
+func TestClassify_LockedWorktreeIsSkipped(t *testing.T) {
+	now := time.Now()
+	wt := removable(now)
+	wt.Locked = true
+	got, err := Classify("/repo", wt, &stubGit{}, now, minIdle)
+	if err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if got.Verdict != VerdictSkip || !strings.Contains(got.Reason, "locked") {
+		t.Errorf("decision = %+v, want a skip naming the lock", got)
+	}
+}
+
 func TestClassify_LiveWorktreeIsSkipped(t *testing.T) {
 	now := time.Now()
 	wt := removable(now)

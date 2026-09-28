@@ -409,6 +409,26 @@ func TestMoveReportResumeNote(t *testing.T) {
 	}
 }
 
+// A --cwd (or recorded cwd) that is not an existing directory is said to be
+// one: the live case printed only "… resolves to account default — bind it
+// first", which sends the operator to bind a path that does not exist.
+func TestMoveReportResumeNoteMissingCwd(t *testing.T) {
+	home, _ := fakeHome(t)
+	file := filepath.Join(home, "a-file")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, cwd := range []string{filepath.Join(home, "does", "not", "exist"), file} {
+		note := MoveReport{UUID: uuid1, To: "insart", Cwd: cwd}.ResumeAccountNote()
+		if !strings.Contains(note, "is not an existing directory") || !strings.Contains(note, "--cwd") {
+			t.Errorf("cwd %s: note = %q, want it to say the path is not an existing directory and name --cwd", cwd, note)
+		}
+		if strings.Contains(note, "swarmery account use") {
+			t.Errorf("cwd %s: note = %q, must not tell the operator to bind a path that does not exist", cwd, note)
+		}
+	}
+}
+
 // Symlinks are never recreated: one inside <uuid>/ or memory/ is refused and
 // listed, a symlinked memory/ is skipped whole and listed, the rest copies.
 func TestMoveSessionRefusesSymlinks(t *testing.T) {

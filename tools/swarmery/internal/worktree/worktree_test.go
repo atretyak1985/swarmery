@@ -1271,6 +1271,26 @@ func TestParseWorktreeList(t *testing.T) {
 	}
 }
 
+// `git worktree lock` shows up as a bare "locked" line, or "locked <reason>";
+// the exported Entry carries it so the janitor can honour the lock instead of
+// finding out from a refused `worktree remove`.
+func TestParseWorktreeListLocked(t *testing.T) {
+	out := "worktree /a\nHEAD 1111\nbranch refs/heads/main\n\n" +
+		"worktree /b\nHEAD 2222\nbranch refs/heads/feature\nlocked\n\n" +
+		"worktree /c\nHEAD 3333\ndetached\nlocked PR in progress\n\n" +
+		"worktree /d\nHEAD 4444\nbranch refs/heads/other\nprunable gitdir file points to non-existent location\n"
+	got := ParseWorktreeList(out)
+	want := map[string]bool{"/a": false, "/b": true, "/c": true, "/d": false}
+	if len(got) != len(want) {
+		t.Fatalf("entries = %+v, want %d", got, len(want))
+	}
+	for _, e := range got {
+		if e.Locked != want[e.Path] {
+			t.Errorf("%s: Locked = %v, want %v", e.Path, e.Locked, want[e.Path])
+		}
+	}
+}
+
 // ---- non-repo -------------------------------------------------------------
 
 func TestAcquireNonRepo(t *testing.T) {

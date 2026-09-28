@@ -1,6 +1,7 @@
 package wtjanitor
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,5 +38,26 @@ func TestSweep_InformativeSkipsAreJournalled(t *testing.T) {
 	rows := journalRows(t, db)
 	if len(rows) != 1 || rows[0]["verdict"] != string(VerdictSkip) {
 		t.Errorf("journal = %+v, want one skip row for a live worktree", rows)
+	}
+}
+
+// A locked worktree used to reach the Remover and come back as a "redundant"
+// row carrying git's refusal, every tick. Now it is a plain skip naming the lock,
+// and the Remover never sees it.
+func TestSweep_LockedWorktreeIsSkippedNotRemoved(t *testing.T) {
+	db := testDB(t)
+	wt := sweepable()
+	wt.Locked = true
+	rem := &recordingRemover{}
+	s := svc(t, db, &stubInspector{wts: []Worktree{wt}}, rem, idleLive{})
+	if _, err := s.Sweep(false); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if len(rem.removed) != 0 {
+		t.Errorf("Remover got %v, want nothing for a locked worktree", rem.removed)
+	}
+	rows := journalRows(t, db)
+	if len(rows) != 1 || rows[0]["verdict"] != string(VerdictSkip) || !strings.Contains(rows[0]["reason"].(string), "locked") || rows[0]["error"] != "" {
+		t.Errorf("journal = %+v, want one error-free skip row naming the lock", rows)
 	}
 }

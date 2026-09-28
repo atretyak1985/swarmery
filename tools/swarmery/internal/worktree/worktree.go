@@ -753,6 +753,7 @@ func dirExists(p string) bool {
 type worktreeEntry struct {
 	path   string
 	branch string // short branch name ("swarm/T-x"), empty if detached
+	locked bool   // `git worktree lock` — a bare "locked" or "locked <reason>" line
 }
 
 type worktreeEntries []worktreeEntry
@@ -775,6 +776,10 @@ func parseWorktreeList(out string) worktreeEntries {
 			if cur != nil {
 				ref := strings.TrimPrefix(line, "branch ")
 				cur.branch = strings.TrimPrefix(ref, "refs/heads/")
+			}
+		case line == "locked" || strings.HasPrefix(line, "locked "):
+			if cur != nil {
+				cur.locked = true
 			}
 		case line == "":
 			if cur != nil {

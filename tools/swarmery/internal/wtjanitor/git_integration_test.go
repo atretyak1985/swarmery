@@ -282,6 +282,34 @@ func TestInspect_OwnershipFilterSkipsForeignWorktrees(t *testing.T) {
 	}
 }
 
+// A worktree held by `git worktree lock` is listed Locked and, like the main
+// checkout, not observed: no `git status` (and so no index.lock) inside it.
+func TestInspect_LockedWorktreeIsListedNotObserved(t *testing.T) {
+	repo, run := testRepo(t)
+	agent := filepath.Join(repo, ".claude", "worktrees", "agent-cd34")
+	run("worktree", "add", "-q", "-b", "worktree-agent-cd34", agent)
+	run("worktree", "lock", "--reason", "kept on purpose", agent)
+	write(t, filepath.Join(agent, "scratch.txt"), "work\n")
+
+	owned := func(p string) bool { return agentOwned(repo, "", p) }
+	got, err := RepoGit{}.Inspect(repo, noLive{}, owned)
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	var wt *Worktree
+	for i := range got {
+		if got[i].Branch == "worktree-agent-cd34" {
+			wt = &got[i]
+		}
+	}
+	if wt == nil {
+		t.Fatalf("Inspect = %+v, want the locked agent worktree listed", got)
+	}
+	if !wt.Locked || wt.Dirty != nil || !wt.NewestMTime.IsZero() {
+		t.Errorf("locked worktree = %+v, want Locked with nothing observed", *wt)
+	}
+}
+
 /* ---------- lockFresh / newestMTime ---------- */
 
 func TestLockFresh(t *testing.T) {
