@@ -27,7 +27,7 @@ const DefaultMarketplaceRepo = "atretyak1985/swarmery"
 
 // KnownPacks is the allow-list of opt-in domain packs a project may enable
 // (core is always on). Mirrors the case guard in scripts/init.sh.
-var KnownPacks = []string{"uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack"}
+var KnownPacks = []string{"uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack", "claude-eng-pack", "graft-pack", "graphify-pack", "architecture-pack", "jira-pack", "accounts-pack", "design-pack"}
 
 // marketplaceSuffix tags every swarmery plugin key in enabledPlugins
 // (e.g. "core@swarmery") — the marketplace manifest name is "swarmery".
@@ -129,6 +129,9 @@ func Run(cfg Config) (*Result, error) {
 		return nil, err
 	}
 	if err := carveWorkspace(cfg.WorkspaceRoot, cfg.Slug, res); err != nil {
+		return nil, err
+	}
+	if err := writeCodePathOverlay(cfg.WorkspaceRoot, cfg.Slug, cfg.ProjectDir, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -279,6 +282,68 @@ func carveWorkspace(wsRoot, slug string, res *Result) error {
 		}
 	}
 	res.step(fmt.Sprintf("✓ workspace: %s/", base))
+	return nil
+}
+
+// writeCodePathOverlay pins the workspace scanner's project binding at onboard
+// time. internal/wsingest resolves a workspace slug to a projects row through,
+// in order: this overlay's codePath, then any registered project's
+// .claude/project.json whose name matches the slug, then a projects.path
+// basename match — and it caches whichever row it lands on in the workspaces
+// table, re-applying that cached id to every task on every future scan.
+//
+// Without this file, a project whose .claude/project.json is shared across
+// machines (and therefore cannot commit a literal absolute codePath — see
+// this repo's own project.json) or was never rewritten by writeProject (it
+// already existed) falls through to a path-basename match against WHATEVER
+// project row it hits first — which can be a phantom row keyed by the
+// workspace directory itself. Once that phantom binding is cached, every
+// scan re-stamps every plan back onto it, and it survives a manual DB fix
+// (project swarmery, 2026-09-24: plans kept reverting off project 27 onto a
+// phantom project 19 until this file existed).
+//
+// Idempotent: never overwrites an existing overlay, so an operator's hand
+// tuning (or a deliberate redirect to a different codePath) is never clobbered
+// by a re-run.
+//
+// This prevents new poisoning; it does not repair an already-poisoned
+// workspace whose cached workspaces.project_id points at a phantom row that
+// no registered project's path matches — that needs a one-time manual fix on
+// top of this file (see the swarmery incident above: healing it worked only
+// because project 27 already existed with the right path).
+func writeCodePathOverlay(wsRoot, slug, projectDir string, res *Result) error {
+	cleanRoot := filepath.Clean(wsRoot)
+	dir := filepath.Join(cleanRoot, slug, "overlay")
+	// Same re-fencing carveWorkspace documents as a per-sink invariant: a
+	// malformed slug must never MkdirAll outside the workspace root.
+	if dir != cleanRoot && !strings.HasPrefix(dir, cleanRoot+string(filepath.Separator)) {
+		return fmt.Errorf("refusing to write overlay outside %s: %s", cleanRoot, dir)
+	}
+	path := filepath.Join(dir, "project.json")
+	if existing, err := os.ReadFile(path); err == nil {
+		var parsed struct {
+			CodePath string `json:"codePath"`
+		}
+		if json.Unmarshal(existing, &parsed) == nil && parsed.CodePath != "" && parsed.CodePath != projectDir {
+			res.step(fmt.Sprintf("! overlay/project.json pins codePath=%s, not %s — left untouched", parsed.CodePath, projectDir))
+			return nil
+		}
+		res.step("• overlay/project.json exists — not touching it")
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	overlay := map[string]string{
+		"name":     slug,
+		"codePath": projectDir,
+	}
+	if err := writeJSON(path, overlay); err != nil {
+		return err
+	}
+	res.step(fmt.Sprintf("✓ overlay/project.json (codePath → %s)", projectDir))
 	return nil
 }
 

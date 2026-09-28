@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "probe": {
+      "command": "/bin/echo",
+      "args": [
+        "parent=${SWARMERY_PROBE_PARENT}",
+        "settingsenv=${SWARMERY_PROBE_SETTINGS_ENV}",
+        "userconfig=${user_config.probe_marker}"
+      ]
+    }
+  }
+}

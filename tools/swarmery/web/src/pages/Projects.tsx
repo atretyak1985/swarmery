@@ -14,6 +14,7 @@ import { fetchProjects, fetchProjectsHealth, patchProject } from '../api';
 import { fmtAgo, fmtCost, fmtTokens } from '../lib/format';
 import { displaySlug } from '../lib/projectSlug';
 import { usePageSearch } from '../lib/pageSearch';
+import { isOnboarded, loadOnboardedOnly, saveOnboardedOnly } from '../lib/onboardedFilter';
 import { ProjectName } from '../components/ProjectName';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
 import { PageSearchInput } from '../components/PageSearchInput';
@@ -291,6 +292,7 @@ export function Projects(): JSX.Element {
   const [health, setHealth] = useState<ProjectHealth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [onboardedOnly, setOnboardedOnly] = useState(loadOnboardedOnly);
   const [tag, setTag] = useState<string | null>(null);
   const query = usePageSearch();
 
@@ -312,22 +314,34 @@ export function Projects(): JSX.Element {
     load();
   }, [load]);
 
-  const managed = (projects ?? []).filter((p) => p.plugin?.managed).length;
+  const onboardedIds = new Set((projects ?? []).filter((p) => isOnboarded(p)).map((p) => p.id));
+  const onboardedCount = onboardedIds.size;
   const allTags = [...new Set((projects ?? []).flatMap((p) => p.tags))].sort();
   // Server order is pinned-first already; the tag filter + header name search
   // narrow client-side.
   const matchesName = (name: string | null, slug: string): boolean =>
     query === '' || name?.toLowerCase().includes(query) === true || slug.toLowerCase().includes(query);
-  const visible = (projects ?? []).filter(
-    (p) => (tag === null || p.tags.includes(tag)) && matchesName(p.name, p.slug),
-  );
+  const matchesTagAndName = (p: { tags: string[]; name: string | null; slug: string }): boolean =>
+    (tag === null || p.tags.includes(tag)) && matchesName(p.name, p.slug);
+  // The onboarded-only filter never applies to the System project: it is
+  // never onboarded by definition, and it already has its own demoted section.
+  const passesOnboarded = (p: { id: number; isSystem: boolean }): boolean =>
+    !onboardedOnly || p.isSystem || onboardedIds.has(p.id);
+  const visible = (projects ?? []).filter((p) => passesOnboarded(p) && matchesTagAndName(p));
   // The System project (daemon telemetry runs, ~/.swarmery) is demoted out of
   // the main list into a collapsed section below it; same split in health.
   const regular = visible.filter((p) => !p.isSystem);
   const system = visible.filter((p) => p.isSystem);
-  const visibleHealth = (health ?? []).filter(
-    (h) => !h.isSystem && (tag === null || h.tags.includes(tag)) && matchesName(h.name, h.slug),
-  );
+  // Rows the onboarded-only filter alone is hiding — named in the empty state
+  // so "nothing onboarded yet" never reads as "no projects at all".
+  const hiddenByOnboarded = onboardedOnly
+    ? (projects ?? []).filter((p) => !p.isSystem && !onboardedIds.has(p.id) && matchesTagAndName(p)).length
+    : 0;
+  const toggleOnboardedOnly = (value: boolean): void => {
+    setOnboardedOnly(value);
+    saveOnboardedOnly(value);
+  };
+  const visibleHealth = (health ?? []).filter((h) => !h.isSystem && passesOnboarded(h) && matchesTagAndName(h));
 
   return (
     <div className="px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px] desk:pb-28">
@@ -335,19 +349,30 @@ export function Projects(): JSX.Element {
         <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
           Projects
         </h1>
-        <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="accent-brand"
-          />
-          show archived
-        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
+            <input
+              type="checkbox"
+              checked={onboardedOnly}
+              onChange={(e) => toggleOnboardedOnly(e.target.checked)}
+              className="accent-brand"
+            />
+            onboarded only
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="accent-brand"
+            />
+            show archived
+          </label>
+        </div>
       </div>
       <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
         {projects !== null
-          ? `${String(regular.length)} project${regular.length === 1 ? '' : 's'} · ${String(managed)} managed`
+          ? `${String(regular.length)} project${regular.length === 1 ? '' : 's'} · ${String(onboardedCount)} onboarded`
           : ' '}
       </div>
 
@@ -360,7 +385,20 @@ export function Projects(): JSX.Element {
       {projects === null && error === null && <Loading label="projects…" />}
       {projects !== null && regular.length === 0 && (
         <Empty>
-          {query !== '' ? (
+          {hiddenByOnboarded > 0 ? (
+            <>
+              {String(hiddenByOnboarded)} project{hiddenByOnboarded === 1 ? '' : 's'} hidden as not
+              onboarded —{' '}
+              <button
+                type="button"
+                onClick={() => toggleOnboardedOnly(false)}
+                className="font-mono text-ink underline underline-offset-2 hover:text-brand"
+              >
+                untick onboarded only
+              </button>{' '}
+              to see them
+            </>
+          ) : query !== '' ? (
             <>no projects match the current filter — try a different search or clear it</>
           ) : tag !== null ? (
             <>

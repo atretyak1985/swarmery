@@ -91,6 +91,18 @@ func TestRunCreatesSettingsProjectAndWorkspace(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(cfg.WorkspaceRoot, cfg.Slug, "workspace", "plans")); !os.IsNotExist(err) {
 		t.Error("workspace/plans must not be scaffolded (frozen tree, issue #188)")
 	}
+
+	// overlay/project.json pins the workspace scanner's project binding to the
+	// real project directory, so wsingest never falls through to a phantom
+	// project row keyed by the workspace path itself (project swarmery,
+	// 2026-09-24).
+	overlay := readJSON(t, filepath.Join(cfg.WorkspaceRoot, cfg.Slug, "overlay", "project.json"))
+	if overlay["codePath"] != cfg.ProjectDir {
+		t.Errorf("overlay codePath = %v, want %v", overlay["codePath"], cfg.ProjectDir)
+	}
+	if overlay["name"] != cfg.Slug {
+		t.Errorf("overlay name = %v, want %v", overlay["name"], cfg.Slug)
+	}
 }
 
 func TestRunIsIdempotentAndNeverOverwrites(t *testing.T) {
@@ -106,6 +118,17 @@ func TestRunIsIdempotentAndNeverOverwrites(t *testing.T) {
 		t.Fatalf("write sentinel: %v", err)
 	}
 
+	// Same for a hand-tuned overlay/project.json — a re-run must not clobber an
+	// operator's deliberate codePath redirect either. A realistic redirect (a
+	// different codePath, not just unparseable JSON) is what exercises the
+	// actual claim: the redirect survives, not just "the bytes are unrelated".
+	overlayPath := filepath.Join(cfg.WorkspaceRoot, cfg.Slug, "overlay", "project.json")
+	redirectedPath := filepath.Join(t.TempDir(), "elsewhere")
+	overlaySentinel := []byte(`{"name":"acme-app","codePath":"` + redirectedPath + `"}`)
+	if err := os.WriteFile(overlayPath, overlaySentinel, 0o644); err != nil {
+		t.Fatalf("write overlay sentinel: %v", err)
+	}
+
 	res, err := Run(cfg)
 	if err != nil {
 		t.Fatalf("second Run: %v", err)
@@ -113,6 +136,21 @@ func TestRunIsIdempotentAndNeverOverwrites(t *testing.T) {
 	got, _ := os.ReadFile(settingsPath)
 	if string(got) != string(sentinel) {
 		t.Errorf("second Run overwrote existing settings.json: %s", got)
+	}
+	gotOverlay, _ := os.ReadFile(overlayPath)
+	if string(gotOverlay) != string(overlaySentinel) {
+		t.Errorf("second Run overwrote existing overlay/project.json: %s", gotOverlay)
+	}
+	// A stale pin must be flagged, not silently kept — an operator watching the
+	// step log needs to know the workspace is still bound to a dead path.
+	var flaggedStale bool
+	for _, s := range res.Steps {
+		if contains(s, "pins codePath="+redirectedPath) {
+			flaggedStale = true
+		}
+	}
+	if !flaggedStale {
+		t.Errorf("expected a stale-pin warning step, got %v", res.Steps)
 	}
 	// The step log should acknowledge the skip.
 	var skipped bool
@@ -197,6 +235,37 @@ func TestCarveWorkspaceRefusesSlugEscape(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(wsRoot), "evil")); err == nil {
 		t.Fatal("traversal slug carved a directory outside the workspace root")
+	}
+}
+
+// writeCodePathOverlay carries the same per-sink fence carveWorkspace
+// documents — a malformed slug must never place a write outside the
+// workspace root.
+func TestWriteCodePathOverlayRefusesSlugEscape(t *testing.T) {
+	wsRoot := t.TempDir()
+	if err := writeCodePathOverlay(wsRoot, "../evil", "/some/project", &Result{}); err == nil {
+		t.Fatal("expected writeCodePathOverlay to refuse a traversal slug")
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(wsRoot), "evil")); err == nil {
+		t.Fatal("traversal slug wrote outside the workspace root")
+	}
+}
+
+// The overlay dir can already exist (carveWorkspace's sibling namespace, or a
+// prior partial run) without project.json in it — that must still be treated
+// as "write it", not "skip: exists".
+func TestWriteCodePathOverlayFillsMissingFileInExistingDir(t *testing.T) {
+	wsRoot := t.TempDir()
+	overlayDir := filepath.Join(wsRoot, "acme-app", "overlay")
+	if err := os.MkdirAll(overlayDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := writeCodePathOverlay(wsRoot, "acme-app", "/real/project", &Result{}); err != nil {
+		t.Fatalf("writeCodePathOverlay: %v", err)
+	}
+	overlay := readJSON(t, filepath.Join(overlayDir, "project.json"))
+	if overlay["codePath"] != "/real/project" {
+		t.Errorf("codePath = %v, want /real/project", overlay["codePath"])
 	}
 }
 

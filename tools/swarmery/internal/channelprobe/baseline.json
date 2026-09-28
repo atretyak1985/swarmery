@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "cliVersion": "2.1.280",
+  "cliVersionRaw": "2.1.280 (Claude Code)",
+  "measuredAt": "2026-09-23T08:40:00Z",
+  "method": "claude mcp list detail line (token-free)",
+  "facts": {
+    "G1": {
+      "verdict": "pass",
+      "observed": {
+        "user": true,
+        "project": false,
+        "local": false,
+        "flag": true,
+        "user_under_project_local": false,
+        "project_under_project_local": false,
+        "local_under_project_local": false,
+        "flag_under_project_local": true
+      },
+      "note": "pluginConfigs is read from userSettings and --settings only; project and local copies are ignored; policySettings not measured"
+    },
+    "G2": {
+      "verdict": "pass",
+      "observed": {
+        "literal_survives": true,
+        "warn_missing_env": true,
+        "diag_mcp_config_invalid": true,
+        "parent_expands": true,
+        "parent_expands_under_project_local": true
+      },
+      "note": "an unset ${VAR} survives literally, with a WARN line and an mcp-config-invalid diagnostic in the debug log; a parent env var expands on every source set"
+    },
+    "G3": {
+      "verdict": "pass",
+      "observed": {
+        "user": true,
+        "project": false,
+        "local": false,
+        "flag": true,
+        "user_under_project_local": false,
+        "project_under_project_local": false,
+        "local_under_project_local": false,
+        "flag_under_project_local": true
+      },
+      "note": "of the three setting sources only user expands an env block; a --settings file's env block also expands, on every source set"
+    }
+  }
+}

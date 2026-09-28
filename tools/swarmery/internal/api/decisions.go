@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
@@ -86,6 +87,16 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusBadRequest, "body must be {\"value\": \"<what actually happened>\"}")
 		return
 	}
+	// Ground truth must be one of the question's own options: a free-text value
+	// could never equal an answer, and would count as a disagreement for ever.
+	switch err := decide.ValidateTruth(h.DB, id, body.Value); {
+	case errors.Is(err, sql.ErrNoRows):
+		writeClientErr(w, http.StatusNotFound, "no such decision")
+		return
+	case err != nil:
+		writeClientErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	switch err := decide.RecordGroundTruth(h.DB, id, body.Value, time.Now()); {
 	case errors.Is(err, sql.ErrNoRows):
 		writeClientErr(w, http.StatusNotFound, "no such decision")
@@ -94,6 +105,14 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// GET /api/decisions/queue?limit=&since= — answered decisions awaiting the
+// operator's ground truth, newest first (the Decisions page's labelling queue).
+func (h *Handler) decisionsQueue(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := decide.LabelQueue(h.DB, limit, strings.TrimSpace(r.URL.Query().Get("since")))
+	writeJSON(w, map[string]any{"items": items}, err)
 }
 
 func (h *Handler) sessionDecisionLabels(w http.ResponseWriter, r *http.Request) {

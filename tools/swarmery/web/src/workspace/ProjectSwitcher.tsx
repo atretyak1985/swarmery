@@ -11,6 +11,7 @@ import type { Project } from '../api/types';
 import { projectLabel } from '../lib/format';
 import { displaySlug, findProject } from '../lib/projectSlug';
 import { useProjectColor } from '../lib/projectColors';
+import { isOnboarded, loadOnboardedOnly, saveOnboardedOnly } from '../lib/onboardedFilter';
 
 export function ProjectSwitcher({
   projects,
@@ -26,6 +27,7 @@ export function ProjectSwitcher({
   const colorFor = useProjectColor();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [onboardedOnly, setOnboardedOnly] = useState(loadOnboardedOnly);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,13 +38,21 @@ export function ProjectSwitcher({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // The current project always stays in the list even when the onboarded-
+    // only filter would otherwise drop it — this is a NAVIGATION control, and
+    // hiding the project the operator is standing in from its own switcher
+    // (e.g. a sub-repo the daemon demoted under its umbrella) would
+    // strand them with no way back short of "All projects →".
+    const base = onboardedOnly
+      ? projects.filter((p) => p.id === current?.id || isOnboarded(p))
+      : projects;
     const rows = q === ''
-      ? projects
-      : projects.filter((p) =>
+      ? base
+      : base.filter((p) =>
           [p.name, p.slug].some((v) => v != null && v.toLowerCase().includes(q)),
         );
     return [...rows].sort((a, b) => projectLabel(a.name, a.slug).localeCompare(projectLabel(b.name, b.slug)));
-  }, [projects, query]);
+  }, [projects, query, onboardedOnly, current]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -164,6 +174,18 @@ export function ProjectSwitcher({
               ))
             )}
           </div>
+          <label className="flex w-full cursor-pointer items-center gap-1.5 border-t border-line px-3 py-1.5 font-mono text-[10px] text-ink-faint transition-colors hover:text-ink-dim">
+            <input
+              type="checkbox"
+              checked={onboardedOnly}
+              onChange={(e) => {
+                setOnboardedOnly(e.target.checked);
+                saveOnboardedOnly(e.target.checked);
+              }}
+              className="accent-brand"
+            />
+            onboarded only
+          </label>
           <button
             type="button"
             onClick={() => {

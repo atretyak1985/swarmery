@@ -134,6 +134,19 @@ agent end the card honestly:
 
 A sentinel is checked first and wins regardless of the process exit code.
 
+**Micro-plans.** Each dispatched card also gets a one-phase plan in the private
+workspace, so its progress ticks and its Completion Report show on the Plans page
+like any other plan. The plan is written into the project's **own workspace
+namespace**: the directory the project is mapped to. When the project has
+several, it is the one scanned most recently. The same rule decides which
+workspace overlay the card's repository is resolved from, so a card's repo and its
+micro-plan always come from the same workspace. A mapped directory that no longer
+exists, or that sits outside the configured workspace root, is logged and skipped
+in favour of `<workspace root>/<project slug>`. The daemon never writes outside
+its own workspace tree. An existing micro-plan is never rewritten, so a re-run or
+a verification fix card keeps the ticks already recorded.
+`SWARMERY_MICRO_PLANS=0` turns micro-plans off.
+
 ## Verification measures reality
 
 After a run, a read-only verifier judges the work and returns one of three verdicts:
@@ -187,6 +200,7 @@ one of exactly three ways:
 | `SWARMERY_INBOX_TTL` | `336h` (14 days) | Triage shelf life; `0` disables the sweeper |
 | `SWARMERY_DISPATCH_TIMEOUT_MIN` | `45` | Minutes before a run is abandoned |
 | `SWARMERY_DISPATCH_PERMISSION_MODE` | `bypassPermissions` | Permission mode for dispatched agents; a playbook may override it |
+| `SWARMERY_MICRO_PLANS` | on | Write a one-phase plan into the project's workspace for every dispatched card; `0` disables it |
 | `SWARMERY_AUTOVERIFY` | on | Automatic verification after a run; manual verify still works when off |
 | `SWARMERY_VERIFY_MAX_DIFF_FILES` | `40` | Diff-size bound above which verification returns inconclusive |
 | `SWARMERY_VERIFY_TIMEOUT_MIN` | `15` | Minutes before a verification run is abandoned |

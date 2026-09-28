@@ -312,6 +312,15 @@ func Attach(cfg AttachConfig) (*Result, error) {
 	if err := carveWorkspace(cfg.WorkspaceRoot, slug, res); err != nil {
 		return nil, err
 	}
+	// Attach is as much a "first time this project is managed" entry point as
+	// Run — a project telemetry has never seen carries no projects row yet, so
+	// without this pin the workspace scanner's fallback chain (wsingest.go
+	// resolveCodePath) can create and permanently cache a phantom project row
+	// keyed by the workspace directory itself. See writeCodePathOverlay's doc
+	// comment for the full mechanism.
+	if err := writeCodePathOverlay(cfg.WorkspaceRoot, slug, cfg.ProjectDir, res); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 

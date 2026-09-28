@@ -16,7 +16,8 @@ import type { PlanRevision, RevisionAction, RevisionConflict } from '../../api/t
 import { applyRevision, fetchRevision, rejectRevision, type RevisionApplyError } from '../../api';
 import { fmtDateTime } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
-import { ErrorBox, Loading } from '../../components/ui';
+import { ConfirmDialog, ErrorBox, Loading } from '../../components/ui';
+import { useDiscardGuard } from '../../components/useDiscardGuard';
 import { DiffBlock } from '../system/ItemDetail';
 
 const ACTION_CHIP: Record<RevisionAction, string> = {
@@ -311,6 +312,10 @@ function DecisionDialog({
   // Remember the trigger so focus returns to it on close (WCAG 2.2 §2.4.3).
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // Dirty = the note differs from the empty value it opens with.
+  const discard = useDiscardGuard(withNote && note.trim() !== '', onClose, { disabled: busy });
+  const { requestClose } = discard;
+
   useEffect(() => {
     previouslyFocused.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -326,8 +331,10 @@ function DecisionDialog({
       'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
+        // The discard confirm, when up, claims Esc in its own capture listener
+        // before this one ever sees it.
         e.preventDefault();
-        if (!busy) onClose();
+        requestClose();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -355,7 +362,7 @@ function DecisionDialog({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
+  }, [requestClose]);
 
   return (
     <div
@@ -363,7 +370,7 @@ function DecisionDialog({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={busy ? undefined : onClose}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -395,7 +402,7 @@ function DecisionDialog({
         <div className="mt-3.5 flex flex-wrap justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={busy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
@@ -412,6 +419,15 @@ function DecisionDialog({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title="Discard note?"
+        confirmLabel="discard"
+        danger
+      >
+        The note you typed will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

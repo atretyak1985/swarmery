@@ -69,6 +69,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
@@ -234,7 +235,7 @@ func usage() {
   swarmery sysscan  [--db <path>] [--claude-dir <dir>] [--overlays-dir <dir>]
                                    one-shot system-config scan (agents/skills/hooks/commands)
   swarmery install  [--port <n>] [--onboard-roots <dirs>] [--workspace-root <dir>] [--statusline-src <dir>]
-                    [--projects-roots <dirs|auto>]
+                    [--projects-roots <dirs|auto>] [--trusted-origins <origins>]
                                    auto-start (launchd on macOS, systemd --user on Linux); bakes SWARMERY_* into the service definition
                                    (--onboard-roots enables POST /api/projects/onboard + the dashboard button;
                                    --projects-roots auto makes every ~/.claude*/projects account visible)
@@ -273,8 +274,11 @@ func usage() {
                                    (never contacts the daemon)
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;
-       'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT)
+       'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;
+       unset: serve reads ~/.claude/projects only, backfill behaves as 'auto')
        SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC
+       SWARMERY_TRUSTED_ORIGINS (comma-separated extra browser origins, scheme://host[:port], that
+       pass the cross-origin fence on writes; empty = localhost/127.0.0.1/::1 only)
        SWARMERY_SETTINGS_OVERLAYS (descriptor of settings files that also apply to given project
        roots; default ~/.swarmery/overlays.json — missing = repo-only plugin detection)
        SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT
@@ -314,6 +318,22 @@ func defaultProjectsRoots() []string {
 		return []string{v}
 	}
 	return []string{defaultClaudeProjectsRoot()}
+}
+
+// cliDefaultProjectsRoots is the roots default for one-shot CLI subcommands
+// that read transcripts (backfill). With neither SWARMERY_PROJECTS_ROOTS nor
+// SWARMERY_PROJECTS_ROOT set it behaves as "auto" — a shell never carries the
+// launchd plist's SWARMERY_PROJECTS_ROOTS=auto, and a manual replay that
+// silently skipped a second account's ~/.claude-<acct>/projects is the bug
+// this exists for. Anything configured is honoured exactly as the daemon does.
+// serve keeps defaultProjectsRoots (configure nothing → ~/.claude/projects).
+func cliDefaultProjectsRoots() []string {
+	if os.Getenv("SWARMERY_PROJECTS_ROOTS") == "" && os.Getenv("SWARMERY_PROJECTS_ROOT") == "" {
+		if roots := claudeacct.ProjectsRoots(); len(roots) > 0 {
+			return roots
+		}
+	}
+	return defaultProjectsRoots()
 }
 
 // defaultClaudeProjectsRoot is the stock single root: ~/.claude/projects.
@@ -374,8 +394,15 @@ func (r *rootsFlag) Set(v string) error {
 	return nil
 }
 
+// pipelineFlags registers the ingest flags with the daemon's roots default.
 func pipelineFlags(fs *flag.FlagSet) *ingest.Config {
-	cfg := &ingest.Config{Exclude: defaultExclude(), ProjectsRoots: defaultProjectsRoots()}
+	return pipelineFlagsWithRoots(fs, defaultProjectsRoots())
+}
+
+// pipelineFlagsWithRoots registers the ingest flags with roots as the
+// --projects-root default.
+func pipelineFlagsWithRoots(fs *flag.FlagSet, roots []string) *ingest.Config {
+	cfg := &ingest.Config{Exclude: defaultExclude(), ProjectsRoots: roots}
 	fs.Var(&rootsFlag{vals: &cfg.ProjectsRoots}, "projects-root",
 		"Claude Code projects root(s) to ingest — comma-separated, repeatable "+
 			"(env: SWARMERY_PROJECTS_ROOTS, 'auto' = every ~/.claude*/projects; "+
@@ -1045,8 +1072,9 @@ func cmdBackfill(args []string) error {
 	dbPath := dbFlag(fs)
 	rebuildText := fs.Bool("rebuild-text", false,
 		"re-read all transcripts from byte 0 to fill turns.text for pre-0005 rows (idempotent; dedup absorbs the replay)")
-	cfg := pipelineFlags(fs)
+	cfg := pipelineFlagsWithRoots(fs, cliDefaultProjectsRoots())
 	fs.Parse(args)
+	fmt.Printf("backfill: roots = %s\n", strings.Join(cfg.ProjectsRoots, ", "))
 
 	db, err := store.Open(*dbPath)
 	if err != nil {
@@ -1217,6 +1245,23 @@ func onboardRoots() []string {
 	for _, p := range strings.Split(v, ",") {
 		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// trustedOrigins parses SWARMERY_TRUSTED_ORIGINS (comma-separated browser
+// origins, scheme://host[:port]) into the opt-in extra-origin allow-list for
+// the D4 CSRF fence. Empty/unset ⇒ only localhost/127.0.0.1/::1 pass.
+func trustedOrigins() []string {
+	v := os.Getenv("SWARMERY_TRUSTED_ORIGINS")
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	var out []string
+	for _, o := range strings.Split(v, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			out = append(out, o)
 		}
 	}
 	return out
@@ -1405,8 +1450,8 @@ func cmdServe(args []string) error {
 		"AskUserQuestion dashboard-answer wire form: updated-input (hook updatedInput injection, spike-verified default) or deny-message (fallback: deny carrying the answers as the message)")
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
-	notifyEvents := fs.String("notify-events", envOr("SWARMERY_NOTIFY_EVENTS", notify.EventApprovalRequested),
-		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise (env: SWARMERY_NOTIFY_EVENTS)")
+	notifyEvents := fs.String("notify-events", notify.EventsSetting(os.Getenv),
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise, run_needs_operator (default: approval_requested,run_needs_operator; env: SWARMERY_NOTIFY_EVENTS replaces the default)")
 	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
 		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
 	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
@@ -1763,6 +1808,10 @@ func cmdServe(args []string) error {
 		Notifier:       notifier,
 	})
 	api.AttachApprovals(svc)
+	// D4 CSRF fence: the loopback origins are built in; any friendly alias the
+	// daemon is reached by (http://swarmery:7777 behind a hosts entry, a compose
+	// service name) is trusted only when the operator opts it in here.
+	api.AttachTrustedOrigins(trustedOrigins())
 	go svc.RunSweeper(context.Background())
 
 	// phase 4: system — GET /api/system/overlays reads overlays/*/project.json
@@ -2122,6 +2171,11 @@ func cmdServe(args []string) error {
 		log.Printf("warn: %s", w)
 	}
 	lessonGen := lessons.NewGenerator(db, lessonCfg)
+	if n, err := lessonGen.Recover(); err != nil {
+		log.Printf("warning: lessons: recover interrupted generations: %v", err)
+	} else if n > 0 {
+		log.Printf("lessons: %d generation(s) interrupted by a restart marked failed (one retry allowed)", n)
+	}
 	lessonGen.Changed = func(taskID int64) {
 		if bus != nil {
 			bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
@@ -2186,6 +2240,16 @@ func cmdServe(args []string) error {
 		for {
 			lessonVerifier.RunLogged()
 			<-ticker.C
+		}
+	}()
+	// Complexity routing phase 3: settle route_decisions outcomes once at start
+	// (runs that ended while the daemon was down); GET /api/route/report settles
+	// again on every request. Pull-based, bounded, advisory — a failure is logged.
+	go func() {
+		if n, err := route.Settle(db); err != nil {
+			log.Printf("warn: route settle at start: %v", err)
+		} else if n > 0 {
+			log.Printf("route: settled %d decision row(s) at start", n)
 		}
 	}()
 	// The diagnosis endpoint reads git directly (branch ancestry) through the same

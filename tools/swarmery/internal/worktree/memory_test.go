@@ -1,13 +1,17 @@
 package worktree
 
 import (
+	"bufio"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeproj"
 )
 
 // withMemoryHome points the memory helpers at a throwaway home for the length
@@ -27,100 +31,167 @@ func slugDir(home, cwd string) string {
 	return filepath.Join(home, ".claude", "projects", ProjectSlug(cwd))
 }
 
+// TestProjectSlugEncoding asserts DELEGATION, not the rule.
+//
+// ProjectSlug is a one-line alias for claudeproj.Slug, so a table mirrored here
+// would be a second copy of one encoding, hand-kept in sync — which is the very
+// drift this package's alias exists to prevent. The rule's own table, with the
+// binary-derived evidence behind every row, lives in
+// internal/claudeproj's TestSlug.
 func TestProjectSlugEncoding(t *testing.T) {
-	// The shapes that actually occur on a daemon-driven machine. The doubled
-	// `--` cases are the ones worth pinning: they come from a `/` immediately
-	// followed by a dot-directory, or by a directory whose own name starts with
-	// the encoded form of another path — which is exactly how the daemon names
-	// its per-project worktree roots.
-	cases := []struct {
-		name string
-		path string
-		want string
-	}{
-		{"repo checkout", "/Volumes/Work/swarmery", "-Volumes-Work-swarmery"},
-		{"nested module", "/Volumes/Work/swarmery/tools/swarmery", "-Volumes-Work-swarmery-tools-swarmery"},
-		{"home itself", "/Users/dev", "-Users-dev"},
-		{
-			// `/.swarmery` → `--swarmery`, and the worktree root's own name is
-			// an encoded path, so `/-Volumes…` → `--Volumes…`.
-			"daemon worktree of a plan run",
-			"/Users/dev/.swarmery/worktrees/-Volumes-Work-swarmery/plan-530",
-			"-Users-dev--swarmery-worktrees--Volumes-Work-swarmery-plan-530",
-		},
-		{
-			"daemon worktree of a single phase",
-			"/Users/dev/.swarmery/worktrees/-Volumes-Work-swarmery/phase-17299",
-			"-Users-dev--swarmery-worktrees--Volumes-Work-swarmery-phase-17299",
-		},
-		{"hyphenated project name", "/Volumes/Work/english-grammar", "-Volumes-Work-english-grammar"},
-		{"dotted directory", "/Volumes/Work/repo/.claude", "-Volumes-Work-repo--claude"},
-		{"root", "/", "-"},
-		{"trailing separator is cleaned away", "/Volumes/Work/swarmery/", "-Volumes-Work-swarmery"},
-		{"empty stays empty", "", ""},
-		// Pass-through, not policy. `/` and `.` are the only characters any
-		// observed slug directory shows being rewritten, so everything else is
-		// copied byte-for-byte. These three cases exist to make that DELIBERATE
-		// and visible: if Claude Code turns out to rewrite spaces or transcode
-		// non-ASCII, the fix is ground truth from a real slug directory (see
-		// TestProjectSlugMatchesRealClaudeProjectDirs), never a guess here.
-		{"spaces pass through unchanged", "/Users/dev/My Projects/acme", "-Users-dev-My Projects-acme"},
-		{"underscores pass through unchanged", "/Users/dev/src/my_app", "-Users-dev-src-my_app"},
-		{"non-ASCII passes through unchanged", "/Users/dev/проєкти/акме", "-Users-dev-проєкти-акме"},
+	paths := []string{
+		"/Volumes/Work/swarmery",
+		"/Volumes/Work/swarmery/tools/swarmery",
+		"/Users/dev",
+		"/Users/dev/.swarmery/worktrees/-Volumes-Work-swarmery/plan-530",
+		"/Users/dev/src/my_app+v2",
+		"/Users/dev/src/app/api/missions/[id]",
+		"/Volumes/Work/swarmery/",
+		"/",
+		"",
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := ProjectSlug(tc.path); got != tc.want {
-				t.Fatalf("ProjectSlug(%q) = %q, want %q", tc.path, got, tc.want)
+	for _, p := range paths {
+		t.Run(p, func(t *testing.T) {
+			if got, want := ProjectSlug(p), claudeproj.Slug(p); got != want {
+				t.Fatalf("ProjectSlug(%q) = %q but claudeproj.Slug(%q) = %q — "+
+					"ProjectSlug must stay a delegation, never a second implementation", p, got, p, want)
 			}
 		})
 	}
 }
 
 // TestProjectSlugMatchesRealClaudeProjectDirs is the encoding's ground truth:
-// it re-encodes the `cwd` each real transcript records and requires the result
-// to reproduce the directory name Claude Code itself chose. Read-only, and
-// skipped wherever there are no transcripts (CI, a fresh machine), so it
-// strengthens the local signal without becoming a portability trap.
+// it re-encodes every `cwd` and `relocatedCwd` a project's transcripts record
+// and requires one of them to reproduce the directory name Claude Code itself
+// chose. Read-only, and skipped wherever there are no transcripts (CI, a fresh
+// machine), so it strengthens the local signal without becoming a portability
+// trap. internal/claudeproj's TestSlug is the hermetic half that still goes red
+// on a machine where this one skips.
+//
+// Three things here are deliberate and were each a defect once:
+//
+//   - It globs `<home>/.claude*/projects`, not `<home>/.claude/projects`. An
+//     operator running several accounts keeps one config dir per account, and
+//     reading only the first excluded a whole account's projects from the
+//     ground truth. The IsDir guard is what rejects the `.claude.json` and
+//     friends the same glob matches.
+//   - It reads EVERY transcript and collects EVERY recorded cwd, rather than
+//     the first match in the first file. Claude Code's own worktree feature
+//     relocates a session's cwd and re-homes its transcript while earlier lines
+//     keep the old path, so the cwd that names the directory is often neither
+//     the first one recorded nor the last.
+//   - A directory passes when ANY candidate re-encodes to its name, never when
+//     every one does. A transcript's recorded cwd set is a SUPERSET of the
+//     paths that name directories — a dynamic-route path such as
+//     `…/api/missions/[id]` is recorded as a cwd and names no directory under
+//     any config dir — so an "every" variant would be red on arrival.
 func TestProjectSlugMatchesRealClaudeProjectDirs(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("no home directory")
 	}
-	projects := filepath.Join(home, ".claude", "projects")
-	entries, err := os.ReadDir(projects)
+	candidates, err := filepath.Glob(filepath.Join(home, ".claude*", "projects"))
 	if err != nil {
-		t.Skipf("no %s on this machine", projects)
+		t.Skipf("glob %s: %v", filepath.Join(home, ".claude*", "projects"), err)
+	}
+	var roots []string
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			roots = append(roots, c)
+		}
+	}
+	if len(roots) == 0 {
+		t.Skipf("no <home>/.claude*/projects on this machine")
 	}
 
-	cwdRe := regexp.MustCompile(`"cwd":"([^"]*)"`)
-	checked := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		transcripts, err := filepath.Glob(filepath.Join(projects, e.Name(), "*.jsonl"))
-		if err != nil || len(transcripts) == 0 {
-			continue
-		}
-		raw, err := os.ReadFile(transcripts[0])
+	// Both keys, because a relocated session records the new cwd under
+	// `relocatedCwd` while `cwd` keeps naming the original checkout.
+	cwdRe := regexp.MustCompile(`"(?:cwd|relocatedCwd)":"((?:[^"\\]|\\.)*)"`)
+
+	reproduced := 0
+	var (
+		skipNoTranscripts int
+		skipUnreadable    int
+		skipNoCwdMatched  int
+	)
+	for _, projects := range roots {
+		entries, err := os.ReadDir(projects)
 		if err != nil {
+			t.Errorf("read %s: %v", projects, err)
 			continue
 		}
-		m := cwdRe.FindSubmatch(raw)
-		if m == nil {
-			continue
-		}
-		cwd := string(m[1])
-		checked++
-		if got := ProjectSlug(cwd); got != e.Name() {
-			t.Errorf("ProjectSlug(%q) = %q, but Claude Code named that directory %q", cwd, got, e.Name())
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			transcripts, err := filepath.Glob(filepath.Join(projects, e.Name(), "*.jsonl"))
+			if err != nil || len(transcripts) == 0 {
+				skipNoTranscripts++
+				continue
+			}
+
+			var (
+				seen      = map[string]bool{}
+				order     []string
+				matched   bool
+				unreadabl bool
+			)
+			for _, tp := range transcripts {
+				f, err := os.Open(tp)
+				if err != nil {
+					unreadabl = true
+					continue
+				}
+				sc := bufio.NewScanner(f)
+				sc.Buffer(make([]byte, 0, 64*1024), 32*1024*1024)
+				for sc.Scan() {
+					for _, m := range cwdRe.FindAllStringSubmatch(sc.Text(), -1) {
+						cwd := m[1]
+						if unquoted, err := strconv.Unquote(`"` + cwd + `"`); err == nil {
+							cwd = unquoted
+						}
+						if cwd == "" || seen[cwd] {
+							continue
+						}
+						seen[cwd] = true
+						order = append(order, cwd)
+						if ProjectSlug(cwd) == e.Name() {
+							matched = true
+						}
+					}
+				}
+				if err := sc.Err(); err != nil {
+					unreadabl = true
+				}
+				f.Close()
+				if matched {
+					// The first transcript that settles the directory is
+					// enough; the rest is 2 GB of I/O for no more evidence.
+					break
+				}
+			}
+
+			switch {
+			case matched:
+				// Counted AFTER the comparison. Counting before it is how the
+				// old log reported more reproductions than it had.
+				reproduced++
+			case len(order) == 0 && unreadabl:
+				skipUnreadable++
+			case len(order) == 0:
+				skipNoCwdMatched++
+			default:
+				t.Errorf("no recorded cwd re-encodes to %q (in %s): %d candidate(s) %q; "+
+					"ProjectSlug(%q) = %q", e.Name(), projects, len(order), order, order[0], ProjectSlug(order[0]))
+			}
 		}
 	}
-	if checked == 0 {
+	if reproduced == 0 {
 		t.Skip("no transcript recorded a cwd to check the encoding against")
 	}
-	t.Logf("encoding reproduced %d real project slug directories", checked)
+	t.Logf("encoding reproduced %d real project slug directories across %d config-dir root(s) %q "+
+		"(skipped: %d with no transcript, %d unreadable, %d with no cwd recorded)",
+		reproduced, len(roots), roots, skipNoTranscripts, skipUnreadable, skipNoCwdMatched)
 }
 
 // TestMemoryLinkDisabledByProbe pins the probe's verdict. If someone flips the

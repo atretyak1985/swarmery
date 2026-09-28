@@ -9,10 +9,12 @@ package api
 //	claude-md    <project.path>/CLAUDE.md                       (single file)
 //	auto-memory  memconsolidate.AutoMemoryDirIn(~/.claude, project.path)
 //	                 = ~/.claude/projects/<slug>/memory/*.md    (MEMORY.md + siblings)
-//	                 slug = claudeproj.Slug = path with "/" AND "." → "-", the
-//	                 name Claude Code itself gives the directory. NOT the DB slug
-//	                 (ingest.SlugForPath, "/"→"-" only) — that one is project
-//	                 identity and would miss any project under a dot-directory.
+//	                 slug = claudeproj.Slug = every character outside
+//	                 [A-Za-z0-9] rewritten to "-" (so "/", ".", "_", "+", space
+//	                 and brackets alike), the name Claude Code itself gives the
+//	                 directory. NOT the DB slug (ingest.SlugForPath, "/"→"-"
+//	                 only) — that one is project identity and would miss every
+//	                 project whose path carries any other non-alphanumeric.
 //	serena       <project.path>/.serena/memories/*.md           (if present)
 //
 // Endpoints (self-wired via h.DB; no cmd/main.go edit):

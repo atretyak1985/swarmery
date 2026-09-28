@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -15,6 +16,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/playbooks"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskdir"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -326,20 +328,29 @@ func (s *Service) Schedule() {
 
 // candidate is one eligible-or-nearly Todo task with the fields the gates need.
 type candidate struct {
-	ID           int64
-	ExternalID   string
-	Title        string // the card's title — the micro-plan's headings and table cell
-	ProjectID    int64
-	ProjectSlug  string
-	ProjectPath  string // repo root for worktree.Acquire
-	Prompt       string
-	Model        sql.NullString
-	Agent        sql.NullString // registry agent name (NULL ⇒ plain run, no mention)
-	Playbook     sql.NullString // selected recipe name (NULL ⇒ default 'standard')
-	Priority     int
-	CreatedAt    string
-	FileScope    []string
-	Dependencies []string
+	ID          int64
+	ExternalID  string
+	Title       string // the card's title — the micro-plan's headings and table cell
+	ProjectID   int64
+	ProjectSlug string
+	// ProjectPath is projects.path — the project ROOT, which for a multi-repo
+	// project is an umbrella dir and NOT itself a git checkout. Never hand it to
+	// worktree.Acquire directly; resolve it through runRoot first (mirrors
+	// phaserun/planrun's ProjectPath vs RepoRoot split).
+	ProjectPath string
+	// WorkspaceRoot is the workspace namespace dir (workspaces.root_path), home of
+	// overlay/project.json — one of runRoot's repo-hint sources — and the dir the
+	// card's micro-plan is minted into. Picked by workspaceOnePerProject. "" when
+	// unmapped.
+	WorkspaceRoot string
+	Prompt        string
+	Model         sql.NullString
+	Agent         sql.NullString // registry agent name (NULL ⇒ plain run, no mention)
+	Playbook      sql.NullString // selected recipe name (NULL ⇒ default 'standard')
+	Priority      int
+	CreatedAt     string
+	FileScope     []string
+	Dependencies  []string
 	// Provenance is the block appended to the task body of a CAPTURED card:
 	// the session's opening prompt and the files it touched, read from the
 	// origin_* columns (0066). "" for a manual card. It is added here, at
@@ -394,11 +405,18 @@ func provenanceBlock(quote string, files []string) string {
 // ordered by priority (urgent<high<normal<low ⇒ ascending int) then created_at
 // then id, with per-candidate dependency satisfaction resolved in-memory.
 func (s *Service) candidates() ([]candidate, error) {
+	// LEFT JOIN workspaces: the overlay's project.json is a repo-hint source, and a
+	// project with no workspace mapped must still be a candidate (the join is
+	// advisory) — same posture as phaserun/planrun's loadPhase. Joined through
+	// workspaceOnePerProject: workspaces.project_id is not UNIQUE, and a plain join
+	// would list a card once per mapped workspace.
 	rows, err := s.DB.Query(`
 		SELECT t.id, COALESCE(t.external_id,''), COALESCE(t.title,''), t.project_id, p.slug, p.path,
+		       w.root_path,
 		       t.prompt, t.model, t.agent, t.playbook, t.priority, t.created_at, t.file_scope, t.dependencies,
 		       COALESCE(t.origin_quote,''), COALESCE(t.origin_files,'')
 		  FROM tasks t JOIN projects p ON p.id = t.project_id
+		  LEFT JOIN ` + workspaceOnePerProject + ` w ON w.project_id = p.id
 		 WHERE t.source='queue' AND t.board_column='todo'
 		   AND t.paused=0 AND t.user_paused=0`)
 	if err != nil {
@@ -410,11 +428,13 @@ func (s *Service) candidates() ([]candidate, error) {
 	for rows.Next() {
 		var c candidate
 		var scopeJSON, depsJSON, quote, filesJSON string
+		var wsRoot sql.NullString
 		if err := rows.Scan(&c.ID, &c.ExternalID, &c.Title, &c.ProjectID, &c.ProjectSlug,
-			&c.ProjectPath, &c.Prompt, &c.Model, &c.Agent, &c.Playbook, &c.Priority, &c.CreatedAt,
+			&c.ProjectPath, &wsRoot, &c.Prompt, &c.Model, &c.Agent, &c.Playbook, &c.Priority, &c.CreatedAt,
 			&scopeJSON, &depsJSON, &quote, &filesJSON); err != nil {
 			return nil, err
 		}
+		c.WorkspaceRoot = wsRoot.String
 		if c.FileScope, err = decodeStringList(scopeJSON); err != nil {
 			return nil, err
 		}
@@ -620,6 +640,61 @@ func (s *Service) liveWorktreeCount() (int, error) {
 
 // ── admission ──
 
+// workspaceOnePerProject is the workspaces relation with at most one row per
+// project. workspaces.project_id carries no UNIQUE constraint, and joining the
+// table directly would repeat a card once per workspace mapped to its project.
+//
+// The row kept is the most recently scanned one (last_scanned DESC, then the
+// newest id, so the choice stays deterministic; a never-scanned NULL sorts
+// last) — the best signal of which mapping wsingest currently considers live.
+// It is THE single rule for "which workspace does this project use": runRoot
+// reads its overlay project.json from it and mintMicroPlan mints into it, so a
+// card's repo and its micro-plan can never come from two different workspace
+// rows. (It used to be MIN(root_path), an arbitrary lexicographic pick that
+// could name a stale namespace.)
+const workspaceOnePerProject = `(SELECT w1.project_id, w1.root_path
+		  FROM workspaces w1
+		 WHERE w1.project_id IS NOT NULL
+		   AND w1.id = (SELECT w2.id FROM workspaces w2
+		                 WHERE w2.project_id = w1.project_id
+		                 ORDER BY w2.last_scanned DESC, w2.id DESC LIMIT 1))`
+
+// runRoot resolves the repository a dispatched card runs in: a board card
+// declares no Repo cell of its own (unlike a phase doc), so the only hints are
+// the workspace overlay's project.json and the checkout's own
+// .claude/project.json — same two-tier fallback phaserun/planrun use, via the
+// shared repopath.Cells order, ending in projectPath itself for a single-repo
+// project (unchanged behaviour).
+//
+// Before this, admit() handed worktree.Acquire the raw project path — the
+// umbrella directory of a multi-repo project, never a git checkout — so every
+// hand-added card in such a project failed immediately with
+// worktree.ErrNotARepo, regardless of project.json's mainApp (project Skygor,
+// 2026-09-17).
+func (s *Service) runRoot(projectPath, workspaceRoot string) (string, error) {
+	cells := repopath.Cells(projectPath, workspaceRoot)
+	// Registered projects are the trusted roots: a declared repo outside this
+	// project is honoured only when it is one of them (mirrors phaserun/planrun).
+	return repopath.ResolveTrusted(projectPath, runcore.RegisteredRoots(s.DB), cells...)
+}
+
+// resolvedRepoRoot is the repository a worktree-REMOVAL call site targets. The
+// worktree's own `.git` file comes first: it names the repo the worktree was
+// actually cut from, which re-resolving through runRoot would not if
+// project.json's mainApp changed while the card ran. Then runRoot, then
+// projectPath — best-effort by construction (removeWorktree already
+// logs-and-continues on any failure), the same degraded answer every call site
+// gave before runRoot existed.
+func (s *Service) resolvedRepoRoot(projectPath, workspaceRoot, wtPath string) string {
+	if repo, ok := repopath.WorktreeRepo(wtPath); ok {
+		return repo
+	}
+	if repoRoot, err := s.runRoot(projectPath, workspaceRoot); err == nil {
+		return repoRoot
+	}
+	return projectPath
+}
+
 // admit acquires a worktree, writes the explicit session link, moves the task
 // todo→in_progress via a guarded CAS, and spawns the run goroutine. Returns
 // true when the run was launched. Any failure is surfaced on the row's
@@ -640,7 +715,14 @@ func (s *Service) admit(c candidate) bool {
 		return false
 	}
 
-	acq, err := s.Wt.Acquire(c.ProjectPath, c.ProjectSlug, c.ExternalID)
+	repoRoot, err := s.runRoot(c.ProjectPath, c.WorkspaceRoot)
+	if err != nil {
+		s.clearActive(c.ID)
+		s.failAdmission(c.ID, err.Error())
+		return false
+	}
+
+	acq, err := s.Wt.Acquire(repoRoot, c.ProjectSlug, c.ExternalID)
 	if err != nil {
 		s.clearActive(c.ID)
 		s.failAdmission(c.ID, "worktree acquire: "+err.Error())
@@ -694,21 +776,32 @@ func (s *Service) admit(c candidate) bool {
 	// doc rather than the column someone dragged it to. Non-fatal by construction —
 	// a docless run is the pre-micro-plan behaviour, and refusing to run work because
 	// a markdown file could not be written would be the worse trade.
-	taskDoc := s.mintMicroPlan(c)
+	taskDoc := s.mintMicroPlan(c, repoRoot)
 
 	s.notify(c.ID)
 
-	// Resolve the playbook (fusion phase 13): NULL ⇒ an auto-profile picks one and
-	// stamps it back on the card; unknown ⇒ the classic single-stage flow. The
-	// resolved stage list drives how many sequential headless runs execute in this
-	// one worktree; the recipe's model/permission knobs shape every spawn. The
-	// first stage reuses the pre-generated uuid recorded above (so the task↔session
-	// link already points at stage 1); later stages mint their own uuids inside
+	// Complexity routing: score the card ONCE, before its playbook resolves,
+	// because in active mode the router is a rung of the playbook ladder itself
+	// (card → route → autoProfile) as well as of the model and effort ladders.
+	// off ⇒ nothing computed; shadow ⇒ decided and recorded, never applied.
+	rt := s.routeCard(c)
+
+	// Resolve the playbook (fusion phase 13): NULL ⇒ the router (active) or an
+	// auto-profile picks one and stamps it back on the card; unknown ⇒ the classic
+	// single-stage flow. The resolved stage list drives how many sequential
+	// headless runs execute in this one worktree; the recipe's model/permission
+	// knobs — and the router's model/effort rungs — shape every spawn. The first
+	// stage reuses the pre-generated uuid recorded above (so the task↔session link
+	// already points at stage 1); later stages mint their own uuids inside
 	// runPlaybook.
-	pb := s.resolvePlaybook(c)
+	pb := s.resolvePlaybook(c, rt.rungs.playbook)
+	pb.route = rt.rungs
+
+	// Record the decision beside what the ladders chose, before the first stage.
+	s.recordRoute(c, pb, rt, uuid)
 
 	// Spawn the run. The goroutine owns exit handling + slot release.
-	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc) })
+	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc, repoRoot) })
 	return true
 }
 
@@ -755,6 +848,28 @@ func microPlansEnabled() bool {
 	return true
 }
 
+// workspaceDirUnder reports whether dir is an existing directory inside root.
+// Both are symlink-resolved first, so a symlinked workspace root (macOS /var →
+// /private/var) neither false-rejects nor lets a symlink smuggle the write out.
+func workspaceDirUnder(dir, root string) bool {
+	rd, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	if fi, err := os.Stat(rd); err != nil || !fi.IsDir() {
+		return false
+	}
+	rr, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(rr, rd)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
+
 // mintMicroPlan writes the card's micro-plan and returns its phase-doc path, or ""
 // when there is none (feature off, no workspace root wired, or a mint that failed).
 //
@@ -762,15 +877,43 @@ func microPlansEnabled() bool {
 // plan it materialized. No workspace task ROW is written here: wsingest discovers
 // the dir on its next pass and stays the only writer of those rows, so there is one
 // path from a dir to a row and no way for the two to disagree.
-func (s *Service) mintMicroPlan(c candidate) string {
+//
+// That invariant is why the namespace dir is taken from c.WorkspaceRoot
+// (workspaces.root_path, picked by workspaceOnePerProject — the same row runRoot
+// resolved the repo from) whenever the project HAS one, instead of rebuilding it
+// as <WorkspaceRoot>/<ProjectSlug>. ProjectSlug is the registry slug — derived
+// from the project path with '/'→'-' — while onboarding carves the namespace
+// under the operator's kebab slug, and upstream documents the two as never
+// matching (internal/onboard/onboard.go). Rebuilding therefore minted the plan
+// into a SECOND tree beside the real one; wsingest then indexed that tree as its
+// own workspace and project, and the card and its micro-plan ended up attributed
+// to different projects — exactly the disagreement this function promises cannot
+// happen. The <root>/<slug> spelling survives only as the fallback for a project
+// with no workspace row, where no carved dir exists to prefer.
+//
+// workspaces.root_path is read straight from the DB, so it is fenced before any
+// write: a mapped dir that no longer exists, or that is not inside the
+// configured s.WorkspaceRoot, is logged and ignored in favour of the fallback —
+// the daemon never mints outside its own workspace tree.
+func (s *Service) mintMicroPlan(c candidate, repoRoot string) string {
 	if s.WorkspaceRoot == "" || !microPlansEnabled() {
 		return ""
 	}
-	dir, err := taskdir.MintMicroPlan(s.WorkspaceRoot, c.ProjectSlug, taskdir.Card{
+	fallback := filepath.Join(s.WorkspaceRoot, c.ProjectSlug)
+	wsDir := c.WorkspaceRoot
+	if wsDir != "" && !workspaceDirUnder(wsDir, s.WorkspaceRoot) {
+		log.Printf("warning: dispatch: task=%d mapped workspace %q is missing or outside the workspace root %q — minting under %q instead",
+			c.ID, wsDir, s.WorkspaceRoot, fallback)
+		wsDir = ""
+	}
+	if wsDir == "" {
+		wsDir = fallback
+	}
+	dir, err := taskdir.MintMicroPlanIn(wsDir, taskdir.Card{
 		ExternalID: c.ExternalID,
 		Title:      c.Title,
 		Prompt:     c.Prompt,
-		RepoPath:   c.ProjectPath,
+		RepoPath:   repoRoot,
 	}, s.clock())
 	if err != nil {
 		// Logged, not surfaced on the card: the run is about to happen either way, and
@@ -797,9 +940,17 @@ type resolvedStage struct {
 // permission mode belong to the RECIPE, not to one step of it, so they are
 // resolved once here and applied to each stage identically.
 type resolvedPlaybook struct {
+	name           string // the recipe that runs, as the registry names it ("" = implicit single stage)
 	stages         []resolvedStage
-	model          string // recipe's declared --model ("" = fall through to card/default)
+	model          string // recipe's declared --model ("" = fall through to route/default)
 	permissionMode string // recipe's --permission-mode ("" = inherit the global knob)
+	// routed: the router's playbook rung chose this recipe (active mode, card
+	// named none). Recorded as part of route_decisions.applied.
+	routed bool
+	// route: the router's model/effort rungs, "" unless active. Carried here,
+	// beside the recipe's own knobs, because they shape EVERY stage of the chain
+	// identically — the same reason the recipe's model is resolved once.
+	route routeRungs
 }
 
 // resolvePlaybook returns the resolved recipe for a candidate. With no registry
@@ -809,8 +960,11 @@ type resolvedPlaybook struct {
 // renders each with the per-run var map (incl. previous_stage_output).
 //
 // A card that never chose a playbook gets one auto-selected here and STAMPED
-// back onto the row, so the board shows the recipe that actually ran.
-func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
+// back onto the row, so the board shows the recipe that actually ran. The
+// ladder is card → routePlaybook (the router's pick, "" unless active) →
+// autoProfile; a card's explicit choice always wins, and the router can only
+// ever offer standard or plan-first (see activeRungs).
+func (s *Service) resolvePlaybook(c candidate, routePlaybook string) resolvedPlaybook {
 	single := resolvedPlaybook{stages: []resolvedStage{{name: "implement", body: buildDispatchPrompt(c)}}}
 	if s.Playbooks == nil {
 		return single
@@ -821,8 +975,13 @@ func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
 	// silently ran 'standard'. Pick explicitly, then record the pick.
 	name := strings.TrimSpace(c.Playbook.String)
 	chosen := name == ""
+	routed := false
 	if chosen {
-		name = autoProfile(c.Prompt, c.Dependencies)
+		if routePlaybook != "" {
+			name, routed = routePlaybook, true
+		} else {
+			name = autoProfile(c.Prompt, c.Dependencies)
+		}
 	}
 
 	pb, ok := s.Playbooks.Get(c.ProjectPath, name)
@@ -839,7 +998,7 @@ func (s *Service) resolvePlaybook(c candidate) resolvedPlaybook {
 	for _, st := range pb.Stages {
 		out = append(out, resolvedStage{name: st.Name, body: st.Body})
 	}
-	return resolvedPlaybook{stages: out, model: pb.Model, permissionMode: pb.PermissionMode}
+	return resolvedPlaybook{name: pb.Name, stages: out, model: pb.Model, permissionMode: pb.PermissionMode, routed: routed}
 }
 
 // autoProfileThreshold is the prompt size above which a card is treated as
@@ -906,7 +1065,7 @@ func (s *Service) failAdmission(id int64, msg string) {
 // A single-stage playbook (the default) walks this loop exactly once, so its
 // behavior is byte-for-byte the pre-playbook runAndHandle: link → sentinel →
 // exit-code routing → pokeVerify.
-func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc string) {
+func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc, repoRoot string) {
 	defer s.clearActive(c.ID)
 
 	// Lend the card's micro-plan doc INTO the worktree and quote it by its
@@ -923,18 +1082,10 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 	// dashboard renders the workspace copy's `## Completion Report` and nothing
 	// else, so a report that stays in the worktree is work that shipped reading
 	// as "no summary of the work written". The defer is what makes "every path"
-	// true without auditing each return.
-	defer worktree.ReturnPlanDocLogged(fmt.Sprintf("dispatch task=%d", c.ID), acq.Path, docRel, taskDoc)
-
-	// A card WITHOUT a plan doc has no workspace file to return, so the contract
-	// points it at worktree.ReportPath instead and this reads that back onto the
-	// card. Same deal as the return trip above, and deferred for the same reason:
-	// the contract asks for a report on the blocked path too, and the report about
-	// why work stopped is the one most worth not losing. Instructing an agent to
-	// write a file nobody reads would be worse than saying nothing.
-	if docRel == "" {
-		defer s.collectDoclessReport(c.ID, acq.Path)
-	}
+	// true without auditing each return. A daemon restart is the one exit no defer
+	// survives; adoption and the startup heal take the same trip through
+	// returnOrphanOutput (adopt.go).
+	defer s.returnRunOutput(c.ID, fmt.Sprintf("dispatch task=%d", c.ID), acq.Path, docRel, taskDoc)
 
 	stages := pb.stages
 
@@ -947,6 +1098,20 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 	// to the same project, and a re-read mid-chain could split one task across two
 	// accounts if the operator rebinds while it runs.
 	account := claudeacct.Binding(c.ProjectPath)
+
+	// SettingsFile lends the project's own .claude/settings.json when repoRoot
+	// resolved this run into a SUB-repo of a multi-repo project: that worktree
+	// carries no settings of its own, so the plugin stack — including whatever
+	// ships c.Agent — would otherwise be silently unreachable and the run would
+	// proceed as an unresolved @mention rather than fail (phaserun and planrun
+	// guard the same case via repopath.InheritedSettings). "" in the common
+	// single-repo case, where the worktree IS a checkout of the project.
+	settingsFile := repopath.InheritedSettings(c.ProjectPath, repoRoot, acq.Path)
+	if settingsFile != "" {
+		log.Printf("dispatch: task=%d inheriting project settings %s (worktree is a checkout of %s)",
+			c.ID, settingsFile, repoRoot)
+	}
+	note := repoNote(repoRoot, c.ProjectPath, acq.Path)
 
 	var prevOutput string
 	for i, st := range stages {
@@ -968,7 +1133,7 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			PreviousStageOutput: prevOutput,
 			TaskDoc:             docRel,
 		}
-		prompt := BuildStagePromptDoc(playbooks.Render(st.body, vars), acq.Branch, c.ExternalID, docRel, c.FileScope)
+		prompt := note + BuildStagePromptDoc(playbooks.Render(st.body, vars), acq.Branch, c.ExternalID, docRel, c.FileScope)
 		if i == 0 {
 			// Record the exact text the runner is about to see, so the card can
 			// answer "what was this task actually told?" — the body, the
@@ -977,24 +1142,24 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			s.recordDispatchedPrompt(c.ID, prompt)
 		}
 		// Model precedence, most specific first: the card's own override, then the
-		// recipe's declared model, then the global default. The middle step is what
-		// makes the `model:` frontmatter knob real — it parsed and rendered as a UI
-		// chip since phase 13 while dispatch ignored it, so the chip named a model
-		// no run ever used.
-		model := c.Model.String
-		if model == "" {
-			model = pb.model
-		}
-		if model == "" {
-			model = DefaultModel
-		}
+		// recipe's declared model, then the router's pick (active mode only), then
+		// the global default. The recipe step is what makes the `model:`
+		// frontmatter knob real — it parsed and rendered as a UI chip since phase 13
+		// while dispatch ignored it, so the chip named a model no run ever used.
+		// stageModel owns the ladder so the route record names exactly the model
+		// this spawn gets.
+		model, _ := stageModel(c, pb)
 		// Agent is carried, never applied: ClaudeRunner.agentPrompt owns the single
 		// "@<agent>: " prefix site. Every stage of a playbook runs as the same agent
 		// — the selection belongs to the card, not to one recipe step. The same
 		// holds for the permission mode: it is the recipe's, so every stage of the
-		// chain gets it ("" ⇒ the runner falls back to the global knob).
+		// chain gets it ("" ⇒ the runner falls back to the global knob) — and for
+		// the effort: the router's pick when active, else "" so the runner resolves
+		// SWARMERY_DISPATCH_EFFORT → DefaultEffort exactly as before.
 		spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: acq.Path, Model: model,
-			Agent: c.Agent.String, Account: account, PermissionMode: pb.permissionMode}
+			Effort: stageEffort(pb),
+			Agent:  c.Agent.String, Account: account, PermissionMode: pb.permissionMode,
+			SettingsFile: settingsFile}
 
 		run, err := s.runStage(spec)
 		if err != nil {
@@ -1109,6 +1274,24 @@ func stageExitMsg(run *Run, timeout time.Duration) string {
 	return msg
 }
 
+// returnRunOutput brings a run's written summary home — the ONE return trip both
+// the normal exit (runPlaybook's defer) and an orphan (returnOrphanOutput) take.
+//
+// With a lent plan doc (docRel != "") the worktree copy goes back over the
+// workspace document via worktree.ReturnPlanDocLogged. A card WITHOUT one has no
+// workspace file to return, so the contract points it at worktree.ReportPath
+// instead and this reads that back onto the card. Both halves run on the blocked
+// path too: the contract asks for a report there, and the report about why work
+// stopped is the one most worth not losing. Instructing an agent to write a file
+// nobody reads would be worse than saying nothing.
+func (s *Service) returnRunOutput(id int64, what, wtPath, docRel, taskDoc string) {
+	if docRel == "" {
+		s.collectDoclessReport(id, wtPath)
+		return
+	}
+	worktree.ReturnPlanDocLogged(what, wtPath, docRel, taskDoc)
+}
+
 // collectDoclessReport moves the worktree's report file onto the card's
 // result_note — the field the board renders as the card's summary. Best-effort
 // by construction: an agent that wrote no report still shipped its commits, and
@@ -1184,7 +1367,7 @@ func (s *Service) finishDone(c candidate, line string) {
 	} else if n > 0 {
 		log.Printf("dispatch: task %d done — ticked %d phase checkbox(es)", c.ID, n)
 	}
-	s.removeWorktree(c.ProjectPath, wtpath.String, branch.String)
+	s.removeWorktree(s.resolvedRepoRoot(c.ProjectPath, c.WorkspaceRoot, wtpath.String), wtpath.String, branch.String)
 	s.notify(c.ID)
 }
 
@@ -1221,11 +1404,12 @@ func (s *Service) removeWorktree(repoRoot, wtPath, branch string) {
 // clears worktree_path so the row no longer counts as holding a live worktree.
 func (s *Service) RemoveWorktreeFor(taskID int64) {
 	var repoPath string
-	var branch, wtpath sql.NullString
+	var branch, wtpath, wsRoot sql.NullString
 	err := s.DB.QueryRow(`
-		SELECT p.path, t.branch, t.worktree_path
+		SELECT p.path, t.branch, t.worktree_path, w.root_path
 		  FROM tasks t JOIN projects p ON p.id=t.project_id
-		 WHERE t.id=? AND t.worktree_path IS NOT NULL`, taskID).Scan(&repoPath, &branch, &wtpath)
+		  LEFT JOIN `+workspaceOnePerProject+` w ON w.project_id = p.id
+		 WHERE t.id=? AND t.worktree_path IS NOT NULL`, taskID).Scan(&repoPath, &branch, &wtpath, &wsRoot)
 	if errors.Is(err, sql.ErrNoRows) {
 		return // no live worktree
 	}
@@ -1233,7 +1417,7 @@ func (s *Service) RemoveWorktreeFor(taskID int64) {
 		log.Printf("error: dispatch: lookup worktree for removal (task %d): %v", taskID, err)
 		return
 	}
-	s.removeWorktree(repoPath, wtpath.String, branch.String)
+	s.removeWorktree(s.resolvedRepoRoot(repoPath, wsRoot.String, wtpath.String), wtpath.String, branch.String)
 	if _, err := s.DB.Exec(`UPDATE tasks SET worktree_path=NULL WHERE id=?`, taskID); err != nil {
 		log.Printf("error: dispatch: clear worktree_path (task %d): %v", taskID, err)
 	}
@@ -1325,6 +1509,10 @@ func (s *Service) HealStale() error {
 		// Best-effort: a failed probe must not leave tasks stuck in_progress.
 		log.Printf("error: swarmery dispatch: adoption probe: %v", err)
 	}
+	// A run that died WITH the previous daemon never ran runPlaybook's return
+	// defer either, and the re-admission this requeue leads to lends the stale
+	// workspace doc back over the report it left behind — so bring it home first.
+	s.returnHealedOutput(adopted)
 	// worktree_path IS NOT NULL is the dispatcher-OWNERSHIP guard, and it is load
 	// bearing: source='queue' alone stopped meaning "a dispatcher run" once
 	// internal/taskcap began minting captured session cards on the board with that

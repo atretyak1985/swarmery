@@ -160,22 +160,57 @@ export function Empty({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
+/* ----- focus containment — one Tab trap for every overlay -----
+ * aria-modal tells assistive tech the rest of the page is unavailable, so Tab
+ * must not walk into whatever is behind the overlay (still in the DOM). Queried
+ * live on each keypress so controls that appear or disable mid-edit count. */
+
+export const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
+
+/** Wraps Tab / Shift+Tab around the focusable elements inside `box`, and pulls
+ * focus back in when it has escaped. No-op for any other key. */
+export function containTab(e: KeyboardEvent, box: HTMLElement): void {
+  if (e.key !== 'Tab') return;
+  const focusable = [...box.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (first === undefined || last === undefined) return;
+  const active = document.activeElement;
+  if (!e.shiftKey && (active === last || !box.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  } else if (e.shiftKey && (active === first || !box.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  }
+}
+
 /* ----- confirmation dialog (phase 4 step-12) -----
  * Destructive actions (hook disable, rollback, delete, conflict reload) must
  * be deliberate: a fixed overlay + hairline card. The destructive confirm
  * button follows the Approvals deny-button style; cancel is the plain
- * hairline secondary. Render null while closed. */
+ * hairline secondary. Render null while closed.
+ *
+ * It is usually raised OVER another modal (a discard-changes confirm on top of
+ * the form it guards), so it owns the keyboard while open:
+ *   - focus moves to the SAFE button (cancel) on open, and returns to whatever
+ *     had it before on close — Enter never lands on a covered control;
+ *   - Tab is contained to the dialog;
+ *   - Esc cancels THIS dialog only. The listener is a window CAPTURE listener
+ *     that stops propagation, so it runs before, and instead of, the parent's
+ *     own Esc / Tab handlers (window bubble listeners or React onKeyDown);
+ *     preventDefault also tells an ExpandableSection underneath to stand down;
+ *   - a backdrop click cancels and stops there — React bubbles it through the
+ *     component tree, and a parent whose backdrop calls its own close request
+ *     would otherwise re-open the confirm in the same batch. */
 
-export function ConfirmDialog({
-  open,
-  title,
-  children,
-  confirmLabel,
-  danger = false,
-  busy = false,
-  onConfirm,
-  onCancel,
-}: {
+export function ConfirmDialog(props: ConfirmDialogProps): JSX.Element | null {
+  // The body mounts per open, so its effects run exactly on open and on close.
+  return props.open ? <ConfirmDialogBody {...props} /> : null;
+}
+
+interface ConfirmDialogProps {
   open: boolean;
   title: string;
   children: ReactNode;
@@ -185,17 +220,64 @@ export function ConfirmDialog({
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-}): JSX.Element | null {
-  if (!open) return null;
+}
+
+function ConfirmDialogBody({
+  title,
+  children,
+  confirmLabel,
+  danger = false,
+  busy = false,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps): JSX.Element {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
+  // Latest handlers without re-running the mount effect (callers pass arrows).
+  const cancelHandler = useRef(onCancel);
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    cancelHandler.current = onCancel;
+    busyRef.current = busy;
+  });
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    cancelRef.current?.focus();
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!busyRef.current) cancelHandler.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const box = boxRef.current;
+      if (box === null) return;
+      e.stopImmediatePropagation();
+      containTab(e, box);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      // The opener may be gone (the confirm discarded the form it lived in).
+      if (opener?.isConnected === true) opener.focus();
+    };
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={onCancel}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!busy) onCancel();
+      }}
     >
       <div
+        ref={boxRef}
         className="w-full max-w-md rounded-xl border border-line bg-surface px-4 py-4"
         onClick={(e) => e.stopPropagation()}
       >
@@ -203,6 +285,7 @@ export function ConfirmDialog({
         <div className="mt-2 text-[12.5px] leading-relaxed text-ink-2">{children}</div>
         <div className="mt-3.5 flex flex-wrap justify-end gap-2">
           <button
+            ref={cancelRef}
             type="button"
             onClick={onCancel}
             disabled={busy}
@@ -250,14 +333,13 @@ export function ConfirmDialog({
  * same time, so 45 only has to clear the header; it is deliberately under 50 so
  * a real dialog can still be raised over an expanded section.
  *
- * That last case is NOT wired up yet, and the `defaultPrevented` guards below
- * are what it will hang on: no z-50 dialog in this app claims Escape today
- * (ConfirmDialog above and workspace/NewTaskModal.tsx close on a button or the
- * backdrop, neither attaches a keydown listener), and no current consumer of
- * this component raises one while expanded — so the guard is currently dead
- * code kept for the day one does. Whoever opens the first dialog over an
- * expanded section must give it an Escape handler that calls preventDefault(),
- * or Esc will collapse the section UNDER the dialog instead of closing it. */
+ * The `defaultPrevented` guards below are what that case hangs on: ConfirmDialog
+ * above claims Escape in a window capture listener and calls preventDefault()
+ * (and stops propagation), so it wins over this section. No current consumer
+ * of this component raises a dialog while expanded. Whoever opens any OTHER
+ * dialog over an expanded section must give it an Escape handler that calls
+ * preventDefault(), or Esc will collapse the section UNDER the dialog instead
+ * of closing it. */
 
 /** Trigger styling for the expand affordance, exported so a page that needs its
  * own label/placement still matches every other embedded page. */
@@ -324,9 +406,6 @@ function unlockBodyScroll(): void {
  * responder, which is what "Esc closes the thing on top" means. */
 const escStack: object[] = [];
 
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
-
 export function ExpandableSection({
   expanded,
   onToggle,
@@ -390,19 +469,7 @@ export function ExpandableSection({
       // the close button is also reachable by mouse and by Esc.
       const box = boxRef.current;
       if (box === null) return;
-      const focusable = [...box.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (first === undefined || last === undefined) return;
-      const active = document.activeElement;
-      if (!e.shiftKey && (active === last || !box.contains(active))) {
-        e.preventDefault();
-        first.focus();
-      } else if (e.shiftKey && (active === first || !box.contains(active))) {
-        e.preventDefault();
-        last.focus();
-      }
+      containTab(e, box);
     };
 
     window.addEventListener('keydown', onKey);

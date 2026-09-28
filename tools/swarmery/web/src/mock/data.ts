@@ -129,6 +129,7 @@ export const mockProjects: Project[] = [
     tokens: 4_820_000,
     costUsd: 18.42,
     plugin: { managed: true, packs: ['iot-pack'], marketplace: swarmeryMarketplace, underOnboardRoot: true },
+    onboarded: true,
   },
   {
     id: 2,
@@ -145,6 +146,7 @@ export const mockProjects: Project[] = [
     tokens: 2_310_000,
     costUsd: 9.07,
     plugin: { managed: true, packs: [], marketplace: swarmeryMarketplace, underOnboardRoot: true },
+    onboarded: true,
   },
   {
     id: 3,
@@ -161,6 +163,7 @@ export const mockProjects: Project[] = [
     tokens: 1_540_000,
     costUsd: 6.13,
     plugin: { managed: true, packs: [], marketplace: swarmeryMarketplace, underOnboardRoot: false },
+    onboarded: true,
   },
   {
     id: 4,
@@ -177,6 +180,7 @@ export const mockProjects: Project[] = [
     tokens: null,
     costUsd: null,
     plugin: null,
+    onboarded: false,
   },
   {
     id: 5,
@@ -193,6 +197,7 @@ export const mockProjects: Project[] = [
     tokens: 939_000,
     costUsd: 8.43,
     plugin: null,
+    onboarded: false,
   },
 ];
 

@@ -11,10 +11,17 @@ DOCS_DST := internal/docsfs/content
 VERSION_PKG := github.com/atretyak1985/swarmery/tools/swarmery/internal/version
 BUILD_ID    := $(shell git describe --tags --match 'swarmery-v*' --always --dirty 2>/dev/null)
 
-# Where the launchd service (`swarmery install`) expects the daemon binary,
-# and the label it registers under.
+# Where the OS service manager expects the daemon binary, and the unit it
+# runs under. macOS uses `swarmery install`'s launchd plist; Linux here runs
+# it as a systemd --user unit pointed at ~/.local/bin/swarmery instead.
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+INSTALL_BIN    := $(HOME)/.local/bin/swarmery
+SYSTEMD_UNIT   := swarmery.service
+else
 INSTALL_BIN   := $(HOME)/.swarmery/bin/swarmery
 LAUNCHD_LABEL := com.swarmery.daemon
+endif
 
 # build: docs snapshot + vite bundle → go:embed → single binary ./swarmery
 build: copy-docs build-web build-go
@@ -29,20 +36,29 @@ build-web:
 build-go:
 	go build -ldflags "-X $(VERSION_PKG).Build=$(BUILD_ID)" -o swarmery ./cmd/swarmery
 
-# install: rebuild, then replace the launchd-managed binary and restart the
-# service. The binary is swapped via atomic rename (mv) so it never overwrites
-# the running executable in place ("Text file busy" / ETXTBSY). If the launchd
-# service isn't loaded yet, install the binary and point to `swarmery install`.
+# install: rebuild, then replace the service-managed binary and restart it.
+# The binary is swapped via atomic rename (mv) so it never overwrites the
+# running executable in place ("Text file busy" / ETXTBSY). If no service is
+# loaded yet, install the binary and point to the right setup command.
 install: build
 	mkdir -p $(dir $(INSTALL_BIN))
 	cp -f swarmery $(INSTALL_BIN).new
 	mv -f $(INSTALL_BIN).new $(INSTALL_BIN)
+ifeq ($(UNAME_S),Linux)
+	@if systemctl --user is-enabled $(SYSTEMD_UNIT) >/dev/null 2>&1; then \
+		systemctl --user restart $(SYSTEMD_UNIT) && \
+		echo "→ restarted $(SYSTEMD_UNIT) on the new binary"; \
+	else \
+		echo "→ installed $(INSTALL_BIN); no systemd --user unit found — see tools/swarmery/README.md to set one up"; \
+	fi
+else
 	@if launchctl print gui/$$(id -u)/$(LAUNCHD_LABEL) >/dev/null 2>&1; then \
 		launchctl kickstart -k gui/$$(id -u)/$(LAUNCHD_LABEL) && \
 		echo "→ restarted $(LAUNCHD_LABEL) on the new binary"; \
 	else \
 		echo "→ installed $(INSTALL_BIN); service not loaded — run '$(INSTALL_BIN) install' to set up launchd auto-start"; \
 	fi
+endif
 
 # copy-docs: snapshot the repo docs into internal/docsfs/content for go:embed.
 # The copies are gitignored (.gitkeep keeps the embed pattern valid without

@@ -77,6 +77,25 @@ It also creates the workspace namespace under
 `working`, `archive`, `plans`, `specs`, `sessions`, `logs` and `metrics`. That
 tree is where plans and task artifacts live — deliberately outside your code repo.
 
+Onboarding from the dashboard also registers the directory as a project under
+the slug you typed. There is one exception. If swarmery has already seen sessions
+in that directory, the project **keeps its existing slug**, and the onboarding
+steps say so. The slug is the project's identity: dispatch worktrees are named
+after it, and sessions from those worktrees are attributed back through it, so
+renaming it in place would orphan them.
+
+**The Projects page lists onboarded projects by default.** A project counts as
+onboarded when it has its own swarmery config and doesn't just sit inside another
+onboarded project. That leaves out a multi-repo umbrella's sub-repos, which carry a
+copied `settings.json`. `/`, `$HOME` and the onboarding roots never count as that
+parent, so enabling core at user scope doesn't hide your projects. The daemon
+decides this (the `onboarded` field on `GET /api/projects`).
+
+Untick **onboarded only** to see everything. When the filter hides every project,
+the page says how many are hidden and offers to untick it. The Health table
+follows the same filter, and the System project stays visible. The choice is
+remembered in the browser.
+
 You never have to add the marketplace by hand: writing that registration into
 `.claude/settings.json` is part of what onboarding does, so there is no separate
 "add marketplace" step to run.

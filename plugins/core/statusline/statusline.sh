@@ -103,7 +103,8 @@
 #       The whole git tail VANISHES when cwd is not a git repo (e.g. workspace root).
 #
 #  8) MEMORY:  📁 <n> Memories │ ◆ <n> Tasks │ ⊕ <n> Sessions
-#       Memories     : ~/.claude/projects/<cwd-slug>/memory/*.md (derived from PROJECT_DIR)
+#       Memories     : <account cfg dir>/projects/<cwd-slug>/memory/*.md
+#                      (slug derived from PROJECT_DIR; cfg dir = ACCT_CFG_DIR)
 #       Tasks        : workspace working/YYYY/MM/DD/<slug>/ dirs (legacy: .claude-workspace/)
 #       Sessions     : .swarmery/sessions/*.json (fallback /tmp/claude-session-*.jsonl)
 #
@@ -250,10 +251,25 @@ CMDS=$(find "$CLAUDE_DIR/commands" -name "*.md" -not -name "README.md" 2>/dev/nu
 HOOKS=$(find "$CLAUDE_DIR/hooks" -name "*.sh" 2>/dev/null | wc -l | tr -d ' ')
 
 # ----- memory / tasks / sessions ------------------------------------------
-# Claude Code names each project dir by mapping every '/' AND every '.' to '-'
-# (so /a/.local/x -> -a--local-x). The authority is tools/swarmery/internal/claudeproj;
-# this shell copy exists only because a statusline is a shell hook and cannot call Go.
-MEM_DIR="$HOME/.claude/projects/$(echo "$PROJECT_DIR" | tr '/.' '--')/memory"
+# Claude Code names each project dir by mapping EVERY character outside
+# [A-Za-z0-9] to '-' — '/', '.', '_', '+', space and brackets alike (so
+# /a/.local/my_app+v2 -> -a--local-my-app-v2). The rule is read out of the
+# shipped binary; the authority is tools/swarmery/internal/claudeproj, and this
+# shell copy exists only because a statusline is a shell hook and cannot call Go.
+#   printf, never echo: a trailing newline is outside the class too and would
+#   become a dash, naming a directory that can never exist.
+#   Never force the C locale here: that would make tr byte-wise and break
+#   parity with the rune-wise Go encoder. Non-ASCII is therefore
+#   locale-dependent in this copy, and unexercised by any real project path —
+#   see the claudeproj package doc.
+# The config dir is ACCT_CFG_DIR (the account this session actually runs under),
+# never $HOME/.claude: a project bound to a second account keeps its memory in
+# that account's dir, and reading $HOME would count a different account's files.
+# The slug stays derived from PROJECT_DIR, which is this field's documented
+# meaning above — NOT from "${TRANSCRIPT%/*}". The transcript directory is named
+# from the session's ORIGINAL cwd, so for a relocated session deriving it there
+# would count a worktree slug's (empty) memory instead of the project's.
+MEM_DIR="$ACCT_CFG_DIR/projects/$(printf '%s' "$PROJECT_DIR" | tr -c 'A-Za-z0-9' '-')/memory"
 MEMORIES=$(find "$MEM_DIR" -name "*.md" -not -name "MEMORY.md" 2>/dev/null | wc -l | tr -d ' ')
 # Active task dirs: working/YYYY/MM/DD/<slug> — swarmery workspace first, legacy fallback
 if [ -n "${AGENT_PROJECT:-}" ]; then

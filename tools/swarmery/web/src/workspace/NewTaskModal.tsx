@@ -22,6 +22,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRosterRow, BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { createBoardTask } from '../api';
+import { ConfirmDialog, containTab } from '../components/ui';
+import { useDiscardGuard } from '../components/useDiscardGuard';
 import { AgentHint, AgentSelect, useAgentRoster } from './AgentPicker';
 import { COLUMN_LABELS, LANE_TITLES, laneOf, TASK_MODELS, TASK_PRIORITIES } from './boardModel';
 import { PlaybookHint, PlaybookSelect, usePlaybooks } from './PlaybookPicker';
@@ -84,6 +86,9 @@ export function NewTaskModal({
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the form was pre-filled with (the `?compose=` seed, once parsed): the
+  // discard guard measures edits against this, not against empty.
+  const [seed, setSeed] = useState({ title: initialText.trim(), agent: '' });
 
   const { playbooks } = usePlaybooks(projectId);
   const { agents, loading: rosterLoading } = useAgentRoster(projectId, projectSlug);
@@ -100,6 +105,7 @@ export function NewTaskModal({
     if (parsed.agent === '') return;
     setAgent(parsed.agent);
     setTitle(parsed.title);
+    setSeed({ title: parsed.title, agent: parsed.agent });
     // The deep link SET something the collapsed form does not show. Open the
     // section rather than dispatch to an agent the operator never saw named.
     setAdvanced(true);
@@ -108,35 +114,6 @@ export function NewTaskModal({
   useEffect(() => {
     titleRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !busy) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
-
-  // Focus trap: Tab cycles inside the dialog instead of escaping to the board
-  // behind it. Queried live so controls that appear/disable mid-edit count.
-  const trapTab = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (e.key !== 'Tab') return;
-    const root = dialogRef.current;
-    if (root === null) return;
-    const focusable = [
-      ...root.querySelectorAll<HTMLElement>('input, select, textarea, button, a[href]'),
-    ].filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (first === undefined || last === undefined) return;
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  };
 
   // Which advanced values are no longer at their default. Named, not counted:
   // the disclosure is the only trace a collapsed override leaves, and "3 set"
@@ -151,6 +128,34 @@ export function NewTaskModal({
     ...(labels.length > 0 ? ['labels'] : []),
     ...(column !== 'triage' ? ['column'] : []),
   ];
+
+  // Anything the operator would have to retype: a title, a prompt, or an
+  // advanced override that differs from what the form opened with (a deep-link
+  // seed counts as the starting point, not as an edit). Closing over any of this
+  // asks first instead of silently discarding it — Escape and the backdrop are
+  // the easiest ways to lose a half-written task, so they need the guard.
+  const dirty =
+    title.trim() !== seed.title ||
+    prompt.trim() !== '' ||
+    agent !== seed.agent ||
+    overrides.some((o) => o !== 'agent');
+  const discard = useDiscardGuard(dirty, onClose, { disabled: busy });
+  const { requestClose } = discard;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') requestClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [requestClose]);
+
+  // Focus trap: Tab cycles inside the dialog instead of escaping to the board
+  // behind it (the shared containment helper, queried live per keypress).
+  const trapTab = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    const root = dialogRef.current;
+    if (root !== null) containTab(e.nativeEvent, root);
+  };
 
   const submit = (): void => {
     const t = title.trim();
@@ -190,7 +195,7 @@ export function NewTaskModal({
       role="dialog"
       aria-modal="true"
       aria-label="New task"
-      onClick={busy ? undefined : onClose}
+      onClick={requestClose}
     >
       <div
         ref={dialogRef}
@@ -202,7 +207,7 @@ export function NewTaskModal({
           <span className="font-display text-[14px] font-bold text-ink">New task</span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={busy}
             aria-label="close"
             className="ml-auto text-[15px] leading-none text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
@@ -378,7 +383,9 @@ export function NewTaskModal({
             go find — and it tracks that select when advanced changes it, so it
             can never promise Inbox and deliver a dispatch. Cancelling is the ×,
             Escape, or the backdrop: three ways out already, none of them a
-            button that competes with the one that does the work. */}
+            button that competes with the one that does the work. Any of the
+            three asks first once there's a title, a prompt, or an advanced
+            override to lose — see `requestClose`. */}
         <div className="mt-4 flex justify-end">
           <button
             type="button"
@@ -390,6 +397,15 @@ export function NewTaskModal({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title="Discard new task?"
+        confirmLabel="discard"
+        danger
+      >
+        The title, prompt, and any advanced settings you've entered will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

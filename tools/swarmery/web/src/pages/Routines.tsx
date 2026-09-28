@@ -21,6 +21,7 @@ import { findProject } from '../lib/projectSlug';
 import { ScopeChip } from '../components/ScopeChip';
 import { useScope } from '../lib/scope';
 import { ConfirmDialog, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
+import { useDiscardGuard } from '../components/useDiscardGuard';
 import { ProjectName } from '../components/ProjectName';
 
 /* ---------------------------------------------------------------- cron help */
@@ -407,8 +408,29 @@ function RoutineEditor({
   const [err, setErr] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
+  // The form as it opened, captured from the initial state on the first render
+  // so the dirty check compares against exactly what the fields were seeded with.
+  const snapshot = JSON.stringify({ name, projectId, cronExpr, catchUp, timeoutSec, webhook, steps });
+  const [initialSnapshot] = useState(snapshot);
+
   const cronOk = cronLooksValid(cronExpr);
   const canSave = name.trim() !== '' && steps.length > 0 && cronOk && !saving;
+
+  // Dirty = the form differs from how it opened. The post-save "copy the
+  // webhook token" view already persisted server-side — gated on token === null
+  // so it never nags on a state that has nothing left to lose.
+  const discard = useDiscardGuard(token === null && snapshot !== initialSnapshot, onClose, {
+    disabled: saving,
+  });
+  const { requestClose } = discard;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') requestClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [requestClose]);
 
   const save = async (): Promise<void> => {
     setSaving(true);
@@ -443,7 +465,7 @@ function RoutineEditor({
       role="dialog"
       aria-modal="true"
       aria-label={isNew ? 'new routine' : 'edit routine'}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         className="flex h-full w-full max-w-lg flex-col border-l border-line bg-surface"
@@ -455,7 +477,7 @@ function RoutineEditor({
           </span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="close"
             className="rounded-lg border border-line px-2.5 py-1 font-mono text-[12px] text-ink-dim hover:text-ink"
           >
@@ -585,7 +607,7 @@ function RoutineEditor({
         <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-lg border border-line px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 hover:bg-surface2"
           >
             Cancel
@@ -600,6 +622,15 @@ function RoutineEditor({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title={isNew ? 'Discard new routine?' : 'Discard changes?'}
+        confirmLabel="discard"
+        danger
+      >
+        The name, schedule, and steps you've entered will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

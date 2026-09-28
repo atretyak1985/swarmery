@@ -1,0 +1,12 @@
+{
+  "name": "probe-pack",
+  "version": "0.0.0",
+  "description": "Throwaway fixture for scripts/tests/cc-channel-probe.sh. It lives under scripts/, outside plugins/**, so it is never listed in marketplace.json and never seen by the neutrality scan or the agent-frontmatter gate.",
+  "userConfig": {
+    "probe_marker": {
+      "type": "string",
+      "title": "Probe marker",
+      "description": "A fixed marker the probe writes into one settings rung at a time."
+    }
+  }
+}

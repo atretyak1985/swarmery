@@ -47,6 +47,20 @@ var KnownEvents = []string{
 	EventPluginDrift, EventPhaseSurprise, EventRunNeedsOperator,
 }
 
+// DefaultEvents is the event set sent when neither --notify-events nor
+// SWARMERY_NOTIFY_EVENTS names one: the two moments a human is blocking work
+// (a pending approval, a headless run handed to the operator).
+var DefaultEvents = []string{EventApprovalRequested, EventRunNeedsOperator}
+
+// EventsSetting resolves the --notify-events default: SWARMERY_NOTIFY_EVENTS
+// when set (it replaces the default, never extends it), else DefaultEvents.
+func EventsSetting(getenv func(string) string) string {
+	if v := getenv("SWARMERY_NOTIFY_EVENTS"); v != "" {
+		return v
+	}
+	return strings.Join(DefaultEvents, ",")
+}
+
 // Body templates (--notify-template).
 const (
 	TemplateGeneric  = "generic"  // raw Event JSON
@@ -73,7 +87,7 @@ type Event struct {
 // Config tunes a Notifier; zero values fall back to defaults.
 type Config struct {
 	URL          string        // receiver URL (required)
-	Events       []string      // enabled event types (default: approval_requested)
+	Events       []string      // enabled event types (default: DefaultEvents)
 	Template     string        // generic | ntfy | telegram (default: generic)
 	TelegramChat string        // chat_id — required when Template == telegram
 	Timeout      time.Duration // per-POST timeout (default 5s)
@@ -95,7 +109,7 @@ func (c Config) withDefaults() Config {
 		}
 	}
 	if len(events) == 0 {
-		events = []string{EventApprovalRequested}
+		events = append([]string(nil), DefaultEvents...)
 	}
 	c.Events = events
 	if c.Timeout <= 0 {

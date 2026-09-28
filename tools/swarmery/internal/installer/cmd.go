@@ -37,6 +37,7 @@ var installEnvKeys = []struct {
 	{flag: "workspace-root", env: "SWARMERY_WORKSPACE_ROOT"},
 	{flag: "statusline-src", env: "SWARMERY_STATUSLINE_SRC"},
 	{flag: "projects-roots", env: "SWARMERY_PROJECTS_ROOTS"},
+	{flag: "trusted-origins", env: "SWARMERY_TRUSTED_ORIGINS"},
 	{flag: "claude-config-dir", env: "CLAUDE_CONFIG_DIR", noShellEnv: true},
 }
 
@@ -44,7 +45,7 @@ var installEnvKeys = []struct {
 //
 //	swarmery install [--port <n>] [--onboard-roots <dirs>]
 //	                 [--workspace-root <dir>] [--statusline-src <dir>]
-//	                 [--projects-roots <dirs|auto>]
+//	                 [--projects-roots <dirs|auto>] [--trusted-origins <origins>]
 //
 // Anything the daemon needs at runtime is baked into the plist's
 // EnvironmentVariables. Because Install rewrites the whole plist, a bare
@@ -68,6 +69,10 @@ func CmdInstall(args []string) error {
 	projectsRoots := fs.String("projects-roots", "",
 		"comma-separated transcript roots, or 'auto' = every ~/.claude*/projects — what makes "+
 			"a second account's sessions and usage visible (env: SWARMERY_PROJECTS_ROOTS)")
+	trustedOrigins := fs.String("trusted-origins", "",
+		"comma-separated extra browser origins (scheme://host[:port]) allowed through the "+
+			"cross-origin fence on write endpoints — set it when the dashboard is reached by a "+
+			"friendly alias instead of localhost (env: SWARMERY_TRUSTED_ORIGINS; empty = loopback only)")
 	claudeConfigDir := fs.String("claude-config-dir", "",
 		"CLAUDE_CONFIG_DIR baked into the plist — the account every daemon-spawned run uses when a "+
 			"project has no binding. Set it when the operator's own sessions always export one: Claude "+
@@ -90,10 +95,11 @@ func CmdInstall(args []string) error {
 	prev := sys.ExistingEnv()
 
 	env, preserved := mergeInstallEnv(prev, set, map[string]string{
-		"onboard-roots":  *onboardRoots,
-		"workspace-root": *workspaceRoot,
-		"statusline-src": *statuslineSrc,
-		"projects-roots": *projectsRoots,
+		"onboard-roots":   *onboardRoots,
+		"workspace-root":  *workspaceRoot,
+		"statusline-src":  *statuslineSrc,
+		"projects-roots":  *projectsRoots,
+		"trusted-origins": *trustedOrigins,
 
 		"claude-config-dir": *claudeConfigDir,
 	}, os.LookupEnv)

@@ -132,3 +132,89 @@ func TestProjectsRootFlagOmittedKeepsTheDefault(t *testing.T) {
 		t.Errorf("cfg.ProjectsRoots = %v, want %v", cfg.ProjectsRoots, want)
 	}
 }
+
+// makeAccountRoots creates ~/.claude/projects and ~/.claude-acct2/projects
+// under home — a two-account machine.
+func makeAccountRoots(t *testing.T, home string) []string {
+	t.Helper()
+	roots := []string{
+		filepath.Join(home, ".claude", "projects"),
+		filepath.Join(home, ".claude-acct2", "projects"),
+	}
+	for _, d := range roots {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return roots
+}
+
+// A shell-run backfill carries no SWARMERY_PROJECTS_ROOTS=auto (only the
+// launchd plist sets it), so the CLI default must cover every account on its
+// own — the 2026-09-24 replay silently skipped the second account.
+func TestCLIDefaultProjectsRootsCoversEveryAccount(t *testing.T) {
+	home := isolatedHome(t)
+	want := makeAccountRoots(t, home)
+	if got := cliDefaultProjectsRoots(); !slices.Equal(got, want) {
+		t.Errorf("cliDefaultProjectsRoots() = %v, want %v", got, want)
+	}
+}
+
+// An explicit env value wins over the CLI auto default, exactly as for serve.
+func TestCLIDefaultProjectsRootsHonorsEnv(t *testing.T) {
+	home := isolatedHome(t)
+	makeAccountRoots(t, home)
+
+	t.Setenv("SWARMERY_PROJECTS_ROOTS", "/only/this")
+	if got := cliDefaultProjectsRoots(); !slices.Equal(got, []string{"/only/this"}) {
+		t.Errorf("with SWARMERY_PROJECTS_ROOTS: got %v, want [/only/this]", got)
+	}
+
+	t.Setenv("SWARMERY_PROJECTS_ROOTS", "")
+	t.Setenv("SWARMERY_PROJECTS_ROOT", "/legacy/root")
+	if got := cliDefaultProjectsRoots(); !slices.Equal(got, []string{"/legacy/root"}) {
+		t.Errorf("with SWARMERY_PROJECTS_ROOT: got %v, want [/legacy/root]", got)
+	}
+}
+
+// No Claude config dir at all → the stock root, so the failure names a path.
+func TestCLIDefaultProjectsRootsFallsBackToTheStockRoot(t *testing.T) {
+	home := isolatedHome(t)
+	want := []string{filepath.Join(home, ".claude", "projects")}
+	if got := cliDefaultProjectsRoots(); !slices.Equal(got, want) {
+		t.Errorf("cliDefaultProjectsRoots() = %v, want %v", got, want)
+	}
+}
+
+// serve's default (pipelineFlags → defaultProjectsRoots) stays the single
+// stock root on the same two-account HOME: configure nothing, get exactly
+// ~/.claude/projects, byte-identical to before.
+func TestServeDefaultProjectsRootsUnchangedOnMultiAccountHome(t *testing.T) {
+	home := isolatedHome(t)
+	makeAccountRoots(t, home)
+
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	cfg := pipelineFlags(fs)
+	if err := fs.Parse(nil); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	want := []string{filepath.Join(home, ".claude", "projects")}
+	if !slices.Equal(cfg.ProjectsRoots, want) {
+		t.Errorf("serve cfg.ProjectsRoots = %v, want %v", cfg.ProjectsRoots, want)
+	}
+}
+
+// --projects-root still replaces the CLI auto default.
+func TestCLIProjectsRootFlagReplacesAutoDefault(t *testing.T) {
+	home := isolatedHome(t)
+	makeAccountRoots(t, home)
+
+	fs := flag.NewFlagSet("backfill", flag.ContinueOnError)
+	cfg := pipelineFlagsWithRoots(fs, cliDefaultProjectsRoots())
+	if err := fs.Parse([]string{"--projects-root", "/x/projects"}); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !slices.Equal(cfg.ProjectsRoots, []string{"/x/projects"}) {
+		t.Errorf("cfg.ProjectsRoots = %v, want [/x/projects]", cfg.ProjectsRoots)
+	}
+}

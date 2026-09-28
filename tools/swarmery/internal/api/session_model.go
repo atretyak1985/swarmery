@@ -17,7 +17,18 @@ import (
 // used", and in every cost and eval surface that trusted the column. The two
 // facts that make the change visible are computed here from turns, which does
 // carry the per-message model.
+//
+// The FIRST model is read from turns too, not from sessions.model: ingest
+// stamps that column with the first assistant model of each BATCH, so a
+// session whose later turns arrive in a tail batch (a resumed `claude -r
+// --model …`, or any mid-file tail) had it overwritten with the new model and
+// compared the last model against itself — the step-8.2 smoke test of plan 546
+// saw sonnet-5 → haiku-4-5 reported as unchanged.
 const sessionModelCols = `,
+	       (SELECT tr.model FROM turns tr
+	         WHERE tr.session_id = s.id AND tr.role = 'assistant'
+	           AND tr.model IS NOT NULL AND tr.model <> ''
+	         ORDER BY tr.seq ASC LIMIT 1),
 	       (SELECT tr.model FROM turns tr
 	         WHERE tr.session_id = s.id AND tr.role = 'assistant'
 	           AND tr.model IS NOT NULL AND tr.model <> ''
@@ -28,11 +39,12 @@ const sessionModelCols = `,
 
 // sessionModelScan holds that tail.
 type sessionModelScan struct {
+	first    sql.NullString
 	last     sql.NullString
 	distinct sql.NullInt64
 }
 
-func (m *sessionModelScan) dest() []any { return []any{&m.last, &m.distinct} }
+func (m *sessionModelScan) dest() []any { return []any{&m.first, &m.last, &m.distinct} }
 
 // apply fills sessionDTO.ModelLast / ModelChanged.
 //
@@ -53,11 +65,11 @@ func (m *sessionModelScan) apply(s *sessionDTO) {
 		v := m.last.String
 		s.ModelLast = &v
 	}
-	if m.distinct.Int64 <= 1 || s.Model == nil || s.ModelLast == nil {
+	if m.distinct.Int64 <= 1 || !m.first.Valid || m.first.String == "" || s.ModelLast == nil {
 		return
 	}
-	s.ModelChanged = !modelid.SameTier(*s.Model, *s.ModelLast)
+	s.ModelChanged = !modelid.SameTier(m.first.String, *s.ModelLast)
 	// The chip renders on this, not on ModelChanged: only a move to a weaker
 	// model is a fallback. See handlers.go's field comment.
-	s.ModelFellBack = modelid.IsFallback(*s.Model, *s.ModelLast)
+	s.ModelFellBack = modelid.IsFallback(m.first.String, *s.ModelLast)
 }

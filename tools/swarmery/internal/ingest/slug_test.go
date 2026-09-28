@@ -16,15 +16,18 @@ import (
 // Code itself writes under ~/.claude/projects: it is a LOOKUP key, and it must
 // match what is on disk or the lookup silently finds nothing.
 func TestSlugForPathIsTheDBSlugNotTheClaudeDirName(t *testing.T) {
-	// A dot-free path is where the two agree — which is exactly why the
-	// divergence went unnoticed until a dotted project turned up.
+	// A path built entirely from [A-Za-z0-9/] is the ONLY shape where the two
+	// agree — which is exactly why the divergence went unnoticed until a dotted
+	// project turned up. They also diverge on '_', '+', space, '@', ':', '&',
+	// '=' and brackets; a dot is simply the first case anyone hit.
 	const plain = "/Users/dev/src/acme"
 	if got, want := SlugForPath(plain), claudeproj.Slug(plain); got != want {
 		t.Fatalf("for a dot-free path the two encodings must agree: %q vs %q", got, want)
 	}
 
-	// A dotted path is where they must NOT agree. If this ever fails, someone
-	// changed SlugForPath — read the comment on it before going further.
+	// A dotted path is one of the many shapes where they must NOT agree. If
+	// this ever fails, someone changed SlugForPath — read the comment on it
+	// before going further.
 	const dotted = "/Users/dev/.local/src/acme"
 	dbSlug := SlugForPath(dotted)
 	if dbSlug != "-Users-dev-.local-src-acme" {

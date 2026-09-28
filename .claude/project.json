@@ -24,6 +24,7 @@
       "typecheck": "cd tools/swarmery/web && npx tsc --noEmit"
     }
   },
+  "learning": { "areaDepth": 4 },
   "jira": {
     "baseUrl": "https://nanitor.atlassian.net",
     "projectKey": "NAN",

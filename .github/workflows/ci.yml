@@ -135,6 +135,15 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: evals/package-lock.json
+      - name: Compile eval regex assertions (no API key needed)
+        working-directory: evals
+        run: |
+          set -euo pipefail
+          # Catches patterns JS RegExp rejects (e.g. PCRE `(?i)`) that would
+          # otherwise only surface on a paid promptfoo run.
+          npm ci
+          node scripts/check-regex.mjs
+          bash ../scripts/tests/eval-regex-compile.test.sh
       - name: Run agent evals + gate (skips cleanly without ANTHROPIC_API_KEY)
         working-directory: evals
         env:
@@ -147,7 +156,6 @@ jobs:
             echo "by scripts/tests/eval-gate.test.sh in the validate job (no API key needed)."
             exit 0
           fi
-          npm ci
           npx promptfoo eval -c promptfooconfig.yaml -o results.json
           bash ../scripts/eval-gate.sh results.json
 

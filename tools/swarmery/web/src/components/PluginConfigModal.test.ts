@@ -1,13 +1,27 @@
+// @vitest-environment jsdom
+//
 // Unit tests for the probe's auto-fill rule — the one piece of the config modal
-// that decides what lands in a project's .claude/project.json.
+// that decides what lands in a project's .claude/project.json — plus a render
+// test of the modal's discard guard. This file stays `.ts` rather than `.tsx`
+// (no JSX loader is configured for it), so the rendered case builds its
+// element with React.createElement instead of JSX.
 //
 // The web app ships no committed test runner (CI is `npm run build` only, and
 // the Go coverage gate excludes web/), so this suite is dev-only: run it with
-//   npx vitest run src/components/PluginConfigModal.test.ts
+//   npx vitest run --environment jsdom src/components/PluginConfigModal.test.ts
 // The file still type-checks under `tsc --noEmit` in the normal build.
 
-import { describe, expect, it } from 'vitest';
-import { buildSubmitValue, fillEmptyFrom } from './PluginConfigModal';
+import { createElement } from 'react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ProjectPluginRow } from '../api/types';
+import { buildSubmitValue, fillEmptyFrom, PluginConfigModal } from './PluginConfigModal';
+
+vi.mock('../api', () => ({
+  ConfigValidationError: class ConfigValidationError extends Error {},
+  probeProjectConfig: vi.fn(),
+  putProjectConfig: vi.fn(),
+}));
 
 const LEAVES = ['tokensFile', 'componentsRoot', 'devUrl', 'verify.lint', 'verify.typecheck'];
 
@@ -96,5 +110,40 @@ describe('buildSubmitValue', () => {
     expect(buildSubmitValue(SCHEMA, { tokensFile: 'a.css', diff: { threshold: '' } })).toEqual({
       tokensFile: 'a.css',
     });
+  });
+});
+
+function row(): ProjectPluginRow {
+  return {
+    name: 'demo-pack',
+    description: '',
+    enabled: true,
+    locked: false,
+    status: 'ok',
+    configKey: 'demo',
+    configSchema: {
+      type: 'object',
+      properties: { tokensFile: { type: 'string' } },
+    },
+    configCurrent: {},
+  };
+}
+
+afterEach(cleanup);
+
+describe('PluginConfigModal — discard guard', () => {
+  it('confirms before discarding an edited field, and only closes once confirmed', async () => {
+    const onClose = vi.fn();
+    render(createElement(PluginConfigModal, { projectId: 1, row: row(), onClose, onSaved: vi.fn() }));
+
+    const field = await screen.findByLabelText('tokensFile');
+    fireEvent.change(field, { target: { value: 'src/app/globals.css' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'cancel' }));
+    expect(await screen.findByText('Discard changes?')).toBeDefined();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'discard' }));
+    expect(onClose).toHaveBeenCalled();
   });
 });

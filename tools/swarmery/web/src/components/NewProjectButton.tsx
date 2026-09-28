@@ -10,6 +10,8 @@
 import { useEffect, useState } from 'react';
 import { fetchOnboardConfig, onboardProject } from '../api';
 import type { OnboardConfig, OnboardResponse } from '../api/types';
+import { ConfirmDialog } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 const PACKS = ['web-pack', 'iot-pack', 'uav-pack', 'infra-pack', 'lsp-pack'] as const;
 
@@ -63,6 +65,21 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
   const enabled = cfg?.enabled ?? false;
   const canSubmit = enabled && slugValid && path.trim() !== '' && !busy;
 
+  // Dirty = any field differs from the empty form it opens with. After a
+  // successful onboard there is nothing left to lose.
+  const dirty =
+    done === null && (slug.trim() !== '' || path.trim() !== '' || workspaceRoot.trim() !== '' || packs.size > 0);
+  const discard = useDiscardGuard(dirty, onClose, { disabled: busy });
+  const { requestClose } = discard;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') requestClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [requestClose]);
+
   function togglePack(p: string): void {
     setPacks((prev) => {
       const next = new Set(prev);
@@ -91,7 +108,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
       role="dialog"
       aria-modal="true"
       aria-label="New project"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         className="w-full max-w-md rounded-xl border border-line bg-surface px-4 py-4"
@@ -188,7 +205,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
@@ -231,6 +248,15 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title="Discard new project?"
+        confirmLabel="discard"
+        danger
+      >
+        The slug, path, workspace root, and pack selections you&apos;ve entered will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

@@ -61,6 +61,16 @@ for f in "${files[@]}"; do
     bad "$f falls back from 'stat -f' to 'stat -c' by exit code — GNU's -f exits 0, so the fallback never runs"
     continue
   fi
+  # The same trap one level indirect, and how it actually shipped: the fallback
+  # was `|| find … -exec stat -c …` in one place and `|| date -r "$(stat -c …)"`
+  # in another. Neither puts `stat -c` next to the `||`, so neither matched the
+  # shape above, and both read every mtime as a filesystem block on Linux for
+  # months. Any `||` guarding a `stat -f` is the bug, whatever follows it.
+  # This suite is the one exemption — a scanner has to quote the shape it forbids.
+  if [ "$f" != "scripts/tests/portable-shell.test.sh" ] && has "$f" 'stat -f.*\|\|'; then
+    bad "$f guards 'stat -f' with '||' — GNU's -f exits 0, so nothing after it runs on Linux; branch on probed output instead"
+    continue
+  fi
   ok
 done
 
@@ -76,6 +86,17 @@ for f in "${files[@]}"; do
   has "$f" 'date -v' || continue
   if has "$f" 'date -d'; then ok
   else bad "$f uses BSD 'date -v' with no GNU 'date -d' form"; fi
+done
+
+# ── date -r ───────────────────────────────────────────────────────
+# The mirror of the stat split, and the other half of the same shipped bug.
+# BSD `date -r 1758...` reads an EPOCH. GNU `date -r` reads a FILE's mtime and
+# rejects a bare number outright, so a BSD-only epoch call is dead on Linux
+# even when it is reached. GNU spells an epoch `date -d @1758...`.
+for f in "${files[@]}"; do
+  has "$f" 'date -r' || continue
+  if has "$f" 'date -d'; then ok
+  else bad "$f uses BSD 'date -r <epoch>' with no GNU 'date -d @<epoch>' form"; fi
 done
 
 # ── bash 4 builtins in a #!/bin/bash script ───────────────────────

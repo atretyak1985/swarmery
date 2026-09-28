@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "cliVersion": "9.9.9",
+  "cliVersionRaw": "9.9.9 (Claude Code)",
+  "cliPath": "/usr/local/bin/claude",
+  "measuredAt": "2026-12-01T00:00:00Z",
+  "host": "Linux x86_64",
+  "method": "claude mcp list detail line (token-free)",
+  "facts": {
+    "G1": {
+      "verdict": "drift",
+      "observed": {
+        "user": true,
+        "project": true,
+        "local": false,
+        "flag": true,
+        "user_under_project_local": false,
+        "project_under_project_local": true,
+        "local_under_project_local": false,
+        "flag_under_project_local": true
+      },
+      "note": "observations disagree with the embedded baseline"
+    },
+    "G2": {
+      "verdict": "inconclusive",
+      "observed": {
+        "literal_survives": true,
+        "parent_expands": true,
+        "parent_expands_under_project_local": true
+      },
+      "note": "at least one observation could not be made"
+    },
+    "G3": {
+      "verdict": "drift",
+      "observed": {
+        "user": true,
+        "project": false,
+        "local": false,
+        "flag": false,
+        "user_under_project_local": false,
+        "project_under_project_local": false,
+        "local_under_project_local": false,
+        "flag_under_project_local": true
+      },
+      "note": "observations disagree with the embedded baseline"
+    }
+  }
+}

@@ -85,6 +85,12 @@ export interface Project {
   isSystem: boolean;
   /** Null for telemetry-only projects (no readable .claude/settings.json). */
   plugin: PluginState | null;
+  /**
+   * Managed AND independently onboarded: false for a sub-repo that inherited
+   * an umbrella's settings, and for "/", $HOME, the System dir or an
+   * onboarding root (Go: internal/api/project_onboarded.go).
+   */
+  onboarded: boolean;
 }
 
 /** One project-local registry entry (agent, skill, command or hook). */
@@ -3139,6 +3145,9 @@ export interface AccountBinding {
   effective: string;
   configDir: string;
   source: 'binding' | 'default';
+  /** Set when the settings file names an account but the provenance gate
+   * ignores it (git tracks it, or git could not classify it). */
+  ignoredReason?: string;
 }
 
 // --- Project overview (GET /api/projects/{id}/overview, Canvas v2 phase 1) ----

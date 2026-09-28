@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -18,6 +19,13 @@ type RunSpec struct {
 	Model       string // optional --model override ("" = account default)
 	Agent       string // optional registry agent name ("" = plain run, no mention)
 
+	// Effort is this run's --effort, set by the service when a rung above this
+	// spawn site's env knob chose one (today: the complexity router in active
+	// mode). "" — every run before that rung existed, and every run in off or
+	// shadow — resolves exactly as before: SWARMERY_DISPATCH_EFFORT, then
+	// DefaultEffort. See runEffort.
+	Effort string
+
 	// PermissionMode is the task's playbook-declared --permission-mode, a
 	// per-run override of this spawn site's env knob. "" (the common case)
 	// inherits the knob, so a card whose recipe says nothing behaves exactly as
@@ -31,6 +39,14 @@ type RunSpec struct {
 	// would silently fall back to the default account (plan A3).
 	// "" means the default account and produces no env delta.
 	Account string
+
+	// SettingsFile names a project settings file to lend the run on the command
+	// line, or "" when it needs none — set via repopath.InheritedSettings when
+	// Cwd is a worktree cut from a SUB-repo of a multi-repo project (the
+	// project's own .claude/settings.json, which enables the plugin stack, is
+	// otherwise unreachable from that worktree; phaserun and planrun guard the
+	// same case). "" is the common single-repo case and changes nothing.
+	SettingsFile string
 }
 
 // Run is the outcome of a completed dispatched process.
@@ -164,6 +180,26 @@ func permissionMode(playbookMode string) string {
 	}
 }
 
+// runEffort resolves ONE run's --effort: the spec's own Effort when the service
+// set one, otherwise this spawn site's knob and default, exactly as every run
+// resolved before RunSpec.Effort existed.
+//
+// The spec value is normalised, not trusted: the router's efforts were already
+// validated at policy load, but this is the one place a value reaches argv, and
+// an unknown one would make `claude` refuse the flag and die before the run
+// starts. An unusable value is demoted to the knob with a warning — the same
+// degradation claudeflags applies to a bad env value — never to "no flag",
+// which would be the CLI's xhigh.
+func runEffort(spec RunSpec) string {
+	if raw := strings.TrimSpace(spec.Effort); raw != "" {
+		if canonical, ok := claudeflags.NormalizeEffort(raw); ok && canonical != "" {
+			return canonical
+		}
+		log.Printf("warning: dispatch: ignoring unusable run effort %q; falling back to %s", raw, effortEnv)
+	}
+	return claudeflags.Effort(effortEnv, DefaultEffort)
+}
+
 // Start maps this engine's RunSpec onto runcore.Spec and its Result back onto
 // Run. Everything shared — the argv, the account env merge, the process group,
 // the drain, the exit ladder — lives in internal/runcore; what stays here is
@@ -189,7 +225,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		Model:       spec.Model,
 		// Resolved, never omitted: an absent --effort is not "the cheap default"
 		// but the CLI's xhigh, paid once per stage of every playbook chain.
-		Effort: claudeflags.Effort(effortEnv, DefaultEffort),
+		Effort: runEffort(spec),
 		// Without this the executor cannot write, run or commit — and it still exits
 		// 0, so the task is stamped done over an empty diff. See internal/claudeflags
 		// (knob: SWARMERY_DISPATCH_PERMISSION_MODE).
@@ -203,6 +239,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// would silently run the task under the default account (plan A3). The
 		// service resolves the binding from the project path once per playbook.
 		Account:         spec.Account,
+		SettingsFile:    spec.SettingsFile,
 		StdoutTailBytes: tailBytes,
 		// No Timeout: the dispatcher's stage ctx owns cancellation (runStage).
 	})

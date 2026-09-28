@@ -30,6 +30,10 @@ func writeProjectPlaybook(t *testing.T, db *sql.DB, projectRoot, name, content s
 	if err := os.WriteFile(dir+"/"+name, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A real .git marker: admit() resolves the project path through
+	// repopath.ResolveTrusted, which requires the final fallback candidate
+	// (projects.path itself) to be an actual git checkout.
+	mkRepo(t, projectRoot)
 	if _, err := db.Exec(`UPDATE projects SET path=? WHERE id=1`, projectRoot); err != nil {
 		t.Fatalf("point project at root: %v", err)
 	}

@@ -26,6 +26,8 @@ import {
 } from '../api';
 import { fmtElapsed } from '../lib/format';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
+import { ConfirmDialog } from './ui';
+import { useDiscardGuard } from './useDiscardGuard';
 
 /** The reason a revise wizard starts from: the diagnosis itself, restated as
  * prose the planner can act on. Composed from what the daemon PROVED (outcome,
@@ -171,28 +173,42 @@ export function RunOutcomeModal({
     };
   }, [load]);
 
+  // The revise reason is pre-filled from the diagnosis when the panel opens, so
+  // "dirty" means it differs from THAT text (or from '' before it was filled) —
+  // an untouched pre-fill is not the operator's writing and must not nag.
+  const diag = phase.kind === 'ready' ? phase.diag : null;
+  const reasonBaseline = diag !== null ? diagnosisReason(diag).trim() : '';
+  const reasonNow = reviseReason.trim();
+  const reviseDirty = reasonNow !== '' && reasonNow !== reasonBaseline;
+  const discard = useDiscardGuard(reviseDirty, onClose, { disabled: busy || reviseBusy });
+
   // Esc closes, except while a branch delete is in flight. While the delete is
   // ARMED it disarms instead of closing — Esc is the universal "back out", and
   // closing the whole modal on it would leave the user unsure whether the branch
-  // survived.
+  // survived. The same collapse-then-close ladder backs the backdrop click and
+  // the Close button; only the final step — the modal unmounting — goes
+  // through the discard guard.
+  const guardedClose = discard.requestClose;
+  const requestClose = useCallback((): void => {
+    if (busy || reviseBusy) return;
+    if (confirmingDelete) {
+      setConfirmingDelete(false);
+      return;
+    }
+    if (revising) {
+      setRevising(false);
+      return;
+    }
+    guardedClose();
+  }, [busy, reviseBusy, confirmingDelete, revising, guardedClose]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape' || busy || reviseBusy) return;
-      if (confirmingDelete) {
-        setConfirmingDelete(false);
-        return;
-      }
-      // Same back-out ladder as the armed delete: Esc collapses the revise
-      // panel (typed reason kept) before it closes the whole modal.
-      if (revising) {
-        setRevising(false);
-        return;
-      }
-      onClose();
+      if (e.key === 'Escape') requestClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, reviseBusy, confirmingDelete, revising, onClose]);
+  }, [requestClose]);
 
   const startRevise = (): void => {
     const reason = reviseReason.trim();
@@ -213,7 +229,6 @@ export function RunOutcomeModal({
       .finally(() => setReviseBusy(false));
   };
 
-  const diag = phase.kind === 'ready' ? phase.diag : null;
   const chip = OUTCOME_CHIP[diag?.runOutcome ?? 'idle'];
   // The branch is only reclaimable when the daemon actually proved it dirty —
   // offering the delete otherwise would invite destroying an unrelated branch. The
@@ -313,7 +328,7 @@ export function RunOutcomeModal({
       role="dialog"
       aria-modal="true"
       aria-label="Phase run diagnosis"
-      onClick={busy ? undefined : onClose}
+      onClick={busy ? undefined : requestClose}
     >
       <div
         className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-line bg-surface px-4 py-4"
@@ -542,14 +557,23 @@ export function RunOutcomeModal({
           </button>
           <button
             type="button"
-            onClick={onClose}
-            disabled={busy}
+            onClick={requestClose}
+            disabled={busy || reviseBusy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
             Close
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        {...discard.confirmProps}
+        title="Discard revise reason?"
+        confirmLabel="discard"
+        danger
+      >
+        The reason you wrote for revising this plan will be lost.
+      </ConfirmDialog>
     </div>
   );
 }

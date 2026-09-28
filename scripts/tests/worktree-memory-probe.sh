@@ -4,11 +4,11 @@
 #
 # Claude Code keeps auto-memory per project under
 # <home>/.claude/projects/<slug>/memory/, where <slug> encodes an absolute path
-# (every '/' and '.' becomes '-'). The daemon never runs a task in the project's
-# checkout — it runs it in a worktree, under a different absolute path, which
-# encodes to a different slug. If memory followed the session's cwd, every
-# headless run would start amnesiac while the operator's real memory sat under
-# the checkout's slug.
+# (EVERY character outside [A-Za-z0-9] becomes '-'). The daemon never runs a task
+# in the project's checkout — it runs it in a worktree, under a different
+# absolute path, which encodes to a different slug. If memory followed the
+# session's cwd, every headless run would start amnesiac while the operator's
+# real memory sat under the checkout's slug.
 #
 # This script answers that question and prints one of:
 #   MATCH        — a worktree session resolved memory to the canonical slug.
@@ -76,8 +76,12 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# slug <abs-path> — the ~/.claude/projects directory name for a path.
-slug() { printf '%s' "$1" | tr './' '--'; }
+# slug <abs-path> — the ~/.claude/projects directory name for a path: every
+# character outside [A-Za-z0-9] becomes '-'. printf never echo (a trailing
+# newline would become a dash), and never under a forced C locale (that would
+# make tr byte-wise and break parity with the rune-wise Go encoder, which is the
+# authority — see tools/swarmery/internal/claudeproj).
+slug() { printf '%s' "$1" | tr -c 'A-Za-z0-9' '-'; }
 
 say() { printf '%s\n' "$*"; }
 hr() { printf -- '── %s %s\n' "$1" "$(printf '%.0s─' $(seq 1 $((60 - ${#1}))))"; }
