@@ -834,3 +834,47 @@ func TestPhysicalDotDotAfterLinkIsNotAdmitted(t *testing.T) {
 		t.Fatalf("composed %d names", n)
 	}
 }
+
+// ── review round 3 (2026-09-28): F4 ──────────────────────────────────────────
+
+// F4: a key with a leading "-" is refused — ".claude--work" would read back as
+// "work" and alias it.
+func TestValidKeyRefusesLeadingDash(t *testing.T) {
+	for _, key := range []string{"-work", "--work", "-"} {
+		if ValidKey(key) {
+			t.Errorf("ValidKey(%q) = true, want false", key)
+		}
+	}
+	for _, key := range []string{"nabu-org", "work-2", "a-"} {
+		if !ValidKey(key) {
+			t.Errorf("ValidKey(%q) = false, want true — only a LEADING dash aliases", key)
+		}
+	}
+}
+
+// F4: with both ".claude-work" and an alias that keys the same way, the
+// canonical directory wins whatever the sort order; a binding naming "-work"
+// resolves to nothing and cannot re-point "work".
+func TestDiscoverPrefersTheCanonicalDir(t *testing.T) {
+	home := fakeHome(t)
+	installAccount(t, "work")
+	mkdirs(t, filepath.Join(home, ".claude--work", "projects"), filepath.Join(home, ".claude.work", "projects"))
+	var dirs []string
+	for _, a := range Discover() {
+		if a.Key == "work" {
+			dirs = append(dirs, a.ConfigDir)
+		}
+	}
+	if len(dirs) != 1 || dirs[0] != filepath.Join(home, ".claude-work") {
+		t.Fatalf("Discover work dirs = %v, want only the canonical %s", dirs, filepath.Join(home, ".claude-work"))
+	}
+	if d, _ := ConfigDirForAccount("work"); d != filepath.Join(home, ".claude-work") {
+		t.Fatalf("ConfigDirForAccount(work) = %s", d)
+	}
+
+	loose := filepath.Join(home, "Downloads", "x")
+	declare(t, loose, map[string]any{"claudeAccount": "-work"})
+	if r := Resolve(loose); r.Account != "" || r.ConfigDir != "" {
+		t.Fatalf("a leading-dash key resolved: account %q config dir %q", r.Account, r.ConfigDir)
+	}
+}

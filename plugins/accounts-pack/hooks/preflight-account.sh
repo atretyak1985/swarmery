@@ -34,7 +34,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 # claudeacct.go:158-180) for the characters that matter here — this is NOT
 # a mirror of it, despite what an earlier version of this comment claimed.
 # This only allows [A-Za-z0-9._-]; ValidKey's own rules (reject "", ".",
-# "..", a leading dot, "/", "\", ".." as a substring, whitespace, and
+# "..", a leading dot or dash, "/", "\", ".." as a substring, whitespace, and
 # non-printable runes) still leave it accepting "wörk", "a$b", "a;b", a
 # bare backtick, or a double quote. Diverging by rejecting MORE than
 # ValidKey does is the safe direction: every extra character this refuses
@@ -49,7 +49,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 valid_account_key() {
   case "${1:-}" in
     ''|'.'|'..')          return 1 ;;
-    .*)                   return 1 ;;
+    .*|-*)                return 1 ;;
     *[!A-Za-z0-9._-]*)    return 1 ;;
   esac
   return 0

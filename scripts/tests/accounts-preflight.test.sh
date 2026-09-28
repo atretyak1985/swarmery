@@ -182,7 +182,7 @@ else bad "(i5) swarmery sleeps 30 -> returns under 4 s, silent" "<4s '' exit 0" 
 
 # ── (j) the character gate stays stricter than claudeacct.ValidKey ────────────
 # shellcheck disable=SC2016  # literal $ and backtick are the point
-gate_vectors=('a b' 'a$b' 'a;b' 'a`b' 'wörk' '"a"')
+gate_vectors=('a b' 'a$b' 'a;b' 'a`b' 'wörk' '"a"' '-a')
 gv=0
 for key in "${gate_vectors[@]}"; do
   gv=$((gv + 1))
