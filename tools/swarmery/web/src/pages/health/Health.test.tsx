@@ -164,7 +164,7 @@ describe('Health', () => {
     expect(waiting.getAttribute('href')).toBe('/inbox');
     await waitFor(() => expect(waiting.textContent).toContain('1 Advisor finding · 1 agent rewrite to approve'));
     const because = screen.getByRole('link', { name: /because of you/i });
-    expect(because.getAttribute('href')).toBe('/lessons?tab=proof');
+    expect(because.getAttribute('href')).toBe('/learning?tab=proof');
     expect(because.textContent).toContain('2 changes verified · 1 gathering proof');
     // The window cell: 60 runs, 10 % failed, down from 50 %, $40 spent.
     await waitFor(() => expect(screen.getByText(/60 runs · 10 % failed/)).toBeTruthy());

@@ -20,8 +20,6 @@ import { UsageDataProvider } from './lib/usageData';
 import { Loading } from './components/ui';
 import { Approvals } from './pages/Approvals';
 import { Inbox } from './pages/inbox/Inbox';
-import { Decisions } from './pages/Decisions';
-import { Lessons } from './pages/Lessons';
 import { Overview } from './pages/Overview';
 import { Projects } from './pages/Projects';
 import { Sessions } from './pages/Sessions';
@@ -40,6 +38,12 @@ import './index.css';
 // it lazy-loads those two pages itself (Analytics pulls in Recharts), so their
 // weight stays out of the initial bundle.
 const Health = lazy(() => import('./pages/health/Health').then((m) => ({ default: m.Health })));
+
+// Learning (Canvas v3 phase 6) absorbs /lessons and /decisions as tabs. Lazy
+// like Health; one component serves /learning and /p/:slug/learning.
+const Learning = lazy(() =>
+  import('./pages/learning/Learning').then((m) => ({ default: m.Learning })),
+);
 
 // Agent Hub (fusion phase 17) — lazy like Health so the fleet initial
 // bundle stays unchanged. Serves both /agents (fleet) and /p/:slug/agents.
@@ -189,9 +193,17 @@ const router = createBrowserRouter([
           },
           { path: 'analytics', element: <Navigate to="/health?tab=cost" replace /> },
           { path: 'retro', element: <Navigate to="/health?tab=agents" replace /> },
-          // Decision classifier (learning-loop phase 9) — per-question stats.
-          { path: 'decisions', element: <Decisions /> },
-          { path: 'lessons', element: <Lessons /> },
+          // Learning (Canvas v3 phase 6): the retired pages land on their tab.
+          {
+            path: 'learning',
+            element: (
+              <Suspense fallback={<Loading label="learning…" />}>
+                <Learning />
+              </Suspense>
+            ),
+          },
+          { path: 'lessons', element: <Navigate to="/learning?tab=lessons" replace /> },
+          { path: 'decisions', element: <Navigate to="/learning?tab=classifier" replace /> },
           // Agent Hub — roster (/agents) + selected agent (/agents/:id). One
           // component serves both; the :id is the selected registry agent.
           {
@@ -291,6 +303,7 @@ const router = createBrowserRouter([
           { path: 'health', element: ws(<Health />) },
           { path: 'analytics', element: <ProjectHealthRedirect tab="cost" /> },
           { path: 'retro', element: <ProjectHealthRedirect tab="agents" /> },
+          { path: 'learning', element: ws(<Learning />) },
           // Agent Hub, project-scoped (rollups narrowed to :slug via the route).
           { path: 'agents', element: ws(<AgentHub />) },
           { path: 'agents/:id', element: ws(<AgentHub />) },
