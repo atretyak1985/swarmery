@@ -60,19 +60,32 @@ type Account struct {
 // usage.Source.ConfigDir which is deliberately EMPTY for the default: there the
 // empty value selects the legacy credential-resolution chain, here the field is
 // purely descriptive. Do not "align" the two — they answer different questions.
+//
+// Two directories can key the same way (".claude-work" and ".claude.work",
+// or ".claude--work", which a stray binding can make exist). The CANONICAL one
+// — ConfigDirFor(key) — wins whenever it is present, whatever the sort order;
+// otherwise the first seen. An alias can therefore never take over an account
+// that already has its canonical directory.
 func Discover() []Account {
 	roots := ProjectsRoots()
 	out := make([]Account, 0, len(roots))
-	seen := make(map[string]bool, len(roots))
+	at := make(map[string]int, len(roots))
 	for _, root := range roots {
 		key := ingest.AccountFor(root)
-		if key == "" || seen[key] {
+		if key == "" {
 			continue
 		}
-		seen[key] = true
+		dir := filepath.Dir(filepath.Clean(root))
+		if i, ok := at[key]; ok {
+			if canon, err := ConfigDirFor(key); err == nil && filepath.Clean(canon) == dir {
+				out[i].ConfigDir = dir
+			}
+			continue
+		}
+		at[key] = len(out)
 		out = append(out, Account{
 			Key:       key,
-			ConfigDir: filepath.Dir(filepath.Clean(root)),
+			ConfigDir: dir,
 			IsDefault: key == ingest.DefaultAccount,
 		})
 	}
@@ -157,11 +170,18 @@ func ConfigDirFor(key string) (string, error) {
 // ValidKey reports whether key is usable as a config-dir suffix and as a store
 // file name. Mirrors usage.safeAccountKey plus a charset restriction: the key
 // becomes a directory name under $HOME, so it is validated, never trusted.
+//
+// A leading "-" is refused as well as a leading ".": the key becomes the
+// directory ".claude-<key>", and Discover derives a key back from a directory
+// name by trimming "-" and "." after ".claude" (ingest.AccountFor). A key
+// "-work" would name ".claude--work", which that trim reads back as "work" —
+// an alias that a binding could use to re-point every "work" project at a
+// directory it made.
 func ValidKey(key string) bool {
 	if key == "" || key == "." || key == ".." {
 		return false
 	}
-	if strings.HasPrefix(key, ".") {
+	if strings.HasPrefix(key, ".") || strings.HasPrefix(key, "-") {
 		return false
 	}
 	if strings.ContainsAny(key, `/\`) || strings.Contains(key, "..") {

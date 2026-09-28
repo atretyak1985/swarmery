@@ -51,7 +51,7 @@ func TestVerdictRetry_RecoversAPass(t *testing.T) {
 	if retry.SessionUUID != r.specs[0].SessionUUID {
 		t.Errorf("retry uuid = %q, want the original %q", retry.SessionUUID, r.specs[0].SessionUUID)
 	}
-	if retry.Model != r.specs[0].Model || retry.Cwd != r.specs[0].Cwd || retry.Account != r.specs[0].Account {
+	if retry.Model != r.specs[0].Model || retry.Cwd != r.specs[0].Cwd || retry.Resolution != r.specs[0].Resolution {
 		t.Error("the verdict retry must keep the original run's model, cwd and account")
 	}
 	for _, want := range []string{"Do not re-read files", "VERDICT: PASS | FAIL | INCONCLUSIVE", "Do not invent one"} {

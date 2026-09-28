@@ -43,6 +43,38 @@ func Open(path string) (*sql.DB, error) {
 	return db, nil
 }
 
+// OpenNoMigrate opens the database at path with exactly Open's DSN (WAL,
+// foreign keys, busy timeout) and single-connection pool, but applies NO
+// migration. It is the CLI's handle: `swarmery account switch|move-session`
+// read (and move-session writes one column) while the daemon may be running,
+// and a terminal command must never migrate the schema behind the daemon's back
+// — the side effect store.Open (and therefore `swarmery backup`) carries.
+//
+// Not a `mode=ro` URI on purpose: SQLite cannot create the -shm a WAL database
+// needs on a read-only connection, so mode=ro fails outright on a cleanly-closed
+// store (see the note beside `swarmery backup` in cmd/swarmery/main.go).
+//
+// The file must already exist: a missing database is reported as an error
+// rather than created empty, so a caller can degrade to "unknown" instead of
+// leaving a blank database behind. A table a pending migration would create
+// is simply absent — callers must treat "no such table" as unknown.
+func OpenNoMigrate(path string) (*sql.DB, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	return db, nil
+}
+
 // Backup writes a consistent, defragmented snapshot of the database at srcPath
 // to destPath using SQLite's `VACUUM INTO`. It is safe to run against a live
 // WAL database (the daemon may keep serving) — VACUUM takes only a brief read

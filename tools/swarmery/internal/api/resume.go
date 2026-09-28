@@ -144,15 +144,29 @@ func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64,
 
 	cmd := exec.CommandContext(ctx, bin, resumeArgs(sessionUUID, text, o)...)
 	cmd.Dir = cwd
-	// The transcript `claude -r` must find lives under the config dir of the
-	// account that WROTE it, so the resume takes the account from the sessions row
-	// rather than from cwd: a dispatched session's cwd is a worktree with no
-	// project settings file, which would resolve to the default account and read
-	// an empty projects/ dir. SpawnEnv is the composition every swarmery spawn
-	// uses — config dir plus the account's secret store, an inherited
-	// CLAUDE_CONFIG_DIR removed for an explicit default binding — and hands
-	// os.Environ() back untouched for an unbound session.
-	cmd.Env = claudeacct.SpawnEnv(os.Environ(), account)
+	// The two axes come from two different places, and this is the one seam
+	// where that is visible:
+	//
+	//   - the ACCOUNT is the sessions row's. The transcript `claude -r` must find
+	//     lives under the config dir of the account that WROTE it, so a pin that
+	//     changed since — or the cwd's own resolution — must not re-home the
+	//     resume onto a config dir whose projects/ has no such session;
+	//   - the ESTATE comes from cwd. The credentials an MCP server needs belong
+	//     to the project tree the session runs in, whichever account pays; a
+	//     worktree cwd maps back to its source checkout inside Resolve.
+	//
+	// SpawnEnvResolved is the composition every swarmery spawn uses — config dir,
+	// account store, estate store; an inherited CLAUDE_CONFIG_DIR removed for an
+	// explicit default account — and hands os.Environ() back untouched when
+	// neither axis adds anything.
+	//
+	// This is a forced composition site (D5): WithAccount forces the payer, and
+	// the account's store is released only when the cwd INDEPENDENTLY resolves
+	// the same key under a rung that store admits (or the store is rootless) —
+	// so a session a foreign binding once re-homed onto an account never
+	// unlocks that account's credentials by being resumed. The estate still
+	// comes from the cwd, admitted by its own store's roots.
+	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(cwd).WithAccount(account))
 	// Own process group: a daemon restart (make install / launchd job stop)
 	// SIGKILLs the daemon's process group — without this, every in-flight
 	// dashboard-driven session dies mid-turn. Detached children survive as

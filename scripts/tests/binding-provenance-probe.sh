@@ -13,10 +13,15 @@
 #                    The file is tracked, so the provenance gate (Lock 1) must
 #                    ignore it: the default account and zero store names.
 #   --case tarball   the same tree extracted WITHOUT its .git. There is no
-#                    repository to ask, so Lock 1 honours it — the measured
-#                    residual that the store anchor (Lock 2) closes later. This
-#                    case is expected to show the binding taking effect; that is
-#                    a recorded number, not a failing test.
+#                    repository to ask, so Lock 1 honours it; the store anchor
+#                    (Lock 2) is what must release nothing to it: zero store
+#                    names and no estate settings, while its payer may still be
+#                    the named account (the documented residual R13).
+#
+# The fixture also commits a .claude/settings.json with one enabledPlugins
+# entry, and the probe reports doctorSettingsFile=empty|set from `account
+# doctor --fast --json`: without that file, "no estate settings were released"
+# would be true for the wrong reason.
 #
 # Named *.sh and NOT *.test.sh on purpose: the CI suite discovers
 # scripts/tests/*.test.sh, and this probe needs a built binary plus a live
@@ -70,7 +75,7 @@ while [ $# -gt 0 ]; do
     --dir)      parent="${2:-}"; shift 2 ;;
     --swarmery) swarmery_bin="${2:-}"; shift 2 ;;
     --keep)     keep=1; shift ;;
-    -h|--help)  sed -n '1,46p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)  sed -n '1,51p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)          die "unknown argument: $1" ;;
   esac
 done
@@ -143,8 +148,11 @@ mkdir -p "$src/.claude" || die "cannot create $src/.claude"
 printf '{\n  "swarmery": {\n    "claudeAccount": %s,\n    "estate": %s\n  }\n}\n' \
   "$(json_string "$account")" "$(json_string "$estate")" > "$src/.claude/settings.local.json"
 
+printf '{\n  "enabledPlugins": {\n    "probe-pack@probe-marketplace": true\n  }\n}\n' \
+  > "$src/.claude/settings.json"
+
 git -C "$src" init -q . >/dev/null 2>&1 || die "git init failed in $src"
-git -C "$src" add -f -- .claude/settings.local.json >/dev/null 2>&1 \
+git -C "$src" add -f -- .claude/settings.local.json .claude/settings.json >/dev/null 2>&1 \
   || die "git add failed in $src"
 git -C "$src" \
   -c user.name='binding provenance probe' \
@@ -223,6 +231,21 @@ printf 'whichIgnoredLines=%s\n' "$((ignored + ignored_stdout))"
 
 not_admitted=$( { printf '%s\n%s\n' "$which_out" "$which_err" | grep -c 'not admitted by' || true; } )
 printf 'whichNotAdmittedLines=%s\n' "$not_admitted"
+
+# doctorSettingsFile — whether the estate settings file would be handed to a
+# spawn here. `set` or `empty`; `unknown` when the binary has no doctor or jq
+# is missing. The PATH is reported as a word, never printed.
+settings_state="unknown"
+if command -v jq >/dev/null 2>&1; then
+  doctor_json=$("${probe_env[@]}" "$swarmery_bin" account doctor --fast --json --path "$subject" 2>/dev/null) || doctor_json=""
+  if [ -n "$doctor_json" ]; then
+    case "$(printf '%s' "$doctor_json" | jq -r 'if (.settingsFile // "") == "" then "empty" else "set" end' 2>/dev/null)" in
+      empty) settings_state="empty" ;;
+      set)   settings_state="set" ;;
+    esac
+  fi
+fi
+printf 'doctorSettingsFile=%s\n' "$settings_state"
 
 if [ "$keep" -eq 1 ]; then
   printf 'fixtureKept=%s\n' "$parent_abs"

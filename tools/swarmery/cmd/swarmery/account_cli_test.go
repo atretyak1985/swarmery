@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,6 +39,14 @@ func fakeHome(t *testing.T, accounts ...string) string {
 		}
 		if err := os.MkdirAll(filepath.Join(home, dir, "projects"), 0o700); err != nil {
 			t.Fatalf("seed account %q: %v", key, err)
+		}
+		// A real account has logged in: its .claude.json carries oauthAccount.
+		// (A rootless store is released from a binding only for such an account.)
+		if key != "default" {
+			if err := os.WriteFile(filepath.Join(home, dir, ".claude.json"),
+				[]byte(`{"oauthAccount":{"accountUuid":"test"}}`+"\n"), 0o600); err != nil {
+				t.Fatalf("seed login for %q: %v", key, err)
+			}
 		}
 	}
 	return home
@@ -138,7 +147,7 @@ func TestAccountUseRefusesAnAccountThatIsNotInstalled(t *testing.T) {
 	dir := project(t, "")
 
 	var out bytes.Buffer
-	err := accountUse([]string{"ghost", "--path", dir}, &out)
+	err := accountUse([]string{"ghost", "--path", dir}, &out, io.Discard, nil)
 	if err == nil {
 		t.Fatal("accountUse accepted an account with no config dir on this machine")
 	}
@@ -158,7 +167,7 @@ func TestAccountUseWhichClearRoundTrip(t *testing.T) {
 	dir := project(t, "")
 
 	var out bytes.Buffer
-	if err := accountUse([]string{"work", "--path", dir}, &out); err != nil {
+	if err := accountUse([]string{"work", "--path", dir}, &out, io.Discard, nil); err != nil {
 		t.Fatalf("accountUse: %v", err)
 	}
 	if got := claudeacct.Binding(dir); got != "work" {
@@ -169,7 +178,7 @@ func TestAccountUseWhichClearRoundTrip(t *testing.T) {
 	if err := accountWhich([]string{"--path", dir}, &out); err != nil {
 		t.Fatalf("accountWhich: %v", err)
 	}
-	for _, want := range []string{"account:    work", "source:     binding", filepath.Join(home, ".claude-work")} {
+	for _, want := range []string{"account:    work", "source:     pin", filepath.Join(home, ".claude-work")} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("which output %q missing %q", out.String(), want)
 		}

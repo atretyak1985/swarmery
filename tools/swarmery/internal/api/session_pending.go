@@ -93,6 +93,7 @@ var pendingSessionExempt = map[string]string{
 	"phase_surprise.session_uuid":          "a copy of phase_actuals.session_uuid (itself epic_phases.run_session_uuid) keying the run's forecast-vs-actual score; written only after the run's actuals exist, so the phase row is the source",
 	"route_decisions.session_uuid":         "a copy of the run's uuid (tasks.dispatch_session_uuid for a card, epic_phases.run_session_uuid for a phase) stamped on the complexity-routing decision at spawn (internal/route); those run rows are the sources and answer for the uuid while the run is live",
 	"lesson_uses.session_uuid":             "a copy of the run's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each lesson a run's prompt carried (internal/lessons, phase 15); written in the same Start that stamps the run row, so those two run rows are the sources",
+	"account_limit_hits.session_uuid":      "an observation about an ALREADY-INGESTED transcript (or '' for a run verdict), never a daemon-minted uuid awaiting its first record",
 }
 
 // pendingSessionDTO is the 202 body for GET /api/sessions/{uuid}. `pending` is the

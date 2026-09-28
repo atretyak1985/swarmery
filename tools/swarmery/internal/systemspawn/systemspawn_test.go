@@ -58,6 +58,17 @@ func configDirEntries(env []string) []string {
 	return out
 }
 
+// envNames is env with every VALUE dropped — what a failure message may print.
+// cmd.Env here is built on the real os.Environ(), so formatting it whole would
+// write the operator's live tokens into a test log.
+func envNames(env []string) []string {
+	out := make([]string, len(env))
+	for i, kv := range env {
+		out[i], _, _ = strings.Cut(kv, "=")
+	}
+	return out
+}
+
 // A missing ~/.swarmery must leave BOTH fields alone — the spawn stays
 // byte-identical to one issued before either feature existed.
 func TestAttachMissingSystemDirTouchesNothing(t *testing.T) {
@@ -76,7 +87,7 @@ func TestAttachMissingSystemDirTouchesNothing(t *testing.T) {
 		t.Errorf("cmd.Dir = %q, want empty — a missing System home must not be chdir'd into", cmd.Dir)
 	}
 	if cmd.Env != nil {
-		t.Errorf("cmd.Env = %v, want nil — no project means no account to resolve", cmd.Env)
+		t.Errorf("cmd.Env names = %v (values withheld), want nil — no project means no account to resolve", envNames(cmd.Env))
 	}
 }
 
@@ -94,7 +105,7 @@ func TestAttachSystemPathIsFileTouchesNothing(t *testing.T) {
 	Attach(cmd)
 
 	if cmd.Dir != "" || cmd.Env != nil {
-		t.Errorf("Attach acted on a file: Dir=%q Env=%v, want both untouched", cmd.Dir, cmd.Env)
+		t.Errorf("Attach acted on a file: Dir=%q Env names=%v (values withheld), want both untouched", cmd.Dir, envNames(cmd.Env))
 	}
 }
 
@@ -117,7 +128,8 @@ func TestAttachUnboundSetsDirAndLeavesEnvByteIdentical(t *testing.T) {
 	}
 	for i := range base {
 		if cmd.Env[i] != base[i] {
-			t.Errorf("env[%d] = %q, want %q", i, cmd.Env[i], base[i])
+			t.Errorf("env[%d] = %s=…, want %s=… (values withheld: this is the real environment)",
+				i, envNames(cmd.Env[i : i+1])[0], envNames(base[i : i+1])[0])
 		}
 	}
 }
@@ -174,6 +186,15 @@ func TestAttachBoundReplacesInheritedConfigDir(t *testing.T) {
 func TestAttachBoundCarriesTheAccountSecretStore(t *testing.T) {
 	unsetConfigDir(t)
 	dir := systemHome(t)
+	// A rootless store is released from a binding only for a logged-in account
+	// on this machine (a config dir with projects/ and a login in .claude.json).
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(dir), ".claude-nabu-org", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(dir), ".claude-nabu-org", ".claude.json"),
+		[]byte(`{"oauthAccount":{"accountUuid":"test"}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := claudeacct.SetBinding(dir, "nabu-org"); err != nil {
 		t.Fatalf("SetBinding: %v", err)
 	}
@@ -184,6 +205,9 @@ func TestAttachBoundCarriesTheAccountSecretStore(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(store, "nabu-org.env"), []byte("SOME_TOKEN=s3cr3t\n"), 0o600); err != nil {
 		t.Fatalf("write store: %v", err)
+	}
+	if err := os.Chmod(store, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
 	}
 	t.Setenv("SWARMERY_SECRETS_DIR", store)
 
@@ -198,5 +222,60 @@ func TestAttachBoundCarriesTheAccountSecretStore(t *testing.T) {
 	}
 	if !found {
 		t.Error("the bound account's secret store did not reach the spawn environment")
+	}
+}
+
+// THE one estate assertion for all five System engines (extract, handoff,
+// improve, retroanalysis, trajjudge): each gets its environment from Attach, and
+// Attach resolves the SYSTEM project (~/.swarmery), so the store a System run
+// carries is the System project's estate — never some repo's. An estate declared
+// on an ordinary project, or on $HOME itself, must not reach it.
+func TestAttachCarriesOnlyTheSystemProjectsEstate(t *testing.T) {
+	unsetConfigDir(t)
+	dir := systemHome(t)
+	home := filepath.Dir(dir)
+
+	repo := filepath.Join(home, "projects", "repo")
+	store := t.TempDir()
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so each store is anchored at its own declaring directory —
+	// the negative half below then fails for the right reason (the System run
+	// resolves only the System project's estate), not for want of an anchor.
+	for name, body := range map[string]string{
+		"sys":  "# swarmery-root: " + dir + "\nSYS_ESTATE_TOKEN=system\n",
+		"repo": "# swarmery-root: " + repo + "\nREPO_ESTATE_TOKEN=repo\n",
+		"home": "# swarmery-root: " + home + "\nHOME_ESTATE_TOKEN=home\n",
+	} {
+		if err := os.WriteFile(filepath.Join(store, name+".env"), []byte(body), 0o600); err != nil {
+			t.Fatalf("write store: %v", err)
+		}
+	}
+	if err := os.Chmod(store, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
+	t.Setenv("SWARMERY_SECRETS_DIR", store)
+
+	for _, decl := range []struct{ dir, key string }{{dir, "sys"}, {repo, "repo"}, {home, "home"}} {
+		if err := claudeacct.SetEstate(decl.dir, decl.key); err != nil {
+			t.Fatalf("SetEstate(%s): %v", decl.dir, err)
+		}
+	}
+
+	cmd := exec.Command("true")
+	Attach(cmd)
+
+	has := func(kv string) bool {
+		for _, e := range cmd.Env {
+			if e == kv {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("SYS_ESTATE_TOKEN=system") {
+		t.Error("the System project's estate store did not reach the spawn environment")
+	}
+	if has("REPO_ESTATE_TOKEN=repo") || has("HOME_ESTATE_TOKEN=home") {
+		t.Error("a System run carried an estate that is not the System project's")
 	}
 }

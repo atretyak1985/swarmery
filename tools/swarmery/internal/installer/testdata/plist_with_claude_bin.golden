@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.swarmery.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/tester/.swarmery/bin/swarmery</string>
+		<string>serve</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/tester/.swarmery/logs/swarmery.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/tester/.swarmery/logs/swarmery.err.log</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>SWARMERY_ONBOARD_ROOTS</key>
+		<string>/home/dev/projects</string>
+		<key>SWARMERY_WORKSPACE_ROOT</key>
+		<string>/home/dev/swarmery-workspace</string>
+		<key>SWARMERY_CLAUDE_BIN</key>
+		<string>/opt/homebrew/bin/claude</string>
+	</dict>
+</dict>
+</plist>

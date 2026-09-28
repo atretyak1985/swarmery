@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 )
 
 // TestArgs_PerEngineArgvPin is the neutrality pin for the runcore extraction.
@@ -428,11 +430,33 @@ func TestNewUUID(t *testing.T) {
 func TestAccountFor_EmptyProjectPathResolvesNothing(t *testing.T) {
 	// The guard that matters: an empty path must never reach Binding, which would
 	// join it with a RELATIVE settings path against the daemon's own cwd.
-	if got := AccountFor(""); got != "" {
-		t.Errorf("AccountFor(\"\") = %q, want the empty key", got)
+	if got := AccountFor(""); got != (claudeacct.Resolution{}) {
+		t.Errorf("AccountFor(\"\") = %+v, want the zero Resolution", got)
 	}
-	if got := AccountFor(t.TempDir()); got != "" {
-		t.Errorf("AccountFor(unbound project) = %q, want the empty key", got)
+	t.Setenv("HOME", t.TempDir())
+	if got := AccountFor(t.TempDir()); got.Account != "" || got.Estate != "" {
+		t.Errorf("AccountFor(unbound project) = %+v, want nothing resolved", got)
+	}
+}
+
+// A bound project resolves both axes through the same call the engines use.
+func TestAccountFor_ResolvesAccountAndEstate(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := filepath.Join(home, "projects", "acme")
+	proj := filepath.Join(root, "repo")
+	if err := claudeacct.SetBinding(root, "work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := claudeacct.SetEstate(root, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if err := claudeacct.SetBinding(proj, "default"); err != nil {
+		t.Fatal(err)
+	}
+	got := AccountFor(proj)
+	if got.Account != "default" || got.Estate != "acme" || got.EstateRoot != root {
+		t.Fatalf("AccountFor = %+v, want account default (own pin) and estate acme at %s", got, root)
 	}
 }
 
@@ -489,5 +513,44 @@ func TestStart_NilBinResolutionFailureIsAnError(t *testing.T) {
 func TestResolveBinDefaultIsWired(t *testing.T) {
 	if resolveBin == nil {
 		t.Fatal("resolveBin is nil; a nil Spec.Bin would panic or exec a bare \"claude\"")
+	}
+}
+
+// ── Spec.Resolution reaches the child's ENVIRONMENT ─────────────────────────
+//
+// The engines differ from each other only in how they fill Spec; argv would be
+// identical whether or not the resolution is read, so the assertion that
+// matters is on the child's env. A Resolution whose Account and Estate DIFFER
+// must deliver the config dir named by the ACCOUNT and the store named by the
+// ESTATE — the two axes, observed by a real child.
+func TestStart_SpecResolutionReachesChildEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".claude-work", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// The ESTATE's store — named "acme", not "work": the account has no store.
+	seedSecretStoreNamed(t, "acme")
+	// D5: an estate store releases only when ROOTED and its roots admit the
+	// estate root, so the store names the root the Resolution carries.
+	estateRoot := t.TempDir()
+	anchorStoreAt(t, "acme", estateRoot)
+
+	res, err := ClaudeRunner{Engine: "test"}.Start(context.Background(), Spec{
+		Prompt: "p", SessionUUID: "u-resolution", Cwd: t.TempDir(),
+		Resolution:    claudeacct.Resolution{Account: "work", Estate: "acme", EstateRoot: estateRoot},
+		Bin:           fakeBin(t, `printf '%s|%s\n' "${`+secretVar+`-`+absentMarker+`}" "${CLAUDE_CONFIG_DIR-`+absentMarker+`}"`+"\n"),
+		Timeout:       30 * time.Second,
+		CaptureStdout: true,
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	store, configDir, _ := strings.Cut(strings.TrimSpace(res.Output), "|")
+	if store != secretValue {
+		t.Errorf("child saw %s=%q, want %q — the ESTATE's store did not reach the child", secretVar, store, secretValue)
+	}
+	if want := filepath.Join(home, ".claude-work"); configDir != want {
+		t.Errorf("child saw CLAUDE_CONFIG_DIR=%q, want %q — the ACCOUNT's config dir did not reach the child", configDir, want)
 	}
 }

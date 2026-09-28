@@ -75,7 +75,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -223,6 +222,10 @@ type gitProbeResult struct {
 	exitCode int
 	stderr   string
 	err      error
+	// stdout is `ls-files -s -z`'s index entries ("<mode> <sha> <stage>\t<path>"
+	// records, NUL-separated) — how an exit 0 is told apart from a match on
+	// CHILDREN of the name asked about (exactEntry).
+	stdout string
 }
 
 // runGitProbe is a package var so a test can count invocations and stand in for
@@ -237,16 +240,16 @@ var runGitProbe = func(dir, name string) gitProbeResult {
 		"-c", "core.hooksPath=/dev/null",
 		"-c", "safe.bareRepository=explicit",
 		"-C", dir,
-		"ls-files", "--error-unmatch", "--", ":(icase,literal)"+name,
+		"ls-files", "-s", "-z", "--error-unmatch", "--", ":(icase,literal)"+name,
 	)
 	cmd.Dir = dir
 	cmd.Env = gitProbeEnv(os.Environ())
-	cmd.Stdout = io.Discard
-	var stderr strings.Builder
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	res := gitProbeResult{exitCode: -1, stderr: stderr.String()}
+	res := gitProbeResult{exitCode: -1, stderr: stderr.String(), stdout: stdout.String()}
 	switch {
 	case err == nil:
 		res.exitCode = 0
@@ -355,11 +358,18 @@ func linkChain(path string) ([]linkHop, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	cur, err := filepath.EvalSymlinks(filepath.Dir(filepath.Dir(abs)))
+	return walkLinks(filepath.Dir(filepath.Dir(abs)), filepath.Base(filepath.Dir(abs)), filepath.Base(abs))
+}
+
+// walkLinks is linkChain's walk: base is resolved with EvalSymlinks and never
+// probed (the operator's choice of path), then each component is followed one
+// at a time, every symlink crossed recorded as a hop.
+func walkLinks(base string, comps ...string) ([]linkHop, string, error) {
+	cur, err := filepath.EvalSymlinks(base)
 	if err != nil {
 		return nil, "", err
 	}
-	todo := []string{filepath.Base(filepath.Dir(abs)), filepath.Base(abs)}
+	todo := append([]string(nil), comps...)
 	var hops []linkHop
 	for len(todo) > 0 {
 		c := todo[0]
@@ -432,10 +442,30 @@ func probeEntry(dir, name string) trackFinding {
 	name = onDiskName(dir, name)
 	r := runGitProbe(dir, name)
 	f := trackFinding{verdict: classifyGitProbe(r.exitCode, r.stderr, r.err), dir: dir, name: name}
+	// A pathspec for a directory name also matches every tracked file UNDER it:
+	// a `.claude` the operator replaced with an untracked link, over an index
+	// that still tracks `.claude/settings.json`, is not a tracked link. Only an
+	// entry that IS the name counts. An exit 0 with no entries read (a stub)
+	// stays tracked — the fail-closed side.
+	if f.verdict == trackTracked && r.stdout != "" && !exactEntry(r.stdout, name) {
+		f.verdict = trackUntracked
+	}
 	if f.verdict == trackUnknown {
 		f.detail = gitFailureDetail(r)
 	}
 	return f
+}
+
+// exactEntry reports whether `ls-files -s -z` output lists name itself (not
+// only paths below it). The pathspec was case-insensitive, so the comparison
+// is too (ASCII folding, as git's icase does).
+func exactEntry(lsFiles, name string) bool {
+	for _, rec := range strings.Split(lsFiles, "\x00") {
+		if _, path, ok := strings.Cut(rec, "\t"); ok && strings.EqualFold(path, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // gitNotFound is the detail for a git the probe could not start at all — the
@@ -511,6 +541,10 @@ func onDiskName(dir, name string) string {
 // untrack the entry. Unknown: ask git why it cannot answer — `git rm --cached`
 // cannot fix a file git never tracked, so it is not offered there.
 //
+// The reason opens with the verdict — "tracked by git" or "git cannot classify
+// it" — so every surface that lists an ignored binding (`account which`, the
+// WARN, the dashboard card) names it the same way.
+//
 // The reason never quotes the file's CONTENTS — not the account key, not a
 // store name. It is written into a log the operator may paste anywhere.
 func distrustReason(f trackFinding) string {
@@ -519,19 +553,69 @@ func distrustReason(f trackFinding) string {
 	}
 	entry := filepath.Join(f.dir, f.name)
 	if f.verdict == trackTracked {
-		return fmt.Sprintf("git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
-			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, f.dir, f.name)
+		return fmt.Sprintf("tracked by git — git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
+			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, shellQuote(f.dir), shellQuote(f.name))
 	}
 	detail := f.detail
 	if detail == "" {
 		detail = "no reason recorded"
 	}
 	if detail == gitNotFound {
-		return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
+		return fmt.Sprintf("git cannot classify it — git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
 			"To make it count, install git or put it on the daemon's PATH", entry, detail)
 	}
-	return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
-		"To see why git cannot answer, run: git -C %s status", entry, detail, f.dir)
+	return fmt.Sprintf("git cannot classify it — git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
+		"To see why git cannot answer, run: git -C %s status", entry, detail, shellQuote(f.dir))
+}
+
+// shellQuote makes s safe to paste into a POSIX shell: returned as-is when it
+// holds only characters no shell treats specially, else wrapped in single
+// quotes, with each embedded single quote closed, escaped and reopened. The
+// remedy the WARN prints is meant to be copied.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	safe := true
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_@%+=:,./-", r)) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// createTargetDistrusted is Lock 1 for a writer about to CREATE the binding
+// file at path: the file does not exist, so the file itself cannot be probed —
+// but the directory it lands in can be reached through links, and a committed
+// `.claude -> <another project>/.claude` would put the write in a directory the
+// operator never named. Every link crossed to reach path's directory is probed
+// as bindingDistrusted probes hops; an unresolvable one fails closed. A
+// directory that does not exist yet crosses nothing (the writer creates a real
+// one). "" when the write lands where it says.
+func createTargetDistrusted(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return distrustReason(unresolvedFinding(path, err))
+	}
+	dir := filepath.Dir(abs)
+	if _, err := os.Lstat(dir); err != nil {
+		return ""
+	}
+	hops, _, err := walkLinks(filepath.Dir(dir), filepath.Base(dir))
+	if err != nil {
+		return distrustReason(unresolvedFinding(path, err))
+	}
+	for _, h := range hops {
+		if f := probeEntry(h.dir, h.name); !f.verdict.honoured() {
+			return distrustReason(f)
+		}
+	}
+	return ""
 }
 
 // bindingDistrusted is the gate Binding() calls. It probes FRESH every time:
@@ -576,8 +660,10 @@ func logDistrusted(path, why string) {
 	if abs, err := filepath.Abs(path); err == nil {
 		path = abs
 	}
-	log.Printf("claudeacct: IGNORING binding in %s (running under the default account, with no account secrets) — %s.",
-		path, why)
+	// No full stop after why: it ends in a command meant to be copied, and a
+	// trailing period would be pasted with it.
+	log.Printf("claudeacct: IGNORING binding in %s (treated as unbound: it chooses no account and releases no "+
+		"account secrets; an inherited CLAUDE_CONFIG_DIR still applies) — %s", path, why)
 }
 
 // ── the display-only verdict cache ───────────────────────────────────────────
@@ -656,8 +742,10 @@ func BindingForDisplay(projectPath string) string {
 // remedy, never the file's contents.
 func BindingForDisplayWithReason(projectPath string) (key, ignoredReason string) {
 	path := bindingPath(projectPath)
-	_, root, _, err := readSettings(path)
-	if err != nil {
+	// The READ side's loader, as Binding uses: a symlinked, group-writable,
+	// foreign-owned or oversize file declares nothing on screen either.
+	root := readTrustedSettings(path)
+	if root == nil {
 		return "", ""
 	}
 	ns, _ := root[bindingNamespace].(map[string]any)

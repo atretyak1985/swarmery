@@ -1,9 +1,47 @@
 package installer
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
+
+// validateClaudeBin gates what `swarmery install` bakes as SWARMERY_CLAUDE_BIN:
+// only an absolute, existing, executable file outside the shim dir passes.
+func TestValidateClaudeBin(t *testing.T) {
+	shim := t.TempDir()
+	t.Setenv("SWARMERY_BIN_DIR", shim)
+	realDir := t.TempDir()
+	write := func(dir, name string, mode os.FileMode) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(p, mode); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	good := write(realDir, "claude", 0o755)
+	noExec := write(realDir, "claude-noexec", 0o644)
+	inShim := write(shim, "claude", 0o755)
+
+	if err := validateClaudeBin(good); err != nil {
+		t.Errorf("validateClaudeBin(%s) = %v, want nil", good, err)
+	}
+	for name, p := range map[string]string{
+		"relative":       "bin/claude",
+		"missing":        filepath.Join(realDir, "nope"),
+		"not executable": noExec,
+		"directory":      realDir,
+		"the shim":       inShim,
+	} {
+		if err := validateClaudeBin(p); err == nil {
+			t.Errorf("validateClaudeBin(%s: %s) = nil, want a refusal", name, p)
+		}
+	}
+}
 
 // noEnv is a getenv that reports every var as unset.
 func noEnv(string) (string, bool) { return "", false }
@@ -200,6 +238,42 @@ func TestMergeInstallEnv_PreservesVarsWithNoFlag(t *testing.T) {
 	}
 	if len(preserved) != 3 {
 		t.Errorf("preserved = %v, want all three carried vars", preserved)
+	}
+}
+
+// --claude-bin follows the same precedence as the SWARMERY_* flags: flag >
+// shell env > existing plist, and the other baked vars survive.
+func TestMergeInstallEnv_ClaudeBin(t *testing.T) {
+	prev := map[string]string{"SWARMERY_CLAUDE_BIN": "/old/claude", "SWARMERY_EXCLUDE": "x"}
+	lookup := func(env []EnvVar, k string) string {
+		for _, e := range env {
+			if e.Key == k {
+				return e.Value
+			}
+		}
+		return ""
+	}
+	env, _ := mergeInstallEnv(prev, map[string]bool{"claude-bin": true},
+		map[string]string{"claude-bin": " /real/claude "}, noEnv)
+	if got := lookup(env, "SWARMERY_CLAUDE_BIN"); got != "/real/claude" {
+		t.Errorf("flag: SWARMERY_CLAUDE_BIN = %q, want /real/claude", got)
+	}
+	if lookup(env, "SWARMERY_EXCLUDE") != "x" {
+		t.Error("a previously baked var was dropped")
+	}
+	shell := func(k string) (string, bool) {
+		if k == "SWARMERY_CLAUDE_BIN" {
+			return "/shell/claude", true
+		}
+		return "", false
+	}
+	env, _ = mergeInstallEnv(prev, map[string]bool{}, map[string]string{}, shell)
+	if got := lookup(env, "SWARMERY_CLAUDE_BIN"); got != "/shell/claude" {
+		t.Errorf("shell env: SWARMERY_CLAUDE_BIN = %q, want /shell/claude", got)
+	}
+	env, _ = mergeInstallEnv(prev, map[string]bool{}, map[string]string{}, noEnv)
+	if got := lookup(env, "SWARMERY_CLAUDE_BIN"); got != "/old/claude" {
+		t.Errorf("preserve: SWARMERY_CLAUDE_BIN = %q, want /old/claude", got)
 	}
 }
 

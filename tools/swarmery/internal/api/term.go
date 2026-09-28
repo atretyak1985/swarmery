@@ -298,6 +298,21 @@ func (h *Handler) termWorktreeRoots() []termAllowedRoot {
 // project, and home is the one cwd that is safe, always present, and carries
 // no .claude/settings.local.json trap of its own (a binding is only read from
 // a PROJECT path, and home is not one).
+//
+// A key-only composition site (D5): SpawnEnv(key) has no rung, so a ROOTED
+// account store is NOT released here — its roots can admit no path this
+// terminal has — while a rootless one is (today's behaviour). On a machine
+// whose account store carries `# swarmery-root:` lines, the account terminal
+// therefore carries none of that account's credentials; open a project-scoped
+// terminal, which resolves (and is admitted) from the project path.
+//
+// KNOWN LIMITATION — this terminal carries NO ESTATE. An account-scoped
+// terminal belongs to no project and starts in $HOME, so there is no project
+// path to resolve an estate from (and $HOME is never an estate candidate): it
+// carries the account's config dir and the account-keyed store only, never an
+// estate's credential store. That is deliberate — inventing a project here
+// would mean guessing whose credentials to hand the shell. A project-scoped
+// terminal (termAccountEnv) resolves its estate normally.
 func resolveTermAccount(key string) (cwd string, env []string, ok bool) {
 	if !claudeacct.ValidKey(key) {
 		return "", nil, false

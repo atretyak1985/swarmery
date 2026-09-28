@@ -44,8 +44,19 @@ package claudeacct
 // 1, and was rejected for two reasons: it is MACHINE-WIDE, so every daemon run
 // of every project would inherit one account's credentials regardless of its
 // binding; and a LaunchAgent plist does not reach a login shell, so it covers
-// neither half of the terminal channel. Keying the store by account fixes both,
+// neither half of the terminal channel. Keying the store per binding fixes both,
 // and the bindings needed to key it are already on disk (binding.go).
+//
+// # Which key names a store
+//
+// A store is named by the ESTATE — the project tree (resolve.go) — not by the
+// account. The credentials in it authenticate against a project's own
+// infrastructure; which Claude subscription pays for tokens has nothing to do
+// with them, so a tree's store must not vanish when one of its sub-repos is
+// pinned to a different account. The account-keyed store <account>.env is still
+// read, FIRST, as a back-compat layer (SecretEnvForAccount), and the estate's
+// store is read after it and wins any name collision (spawnenv.go). An estate
+// with no <key>.env file is healthy and contributes nothing.
 //
 // # The contract
 //
@@ -60,11 +71,15 @@ package claudeacct
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
@@ -77,7 +92,8 @@ const (
 	secretsDirEnv = "SWARMERY_SECRETS_DIR"
 	// secretsDirMode/secretsFileMode are the hygiene contract, identical to the
 	// credential store's: only the owner may traverse the directory or read a
-	// file. secretsFileMode is also the CEILING enforced by the loader.
+	// file. Both are also the CEILINGS the loader enforces (checkStoreDir,
+	// secretEnvFromFile).
 	secretsDirMode  = 0o700
 	secretsFileMode = 0o600
 	// secretsGroupOther is every permission bit outside the owner's. A store
@@ -100,78 +116,250 @@ func SecretsDir() string {
 	return filepath.Join(home, ".swarmery", "secrets")
 }
 
-// SecretsPath is one account's store file, or "" when there is no store dir or
-// the key is not usable as a bare file name.
+// SecretsPath is one STORE's file, <SecretsDir>/<store>.env, or "" when there is
+// no store dir or the key is not usable as a bare file name.
 //
-// The key ultimately comes from a directory name the OPERATOR controls, so it is
+// The store key is the PROJECT axis: normally an estate key (resolve.go), and
+// for the back-compat layer an account key. It is not rejected for being
+// "default" — that rejection belongs to the ACCOUNT layer only
+// (SecretEnvForAccount), because which subscription pays has nothing to do with
+// which credentials a project tree needs.
+//
+// The key ultimately comes from a file the OPERATOR controls, so it is
 // validated rather than trusted (ValidKey): a "/" or a ".." in it would
 // otherwise escape the store directory.
-func SecretsPath(account string) string {
-	account = strings.TrimSpace(account)
-	if account == "" || account == ingest.DefaultAccount || !ValidKey(account) {
+func SecretsPath(store string) string {
+	store = strings.TrimSpace(store)
+	if !ValidKey(store) {
 		return ""
 	}
 	base := SecretsDir()
 	if base == "" {
 		return ""
 	}
-	return filepath.Join(base, account+".env")
+	return filepath.Join(base, store+".env")
 }
 
-// SecretEnvForAccount is the env DELTA of secrets for one account key, to be
-// appended to os.Environ() by a spawner. nil for the default account, for an
-// unresolvable key, for a missing store file, and for a store file whose mode is
-// too permissive.
-//
-// nil is the answer for "there is nothing here", never an error: 12 of the 13
-// indexed projects on a typical machine have no store at all, and a spawn must
-// not fail because an optional file is absent.
-func SecretEnvForAccount(key string) []string {
-	path := SecretsPath(key)
+// SecretEnvForStore is the env DELTA of one store's secrets. nil for an unusable
+// key, for a missing store file, and for a store file whose mode is too
+// permissive. A declared estate whose store does not exist lands here and gets
+// nil SILENTLY — an estate with no credential store is a first-class state, not
+// a degraded one, so no error, warning or log line is emitted for it.
+func SecretEnvForStore(store string) []string {
+	path := SecretsPath(store)
 	if path == "" {
 		return nil
 	}
 	return secretEnvFromFile(path)
 }
 
-// SecretEnvFor resolves the project's binding and delegates. Terminal callers
-// use this one; the daemon's spawn sites hold the resolved key already and must
-// use SecretEnvForAccount — they run in a worktree that carries no binding file
-// of its own, so resolving from cwd there would silently yield the default
-// account and no secrets.
-func SecretEnvFor(projectPath string) []string {
+// SecretEnvForAccount is the env DELTA of secrets for one ACCOUNT key — the
+// back-compat layer, from before stores were keyed by estate: a machine whose
+// only store is <account>.env keeps working exactly as it did. nil for the
+// default account (unchanged semantics: the default account never had a store
+// of its own), for an unresolvable key, for a missing store file, and for a
+// store file whose mode is too permissive.
+//
+// nil is the answer for "there is nothing here", never an error: most projects
+// on a typical machine have no store at all, and a spawn must not fail because
+// an optional file is absent.
+func SecretEnvForAccount(key string) []string {
+	key = strings.TrimSpace(key)
+	if key == "" || key == ingest.DefaultAccount {
+		return nil
+	}
+	return SecretEnvForStore(key)
+}
+
+// secretEnvForBinding resolves the project's OWN account binding (no walk, no
+// estate) and delegates to the back-compat account layer, WITHOUT the store
+// anchor (Lock 2). Unexported on purpose: no spawn may use it — they compose
+// through SpawnEnvResolved, which applies the release table — and it survives
+// only as the provenance tests' direct probe of what Lock 1 lets through.
+func secretEnvForBinding(projectPath string) []string {
 	return SecretEnvForAccount(Binding(projectPath))
 }
 
-// secretEnvFromFile stats, mode-checks and parses one store file.
+// secretEnvFromFile opens, checks and parses one store file.
 //
-// The mode check is the reason this is not a bare os.ReadFile. A secret store
-// that silently tolerates 0644 is not a secret store: it would hand every local
-// process the credentials while reporting success. Refusal logs the path and the
-// MODE — never a name, never a value — because the operator has to be told which
-// file to chmod.
+// The checks are the reason this is not a bare os.ReadFile. A secret store that
+// silently tolerates 0644 is not a secret store: it would hand every local
+// process the credentials while reporting success. So the store is opened
+// WITHOUT following a symlink, and every check is made on the OPENED file (no
+// window to swap one in): a regular file, owned by the current user, not
+// readable by group or other — inside a directory owned by the current user and
+// closed to group and other, since a directory another user can write lets them
+// replace the file. Refusal logs the path and the MODE — never a name, never a
+// value — because the operator has to be told which file to chmod.
 func secretEnvFromFile(path string) []string {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil // no store for this account: the normal case
+	f, c := openStore(path)
+	if c.log != "" {
+		log.Print(c.log)
 	}
-	if info.IsDir() {
-		log.Printf("claudeacct: secret store %s is a directory; ignoring it", path)
-		return nil
-	}
-	if mode := info.Mode().Perm(); mode&secretsGroupOther != 0 {
-		log.Printf("claudeacct: REFUSING secret store %s: mode %04o is readable beyond its owner "+
-			"(want %04o) — no secret was loaded; fix it with: chmod %04o %s",
-			path, mode, secretsFileMode, secretsFileMode, path)
-		return nil
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		log.Printf("claudeacct: cannot read secret store %s: %v", path, err)
+	if f == nil {
 		return nil
 	}
 	defer f.Close()
 	return parseSecretEnv(path, f)
+}
+
+// StoreState is what one credential store is, as the LOADER sees it — the same
+// checks secretEnvFromFile applies, so a surface can never report a store the
+// loader refuses as "present".
+type StoreState int
+
+const (
+	// StoreAbsent: no file at the store's path. Healthy — zero credentials.
+	StoreAbsent StoreState = iota
+	// StorePresent: the loader would read it.
+	StorePresent
+	// StoreRefused: something is there, and the loader will not read it (a
+	// symlink, a mode open beyond its owner, a foreign owner, an open store
+	// directory, …). Zero credentials, and the operator has something to fix.
+	StoreRefused
+	// StoreUnadmitted: the loader would read it, but its root lines do not admit
+	// the estate root asking for it — or, for an estate store, it carries none
+	// (the unanchored state, D5). Zero credentials; the fix is a root line in
+	// the store, which only the operator writes.
+	StoreUnadmitted
+)
+
+// storeCheck is the loader's verdict on one store file.
+type storeCheck struct {
+	State StoreState
+	// Reason says why a StoreRefused store is refused. It names neither the
+	// store's path nor anything inside it, so a surface may print it.
+	Reason string
+	// log is the operator-facing log line for a refusal (or an I/O error): it
+	// names the path and the MODE, never a variable name or a value.
+	log string
+}
+
+// openStore opens path WITHOUT following a symlink and makes every loader check
+// on the OPENED file (no window to swap one in) and on its directory. The file is
+// returned open only when the verdict is StorePresent; the caller closes it.
+// It logs nothing itself: secretEnvFromFile logs c.log, a surface prints
+// c.Reason.
+func openStore(path string) (*os.File, storeCheck) {
+	f, err := openNoFollow(path)
+	if err != nil {
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			// no store for this key: the normal case, silent
+			return nil, storeCheck{State: StoreAbsent}
+		case errors.Is(err, syscall.ELOOP):
+			return nil, storeCheck{
+				State:  StoreRefused,
+				Reason: "the store is a symlink",
+				log: fmt.Sprintf("claudeacct: REFUSING secret store %s: it is a symlink — no secret was loaded; "+
+					"replace it with a regular file (mode %04o)", path, secretsFileMode),
+			}
+		default:
+			return nil, storeCheck{
+				State:  StoreRefused,
+				Reason: fmt.Sprintf("the store cannot be opened (%v)", unwrapPathErr(err)),
+				log:    fmt.Sprintf("claudeacct: cannot read secret store %s: %v", path, err),
+			}
+		}
+	}
+	c := checkOpenedStore(path, f)
+	if c.State != StorePresent {
+		f.Close()
+		return nil, c
+	}
+	return f, c
+}
+
+// checkOpenedStore is openStore's checks on an opened file: the directory first
+// (whoever can write it can swap the file), then the file's type, mode and owner.
+func checkOpenedStore(path string, f *os.File) storeCheck {
+	if c := checkStoreDir(filepath.Dir(path)); c.State != StorePresent {
+		return c
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: fmt.Sprintf("the store cannot be inspected (%v)", unwrapPathErr(err)),
+			log:    fmt.Sprintf("claudeacct: cannot stat secret store %s: %v", path, err),
+		}
+	}
+	if info.IsDir() {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: "the store is a directory",
+			log:    fmt.Sprintf("claudeacct: secret store %s is a directory; ignoring it", path),
+		}
+	}
+	mode := info.Mode().Perm()
+	if !info.Mode().IsRegular() {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: "the store is not a regular file",
+			log:    fmt.Sprintf("claudeacct: REFUSING secret store %s: not a regular file — no secret was loaded", path),
+		}
+	}
+	if mode&secretsGroupOther != 0 {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: fmt.Sprintf("the store's mode %04o is open beyond its owner (want %04o)", mode, secretsFileMode),
+			log: fmt.Sprintf("claudeacct: REFUSING secret store %s: mode %04o is readable beyond its owner "+
+				"(want %04o) — no secret was loaded; fix it with: chmod %04o %s",
+				path, mode, secretsFileMode, secretsFileMode, path),
+		}
+	}
+	if uid, ok := fileOwner(info); !ok || uid != currentUID() {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: "the store is not owned by you",
+			log: fmt.Sprintf("claudeacct: REFUSING secret store %s (mode %04o): it is not owned by the current user "+
+				"— no secret was loaded", path, mode),
+		}
+	}
+	return storeCheck{State: StorePresent}
+}
+
+// checkStoreDir is whether the store directory may hold secrets: owned by the
+// current user and closed to group and other (secretsDirMode is the ceiling).
+// StorePresent means "the directory passes".
+func checkStoreDir(dir string) storeCheck {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: fmt.Sprintf("the store directory cannot be inspected (%v)", unwrapPathErr(err)),
+			log:    fmt.Sprintf("claudeacct: cannot stat secret store directory %s: %v", dir, err),
+		}
+	}
+	mode := info.Mode().Perm()
+	if mode&^secretsDirMode != 0 {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: fmt.Sprintf("the store directory's mode %04o is open beyond its owner (want %04o)", mode, secretsDirMode),
+			log: fmt.Sprintf("claudeacct: REFUSING secret store directory %s: mode %04o is accessible beyond its owner "+
+				"(want %04o) — no secret was loaded; fix it with: chmod %04o %s",
+				dir, mode, secretsDirMode, secretsDirMode, dir),
+		}
+	}
+	if uid, ok := fileOwner(info); !ok || uid != currentUID() {
+		return storeCheck{
+			State:  StoreRefused,
+			Reason: "the store directory is not owned by you",
+			log: fmt.Sprintf("claudeacct: REFUSING secret store directory %s (mode %04o): it is not owned by the current user "+
+				"— no secret was loaded", dir, mode),
+		}
+	}
+	return storeCheck{State: StorePresent}
+}
+
+// unwrapPathErr drops the path an *fs.PathError carries, so a Reason built from
+// it never names the store's path.
+func unwrapPathErr(err error) error {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		return pe.Err
+	}
+	return err
 }
 
 // parseSecretEnv reads the KEY=value lines of a store.

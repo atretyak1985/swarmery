@@ -180,4 +180,7 @@ type Provider struct {
 	// Hint is set only for a local-setup failure (StatusNoAuth); the UI renders
 	// it instead of the raw Error line.
 	Hint *Hint `json:"hint,omitempty"`
+	// TokenExpired is set only by a NoRefresh client that found the stored
+	// token expired and did not refresh it. In-process only — never served.
+	TokenExpired bool `json:"-"`
 }

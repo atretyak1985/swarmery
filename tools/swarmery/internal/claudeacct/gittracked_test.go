@@ -505,6 +505,9 @@ func TestNoGitAncestorRunsNoGit(t *testing.T) {
 func seedProbeStore(t *testing.T, account string) string {
 	t.Helper()
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil { // the loader refuses a store dir open beyond its owner
+		t.Fatal(err)
+	}
 	t.Setenv(secretsDirEnv, dir)
 	path := filepath.Join(dir, account+".env")
 	if err := os.WriteFile(path, []byte(probeStoreName+"=not-a-secret\n"), 0o600); err != nil {
@@ -554,8 +557,8 @@ func TestTrackedBindingNeverReachesTheSpawnEnv(t *testing.T) {
 	if n := countPrefix(env, configDirEnv+"="); n != 0 {
 		t.Errorf("the spawn environment carries %d %s entry/entries; want 0", n, configDirEnv)
 	}
-	if got := len(SecretEnvFor(repo)); got != 0 {
-		t.Errorf("SecretEnvFor length = %d, want 0 — a tracked binding unlocked the store", got)
+	if got := len(secretEnvForBinding(repo)); got != 0 {
+		t.Errorf("secretEnvForBinding length = %d, want 0 — a tracked binding unlocked the store", got)
 	}
 
 	// Untrack it — the documented fix — and everything comes back.
@@ -563,8 +566,8 @@ func TestTrackedBindingNeverReachesTheSpawnEnv(t *testing.T) {
 	if got := Binding(repo); got != account {
 		t.Fatalf("after `git rm --cached`, Binding = %q, want %q", got, account)
 	}
-	if got := len(SecretEnvFor(repo)); got != 1 {
-		t.Errorf("after `git rm --cached`, SecretEnvFor length = %d, want 1", got)
+	if got := len(secretEnvForBinding(repo)); got != 1 {
+		t.Errorf("after `git rm --cached`, secretEnvForBinding length = %d, want 1", got)
 	}
 	if n := countPrefix(SpawnEnvFor([]string{"PATH=/usr/bin"}, repo), configDirEnv+"="); n != 1 {
 		t.Errorf("after `git rm --cached`, %s entries = %d, want exactly 1", configDirEnv, n)
@@ -598,8 +601,8 @@ func TestBindingFailsClosedWhenGitCannotAnswer(t *testing.T) {
 			if got := Binding(repo); got != "" {
 				t.Errorf("Binding = %q, want \"\" — an unclassifiable binding was trusted", got)
 			}
-			if got := len(SecretEnvFor(repo)); got != 0 {
-				t.Errorf("SecretEnvFor length = %d, want 0", got)
+			if got := len(secretEnvForBinding(repo)); got != 0 {
+				t.Errorf("secretEnvForBinding length = %d, want 0", got)
 			}
 		})
 	}
@@ -789,6 +792,23 @@ func TestBindingForDisplayAgreesWithBinding(t *testing.T) {
 			writeBinding(t, dir, "../escape")
 			return dir
 		},
+		// The READ side's own refusals: the display must not show a key the
+		// launch path ignores.
+		"symlinked-file": func(t *testing.T) string {
+			target := t.TempDir()
+			writeBinding(t, target, "work")
+			dir := t.TempDir()
+			symlink(t, bindingPath(target), bindingPath(dir))
+			return dir
+		},
+		"group-writable": func(t *testing.T) string {
+			dir := t.TempDir()
+			p := writeBinding(t, dir, "work")
+			if err := os.Chmod(p, 0o666); err != nil {
+				t.Fatal(err)
+			}
+			return dir
+		},
 	}
 	for name, build := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -891,8 +911,8 @@ func wantIgnored(t *testing.T, project string) {
 		t.Errorf("Binding = %q, want \"\" — verdict %s: a binding the clone carried chose the account",
 			got, verdictOf(bindingPath(project)))
 	}
-	if n := len(SecretEnvFor(project)); n != 0 {
-		t.Errorf("SecretEnvFor length = %d, want 0 — the account's store was unlocked", n)
+	if n := len(secretEnvForBinding(project)); n != 0 {
+		t.Errorf("secretEnvForBinding length = %d, want 0 — the account's store was unlocked", n)
 	}
 }
 
@@ -902,8 +922,8 @@ func wantHonoured(t *testing.T, project, key string) {
 	if got := Binding(project); got != key {
 		t.Errorf("Binding = %q, want %q (verdict %s)", got, key, verdictOf(bindingPath(project)))
 	}
-	if n := len(SecretEnvFor(project)); n != 1 {
-		t.Errorf("SecretEnvFor length = %d, want 1", n)
+	if n := len(secretEnvForBinding(project)); n != 1 {
+		t.Errorf("secretEnvForBinding length = %d, want 1", n)
 	}
 }
 
@@ -1013,14 +1033,23 @@ func TestProvenanceUntrackedSymlinkHopHonoured(t *testing.T) {
 			symlink(t, filepath.Join(elsewhere(t), ".claude"), filepath.Join(repo, ".claude"))
 			return repo
 		},
-		"untracked-.claude-link-in-a-repo": func(t *testing.T) string {
+		// The index still tracks .claude/settings.json, but the working tree's
+		// .claude is the operator's own untracked link: the pathspec matches the
+		// CHILD entry, and only an entry that is the link itself counts.
+		"untracked-.claude-link-over-tracked-children": func(t *testing.T) string {
 			repo := newRepo(t)
+			writeAt(t, filepath.Join(repo, ".claude", "settings.json"), "{}\n")
+			runGit(t, repo, "add", "-f", "--", ".claude/settings.json")
+			runGit(t, repo, "commit", "-qm", "track the project settings")
+			if err := os.RemoveAll(filepath.Join(repo, ".claude")); err != nil {
+				t.Fatal(err)
+			}
 			symlink(t, filepath.Join(elsewhere(t), ".claude"), filepath.Join(repo, ".claude"))
 			return repo
 		},
-		"untracked-file-link-in-a-repo": func(t *testing.T) string {
+		"untracked-.claude-link-in-a-repo": func(t *testing.T) string {
 			repo := newRepo(t)
-			symlink(t, bindingPath(elsewhere(t)), bindingPath(repo))
+			symlink(t, filepath.Join(elsewhere(t), ".claude"), filepath.Join(repo, ".claude"))
 			return repo
 		},
 	}
@@ -1032,6 +1061,30 @@ func TestProvenanceUntrackedSymlinkHopHonoured(t *testing.T) {
 			project := build(t)
 			wantHonoured(t, project, "work")
 		})
+	}
+}
+
+// A binding FILE that is itself a symlink declares nothing, tracked or not:
+// every reader opens it through readTrustedSettings, which refuses a symlinked
+// final component, and D5 honours a binding only from a file that loader
+// accepts. (Phase 9 honoured an untracked file link; the estate reader never
+// did, and the integrated tree follows the stricter one — a linked .claude
+// DIRECTORY, the skygor shape above, stays honoured.)
+func TestSymlinkedBindingFileIsRefused(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	seedProbeStore(t, "work")
+	target := t.TempDir()
+	writeBinding(t, target, "work")
+	repo := newRepo(t)
+	symlink(t, bindingPath(target), bindingPath(repo))
+
+	wantIgnored(t, repo)
+	if r := Resolve(repo); r.Account != "" {
+		t.Fatalf("Resolve through a symlinked binding file = %q, want nothing declared", r.Account)
+	}
+	if why := BindingFileUntrusted(repo); !strings.Contains(why, "symlink") {
+		t.Fatalf("BindingFileUntrusted = %q, want the symlink reason", why)
 	}
 }
 
@@ -1128,6 +1181,33 @@ func TestWarnRemedyPerVerdict(t *testing.T) {
 			[]string{"IGNORING binding in " + bindingPath(project), "git -C " + dir + " status"},
 			[]string{"rm --cached", "re-run"})
 	})
+}
+
+// The remedy is pasteable: a path with a space or a quote is shell-quoted, and
+// no full stop follows the command.
+func TestWarnRemedyIsShellQuoted(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	repo := filepath.Join(t.TempDir(), "it's a repo")
+	mkdirs(t, repo)
+	runGit(t, repo, "init", "-q", ".")
+	writeBinding(t, repo, "work")
+	runGit(t, repo, "add", "-f", "--", ".claude/settings.local.json")
+	runGit(t, repo, "commit", "-qm", "commit the binding")
+	out := captureLog(t, func() { Binding(repo) })
+	dir := realPath(t, filepath.Join(repo, ".claude"))
+	want := "git -C " + shellQuote(dir) + " rm --cached -- settings.local.json"
+	if !strings.Contains(out, want) || !strings.Contains(shellQuote(dir), `'\''`) {
+		t.Fatalf("log %q lacks the quoted remedy %q", out, want)
+	}
+	if strings.HasSuffix(strings.TrimSpace(out), ".") {
+		t.Fatalf("the remedy is followed by a full stop: %q", out)
+	}
+	for in, want := range map[string]string{"plain/path-1.x": "plain/path-1.x", "a b": "'a b'", "": "''"} {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
+		}
+	}
 }
 
 func wantLog(t *testing.T, out string, has, lacks []string) {

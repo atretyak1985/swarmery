@@ -93,6 +93,14 @@ type Source struct {
 	// ConfigDir is the account's `claude` config dir (the parent of its
 	// projects root). "" means the legacy chain — see LoadCredsFor.
 	ConfigDir string
+	// IgnoreConfigDirEnv drops the CLAUDE_CONFIG_DIR rung from the legacy
+	// chain (meaningful only with an empty ConfigDir). The DEFAULT account is
+	// the one `claude` runs with that variable UNSET, so a process that merely
+	// inherited it (a daemon started from a shell bound to another account)
+	// would otherwise read that other account's credential and publish its
+	// numbers under "default". The ~/.claude file, ~/.config/claude and the
+	// plain keychain item — the default login's own sources — stay.
+	IgnoreConfigDirEnv bool
 }
 
 // LoadCredsFor resolves ONE account's Claude OAuth credential.
@@ -141,7 +149,7 @@ func LoadCredsFor(ctx context.Context, src Source) (*Creds, error) {
 	if src.ConfigDir != "" {
 		return scopedCreds(ctx, src.ConfigDir)
 	}
-	return chainCreds(ctx)
+	return chainCreds(ctx, src.IgnoreConfigDirEnv)
 }
 
 // scopedCreds resolves one non-default account's credential from that account's
@@ -208,10 +216,11 @@ func LoadCreds(ctx context.Context) (*Creds, error) {
 	return LoadCredsFor(ctx, Source{})
 }
 
-// chainCreds is the legacy multi-source resolution documented on LoadCreds.
-func chainCreds(ctx context.Context) (*Creds, error) {
+// chainCreds is the legacy multi-source resolution documented on LoadCreds;
+// skipEnv drops the CLAUDE_CONFIG_DIR rung (Source.IgnoreConfigDirEnv).
+func chainCreds(ctx context.Context, skipEnv bool) (*Creds, error) {
 	var stale *Creds
-	for _, path := range credentialPaths() {
+	for _, path := range credentialPaths(skipEnv) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -266,10 +275,11 @@ func laterExpiry(best, next *Creds) *Creds {
 }
 
 // credentialPaths lists the file sources in resolution order. Sources whose
-// base directory cannot be resolved are simply omitted.
-func credentialPaths() []string {
+// base directory cannot be resolved are simply omitted; skipEnv omits the
+// CLAUDE_CONFIG_DIR rung.
+func credentialPaths(skipEnv bool) []string {
 	var paths []string
-	if dir := os.Getenv(configDirEnv); dir != "" {
+	if dir := os.Getenv(configDirEnv); dir != "" && !skipEnv {
 		paths = append(paths, filepath.Join(dir, credentialsFile))
 	}
 	home, err := os.UserHomeDir()
@@ -286,7 +296,12 @@ func credentialPaths() []string {
 // in a form fit for an operator-facing setup hint ("looked in …"). It reports
 // LOCATIONS only and never reads or reveals credential content.
 func CredentialSources() []string {
-	srcs := credentialPaths()
+	return chainSources(false)
+}
+
+// chainSources is CredentialSources with the CLAUDE_CONFIG_DIR rung optional.
+func chainSources(skipEnv bool) []string {
+	srcs := credentialPaths(skipEnv)
 	if runtime.GOOS == "darwin" {
 		srcs = append(srcs, "macOS Keychain: "+keychainService)
 	}
@@ -316,7 +331,7 @@ func CredentialSourcesFor(src Source) []string {
 		}
 		return srcs
 	}
-	return append(srcs, CredentialSources()...)
+	return append(srcs, chainSources(src.IgnoreConfigDirEnv)...)
 }
 
 // readKeychainCreds reads ONE credential item out of the macOS login keychain —
