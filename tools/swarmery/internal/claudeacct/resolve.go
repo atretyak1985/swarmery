@@ -505,7 +505,7 @@ func namespaceAt(dir string) (ns map[string]any, ignored string) {
 	if ns == nil {
 		return nil, ""
 	}
-	if why := bindingIgnoredReason(path); why != "" {
+	if why := bindingDistrusted(path); why != "" {
 		return nil, why
 	}
 	return ns, ""

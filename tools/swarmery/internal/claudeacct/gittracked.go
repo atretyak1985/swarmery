@@ -534,6 +534,10 @@ func onDiskName(dir, name string) string {
 // untrack the entry. Unknown: ask git why it cannot answer — `git rm --cached`
 // cannot fix a file git never tracked, so it is not offered there.
 //
+// The reason opens with the verdict — "tracked by git" or "git cannot classify
+// it" — so every surface that lists an ignored binding (`account which`, the
+// WARN, the dashboard card) names it the same way.
+//
 // The reason never quotes the file's CONTENTS — not the account key, not a
 // store name. It is written into a log the operator may paste anywhere.
 func distrustReason(f trackFinding) string {
@@ -542,7 +546,7 @@ func distrustReason(f trackFinding) string {
 	}
 	entry := filepath.Join(f.dir, f.name)
 	if f.verdict == trackTracked {
-		return fmt.Sprintf("git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
+		return fmt.Sprintf("tracked by git — git tracks %s, so it can have arrived from a clone, a pull or a teammate's commit. "+
 			"To make it count, untrack it: git -C %s rm --cached -- %s", entry, shellQuote(f.dir), shellQuote(f.name))
 	}
 	detail := f.detail
@@ -550,10 +554,10 @@ func distrustReason(f trackFinding) string {
 		detail = "no reason recorded"
 	}
 	if detail == gitNotFound {
-		return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
+		return fmt.Sprintf("git cannot classify it — git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
 			"To make it count, install git or put it on the daemon's PATH", entry, detail)
 	}
-	return fmt.Sprintf("git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
+	return fmt.Sprintf("git cannot classify it — git could not say whether %s is tracked (%s), and an unclassifiable binding is not trusted. "+
 		"To see why git cannot answer, run: git -C %s status", entry, detail, shellQuote(f.dir))
 }
 
@@ -583,23 +587,6 @@ func shellQuote(s string) string {
 // decision.
 func bindingDistrusted(path string) string {
 	return distrustReason(probeGitTracked(path))
-}
-
-// bindingIgnoredReason is bindingDistrusted with the verdict named first —
-// "tracked by git" or "git cannot classify it" — for the surfaces that list the
-// rungs a resolution ignored (`swarmery account which`). Probes fresh, like
-// bindingDistrusted: Resolve runs it on the launch path.
-func bindingIgnoredReason(path string) string {
-	f := probeGitTracked(path)
-	why := distrustReason(f)
-	if why == "" {
-		return ""
-	}
-	label := "git cannot classify it"
-	if f.verdict == trackTracked {
-		label = "tracked by git"
-	}
-	return label + " — " + why
 }
 
 // probeKey identifies what a verdict describes: the symlink hops on the path
