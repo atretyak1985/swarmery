@@ -2387,9 +2387,11 @@ func cmdServe(args []string) error {
 	// under the shutdown context.
 	go termMgr.Reap(ctx.Done())
 
-	// worktree janitor: agent worktrees — the harness's <repo>/.claude/worktrees/*
-	// and our own under the manager's root — are never cleaned by whoever created
-	// them, so they accumulate until a human notices. This sweeps them on a
+	// worktree janitor: agent worktrees — the harness's
+	// <repo>/.claude/worktrees/agent-<hex> and our own under the manager's root,
+	// and nothing else (an operator's worktree is never touched) — are never
+	// cleaned by whoever created them, so they accumulate until a human
+	// notices. This sweeps them on a
 	// 15-minute tick: a worktree is removed only when every dirty path's blob is
 	// already in git, or after its content has been committed to a salvage/*
 	// branch, and never while anything is live inside it. Kill-switch
@@ -2398,12 +2400,15 @@ func cmdServe(args []string) error {
 	// janitor printing a line every 15 minutes forever is just noise.
 	wtjCfg := wtjanitor.ConfigFromEnv()
 	if wtjCfg.Enabled {
+		// No root (no $HOME) leaves only the harness's agent worktrees in scope.
+		wtRoot, _ := wtMgr.RootDir()
 		wtj := &wtjanitor.Service{
-			DB:      db,
-			Git:     wtjanitor.RepoGit{},
-			Live:    wtjanitor.ProcLiveness{Proc: procwatch.OsProvider{}, DB: db},
-			MinIdle: wtjCfg.MinIdle,
-			Remover: wtjanitor.NewRealRemover(wtMgr),
+			DB:         db,
+			Git:        wtjanitor.RepoGit{},
+			Live:       wtjanitor.ProcLiveness{Proc: procwatch.OsProvider{}, DB: db},
+			MinIdle:    wtjCfg.MinIdle,
+			DaemonRoot: wtRoot,
+			Remover:    wtjanitor.NewRealRemover(wtMgr),
 		}
 		go func() {
 			sweep := func() {
@@ -2562,13 +2567,16 @@ func cmdWorktrees(args []string) error {
 	defer db.Close()
 
 	cfg := wtjanitor.ConfigFromEnv()
+	mgr := &worktree.Manager{Git: worktree.ExecGit{}}
+	wtRoot, _ := mgr.RootDir()
 	svc := &wtjanitor.Service{
-		DB:       db,
-		Git:      wtjanitor.RepoGit{},
-		Live:     wtjanitor.ProcLiveness{Proc: procwatch.OsProvider{}, DB: db},
-		MinIdle:  cfg.MinIdle,
-		OnlyRepo: *repo,
-		Remover:  wtjanitor.NewRealRemover(&worktree.Manager{Git: worktree.ExecGit{}}),
+		DB:         db,
+		Git:        wtjanitor.RepoGit{},
+		Live:       wtjanitor.ProcLiveness{Proc: procwatch.OsProvider{}, DB: db},
+		MinIdle:    cfg.MinIdle,
+		OnlyRepo:   *repo,
+		DaemonRoot: wtRoot,
+		Remover:    wtjanitor.NewRealRemover(mgr),
 	}
 	// Stamp the journal cursor BEFORE sweeping so the report prints this pass's
 	// rows only, not the whole history.
