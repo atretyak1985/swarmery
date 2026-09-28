@@ -557,8 +557,8 @@ func TestTrackedBindingNeverReachesTheSpawnEnv(t *testing.T) {
 	if n := countPrefix(env, configDirEnv+"="); n != 0 {
 		t.Errorf("the spawn environment carries %d %s entry/entries; want 0", n, configDirEnv)
 	}
-	if got := len(SecretEnvFor(repo)); got != 0 {
-		t.Errorf("SecretEnvFor length = %d, want 0 — a tracked binding unlocked the store", got)
+	if got := len(secretEnvForBinding(repo)); got != 0 {
+		t.Errorf("secretEnvForBinding length = %d, want 0 — a tracked binding unlocked the store", got)
 	}
 
 	// Untrack it — the documented fix — and everything comes back.
@@ -566,8 +566,8 @@ func TestTrackedBindingNeverReachesTheSpawnEnv(t *testing.T) {
 	if got := Binding(repo); got != account {
 		t.Fatalf("after `git rm --cached`, Binding = %q, want %q", got, account)
 	}
-	if got := len(SecretEnvFor(repo)); got != 1 {
-		t.Errorf("after `git rm --cached`, SecretEnvFor length = %d, want 1", got)
+	if got := len(secretEnvForBinding(repo)); got != 1 {
+		t.Errorf("after `git rm --cached`, secretEnvForBinding length = %d, want 1", got)
 	}
 	if n := countPrefix(SpawnEnvFor([]string{"PATH=/usr/bin"}, repo), configDirEnv+"="); n != 1 {
 		t.Errorf("after `git rm --cached`, %s entries = %d, want exactly 1", configDirEnv, n)
@@ -601,8 +601,8 @@ func TestBindingFailsClosedWhenGitCannotAnswer(t *testing.T) {
 			if got := Binding(repo); got != "" {
 				t.Errorf("Binding = %q, want \"\" — an unclassifiable binding was trusted", got)
 			}
-			if got := len(SecretEnvFor(repo)); got != 0 {
-				t.Errorf("SecretEnvFor length = %d, want 0", got)
+			if got := len(secretEnvForBinding(repo)); got != 0 {
+				t.Errorf("secretEnvForBinding length = %d, want 0", got)
 			}
 		})
 	}
@@ -911,8 +911,8 @@ func wantIgnored(t *testing.T, project string) {
 		t.Errorf("Binding = %q, want \"\" — verdict %s: a binding the clone carried chose the account",
 			got, verdictOf(bindingPath(project)))
 	}
-	if n := len(SecretEnvFor(project)); n != 0 {
-		t.Errorf("SecretEnvFor length = %d, want 0 — the account's store was unlocked", n)
+	if n := len(secretEnvForBinding(project)); n != 0 {
+		t.Errorf("secretEnvForBinding length = %d, want 0 — the account's store was unlocked", n)
 	}
 }
 
@@ -922,8 +922,8 @@ func wantHonoured(t *testing.T, project, key string) {
 	if got := Binding(project); got != key {
 		t.Errorf("Binding = %q, want %q (verdict %s)", got, key, verdictOf(bindingPath(project)))
 	}
-	if n := len(SecretEnvFor(project)); n != 1 {
-		t.Errorf("SecretEnvFor length = %d, want 1", n)
+	if n := len(secretEnvForBinding(project)); n != 1 {
+		t.Errorf("secretEnvForBinding length = %d, want 1", n)
 	}
 }
 

@@ -404,12 +404,17 @@ func accountUse(args []string, out, errOut io.Writer, in *os.File) error {
 		}
 	}
 
+	existedBefore := claudeacct.BindingFileExists(dir)
 	if err := claudeacct.SetBinding(dir, key); err != nil {
 		return err
 	}
 	// Read it back: a write the walk ignores (an untrusted file SetBinding had
-	// nothing to rewrite) must not be reported as "bound".
+	// nothing to rewrite) must not be reported as "bound" — and a file this
+	// write CREATED is removed again rather than left declaring nothing.
 	if err := claudeacct.VerifyBinding(dir, key); err != nil {
+		if rerr := claudeacct.RevertBinding(dir, existedBefore); rerr != nil {
+			return fmt.Errorf("%w — and removing the file this write created FAILED (%v)", err, rerr)
+		}
 		return err
 	}
 

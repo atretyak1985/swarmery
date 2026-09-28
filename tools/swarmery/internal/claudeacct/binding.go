@@ -126,12 +126,37 @@ var ErrTrackedBinding = errors.New("binding file is not machine-local")
 // refuseDistrustedTarget is the writers' half of Lock 1. It probes an EXISTING
 // file that carries our namespace or would receive it (a missing file is never
 // probed), and refuses with the gate's own reason and remedy.
+//
+// A target that does not exist yet is not "untracked by construction" when
+// the directory it lands in is reached through a committed link: the links on
+// the way are probed instead (createTargetDistrusted).
 func refuseDistrustedTarget(path string, existed bool) error {
-	if !existed {
+	why := ""
+	if existed {
+		why = bindingDistrusted(path)
+	} else {
+		why = createTargetDistrusted(path)
+	}
+	if why != "" {
+		return fmt.Errorf("%w: refusing to write %s — %s", ErrTrackedBinding, path, why)
+	}
+	return nil
+}
+
+// RevertBinding undoes a binding write that did not read back, when the write
+// CREATED the file (existedBefore false): that file is removed, and nothing
+// else. An existing file is left as the write left it — a writer refuses the
+// files it cannot trust before writing, so that case is the operator's to see.
+func RevertBinding(projectPath string, existedBefore bool) error {
+	if strings.TrimSpace(projectPath) == "" {
+		return errors.New("claudeacct: RevertBinding needs a directory")
+	}
+	if existedBefore {
 		return nil
 	}
-	if why := bindingDistrusted(path); why != "" {
-		return fmt.Errorf("%w: refusing to write %s — %s", ErrTrackedBinding, path, why)
+	path := bindingPath(projectPath)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove %s: %w", path, err)
 	}
 	return nil
 }

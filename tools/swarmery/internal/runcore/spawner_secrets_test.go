@@ -100,6 +100,12 @@ func childSecret(t *testing.T, account string) string {
 // variables — which is what makes ${VAR} in a plugin's .mcp.json expand.
 func TestStart_BoundAccountCarriesItsSecretStore(t *testing.T) {
 	seedSecretStore(t, "work")
+	// A rootless store is released through the account route only for a real
+	// account on this machine (a config dir with projects/), so one is made in
+	// the HOME seedSecretStore just set.
+	if err := os.MkdirAll(filepath.Join(os.Getenv("HOME"), ".claude-work", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if got := childSecret(t, "work"); got != secretValue {
 		t.Fatalf("child saw %s=%q, want %q — the MCP servers would fail to start", secretVar, got, secretValue)
 	}

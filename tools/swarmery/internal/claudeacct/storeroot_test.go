@@ -45,6 +45,20 @@ func anchorStore(t *testing.T, key string, roots ...string) string {
 	return path
 }
 
+// installAccount makes key a real account in the (fake) home — a config dir
+// with projects/, which is what Discover reports and what F2's rule requires
+// before a ROOTLESS store is released through the account route.
+func installAccount(t *testing.T, keys ...string) {
+	t.Helper()
+	h, err := userHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range keys {
+		mkdirs(t, filepath.Join(h, ".claude-"+key, "projects"))
+	}
+}
+
 // resetRootlessWarn gives a test a fresh store-rootless warn-once ledger.
 func resetRootlessWarn(t *testing.T) {
 	t.Helper()
@@ -262,6 +276,7 @@ func TestRootlessAccountStoreUntrackedLoadsAndWarns(t *testing.T) {
 	proj := filepath.Join(home, "projects", "p")
 	declare(t, proj, map[string]any{"claudeAccount": "work"})
 	seedStores(t, map[string]string{"work": "WORK_ONE=1\n"})
+	installAccount(t, "work")
 
 	var total int
 	logged := captureLog(t, func() {
@@ -418,6 +433,7 @@ func TestResumeForcedAccountAdmittedCwdCarriesStore(t *testing.T) {
 func TestSpawnEnvKeyOnlyReleasesNoRootedStore(t *testing.T) {
 	fakeHome(t)
 	resetRootlessWarn(t)
+	installAccount(t, "work")
 	seedStores(t, map[string]string{"work": "WORK_ONE=1\n"})
 	if n := namesWithPrefix(SpawnEnv([]string{"PATH=/usr/bin"}, "work"), "WORK_"); n != 1 {
 		t.Fatalf("key-only, rootless: %d names, want 1", n)
@@ -616,5 +632,124 @@ func TestCredentialCountAdmittedOnly(t *testing.T) {
 	}
 	if state, why := r.CredentialStore(); state != StoreUnadmitted || why != "not admitted by acme.env roots" {
 		t.Fatalf("CredentialStore = %v %q", state, why)
+	}
+}
+
+// ── review round 1 (2026-09-28): F1, F2, F3 and root-line hardening ──────────
+
+// F1: a writer about to CREATE the binding file probes the links on the way.
+// A clone that commits `.claude -> <victim>/.claude` must not get the write
+// into the victim's directory, even though no binding file exists yet.
+func TestWriterRefusesCreateThroughTrackedLink(t *testing.T) {
+	fakeHome(t)
+	resetWarnOnce(t)
+	victim := filepath.Join(t.TempDir(), "victim")
+	mkdirs(t, filepath.Join(victim, ".claude"))
+	clone := cloneOf(t, func(src string) {
+		symlink(t, filepath.Join(victim, ".claude"), filepath.Join(src, ".claude"))
+	}, ".claude")
+
+	for name, write := range map[string]func() error{
+		"SetBinding": func() error { return SetBinding(clone, "j") },
+		"SetEstate":  func() error { return SetEstate(clone, "j") },
+	} {
+		if err := write(); err == nil || !strings.Contains(err.Error(), "tracked by git") {
+			t.Fatalf("%s through a committed .claude link: err = %v, want the tracked refusal", name, err)
+		}
+		if _, err := os.Lstat(bindingPath(victim)); err == nil {
+			t.Fatalf("%s created a binding in the victim's directory", name)
+		}
+	}
+	// The operator's own (untracked) link still takes a write.
+	own := t.TempDir()
+	symlink(t, filepath.Join(victim, ".claude"), filepath.Join(own, ".claude"))
+	if err := SetBinding(own, "j"); err != nil {
+		t.Fatalf("SetBinding through an untracked link: %v", err)
+	}
+}
+
+// F2: a ROOTLESS store is released through the account route only for a key
+// that is a real account here. A tarball naming an estate key as its "account"
+// gets nothing from that estate's unanchored store.
+func TestRootlessStoreNotReleasedForANonAccountKey(t *testing.T) {
+	home := fakeHome(t)
+	resetRootlessWarn(t)
+	seedStores(t, map[string]string{"ins": "INS_ONE=1\nINS_TWO=2\n"})
+	tarball := filepath.Join(home, "Downloads", "x")
+	declare(t, tarball, map[string]any{"claudeAccount": "ins"})
+
+	r := Resolve(tarball)
+	if n := namesWithPrefix(SpawnEnvResolved(nil, r), "INS_"); n != 0 {
+		t.Fatalf("a non-account key pulled %d names from a rootless store", n)
+	}
+	if r.AccountStoreAdmitted || !strings.Contains(r.AdmissionNote, "no account on this machine") {
+		t.Fatalf("admitted %v, note %q", r.AccountStoreAdmitted, r.AdmissionNote)
+	}
+	// Once ins IS an account, the rootless store keeps today's behaviour.
+	installAccount(t, "ins")
+	if n := namesWithPrefix(SpawnEnvResolved(nil, Resolve(tarball)), "INS_"); n != 2 {
+		t.Fatalf("a real account's rootless store composed %d names, want 2", n)
+	}
+}
+
+// F3: the ladder climbs LOGICAL ancestors, so `<root>/link -> ~/outside` puts a
+// physically foreign directory under the root. Admission also requires the
+// resolved path the walk ran from to be inside a root.
+func TestPhysicalPathMustBeInsideTheRoot(t *testing.T) {
+	home := fakeHome(t)
+	root := filepath.Join(home, "projects", "ae")
+	outside := filepath.Join(home, "outside")
+	mkdirs(t, filepath.Join(outside, "deep"))
+	declare(t, root, map[string]any{"claudeAccount": "work", "estate": "ae"})
+	seedStores(t, map[string]string{"ae": "AE_ONE=1\n", "work": "WORK_ONE=1\n"})
+	anchorStore(t, "ae", root)
+	anchorStore(t, "work", root)
+	symlink(t, outside, filepath.Join(root, "link"))
+
+	r := Resolve(filepath.Join(root, "link", "deep"))
+	if r.EstateRoot != root || r.AccountRoot != root {
+		t.Fatalf("precondition: the logical ladder reaches the root: %+v", r)
+	}
+	if r.EstateAdmitted || r.AccountStoreAdmitted || r.SettingsFile != "" {
+		t.Fatalf("a physically foreign cwd was admitted: estate %v account %v", r.EstateAdmitted, r.AccountStoreAdmitted)
+	}
+	if n := namesWithPrefix(SpawnEnvResolved(nil, r), "AE_") + namesWithPrefix(SpawnEnvResolved(nil, r), "WORK_"); n != 0 {
+		t.Fatalf("a physically foreign cwd composed %d names", n)
+	}
+	// A real directory under the root, and one not created yet, still admit.
+	mkdirs(t, filepath.Join(root, "real"))
+	for _, p := range []string{filepath.Join(root, "real"), filepath.Join(root, "not", "yet")} {
+		if !Resolve(p).EstateAdmitted {
+			t.Fatalf("%s under the root was not admitted", p)
+		}
+	}
+}
+
+// A misspelled marker makes a store MORE rooted, never rootless.
+func TestLooseRootMarkersCount(t *testing.T) {
+	for _, line := range []string{"# Swarmery-Root: /x", "#swarmery_root: /x", "\ufeff# swarmery-root: /x", "# SWARMERY ROOT: /x"} {
+		if v, ok := rootLineValue(line); !ok || v != "/x" {
+			t.Errorf("rootLineValue(%q) = %q, %v — want /x, true", line, v, ok)
+		}
+	}
+	for _, line := range []string{"# swarmery", "# comment", "SWARMERY_ROOT=/x", "#"} {
+		if _, ok := rootLineValue(line); ok {
+			t.Errorf("rootLineValue(%q) read a root line", line)
+		}
+	}
+}
+
+// A root of "/" or $HOME (or any ancestor of home) admits nothing: it would
+// admit every archive and clone that lands under home.
+func TestTooBroadRootAdmitsNothing(t *testing.T) {
+	home := fakeHome(t)
+	for _, root := range []string{"/", home, filepath.Dir(home)} {
+		if _, why := usableRoot(root); !strings.Contains(why, "home directory") {
+			t.Errorf("usableRoot(%s) = %q, want the too-broad refusal", root, why)
+		}
+	}
+	mkdirs(t, filepath.Join(home, "projects", "ae"))
+	if _, why := usableRoot(filepath.Join(home, "projects", "ae")); why != "" {
+		t.Errorf("a project root was refused: %q", why)
 	}
 }

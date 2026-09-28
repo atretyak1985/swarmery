@@ -160,6 +160,11 @@ type Resolution struct {
 	// account to, kept by WithAccount so the forced rule can compare keys. Both
 	// strings: Resolution must stay comparable with ==.
 	cwdAccount, cwdAccountRoot string
+	// physical is the path the walk ran from. The ladder climbs LOGICAL
+	// ancestors, so a symlink inside a root can put a physically foreign
+	// directory under it; admission therefore requires this path, resolved,
+	// to be inside a root too (storeroot.go).
+	physical string
 }
 
 // IgnoredRung is one rung whose binding the provenance gate ignored.
@@ -222,6 +227,12 @@ func Resolve(projectPath string) Resolution {
 		}
 	}
 
+	// The physical path matters only to a rung-derived answer; an unbound,
+	// estate-less resolution stays path-independent (and comparable across
+	// paths, as it always was).
+	if r.AccountRoot != "" || r.Estate != "" {
+		r.physical = walkFrom
+	}
 	r.setAccountDerived()
 	r.applyAdmission()
 	if r.Estate != "" {

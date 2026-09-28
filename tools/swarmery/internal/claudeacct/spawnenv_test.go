@@ -60,6 +60,7 @@ func TestSpawnEnv_ExplicitDefaultDropsInheritedConfigDir(t *testing.T) {
 // carried through untouched.
 func TestSpawnEnv_BoundAccountMergesConfigDirAndSecrets(t *testing.T) {
 	fakeHome(t)
+	installAccount(t, "work") // a rootless store is released through the account route only for a real account
 	seedStore(t, "work", "MCP_TOKEN=abc\n", 0o600)
 	want, ok := ConfigDirForAccount("work")
 	if !ok || want == "" {
@@ -97,6 +98,7 @@ func TestSpawnEnv_BoundAccountMergesConfigDirAndSecrets(t *testing.T) {
 // resolvedDelta is the same two pieces, delta-shaped, before the merge.
 func TestResolvedDelta_ConfigDirThenSecrets(t *testing.T) {
 	fakeHome(t)
+	installAccount(t, "work") // a rootless store is released through the account route only for a real account
 	seedStore(t, "work", "MCP_TOKEN=abc\n", 0o600)
 	dir, _ := ConfigDirForAccount("work")
 	if got, want := resolvedDelta(Resolution{Account: "work"}), []string{configDirEnv + "=" + dir, "MCP_TOKEN=abc"}; !slices.Equal(got, want) {
@@ -159,6 +161,7 @@ func entriesNamed(env []string, name string) []string {
 // cmd/swarmery.
 func TestSpawnEnvResolved_EstateWinsCollision(t *testing.T) {
 	fakeHome(t)
+	installAccount(t, "work") // a rootless store is released through the account route only for a real account
 	seedStores(t, map[string]string{
 		"work": "SHARED=from-account\nACCOUNT_ONLY=a\n",
 		"acme": "SHARED=from-estate\nESTATE_ONLY=e\n",
@@ -219,6 +222,7 @@ func TestSpawnEnvResolved_EstateWinsCollision(t *testing.T) {
 // then the account's store. This is the SC-12 property at the unit level.
 func TestSpawnEnvResolved_NoEstateIsTheOldDelta(t *testing.T) {
 	fakeHome(t)
+	installAccount(t, "work") // a rootless store is released through the account route only for a real account
 	seedStores(t, map[string]string{"work": "MCP_TOKEN=abc\nOTHER=1\n"})
 	old := append(EnvForAccount("work"), SecretEnvForAccount("work")...)
 	if got := resolvedDelta(Resolution{Account: "work"}); !slices.Equal(got, old) {

@@ -649,6 +649,7 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	existedBefore := claudeacct.BindingFileExists(path)
 	if err := claudeacct.SetBinding(path, key); err != nil {
 		// SetBinding refuses an invalid key and an unparseable settings file
 		// (400), and an existing file the walk ignores — group/other-writable,
@@ -672,6 +673,8 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 	// under. The file is theirs to fix — a client error, like the refusals above.
 	if row.IgnoredReason == "" {
 		if err := claudeacct.VerifyBinding(path, key); err != nil {
+			// A file this write created and nothing reads is removed again.
+			_ = claudeacct.RevertBinding(path, existedBefore)
 			writeClientErr(w, http.StatusConflict, err.Error())
 			return
 		}

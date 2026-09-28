@@ -95,17 +95,26 @@ func readStoreRoots(path string) storeRoots {
 }
 
 // rootLineValue returns the path a root line carries, and whether the line is
-// a root line at all.
+// a root line at all. The marker is matched loosely — any case, `-`, `_` or a
+// space between the words, a leading byte-order mark — because a misspelled
+// marker must make a store MORE rooted (it then admits nothing), never leave
+// it rootless and released everywhere.
 func rootLineValue(line string) (string, bool) {
+	line = strings.TrimPrefix(strings.TrimSpace(line), "\ufeff")
 	rest, ok := strings.CutPrefix(strings.TrimSpace(line), "#")
 	if !ok {
 		return "", false
 	}
-	value, ok := strings.CutPrefix(strings.TrimSpace(rest), storeRootMarker)
-	if !ok {
+	rest = strings.TrimSpace(rest)
+	const words = len("swarmery-root:")
+	if len(rest) < words {
 		return "", false
 	}
-	return strings.TrimSpace(value), true
+	switch strings.ToLower(rest[:words]) {
+	case "swarmery-root:", "swarmery_root:", "swarmery root:":
+		return strings.TrimSpace(rest[words:]), true
+	}
+	return "", false
 }
 
 // usableRoot is a root line's value, cleaned — or why it admits nothing.
@@ -125,13 +134,61 @@ func usableRoot(raw string) (string, string) {
 	if err != nil || !fi.IsDir() {
 		return "", fmt.Sprintf("%s is not a directory", root)
 	}
+	if tooBroad(fi, res) {
+		return "", fmt.Sprintf("%s contains the home directory, so it would admit every clone and download under it", root)
+	}
 	return root, ""
+}
+
+// tooBroad reports whether a root would admit the home directory — "/" or
+// $HOME itself, or any ancestor of it. Such a root admits every archive and
+// clone that lands under home, which is exactly what the anchor exists to stop.
+func tooBroad(rootInfo os.FileInfo, res string) bool {
+	if filepath.Dir(res) == res {
+		return true
+	}
+	h, err := userHomeDir()
+	if err != nil || strings.TrimSpace(h) == "" {
+		return false
+	}
+	hr, err := filepath.EvalSymlinks(h)
+	if err != nil {
+		return false
+	}
+	for dir := hr; ; {
+		if fi, err := os.Stat(dir); err == nil && os.SameFile(fi, rootInfo) {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
 }
 
 // admits returns the root that admits rung, or "" when none does. See the file
 // header for why this compares resolved files and never strings.
 func (s storeRoots) admits(rung string) string {
 	return admits(rung, s.roots)
+}
+
+// admitsPhysical is admits for the path a walk ran from, which may not exist
+// yet (the ladder lets a not-yet-created project inherit its ancestors): such a
+// path is physically wherever its nearest EXISTING ancestor resolves, so that
+// ancestor is what is tested.
+func (s storeRoots) admitsPhysical(p string) string {
+	p = cleanAbs(p)
+	for {
+		if _, err := os.Lstat(p); err == nil {
+			return admits(p, s.roots)
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return ""
+		}
+		p = parent
+	}
 }
 
 // admits is the admission test: rr = EvalSymlinks(rung); rr and each of its
@@ -216,6 +273,16 @@ type admission struct {
 //     zero credentials and no estate settings, never an error.
 //   - The payer (CLAUDE_CONFIG_DIR) is not decided here: it follows the
 //     Lock-1-clean binding and is never gated by roots (residual R13).
+//
+// Two refinements close what the table alone leaves open:
+//
+//   - A rooted store must admit the rung AND the resolved path the walk ran
+//     from: the ladder climbs logical ancestors, so `<root>/link -> ~/outside`
+//     would otherwise put a physically foreign directory under the root.
+//   - A rootless store is released through the ACCOUNT route only for a key
+//     that is a real account on this machine (Discover): the store namespace is
+//     shared, and a binding naming an estate key as its "account" must not pull
+//     an unanchored estate store out that way.
 func admit(r Resolution) admission {
 	var a admission
 	if key := strings.TrimSpace(r.Account); key != "" && key != ingest.DefaultAccount {
@@ -223,6 +290,10 @@ func admit(r Resolution) admission {
 		if r.Source == SourceForced {
 			rung = r.cwdAccountRoot
 			forcedMismatch = strings.TrimSpace(r.cwdAccount) != key
+		}
+		phys := r.physical
+		if phys == "" {
+			phys = rung
 		}
 		path := SecretsPath(key)
 		sr := readStoreRoots(path)
@@ -236,6 +307,8 @@ func admit(r Resolution) admission {
 		case forcedMismatch:
 			a.accountNote = fmt.Sprintf("%s not released: the account is forced, and this directory resolves %s",
 				key+".env", orDefault(r.cwdAccount))
+		case !sr.rooted && !accountInstalled(key):
+			a.accountNote = fmt.Sprintf("%s.env rootless, and %s is no account on this machine — not released", key, key)
 		case !sr.rooted:
 			a.accountReleased = true
 			a.accountNote = rootlessLine(key)
@@ -243,7 +316,7 @@ func admit(r Resolution) admission {
 				a.accountRootlessWarn = path
 			}
 		default:
-			if root := sr.admits(rung); root != "" {
+			if root := sr.admits(rung); root != "" && sr.admitsPhysical(phys) != "" {
 				a.accountReleased = true
 				a.accountNote = admittedLine(key, root)
 			} else {
@@ -255,7 +328,11 @@ func admit(r Resolution) admission {
 		sr := readStoreRoots(SecretsPath(key))
 		switch {
 		case sr.state == StorePresent && sr.rooted:
-			if root := sr.admits(r.EstateRoot); root != "" {
+			phys := r.physical
+			if phys == "" {
+				phys = r.EstateRoot
+			}
+			if root := sr.admits(r.EstateRoot); root != "" && sr.admitsPhysical(phys) != "" {
 				a.estateReleased = true
 				a.estateNote = admittedLine(key, root)
 			} else {
@@ -266,6 +343,17 @@ func admit(r Resolution) admission {
 		}
 	}
 	return a
+}
+
+// accountInstalled reports whether key is an account with a config dir on this
+// machine (Discover).
+func accountInstalled(key string) bool {
+	for _, a := range Discover() {
+		if a.Key == key {
+			return true
+		}
+	}
+	return false
 }
 
 // orDefault names an unpinned resolution the way every surface does.

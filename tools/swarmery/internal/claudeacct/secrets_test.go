@@ -194,7 +194,7 @@ func TestParseSecretEnv(t *testing.T) {
 	}
 }
 
-// SecretEnvFor resolves the project's binding — the terminal seam's entry point.
+// secretEnvForBinding resolves the project's own binding (the provenance probe).
 func TestSecretEnvFor_ResolvesTheProjectBinding(t *testing.T) {
 	seedStore(t, "work", "SECRET_NAME=not-a-secret\n", secretsFileMode)
 
@@ -202,13 +202,13 @@ func TestSecretEnvFor_ResolvesTheProjectBinding(t *testing.T) {
 	if err := SetBinding(bound, "work"); err != nil {
 		t.Fatalf("SetBinding: %v", err)
 	}
-	if got := SecretEnvFor(bound); !reflect.DeepEqual(got, []string{"SECRET_NAME=not-a-secret"}) {
-		t.Fatalf("SecretEnvFor(bound) = %v, want the store's pair", got)
+	if got := secretEnvForBinding(bound); !reflect.DeepEqual(got, []string{"SECRET_NAME=not-a-secret"}) {
+		t.Fatalf("secretEnvForBinding(bound) = %v, want the store's pair", got)
 	}
 	// An UNBOUND project gets nothing even though a store exists on the machine.
 	// This is the scoping property: secrets follow the binding, not the box.
-	if got := SecretEnvFor(t.TempDir()); got != nil {
-		t.Fatalf("SecretEnvFor(unbound) = %v, want nil — the store is per ACCOUNT, not machine-wide", got)
+	if got := secretEnvForBinding(t.TempDir()); got != nil {
+		t.Fatalf("secretEnvForBinding(unbound) = %v, want nil — the store is per ACCOUNT, not machine-wide", got)
 	}
 }
 

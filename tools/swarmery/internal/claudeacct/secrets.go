@@ -171,10 +171,12 @@ func SecretEnvForAccount(key string) []string {
 	return SecretEnvForStore(key)
 }
 
-// SecretEnvFor resolves the project's OWN account binding (no walk, no estate)
-// and delegates to the back-compat account layer. Spawn sites do not use it: they
-// compose through SpawnEnvResolved, which adds the estate's store.
-func SecretEnvFor(projectPath string) []string {
+// secretEnvForBinding resolves the project's OWN account binding (no walk, no
+// estate) and delegates to the back-compat account layer, WITHOUT the store
+// anchor (Lock 2). Unexported on purpose: no spawn may use it — they compose
+// through SpawnEnvResolved, which applies the release table — and it survives
+// only as the provenance tests' direct probe of what Lock 1 lets through.
+func secretEnvForBinding(projectPath string) []string {
 	return SecretEnvForAccount(Binding(projectPath))
 }
 

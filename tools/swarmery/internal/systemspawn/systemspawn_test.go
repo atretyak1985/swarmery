@@ -186,6 +186,11 @@ func TestAttachBoundReplacesInheritedConfigDir(t *testing.T) {
 func TestAttachBoundCarriesTheAccountSecretStore(t *testing.T) {
 	unsetConfigDir(t)
 	dir := systemHome(t)
+	// A rootless store is released through the account route only for a real
+	// account on this machine (a config dir with projects/).
+	if err := os.MkdirAll(filepath.Join(filepath.Dir(dir), ".claude-nabu-org", "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := claudeacct.SetBinding(dir, "nabu-org"); err != nil {
 		t.Fatalf("SetBinding: %v", err)
 	}

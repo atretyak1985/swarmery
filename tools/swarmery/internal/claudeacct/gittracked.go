@@ -358,11 +358,18 @@ func linkChain(path string) ([]linkHop, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	cur, err := filepath.EvalSymlinks(filepath.Dir(filepath.Dir(abs)))
+	return walkLinks(filepath.Dir(filepath.Dir(abs)), filepath.Base(filepath.Dir(abs)), filepath.Base(abs))
+}
+
+// walkLinks is linkChain's walk: base is resolved with EvalSymlinks and never
+// probed (the operator's choice of path), then each component is followed one
+// at a time, every symlink crossed recorded as a hop.
+func walkLinks(base string, comps ...string) ([]linkHop, string, error) {
+	cur, err := filepath.EvalSymlinks(base)
 	if err != nil {
 		return nil, "", err
 	}
-	todo := []string{filepath.Base(filepath.Dir(abs)), filepath.Base(abs)}
+	todo := append([]string(nil), comps...)
 	var hops []linkHop
 	for len(todo) > 0 {
 		c := todo[0]
@@ -582,6 +589,35 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// createTargetDistrusted is Lock 1 for a writer about to CREATE the binding
+// file at path: the file does not exist, so the file itself cannot be probed —
+// but the directory it lands in can be reached through links, and a committed
+// `.claude -> <another project>/.claude` would put the write in a directory the
+// operator never named. Every link crossed to reach path's directory is probed
+// as bindingDistrusted probes hops; an unresolvable one fails closed. A
+// directory that does not exist yet crosses nothing (the writer creates a real
+// one). "" when the write lands where it says.
+func createTargetDistrusted(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return distrustReason(unresolvedFinding(path, err))
+	}
+	dir := filepath.Dir(abs)
+	if _, err := os.Lstat(dir); err != nil {
+		return ""
+	}
+	hops, _, err := walkLinks(filepath.Dir(dir), filepath.Base(dir))
+	if err != nil {
+		return distrustReason(unresolvedFinding(path, err))
+	}
+	for _, h := range hops {
+		if f := probeEntry(h.dir, h.name); !f.verdict.honoured() {
+			return distrustReason(f)
+		}
+	}
+	return ""
+}
+
 // bindingDistrusted is the gate Binding() calls. It probes FRESH every time:
 // this is a spawn path, and a cached verdict there would be a cached security
 // decision.
@@ -626,8 +662,8 @@ func logDistrusted(path, why string) {
 	}
 	// No full stop after why: it ends in a command meant to be copied, and a
 	// trailing period would be pasted with it.
-	log.Printf("claudeacct: IGNORING binding in %s (running under the default account, with no account secrets) — %s",
-		path, why)
+	log.Printf("claudeacct: IGNORING binding in %s (treated as unbound: it chooses no account and releases no "+
+		"account secrets; an inherited CLAUDE_CONFIG_DIR still applies) — %s", path, why)
 }
 
 // ── the display-only verdict cache ───────────────────────────────────────────
