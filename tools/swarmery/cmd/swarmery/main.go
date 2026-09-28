@@ -1887,6 +1887,15 @@ func cmdServe(args []string) error {
 	// remove/tree) and auto-verification (tree-hash). Shared so both agree on the
 	// worktree root and git boundary.
 	wtMgr := &worktree.Manager{Git: worktree.ExecGit{}}
+	// Worktrees cut before configsync stopped lending the `swarmery` binding
+	// object still carry a frozen copy that would read as the worktree's own
+	// pin; strip it once per start (foreign keys kept, tracked files never
+	// rewritten). Best-effort: a failure is logged, never fatal.
+	if n, err := wtMgr.StripLentBindings(); err != nil {
+		log.Printf("warning: worktree: strip lent bindings: %v", err)
+	} else if n > 0 {
+		log.Printf("worktree: stripped the lent binding object from %d worktree settings file(s)", n)
+	}
 
 	// fusion phase 13: the playbook registry (embedded built-ins + per-project
 	// .claude/playbooks overrides). Shared read-only by the dispatcher (multi-stage
