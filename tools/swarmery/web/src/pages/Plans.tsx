@@ -51,7 +51,6 @@ import type {
   BoardColumn,
   Epic,
   EpicPhase,
-  PhaseForecast,
   PhaseRunOutcome,
   PhaseVerifyVerdict,
   PlanRevision,
@@ -89,6 +88,10 @@ import { RunOutcomeModal } from '../components/RunOutcomeModal';
 import { PlanBranchDirtyModal, type PlanBranchDirty } from '../components/PlanBranchDirtyModal';
 import { RevisionReview, ORIGIN_LABEL } from './planning/RevisionReview';
 import { ReviseModal } from './planning/ReviseModal';
+import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsActual';
+import { ForecastStory } from './plans/ForecastStory';
+import { PhaseCard } from './plans/PhaseCard';
+import { PhaseDrawer, type PhaseTab } from './plans/PhaseDrawer';
 
 /** A board column that counts as "resolved" for the dependency gate. */
 function isResolvedColumn(col: BoardColumn | null): boolean {
@@ -320,200 +323,6 @@ function VerifyVerdictChip({ phase }: { phase: EpicPhase }): JSX.Element | null 
     >
       {label}
     </span>
-  );
-}
-
-/** Human label for a surprise component key: `outcome_miss` → `outcome miss`. */
-function surpriseLabel(top: string): string {
-  return top === '' ? 'as forecast' : top.replace(/_/g, ' ');
-}
-
-/** Colour by index: calm below 0.3, needs-a-look below 0.6, attention above. */
-function surpriseCls(index: number): string {
-  if (index >= 0.6) return 'border-red/40 bg-red/10 text-red';
-  if (index >= 0.3) return 'border-amber/40 bg-amber/10 text-amber';
-  return 'border-green/40 bg-green/10 text-green';
-}
-
-/** The learning loop's surprise chip (phase 13): how far the current run landed
- * from its forecast, labelled with the component that contributed most. ADVISORY —
- * it sits beside the run chips and never changes what they say. A run with no
- * forecast reads "no forecast", never a zero score; a phase that never ran shows
- * nothing. */
-function SurpriseChip({ phase, onOpen }: { phase: EpicPhase; onOpen?: () => void }): JSX.Element | null {
-  const s = phase.surprise;
-  if (s === null) {
-    if (phase.runEndedAt === null || phase.forecasts.length > 0) return null;
-    return (
-      <span
-        className="rounded border border-line px-1.5 py-px font-mono text-[9.5px] text-ink-faint"
-        data-tip="this phase declares no ## Forecast, so its run has nothing to be scored against"
-      >
-        no forecast
-      </span>
-    );
-  }
-  const label = `surprise ${s.index.toFixed(2)} · ${surpriseLabel(s.top)}`;
-  const cls = `rounded border px-1.5 py-px font-mono text-[9.5px] ${surpriseCls(s.index)}`;
-  if (onOpen === undefined)
-    return (
-      <span className={cls} data-tip={s.summary}>
-        {label}
-      </span>
-    );
-  return (
-    <button
-      type="button"
-      className={`${cls} transition-opacity hover:opacity-80`}
-      data-tip={`${s.summary} — click for forecast vs actual`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-/** The Completion Report's "Where reality diverged" paragraph, when the executor
- * wrote one: the heading/label line (with any text after the label) plus the
- * lines up to the next blank line or heading. null when absent. */
-function extractDivergence(report: string | null): string | null {
-  if (report === null) return null;
-  const lines = report.split('\n');
-  const at = lines.findIndex((l) => /where reality diverged/i.test(l));
-  if (at < 0) return null;
-  const out: string[] = [];
-  const first = (lines[at] ?? '')
-    .replace(/^#+\s*/, '')
-    .replace(/\*{0,2}where reality diverged\*{0,2}\s*[:.—-]?\s*\*{0,2}/i, '')
-    .trim();
-  if (first !== '') out.push(first);
-  for (const line of lines.slice(at + 1)) {
-    if (/^#/.test(line)) break;
-    if (line.trim() === '') {
-      if (out.length > 0) break;
-      continue;
-    }
-    out.push(line);
-  }
-  return out.length > 0 ? out.join('\n') : null;
-}
-
-/** Detail tab "Forecast vs actual" (learning loop phase 13): the scored forecast
- * beside what the current run measurably did — areas diff, size / duration bands,
- * outcome, the component vector — and the executor's own account of where
- * reality diverged. READ-ONLY and advisory. */
-function ForecastVsActual({ phase }: { phase: EpicPhase }): JSX.Element {
-  const s = phase.surprise;
-  const divergence = extractDivergence(phase.completionReport);
-  if (s === null) {
-    const why =
-      phase.forecasts.length === 0
-        ? 'no forecast — this phase declares no ## Forecast, so there is nothing to score its run against'
-        : phase.runEndedAt === null
-          ? 'not run yet — a score appears once a run of this phase has finished and been measured'
-          : 'not scored — the run’s actuals are not recorded yet, or nothing about it was measurable';
-    return (
-      <>
-        <div className="font-mono text-[11.5px] text-ink-faint">{why}</div>
-        {divergence !== null && (
-          <RailSection label="where reality diverged">
-            <Markdown text={divergence} />
-          </RailSection>
-        )}
-      </>
-    );
-  }
-  const d = s.detail;
-  const row = (label: string, forecast: string, actual: string, miss: boolean): JSX.Element => (
-    <div className="flex gap-2">
-      <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
-      <span className="text-ink-dim">{forecast === '' ? '—' : forecast}</span>
-      <span className="text-ink-faint">→</span>
-      <span className={miss ? 'text-amber' : 'text-ink-dim'}>{actual === '' ? '—' : actual}</span>
-    </div>
-  );
-  const areaList = (label: string, items: string[], cls: string): JSX.Element | null =>
-    items.length === 0 ? null : (
-      <div className="flex gap-2">
-        <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
-        <span className={`break-words ${cls}`}>{items.join(', ')}</span>
-      </div>
-    );
-  const components = Object.entries(s.components) as [string, number | null | undefined][];
-  return (
-    <>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className={`rounded border px-1.5 py-px font-mono text-[10px] ${surpriseCls(s.index)}`}>
-          surprise {s.index.toFixed(2)} · {surpriseLabel(s.top)}
-        </span>
-        <span className="font-mono text-[10px] text-ink-faint">
-          scored against the {d.forecastKind}
-          {d.forecastPostHoc ? ' (post hoc — excluded from calibration)' : ''} · advisory, never a gate
-        </span>
-      </div>
-      <RailSection label="bands & outcome">
-        <div className="space-y-0.5 font-mono text-[10.5px]">
-          {row('size', d.forecastSize, d.actualSize, (d.sizeDistance ?? 0) > 0)}
-          {row('duration', d.forecastDuration, d.actualDuration, (d.durationDistance ?? 0) > 0)}
-          {row('outcome', d.forecastOutcome, d.actualOutcome, (s.components.outcome_miss ?? 0) > 0)}
-          {d.confidence !== null && row('confidence', d.confidence.toFixed(2), d.majorMiss ? 'major miss' : 'held', d.majorMiss)}
-        </div>
-      </RailSection>
-      <RailSection label="areas">
-        {d.actualAreas === null ? (
-          <div className="font-mono text-[10.5px] text-ink-faint">the run’s diff was not measured</div>
-        ) : (
-          <div className="space-y-0.5 font-mono text-[10.5px]">
-            {areaList('unexpected', d.unexpectedAreas, 'text-red')}
-            {areaList('missed', d.missedAreas, 'text-amber')}
-            {areaList('as forecast', d.matchedAreas, 'text-green')}
-            {d.unexpectedAreas.length + d.missedAreas.length + d.matchedAreas.length === 0 && (
-              <div className="text-ink-faint">no areas to compare</div>
-            )}
-          </div>
-        )}
-      </RailSection>
-      <RailSection label="surprise vector">
-        <div className="space-y-0.5 font-mono text-[10.5px]">
-          {components.map(([name, v]) => (
-            <div key={name} className="flex gap-2">
-              <span className={`w-[120px] shrink-0 ${name === s.top ? 'text-ink' : 'text-ink-faint'}`}>
-                {surpriseLabel(name)}
-              </span>
-              {/* null is "not measurable", never zero. */}
-              <span className="text-ink-dim">{v === null || v === undefined ? 'n/a' : v.toFixed(2)}</span>
-              <span className="text-ink-faint">× {(s.weights[name as keyof typeof s.weights] ?? 0).toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-      </RailSection>
-      {s.revision !== null && (
-        <RailSection label="prior → posterior">
-          <div className="space-y-0.5 font-mono text-[10.5px] text-ink-dim">
-            <div>revision {s.revision.index.toFixed(2)} — how much reading the code changed the expectation</div>
-            {s.revision.areasAdded.length > 0 && <div>areas added: {s.revision.areasAdded.join(', ')}</div>}
-            {s.revision.areasDropped.length > 0 && <div>areas dropped: {s.revision.areasDropped.join(', ')}</div>}
-            {s.revision.priorOutcome !== s.revision.posteriorOutcome && (
-              <div>
-                outcome {s.revision.priorOutcome || '—'} → {s.revision.posteriorOutcome || '—'}
-              </div>
-            )}
-          </div>
-        </RailSection>
-      )}
-      <RailSection label="where reality diverged">
-        {divergence === null ? (
-          <div className="font-mono text-[10.5px] text-ink-faint">
-            the Completion Report carries no “Where reality diverged” paragraph
-          </div>
-        ) : (
-          <Markdown text={divergence} />
-        )}
-      </RailSection>
-    </>
   );
 }
 
@@ -908,10 +717,9 @@ function epicFilterOf(status: Epic['status']): EpicFilter {
  * only on complete plans. */
 type PlanDetailTab = 'plan' | 'spec' | 'summary' | 'revisions' | 'edit';
 
-/** Phase-details tab ids. All three always exist — a phase with nothing shipped
- * yet still shows Summary (with an empty note) rather than hiding the tab, which
- * is what made "where do I read the summary?" a dead end. */
-type PhaseDetailTab = 'phase' | 'summary' | 'forecast' | 'edit';
+/** Phase drawer tabs (story/criteria/runs/report/edit). Report always exists —
+ * an empty note beats hiding it ("where do I read the summary?" was a dead end). */
+type PhaseDetailTab = PhaseTab;
 
 /** What the inline detail panel shows: one phase's details, or the plan's (both
  * tabbed). `null` means "no details — show the phase list".
@@ -1021,15 +829,15 @@ export function Plans(): JSX.Element {
   // that task, so a stale pending can never leak onto another plan.
   const pendingDetailRef = useRef<{ taskId: number; target: DetailTarget | null } | null>(null);
   useEffect(() => {
-    if (epics === null) return;
+    if (epics === null || epics.length === 0) return; // [] = project not resolved yet (cold visit)
     const raw = searchParams.get('task');
     if (raw === null) return;
     const wantRevisions = searchParams.get('tab') === 'revisions';
+    const phaseSeq = Number(searchParams.get('phase') ?? NaN); // ?phase=<seq> opens the drawer
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        next.delete('task');
-        next.delete('tab');
+        for (const k of ['task', 'tab', 'phase']) next.delete(k);
         return next;
       },
       { replace: true },
@@ -1038,7 +846,11 @@ export function Plans(): JSX.Element {
     const epic = epics.find((e) => e.taskId === taskId);
     if (epic === undefined) return;
     setFilter(epicFilterOf(epic.status));
-    const target: DetailTarget | null = wantRevisions ? { kind: 'plan', tab: 'revisions' } : null;
+    const target: DetailTarget | null = wantRevisions
+      ? { kind: 'plan', tab: 'revisions' }
+      : epic.phases.some((p) => p.seq === phaseSeq)
+        ? { kind: 'phase', seq: phaseSeq, tab: 'story' }
+        : null;
     pendingDetailRef.current = { taskId, target };
     setSelected((cur) => {
       // Already selected → the reset effect may never fire; open directly (the
@@ -1558,7 +1370,7 @@ function EpicDetail({
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         {/* Leaving the details is the first thing offered while they are open,
             in the same row as the plan actions. */}
-        {detail !== null && <BackToPhases onBack={onCloseDetail} />}
+        {detail?.kind === 'plan' && <BackToPhases onBack={onCloseDetail} />}
         <button
           type="button"
           onClick={() => onOpenPlan('plan')}
@@ -1655,40 +1467,41 @@ function EpicDetail({
               disabled={runBusy !== null || planRunning}
             />
           </div>
-          {detail !== null ? (
-            <>
-              {detail.kind === 'phase' ? (
-                <PhaseDetailPanel
-                  epic={epic}
-                  phase={detail.phase}
-                  tab={detail.tab}
-                  onTab={(t) => onOpenPhase(detail.phase.seq, t)}
-                  runBusy={runBusy}
-                  planRunning={planRunning}
-                  phaseRunModel={phaseRunModel}
-                  onRetry={() => onRun(detail.phase.id)}
-                  onCancelRun={() => onCancelRun(detail.phase.id)}
-                  onOpenOutcome={() => onOpenOutcome(detail.phase.id)}
-                  onDocChanged={onDocChanged}
-                  revisions={revisions}
-                  onOpenRevisions={() => onOpenPlan('revisions')}
-                />
-              ) : (
-                <PlanDetailPanel
-                  epic={epic}
-                  tab={detail.tab}
-                  onTab={onOpenPlan}
-                  onDocChanged={onDocChanged}
-                  revisions={revisions}
-                  revisionsErr={revisionsErr}
-                  stagedCount={stagedCount}
-                  onRevisionsChanged={() => {
-                    reloadRevisions();
-                    onDocChanged();
-                  }}
-                />
-              )}
-            </>
+          {/* A phase opens in a drawer OVER the still-visible list (2d); plan-level
+              detail stays inline in place of the list. */}
+          {detail?.kind === 'phase' && (
+            <PhaseDetailPanel
+              epic={epic}
+              phase={detail.phase}
+              tab={detail.tab}
+              onTab={(t) => onOpenPhase(detail.phase.seq, t)}
+              onStep={(seq) => onOpenPhase(seq, detail.tab)}
+              onClose={onCloseDetail}
+              runBusy={runBusy}
+              planRunning={planRunning}
+              phaseRunModel={phaseRunModel}
+              onRetry={() => onRun(detail.phase.id)}
+              onCancelRun={() => onCancelRun(detail.phase.id)}
+              onOpenOutcome={() => onOpenOutcome(detail.phase.id)}
+              onDocChanged={onDocChanged}
+              revisions={revisions}
+              onOpenRevisions={() => onOpenPlan('revisions')}
+            />
+          )}
+          {detail?.kind === 'plan' ? (
+            <PlanDetailPanel
+              epic={epic}
+              tab={detail.tab}
+              onTab={onOpenPlan}
+              onDocChanged={onDocChanged}
+              revisions={revisions}
+              revisionsErr={revisionsErr}
+              stagedCount={stagedCount}
+              onRevisionsChanged={() => {
+                reloadRevisions();
+                onDocChanged();
+              }}
+            />
           ) : (
             <PhaseList
               epic={epic}
@@ -2008,7 +1821,7 @@ function PhaseList({
               ? `waiting on phase ${depsUnmet.join(', ')}`
               : 'run this phase headlessly in an isolated worktree';
         const openPhase = (): void => {
-          onOpenPhase(p.seq, 'phase');
+          onOpenPhase(p.seq, 'story');
         };
         return (
           <li
@@ -2080,7 +1893,7 @@ function PhaseList({
                     and offers ✓ summary (opens the details rail); idle/failed
                     offer Run/Retry. */}
                 <ContinuationChip events={p.runEvents} />
-                <SurpriseChip phase={p} onOpen={() => onOpenPhase(p.seq, 'forecast')} />
+                <SurpriseChip phase={p} onOpen={() => onOpenPhase(p.seq, 'story')} />
 
                 {p.runState === 'running' ? (
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -2128,7 +1941,7 @@ function PhaseList({
                     <button
                       type="button"
                       onClick={() => {
-                        onOpenPhase(p.seq, 'summary');
+                        onOpenPhase(p.seq, 'report');
                       }}
                       data-tip="what was done — the executor's Completion Report and execution record"
                       className="font-mono text-[9.5px] text-green underline-offset-2 transition-colors hover:underline"
@@ -2558,93 +2371,6 @@ function DetailTabs<T extends string>({
   );
 }
 
-/** One labeled section inside a detail body. */
-function RailSection({ label, children }: { label: string; children: ReactNode }): JSX.Element {
-  return (
-    <section className="mb-4 last:mb-0">
-      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        {label}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** One forecast column — the prior or the posterior, whichever the doc carries.
- *
- * Every value is rendered VERBATIM, including a band the daemon does not
- * recognise: the operator cannot fix a typo the UI has already normalised away.
- * `forecastLints` below the columns is what says a value is wrong. */
-function ForecastColumn({ f }: { f: PhaseForecast }): JSX.Element {
-  const row = (label: string, value: string): JSX.Element | null =>
-    value === '' ? null : (
-      <div className="flex gap-1.5">
-        <span className="w-[68px] shrink-0 text-ink-faint">{label}</span>
-        <span className="break-words text-ink-dim">{value}</span>
-      </div>
-    );
-  return (
-    <div className="min-w-0 flex-1 rounded-md border border-line px-2.5 py-2 font-mono text-[10.5px]">
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <span className="uppercase tracking-wider text-ink">{f.kind === '' ? '(no kind)' : f.kind}</span>
-        {f.postHoc && (
-          <span
-            data-tip={
-              f.postHocReason === 'after-first-edit'
-                ? 'written to the doc after the run had already changed another file — not a prediction, so calibration skips it'
-                : 'written into a doc that already reported the work done — not a prediction, so calibration skips it'
-            }
-            className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px text-[9.5px] text-amber"
-          >
-            post hoc
-          </span>
-        )}
-      </div>
-      <div className="space-y-0.5">
-        {row('written', f.writtenAt)}
-        {row('size', f.sizeBand)}
-        {row('duration', f.durationBand)}
-        {row('outcome', f.outcome)}
-        {/* null, not 0: "the author said nothing" is not "certain it is wrong". */}
-        {f.confidence !== null && row('confidence', f.confidence.toFixed(2))}
-        {f.areas.length > 0 && row('areas', f.areas.join(', '))}
-        {f.files.length > 0 && row('files', f.files.join(', '))}
-        {f.risks.length > 0 && row('risks', f.risks.join(' · '))}
-      </div>
-    </div>
-  );
-}
-
-/** The phase's `## Forecast` blocks, prior and posterior side by side, plus the
- * lints over them. READ-ONLY, and renders nothing at all when the doc declares
- * no forecast — which is every phase until an author opts in.
- *
- * Deliberately NOT a verdict and deliberately placed away from the completion
- * chips: a forecast is a prediction to be scored later, not something a phase
- * can fail. A lint here says the block is unreadable, never that the work is. */
-function ForecastSection({ phase }: { phase: EpicPhase }): JSX.Element | null {
-  if (phase.forecasts.length === 0 && phase.forecastLints.length === 0) return null;
-  return (
-    <RailSection label="forecast">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        {phase.forecasts.map((f, i) => (
-          <ForecastColumn key={`${f.kind}-${String(i)}`} f={f} />
-        ))}
-      </div>
-      {phase.forecastLints.length > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {phase.forecastLints.map((l, i) => (
-            <div key={`${l.code}-${String(i)}`} className="font-mono text-[10.5px] text-amber">
-              {l.kind === '' ? '' : `${l.kind}: `}
-              {l.message}
-            </div>
-          ))}
-        </div>
-      )}
-    </RailSection>
-  );
-}
-
 /** Acceptance-criteria list with tick state (✓ done / ○ open). With `onToggle`
  * the rows become buttons that flip the criterion in the doc (the affordance
  * the retired doc modal owned); without it the list is read-only. */
@@ -2827,14 +2553,16 @@ function RunStateChip({
   return null;
 }
 
-/** Phase details panel, tabbed: Phase (run state, interactive acceptance
- * criteria, full doc), Summary (what was shipped) and Edit (raw markdown).
- * Rendered inline in place of the phase list. */
+/** One phase's body inside PhaseDrawer (2d), tabbed: Story (PhaseCard + the
+ * forecast story), Criteria (interactive checks + the doc), Runs (run state,
+ * diagnosis, provenance), Report (what was shipped) and Edit (raw markdown). */
 function PhaseDetailPanel({
   epic,
   phase,
   tab,
   onTab,
+  onStep,
+  onClose,
   runBusy,
   planRunning,
   phaseRunModel,
@@ -2849,6 +2577,9 @@ function PhaseDetailPanel({
   phase: EpicPhase;
   tab: PhaseDetailTab;
   onTab: (tab: PhaseDetailTab) => void;
+  /** Open the neighbouring phase by seq (↑/↓), keeping the tab. */
+  onStep: (seq: number) => void;
+  onClose: () => void;
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
@@ -2867,27 +2598,24 @@ function PhaseDetailPanel({
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const sessionHref = useSessionHref();
   const status = phaseStatus(phase, resolvedSeqs);
-  // Same split as the list row: `phaseStatus` reads the doc, `running` reads the
-  // process, and only the second one may put the word `running` on screen.
+  // `phaseStatus` reads the doc, `running` reads the process; only the second
+  // may put the word `running` on screen.
   const running = phase.runState === 'running';
   const chip = phaseChip(status, running);
   const [doc, setDoc] = usePlanDoc(epic.taskId, phase.docRelPath, phase.docUpdatedAt);
   const checks = useMemo(() => (doc !== null ? extractChecks(doc) : null), [doc]);
-  // A done phase retires its Edit tab along with the Run button: the doc is the
-  // record of work already shipped, not a plan still being steered. A stale
-  // `edit` selection (the phase finished while the tab was open) degrades to
-  // Summary instead of leaving a dead panel.
+  // A done phase retires its Edit tab (the doc is the record of shipped work); a
+  // stale `edit` selection degrades to Report instead of a dead panel.
   const editable = status !== 'done';
-  const activeTab: PhaseDetailTab = tab === 'edit' && !editable ? 'summary' : tab;
-  const tabs = useMemo(
-    () => (editable ? PHASE_TABS : PHASE_TABS.filter((t) => t.id !== 'edit')),
-    [editable],
-  );
+  const activeTab: PhaseDetailTab = tab === 'edit' && !editable ? 'report' : tab;
+  const at = epic.phases.findIndex((p) => p.seq === phase.seq);
+  const prev = epic.phases[at - 1];
+  const next = epic.phases[at + 1];
   const [busyLine, setBusyLine] = useState<number | null>(null);
   const [toggleErr, setToggleErr] = useState<string | null>(null);
 
   // The newest APPLIED revision that touched this phase's doc (by its current
-  // path or as a rename source) — the one-line provenance note in the header.
+  // path or as a rename source) — the one-line provenance note on Runs.
   const appliedRevision = useMemo(() => {
     const hits = (revisions ?? []).filter(
       (r) =>
@@ -2911,8 +2639,6 @@ function PhaseDetailPanel({
       .finally(() => setBusyLine(null));
   };
 
-  // The phase list — which normally carries the run controls — is hidden while
-  // this panel is open, so the same actions live in the header here.
   const depsUnmet = phase.dependsOn.filter((seq) => !resolvedSeqs.has(seq));
   const runDisabled =
     runBusy !== null || planRunning || epic.status !== 'active' || depsUnmet.length > 0;
@@ -2923,61 +2649,57 @@ function PhaseDetailPanel({
       : depsUnmet.length > 0
         ? `waiting on phase ${depsUnmet.join(', ')}`
         : 'run this phase headlessly in an isolated worktree';
+  // The card's ONE primary action (1d): Cancel while live, Run/Retry until done.
+  const primary = running
+    ? { label: 'Cancel', onClick: onCancelRun, disabled: runBusy !== null }
+    : status !== 'done'
+      ? {
+          label:
+            runBusy === phase.id ? '…' : isUnresolvedOutcome(phase.runOutcome) ? 'Retry run' : 'Run phase',
+          onClick: onRetry,
+          disabled: runDisabled,
+          tip: runTitle,
+        }
+      : null;
 
   return (
-    <DetailShell
-      ariaLabel={`Phase ${String(phase.seq)} — ${phase.name} details`}
-      header={
+    <PhaseDrawer
+      epic={epic}
+      phase={phase}
+      tab={activeTab}
+      onTab={onTab}
+      onPrev={prev !== undefined ? () => onStep(prev.seq) : undefined}
+      onNext={next !== undefined ? () => onStep(next.seq) : undefined}
+      onClose={onClose}
+      editable={editable}
+    >
+      {activeTab === 'edit' ? (
+        <DocEditor
+          taskId={epic.taskId}
+          path={phase.docRelPath}
+          version={phase.docUpdatedAt}
+          onSaved={onDocChanged}
+        />
+      ) : activeTab === 'report' ? (
+        <PhaseSummary phase={phase} doc={doc} />
+      ) : activeTab === 'story' ? (
+        <div className="space-y-5">
+          <PhaseCard
+            phase={phase}
+            {...(primary !== null ? { primary } : {})}
+            secondaries={
+              isUnresolvedOutcome(phase.runOutcome) ? [{ label: 'why it did not move', onClick: onOpenOutcome }] : []
+            }
+            {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
+          />
+          <ForecastStory phase={phase} />
+          {phase.surprise == null && <ForecastSection phase={phase} />}
+        </div>
+      ) : activeTab === 'runs' ? (
         <>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="font-mono text-[10px] text-ink-faint">Phase {phase.seq}</div>
-              <div className="text-[14px] font-semibold text-ink">{phase.name}</div>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              {phase.runState === 'running' ? (
-                <>
-                  {phase.runSessionUuid !== null && (
-                    <Link
-                      to={sessionHref(phase.runSessionUuid)}
-                      className="font-mono text-[10px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
-                    >
-                      session
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    disabled={runBusy !== null}
-                    onClick={onCancelRun}
-                    className="rounded-md border border-red/40 px-2 py-1 font-mono text-[10px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : status !== 'done' ? (
-                <button
-                  type="button"
-                  disabled={runDisabled}
-                  data-tip={runTitle}
-                  onClick={onRetry}
-                  className={`rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint ${runButtonCls(phase.runOutcome)}`}
-                >
-                  {runBusy === phase.id
-                    ? '…'
-                    : isUnresolvedOutcome(phase.runOutcome)
-                      ? 'Retry run'
-                      : 'Run phase'}
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className={`rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}>
-              {chip.label}
-            </span>
-            {/* Only the idle half. While a run is live, RunStateChip's own pulsing
-                `Running · <elapsed>` already carries the liveness signal, and a second
-                pulsing dot beside it reads as noise rather than as a second fact. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}>{chip.label}</span>
+            {/* Only the idle half: while live, RunStateChip already pulses. */}
             {status === 'in_progress' && !running && (
               <PhaseActivity docUpdatedAt={phase.docUpdatedAt} running={false} />
             )}
@@ -2985,10 +2707,7 @@ function PhaseDetailPanel({
             <RunModelChip phase={phase} />
             <DocModelChip phase={phase} picked={phaseRunModel} />
             <VerifyVerdictChip phase={phase} />
-            <SurpriseChip phase={phase} onOpen={() => onTab('forecast')} />
-            <span className="font-mono text-[10px] text-ink-faint">
-              {phase.checkboxesDone}/{phase.checkboxesTotal || 0}
-            </span>
+            <SurpriseChip phase={phase} onOpen={() => onTab('story')} />
             {phase.dependsOn.map((seq) => (
               <span
                 key={seq}
@@ -3000,52 +2719,40 @@ function PhaseDetailPanel({
                 ← #{seq}
               </span>
             ))}
-          </div>
-          {appliedRevision !== undefined && (
-            <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
-              this doc was changed by an applied revision{' '}
-              {fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt)} —{' '}
+            {primary !== null && (
               <button
                 type="button"
-                onClick={onOpenRevisions}
-                className="text-brand underline-offset-2 transition-colors hover:underline"
+                disabled={primary.disabled}
+                data-tip={'tip' in primary ? primary.tip : undefined}
+                onClick={primary.onClick}
+                className={`ml-auto rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
               >
+                {primary.label}
+              </button>
+            )}
+          </div>
+          {running && phase.runSessionUuid !== null && (
+            <Link to={sessionHref(phase.runSessionUuid)} className="mt-2 inline-block font-mono text-[10px] text-ink-dim hover:text-brand hover:underline">
+              session →
+            </Link>
+          )}
+          {appliedRevision !== undefined && (
+            <div className="mt-2 font-mono text-[10px] text-ink-faint">
+              this doc was changed by an applied revision{' '}
+              {fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt)} —{' '}
+              <button type="button" onClick={onOpenRevisions} className="text-brand hover:underline">
                 see Revisions
               </button>
             </div>
           )}
-        </>
-      }
-      tabBar={
-        <DetailTabs
-          label="phase details tabs"
-          tabs={tabs}
-          active={activeTab}
-          onTab={onTab}
-        />
-      }
-    >
-      {activeTab === 'edit' ? (
-        <DocEditor
-          taskId={epic.taskId}
-          path={phase.docRelPath}
-          version={phase.docUpdatedAt}
-          onSaved={onDocChanged}
-        />
-      ) : activeTab === 'summary' ? (
-        <PhaseSummary phase={phase} doc={doc} />
-      ) : activeTab === 'forecast' ? (
-        <ForecastVsActual phase={phase} />
-      ) : (
-        <>
           {phase.runState === 'failed' && (
-            <div className="mb-4 rounded-md border border-red/40 bg-red/10 px-2.5 py-2">
-              <div className="font-mono text-[10.5px] break-words text-red">
-                {phase.runError ?? 'run failed'}
-              </div>
+            <div className="mt-3 rounded-md border border-red/40 bg-red/10 px-2.5 py-2 font-mono text-[10.5px] break-words text-red">
+              {phase.runError ?? 'run failed'}
             </div>
           )}
-
+        </>
+      ) : (
+        <>
           {toggleErr !== null && (
             <div
               role="alert"
@@ -3054,7 +2761,6 @@ function PhaseDetailPanel({
               {toggleErr}
             </div>
           )}
-
           <RailSection label="acceptance criteria">
             {checks === null ? (
               <Loading label="criteria…" />
@@ -3064,24 +2770,12 @@ function PhaseDetailPanel({
               <ChecksList checks={checks} onToggle={toggle} busyLine={busyLine} />
             )}
           </RailSection>
-
-          <ForecastSection phase={phase} />
-
-          <RailSection label="doc">
-            {doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}
-          </RailSection>
+          <RailSection label="doc">{doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}</RailSection>
         </>
       )}
-    </DetailShell>
+    </PhaseDrawer>
   );
 }
-
-const PHASE_TABS: { id: PhaseDetailTab; label: string }[] = [
-  { id: 'phase', label: 'Phase' },
-  { id: 'summary', label: 'Summary' },
-  { id: 'forecast', label: 'Forecast vs actual' },
-  { id: 'edit', label: 'Edit' },
-];
 
 /** Summary tab of one phase: a prose account of WHAT WAS DONE — the Completion
  * Report the executor wrote plus the doc's `## Execution record` section.
@@ -3100,7 +2794,7 @@ function PhaseSummary({ phase, doc }: { phase: EpicPhase; doc: string | null }):
   const done = checks.filter((c) => c.done).length;
   const score = (
     <div className="mb-3 font-mono text-[10.5px] text-ink-faint">
-      {done}/{checks.length} acceptance criteria met · full list on the Phase tab
+      {done}/{checks.length} acceptance criteria met · full list on the Criteria tab
     </div>
   );
 
