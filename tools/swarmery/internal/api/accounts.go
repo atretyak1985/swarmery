@@ -293,7 +293,9 @@ func (c *bindingCache) get(load func() (bindingView, error)) (bindingView, error
 
 	f.view, f.err = load()
 	c.mu.Lock()
-	c.flight = nil
+	if c.flight == f { // invalidate may have detached it and a newer load taken its place
+		c.flight = nil
+	}
 	if f.err == nil && gen == c.gen {
 		c.view, c.at, c.valid = f.view, bindingCacheNow(), true
 	}
@@ -302,11 +304,16 @@ func (c *bindingCache) get(load func() (bindingView, error)) (bindingView, error
 	return f.view, f.err
 }
 
-// invalidate drops the cached view; called after every binding write here.
+// invalidate drops the cached view; called after every binding write here. It
+// also DETACHES a load already in flight: that load began before the write,
+// so a caller arriving now must start a fresh one rather than join it (the
+// detached load still answers the callers already waiting on it, and its
+// result is never stored — gen moved).
 func (c *bindingCache) invalidate() {
 	c.mu.Lock()
 	c.valid = false
 	c.gen++
+	c.flight = nil
 	c.mu.Unlock()
 }
 
