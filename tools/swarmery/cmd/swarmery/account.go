@@ -597,7 +597,7 @@ func accountKeys() []string {
 
 // ── prune ───────────────────────────────────────────────────────────────────
 
-const accountPruneUsage = `usage: swarmery account prune [--path <dir>] [--dry-run] [--include-tracked] [--json]
+const accountPruneUsage = `usage: swarmery account prune [--path <dir>] [flags]
 
   Remove, from every settings file under <dir>, the keys the estate <dir>
   resolves to already supplies: pluginConfigs and extraKnownMarketplaces, each
