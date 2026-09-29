@@ -142,7 +142,7 @@ type Duplicate struct {
 }
 
 // Finding is one diagnosed problem; the list is never null. ID is a stable
-// kebab-case identifier (docs/account-doctor.md lists every one), Severity one
+// kebab-case identifier (docs/claude-cli-config-channels.md lists every one), Severity one
 // of the Sev* constants. Detail and File name paths, counts and variable NAMES
 // only — never a value.
 type Finding struct {
