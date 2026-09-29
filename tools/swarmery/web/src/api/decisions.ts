@@ -199,9 +199,12 @@ const MOCK_QUEUE: QueueItem[] = [
 ];
 
 /** GET /api/decisions/queue — answered decisions awaiting ground truth, newest first. */
-export async function fetchLabelQueue(limit = 100): Promise<QueueItem[]> {
+export async function fetchLabelQueue(limit = 100, project: string | null = null): Promise<QueueItem[]> {
   if (MOCK) return MOCK_QUEUE;
-  const path = `/api/decisions/queue?limit=${String(limit)}`;
+  const qs = new URLSearchParams({ limit: String(limit) });
+  // A project scope narrows to decisions about that project's sessions.
+  if (project !== null) qs.set('project', project);
+  const path = `/api/decisions/queue?${qs.toString()}`;
   const body = await jsonOrThrow<{ items: QueueItem[] }>(await fetch(path), `GET ${path}`);
   return body.items;
 }

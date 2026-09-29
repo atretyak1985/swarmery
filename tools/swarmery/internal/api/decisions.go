@@ -107,11 +107,27 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /api/decisions/queue?limit=&since= — answered decisions awaiting the
-// operator's ground truth, newest first (the Decisions page's labelling queue).
+// GET /api/decisions/queue?limit=&since=&project= — answered decisions awaiting
+// the operator's ground truth, newest first (the Decisions page's labelling
+// queue, and the Inbox's classifier rows). ?project=<slug|name|id> narrows it to
+// decisions about that project's sessions; an unknown project yields an empty
+// queue, never the whole fleet's.
 func (h *Handler) decisionsQueue(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	items, err := decide.LabelQueue(h.DB, limit, strings.TrimSpace(r.URL.Query().Get("since")))
+	var projectID int64
+	if p := strings.TrimSpace(r.URL.Query().Get("project")); p != "" {
+		err := h.DB.QueryRow(`SELECT id FROM projects WHERE `+projectMatchExpr("")+` ORDER BY id LIMIT 1`,
+			scopeArgs(p)...).Scan(&projectID)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, map[string]any{"items": []decide.QueueItem{}}, nil)
+			return
+		}
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	items, err := decide.LabelQueue(h.DB, limit, strings.TrimSpace(r.URL.Query().Get("since")), projectID)
 	writeJSON(w, map[string]any{"items": items}, err)
 }
 

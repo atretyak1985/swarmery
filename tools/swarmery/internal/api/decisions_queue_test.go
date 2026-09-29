@@ -64,3 +64,63 @@ func TestDecisionsQueueAndTruthValidation(t *testing.T) {
 		t.Errorf("labelled row still queued: %d items, want 2", len(q.Items))
 	}
 }
+
+// ?project= narrows the labelling queue to decisions about that project's
+// sessions: the Inbox shows it under the project switcher, so a project view
+// must not list the whole fleet's classifier questions. A decision with no
+// session is fleet-level and drops out; an unknown project is an empty queue.
+func TestDecisionsQueueProjectScope(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+	exec(`INSERT INTO projects (id, path, slug, name, first_seen) VALUES
+		(901, '/work/alpha', '-work-alpha', 'Alpha', '2026-09-24T00:00:00Z'),
+		(902, '/work/beta',  '-work-beta',  'Beta',  '2026-09-24T00:00:00Z')`)
+	exec(`INSERT INTO sessions (project_id, session_uuid, title, started_at) VALUES
+		(901, 's-alpha', 'Alpha work', '2026-09-24T10:00:00Z'),
+		(902, 's-beta',  'Beta work',  '2026-09-24T10:00:00Z')`)
+	for _, row := range []struct{ sess, at string }{
+		{"s-alpha", "2026-09-24T18:00:00Z"}, // id 1
+		{"s-alpha", "2026-09-24T18:00:01Z"}, // id 2
+		{"s-beta", "2026-09-24T18:00:02Z"},  // id 3
+		{"", "2026-09-24T18:00:03Z"},        // id 4: no session — fleet-level
+	} {
+		exec(`INSERT INTO decisions (question_id, subject, session_uuid, input_hash, answer, confidence, error, backend, created_at)
+			VALUES ('d2.task_type', 'x', ?, 'h', 'refactor', 0.8, '', 'local', ?)`, row.sess, row.at)
+	}
+
+	var q struct {
+		Items []struct {
+			SessionUUID string `json:"sessionUuid"`
+		} `json:"items"`
+	}
+	sessions := func(path string) []string {
+		t.Helper()
+		getJSON(t, srv.URL+path, &q)
+		out := []string{}
+		for _, it := range q.Items {
+			out = append(out, it.SessionUUID)
+		}
+		return out
+	}
+
+	if got := sessions("/api/decisions/queue"); len(got) != 4 {
+		t.Errorf("unscoped queue = %v, want all 4 decisions", got)
+	}
+	for _, scope := range []string{"-work-alpha", "901", "alpha"} {
+		got := sessions("/api/decisions/queue?project=" + scope)
+		if len(got) != 2 || got[0] != "s-alpha" || got[1] != "s-alpha" {
+			t.Errorf("project=%s queue = %v, want only the two s-alpha decisions", scope, got)
+		}
+	}
+	if got := sessions("/api/decisions/queue?project=-work-beta"); len(got) != 1 || got[0] != "s-beta" {
+		t.Errorf("project=-work-beta queue = %v, want only s-beta", got)
+	}
+	if got := sessions("/api/decisions/queue?project=-work-ghost"); len(got) != 0 {
+		t.Errorf("unknown project queue = %v, want empty (never the fleet)", got)
+	}
+}
