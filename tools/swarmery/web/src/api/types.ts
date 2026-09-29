@@ -2700,6 +2700,29 @@ export interface FileSessionsResponse {
   sessions: FileSession[];
 }
 
+/** Go: contentionSessionDTO — one live session that touched a contended file. */
+export interface ContentionSession {
+  sessionId: number;
+  title: string | null;
+  status: SessionStatus;
+  projectSlug: string;
+  changes: number;
+  lastTouched: string;
+}
+
+/** Go: contentionPathDTO — one normalised absolute path and the ≥2 live sessions on it. */
+export interface ContentionPath {
+  path: string;
+  sessions: ContentionSession[];
+}
+
+/** Go: contentionResponseDTO — GET /api/files/contention. */
+export interface FileContentionResponse {
+  hours: number;
+  /** Newest touch first, at most 50; always an array (never null). */
+  paths: ContentionPath[];
+}
+
 // --- Multi-project UX: global scope + health + pin/tags ----------------------
 
 /** Go: projectHealthDTO — one row of GET /api/projects/health (camelCase). */

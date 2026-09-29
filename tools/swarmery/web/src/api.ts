@@ -30,6 +30,7 @@ import type {
   Epic,
   ErrorsResp,
   ExplorationResp,
+  FileContentionResponse,
   FileSessionsResponse,
   FunnelResp,
   HealthResponse,
@@ -2043,6 +2044,20 @@ export function fetchFileSessions(path: string, project?: string): Promise<FileS
   const qs = new URLSearchParams({ path });
   if (project !== undefined && project !== '') qs.set('project', project);
   return get(`/api/files/sessions?${qs.toString()}`);
+}
+
+/**
+ * GET /api/files/contention — files two or more live sessions touched inside
+ * the last `hours` (server default 6, clamped to [1, 72]). Mock mode reports
+ * no contention, so the banner stays hidden offline.
+ */
+export function getFileContention(project?: string, hours?: number): Promise<FileContentionResponse> {
+  if (MOCK) return Promise.resolve({ hours: hours ?? 6, paths: [] });
+  const qs = new URLSearchParams();
+  if (project !== undefined && project !== '') qs.set('project', project);
+  if (hours !== undefined) qs.set('hours', String(hours));
+  const suffix = qs.toString();
+  return get(`/api/files/contention${suffix === '' ? '' : `?${suffix}`}`);
 }
 
 // ── Routines (fusion phase 7) ───────────────────────────────────────────────

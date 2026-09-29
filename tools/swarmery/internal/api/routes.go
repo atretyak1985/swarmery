@@ -297,6 +297,9 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// sessions/files/projects — powers the Cmd+K command palette.
 	mux.HandleFunc("GET /api/search", h.search)
 	mux.HandleFunc("GET /api/files/sessions", h.fileSessions)
+	// files two or more live sessions touched inside ?hours= — the
+	// shared-checkout collision banner on the sessions list (visibility only).
+	mux.HandleFunc("GET /api/files/contention", h.fileContention)
 
 	// tool dashboards (step 02): sidebar feed + fenced serena process control
 	// (tools_dash.go). The POSTs carry the same D4 origin hardening as every
