@@ -78,12 +78,24 @@ func (r *run) firstSight() {
 	if file == "" || !r.opts.Record {
 		return
 	}
+	// Recorded only when the whole run completes (commitLedger): a hook
+	// watchdog that kills the doctor mid-run must not mark the warning as
+	// shown when it never reached the session.
+	r.ledgerFile = file
+}
+
+// commitLedger records the first-sight warning this run emitted, once the
+// run has completed. A no-op when nothing is pending.
+func (r *run) commitLedger() {
+	if r.ledgerFile == "" {
+		return
+	}
+	file := r.ledgerFile
+	r.ledgerFile = ""
+	l := readLedger(file)
 	now := r.opts.Now
 	if now.IsZero() {
 		now = time.Now()
-	}
-	if l.Seen == nil {
-		l.Seen = map[string]string{}
 	}
 	l.Seen[r.path] = now.UTC().Format(time.RFC3339)
 	if err := writeLedger(file, l); err != nil {

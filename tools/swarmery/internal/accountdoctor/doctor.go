@@ -175,7 +175,13 @@ type run struct {
 	rep      *Report
 	deadline time.Time
 	timedOut bool
+	// ledgerFile is the first-sight ledger to record this path in once the
+	// run completes ("" when there is nothing to record).
+	ledgerFile string
 }
+
+// afterArm is a test seam called after each Fast arm; nil in production.
+var afterArm func(name string)
 
 // add appends a finding.
 func (r *run) add(f Finding) { r.rep.Findings = append(r.rep.Findings, f) }
@@ -212,6 +218,7 @@ func Fast(opts Options) (Report, error) {
 		return emptyReport(""), err
 	}
 	r.fast()
+	r.commitLedger()
 	return *r.rep, nil
 }
 
@@ -226,6 +233,7 @@ func Full(opts Options) (Report, error) {
 	if !r.expired("full-trust") {
 		r.fullTrust()
 	}
+	r.commitLedger()
 	return *r.rep, nil
 }
 
@@ -304,6 +312,9 @@ func (r *run) fast() {
 			return
 		}
 		a.fn()
+		if afterArm != nil {
+			afterArm(a.name)
+		}
 	}
 }
 

@@ -400,8 +400,7 @@ func accountUse(args []string, out, errOut io.Writer, in *os.File) error {
 		pins, untrusted = claudeacct.ScanPins(dir)
 	}
 	for _, why := range untrusted {
-		fmt.Fprintf(errOut, "skipped: %s — any pin in it is neither listed nor cleared; "+
-			"fix it (chmod go-w, or replace a file you do not own) and re-run\n", why)
+		fmt.Fprintf(errOut, "skipped: %s — any pin in it is neither listed nor cleared; %s\n", why, claudeacct.SkippedPinHint(why))
 	}
 	var redundant, divergent []string
 	for _, p := range pins {

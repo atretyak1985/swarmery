@@ -166,4 +166,21 @@ func TestScanPins_ReportsATrackedPinAsIgnored(t *testing.T) {
 	if detail[0].Dir != honoured || detail[0].Key != "home" || detail[0].Ignored != "" {
 		t.Errorf("ScanPinsDetail[0] = %+v", detail[0])
 	}
+	// The hint follows the cause: never chmod advice for a tracked pin.
+	if h := SkippedPinHint(skipped[0]); strings.Contains(h, "chmod") {
+		t.Errorf("hint for a tracked pin = %q", h)
+	}
+	if h := SkippedPinHint(bindingPath(tracked) + " is writable by group or other (mode 0664), so the walk ignores it"); !strings.Contains(h, "chmod") {
+		t.Errorf("hint for a group-writable pin = %q", h)
+	}
+	// The display variant agrees, and prune keeps a subtree out.
+	if got := ScanPinsDetailForDisplay(repo); len(got) != 2 {
+		t.Errorf("ScanPinsDetailForDisplay = %+v", got)
+	}
+	if got := ScanPinsDetailForDisplay(repo, tracked); len(got) != 1 || got[0].Dir != honoured {
+		t.Errorf("pruned ScanPinsDetailForDisplay = %+v", got)
+	}
+	if r := ResolveForDisplay(filepath.Join(tracked, "x")); r.Account != "" || r.IgnoredNote == "" {
+		t.Errorf("ResolveForDisplay under a tracked pin = %+v", r)
+	}
 }

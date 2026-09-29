@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // PinScanMaxDepth is how many directory levels below the root the walk looks.
@@ -164,6 +165,16 @@ func pinAt(dir string, distrust func(string) string) (PinEntry, bool) {
 		return PinEntry{Dir: dir, Key: key, Ignored: fmt.Sprintf("%s is ignored — %s", path, why)}, true
 	}
 	return PinEntry{Dir: dir, Key: key}, true
+}
+
+// SkippedPinHint is the follow-up advice for one entry of ScanPins' skipped
+// list, by cause: a pin Lock 1 ignores already carries its own remedy (untrack
+// it, or ask git why it cannot tell), so the mode advice would be wrong there.
+func SkippedPinHint(reason string) string {
+	if strings.Contains(reason, "tracked by git") || strings.Contains(reason, "git cannot classify") {
+		return "the provenance gate ignores it — apply the remedy above and re-run"
+	}
+	return "fix it (chmod go-w, or replace a file you do not own) and re-run"
 }
 
 // ScanSettingsFiles returns, sorted, absolute and cleaned, every
