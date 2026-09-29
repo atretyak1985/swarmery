@@ -85,7 +85,7 @@ func estate(t *testing.T, v any) claudeacct.Resolution {
 	return claudeacct.Resolution{Estate: "acme", EstateRoot: root, SettingsFile: f, EstateAdmitted: true}
 }
 
-// the estate file every happy-path test starts from: the three keys plus the
+// the estate file every happy-path test starts from: the EstateKeys, enabledPlugins, plus the
 // keys that must never travel.
 func fullEstate() map[string]any {
 	return map[string]any{
@@ -167,13 +167,50 @@ func TestComposeCarriesExactlyEstateKeys(t *testing.T) {
 	if !reflect.DeepEqual(got, wantRT) {
 		t.Errorf("composed = %v\nwant     = %v", got, wantRT)
 	}
+	if _, ok := got["enabledPlugins"]; ok {
+		t.Errorf("the estate's enabledPlugins reached the composed file: %v", got)
+	}
+}
+
+// TestEstateKeysLeavePackEnablementToTheProject pins the list. Claude Code merges
+// enabledPlugins per key across scopes and a --settings file wins every conflict,
+// an explicit project `false` included (CLI 2.1.284, PR #418 review). An estate
+// `x: true` would therefore re-enable a pack a sub-project turned off, and no value
+// the project can write would win. Pack enablement stays at project scope, where
+// Claude Code reads it natively and the dashboard toggle manages it.
+func TestEstateKeysLeavePackEnablementToTheProject(t *testing.T) {
+	want := []string{"pluginConfigs", "extraKnownMarketplaces"}
+	if got := EstateKeys[:]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("EstateKeys = %v, want %v", got, want)
+	}
+	isolate(t)
+	buf := captureLog(t)
+	// Not an EstateKey any more, so its shape is not checked: a string is dropped
+	// by name like any other foreign key, never a reason to refuse the file.
+	p := Compose("dispatch", estate(t, map[string]any{
+		"pluginConfigs":  map[string]any{"p@m": map[string]any{"k": "v"}},
+		"enabledPlugins": "SENTINEL",
+	}), Inputs{})
+	if p == "" {
+		t.Fatalf("a string enabledPlugins made the estate file unusable: %s", buf.String())
+	}
+	if _, ok := readComposed(t, p)["enabledPlugins"]; ok {
+		t.Error("enabledPlugins reached the composed file")
+	}
+	line := buf.String()
+	if !strings.Contains(line, `dropped="enabledPlugins"`) {
+		t.Errorf("log line should name enabledPlugins as dropped: %s", line)
+	}
+	if strings.Contains(line, "enabledPlugins=") {
+		t.Errorf("log line still counts enabledPlugins: %s", line)
+	}
 }
 
 func TestComposeDropsEveryOtherKeyByName(t *testing.T) {
 	isolate(t)
 	buf := captureLog(t)
 	const sentinel = "SENTINEL-VALUE-7f3a"
-	dropped := []string{"env", "permissions", "enabledMcpjsonServers", "hooks", "statusLine",
+	dropped := []string{"env", "permissions", "enabledMcpjsonServers", "enabledPlugins", "hooks", "statusLine",
 		"apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper",
 		"disableAllHooks", "model", "defaultMode", "futureKey"}
 	in := map[string]any{"pluginConfigs": map[string]any{"p@m": map[string]any{"k": "v"}},
@@ -225,7 +262,6 @@ func TestComposeFailureIsLogged(t *testing.T) {
 		{"malformed JSON", writeRaw(`{"pluginConfigs":`, 0o600), claudeacct.TrustMalformed},
 		{"top-level array", writeRaw(`[1,2]`, 0o600), claudeacct.TrustMalformed},
 		{"pluginConfigs as a string", writeRaw(`{"pluginConfigs":"SENTINEL"}`, 0o600), "wrong-type:pluginConfigs"},
-		{"enabledPlugins as a string", writeRaw(`{"enabledPlugins":"SENTINEL"}`, 0o600), "wrong-type:enabledPlugins"},
 		{"extraKnownMarketplaces as a string", writeRaw(`{"extraKnownMarketplaces":"SENTINEL"}`, 0o600), "wrong-type:extraKnownMarketplaces"},
 		{"more than 1 MiB", writeRaw(`{"x":"`+strings.Repeat("a", 1<<20)+`"}`, 0o600), claudeacct.TrustTooLarge},
 		{"a directory", func(t *testing.T, f string) {
@@ -395,10 +431,57 @@ func TestComposeFallbackParityLentFileVerbatim(t *testing.T) {
 	if got := Compose("phaserun", res, Inputs{Fallback: full}); got != full {
 		t.Errorf("estate adds nothing: got %q, want the Fallback itself", got)
 	}
-	// An unreadable lent file leaves the Fallback unchanged.
+	// A missing lent file leaves the Fallback unchanged, silently.
+	buf.Reset()
 	missing := filepath.Join(t.TempDir(), "gone.json")
 	if got := Compose("resume", res, Inputs{Fallback: missing}); got != missing {
-		t.Errorf("unreadable lent file: got %q, want the Fallback", got)
+		t.Errorf("missing lent file: got %q, want the Fallback", got)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("a missing lent file logged %q, want nothing", buf.String())
+	}
+}
+
+// TestComposeWarnsWhenTheLentFileIsRefused: a lent file the trusted loader
+// refuses (a symlinked overlay, a group-writable file, …) still goes verbatim —
+// Claude Code reads it itself — but the estate's keys are lost, so the operator
+// hears about it: the same D9 WARN as an unusable estate file, once per
+// (engine, path, mtime), path and reason only.
+func TestComposeWarnsWhenTheLentFileIsRefused(t *testing.T) {
+	isolate(t)
+	buf := captureLog(t)
+	res := estate(t, fullEstate())
+	dir := t.TempDir()
+	real := filepath.Join(dir, "overlay.json")
+	writeJSON(t, real, map[string]any{"hooks": map[string]any{}})
+	link := filepath.Join(dir, "settings.json")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if got := Compose("planrun", res, Inputs{Fallback: link}); got != link {
+			t.Fatalf("symlinked lent file: got %q, want the Fallback verbatim", got)
+		}
+	}
+	line := buf.String()
+	if n := strings.Count(line, "runsettings: engine=planrun"); n != 1 {
+		t.Errorf("want exactly one WARN for the same (engine, path, mtime), got %d: %q", n, line)
+	}
+	if !strings.Contains(line, "warning:") || !strings.Contains(line, claudeacct.TrustSymlink) || !strings.Contains(line, link) {
+		t.Errorf("WARN should carry the reason %q and the lent path: %q", claudeacct.TrustSymlink, line)
+	}
+
+	buf.Reset()
+	gw := filepath.Join(t.TempDir(), "settings.json")
+	writeJSON(t, gw, map[string]any{"hooks": map[string]any{}})
+	if err := os.Chmod(gw, 0o620); err != nil {
+		t.Fatal(err)
+	}
+	if got := Compose("phaserun", res, Inputs{Fallback: gw}); got != gw {
+		t.Fatalf("group-writable lent file: got %q, want the Fallback verbatim", got)
+	}
+	if !strings.Contains(buf.String(), claudeacct.TrustGroupWritable) {
+		t.Errorf("no WARN for a group-writable lent file: %q", buf.String())
 	}
 }
 

@@ -6,7 +6,7 @@
 // and local-scope copies are written and ignored. So the one project-portable
 // channel for an estate's plugin options is `--settings`.
 //
-// # One source, three keys (D6)
+// # One source, two keys (D6)
 //
 // The composed file comes from ONE file — the admitted estate's
 // <EstateRoot>/.claude/settings.json — and carries exactly EstateKeys, copied
@@ -15,8 +15,12 @@
 // those itself, behind its own trust gate, and merges them with the flag file.
 // A `--settings` file is trusted configuration — on the terminal route it is
 // applied without the workspace-trust dialog — so `env`, `permissions`, `hooks`,
-// `apiKeyHelper` and every other key stay out: only the three plugin-wiring keys
+// `apiKeyHelper` and every other key stay out: only the two plugin-wiring keys
 // the operator declared, from a file the estate store admits (D5 Lock 2).
+// `enabledPlugins` stays out too: Claude Code merges it per key across scopes
+// and a --settings file wins every conflict, an explicit project `false`
+// included, so an estate's `x: true` would re-enable a pack a sub-project turned
+// off. Pack enablement stays at project scope, which Claude Code reads natively.
 //
 // # The contract, in order
 //
@@ -27,8 +31,10 @@
 //   - c: the file is unusable (D9) — outside EstateRoot, refused by the trusted
 //     loader, or an EstateKeys value that is not an object ⇒ in.Fallback VERBATIM
 //     and one WARN per (engine, path, mtime); never a partial compose.
-//   - d: filter to EstateKeys; e: Fallback parity for a lent file; f: write the
-//     content-addressed file (store.go); g: log counts and key names once.
+//   - d: filter to EstateKeys; e: Fallback parity for a lent file — a lent file
+//     the trusted loader refuses goes verbatim with the same D9 WARN as c; f:
+//     write the content-addressed file (store.go); g: log counts and key names
+//     once.
 //
 // Compose never returns an error and never blocks a launch. No log line or
 // return value ever carries a settings VALUE.
@@ -51,7 +57,8 @@ import (
 // EstateKeys are the ONLY keys a composed file takes from the estate. An array,
 // so every reader gets a copy and none can mutate it. Phase 5's settings-block
 // detector and Phase 7's prune compare exactly this list; never copy it.
-var EstateKeys = [...]string{"pluginConfigs", "enabledPlugins", "extraKnownMarketplaces"}
+// enabledPlugins is deliberately absent (see the package comment).
+var EstateKeys = [...]string{"pluginConfigs", "extraKnownMarketplaces"}
 
 // keySwarmery is the binding object. It is dropped silently: a binding copied
 // into a run would freeze it.
@@ -128,7 +135,7 @@ func compose(engine string, res claudeacct.Resolution, in Inputs, quiet bool) (s
 	}
 	if reason != "" {
 		if !quiet {
-			warnUnusable(engine, res.SettingsFile, reason)
+			warnUnusable(engine, "estate", res.SettingsFile, reason)
 		}
 		return in.Fallback, reason
 	}
@@ -137,7 +144,15 @@ func compose(engine string, res claudeacct.Resolution, in Inputs, quiet bool) (s
 	lent := 0
 	if in.Fallback != "" {
 		lentRoot, lentReason := claudeacct.ReadTrustedSettings(in.Fallback)
-		if lentRoot == nil || lentReason != "" {
+		if lentReason != "" {
+			// Claude Code still reads the lent file itself, but the estate's keys
+			// are lost for this run — a symlinked overlay, say — so say so.
+			if !quiet {
+				warnUnusable(engine, "lent", in.Fallback, lentReason)
+			}
+			return in.Fallback, ""
+		}
+		if lentRoot == nil {
 			return in.Fallback, ""
 		}
 		merged := make(map[string]any, len(lentRoot)+len(EstateKeys))
@@ -231,8 +246,8 @@ func isEstateKey(k string) bool {
 
 // warnUnusable logs the D9 WARN once per (engine, path, mtime): a file fixed or
 // touched later is reported again, an unchanged one is not repeated per spawn.
-// Path and reason only — never contents.
-func warnUnusable(engine, path, reason string) {
+// Path and reason only — never contents. which is "estate" or "lent".
+func warnUnusable(engine, which, path, reason string) {
 	mtime := ""
 	if fi, err := os.Stat(path); err == nil {
 		mtime = fi.ModTime().UTC().Format("2006-01-02T15:04:05.000000000Z")
@@ -240,14 +255,14 @@ func warnUnusable(engine, path, reason string) {
 		mtime = fi.ModTime().UTC().Format("2006-01-02T15:04:05.000000000Z")
 	}
 	logOnce("unusable\x00"+engine+"\x00"+path+"\x00"+mtime,
-		fmt.Sprintf("warning: runsettings: engine=%s estate settings unusable (%s): %s; using the fallback", engine, reason, path))
+		fmt.Sprintf("warning: runsettings: engine=%s %s settings unusable (%s): %s; using the fallback", engine, which, reason, path))
 }
 
 // logCompose is contract step g: one line per (engine, settings path).
 func logCompose(engine, path, estateRoot string, file map[string]any, lent int, dropped []string) {
 	logOnce("compose\x00"+engine+"\x00"+path, fmt.Sprintf(
-		"runsettings: engine=%s settings=%s estate=%s pluginConfigs=%d enabledPlugins=%d extraKnownMarketplaces=%d lent=%d dropped=%s",
-		engine, path, estateRoot, countOf(file["pluginConfigs"]), countOf(file["enabledPlugins"]),
+		"runsettings: engine=%s settings=%s estate=%s pluginConfigs=%d extraKnownMarketplaces=%d lent=%d dropped=%s",
+		engine, path, estateRoot, countOf(file["pluginConfigs"]),
 		countOf(file["extraKnownMarketplaces"]), lent, quoteNames(dropped)))
 }
 

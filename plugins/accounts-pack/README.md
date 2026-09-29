@@ -97,8 +97,11 @@ pack use `exec` for exactly that reason.
 from a project's own `.claude/settings.json`. So when the path is under an estate
 that its store ADMITS (the `# swarmery-root:` line), `exec` builds one settings
 file from exactly one source, the estate root's `.claude/settings.json`, and
-copies only its `pluginConfigs`, `enabledPlugins` and `extraKnownMarketplaces`.
-Every other key — `env`, `permissions`, `hooks`, `apiKeyHelper`,
+copies only its `pluginConfigs` and `extraKnownMarketplaces`. `enabledPlugins`
+stays out: Claude Code merges it per key and a `--settings` file wins every
+conflict, so an estate's `true` would re-enable a pack a sub-project turned off.
+Enable packs in each project's own settings, where the dashboard toggle manages
+them. Every other key — `env`, `permissions`, `hooks`, `apiKeyHelper`,
 `enabledMcpjsonServers`, the `swarmery` binding — is dropped by name: a
 `--settings` file is applied without the workspace-trust dialog, so nothing else
 may ride in it. Claude Code still loads the project's own settings files itself.
@@ -117,12 +120,19 @@ subcommand. The splice happens only when all three of these hold:
 When the estate's settings file is unusable — outside the estate root, reached
 through an absolute symlink (a link inside the estate must be relative), itself
 a symlink, hard-linked, not owned by you, group- or other-writable, over 1 MiB,
-malformed, or one of the three keys not a JSON object — `exec` prints exactly one line to
+malformed, or one of the two keys not a JSON object — `exec` prints exactly one line to
 stderr, `swarmery: project settings not composed (<reason>); running without
 them`, and runs the command without the flag. `swarmery account env` still
 prints zero or one `CLAUDE_CONFIG_DIR=` line and nothing about settings. A
 binding file (`.claude/settings.local.json`) that is hard-linked is ignored the
 same way a symlinked one is, and `swarmery account which` says why.
+
+The daemon's runs that already pass a project settings file as `--settings`
+(dispatch in a sub-repo, plan and phase runs, resume) get the estate's two keys
+added to what that file lacks. When the trusted loader refuses that file — a
+symlinked shared overlay, for instance — the run keeps it as before, without the
+estate's keys, and the daemon logs one warning per path with the reason. The
+symlinked-overlay layout does not get this feature.
 
 `which`, `use`, `clear`, `env`, `exec`, `estate`, `switch` and `move-session`
 never contact the daemon (`switch` and `move-session` read its database without
@@ -394,6 +404,14 @@ Two consequences worth knowing:
   terminal resolves (and is admitted) from its project.
 
 ## Known edges
+
+- **0.6.0 ignores a hard-linked binding file.** Up to 0.5.x a
+  `.claude/settings.local.json` with more than one hard link was honoured; now
+  it is refused like a symlinked one, so the project falls back to the next rung
+  of the walk (usually the default account). Some dotfile managers create hard
+  links. `swarmery account which` prints the ignored file and the reason
+  (`is hard-linked (N links)`); replace the link with a regular file to restore
+  the binding.
 
 - **The shim and the function coexist; the function wins in shells that have
   it.** A shell function shadows every `PATH` entry, so a shell that sourced the

@@ -40,8 +40,9 @@ func settingsTree(t *testing.T) (home, proj, runDir string) {
 	}
 	accttest.AdmitEstate(t, "acme", root)
 	writeTrusted(t, filepath.Join(root, ".claude", "settings.json"), map[string]any{
-		"pluginConfigs": map[string]any{"estate-pack@mkt": map[string]any{"opt": "x"}},
-		"permissions":   map[string]any{"deny": []any{"Bash(rm:*)"}},
+		"pluginConfigs":  map[string]any{"estate-pack@mkt": map[string]any{"opt": "x"}},
+		"enabledPlugins": map[string]any{"other-pack@mkt": true},
+		"permissions":    map[string]any{"deny": []any{"Bash(rm:*)"}},
 	})
 	proj = filepath.Join(root, "deployment", "repo")
 	writeTrusted(t, filepath.Join(proj, ".claude", "settings.json"), map[string]any{
@@ -137,13 +138,15 @@ func TestAccountExecSplicesSettingsAfterArgv0(t *testing.T) {
 	if _, ok := m["pluginConfigs"].(map[string]any)["estate-pack@mkt"]; !ok {
 		t.Fatal("the estate's pluginConfigs is missing")
 	}
-	// D6: one source, three keys. The project's own enabledPlugins is NOT copied —
-	// Claude Code loads the project's settings natively, behind its trust gate.
+	// D6: one source, two keys. No enabledPlugins travels — neither the project's
+	// own (Claude Code loads the project's settings natively, behind its trust
+	// gate) nor the estate's (at flag precedence it would override a project that
+	// turned the pack off).
 	if _, ok := m["enabledPlugins"]; ok {
-		t.Fatal("the project's own enabledPlugins reached the composed file")
+		t.Fatal("an enabledPlugins block reached the composed file")
 	}
 	for k := range m {
-		if k != "pluginConfigs" && k != "enabledPlugins" && k != "extraKnownMarketplaces" {
+		if k != "pluginConfigs" && k != "extraKnownMarketplaces" {
 			t.Fatalf("composed file carries %q, outside runsettings.EstateKeys", k)
 		}
 	}
