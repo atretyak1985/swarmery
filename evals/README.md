@@ -93,6 +93,19 @@ python3 evals/sweep/summarise.py /tmp/sweep         # pass rate, output tokens, 
 It uses subscription quota, not API billing. One sample per case: treat a single
 flip as noise, and a difference that repeats across runs as signal.
 
+## Frozen bench (whole-session tasks, deterministic checks)
+
+[`bench/`](bench/README.md) runs five fixed coding tasks through a full
+`claude -p` session on a known fixture repo and grades each with a shell check
+instead of an LLM judge — pass/fail, turns, cost and duration per task — so two
+model × effort configurations can be compared on identical work:
+
+```bash
+bash evals/bench/selftest.sh                                         # free: proves every check discriminates
+bash evals/bench/run.sh /tmp/opus-high.json claude-opus-5-5 high      # spends tokens
+python3 evals/bench/compare.py <candidate.json> <baseline.json>       # exit 1 = candidate passes fewer
+```
+
 ## Growing the corpus
 
 Every real routing bug or contract regression should become a test case here

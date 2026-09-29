@@ -1,0 +1,75 @@
+diff --git a/lineitem.go b/lineitem.go
+new file mode 100644
+index 0000000..aa1e589
+--- /dev/null
++++ b/lineitem.go
+@@ -0,0 +1,29 @@
++package orders
++
++import (
++	"errors"
++	"fmt"
++	"strings"
++)
++
++// LineItem is one SKU on an order, bought Qty times.
++type LineItem struct {
++	SKU string
++	Qty int
++}
++
++// ErrMalformedLineItem is returned for a line item that is not `<sku>:<qty>`.
++var ErrMalformedLineItem = errors.New("orders: line item must be <sku>:<qty>")
++
++// ParseLineItem parses one line item written as `<sku>:<qty>`, e.g. "A-100:3".
++func ParseLineItem(s string) (LineItem, error) {
++	sku, qty, ok := strings.Cut(strings.TrimSpace(s), ":")
++	if !ok || strings.TrimSpace(sku) == "" {
++		return LineItem{}, fmt.Errorf("orders: parse line item %q: %w", s, ErrMalformedLineItem)
++	}
++	n, err := ParseQuantity(qty)
++	if err != nil {
++		return LineItem{}, fmt.Errorf("orders: parse line item %q: %w", s, err)
++	}
++	return LineItem{SKU: strings.TrimSpace(sku), Qty: n}, nil
++}
+diff --git a/lineitem_test.go b/lineitem_test.go
+new file mode 100644
+index 0000000..0cf7683
+--- /dev/null
++++ b/lineitem_test.go
+@@ -0,0 +1,34 @@
++package orders
++
++import (
++	"errors"
++	"strconv"
++	"testing"
++)
++
++func TestParseLineItem(t *testing.T) {
++	cases := []struct {
++		in      string
++		want    LineItem
++		wantErr error
++	}{
++		{"A-100:3", LineItem{SKU: "A-100", Qty: 3}, nil},
++		{" B-7:12 ", LineItem{SKU: "B-7", Qty: 12}, nil},
++		{"A-100", LineItem{}, ErrMalformedLineItem},
++		{":3", LineItem{}, ErrMalformedLineItem},
++		{"A-100:0", LineItem{}, ErrNonPositive},
++		{"A-100:x", LineItem{}, strconv.ErrSyntax},
++	}
++	for _, c := range cases {
++		got, err := ParseLineItem(c.in)
++		if c.wantErr != nil {
++			if !errors.Is(err, c.wantErr) {
++				t.Errorf("ParseLineItem(%q) err = %v, want %v", c.in, err, c.wantErr)
++			}
++			continue
++		}
++		if err != nil || got != c.want {
++			t.Errorf("ParseLineItem(%q) = %+v, %v; want %+v", c.in, got, err, c.want)
++		}
++	}
++}

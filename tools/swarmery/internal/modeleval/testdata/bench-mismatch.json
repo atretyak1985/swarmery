@@ -1,0 +1,63 @@
+{
+  "model": "candidate-model",
+  "effort": "medium",
+  "startedAt": "2026-09-29T00:00:00Z",
+  "claudeVersion": "fixture",
+  "tasks": [
+    {
+      "id": "b01-bugfix",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 6,
+      "costUsd": 0.21,
+      "durationMs": 41000,
+      "checkTail": ""
+    },
+    {
+      "id": "b02-feature",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 9,
+      "costUsd": 0.34,
+      "durationMs": 70000,
+      "checkTail": ""
+    },
+    {
+      "id": "b03-refactor-constraint",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 13,
+      "costUsd": 0.55,
+      "durationMs": 118000,
+      "checkTail": ""
+    },
+    {
+      "id": "b04-stale-premise",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 3,
+      "costUsd": 0.08,
+      "durationMs": 21000,
+      "checkTail": ""
+    },
+    {
+      "id": "b06-extra",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 8,
+      "costUsd": 0.31,
+      "durationMs": 66000,
+      "checkTail": ""
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+diff --git a/inventory.sh b/inventory.sh
+index ffec163..dff9db3 100755
+--- a/inventory.sh
++++ b/inventory.sh
+@@ -5,24 +5,28 @@
+ #   inventory.sh FILE            print a table of every item
+ #   inventory.sh --total FILE    print the total quantity on hand
+ #   inventory.sh --low N FILE    print only items with qty below N
++#   inventory.sh --json FILE     print every item as a JSON array
++#                                (combines with --low N)
+ #
+ # FILE holds one item per line as `sku,qty,location`. Blank lines and lines
+ # starting with `#` are ignored.
+ set -euo pipefail
+ 
+ usage() {
+-  echo "usage: inventory.sh [--total | --low N] FILE" >&2
++  echo "usage: inventory.sh [--total | --low N] [--json] FILE" >&2
+   exit 2
+ }
+ 
+ mode=table
+ low=
++json=false
+ while [ $# -gt 0 ]; do
+   case "$1" in
+     --total) mode=total; shift ;;
+     --low)
+       [ $# -ge 2 ] || usage
+       mode=low; low=$2; shift 2 ;;
++    --json) json=true; shift ;;
+     -*) usage ;;
+     *) break ;;
+   esac
+@@ -36,6 +40,15 @@ items() {
+   grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$file" || true
+ }
+ 
++if [ "$json" = true ]; then
++  items | awk -F, -v mode="$mode" -v low="$low" '
++    mode == "low" && $2 + 0 >= low + 0 { next }
++    { printf "%s{\"sku\":\"%s\",\"qty\":%d,\"location\":\"%s\"}", (n++ ? "," : ""), $1, $2, $3 }
++    BEGIN { printf "[" }
++    END { print "]" }'
++  exit 0
++fi
++
+ case "$mode" in
+   total)
+     items | awk -F, '{ s += $2 } END { print s + 0 }'
