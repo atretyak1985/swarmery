@@ -1,0 +1,15 @@
+diff --git a/total.go b/total.go
+index d1e96ef..577b60d 100644
+--- a/total.go
++++ b/total.go
+@@ -16,8 +16,8 @@ func (l Line) Subtotal() int {
+ // Total is the price of every line item of an order, in cents.
+ func Total(lines []Line) int {
+ 	total := 0
+-	for i := 0; i < len(lines)-1; i++ {
+-		total += lines[i].Subtotal()
++	for _, l := range lines {
++		total += l.Subtotal()
+ 	}
+ 	return total
+ }

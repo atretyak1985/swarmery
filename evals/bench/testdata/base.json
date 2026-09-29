@@ -1,0 +1,63 @@
+{
+  "model": "baseline-model",
+  "effort": "high",
+  "startedAt": "2026-09-28T00:00:00Z",
+  "claudeVersion": "fixture",
+  "tasks": [
+    {
+      "id": "b01-bugfix",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 5,
+      "costUsd": 0.3,
+      "durationMs": 52000,
+      "checkTail": ""
+    },
+    {
+      "id": "b02-feature",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 8,
+      "costUsd": 0.41,
+      "durationMs": 81000,
+      "checkTail": ""
+    },
+    {
+      "id": "b03-refactor-constraint",
+      "pass": true,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 12,
+      "costUsd": 0.66,
+      "durationMs": 140000,
+      "checkTail": ""
+    },
+    {
+      "id": "b04-stale-premise",
+      "pass": false,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 4,
+      "costUsd": 0.15,
+      "durationMs": 28000,
+      "checkTail": "reply does not say the fix is already in place"
+    },
+    {
+      "id": "b05-read-the-docs",
+      "pass": false,
+      "error": false,
+      "timedOut": false,
+      "exitCode": 0,
+      "turns": 7,
+      "costUsd": 0.29,
+      "durationMs": 64000,
+      "checkTail": "error without the \"orders: \" prefix in lineitem.go"
+    }
+  ]
+}

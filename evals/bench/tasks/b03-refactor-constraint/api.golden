@@ -1,0 +1,130 @@
+package orders // import "example.com/orders"
+
+Package orders models customer orders: their line items, money arithmetic,
+status lifecycle, pricing from a catalog, and a printable summary.
+
+VARIABLES
+
+var (
+	ErrEmptyOrder    = errors.New("orders: order has no line items")
+	ErrInvalidQty    = errors.New("orders: quantity must be positive")
+	ErrUnknownSKU    = errors.New("orders: unknown sku")
+	ErrBadTransition = errors.New("orders: status transition not allowed")
+	ErrNotEditable   = errors.New("orders: order is no longer editable")
+)
+    Errors returned by this package.
+
+
+FUNCTIONS
+
+func CanTransition(from, to Status) bool
+    CanTransition reports whether an order in status from may move to status to.
+
+
+TYPES
+
+type Catalog map[string]Money
+    Catalog maps a SKU to its current unit price.
+
+func (c Catalog) Price(sku string) (Money, error)
+    Price returns the unit price of sku, or ErrUnknownSKU.
+
+type LineItem struct {
+	SKU       string
+	Qty       int
+	UnitPrice Money
+}
+    LineItem is one SKU on an order, bought Qty times at UnitPrice each.
+
+func (li LineItem) Subtotal() Money
+    Subtotal is Qty times UnitPrice.
+
+type Money int64
+    Money is an amount in cents. Negative amounts are credits.
+
+func Cents(units, cents int64) Money
+    Cents builds a Money from whole units and cents, e.g. Cents(12, 34) is
+    12.34.
+
+func (m Money) Add(n Money) Money
+    Add returns m + n.
+
+func (m Money) BasisPoints(bp int) Money
+    BasisPoints returns bp hundredths of a percent of m, rounded half away from
+    zero.
+
+func (m Money) Mul(qty int) Money
+    Mul returns m multiplied by a whole quantity.
+
+func (m Money) Percent(pct int) Money
+    Percent returns pct percent of m, rounded half away from zero to the cent.
+
+func (m Money) String() string
+    String formats m as a decimal amount with two places, e.g. "12.34" or
+    "-0.05".
+
+type Order struct {
+	ID          string
+	Status      Status
+	Items       []LineItem
+	DiscountPct int // whole-order discount, 0..100
+	TaxRateBP   int // tax rate in basis points, applied after the discount
+}
+    Order is a customer order. The zero value is not usable; call NewOrder.
+
+func NewOrder(id string) *Order
+    NewOrder returns an empty draft order with the given ID.
+
+func (o *Order) AddItem(c Catalog, sku string, qty int) error
+    AddItem adds qty of sku priced from the catalog. Adding a SKU already on the
+    order increases its quantity and keeps its original unit price.
+
+func (o *Order) Discount() Money
+    Discount is the whole-order discount amount.
+
+func (o *Order) ItemCount() int
+    ItemCount is the total quantity across all line items.
+
+func (o *Order) RemoveItem(sku string) error
+    RemoveItem removes the line item for sku.
+
+func (o *Order) SetQty(sku string, qty int) error
+    SetQty sets the quantity of sku. A quantity of zero removes the line item.
+
+func (o *Order) SortedItems() []LineItem
+    SortedItems returns a copy of the line items ordered by SKU.
+
+func (o *Order) Subtotal() Money
+    Subtotal is the sum of every line item's subtotal.
+
+func (o *Order) Summary() string
+    Summary renders the order as a fixed-width text receipt, items sorted by
+    SKU.
+
+func (o *Order) Tax() Money
+    Tax is the tax on the discounted subtotal.
+
+func (o *Order) Total() Money
+    Total is the subtotal minus the discount plus tax.
+
+func (o *Order) Transition(to Status) error
+    Transition moves the order to status to, validating it first when placing.
+
+func (o *Order) Validate() error
+    Validate reports the first problem that would stop the order being placed.
+
+type Status string
+    Status is the lifecycle state of an order.
+
+const (
+	StatusDraft     Status = "draft"
+	StatusPlaced    Status = "placed"
+	StatusShipped   Status = "shipped"
+	StatusDelivered Status = "delivered"
+	StatusCancelled Status = "cancelled"
+)
+    The states an order moves through.
+
+func (s Status) Terminal() bool
+    Terminal reports whether no further transition is possible from s.
+
