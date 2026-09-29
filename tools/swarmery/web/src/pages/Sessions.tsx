@@ -2,6 +2,9 @@
 //
 // Structure. The ONLY top-level structure is the day timeline: `today · sat,
 // aug 2`, `fri, aug 1`, … under mono eyebrow rules. Nothing is hoisted above it.
+// The one exception is FileContentionBanner under the heading: an advisory that
+// renders null unless two live sessions share a file, so it costs the common
+// case nothing.
 // A plan run does NOT get its own section: it renders INSIDE its day, positioned
 // by its newest session, as ONE collapsed PlanRunCard row that fans out on
 // click. Ordinary sessions render as flat SessionCard rows in the same day.
@@ -46,6 +49,7 @@ import {
 } from '../lib/sessionsView';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
 import { ExplainPair } from '../components/Explain';
+import { FileContentionBanner } from '../components/FileContentionBanner';
 import { PageSearchInput } from '../components/PageSearchInput';
 import { PlanRunCard } from '../components/PlanRunCard';
 import { ScopeChip } from '../components/ScopeChip';
@@ -364,6 +368,9 @@ export function Sessions(): JSX.Element {
         {shownSessions} sessions
         {shownRuns > 0 && ` · ${String(shownRuns)} plan runs`} · newest first
       </div>
+
+      {/* Files two or more live sessions touched recently — null when none. */}
+      <FileContentionBanner project={effectiveScope} />
 
       {/* search · project scope · | · status chips · view segment */}
       <div className="mt-5 flex flex-wrap items-center gap-2">
