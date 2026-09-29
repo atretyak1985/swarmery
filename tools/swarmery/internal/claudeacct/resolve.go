@@ -186,6 +186,32 @@ func (r Resolution) IgnoredRungs() []IgnoredRung {
 	return out
 }
 
+// AdmissionLines is the ONE renderer of the admission block `swarmery account
+// which` prints on stdout — one "admission:  <note>" line per AdmissionNote
+// line — so every surface that repeats it (the doctor's `admission` field)
+// prints the identical text. Paths and reasons only. nil when there is none.
+func (r Resolution) AdmissionLines() []string {
+	if r.AdmissionNote == "" {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(r.AdmissionNote, "\n") {
+		out = append(out, "admission:  "+line)
+	}
+	return out
+}
+
+// IgnoredLines is the ONE renderer of the "ignored:" lines `swarmery account
+// which` prints for every rung whose binding Lock 1 ignored — path and reason,
+// never the file's contents. nil when there is none.
+func (r Resolution) IgnoredLines() []string {
+	var out []string
+	for _, ig := range r.IgnoredRungs() {
+		out = append(out, "ignored:    "+ig.Path+" — "+ig.Reason)
+	}
+	return out
+}
+
 // Resolve resolves projectPath on both axes. See the file header for the walk
 // and its safety properties. "" short-circuits to Source "none" with NO walk:
 // a relative binding path would otherwise be read against the process's own

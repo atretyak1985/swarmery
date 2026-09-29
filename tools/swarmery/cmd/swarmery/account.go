@@ -274,7 +274,9 @@ func accountWhich(args []string, out io.Writer) error {
 	ownIgnored := false
 	for _, ig := range r.IgnoredRungs() {
 		ownIgnored = ownIgnored || ig.Path == ownBinding
-		fmt.Fprintf(out, "ignored:    %s — %s\n", ig.Path, ig.Reason)
+	}
+	for _, line := range r.IgnoredLines() {
+		fmt.Fprintln(out, line)
 	}
 	// The project's own binding file exists but no reader trusts it (mode, owner,
 	// type — or provenance, already said above).
@@ -282,10 +284,8 @@ func accountWhich(args []string, out io.Writer) error {
 		fmt.Fprintf(out, "ignored:    %s\n", why)
 	}
 	// Which stores a spawn here receives, and why (D5 Lock 2).
-	if r.AdmissionNote != "" {
-		for _, line := range strings.Split(r.AdmissionNote, "\n") {
-			fmt.Fprintf(out, "admission:  %s\n", line)
-		}
+	for _, line := range r.AdmissionLines() {
+		fmt.Fprintln(out, line)
 	}
 	for _, s := range claudeacct.Shadowed(dir) {
 		fmt.Fprintf(out, "shadowed:   %s says %s\n", s.Dir, s.Account)

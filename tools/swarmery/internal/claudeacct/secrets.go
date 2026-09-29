@@ -224,6 +224,22 @@ const (
 	StoreUnadmitted
 )
 
+// StoreStatus is the loader's verdict on the store FILE at path — the same
+// checks secretEnvFromFile applies — without reading a variable and without
+// logging: StoreAbsent, StorePresent, or StoreRefused with a reason that names
+// neither the path nor anything inside it. It says nothing about roots
+// (admission is a property of a store AND a rung, see Resolution).
+func StoreStatus(path string) (StoreState, string) {
+	if path == "" {
+		return StoreAbsent, ""
+	}
+	f, c := openStore(path)
+	if f != nil {
+		f.Close()
+	}
+	return c.State, c.Reason
+}
+
 // storeCheck is the loader's verdict on one store file.
 type storeCheck struct {
 	State StoreState
