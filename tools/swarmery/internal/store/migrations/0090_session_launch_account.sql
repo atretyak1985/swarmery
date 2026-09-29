@@ -1,0 +1,14 @@
+-- session_launch_account: what a session was LAUNCHED as, beside where its
+-- transcript LANDED.
+--
+-- sessions.account (0047) is derived at ingest from the config dir of the
+-- transcript root — where the run's JSONL was written. launch_account is the
+-- account the process was started under, as the SessionStart hookshim read it
+-- from its own CLAUDE_CONFIG_DIR (unset => 'default'). The two disagree exactly
+-- when a terminal was launched under one account inside a project bound to
+-- another, which store.AccountDrift turns into a query instead of a hunch.
+--
+-- '' (the default) means "unknown", exactly as 0047 defined account's '': every
+-- row that existed before this column, and every session whose SessionStart
+-- hook never reported one. Additive with a default: no backfill, no rewrite.
+ALTER TABLE sessions ADD COLUMN launch_account TEXT NOT NULL DEFAULT '';
