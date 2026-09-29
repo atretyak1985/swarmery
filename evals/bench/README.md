@@ -132,6 +132,50 @@ the totals, which a footnote flags. Exit codes:
 | 2    | not comparable: different or duplicate task ids, or any `error: true` task on either side |
 | 3    | unreadable input                                                                          |
 
+## Feeding the upgrade gate
+
+`swarmery modeleval` takes two bench result files as its primary signal for a
+model or effort switch. It re-applies the same comparison `compare.py` does
+(same pass counting, same "not comparable" rules), so run the bench first and
+hand it both files:
+
+```bash
+bash evals/bench/run.sh /tmp/cand.json claude-opus-5-5 medium     # the candidate
+bash evals/bench/run.sh /tmp/base.json claude-opus-5-5 high       # what runs today
+swarmery modeleval --model claude-opus-5-5 \
+  --bench-candidate /tmp/cand.json --bench-baseline /tmp/base.json
+```
+
+The bench verdict is combined with the live-trajectory verdict (the judged
+sessions already in the corpus), which stays as a regression backstop:
+
+| Trajectories ↓ / Bench → | pass | fail | inconclusive |
+| ------------------------ | ---- | ---- | ------------ |
+| pass                     | pass | fail | pass         |
+| fail                     | fail | fail | fail         |
+| inconclusive             | pass | fail | inconclusive |
+
+- A bench **pass** carries the gate even when there are no judged sessions on
+  the new model yet: that is the normal state before a switch, and not
+  evidence against it.
+- A bench **inconclusive** (different or duplicate task ids, or any
+  `error: true` task on either side) defers to the trajectory verdict. Re-run
+  the broken tasks rather than overriding.
+- Either side failing fails the gate, and `modeleval` exits non-zero only on
+  `fail`, as before.
+- Turns and cost are reported in the detail and the `--json` `bench` object,
+  never gated: spend is your call.
+- Pass both flags or neither. With neither, `modeleval` is the
+  trajectory-only gate it always was. With only one, it stops with a usage error.
+- The candidate file's `model` must be the `--model` being evaluated (a
+  `[1m]` context-window suffix is ignored on both), and the two files must
+  differ in model or effort. Anything else is a usage error: a bench of another
+  model, or of the same configuration twice, cannot speak for this switch.
+
+The combined verdict and detail are stored in the same `model_validations` row
+the `PreModelSwitch` gate reads. Compare only runs made on the same suite
+revision (see the end of "Adding a task").
+
 ## Self-test (free)
 
 ```bash

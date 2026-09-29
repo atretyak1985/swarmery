@@ -580,9 +580,39 @@ func cmdModelEval(args []string) error {
 	setPath := fs.String("golden-set", "", "path to the golden set manifest "+
 		"(default: testdata/goldenset/manifest.json next to the binary source)")
 	asJSON := fs.Bool("json", false, "emit the result as JSON")
+	benchCand := fs.String("bench-candidate", "", "frozen-bench result file for the candidate "+
+		"(evals/bench/run.sh output); requires --bench-baseline")
+	benchBase := fs.String("bench-baseline", "", "frozen-bench result file for the incumbent "+
+		"configuration; requires --bench-candidate")
 	fs.Parse(args)
+	const usage = "usage: swarmery modeleval --model <id> [--golden-set <path>] " +
+		"[--bench-candidate <path> --bench-baseline <path>] [--json] [--db <path>]"
 	if *model == "" || fs.NArg() != 0 {
-		return fmt.Errorf("usage: swarmery modeleval --model <id> [--golden-set <path>] [--json] [--db <path>]")
+		return fmt.Errorf("%s", usage)
+	}
+	// A bench comparison needs both sides; one alone would silently drop the
+	// primary signal, so it is a usage error rather than a trajectory-only run.
+	if (*benchCand == "") != (*benchBase == "") {
+		return fmt.Errorf("--bench-candidate and --bench-baseline go together; %s", usage)
+	}
+
+	// The bench is loaded before the database is touched, so a bad result file
+	// fails fast and never leaves a trajectory-only verdict persisted.
+	var bench *modeleval.BenchVerdict
+	if *benchCand != "" {
+		cand, err := modeleval.LoadBench(*benchCand)
+		if err != nil {
+			return err
+		}
+		base, err := modeleval.LoadBench(*benchBase)
+		if err != nil {
+			return err
+		}
+		if err := modeleval.ValidateBenchPair(*model, cand, base); err != nil {
+			return fmt.Errorf("%v; %s", err, usage)
+		}
+		v := modeleval.CompareBench(cand, base)
+		bench = &v
 	}
 
 	path := *setPath
@@ -600,33 +630,43 @@ func cmdModelEval(args []string) error {
 	}
 	defer db.Close()
 
-	res, err := modeleval.Evaluate(db, gs, *model)
+	traj, err := modeleval.Evaluate(db, gs, *model)
 	if err != nil {
 		return err
 	}
+	res := modeleval.Combine(traj, bench)
 	if err := modeleval.Persist(db, res, time.Now()); err != nil {
 		return err
 	}
 
 	if *asJSON {
-		out, err := json.MarshalIndent(map[string]any{
+		doc := map[string]any{
 			"model": res.Model, "goldenSetVersion": res.GoldenSetVersion,
 			"verdict": res.Verdict, "score": res.Score,
 			"trajectories": res.Trajectories, "agentsCovered": res.AgentsCovered,
 			"detail": res.Detail,
-		}, "", "  ")
+		}
+		if bench != nil {
+			doc["bench"] = bench
+		}
+		out, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
 			return err
 		}
 		fmt.Println(string(out))
 	} else {
-		fmt.Printf("modeleval %s (golden set %s)\n  verdict:      %s\n  score:        %.2f\n  trajectories: %d\n  agents:       %d covered\n  %s\n",
+		fmt.Printf("modeleval %s (golden set %s)\n  verdict:      %s\n  score:        %.2f\n  trajectories: %d\n  agents:       %d covered\n",
 			res.Model, res.GoldenSetVersion, res.Verdict, res.Score,
-			res.Trajectories, res.AgentsCovered, res.Detail)
+			res.Trajectories, res.AgentsCovered)
+		if bench != nil {
+			fmt.Printf("  bench:        %s (candidate %d passed, baseline %d)\n",
+				bench.Verdict, bench.CandPass, bench.BasePass)
+		}
+		fmt.Printf("  %s\n", res.Detail)
 	}
 
-	if res.Verdict == "fail" {
-		return fmt.Errorf("model %s failed the golden set", res.Model)
+	if res.Verdict == modeleval.VerdictFail {
+		return fmt.Errorf("model %s failed — %s", res.Model, modeleval.FailReason(traj, bench))
 	}
 	return nil
 }

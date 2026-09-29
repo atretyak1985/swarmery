@@ -336,6 +336,52 @@ func Evaluate(db *sql.DB, gs *GoldenSet, model string) (Result, error) {
 	return res, nil
 }
 
+// Combine folds a frozen-bench verdict into a trajectory result. The bench is
+// the primary signal — identical work, deterministic checks — and the live
+// trajectory comparison is the regression backstop:
+//
+//   - no bench (nil): the trajectory result, unchanged;
+//   - either side fails: fail;
+//   - bench passes: pass, even when the trajectories are merely inconclusive —
+//     a new model has no live trajectories yet, and that is not evidence
+//     against it;
+//   - bench inconclusive (runs not comparable): the trajectory verdict.
+//
+// Every other field of traj is kept, so Persist writes the combined verdict
+// and detail through the existing columns.
+func Combine(traj Result, bench *BenchVerdict) Result {
+	if bench == nil {
+		return traj
+	}
+	out := traj
+	switch {
+	case bench.Verdict == VerdictFail || traj.Verdict == VerdictFail:
+		out.Verdict = VerdictFail
+	case bench.Verdict == VerdictPass:
+		out.Verdict = VerdictPass
+	default:
+		out.Verdict = traj.Verdict
+	}
+	// Evaluate ends its detail with a sentence; drop that full stop so the join
+	// reads "…0/13; bench …" rather than "…0/13.; bench …".
+	out.Detail = strings.TrimSuffix(traj.Detail, ".") + "; " + bench.Detail
+	return out
+}
+
+// FailReason names which signal failed, for the error a failing modeleval run
+// exits with: the bench, the trajectory backstop, or both. It returns "" when
+// neither did.
+func FailReason(traj Result, bench *BenchVerdict) string {
+	var parts []string
+	if bench != nil && bench.Verdict == VerdictFail {
+		parts = append(parts, "bench regression: "+bench.Detail)
+	}
+	if traj.Verdict == VerdictFail {
+		parts = append(parts, "trajectory regression: "+traj.Detail)
+	}
+	return strings.Join(parts, "; ")
+}
+
 // Persist upserts the result. One row per (model, golden_set_version), so a
 // re-run converges instead of accumulating and "the newest verdict" stays
 // unambiguous.
