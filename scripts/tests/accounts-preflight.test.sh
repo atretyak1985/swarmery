@@ -211,6 +211,27 @@ HOOK_OUT="$(printf '{"session_id":"../evil","cwd":"%s"}' "$PROJ" | env HOME="$FA
 if [ ! -e "$FAKE_HOME/.swarmery/run/evil.env" ] && [ -n "$HOOK_OUT" ]; then ok
 else bad "(k) a session id outside [A-Za-z0-9_-] writes no cache" "no file" "written"; fi
 
+# ── (m) first sight: one sentence with the estate root and the COUNT, no name ─
+FS='[{"id":"first-sight","severity":"warn","title":"t","detail":"d","file":""}]'
+R_FS="$WORK/fs.json"; report "$R_FS" default estatex 13 "$N13_JSON" "$N13_JSON" '[]' "$FS"
+run_hook "$R_FS" "$PROJ"
+ctx="$(ctx_of "$HOOK_OUT")"
+lines="$(printf '%s' "$HOOK_OUT" | grep -c '^' || true)"
+leaked=0
+for n in "${N13[@]}"; do printf '%s' "$ctx" | grep -qF "$n" && leaked=$((leaked + 1)); done
+if [ "$HOOK_EXIT" -eq 0 ] && [ "$lines" -eq 1 ] && printf '%s' "$ctx" | grep -qF '/estate/root' &&
+  printf '%s' "$ctx" | grep -qF '13 credential' && [ "$leaked" -eq 0 ]; then ok
+else bad "(m) first-sight -> one line naming the root and the count, no name" "1 line" "$lines line(s) ctx='$ctx'"; fi
+# the same report without the finding says nothing (coverage is full)
+R_NOFS="$WORK/nofs.json"; report "$R_NOFS" default estatex 13 "$N13_JSON" "$N13_JSON" '[]'
+run_hook "$R_NOFS" "$PROJ"
+if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ]; then ok
+else bad "(m) no first-sight finding -> silent" "''" "'$HOOK_OUT'"; fi
+
+# ── (n) the inner bound is below the watchdog; the retired name stays gone ───
+if [ "$(grep -c -- '--timeout 2.5s' "$HOOK")" -eq 1 ] && [ ! -e "$(dirname "$HOOK")/warn-wrong-account.sh" ]; then ok
+else bad "(n) --timeout 2.5s once, warn-wrong-account.sh absent" "1 / absent" "$(grep -c -- '--timeout 2.5s' "$HOOK")"; fi
+
 # ── (l) one name per fact: no snake_case alias anywhere in the hook ──────────
 if ! grep -qE 'vars_expected|vars_present|vars_missing' "$HOOK"; then ok
 else bad "(l) no snake_case alias in the hook" "0 matches" "$(grep -nE 'vars_expected|vars_present|vars_missing' "$HOOK")"; fi

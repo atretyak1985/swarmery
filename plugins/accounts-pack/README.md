@@ -403,6 +403,21 @@ Two consequences worth knowing:
   path, so an anchored account store is not released there. A project-scoped
   terminal resolves (and is admitted) from its project.
 
+## The doctor, at session start (0.6.1)
+
+The SessionStart preflight runs `swarmery account doctor --fast --json
+--timeout 2.5s` — the inner bound sits below the hook's 3 s watchdog, so a slow
+arm is cut short and the report still arrives. Besides a credential-coverage
+gap it now says one more thing, once per directory: the **first session in a
+path under an estate root** names that root and the NUMBER of credentials the
+path inherits (never a name, never a value), so a checkout cloned into an
+estate does not inherit its credentials silently. The doctor keeps the
+already-reported paths in `~/.swarmery/doctor/estate-seen.json`; run it with
+`--no-record` to look without recording. Everything else the doctor reports —
+the default account's two profiles, trust findings, the settings delta and
+plugin parity between accounts, stale duplicates — is in `swarmery account
+doctor` (bare, or `--json`).
+
 ## Known edges
 
 - **0.6.0 ignores a hard-linked binding file.** Up to 0.5.x a

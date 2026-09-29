@@ -18,6 +18,9 @@
 # an estate with no store file, "no estate", or an empty `varsExpected` are all
 # HEALTHY and silent: a project may enable a dozen plugins that reference no
 # ${VAR} at all, and a hook that spoke on a count would fire at every start.
+# One INFORMATIONAL sentence rides along: the doctor's once-per-path
+# `first-sight` finding (a directory new under an estate root) is rendered as
+# the estate root plus the credential COUNT — never a name, never a value.
 #
 # Side output: ~/.swarmery/run/preflight/<session_id>.env (dir 0700, file 0600)
 # for the statusline — account=, estate=, varsExpected=, varsPresent= (the
@@ -87,7 +90,9 @@ esac
 # provenance probe (a `git ls-files`) at every rung that declares a binding.
 OUT_FILE="$(mktemp 2>/dev/null)" || exit 0
 trap 'rm -f "$OUT_FILE"' EXIT
-"$SWARMERY" account doctor --fast --json --path "$PROJECT_DIR" \
+# --timeout is the doctor's own inner bound, strictly below the watchdog: a
+# slow arm is cut short and the report still arrives, before the kill -9.
+"$SWARMERY" account doctor --fast --json --timeout 2.5s --path "$PROJECT_DIR" \
   </dev/null >"$OUT_FILE" 2>/dev/null &
 DOCTOR_PID=$!
 # The watchdog's own stdio goes to /dev/null: a sleeper that inherited this
@@ -112,10 +117,13 @@ FIELDS="$(jq -r '
       (arr(.varsPresent) | length | tostring),
       (if .launchedViaSwarmery == true then "1" else "0" end),
       (if .daemon == true then "1" else "0" end),
+      (if (arr(.findings) | map(select(type == "object" and .id == "first-sight")) | length) > 0 then "1" else "0" end),
+      str(.estateRoot),
+      (if (.credentials | type) == "number" then (.credentials | floor | tostring) else "" end),
       (arr(.varsMissing) | map(select(type == "string")) | join("\u001e"))
     ] | join("\u001f")' "$OUT_FILE" 2>/dev/null)" || exit 0
 [ -n "$FIELDS" ] || exit 0
-IFS=$'\x1f' read -r ACCOUNT ESTATE N_EXPECTED N_PRESENT LAUNCHED DAEMON MISSING_RAW <<<"$FIELDS" || exit 0
+IFS=$'\x1f' read -r ACCOUNT ESTATE N_EXPECTED N_PRESENT LAUNCHED DAEMON FIRST_SIGHT ESTATE_ROOT N_CREDS MISSING_RAW <<<"$FIELDS" || exit 0
 
 valid_account_key "$ACCOUNT" || exit 0
 [ -z "$ESTATE" ] || valid_account_key "$ESTATE" || exit 0
@@ -147,19 +155,39 @@ IFS=$'\x1e' read -r -a RAW_NAMES <<<"$MISSING_RAW" || true
 for name in "${RAW_NAMES[@]+"${RAW_NAMES[@]}"}"; do
   valid_var_name "$name" && MISSING+=("$name")
 done
-[ "${#MISSING[@]}" -gt 0 ] || exit 0
+# ── the first-sight clause (D3): a path new under an estate root ──────────────
+# One sentence naming the estate root and the credential COUNT — never a name,
+# never a value. The doctor reports it once per path (its ledger), so this is
+# said once, not at every start. The root is printed only when it is a plain
+# absolute path (no control or quoting characters can reach the context).
+FIRST=""
+if [ "$FIRST_SIGHT" = "1" ] && [ -n "$ESTATE_ROOT" ]; then
+  case "$N_CREDS" in ''|*[!0-9]*) N_CREDS="" ;; esac
+  case "$ESTATE_ROOT" in
+    /*[!A-Za-z0-9._/@+~-]*) ;;
+    /*) [ -n "$N_CREDS" ] && FIRST="First session in this directory: it sits under estate root ${ESTATE_ROOT} and inherits that estate's ${N_CREDS} credential(s). If this checkout is not yours to trust, move it out of the estate." ;;
+  esac
+fi
 
-NAMES="$(printf '%s, ' "${MISSING[@]}")"
-NAMES="${NAMES%, }"
-WHERE="account '${ACCOUNT}'"
-[ -n "$ESTATE" ] && WHERE="${WHERE}, estate '${ESTATE}'"
-CTX="Credential coverage gap: ${#MISSING[@]} of ${N_EXPECTED} MCP variable(s) referenced by this project's enabled plugins are unset in this session (${WHERE}): ${NAMES}."
-if [ "$DAEMON" = "1" ]; then
-  CTX="${CTX} This session runs in a swarmery daemon worktree, so the gap is in the daemon's spawn seam, not in a terminal: check the estate's credential store and the environment the daemon spawns with."
-elif [ "$LAUNCHED" != "1" ]; then
-  CTX="${CTX} This session was not launched through \`swarmery account exec\`. MCP env is read once at process start and cannot be repaired in-session: exit and open a new shell, then start claude again (or run \`swarmery account exec -- claude\`)."
-else
-  CTX="${CTX} The launch went through swarmery, so nothing supplies these names: add them to the estate's credential store (\`swarmery account estate show\`), then restart the session."
+[ "${#MISSING[@]}" -gt 0 ] || [ -n "$FIRST" ] || exit 0
+
+CTX=""
+if [ "${#MISSING[@]}" -gt 0 ]; then
+  NAMES="$(printf '%s, ' "${MISSING[@]}")"
+  NAMES="${NAMES%, }"
+  WHERE="account '${ACCOUNT}'"
+  [ -n "$ESTATE" ] && WHERE="${WHERE}, estate '${ESTATE}'"
+  CTX="Credential coverage gap: ${#MISSING[@]} of ${N_EXPECTED} MCP variable(s) referenced by this project's enabled plugins are unset in this session (${WHERE}): ${NAMES}."
+  if [ "$DAEMON" = "1" ]; then
+    CTX="${CTX} This session runs in a swarmery daemon worktree, so the gap is in the daemon's spawn seam, not in a terminal: check the estate's credential store and the environment the daemon spawns with."
+  elif [ "$LAUNCHED" != "1" ]; then
+    CTX="${CTX} This session was not launched through \`swarmery account exec\`. MCP env is read once at process start and cannot be repaired in-session: exit and open a new shell, then start claude again (or run \`swarmery account exec -- claude\`)."
+  else
+    CTX="${CTX} The launch went through swarmery, so nothing supplies these names: add them to the estate's credential store (\`swarmery account estate show\`), then restart the session."
+  fi
+fi
+if [ -n "$FIRST" ]; then
+  CTX="${CTX:+$CTX }${FIRST}"
 fi
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
   "$(printf '%s' "$CTX" | jq -Rs .)"
