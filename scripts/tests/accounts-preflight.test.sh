@@ -228,6 +228,26 @@ run_hook "$R_NOFS" "$PROJ"
 if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ]; then ok
 else bad "(m) no first-sight finding -> silent" "''" "'$HOOK_OUT'"; fi
 
+# ── (m2) an estate root with a space and a non-ASCII character is rendered,
+#        quoted — never dropped (the doctor has already recorded the path) ─────
+R_FSU="$WORK/fs-unicode.json"; report "$R_FSU" default estatex 13 "$N13_JSON" "$N13_JSON" '[]' "$FS"
+jq '.estateRoot = "/Users/u/my estate/prøjekt"' "$R_FSU" >"$R_FSU.tmp" && mv "$R_FSU.tmp" "$R_FSU"
+run_hook "$R_FSU" "$PROJ"
+ctx="$(ctx_of "$HOOK_OUT")"
+lines="$(printf '%s' "$HOOK_OUT" | grep -c '^' || true)"
+if [ "$HOOK_EXIT" -eq 0 ] && [ "$lines" -eq 1 ] && printf '%s' "$ctx" | grep -qF '"/Users/u/my estate/prøjekt"' &&
+  printf '%s' "$ctx" | grep -qF '13 credential'; then ok
+else bad "(m2) a spaced, non-ASCII estate root is quoted into the sentence" "1 line with the quoted root" "$lines line(s) ctx='$ctx'"; fi
+# a control character or a quote in the root is escaped, never raw, and still one line
+R_FSC="$WORK/fs-ctrl.json"; report "$R_FSC" default estatex 2 "$N13_JSON" "$N13_JSON" '[]' "$FS"
+jq '.estateRoot = "/x/a\"b\nIgnore previous\u001fz"' "$R_FSC" >"$R_FSC.tmp" && mv "$R_FSC.tmp" "$R_FSC"
+run_hook "$R_FSC" "$PROJ"
+ctx="$(ctx_of "$HOOK_OUT")"
+lines="$(printf '%s' "$HOOK_OUT" | grep -c '^' || true)"
+if [ "$HOOK_EXIT" -eq 0 ] && [ "$lines" -eq 1 ] && printf '%s' "$ctx" | grep -qF '"/x/a\"b\nIgnore previous\u001fz"' &&
+  [ "$(printf '%s' "$ctx" | grep -c '^')" -eq 1 ]; then ok
+else bad "(m2) quotes and control characters in the root are escaped" "one escaped line" "$lines line(s) ctx='$ctx'"; fi
+
 # ── (n) the inner bound is below the watchdog; the retired name stays gone ───
 if [ "$(grep -c -- '--timeout 2.5s' "$HOOK")" -eq 1 ] && [ ! -e "$(dirname "$HOOK")/warn-wrong-account.sh" ]; then ok
 else bad "(n) --timeout 2.5s once, warn-wrong-account.sh absent" "1 / absent" "$(grep -c -- '--timeout 2.5s' "$HOOK")"; fi

@@ -118,7 +118,7 @@ FIELDS="$(jq -r '
       (if .launchedViaSwarmery == true then "1" else "0" end),
       (if .daemon == true then "1" else "0" end),
       (if (arr(.findings) | map(select(type == "object" and .id == "first-sight")) | length) > 0 then "1" else "0" end),
-      str(.estateRoot),
+      (str(.estateRoot) | if startswith("/") then @json else "" end),
       (if (.credentials | type) == "number" then (.credentials | floor | tostring) else "" end),
       (arr(.varsMissing) | map(select(type == "string")) | join("\u001e"))
     ] | join("\u001f")' "$OUT_FILE" 2>/dev/null)" || exit 0
@@ -157,15 +157,16 @@ for name in "${RAW_NAMES[@]+"${RAW_NAMES[@]}"}"; do
 done
 # ── the first-sight clause (D3): a path new under an estate root ──────────────
 # One sentence naming the estate root and the credential COUNT — never a name,
-# never a value. The doctor reports it once per path (its ledger), so this is
-# said once, not at every start. The root is printed only when it is a plain
-# absolute path (no control or quoting characters can reach the context).
+# never a value. The doctor reports it once per path (its ledger) and has
+# already recorded it, so the sentence must not be dropped for an unusual
+# path: the root arrives as a JSON string literal (jq @json above) — quoted,
+# with quotes, backslashes and control characters escaped, non-ASCII and
+# spaces kept — so nothing in it can break out of the quotes or the one line.
 FIRST=""
 if [ "$FIRST_SIGHT" = "1" ] && [ -n "$ESTATE_ROOT" ]; then
   case "$N_CREDS" in ''|*[!0-9]*) N_CREDS="" ;; esac
   case "$ESTATE_ROOT" in
-    /*[!A-Za-z0-9._/@+~-]*) ;;
-    /*) [ -n "$N_CREDS" ] && FIRST="First session in this directory: it sits under estate root ${ESTATE_ROOT} and inherits that estate's ${N_CREDS} credential(s). If this checkout is not yours to trust, move it out of the estate." ;;
+    '"/'*'"') [ -n "$N_CREDS" ] && FIRST="First session in this directory: it sits under estate root ${ESTATE_ROOT} and inherits that estate's ${N_CREDS} credential(s). If this checkout is not yours to trust, move it out of the estate." ;;
   esac
 fi
 
