@@ -164,6 +164,11 @@ type sessionDTO struct {
 	// transcript root. "" — pre-0047 rows and every hook-minted session —
 	// means the stock account and is displayed as ingest.DefaultAccount.
 	Account string `json:"account"`
+	// LaunchAccount is what the run was LAUNCHED as (the SessionStart shim's
+	// CLAUDE_CONFIG_DIR; migration session_launch_account). "" = unknown. It
+	// differs from Account when a terminal under one account ran in a project
+	// whose transcript landed under another — store.AccountDrift.
+	LaunchAccount string `json:"launchAccount"`
 	// Parity contract: per-session aggregates over deduped turns.
 	// tokens = SUM(tokens_in + tokens_out), null while the session has no
 	// turns; costUsd = SUM(cost_usd), null while no turn is priced.
@@ -499,7 +504,7 @@ var sessionSelect = `SELECT ` + sessionCols + sessionFrom
 const sessionCols = `
 	       s.id, s.project_id, p.slug, p.name, s.session_uuid, s.model, s.git_branch, s.cwd,
 	       s.status, s.started_at, s.ended_at, COALESCE(s.custom_title, s.title), s.source,
-	       s.account,
+	       s.account, s.launch_account,
 	       -- Session totals are the TRUE cost: every turn including subagents
 	       -- (phase 2). The Chat tab still shows the orchestrator turns only, but
 	       -- the card's cost/tokens reflect the whole session — consistent with
@@ -867,7 +872,7 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	var models sessionModelScan
 	dest := append([]any{&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
-		&s.Account,
+		&s.Account, &s.LaunchAccount,
 		&s.Tokens, &s.CostUSD, &s.ContextTokens,
 		&s.TaskID, &s.TaskExternalID, &s.TaskLinkSource, &s.TaskConfidence,
 		&s.ProcState, &s.ProcPID, &s.Outcome,

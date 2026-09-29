@@ -94,6 +94,10 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 			FocusURL string `json:"focusUrl"`
 			BundleID string `json:"bundleId"`
 		} `json:"terminal"`
+		// LaunchAccount is the account the shim's own CLAUDE_CONFIG_DIR names
+		// ("default" when unset) — what this run was LAUNCHED as, stored beside
+		// sessions.account (where its transcript lands). "" from an older shim.
+		LaunchAccount string `json:"launchAccount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PID <= 0 || body.SessionID == "" {
 		w.WriteHeader(http.StatusNoContent) // fire-and-forget — never error back
@@ -109,10 +113,12 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := h.DB.Exec(`UPDATE sessions SET pid = ?, pid_source = 'hook',
 		proc_started_at = ?, proc_state = 'running', proc_checked_at = ?,
-		term_program = ?, term_focus_url = ?, term_bundle_id = ?, term_tty = ?
+		term_program = ?, term_focus_url = ?, term_bundle_id = ?, term_tty = ?,
+		launch_account = CASE WHEN ? <> '' THEN ? ELSE launch_account END
 		WHERE session_uuid = ?`,
 		body.PID, info.StartTime, now,
 		nullStr(body.Terminal.Program), nullStr(body.Terminal.FocusURL), nullStr(body.Terminal.BundleID), nullStr(info.TTY),
+		body.LaunchAccount, body.LaunchAccount,
 		body.SessionID)
 	if err != nil {
 		log.Printf("prockill: bind pid for session %s: %v", body.SessionID, err)
@@ -124,10 +130,11 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 		// lost to the same race today; that gap predates this phase and stays
 		// out of scope here.
 		ingest.ParkPendingTerminal(body.SessionID, ingest.SessionTerminal{
-			Program:  body.Terminal.Program,
-			FocusURL: body.Terminal.FocusURL,
-			BundleID: body.Terminal.BundleID,
-			TTY:      info.TTY,
+			Program:       body.Terminal.Program,
+			FocusURL:      body.Terminal.FocusURL,
+			BundleID:      body.Terminal.BundleID,
+			TTY:           info.TTY,
+			LaunchAccount: body.LaunchAccount,
 		})
 	}
 	if ctx := h.driftContext(body.CWD); ctx != "" {

@@ -244,6 +244,13 @@ export interface Session {
    * machine sees no account UI at all.
    */
   account?: string;
+  /**
+   * What the run was LAUNCHED as (migration session_launch_account), read by
+   * the SessionStart shim from its own CLAUDE_CONFIG_DIR. '' = unknown. It
+   * differs from `account` when a terminal under one account ran a session
+   * whose transcript landed under another. Absent on an older daemon.
+   */
+  launchAccount?: string;
   /** Aggregate SUM(turns.tokens_in + tokens_out) — parity wave; optional until backend lands. */
   tokens?: number | null;
   /** Aggregate SUM(turns.cost_usd) — parity wave; optional until backend lands. */
