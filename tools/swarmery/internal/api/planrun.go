@@ -110,6 +110,10 @@ func (h *Handler) runPlan(w http.ResponseWriter, r *http.Request) {
 	// so the body names the holders instead of blaming the plan.
 	case errors.As(err, &noSlot):
 		writeNoRunSlot(w, noSlot)
+	// The run's account is below the quota floor. Transient like a full pool and
+	// nothing was stamped — 429 with the reset time, not a 409.
+	case errors.Is(err, runcore.ErrLowQuota):
+		writeLowQuota(w, err)
 	case errors.Is(err, planrun.ErrNotActive):
 		writeConflict(w, codePlanInactive, "plan is not active")
 	case errors.Is(err, planrun.ErrNoPhases):

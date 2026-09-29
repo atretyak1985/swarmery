@@ -92,6 +92,11 @@ type Service struct {
 	// daemon replaces it with the one instance all three engines hold.
 	Slots *runcore.Slots
 
+	// QuotaCheck is the account-quota admission gate (runcore.CheckQuota): a
+	// card whose account has a fresh reading below the floor stays in Todo, the
+	// same posture as a full pool. nil ⇒ runcore.CheckQuota. Test seam, like UUID.
+	QuotaCheck runcore.QuotaCheckFunc
+
 	scheduling atomic.Bool // re-entrance guard: overlapping Schedule passes skip
 }
 
@@ -100,9 +105,10 @@ type Service struct {
 func NewService(db *sql.DB, cfg Config, r Runner, wt WorktreeManager) *Service {
 	return &Service{
 		DB: db, Cfg: cfg, Run: r, Wt: wt,
-		UUID:  runcore.NewUUID,
-		now:   time.Now,
-		Slots: runcore.NewSlots(0),
+		UUID:       runcore.NewUUID,
+		now:        time.Now,
+		Slots:      runcore.NewSlots(0),
+		QuotaCheck: runcore.CheckQuota,
 	}
 }
 
@@ -546,14 +552,42 @@ const depBlockPrefix = "blocked by dependency "
 // this gate does not have and must not be replaced by "waiting on a dependency",
 // which would read as benign. Every scheduling pass re-evaluates the same blocked
 // card, so without the prefix check the gate would overwrite such an error within
-// seconds of it being written.
+// seconds of it being written. A quota-wait stamp is the one foreign message it
+// may replace: both are benign holds, and a dependency block outlasts a quota
+// window, so the stale quota text must not hide it.
 func (s *Service) recordDepBlock(id int64, b DepBlocker) {
 	msg := depBlockPrefix + b.String()
 	if _, err := s.DB.Exec(`
 		UPDATE tasks SET dispatch_error=?
-		 WHERE id=? AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ?)`,
-		msg, id, depBlockPrefix+"%"); err != nil {
+		 WHERE id=? AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ? OR dispatch_error LIKE ?)`,
+		msg, id, depBlockPrefix+"%", quotaWaitPrefix+"%"); err != nil {
 		log.Printf("error: dispatch: record dep block (task %d): %v", id, err)
+	}
+}
+
+// quotaWaitPrefix marks a dispatch_error the quota gate wrote — the twin of
+// depBlockPrefix: a card waiting on its account's quota must not read like a
+// card whose run broke, and a later pass must be able to refresh its own
+// message (the percent left moves) without clobbering a real error.
+const quotaWaitPrefix = "waiting on quota: "
+
+// recordQuotaWait stamps why a card is held back by the quota gate. Same guard
+// as recordDepBlock: it only ever overwrites nothing or its OWN previous
+// message, never a real failure. The row is written, and the board nudged, only
+// when the text actually changes — the gate runs on every scheduling pass.
+func (s *Service) recordQuotaWait(id int64, refusal error) {
+	msg := quotaWaitPrefix + refusal.Error()
+	res, err := s.DB.Exec(`
+		UPDATE tasks SET dispatch_error=?
+		 WHERE id=? AND dispatch_error IS NOT ?
+		   AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ?)`,
+		msg, id, msg, quotaWaitPrefix+"%")
+	if err != nil {
+		log.Printf("error: dispatch: record quota wait (task %d): %v", id, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		s.notify(id)
 	}
 }
 
@@ -711,6 +745,29 @@ func (s *Service) admit(c candidate) bool {
 	// Schedule is advisory, this claim is atomic. A refusal is NOT an error on the
 	// row: the task stays a Todo candidate and the next pass retries, the same
 	// posture as the file-scope and worktree gates.
+	//
+	// The account is resolved HERE, once, from the PROJECT path, and handed to the
+	// run: the quota gate needs it before the slot, and runPlaybook's stages must
+	// all run under the account the gate vouched for.
+	resolution := claudeacct.Resolve(c.ProjectPath)
+	// Gate: account quota. Before the slot, so a refusal takes nothing. Like a full
+	// pool it leaves the card in Todo, but unlike a full pool the reason is about
+	// THIS card's account and can last hours, so it is surfaced twice: stamped on
+	// the row's dispatch_error (quotaWaitPrefix — the board renders it), and
+	// recorded as a quota_wait run event once per reset window (the history).
+	// Admission's CAS clears the stamp. Wall-clock time, not s.clock():
+	// account_quota's fetched_at is the poller's wall time.
+	if err := runcore.CheckQuotaWith(s.QuotaCheck, s.DB, resolution, time.Now()); err != nil {
+		if errors.Is(err, runcore.ErrLowQuota) {
+			s.recordQuotaWait(c.ID, err)
+			if runcore.RecordQuotaWait(s.DB, Engine, c.ID, err, s.clock()) {
+				log.Printf("dispatch: task=%d waiting on quota: %v", c.ID, err)
+			}
+			return false
+		}
+		// Any other failure of the check is UNKNOWN, and unknown admits.
+		log.Printf("warning: dispatch: task=%d quota check failed, admitting: %v", c.ID, err)
+	}
 	if err := s.markActive(c.ID); err != nil {
 		log.Printf("dispatch: task=%d not admitted: %v", c.ID, err)
 		return false
@@ -802,7 +859,7 @@ func (s *Service) admit(c candidate) bool {
 	s.recordRoute(c, pb, rt, uuid)
 
 	// Spawn the run. The goroutine owns exit handling + slot release.
-	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc, repoRoot) })
+	s.spawn(func() { s.runPlaybook(c, acq, pb, uuid, taskDoc, repoRoot, resolution) })
 	return true
 }
 
@@ -1066,7 +1123,7 @@ func (s *Service) failAdmission(id int64, msg string) {
 // A single-stage playbook (the default) walks this loop exactly once, so its
 // behavior is byte-for-byte the pre-playbook runAndHandle: link → sentinel →
 // exit-code routing → pokeVerify.
-func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc, repoRoot string) {
+func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc, repoRoot string, resolution claudeacct.Resolution) {
 	defer s.clearActive(c.ID)
 
 	// Lend the card's micro-plan doc INTO the worktree and quote it by its
@@ -1090,14 +1147,15 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 
 	stages := pb.stages
 
-	// What every stage of this task runs under — the Claude account and the
-	// project's estate — resolved ONCE from the PROJECT path. It is not resolved
-	// at the spawn site: that runs with cwd=acq.Path (the worktree), which says
-	// nothing about the project. An unbound project resolves to no account = no
-	// config-dir delta. Read once rather than per stage: every stage of one
-	// playbook belongs to the same project, and a re-read mid-chain could split
-	// one task across two accounts if the operator rebinds while it runs.
-	resolution := claudeacct.Resolve(c.ProjectPath)
+	// resolution is what every stage of this task runs under — the Claude account
+	// and the project's estate — resolved ONCE from the PROJECT path by admit (the
+	// same value the quota gate checked). It is not resolved at the spawn site:
+	// that runs with cwd=acq.Path (the worktree), which says nothing about the
+	// project. An unbound project resolves to no account = no config-dir delta.
+	// Read once rather than per stage: every stage of one playbook belongs to the
+	// same project, and a re-read mid-chain could split one task across two
+	// accounts if the operator rebinds while it runs.
+
 	// SettingsFile lends the project's own .claude/settings.json when repoRoot
 	// resolved this run into a SUB-repo of a multi-repo project: that worktree
 	// carries no settings of its own, so the plugin stack — including whatever

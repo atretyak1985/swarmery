@@ -189,6 +189,10 @@ type Service struct {
 	Slots *runcore.Slots
 	// adoptPoll overrides runcore.AdoptPollInterval when > 0 (tests shrink it).
 	adoptPoll time.Duration
+	// QuotaCheck is the account-quota admission gate (runcore.CheckQuota), run
+	// before the slot: a fresh reading below the floor refuses Start with a
+	// *runcore.LowQuotaError and stamps nothing. nil ⇒ runcore.CheckQuota.
+	QuotaCheck runcore.QuotaCheckFunc
 }
 
 // NewService builds a phase-run service. The caller wires DB + Run
@@ -196,12 +200,13 @@ type Service struct {
 // production impls.
 func NewService(db *sql.DB, r Runner, wt runcore.WorktreeManager) *Service {
 	return &Service{
-		DB:    db,
-		Run:   r,
-		Wt:    wt,
-		UUID:  runcore.NewUUID,
-		now:   time.Now,
-		Slots: runcore.NewSlots(0),
+		DB:         db,
+		Run:        r,
+		Wt:         wt,
+		UUID:       runcore.NewUUID,
+		now:        time.Now,
+		Slots:      runcore.NewSlots(0),
+		QuotaCheck: runcore.CheckQuota,
 	}
 }
 
@@ -538,6 +543,15 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// leave no state behind.
 	info.RepoRoot, err = s.runRoot(info)
 	if err != nil {
+		return "", err
+	}
+	// Account quota: the last admission verdict before the slot. A fresh reading
+	// below the floor is refused as itself (*runcore.LowQuotaError — the API
+	// renders 429 with the reset time); unknown headroom admits. Nothing is
+	// stamped and no slot is taken, exactly like ErrNoSlot. Wall-clock time, not
+	// s.clock(): account_quota's fetched_at is the poller's wall time, and the
+	// service clock is the run's stamp source (budget.Started reads it below).
+	if err := runcore.CheckQuotaWith(s.QuotaCheck, s.DB, runcore.AccountFor(info.ProjectPath), time.Now()); err != nil {
 		return "", err
 	}
 

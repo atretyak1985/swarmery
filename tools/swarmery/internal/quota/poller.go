@@ -5,23 +5,17 @@
 // endpoint for each account's windows and stores them in account_quota with a
 // fetched_at. Headroom (headroom.go) is the single reader: `swarmery account
 // switch` gates on it and refuses an account whose headroom it cannot vouch
-// for.
+// for, and runcore.CheckQuota gates headless run admission on it.
 //
-// # Decision — no admission-time consult (yet)
+// # Decision — the admission gate fails OPEN
 //
-// internal/runcore/slots.go's TryAcquire deliberately does NOT read this
-// package. Three reasons, recorded so the next reader does not re-derive them:
-//
-//  1. A stale row would become a global freeze. Absence means UNKNOWN, and a
-//     gate reading a table one missed ticker left stale turns that into "the
-//     daemon stopped dispatching" with no error anywhere.
-//  2. There is no third refusal. ErrBusy and ErrNoSlot are the only two the
-//     five engines know how to route and render; a third is a phase of its own.
-//  3. The signal has no track record. Gating on a table whose first row this
-//     change writes is building the consumer before the producer has history.
-//
-// An admission gate is a clean follow-up once account_quota has weeks of rows;
-// Headroom, with its explicit staleness bound, is already the reader it needs.
+// internal/runcore/slots.go's TryAcquire still does NOT read this package; the
+// admission gate is a separate refusal (runcore.ErrLowQuota) the engines call
+// before it. It refuses only on a FRESH reading below the floor. A stale row,
+// no rows, or a failed read is UNKNOWN and admits: a gate reading a table one
+// missed ticker left stale must never turn into "the daemon stopped
+// dispatching" with no error anywhere. MaxAge is the one staleness bound both
+// readers share.
 package quota
 
 import (

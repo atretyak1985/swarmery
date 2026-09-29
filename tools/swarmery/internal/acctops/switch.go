@@ -40,18 +40,13 @@ import (
 // staleness bound follows the cadence the poller actually runs at.
 const quotaIntervalEnv = "SWARMERY_QUOTA_INTERVAL"
 
-// HeadroomMaxAge is how old a stored quota reading may be and still vouch for
-// an account: three EFFECTIVE poll intervals of the configured
-// SWARMERY_QUOTA_INTERVAL value, so one missed tick does not turn a healthy
-// account into "unknown" and a slow cadence does not turn every reading stale.
-// polling=false when the value disables the poller; the bound then falls back
-// to three default intervals (no new reading will arrive to refresh it).
+// HeadroomMaxAge is quota.MaxAge: how old a stored quota reading may be and
+// still vouch for an account (three effective poll intervals; polling=false
+// when the value disables the poller). Kept as a name here so switch's callers
+// and tests read unchanged; the bound itself is shared with the run admission
+// gate (runcore.CheckQuota).
 func HeadroomMaxAge(intervalValue string) (maxAge time.Duration, polling bool) {
-	d, on, _ := quota.ParseInterval(intervalValue) // an invalid value is the daemon's default, as it runs
-	if !on {
-		return 3 * quota.DefaultInterval, false
-	}
-	return 3 * d, true
+	return quota.MaxAge(intervalValue)
 }
 
 // ErrNoEstate is returned (wrapped) when no declared estate root was found.

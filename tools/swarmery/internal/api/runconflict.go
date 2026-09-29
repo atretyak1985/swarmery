@@ -157,6 +157,41 @@ func writeNoRunSlot(w http.ResponseWriter, err *runcore.NoSlotError) {
 		map[string]any{"holders": holders, "max": err.Max})
 }
 
+// codeLowQuota is the account-quota refusal. NOT a 409: nothing conflicts —
+// the account is simply out of headroom until its window resets — so it
+// answers 429, the status that already means "retry later", with the reset time
+// in the body. Underscore, like codeSpecUncovered: the phase doc froze this
+// wire value before the code existed.
+const codeLowQuota = "low_quota"
+
+// writeLowQuota renders a run refused by the quota gate (runcore.ErrLowQuota):
+// 429 {"error":"low_quota","code":"low_quota","message",…,"account","window",
+// "percentLeft","floor","resetsAt"}. `error` carries the discriminator here, as
+// specified for this refusal; `code` repeats it so a client switching on `code`
+// (the 409 convention above) reads it the same way. A bare sentinel with no
+// evidence still answers 429, with the structured fields empty.
+func writeLowQuota(w http.ResponseWriter, err error) {
+	body := map[string]any{
+		"error":       codeLowQuota,
+		"code":        codeLowQuota,
+		"message":     err.Error(),
+		"account":     "",
+		"window":      "",
+		"percentLeft": 0.0,
+		"floor":       0.0,
+		"resetsAt":    "",
+	}
+	var low *runcore.LowQuotaError
+	if errors.As(err, &low) {
+		body["account"] = low.Account
+		body["window"] = low.Window
+		body["percentLeft"] = low.PercentLeft
+		body["floor"] = low.Floor
+		body["resetsAt"] = low.ResetsAt
+	}
+	writeJSONStatus(w, http.StatusTooManyRequests, body)
+}
+
 // writeConflict replies 409 {"error": msg, "code": code}.
 func writeConflict(w http.ResponseWriter, code, msg string) {
 	writeConflictFields(w, code, msg, nil)

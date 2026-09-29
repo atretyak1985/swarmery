@@ -397,6 +397,22 @@ export function sourceLine(task: BoardTask): SourceLine {
  */
 export const DEP_BLOCK_PREFIX = 'blocked by dependency ';
 
+/**
+ * The marker the dispatcher puts on a `dispatch_error` it wrote because the
+ * card's Claude account is below the quota floor (dispatch/service.go
+ * `quotaWaitPrefix`; the text after it is runcore.LowQuotaError — account,
+ * window, % left, floor, reset time). The card is NOT broken: admission refuses
+ * it until the window resets, and the stamp is cleared the moment it is
+ * admitted. Keep this string identical to the Go constant.
+ */
+export const QUOTA_WAIT_PREFIX = 'waiting on quota: ';
+
+/** Whether the dispatcher is holding this card back on its account's quota
+ * (QUOTA_WAIT_PREFIX) — a wait that resolves on its own, not a failure. */
+export function isQuotaWait(task: BoardTask): boolean {
+  return dispatchErrorText(task).startsWith(QUOTA_WAIT_PREFIX);
+}
+
 /** How much detail the one-line signal carries before it is clipped; the full
  * text stays in the hover tip. */
 export const SIGNAL_CLIP = 80;
@@ -462,6 +478,10 @@ export function attentionSignal(task: BoardTask): AttentionSignal | null {
   if (err.startsWith(DEP_BLOCK_PREFIX)) {
     const dep = err.slice(DEP_BLOCK_PREFIX.length);
     return { text: `blocked by ${clip(dep, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
+  }
+  if (err.startsWith(QUOTA_WAIT_PREFIX)) {
+    const why = err.slice(QUOTA_WAIT_PREFIX.length);
+    return { text: `waiting on quota: ${clip(why, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
   }
   if (err !== '') {
     return { text: `dispatch error: ${clip(err, SIGNAL_CLIP)}`, tone: 'bad', tip: err };
@@ -529,12 +549,18 @@ export const BOARD_FILTER_TIPS: Record<BoardFilter, string> = {
  * waiting on another CARD rather than on a person — but the card it waits for
  * may itself be stuck, and the plan defined this predicate as "any dispatch
  * error". Kept literal; the card's own signal row still tells the two apart.
+ *
+ * A quota wait (`QUOTA_WAIT_PREFIX`) is the one dispatch_error excluded, and
+ * deliberately NOT treated like the dependency block: there is no stuck card
+ * behind it for a person to unstick. The account's window resets on its own and
+ * the dispatcher admits the card on the next pass, so counting it would put
+ * every card of a throttled account into "needs me" at once.
  */
 export function needsMe(task: BoardTask): boolean {
   return (
     laneOf(task.boardColumn) === 'review' ||
     hasFailedVerdict(task) ||
-    dispatchErrorText(task) !== '' ||
+    (dispatchErrorText(task) !== '' && !isQuotaWait(task)) ||
     task.pendingApprovalCount > 0
   );
 }
