@@ -1,4 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect x="7" y="7" width="18" height="18" rx="3" fill="#0e0f12" transform="rotate(45 16 16)"/>
-  <rect x="10" y="10" width="12" height="12" rx="2" fill="#e8a13a" transform="rotate(45 16 16)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="swarmery">
+  <title>swarmery</title>
+  <style>
+    .mark { fill: #A8721F; }
+    @media (prefers-color-scheme: dark) {
+      .mark { fill: #E3A44A; }
+    }
+  </style>
+  <path class="mark" fill-rule="evenodd"
+        d="M16 2.4 4.22 9.2v13.6L16 29.6l11.78-6.8V9.2Z
+           M16 6.9 8.12 11.45v9.1L16 25.1l7.88-4.55v-9.1Z"/>
+  <path class="mark" d="M16 11.5 12.1 13.75v4.5L16 20.5l3.9-2.25v-4.5Z"/>
 </svg>

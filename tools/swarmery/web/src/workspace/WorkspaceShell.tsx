@@ -17,6 +17,7 @@ import { UsageChip } from '../components/usage/UsageChip';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
 import { PluginDriftBadge } from '../components/PluginDriftBadge';
 import { ProjectWorkspaceLayout } from './ProjectWorkspaceLayout';
+import { Wordmark } from '../components/Wordmark';
 
 export function WorkspaceShell(): JSX.Element {
   const { health, unreachable } = useHealth();
@@ -37,7 +38,7 @@ export function WorkspaceShell(): JSX.Element {
           aria-label="back to all projects"
           className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80 desk:w-[172px] desk:shrink-0"
         >
-          SW<span className="text-brand">◆</span>RMERY
+          <Wordmark />
         </Link>
         <span className="ml-auto flex items-center gap-3">
           <ThemeToggle />

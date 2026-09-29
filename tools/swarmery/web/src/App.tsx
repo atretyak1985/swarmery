@@ -22,6 +22,7 @@ import { useHealth, versionLabel, versionTitle } from './lib/health';
 import { PluginDriftBadge } from './components/PluginDriftBadge';
 import { loadPrefs, useBrowserNotifications, type NotifyPrefs } from './lib/notifications';
 import { NotifyPrefsContext } from './lib/notifyPrefsContext';
+import { Wordmark } from './components/Wordmark';
 
 /* The global project-scope dropdown no longer lives in this rail. It was a
  * shell-level control for a page-level filter: it sat above the nav on every
@@ -67,7 +68,7 @@ function AppShell(): JSX.Element {
           aria-label="swarmery home"
           className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80 desk:w-[172px] desk:shrink-0"
         >
-          SW<span className="text-brand">◆</span>RMERY
+          <Wordmark />
         </Link>
         {/* The project switcher at the sidebar top is the scope control (it
             replaced the Sessions/Projects mode toggle). The page-search box
