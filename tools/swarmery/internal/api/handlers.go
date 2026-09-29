@@ -53,6 +53,10 @@ type Handler struct {
 	// probes single-flights the account readiness probe (accounts.go) — one
 	// `claude` per account at a time; concurrent re-checks share the result.
 	probes probeFlights
+	// bindings caches GET /api/accounts' binding discovery for a few seconds,
+	// single-flighted, and is invalidated by this API's own binding writes
+	// (accounts.go bindingCache).
+	bindings bindingCache
 	// Wt re-attaches the worktree of a finished run so its session stays
 	// answerable after the janitor removed the directory (session_message.go).
 	// Its own instance rather than the dispatcher's: the Manager holds no run

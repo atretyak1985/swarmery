@@ -39,6 +39,12 @@ var PinScanSkipDirs = []string{".git", ".swarmery", "dist", "node_modules", "ven
 // symlinked directory (a DirEntry for a link is not IsDir), so a link cycle
 // cannot make it unbounded. An unreadable directory is skipped, never fatal.
 func walkBounded(dir string, depth int, visit func(dir string, depth int)) {
+	walkBoundedPruning(dir, depth, nil, visit)
+}
+
+// walkBoundedPruning is walkBounded that also never enters a directory in
+// prune (cleaned absolute paths) — a subtree a caller already walked.
+func walkBoundedPruning(dir string, depth int, prune map[string]bool, visit func(dir string, depth int)) {
 	visit(dir, depth)
 	if depth >= PinScanMaxDepth {
 		return
@@ -51,7 +57,11 @@ func walkBounded(dir string, depth int, visit func(dir string, depth int)) {
 		if !e.IsDir() || slices.Contains(PinScanSkipDirs, e.Name()) {
 			continue
 		}
-		walkBounded(filepath.Join(dir, e.Name()), depth+1, visit)
+		child := filepath.Join(dir, e.Name())
+		if prune[child] {
+			continue
+		}
+		walkBoundedPruning(child, depth+1, prune, visit)
 	}
 }
 
@@ -102,12 +112,29 @@ type PinEntry struct {
 // directory: the pins in effect and every binding file the read side ignores,
 // in one list. It is the same walk, and the only one.
 func ScanPinsDetail(root string) []PinEntry {
+	return scanPinsDetail(root, nil, bindingDistrusted)
+}
+
+// ScanPinsDetailForDisplay is ScanPinsDetail for the dashboard's read-only
+// loops: Lock 1 is answered through the display verdict cache
+// (bindingDistrustedCached), and the directories in prune — subtrees the
+// caller already scanned — are not entered again. Same walk, same bounds. No
+// spawn path may use it.
+func ScanPinsDetailForDisplay(root string, prune ...string) []PinEntry {
+	skip := make(map[string]bool, len(prune))
+	for _, p := range prune {
+		skip[cleanAbs(p)] = true
+	}
+	return scanPinsDetail(root, skip, bindingDistrustedCached)
+}
+
+func scanPinsDetail(root string, prune map[string]bool, distrust func(string) string) []PinEntry {
 	var out []PinEntry
-	walkBounded(cleanAbs(root), 0, func(dir string, depth int) {
+	walkBoundedPruning(cleanAbs(root), 0, prune, func(dir string, depth int) {
 		if depth == 0 {
 			return
 		}
-		if e, ok := pinAt(dir); ok {
+		if e, ok := pinAt(dir, distrust); ok {
 			out = append(out, e)
 		}
 	})
@@ -118,7 +145,7 @@ func ScanPinsDetail(root string) []PinEntry {
 // pinAt classifies dir's binding file for the downward scan: a pin in effect,
 // a pin Lock 1 ignores, a file the trusted loader refuses, or nothing (ok
 // false) — no file, or a trusted file declaring no valid claudeAccount.
-func pinAt(dir string) (PinEntry, bool) {
+func pinAt(dir string, distrust func(string) string) (PinEntry, bool) {
 	path := bindingPath(dir)
 	root := readTrustedSettings(path)
 	if root == nil {
@@ -132,7 +159,7 @@ func pinAt(dir string) (PinEntry, bool) {
 	if key == "" {
 		return PinEntry{}, false
 	}
-	if why := bindingDistrusted(path); why != "" {
+	if why := distrust(path); why != "" {
 		logDistrusted(path, why)
 		return PinEntry{Dir: dir, Key: key, Ignored: fmt.Sprintf("%s is ignored — %s", path, why)}, true
 	}

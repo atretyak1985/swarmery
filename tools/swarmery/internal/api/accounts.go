@@ -246,16 +246,83 @@ type ignoredBindingDTO struct {
 // discoverBindings is accountdoctor.DiscoverBindings, a seam for tests.
 var discoverBindings = accountdoctor.DiscoverBindings
 
+// bindingCacheTTL bounds how stale GET /api/accounts' binding view may be.
+// The trade-off: discovery walks every estate subtree and classifies each
+// binding (through the 60 s display verdict cache, never a fresh git probe),
+// and every SPA load and project mount waits on this endpoint; a binding the
+// operator edits by hand in an editor shows up within this TTL instead of at
+// once. This API's own binding writes invalidate it immediately.
+const bindingCacheTTL = 10 * time.Second
+
+// bindingCacheNow is the cache's clock, a seam for tests.
+var bindingCacheNow = time.Now
+
+// bindingCache is a short-TTL, single-flight cache of one bindingView.
+type bindingCache struct {
+	mu     sync.Mutex
+	view   bindingView
+	at     time.Time
+	valid  bool
+	gen    uint64 // bumped by invalidate; a flight that straddles one is not stored
+	flight *bindingFlight
+}
+
+type bindingFlight struct {
+	done chan struct{}
+	view bindingView
+	err  error
+}
+
+// get returns the cached view, or runs load once for every concurrent caller.
+func (c *bindingCache) get(load func() (bindingView, error)) (bindingView, error) {
+	c.mu.Lock()
+	if c.valid && bindingCacheNow().Sub(c.at) < bindingCacheTTL {
+		v := c.view
+		c.mu.Unlock()
+		return v, nil
+	}
+	if f := c.flight; f != nil {
+		c.mu.Unlock()
+		<-f.done
+		return f.view, f.err
+	}
+	f := &bindingFlight{done: make(chan struct{})}
+	c.flight = f
+	gen := c.gen
+	c.mu.Unlock()
+
+	f.view, f.err = load()
+	c.mu.Lock()
+	c.flight = nil
+	if f.err == nil && gen == c.gen {
+		c.view, c.at, c.valid = f.view, bindingCacheNow(), true
+	}
+	c.mu.Unlock()
+	close(f.done)
+	return f.view, f.err
+}
+
+// invalidate drops the cached view; called after every binding write here.
+func (c *bindingCache) invalidate() {
+	c.mu.Lock()
+	c.valid = false
+	c.gen++
+	c.mu.Unlock()
+}
+
 // bindingsByAccount returns every binding on disk — not only those that happen
-// to have a projects row (SC-10). Seeds are the non-archived projects rows;
-// accountdoctor.DiscoverBindings adds each seed's estate root and every pin
-// below it (the one shared downward walk), and walks the configured onboard
-// roots. A path under the daemon's worktree root is dropped by path: a lent
-// binding copy there is indistinguishable from a real one by content.
-//
-// Not cached: the alternative — caching a binding the operator edits by hand
-// in their editor — would go stale silently.
+// to have a projects row (SC-10) — through the short-TTL cache above.
 func (h *Handler) bindingsByAccount() (bindingView, error) {
+	return h.bindings.get(h.discoverBindingView)
+}
+
+// discoverBindingView does the work. Seeds are the non-archived projects rows;
+// accountdoctor.DiscoverBindings adds each seed's estate root and every pin
+// below it (the one shared downward walk, with Lock 1 answered through the
+// display verdict cache), and walks the configured onboard roots once. A path
+// under the daemon's worktree root is dropped by path: a lent binding copy
+// there is indistinguishable from a real one by content.
+func (h *Handler) discoverBindingView() (bindingView, error) {
 	v := bindingView{indexed: map[string][]string{}, unindexed: map[string][]string{}, ignored: []ignoredBindingDTO{}}
 	rows, err := h.DB.Query(`SELECT path FROM projects WHERE archived = 0 ORDER BY path`)
 	if err != nil {
@@ -459,6 +526,7 @@ func (h *Handler) createAccount(w http.ResponseWriter, r *http.Request) {
 	key := strings.TrimSpace(req.Key)
 
 	acct, err := claudeacct.Provision(key)
+	h.bindings.invalidate() // a new account changes which bindings resolve
 	switch {
 	case errors.Is(err, claudeacct.ErrDefaultAccount):
 		writeClientErr(w, http.StatusBadRequest,
@@ -518,6 +586,7 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	defer h.bindings.invalidate()
 	switch err := claudeacct.Remove(key); {
 	case errors.Is(err, claudeacct.ErrDefaultAccount):
 		writeClientErr(w, http.StatusBadRequest, "the default account cannot be removed")
@@ -720,6 +789,8 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	existedBefore := claudeacct.BindingFileExists(path)
+	// Whatever happens next, the cached binding view may now be wrong.
+	defer h.bindings.invalidate()
 	if err := claudeacct.SetBinding(path, key); err != nil {
 		// SetBinding refuses an invalid key and an unparseable settings file
 		// (400), and an existing file the walk ignores — group/other-writable,

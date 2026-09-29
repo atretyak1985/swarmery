@@ -44,62 +44,93 @@ func DiscoverBindings(seeds []string, scanRoots ...string) []Binding {
 		}
 		byPath[b.Path] = b
 	}
+	// own classifies one directory's binding file, once per directory. It is
+	// the dashboard's path, so Lock 1 is answered through the display verdict
+	// cache (BindingForDisplayWithReason) — never a fresh git probe per call.
+	visited := map[string]bool{}
 	own := func(dir string) {
-		if dir == "" || !claudeacct.BindingFileExists(dir) {
+		if dir == "" {
+			return
+		}
+		dir = filepath.Clean(dir)
+		if visited[dir] {
+			return
+		}
+		visited[dir] = true
+		if !claudeacct.BindingFileExists(dir) {
 			return
 		}
 		file := filepath.Join(dir, filepath.FromSlash(claudeacct.BindingFile))
 		root, reason := claudeacct.ReadTrustedSettings(file)
-		if reason != "" { // its mode, owner or type: nothing reads it
+		if reason != "" { // its mode, owner or type: nothing reads it (no git needed)
 			put(Binding{Path: dir, Ignored: true, Reason: claudeacct.BindingFileUntrusted(dir)})
 			return
 		}
-		if _, ok := root["swarmery"].(map[string]any); !ok {
+		ns, ok := root["swarmery"].(map[string]any)
+		if !ok {
 			return // a settings file that binds nothing
 		}
-		if key := claudeacct.Binding(dir); key != "" {
+		key, ignored := claudeacct.BindingForDisplayWithReason(dir)
+		switch {
+		case key != "":
 			put(Binding{Path: dir, Key: key})
-			return
-		}
-		if key := declaredKey(dir); key != "" { // declared, and Lock 1 ignores it
-			put(Binding{Path: dir, Key: key, Ignored: true, Reason: claudeacct.BindingFileUntrusted(dir)})
-			return
-		}
-		if key, _ := claudeacct.Estate(dir); key != "" {
-			put(Binding{Path: dir}) // an estate declaration with no account pin
+		case ignored != "": // declared, and Lock 1 ignores it
+			put(Binding{Path: dir, Key: declaredKey(dir), Ignored: true, Reason: ignored})
+		default:
+			if e, _ := ns["estate"].(string); claudeacct.ValidKey(strings.TrimSpace(e)) {
+				put(Binding{Path: dir}) // an estate declaration with no account pin
+			}
 		}
 	}
-	scan := func(root string) {
-		for _, e := range claudeacct.ScanPinsDetail(root) {
-			put(Binding{Path: e.Dir, Key: e.Key, Ignored: e.Ignored != "", Reason: e.Ignored})
+	var scanned []string
+	isScanned := func(dir string) bool {
+		for _, s := range scanned {
+			if s == dir {
+				return true
+			}
+		}
+		return false
+	}
+	scan := func(root string, prune []string) {
+		for _, e := range claudeacct.ScanPinsDetailForDisplay(root, prune...) {
+			if !visited[e.Dir] {
+				visited[e.Dir] = true
+				put(Binding{Path: e.Dir, Key: e.Key, Ignored: e.Ignored != "", Reason: e.Ignored})
+			}
 		}
 	}
-	scanned := map[string]bool{}
 	for _, seed := range seeds {
 		if strings.TrimSpace(seed) == "" {
 			continue
 		}
 		seed = filepath.Clean(seed)
-		res := claudeacct.Resolve(seed)
+		res := claudeacct.ResolveForDisplay(seed)
 		own(seed)
 		own(res.AccountRoot)
 		own(res.EstateRoot)
 		for _, ig := range res.IgnoredRungs() {
 			dir := filepath.Dir(filepath.Dir(ig.Path))
-			put(Binding{Path: dir, Key: declaredKey(dir), Ignored: true, Reason: ig.Reason})
+			if !visited[dir] {
+				visited[dir] = true
+				put(Binding{Path: dir, Key: declaredKey(dir), Ignored: true, Reason: ig.Reason})
+			}
 		}
-		if res.EstateRoot != "" && !scanned[res.EstateRoot] {
-			scanned[res.EstateRoot] = true
-			scan(res.EstateRoot)
+		if res.EstateRoot != "" && !isScanned(res.EstateRoot) {
+			scanned = append(scanned, res.EstateRoot)
+			scan(res.EstateRoot, nil)
 		}
 	}
+	// The onboard roots are walked with every estate subtree already scanned
+	// pruned out: each directory is visited by one walk, not two.
+	estates := append([]string(nil), scanned...)
 	for _, root := range scanRoots {
-		if root = strings.TrimSpace(root); root == "" || scanned[filepath.Clean(root)] {
+		if root = strings.TrimSpace(root); root == "" || isScanned(filepath.Clean(root)) {
 			continue
 		}
-		scanned[filepath.Clean(root)] = true
+		root = filepath.Clean(root)
+		scanned = append(scanned, root)
 		own(root)
-		scan(root)
+		scan(root, estates)
 	}
 	out := make([]Binding, 0, len(byPath))
 	for _, b := range byPath {

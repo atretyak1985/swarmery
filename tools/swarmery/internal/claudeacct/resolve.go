@@ -217,11 +217,23 @@ func (r Resolution) IgnoredLines() []string {
 // a relative binding path would otherwise be read against the process's own
 // working directory.
 func Resolve(projectPath string) Resolution {
+	return resolveWith(projectPath, bindingDistrusted)
+}
+
+// ResolveForDisplay is Resolve with Lock 1 answered through the display-only
+// verdict cache (bindingDistrustedCached, 60 s TTL) — for the dashboard's
+// read-only loops, which resolve many paths per request. No spawn path may use
+// it: a cached verdict there would be a cached security decision.
+func ResolveForDisplay(projectPath string) Resolution {
+	return resolveWith(projectPath, bindingDistrustedCached)
+}
+
+func resolveWith(projectPath string, distrust func(string) string) Resolution {
 	if strings.TrimSpace(projectPath) == "" {
 		return Resolution{Source: SourceNone, DefaultProfile: true}
 	}
 	path := cleanAbs(projectPath)
-	walkFrom, cands, nss, ignored := candidates(path)
+	walkFrom, cands, nss, ignored := candidatesWith(path, distrust)
 
 	r := Resolution{Source: SourceDefault}
 	var notes []string
@@ -419,6 +431,10 @@ func Shadowed(projectPath string) []AncestorPin {
 // the reason Lock 1 ignored its binding ("" where it did not). walkFrom is the
 // path the ladder starts at.
 func candidates(path string) (walkFrom string, cands []string, nss []map[string]any, ignored []string) {
+	return candidatesWith(path, bindingDistrusted)
+}
+
+func candidatesWith(path string, distrust func(string) string) (walkFrom string, cands []string, nss []map[string]any, ignored []string) {
 	walkFrom = path
 	if src := sourceCheckout(path); src != "" {
 		walkFrom = src
@@ -427,7 +443,7 @@ func candidates(path string) (walkFrom string, cands []string, nss []map[string]
 	nss = make([]map[string]any, len(cands))
 	ignored = make([]string, len(cands))
 	for i, dir := range cands {
-		nss[i], ignored[i] = namespaceAt(dir)
+		nss[i], ignored[i] = namespaceAtWith(dir, distrust)
 	}
 	return walkFrom, cands, nss, ignored
 }
@@ -538,6 +554,10 @@ func ownRung(dir string) bool {
 // on a relative path (dir is always an absolute ladder rung). It logs nothing:
 // the WARN is the composer's (spawnenv.go), once per path per process.
 func namespaceAt(dir string) (ns map[string]any, ignored string) {
+	return namespaceAtWith(dir, bindingDistrusted)
+}
+
+func namespaceAtWith(dir string, distrust func(string) string) (ns map[string]any, ignored string) {
 	path := bindingPath(dir)
 	root := readTrustedSettings(path)
 	if root == nil {
@@ -547,7 +567,7 @@ func namespaceAt(dir string) (ns map[string]any, ignored string) {
 	if ns == nil {
 		return nil, ""
 	}
-	if why := bindingDistrusted(path); why != "" {
+	if why := distrust(path); why != "" {
 		return nil, why
 	}
 	return ns, ""
