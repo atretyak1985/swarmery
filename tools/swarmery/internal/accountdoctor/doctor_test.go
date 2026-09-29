@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 )
 
 // fixture is a hermetic HOME with the default account's config dir.
@@ -32,6 +34,12 @@ func newFixture(t *testing.T) fixture {
 	t.Setenv("SWARMERY_SECRETS_DIR", f.secrets)
 	t.Setenv(LaunchPathEnv, "")
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	// The probe-verdict arm resolves the CLI and reads a verdict file: pin both
+	// to fixture state so no operator file is ever consulted.
+	t.Setenv("SWARMERY_CLAUDE_BIN", filepath.Join(root, "no-such-claude"))
+	t.Setenv("SWARMERY_PROBES_DIR", filepath.Join(root, "probes"))
+	t.Setenv(StateDirEnv, filepath.Join(root, "doctor"))
+	t.Setenv(ProbeScriptEnv, "")
 	return f
 }
 
@@ -113,7 +121,8 @@ func TestFastZeroConfigNeverNull(t *testing.T) {
 	}
 	for name, v := range map[string]any{
 		"VarsExpected": rep.VarsExpected, "VarsPresent": rep.VarsPresent, "VarsMissing": rep.VarsMissing,
-		"Findings": rep.Findings, "StaleDuplicates": rep.StaleDuplicates,
+		"StaleDuplicates": rep.StaleDuplicates, "EnabledPacks": rep.EnabledPacks,
+		"SettingsDelta": rep.SettingsDelta, "Parity": rep.Parity,
 	} {
 		rv := reflect.ValueOf(v)
 		if rv.IsNil() || rv.Len() != 0 {
@@ -124,7 +133,16 @@ func TestFastZeroConfigNeverNull(t *testing.T) {
 		t.Errorf("zero report = %+v", rep)
 	}
 	raw := mustJSON(t, rep)
-	for _, want := range []string{`"staleDuplicates":[]`, `"varsMissing":[]`, `"varsExpected":[]`, `"varsPresent":[]`, `"findings":[]`} {
+	if rep.Findings == nil {
+		t.Error("Findings is nil, want a non-nil slice")
+	}
+	for _, f := range rep.Findings {
+		if f.Severity == SevError {
+			t.Errorf("a zero-config report carries an error finding: %+v", f)
+		}
+	}
+	for _, want := range []string{`"staleDuplicates":[]`, `"varsMissing":[]`, `"varsExpected":[]`, `"varsPresent":[]`,
+		`"enabledPacks":[]`, `"settingsDelta":[]`, `"parity":[]`, `"findings":[`} {
 		if !strings.Contains(raw, want) {
 			t.Errorf("JSON lacks %s: %s", want, raw)
 		}
@@ -148,7 +166,9 @@ func TestFastTagSpelling(t *testing.T) {
 	}
 	want := []string{"schema", "path", "account", "source", "configDir", "estate", "estateRoot", "settingsFile",
 		"credentials", "credentialStore", "varsExpected", "varsPresent", "varsMissing", "staleDuplicates",
-		"launchedViaSwarmery", "daemon", "findings"}
+		"launchedViaSwarmery", "daemon", "findings",
+		// added by the doctor phase — additive only
+		"enabledPacks", "admission", "defaultProfile", "settingsDelta", "parity"}
 	if len(m) != len(want) {
 		t.Errorf("report has %d keys, want %d: %v", len(m), len(want), m)
 	}
@@ -338,9 +358,10 @@ func TestFastDaemonWorktree(t *testing.T) {
 	}
 }
 
-// TestFastEstateWithoutStoreIsHealthy (D2a): an estate whose store file does
-// not exist, with no pack referencing any ${VAR}, is a value — zero
-// credentials, no store, empty coverage — and NOT an error.
+// TestFastEstateWithoutStoreIsHealthy (D2a as amended by D5): an estate whose
+// store file does not exist, with no pack referencing any ${VAR}, is a value —
+// zero credentials, no store, empty coverage — and NOT an error. D5 made it
+// UNANCHORED, which the doctor reports as exactly one estate-unanchored warn.
 func TestFastEstateWithoutStoreIsHealthy(t *testing.T) {
 	newFixture(t)
 	proj := t.TempDir()
@@ -357,8 +378,11 @@ func TestFastEstateWithoutStoreIsHealthy(t *testing.T) {
 	if rep.Estate != "doctortest" || rep.EstateRoot == "" || rep.Source != "pin" || rep.Account != "default" {
 		t.Errorf("estate/resolution = %q %q %q %q", rep.Estate, rep.EstateRoot, rep.Source, rep.Account)
 	}
-	if len(rep.Findings) != 0 || rep.Findings == nil {
-		t.Errorf("Findings = %#v, want []", rep.Findings)
+	if n := countFindings(rep, "estate-unanchored", SevWarn); n != 1 {
+		t.Errorf("estate-unanchored warns = %d, want 1: %+v", n, rep.Findings)
+	}
+	if n := countSeverity(rep, SevError); n != 0 {
+		t.Errorf("error findings = %d, want 0: %+v", n, rep.Findings)
 	}
 }
 
@@ -433,4 +457,36 @@ func TestReadCappedRejectsNonRegularAndOversize(t *testing.T) {
 	if got := expectedVars("", dir); got == nil || len(got) != 0 {
 		t.Errorf("expectedVars with no config dir = %#v, want []", got)
 	}
+}
+
+// countFindings is the number of findings with id at severity.
+func countFindings(rep Report, id, sev string) int {
+	n := 0
+	for _, f := range rep.Findings {
+		if f.ID == id && (sev == "" || f.Severity == sev) {
+			n++
+		}
+	}
+	return n
+}
+
+// claudeResolve is claudeacct.Resolve, for tests that call an arm directly.
+func claudeResolve(p string) claudeacct.Resolution { return claudeacct.Resolve(p) }
+
+func chmod(t *testing.T, p string, mode os.FileMode) {
+	t.Helper()
+	if err := os.Chmod(p, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// countSeverity is the number of findings at severity.
+func countSeverity(rep Report, sev string) int {
+	n := 0
+	for _, f := range rep.Findings {
+		if f.Severity == sev {
+			n++
+		}
+	}
+	return n
 }
