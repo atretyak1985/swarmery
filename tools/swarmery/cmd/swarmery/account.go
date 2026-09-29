@@ -654,7 +654,15 @@ func accountPrune(args []string, out, errOut io.Writer) error {
 	if err := accountprune.RenderTargets(out, targets); err != nil {
 		return err
 	}
+	// A failure mid-run still prints what was already rewritten, with each
+	// pre-image: it is the only record of those files. A refusal before any
+	// write (tracked, pre-image pre-flight) has nothing to print.
 	if applyErr != nil {
+		if len(res.Changed) > 0 || len(res.Skipped) > 0 {
+			if err := accountprune.RenderResult(out, res); err != nil {
+				return err
+			}
+		}
 		return applyErr
 	}
 	if *dryRun {

@@ -437,10 +437,20 @@ swarmery account prune --path <estate-root>               # then apply
   what the prune removes. A key with one entry the estate lacks stays whole, and
   the dry run names that entry. `permissions`, `enabledMcpjsonServers`,
   `enabledPlugins` and the `swarmery` binding object are never touched.
-- **The estate's own two files** (`<root>/.claude/settings.json` and
-  `<root>/.claude/settings.local.json`) are listed `estate source` and never
-  written: compared with themselves they are all redundant, and pruning them
-  would empty the estate.
+- **Every file is judged against its own estate** — the one a session started
+  in that directory resolves to. A file under a nested estate (a sub-tree that
+  declares its own `estate`) is listed `other estate: <root>` and never written.
+- **Every estate's own two files** (`<root>/.claude/settings.json` and
+  `<root>/.claude/settings.local.json`, nested estates included) are listed
+  `estate source` and never written: compared with themselves they are all
+  redundant, and pruning them would empty the estate.
+- **A symlinked path is never written.** A file reached through a symlink below
+  the estate root — a linked `.claude` directory, a linked parent — is listed
+  `symlinked path`: the write would land in the link's target, possibly outside
+  the estate and shared with other projects.
+- **It writes what the dry run showed, or nothing.** Each file is re-checked on
+  its current bytes just before the write; one edited since the plan is
+  skipped `changed since plan`.
 - **Three git states.** Every listed line ends in `TRACKED`, `untracked` or
   `NO-REPO`, from the same hardened git probe the binding's provenance lock uses.
   A file git cannot classify counts as `TRACKED`.
@@ -450,9 +460,11 @@ swarmery account prune --path <estate-root>               # then apply
   machine's settings for everyone who pulls. A tracked file with nothing
   redundant is listed `nothing redundant` and never written either way.
 - **Rollback.** Before its first write to a file the prune copies it to
-  `~/.swarmery/quarantine/<date>/prune/<path with / as ->.bak.json` (directory
-  mode `0700`) and names that copy in its output. For a gitignored file that
-  copy is the only way back: `cp` it over the original.
+  `~/.swarmery/quarantine/<date>/prune/<path with / as ->.<12-hex hash>.bak.json`
+  (directory mode `0700`) and names that copy in its output — also when a later
+  file fails mid-run. Every pre-image path is checked before the first write, so
+  an existing, different pre-image aborts with nothing written. For a gitignored
+  file that copy is the only way back: `cp` it over the original.
 - **No secrets.** The prune never reads or prints a credential store and never
   prints a settings value — key and entry names only. `--json` prints the same
   plan as one object.

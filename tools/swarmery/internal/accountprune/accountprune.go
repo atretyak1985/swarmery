@@ -11,38 +11,54 @@
 // enabledMcpjsonServers, enabledPlugins and the swarmery binding object are
 // never candidates (neverRedundant).
 //
-// # Three exclusions that keep it from eating its own source
+// # Each file is judged against ITS OWN estate
 //
-//  1. The ESTATE'S OWN TWO FILES — <EstateRoot>/.claude/settings.json (the
-//     --settings supply) and <EstateRoot>/.claude/settings.local.json (the
-//     binding) — are matched by resolved path (claudeacct.SameFile, i.e.
-//     filepath.EvalSymlinks on both sides, never a string compare) and listed
-//     "estate source", never eligible. Compared against the estate, which is
-//     itself, every key in them is trivially redundant: unexcluded, the prune
-//     would empty the estate in one write.
-//  2. A TRACKED file (claudeacct.FileProvenance: tracked, or git cannot tell)
+// Every file is resolved from its own project directory (the one holding its
+// .claude/) with claudeacct.Resolve — the resolution a session started there
+// gets — and compared only with THAT resolution's admitted estate. A file
+// that resolves to a different estate than the --path root (a nested
+// sub-estate, admitted or not) is listed "other estate: <root>" and never
+// written: pruning it against the outer estate would drop configuration its
+// own estate does not supply.
+//
+// # Exclusions that keep it from eating a source, or writing elsewhere
+//
+//  1. EVERY ESTATE'S OWN TWO FILES — <root>/.claude/settings.json (the
+//     --settings supply) and <root>/.claude/settings.local.json (the binding),
+//     for the outer estate and every nested one — are matched by resolved path
+//     (claudeacct.SameFile) and listed "estate source", never eligible.
+//  2. A SYMLINKED PATH — any link between the estate root and the file (a
+//     linked .claude directory, a linked parent) — is listed "symlinked path"
+//     and never written: a rename in a linked directory lands in the link's
+//     target, which may lie outside the estate and be shared with other
+//     projects. Apply re-checks this at write time.
+//  3. A TRACKED file (claudeacct.FileProvenance: tracked, or git cannot tell)
 //     that is eligible makes Apply refuse the WHOLE run unless
-//     Options.IncludeTracked — writing it would push this machine's config at
-//     everyone who pulls, and a partial apply would leave the operator unable
-//     to tell which files changed.
-//  3. An estate that is not ADMITTED (its store carries no `# swarmery-root:`
-//     line for the root) delivers nothing, so nothing is redundant with it.
+//     Options.IncludeTracked.
+//  4. An estate that is not ADMITTED delivers nothing, so nothing is redundant
+//     with it.
 //
-// # Scope
+// # Apply writes what the plan showed, or nothing
 //
-// Plan enumerates with claudeacct.ScanSettingsFiles — the one bounded walk the
-// doctor's detector uses too, so the two always see the same files — and reads
-// each file with claudeacct.ReadTrustedSettings. A file carrying no EstateKey
-// is not listed at all. It never reads a credential store and never prints a
-// value: names of keys and entries only.
+// Apply re-evaluates every eligible target on its CURRENT bytes before
+// writing anything; a file whose verdict or content changed since the plan is
+// skipped "changed since plan". Every pre-image path is checked before the
+// first write, so the common aborts leave zero files changed; a failure
+// mid-run returns the files already changed with their pre-images.
+//
+// It never reads a credential store and never prints a value: names of keys
+// and entries only.
 package accountprune
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -54,22 +70,30 @@ import (
 // Reasons a Target carries. None of them contains the word the dry run's
 // eligible lines are counted by.
 const (
-	ReasonRedundant        = "redundant with the estate"
-	ReasonEstateSource     = "estate source"
-	ReasonNothingRedundant = "nothing redundant"
-	ReasonNotAdmitted      = "estate not admitted"
-	reasonUnreadablePrefix = "unreadable: "
+	ReasonRedundant         = "redundant with the estate"
+	ReasonEstateSource      = "estate source"
+	ReasonNothingRedundant  = "nothing redundant"
+	ReasonNotAdmitted       = "estate not admitted"
+	ReasonOtherEstatePrefix = "other estate: "
+	ReasonSymlinked         = "symlinked path"
+	ReasonChangedSincePlan  = "changed since plan"
+	reasonUnreadablePrefix  = "unreadable: "
+	noEstate                = "(none)"
 )
 
 // Target is one settings file Plan considered.
 type Target struct {
 	Path       string    `json:"path"`
-	EstateRoot string    `json:"estateRoot"` // the estate the keys were compared against
+	EstateRoot string    `json:"estateRoot"` // the estate the file itself resolves to
 	Keys       []string  `json:"keys"`       // redundant EstateKeys Apply removes; [] never null
 	Kept       []KeptKey `json:"kept"`       // EstateKeys that stay, with the entry names the estate lacks
 	Status     GitStatus `json:"status"`
 	Eligible   bool      `json:"eligible"`
 	Reason     string    `json:"reason"`
+
+	// digest is the SHA-256 of the bytes the verdict was made on; Apply writes
+	// only a file whose current bytes still match. Never rendered.
+	digest [sha256.Size]byte
 }
 
 // Options steer Apply.
@@ -90,10 +114,17 @@ type Change struct {
 	Backup string   `json:"backup,omitempty"` // the pre-image; "" in a dry run
 }
 
+// Skip is an eligible target Apply left alone, and why.
+type Skip struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
+
 // Result is what Apply did.
 type Result struct {
 	DryRun  bool     `json:"dryRun"`
 	Changed []Change `json:"changed"` // never null
+	Skipped []Skip   `json:"skipped"` // never null
 }
 
 // TrackedError is Apply's refusal: eligible targets git tracks (or cannot
@@ -109,20 +140,31 @@ func (e *TrackedError) Error() string {
 }
 
 // Plan lists every settings file under each root that carries an EstateKey,
-// plus the estate's own two files, each classified against the estate the
-// root resolves to. Sorted by path, de-duplicated. A root that resolves to no
+// plus every estate's own two files, each judged against the estate the file
+// itself resolves to. Sorted by path, de-duplicated. A root that resolves to no
 // estate is an error: with nothing supplying these keys, nothing is redundant.
 func Plan(roots []string) ([]Target, error) {
 	seen := map[string]bool{}
 	out := []Target{}
 	for _, root := range roots {
-		ts, err := planRoot(root)
+		abs, err := filepath.Abs(root)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("resolve %s: %w", root, err)
 		}
-		for _, t := range ts {
-			if !seen[t.Path] {
-				seen[t.Path] = true
+		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+			return nil, fmt.Errorf("%s is not a directory", abs)
+		}
+		outer := claudeacct.Resolve(abs).EstateRoot
+		if outer == "" {
+			return nil, fmt.Errorf("%s resolves to no estate: nothing supplies these keys, so nothing is redundant "+
+				"(declare one with `swarmery account estate use <key> --path <root>`)", abs)
+		}
+		for _, f := range claudeacct.ScanSettingsFiles(abs) {
+			if seen[f] {
+				continue
+			}
+			if t, listed := evaluate(f, outer); listed {
+				seen[f] = true
 				out = append(out, t)
 			}
 		}
@@ -131,65 +173,99 @@ func Plan(roots []string) ([]Target, error) {
 	return out, nil
 }
 
-func planRoot(root string) ([]Target, error) {
-	abs, err := filepath.Abs(root)
+// evaluate judges one settings file. outer is the estate root of the scan;
+// listed is false for a file that carries no EstateKey (out of scope) or
+// vanished since the walk.
+func evaluate(f, outer string) (Target, bool) {
+	res := claudeacct.Resolve(filepath.Dir(filepath.Dir(f)))
+	t := Target{Path: f, EstateRoot: res.EstateRoot, Keys: []string{}, Kept: []KeptKey{}}
+	if isEstateFile(f, res.EstateRoot) || isEstateFile(f, outer) {
+		t.Reason = ReasonEstateSource
+		t.Status = gitStatus(f)
+		return t, true
+	}
+	doc, why := claudeacct.ReadTrustedSettings(f)
+	if doc == nil {
+		if why == "" {
+			return t, false // raced away since the walk
+		}
+		t.Reason = reasonUnreadablePrefix + why
+		t.Status = gitStatus(f)
+		return t, true
+	}
+	if len(candidateKeys(doc)) == 0 {
+		return t, false // carries no EstateKey: not listed
+	}
+	t.Status = gitStatus(f)
+	t.Kept = keptAll(doc)
+	switch {
+	case res.EstateRoot == "":
+		t.Reason = ReasonOtherEstatePrefix + noEstate
+		return t, true
+	case !claudeacct.SameFile(res.EstateRoot, outer):
+		t.Reason = ReasonOtherEstatePrefix + res.EstateRoot
+		return t, true
+	case !unlinkedBelow(f, res.EstateRoot):
+		t.Reason = ReasonSymlinked
+		return t, true
+	case !res.EstateAdmitted:
+		t.Reason = ReasonNotAdmitted
+		return t, true
+	}
+	raw, _, err := readForWrite(f)
 	if err != nil {
-		return nil, fmt.Errorf("resolve %s: %w", root, err)
-	}
-	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", abs)
-	}
-	res := claudeacct.Resolve(abs)
-	if res.EstateRoot == "" {
-		return nil, fmt.Errorf("%s resolves to no estate: nothing supplies these keys, so nothing is redundant "+
-			"(declare one with `swarmery account estate use <key> --path <root>`)", abs)
+		t.Reason = reasonUnreadablePrefix + err.Error()
+		return t, true
 	}
 	estateFile := filepath.Join(res.EstateRoot, filepath.FromSlash(claudeacct.ProjectSettingsFile))
-	bindingFile := filepath.Join(res.EstateRoot, filepath.FromSlash(claudeacct.BindingFile))
-
-	var estate map[string]any
-	if res.EstateAdmitted {
-		estate, _ = claudeacct.ReadTrustedSettingsWithin(estateFile, res.EstateRoot)
+	estate, _ := claudeacct.ReadTrustedSettingsWithin(estateFile, res.EstateRoot)
+	if estate == nil {
+		t.Reason = ReasonNothingRedundant
+		return t, true
 	}
-
-	var out []Target
-	for _, f := range claudeacct.ScanSettingsFiles(abs) {
-		t := Target{Path: f, EstateRoot: res.EstateRoot, Keys: []string{}, Kept: []KeptKey{}}
-		if claudeacct.SameFile(f, estateFile) || claudeacct.SameFile(f, bindingFile) {
-			t.Reason = ReasonEstateSource
-			t.Status = gitStatus(f)
-			out = append(out, t)
-			continue
-		}
-		doc, why := claudeacct.ReadTrustedSettings(f)
-		if doc == nil {
-			if why != "" {
-				t.Reason = reasonUnreadablePrefix + why
-				t.Status = gitStatus(f)
-				out = append(out, t)
-			}
-			continue // absent: raced away since the walk
-		}
-		if len(candidateKeys(doc)) == 0 {
-			continue // carries no EstateKey: out of scope, not listed
-		}
-		t.Status = gitStatus(f)
-		if estate == nil {
-			t.Kept = keptAll(doc)
-			t.Reason = ReasonNotAdmitted
-			out = append(out, t)
-			continue
-		}
-		t.Keys, t.Kept = classifyKeys(estate, doc)
-		if len(t.Keys) == 0 {
-			t.Reason = ReasonNothingRedundant
-		} else {
-			t.Eligible = true
-			t.Reason = ReasonRedundant
-		}
-		out = append(out, t)
+	t.digest = sha256.Sum256(raw)
+	t.Keys, t.Kept = classifyKeys(estate, doc)
+	if len(t.Keys) == 0 {
+		t.Reason = ReasonNothingRedundant
+	} else {
+		t.Eligible = true
+		t.Reason = ReasonRedundant
 	}
-	return out, nil
+	return t, true
+}
+
+// isEstateFile reports whether f is one of root's own two files, by resolved
+// path.
+func isEstateFile(f, root string) bool {
+	if root == "" {
+		return false
+	}
+	for _, name := range []string{claudeacct.ProjectSettingsFile, claudeacct.BindingFile} {
+		if claudeacct.SameFile(f, filepath.Join(root, filepath.FromSlash(name))) {
+			return true
+		}
+	}
+	return false
+}
+
+// unlinkedBelow reports whether path lies inside root with NO symlink on any
+// component between the two: the fully resolved path must equal the resolved
+// root joined with path's lexical remainder. Links above root (the operator's
+// choice of where the estate lives) are allowed; one below it is not.
+func unlinkedBelow(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	rr, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	rp, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	return rp == filepath.Join(rr, rel) && claudeacct.WithinRoot(path, root)
 }
 
 // keptAll is every candidate key of doc, kept, with all its entry names.
@@ -201,21 +277,49 @@ func keptAll(doc map[string]any) []KeptKey {
 	return out
 }
 
-// Apply removes each eligible target's Keys from its file. It refuses the
-// whole run — writing nothing — when an eligible target is TRACKED and
-// opts.IncludeTracked is false. An ineligible target is never written. A file
-// that no longer carries any of its keys is left alone and not reported, which
-// is what makes a second run report zero changes.
+// job is one target Apply will write, with the bytes it was re-verified on.
+type job struct {
+	t      Target
+	raw    []byte
+	backup string
+}
+
+// Apply removes each eligible target's Keys from its file.
+//
+// Before anything is written it re-evaluates every eligible target on its
+// current bytes (a changed verdict or changed bytes → skipped "changed since
+// plan"), refuses the whole run when a remaining target is TRACKED and
+// opts.IncludeTracked is false, and checks every pre-image path. Only then
+// does it write, one file at a time; a failure mid-run returns the changes
+// already made alongside the error. An ineligible target is never written.
 func Apply(targets []Target, opts Options) (Result, error) {
-	res := Result{DryRun: opts.DryRun, Changed: []Change{}}
-	var eligible []Target
+	res := Result{DryRun: opts.DryRun, Changed: []Change{}, Skipped: []Skip{}}
+	var jobs []job
 	var tracked []string
 	for _, t := range targets {
 		if !t.Eligible || len(t.Keys) == 0 {
 			continue
 		}
-		eligible = append(eligible, t)
-		if t.Status == StatusTracked {
+		fresh, ok := evaluate(t.Path, t.EstateRoot)
+		switch {
+		case !ok:
+			res.Skipped = append(res.Skipped, Skip{Path: t.Path, Reason: ReasonChangedSincePlan})
+			continue
+		case fresh.Reason == ReasonSymlinked:
+			res.Skipped = append(res.Skipped, Skip{Path: t.Path, Reason: ReasonSymlinked})
+			continue
+		case !fresh.Eligible || fresh.EstateRoot != t.EstateRoot || !slices.Equal(fresh.Keys, t.Keys) ||
+			(t.digest != [sha256.Size]byte{} && fresh.digest != t.digest):
+			res.Skipped = append(res.Skipped, Skip{Path: t.Path, Reason: ReasonChangedSincePlan})
+			continue
+		}
+		raw, _, err := readForWrite(t.Path)
+		if err != nil || sha256.Sum256(raw) != fresh.digest {
+			res.Skipped = append(res.Skipped, Skip{Path: t.Path, Reason: ReasonChangedSincePlan})
+			continue
+		}
+		jobs = append(jobs, job{t: fresh, raw: raw})
+		if fresh.Status == StatusTracked {
 			tracked = append(tracked, t.Path)
 		}
 	}
@@ -223,9 +327,12 @@ func Apply(targets []Target, opts Options) (Result, error) {
 		return res, &TrackedError{Paths: tracked}
 	}
 	if opts.DryRun {
-		for _, t := range eligible {
-			res.Changed = append(res.Changed, Change{Path: t.Path, Keys: t.Keys})
+		for _, j := range jobs {
+			res.Changed = append(res.Changed, Change{Path: j.t.Path, Keys: j.t.Keys})
 		}
+		return res, nil
+	}
+	if len(jobs) == 0 {
 		return res, nil
 	}
 	q := opts.QuarantineDir
@@ -239,16 +346,52 @@ func Apply(targets []Target, opts Options) (Result, error) {
 			return res, err
 		}
 	}
-	for _, t := range eligible {
-		changed, backup, err := pruneFile(t.Path, t.Keys, q)
+	bdir := filepath.Join(q, "prune")
+	for i := range jobs {
+		jobs[i].backup = filepath.Join(bdir, backupName(jobs[i].t.Path))
+	}
+	if err := preflightBackups(bdir, jobs); err != nil {
+		return res, err
+	}
+	if _, err := ensureQuarantine(q); err != nil {
+		return res, err
+	}
+	for _, j := range jobs {
+		changed, skip, err := pruneFile(j, unlinkedBelow)
 		if err != nil {
 			return res, err
 		}
-		if changed {
-			res.Changed = append(res.Changed, Change{Path: t.Path, Keys: t.Keys, Backup: backup})
+		switch {
+		case skip != "":
+			res.Skipped = append(res.Skipped, Skip{Path: j.t.Path, Reason: skip})
+		case changed:
+			res.Changed = append(res.Changed, Change{Path: j.t.Path, Keys: j.t.Keys, Backup: j.backup})
 		}
 	}
 	return res, nil
+}
+
+// preflightBackups refuses, before any write, the two ways a pre-image could
+// not be made: two jobs mapping to one backup file, and an existing backup
+// whose bytes differ from the file as it is now (the earliest pre-image is the
+// rollback artifact and nothing may replace it).
+func preflightBackups(bdir string, jobs []job) error {
+	owner := map[string]string{}
+	for _, j := range jobs {
+		bak := j.backup
+		if bak == "" {
+			bak = filepath.Join(bdir, backupName(j.t.Path))
+		}
+		if prev, dup := owner[bak]; dup {
+			return fmt.Errorf("%s and %s would share the pre-image %s; nothing was written", prev, j.t.Path, bak)
+		}
+		owner[bak] = j.t.Path
+		if existing, err := os.ReadFile(bak); err == nil && !bytes.Equal(existing, j.raw) {
+			return fmt.Errorf("a different pre-image of %s already exists at %s; move it aside before pruning again. "+
+				"Nothing was written", j.t.Path, bak)
+		}
+	}
+	return nil
 }
 
 // IsTrackedRefusal reports whether err is Apply's tracked-file refusal.
@@ -269,7 +412,7 @@ func RenderTargets(w io.Writer, targets []Target) error {
 			verdict = "eligible"
 			detail = "remove " + strings.Join(t.Keys, ",")
 		}
-		if len(t.Kept) > 0 && t.Reason != ReasonEstateSource {
+		if len(t.Kept) > 0 && (t.Eligible || t.Reason == ReasonNothingRedundant) {
 			detail += " (keep " + keptSummary(t.Kept) + ")"
 		}
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", verdict, t.Path, detail, t.Status); err != nil {
@@ -290,8 +433,10 @@ func keptSummary(kept []KeptKey) string {
 }
 
 // RenderResult writes the apply summary: one line per changed file naming its
-// pre-image, then "<n> files changed". A dry run writes the count alone — its
-// target lines already say what would change.
+// pre-image, one per skipped file with its reason, then "<n> files changed". A
+// dry run writes the count alone — its target lines already say what would
+// change. Call it on a PARTIAL result too: after a mid-run failure it is the
+// only record of which files were already rewritten.
 func RenderResult(w io.Writer, r Result) error {
 	for _, c := range r.Changed {
 		if r.DryRun {
@@ -302,6 +447,11 @@ func RenderResult(w io.Writer, r Result) error {
 			line += "; pre-image " + c.Backup
 		}
 		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	for _, s := range r.Skipped {
+		if _, err := fmt.Fprintf(w, "skipped %s: %s\n", s.Path, s.Reason); err != nil {
 			return err
 		}
 	}

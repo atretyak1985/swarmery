@@ -19,6 +19,8 @@ package accountprune
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,9 +165,12 @@ func DefaultQuarantineDir(now time.Time) (string, error) {
 }
 
 // backupName is the pre-image's file name for path: the absolute path with
-// every separator replaced by '-', plus .bak.json.
+// every separator replaced by '-' (readable), then the first 12 hex digits of
+// the path's SHA-256 (unique: "/a/b-c" and "/a/b/c" mangle alike, and no
+// escaping of '-' alone is injective), then .bak.json.
 func backupName(path string) string {
-	return strings.ReplaceAll(filepath.ToSlash(path), "/", "-") + ".bak.json"
+	sum := sha256.Sum256([]byte(path))
+	return strings.ReplaceAll(filepath.ToSlash(path), "/", "-") + "." + hex.EncodeToString(sum[:])[:12] + ".bak.json"
 }
 
 // ensureQuarantine creates <q> and <q>/prune at mode 0700 (and re-asserts
@@ -184,37 +189,37 @@ func ensureQuarantine(q string) (string, error) {
 	return dir, nil
 }
 
-// writeBackup copies raw to <dir>/<backupName(path)> with mode perm, never
-// overwriting: an existing pre-image with the SAME bytes is reused (a re-run
-// the same day after a rollback), one with DIFFERENT bytes aborts — the
-// earliest pre-image is the rollback artifact and nothing may replace it.
-func writeBackup(dir, path string, raw []byte, perm os.FileMode) (string, error) {
-	bak := filepath.Join(dir, backupName(path))
+// writeBackup copies raw to bak with mode perm, never overwriting: an
+// existing pre-image with the SAME bytes is reused (a re-run the same day after
+// a rollback), one with DIFFERENT bytes aborts — the earliest pre-image is the
+// rollback artifact and nothing may replace it. (Apply's pre-flight refuses
+// that case before any write; this is the last guard.)
+func writeBackup(bak, path string, raw []byte, perm os.FileMode) error {
 	if existing, err := os.ReadFile(bak); err == nil {
 		if bytes.Equal(existing, raw) {
-			return bak, nil
+			return nil
 		}
-		return "", fmt.Errorf("a different pre-image of %s already exists at %s; move it aside before pruning again", path, bak)
+		return fmt.Errorf("a different pre-image of %s already exists at %s; move it aside before pruning again", path, bak)
 	}
 	f, err := os.OpenFile(bak, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
 	if err != nil {
-		return "", fmt.Errorf("write pre-image %s: %w", bak, err)
+		return fmt.Errorf("write pre-image %s: %w", bak, err)
 	}
 	if _, err := f.Write(raw); err != nil {
 		f.Close()
 		os.Remove(bak)
-		return "", fmt.Errorf("write pre-image %s: %w", bak, err)
+		return fmt.Errorf("write pre-image %s: %w", bak, err)
 	}
 	if err := f.Sync(); err != nil {
 		f.Close()
 		os.Remove(bak)
-		return "", fmt.Errorf("sync pre-image %s: %w", bak, err)
+		return fmt.Errorf("sync pre-image %s: %w", bak, err)
 	}
 	if err := f.Close(); err != nil {
 		os.Remove(bak)
-		return "", fmt.Errorf("close pre-image %s: %w", bak, err)
+		return fmt.Errorf("close pre-image %s: %w", bak, err)
 	}
-	return bak, nil
+	return nil
 }
 
 // readForWrite reads path for a rewrite: a regular file (never through a
@@ -237,14 +242,24 @@ func readForWrite(path string) ([]byte, os.FileMode, error) {
 	return raw, fi.Mode().Perm(), nil
 }
 
-// pruneFile removes keys from path. changed is false — and nothing, not even
-// a backup, is written — when path carries none of them. Otherwise the
-// pre-image goes to quarantineDir/prune first, then the rewrite lands through a
-// temp file in path's own directory and os.Rename, with the original mode.
-func pruneFile(path string, keys []string, quarantineDir string) (changed bool, backup string, err error) {
+// pruneFile writes one job, re-checking at write time what the plan
+// established: the path still has no symlink below its estate root (unlinked),
+// and its bytes are still the ones Apply verified (j.raw). Either failing is a
+// skip with its reason, never a write. changed is false — and nothing, not even
+// a backup, is written — when the file carries none of the keys. Otherwise the
+// pre-image goes to j.backup first, then the rewrite lands through a temp file
+// in the file's own directory and os.Rename, with the original mode.
+func pruneFile(j job, unlinked func(path, root string) bool) (changed bool, skip string, err error) {
+	path, keys := j.t.Path, j.t.Keys
+	if !unlinked(path, j.t.EstateRoot) {
+		return false, ReasonSymlinked, nil
+	}
 	raw, perm, err := readForWrite(path)
 	if err != nil {
 		return false, "", err
+	}
+	if !bytes.Equal(raw, j.raw) {
+		return false, ReasonChangedSincePlan, nil
 	}
 	after, err := removeTopLevelKeys(raw, keys)
 	if err != nil {
@@ -256,17 +271,13 @@ func pruneFile(path string, keys []string, quarantineDir string) (changed bool, 
 	if err := verifyRemoval(raw, after, keys); err != nil {
 		return false, "", fmt.Errorf("%s: %w", path, err)
 	}
-	bdir, err := ensureQuarantine(quarantineDir)
-	if err != nil {
-		return false, "", err
-	}
-	if backup, err = writeBackup(bdir, path, raw, perm); err != nil {
+	if err := writeBackup(j.backup, path, raw, perm); err != nil {
 		return false, "", err
 	}
 	if err := atomicWrite(path, after, perm); err != nil {
-		return false, backup, err
+		return false, "", err
 	}
-	return true, backup, nil
+	return true, "", nil
 }
 
 // atomicWrite replaces path with data: a temp file in the same directory,

@@ -138,6 +138,45 @@ func TestAccountPruneRefusesTracked(t *testing.T) {
 	}
 }
 
+// A failure mid-run still prints — text and JSON — every file already
+// rewritten and its pre-image: that output is the only record of them.
+func TestAccountPruneMidRunFailurePrintsPartial(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		root, _ := pruneFixture(t)
+		// Only two untracked eligible files: plain/ (written first) and zz/.
+		if err := os.RemoveAll(filepath.Join(root, "repo")); err != nil {
+			t.Fatal(err)
+		}
+		plain := filepath.Join(root, "plain", ".claude", "settings.local.json")
+		zz := filepath.Join(root, "zz", ".claude")
+		if err := os.MkdirAll(zz, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(zz, "settings.json"), []byte(`{"pluginConfigs":{"a@m":{"options":{"k":"v"}}}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(zz, 0o555); err != nil { // the rename into zz/ fails
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(zz, 0o755) })
+
+		args := []string{"--path", root}
+		if asJSON {
+			args = append(args, "--json")
+		}
+		var out, errOut bytes.Buffer
+		if err := accountPrune(args, &out, &errOut); err == nil {
+			t.Fatalf("json=%v: want the rewrite of zz/ to fail", asJSON)
+		}
+		if !strings.Contains(out.String(), plain) || !strings.Contains(out.String(), ".bak.json") {
+			t.Errorf("json=%v: output does not name the rewritten file and its pre-image:\n%s", asJSON, out.String())
+		}
+		if !asJSON && !strings.Contains(out.String(), "changed "+plain) {
+			t.Errorf("text output lacks the changed line:\n%s", out.String())
+		}
+	}
+}
+
 // --json carries every target with its status and reason; --help is a usage
 // error whose text names each flag on its own line.
 func TestAccountPruneJSONAndUsage(t *testing.T) {

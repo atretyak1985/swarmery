@@ -61,47 +61,68 @@ func TestVerifyRemoval(t *testing.T) {
 	}
 }
 
-// Never written through a symlink; a non-regular or missing path is an error.
+func anyPath(string, string) bool { return true }
+
+// pj is a job for path whose verified bytes are the file's current bytes.
+func pj(t *testing.T, path string, keys []string, bak string) job {
+	t.Helper()
+	raw, _ := os.ReadFile(path)
+	return job{t: Target{Path: path, Keys: keys}, raw: raw, backup: bak}
+}
+
+// Never written through a symlink; a non-regular or missing path is an error;
+// a failed re-check is a skip, never a write.
 func TestPruneFileRefusals(t *testing.T) {
 	dir := t.TempDir()
+	bak := filepath.Join(dir, "b.bak.json")
 	real := write(t, filepath.Join(dir, "real.json"), `{"k":1}`)
 	link := filepath.Join(dir, "link.json")
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := pruneFile(link, []string{"k"}, filepath.Join(dir, "q")); err == nil || !strings.Contains(err.Error(), "symlink") {
+	if _, _, err := pruneFile(pj(t, link, []string{"k"}, bak), anyPath); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("symlink: %v", err)
 	}
-	if _, _, err := pruneFile(filepath.Join(dir, "missing.json"), []string{"k"}, filepath.Join(dir, "q")); err == nil {
+	if _, _, err := pruneFile(pj(t, filepath.Join(dir, "missing.json"), []string{"k"}, bak), anyPath); err == nil {
 		t.Error("missing file: want an error")
 	}
-	if _, _, err := pruneFile(dir, []string{"k"}, filepath.Join(dir, "q")); err == nil {
+	if _, _, err := pruneFile(job{t: Target{Path: dir, Keys: []string{"k"}}}, anyPath); err == nil {
 		t.Error("directory: want an error")
 	}
 	big := write(t, filepath.Join(dir, "big.json"), `{"k":"`+strings.Repeat("x", maxFileBytes)+`"}`)
-	if _, _, err := pruneFile(big, []string{"k"}, filepath.Join(dir, "q")); err == nil {
+	if _, _, err := pruneFile(job{t: Target{Path: big, Keys: []string{"k"}}}, anyPath); err == nil {
 		t.Error("oversize: want an error")
 	}
 	bad := write(t, filepath.Join(dir, "bad.json"), `[`)
-	if _, _, err := pruneFile(bad, []string{"k"}, filepath.Join(dir, "q")); err == nil {
+	if _, _, err := pruneFile(pj(t, bad, []string{"k"}, bak), anyPath); err == nil {
 		t.Error("malformed: want an error")
 	}
-	// Nothing to remove: no write, no backup, no quarantine.
-	changed, bak, err := pruneFile(real, []string{"zz"}, filepath.Join(dir, "q"))
-	if err != nil || changed || bak != "" {
-		t.Errorf("no-op = %v %q %v", changed, bak, err)
+	// Nothing to remove: no write, no backup.
+	changed, skip, err := pruneFile(pj(t, real, []string{"zz"}, bak), anyPath)
+	if err != nil || changed || skip != "" {
+		t.Errorf("no-op = %v %q %v", changed, skip, err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "q")); !os.IsNotExist(err) {
-		t.Error("a no-op created the quarantine")
+	if _, err := os.Stat(bak); !os.IsNotExist(err) {
+		t.Error("a no-op wrote a pre-image")
+	}
+	// The write-time re-checks: a linked path, and bytes that moved.
+	if _, skip, _ := pruneFile(pj(t, real, []string{"k"}, bak), func(string, string) bool { return false }); skip != ReasonSymlinked {
+		t.Errorf("unlinked=false skip = %q", skip)
+	}
+	moved := job{t: Target{Path: real, Keys: []string{"k"}}, raw: []byte(`{"k":0}`), backup: bak}
+	if _, skip, _ := pruneFile(moved, anyPath); skip != ReasonChangedSincePlan {
+		t.Errorf("moved bytes skip = %q", skip)
+	}
+	if read(t, real) != `{"k":1}` {
+		t.Error("a skipped job wrote")
 	}
 }
 
-// A quarantine that cannot be created aborts before the file is touched.
-func TestQuarantineUnwritable(t *testing.T) {
+// A pre-image that cannot be written aborts before the file is touched.
+func TestBackupUnwritable(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, filepath.Join(dir, "s.json"), `{"k":1}`)
-	blocker := write(t, filepath.Join(dir, "q"), "a file where the quarantine dir belongs")
-	if _, _, err := pruneFile(p, []string{"k"}, blocker); err == nil {
+	if _, _, err := pruneFile(pj(t, p, []string{"k"}, filepath.Join(dir, "no", "such", "dir", "b.json")), anyPath); err == nil {
 		t.Error("want an error")
 	}
 	if read(t, p) != `{"k":1}` {
@@ -109,8 +130,23 @@ func TestQuarantineUnwritable(t *testing.T) {
 	}
 }
 
+// A quarantine that cannot be created aborts Apply before any write.
+func TestQuarantineUnwritable(t *testing.T) {
+	f := newEstate(t)
+	p := write(t, filepath.Join(f.root, "a", ".claude", "settings.json"), subsetPC)
+	blocker := write(t, filepath.Join(filepath.Dir(f.root), "qfile"), "a file where the quarantine dir belongs")
+	if _, err := Apply(mustPlan(t, f.root), Options{QuarantineDir: blocker}); err == nil {
+		t.Error("want an error")
+	}
+	if read(t, p) != subsetPC {
+		t.Error("file written without a pre-image")
+	}
+}
+
 func TestBackupName(t *testing.T) {
-	if got := backupName("/Users/me/p/.claude/settings.json"); got != "-Users-me-p-.claude-settings.json.bak.json" {
+	got := backupName("/Users/me/p/.claude/settings.json")
+	if !strings.HasPrefix(got, "-Users-me-p-.claude-settings.json.") || !strings.HasSuffix(got, ".bak.json") ||
+		len(got) != len("-Users-me-p-.claude-settings.json.")+12+len(".bak.json") {
 		t.Errorf("backupName = %q", got)
 	}
 }
