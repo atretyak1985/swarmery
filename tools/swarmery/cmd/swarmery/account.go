@@ -12,6 +12,7 @@ package main
 //	swarmery account doctor [--fast|--probe] [--json] the account doctor, names only (account_doctor.go)
 //	swarmery account switch <key> [--estate <root>]  move a declared estate's payer (account_switch.go)
 //	swarmery account move-session <uuid> --to <key>  copy a session to another account (account_switch.go)
+//	swarmery account prune  [--path <dir>] [--dry-run] remove settings keys the estate already supplies (internal/accountprune)
 //
 // # Two properties this file exists to preserve
 //
@@ -34,6 +35,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -45,6 +47,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/accountprune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
@@ -82,6 +85,11 @@ const accountUsage = `usage:
                                                      copy a session's transcript, its <uuid>/ dir and the
                                                      project memory/ into <key>'s config dir, and re-point
                                                      its database row; prints the resume command
+  swarmery account prune [--path <dir>] [--dry-run] [--include-tracked] [--json]
+                                                     remove the settings keys the estate already supplies
+                                                     (pluginConfigs, extraKnownMarketplaces — whole keys,
+                                                     only when every entry is the estate's) from the files
+                                                     under <dir>; see ` + "`swarmery account prune --help`" + `
 
   --path defaults to the current directory. A binding lives in
   <path>/` + claudeacct.BindingFile + `; a path with none inherits the account
@@ -100,7 +108,7 @@ const accountUsage = `usage:
   listed pin. --keep-pins lists and clears nothing. With no flag, a terminal
   is asked; anything else only lists.
 
-  which|use|clear|env|exec|doctor|estate|switch|move-session never contact the
+  which|use|clear|env|exec|doctor|estate|switch|move-session|prune never contact the
   daemon — the terminal has to keep working with swarmery stopped. switch and
   move-session read the database without migrating it.`
 
@@ -131,6 +139,8 @@ func cmdAccount(args []string) error {
 		return accountSwitch(rest, os.Stdout)
 	case "move-session":
 		return accountMoveSession(rest, os.Stdout)
+	case "prune":
+		return accountPrune(rest, os.Stdout, os.Stderr)
 	case "-h", "--help", "help":
 		fmt.Fprintln(os.Stderr, accountUsage)
 		return nil
@@ -583,6 +593,74 @@ func accountKeys() []string {
 		keys = append(keys, a.Key)
 	}
 	return keys
+}
+
+// ── prune ───────────────────────────────────────────────────────────────────
+
+const accountPruneUsage = `usage: swarmery account prune [--path <dir>] [--dry-run] [--include-tracked] [--json]
+
+  Remove, from every settings file under <dir>, the keys the estate <dir>
+  resolves to already supplies: pluginConfigs and extraKnownMarketplaces, each
+  removed WHOLE and only when every entry of the file's copy is in the estate's
+  with an identical value. permissions, enabledMcpjsonServers, enabledPlugins
+  and the swarmery binding are never touched. The estate's own two files are
+  listed "estate source" and never written.
+
+  --path <dir>        where to look (default: the current directory)
+  --dry-run           list every file considered and write nothing
+  --include-tracked   also write an eligible file git TRACKS (or cannot classify);
+                      without it such a file refuses the WHOLE run, exit 1
+  --json              print {"targets": […], "result": {…}} instead of text
+
+  Every listed line ends in its git status: TRACKED, untracked or NO-REPO.
+  Before its first write to a file the prune copies it to
+  ~/.swarmery/quarantine/<date>/prune/ — the only rollback for an ignored file.
+  It never reads a credential store and never prints a settings value.`
+
+// accountPrune parses the flags, plans, prints the targets, and applies
+// (internal/accountprune holds every decision). Text mode: the target lines on
+// stdout — nothing else in a dry run, so every stdout line ends in a git status
+// — and, after an apply, one line per changed file plus "<n> files changed".
+func accountPrune(args []string, out, errOut io.Writer) error {
+	fs := flag.NewFlagSet("account prune", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	path := pathFlag(fs)
+	dryRun := fs.Bool("dry-run", false, "list what would change and write nothing")
+	includeTracked := fs.Bool("include-tracked", false, "also write eligible git-tracked files")
+	asJSON := fs.Bool("json", false, "print the plan and result as one JSON object")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
+		return usageError{accountPruneUsage}
+	}
+	dir, err := projectPath(*path)
+	if err != nil {
+		return err
+	}
+	targets, err := accountprune.Plan([]string{dir})
+	if err != nil {
+		return err
+	}
+	res, applyErr := accountprune.Apply(targets, accountprune.Options{DryRun: *dryRun, IncludeTracked: *includeTracked})
+	if *asJSON {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(struct {
+			Targets []accountprune.Target `json:"targets"`
+			Result  accountprune.Result   `json:"result"`
+		}{targets, res}); err != nil {
+			return err
+		}
+		return applyErr
+	}
+	if err := accountprune.RenderTargets(out, targets); err != nil {
+		return err
+	}
+	if applyErr != nil {
+		return applyErr
+	}
+	if *dryRun {
+		return accountprune.RenderResult(errOut, res)
+	}
+	return accountprune.RenderResult(out, res)
 }
 
 // ── env ─────────────────────────────────────────────────────────────────────

@@ -280,6 +280,10 @@ func usage() {
                                    project runs under, bind/clear it, declare an estate root,
                                    print its env line, run a command under it
                                    (never contacts the daemon)
+  swarmery account prune [--path <dir>] [--dry-run] [--include-tracked] [--json]
+                                   remove the settings keys the project's estate already supplies
+                                   from the files under <dir>; refuses a git-tracked file without
+                                   --include-tracked (not the retention prune above)
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;
        'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;

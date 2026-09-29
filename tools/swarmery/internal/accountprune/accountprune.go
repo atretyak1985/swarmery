@@ -290,9 +290,13 @@ func keptSummary(kept []KeptKey) string {
 }
 
 // RenderResult writes the apply summary: one line per changed file naming its
-// pre-image, then "<n> files changed".
+// pre-image, then "<n> files changed". A dry run writes the count alone — its
+// target lines already say what would change.
 func RenderResult(w io.Writer, r Result) error {
 	for _, c := range r.Changed {
+		if r.DryRun {
+			break
+		}
 		line := fmt.Sprintf("changed %s: removed %s", c.Path, strings.Join(c.Keys, ","))
 		if c.Backup != "" {
 			line += "; pre-image " + c.Backup
