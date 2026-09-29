@@ -73,6 +73,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runtruth"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/settingsoverlay"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/spawnpath"
@@ -285,7 +286,9 @@ func usage() {
        roots; default ~/.swarmery/overlays.json — missing = repo-only plugin detection)
        SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT
        SWARMERY_RETENTION_DAYS (daily telemetry prune window while serving; default 60,
-       0 disables, values 1..13 are raised to 14 — the daemon never VACUUMs)`)
+       0 disables, values 1..13 are raised to 14 — the daemon never VACUUMs)
+       SWARMERY_RUN_DIR (run artifacts; default ~/.swarmery/run — composed --settings files live in
+       <dir>/settings, 0600 in a 0700 dir, pruned after 14 days at daemon start)`)
 }
 
 // autoProjectsRoots is the SWARMERY_PROJECTS_ROOTS value that means "find them
@@ -2027,6 +2030,13 @@ func cmdServe(args []string) error {
 		log.Printf("revision scratch sweep: removed %d orphaned dir(s)", len(removed))
 	}
 	api.AttachPlanning(planningSvc)
+
+	// Composed --settings files (internal/runsettings) older than 14 days, once
+	// on start. Inline, unlike the deferred retention prune: pure filesystem, no
+	// DB and no store connection. Content addressing means a pruned file is
+	// recreated identically by the next run that needs it.
+	log.Printf("runsettings prune: removed %d composed settings file(s) older than 14d from %s",
+		runsettings.Prune(14*24*time.Hour), runsettings.Dir())
 
 	// plan-revision phase 5: revision retention, daily alongside the other
 	// maintenance tickers — staged proposals nobody decided go superseded

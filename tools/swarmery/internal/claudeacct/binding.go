@@ -309,6 +309,15 @@ func fileOwner(fi os.FileInfo) (int, bool) {
 	return int(st.Uid), true
 }
 
+// fileNlink is fi's hard-link count; ok=false where the platform does not say.
+func fileNlink(fi os.FileInfo) (uint64, bool) {
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return uint64(st.Nlink), true
+}
+
 // openNoFollow opens path read-only, refusing a symlink as its FINAL component
 // (ELOOP) and never blocking on a FIFO swapped in under it.
 func openNoFollow(path string) (*os.File, error) {
@@ -332,27 +341,139 @@ func readCapped(f *os.File, limit int64) (raw []byte, ok bool, err error) {
 // must not choose the account or the credentials this user's spawn runs with.
 // The checks are made on the OPENED file, so nothing can be swapped in between.
 func readTrustedSettings(path string) map[string]any {
-	f, err := openNoFollow(path)
+	root, _ := ReadTrustedSettings(path)
+	return root
+}
+
+// The reason codes ReadTrustedSettings returns for a present file it refuses.
+// They are a contract: internal/runsettings puts them in its WARN line and in
+// the one stderr line `swarmery account exec` prints, and operators grep them.
+const (
+	TrustSymlink       = "symlink"        // the final path component is a link
+	TrustNotRegular    = "not-regular"    // a directory, FIFO, device or socket
+	TrustNotOwned      = "not-owned"      // owned by another uid
+	TrustGroupWritable = "group-writable" // mode carries g+w
+	TrustOtherWritable = "other-writable" // mode carries o+w
+	TrustTooLarge      = "too-large"      // more than maxSettingsBytes
+	TrustUnreadable    = "unreadable"     // open, stat or read failed
+	TrustMalformed     = "malformed"      // not a JSON object
+	TrustHardLinked    = "hard-linked"    // more than one link to the inode
+	TrustOutsideRoot   = "outside-root"   // not a file inside the given root (ReadTrustedSettingsWithin)
+	TrustAbsoluteLink  = "absolute-link"  // reached through an ABSOLUTE symlink, even one resolving inside the root
+)
+
+// testHookBeforeOpen and testHookAfterOpen let a test swap directories right
+// before and right after ReadTrustedSettingsWithin's open. Always nil outside
+// tests.
+var testHookBeforeOpen, testHookAfterOpen func()
+
+// ReadTrustedSettingsWithin is ReadTrustedSettings for a file that must lie
+// inside root — an estate's settings file inside its estate root. The open goes
+// through os.Root: an openat walk from a descriptor on root that refuses every
+// component, and every symlink, that would leave the tree — so no directory swap
+// at any moment can hand the reader a file from outside, which a check-then-open
+// by path could not promise. os.Root follows a symlink only when it is RELATIVE
+// and stays inside; an absolute link is refused even when it resolves inside the
+// root (reason TrustAbsoluteLink). A symlink as the FINAL component is refused as
+// TrustSymlink, the rule the binding walk applies. The opened file then passes
+// the same checks as ReadTrustedSettings. reason is "" for an absent file.
+func ReadTrustedSettingsWithin(path, root string) (map[string]any, string) {
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		return nil, ""
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || rel == ".." || filepath.IsAbs(rel) ||
+		strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, TrustOutsideRoot
+	}
+	r, err := os.OpenRoot(root)
 	if err != nil {
-		return nil
+		return nil, TrustUnreadable
+	}
+	defer r.Close()
+	if li, err := r.Lstat(rel); err == nil && li.Mode()&os.ModeSymlink != 0 {
+		return nil, TrustSymlink
+	}
+	if testHookBeforeOpen != nil {
+		testHookBeforeOpen()
+	}
+	f, err := r.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if testHookAfterOpen != nil {
+		testHookAfterOpen()
+	}
+	if err != nil {
+		switch {
+		case os.IsNotExist(err):
+			return nil, ""
+		// os.Root's escape error is unexported; its text is pinned by the tests.
+		case strings.Contains(err.Error(), "path escapes from parent"):
+			if WithinRoot(path, root) {
+				return nil, TrustAbsoluteLink
+			}
+			return nil, TrustOutsideRoot
+		}
+		return nil, TrustUnreadable
 	}
 	defer f.Close()
+	return readTrustedFile(f)
+}
+
+// ReadTrustedSettings is the one trusted settings loader, exported for readers
+// outside this package (internal/runsettings reads an estate's settings file with
+// the SAME rules the walk applies to a binding file). reason is "" when the file
+// was read — and also when nothing exists at path, because an absent file is not
+// an unusable one. Otherwise root is nil and reason is exactly one of the Trust*
+// codes above. A reason never carries any of the file's contents.
+func ReadTrustedSettings(path string) (root map[string]any, reason string) {
+	f, err := openNoFollow(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ""
+		}
+		if fi, lerr := os.Lstat(path); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return nil, TrustSymlink
+		}
+		return nil, TrustUnreadable
+	}
+	defer f.Close()
+	return readTrustedFile(f)
+}
+
+// readTrustedFile is the loader's one set of checks, made on the OPENED file so
+// nothing can be swapped in between: regular, not group/other-writable, owned
+// by this user, one link, at most maxSettingsBytes, a JSON object.
+func readTrustedFile(f *os.File) (root map[string]any, reason string) {
 	fi, err := f.Stat()
-	if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&settingsUntrustedBits != 0 {
-		return nil
+	if err != nil {
+		return nil, TrustUnreadable
+	}
+	switch perm := fi.Mode().Perm(); {
+	case !fi.Mode().IsRegular():
+		return nil, TrustNotRegular
+	case perm&0o020 != 0:
+		return nil, TrustGroupWritable
+	case perm&0o002 != 0:
+		return nil, TrustOtherWritable
 	}
 	if uid, ok := fileOwner(fi); !ok || uid != currentUID() {
-		return nil
+		return nil, TrustNotOwned
+	}
+	// A second link to the inode means the file also lives somewhere else — a
+	// hard link planted here would pass every other check as the operator's own.
+	if n, ok := fileNlink(fi); !ok || n > 1 {
+		return nil, TrustHardLinked
 	}
 	raw, ok, err := readCapped(f, maxSettingsBytes)
-	if err != nil || !ok {
-		return nil
+	if err != nil {
+		return nil, TrustUnreadable
 	}
-	var root map[string]any
-	if json.Unmarshal(raw, &root) != nil {
-		return nil
+	if !ok {
+		return nil, TrustTooLarge
 	}
-	return root
+	if json.Unmarshal(raw, &root) != nil || root == nil {
+		return nil, TrustMalformed
+	}
+	return root, ""
 }
 
 // untrustedSettings reports why an EXISTING settings file would be ignored by
@@ -377,6 +498,9 @@ func untrustedSettings(path string) string {
 	}
 	if uid, ok := fileOwner(fi); !ok || uid != currentUID() {
 		return fmt.Sprintf("%s is not owned by you, so the walk ignores it", path)
+	}
+	if n, ok := fileNlink(fi); ok && n > 1 {
+		return fmt.Sprintf("%s is hard-linked (%d links), so the walk ignores it", path, n)
 	}
 	return ""
 }

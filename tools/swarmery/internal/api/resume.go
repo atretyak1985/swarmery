@@ -13,6 +13,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // resumePermEnv is this spawn site's --permission-mode knob (internal/claudeflags
@@ -62,6 +63,20 @@ func resumeArgs(sessionUUID, text string, o resumeOrigin) []string {
 		args = append(args, "--settings", f)
 	}
 	return append(args, claudeflags.PermissionModeArgs(resumePermEnv)...)
+}
+
+// resumeSettings resolves the resume spawn ONCE and composes its settings file
+// from that resolution: the admitted estate's EstateKeys over the file the
+// origin run was lent (o.SettingsFile, recovered by lookupResumeOrigin), which
+// is therefore the Fallback — with no admitted estate the resume's argv stays
+// byte-identical. The resolution is the session's PROJECT: Resolve walks a
+// daemon worktree cwd from its source checkout (claudeacct/worktreesrc.go), so
+// a worktree never composes an estate-less file. It is returned for the env as
+// well, so D5's git probe runs once per resume.
+func resumeSettings(cwd string, o resumeOrigin) (claudeacct.Resolution, resumeOrigin) {
+	res := claudeacct.Resolve(cwd)
+	o.SettingsFile = runsettings.Compose("resume", res, runsettings.Inputs{Fallback: o.SettingsFile})
+	return res, o
 }
 
 // errResumeCwdGone reports that the directory a session recorded as its cwd no
@@ -142,6 +157,7 @@ func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64,
 	}()
 	publishSessionUpdated(id) // resumeInFlight is now true → composer shows Stop
 
+	res, o := resumeSettings(cwd, o)
 	cmd := exec.CommandContext(ctx, bin, resumeArgs(sessionUUID, text, o)...)
 	cmd.Dir = cwd
 	// The two axes come from two different places, and this is the one seam
@@ -166,7 +182,7 @@ func runSessionMessage(ctx context.Context, cancel context.CancelFunc, id int64,
 	// so a session a foreign binding once re-homed onto an account never
 	// unlocks that account's credentials by being resumed. The estate still
 	// comes from the cwd, admitted by its own store's roots.
-	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), claudeacct.Resolve(cwd).WithAccount(account))
+	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), res.WithAccount(account))
 	// Own process group: a daemon restart (make install / launchd job stop)
 	// SIGKILLs the daemon's process group — without this, every in-flight
 	// dashboard-driven session dies mid-turn. Detached children survive as

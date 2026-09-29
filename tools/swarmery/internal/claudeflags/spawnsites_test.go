@@ -230,3 +230,155 @@ func moduleRoot(t *testing.T) string {
 	t.Fatalf("go.mod not found above %s", dir)
 	return ""
 }
+
+// ── the --settings channel ──────────────────────────────────────────────────
+//
+// The second decision every headless spawn site must make: does the project's
+// composed settings file (internal/runsettings) ride along as --settings? A
+// site that neither carries it nor is listed below with its reason fails this
+// test — so a seam added later cannot silently skip the channel that delivers
+// pluginConfigs, which Claude Code reads from no project-scope file.
+//
+// A detected site has decided when its body does ONE of:
+//   - references the runsettings package or the "--settings" literal (it
+//     composes or emits the flag itself);
+//   - calls into systemspawn — Attach splices the System project's composed
+//     settings into cmd.Args (settingsDelegates proves it still does);
+//   - calls <x>.Runner.Claude — the provision Runner, whose production
+//     ClaudeRunner.Claude prepends the flag (settingsDelegates again).
+
+// noSettingsSites are the claude spawns that deliberately carry no --settings.
+// Their argv is built outside the function body the scanner inspects, so the
+// scanner never detects them; they are stale-checked by the named FUNCTION still
+// existing in the named file instead (readOnlySites' "seen by the scanner" check
+// would fail on both).
+var noSettingsSites = map[string]string{
+	"internal/mcpcfg/mcpcfg.go:execRunner": "claude mcp list/add/remove runs with no cmd.Dir and no cmd.Env on purpose — it reports what the daemon's own cwd sees and belongs to no project, so there is no project settings file to compose",
+	"internal/claudeprobe/probe.go:Probe":  "claude auth status — its whole job is account identity; a project settings file would be noise and could only add failure modes",
+}
+
+// settingsDelegates are the callees the delegation rules above trust. Each must
+// itself reference runsettings, or the delegation would absolve sites over a
+// callee that no longer splices anything.
+var settingsDelegates = []string{
+	"internal/systemspawn/systemspawn.go:Attach",
+	"internal/provision/runner.go:Claude",
+}
+
+func TestEveryHeadlessSpawnSiteDecidesSettings(t *testing.T) {
+	root := moduleRoot(t)
+	var missing []string
+	funcs := map[string]settingsScan{} // every non-test function in the tree, by key
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "web", "testdata", "node_modules", ".git":
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		rel, _ := filepath.Rel(root, path)
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			key := filepath.ToSlash(rel) + ":" + fn.Name.Name
+			sc := scanSettings(fn)
+			funcs[key] = sc
+			if lits, _ := scanFunc(fn); !isHeadlessClaudeArgv(lits) {
+				continue
+			}
+			if sc.decided() {
+				continue
+			}
+			if _, ok := noSettingsSites[key]; ok {
+				continue
+			}
+			missing = append(missing, key)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Errorf(`headless claude spawn without a --settings decision:
+
+  %s
+
+pluginConfigs reaches a run ONLY through --settings. Compose the project's file
+with runsettings.Compose and pass it, route the spawn through systemspawn.Attach
+or the provision Runner, or — if the spawn belongs to no project — add it to
+noSettingsSites in this file with the reason.`, strings.Join(missing, "\n  "))
+	}
+
+	for key := range noSettingsSites {
+		if _, ok := funcs[key]; !ok {
+			t.Errorf("noSettingsSites entry %q names a function that no longer exists — remove or re-key it", key)
+		}
+	}
+	for _, key := range settingsDelegates {
+		sc, ok := funcs[key]
+		if !ok {
+			t.Errorf("settings delegate %q no longer exists — the delegation rule would absolve sites over nothing", key)
+			continue
+		}
+		if !sc.runsettings {
+			t.Errorf("settings delegate %q no longer references runsettings — it no longer splices --settings", key)
+		}
+	}
+}
+
+// settingsScan is what one function body says about --settings.
+type settingsScan struct {
+	runsettings   bool // references the runsettings package
+	literal       bool // carries the "--settings" literal
+	systemspawn   bool // calls into systemspawn (Attach splices)
+	provisionCall bool // calls <x>.Runner.Claude (ClaudeRunner.Claude splices)
+}
+
+func (s settingsScan) decided() bool {
+	return s.runsettings || s.literal || s.systemspawn || s.provisionCall
+}
+
+func scanSettings(fn *ast.FuncDecl) settingsScan {
+	var s settingsScan
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch v := n.(type) {
+		case *ast.BasicLit:
+			if v.Kind == token.STRING {
+				if u, err := strconv.Unquote(v.Value); err == nil && u == "--settings" {
+					s.literal = true
+				}
+			}
+		case *ast.SelectorExpr:
+			if id, ok := v.X.(*ast.Ident); ok {
+				switch id.Name {
+				case "runsettings":
+					s.runsettings = true
+				case "systemspawn":
+					s.systemspawn = true
+				}
+			}
+			if inner, ok := v.X.(*ast.SelectorExpr); ok && inner.Sel.Name == "Runner" && v.Sel.Name == "Claude" {
+				s.provisionCall = true
+			}
+		}
+		return true
+	})
+	return s
+}

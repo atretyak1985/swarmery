@@ -14,8 +14,9 @@
 // composition, so the daemon's background engines silently ran under a
 // different account than every other spawn site in this program.
 //
-// THE GUARD IS THE CONTRACT. cmd.Dir and cmd.Env are set together or not at
-// all. When ~/.swarmery does not exist there is no System project to attribute
+// THE GUARD IS THE CONTRACT. cmd.Dir and cmd.Env — and the composed
+// `--settings` splice into cmd.Args (internal/runsettings) — are set together
+// or not at all. When ~/.swarmery does not exist there is no System project to attribute
 // to AND no project to resolve an account for, so the spawn must stay
 // byte-identical to one issued before either feature existed — setting Dir to
 // a missing directory would fail the spawn with chdir ENOENT, and losing
@@ -30,6 +31,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
 
 // Attach points cmd at the System project — cwd and account environment both —
@@ -37,8 +39,8 @@ import (
 // has not had Dir or Env set: Attach owns both fields when it acts, and touches
 // neither when it does not.
 //
-// The account composition is claudeacct.SpawnEnvFor, the same call every other
-// swarmery spawn site uses, so a bound System project gets its CLAUDE_CONFIG_DIR
+// The account composition is claudeacct.SpawnEnvResolved over Resolve(dir) —
+// what SpawnEnvFor computes, the composition every other swarmery spawn site uses, so a bound System project gets its CLAUDE_CONFIG_DIR
 // and its per-account secret store exactly as a bound repo does, and an unbound
 // one gets os.Environ() back unchanged (same backing array).
 func Attach(cmd *exec.Cmd) {
@@ -47,7 +49,19 @@ func Attach(cmd *exec.Cmd) {
 		return
 	}
 	cmd.Dir = dir
-	cmd.Env = claudeacct.SpawnEnvFor(os.Environ(), dir)
+	// ONE resolution feeds the env and the settings composer, so D5's git probe
+	// runs once per spawn. SpawnEnvResolved over Resolve(dir) is exactly what
+	// SpawnEnvFor(os.Environ(), dir) computed for a non-empty dir.
+	res := claudeacct.Resolve(dir)
+	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), res)
+	// On the SAME fall-through path as Dir and Env — never on the guard's abort
+	// path above: the admitted estate's composed settings, spliced right after
+	// argv[0] because --settings is a root option. exec.Cmd.Args is read at
+	// Start, so mutating it here is valid. No admitted estate over ~/.swarmery
+	// ⇒ "" ⇒ Args untouched, byte-identical to before.
+	if f := runsettings.Compose("systemspawn", res, runsettings.Inputs{}); f != "" && len(cmd.Args) > 0 {
+		cmd.Args = append([]string{cmd.Args[0], "--settings", f}, cmd.Args[1:]...)
+	}
 }
 
 // isDir reports whether path exists and is a directory. A file at that path is
