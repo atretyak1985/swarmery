@@ -282,7 +282,7 @@
         </div>
         <div class="code-card">
           <button class="copy" type="button" hidden>Copy</button>
-          <pre><code>cd tools/swarmery &amp;&amp; make build &amp;&amp; ./swarmery</code></pre>
+          <pre><code>cd tools/swarmery &amp;&amp; make build &amp;&amp; ./swarmery serve</code></pre>
           <p class="cap">Build and run the control plane. One binary, one SQLite file, listening on <code>:7777</code>.</p>
         </div>
       </div>
@@ -310,7 +310,7 @@
         <div class="card">
           <p class="eyebrow">isolation</p>
           <h3>One worktree per task</h3>
-          <p>Every dispatched task runs on its own <code>swarm/&lt;T-id&gt;</code> branch inside an isolated git worktree, cut from the tip of the default branch. Your working tree is never the agent's workspace.</p>
+          <p>Every dispatched task runs on its own <code>swarm/&lt;T-id&gt;</code> branch inside an isolated git worktree, cut from the tip of whatever branch your checkout is on. Your working tree is never the agent's workspace.</p>
         </div>
         <div class="card">
           <p class="eyebrow">verification</p>
@@ -402,24 +402,24 @@
         <div>
           <p>A single Go daemon with an embedded React dashboard. It reads the session transcripts Claude Code already writes, indexes them into local SQLite, and serves everything on one port that never leaves the loopback interface.</p>
           <ul class="feature-list">
+            <li><b>Today</b>What waits on you, what runs now, and this week's loop — plan, run, measure, learn, change.</li>
+            <li><b>Inbox</b>Every decision in one queue — permission prompts, lessons, advisor findings, agent-change proposals — and it reaches your phone, so a waiting run is unblocked without going back to the desk.</li>
             <li><b>Sessions</b>Every transcript indexed as it is written, with the tool calls, files and errors of each run.</li>
-            <li><b>Cost &amp; usage</b>Tokens and spend per session, project and account, against the live quota window.</li>
-            <li><b>Approvals</b>Permission prompts reach your phone, so a waiting run is unblocked without going back to the desk.</li>
-            <li><b>Plans</b>Phase documents stay the source of truth; ticked criteria and completion reports render straight from the markdown.</li>
-            <li><b>Board</b>The three-lane funnel above, driven by actions with a dispatcher underneath it.</li>
-            <li><b>Retro loop</b>Finished runs are scored and mined for the improvements that go into the next ones.</li>
+            <li><b>Plans</b>New plan, plans, the board and playbooks: phase documents stay the source of truth, and the three-lane funnel above runs single cards with a dispatcher underneath it.</li>
+            <li><b>Health</b>Agent scorecards, friction, estimates, an evidenced advisor, and cost and tokens per session, project and account against the live quota window.</li>
+            <li><b>Learning</b>Lessons from runs that missed their forecast, an optional local classifier, and how honest the forecasts are.</li>
           </ul>
         </div>
         <div>
-          <div class="app" role="img" aria-label="Mockup of the swarmery dashboard: a left sidebar listing Sessions, Board, Plans, Costs, Approvals and Retro, with Sessions selected, next to a main panel listing recent sessions with their status and token counts.">
+          <div class="app" role="img" aria-label="Mockup of the swarmery dashboard: a left sidebar listing Today, Inbox, Sessions, Plans, Health and Learning, with Sessions selected, next to a main panel listing recent sessions with their status and token counts.">
             <div class="app-side">
               <span class="app-brand">swarmery</span>
+              <span class="app-nav">Today</span>
+              <span class="app-nav">Inbox</span>
               <span class="app-nav on">Sessions</span>
-              <span class="app-nav">Board</span>
               <span class="app-nav">Plans</span>
-              <span class="app-nav">Costs</span>
-              <span class="app-nav">Approvals</span>
-              <span class="app-nav">Retro</span>
+              <span class="app-nav">Health</span>
+              <span class="app-nav">Learning</span>
             </div>
             <div class="app-main">
               <div class="app-row"><b>landing-site</b><span>running</span></div>
@@ -446,13 +446,13 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="eyebrow">plugins</p>
-        <h2>One core, eleven opt-in packs.</h2>
+        <h2>One core, twelve opt-in packs.</h2>
         <p>The core carries everything that is true for every project. Domain packs add the vocabulary and tooling of one kind of work, and a project enables only the ones it actually uses.</p>
       </div>
       <div class="grid-plugins">
         <div class="plugin is-core">
           <span class="name">core</span>
-          <p>Vendor-neutral agent-development core: generic agents, skills, commands, hooks, and the project-aware agent-work CLI.</p>
+          <p>Vendor-neutral agent-development core: a judgment-style agent fleet (orchestration, planning, design, execution, review) plus progressively-disclosed skills, commands, hooks, and the project-aware agent-work CLI.</p>
         </div>
         <div class="plugin">
           <span class="name">uav-pack</span>
@@ -468,15 +468,19 @@
         </div>
         <div class="plugin">
           <span class="name">infra-pack</span>
-          <p>Infrastructure &amp; delivery domain pack: Kubernetes/Helm, GitOps promotion, IaC, GitLab CI, GCP CI auth, Keycloak.</p>
+          <p>Infrastructure &amp; delivery domain pack: Kubernetes/Helm, GitOps promotion, IaC, GitLab CI, GitHub Actions, GCP &amp; AWS CI auth, Keycloak.</p>
         </div>
         <div class="plugin">
           <span class="name">lsp-pack</span>
-          <p>Semantic code-navigation pack: Serena LSP MCP server.</p>
+          <p>Semantic code-navigation pack: Serena LSP MCP server — symbol-level search, references and refactoring context.</p>
         </div>
         <div class="plugin">
           <span class="name">claude-eng-pack</span>
           <p>Claude-engineering pack: skills for building and auditing Claude agent systems — agent architecture, tool and MCP design, prompt engineering, Claude Code config, context reliability.</p>
+        </div>
+        <div class="plugin">
+          <span class="name">graft-pack</span>
+          <p>Context-graph pack: file:line locators injected into a prompt before the first grep, and a blast-radius note after every edit naming what depends on the file just changed.</p>
         </div>
         <div class="plugin">
           <span class="name">graphify-pack</span>
