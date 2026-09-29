@@ -143,9 +143,16 @@ func candidatesWithSysDir(db *sql.DB, now time.Time, sysDir string) ([]Candidate
 }
 
 // Digest builds the generator input from the DB (never the transcript). Layout:
-// a session header, the touched-files table, then the recent user/assistant
-// prose (truncated, empties skipped).
+// a session header, the repository anchor, the touched-files table, then the
+// recent user/assistant prose (truncated, empties skipped).
 func Digest(db *sql.DB, sessionID int64) (string, error) {
+	dig, _, err := digestWithAnchor(db, sessionID)
+	return dig, err
+}
+
+// digestWithAnchor is Digest plus the repository anchor it embedded, so
+// generateInto appends the very same facts the model saw — computed once.
+func digestWithAnchor(db *sql.DB, sessionID int64) (string, anchor, error) {
 	var b strings.Builder
 
 	// Session header.
@@ -154,13 +161,21 @@ func Digest(db *sql.DB, sessionID int64) (string, error) {
 		SELECT COALESCE(custom_title, title, ''), COALESCE(cwd, ''), COALESCE(git_branch, ''), started_at
 		FROM sessions WHERE id = ?`, sessionID).Scan(&title, &cwd, &branch, &started)
 	if err != nil {
-		return "", err
+		return "", anchor{}, err
 	}
 	fmt.Fprintf(&b, "## Session\n")
 	fmt.Fprintf(&b, "- Title: %s\n", nz(title.String, "unknown"))
 	fmt.Fprintf(&b, "- Working dir: %s\n", nz(cwd.String, "unknown"))
 	fmt.Fprintf(&b, "- Git branch: %s\n", nz(branch.String, "unknown"))
 	fmt.Fprintf(&b, "- Started: %s\n\n", nz(started.String, "unknown"))
+
+	// Repository anchor: recorded by Go from the repo itself, not the DB.
+	anc := repoAnchor(cwd.String)
+	if anc.Known && anc.Branch == "" {
+		anc.Branch = strings.TrimSpace(branch.String)
+	}
+	b.WriteString(anc.Markdown())
+	b.WriteString("\n")
 
 	// Touched files, aggregated per path, most-changed first.
 	fcRows, err := db.Query(`
@@ -174,7 +189,7 @@ func Digest(db *sql.DB, sessionID int64) (string, error) {
 		ORDER BY (COALESCE(SUM(additions),0) + COALESCE(SUM(deletions),0)) DESC
 		LIMIT ?`, sessionID, maxFiles)
 	if err != nil {
-		return "", err
+		return "", anchor{}, err
 	}
 	b.WriteString("## Files touched\n")
 	anyFile := false
@@ -183,14 +198,14 @@ func Digest(db *sql.DB, sessionID int64) (string, error) {
 		var adds, dels int64
 		if err := fcRows.Scan(&path, &kinds, &adds, &dels); err != nil {
 			fcRows.Close()
-			return "", err
+			return "", anchor{}, err
 		}
 		fmt.Fprintf(&b, "- %s (%s, +%d/-%d)\n", path, kinds, adds, dels)
 		anyFile = true
 	}
 	fcRows.Close()
 	if err := fcRows.Err(); err != nil {
-		return "", err
+		return "", anchor{}, err
 	}
 	if !anyFile {
 		b.WriteString("- (none recorded)\n")
@@ -200,7 +215,7 @@ func Digest(db *sql.DB, sessionID int64) (string, error) {
 	// Recent user prose (intent), oldest→newest for readability.
 	userTexts, err := recentTurns(db, sessionID, "user", maxUserTurns, userTextCap)
 	if err != nil {
-		return "", err
+		return "", anchor{}, err
 	}
 	b.WriteString("## Recent user messages\n")
 	if len(userTexts) == 0 {
@@ -214,7 +229,7 @@ func Digest(db *sql.DB, sessionID int64) (string, error) {
 	// Recent assistant prose (the work), oldest→newest.
 	asstTexts, err := recentTurns(db, sessionID, "assistant", maxAssistantTurns, assistantTextCap)
 	if err != nil {
-		return "", err
+		return "", anchor{}, err
 	}
 	b.WriteString("## Recent assistant messages\n")
 	if len(asstTexts) == 0 {
@@ -224,7 +239,7 @@ func Digest(db *sql.DB, sessionID int64) (string, error) {
 		fmt.Fprintf(&b, "- %s\n", t)
 	}
 
-	return b.String(), nil
+	return b.String(), anc, nil
 }
 
 // recentTurns returns up to `limit` non-empty turns of the given role, each
@@ -286,7 +301,7 @@ func generateInto(db *sql.DB, r Runner, sessionID int64, now time.Time, dir stri
 		return "", err
 	}
 
-	digest, err := Digest(db, sessionID)
+	digest, anc, err := digestWithAnchor(db, sessionID)
 	if err != nil {
 		return "", err
 	}
@@ -296,12 +311,15 @@ func generateInto(db *sql.DB, r Runner, sessionID int64, now time.Time, dir stri
 	if err != nil {
 		return "", err
 	}
+	// The anchor is appended by Go, never by the model: the next session can
+	// check these facts against the repo instead of trusting a retelling.
+	body := strings.TrimRight(out, "\n") + "\n\n" + anc.Markdown()
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 	path := filepath.Join(dir, uuid+".md")
-	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return "", err
 	}
 
@@ -332,10 +350,13 @@ markdown file content, no preamble. Required sections, in order:
 ## State — what is done and verified vs in progress (bullet list)
 ## Files touched — from the list below, with one-phrase why per file
 ## Key decisions — decisions/constraints the fresh session must not re-litigate
+## Non-goals — what this session deliberately did not do or ruled out
+## Open risks & failed checks — anything unverified, failing, or flaky, with the command that shows it
 ## Next step — the single concrete next action, with the exact command or file to start from
 ## Verification — commands that prove the work still passes
 Hard limits: ≤120 lines total. No invented facts: if the digest below doesn't say
 it, don't claim it — write "unknown" instead.
+Do not restate the repository anchor; it is appended automatically.
 
 === SESSION DIGEST ===
 `
