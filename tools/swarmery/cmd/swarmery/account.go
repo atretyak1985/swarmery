@@ -9,7 +9,7 @@ package main
 //	swarmery account env    [--path <dir>]           the env line for a project (zero or one)
 //	swarmery account exec   [--path <dir>] -- <cmd…> run a command under a project's account
 //	swarmery account estate use|show|clear           declare, inspect, remove an estate root
-//	swarmery account doctor --fast [--json]          credential coverage, names only (account_doctor.go)
+//	swarmery account doctor [--fast|--probe] [--json] the account doctor, names only (account_doctor.go)
 //	swarmery account switch <key> [--estate <root>]  move a declared estate's payer (account_switch.go)
 //	swarmery account move-session <uuid> --to <key>  copy a session to another account (account_switch.go)
 //
@@ -65,10 +65,14 @@ const accountUsage = `usage:
   swarmery account estate use <key> [--path <dir>]   declare <dir> as the root of estate <key>
   swarmery account estate show [--path <dir>]       the estate this path resolves to, and where it was declared
   swarmery account estate clear [--path <dir>]      remove the declaration AT <dir> (the account binding stays)
-  swarmery account doctor --fast [--json] [--path <dir>]
-                                                     read-only credential coverage for this path: the ${VAR}
-                                                     names its enabled packs reference, which are set, which
-                                                     are missing — names only, never a value
+  swarmery account doctor [--fast | --probe] [--json] [--path <dir>] [--timeout <dur>] [--no-record]
+                                                     everything that decides whether the next session here
+                                                     works: resolution, credential coverage (names only,
+                                                     never a value), trust findings, settings delta and
+                                                     plugin parity between accounts, stale duplicates.
+                                                     --fast: the turn-zero arms (no claude spawn); bare: plus
+                                                     the git-tracked findings; --probe: measure the installed
+                                                     CLI's channels and store the verdict (the only spawn)
   swarmery account switch <key> [--estate <root>] [--force] [--clear-pins] [--dry-run]
                                                      move a whole declared ESTATE's payer to <key>; refuses
                                                      an estate-less path and an account whose quota

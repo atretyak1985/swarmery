@@ -45,7 +45,12 @@ func TestAccountDoctorFastJSONEstateWithoutStore(t *testing.T) {
 	if rep["credentials"] != float64(0) || rep["credentialStore"] != "" || rep["estate"] != "phase4x" || rep["estateRoot"] == "" {
 		t.Errorf("report = %v", rep)
 	}
-	for _, k := range []string{"varsExpected", "varsPresent", "varsMissing", "findings", "staleDuplicates"} {
+	// findings is non-empty now (estate-unanchored per D5, the fixed info
+	// findings); the escalation lists stay empty arrays, never null.
+	if _, ok := rep["findings"].([]any); !ok {
+		t.Errorf("findings = %#v, want an array", rep["findings"])
+	}
+	for _, k := range []string{"varsExpected", "varsPresent", "varsMissing", "staleDuplicates"} {
 		arr, ok := rep[k].([]any)
 		if !ok || len(arr) != 0 {
 			t.Errorf("%s = %#v, want an empty array (never null)", k, rep[k])
@@ -58,13 +63,13 @@ func TestAccountDoctorFastJSONEstateWithoutStore(t *testing.T) {
 	}
 }
 
-// A bare `doctor`, a stray argument, and a later phase's flag are all usage
-// errors — this phase parses --path, --fast and --json only.
+// A stray argument, an unknown flag, a malformed duration and --fast with
+// --probe are usage errors (exit 2) and write nothing to stdout.
 func TestAccountDoctorUsageErrors(t *testing.T) {
-	for _, args := range [][]string{{}, {"--json"}, {"--fast", "extra"}, {"--probe"}, {"--fast", "--timeout", "1s"}} {
+	for _, args := range [][]string{{"--fast", "extra"}, {"--fast", "--probe"}, {"--bogus"}, {"--timeout", "soon"}, {"--timeout", "-1s"}} {
 		var out bytes.Buffer
-		if err := accountDoctor(args, &out); err == nil {
-			t.Errorf("accountDoctor(%v) = nil error, want the usage error", args)
+		if err := accountDoctor(args, &out); !isUsage(err) {
+			t.Errorf("accountDoctor(%v) = %v, want the usage error", args, err)
 		}
 		if out.Len() != 0 {
 			t.Errorf("accountDoctor(%v) wrote to stdout on a usage error: %q", args, out.String())

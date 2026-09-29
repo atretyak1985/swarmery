@@ -64,7 +64,7 @@ func staleDuplicates(res claudeacct.Resolution) ([]Duplicate, []Finding) {
 	for _, s := range stores {
 		if s.state == claudeacct.StoreRefused {
 			findings = append(findings, Finding{ID: "store-refused", Severity: SevWarn,
-				Title: "a credential store is refused by the loader and supplies nothing",
+				Title:  "a credential store is refused by the loader and supplies nothing",
 				Detail: s.path + ": " + s.reason, File: s.path})
 		}
 	}

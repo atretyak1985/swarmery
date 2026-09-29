@@ -15,8 +15,8 @@ func TestRenderRedactsEveryStoreValue(t *testing.T) {
 	f := newFixture(t)
 	root := t.TempDir()
 	values := map[string]string{
-		"PACK_DB_HOST":  "zzq-sentinel-host.example.invalid",
-		"PACK_DB_PASS":  `zzq"sentinel\pass`, // JSON-escaped in the JSON form
+		"PACK_DB_HOST":   "zzq-sentinel-host.example.invalid",
+		"PACK_DB_PASS":   `zzq"sentinel\pass`, // JSON-escaped in the JSON form
 		"PACK_API_BASIC": "zzq-sentinel-basic-token",
 	}
 	var body strings.Builder

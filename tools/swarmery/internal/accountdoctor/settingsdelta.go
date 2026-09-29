@@ -25,13 +25,13 @@ type SettingsDelta struct {
 	Key string `json:"key"` // enabledPlugins | pluginConfigs | extraKnownMarketplaces | env
 	// Kind is "only-in" (Names exist in OnlyIn's file and not in Other's) or
 	// "differs" (Names exist in both with different values).
-	Kind   string   `json:"kind"`
-	OnlyIn string   `json:"onlyIn"` // the account holding the names; "" for "differs"
-	Other  string   `json:"other"`  // the account compared against ("" for "differs")
+	Kind   string `json:"kind"`
+	OnlyIn string `json:"onlyIn"` // the account holding the names; "" for "differs"
+	Other  string `json:"other"`  // the account compared against ("" for "differs")
 	// Between is the compared pair, sorted — set for every kind.
 	Between []string `json:"between"`
-	Names  []string `json:"names"`  // entry / variable NAMES — never values
-	Count  int      `json:"count"`
+	Names   []string `json:"names"` // entry / variable NAMES — never values
+	Count   int      `json:"count"`
 }
 
 // deltaKeys are the keys compared, in report order.

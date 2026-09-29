@@ -47,10 +47,12 @@ func TestTrustStoreRootless(t *testing.T) {
 // estate-settings-unusable ERROR naming the path and the reason.
 func TestTrustEstateSettingsUnusable(t *testing.T) {
 	cases := map[string]func(t *testing.T, root, file string){
-		"malformed":      func(t *testing.T, root, file string) { mustWrite(t, file, `{not json`, 0o644) },
-		"not an object":  func(t *testing.T, root, file string) { mustWrite(t, file, `["a"]`, 0o644) },
-		"wrong type":     func(t *testing.T, root, file string) { mustWrite(t, file, `{"pluginConfigs":["a@m"]}`, 0o644) },
-		"too large":      func(t *testing.T, root, file string) { mustWrite(t, file, `{"a":"`+strings.Repeat("x", 1<<20)+`"}`, 0o644) },
+		"malformed":     func(t *testing.T, root, file string) { mustWrite(t, file, `{not json`, 0o644) },
+		"not an object": func(t *testing.T, root, file string) { mustWrite(t, file, `["a"]`, 0o644) },
+		"wrong type":    func(t *testing.T, root, file string) { mustWrite(t, file, `{"pluginConfigs":["a@m"]}`, 0o644) },
+		"too large": func(t *testing.T, root, file string) {
+			mustWrite(t, file, `{"a":"`+strings.Repeat("x", 1<<20)+`"}`, 0o644)
+		},
 		"not regular":    func(t *testing.T, root, file string) { mustMkdir(t, file, 0o755) },
 		"group-writable": func(t *testing.T, root, file string) { mustWrite(t, file, `{}`, 0o664) },
 		"outside root": func(t *testing.T, root, file string) {
