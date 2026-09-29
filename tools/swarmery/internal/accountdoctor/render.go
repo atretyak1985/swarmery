@@ -160,17 +160,113 @@ func redactText(s string, values []string) string {
 	return s
 }
 
-// redactJSON replaces every occurrence of every value in its JSON-escaped
-// spelling — the form it would take inside a marshalled string.
+// identifierFields are the object keys whose whole value — a string, or every
+// string below it — is an identifier or a NAME by construction, never a
+// credential: account/estate keys and their provenance, enum-like kinds and
+// severities, finding ids, variable and entry NAME lists, versions. Redacting
+// them would only corrupt what the shell consumers select on (the preflight's
+// valid_account_key, a `select(.kind==…)` gate) while hiding nothing.
+var identifierFields = map[string]bool{
+	"account": true, "source": true, "estate": true, "kind": true, "key": true,
+	"id": true, "severity": true, "scope": true, "onlyIn": true, "other": true,
+	"between": true, "versions": true, "varsExpected": true, "varsPresent": true,
+	"varsMissing": true, "enabledPacks": true, "overlap": true, "names": true,
+}
+
+// redactJSON rewrites ONLY string values of the marshalled report: object
+// keys, numbers, booleans and null pass through untouched, as does every value
+// under an identifierFields key; every other string has each value replaced
+// by the marker. It re-emits the document token by token, so the output keeps
+// the original field order and is valid JSON whenever the input is. On any
+// decoding failure it returns an empty object rather than the raw bytes — an
+// unredacted document is never the fallback.
 func redactJSON(raw []byte, values []string) []byte {
-	for _, v := range values {
-		esc, err := json.Marshal(v)
-		if err != nil || len(esc) < 2 {
-			continue
-		}
-		raw = bytes.ReplaceAll(raw, esc[1:len(esc)-1], []byte(redactedMarker))
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var out bytes.Buffer
+	type frame struct {
+		object    bool
+		expectKey bool // in an object: the next string is a key
+		first     bool
+		protected bool // this container sits under an identifier key
+		key       string
 	}
-	return raw
+	var stack []frame
+	protected := func() bool { return len(stack) > 0 && stack[len(stack)-1].protected }
+	// sep writes the comma / colon due before the next token, and reports the
+	// key that owns a value token (or "" inside an array).
+	sep := func() {
+		if len(stack) == 0 {
+			return
+		}
+		top := &stack[len(stack)-1]
+		if top.object && !top.expectKey {
+			out.WriteByte(':')
+			return
+		}
+		if !top.first {
+			out.WriteByte(',')
+		}
+		top.first = false
+	}
+	// valueDone flips an object back to expecting a key after a value.
+	valueDone := func() {
+		if len(stack) > 0 && stack[len(stack)-1].object {
+			stack[len(stack)-1].expectKey = true
+		}
+	}
+	valueKey := func() string {
+		if len(stack) > 0 && stack[len(stack)-1].object {
+			return stack[len(stack)-1].key
+		}
+		return ""
+	}
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return []byte("{}")
+		}
+		switch v := tok.(type) {
+		case json.Delim:
+			switch v {
+			case '{', '[':
+				sep()
+				p := protected() || identifierFields[valueKey()]
+				out.WriteByte(byte(v))
+				stack = append(stack, frame{object: v == '{', expectKey: v == '{', first: true, protected: p})
+			default:
+				out.WriteByte(byte(v))
+				stack = stack[:len(stack)-1]
+				valueDone()
+			}
+		case string:
+			if len(stack) > 0 && stack[len(stack)-1].object && stack[len(stack)-1].expectKey {
+				sep()
+				b, _ := json.Marshal(v) // a KEY: never rewritten
+				out.Write(b)
+				stack[len(stack)-1].key = v
+				stack[len(stack)-1].expectKey = false
+				continue
+			}
+			sep()
+			s := v
+			if !protected() && !identifierFields[valueKey()] {
+				s = redactText(s, values)
+			}
+			b, _ := json.Marshal(s)
+			out.Write(b)
+			valueDone()
+		default: // json.Number, bool, nil — structure, never rewritten
+			sep()
+			b, _ := json.Marshal(v)
+			out.Write(b)
+			valueDone()
+		}
+	}
+	return out.Bytes()
 }
 
 func orDash(s string) string {
