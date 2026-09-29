@@ -3140,10 +3140,24 @@ export interface Account {
   ingested: boolean;
   /** Project paths EXPLICITLY bound to this account (not "every unbound project"). */
   projects: string[];
+  /** Bound paths with NO live (non-archived) projects row — visible, never
+   * presented as indexed. Absent on an older daemon. */
+  projectsUnindexed?: string[];
+}
+
+/** A binding file the read side ignores (git-tracked, indeterminate, or an
+ * untrusted mode/owner/type) — counted under no account. */
+export interface IgnoredBinding {
+  path: string;
+  /** The account key the file names ('' when it cannot be read). */
+  declares: string;
+  reason: string;
 }
 
 export interface AccountsResponse {
   accounts: Account[];
+  /** Never null on a current daemon; absent on an older one. */
+  ignoredBindings?: IgnoredBinding[];
 }
 
 /** Go: provisionResponse (internal/api/accounts.go:113) */

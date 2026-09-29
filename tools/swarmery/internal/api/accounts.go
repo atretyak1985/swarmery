@@ -58,16 +58,19 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/accountdoctor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/usage"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
 // maxAccountBodyBytes caps the request bodies here. Both carry a single account
@@ -135,11 +138,20 @@ type accountDTO struct {
 	// to it, not every unbound project that implicitly runs under it — a count
 	// of "all of them" would carry no information.
 	Projects []string `json:"projects"`
+	// ProjectsUnindexed are paths bound to this account that have NO live
+	// (non-archived) projects row — a sub-repo nobody opened a session in yet,
+	// or an archived estate root. Listed so the binding is visible, apart from
+	// Projects so the UI never pretends they are indexed. Never null.
+	ProjectsUnindexed []string `json:"projectsUnindexed"`
 }
 
 // accountsResponse is the GET /api/accounts body.
 type accountsResponse struct {
 	Accounts []accountDTO `json:"accounts"`
+	// IgnoredBindings are binding files the read side ignores (git-tracked or
+	// indeterminate — Lock 1 — or an untrusted mode/owner/type), counted under
+	// no account and listed with their reason instead of dropped. Never null.
+	IgnoredBindings []ignoredBindingDTO `json:"ignoredBindings"`
 }
 
 // provisionResponse is the POST /api/accounts body.
@@ -207,43 +219,101 @@ func ingestedRoots() map[string]bool {
 	return set
 }
 
-// bindingsByAccount maps account key → the project paths bound to it.
+// bindingView is every on-disk binding, split the way the account screen shows
+// it: bound paths WITH a live (non-archived) projects row, bound paths without
+// one, and binding files the read side ignores.
+type bindingView struct {
+	indexed   map[string][]string // account key → paths with a live projects row
+	unindexed map[string][]string // account key → bound paths with no live row
+	ignored   []ignoredBindingDTO
+}
+
+// all is every path bound to key, indexed or not — what a removal leaves
+// dangling.
+func (v bindingView) all(key string) []string {
+	return append(append([]string{}, v.indexed[key]...), v.unindexed[key]...)
+}
+
+// ignoredBindingDTO is a binding file that exists but that Lock 1 (or its
+// mode, owner or type) keeps any reader from honouring: listed as ignored,
+// with the key it declares and why — never counted under an account.
+type ignoredBindingDTO struct {
+	Path     string `json:"path"`
+	Declares string `json:"declares"`
+	Reason   string `json:"reason"`
+}
+
+// discoverBindings is accountdoctor.DiscoverBindings, a seam for tests.
+var discoverBindings = accountdoctor.DiscoverBindings
+
+// bindingsByAccount returns every binding on disk — not only those that happen
+// to have a projects row (SC-10). Seeds are the non-archived projects rows;
+// accountdoctor.DiscoverBindings adds each seed's estate root and every pin
+// below it (the one shared downward walk), and walks the configured onboard
+// roots. A path under the daemon's worktree root is dropped by path: a lent
+// binding copy there is indistinguishable from a real one by content.
 //
-// One settings-file read per indexed project. That is a handful of small local
-// reads on a machine with tens of projects, and the alternative — caching a
-// binding the operator edits by hand in their editor — would go stale silently.
-func (h *Handler) bindingsByAccount() (map[string][]string, error) {
-	rows, err := h.DB.Query(`SELECT path FROM projects ORDER BY path`)
+// Not cached: the alternative — caching a binding the operator edits by hand
+// in their editor — would go stale silently.
+func (h *Handler) bindingsByAccount() (bindingView, error) {
+	v := bindingView{indexed: map[string][]string{}, unindexed: map[string][]string{}, ignored: []ignoredBindingDTO{}}
+	rows, err := h.DB.Query(`SELECT path FROM projects WHERE archived = 0 ORDER BY path`)
 	if err != nil {
-		return nil, err
+		return v, err
 	}
-	defer rows.Close()
-	out := map[string][]string{}
+	live := map[string]bool{}
+	var seeds []string
 	for rows.Next() {
 		var path string
 		if err := rows.Scan(&path); err != nil {
-			return nil, err
+			rows.Close()
+			return v, err
 		}
-		if key := claudeacct.BindingForDisplay(path); key != "" {
-			out[key] = append(out[key], path)
+		live[filepath.Clean(path)] = true
+		seeds = append(seeds, path)
+	}
+	if err := rows.Close(); err != nil {
+		return v, err
+	}
+	wtRoot := ""
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		wtRoot = filepath.Join(home, filepath.FromSlash(worktree.DefaultRoot))
+	}
+	for _, b := range discoverBindings(seeds, onboardCfg.Roots...) {
+		if wtRoot != "" && (b.Path == wtRoot || strings.HasPrefix(b.Path, wtRoot+string(filepath.Separator))) {
+			continue
+		}
+		switch {
+		case b.Ignored:
+			v.ignored = append(v.ignored, ignoredBindingDTO{Path: b.Path, Declares: b.Key, Reason: b.Reason})
+		case b.Key == "":
+			// an estate declaration with no account pin binds no account
+		case live[b.Path]:
+			v.indexed[b.Key] = append(v.indexed[b.Key], b.Path)
+		default:
+			v.unindexed[b.Key] = append(v.unindexed[b.Key], b.Path)
 		}
 	}
-	return out, rows.Err()
+	return v, nil
 }
 
 // accountRow builds one account's DTO. runnable is the STORED verdict map
 // (store.AllAccountRunnable) — this function must stay a pure read; the probe
 // itself runs only from the explicit POST …/probe endpoint.
-func accountRow(ctx context.Context, a claudeacct.Account, roots map[string]bool, bound map[string][]string, runnable map[string]store.AccountRunnable) accountDTO {
+func accountRow(ctx context.Context, a claudeacct.Account, roots map[string]bool, bound bindingView, runnable map[string]store.AccountRunnable) accountDTO {
 	row := accountDTO{
-		Key:       a.Key,
-		ConfigDir: a.ConfigDir,
-		IsDefault: a.IsDefault,
-		Ingested:  roots[filepath.Clean(a.ProjectsRoot())],
-		Projects:  bound[a.Key],
+		Key:               a.Key,
+		ConfigDir:         a.ConfigDir,
+		IsDefault:         a.IsDefault,
+		Ingested:          roots[filepath.Clean(a.ProjectsRoot())],
+		Projects:          bound.indexed[a.Key],
+		ProjectsUnindexed: bound.unindexed[a.Key],
 	}
 	if row.Projects == nil {
 		row.Projects = []string{}
+	}
+	if row.ProjectsUnindexed == nil {
+		row.ProjectsUnindexed = []string{}
 	}
 	if verdict, ok := runnable[a.Key]; ok {
 		row.Runnable, row.RunnableReason, row.RunnableCheckedAt = runnableDTOFields(verdict)
@@ -371,7 +441,7 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	for _, a := range accounts {
 		rows = append(rows, accountRow(r.Context(), a, roots, bound, runnable))
 	}
-	writeJSON(w, accountsResponse{Accounts: rows}, nil)
+	writeJSON(w, accountsResponse{Accounts: rows, IgnoredBindings: bound.ignored}, nil)
 }
 
 // createAccount handles POST /api/accounts — provision a config dir.
@@ -456,7 +526,7 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, removeAccountResponse{OK: true, DanglingBindings: bound[key]}, nil)
+	writeJSON(w, removeAccountResponse{OK: true, DanglingBindings: bound.all(key)}, nil)
 }
 
 // accountProbeResponse is the POST /api/accounts/{account}/probe body — the same

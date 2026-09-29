@@ -18,7 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import { deleteAccount, fetchAccounts, probeAccount } from '../api';
-import type { Account, AccountProbeResponse } from '../api/types';
+import type { Account, AccountProbeResponse, IgnoredBinding } from '../api/types';
 import { applyVerdict, patchReadiness } from '../lib/accountReadiness';
 import { fmtAgo } from '../lib/format';
 import { CreateAccountModal } from './CreateAccountModal';
@@ -27,7 +27,7 @@ import { ConfirmDialog, Empty, ErrorBox, Loading } from './ui';
 type State =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; accounts: Account[] };
+  | { kind: 'ready'; accounts: Account[]; ignored: IgnoredBinding[] };
 
 type ConnectedState = 'yes' | 'no' | 'unknown';
 
@@ -146,6 +146,69 @@ function AccountRow({
           remove
         </button>
       )}
+
+      <BoundProjects a={a} />
+    </div>
+  );
+}
+
+// BoundProjects lists the paths bound to an account: indexed ones (a live
+// projects row) and, as a separate labelled group, bound paths with NO live
+// row — visible, never presented as indexed (SC-10).
+function BoundProjects({ a }: { a: Account }): JSX.Element | null {
+  const unindexed = a.projectsUnindexed ?? [];
+  if (a.projects.length === 0 && unindexed.length === 0) return null;
+  return (
+    <div className="order-last basis-full space-y-1 pt-1">
+      {a.projects.length > 0 && (
+        <PathGroup label={`bound projects (${String(a.projects.length)})`} paths={a.projects} />
+      )}
+      {unindexed.length > 0 && (
+        <PathGroup
+          label={`bound, not indexed (${String(unindexed.length)}) — no live project row`}
+          paths={unindexed}
+        />
+      )}
+    </div>
+  );
+}
+
+function PathGroup({ label, paths }: { label: string; paths: string[] }): JSX.Element {
+  return (
+    <div>
+      <div className="font-mono text-[10px] text-ink-dim">{label}</div>
+      <ul className="space-y-0.5">
+        {paths.map((p) => (
+          <li key={p} className="truncate font-mono text-[10.5px] text-ink-2" title={p}>
+            {p}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// IgnoredBindings lists binding files the read side ignores (git-tracked,
+// indeterminate, or an untrusted mode/owner/type) with their reason — shown as
+// ignored instead of silently dropped, and counted under no account.
+function IgnoredBindings({ items }: { items: IgnoredBinding[] }): JSX.Element | null {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-2.5 rounded-xl border border-amber/25 bg-amber/5 px-3.5 py-3">
+      <div className="font-mono text-[11.5px] text-amber">
+        ignored bindings ({String(items.length)}) — counted under no account
+      </div>
+      <ul className="mt-1.5 space-y-1.5">
+        {items.map((b) => (
+          <li key={b.path} className="font-mono text-[10.5px]">
+            <div className="truncate text-ink-2" title={b.path}>
+              {b.path}
+              {b.declares !== '' && <span className="text-ink-dim"> — declares {b.declares}</span>}
+            </div>
+            <div className="break-words text-ink-dim">{b.reason}</div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -170,7 +233,8 @@ export function AccountsSection(): JSX.Element {
 
     void fetchAccounts()
       .then((resp) => {
-        if (!cancelled) setState({ kind: 'ready', accounts: resp.accounts });
+        if (!cancelled)
+          setState({ kind: 'ready', accounts: resp.accounts, ignored: resp.ignoredBindings ?? [] });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -198,7 +262,7 @@ export function AccountsSection(): JSX.Element {
       setState((s) =>
         s.kind === 'ready'
           ? {
-              kind: 'ready',
+              ...s,
               accounts: s.accounts.map((a) => (a.key === key ? applyVerdict(a, verdict) : a)),
             }
           : s,
@@ -299,6 +363,8 @@ export function AccountsSection(): JSX.Element {
           ))}
         </div>
       )}
+
+      {state.kind === 'ready' && <IgnoredBindings items={state.ignored} />}
 
       <div className="mt-2 flex justify-end">
         <button
