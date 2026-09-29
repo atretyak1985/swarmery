@@ -28,6 +28,7 @@ import {
   idleSince,
   inboxTtlMs,
   isExpired,
+  isQuotaWait,
   isStale,
   labelColor,
   labelFilterOptions,
@@ -40,6 +41,7 @@ import {
   needsMe,
   parseBoardFilter,
   parseBoardView,
+  QUOTA_WAIT_PREFIX,
   sourceLine,
   splitLanes,
   staleLabel,
@@ -374,6 +376,21 @@ describe('attentionSignal', () => {
     expect(broken?.tone).toBe('bad');
     expect(blocked?.text.startsWith('blocked by')).toBe(true);
     expect(broken?.text.startsWith('dispatch error')).toBe(true);
+  });
+
+  it('reads a quota wait as a wait, not a failure', () => {
+    const why = 'account work: Session (5h) at 4% left (floor 10%), resets 2027-01-01T00:00:00Z';
+    const waiting = makeTask({ boardColumn: 'todo', dispatchError: `${QUOTA_WAIT_PREFIX}${why}` });
+    expect(isQuotaWait(waiting)).toBe(true);
+    expect(attentionSignal(waiting)).toEqual({
+      text: `waiting on quota: ${why}`,
+      tone: 'warn',
+      tip: `${QUOTA_WAIT_PREFIX}${why}`,
+    });
+    // Same clip as the dependency arm; the full text stays in the tip.
+    const long = makeTask({ dispatchError: `${QUOTA_WAIT_PREFIX}${'x'.repeat(200)}` });
+    expect(attentionSignal(long)?.text.endsWith('…')).toBe(true);
+    expect(isQuotaWait(makeTask({ dispatchError: 'worktree missing' }))).toBe(false);
   });
 
   it('reads a passing verdict as no signal at all', () => {
@@ -841,6 +858,17 @@ describe('needsMe', () => {
     const blocked = makeTask({ boardColumn: 'todo', dispatchError: `${DEP_BLOCK_PREFIX}T-14` });
     expect(needsMe(blocked)).toBe(true);
     expect(attentionSignal(blocked)?.tone).toBe('warn');
+  });
+
+  it('does not match a quota wait — nothing for a person to unstick', () => {
+    const waiting = makeTask({
+      boardColumn: 'todo',
+      dispatchError: `${QUOTA_WAIT_PREFIX}account work: Weekly at 3% left (floor 10%), resets unknown`,
+    });
+    expect(needsMe(waiting)).toBe(false);
+    expect(attentionSignal(waiting)?.tone).toBe('warn');
+    // A quota-waiting card that ALSO wants review still needs me.
+    expect(needsMe({ ...waiting, boardColumn: 'in_review' })).toBe(true);
   });
 
   it('ignores a done or archived card that once failed', () => {

@@ -16,6 +16,24 @@ type H struct {
 	FetchedAt   time.Time
 }
 
+// MaxAge is how old a stored quota reading may be and still vouch for an
+// account: three EFFECTIVE poll intervals of the configured
+// SWARMERY_QUOTA_INTERVAL value, so one missed tick does not turn a healthy
+// account into "unknown" and a slow cadence does not turn every reading stale.
+// polling=false when the value disables the poller; the bound then falls back
+// to three default intervals (no new reading will arrive to refresh it).
+//
+// It lives here, beside Headroom, because every reader needs the same bound:
+// `swarmery account switch` (acctops.HeadroomMaxAge) and the run admission gate
+// (runcore.CheckQuota) must agree on what "fresh" means.
+func MaxAge(intervalValue string) (maxAge time.Duration, polling bool) {
+	d, on, _ := ParseInterval(intervalValue) // an invalid value is the daemon's default, as it runs
+	if !on {
+		return 3 * DefaultInterval, false
+	}
+	return 3 * d, true
+}
+
 // Headroom reads account's headroom. ok=false means UNKNOWN — and "no answer"
 // is kept distinct from "a bad answer" on purpose, because that is the whole
 // reason `switch --force` exists. Unknown when: db is nil; the read fails for
@@ -24,6 +42,19 @@ type H struct {
 // the account has no rows; or every row is older than maxAge (maxAge <= 0
 // disables the staleness bound).
 func Headroom(db *sql.DB, account string, now time.Time, maxAge time.Duration) (H, bool) {
+	return headroom(db, account, now, maxAge, false)
+}
+
+// LiveHeadroom is Headroom that also treats a window whose reset time has
+// already passed as UNKNOWN: its percent_left describes a window that no longer
+// exists, however recently it was read. A reset time that does not parse is
+// kept (no evidence it passed). The run admission gate reads this; `account
+// switch` keeps Headroom's semantics unchanged.
+func LiveHeadroom(db *sql.DB, account string, now time.Time, maxAge time.Duration) (H, bool) {
+	return headroom(db, account, now, maxAge, true)
+}
+
+func headroom(db *sql.DB, account string, now time.Time, maxAge time.Duration, skipReset bool) (H, bool) {
 	if db == nil {
 		return H{}, false
 	}
@@ -36,6 +67,11 @@ func Headroom(db *sql.DB, account string, now time.Time, maxAge time.Duration) (
 	for _, r := range rows {
 		if maxAge > 0 && now.Sub(r.FetchedAt) > maxAge {
 			continue
+		}
+		if skipReset && r.ResetsAt != "" {
+			if at, err := time.Parse(time.RFC3339, r.ResetsAt); err == nil && !at.After(now) {
+				continue
+			}
 		}
 		if !found || r.PercentLeft < best.PercentLeft {
 			best = H{PercentLeft: r.PercentLeft, Window: r.WindowKey, Label: r.Label,
