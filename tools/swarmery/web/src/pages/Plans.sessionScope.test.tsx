@@ -291,7 +291,8 @@ function queryScopeToggle(): HTMLElement | null {
 }
 
 function selectPlan(title: string): void {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(title) }));
+  // Plan-list items are links since plans-deep-links phase 2.
+  fireEvent.click(screen.getByRole('link', { name: new RegExp(title) }));
 }
 
 beforeEach(() => {

@@ -222,9 +222,10 @@ async function back(r: Router): Promise<void> {
   });
 }
 
-/** The plan-list items (the only buttons carrying aria-current). */
+/** The plan-list items (the only links carrying aria-current — phase 2 made
+ * them anchors). */
 function listItems(): HTMLElement[] {
-  return screen.getAllByRole('button').filter((b) => b.hasAttribute('aria-current'));
+  return screen.getAllByRole('link').filter((b) => b.hasAttribute('aria-current'));
 }
 function listItem(title: string): HTMLElement {
   const item = listItems().find((b) => b.textContent?.includes(title));

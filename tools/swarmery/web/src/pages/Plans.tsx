@@ -46,7 +46,15 @@
 // flips, lifecycle transitions, plan rescans) so progress ticks without a reload.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import {
+  type BlockerFunction,
+  Link,
+  useBlocker,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  useParams,
+} from 'react-router-dom';
 import type {
   BoardColumn,
   Epic,
@@ -82,6 +90,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { Markdown } from '../lib/markdown';
 import { fmtAgo, fmtCost, fmtDateTime, fmtElapsed } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
+import { useDocumentTitle } from '../lib/useDocumentTitle';
 import { scopePlanSessions, type PlanSessionScope } from '../lib/planSessionScope';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { CopyIdBadge } from '../components/CopyIdBadge';
@@ -92,7 +101,7 @@ import { ReviseModal } from './planning/ReviseModal';
 import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsActual';
 import { ForecastStory } from './plans/ForecastStory';
 import { PhaseCard } from './plans/PhaseCard';
-import { PhaseDrawer, type PhaseTab } from './plans/PhaseDrawer';
+import { PHASE_TABS, PhaseDrawer, type PhaseTab } from './plans/PhaseDrawer';
 import {
   parsePlansRoute,
   plansHref,
@@ -751,8 +760,65 @@ type DetailSel =
   | { kind: 'phase'; phase: EpicPhase; tab: PhaseDetailTab }
   | { kind: 'plan'; tab: PlanDetailTab };
 
-/** Which URL-named level did not exist — phase 2 turns it into a notice. */
-type PlansMissing = 'plan' | 'phase' | null;
+/** Which URL-named level did not exist — named by the stale-link notice (SC-8).
+ * `task` is the numeric `?task=`/`?plan=` hand-off (NaN for a non-numeric id). */
+type PlansMissing =
+  | { kind: 'plan'; externalId: string }
+  | { kind: 'task'; taskId: number }
+  | { kind: 'phase'; seq: number; planTitle: string }
+  | null;
+
+/** The one-line notice for a link whose target is gone; null when nothing is.
+ * `search` supplies a non-numeric legacy id verbatim. */
+function staleNotice(missing: PlansMissing, search: string): string | null {
+  if (missing === null) return null;
+  switch (missing.kind) {
+    case 'plan':
+      return `Plan ${missing.externalId} not found — showing the plan list`;
+    case 'task': {
+      const q = new URLSearchParams(search);
+      const id = Number.isNaN(missing.taskId) ? (q.get('task') ?? q.get('plan') ?? '') : String(missing.taskId);
+      return `Plan #${id} not found`;
+    }
+    case 'phase':
+      return `Phase ${String(missing.seq)} not found in ${missing.planTitle}`;
+  }
+}
+
+/** A click the page handles itself — not a new-tab / new-window / download
+ * gesture, which belongs to the browser. */
+function isPlainClick(e: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
+/** Plan-details tab labels, as PlanDetailPanel shows them (Revisions without its count). */
+const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, string> = {
+  plan: 'Plan',
+  spec: 'Spec',
+  summary: 'Summary',
+  revisions: 'Revisions',
+  edit: 'Edit',
+};
+
+/**
+ * `document.title` of the Plans tab (SC-11):
+ *   drawer        `Runs · Phase 3 — <plan> · <project> — Swarmery`
+ *   plan details  `Revisions — <plan> · <project> — Swarmery`
+ *   plan          `<plan> · Plans · <project> — Swarmery`
+ *   no plan       `Plans · <project> — Swarmery`
+ * A phase the plan does not have reads as the plan (the URL is about to be
+ * corrected to it).
+ */
+function plansTitle(epic: Epic | null, detail: DetailTarget | null, project: string): string {
+  const tail = `${project} — Swarmery`;
+  if (epic === null) return `Plans · ${tail}`;
+  if (detail?.kind === 'phase' && epic.phases.some((p) => p.seq === detail.seq)) {
+    const tab = PHASE_TABS.find((t) => t.id === detail.tab)?.label ?? detail.tab;
+    return `${tab} · Phase ${String(detail.seq)} — ${epic.title} · ${tail}`;
+  }
+  if (detail?.kind === 'plan') return `${PLAN_DETAIL_TAB_LABEL[detail.tab]} — ${epic.title} · ${tail}`;
+  return `${epic.title} · Plans · ${tail}`;
+}
 
 /**
  * The canonical target for a parsed Plans URL against the loaded epics: the
@@ -779,24 +845,26 @@ function canonicalPlansTarget(
     if (route.legacy === null) return listOf(route.status ?? 'active', null);
     const { taskId, phaseSeq, wantRevisions } = route.legacy;
     const epic = epics.find((e) => e.taskId === taskId);
-    if (epic === undefined) return listOf('active', 'plan');
+    if (epic === undefined) return listOf('active', { kind: 'task', taskId });
     if (wantRevisions) {
       return { target: { plan: epic.externalId, detail: { kind: 'plan', tab: 'revisions' } }, missing: null };
     }
     if (phaseSeq === null) return { target: { plan: epic.externalId }, missing: null };
     return epic.phases.some((p) => p.seq === phaseSeq)
       ? { target: { plan: epic.externalId, detail: { kind: 'phase', seq: phaseSeq, tab: 'story' } }, missing: null }
-      : { target: { plan: epic.externalId }, missing: 'phase' };
+      : { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: phaseSeq, planTitle: epic.title } };
   }
 
   const epic = epics.find((e) => e.externalId === route.plan);
-  if (epic === undefined) return listOf('active', 'plan');
+  if (epic === undefined) return listOf('active', { kind: 'plan', externalId: route.plan });
   const d = route.detail;
   if (d === null) return { target: { plan: epic.externalId }, missing: null };
   const resolvedSeqs = computeResolvedSeqs(epic.phases);
   if (d.kind === 'phase') {
     const p = epic.phases.find((x) => x.seq === d.seq);
-    if (p === undefined) return { target: { plan: epic.externalId }, missing: 'phase' };
+    if (p === undefined) {
+      return { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: d.seq, planTitle: epic.title } };
+    }
     const tab: PhaseDetailTab = d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done' ? 'report' : d.tab;
     return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
   }
@@ -872,14 +940,30 @@ export function Plans(): JSX.Element {
     [slug, location.search, here, navigate],
   );
   /** An automatic correction: replace, and only when it changes something, so
-   * it can neither add a Back step nor loop. */
+   * it can neither add a Back step nor loop. A stale link's correction carries
+   * the notice naming what was not found (SC-8) in the history state. */
   const correct = useCallback(
-    (t: PlansTarget): void => {
+    (t: PlansTarget, notice: string | null = null): void => {
       const href = plansHref(slug, t, location.search);
-      if (!sameHref(href, here)) navigate(href, { replace: true });
+      if (sameHref(href, here)) return;
+      navigate(href, notice !== null ? { replace: true, state: { plansNotice: notice } } : { replace: true });
     },
     [slug, location.search, here, navigate],
   );
+
+  // The stale-link notice. Held here, not read from `location.state` on each
+  // render: a follow-up replace (another correction, ScopeProvider's ?scope=
+  // rewrite) carries no state and must not drop it. It clears on the next PUSH —
+  // an operator click — and on Back/Forward to an entry that carries none.
+  const navType = useNavigationType();
+  const stateNotice = (location.state as { plansNotice?: unknown } | null)?.plansNotice;
+  const [notice, setNotice] = useState<string | null>(
+    typeof stateNotice === 'string' ? stateNotice : null,
+  );
+  useEffect(() => {
+    if (typeof stateNotice === 'string') setNotice(stateNotice);
+    else if (navType !== 'REPLACE') setNotice(null);
+  }, [stateNotice, navType]);
 
   const reload = useCallback((): void => {
     fetchingFor.current = projectId;
@@ -955,16 +1039,20 @@ export function Plans(): JSX.Element {
   // ProjectTabRedirect). Idempotent: `correct` no-ops when nothing changes.
   useEffect(() => {
     if (epics === null || epics.length === 0) return;
-    // phase 2: notice — canonicalPlansTarget's `missing` (and route.invalidTab)
-    // name what the link pointed at and could not be found; carry it as a
-    // one-line dismissible notice on this replace.
-    correct(canonicalPlansTarget(route, epics).target);
-  }, [epics, route, correct]);
+    // A plan / phase / legacy id the link named and this project does not have
+    // rides this replace as a notice (SC-8). A canonicalised tab (malformed, or
+    // unavailable on this plan / phase) is expected and stays silent.
+    const { target, missing } = canonicalPlansTarget(route, epics);
+    correct(target, staleNotice(missing, location.search));
+  }, [epics, route, correct, location.search]);
 
   const activeEpic = useMemo(
     () => (selected !== null ? (filtered.find((e) => e.taskId === selected) ?? null) : null),
     [filtered, selected],
   );
+
+  // The browser tab names what is open (SC-11), most specific first.
+  useDocumentTitle(plansTitle(activeEpic, detailTarget, project?.name ?? slug));
 
   const lifecycle = (epic: Epic, action: EpicLifecycleAction): void => {
     if (
@@ -1171,23 +1259,37 @@ export function Plans(): JSX.Element {
           </button>
         </div>
       )}
+      {/* A stale link's notice (SC-8): the actionError strip's shape, in amber —
+          the page did land somewhere valid, nothing failed. */}
+      {notice !== null && (
+        <div
+          role="status"
+          className="mb-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
+        >
+          <span className="min-w-0 flex-1">{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="dismiss notice" className="text-amber/70">
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 gap-5">
         {/* Epic list behind status filter tabs. */}
         <div className="flex w-[280px] shrink-0 flex-col">
           <div className="mb-2 flex items-center gap-1" role="tablist" aria-label="plan status filter">
             {FILTERS.map((f) => (
-              <button
+              <Link
                 key={f}
-                type="button"
                 role="tab"
                 aria-selected={filter === f}
-                // One push to the plan-less filter URL; the correction effect
-                // then REPLACES it with that filter's first plan (or leaves an
-                // empty filter on its empty state). Re-clicking the current
-                // filter is not a step — and must not re-pick its first plan.
-                onClick={() => {
-                  if (f !== filter) go({ plan: null, status: f });
+                // A real link to the plan-less filter URL: one push, then the
+                // correction effect REPLACES it with that filter's first plan
+                // (or leaves an empty filter on its empty state). Re-clicking
+                // the current filter is not a step — and must not re-pick its
+                // first plan — so that plain click is swallowed.
+                to={plansHref(slug, { plan: null, status: f }, location.search)}
+                onClick={(ev) => {
+                  if (f === filter && isPlainClick(ev)) ev.preventDefault();
                 }}
                 className={`rounded-md border px-2 py-1 font-mono text-[10.5px] capitalize transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
                   filter === f
@@ -1196,7 +1298,7 @@ export function Plans(): JSX.Element {
                 }`}
               >
                 {f} ({counts[f]})
-              </button>
+              </Link>
             ))}
           </div>
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
@@ -1204,44 +1306,40 @@ export function Plans(): JSX.Element {
               <Empty>no {filter} plans</Empty>
             ) : (
               filtered.map((e) => (
-                // A real <button> can't host CopyIdBadge's own nested <button> (invalid
-                // HTML, React warns) — this row becomes a div/role="button" instead,
-                // matching the same click-and-Enter/Space idiom TaskCard already uses,
-                // so the id chip can sit inside it as an independently-clickable control.
+                // The row is a real link to the plan (Cmd-click opens it in a new tab)
+                // AND hosts CopyIdBadge's own <button>. Interactive content can't nest
+                // inside an <a> (invalid HTML, and the chip's "copy id: …" would fold
+                // into the link's name), so the link is the title and stretches over
+                // the whole row with an ::after overlay. The chips that need their own
+                // pointer (copy, the card tooltip) sit above that overlay (relative z-10).
                 <div
                   key={e.taskId}
-                  role="button"
-                  tabIndex={0}
-                  // Own name, so the nested copy chip's "copy id: …" isn't folded
-                  // into the row's accessible name (as TaskCard does).
-                  aria-label={`plan ${e.externalId}: ${e.title}`}
-                  // Re-clicking the selected plan keeps its open details, as before.
-                  onClick={() => {
-                    if (selected !== e.taskId) go({ plan: e.externalId });
-                  }}
-                  onKeyDown={(ev) => {
-                    if (ev.target !== ev.currentTarget) return;
-                    if (ev.key === 'Enter' || ev.key === ' ') {
-                      ev.preventDefault();
-                      if (selected !== e.taskId) go({ plan: e.externalId });
-                    }
-                  }}
-                  aria-current={selected === e.taskId}
-                  className={`block w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
+                  className={`relative rounded-lg border px-3 py-2.5 transition-colors ${
                     selected === e.taskId
                       ? 'border-line-strong bg-surface2'
                       : 'border-line bg-surface/40 hover:border-line-strong'
                   }`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{e.title}</div>
+                    <Link
+                      to={plansHref(slug, { plan: e.externalId }, location.search)}
+                      // A plain click is one push. Re-clicking the selected plan keeps
+                      // its open details, as before.
+                      onClick={(ev) => {
+                        if (selected === e.taskId && isPlainClick(ev)) ev.preventDefault();
+                      }}
+                      aria-current={selected === e.taskId}
+                      className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink after:absolute after:inset-0 after:rounded-lg focus:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-1 focus-visible:after:outline-brand"
+                    >
+                      {e.title}
+                    </Link>
                     {/* A micro-plan: this plan IS a dispatched board card, materialized so its
                         outcome is evidence in a doc rather than a column someone dragged it to.
                         The chip is what makes the two views of one unit of work navigable. */}
                     {e.cardExternalId !== null && (
                       <span
                         data-tip={`board card ${e.cardExternalId}`}
-                        className="shrink-0 rounded border border-line px-1 py-px font-mono text-[9px] text-ink-dim"
+                        className="relative z-10 shrink-0 rounded border border-line px-1 py-px font-mono text-[9px] text-ink-dim"
                       >
                         card
                       </span>
@@ -1252,7 +1350,7 @@ export function Plans(): JSX.Element {
                         `yyyy-mm-dd-slug` plan id can run past this column's width,
                         and copying still copies the FULL id regardless of how much
                         of it is visually truncated. */}
-                    <CopyIdBadge id={e.externalId} label="plan" truncate className="min-w-0 flex-1" />
+                    <CopyIdBadge id={e.externalId} label="plan" truncate className="relative z-10 min-w-0 flex-1" />
                     {e.startedAt !== null && <span className="shrink-0">{e.startedAt.slice(0, 10)}</span>}
                     <span className="shrink-0">
                       {e.phases.length} phase{e.phases.length === 1 ? '' : 's'}
@@ -1286,14 +1384,23 @@ export function Plans(): JSX.Element {
               onOpenPhase={(seq, tab) => go({ plan: activeEpic.externalId, detail: { kind: 'phase', seq, tab } })}
               onOpenPlan={(tab) => go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab } })}
               onCloseDetail={() => go({ plan: activeEpic.externalId })}
+              phaseHref={(seq, tab) =>
+                plansHref(slug, { plan: activeEpic.externalId, detail: { kind: 'phase', seq, tab } }, location.search)
+              }
+              planHref={(tab) =>
+                plansHref(slug, { plan: activeEpic.externalId, detail: { kind: 'plan', tab } }, location.search)
+              }
               revId={urlRevId}
               onOpenRevision={(revId) =>
                 go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions', revId } })
               }
-              onRevisionMissing={() =>
-                // phase 2: notice — the revision the link named is not this plan's.
-                correct({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } })
-              }
+              onRevisionMissing={() => {
+                // The revision the link named is not this plan's (SC-8).
+                correct(
+                  { plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } },
+                  urlRevId !== null ? `Revision #${String(urlRevId)} not found` : null,
+                );
+              }}
               runBusy={runBusy}
               runMsg={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.text : null}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
@@ -1363,6 +1470,8 @@ function EpicDetail({
   onOpenPhase,
   onOpenPlan,
   onCloseDetail,
+  phaseHref,
+  planHref,
   revId,
   onOpenRevision,
   onRevisionMissing,
@@ -1388,6 +1497,9 @@ function EpicDetail({
   onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
   onOpenPlan: (tab: PlanDetailTab) => void;
   onCloseDetail: () => void;
+  /** The URLs of a phase drawer tab / a plan-details tab — what their links point at. */
+  phaseHref: (seq: number, tab: PhaseDetailTab) => string;
+  planHref: (tab: PlanDetailTab) => string;
   /** The revision the URL names (`/details/revisions/<revId>`), or null. */
   revId: number | null;
   /** Open one revision on the Revisions tab (a push). */
@@ -1435,16 +1547,22 @@ function EpicDetail({
   // already names (ReviseModal links to a just-staged one as it reloads), so
   // an unknown revId is not judged until they are all back.
   const [revisionsInFlight, setRevisionsInFlight] = useState(0);
+  // The plan the latest reload was for: a slower fetch for a plan we have since
+  // left must not land over the current plan's list (the epics fetch's guard).
+  const revisionsFetchingFor = useRef<number | null>(null);
   const reloadRevisions = useCallback((): void => {
     const taskId = epic.taskId;
+    revisionsFetchingFor.current = taskId;
     setRevisionsInFlight((n) => n + 1);
     fetchRevisions(taskId)
       .then((rs) => {
+        if (revisionsFetchingFor.current !== taskId) return;
         setRevisions(rs);
         setRevisionsErr(null);
         setRevisionsOf(taskId);
       })
       .catch((e: unknown) => {
+        if (revisionsFetchingFor.current !== taskId) return;
         setRevisions([]);
         setRevisionsErr(e instanceof Error ? e.message : String(e));
         setRevisionsOf(taskId);
@@ -1640,6 +1758,7 @@ function EpicDetail({
               phase={detail.phase}
               tab={detail.tab}
               onTab={(t) => onOpenPhase(detail.phase.seq, t)}
+              tabHref={(t) => phaseHref(detail.phase.seq, t)}
               onStep={(seq) => onOpenPhase(seq, detail.tab)}
               onClose={onCloseDetail}
               runBusy={runBusy}
@@ -1658,6 +1777,7 @@ function EpicDetail({
               epic={epic}
               tab={detail.tab}
               onTab={onOpenPlan}
+              tabHref={planHref}
               onDocChanged={onDocChanged}
               revisions={revisions}
               revisionsErr={revisionsErr}
@@ -1677,6 +1797,7 @@ function EpicDetail({
               planRunning={planRunning}
               phaseRunModel={phaseRunModel}
               onOpenPhase={onOpenPhase}
+              phaseHref={(seq) => phaseHref(seq, 'story')}
               onRun={onRun}
               onCancelRun={onCancelRun}
               onOpenOutcome={onOpenOutcome}
@@ -1948,6 +2069,7 @@ function PhaseList({
   planRunning,
   phaseRunModel,
   onOpenPhase,
+  phaseHref,
   onRun,
   onCancelRun,
   onOpenOutcome,
@@ -1964,6 +2086,8 @@ function PhaseList({
    * second thing to drift. */
   phaseRunModel: PhaseRunModel;
   onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
+  /** The URL a phase opens at (its drawer's Story) — what its name links to. */
+  phaseHref: (seq: number) => string;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
   onOpenOutcome: (phaseId: number) => void;
@@ -2013,7 +2137,16 @@ function PhaseList({
                   <span className="shrink-0 font-mono text-[10px] text-ink-faint">
                     Phase {p.seq}
                   </span>
-                  <span className="truncate text-[13px] font-medium text-ink">{p.name}</span>
+                  {/* The row holds buttons, so the anchor is the NAME, not the row
+                      (no <a> around inner buttons). Its click is the Link's push;
+                      stopPropagation keeps the row from opening it a second time. */}
+                  <Link
+                    to={phaseHref(p.seq)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="truncate text-[13px] font-medium text-ink"
+                  >
+                    {p.name}
+                  </Link>
                   <span
                     className={`shrink-0 rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}
                   >
@@ -2501,17 +2634,20 @@ function DetailShell({
   );
 }
 
-/** The shared tab bar of both detail panels. */
+/** The shared tab bar of both detail panels. With `hrefFor` each tab is a real
+ * link (its click navigates, `onTab` is not called as well). */
 function DetailTabs<T extends string>({
   label,
   tabs,
   active,
   onTab,
+  hrefFor,
 }: {
   label: string;
   tabs: { id: T; label: string }[];
   active: T;
   onTab: (tab: T) => void;
+  hrefFor?: ((tab: T) => string) | undefined;
 }): JSX.Element {
   return (
     <div
@@ -2519,22 +2655,27 @@ function DetailTabs<T extends string>({
       role="tablist"
       aria-label={label}
     >
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          role="tab"
-          aria-selected={active === t.id}
-          onClick={() => onTab(t.id)}
-          className={`-mb-px shrink-0 border-b-2 px-3 py-[8px] text-[12.5px] font-medium whitespace-nowrap transition-colors ${
-            active === t.id
-              ? 'border-brand text-brand'
-              : 'border-transparent text-ink-dim hover:text-ink'
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+      {tabs.map((t) => {
+        const className = `-mb-px shrink-0 border-b-2 px-3 py-[8px] text-[12.5px] font-medium whitespace-nowrap transition-colors ${
+          active === t.id ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
+        }`;
+        return hrefFor !== undefined ? (
+          <Link key={t.id} to={hrefFor(t.id)} role="tab" aria-selected={active === t.id} className={className}>
+            {t.label}
+          </Link>
+        ) : (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={active === t.id}
+            onClick={() => onTab(t.id)}
+            className={className}
+          >
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -2646,6 +2787,36 @@ function DocEditor({
       .finally(() => setSaving(false));
   };
 
+  // Unsaved work cannot be lost without a prompt (SC-12). In-app navigation —
+  // Back, a tab, a plan link — that would leave this location is blocked and
+  // confirmed; a reload or a closed tab gets the native beforeunload prompt
+  // (the pages/Memory.tsx idiom).
+  const unsaved = content !== null && draft !== content;
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) =>
+      unsaved &&
+      `${currentLocation.pathname}${currentLocation.search}` !== `${nextLocation.pathname}${nextLocation.search}`,
+    [unsaved],
+  );
+  const blocker = useBlocker(shouldBlock);
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm(`Discard unsaved changes to ${path}?`)) blocker.proceed();
+    else blocker.reset();
+  }, [blocker, path]);
+  const unsavedRef = useRef(unsaved);
+  unsavedRef.current = unsaved;
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent): void => {
+      if (unsavedRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
   if (content === null && error === null) return <Loading label="doc…" />;
   const dirty = draft !== content;
 
@@ -2729,6 +2900,7 @@ function PhaseDetailPanel({
   phase,
   tab,
   onTab,
+  tabHref,
   onStep,
   onClose,
   runBusy,
@@ -2745,6 +2917,8 @@ function PhaseDetailPanel({
   phase: EpicPhase;
   tab: PhaseDetailTab;
   onTab: (tab: PhaseDetailTab) => void;
+  /** Each drawer tab's URL — makes the tabs real links. */
+  tabHref?: ((tab: PhaseDetailTab) => string) | undefined;
   /** Open the neighbouring phase by seq (↑/↓), keeping the tab. */
   onStep: (seq: number) => void;
   onClose: () => void;
@@ -2840,6 +3014,7 @@ function PhaseDetailPanel({
       onNext={next !== undefined ? () => onStep(next.seq) : undefined}
       onClose={onClose}
       editable={editable}
+      hrefFor={tabHref}
     >
       {activeTab === 'edit' ? (
         <DocEditor
@@ -3005,6 +3180,7 @@ function PlanDetailPanel({
   epic,
   tab,
   onTab,
+  tabHref,
   onDocChanged,
   revisions,
   revisionsErr,
@@ -3015,6 +3191,8 @@ function PlanDetailPanel({
   epic: Epic;
   tab: PlanDetailTab;
   onTab: (tab: PlanDetailTab) => void;
+  /** Each tab's URL — makes the tabs real links. */
+  tabHref?: ((tab: PlanDetailTab) => string) | undefined;
   onDocChanged: () => void;
   /** The plan's revisions, newest first (fetched by EpicDetail). */
   revisions: PlanRevision[] | null;
@@ -3061,7 +3239,7 @@ function PlanDetailPanel({
         </div>
       }
       tabBar={
-        <DetailTabs label="plan details tabs" tabs={tabs} active={activeTab} onTab={onTab} />
+        <DetailTabs label="plan details tabs" tabs={tabs} active={activeTab} onTab={onTab} hrefFor={tabHref} />
       }
     >
       {activeTab === 'edit' ? (

@@ -8,11 +8,21 @@
 // Plans tab: the path names a plan, so a stray `?tab=` there is ignored and
 // replaced away, and picking another top tab leaves the plan path for
 // /plans?tab=<id>.
+//
+// The top tabs are real links and switch with PUSH (plans-deep-links phase 2,
+// SC-10): Plans → Board → Back returns to Plans. `?scope=` rides along on every
+// href. On a plan path the Plans tab links to that plan (details closed) — the
+// plan is kept rather than dropped to /plans, which would re-pick the first
+// Active plan. The title names the tab while a non-Plans body is showing;
+// Plans titles itself.
 
 import { Suspense, lazy, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { type TabItem, Tabs, useTabParam } from '../../components/Tabs';
+import { type TabItem, Tabs, tabParamHref, useTabParam } from '../../components/Tabs';
 import { Loading } from '../../components/ui';
+import { useDocumentTitle } from '../../lib/useDocumentTitle';
+import { useProjectWorkspace } from '../../workspace/ProjectContext';
+import { plansHref } from './plansUrl';
 
 const Plans = lazy(() => import('../Plans').then((m) => ({ default: m.Plans })));
 const PlanningMode = lazy(() => import('../PlanningMode').then((m) => ({ default: m.PlanningMode })));
@@ -31,8 +41,9 @@ export const PLANS_PLACE_TABS: readonly TabItem<PlansPlaceTab>[] = [
 const IDS = PLANS_PLACE_TABS.map((t) => t.id);
 
 export function PlansPlace(): JSX.Element {
-  const [paramTab, setParamTab] = useTabParam<PlansPlaceTab>('tab', IDS, 'plans');
+  const [paramTab, setParamTab] = useTabParam<PlansPlaceTab>('tab', IDS, 'plans', { history: 'push' });
   const { slug = '', plan } = useParams<{ slug: string; plan?: string }>();
+  const { project } = useProjectWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
   const inPlan = plan !== undefined && plan !== '';
@@ -61,11 +72,21 @@ export function PlansPlace(): JSX.Element {
     navigate(`/p/${encodeURIComponent(slug)}/plans?${q.toString()}`);
   };
 
+  // Each top tab's URL. Off a plan path: this path with `?tab=` set (dropped for
+  // Plans). On one: another tab leaves for /plans?tab=<id>; Plans stays on the plan.
+  const place = `/p/${encodeURIComponent(slug)}/plans`;
+  const hrefOf = (id: PlansPlaceTab): string => {
+    const search = tabParamHref(location.search, 'tab', id, 'plans');
+    return inPlan && id === 'plans' && plan !== undefined ? plansHref(slug, { plan }, search) : `${place}${search}`;
+  };
+  const tabs = PLANS_PLACE_TABS.map((t) => ({ ...t, href: hrefOf(t.id) }));
+
   const label = PLANS_PLACE_TABS.find((t) => t.id === tab)?.label ?? tab;
+  useDocumentTitle(tab === 'plans' ? null : `${label} · ${project?.name ?? slug} — Swarmery`);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-3 pt-3 desk:px-6">
-        <Tabs tabs={PLANS_PLACE_TABS} value={tab} onChange={setTab} ariaLabel="Plans" />
+        <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Plans" />
       </div>
       <div role="tabpanel" aria-label={label} className="flex min-h-0 flex-1 flex-col">
         <Suspense fallback={<Loading label={`${label.toLowerCase()}…`} />}>
