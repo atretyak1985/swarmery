@@ -3,9 +3,10 @@ package accountprune
 // Which keys of a settings file the estate already supplies.
 //
 // This file is thin on purpose. The redundancy rule is NOT defined here: it is
-// runsettings.Redundant — the SUBSET rule the doctor's settings-block detector
-// (internal/accountdoctor) reports on — so the doctor reports exactly what the
-// prune removes. Nothing below compares two values.
+// runsettings.Redundant, the SUBSET rule. The doctor's settings-block detector
+// (internal/accountdoctor) does not re-apply it either: it reads Redundancies,
+// this package's own verdict, so the doctor reports exactly what the prune
+// removes. Nothing below compares two values.
 
 import (
 	"sort"

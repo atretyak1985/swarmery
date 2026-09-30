@@ -13,12 +13,14 @@ package accountdoctor
 //     sets intersect. A store the gate refuses loads nothing and is a warn
 //     finding, never a duplicate. A store moved out of SecretsDir() (a
 //     quarantine) is out of scope by construction.
-//  2. settings-block — runsettings.EstateKeys only. Every settings file under
-//     an ADMITTED estate root (claudeacct.ScanSettingsFiles — the shared
-//     walk, never pins: a sub-repo with no binding still copies the estate)
-//     whose copy of an EstateKey runsettings.Redundant calls redundant with
-//     the estate's own. An unadmitted estate delivers nothing, so its
-//     sub-repos' copies are the only live ones and nothing is reported.
+//  2. settings-block — exactly what `swarmery account prune` would remove
+//     under the estate root: accountprune.Redundancies, the prune's own
+//     per-file verdict (runsettings.EstateKeys only, the SUBSET rule, each
+//     file judged against the estate it resolves to). So every exclusion the
+//     prune applies holds here too: an estate's own two files, a nested
+//     estate and everything below it, a symlinked path, and an unadmitted
+//     estate — which delivers nothing, so its sub-repos' copies are the only
+//     live ones — are never reported.
 //  3. binding — the `swarmery` object internal/worktree/configsync.go lent
 //     into a daemon worktree: a fixed two-level glob under the worktree root.
 
@@ -28,9 +30,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/accountprune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeproj"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
@@ -162,37 +164,17 @@ func intersect(a, b []string) []string {
 	return out
 }
 
-// settingsBlocks is detector 2.
+// settingsBlocks is detector 2: accountprune.Redundancies, one Duplicate per
+// key it would remove. The prune's own verdict, never a second copy of its
+// rules — a duplicate this reports is one `account prune` clears.
 func settingsBlocks(res claudeacct.Resolution) []Duplicate {
-	if res.EstateRoot == "" || !res.EstateAdmitted {
+	if res.EstateRoot == "" {
 		return nil
 	}
-	estateFile := filepath.Join(res.EstateRoot, filepath.FromSlash(claudeacct.ProjectSettingsFile))
-	estate, why := claudeacct.ReadTrustedSettingsWithin(estateFile, res.EstateRoot)
-	if estate == nil || why != "" {
-		return nil // absent or unusable — the trust arm reports the latter
-	}
 	var out []Duplicate
-	for _, f := range claudeacct.ScanSettingsFiles(res.EstateRoot) {
-		if claudeacct.SameFile(f, estateFile) {
-			continue // the estate's own file never pairs with itself
-		}
-		doc, _ := claudeacct.ReadTrustedSettings(f)
-		if doc == nil {
-			continue
-		}
-		for _, key := range runsettings.EstateKeys {
-			ev, inEstate := estate[key]
-			fv, inFile := doc[key]
-			if !inEstate || !inFile {
-				continue
-			}
-			if redundant, _ := runsettings.Redundant(key, ev, fv); redundant {
-				names := entryNames(fv)
-				out = append(out, Duplicate{Kind: KindSettingsBlock, Paths: []string{estateFile, f},
-					Key: key, Overlap: names, Count: len(names)})
-			}
-		}
+	for _, r := range accountprune.Redundancies(res.EstateRoot) {
+		out = append(out, Duplicate{Kind: KindSettingsBlock, Paths: []string{r.EstateFile, r.Path},
+			Key: r.Key, Overlap: r.Entries, Count: len(r.Entries)})
 	}
 	return out
 }

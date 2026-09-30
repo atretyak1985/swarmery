@@ -7,6 +7,7 @@ package accountprune
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -238,5 +239,60 @@ func TestMidRunFailureReportsChanged(t *testing.T) {
 	}
 	if len(res.Changed) != 1 || res.Changed[0].Path != a || res.Changed[0].Backup == "" {
 		t.Errorf("changed = %+v, want a with its pre-image", res.Changed)
+	}
+}
+
+// Redundancies is Plan's eligible set, key by key — the doctor's settings-block
+// detector reads it, so the doctor reports exactly what the prune removes. One
+// fixture carries every exclusion evaluate applies (the root's binding copy,
+// a nested estate's two files and a file below it, a symlinked .claude) next
+// to two ordinary copies.
+func TestRedundanciesArePlanEligible(t *testing.T) {
+	f := newEstate(t)
+	nestedEstate(t, f, true)
+	a := write(t, filepath.Join(f.root, "a", ".claude", "settings.json"), subsetPC)
+	b := write(t, filepath.Join(f.root, "b", ".claude", "settings.local.json"),
+		`{"pluginConfigs":{"b@m":{"options":{}}},"extraKnownMarketplaces":{"mk":{"source":{"source":"github","repo":"o/r"}}}}`)
+	outside := filepath.Join(filepath.Dir(f.root), "outside")
+	write(t, filepath.Join(outside, ".claude", "settings.json"), subsetPC)
+	if err := os.MkdirAll(filepath.Join(f.root, "linked"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, ".claude"), filepath.Join(f.root, "linked", ".claude")); err != nil {
+		t.Fatal(err)
+	}
+
+	var fromPlan []string
+	for _, tg := range mustPlan(t, f.root) {
+		if tg.Eligible {
+			for _, k := range tg.Keys {
+				fromPlan = append(fromPlan, tg.Path+" "+k)
+			}
+		}
+	}
+	var fromRedundancies []string
+	for _, r := range Redundancies(f.root) {
+		if r.EstateFile != f.estateFile {
+			t.Errorf("%s pairs with %s, want the estate's own %s", r.Path, r.EstateFile, f.estateFile)
+		}
+		fromRedundancies = append(fromRedundancies, r.Path+" "+r.Key)
+	}
+	want := []string{a + " pluginConfigs", b + " pluginConfigs", b + " extraKnownMarketplaces"} // EstateKeys order
+	if !reflect.DeepEqual(fromPlan, want) {
+		t.Fatalf("precondition: Plan eligible = %v, want %v", fromPlan, want)
+	}
+	if !reflect.DeepEqual(fromRedundancies, fromPlan) {
+		t.Errorf("Redundancies = %v\nPlan eligible = %v", fromRedundancies, fromPlan)
+	}
+}
+
+// Entries are the copy's entry NAMES, sorted — never a value.
+func TestRedundancyEntries(t *testing.T) {
+	f := newEstate(t)
+	write(t, filepath.Join(f.root, "a", ".claude", "settings.json"),
+		`{"pluginConfigs":{"b@m":{"options":{}},"a@m":{"options":{"k":"v1"}}}}`)
+	rs := Redundancies(f.root)
+	if len(rs) != 1 || !reflect.DeepEqual(rs[0].Entries, []string{"a@m", "b@m"}) {
+		t.Errorf("Redundancies = %+v, want one pluginConfigs entry naming a@m, b@m", rs)
 	}
 }

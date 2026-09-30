@@ -27,9 +27,11 @@
 // # The arms
 //
 // Fast is pure filesystem plus the Lock 1 git probe claudeacct.Resolve runs
-// itself, plus at most one optional read-only SQLite lookup (the first-sight
-// arm). It never opens a socket and never starts a `claude` process — it runs
-// at turn zero from a SessionStart hook. Its arms, each in its own file:
+// itself (and, for the settings-block detector, the same probe through the
+// display verdict cache: one per distinct binding file), plus at most one
+// optional read-only SQLite lookup (the first-sight arm). It never opens a
+// socket and never starts a `claude` process — it runs at turn zero from a
+// SessionStart hook. Its arms, each in its own file:
 //
 //	resolution.go    the account, the rung that decided it, the estate, the
 //	                 default account's two profiles, shadowing / ignored pins

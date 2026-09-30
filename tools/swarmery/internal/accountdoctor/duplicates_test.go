@@ -3,6 +3,7 @@ package accountdoctor
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -151,5 +152,48 @@ func TestStaleDuplicatesUnadmittedAndRefused(t *testing.T) {
 	}
 	if countFindings(rep, "store-refused", SevWarn) != 1 {
 		t.Errorf("findings = %+v, want one store-refused warn", rep.Findings)
+	}
+}
+
+// The settings-block detector reports exactly what `account prune` removes: a
+// redundant copy in the estate root's own binding file, in a nested estate's
+// supply, in a file that resolves to that nested estate, or behind a .claude
+// symlinked out of the estate is never a duplicate — prune never removes any
+// of them, so reporting one would be a finding no command clears. An ordinary
+// sub-repo copy still is.
+func TestStaleDuplicatesSettingsBlockMatchesPruneScope(t *testing.T) {
+	f := newFixture(t)
+	base := t.TempDir()
+	root := filepath.Join(base, "estate")
+	const pc = `{"pluginConfigs":{"a@m":{}}}`
+	f.anchoredEstate(t, root, "estate", "")
+	mustWrite(t, filepath.Join(root, ".claude", "settings.local.json"),
+		`{"swarmery":{"estate":"estate"},"pluginConfigs":{"a@m":{}}}`, 0o644) // the root's binding: an estate source
+	estateFile := filepath.Join(root, ".claude", "settings.json")
+	mustWrite(t, estateFile, pc, 0o644)
+	plain := filepath.Join(root, "repos", "plain", ".claude", "settings.json")
+	mustWrite(t, plain, pc, 0o644)
+
+	sub := filepath.Join(root, "sub") // a nested, admitted estate
+	f.anchoredEstate(t, sub, "sub", "")
+	mustWrite(t, filepath.Join(sub, ".claude", "settings.json"), pc, 0o644)
+	mustWrite(t, filepath.Join(sub, "x", ".claude", "settings.json"), pc, 0o644)
+
+	outside := filepath.Join(base, "outside") // a .claude linked out of the estate
+	mustWrite(t, filepath.Join(outside, ".claude", "settings.json"), pc, 0o644)
+	mustMkdir(t, filepath.Join(root, "linked"), 0o755)
+	if err := os.Symlink(filepath.Join(outside, ".claude"), filepath.Join(root, "linked", ".claude")); err != nil {
+		t.Fatal(err)
+	}
+
+	var got [][]string
+	for _, d := range StaleDuplicates(claudeResolve(root)) {
+		if d.Kind == KindSettingsBlock {
+			got = append(got, append([]string{d.Key}, d.Paths...))
+		}
+	}
+	want := [][]string{{"pluginConfigs", estateFile, plain}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("settings-block duplicates = %v\nwant %v — only the copy `account prune` removes", got, want)
 	}
 }

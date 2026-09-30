@@ -5,9 +5,10 @@
 // # What it removes, and what it never touches
 //
 // Only runsettings.EstateKeys (pluginConfigs, extraKnownMarketplaces), whole
-// keys only, and only when runsettings.Redundant — the SUBSET rule the doctor's
-// settings-block detector also calls — says every entry of the file's copy
-// exists in the estate's with an identical value (keys.go). permissions,
+// keys only, and only when runsettings.Redundant — the SUBSET rule — says every
+// entry of the file's copy exists in the estate's with an identical value
+// (keys.go). The doctor's settings-block detector reports Redundancies, this
+// package's verdict, so it names exactly the copies Apply removes. permissions,
 // enabledMcpjsonServers, enabledPlugins and the swarmery binding object are
 // never candidates (neverRedundant).
 //
@@ -94,6 +95,9 @@ type Target struct {
 	// digest is the SHA-256 of the bytes the verdict was made on; Apply writes
 	// only a file whose current bytes still match. Never rendered.
 	digest [sha256.Size]byte
+	// entries is each of Keys' entry names in the file's copy — names only,
+	// for Redundancies. Never rendered.
+	entries map[string][]string
 }
 
 // Options steer Apply.
@@ -173,15 +177,68 @@ func Plan(roots []string) ([]Target, error) {
 	return out, nil
 }
 
-// evaluate judges one settings file. outer is the estate root of the scan;
-// listed is false for a file that carries no EstateKey (out of scope) or
-// vanished since the walk.
+// Redundancy is one EstateKey Apply would remove from one file: the file's
+// copy duplicates EstateFile's, entry for entry. Names only, never a value.
+type Redundancy struct {
+	EstateFile string   // <the file's estate root>/.claude/settings.json
+	Path       string   // the settings file carrying the copy
+	Key        string   // the EstateKey
+	Entries    []string // the copy's entry names, sorted
+}
+
+// Redundancies is what Plan([]string{root}) marks eligible, one entry per key,
+// sorted by path, keys in EstateKeys order — every exclusion evaluate applies,
+// because it is evaluate's own verdict. It is the doctor's settings-block
+// detector (internal/accountdoctor), so the doctor reports exactly what the
+// prune removes. Read-only and git-free: no provenance probe (Status is the
+// prune's concern), and Lock 1 answered through claudeacct.ResolveForDisplay —
+// a report, never a write. A root that resolves to no estate supplies nothing:
+// [].
+func Redundancies(root string) []Redundancy {
+	out := []Redundancy{}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return out
+	}
+	outer := claudeacct.ResolveForDisplay(abs).EstateRoot
+	if outer == "" {
+		return out
+	}
+	files := claudeacct.ScanSettingsFiles(abs)
+	sort.Strings(files)
+	for _, f := range files {
+		t, _ := judge(f, outer, claudeacct.ResolveForDisplay)
+		if !t.Eligible {
+			continue
+		}
+		estateFile := filepath.Join(t.EstateRoot, filepath.FromSlash(claudeacct.ProjectSettingsFile))
+		for _, k := range t.Keys {
+			out = append(out, Redundancy{EstateFile: estateFile, Path: f, Key: k, Entries: t.entries[k]})
+		}
+	}
+	return out
+}
+
+// evaluate judges one settings file for Plan and Apply: judge on a fresh Lock 1
+// verdict (this path writes), plus the file's git status. outer is the estate
+// root of the scan; listed is false for a file that carries no EstateKey (out
+// of scope) or vanished since the walk.
 func evaluate(f, outer string) (Target, bool) {
-	res := claudeacct.Resolve(filepath.Dir(filepath.Dir(f)))
+	t, listed := judge(f, outer, claudeacct.Resolve)
+	if listed {
+		t.Status = gitStatus(f)
+	}
+	return t, listed
+}
+
+// judge is every verdict evaluate reaches, with Status left unset: it runs no
+// git of its own. resolve answers which estate the file's project directory
+// belongs to.
+func judge(f, outer string, resolve func(string) claudeacct.Resolution) (Target, bool) {
+	res := resolve(filepath.Dir(filepath.Dir(f)))
 	t := Target{Path: f, EstateRoot: res.EstateRoot, Keys: []string{}, Kept: []KeptKey{}}
 	if isEstateFile(f, res.EstateRoot) || isEstateFile(f, outer) {
 		t.Reason = ReasonEstateSource
-		t.Status = gitStatus(f)
 		return t, true
 	}
 	doc, why := claudeacct.ReadTrustedSettings(f)
@@ -190,13 +247,11 @@ func evaluate(f, outer string) (Target, bool) {
 			return t, false // raced away since the walk
 		}
 		t.Reason = reasonUnreadablePrefix + why
-		t.Status = gitStatus(f)
 		return t, true
 	}
 	if len(candidateKeys(doc)) == 0 {
 		return t, false // carries no EstateKey: not listed
 	}
-	t.Status = gitStatus(f)
 	t.Kept = keptAll(doc)
 	switch {
 	case res.EstateRoot == "":
@@ -230,6 +285,10 @@ func evaluate(f, outer string) (Target, bool) {
 	} else {
 		t.Eligible = true
 		t.Reason = ReasonRedundant
+		t.entries = make(map[string][]string, len(t.Keys))
+		for _, k := range t.Keys {
+			t.entries[k] = entryNames(doc[k])
+		}
 	}
 	return t, true
 }
