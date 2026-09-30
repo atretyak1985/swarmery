@@ -47,8 +47,13 @@ type QueueItem struct {
 // window, e.g. the one a measurement counts. projectID (0 ⇒ every project)
 // narrows the queue to decisions about that project's sessions; a decision with
 // no session belongs to the whole fleet and drops out of a project view.
+// limit < 0 returns the whole queue (the Inbox lists every open question);
+// 0 or anything above 500 falls back to 100.
 func LabelQueue(db *sql.DB, limit int, since string, projectID int64) ([]QueueItem, error) {
-	if limit <= 0 || limit > 500 {
+	switch {
+	case limit < 0:
+		limit = -1 // SQLite: a negative LIMIT is no limit
+	case limit == 0 || limit > 500:
 		limit = 100
 	}
 	rows, err := db.Query(`

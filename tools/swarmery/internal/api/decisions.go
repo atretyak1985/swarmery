@@ -111,9 +111,13 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 // the operator's ground truth, newest first (the Decisions page's labelling
 // queue, and the Inbox's classifier rows). ?project=<slug|name|id> narrows it to
 // decisions about that project's sessions; an unknown project yields an empty
-// queue, never the whole fleet's.
+// queue, never the whole fleet's. limit=all returns every open decision (the
+// Inbox); a missing or out-of-range number keeps the 100 default.
 func (h *Handler) decisionsQueue(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if strings.TrimSpace(r.URL.Query().Get("limit")) == "all" {
+		limit = -1
+	}
 	var projectID int64
 	if p := strings.TrimSpace(r.URL.Query().Get("project")); p != "" {
 		err := h.DB.QueryRow(`SELECT id FROM projects WHERE `+projectMatchExpr("")+` ORDER BY id LIMIT 1`,
