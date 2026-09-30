@@ -52,7 +52,7 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
     fetchLessons('candidate'),
     scope === null ? fetchRecommendations('proposed') : fetchProjectRecommendations(scope, 'proposed'),
     fetchProposals('proposed,needs_target'),
-    fetchLabelQueue(100, scope),
+    fetchLabelQueue('all', scope),
     fetchRetirements(),
   ]);
   const errors: InboxKind[] = [];

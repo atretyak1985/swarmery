@@ -124,3 +124,42 @@ func TestDecisionsQueueProjectScope(t *testing.T) {
 		t.Errorf("unknown project queue = %v, want empty (never the fleet)", got)
 	}
 }
+
+// limit=all returns the whole open queue — the Inbox lists every question, not
+// the first page — while a missing limit keeps the 100 default and an
+// out-of-range number still falls back to it.
+func TestDecisionsQueueLimitAll(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 620; i++ {
+		if _, err := tx.Exec(`INSERT INTO decisions (question_id, subject, session_uuid, input_hash, answer, confidence, error, backend, created_at)
+			VALUES ('d2.task_type', 'x', '', 'h', 'refactor', 0.8, '', 'local', '2026-09-24T18:00:00Z')`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var q struct {
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+	}
+	for _, c := range []struct {
+		query string
+		want  int
+	}{
+		{"", 100},
+		{"?limit=all", 620},
+		{"?limit=250", 250},
+		{"?limit=9999", 100},
+	} {
+		getJSON(t, srv.URL+"/api/decisions/queue"+c.query, &q)
+		if len(q.Items) != c.want {
+			t.Errorf("queue%s = %d items, want %d", c.query, len(q.Items), c.want)
+		}
+	}
+}
