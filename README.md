@@ -93,7 +93,7 @@ cd /path/to/your/project
 swarmery onboard <project-slug> [pack ...]
 #   packs: web-pack | iot-pack | uav-pack | infra-pack | lsp-pack
 #          claude-eng-pack | graphify-pack | graft-pack | architecture-pack
-#          jira-pack
+#          jira-pack | accounts-pack | design-pack | review-pack
 ```
 
 Then open a fresh Claude Code session, accept the `swarmery` marketplace trust prompt,
@@ -200,6 +200,7 @@ the native Claude Code plugin mechanism — **semver-versioned**, **namespaced**
 | `jira-pack` | Issue-tracker pack: /jira-fix drives any Jira ticket end-to-end — access preflight, defect-or-change triage, reproduction or test-first evidence, delegated fix/implementation, evidence comment, QA transition. Requires an Atlassian MCP provider enabled on the machine. |
 | `accounts-pack` | Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it — /account, a shell wrapper, an optional shell function, and a wrong-account warning. The binding is machine-local, and a binding file committed to git is ignored. Requires the swarmery CLI. |
 | `design-pack` | Design-handoff pack: /design-implement takes an exported design and re-expresses it in the project's stack pixel-accurately — computed-style token inventory, reuse-vs-create recon, an approval gate, and a measured pixel diff as the completion criterion. |
+| `review-pack` | Pull-request review pack: /pr-review reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments on it — verify each against the code, fix the valid ones behind the repo's gates, rebut the rest with file:line evidence, reply in-thread. Requires the gh CLI. |
 <!-- END generated:packs -->
 
 Every pack requires `core` and is opt-in per project.

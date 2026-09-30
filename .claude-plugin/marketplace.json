@@ -73,6 +73,11 @@
       "name": "design-pack",
       "source": "./plugins/design-pack",
       "description": "Design-handoff pack: /design-implement takes an exported design and re-expresses it in the project's stack pixel-accurately — computed-style token inventory, reuse-vs-create recon, an approval gate, and a measured pixel diff as the completion criterion. Opt-in; requires core."
+    },
+    {
+      "name": "review-pack",
+      "source": "./plugins/review-pack",
+      "description": "Pull-request review pack: /pr-review reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments on it — verify each against the code, fix the valid ones behind the repo's gates, rebut the rest with file:line evidence, reply in-thread. Opt-in; requires the gh CLI."
     }
   ]
 }
