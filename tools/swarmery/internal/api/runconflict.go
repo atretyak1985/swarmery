@@ -229,6 +229,60 @@ func writeAccountBreaker(w http.ResponseWriter, err error) {
 	writeJSONStatus(w, http.StatusConflict, body)
 }
 
+// codeDepsUnmerged: the phase's dependencies are complete, but their work sits on
+// run branches that are not merged into the repo's base branch and have DIVERGED
+// from one another — so there is no single commit a run could start from that
+// contains all of it. Distinct from codeDepsUnmet ("the dependency is not
+// finished"): here it is finished and stranded, and the fix is a merge the
+// operator performs, which is why the body names the branches. One unmerged
+// branch (or a linear chain of them) never reaches this code — the run is simply
+// stacked on it. Phase-run-only: a whole-plan run executes every phase in one
+// worktree and has nothing to stack.
+const codeDepsUnmerged = "deps-unmerged"
+
+// writeDepsUnmerged renders that refusal: 409 {"error":"deps-unmerged","code":
+// "deps-unmerged","message",…,"branches":[…],"base":"<branch>"}. `error` carries
+// the discriminator, as specified for this refusal (the writeAccountBreaker
+// shape), `code` repeats it for a client switching on `code`, and `message` is
+// the sentence a toast shows. branches is never null — a client iterates it —
+// and base is "" when the repo is on a detached HEAD and there is no name to give.
+func writeDepsUnmerged(w http.ResponseWriter, message string, branches []string, base string) {
+	if branches == nil {
+		branches = []string{}
+	}
+	writeJSONStatus(w, http.StatusConflict, map[string]any{
+		"error":    codeDepsUnmerged,
+		"code":     codeDepsUnmerged,
+		"message":  message,
+		"branches": branches,
+		"base":     base,
+	})
+}
+
+// codeBlockedUnchanged: the phase's last run ended `blocked`, and nothing a re-run
+// would see has changed since — same base commit, same dependency branches, same
+// ticked criteria, same phase doc. Running it again would buy the same refusal at
+// the price of a run. NOT terminal: it lapses on its own at `retryAfter`
+// (SWARMERY_BLOCKED_RERUN_COOLDOWN, 24h by default), and a request carrying
+// {"force": true} runs the phase regardless.
+const codeBlockedUnchanged = "blocked-unchanged"
+
+// writeBlockedUnchanged renders that refusal: 409 {"error":"blocked-unchanged",
+// "code":"blocked-unchanged","message",…,"reason","since","retryAfter"}. reason
+// is the blocked run's own one-line reason, since when it ended, and retryAfter
+// the instant the refusal lapses — both RFC 3339, so a client can render "blocked
+// 3 h ago, retry after 09:00" without parsing the message.
+func writeBlockedUnchanged(w http.ResponseWriter, message, reason, since, retryAfter string) {
+	writeJSONStatus(w, http.StatusConflict, map[string]any{
+		"error":      codeBlockedUnchanged,
+		"code":       codeBlockedUnchanged,
+		"message":    message,
+		"reason":     reason,
+		"since":      since,
+		"retryAfter": retryAfter,
+	})
+}
+
 // writeConflict replies 409 {"error": msg, "code": code}.
 func writeConflict(w http.ResponseWriter, code, msg string) {
 	writeConflictFields(w, code, msg, nil)

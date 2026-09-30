@@ -2212,6 +2212,11 @@ function runConflictError(
      * whose `error` field carries the discriminator rather than a sentence: the
      * sentence is here, and it is what the toast must show — "account-breaker"
      * tells an operator nothing, "account work is paused (auth): …" does.
+     *
+     * The two phase-run refusals `deps-unmerged` and `blocked-unchanged` have the
+     * same shape for the same reason: their sentence names the branches to merge,
+     * or why the phase blocked and when the refusal lapses, and that is what the
+     * run strip shows — exactly where a `deps-unmet` sentence appears.
      */
     message?: string;
     code?: RunConflictCode;

@@ -210,6 +210,77 @@ func TestApplyEpicsCarriedSourceIsPrunedWhileRunning(t *testing.T) {
 	}
 }
 
+// A rescan that re-mints a phase row must carry the blocked fingerprint (0091) with
+// the rest of the run's state. run_state='blocked' IS carried, so a dropped
+// fingerprint leaves a row that says "blocked" with nothing to compare against:
+// phaserun's re-run guard reads a NULL fingerprint as "never blocked" and admits
+// the very re-run it exists to refuse — after nothing more than an archive or a
+// doc rename.
+func TestRescanCarriesFingerprint(t *testing.T) {
+	db := carryFixture(t)
+	const (
+		oldPath = "/ws/p/workspace/working/2026/09/27/epic/plan/phase-2-contracts.md"
+		newPath = "/ws/p/workspace/archive/2026/09/27/epic/plan/phase-2-contracts.md"
+		fp      = "9f2c1e0b7a6d5c4b3a291807f6e5d4c3b2a1908f7e6d5c4b3a2918070f1e2d3c"
+		reason  = "contracts exist only on the unmerged swarm/phase-26498"
+	)
+	seedPhase(t, db, 2, "Phase 2", oldPath, "blocked", "uuid-2", "swarm/phase-26499")
+	mustExec(t, db, `UPDATE epic_phases
+		   SET run_blocked_fingerprint=?, run_error=?, run_ended_at='2026-09-27T09:00:00Z',
+		       run_start_point='abc1234'
+		 WHERE doc_path=?`, fp, reason, oldPath)
+	// A phase that never blocked has no fingerprint, and must not gain one.
+	seedPhase(t, db, 1, "Phase 1", "/ws/p/workspace/working/2026/09/27/epic/plan/phase-1-schema.md", "done", "uuid-1", "swarm/phase-26498")
+
+	applyPhases(t, db, []epicPhase{
+		phase(1, "Phase 1", "/ws/p/workspace/archive/2026/09/27/epic/plan/phase-1-schema.md"),
+		phase(2, "Phase 2", newPath),
+	})
+
+	var (
+		state                           string
+		got, runErr, endedAt, startedOn sql.NullString
+	)
+	if err := db.QueryRow(`SELECT run_state, run_blocked_fingerprint, run_error, run_ended_at, run_start_point
+		  FROM epic_phases WHERE workspace_task_id=? AND doc_path=?`, carryTaskID, newPath).
+		Scan(&state, &got, &runErr, &endedAt, &startedOn); err != nil {
+		t.Fatalf("re-minted row: %v", err)
+	}
+	if state != "blocked" {
+		t.Fatalf("run_state = %q, want blocked (test premise: the run state is carried)", state)
+	}
+	if got.String != fp {
+		t.Errorf("run_blocked_fingerprint = %v, want %s — without it the guard forgets this block", got, fp)
+	}
+	// The three columns the guard reads BESIDE the fingerprint travel with it.
+	if runErr.String != reason || endedAt.String != "2026-09-27T09:00:00Z" || startedOn.String != "abc1234" {
+		t.Errorf("carried run_error=%q run_ended_at=%q run_start_point=%q, want all three intact",
+			runErr.String, endedAt.String, startedOn.String)
+	}
+	// The source rows are gone — exactly one row holds the fingerprint.
+	if n := count(t, db, `SELECT COUNT(*) FROM epic_phases WHERE run_blocked_fingerprint=?`, fp); n != 1 {
+		t.Errorf("rows holding the fingerprint = %d, want 1", n)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM epic_phases WHERE workspace_task_id=? AND run_state='done'
+		AND run_blocked_fingerprint IS NOT NULL`, carryTaskID); n != 0 {
+		t.Errorf("a phase that never blocked gained a fingerprint across the rename (%d row(s))", n)
+	}
+
+	// A rescan that renames nothing leaves the fingerprint where it is: the upsert
+	// of an existing row must not touch a daemon-owned column.
+	applyPhases(t, db, []epicPhase{
+		phase(1, "Phase 1", "/ws/p/workspace/archive/2026/09/27/epic/plan/phase-1-schema.md"),
+		phase(2, "Phase 2 — renamed title", newPath),
+	})
+	if err := db.QueryRow(`SELECT run_blocked_fingerprint FROM epic_phases WHERE workspace_task_id=? AND doc_path=?`,
+		carryTaskID, newPath).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.String != fp {
+		t.Errorf("run_blocked_fingerprint after a plain rescan = %v, want it untouched", got)
+	}
+}
+
 // THE archive regression (task 554): `agent-work.sh archive` moves the task dir from
 // workspace/working/… to workspace/archive/…, which changes every phase doc_path while
 // the workspace task id stays put. The carry handed the run columns to the new rows but

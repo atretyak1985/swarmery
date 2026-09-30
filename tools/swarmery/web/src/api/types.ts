@@ -3379,7 +3379,14 @@ export type RunConflictCode =
   | 'plan-complete'
   /** the run's account cannot run — its circuit breaker is open (sign-in or access
    *  refused, or a usage limit). Resolved from the Inbox alert's "Probe & resume". */
-  | 'account-breaker';
+  | 'account-breaker'
+  /** phase run only: the dependencies are complete, but on run branches that are
+   *  unmerged and have diverged — the body names `branches` and `base`, and the fix
+   *  is a merge the operator performs. */
+  | 'deps-unmerged'
+  /** phase run only: the last run ended blocked and nothing a re-run would see has
+   *  changed. Lapses at `retryAfter`; `{force: true}` on the request runs it anyway. */
+  | 'blocked-unchanged';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';

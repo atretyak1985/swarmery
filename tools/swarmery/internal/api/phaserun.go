@@ -103,11 +103,14 @@ func (h *Handler) parsePhaseRunParams(w http.ResponseWriter, r *http.Request) (p
 	return phaseID, true
 }
 
-// runPhase — POST /api/epics/{taskId}/phases/{phaseId}/run [{model?}].
+// runPhase — POST /api/epics/{taskId}/phases/{phaseId}/run [{model?, effort?, force?}].
 // requireLocalOrigin. 202 {status:"running", sessionUuid}; 400 unknown REQUEST
 // model; 404 unknown phase; 409 already running / unmet deps (body names them) /
-// unreadable doc / an unknown `**Model:**` in the phase doc (body names the doc)
-// / pathless project / any branch sentinel; 503 not attached.
+// dependencies on unmerged, diverged run branches (`deps-unmerged`, body names the
+// branches) / a blocked phase nothing has changed for (`blocked-unchanged`, body
+// carries the reason and when it lapses) / unreadable doc / an unknown
+// `**Model:**` in the phase doc (body names the doc) / pathless project / any
+// branch sentinel; 503 not attached.
 // EVERY 409 carries a `code` (see runconflict.go) alongside its pre-existing
 // fields, so the client discriminates on one stable value instead of sniffing
 // which fields happen to be present.
@@ -117,6 +120,10 @@ func (h *Handler) parsePhaseRunParams(w http.ResponseWriter, r *http.Request) (p
 // for this run, and an absent or empty body (every caller before this endpoint
 // grew one) runs exactly as it always did — falling through the doc's declaration
 // to the env knob (phaserun.resolveModel owns the four-rung ladder).
+//
+// `force` (default false) is the operator's "run it anyway" for ONE refusal: the
+// `blocked-unchanged` 409. It overrides nothing else — a forced run still answers
+// to every other gate above.
 func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	if phaserunSvc == nil {
 		writeClientErr(w, http.StatusServiceUnavailable, "phase runs not attached")
@@ -132,14 +139,21 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Model  string `json:"model"`
 		Effort string `json:"effort"`
+		Force  bool   `json:"force"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
-	uuid, err := phaserunSvc.Start(phaseID, body.Model, body.Effort)
+	uuid, err := phaserunSvc.StartWith(phaseID, phaserun.StartOptions{
+		Model:  body.Model,
+		Effort: body.Effort,
+		Force:  body.Force,
+	})
 	var depsErr *phaserun.DepsUnmetError
+	var unmergedErr *phaserun.DepsUnmergedError
+	var blockedErr *phaserun.BlockedUnchangedError
 	var dirtyErr *phaserun.BranchDirtyError
 	var noSlot *runcore.NoSlotError
 	var docModelErr *phaserun.DocModelError
@@ -203,6 +217,17 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 		writeConflictFields(w, codeDepsUnmet, depsErr.Error(), map[string]any{
 			"unmetDeps": depsErr.Unmet,
 		})
+	// The dependencies ARE complete — their work is on run branches that diverged
+	// and were never merged, so no single commit holds all of it. Not deps-unmet:
+	// nothing is unfinished, and the fix is a merge, so the body names the branches
+	// and what they were measured against. Nothing was acquired or stamped.
+	case errors.As(err, &unmergedErr):
+		writeDepsUnmerged(w, unmergedErr.Error(), unmergedErr.Branches, unmergedErr.Base)
+	// The last run ended blocked and nothing a re-run would see has changed. The
+	// body says why it blocked, since when, and when the refusal lapses; the same
+	// request with {"force": true} runs it anyway.
+	case errors.As(err, &blockedErr):
+		writeBlockedUnchanged(w, blockedErr.Error(), blockedErr.Reason, blockedErr.Since, blockedErr.RetryAfter)
 	case errors.Is(err, phaserun.ErrNoDoc):
 		writeConflict(w, codeDocUnreadable, "phase doc is unreadable")
 	case errors.Is(err, phaserun.ErrNoPath):

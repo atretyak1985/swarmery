@@ -156,6 +156,11 @@ type stubWt struct {
 	reclaimed    []string // branches handed to ReclaimEmptyBranch, in order
 	reclaimAhead int      // commits-ahead ReclaimEmptyBranch reports (0 ⇒ reclaimed)
 	reclaimErr   error
+	// startRefs are the start refs handed to AcquireAt, in order ("" ⇒ the repo's
+	// branch tip); reclaimBases the recorded start points handed to
+	// ReclaimEmptyBranchAt, aligned with reclaimed.
+	startRefs    []string
+	reclaimBases []string
 	// reclaimAheadBy overrides reclaimAhead per branch. Start reclaims TWO names when a
 	// previous run's branch no longer matches the deterministic one, and the whole point
 	// of that second call is that the two can answer differently.
@@ -168,6 +173,13 @@ type stubWt struct {
 }
 
 func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquired, error) {
+	return w.AcquireAt(repoRoot, projectSlug, taskID, "")
+}
+
+// AcquireAt makes the stub a StackingWorktrees, which is what Start reaches for
+// first. It records the start ref it was handed, and — like the real manager —
+// reports that ref as the start point when one was given.
+func (w *stubWt) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (worktree.Acquired, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.acquireErr != nil {
@@ -175,9 +187,13 @@ func (w *stubWt) Acquire(repoRoot, projectSlug, taskID string) (worktree.Acquire
 	}
 	w.acquired = append(w.acquired, taskID)
 	w.acquireRoots = append(w.acquireRoots, repoRoot)
+	w.startRefs = append(w.startRefs, startRef)
 	sp := w.startPoint
 	if sp == "" {
 		sp = stubStartPoint
+	}
+	if startRef != "" {
+		sp = startRef
 	}
 	path := w.pathFor(projectSlug, taskID)
 	if w.pathOverride != "" {
@@ -237,9 +253,16 @@ func (w *stubWt) Remove(repoRoot string, a worktree.Acquired, keepBranch bool) e
 }
 
 func (w *stubWt) ReclaimEmptyBranch(repoRoot, branch string) (int, error) {
+	return w.ReclaimEmptyBranchAt(repoRoot, branch, "")
+}
+
+// ReclaimEmptyBranchAt is the other half of StackingWorktrees; it records the
+// start point each reclaim was measured against.
+func (w *stubWt) ReclaimEmptyBranchAt(repoRoot, branch, baseRef string) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.reclaimed = append(w.reclaimed, branch)
+	w.reclaimBases = append(w.reclaimBases, baseRef)
 	if w.reclaimErr != nil {
 		return 0, w.reclaimErr
 	}
