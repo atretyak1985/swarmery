@@ -15,6 +15,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardColumn, BoardTask, BoardTaskSource } from '../api/types';
 import {
+  ACCOUNT_PAUSE_PREFIX,
+  accountPauseKind,
   ageLabel,
   amnestyBefore,
   amnestyCandidates,
@@ -27,6 +29,7 @@ import {
   filterTasks,
   idleSince,
   inboxTtlMs,
+  isAccountPause,
   isExpired,
   isQuotaWait,
   isStale,
@@ -391,6 +394,49 @@ describe('attentionSignal', () => {
     const long = makeTask({ dispatchError: `${QUOTA_WAIT_PREFIX}${'x'.repeat(200)}` });
     expect(attentionSignal(long)?.text.endsWith('…')).toBe(true);
     expect(isQuotaWait(makeTask({ dispatchError: 'worktree missing' }))).toBe(false);
+  });
+
+  it('reads an account pause as a wait, not a failure — both kinds', () => {
+    // The text after the prefix is runcore.AccountBreakerError.Error().
+    const auth =
+      "account work is paused (auth): Claude refused this account's access, since 2026-09-30T12:00:00Z";
+    const quota =
+      'account work is paused (quota): this account has hit a Claude usage limit, since 2026-09-30T12:00:00Z, resets 2026-09-30T17:00:00Z';
+    for (const [why, kind] of [
+      [auth, 'auth'],
+      [quota, 'quota'],
+    ] as const) {
+      const paused = makeTask({ boardColumn: 'todo', dispatchError: `${ACCOUNT_PAUSE_PREFIX}${why}` });
+      expect(isAccountPause(paused)).toBe(true);
+      expect(accountPauseKind(paused)).toBe(kind);
+      // An account pause is not a quota wait: the two prefixes stay apart.
+      expect(isQuotaWait(paused)).toBe(false);
+      const signal = attentionSignal(paused);
+      expect(signal?.tone).toBe('warn');
+      expect(signal?.text.startsWith('account paused: ')).toBe(true);
+      expect(signal?.text.startsWith('dispatch error')).toBe(false);
+      // Both messages run past the clip; the full text stays in the tip.
+      expect(signal?.text.endsWith('…')).toBe(true);
+      expect(signal?.tip).toBe(`${ACCOUNT_PAUSE_PREFIX}${why}`);
+    }
+    // A pause short enough to fit is shown whole.
+    const short = makeTask({ dispatchError: `${ACCOUNT_PAUSE_PREFIX}account work is paused (auth)` });
+    expect(attentionSignal(short)).toEqual({
+      text: 'account paused: account work is paused (auth)',
+      tone: 'warn',
+      tip: `${ACCOUNT_PAUSE_PREFIX}account work is paused (auth)`,
+    });
+    // Not a pause at all, and a pause whose message this model does not know.
+    expect(isAccountPause(makeTask({ dispatchError: 'worktree missing' }))).toBe(false);
+    expect(accountPauseKind(makeTask({ dispatchError: 'worktree missing' }))).toBeNull();
+    const reworded = makeTask({ dispatchError: `${ACCOUNT_PAUSE_PREFIX}work is on hold` });
+    expect(accountPauseKind(reworded)).toBeNull();
+    expect(attentionSignal(reworded)?.tone).toBe('warn');
+    // The kind is read from the head of the message only, never from its tail.
+    const tail = makeTask({
+      dispatchError: `${ACCOUNT_PAUSE_PREFIX}account work is paused (quota): see account x is paused (auth)`,
+    });
+    expect(accountPauseKind(tail)).toBe('quota');
   });
 
   it('reads a passing verdict as no signal at all', () => {
@@ -869,6 +915,34 @@ describe('needsMe', () => {
     expect(attentionSignal(waiting)?.tone).toBe('warn');
     // A quota-waiting card that ALSO wants review still needs me.
     expect(needsMe({ ...waiting, boardColumn: 'in_review' })).toBe(true);
+  });
+
+  it('does not match a quota-kind account pause — the breaker closes at the reset time', () => {
+    const paused = makeTask({
+      boardColumn: 'todo',
+      dispatchError: `${ACCOUNT_PAUSE_PREFIX}account work is paused (quota): this account has hit a Claude usage limit, since 2026-09-30T12:00:00Z, resets 2026-09-30T17:00:00Z`,
+    });
+    expect(needsMe(paused)).toBe(false);
+    expect(attentionSignal(paused)?.tone).toBe('warn');
+    // A paused card that ALSO wants review still needs me.
+    expect(needsMe({ ...paused, boardColumn: 'in_review' })).toBe(true);
+  });
+
+  it('matches an auth-kind account pause — only a login or a probe reopens the account', () => {
+    const paused = makeTask({
+      boardColumn: 'todo',
+      dispatchError: `${ACCOUNT_PAUSE_PREFIX}account work is paused (auth): Claude login required for this account, since 2026-09-30T12:00:00Z`,
+    });
+    expect(needsMe(paused)).toBe(true);
+    // Needing the operator does not make it a failure: the card itself is fine.
+    expect(attentionSignal(paused)?.tone).toBe('warn');
+  });
+
+  it('reads an account pause of an unknown kind as a wait', () => {
+    // A reworded Go message must not flood "needs me" with every card of the
+    // account; the Inbox alert for the open breaker still asks for the operator.
+    const paused = makeTask({ boardColumn: 'todo', dispatchError: `${ACCOUNT_PAUSE_PREFIX}work is on hold` });
+    expect(needsMe(paused)).toBe(false);
   });
 
   it('ignores a done or archived card that once failed', () => {

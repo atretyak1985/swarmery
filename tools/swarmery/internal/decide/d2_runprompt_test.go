@@ -32,6 +32,12 @@ func TestRunPromptHeadsMatchEngines(t *testing.T) {
 		{"plan run in a multi-repo project", planrun.BuildPromptIn("/ws/plan", readme, nil, planrun.ValidMode("inline"),
 			"/work/umbrella/app", "/work/umbrella", "/work/umbrella/app/.wt/run", budget),
 			"plan", "Cache plan", "Ship the cache."},
+		// A stacked run carries one more note between the contract and the
+		// document; it must neither move the head nor hide the marker line.
+		// Last in the list: the head check below reads cases[0] and cases[2].
+		{"phase run stacked on a dependency branch", phaserun.BuildPromptStacked("plan/phase-3-cache.md", "plan/phase-3-cache.md", phaseDoc,
+			"/work/umbrella/app", "/work/umbrella", "/work/umbrella/app/.wt/run", "swarm/phase-2-store", budget),
+			"phase", "Phase 3 — Cache", "Add the read-through cache."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
