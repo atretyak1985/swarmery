@@ -20,7 +20,7 @@
 // `usage/UsageSetupHint.tsx` already uses: the id stays put, only a trailing
 // glyph and a separate, normally-empty live region change.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // navigator.clipboard does not exist at all on a non-secure origin (plain
 // HTTP on anything but localhost/127.0.0.1 — a LAN hostname like
@@ -40,6 +40,9 @@ async function copyText(text: string): Promise<boolean> {
       // fall through to the legacy path below
     }
   }
+  // select() moves focus into the off-screen textarea; once it is removed focus
+  // would fall to <body>, and a keyboard user loses their place on the card.
+  const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const textarea = document.createElement('textarea');
   textarea.value = text;
   textarea.style.position = 'fixed';
@@ -55,6 +58,7 @@ async function copyText(text: string): Promise<boolean> {
     ok = false;
   }
   document.body.removeChild(textarea);
+  previous?.focus();
   return ok;
 }
 
@@ -73,7 +77,16 @@ export function CopyIdBadge({
    * don't need this and should leave it off. */
   truncate?: boolean;
 }): JSX.Element {
-  const [copied, setCopied] = useState(false);
+  // idle → ok | failed → idle. A failed copy must be as visible as a
+  // successful one: a silent no-op is the dead button this chip replaced.
+  const [state, setState] = useState<'idle' | 'ok' | 'failed'>('idle');
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+    },
+    [],
+  );
 
   return (
     <button
@@ -85,9 +98,9 @@ export function CopyIdBadge({
         e.stopPropagation();
         e.preventDefault();
         void copyText(id).then((ok) => {
-          if (!ok) return;
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
+          if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+          setState(ok ? 'ok' : 'failed');
+          resetTimer.current = setTimeout(() => setState('idle'), ok ? 1500 : 2500);
         });
       }}
       aria-label={`copy id: ${id}`}
@@ -95,9 +108,11 @@ export function CopyIdBadge({
       className={`inline-flex max-w-full items-center gap-1 rounded border px-1 py-[1px] font-mono text-[10px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
         truncate ? 'min-w-0' : ''
       } ${
-        copied
+        state === 'ok'
           ? 'border-green/40 bg-green/10 text-green'
-          : 'border-line text-ink-2 hover:border-line-strong hover:text-ink'
+          : state === 'failed'
+            ? 'border-red/40 bg-red/10 text-red'
+            : 'border-line text-ink-2 hover:border-line-strong hover:text-ink'
       } ${className}`}
     >
       <span className={truncate ? 'min-w-0 truncate' : ''}>{id}</span>
@@ -105,12 +120,12 @@ export function CopyIdBadge({
           width, or every sibling chip in a flex-wrap row reflows twice per
           copy. */}
       <span aria-hidden="true" className="inline-block w-[9px] shrink-0 text-center">
-        {copied ? '✓' : '⧉'}
+        {state === 'ok' ? '✓' : state === 'failed' ? '✕' : '⧉'}
       </span>
       {/* Empty at rest; announced once on copy, then cleared — never holds the
        * id itself, so it can never re-announce it out of context. */}
       <span aria-live="polite" className="sr-only">
-        {copied ? 'copied' : ''}
+        {state === 'ok' ? 'copied' : state === 'failed' ? 'copy failed' : ''}
       </span>
     </button>
   );
