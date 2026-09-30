@@ -25,27 +25,55 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
-// ErrDepsUnmerged: the phase's dependencies are complete, but their work sits on
-// run branches that are neither merged into the repo's base branch nor contained
-// in one another, so there is no single commit to start from (409). Returned as a
-// *DepsUnmergedError, which errors.Is-matches this sentinel.
-var ErrDepsUnmerged = errors.New("phase dependencies are on unmerged, diverged run branches")
+// ErrDepsUnmerged: the phase's dependencies are complete, but there is no single
+// commit a run could start from that holds all of their work — and producing one
+// takes a merge only the operator can perform (409). Returned as a
+// *DepsUnmergedError, which errors.Is-matches this sentinel and says which of the
+// three ways it happened (its Cause).
+var ErrDepsUnmerged = errors.New("phase dependencies are on run branches the operator has to merge first")
 
-// ErrCannotStack: base resolution chose a dependency branch to start on, but the
-// wired worktree manager cannot pin a worktree anywhere except the repo's current
-// branch tip. Refused rather than started on the wrong tree. Unreachable with
-// *worktree.Manager, which is what the daemon wires.
-var ErrCannotStack = errors.New("worktree manager cannot start a run on a dependency branch")
+// ErrCannotStack: base resolution chose a dependency branch to start on, and the
+// run cannot be given a worktree that contains it. Two ways to get here: the wired
+// worktree manager cannot pin a worktree anywhere except the repo's current branch
+// tip (unreachable with *worktree.Manager, which is what the daemon wires), or a
+// leftover worktree of this phase was warm-reused and its branch was cut BEFORE
+// the dependency's current tip. Refused either way rather than started on a tree
+// without the dependency's work.
+var ErrCannotStack = errors.New("the run cannot be started on its dependency branch")
 
-// DepsUnmergedError names the branches the operator has to merge and the branch
+// The three ways dependencies can be complete and still leave nothing to start on.
+const (
+	// DepsDiverged: two or more unmerged dependency branches, none containing the
+	// others.
+	DepsDiverged = "diverged"
+	// DepsConflict: a dependency branch does not merge cleanly into the base. The
+	// daemon cannot tell "its work is not on the base" from "its work was
+	// squash-merged and the base has since edited the same lines" — and stacking on
+	// it in the second case would start the run on a tree older than the base.
+	DepsConflict = "conflict"
+	// DepsStale: there IS one unmerged branch to stack on, but it lacks the work of
+	// another dependency that has already merged into the base — it was cut before
+	// that merge landed.
+	DepsStale = "stale"
+)
+
+// DepsUnmergedError names the branches the operator has to act on and the branch
 // they were measured against, so the api's 409 body and the UI say exactly what to
 // do instead of "dependencies unmerged".
 type DepsUnmergedError struct {
-	// Branches are the unmerged dependency run branches, sorted.
+	// Branches are the dependency run branches to act on, sorted: the diverged
+	// ones, the conflicting ones, or the one stale branch the run would have been
+	// stacked on.
 	Branches []string
 	// Base is the repo's checked-out branch — what "merged" was measured against.
 	// Empty on a detached HEAD, where there is a tip but no name for it.
 	Base string
+	// Cause is DepsDiverged, DepsConflict or DepsStale. It picks the remedy the
+	// message gives; the zero value reads as DepsDiverged.
+	Cause string
+	// Missing (DepsStale only) are the already-merged dependency branches whose
+	// work Branches[0] does not contain.
+	Missing []string
 }
 
 func (e *DepsUnmergedError) Error() string {
@@ -53,9 +81,20 @@ func (e *DepsUnmergedError) Error() string {
 	if base == "" {
 		base = "the repo's current HEAD"
 	}
+	branches := strings.Join(e.Branches, ", ")
+	switch e.Cause {
+	case DepsConflict:
+		return fmt.Sprintf("this phase depends on %s, which does not merge cleanly into %s, so it cannot be told whether %s already holds that work — "+
+			"merge it into %s, or delete the branch if its work was already squash-merged, then run the phase again",
+			branches, base, base, base)
+	case DepsStale:
+		return fmt.Sprintf("this phase would be stacked on %s, but that branch does not contain the work of %s, which %s already holds — "+
+			"bring %s up to date with %s (or merge it into %s), then run the phase again",
+			branches, strings.Join(e.Missing, ", "), base, branches, base, base)
+	}
 	return fmt.Sprintf("this phase depends on run branches that are not merged into %s and have diverged from one another: %s — "+
 		"merge them into %s (or one into the other), then run the phase again",
-		base, strings.Join(e.Branches, ", "), base)
+		base, branches, base)
 }
 
 func (e *DepsUnmergedError) Is(target error) bool { return target == ErrDepsUnmerged }
@@ -105,10 +144,27 @@ type depBranch struct {
 //     merging it into baseTip would change nothing (a squash merge leaves no
 //     ancestry, only the content). A branch that no longer exists counts as merged:
 //     a deleted run branch is the operator saying its work is accounted for.
+//     A branch whose merge into baseTip CONFLICTS is neither: see step 2a.
 //  3. Nothing unmerged ⇒ StartRef "" (unchanged behaviour).
 //  4. Exactly one unmerged tip that every other unmerged tip is an ancestor of ⇒
 //     start there: a linear chain, where the last branch already carries the rest.
+//     See step 4a for the condition that tip still has to meet.
 //  5. Otherwise ⇒ *DepsUnmergedError naming the branches.
+//
+// Two refusals guard the phase's one promise — the run starts on a tree that
+// contains its dependencies' work, or is told which branches to merge first:
+//
+//	2a. A dependency branch that conflicts with baseTip ⇒ *DepsUnmergedError
+//	    (DepsConflict). "Unmerged, stack on it" would be right for a branch that
+//	    really is unmerged and wrong for one that was squash-merged before the base
+//	    edited the same lines again: stacking there starts the run on a tree older
+//	    than the base, without everything merged since. The two cannot be told
+//	    apart from here, so neither is guessed.
+//	4a. The tip chosen in step 4 must hold every MERGED dependency's work too — its
+//	    tip is an ancestor of the chosen tip, or merging it in changes nothing.
+//	    Otherwise ⇒ *DepsUnmergedError (DepsStale): the branch was cut before
+//	    another dependency merged, and starting on it would silently drop that
+//	    dependency while the prompt says "stacked".
 //
 // The resolution is returned even alongside a *DepsUnmergedError, with BaseTip and
 // DepTips filled: the blocked fingerprint needs them whether or not a start point
@@ -137,7 +193,7 @@ func resolveBase(git worktree.Git, repoRoot string, depBranches []string) (baseR
 	}
 	res.BaseTip, res.BaseBranch = baseTip, baseBranch
 
-	var unmerged []depBranch
+	var merged, unmerged, conflicting []depBranch
 	for _, name := range uniqueSorted(depBranches) {
 		tip, exists, err := branchTip(git, repoRoot, name)
 		if err != nil {
@@ -147,15 +203,26 @@ func resolveBase(git worktree.Git, repoRoot string, depBranches []string) (baseR
 			continue // a deleted run branch counts as merged
 		}
 		res.DepTips = append(res.DepTips, tip)
-		merged, err := depMerged(git, repoRoot, baseTip, tip)
+		dep := depBranch{name: name, tip: tip}
+		state, err := depStateOf(git, repoRoot, baseTip, tip)
 		if err != nil {
 			return res, fmt.Errorf("resolve run base: %s: %w", name, err)
 		}
-		if !merged {
-			unmerged = append(unmerged, depBranch{name: name, tip: tip})
+		switch state {
+		case depMerged:
+			merged = append(merged, dep)
+		case depConflicts:
+			conflicting = append(conflicting, dep)
+		default:
+			unmerged = append(unmerged, dep)
 		}
 	}
 	sort.Strings(res.DepTips)
+	// Step 2a, ahead of everything else: while a conflicting branch is there, no
+	// start point this function could pick is known to hold its work.
+	if len(conflicting) > 0 {
+		return res, &DepsUnmergedError{Branches: branchNames(conflicting), Base: baseBranch, Cause: DepsConflict}
+	}
 	if len(unmerged) == 0 {
 		return res, nil
 	}
@@ -165,14 +232,61 @@ func resolveBase(git worktree.Git, repoRoot string, depBranches []string) (baseR
 		return res, fmt.Errorf("resolve run base: %w", err)
 	}
 	if !ok {
-		names := make([]string, 0, len(unmerged))
-		for _, d := range unmerged {
-			names = append(names, d.name)
+		return res, &DepsUnmergedError{Branches: branchNames(unmerged), Base: baseBranch, Cause: DepsDiverged}
+	}
+	// Step 4a: the unmerged set agreed on a tip — now the merged dependencies have
+	// to be in it as well.
+	missing, err := missingFrom(git, repoRoot, top, merged)
+	if err != nil {
+		return res, fmt.Errorf("resolve run base: %w", err)
+	}
+	if len(missing) > 0 {
+		return res, &DepsUnmergedError{
+			Branches: []string{top.name}, Base: baseBranch, Cause: DepsStale, Missing: branchNames(missing),
 		}
-		return res, &DepsUnmergedError{Branches: names, Base: baseBranch}
 	}
 	res.StartRef, res.StackedOn = top.tip, top.name
 	return res, nil
+}
+
+func branchNames(deps []depBranch) []string {
+	names := make([]string, 0, len(deps))
+	for _, d := range deps {
+		names = append(names, d.name)
+	}
+	return names
+}
+
+// missingFrom lists the MERGED dependencies whose work the chosen stack tip does
+// not hold. A merged dependency is present in the tip when its own tip is an
+// ancestor of it (the branch was cut after the merge landed), or when merging it
+// into the tip would change nothing (the tip picked the same content up another
+// way — through a squash on the base it was cut from, say). Anything else, a
+// conflict and a git too old to run the merge probe included, is "not provably
+// there", and not provably there is missing: this list becomes a refusal, and the
+// alternative is a run that starts without a dependency and says nothing.
+func missingFrom(git worktree.Git, repoRoot string, top depBranch, merged []depBranch) ([]depBranch, error) {
+	var missing []depBranch
+	for _, dep := range merged {
+		if dep.tip == top.tip {
+			continue
+		}
+		anc, err := isAncestor(git, repoRoot, dep.tip, top.tip)
+		if err != nil {
+			return nil, err
+		}
+		if anc {
+			continue
+		}
+		outcome, err := probeMerge(git, repoRoot, top.tip, dep.tip)
+		if err != nil {
+			return nil, fmt.Errorf("%s into %s: %w", dep.name, top.name, err)
+		}
+		if outcome != mergeNoOp {
+			missing = append(missing, dep)
+		}
+	}
+	return missing, nil
 }
 
 // containingTip finds the one unmerged branch whose tip every other unmerged tip
@@ -224,10 +338,33 @@ func currentTip(git worktree.Git, repoRoot string) (sha, branch string, err erro
 	return strings.TrimSpace(out), branch, nil
 }
 
+// exitStatus is the exit status git itself reported, when the failure WAS git
+// exiting: worktree.ExecGit wraps the *exec.ExitError, and a status is what that
+// carries. ok=false for everything else — a timeout (ExecGit reports it without an
+// exit status), a git binary that could not be started, a killed process.
+//
+// The distinction is the whole point of asking. Git answers several of the
+// questions below WITH its exit status — 1 is "no" from `rev-parse --verify
+// --quiet`, from `merge-base --is-ancestor`, and "it conflicts" from `merge-tree`
+// — and a probe that never produced a status has not answered at all. Reading a
+// silent failure as "no" is how a wedged filesystem would turn into "the branch is
+// gone, so it counts as merged".
+func exitStatus(err error) (status int, ok bool) {
+	var exited interface{ ExitCode() int }
+	if !errors.As(err, &exited) {
+		return 0, false
+	}
+	status = exited.ExitCode()
+	return status, status > 0 // -1 is "did not exit": killed by a signal
+}
+
 // branchTip resolves refs/heads/<branch>, telling "the branch is not there" apart
-// from "git could not answer" the way worktree.Manager does: `rev-parse --verify
-// --quiet` exits non-zero with NO output for an absent ref and prints a diagnostic
-// when git itself is unhappy. The second must never read as "merged".
+// from "git could not answer". `rev-parse --verify --quiet` exits 1 with NO output
+// for an absent ref; that, and only that, is "absent" — which resolveBase counts
+// as merged. Any other failure is an error that refuses the start: a diagnostic on
+// the output, another exit status, or no exit status at all (a timeout, a git that
+// did not run) must never read as "merged", because merged means "start on the
+// base without this dependency's branch".
 func branchTip(git worktree.Git, repoRoot, branch string) (tip string, exists bool, err error) {
 	out, runErr := git.Run(repoRoot, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
 	if runErr == nil {
@@ -237,64 +374,118 @@ func branchTip(git worktree.Git, repoRoot, branch string) (tip string, exists bo
 		}
 		return tip, true, nil
 	}
-	if strings.TrimSpace(out) == "" {
+	if status, ok := exitStatus(runErr); ok && status == 1 && strings.TrimSpace(out) == "" {
 		return "", false, nil
 	}
 	return "", false, fmt.Errorf("probe branch %s: %w", branch, runErr)
 }
 
-// depMerged reports whether the dependency tip is already contained in baseTip.
-func depMerged(git worktree.Git, repoRoot, baseTip, depTip string) (bool, error) {
+// depState is what one dependency branch is, relative to the base tip.
+type depState int
+
+const (
+	// depUnmerged: its work is not on the base, and merging it would apply cleanly
+	// — a branch a run may be stacked on.
+	depUnmerged depState = iota
+	// depMerged: an ancestor of the base, or a merge that changes nothing.
+	depMerged
+	// depConflicts: merging it into the base conflicts. Neither of the above can
+	// be claimed; resolveBase refuses (step 2a).
+	depConflicts
+)
+
+// depStateOf classifies the dependency tip against baseTip.
+func depStateOf(git worktree.Git, repoRoot, baseTip, depTip string) (depState, error) {
 	if depTip == baseTip {
-		return true, nil
+		return depMerged, nil
 	}
 	anc, err := isAncestor(git, repoRoot, depTip, baseTip)
-	if err != nil || anc {
-		return anc, err
+	if err != nil {
+		return depUnmerged, err
 	}
-	return mergeChangesNothing(git, repoRoot, baseTip, depTip), nil
+	if anc {
+		return depMerged, nil
+	}
+	outcome, err := probeMerge(git, repoRoot, baseTip, depTip)
+	if err != nil {
+		return depUnmerged, err
+	}
+	switch outcome {
+	case mergeNoOp:
+		return depMerged, nil
+	case mergeConflicts:
+		return depConflicts, nil
+	}
+	// mergeChanges, and mergeUnsupported: on a git without the probe the ancestor
+	// test above is the only judge — the documented fallback.
+	return depUnmerged, nil
 }
 
-// isAncestor runs `merge-base --is-ancestor a b`. Exit 1 with no output is the
-// plain "no"; anything that prints is git failing, and is returned as an error
-// rather than read as "not an ancestor" — that reading would turn a broken probe
-// into a stacking decision.
+// isAncestor runs `merge-base --is-ancestor a b`. Exit status 1 is the plain "no";
+// any other failure — another status, a diagnostic, no status at all — is git
+// failing, and is returned as an error rather than read as "not an ancestor": that
+// reading would turn a broken probe into a stacking decision.
 func isAncestor(git worktree.Git, repoRoot, a, b string) (bool, error) {
-	out, err := git.Run(repoRoot, "merge-base", "--is-ancestor", a, b)
+	_, err := git.Run(repoRoot, "merge-base", "--is-ancestor", a, b)
 	if err == nil {
 		return true, nil
 	}
-	if strings.TrimSpace(out) == "" {
+	if status, ok := exitStatus(err); ok && status == 1 {
 		return false, nil
 	}
 	return false, fmt.Errorf("ancestry of %s in %s: %w", a, b, err)
 }
 
-// mergeChangesNothing reports whether merging depTip into baseTip would leave
-// baseTip's tree exactly as it is — the signature of a SQUASH merge, which puts
-// the dependency's content on the base branch and none of its commits.
+// mergeOutcome is what merging one commit into another would do to the tree.
+type mergeOutcome int
+
+const (
+	// mergeNoOp: the result is the target's own tree. The signature of a SQUASH
+	// merge, which puts a branch's content on the target and none of its commits.
+	mergeNoOp mergeOutcome = iota
+	// mergeChanges: the merge applies cleanly and the tree changes.
+	mergeChanges
+	// mergeConflicts: the merge does not apply cleanly.
+	mergeConflicts
+	// mergeUnsupported: this git cannot run the probe (`merge-tree --write-tree`
+	// needs git ≥ 2.38, and an older one rejects the option). Nothing was learned.
+	mergeUnsupported
+)
+
+// probeMerge asks what merging `from` into `into` would do, without touching a
+// ref or a working tree: `git merge-tree --write-tree into from`.
 //
-// `git merge-tree --write-tree` needs git ≥ 2.38. On an older git the option is
-// rejected and this answers false, which leaves the ancestor test as the only
-// judge — the documented fallback: a squash-merged dependency then reads as
-// unmerged and the run is stacked on (or refused for) a branch whose work the base
-// already holds, which is conservative and never wrong about what the tree
-// contains. A real conflict answers false for the honest reason: a merge that
-// conflicts is not a no-op.
-func mergeChangesNothing(git worktree.Git, repoRoot, baseTip, depTip string) bool {
-	out, err := git.Run(repoRoot, "merge-tree", "--write-tree", baseTip, depTip)
+// Git answers with its exit status: 0 and the merged tree's id on the first line
+// for a clean merge, 1 for a conflicted one, and anything else when it could not
+// run the merge at all — which on a git older than 2.38 is every call, because the
+// option does not exist. That last case is mergeUnsupported, not an error: the
+// callers each have a documented answer for "no probe". A failure with NO exit
+// status (a timeout, a git that did not start) is an error, and so is a clean
+// merge whose answer cannot be read — an unreadable answer is not a decision.
+func probeMerge(git worktree.Git, repoRoot, into, from string) (mergeOutcome, error) {
+	out, err := git.Run(repoRoot, "merge-tree", "--write-tree", into, from)
 	if err != nil {
-		return false
+		status, ok := exitStatus(err)
+		switch {
+		case !ok:
+			return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: %w", from, into, err)
+		case status == 1:
+			return mergeConflicts, nil
+		}
+		return mergeUnsupported, nil
 	}
 	merged := firstLine(out)
 	if merged == "" {
-		return false
+		return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: git answered with nothing", from, into)
 	}
-	baseTree, err := git.Run(repoRoot, "rev-parse", baseTip+"^{tree}")
+	tree, err := git.Run(repoRoot, "rev-parse", into+"^{tree}")
 	if err != nil {
-		return false
+		return mergeUnsupported, fmt.Errorf("resolve tree of %s: %w", into, err)
 	}
-	return merged == strings.TrimSpace(baseTree)
+	if merged == strings.TrimSpace(tree) {
+		return mergeNoOp, nil
+	}
+	return mergeChanges, nil
 }
 
 func firstLine(s string) string {
@@ -388,7 +579,7 @@ func (s *Service) acquire(repoRoot, projectSlug, taskName, startRef string) (wor
 		return st.AcquireAt(repoRoot, projectSlug, taskName, startRef)
 	}
 	if startRef != "" {
-		return worktree.Acquired{}, ErrCannotStack
+		return worktree.Acquired{}, fmt.Errorf("%w: the wired worktree manager can only start a run on the repo's current branch tip", ErrCannotStack)
 	}
 	return s.Wt.Acquire(repoRoot, projectSlug, taskName)
 }

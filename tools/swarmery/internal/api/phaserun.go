@@ -228,6 +228,19 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	// request with {"force": true} runs it anyway.
 	case errors.As(err, &blockedErr):
 		writeBlockedUnchanged(w, blockedErr.Error(), blockedErr.Reason, blockedErr.Since, blockedErr.RetryAfter)
+	// Base resolution picked a dependency branch to start on, and the run could not
+	// be given a worktree that contains it: a leftover worktree of this phase
+	// predates the dependency's tip (or the manager cannot stack at all). Start
+	// wraps the acquire failure, so errors.Is matches through the wrap; the message
+	// names the worktree to finish or remove. Must stay above `case err != nil`.
+	case errors.Is(err, phaserun.ErrCannotStack):
+		writeStackRefusal(w, codeCannotStack, err.Error())
+	// The commit the run was resolved to start on stopped resolving before the
+	// worktree was cut. A retry resolves afresh.
+	case errors.Is(err, worktree.ErrStartRefUnresolved):
+		writeStackRefusal(w, codeStartRefUnresolved,
+			"the dependency commit this run was to start from no longer resolves in the repository "+
+				"(its branch was deleted or rewritten a moment ago) — run the phase again")
 	case errors.Is(err, phaserun.ErrNoDoc):
 		writeConflict(w, codeDocUnreadable, "phase doc is unreadable")
 	case errors.Is(err, phaserun.ErrNoPath):

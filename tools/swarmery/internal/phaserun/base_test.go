@@ -2,6 +2,7 @@ package phaserun
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -331,13 +332,21 @@ func TestResolveBase_DetachedHead(t *testing.T) {
 	}
 }
 
+// exitErr is a git failure that carries an exit status, the way the *exec.ExitError
+// inside worktree.ExecGit's errors does. A plain errors.New in a fake git is the
+// OTHER kind of failure — no status at all: a timeout, a git that never ran.
+type exitErr int
+
+func (e exitErr) Error() string { return "exit status " + strconv.Itoa(int(e)) }
+func (e exitErr) ExitCode() int { return int(e) }
+
 // oldGit is a git that predates `merge-tree --write-tree` (< 2.38): it rejects
 // the option exactly as such a git does, and runs everything else for real.
 type oldGit struct{ worktree.ExecGit }
 
 func (g oldGit) Run(dir string, args ...string) (string, error) {
 	if len(args) > 1 && args[0] == "merge-tree" && args[1] == "--write-tree" {
-		return "usage: git merge-tree <base-tree> <branch1> <branch2>\n", errors.New("exit status 129")
+		return "usage: git merge-tree <base-tree> <branch1> <branch2>\n", exitErr(129)
 	}
 	return g.ExecGit.Run(dir, args...)
 }
@@ -365,27 +374,186 @@ func TestResolveBase_OldGitFallsBackToAncestorTest(t *testing.T) {
 	if res, err := resolveBase(oldGit{}, r2.dir, []string{depA}); err != nil || res.StartRef != "" {
 		t.Errorf("ancestor dep on an old git: StartRef=%q err=%v, want merged", res.StartRef, err)
 	}
+
+	// …but the stack check has no such fallback. A MERGED dependency that is not an
+	// ancestor of the branch to stack on cannot be shown to be in it without the
+	// probe, and "cannot be shown" is a refusal, never a stack.
+	r3 := newTempRepo(t)
+	r3.branch(depA, "main", 1)
+	r3.branch(depB, "main", 1)
+	r3.run("merge", "-q", "--ff-only", depA)
+	_, err = resolveBase(oldGit{}, r3.dir, []string{depA, depB})
+	var stale *DepsUnmergedError
+	if !errors.As(err, &stale) || stale.Cause != DepsStale {
+		t.Errorf("stale stack tip on an old git: err = %v, want a DepsStale refusal", err)
+	}
 }
 
-// A dependency that CONFLICTS with the base is not a no-op merge: unmerged.
-func TestResolveBase_ConflictingDepIsUnmerged(t *testing.T) {
+// writeShared commits `content` to shared.txt on the repo's current branch.
+func (r *tempRepo) writeShared(content, msg string) string {
+	r.t.Helper()
+	mustWriteDoc(r.t, filepath.Join(r.dir, "shared.txt"), content)
+	r.run("add", "shared.txt")
+	r.run("commit", "-q", "-m", msg)
+	return r.tip("HEAD")
+}
+
+// wantRefusal asserts err is a *DepsUnmergedError of the given cause naming
+// exactly `branches`, and that nothing was chosen to start on.
+func wantRefusal(t *testing.T, res baseResolution, err error, cause string, branches ...string) *DepsUnmergedError {
+	t.Helper()
+	if !errors.Is(err, ErrDepsUnmerged) {
+		t.Fatalf("err = %v, want ErrDepsUnmerged (%s)", err, cause)
+	}
+	var refused *DepsUnmergedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("err = %v, want a *DepsUnmergedError", err)
+	}
+	if refused.Cause != cause {
+		t.Errorf("Cause = %q, want %q", refused.Cause, cause)
+	}
+	if !reflect.DeepEqual(refused.Branches, branches) {
+		t.Errorf("Branches = %v, want %v", refused.Branches, branches)
+	}
+	if res.StartRef != "" || res.StackedOn != "" {
+		t.Errorf("StartRef=%q StackedOn=%q alongside a refusal — nothing may be chosen to start on", res.StartRef, res.StackedOn)
+	}
+	return refused
+}
+
+// A dependency that CONFLICTS with the base is refused, not stacked on. "It
+// conflicts" cannot tell a branch whose work is missing from the base apart from
+// one that was squash-merged before the base edited the same lines — and stacking
+// on the second starts the run on a tree older than the base.
+func TestResolveBase_ConflictingDepIsRefused(t *testing.T) {
 	r := newTempRepo(t)
 	r.run("checkout", "-q", "-b", depA, "main")
-	mustWriteDoc(t, filepath.Join(r.dir, "shared.txt"), "from the dependency\n")
-	r.run("add", "shared.txt")
-	r.run("commit", "-q", "-m", "dep writes shared.txt")
-	tip := r.tip("HEAD")
+	r.writeShared("from the dependency\n", "dep writes shared.txt")
 	r.run("checkout", "-q", "main")
-	mustWriteDoc(t, filepath.Join(r.dir, "shared.txt"), "from main\n")
-	r.run("add", "shared.txt")
-	r.run("commit", "-q", "-m", "main writes shared.txt")
+	r.writeShared("from main\n", "main writes shared.txt")
 
 	res, err := resolveBase(r.git, r.dir, []string{depA})
+	refused := wantRefusal(t, res, err, DepsConflict, depA)
+	if refused.Base != "main" {
+		t.Errorf("Base = %q, want main", refused.Base)
+	}
+	// The hint: merge it, or delete it if it was already squash-merged.
+	for _, want := range []string{depA, "main", "does not merge cleanly", "delete the branch", "squash-merged"} {
+		if !strings.Contains(refused.Error(), want) {
+			t.Errorf("message %q does not carry %q", refused.Error(), want)
+		}
+	}
+	// The facts the blocked fingerprint needs are still there.
+	if res.BaseTip != r.tip("main") || len(res.DepTips) != 1 {
+		t.Errorf("BaseTip=%q DepTips=%v, want both filled alongside the refusal", res.BaseTip, res.DepTips)
+	}
+
+	// A conflicting branch outranks a stackable one beside it: while it is there,
+	// no start point is known to hold its work.
+	tipB := r.branch(depB, "main", 1)
+	res, err = resolveBase(r.git, r.dir, []string{depA, depB})
+	wantRefusal(t, res, err, DepsConflict, depA)
+	// …and the remedy the message names works: delete the conflicting branch, and
+	// the other dependency is stacked on as usual.
+	r.run("branch", "-D", depA)
+	if res, err := resolveBase(r.git, r.dir, []string{depA, depB}); err != nil || res.StartRef != tipB {
+		t.Errorf("after deleting the conflicting branch: StartRef=%q err=%v, want stacked on %s", res.StartRef, err, tipB)
+	}
+}
+
+// THE regression this refusal exists for. Dependency A was squash-merged and its
+// run branch survives; a later merged change edited the same lines. Merging A into
+// main now conflicts — and reading that as "unmerged, stack on it" would pin the
+// next dependent to A's stale tip, without anything merged since. Before base
+// resolution existed that run started on main and was correct.
+func TestResolveBase_SquashMergedThenEditedIsRefused(t *testing.T) {
+	r := newTempRepo(t)
+	r.writeShared("line one\nline two\n", "main adds shared.txt")
+	r.run("checkout", "-q", "-b", depA, "main")
+	staleTip := r.writeShared("line one\nline two — phase A\n", "phase A edits line two")
+	r.run("checkout", "-q", "main")
+	r.run("merge", "-q", "--squash", depA)
+	r.run("commit", "-q", "-m", "squash "+depA)
+
+	// Right after the squash the dependency reads as merged (case 6).
+	if res, err := resolveBase(r.git, r.dir, []string{depA}); err != nil || res.StartRef != "" {
+		t.Fatalf("right after the squash: StartRef=%q err=%v, want merged (test premise)", res.StartRef, err)
+	}
+
+	// A later merged phase edits the same hunk.
+	r.writeShared("line one\nline two — phase A, then phase C\n", "a later phase edits line two again")
+
+	res, err := resolveBase(r.git, r.dir, []string{depA})
+	wantRefusal(t, res, err, DepsConflict, depA)
+	if res.StartRef == staleTip {
+		t.Errorf("the run was pinned to the stale squash-merged tip %s", staleTip)
+	}
+}
+
+// THE other regression. Phases 1 and 2 are both cut from main@M0; 1 merges into
+// main, 2 does not. A phase depending on both must not be pinned to 2's tip: that
+// tree was cut before 1 landed and does not contain it, while the prompt would say
+// "stacked". Refused, naming the branch that has to be brought up to date.
+func TestResolveBase_StackTipLacksMergedDep(t *testing.T) {
+	for _, mode := range []string{"--ff-only", "--no-ff", "--squash"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newTempRepo(t)
+			r.branch(depA, "main", 1) // both cut from main@M0
+			tipB := r.branch(depB, "main", 1)
+			if mode == "--squash" {
+				r.run("merge", "-q", "--squash", depA)
+				r.run("commit", "-q", "-m", "squash "+depA)
+			} else {
+				r.run("merge", "-q", mode, "-m", "merge "+depA, depA)
+			}
+
+			res, err := resolveBase(r.git, r.dir, []string{depA, depB})
+			refused := wantRefusal(t, res, err, DepsStale, depB)
+			if !reflect.DeepEqual(refused.Missing, []string{depA}) {
+				t.Errorf("Missing = %v, want the merged dependency [%s]", refused.Missing, depA)
+			}
+			if refused.Base != "main" {
+				t.Errorf("Base = %q, want main", refused.Base)
+			}
+			for _, want := range []string{depB, depA, "main", "up to date"} {
+				if !strings.Contains(refused.Error(), want) {
+					t.Errorf("message %q does not carry %q", refused.Error(), want)
+				}
+			}
+			if res.StartRef == tipB {
+				t.Errorf("the run was pinned to %s, which lacks %s", depB, depA)
+			}
+
+			// The remedy the message names works: bring B up to date with main, and
+			// the run is stacked on a tip that now holds both.
+			r.run("checkout", "-q", depB)
+			r.run("merge", "-q", "--no-ff", "-m", "bring "+depB+" up to date", "main")
+			updated := r.tip("HEAD")
+			r.run("checkout", "-q", "main")
+			res, err = resolveBase(r.git, r.dir, []string{depA, depB})
+			if err != nil || res.StartRef != updated || res.StackedOn != depB {
+				t.Errorf("after bringing %s up to date: stacked on %q at %s (err %v), want %q at %s",
+					depB, res.StackedOn, res.StartRef, err, depB, updated)
+			}
+		})
+	}
+}
+
+// A squash-merged dependency IS in a branch cut after the squash landed: not by
+// ancestry, but merging it in changes nothing. That stacks.
+func TestResolveBase_StackTipHoldsSquashedDep(t *testing.T) {
+	r := newTempRepo(t)
+	r.branch(depA, "main", 1)
+	r.run("merge", "-q", "--squash", depA)
+	r.run("commit", "-q", "-m", "squash "+depA)
+	tipB := r.branch(depB, "main", 1) // cut AFTER the squash
+
+	res, err := resolveBase(r.git, r.dir, []string{depA, depB})
 	if err != nil {
 		t.Fatalf("resolveBase: %v", err)
 	}
-	if res.StartRef != tip {
-		t.Errorf("StartRef = %q, want the conflicting dependency's tip %s", res.StartRef, tip)
+	if res.StartRef != tipB || res.StackedOn != depB {
+		t.Errorf("stacked on %q at %s, want %q at %s", res.StackedOn, res.StartRef, depB, tipB)
 	}
 }
 
@@ -444,102 +612,188 @@ func (g scriptedGit) Run(_ string, args ...string) (string, error) {
 	return g.answers[best].out, g.answers[best].err
 }
 
+// scriptedHead is the prelude every scripted resolution answers: on `main`, at
+// base000.
+var scriptedHead = map[string]scriptedAnswer{
+	"symbolic-ref --short HEAD": {out: "main\n"},
+	"rev-parse refs/heads/main": {out: "base000\n"},
+}
+
+// scripted builds a fake git from scriptedHead plus the given answers.
+func scripted(extra ...map[string]scriptedAnswer) scriptedGit {
+	all := make(map[string]scriptedAnswer)
+	for k, v := range scriptedHead {
+		all[k] = v
+	}
+	for _, m := range extra {
+		for k, v := range m {
+			all[k] = v
+		}
+	}
+	return scriptedGit{answers: all}
+}
+
 // A probe git could not answer is an ERROR at every step — never a confident
-// "merged", "missing" or "not an ancestor".
+// "merged", "missing", "not an ancestor" or "conflicts". Two kinds of failure are
+// scripted: git exiting with a status that is not the probe's "no" (exitErr), and
+// a failure with NO exit status at all (a plain error: a timeout, a git that never
+// ran). The second is the one that used to slip through as an answer.
 func TestResolveBase_BrokenProbesAreErrors(t *testing.T) {
-	head := map[string]scriptedAnswer{
-		"symbolic-ref --short HEAD": {out: "main\n"},
-		"rev-parse refs/heads/main": {out: "base000\n"},
-	}
-	with := func(extra map[string]scriptedAnswer) scriptedGit {
-		all := make(map[string]scriptedAnswer, len(head)+len(extra))
-		for k, v := range head {
-			all[k] = v
-		}
-		for k, v := range extra {
-			all[k] = v
-		}
-		return scriptedGit{answers: all}
-	}
-	broken := errors.New("exit 128")
+	loud := exitErr(128)
+	silent := errors.New("git rev-parse timed out after 30s")
+	oneDep := map[string]scriptedAnswer{"rev-parse --verify --quiet": {out: "dep111\n"}}
+	notAncestor := map[string]scriptedAnswer{"merge-base --is-ancestor dep111 base000": {err: exitErr(1)}}
 
 	cases := map[string]scriptedGit{
-		"base tip unresolvable": with(map[string]scriptedAnswer{
-			"rev-parse refs/heads/main": {out: "fatal: bad ref\n", err: broken},
+		"base tip unresolvable": scripted(map[string]scriptedAnswer{
+			"rev-parse refs/heads/main": {out: "fatal: bad ref\n", err: loud},
 		}),
-		"branch probe fails loudly": with(map[string]scriptedAnswer{
-			"rev-parse --verify --quiet": {out: "fatal: unable to read ref\n", err: broken},
+		"branch probe fails loudly": scripted(map[string]scriptedAnswer{
+			"rev-parse --verify --quiet": {out: "fatal: unable to read ref\n", err: loud},
 		}),
-		"branch probe answers nothing": with(map[string]scriptedAnswer{
+		// THE case: no output and no exit status. It used to read as "the branch is
+		// absent", which resolveBase counts as merged — a wedged git failing toward
+		// the stale base.
+		"branch probe times out silently": scripted(map[string]scriptedAnswer{
+			"rev-parse --verify --quiet": {err: silent},
+		}),
+		"branch probe exits with another status, silently": scripted(map[string]scriptedAnswer{
+			"rev-parse --verify --quiet": {err: loud},
+		}),
+		"branch probe says no, but prints": scripted(map[string]scriptedAnswer{
+			"rev-parse --verify --quiet": {out: "warning: something\n", err: exitErr(1)},
+		}),
+		"branch probe answers nothing": scripted(map[string]scriptedAnswer{
 			"rev-parse --verify --quiet": {out: "\n"},
 		}),
-		"ancestry probe fails loudly": with(map[string]scriptedAnswer{
-			"rev-parse --verify --quiet": {out: "dep111\n"},
-			"merge-base --is-ancestor":   {out: "fatal: not a valid object name\n", err: broken},
+		"ancestry probe fails loudly": scripted(oneDep, map[string]scriptedAnswer{
+			"merge-base --is-ancestor": {out: "fatal: not a valid object name\n", err: loud},
+		}),
+		"ancestry probe times out silently": scripted(oneDep, map[string]scriptedAnswer{
+			"merge-base --is-ancestor": {err: silent},
+		}),
+		"merge probe times out": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"merge-tree": {err: silent},
+		}),
+		"merge probe succeeds with nothing": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"merge-tree": {out: "\n"},
+		}),
+		"merge probe's base tree is unresolvable": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"merge-tree":               {out: "tree999\n"},
+			"rev-parse base000^{tree}": {out: "fatal\n", err: loud},
 		}),
 	}
 	for name, git := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := resolveBase(git, "/repo", []string{depA}); err == nil {
-				t.Fatal("resolveBase succeeded on a broken probe")
-			} else if errors.Is(err, ErrDepsUnmerged) {
+			res, err := resolveBase(git, "/repo", []string{depA})
+			if err == nil {
+				t.Fatalf("resolveBase succeeded on a broken probe: %+v", res)
+			}
+			if errors.Is(err, ErrDepsUnmerged) {
 				t.Fatalf("err = %v — a broken probe was reported as unmerged dependencies", err)
+			}
+			if res.StartRef != "" {
+				t.Errorf("StartRef = %q alongside a probe failure", res.StartRef)
 			}
 		})
 	}
 
-	// The ancestry probe between two unmerged tips fails too.
-	chain := with(map[string]scriptedAnswer{
+	twoDeps := map[string]scriptedAnswer{
 		"rev-parse --verify --quiet refs/heads/" + depA: {out: "aaa111\n"},
 		"rev-parse --verify --quiet refs/heads/" + depB: {out: "bbb222\n"},
-		"merge-base --is-ancestor aaa111 base000":       {err: errors.New("exit 1")},
-		"merge-base --is-ancestor bbb222 base000":       {err: errors.New("exit 1")},
-		"merge-tree":                             {err: errors.New("exit 1")},
-		"merge-base --is-ancestor bbb222 aaa111": {out: "fatal: boom\n", err: broken},
+		"merge-base --is-ancestor aaa111 base000":       {err: exitErr(1)},
+		"merge-base --is-ancestor bbb222 base000":       {err: exitErr(1)},
+		"merge-tree":               {out: "tree999\n"},
+		"rev-parse base000^{tree}": {out: "tree000\n"},
+	}
+	// The ancestry probe between two unmerged tips fails too.
+	chain := scripted(twoDeps, map[string]scriptedAnswer{
+		"merge-base --is-ancestor bbb222 aaa111": {out: "fatal: boom\n", err: loud},
 	})
 	if _, err := resolveBase(chain, "/repo", []string{depA, depB}); err == nil || errors.Is(err, ErrDepsUnmerged) {
 		t.Fatalf("err = %v, want the broken tip-to-tip probe surfaced", err)
 	}
+
+	// …and so do both probes of the stack check: A is merged (an ancestor of the
+	// base), B is the branch to stack on, and whether A is IN B cannot be asked.
+	stackCheck := map[string]scriptedAnswer{
+		"rev-parse --verify --quiet refs/heads/" + depA: {out: "aaa111\n"},
+		"rev-parse --verify --quiet refs/heads/" + depB: {out: "bbb222\n"},
+		"merge-base --is-ancestor bbb222 base000":       {err: exitErr(1)},
+		"merge-tree --write-tree base000 bbb222":        {out: "tree999\n"},
+		"rev-parse base000^{tree}":                      {out: "tree000\n"},
+	}
+	for name, extra := range map[string]map[string]scriptedAnswer{
+		"ancestry of the merged dep in the stack tip": {
+			"merge-base --is-ancestor aaa111 bbb222": {err: silent},
+		},
+		"merge probe of the merged dep into the stack tip": {
+			"merge-base --is-ancestor aaa111 bbb222": {err: exitErr(1)},
+			"merge-tree --write-tree bbb222 aaa111":  {err: silent},
+		},
+	} {
+		if _, err := resolveBase(scripted(stackCheck, extra), "/repo", []string{depA, depB}); err == nil || errors.Is(err, ErrDepsUnmerged) {
+			t.Errorf("%s: err = %v, want the broken probe surfaced", name, err)
+		}
+	}
 }
 
-// merge-tree answers that cannot be read as a tree are "not a no-op": unmerged.
-func TestResolveBase_UnreadableMergeTreeIsUnmerged(t *testing.T) {
-	base := map[string]scriptedAnswer{
-		"symbolic-ref --short HEAD":               {out: "main\n"},
-		"rev-parse refs/heads/main":               {out: "base000\n"},
+// The three answers the merge probe CAN give, and the one it gives on a git too
+// old to run it, each read for what it is.
+func TestResolveBase_MergeProbeAnswers(t *testing.T) {
+	prelude := map[string]scriptedAnswer{
 		"rev-parse --verify --quiet":              {out: "dep111\n"},
-		"merge-base --is-ancestor dep111 base000": {err: errors.New("exit 1")},
+		"merge-base --is-ancestor dep111 base000": {err: exitErr(1)},
+		"rev-parse base000^{tree}":                {out: "tree000\n"},
 	}
-	cases := map[string]map[string]scriptedAnswer{
-		"empty output":            {"merge-tree": {out: "\n"}},
-		"base tree unresolvable":  {"merge-tree": {out: "tree999\n"}, "rev-parse base000^{tree}": {out: "fatal\n", err: errors.New("exit 128")}},
-		"a different merged tree": {"merge-tree": {out: "tree999\n"}, "rev-parse base000^{tree}": {out: "tree000\n"}},
+	resolve := func(mergeTree scriptedAnswer) (baseResolution, error) {
+		return resolveBase(scripted(prelude, map[string]scriptedAnswer{"merge-tree": mergeTree}), "/repo", []string{depA})
 	}
-	for name, extra := range cases {
-		t.Run(name, func(t *testing.T) {
-			all := make(map[string]scriptedAnswer)
-			for k, v := range base {
-				all[k] = v
-			}
-			for k, v := range extra {
-				all[k] = v
-			}
-			res, err := resolveBase(scriptedGit{answers: all}, "/repo", []string{depA})
-			if err != nil {
-				t.Fatalf("resolveBase: %v", err)
-			}
-			if res.StartRef != "dep111" {
-				t.Errorf("StartRef = %q, want the dependency stacked on", res.StartRef)
-			}
-		})
+
+	// The target's own tree ⇒ a no-op merge ⇒ merged. Only the first line is the
+	// tree; whatever follows it is not.
+	if res, err := resolve(scriptedAnswer{out: "tree000\nextra line\n"}); err != nil || res.StartRef != "" {
+		t.Errorf("no-op merge: StartRef=%q err=%v, want merged", res.StartRef, err)
 	}
-	// The matching tree IS a no-op merge.
-	all := map[string]scriptedAnswer{"merge-tree": {out: "tree000\nextra line\n"}, "rev-parse base000^{tree}": {out: "tree000\n"}}
-	for k, v := range base {
-		all[k] = v
+	// A clean merge that changes the tree ⇒ unmerged ⇒ stacked on.
+	if res, err := resolve(scriptedAnswer{out: "tree999\n"}); err != nil || res.StartRef != "dep111" {
+		t.Errorf("clean, tree-changing merge: StartRef=%q err=%v, want the dependency stacked on", res.StartRef, err)
 	}
-	if res, err := resolveBase(scriptedGit{answers: all}, "/repo", []string{depA}); err != nil || res.StartRef != "" {
-		t.Errorf("matching tree: StartRef=%q err=%v, want merged", res.StartRef, err)
+	// Exit status 1 ⇒ a conflict ⇒ refused. git prints the conflicted tree and the
+	// conflict list on this path; none of it is read as a tree.
+	res, err := resolve(scriptedAnswer{out: "tree555\n100644 aaa 1\tshared.txt\n\nCONFLICT (content)\n", err: exitErr(1)})
+	wantRefusal(t, res, err, DepsConflict, depA)
+	// Any other exit status ⇒ this git cannot run the probe ⇒ the ancestor test
+	// alone decides (the documented fallback) ⇒ unmerged ⇒ stacked on.
+	if res, err := resolve(scriptedAnswer{out: "usage: git merge-tree …\n", err: exitErr(129)}); err != nil || res.StartRef != "dep111" {
+		t.Errorf("unsupported probe: StartRef=%q err=%v, want the ancestor-test fallback to stack", res.StartRef, err)
+	}
+}
+
+// An absent run branch — exit status 1, nothing printed — is the ONE failure of
+// the ref lookup that is an answer, and it counts as merged.
+func TestResolveBase_AbsentBranchIsExitStatusOne(t *testing.T) {
+	git := scripted(map[string]scriptedAnswer{"rev-parse --verify --quiet": {err: exitErr(1)}})
+	res, err := resolveBase(git, "/repo", []string{depA})
+	if err != nil {
+		t.Fatalf("resolveBase: %v", err)
+	}
+	if res.StartRef != "" || len(res.DepTips) != 0 {
+		t.Errorf("StartRef=%q DepTips=%v, want an absent branch to count as merged and contribute no tip", res.StartRef, res.DepTips)
+	}
+
+	// exitStatus itself: a status is a status only when git exited with one.
+	if status, ok := exitStatus(exitErr(1)); !ok || status != 1 {
+		t.Errorf("exitStatus(exit 1) = %d, %v", status, ok)
+	}
+	if _, ok := exitStatus(errors.New("timed out")); ok {
+		t.Error("exitStatus read a status out of an error that carries none")
+	}
+	if _, ok := exitStatus(exitErr(-1)); ok {
+		t.Error("exitStatus read -1 (killed by a signal) as an exit status")
+	}
+	if _, ok := exitStatus(fmt.Errorf("git rev-parse: %w: tail", exitErr(128))); !ok {
+		t.Error("exitStatus did not see through the wrap worktree.ExecGit applies")
 	}
 }
 

@@ -211,6 +211,15 @@ func (m *Manager) Acquire(repoRoot, projectSlug, taskID string) (Acquired, error
 // dependency branch may have moved since. StartPoint is therefore the merge base
 // of the run branch and startRef — the commit this run's own work actually starts
 // after — not the freshly resolved tip, which the branch may not even contain.
+//
+// That difference is also the caller's signal. A StartPoint equal to the commit
+// startRef resolves to means the worktree contains it — always true for a fresh
+// one, and true for a reused one whose branch was cut at or after that commit. A
+// StartPoint that differs means a reused branch forks EARLIER and lacks whatever
+// startRef gained since; a caller that needs the tree to contain startRef must
+// compare the two and refuse (phaserun.Start does). This function does not refuse
+// on its own: it never destroys a leftover worktree, and whether an older fork
+// point is acceptable is the caller's contract, not this package's.
 func (m *Manager) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (Acquired, error) {
 	path, err := m.Path(projectSlug, taskID)
 	if err != nil {

@@ -283,6 +283,35 @@ func writeBlockedUnchanged(w http.ResponseWriter, message, reason, since, retryA
 	})
 }
 
+// The two ways a STACKED phase run can be resolved onto a dependency branch and
+// still not be given a worktree that contains it. Both used to fall through to the
+// generic 500 arm carrying a wrapped Go error; both are states the operator can
+// resolve, so both are 409s with a discriminator. Phase-run-only, like
+// codeDepsUnmerged: nothing else stacks.
+const (
+	// codeCannotStack: the run cannot be started on its dependency branch — in
+	// practice, a leftover worktree of this phase (a crashed run's) was about to be
+	// reused, and its branch was cut before the dependency's current tip. The
+	// message names the worktree and says to finish or remove it.
+	codeCannotStack = "cannot-stack"
+	// codeStartRefUnresolved: the commit the run was resolved to start on no longer
+	// resolves in the repository (the dependency branch was deleted or rewritten
+	// between resolution and acquisition). Nothing about the phase is wrong; the
+	// same request resolves afresh.
+	codeStartRefUnresolved = "start-ref-unresolved"
+)
+
+// writeStackRefusal renders either of them: 409 {"error": code, "code": code,
+// "message": …} — the shape codeDepsUnmerged uses, so the three refusals base
+// resolution can end in read alike on the wire and the client shows `message`.
+func writeStackRefusal(w http.ResponseWriter, code, message string) {
+	writeJSONStatus(w, http.StatusConflict, map[string]any{
+		"error":   code,
+		"code":    code,
+		"message": message,
+	})
+}
+
 // writeConflict replies 409 {"error": msg, "code": code}.
 func writeConflict(w http.ResponseWriter, code, msg string) {
 	writeConflictFields(w, code, msg, nil)

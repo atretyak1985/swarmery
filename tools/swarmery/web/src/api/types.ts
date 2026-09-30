@@ -3386,7 +3386,13 @@ export type RunConflictCode =
   | 'deps-unmerged'
   /** phase run only: the last run ended blocked and nothing a re-run would see has
    *  changed. Lapses at `retryAfter`; `{force: true}` on the request runs it anyway. */
-  | 'blocked-unchanged';
+  | 'blocked-unchanged'
+  /** phase run only: the run was resolved onto a dependency branch but a leftover
+   *  worktree of this phase predates that branch's tip — `message` names it. */
+  | 'cannot-stack'
+  /** phase run only: the dependency commit to start from stopped resolving between
+   *  resolution and acquisition; the same request resolves afresh. */
+  | 'start-ref-unresolved';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';

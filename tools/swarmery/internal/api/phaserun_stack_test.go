@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -239,6 +240,140 @@ func TestRunPhaseBlockedUnchanged(t *testing.T) {
 	if runner.runs != 2 {
 		t.Errorf("runs = %d, want the forced run spawned (2)", runner.runs)
 	}
+}
+
+// stackRefusalBody is the wire shape of the refusals base resolution can end in.
+type stackRefusalBody struct {
+	Error    string   `json:"error"`
+	Code     string   `json:"code"`
+	Message  string   `json:"message"`
+	Branches []string `json:"branches"`
+	Base     string   `json:"base"`
+}
+
+func decodeStackRefusal(t *testing.T, resp *http.Response) stackRefusalBody {
+	t.Helper()
+	var body stackRefusalBody
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+// TestRunPhaseDepsUnmergedConflictHint: a dependency branch that CONFLICTS with
+// the base is refused as deps-unmerged, and the message the client shows carries
+// the remedy for this case — merge it, or delete it if it was already
+// squash-merged — rather than the diverged-branches sentence.
+func TestRunPhaseDepsUnmergedConflictHint(t *testing.T) {
+	srv, db, taskID, _ := epicFixture(t)
+	p1, p2 := fixturePhaseIDs(t, db, taskID)
+	repo, git := stackGitRepo(t)
+
+	const branch = "swarm/phase-9003"
+	writeShared := func(content, msg string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, "shared.txt"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git("add", "shared.txt")
+		git("commit", "-q", "-m", msg)
+	}
+	git("checkout", "-q", "-b", branch, "main")
+	writeShared("from the dependency\n", "dep writes shared.txt")
+	git("checkout", "-q", "main")
+	writeShared("from main\n", "main writes shared.txt")
+
+	mustExecStack(t, db, `UPDATE projects SET path=? WHERE id=1`, repo)
+	mustExecStack(t, db, `UPDATE epic_phases SET checkboxes_done=2, run_state='done', run_branch=? WHERE id=?`, branch, p1)
+
+	runner := &phaseStubRunner{}
+	svc := attachPhaseRun(t, db, runner, true)
+	svc.Git = worktree.ExecGit{}
+
+	resp := postPhase(t, phaseRunURL(srv, taskID, p2))
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	}
+	body := decodeStackRefusal(t, resp)
+	if body.Error != "deps-unmerged" || body.Code != "deps-unmerged" {
+		t.Errorf("error=%q code=%q, want deps-unmerged in both", body.Error, body.Code)
+	}
+	if !reflect.DeepEqual(body.Branches, []string{branch}) || body.Base != "main" {
+		t.Errorf("branches=%v base=%q, want [%s] and main", body.Branches, body.Base, branch)
+	}
+	for _, want := range []string{branch, "does not merge cleanly", "delete the branch", "squash-merged"} {
+		if !strings.Contains(body.Message, want) {
+			t.Errorf("message %q does not carry %q", body.Message, want)
+		}
+	}
+	if n := len(runner.dispatchedSpecs()); n != 0 {
+		t.Errorf("dispatched %d run(s), want 0", n)
+	}
+}
+
+// TestRunPhaseStackRefusals: the two ways a run resolved onto a dependency branch
+// can fail to be given a worktree that contains it. Both used to reach the generic
+// 500 arm; both are 409s with a stable discriminator and a sentence in `message`.
+// The STATUS is the point — an arm placed below `case err != nil` is dead code no
+// body assertion would reveal.
+func TestRunPhaseStackRefusals(t *testing.T) {
+	// cannot-stack, through the real path: one unmerged dependency, real git, and
+	// a worktree manager that can only start a run on the repo's branch tip.
+	t.Run("cannot-stack", func(t *testing.T) {
+		srv, db, taskID, _ := epicFixture(t)
+		p1, p2 := fixturePhaseIDs(t, db, taskID)
+		repo, git := stackGitRepo(t)
+		const branch = "swarm/phase-9004"
+		git("checkout", "-q", "-b", branch, "main")
+		stackCommit(t, repo, git, "dependency work")
+		git("checkout", "-q", "main")
+		mustExecStack(t, db, `UPDATE projects SET path=? WHERE id=1`, repo)
+		mustExecStack(t, db, `UPDATE epic_phases SET checkboxes_done=2, run_state='done', run_branch=? WHERE id=?`, branch, p1)
+
+		runner := &phaseStubRunner{}
+		svc := attachPhaseRun(t, db, runner, true) // phaseStubWt has no AcquireAt
+		svc.Git = worktree.ExecGit{}
+
+		resp := postPhase(t, phaseRunURL(srv, taskID, p2))
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("status = %d, want 409", resp.StatusCode)
+		}
+		body := decodeStackRefusal(t, resp)
+		if body.Error != "cannot-stack" || body.Code != "cannot-stack" {
+			t.Errorf("error=%q code=%q, want cannot-stack in both", body.Error, body.Code)
+		}
+		if !strings.Contains(body.Message, "dependency branch") {
+			t.Errorf("message = %q, want it to say what could not be done", body.Message)
+		}
+		if n := len(runner.dispatchedSpecs()); n != 0 {
+			t.Errorf("dispatched %d run(s), want 0", n)
+		}
+		var state string
+		if err := db.QueryRow(`SELECT run_state FROM epic_phases WHERE id=?`, p2).Scan(&state); err != nil || state != "idle" {
+			t.Errorf("run_state = %q (%v), want idle — nothing may be stamped", state, err)
+		}
+	})
+
+	// start-ref-unresolved: the sentinel as the worktree manager raises it, wrapped
+	// the way Start wraps every reclaim/acquire failure.
+	t.Run("start-ref-unresolved", func(t *testing.T) {
+		srv, db, taskID, _ := epicFixture(t)
+		p1, _ := fixturePhaseIDs(t, db, taskID)
+		attachPhaseRunWt(t, db, &phaseStubRunner{}, true,
+			&phaseWtStub{reclaimErr: fmt.Errorf("%w: deadbeef", worktree.ErrStartRefUnresolved)})
+
+		resp := postPhase(t, phaseRunURL(srv, taskID, p1))
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("status = %d, want 409", resp.StatusCode)
+		}
+		body := decodeStackRefusal(t, resp)
+		if body.Error != "start-ref-unresolved" || body.Code != "start-ref-unresolved" {
+			t.Errorf("error=%q code=%q, want start-ref-unresolved in both", body.Error, body.Code)
+		}
+		if !strings.Contains(body.Message, "run the phase again") {
+			t.Errorf("message = %q, want it to say what to do", body.Message)
+		}
+	})
 }
 
 func mustExecStack(t *testing.T, db *sql.DB, q string, args ...any) {

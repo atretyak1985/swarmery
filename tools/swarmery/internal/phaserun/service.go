@@ -708,6 +708,23 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		release()
 		return "", fmt.Errorf("worktree acquire: %w", err)
 	}
+	// A FRESH worktree is cut from base.StartRef, so its start point is that SHA.
+	// A different start point means the manager WARM-REUSED a leftover worktree of
+	// this phase (a crashed run's), whose branch forks from the dependency earlier
+	// than the dependency's current tip — AcquireAt reports that fork point. The
+	// tree is then missing dependency work the run was resolved to start on, and
+	// the prompt below would call it "stacked" regardless. Refuse instead.
+	//
+	// The worktree is deliberately NOT removed: this call did not create it, and it
+	// may hold the only copy of the crashed run's uncommitted work. The slot is
+	// released and nothing is stamped, exactly as for every refusal above.
+	if base.StartRef != "" && acq.StartPoint != base.StartRef {
+		release()
+		return "", fmt.Errorf("worktree acquire: %w: a leftover worktree of this phase at %s (branch %s) forks from %s at %s "+
+			"and does not contain that branch's current tip %s — finish or remove the leftover worktree "+
+			"(`git worktree remove`, after saving anything in it worth keeping), then run the phase again",
+			ErrCannotStack, acq.Path, acq.Branch, base.StackedOn, acq.StartPoint, base.StartRef)
+	}
 
 	// run_checkboxes_before=checkboxes_done snapshots the ticked-criteria baseline
 	// in the SAME statement — no extra round trip, and no race with a concurrent

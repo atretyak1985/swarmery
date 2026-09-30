@@ -345,6 +345,144 @@ func TestStartKeepsAStackedBranchWithItsOwnWork(t *testing.T) {
 	}
 }
 
+// leftoverWorktree stands in for a crashed run of phase 2: its worktree is still
+// registered on its own branch at the run's deterministic path, cut from `at`, and
+// the row carries what that run's Start stamped before the daemon died and what
+// HealStale wrote when it came back — the branch, the start point, `failed`.
+func (e *stackEnv) leftoverWorktree(t *testing.T, at string) worktree.Acquired {
+	t.Helper()
+	acq, err := e.mgr.AcquireAt(e.repo.dir, "p", runcore.PhaseTaskName(e.p2), at)
+	if err != nil {
+		t.Fatalf("set up the leftover worktree: %v", err)
+	}
+	mustExec(t, e.db, `UPDATE epic_phases
+		   SET run_state='failed', run_error='daemon restart', run_branch=?, run_start_point=?
+		 WHERE id=?`, acq.Branch, acq.StartPoint, e.p2)
+	return acq
+}
+
+// TestStartRefusesWarmReuseThatLacksTheDependencyTip: a crashed run left its
+// worktree behind, cut from the dependency's tip AS IT WAS; the dependency branch
+// has gained a commit since. The retry warm-reuses that worktree — whose tree does
+// not contain the commit the run was just resolved to start on. Telling the
+// executor it is "stacked on" the dependency would be false, so the start is
+// refused, and the leftover (which may hold the crashed run's only copy of its
+// work) is left exactly where it is.
+func TestStartRefusesWarmReuseThatLacksTheDependencyTip(t *testing.T) {
+	e := newStackEnv(t)
+	leftover := e.leftoverWorktree(t, e.depTip)
+	mustWriteDoc(t, filepath.Join(leftover.Path, "uncommitted.txt"), "the crashed run's work in progress\n")
+
+	e.repo.run("checkout", "-q", e.depBranch)
+	newTip := e.repo.commit("a fix on the dependency branch")
+	e.repo.run("checkout", "-q", "main")
+
+	_, err := e.svc.Start(e.p2, "", "")
+	if !errors.Is(err, ErrCannotStack) {
+		t.Fatalf("err = %v, want ErrCannotStack", err)
+	}
+	// The message names what to act on: the leftover, the branch, both commits.
+	for _, want := range []string{leftover.Path, leftover.Branch, e.depBranch, e.depTip, newTip, "git worktree remove"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("message %q does not carry %q", err.Error(), want)
+		}
+	}
+	// A refusal, not a teardown: nothing spawned, nothing stamped, the slot free —
+	// and the leftover worktree, its branch and its uncommitted file untouched.
+	if n := e.runner.specCount(); n != 0 {
+		t.Errorf("spawned %d times, want 0", n)
+	}
+	if e.svc.Slots.IsActive(e.svc.slotKey(e.p2)) {
+		t.Error("the refused run is holding the slot")
+	}
+	if state, uuid, _, runErr := phaseRow(t, e.db, e.p2); state != "failed" || uuid.Valid || runErr.String != "daemon restart" {
+		t.Errorf("row after the refusal = %q / %v / %q, want it exactly as the crashed run left it", state, uuid, runErr.String)
+	}
+	if _, statErr := os.Stat(filepath.Join(leftover.Path, "uncommitted.txt")); statErr != nil {
+		t.Errorf("the leftover worktree's uncommitted work is gone: %v", statErr)
+	}
+	if got := e.repo.tip("refs/heads/" + leftover.Branch); got != e.depTip {
+		t.Errorf("leftover branch = %s, want it untouched at %s", got, e.depTip)
+	}
+
+	// The remedy the message names works: remove the leftover, and the run is cut
+	// fresh from the dependency's current tip.
+	e.repo.run("worktree", "remove", "--force", leftover.Path)
+	var headAtSpawn string
+	e.setRun(func(spec RunSpec) (*Run, error) {
+		headAtSpawn = strings.TrimSpace(e.repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+		e.finishPhase2(t, spec)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	})
+	if _, err := e.svc.Start(e.p2, "", ""); err != nil {
+		t.Fatalf("Start after removing the leftover: %v", err)
+	}
+	if headAtSpawn != newTip {
+		t.Errorf("worktree HEAD at spawn = %s, want the dependency's current tip %s", headAtSpawn, newTip)
+	}
+}
+
+// TestStartWarmReuseOnTheCurrentDependencyTipIsStacked: the same leftover, with
+// the dependency branch where it was. The reused tree DOES contain the tip, so the
+// run is admitted, continues on top of the crashed run's commit, and is told — this
+// time truthfully — what it is stacked on.
+func TestStartWarmReuseOnTheCurrentDependencyTipIsStacked(t *testing.T) {
+	e := newStackEnv(t)
+	leftover := e.leftoverWorktree(t, e.depTip)
+	crashed := e.repo.commitIn(leftover.Path, "phase 2, before the crash")
+
+	var headAtSpawn string
+	e.setRun(func(spec RunSpec) (*Run, error) {
+		headAtSpawn = strings.TrimSpace(e.repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+		e.finishPhase2(t, spec)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	})
+	if _, err := e.svc.Start(e.p2, "", ""); err != nil {
+		t.Fatalf("Start over a leftover that contains the dependency tip: %v", err)
+	}
+	if headAtSpawn != crashed {
+		t.Errorf("worktree HEAD at spawn = %s, want the crashed run's commit %s (warm reuse)", headAtSpawn, crashed)
+	}
+	if sp := phaseStartPoint(t, e.db, e.p2); sp.String != e.depTip {
+		t.Errorf("run_start_point = %q, want the dependency tip %s", sp.String, e.depTip)
+	}
+	if !strings.Contains(e.runner.firstSpec().Prompt, "stacked on `"+e.depBranch+"`") {
+		t.Error("the prompt does not say what the reused worktree is stacked on")
+	}
+}
+
+// TestStartRefusesAStackTipThatLacksAMergedDependency: the scenario of
+// TestResolveBase_StackTipLacksMergedDep through the real Start — nothing is
+// acquired for a run that would have started without one of its dependencies.
+func TestStartRefusesAStackTipThatLacksAMergedDependency(t *testing.T) {
+	e := newStackEnv(t)
+	// A second dependency, cut from the same main commit as the first…
+	const other = "swarm/phase-778"
+	e.repo.branch(other, "main", 1)
+	mustExec(t, e.db, `INSERT INTO epic_phases
+		(workspace_task_id, seq, name, doc_path, depends_on, checkboxes_total, checkboxes_done, run_state, run_branch)
+		VALUES (?, 3, 'Phase 3', '/plan/phase-3.md', '[]', 1, 1, 'done', ?)`, e.taskID, other)
+	mustExec(t, e.db, `UPDATE epic_phases SET depends_on='[1,3]' WHERE id=?`, e.p2)
+	// …and the first one merges.
+	e.repo.run("merge", "-q", "--no-ff", "-m", "merge "+e.depBranch, e.depBranch)
+
+	_, err := e.svc.Start(e.p2, "", "")
+	var refused *DepsUnmergedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("err = %v, want a *DepsUnmergedError", err)
+	}
+	if refused.Cause != DepsStale || !reflect.DeepEqual(refused.Branches, []string{other}) ||
+		!reflect.DeepEqual(refused.Missing, []string{e.depBranch}) {
+		t.Errorf("refusal = %+v, want DepsStale naming %s as lacking %s", refused, other, e.depBranch)
+	}
+	if n := e.runner.specCount(); n != 0 {
+		t.Errorf("spawned %d times, want 0", n)
+	}
+	if out := strings.TrimSpace(e.repo.run("worktree", "list", "--porcelain")); strings.Count(out, "worktree ") != 1 {
+		t.Errorf("worktrees after the refusal:\n%s\nwant only the repo itself", out)
+	}
+}
+
 // TestStartHandsReclaimTheRecordedStartPoint: both reclaims — the deterministic
 // branch and a previous row id's branch — are measured against run_start_point.
 func TestStartHandsReclaimTheRecordedStartPoint(t *testing.T) {
