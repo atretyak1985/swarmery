@@ -36,6 +36,13 @@ func TestHookSessionStartWritesLaunchAccount(t *testing.T) {
 	if got := readLaunchAccount(t, h, "sid-launch"); got != "default" {
 		t.Errorf("an older shim's payload overwrote launch_account with %q", got)
 	}
+	// A value that is not an account key is unknown, not free text.
+	for _, bad := range []string{"../etc", "a/b", ".hidden", "-work"} {
+		postSessionStart(t, h, `{"session_id":"sid-launch","pid":4242,"cwd":"/tmp/proj","launchAccount":"`+bad+`"}`)
+		if got := readLaunchAccount(t, h, "sid-launch"); got != "default" {
+			t.Errorf("launchAccount %q stored as %q", bad, got)
+		}
+	}
 	rows, err := store.AccountDrift(db, 10)
 	if err != nil || len(rows) != 1 || rows[0].SessionUUID != "sid-launch" {
 		t.Errorf("AccountDrift = %+v %v, want the drifted session", rows, err)

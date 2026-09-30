@@ -134,13 +134,13 @@ whether the next session in a directory will work. Three forms:
 
 | form | what runs | spawns |
 |---|---|---|
-| `--fast` | the turn-zero arms below — what the accounts-pack SessionStart preflight calls | nothing (only the Lock 1 `git ls-files` `Resolve` already runs) |
+| `--fast` | the turn-zero arms below — what the accounts-pack SessionStart preflight calls | git only: the Lock 1 `git ls-files` probe, for `Resolve` and at most once more per binding file under the estate (the pin scan and the settings-block detector share the display verdict cache) |
 | bare | `--fast` plus the two findings that cost further git calls | git only |
 | `--probe` | the channel probe above, then a `--fast` report | the harness (and through it `claude mcp list`) |
 
-`--json` prints one object; `--timeout <dur>` bounds the whole call (a spent budget adds
-a `timeout` warn and skips the remaining arms); `--no-record` leaves the first-sight
-ledger untouched. Usage errors exit 2; a report with findings exits 0. No value from any
+`--json` prints one object; `--timeout <dur>` is checked between arms (a spent budget adds
+a `timeout` warn and skips the remaining arms; an arm already running finishes first);
+`--no-record` leaves the first-sight ledger untouched. Usage errors exit 2; a report with findings exits 0. No value from any
 credential store ever reaches the output: every rendering passes one redaction choke
 point. Beyond the contract fields (`credentials`, `varsExpected`/`varsPresent`/
 `varsMissing`, `staleDuplicates`, `findings`) the report carries `enabledPacks`,

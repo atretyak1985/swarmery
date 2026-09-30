@@ -90,8 +90,10 @@ esac
 # provenance probe (a `git ls-files`) at every rung that declares a binding.
 OUT_FILE="$(mktemp 2>/dev/null)" || exit 0
 trap 'rm -f "$OUT_FILE"' EXIT
-# --timeout is the doctor's own inner bound, strictly below the watchdog: a
-# slow arm is cut short and the report still arrives, before the kill -9.
+# --timeout is the doctor's own inner bound, strictly below the watchdog. It is
+# checked between arms: the arms still to run are skipped and the report still
+# arrives before the kill -9, but an arm already running finishes first — one
+# that alone outlasts the watchdog loses the whole report, vars-missing too.
 "$SWARMERY" account doctor --fast --json --timeout 2.5s --path "$PROJECT_DIR" \
   </dev/null >"$OUT_FILE" 2>/dev/null &
 DOCTOR_PID=$!

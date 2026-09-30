@@ -2,21 +2,6 @@ package store
 
 import "database/sql"
 
-// SetSessionLaunchAccount records what session uuid was LAUNCHED as (the
-// session_launch_account migration). An empty key is a no-op: '' is "unknown"
-// and must never overwrite a recorded value. Reports whether a row was updated.
-func SetSessionLaunchAccount(db *sql.DB, uuid, key string) (bool, error) {
-	if uuid == "" || key == "" {
-		return false, nil
-	}
-	res, err := db.Exec(`UPDATE sessions SET launch_account = ? WHERE session_uuid = ?`, key, uuid)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n > 0, nil
-}
-
 // DriftRow is a session whose transcript landed under a different account than
 // the one it was launched as.
 type DriftRow struct {
@@ -28,6 +13,10 @@ type DriftRow struct {
 
 // AccountDrift returns, newest first, up to limit sessions whose account and
 // launch_account are both known and differ. limit <= 0 means 100.
+//
+// sessions.launch_account is written by the SessionStart hook handler
+// (api/prockill.go) and by ingest from a parked hook; nothing reads this query
+// in production yet — it is the one a drift view or doctor finding builds on.
 func AccountDrift(db *sql.DB, limit int) ([]DriftRow, error) {
 	if limit <= 0 {
 		limit = 100

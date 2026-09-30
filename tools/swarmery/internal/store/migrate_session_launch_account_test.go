@@ -59,7 +59,7 @@ func TestMigrateSessionLaunchAccountOnPopulatedDB(t *testing.T) {
 }
 
 // AccountDrift returns exactly the rows where both columns are known and
-// differ; SetSessionLaunchAccount never writes ''.
+// differ: '' on either side is unknown, never drift.
 func TestAccountDrift(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
@@ -75,15 +75,9 @@ func TestAccountDrift(t *testing.T) {
 		}
 	}
 	for uuid, key := range map[string]string{"same": "work", "drift": "default", "unknown-land": "default"} {
-		if ok, err := SetSessionLaunchAccount(db, uuid, key); err != nil || !ok {
-			t.Fatalf("SetSessionLaunchAccount(%s) = %v %v", uuid, ok, err)
+		if _, err := db.Exec(`UPDATE sessions SET launch_account = ? WHERE session_uuid = ?`, key, uuid); err != nil {
+			t.Fatal(err)
 		}
-	}
-	if ok, _ := SetSessionLaunchAccount(db, "drift", ""); ok {
-		t.Error("an empty key was written")
-	}
-	if ok, _ := SetSessionLaunchAccount(db, "no-such", "x"); ok {
-		t.Error("a missing row reported updated")
 	}
 	rows, err := AccountDrift(db, 0)
 	if err != nil {

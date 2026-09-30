@@ -69,7 +69,10 @@ func (r *run) resolution() {
 	if estateAccount == "" {
 		estateAccount = ingest.DefaultAccount
 	}
-	for _, e := range claudeacct.ScanPinsDetail(res.EstateRoot) {
+	// The display verdict cache: one Lock 1 probe per binding file per run,
+	// shared with the settings-block detector and lentBindings. Fast never
+	// spawns, so a cached verdict decides nothing here but a report line.
+	for _, e := range claudeacct.ScanPinsDetailForDisplay(res.EstateRoot) {
 		file := filepath.Join(e.Dir, filepath.FromSlash(claudeacct.BindingFile))
 		switch {
 		case e.Ignored != "":

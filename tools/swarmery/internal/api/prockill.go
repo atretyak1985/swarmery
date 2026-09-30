@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
@@ -102,6 +103,12 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PID <= 0 || body.SessionID == "" {
 		w.WriteHeader(http.StatusNoContent) // fire-and-forget — never error back
 		return
+	}
+	// launchAccount is an account key from the hook body: one that is not a
+	// usable key is stored as unknown (''), exactly like an older shim's
+	// absent field — never as free text.
+	if !claudeacct.ValidKey(body.LaunchAccount) {
+		body.LaunchAccount = ""
 	}
 
 	info, err := sessionStartProcInfo(body.PID)

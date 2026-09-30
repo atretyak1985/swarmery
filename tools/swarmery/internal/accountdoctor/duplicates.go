@@ -244,7 +244,7 @@ func knownBindingDirs(res claudeacct.Resolution) []string {
 		}
 	}
 	if res.EstateRoot != "" {
-		for _, e := range claudeacct.ScanPinsDetail(res.EstateRoot) {
+		for _, e := range claudeacct.ScanPinsDetailForDisplay(res.EstateRoot) {
 			dirs = append(dirs, e.Dir)
 		}
 	}

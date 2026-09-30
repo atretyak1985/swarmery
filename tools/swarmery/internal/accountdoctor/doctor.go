@@ -27,9 +27,12 @@
 // # The arms
 //
 // Fast is pure filesystem plus the Lock 1 git probe claudeacct.Resolve runs
-// itself (and, for the settings-block detector, the same probe through the
-// display verdict cache: one per distinct binding file), plus at most one
-// optional read-only SQLite lookup (the first-sight arm). It never opens a
+// itself (and, for the pins under the estate and the settings-block detector,
+// the same probe through the display verdict cache: at most one per distinct
+// binding file per run), plus at most one optional read-only SQLite lookup
+// (the first-sight arm). Options.Timeout is checked BETWEEN arms: an arm
+// already running finishes, and a walk of a very large estate is bounded only
+// by the pin walk's own depth and skip list. It never opens a
 // socket and never starts a `claude` process — it runs at turn zero from a
 // SessionStart hook. Its arms, each in its own file:
 //
