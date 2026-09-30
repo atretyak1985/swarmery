@@ -807,9 +807,125 @@ func TestEvalPerRuleTable(t *testing.T) {
 func TestShipEvidenceEndingLines(t *testing.T) {
 	db := openDB(t)
 	seedEnding(t, db, "s-fail", syntheticModel, "stop_sequence", "API Error: 529 Overloaded")
-	got := shipEvidence(db, "s-fail", "fail")
+	got := shipEvidence(db, d2FactsFor(db, "s-fail"), "s-fail", "fail")
 	want := "turns: 2\nfinal answer: no\nlast stop reason: stop_sequence\napi error: yes\noperator verdict: fail\n"
 	if !strings.HasSuffix(got, want) {
 		t.Errorf("evidence =\n%s\nwant it to end with\n%s", got, want)
 	}
+}
+
+// A model call that fails must not cost a session the answers its rules
+// already have. Task type is asked first; for a phase run `planning` is off the
+// option list, so a model that still says it yields an errored call — and the
+// all-ticked phase's outcome and cause are recorded by the rules all the same,
+// once, however many passes retry the session.
+func TestRuleAnswersSurviveModelFailure(t *testing.T) {
+	now := func() time.Time { return time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC) }
+	seed := func(t *testing.T) (*sql.DB, *stub, *Engine) {
+		t.Helper()
+		db := openDB(t)
+		seedSession(t, db, "s-phase", "2026-09-20T11:00:00.000Z", "")
+		seedPhase(t, db, "s-phase", "Phase 1 — parser", "", "done", 3, 3)
+		s := &stub{name: BackendLocal, a: Answer{Value: "planning", Confidence: 0.99, Calibrated: true}}
+		return db, s, &Engine{DB: db, Local: s, Now: now, DefaultModes: map[string]Mode{"d2": ModeActive}}
+	}
+	// tally counts the session's rows: errored task-type calls, answered
+	// task-type calls, and the rules' outcome / cause rows.
+	tally := func(t *testing.T, db *sql.DB) (taskErr, taskOK, outcome, cause int) {
+		t.Helper()
+		for _, r := range decisionRows(t, db) {
+			switch {
+			case r["q"] == QD2TaskType && r["error"] != "":
+				if r["backend"] != BackendLocal || !strings.Contains(r["error"].(string), "is not one of") {
+					t.Errorf("task-type failure row = %v, want the local backend's off-list error", r)
+				}
+				taskErr++
+			case r["q"] == QD2TaskType:
+				taskOK++
+			case r["q"] == QD2Outcome && r["answer"] == "shipped" && r["backend"] == BackendRules && r["error"] == "":
+				outcome++
+			case r["q"] == QD2Failure && r["answer"] == "none" && r["backend"] == BackendRules && r["error"] == "":
+				cause++
+			default:
+				t.Errorf("unexpected decision row: %v", r)
+			}
+		}
+		return
+	}
+
+	t.Run("the model never recovers", func(t *testing.T) {
+		db, s, e := seed(t)
+		for pass := 1; pass <= d2MaxFailures; pass++ {
+			if n, err := (&Labeler{E: e}).Run(context.Background()); err != nil || n != 1 {
+				t.Fatalf("pass %d: labelled %d (%v), want the session retried", pass, n, err)
+			}
+			// The failure is counted as before — one errored row per pass — and the
+			// rule-answered pair is there from the first pass, never duplicated.
+			if taskErr, taskOK, outcome, cause := tally(t, db); taskErr != pass || taskOK != 0 || outcome != 1 || cause != 1 {
+				t.Fatalf("pass %d: %d errored and %d answered task-type rows, %d outcome and %d cause rule rows; want %d/0/1/1",
+					pass, taskErr, taskOK, outcome, cause, pass)
+			}
+		}
+		// Given up after d2MaxFailures errored calls, exactly as before — with its
+		// rule answers on record.
+		if n, _ := (&Labeler{E: e}).Run(context.Background()); n != 0 {
+			t.Errorf("after %d failures the session is still asked about (%d)", d2MaxFailures, n)
+		}
+		if s.calls != d2MaxFailures {
+			t.Errorf("model calls = %d, want %d (task type once per pass; the rules need no backend)", s.calls, d2MaxFailures)
+		}
+		// A failed pass still writes no session label.
+		if l, _ := LabelFor(db, "s-phase"); l != nil {
+			t.Errorf("a failed pass wrote labels: %+v", l)
+		}
+	})
+
+	t.Run("the model recovers on the next pass", func(t *testing.T) {
+		db, s, e := seed(t)
+		if n, err := (&Labeler{E: e}).Run(context.Background()); err != nil || n != 1 {
+			t.Fatalf("pass 1: %d %v", n, err)
+		}
+		s.a = Answer{Value: "feature", Confidence: 0.99, Calibrated: true}
+		if n, err := (&Labeler{E: e}).Run(context.Background()); err != nil || n != 1 {
+			t.Fatalf("pass 2: %d %v", n, err)
+		}
+		// Only the task type was asked again; the stored rule answers stand and
+		// feed the label.
+		if taskErr, taskOK, outcome, cause := tally(t, db); taskErr != 1 || taskOK != 1 || outcome != 1 || cause != 1 {
+			t.Errorf("rows: %d errored, %d answered task type, %d outcome, %d cause; want 1/1/1/1", taskErr, taskOK, outcome, cause)
+		}
+		if s.calls != 2 {
+			t.Errorf("model calls = %d, want 2", s.calls)
+		}
+		if l, err := LabelFor(db, "s-phase"); err != nil || l == nil || l.TaskType != "feature" || l.Outcome != "shipped" || l.FailureCause != "none" {
+			t.Errorf("labels = %+v (%v), want feature / shipped / none", l, err)
+		}
+		if n, _ := (&Labeler{E: e}).Run(context.Background()); n != 0 {
+			t.Errorf("a fully answered session was asked again (%d)", n)
+		}
+	})
+
+	// The same holds for a question in the middle: outcome fails at the model,
+	// the cause a rule knows (R2) is still recorded, and nothing model-bound
+	// after the failure is asked.
+	t.Run("a rule answer after a failed model question", func(t *testing.T) {
+		db := openDB(t)
+		seedEnding(t, db, "s-stall", testModel, "", "The permission check stopped returning verdicts.")
+		seedToolCall(t, db, "s-stall", "Bash", "error", "2026-09-20T10:25:00.000Z", autoModeDenial)
+		b := &failOn{bad: map[string]bool{QD2Outcome: true}}
+		e := &Engine{DB: db, Local: b, Now: now}
+		if n, err := (&Labeler{E: e}).Run(context.Background()); err != nil || n != 1 {
+			t.Fatalf("run: %d %v", n, err)
+		}
+		got := map[string]string{}
+		for _, r := range decisionRows(t, db) {
+			got[r["q"].(string)] = fmt.Sprintf("%v/%v/err=%v", r["answer"], r["backend"], r["error"] != "")
+		}
+		want := map[string]string{QD2TaskType: "bugfix/local/err=false", QD2Outcome: "/local/err=true", QD2Failure: "api-error/rules/err=false"}
+		for q, w := range want {
+			if got[q] != w {
+				t.Errorf("%s = %q, want %q (all rows: %v)", q, got[q], w, got)
+			}
+		}
+	})
 }

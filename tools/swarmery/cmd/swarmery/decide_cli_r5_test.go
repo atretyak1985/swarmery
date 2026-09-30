@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
@@ -25,14 +26,13 @@ func TestDecideEval_R5SwitchAppliesRulesOnly(t *testing.T) {
 	}
 	db.Close()
 
-	taskRules := func(env map[string]string) []decide.EvalRule {
+	// taskRulesWarn runs the rules-only replay under env and returns the
+	// task_type rule rows plus whatever reached stderr.
+	taskRulesWarn := func(env map[string]string) ([]decide.EvalRule, string) {
 		t.Helper()
 		code, stdout, stderr := runDecideEval(t, func(k string) string { return env[k] }, "--db", path, "--json", "--questions", "task_type")
 		if code != 0 {
 			t.Fatalf("exit = %d, want 0\nstderr: %s", code, stderr)
-		}
-		if stderr != "" {
-			t.Errorf("rules-only wrote to stderr: %q", stderr)
 		}
 		var rep decide.EvalReport
 		if err := json.Unmarshal([]byte(stdout), &rep); err != nil {
@@ -41,7 +41,15 @@ func TestDecideEval_R5SwitchAppliesRulesOnly(t *testing.T) {
 		if rep.LLM || len(rep.Questions) != 1 {
 			t.Fatalf("report = %+v, want a rules-only task_type report", rep)
 		}
-		return rep.Questions[0].Rules
+		return rep.Questions[0].Rules, stderr
+	}
+	taskRules := func(env map[string]string) []decide.EvalRule {
+		t.Helper()
+		rules, stderr := taskRulesWarn(env)
+		if stderr != "" {
+			t.Errorf("rules-only with a valid environment wrote to stderr: %q", stderr)
+		}
+		return rules
 	}
 
 	if rules := taskRules(nil); len(rules) != 0 {
@@ -50,5 +58,19 @@ func TestDecideEval_R5SwitchAppliesRulesOnly(t *testing.T) {
 	rules := taskRules(map[string]string{"SWARMERY_DECIDE_R5": "on"})
 	if len(rules) != 1 || rules[0].Rule != decide.RulePhaseRunFeature || rules[0].N != 1 || rules[0].Agree != 0 {
 		t.Errorf("rules = %+v, want R5 answering the one phase run (feature, against a bugfix label)", rules)
+	}
+
+	// A mistyped switch leaves the rule off — and says so, without --llm too:
+	// a silent "off" would read as "R5 answers nothing on these labels".
+	rules, stderr := taskRulesWarn(map[string]string{"SWARMERY_DECIDE_R5": "enabled"})
+	if len(rules) != 0 {
+		t.Errorf("an unknown SWARMERY_DECIDE_R5 value switched the rule on: %+v", rules)
+	}
+	if !strings.Contains(stderr, "warning: decide: SWARMERY_DECIDE_R5: unknown value, rule R5 stays off") {
+		t.Errorf("rules-only swallowed the config warning: stderr %q", stderr)
+	}
+	// Every other ignored knob is reported the same way.
+	if _, stderr := taskRulesWarn(map[string]string{"SWARMERY_DECIDE_THRESHOLDS": "d2.nope=0.9"}); !strings.Contains(stderr, "warning: decide: SWARMERY_DECIDE_THRESHOLDS: ignored") {
+		t.Errorf("rules-only swallowed the thresholds warning: stderr %q", stderr)
 	}
 }

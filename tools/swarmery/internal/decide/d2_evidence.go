@@ -19,36 +19,28 @@ const d2EvidenceBashRows = 2000
 // operator's own verdict (if set). The last assistant message alone cannot tell
 // a shipped session from an abandoned one; this can.
 //
-// A DB error never fails labelling: the failing line is dropped with a
-// warning and the rest is still emitted, so the block is never empty.
-func shipEvidence(db *sql.DB, uuid, operatorOutcome string) string {
+// The git, file and ending lines are rendered from the session's facts, which
+// the caller loaded once (d2FactsFor) and the rules read too — nothing is
+// queried twice. A DB error never fails labelling: the lines of a part that
+// failed to load are dropped (the load already logged why) and the rest is
+// still emitted, so the block is never empty.
+func shipEvidence(db *sql.DB, f d2Facts, uuid, operatorOutcome string) string {
 	var b strings.Builder
 	b.WriteString("evidence:\n")
-	if g, err := gitActivity(db, uuid); err != nil {
-		log.Printf("warning: decide: d2 git evidence for %s: %v", uuid, err)
-	} else {
+	if f.gitOK {
 		fmt.Fprintf(&b, "commits: %d\npushed: %s\npr opened: %d, pr merged: %d\n",
-			g.commits, yesNo(g.pushes > 0), g.prsOpened, g.prsMerged)
+			f.git.commits, yesNo(f.git.pushes > 0), f.git.prsOpened, f.git.prsMerged)
 	}
-	var files, adds, dels int
-	if err := db.QueryRow(`
-		SELECT COUNT(DISTINCT file_path), COALESCE(SUM(additions), 0), COALESCE(SUM(deletions), 0)
-		  FROM file_changes
-		 WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)`, uuid).
-		Scan(&files, &adds, &dels); err != nil {
-		log.Printf("warning: decide: d2 file evidence for %s: %v", uuid, err)
-	} else {
-		fmt.Fprintf(&b, "files edited: %d (+%d/-%d)\n", files, adds, dels)
+	if f.filesOK {
+		fmt.Fprintf(&b, "files edited: %d (+%d/-%d)\n", f.filesEdited, f.additions, f.deletions)
 	}
 	if line, err := phaseRunLine(db, uuid); err != nil {
 		log.Printf("warning: decide: d2 phase-run evidence for %s: %v", uuid, err)
 	} else if line != "" {
 		b.WriteString(line)
 	}
-	if e, err := loadD2Ending(db, uuid); err != nil {
-		log.Printf("warning: decide: d2 ending evidence for %s: %v", uuid, err)
-	} else {
-		b.WriteString(endingLines(e))
+	if f.endingOK {
+		b.WriteString(endingLines(f.ending))
 	}
 	if operatorOutcome != "" {
 		fmt.Fprintf(&b, "operator verdict: %s\n", operatorOutcome)

@@ -162,10 +162,11 @@ var operatorOutcome = map[string]string{"success": "shipped", "fail": "failed", 
 // session executed (if any, with the head of its goal), the session's time
 // window, the ship-evidence block, then the tail of the last assistant
 // message. The window line deliberately avoids a bare `ended:` key — a small
-// model echoed it back as an off-list outcome.
-func d2Digest(db *sql.DB, s d2Session, run d2Run) string {
+// model echoed it back as an off-list outcome. facts are the session's, loaded
+// once by the caller and shared with the rules.
+func d2Digest(db *sql.DB, s d2Session, facts d2Facts) string {
 	return fmt.Sprintf("title: %s\n%ssession window: %s → %s\n%slast assistant message (tail):\n%s",
-		s.title, runContext(run), s.started, s.ended, shipEvidence(db, s.uuid, s.outcome),
+		s.title, runContext(facts.run), s.started, s.ended, shipEvidence(db, facts, s.uuid, s.outcome),
 		tail(runcore.LastAssistantText(db, s.uuid), d2DigestBytes))
 }
 
@@ -201,7 +202,7 @@ const (
 func d2Questions(db *sql.DB, s d2Session, phaseRunFeature bool) []Question {
 	facts := d2FactsFor(db, s.uuid)
 	rules := d2Rules(facts, s.outcome, phaseRunFeature)
-	digest := d2Digest(db, s, facts.run)
+	digest := d2Digest(db, s, facts)
 	taskPrompt, taskTypes := d2TaskTypePrompt, TaskTypes
 	if facts.run.kind != "" {
 		taskPrompt, taskTypes = d2TaskTypePrompt+d2RunTaskTypeSuffix, runTaskTypes
@@ -217,18 +218,37 @@ func d2Questions(db *sql.DB, s d2Session, phaseRunFeature bool) []Question {
 	}
 }
 
+// label asks one session's D2 questions and reports whether a MODEL call
+// failed (the caller then stops the pass).
+//
+// A failed model call skips only the questions still bound for the model: a
+// question the rules answer needs no backend, so it is asked and recorded
+// whatever happened to the ones before it — a timed-out or off-list task type
+// (asked first) must not cost the session its rule-answered outcome and cause.
+//
+// A question that already has an error-free row from an earlier pass is not
+// asked again: its stored answer stands. A session comes back after a failed
+// pass (until d2MaxFailures), and without this every retry would record the
+// answers it already has a second and a third time.
 func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 	e := l.E
+	prior := answeredD2(e.DB, s.uuid)
 	labels := map[string]string{}
 	for _, q := range d2Questions(e.DB, s, e.R5PhaseRunFeature) {
 		labels[q.ID] = LabelUnknown
-		if failed || e.Mode(q.ID) == ModeOff {
+		if e.Mode(q.ID) == ModeOff {
 			continue
 		}
-		a, err := e.Decide(ctx, q)
-		if err != nil {
-			failed = true
-			continue
+		a, answered := prior[q.ID]
+		if !answered {
+			if failed && q.RuleAnswer == "" {
+				continue
+			}
+			var err error
+			if a, err = e.Decide(ctx, q); err != nil {
+				failed = true
+				continue
+			}
 		}
 		if e.clears(q.ID, a) {
 			labels[q.ID] = a.Value
@@ -246,6 +266,40 @@ func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 		log.Printf("warning: decide: d2 labels for %s: %v", s.uuid, err)
 	}
 	return false
+}
+
+// answeredD2 reads the session's D2 answers already recorded without an error,
+// the newest per question, in the shape Decide returned them. A read that fails
+// is logged and yields none: the questions are then asked again, which costs
+// calls and duplicate rows but loses nothing.
+func answeredD2(db *sql.DB, uuid string) map[string]Answer {
+	out := map[string]Answer{}
+	rows, err := db.Query(`
+		SELECT question_id, answer, COALESCE(confidence, 0), calibrated, backend
+		  FROM decisions
+		 WHERE subject = ? AND error = '' AND question_id IN (?, ?, ?)
+		 ORDER BY id`, uuid, QD2TaskType, QD2Outcome, QD2Failure)
+	if err != nil {
+		log.Printf("warning: decide: d2 recorded answers for %s: %v", uuid, err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var a Answer
+		var calibrated int
+		if err := rows.Scan(&id, &a.Value, &a.Confidence, &calibrated, &a.Backend); err != nil {
+			log.Printf("warning: decide: d2 recorded answers for %s: %v", uuid, err)
+			return map[string]Answer{}
+		}
+		a.Calibrated = calibrated != 0
+		out[id] = a // ascending id: the newest row wins
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("warning: decide: d2 recorded answers for %s: %v", uuid, err)
+		return map[string]Answer{}
+	}
+	return out
 }
 
 func backendSummary(e *Engine) string {

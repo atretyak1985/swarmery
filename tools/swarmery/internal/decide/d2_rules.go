@@ -142,14 +142,21 @@ func (r d2Run) allTicked() bool {
 	return r.kind == runPhase && r.state == "done" && r.tickedKnown && r.total > 0 && r.ticked == r.total
 }
 
-// d2Facts is what the rules read about one finished session, loaded once per
-// session and shared by its three questions.
+// d2Facts is what the rules and the evidence block read about one finished
+// session, loaded ONCE per session and shared by its three questions.
 type d2Facts struct {
 	// ok is false when any part failed to load; no rule past R0 fires then.
-	ok                   bool
-	ending               d2Ending
-	filesEdited, commits int
-	run                  d2Run
+	ok bool
+	// Each part carries its own flag: the evidence block drops the lines of a
+	// part that failed and still emits the rest.
+	ending   d2Ending
+	endingOK bool
+	git      gitTally
+	gitOK    bool
+	// filesEdited counts distinct paths; additions and deletions sum their lines.
+	filesEdited, additions, deletions int
+	filesOK                           bool
+	run                               d2Run
 }
 
 // oneShot reports a session that is not a plan engine run and ended on the
@@ -159,7 +166,7 @@ type d2Facts struct {
 func (f d2Facts) oneShot() bool {
 	return f.run.kind == "" &&
 		strings.EqualFold(strings.TrimSpace(f.ending.stopReason), stopEndTurn) &&
-		f.filesEdited == 0 && f.commits == 0 &&
+		f.filesEdited == 0 && f.git.commits == 0 &&
 		f.ending.finalAnswer() && !f.ending.apiError()
 }
 
@@ -299,33 +306,44 @@ func enginePrompt(text string) (kind, doc string) {
 	return kind, doc
 }
 
-// loadD2Facts loads the facts for one session. On any error it returns the
-// zero facts (ok=false) so no rule fires on a half-read session — a missed rule
-// costs one model call, a wrong rule answer is recorded at confidence 1.
+// loadD2Facts loads the facts for one session, each part once. A part that
+// fails is left zero with its flag down, the others still load, and the joined
+// error says which failed. ok is true only when every part loaded, so no rule
+// fires on a half-read session — a missed rule costs one model call, a wrong
+// rule answer is recorded at confidence 1.
 func loadD2Facts(db *sql.DB, uuid string) (d2Facts, error) {
 	if db == nil {
 		return d2Facts{}, errors.New("no database")
 	}
 	var f d2Facts
-	var err error
-	if f.ending, err = loadD2Ending(db, uuid); err != nil {
-		return d2Facts{}, err
+	var errs []error
+	if ending, err := loadD2Ending(db, uuid); err != nil {
+		errs = append(errs, err)
+	} else {
+		f.ending, f.endingOK = ending, true
 	}
 	if err := db.QueryRow(`
-		SELECT COUNT(DISTINCT file_path) FROM file_changes
-		 WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)`, uuid).Scan(&f.filesEdited); err != nil {
-		return d2Facts{}, fmt.Errorf("files edited: %w", err)
+		SELECT COUNT(DISTINCT file_path), COALESCE(SUM(additions), 0), COALESCE(SUM(deletions), 0)
+		  FROM file_changes
+		 WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)`, uuid).
+		Scan(&f.filesEdited, &f.additions, &f.deletions); err != nil {
+		errs = append(errs, fmt.Errorf("files edited: %w", err))
+	} else {
+		f.filesOK = true
 	}
-	git, err := gitActivity(db, uuid)
+	if git, err := gitActivity(db, uuid); err != nil {
+		errs = append(errs, fmt.Errorf("git activity: %w", err))
+	} else {
+		f.git, f.gitOK = git, true
+	}
+	run, err := loadD2Run(db, uuid)
 	if err != nil {
-		return d2Facts{}, fmt.Errorf("git activity: %w", err)
+		errs = append(errs, err)
+	} else {
+		f.run = run
 	}
-	f.commits = git.commits
-	if f.run, err = loadD2Run(db, uuid); err != nil {
-		return d2Facts{}, err
-	}
-	f.ok = true
-	return f, nil
+	f.ok = len(errs) == 0
+	return f, errors.Join(errs...)
 }
 
 // d2RuleAnswer is one rule's answer to one question; the zero value is "no

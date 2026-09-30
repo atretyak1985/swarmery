@@ -168,13 +168,15 @@ func decideEval(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 	// eval still runs. --llm builds the local backend from the daemon's own env
 	// knobs; the claude backend is never built here, so nothing leaves the machine.
 	// The rule switch (SWARMERY_DECIDE_R5) applies in both modes: it changes what
-	// the rules answer, which is what a rules-only replay measures.
+	// the rules answer, which is what a rules-only replay measures. So do the
+	// config warnings: a mistyped SWARMERY_DECIDE_R5 must not leave the rule off
+	// in silence.
 	cfg, warn := decide.ConfigFromEnv(getenv)
+	for _, w := range warn {
+		fmt.Fprintf(stderr, "warning: decide: %s\n", w)
+	}
 	engine := &decide.Engine{R5PhaseRunFeature: cfg.R5PhaseRunFeature}
 	if *llm {
-		for _, w := range warn {
-			fmt.Fprintf(stderr, "warning: decide: %s\n", w)
-		}
 		if cfg.URL == "" {
 			return usageErr("--llm needs SWARMERY_DECIDE_URL (the local model server)")
 		}

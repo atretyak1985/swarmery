@@ -134,7 +134,7 @@ func TestShipEvidence(t *testing.T) {
 			db := openDB(t)
 			seedSession(t, db, "s", "2026-09-20T11:00:00.000Z", "")
 			tc.seed(t, db)
-			got := shipEvidence(db, "s", tc.operator)
+			got := shipEvidence(db, d2FactsFor(db, "s"), "s", tc.operator)
 			if !strings.HasPrefix(got, "evidence:\n") {
 				t.Fatalf("no evidence header:\n%s", got)
 			}
@@ -156,7 +156,7 @@ func TestShipEvidence(t *testing.T) {
 func TestShipEvidence_DBErrorKeepsWhatItHas(t *testing.T) {
 	db := openDB(t)
 	db.Close()
-	got := shipEvidence(db, "s", "fail")
+	got := shipEvidence(db, d2FactsFor(db, "s"), "s", "fail")
 	if got != "evidence:\noperator verdict: fail\n" {
 		t.Fatalf("got %q", got)
 	}
