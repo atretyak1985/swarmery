@@ -50,9 +50,13 @@ type QueueItem struct {
 // A decision about a session that has NO turns is hidden, not deleted: there is
 // no transcript to judge it from, so it can never be labelled; a decision with
 // no session row at all (a run subject, a not-yet-ingested session) stays.
+// An answer the RULES gave is left out unless includeRules is set: it follows
+// from the session's own record (the operator's verdict, a recorded failure
+// line, a fully ticked phase), so there is nothing for the operator to judge —
+// the Inbox passes false; a caller auditing the rules passes true.
 // limit < 0 returns the whole queue (the Inbox lists every open question);
 // 0 or anything above 500 falls back to 100.
-func LabelQueue(db *sql.DB, limit int, since string, projectID int64) ([]QueueItem, error) {
+func LabelQueue(db *sql.DB, limit int, since string, projectID int64, includeRules bool) ([]QueueItem, error) {
 	switch {
 	case limit < 0:
 		limit = -1 // SQLite: a negative LIMIT is no limit
@@ -69,8 +73,9 @@ func LabelQueue(db *sql.DB, limit int, since string, projectID int64) ([]QueueIt
 		   AND (? = '' OR d.created_at >= ?)
 		   AND (? = 0 OR s.project_id = ?)
 		   AND (s.id IS NULL OR EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id))
+		   AND (? = 1 OR d.backend <> ?)
 		 ORDER BY d.id DESC
-		 LIMIT ?`, since, since, projectID, projectID, limit)
+		 LIMIT ?`, since, since, projectID, projectID, boolInt(includeRules), BackendRules, limit)
 	if err != nil {
 		return nil, err
 	}

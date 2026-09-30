@@ -81,9 +81,12 @@ type EvalQuestion struct {
 	Errors int `json:"errors"`
 	// RecordedAgree is the same comparison over the answer STORED on each
 	// labelled row — what the daemon said when it asked, before any replay.
-	RecordedAgree int             `json:"recordedAgree"`
-	Backends      []EvalBackend   `json:"backends"`
-	Confusions    []EvalConfusion `json:"confusions"`
+	RecordedAgree int           `json:"recordedAgree"`
+	Backends      []EvalBackend `json:"backends"`
+	// Rules splits the rules backend's answers by the rule that gave each
+	// (Question.RuleID), in id order; empty when no rule answered.
+	Rules      []EvalRule      `json:"rules"`
+	Confusions []EvalConfusion `json:"confusions"`
 	// Buckets are ten confidence buckets, [0,0.1) … [0.9,1], over NON-rule
 	// answers (a rule's confidence is always 1 and says nothing).
 	Buckets []EvalBucket `json:"buckets"`
@@ -98,6 +101,20 @@ type EvalBackend struct {
 	Agree     int      `json:"agree"`
 	Precision *float64 `json:"precision"`
 }
+
+// EvalRule is one rule's share of a question: how many replayed questions it
+// answered (N; Coverage is N over the question's replayed count), and how many
+// of those agreed (Precision is Agree over N).
+type EvalRule struct {
+	Rule      string   `json:"rule"`
+	N         int      `json:"n"`
+	Agree     int      `json:"agree"`
+	Precision *float64 `json:"precision"`
+	Coverage  *float64 `json:"coverage"`
+}
+
+// evalRuleUnnamed is the row for a rule answer that carries no rule id.
+const evalRuleUnnamed = "(unnamed)"
 
 // EvalConfusion is one (answer, truth) disagreement and how often it happened.
 type EvalConfusion struct {
@@ -177,7 +194,7 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 				tallies[id].skip(reason)
 			}
 		} else {
-			for _, q := range d2Questions(db, s) {
+			for _, q := range d2Questions(db, s, e.R5PhaseRunFeature) {
 				tr, ok := sub.truths[q.ID]
 				if !ok {
 					continue
@@ -318,6 +335,7 @@ type evalTally struct {
 	labelled, replayed, agree, errs, recordedAgree int
 	skips                                          map[string]int
 	backends                                       map[string]*EvalBackend
+	rules                                          map[string]*EvalRule
 	confusions                                     map[[2]string]int
 	buckets                                        []EvalBucket
 }
@@ -326,9 +344,22 @@ func newEvalTally() *evalTally {
 	return &evalTally{
 		skips:      map[string]int{},
 		backends:   map[string]*EvalBackend{},
+		rules:      map[string]*EvalRule{},
 		confusions: map[[2]string]int{},
 		buckets:    make([]EvalBucket, 10),
 	}
+}
+
+func (t *evalTally) rule(id string) *EvalRule {
+	if id == "" {
+		id = evalRuleUnnamed
+	}
+	r := t.rules[id]
+	if r == nil {
+		r = &EvalRule{Rule: id}
+		t.rules[id] = r
+	}
+	return r
 }
 
 func (t *evalTally) skip(reason string) { t.skips[reason]++ }
@@ -362,22 +393,34 @@ func (t *evalTally) answer(questionID, truth string, a Answer, err error) {
 	} else {
 		t.confusions[[2]string{a.Value, truth}]++
 	}
-	if a.Backend != BackendRules {
-		bucket := &t.buckets[min(max(int(a.Confidence*10), 0), 9)]
-		bucket.N++
+	if a.Backend == BackendRules {
+		r := t.rule(a.Rule)
+		r.N++
 		if agrees {
-			bucket.Agree++
+			r.Agree++
 		}
+		return
+	}
+	bucket := &t.buckets[min(max(int(a.Confidence*10), 0), 9)]
+	bucket.N++
+	if agrees {
+		bucket.Agree++
 	}
 }
 
 func (t *evalTally) report(id string) EvalQuestion {
 	q := EvalQuestion{QuestionID: id, Labelled: t.labelled, Replayed: t.replayed, SkipReasons: t.skips,
 		Agree: t.agree, Agreement: ratio(t.agree, t.replayed), Errors: t.errs, RecordedAgree: t.recordedAgree,
-		Confusions: []EvalConfusion{}, Buckets: t.buckets}
+		Rules: []EvalRule{}, Confusions: []EvalConfusion{}, Buckets: t.buckets}
 	for _, n := range t.skips {
 		q.Skipped += n
 	}
+	for _, r := range t.rules {
+		row := *r
+		row.Precision, row.Coverage = ratio(row.Agree, row.N), ratio(row.N, t.replayed)
+		q.Rules = append(q.Rules, row)
+	}
+	sort.Slice(q.Rules, func(i, j int) bool { return q.Rules[i].Rule < q.Rules[j].Rule })
 	// rules, local, unanswered always; any other backend that answered after them.
 	names := []string{BackendRules, BackendLocal}
 	for name := range t.backends {
@@ -476,6 +519,12 @@ func RenderEval(w io.Writer, rep EvalReport, asJSON bool) error {
 				continue
 			}
 			fmt.Fprintf(w, "  %-11s %6d %6d %9s\n", b.Backend, b.N, b.Agree, evalPct(b.Precision))
+		}
+		if len(q.Rules) > 0 {
+			fmt.Fprintf(w, "  %-11s %6s %6s %9s %9s\n", "rule", "n", "agree", "precision", "coverage")
+			for _, r := range q.Rules {
+				fmt.Fprintf(w, "  %-11s %6d %6d %9s %9s\n", r.Rule, r.N, r.Agree, evalPct(r.Precision), evalPct(r.Coverage))
+			}
 		}
 		if q.Skipped > 0 {
 			reasons := make([]string, 0, len(q.SkipReasons))

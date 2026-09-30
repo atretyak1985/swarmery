@@ -178,6 +178,12 @@ func TestLandingAction(t *testing.T) {
 		"echo git commit":              "",
 		"gh issue create":              "",
 		"FOO=1 BAR=2 git commit -am x": "commit",
+		// An option value with a space in it stays one token.
+		`git -c user.name="First Last" -c user.email="a@b.c" commit -q -m "feat: x"`: "commit",
+		`git -c user.name='First Last' push origin main`:                             "push",
+		`git -c user.name="First Last" log --grep commit`:                            "",
+		`git commit -m "unclosed message`:                                            "commit",
+		`echo "git commit later"`:                                                    "",
 	} {
 		if got := landingAction(seg); got != want {
 			t.Errorf("landingAction(%q) = %q, want %q", seg, got, want)

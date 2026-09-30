@@ -25,12 +25,59 @@ a hook, never trims a context window, never picks a tool, a model or an effort.
 | **D3** `d3.divergence_cause` | A scored phase run landed far from its own forecast | `spec-wrong` · `code-differs` · `scope-grew` · `tooling-env` · `model-fallback` · `other` | Analytics, and the cause behind a lesson candidate |
 
 The evidence each question sees is deliberately small — the tail of the last
-assistant message, the session title and times — never a full transcript.
+assistant message, the session title and times, and a short evidence block — never a
+full transcript. The block lists what the session's own record shows: commits, pushes
+and pull requests, files edited, the plan phase it ran, how many turns it had, whether
+it ended on the model's own final answer, the stop reason of its last turn, and whether
+the account or the API ended it.
 
 A finished session with **no turns at all** is left alone: there is nothing for a
 question to read, so D2 never asks about it, and any answers already recorded for such
 a session are hidden from the labelling queue (hidden, not deleted — they come back
 the moment the session has a turn).
+
+### What the rules answer first
+
+Some sessions need no model: their own record already says how they ended. For these
+D2 answers by rule, with confidence 1, before the local model is asked. The first rule
+that matches a question wins.
+
+| Rule | The session's record shows | `d2.outcome` | `d2.failure_cause` |
+|---|---|---|---|
+| **R0** | You set the session's verdict yourself | your verdict | — |
+| **R1** | The last assistant turn is a failure line the CLI wrote — a login, a usage-limit or an API error (see the next section) | `failed` | `auth` · `quota` · `api-error` |
+| **R2** | The last tool call was refused because the auto mode check returned no verdict | — | `api-error` |
+| **R3** | A phase run ended `done` with every acceptance criterion ticked | `shipped` | `none` |
+| **R4** | Not a phase or plan run; the last turn is the model's own final answer with an `end_turn` stop reason; no file edited, no commit, no account or API error | `shipped` | `none` |
+
+A dash means the rule does not answer that question, and the model is asked. Three
+limits keep the rules honest:
+
+- **R4 needs the stop reason.** Sessions ingested before stop reasons were recorded have
+  none, and R4 never fires for them — they go to the model.
+- A last turn the CLI wrote that names no failure (an empty one, or
+  `No response requested.`) matches no rule.
+- The two answers of one session never contradict each other: a rule gives no cause
+  other than `none` beside a `shipped` it answered, and no `none` beside any other
+  outcome. Where that would happen the question goes to the model instead.
+
+A session that **ran a plan phase or a whole plan** is never `planning` — it does the
+work the phase describes. For those sessions `planning` is removed from the
+`d2.task_type` options, and the evidence names the phase and quotes the start of its
+goal. A session counts as such a run when the plan links to it, or when it opens with
+the prompt the daemon itself sends to start a phase or plan run — a phase remembers
+only its latest run, so earlier runs are recognised by that prompt. The goal is read
+from the phase document, or from the copy inside the prompt when the document has
+moved.
+
+One more rule ships switched off: **R5** answers `d2.task_type` = `feature` for every
+phase or plan run. It is a fallback for a model that cannot label those runs well
+enough; turn it on with `SWARMERY_DECIDE_R5=on` only after the eval below shows its
+precision on your own labels.
+
+An answer a rule gave is **not** listed in the Inbox's classifier tab: there is nothing
+in it for you to judge. It is still recorded, and
+`GET /api/decisions/queue?rules=1` returns it when you want to audit the rules.
 
 ### Account and API failures
 
@@ -108,6 +155,8 @@ curl -s http://localhost:11434/v1/models     # Ollama
 | `SWARMERY_DECIDE_MODEL` | The model id from `/v1/models` | `local-model` |
 | `SWARMERY_DECIDE_D1` / `_D2` / `_D3` | `off` · `shadow` · `active` | `shadow` |
 | `SWARMERY_DECIDE_D1_THRESHOLD` (and `_D2_`, `_D3_`) | Confidence floor for `active`, in (0, 1] | D1 `0.85`, D2 `0.6`, D3 `0.6` |
+| `SWARMERY_DECIDE_THRESHOLDS` | Floors for single questions, which win over their family's: `d2.outcome=0.95,d2.task_type=0.8`. `1.01` switches a question's model answers off — no confidence reaches it — while rule answers still count. An entry that is not `<question>=<number in (0, 1.01]>` is ignored with one startup warning | unset |
+| `SWARMERY_DECIDE_R5` | `on` enables rule R5 (a phase or plan run is task type `feature`) | off |
 | `SWARMERY_DECIDE_CLAUDE` | `1` enables the Haiku fallback | off |
 
 If you run the daemon by hand, pass them on the command line:
@@ -150,8 +199,9 @@ The mode switch on each question reads **off · watching · acting** — the das
 words for the `off`, `shadow` and `active` values of the environment variables.
 
 Every question starts in **shadow** (*watching*): it is asked, the answer is logged,
-and nothing acts on it. Its answers wait in the Inbox's **classifier** tab for you to
-check — that is how you find out whether a model is good enough before trusting it.
+and nothing acts on it. The model's answers wait in the Inbox's **classifier** tab for
+you to check — that is how you find out whether a model is good enough before trusting
+it. Answers the rules gave are not queued.
 
 - **agreement** (*matches you*) is the share of answers that matched what actually
   happened, over the decisions that have a ground truth — including the ones you
@@ -210,6 +260,9 @@ Per question the report gives:
   asked, before any replay;
 - **by backend** — how many answers came from the rules and from the local model, and
   the *precision* of each (agreeing answers over that backend's answers);
+- **by rule** — the rules' answers split by the rule that gave each (`R0` … `R5`), with
+  its *precision* and its *coverage* (the share of replayed questions it answered). A
+  rule whose precision on your labels is low is one to tighten or switch off;
 - **confusions** — the most frequent *answer → label* disagreements;
 - **confidence** — ten buckets of the local model's answers, with how many in each
   agreed. A well-calibrated model agrees more in the higher buckets.

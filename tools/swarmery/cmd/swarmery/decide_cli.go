@@ -58,6 +58,10 @@ const decideUsage = `usage:
                  agreement floors in [0, 1] for d2.outcome, d2.failure_cause and
                  d2.task_type; a missed floor exits 1
 
+  SWARMERY_DECIDE_R5=on replays with rule R5 (a phase or plan run is task type
+  feature) switched on, with or without --llm; each rule's coverage and
+  precision is listed per question.
+
   exit: 0 ok · 1 a --min-* floor was missed · 2 usage or database error`
 
 // decideProgressEvery is how many sessions pass between --llm progress lines.
@@ -163,9 +167,11 @@ func decideEval(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 	// Rules-only needs no backend at all — Engine.Configured() is false and the
 	// eval still runs. --llm builds the local backend from the daemon's own env
 	// knobs; the claude backend is never built here, so nothing leaves the machine.
-	engine := &decide.Engine{}
+	// The rule switch (SWARMERY_DECIDE_R5) applies in both modes: it changes what
+	// the rules answer, which is what a rules-only replay measures.
+	cfg, warn := decide.ConfigFromEnv(getenv)
+	engine := &decide.Engine{R5PhaseRunFeature: cfg.R5PhaseRunFeature}
 	if *llm {
-		cfg, warn := decide.ConfigFromEnv(getenv)
 		for _, w := range warn {
 			fmt.Fprintf(stderr, "warning: decide: %s\n", w)
 		}

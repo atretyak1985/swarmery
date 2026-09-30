@@ -88,6 +88,9 @@ type Question struct {
 	// RuleAnswer is an answer the caller's deterministic rules already know;
 	// when set (and valid) the rules backend returns it with confidence 1.
 	RuleAnswer string
+	// RuleID names the rule that gave RuleAnswer (D2: "R0" … "R5"); it rides on
+	// the answer so the eval can report each rule on its own. Not stored.
+	RuleID string
 	// Subject/SessionUUID/RuleValue are stored with the decision row.
 	Subject     string
 	SessionUUID string
@@ -128,6 +131,9 @@ type Answer struct {
 	// (or the rules). An uncalibrated answer never clears an active threshold.
 	Calibrated bool
 	Backend    string
+	// Rule is the id of the rule that answered (Question.RuleID); "" for any
+	// other backend.
+	Rule       string
 	Latency    time.Duration
 	DecisionID int64
 }
@@ -151,6 +157,15 @@ type Engine struct {
 	DefaultModes map[string]Mode
 	// Thresholds maps a question family to its active-mode confidence floor.
 	Thresholds map[string]float64
+	// QuestionThresholds maps a question ID to its own floor, which wins over
+	// the family's (SWARMERY_DECIDE_THRESHOLDS). NeverThreshold switches a
+	// question's model leg off: no confidence reaches it.
+	QuestionThresholds map[string]float64
+	// R5PhaseRunFeature switches on D2 rule R5 — a phase or plan run is
+	// task_type `feature` (SWARMERY_DECIDE_R5). Off by default: the rule is a
+	// fallback for a model that cannot reach the task_type floor on those runs,
+	// and is removed by deleting this field and its branch in d2Rules.
+	R5PhaseRunFeature bool
 	// OnNeedsOperator is called when an ACTIVE D1 answer hands a run to the
 	// operator. nil ⇒ the run event and the partial state are the only signal.
 	OnNeedsOperator func(NeedsOperator)
@@ -231,9 +246,13 @@ func SetMode(db *sql.DB, questionID string, mode Mode, now time.Time) error {
 	return err
 }
 
-// Threshold is the active-mode confidence floor of the question's family.
+// Threshold is the question's active-mode confidence floor: its own when one
+// is configured, else its family's.
 func (e *Engine) Threshold(questionID string) float64 {
 	if e != nil {
+		if t, ok := e.QuestionThresholds[questionID]; ok {
+			return t
+		}
 		if t, ok := e.Thresholds[Family(questionID)]; ok {
 			return t
 		}
@@ -243,6 +262,20 @@ func (e *Engine) Threshold(questionID string) float64 {
 
 // DefaultThreshold is the floor for a family with no configured threshold.
 const DefaultThreshold = 0.85
+
+// NeverThreshold is the per-question floor no model confidence reaches: the
+// value for a question whose model answers are not yet good enough to act on.
+const NeverThreshold = 1.01
+
+// clears reports whether an answer may be acted on for questionID: a rule's
+// answer always (it is correct by construction, whatever the floor), a model's
+// only when its confidence is calibrated and at or above the floor.
+func (e *Engine) clears(questionID string, a Answer) bool {
+	if a.Backend == BackendRules {
+		return true
+	}
+	return a.Calibrated && a.Confidence >= e.Threshold(questionID)
+}
 
 // Decide asks q through the backends in order and records the call. The
 // returned answer carries the decision row id (0 when recording failed).
@@ -258,7 +291,7 @@ func (e *Engine) Decide(ctx context.Context, q Question) (Answer, error) {
 
 func (e *Engine) ask(ctx context.Context, q Question) (Answer, error) {
 	if v, ok := q.canonical(q.RuleAnswer); ok && q.RuleAnswer != "" {
-		return Answer{Value: v, Probs: map[string]float64{v: 1}, Confidence: 1, Calibrated: true, Backend: BackendRules}, nil
+		return Answer{Value: v, Probs: map[string]float64{v: 1}, Confidence: 1, Calibrated: true, Backend: BackendRules, Rule: q.RuleID}, nil
 	}
 	var errs []error
 	for _, b := range []Backend{e.Local, e.Claude} {
@@ -427,6 +460,11 @@ type Config struct {
 	Claude     bool
 	Modes      map[string]Mode
 	Thresholds map[string]float64
+	// QuestionThresholds are per-question floors (SWARMERY_DECIDE_THRESHOLDS,
+	// `d2.outcome=0.95,d2.task_type=0.8`), each winning over its family's.
+	QuestionThresholds map[string]float64
+	// R5PhaseRunFeature switches D2 rule R5 on (SWARMERY_DECIDE_R5).
+	R5PhaseRunFeature bool
 }
 
 // DefaultLocalModel is sent when SWARMERY_DECIDE_MODEL is unset; LM Studio
@@ -486,7 +524,44 @@ func ConfigFromEnv(getenv func(string) string) (Config, []string) {
 			}
 		}
 	}
+	switch strings.ToLower(strings.TrimSpace(getenv("SWARMERY_DECIDE_R5"))) {
+	case "1", "on", "true", "yes":
+		cfg.R5PhaseRunFeature = true
+	case "", "0", "off", "false", "no":
+	default:
+		warn = append(warn, "SWARMERY_DECIDE_R5: unknown value, rule R5 stays off")
+	}
+	var bad []string
+	cfg.QuestionThresholds, bad = parseQuestionThresholds(getenv("SWARMERY_DECIDE_THRESHOLDS"))
+	if len(bad) > 0 {
+		warn = append(warn, fmt.Sprintf("SWARMERY_DECIDE_THRESHOLDS: ignored %s; want <question>=<number in (0,%.2f]> with a known question id",
+			strings.Join(bad, ", "), NeverThreshold))
+	}
 	return cfg, warn
+}
+
+// parseQuestionThresholds reads `question=floor` pairs separated by commas. A
+// pair with an unknown question id, no `=`, or a floor outside (0,
+// NeverThreshold] is returned in bad and otherwise ignored; the good pairs
+// still apply. nil when nothing valid was given.
+func parseQuestionThresholds(raw string) (out map[string]float64, bad []string) {
+	for _, pair := range strings.Split(raw, ",") {
+		if pair = strings.TrimSpace(pair); pair == "" {
+			continue
+		}
+		id, val, found := strings.Cut(pair, "=")
+		id = strings.TrimSpace(id)
+		t, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+		if !found || err != nil || !(t > 0 && t <= NeverThreshold) || !slices.Contains(KnownQuestions, id) {
+			bad = append(bad, strconv.Quote(pair))
+			continue
+		}
+		if out == nil {
+			out = map[string]float64{}
+		}
+		out[id] = t
+	}
+	return out, bad
 }
 
 // String renders the config for the startup log (no secrets are involved).
@@ -504,15 +579,28 @@ func (c Config) String() string {
 			local += " timeout=" + c.Timeout.String()
 		}
 	}
-	return fmt.Sprintf("local=%s claude=%t d1=%s(%.2f) d2=%s(%.2f) d3=%s(%.2f)",
+	out := fmt.Sprintf("local=%s claude=%t d1=%s(%.2f) d2=%s(%.2f) d3=%s(%.2f)",
 		local, c.Claude, c.Modes["d1"], c.Thresholds["d1"], c.Modes["d2"], c.Thresholds["d2"],
 		c.Modes["d3"], c.Thresholds["d3"])
+	if len(c.QuestionThresholds) > 0 {
+		pairs := make([]string, 0, len(c.QuestionThresholds))
+		for id, t := range c.QuestionThresholds {
+			pairs = append(pairs, fmt.Sprintf("%s=%.2f", id, t))
+		}
+		slices.Sort(pairs)
+		out += " thresholds=" + strings.Join(pairs, ",")
+	}
+	if c.R5PhaseRunFeature {
+		out += " r5=on"
+	}
+	return out
 }
 
 // New builds the engine. Local exists only with a URL; Claude only when
 // explicitly enabled.
 func New(db *sql.DB, cfg Config) *Engine {
-	e := &Engine{DB: db, DefaultModes: cfg.Modes, Thresholds: cfg.Thresholds}
+	e := &Engine{DB: db, DefaultModes: cfg.Modes, Thresholds: cfg.Thresholds,
+		QuestionThresholds: cfg.QuestionThresholds, R5PhaseRunFeature: cfg.R5PhaseRunFeature}
 	if cfg.URL != "" {
 		e.Local = &Local{URL: cfg.URL, Model: cfg.Model, NoSchema: cfg.NoSchema, UserSuffix: cfg.UserSuffix, Timeout: cfg.Timeout}
 	}

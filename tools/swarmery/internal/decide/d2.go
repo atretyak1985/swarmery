@@ -158,52 +158,69 @@ const d2MaxFailures = 3
 // vocabulary — the rules backend's answer when it exists.
 var operatorOutcome = map[string]string{"success": "shipped", "fail": "failed", "abandoned": "abandoned"}
 
-// d2Digest is the evidence every D2 question reads: title, the session's time
+// d2Digest is the evidence every D2 question reads: title, the plan phase the
+// session executed (if any, with the head of its goal), the session's time
 // window, the ship-evidence block, then the tail of the last assistant
 // message. The window line deliberately avoids a bare `ended:` key — a small
 // model echoed it back as an off-list outcome.
-func d2Digest(db *sql.DB, s d2Session) string {
-	return fmt.Sprintf("title: %s\nsession window: %s → %s\n%slast assistant message (tail):\n%s",
-		s.title, s.started, s.ended, shipEvidence(db, s.uuid, s.outcome),
+func d2Digest(db *sql.DB, s d2Session, run d2Run) string {
+	return fmt.Sprintf("title: %s\n%ssession window: %s → %s\n%slast assistant message (tail):\n%s",
+		s.title, runContext(run), s.started, s.ended, shipEvidence(db, s.uuid, s.outcome),
 		tail(runcore.LastAssistantText(db, s.uuid), d2DigestBytes))
 }
 
-// D2 prompts. The option lists stay fixed; the outcome prompt defines each
-// option against the evidence block so "stopped talking" is not read as
-// "abandoned" when the work landed.
+// D2 prompts. The outcome prompt defines each option against the evidence
+// block so "stopped talking" is not read as "abandoned" when the work landed —
+// or when the work WAS the answer: a one-shot question-and-answer session
+// commits nothing and still ships.
 const (
 	d2TaskTypePrompt = "What kind of task was this coding session?"
-	d2OutcomePrompt  = "How did the session end? Judge by the evidence block first. " +
+	// d2RunTaskTypeSuffix is added for a session that ran a plan phase (or a
+	// whole plan), whose options also drop `planning` (runTaskTypes).
+	d2RunTaskTypeSuffix = " A session that executes a plan phase is the kind of work the phase does, never planning."
+	d2OutcomePrompt     = "How did the session end? Judge by the evidence block first. " +
 		"shipped = work was committed, pushed or merged, or every phase criterion was ticked; " +
+		"a one-shot question-and-answer session that ended with a final answer and no error shipped; " +
 		"partial = some work landed but not all of it; " +
-		"abandoned = the session stopped with no landed work and no failure; " +
-		"failed = the work was attempted and did not work."
+		"abandoned = the session stopped with no landed work, no final answer and no failure; " +
+		"failed = the work was attempted and did not work, or the account or the API stopped it."
 	d2FailurePrompt = "If the session did not ship, what was the main cause? " +
-		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped)"
+		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped, " +
+		"and so does a final answer with no error) " +
+		"auth = the CLI was not logged in or its login expired; " +
+		"quota = a usage or spend limit stopped the session; " +
+		"api-error = the API was unreachable, overloaded or dropped the response."
 )
 
 // d2Questions builds the three D2 questions for one session, in asking order
 // (task type, outcome, failure cause): id, prompt, options, the shared digest
-// and the rules' answer when the operator's own verdict gives one. It is the
-// single path the labeler and the offline eval (eval.go) share, so a replay
-// asks exactly what the daemon asks. It only reads.
-func d2Questions(db *sql.DB, s d2Session) []Question {
-	digest := d2Digest(db, s)
-	q := func(id, prompt string, opts []string, rule string) Question {
+// and the deterministic rules' answer where a rule applies (d2_rules.go), the
+// operator's own verdict first. It is the single path the labeler and the
+// offline eval (eval.go) share, so a replay asks exactly what the daemon asks.
+// phaseRunFeature switches rule R5 on (Engine.R5PhaseRunFeature). It only reads.
+func d2Questions(db *sql.DB, s d2Session, phaseRunFeature bool) []Question {
+	facts := d2FactsFor(db, s.uuid)
+	rules := d2Rules(facts, s.outcome, phaseRunFeature)
+	digest := d2Digest(db, s, facts.run)
+	taskPrompt, taskTypes := d2TaskTypePrompt, TaskTypes
+	if facts.run.kind != "" {
+		taskPrompt, taskTypes = d2TaskTypePrompt+d2RunTaskTypeSuffix, runTaskTypes
+	}
+	q := func(id, prompt string, opts []string, rule d2RuleAnswer) Question {
 		return Question{ID: id, Kind: KindChoice, Opts: opts, Prompt: prompt,
-			Input: digest, RuleAnswer: rule, Subject: s.uuid, SessionUUID: s.uuid}
+			Input: digest, RuleAnswer: rule.value, RuleID: rule.rule, Subject: s.uuid, SessionUUID: s.uuid}
 	}
 	return []Question{
-		q(QD2TaskType, d2TaskTypePrompt, TaskTypes, ""),
-		q(QD2Outcome, d2OutcomePrompt, Outcomes, operatorOutcome[s.outcome]),
-		q(QD2Failure, d2FailurePrompt, FailureCauses, ""),
+		q(QD2TaskType, taskPrompt, taskTypes, rules.taskType),
+		q(QD2Outcome, d2OutcomePrompt, Outcomes, rules.outcome),
+		q(QD2Failure, d2FailurePrompt, FailureCauses, rules.failure),
 	}
 }
 
 func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 	e := l.E
 	labels := map[string]string{}
-	for _, q := range d2Questions(e.DB, s) {
+	for _, q := range d2Questions(e.DB, s, e.R5PhaseRunFeature) {
 		labels[q.ID] = LabelUnknown
 		if failed || e.Mode(q.ID) == ModeOff {
 			continue
@@ -213,7 +230,7 @@ func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 			failed = true
 			continue
 		}
-		if a.Calibrated && a.Confidence >= e.Threshold(q.ID) {
+		if e.clears(q.ID, a) {
 			labels[q.ID] = a.Value
 		}
 	}

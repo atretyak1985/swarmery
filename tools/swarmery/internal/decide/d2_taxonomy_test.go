@@ -146,7 +146,7 @@ func TestLabelQueueHidesZeroTurn(t *testing.T) {
 	}
 	ids := func(projectID int64) []int64 {
 		t.Helper()
-		items, err := LabelQueue(db, -1, "", projectID)
+		items, err := LabelQueue(db, -1, "", projectID, false)
 		if err != nil {
 			t.Fatal(err)
 		}
