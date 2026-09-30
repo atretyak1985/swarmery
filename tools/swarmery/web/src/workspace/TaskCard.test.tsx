@@ -226,6 +226,23 @@ describe('TaskCard stale', () => {
   });
 });
 
+describe('TaskCard id chip', () => {
+  it('copies the id and does not open the card', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const onOpen = vi.fn();
+    renderCard({ externalId: 'T-a1b2c3' }, { onOpen });
+
+    screen.getByRole('button', { name: 'copy id: T-a1b2c3' }).click();
+
+    expect(writeText).toHaveBeenCalledWith('T-a1b2c3');
+    expect(onOpen).not.toHaveBeenCalled();
+    // The id is the readout, not just a control label — it must stay visible
+    // through the confirmation, not swap out for "copied".
+    expect(screen.getByText('T-a1b2c3')).toBeDefined();
+  });
+});
+
 // The lane action blocks are explicitly out of scope for this phase; this is the
 // fence that says the readout above them did not disturb them.
 describe('TaskCard lane actions (unchanged by phase 1)', () => {
