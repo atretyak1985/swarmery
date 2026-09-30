@@ -134,6 +134,11 @@ type Service struct {
 	// dependencies: every run starts on the repo's current branch tip, as it did
 	// before base resolution existed. The daemon always wires it.
 	Git worktree.Git
+	// gitCaps remembers what the git behind Git can do — today one thing: whether
+	// it has `merge-tree --write-tree` (git ≥ 2.38), which base resolution decides
+	// once from `git version` instead of inferring from a failing probe. The zero
+	// value is ready; it answers for whichever Git was wired when first asked.
+	gitCaps gitCapability
 	// RepoRoot resolves the git repository a run executes in from the project path
 	// and the repo the phase declares. nil ⇒ repopath.Resolve. A seam because the
 	// production resolver stats the filesystem, and the run gates have to be

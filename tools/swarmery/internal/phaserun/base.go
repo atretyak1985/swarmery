@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -71,9 +73,24 @@ type DepsUnmergedError struct {
 	// Cause is DepsDiverged, DepsConflict or DepsStale. It picks the remedy the
 	// message gives; the zero value reads as DepsDiverged.
 	Cause string
-	// Missing (DepsStale only) are the already-merged dependency branches whose
-	// work Branches[0] does not contain.
+	// The three reasons a DepsStale refusal can give for not stacking on
+	// Branches[0]; at least one is non-empty, and each changes what the message
+	// says and asks for.
+	//
+	// Missing are already-merged dependency branches whose work Branches[0]
+	// provably lacks: merging them in applies cleanly and changes the tree.
 	Missing []string
+	// Conflicting are already-merged dependency branches that do not merge
+	// cleanly into Branches[0]. That is NOT "their work is missing": a dependency
+	// squash-merged into the base, with a stack branch cut after the squash that
+	// edited the same lines, conflicts while the stack branch holds all of it.
+	// It cannot be told either way, so the message says that, and offers the
+	// remedy that fits the squash case — delete the merged branch.
+	Conflicting []string
+	// Absent are dependency run branches that no longer exist. Their work can
+	// only be on the base, there is no tip left to test, and Branches[0] does not
+	// contain the base as it stands.
+	Absent []string
 }
 
 func (e *DepsUnmergedError) Error() string {
@@ -88,9 +105,25 @@ func (e *DepsUnmergedError) Error() string {
 			"merge it into %s, or delete the branch if its work was already squash-merged, then run the phase again",
 			branches, base, base, base)
 	case DepsStale:
-		return fmt.Sprintf("this phase would be stacked on %s, but that branch does not contain the work of %s, which %s already holds — "+
-			"bring %s up to date with %s (or merge it into %s), then run the phase again",
-			branches, strings.Join(e.Missing, ", "), base, branches, base, base)
+		var why []string
+		if len(e.Missing) > 0 {
+			why = append(why, fmt.Sprintf("that branch does not contain the work of %s, which %s already holds",
+				strings.Join(e.Missing, ", "), base))
+		}
+		if len(e.Conflicting) > 0 {
+			why = append(why, fmt.Sprintf("%s, which %s already holds, does not merge cleanly into that branch, so it cannot be told whether the branch contains that work",
+				strings.Join(e.Conflicting, ", "), base))
+		}
+		if len(e.Absent) > 0 {
+			why = append(why, fmt.Sprintf("the run branch of another dependency (%s) no longer exists, so that work can only be on %s, and the branch does not contain %s as it stands",
+				strings.Join(e.Absent, ", "), base, base))
+		}
+		remedy := fmt.Sprintf("bring %s up to date with %s (or merge it into %s)", branches, base, base)
+		if len(e.Conflicting) > 0 {
+			remedy += fmt.Sprintf(", or delete %s if its work was already squash-merged", strings.Join(e.Conflicting, ", "))
+		}
+		return fmt.Sprintf("this phase would be stacked on %s, but %s — %s, then run the phase again",
+			branches, strings.Join(why, "; and "), remedy)
 	}
 	return fmt.Sprintf("this phase depends on run branches that are not merged into %s and have diverged from one another: %s — "+
 		"merge them into %s (or one into the other), then run the phase again",
@@ -165,6 +198,16 @@ type depBranch struct {
 //	    Otherwise ⇒ *DepsUnmergedError (DepsStale): the branch was cut before
 //	    another dependency merged, and starting on it would silently drop that
 //	    dependency while the prompt says "stacked".
+//	4b. A dependency whose branch is GONE has no tip to run 4a against — and a
+//	    merged branch is exactly the one that gets deleted (`gh pr merge -d`).
+//	    Its work can only be on the base, so when any dependency branch is absent
+//	    the chosen tip must hold the BASE tip: baseTip is an ancestor of it, or
+//	    merging baseTip in changes nothing. Otherwise ⇒ DepsStale again. This is
+//	    stricter than 4a (a base that moved on with unrelated work refuses too);
+//	    with nothing left to test, that is the only claim that can be proven.
+//
+// resolveBase asks git whether it can run the merge probe on every call;
+// resolveBaseWith takes the cached answer a Service keeps.
 //
 // The resolution is returned even alongside a *DepsUnmergedError, with BaseTip and
 // DepTips filled: the blocked fingerprint needs them whether or not a start point
@@ -178,6 +221,10 @@ type depBranch struct {
 // writes the merged tree into the object store. It moves no ref and touches no
 // working tree, and the objects are unreachable garbage the next gc collects.
 func resolveBase(git worktree.Git, repoRoot string, depBranches []string) (baseResolution, error) {
+	return resolveBaseWith(git, &gitCapability{}, repoRoot, depBranches)
+}
+
+func resolveBaseWith(git worktree.Git, caps *gitCapability, repoRoot string, depBranches []string) (baseResolution, error) {
 	var res baseResolution
 	if git == nil || repoRoot == "" {
 		return res, nil
@@ -194,17 +241,21 @@ func resolveBase(git worktree.Git, repoRoot string, depBranches []string) (baseR
 	res.BaseTip, res.BaseBranch = baseTip, baseBranch
 
 	var merged, unmerged, conflicting []depBranch
+	var absent []string
 	for _, name := range uniqueSorted(depBranches) {
 		tip, exists, err := branchTip(git, repoRoot, name)
 		if err != nil {
 			return res, fmt.Errorf("resolve run base: %w", err)
 		}
 		if !exists {
-			continue // a deleted run branch counts as merged
+			// A deleted run branch counts as merged — and is remembered, because
+			// "merged" with no tip left is a claim step 4b has to cover.
+			absent = append(absent, name)
+			continue
 		}
 		res.DepTips = append(res.DepTips, tip)
 		dep := depBranch{name: name, tip: tip}
-		state, err := depStateOf(git, repoRoot, baseTip, tip)
+		state, err := depStateOf(git, caps, repoRoot, baseTip, tip)
 		if err != nil {
 			return res, fmt.Errorf("resolve run base: %s: %w", name, err)
 		}
@@ -236,17 +287,48 @@ func resolveBase(git worktree.Git, repoRoot string, depBranches []string) (baseR
 	}
 	// Step 4a: the unmerged set agreed on a tip — now the merged dependencies have
 	// to be in it as well.
-	missing, err := missingFrom(git, repoRoot, top, merged)
+	missing, unclear, err := missingFrom(git, caps, repoRoot, top, merged)
 	if err != nil {
 		return res, fmt.Errorf("resolve run base: %w", err)
 	}
-	if len(missing) > 0 {
-		return res, &DepsUnmergedError{
-			Branches: []string{top.name}, Base: baseBranch, Cause: DepsStale, Missing: branchNames(missing),
+	stale := &DepsUnmergedError{
+		Branches: []string{top.name}, Base: baseBranch, Cause: DepsStale,
+		Missing: branchNames(missing), Conflicting: branchNames(unclear),
+	}
+	// Step 4b: a dependency branch that is gone leaves only the base to test.
+	if len(absent) > 0 {
+		holds, err := holdsCommit(git, caps, repoRoot, top.tip, baseTip)
+		if err != nil {
+			return res, fmt.Errorf("resolve run base: %s against %s: %w", top.name, baseTip, err)
 		}
+		if !holds {
+			stale.Absent = absent
+		}
+	}
+	if len(stale.Missing)+len(stale.Conflicting)+len(stale.Absent) > 0 {
+		return res, stale
 	}
 	res.StartRef, res.StackedOn = top.tip, top.name
 	return res, nil
+}
+
+// holdsCommit reports whether `tip` provably contains everything `commit` has:
+// commit is an ancestor of tip, or merging it into tip changes nothing. A
+// conflict, a merge that changes the tree, and a git that cannot run the probe
+// are all "not provably" — false.
+func holdsCommit(git worktree.Git, caps *gitCapability, repoRoot, tip, commit string) (bool, error) {
+	if tip == commit {
+		return true, nil
+	}
+	anc, err := isAncestor(git, repoRoot, commit, tip)
+	if err != nil || anc {
+		return anc, err
+	}
+	outcome, err := probeMerge(git, caps, repoRoot, tip, commit)
+	if err != nil {
+		return false, err
+	}
+	return outcome == mergeNoOp, nil
 }
 
 func branchNames(deps []depBranch) []string {
@@ -257,36 +339,47 @@ func branchNames(deps []depBranch) []string {
 	return names
 }
 
-// missingFrom lists the MERGED dependencies whose work the chosen stack tip does
-// not hold. A merged dependency is present in the tip when its own tip is an
-// ancestor of it (the branch was cut after the merge landed), or when merging it
-// into the tip would change nothing (the tip picked the same content up another
-// way — through a squash on the base it was cut from, say). Anything else, a
-// conflict and a git too old to run the merge probe included, is "not provably
-// there", and not provably there is missing: this list becomes a refusal, and the
-// alternative is a run that starts without a dependency and says nothing.
-func missingFrom(git worktree.Git, repoRoot string, top depBranch, merged []depBranch) ([]depBranch, error) {
-	var missing []depBranch
+// missingFrom sorts the MERGED dependencies the chosen stack tip cannot be shown
+// to hold into two lists. A merged dependency is present in the tip when its own
+// tip is an ancestor of it (the branch was cut after the merge landed), or when
+// merging it into the tip would change nothing (the tip picked the same content up
+// another way — through a squash on the base it was cut from, say). Otherwise:
+//
+//   - missing: the merge applies cleanly and changes the tree — the tip lacks that
+//     work, provably. A git too old to run the probe lands here as well: not
+//     provably there is treated as missing, because the alternative is a run that
+//     starts without a dependency and says nothing.
+//   - unclear: the merge conflicts. The tip may hold the work (a squash-merged
+//     dependency, and a tip cut after the squash that edited the same lines) or
+//     may not; saying "it does not contain it" would be a guess, and the remedy
+//     for the squash case is a different one.
+//
+// Both lists become a refusal; they differ in what it says.
+func missingFrom(git worktree.Git, caps *gitCapability, repoRoot string, top depBranch, merged []depBranch) (missing, unclear []depBranch, err error) {
 	for _, dep := range merged {
 		if dep.tip == top.tip {
 			continue
 		}
 		anc, err := isAncestor(git, repoRoot, dep.tip, top.tip)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if anc {
 			continue
 		}
-		outcome, err := probeMerge(git, repoRoot, top.tip, dep.tip)
+		outcome, err := probeMerge(git, caps, repoRoot, top.tip, dep.tip)
 		if err != nil {
-			return nil, fmt.Errorf("%s into %s: %w", dep.name, top.name, err)
+			return nil, nil, fmt.Errorf("%s into %s: %w", dep.name, top.name, err)
 		}
-		if outcome != mergeNoOp {
+		switch outcome {
+		case mergeNoOp:
+		case mergeConflicts:
+			unclear = append(unclear, dep)
+		default:
 			missing = append(missing, dep)
 		}
 	}
-	return missing, nil
+	return missing, unclear, nil
 }
 
 // containingTip finds the one unmerged branch whose tip every other unmerged tip
@@ -395,7 +488,7 @@ const (
 )
 
 // depStateOf classifies the dependency tip against baseTip.
-func depStateOf(git worktree.Git, repoRoot, baseTip, depTip string) (depState, error) {
+func depStateOf(git worktree.Git, caps *gitCapability, repoRoot, baseTip, depTip string) (depState, error) {
 	if depTip == baseTip {
 		return depMerged, nil
 	}
@@ -406,7 +499,7 @@ func depStateOf(git worktree.Git, repoRoot, baseTip, depTip string) (depState, e
 	if anc {
 		return depMerged, nil
 	}
-	outcome, err := probeMerge(git, repoRoot, baseTip, depTip)
+	outcome, err := probeMerge(git, caps, repoRoot, baseTip, depTip)
 	if err != nil {
 		return depUnmerged, err
 	}
@@ -448,31 +541,102 @@ const (
 	// mergeConflicts: the merge does not apply cleanly.
 	mergeConflicts
 	// mergeUnsupported: this git cannot run the probe (`merge-tree --write-tree`
-	// needs git ≥ 2.38, and an older one rejects the option). Nothing was learned.
+	// needs git ≥ 2.38). Nothing was asked and nothing was learned.
 	mergeUnsupported
 )
+
+// mergeTreeMinMajor/Minor: the first git whose `merge-tree` takes `--write-tree`.
+const (
+	mergeTreeMinMajor = 2
+	mergeTreeMinMinor = 38
+)
+
+// gitCapability remembers whether the git behind a seam can run the merge probe.
+// The zero value is ready to use and knows nothing yet.
+//
+// It exists so that "this git is too old" is DECIDED — once, from `git version` —
+// rather than inferred from a failing probe. Inferring it made every exit status
+// other than 0 and 1 mean "unsupported, fall back to the ancestor test", which on
+// a modern git turns a real failure (a corrupt object, exit 128) into "unmerged,
+// stack on it". Only an answer is cached: a version probe that failed is asked
+// again next time, so one timeout cannot pin a Service to a wrong verdict.
+type gitCapability struct {
+	mu        sync.Mutex
+	known     bool
+	mergeTree bool
+}
+
+// canMergeTree reports whether `git merge-tree --write-tree` exists here. A
+// version that cannot be obtained or read is an error: whether the probe may be
+// trusted is not something to guess in either direction.
+func (c *gitCapability) canMergeTree(git worktree.Git, repoRoot string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.known {
+		return c.mergeTree, nil
+	}
+	out, err := git.Run(repoRoot, "version")
+	if err != nil {
+		return false, fmt.Errorf("git version: %w", err)
+	}
+	major, minor, ok := parseGitVersion(out)
+	if !ok {
+		return false, fmt.Errorf("git version: cannot read a version out of %q", strings.TrimSpace(out))
+	}
+	c.known = true
+	c.mergeTree = major > mergeTreeMinMajor || (major == mergeTreeMinMajor && minor >= mergeTreeMinMinor)
+	return c.mergeTree, nil
+}
+
+// parseGitVersion reads major and minor out of `git version`'s line — "git version
+// 2.50.1 (Apple Git-155)", "git version 2.43.0.windows.1".
+func parseGitVersion(out string) (major, minor int, ok bool) {
+	const prefix = "git version "
+	line := firstLine(out)
+	if !strings.HasPrefix(line, prefix) {
+		return 0, 0, false
+	}
+	fields := strings.Fields(strings.TrimPrefix(line, prefix))
+	if len(fields) == 0 {
+		return 0, 0, false
+	}
+	parts := strings.Split(fields[0], ".")
+	if len(parts) < 2 {
+		return 0, 0, false
+	}
+	major, errMajor := strconv.Atoi(parts[0])
+	minor, errMinor := strconv.Atoi(parts[1])
+	if errMajor != nil || errMinor != nil || major < 0 || minor < 0 {
+		return 0, 0, false
+	}
+	return major, minor, true
+}
 
 // probeMerge asks what merging `from` into `into` would do, without touching a
 // ref or a working tree: `git merge-tree --write-tree into from`.
 //
-// Git answers with its exit status: 0 and the merged tree's id on the first line
-// for a clean merge, 1 for a conflicted one, and anything else when it could not
-// run the merge at all — which on a git older than 2.38 is every call, because the
-// option does not exist. That last case is mergeUnsupported, not an error: the
-// callers each have a documented answer for "no probe". A failure with NO exit
-// status (a timeout, a git that did not start) is an error, and so is a clean
-// merge whose answer cannot be read — an unreadable answer is not a decision.
-func probeMerge(git worktree.Git, repoRoot, into, from string) (mergeOutcome, error) {
+// On a git that cannot run it (caps says so) nothing is executed and the answer
+// is mergeUnsupported — the callers each have a documented answer for "no probe".
+// On a git that can, its exit status IS the answer: 0 and the merged tree's id on
+// the first line for a clean merge, 1 for a conflicted one. Everything else is an
+// error that refuses the start — any other status (git could not perform the
+// merge), no status at all (a timeout, a git that did not start), and a clean
+// merge whose answer cannot be read. None of those is a decision, and the
+// fallback for old gits is not a place to hide them.
+func probeMerge(git worktree.Git, caps *gitCapability, repoRoot, into, from string) (mergeOutcome, error) {
+	supported, err := caps.canMergeTree(git, repoRoot)
+	if err != nil {
+		return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: %w", from, into, err)
+	}
+	if !supported {
+		return mergeUnsupported, nil
+	}
 	out, err := git.Run(repoRoot, "merge-tree", "--write-tree", into, from)
 	if err != nil {
-		status, ok := exitStatus(err)
-		switch {
-		case !ok:
-			return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: %w", from, into, err)
-		case status == 1:
+		if status, ok := exitStatus(err); ok && status == 1 {
 			return mergeConflicts, nil
 		}
-		return mergeUnsupported, nil
+		return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: %w", from, into, err)
 	}
 	merged := firstLine(out)
 	if merged == "" {
@@ -554,7 +718,7 @@ func (s *Service) resolveRunBase(info phaseInfo) (baseResolution, error) {
 	if err != nil {
 		return baseResolution{}, err
 	}
-	return resolveBase(s.Git, info.RepoRoot, branches)
+	return resolveBaseWith(s.Git, &s.gitCaps, info.RepoRoot, branches)
 }
 
 // StackingWorktrees is the part of *worktree.Manager only phase runs use: pinning

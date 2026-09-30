@@ -340,12 +340,23 @@ type exitErr int
 func (e exitErr) Error() string { return "exit status " + strconv.Itoa(int(e)) }
 func (e exitErr) ExitCode() int { return int(e) }
 
-// oldGit is a git that predates `merge-tree --write-tree` (< 2.38): it rejects
-// the option exactly as such a git does, and runs everything else for real.
-type oldGit struct{ worktree.ExecGit }
+// oldGit is a git that predates `merge-tree --write-tree` (< 2.38): it reports an
+// old version, rejects the option exactly as such a git does, and runs everything
+// else for real. mergeTreeCalls counts how often the option was tried anyway —
+// resolution is supposed to decide from the version and never try.
+type oldGit struct {
+	worktree.ExecGit
+	mergeTreeCalls *int
+}
 
 func (g oldGit) Run(dir string, args ...string) (string, error) {
+	if len(args) == 1 && args[0] == "version" {
+		return "git version 2.30.1\n", nil
+	}
 	if len(args) > 1 && args[0] == "merge-tree" && args[1] == "--write-tree" {
+		if g.mergeTreeCalls != nil {
+			*g.mergeTreeCalls++
+		}
 		return "usage: git merge-tree <base-tree> <branch1> <branch2>\n", exitErr(129)
 	}
 	return g.ExecGit.Run(dir, args...)
@@ -360,12 +371,18 @@ func TestResolveBase_OldGitFallsBackToAncestorTest(t *testing.T) {
 	r.run("merge", "-q", "--squash", depA)
 	r.run("commit", "-q", "-m", "squash "+depA)
 
-	res, err := resolveBase(oldGit{}, r.dir, []string{depA})
+	tried := 0
+	res, err := resolveBase(oldGit{mergeTreeCalls: &tried}, r.dir, []string{depA})
 	if err != nil {
 		t.Fatalf("resolveBase on an old git: %v", err)
 	}
 	if res.StartRef != tip || res.StackedOn != depA {
 		t.Errorf("stacked on %q at %s, want the fallback to stack on %q at %s", res.StackedOn, res.StartRef, depA, tip)
+	}
+	// Decided from `git version`, not discovered by running an option this git
+	// does not have.
+	if tried != 0 {
+		t.Errorf("merge-tree --write-tree was run %d time(s) on a git whose version says it lacks it", tried)
 	}
 	// A truly merged (ancestor) dependency needs no merge-tree at all.
 	r2 := newTempRepo(t)
@@ -454,10 +471,157 @@ func TestResolveBase_ConflictingDepIsRefused(t *testing.T) {
 	res, err = resolveBase(r.git, r.dir, []string{depA, depB})
 	wantRefusal(t, res, err, DepsConflict, depA)
 	// …and the remedy the message names works: delete the conflicting branch, and
-	// the other dependency is stacked on as usual.
+	// the other dependency is stacked on. Deleting A is a claim that A's work is on
+	// main, and the only thing left to test it with is main itself — so what makes
+	// this stack is that B CONTAINS main's tip (it was cut from it), asserted here
+	// rather than assumed.
+	r.run("branch", "-D", depA)
+	res, err = resolveBase(r.git, r.dir, []string{depA, depB})
+	if err != nil || res.StartRef != tipB {
+		t.Fatalf("after deleting the conflicting branch: StartRef=%q err=%v, want stacked on %s", res.StartRef, err, tipB)
+	}
+	if out, err := r.git.Run(r.dir, "merge-base", "--is-ancestor", r.tip("main"), res.StartRef); err != nil {
+		t.Errorf("the stacked tip does not contain main's tip: %v\n%s", err, out)
+	}
+
+	// The same deletion with B cut BEFORE main took its conflicting commit must
+	// not stack: B would lack whatever main holds in A's place.
+	r2 := newTempRepo(t)
+	r2.run("checkout", "-q", "-b", depA, "main")
+	r2.writeShared("from the dependency\n", "dep writes shared.txt")
+	r2.run("checkout", "-q", "main")
+	r2.branch(depB, "main", 1) // cut before main's commit below
+	r2.writeShared("from main\n", "main writes shared.txt")
+	r2.run("branch", "-D", depA)
+	res, err = resolveBase(r2.git, r2.dir, []string{depA, depB})
+	refused = wantRefusal(t, res, err, DepsStale, depB)
+	if !reflect.DeepEqual(refused.Absent, []string{depA}) {
+		t.Errorf("Absent = %v, want [%s]", refused.Absent, depA)
+	}
+}
+
+// THE hole behind one `git branch -d`. Phases 1 and 2 are both cut from main@M0;
+// 1 merges and its run branch is deleted (`gh pr merge -d` does exactly that); 2
+// stays unmerged. There is no tip of phase 1 left to look for in phase 2's branch
+// — and phase 2's branch does not contain it. Its work can only be on main, so the
+// stack tip has to hold main; it does not, and the run is refused.
+func TestResolveBase_AbsentDepStackTipBehindBase(t *testing.T) {
+	for _, mode := range []string{"--ff-only", "--no-ff", "--squash"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newTempRepo(t)
+			r.branch(depA, "main", 1) // both cut from main@M0
+			tipB := r.branch(depB, "main", 1)
+			if mode == "--squash" {
+				r.run("merge", "-q", "--squash", depA)
+				r.run("commit", "-q", "-m", "squash "+depA)
+			} else {
+				r.run("merge", "-q", mode, "-m", "merge "+depA, depA)
+			}
+			r.run("branch", "-D", depA)
+
+			res, err := resolveBase(r.git, r.dir, []string{depA, depB})
+			refused := wantRefusal(t, res, err, DepsStale, depB)
+			if refused.Base != "main" {
+				t.Errorf("Base = %q, want main", refused.Base)
+			}
+			if !reflect.DeepEqual(refused.Absent, []string{depA}) {
+				t.Errorf("Absent = %v, want the deleted dependency [%s]", refused.Absent, depA)
+			}
+			for _, want := range []string{depB, depA, "main", "no longer exists", "up to date"} {
+				if !strings.Contains(refused.Error(), want) {
+					t.Errorf("message %q does not carry %q", refused.Error(), want)
+				}
+			}
+			if res.StartRef == tipB {
+				t.Errorf("the run was pinned to %s, which lacks the deleted %s", depB, depA)
+			}
+
+			// The remedy works: bring B up to date with main, and it holds main's tip.
+			r.run("checkout", "-q", depB)
+			r.run("merge", "-q", "--no-ff", "-m", "bring "+depB+" up to date", "main")
+			updated := r.tip("HEAD")
+			r.run("checkout", "-q", "main")
+			res, err = resolveBase(r.git, r.dir, []string{depA, depB})
+			if err != nil || res.StartRef != updated || res.StackedOn != depB {
+				t.Errorf("after bringing %s up to date: stacked on %q at %s (err %v), want %q at %s",
+					depB, res.StackedOn, res.StartRef, err, depB, updated)
+			}
+		})
+	}
+}
+
+// The ordinary sequence: phase 1 merges, its branch is deleted, and phase 2 is cut
+// from main AFTER that. Phase 2's branch contains main's tip, so everything the
+// deleted dependency put on main is in it — that stacks.
+func TestResolveBase_AbsentDepStackTipHoldsBase(t *testing.T) {
+	for _, mode := range []string{"--no-ff", "--squash"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newTempRepo(t)
+			r.branch(depA, "main", 1)
+			if mode == "--squash" {
+				r.run("merge", "-q", "--squash", depA)
+				r.run("commit", "-q", "-m", "squash "+depA)
+			} else {
+				r.run("merge", "-q", mode, "-m", "merge "+depA, depA)
+			}
+			r.run("branch", "-D", depA)
+			tipB := r.branch(depB, "main", 1) // cut AFTER the merge and the delete
+
+			res, err := resolveBase(r.git, r.dir, []string{depA, depB})
+			if err != nil {
+				t.Fatalf("resolveBase: %v", err)
+			}
+			if res.StartRef != tipB || res.StackedOn != depB {
+				t.Fatalf("stacked on %q at %s, want %q at %s", res.StackedOn, res.StartRef, depB, tipB)
+			}
+			if out, err := r.git.Run(r.dir, "merge-base", "--is-ancestor", r.tip("main"), res.StartRef); err != nil {
+				t.Errorf("the stacked tip does not contain main's tip: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+// A squash workflow that used to be told something untrue. A is squash-merged and
+// its branch kept; B is cut from main AFTER the squash and edits the same lines.
+// Merging A into B conflicts — yet B holds all of A's work. "B does not contain the
+// work of A" is false and "bring B up to date" is a no-op; what is true is that it
+// cannot be told, and the remedy that fits is deleting A's already-merged branch.
+func TestResolveBase_SquashedDepConflictsWithStackTip(t *testing.T) {
+	r := newTempRepo(t)
+	r.writeShared("line one\nline two\n", "main adds shared.txt")
+	r.run("checkout", "-q", "-b", depA, "main")
+	r.writeShared("line one\nline two — phase A\n", "phase A edits line two")
+	r.run("checkout", "-q", "main")
+	r.run("merge", "-q", "--squash", depA)
+	r.run("commit", "-q", "-m", "squash "+depA)
+	r.run("checkout", "-q", "-b", depB, "main") // cut after the squash
+	tipB := r.writeShared("line one\nline two — phase A, then phase B\n", "phase B edits line two again")
+	r.run("checkout", "-q", "main")
+
+	res, err := resolveBase(r.git, r.dir, []string{depA, depB})
+	refused := wantRefusal(t, res, err, DepsStale, depB)
+	if !reflect.DeepEqual(refused.Conflicting, []string{depA}) {
+		t.Errorf("Conflicting = %v, want [%s]", refused.Conflicting, depA)
+	}
+	if len(refused.Missing) != 0 {
+		t.Errorf("Missing = %v, want none — nothing was shown to be missing", refused.Missing)
+	}
+	msg := refused.Error()
+	for _, want := range []string{depA, depB, "does not merge cleanly", "cannot be told",
+		"delete " + depA + " if its work was already squash-merged"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message %q does not carry %q", msg, want)
+		}
+	}
+	if strings.Contains(msg, "does not contain the work of") {
+		t.Errorf("message %q claims the work is missing — that was never shown, and here it is false", msg)
+	}
+
+	// The remedy the message adds for this case works: delete A's merged branch,
+	// and B — which was cut from main's tip — is stacked on.
 	r.run("branch", "-D", depA)
 	if res, err := resolveBase(r.git, r.dir, []string{depA, depB}); err != nil || res.StartRef != tipB {
-		t.Errorf("after deleting the conflicting branch: StartRef=%q err=%v, want stacked on %s", res.StartRef, err, tipB)
+		t.Errorf("after deleting %s: StartRef=%q err=%v, want stacked on %s", depA, res.StartRef, err, tipB)
 	}
 }
 
@@ -612,9 +776,10 @@ func (g scriptedGit) Run(_ string, args ...string) (string, error) {
 	return g.answers[best].out, g.answers[best].err
 }
 
-// scriptedHead is the prelude every scripted resolution answers: on `main`, at
-// base000.
+// scriptedHead is the prelude every scripted resolution answers: a git that has
+// the merge probe, on `main`, at base000.
 var scriptedHead = map[string]scriptedAnswer{
+	"version":                   {out: "git version 2.50.1 (Apple Git-155)\n"},
 	"symbolic-ref --short HEAD": {out: "main\n"},
 	"rev-parse refs/heads/main": {out: "base000\n"},
 }
@@ -681,6 +846,23 @@ func TestResolveBase_BrokenProbesAreErrors(t *testing.T) {
 		"merge probe's base tree is unresolvable": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
 			"merge-tree":               {out: "tree999\n"},
 			"rev-parse base000^{tree}": {out: "fatal\n", err: loud},
+		}),
+		// On a git that HAS the probe, an exit status that is neither "clean" nor
+		// "conflict" is git failing to perform the merge. It used to be read as "this
+		// git is too old" and fall back to unmerged ⇒ stack.
+		"merge probe exits 128 on a git that supports it": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"merge-tree": {out: "fatal: unable to read tree\n", err: loud},
+		}),
+		"merge probe exits 129 on a git that supports it": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"merge-tree": {out: "usage: git merge-tree …\n", err: exitErr(129)},
+		}),
+		// Whether the probe can be trusted is decided from `git version`; when that
+		// cannot be had or read, it is not guessed in either direction.
+		"git version fails": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"version": {err: silent},
+		}),
+		"git version is unreadable": scripted(oneDep, notAncestor, map[string]scriptedAnswer{
+			"version": {out: "gti vresion two\n"},
 		}),
 	}
 	for name, git := range cases {
@@ -763,10 +945,140 @@ func TestResolveBase_MergeProbeAnswers(t *testing.T) {
 	// conflict list on this path; none of it is read as a tree.
 	res, err := resolve(scriptedAnswer{out: "tree555\n100644 aaa 1\tshared.txt\n\nCONFLICT (content)\n", err: exitErr(1)})
 	wantRefusal(t, res, err, DepsConflict, depA)
-	// Any other exit status ⇒ this git cannot run the probe ⇒ the ancestor test
-	// alone decides (the documented fallback) ⇒ unmerged ⇒ stacked on.
-	if res, err := resolve(scriptedAnswer{out: "usage: git merge-tree …\n", err: exitErr(129)}); err != nil || res.StartRef != "dep111" {
-		t.Errorf("unsupported probe: StartRef=%q err=%v, want the ancestor-test fallback to stack", res.StartRef, err)
+	// Any other exit status, on this git that has the probe ⇒ an error. Not a
+	// fallback: the fallback belongs to a git that lacks the probe, and that is
+	// decided from its version (TestResolveBase_MergeProbeSupportIsDecidedOnce).
+	if res, err := resolve(scriptedAnswer{out: "fatal: bad object\n", err: exitErr(128)}); err == nil || errors.Is(err, ErrDepsUnmerged) {
+		t.Errorf("exit 128 from the probe: StartRef=%q err=%v, want an error that refuses the start", res.StartRef, err)
+	}
+}
+
+// countingGit records how often each git verb ran.
+type countingGit struct {
+	worktree.Git
+	calls map[string]int
+}
+
+func (g countingGit) Run(dir string, args ...string) (string, error) {
+	if len(args) > 0 {
+		g.calls[args[0]]++
+	}
+	return g.Git.Run(dir, args...)
+}
+
+// Whether git can run `merge-tree --write-tree` is DECIDED — from `git version`,
+// once — and never inferred from how a probe failed.
+func TestResolveBase_MergeProbeSupportIsDecidedOnce(t *testing.T) {
+	probeNeeded := map[string]scriptedAnswer{
+		"rev-parse --verify --quiet":              {out: "dep111\n"},
+		"merge-base --is-ancestor dep111 base000": {err: exitErr(1)},
+		"merge-tree":               {out: "tree000\n"},
+		"rev-parse base000^{tree}": {out: "tree000\n"},
+	}
+
+	// A git older than 2.38: the probe is not run at all, and the ancestor test
+	// alone decides — unmerged, stacked on (the documented fallback). The scripted
+	// merge-tree answer above says "no-op"; it must never be consulted.
+	for _, version := range []string{"git version 2.37.9\n", "git version 2.30.1.windows.2\n", "git version 1.9.5\n"} {
+		old := countingGit{Git: scripted(probeNeeded, map[string]scriptedAnswer{"version": {out: version}}), calls: map[string]int{}}
+		res, err := resolveBase(old, "/repo", []string{depA})
+		if err != nil || res.StartRef != "dep111" {
+			t.Errorf("%q: StartRef=%q err=%v, want the ancestor-only fallback to stack", strings.TrimSpace(version), res.StartRef, err)
+		}
+		if old.calls["merge-tree"] != 0 {
+			t.Errorf("%q: merge-tree ran %d time(s) on a git that lacks --write-tree", strings.TrimSpace(version), old.calls["merge-tree"])
+		}
+	}
+
+	// 2.38 and everything after it has the probe.
+	for _, version := range []string{"git version 2.38.0\n", "git version 2.50.1 (Apple Git-155)\n", "git version 3.0.0\n"} {
+		modern := countingGit{Git: scripted(probeNeeded, map[string]scriptedAnswer{"version": {out: version}}), calls: map[string]int{}}
+		res, err := resolveBase(modern, "/repo", []string{depA})
+		if err != nil || res.StartRef != "" {
+			t.Errorf("%q: StartRef=%q err=%v, want the no-op merge read as merged", strings.TrimSpace(version), res.StartRef, err)
+		}
+		if modern.calls["merge-tree"] != 1 {
+			t.Errorf("%q: merge-tree ran %d time(s), want 1", strings.TrimSpace(version), modern.calls["merge-tree"])
+		}
+	}
+
+	// Cached: one capability, many resolutions, one `git version`.
+	git := countingGit{Git: scripted(probeNeeded), calls: map[string]int{}}
+	caps := &gitCapability{}
+	for i := 0; i < 3; i++ {
+		if _, err := resolveBaseWith(git, caps, "/repo", []string{depA}); err != nil {
+			t.Fatalf("resolution %d: %v", i, err)
+		}
+	}
+	if git.calls["version"] != 1 {
+		t.Errorf("git version ran %d time(s) across three resolutions, want 1", git.calls["version"])
+	}
+	if git.calls["merge-tree"] != 3 {
+		t.Errorf("merge-tree ran %d time(s), want once per resolution (3)", git.calls["merge-tree"])
+	}
+
+	// …and only an ANSWER is cached. A version probe that failed is asked again,
+	// so one timeout cannot pin the verdict.
+	flaky := &gitCapability{}
+	if _, err := flaky.canMergeTree(scripted(map[string]scriptedAnswer{"version": {err: errors.New("timed out")}}), "/repo"); err == nil {
+		t.Fatal("a failed version probe produced a verdict")
+	}
+	if ok, err := flaky.canMergeTree(scripted(), "/repo"); err != nil || !ok {
+		t.Errorf("after the failed probe: supported=%v err=%v, want it asked again and answered", ok, err)
+	}
+
+	// No dependency needs the probe ⇒ git version is never asked.
+	idle := countingGit{Git: scripted(), calls: map[string]int{}}
+	if _, err := resolveBase(idle, "/repo", nil); err != nil {
+		t.Fatal(err)
+	}
+	if idle.calls["version"] != 0 {
+		t.Errorf("git version ran %d time(s) for a resolution that needed no probe", idle.calls["version"])
+	}
+
+	for out, want := range map[string][3]int{
+		"git version 2.50.1 (Apple Git-155)": {2, 50, 1},
+		"git version 2.38":                   {2, 38, 1},
+		"git version 2.43.0.windows.1\nmore": {2, 43, 1},
+		"git version":                        {0, 0, 0},
+		"git version two.three":              {0, 0, 0},
+		"git version 2":                      {0, 0, 0},
+		"version 2.50.1":                     {0, 0, 0},
+		"":                                   {0, 0, 0},
+	} {
+		major, minor, ok := parseGitVersion(out)
+		if major != want[0] || minor != want[1] || ok != (want[2] == 1) {
+			t.Errorf("parseGitVersion(%q) = %d, %d, %v — want %d, %d, %v", out, major, minor, ok, want[0], want[1], want[2] == 1)
+		}
+	}
+}
+
+// The Service keeps ONE capability for its git: two resolutions through the
+// service ask `git version` once.
+func TestService_MergeProbeSupportIsCachedPerService(t *testing.T) {
+	db, _, p1, p2 := fixture(t)
+	mustExec(t, db, `UPDATE epic_phases SET run_branch='swarm/phase-1' WHERE id=?`, p1)
+	git := countingGit{Git: scripted(map[string]scriptedAnswer{
+		"rev-parse --verify --quiet":              {out: "dep111\n"},
+		"merge-base --is-ancestor dep111 base000": {err: exitErr(1)},
+		"merge-tree":               {out: "tree000\n"},
+		"rev-parse base000^{tree}": {out: "tree000\n"},
+	}), calls: map[string]int{}}
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	s.Git = git
+
+	info, err := s.loadPhase(p2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info.RepoRoot = "/repo"
+	for i := 0; i < 2; i++ {
+		if res, err := s.resolveRunBase(info); err != nil || res.StartRef != "" {
+			t.Fatalf("resolution %d: StartRef=%q err=%v, want merged", i, res.StartRef, err)
+		}
+	}
+	if git.calls["version"] != 1 {
+		t.Errorf("git version ran %d time(s) across two resolutions of one service, want 1", git.calls["version"])
 	}
 }
 
