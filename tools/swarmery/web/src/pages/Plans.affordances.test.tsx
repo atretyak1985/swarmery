@@ -367,6 +367,39 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     expect(tabIn('Plans', /^New plan$/).getAttribute('href')).toBe(`${BASE}?scope=swarmery&tab=new`);
   });
 
+  it('a plan row stays a link while its copy-id chip stays a separate control', async () => {
+    const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    try {
+      const r = mount(`${BASE}/${B.externalId}?scope=swarmery`);
+      await waitFor(() => {
+        expect(listItem('Beta').getAttribute('aria-current')).toBe('true');
+      });
+      const link = listItem('Alpha');
+      const chip = screen.getByRole('button', { name: `copy id: ${A.externalId}` });
+      // No <button> inside the <a>: the chip is a sibling, so the link's name is
+      // the plan title alone.
+      expect(link.contains(chip)).toBe(false);
+      expect(link.querySelector('button')).toBeNull();
+      expect(link.textContent).toBe('Alpha');
+
+      await act(async () => {
+        fireEvent.click(chip);
+      });
+      expect(writeText).toHaveBeenCalledWith(A.externalId);
+      // Copying never selects the row.
+      expect(at(r)).toBe(`${BASE}/${B.externalId}?scope=swarmery`);
+
+      fireEvent.click(link);
+      await settled(r, `${BASE}/${A.externalId}?scope=swarmery`);
+      expect(r.state.historyAction).toBe('PUSH');
+    } finally {
+      if (realClipboard) Object.defineProperty(navigator, 'clipboard', realClipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
   it('PhaseDrawer tabs link to their drawer URLs', async () => {
     mount(`${BASE}/${B.externalId}/phase/2/runs?scope=swarmery`);
     const d = await screen.findByRole('dialog', { name: 'Beta 2' });
