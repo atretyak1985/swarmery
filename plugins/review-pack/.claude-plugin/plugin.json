@@ -1,0 +1,9 @@
+{
+  "name": "review-pack",
+  "description": "Pull-request review pack: /pr-review reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments already on it — verify each against the code, fix the valid ones on the PR branch behind the repo's gates, rebut the rest with file:line evidence, reply in-thread. Opt-in; requires the gh CLI and a prReview block in project.json.",
+  "version": "0.1.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  }
+}
