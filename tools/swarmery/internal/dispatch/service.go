@@ -97,6 +97,11 @@ type Service struct {
 	// same posture as a full pool. nil ⇒ runcore.CheckQuota. Test seam, like UUID.
 	QuotaCheck runcore.QuotaCheckFunc
 
+	// AccountCheck is the account circuit-breaker gate (runcore.CheckAccount),
+	// run right after QuotaCheck: a card whose account cannot run (its breaker is
+	// open) stays in Todo. nil ⇒ runcore.CheckAccount. Test seam, like QuotaCheck.
+	AccountCheck runcore.AccountCheckFunc
+
 	scheduling atomic.Bool // re-entrance guard: overlapping Schedule passes skip
 }
 
@@ -105,10 +110,11 @@ type Service struct {
 func NewService(db *sql.DB, cfg Config, r Runner, wt WorktreeManager) *Service {
 	return &Service{
 		DB: db, Cfg: cfg, Run: r, Wt: wt,
-		UUID:       runcore.NewUUID,
-		now:        time.Now,
-		Slots:      runcore.NewSlots(0),
-		QuotaCheck: runcore.CheckQuota,
+		UUID:         runcore.NewUUID,
+		now:          time.Now,
+		Slots:        runcore.NewSlots(0),
+		QuotaCheck:   runcore.CheckQuota,
+		AccountCheck: runcore.CheckAccount,
 	}
 }
 
@@ -552,15 +558,16 @@ const depBlockPrefix = "blocked by dependency "
 // this gate does not have and must not be replaced by "waiting on a dependency",
 // which would read as benign. Every scheduling pass re-evaluates the same blocked
 // card, so without the prefix check the gate would overwrite such an error within
-// seconds of it being written. A quota-wait stamp is the one foreign message it
-// may replace: both are benign holds, and a dependency block outlasts a quota
-// window, so the stale quota text must not hide it.
+// seconds of it being written. The two account holds (a quota-wait stamp, an
+// account-pause stamp) are the foreign messages it may replace: all three are
+// benign holds, and a dependency block outlasts a quota window or a paused
+// account, so stale account text must not hide it.
 func (s *Service) recordDepBlock(id int64, b DepBlocker) {
 	msg := depBlockPrefix + b.String()
 	if _, err := s.DB.Exec(`
 		UPDATE tasks SET dispatch_error=?
-		 WHERE id=? AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ? OR dispatch_error LIKE ?)`,
-		msg, id, depBlockPrefix+"%", quotaWaitPrefix+"%"); err != nil {
+		 WHERE id=? AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ? OR dispatch_error LIKE ? OR dispatch_error LIKE ?)`,
+		msg, id, depBlockPrefix+"%", quotaWaitPrefix+"%", breakerWaitPrefix+"%"); err != nil {
 		log.Printf("error: dispatch: record dep block (task %d): %v", id, err)
 	}
 }
@@ -576,14 +583,36 @@ const quotaWaitPrefix = "waiting on quota: "
 // message, never a real failure. The row is written, and the board nudged, only
 // when the text actually changes — the gate runs on every scheduling pass.
 func (s *Service) recordQuotaWait(id int64, refusal error) {
-	msg := quotaWaitPrefix + refusal.Error()
+	s.recordHold(id, quotaWaitPrefix+refusal.Error(), "quota wait")
+}
+
+// breakerWaitPrefix marks a dispatch_error the account-breaker gate wrote — the
+// third benign hold, beside depBlockPrefix and quotaWaitPrefix: the card is not
+// broken, its ACCOUNT is, and the text after the prefix is
+// runcore.AccountBreakerError (account, kind, fixed reason, since when, and the
+// reset time of a quota opening).
+const breakerWaitPrefix = "account paused: "
+
+// recordBreakerWait stamps why a card is held back by its account's open
+// breaker. Same guard as recordQuotaWait.
+func (s *Service) recordBreakerWait(id int64, refusal error) {
+	s.recordHold(id, breakerWaitPrefix+refusal.Error(), "account pause")
+}
+
+// recordHold writes one of the two account holds (quota wait, account pause)
+// onto the row. It only ever overwrites nothing, its own previous message, or
+// the OTHER account hold — both are benign and about the same account, so
+// whichever gate refused last is the current reason — and never a real failure.
+// The row is written, and the board nudged, only when the text actually changes:
+// the gates run on every scheduling pass.
+func (s *Service) recordHold(id int64, msg, what string) {
 	res, err := s.DB.Exec(`
 		UPDATE tasks SET dispatch_error=?
 		 WHERE id=? AND dispatch_error IS NOT ?
-		   AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ?)`,
-		msg, id, msg, quotaWaitPrefix+"%")
+		   AND (dispatch_error IS NULL OR dispatch_error='' OR dispatch_error LIKE ? OR dispatch_error LIKE ?)`,
+		msg, id, msg, quotaWaitPrefix+"%", breakerWaitPrefix+"%")
 	if err != nil {
-		log.Printf("error: dispatch: record quota wait (task %d): %v", id, err)
+		log.Printf("error: dispatch: record %s (task %d): %v", what, id, err)
 		return
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
@@ -767,6 +796,24 @@ func (s *Service) admit(c candidate) bool {
 		}
 		// Any other failure of the check is UNKNOWN, and unknown admits.
 		log.Printf("warning: dispatch: task=%d quota check failed, admitting: %v", c.ID, err)
+	}
+	// Gate: the account's circuit breaker. Same place and same posture as the
+	// quota gate — before the slot, the card stays in Todo — for an account that
+	// cannot run at all: its login is gone, its access was refused, it hit a usage
+	// limit. Surfaced the same two ways: a breakerWaitPrefix dispatch_error the
+	// board renders, and ONE account_breaker run event per opening. The check may
+	// first probe the account (once per account per SWARMERY_PREFLIGHT_TTL,
+	// single-flighted across the cards of one pass).
+	if err := runcore.CheckAccountWith(context.Background(), s.AccountCheck, s.DB, resolution, time.Now()); err != nil {
+		if errors.Is(err, runcore.ErrAccountBreaker) {
+			s.recordBreakerWait(c.ID, err)
+			if runcore.RecordBreakerWait(s.DB, Engine, c.ID, err, s.clock()) {
+				log.Printf("dispatch: task=%d held: %v", c.ID, err)
+			}
+			return false
+		}
+		// Any other failure of the check is UNKNOWN, and unknown admits.
+		log.Printf("warning: dispatch: task=%d account check failed, admitting: %v", c.ID, err)
 	}
 	if err := s.markActive(c.ID); err != nil {
 		log.Printf("dispatch: task=%d not admitted: %v", c.ID, err)

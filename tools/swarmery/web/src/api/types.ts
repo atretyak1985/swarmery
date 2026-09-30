@@ -3359,7 +3359,10 @@ export type RunConflictCode =
   | 'phase-running'
   | 'plan-not-active'
   | 'no-phases'
-  | 'plan-complete';
+  | 'plan-complete'
+  /** the run's account cannot run — its circuit breaker is open (sign-in or access
+   *  refused, or a usage limit). Resolved from the Inbox alert's "Probe & resume". */
+  | 'account-breaker';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';

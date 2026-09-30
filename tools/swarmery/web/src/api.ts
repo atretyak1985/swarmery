@@ -2207,6 +2207,13 @@ export type PhaseRunBranchError = Error & {
 function runConflictError(
   body: {
     error?: string;
+    /**
+     * Present on the two ACCOUNT refusals (`low_quota`, `account-breaker`),
+     * whose `error` field carries the discriminator rather than a sentence: the
+     * sentence is here, and it is what the toast must show — "account-breaker"
+     * tells an operator nothing, "account work is paused (auth): …" does.
+     */
+    message?: string;
     code?: RunConflictCode;
     branch?: string;
     commitsAhead?: number;
@@ -2214,7 +2221,7 @@ function runConflictError(
   },
   fallback: string,
 ): PhaseRunBranchError {
-  const err: PhaseRunBranchError = new Error(body.error ?? fallback);
+  const err: PhaseRunBranchError = new Error(body.message ?? body.error ?? fallback);
   if (body.code !== undefined) err.code = body.code;
   if (body.code === 'branch-dirty') {
     err.branch = body.branch;

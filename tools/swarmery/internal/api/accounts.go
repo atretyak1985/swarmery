@@ -583,6 +583,13 @@ func (h *Handler) probeAccountHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("account probe: account=%s status=%s source=%s", acct.Key, verdict.Status, source)
+	// A ready verdict closes an AUTH breaker: the operator re-checked the account
+	// and the CLI is logged in. (`auth status` cannot see an account the API
+	// refuses — if that is what opened the breaker, the next run reopens it; the
+	// alert's "Probe & resume" runs the ping that can.)
+	if claudeprobe.Status(verdict.Status) == claudeprobe.StatusReady {
+		h.closeAuthBreaker(acct.Key, store.BreakerClosedByProbe)
+	}
 	var resp accountProbeResponse
 	resp.Runnable, resp.RunnableReason, resp.RunnableCheckedAt = runnableDTOFields(verdict)
 	writeJSON(w, resp, nil)

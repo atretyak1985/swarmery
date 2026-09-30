@@ -461,6 +461,15 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	// never spawns a process). Single-flight per account; same D4 origin
 	// hardening because it spends a CLI invocation and writes the verdict row.
 	mux.HandleFunc("POST /api/accounts/{account}/probe", requireLocalOrigin(h.probeAccountHandler))
+	// The account circuit breaker (alerts.go). GET /api/alerts is the read side:
+	// the unresolved findings the operator must act on — today an open breaker —
+	// which the Inbox renders as its `alert` kind; read-only and unfenced. The
+	// resume POST is "Probe & resume": it runs BOTH probe stages (the second one
+	// is a real model call) and closes the breaker only when the account can run
+	// again — same D4 origin hardening, because it spends a CLI invocation and
+	// re-opens admission for the account.
+	mux.HandleFunc("GET /api/alerts", h.listAlerts)
+	mux.HandleFunc("POST /api/accounts/{account}/breaker/resume", requireLocalOrigin(h.resumeAccountBreaker))
 	mux.HandleFunc("GET /api/projects/{id}/account", h.projectAccount)
 	mux.HandleFunc("PUT /api/projects/{id}/account", requireLocalOrigin(h.putProjectAccount))
 

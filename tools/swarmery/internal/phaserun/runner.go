@@ -50,6 +50,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 )
@@ -160,6 +161,19 @@ func timeoutFromEnv() time.Duration {
 type ClaudeRunner struct {
 	// Timeout overrides phaseRunTimeout when > 0 (tests shrink it).
 	Timeout time.Duration
+
+	// AccountVerdict, when set, is called after a run finishes with the account
+	// the run used ("" = the default account, Resolution.Account's own
+	// convention) and how its exit reads as a readiness verdict — the same hook
+	// dispatch and verify carry, and for the same reason: a phase run already
+	// executes `claude` under the account's config dir, so its death on a login
+	// demand, a refused account or a usage limit is a free authoritative probe,
+	// and the verdict is what opens the account's circuit breaker. Optional: a
+	// nil hook leaves run behaviour byte-identical (the child's stdout stays
+	// discarded — the bounded tail is captured only to classify). Not called on
+	// a timeout or a failed start: neither is an exit, so neither says anything
+	// about the account.
+	AccountVerdict func(account string, r claudeprobe.Result)
 }
 
 // Start maps this engine's RunSpec onto runcore.Spec and its Result back onto
@@ -184,6 +198,14 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	// with one, the estate's EstateKeys are added to what the lent file lacks.
 	settingsFile := runsettings.Compose("phaserun", resolution, runsettings.Inputs{Fallback: spec.SettingsFile})
 
+	// A bounded stdout tail is kept ONLY when a verdict hook wants the exit
+	// classified (the CLI prints its account failures on stdout). With no hook
+	// stdout stays discarded at the OS level, as it always was.
+	tailBytes := 0
+	if r.AccountVerdict != nil {
+		tailBytes = runcore.StderrTailBytes
+	}
+
 	res, err := runcore.ClaudeRunner{Engine: "phaserun"}.Start(ctx, runcore.Spec{
 		Prompt:      spec.Prompt,
 		SessionUUID: spec.SessionUUID,
@@ -202,11 +224,17 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// phase's acquired worktree. An empty path resolves nothing and an
 		// unbound, estate-less project adds nothing, so cmd.Env then stays a
 		// byte-identical copy of os.Environ().
-		Resolution: resolution,
-		Timeout:    timeout,
+		Resolution:      resolution,
+		Timeout:         timeout,
+		StdoutTailBytes: tailBytes,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})
+	// A clean exit and a nonzero one both say something about the account; a
+	// timeout and a failed start are not exits, so they say nothing.
+	if r.AccountVerdict != nil && err == nil && !res.TimedOut {
+		r.AccountVerdict(resolution.Account, claudeprobe.ClassifyRun(res.ExitCode, res.StdoutTail, res.Stderr))
+	}
 	return &Run{
 		SessionUUID: res.SessionUUID,
 		ExitCode:    res.ExitCode,

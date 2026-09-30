@@ -9,6 +9,7 @@
 // after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
 
 import { describe, expect, it } from 'vitest';
+import type { Alert } from '../../api/alerts';
 import type { QueueItem } from '../../api/decisions';
 import type { Lesson, RetirementProposal } from '../../api/lessons';
 import type { AgentChangeProposal, PermissionRequest, Recommendation } from '../../api/types';
@@ -177,6 +178,60 @@ describe('toItems', () => {
 
   it('treats a missing source as empty', () => {
     expect(toItems({ lessons: undefined })).toEqual([]);
+  });
+});
+
+describe('alerts', () => {
+  const breaker = (id: number, kind: 'auth' | 'quota', resetsAt?: string): Alert => ({
+    id,
+    rule: 'account_breaker_open',
+    target: 'account:work',
+    severity: 'error',
+    message: 'Claude refused this account. Runs on it are paused until a probe succeeds.',
+    detectedAt: '2026-09-27T09:00:00Z',
+    account: 'work',
+    kind,
+    reason: "Claude refused this account's access",
+    openedAt: '2026-09-27T09:00:00Z',
+    ...(resetsAt === undefined ? {} : { resetsAt }),
+  });
+
+  it('normalises a paused account into an urgent alert item', () => {
+    const [auth, quota] = toItems({ alerts: [breaker(1, 'auth'), breaker(2, 'quota', '2026-09-27T14:00:00Z')] });
+    expect(auth?.kind).toBe('alert');
+    expect(auth?.key).toBe('alert:1');
+    expect(auth?.title).toBe('Account work is paused');
+    expect(auth?.context).toBe('sign-in or access');
+    expect(auth?.urgent).toBe(true);
+    // An auth pause does not end on its own; a quota pause does, at its reset.
+    expect(auth?.expiresIso).toBeUndefined();
+    expect(quota?.context).toBe('usage limit');
+    expect(quota?.expiresIso).toBe('2026-09-27T14:00:00Z');
+  });
+
+  it('sorts a paused account ahead of the calm queue and counts it under its tab', () => {
+    const items = toItems({
+      lessons: [lesson(3, '2026-09-20T10:00:00Z')],
+      alerts: [breaker(1, 'auth')],
+    });
+    expect(sortItems(items).map((i) => i.key)).toEqual(['alert:1', 'lesson:3']);
+    expect(tabCounts(items).alerts).toBe(1);
+    expect(filterTab(items, 'alerts').map((i) => i.key)).toEqual(['alert:1']);
+  });
+
+  it('keeps an alert that is not an account breaker, with its own message', () => {
+    const other: Alert = {
+      id: 9,
+      rule: 'some_future_rule',
+      target: 'thing:1',
+      severity: 'error',
+      message: 'Something needs you.',
+      detectedAt: '2026-09-27T09:00:00Z',
+    };
+    const [item] = toItems({ alerts: [other] });
+    expect(item?.title).toBe('Something needs you.');
+    expect(item?.context).toBe('thing:1');
+    expect(item?.ageIso).toBe('2026-09-27T09:00:00Z');
   });
 });
 

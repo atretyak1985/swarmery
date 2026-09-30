@@ -192,6 +192,43 @@ func writeLowQuota(w http.ResponseWriter, err error) {
 	writeJSONStatus(w, http.StatusTooManyRequests, body)
 }
 
+// codeAccountBreaker is the account circuit-breaker refusal: the run's account
+// cannot run right now — its login is gone, its access was refused, or it hit a
+// usage limit — and the daemon will not spend a run finding that out again. A
+// 409, unlike codeLowQuota's 429: for an auth opening "retry later" is not the
+// answer — the operator has to fix the account and resume it (the Inbox alert's
+// "Probe & resume", POST /api/accounts/{account}/breaker/resume).
+const codeAccountBreaker = "account-breaker"
+
+// writeAccountBreaker renders a run refused by the account gate
+// (runcore.ErrAccountBreaker): 409 {"error":"account-breaker","code":
+// "account-breaker","message",…,"account","kind","reason","openedAt",
+// "resetsAt"}. `error` carries the discriminator, as specified for this refusal
+// (the writeLowQuota shape); `code` repeats it so a client switching on `code`
+// reads it the same way. reason is a fixed phrase, never CLI output. A bare
+// sentinel with no evidence still answers 409, with the structured fields empty.
+func writeAccountBreaker(w http.ResponseWriter, err error) {
+	body := map[string]any{
+		"error":    codeAccountBreaker,
+		"code":     codeAccountBreaker,
+		"message":  err.Error(),
+		"account":  "",
+		"kind":     "",
+		"reason":   "",
+		"openedAt": "",
+		"resetsAt": "",
+	}
+	var open *runcore.AccountBreakerError
+	if errors.As(err, &open) {
+		body["account"] = open.Account
+		body["kind"] = open.Kind
+		body["reason"] = open.Reason
+		body["openedAt"] = open.OpenedAt
+		body["resetsAt"] = open.ResetsAt
+	}
+	writeJSONStatus(w, http.StatusConflict, body)
+}
+
 // writeConflict replies 409 {"error": msg, "code": code}.
 func writeConflict(w http.ResponseWriter, code, msg string) {
 	writeConflictFields(w, code, msg, nil)

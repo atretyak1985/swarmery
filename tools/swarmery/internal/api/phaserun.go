@@ -195,6 +195,10 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	// nothing was stamped — 429 with the reset time, not a 409.
 	case errors.Is(err, runcore.ErrLowQuota):
 		writeLowQuota(w, err)
+	// The run's account cannot run (its circuit breaker is open). Nothing was
+	// stamped; the body names the account, why, and when a quota opening resets.
+	case errors.Is(err, runcore.ErrAccountBreaker):
+		writeAccountBreaker(w, err)
 	case errors.As(err, &depsErr):
 		writeConflictFields(w, codeDepsUnmet, depsErr.Error(), map[string]any{
 			"unmetDeps": depsErr.Unmet,

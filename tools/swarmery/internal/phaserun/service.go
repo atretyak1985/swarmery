@@ -193,6 +193,11 @@ type Service struct {
 	// before the slot: a fresh reading below the floor refuses Start with a
 	// *runcore.LowQuotaError and stamps nothing. nil ⇒ runcore.CheckQuota.
 	QuotaCheck runcore.QuotaCheckFunc
+	// AccountCheck is the account circuit-breaker gate (runcore.CheckAccount), run
+	// right after QuotaCheck and before the slot: an account whose breaker is open
+	// refuses Start with a *runcore.AccountBreakerError and stamps nothing.
+	// nil ⇒ runcore.CheckAccount.
+	AccountCheck runcore.AccountCheckFunc
 }
 
 // NewService builds a phase-run service. The caller wires DB + Run
@@ -200,13 +205,14 @@ type Service struct {
 // production impls.
 func NewService(db *sql.DB, r Runner, wt runcore.WorktreeManager) *Service {
 	return &Service{
-		DB:         db,
-		Run:        r,
-		Wt:         wt,
-		UUID:       runcore.NewUUID,
-		now:        time.Now,
-		Slots:      runcore.NewSlots(0),
-		QuotaCheck: runcore.CheckQuota,
+		DB:           db,
+		Run:          r,
+		Wt:           wt,
+		UUID:         runcore.NewUUID,
+		now:          time.Now,
+		Slots:        runcore.NewSlots(0),
+		QuotaCheck:   runcore.CheckQuota,
+		AccountCheck: runcore.CheckAccount,
 	}
 }
 
@@ -551,7 +557,17 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// stamped and no slot is taken, exactly like ErrNoSlot. Wall-clock time, not
 	// s.clock(): account_quota's fetched_at is the poller's wall time, and the
 	// service clock is the run's stamp source (budget.Started reads it below).
-	if err := runcore.CheckQuotaWith(s.QuotaCheck, s.DB, runcore.AccountFor(info.ProjectPath), time.Now()); err != nil {
+	account := runcore.AccountFor(info.ProjectPath)
+	if err := runcore.CheckQuotaWith(s.QuotaCheck, s.DB, account, time.Now()); err != nil {
+		return "", err
+	}
+	// Account circuit breaker: the same posture one gate later. An account that
+	// cannot run — its login is gone, its access was refused, it hit a usage
+	// limit — is refused as itself (*runcore.AccountBreakerError — the API
+	// renders 409 account-breaker), before the slot and the worktree, so a phase
+	// is never spent on it. It may first probe the account (once per account per
+	// SWARMERY_PREFLIGHT_TTL); an account it cannot judge is admitted.
+	if err := runcore.CheckAccountWith(context.Background(), s.AccountCheck, s.DB, account, time.Now()); err != nil {
 		return "", err
 	}
 

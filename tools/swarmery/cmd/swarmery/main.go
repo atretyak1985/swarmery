@@ -1971,6 +1971,16 @@ func cmdServe(args []string) error {
 	// verdicts with source='run' under runtruth's write rules (negative-only,
 	// no-login→ready recovery, debounced).
 	runTruth := runtruth.NewRecorder(db)
+	// The account circuit breaker's PRE-FLIGHT (internal/runcore/breaker.go):
+	// before the first run after a quiet period, admission probes the account —
+	// `claude auth status`, then a one-turn `claude -p` ping — so an account that
+	// cannot run is caught before a volley of runs starts on it. The probe is
+	// installed HERE and nowhere else: without it the three engines still enforce
+	// the stored breaker state (run-truth and ingest open it) but spawn nothing,
+	// which is what keeps every test that starts a run away from the real CLI.
+	// Knobs: SWARMERY_PREFLIGHT_TTL (default 15m, 0 = off) and
+	// SWARMERY_PREFLIGHT_PING=off (stage one only).
+	runcore.SetPreflightProbe(runcore.ProbeAccount)
 
 	// ONE run budget for the whole daemon (SWARMERY_MAX_RUNS, default 4). Every
 	// engine below is handed this same registry: board, phase and plan runs draw
@@ -2183,7 +2193,7 @@ func cmdServe(args []string) error {
 	// epic_phases, no board task). Shares the worktree.Manager with dispatch/
 	// verify so all three agree on the worktree root and git boundary. Heal any
 	// 'running' rows a crashed daemon left behind to failed before serving.
-	phaserunSvc := phaserun.NewService(db, phaserun.ClaudeRunner{}, wtMgr)
+	phaserunSvc := phaserun.NewService(db, phaserun.ClaudeRunner{AccountVerdict: runTruth.Record}, wtMgr)
 	phaserunSvc.Slots = runSlots // the one daemon-wide budget (see runSlots above)
 	// Read-only git seam, through the same boundary the worktree manager uses: it
 	// NAMES the base a dirty-branch refusal counted commits against. NewService
@@ -2334,7 +2344,7 @@ func cmdServe(args []string) error {
 	// Plan runs: hand a WHOLE plan to one agent — one headless session in one
 	// worktree, driving core's run-plan skill (state on plan_runs). Same
 	// worktree.Manager as dispatch/verify/phaserun; same startup heal posture.
-	planrunSvc := planrun.NewService(db, planrun.ClaudeRunner{}, wtMgr)
+	planrunSvc := planrun.NewService(db, planrun.ClaudeRunner{AccountVerdict: runTruth.Record}, wtMgr)
 	planrunSvc.Slots = runSlots // the one daemon-wide budget (see runSlots above)
 	planrunSvc.InjectLessons = lessonInjector.ForPlan
 	planrunSvc.LessonCitations = lessonInjector.AfterPlanRun

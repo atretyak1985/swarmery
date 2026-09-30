@@ -19,6 +19,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
+import * as alerts from '../../api/alerts';
 import * as decisions from '../../api/decisions';
 import { Inbox } from './Inbox';
 
@@ -101,9 +102,18 @@ vi.mock('../../api/decisions', () => ({
   postGroundTruth: vi.fn(async () => undefined),
 }));
 
+// The seventh source. Empty by default, so the six-kind claims above count what
+// they always counted; the alert test below fills it.
+vi.mock('../../api/alerts', () => ({
+  ACCOUNT_BREAKER_RULE: 'account_breaker_open',
+  fetchAlerts: vi.fn(async () => []),
+  resumeAccount: vi.fn(async () => undefined),
+}));
+
 vi.mock('../../lib/ws', () => ({ useLiveUpdates: () => undefined }));
 
 function defaultFetchers(): void {
+  vi.mocked(alerts.fetchAlerts).mockResolvedValue([]);
   vi.mocked(api.fetchApprovals).mockResolvedValue([
     approvalRow(1, 'Bash', { command: 'rm -rf node_modules && npm ci' }, 78),
     approvalRow(2, 'AskUserQuestion', ASK, 300),
@@ -253,5 +263,41 @@ describe('Inbox', () => {
     await renderInbox();
     expect(screen.getByRole('alert').textContent).toContain("couldn't load proposals");
     expect(rows()).toHaveLength(6);
+  });
+
+  it('puts a paused account first, and e probes and resumes it', async () => {
+    vi.mocked(alerts.fetchAlerts).mockResolvedValue([
+      {
+        id: 4,
+        rule: 'account_breaker_open',
+        target: 'account:work',
+        severity: 'error',
+        message: 'Claude refused this account. Runs on it are paused until a probe succeeds.',
+        detectedAt: iso(-600),
+        account: 'work',
+        kind: 'auth',
+        reason: "Claude refused this account's access",
+        openedAt: iso(-600),
+      },
+    ]);
+    await renderInbox();
+    const list = rows();
+    expect(list).toHaveLength(8);
+    expect(list[0]?.textContent).toContain('Account work is paused');
+    expect(selectedRow().textContent).toContain('Account work is paused');
+    expect(primaries()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /probe & resume/ })).toBeTruthy();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(alerts.resumeAccount).toHaveBeenCalledWith('work');
+    // x is a no-op: an alert cannot be dismissed.
+    cleanup();
+    await renderInbox('/inbox?tab=alerts');
+    expect(rows()).toHaveLength(1);
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'x' });
+    });
+    expect(api.resolveApproval).not.toHaveBeenCalled();
   });
 });

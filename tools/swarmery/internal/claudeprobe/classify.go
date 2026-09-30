@@ -150,6 +150,85 @@ func FailureKindOfTail(output string) (kind string, ok bool) {
 	return "", false
 }
 
+// ClassifyRun is ClassifyExit for a finished RUN whose two output tails are
+// still apart, plus one more read of a NON-ZERO exit: when ClassifyExit cannot
+// name the failure, the last line of each tail is put through FailureKind. That
+// is what turns an exit the older markers do not know — the organisation
+// switched subscription access off, a 401 that demands a fresh login, the
+// account ran out of usage credits — into a verdict about the account instead
+// of an unexplained failed run.
+//
+//	auth  → StatusNoLogin / ReasonAccessRefused   (the CLI cannot run under it)
+//	quota → StatusLimited / ReasonRateLimited
+//
+// An `API Error:` tail stays StatusUnknown: an overloaded or unreachable API
+// says nothing about the account. A ZERO exit is ready and nothing else — a run
+// that succeeded never reads as a failure because of what it printed, the rule
+// ClassifyExit already keeps.
+func ClassifyRun(exitCode int, stdoutTail, stderrTail string) Result {
+	r := ClassifyExit(exitCode, stdoutTail+"\n"+stderrTail)
+	if exitCode == 0 || r.Status != StatusUnknown {
+		return r
+	}
+	for _, tail := range []string{stdoutTail, stderrTail} {
+		switch kind, _ := FailureKindOfTail(tail); kind {
+		case FailureAuth:
+			return Result{Status: StatusNoLogin, Reason: ReasonAccessRefused}
+		case FailureQuota:
+			return Result{Status: StatusLimited, Reason: ReasonRateLimited}
+		}
+	}
+	return r
+}
+
+// AccountFailure reports whether text IS a recorded failure line that says
+// something about the ACCOUNT — auth or quota, never an API error — and, if so,
+// its kind and the fixed reason phrase for it. A login demand the older markers
+// know keeps the login wording; any other auth shape is access the account no
+// longer has. Like FailureKind, the text is matched and never returned.
+func AccountFailure(text string) (kind, reason string, ok bool) {
+	switch k, _ := FailureKind(text); k {
+	case FailureAuth:
+		if r := ClassifyExit(1, text); r.Status == StatusNoLogin {
+			return k, r.Reason, true
+		}
+		return k, ReasonAccessRefused, true
+	case FailureQuota:
+		return k, ReasonRateLimited, true
+	}
+	return "", "", false
+}
+
+// classifyPing reads the output of the fixed ping (ProbeRun). The expected
+// output is the two letters the prompt asks for, so ANY line that is a recorded
+// failure shape is the failure itself — prose cannot fake a marker here — and
+// it is matched regardless of the exit code: the CLI has printed such a line
+// and still exited 0.
+//
+// No failure line: a zero exit is ready (the account authenticated and the
+// model answered), and a non-zero one falls back to ClassifyExit's markers.
+func classifyPing(exitCode int, stdout, stderr string) Result {
+	apiError := false
+	for _, out := range []string{stdout, stderr} {
+		for _, line := range strings.Split(out, "\n") {
+			kind, reason, account := AccountFailure(line)
+			switch {
+			case account && kind == FailureAuth:
+				return Result{Status: StatusNoLogin, Reason: reason}
+			case account:
+				return Result{Status: StatusLimited, Reason: reason}
+			}
+			if k, _ := FailureKind(line); k == FailureAPIError {
+				apiError = true
+			}
+		}
+	}
+	if apiError {
+		return Result{Status: StatusUnknown, Reason: ReasonAPIError}
+	}
+	return ClassifyExit(exitCode, stdout+"\n"+stderr)
+}
+
 // LimitScope reports whether output carries one of the recorded usage-limit
 // shapes and, if so, which scope: "session", "weekly", "model", or "" (a limit
 // whose scope the wording does not say). ok=false means no limit shape matched.

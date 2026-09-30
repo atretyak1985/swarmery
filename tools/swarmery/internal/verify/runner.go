@@ -172,9 +172,12 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 // reportVerdict feeds one finished run's exit through the probe's shared
 // classifier and into the AccountVerdict hook. The combined output exists in
 // this call only for matching — it is never stored or logged through this path.
+// ClassifyRun also reads a NON-ZERO exit's last output line (FailureKindOfTail),
+// the same rule dispatch applies: verification has no admission gate of its
+// own, but its verdicts still open the account's breaker.
 func (r ClaudeRunner) reportVerdict(spec RunSpec, exitCode int, stdout, stderrTail string) {
 	if r.AccountVerdict == nil {
 		return
 	}
-	r.AccountVerdict(spec.Resolution.Account, claudeprobe.ClassifyExit(exitCode, stdout+"\n"+stderrTail))
+	r.AccountVerdict(spec.Resolution.Account, claudeprobe.ClassifyRun(exitCode, stdout, stderrTail))
 }

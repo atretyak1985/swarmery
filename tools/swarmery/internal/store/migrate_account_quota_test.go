@@ -104,9 +104,11 @@ func TestOpenNoMigrate(t *testing.T) {
 	if maxV != latest-1 {
 		t.Errorf("MAX(version) = %d after OpenNoMigrate, want %d (it migrated)", maxV, latest-1)
 	}
-	// The table the pending migration would add is absent — callers see "no such table".
-	if _, err := QuotaForAccount(db, "default"); err == nil || !strings.Contains(err.Error(), "no such table") {
-		t.Errorf("QuotaForAccount on a pre-migration db: err = %v, want no such table", err)
+	// The table the pending migration would add is absent — callers see "no such
+	// table". The pending migration is whichever one is newest: account_breaker
+	// since it landed on top of account_quota.
+	if _, _, err := GetAccountBreaker(db, "default"); err == nil || !strings.Contains(err.Error(), "no such table") {
+		t.Errorf("GetAccountBreaker on a pre-migration db: err = %v, want no such table", err)
 	}
 
 	if _, err := OpenNoMigrate(filepath.Join(t.TempDir(), "absent.db")); err == nil {

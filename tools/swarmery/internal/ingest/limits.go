@@ -14,9 +14,12 @@ package ingest
 
 import (
 	"encoding/json"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/findings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -26,6 +29,10 @@ import (
 // projects-root context (its
 // account is unknown; a later tail that knows the root records it, the
 // record_uuid unique index keeping that to one row).
+//
+// The same flagged record is also what opens the account's circuit breaker
+// (tripBreaker) — under its own, stricter rule: the text must BE an auth or
+// quota failure line and the record must be fresh.
 func (in *ingester) recordLimitHit(r *record) error {
 	// No uuid, no row: the record_uuid unique index is what makes a re-tail
 	// idempotent, and it does not cover the empty string.
@@ -36,7 +43,11 @@ func (in *ingester) recordLimitHit(r *record) error {
 	if account == "" {
 		return nil
 	}
-	scope, ok := claudeprobe.LimitScope(apiErrorText(r))
+	text := apiErrorText(r)
+	if err := in.tripBreaker(account, r, text); err != nil {
+		return err
+	}
+	scope, ok := claudeprobe.LimitScope(text)
 	if !ok {
 		return nil
 	}
@@ -49,6 +60,46 @@ func (in *ingester) recordLimitHit(r *record) error {
 		RecordUUID:  r.UUID,
 	})
 	return err
+}
+
+// breakerRecency bounds how old (or how far ahead) a flagged record's timestamp
+// may be and still open the breaker. A breaker is about NOW: a backfill or a
+// re-tail walks months of transcripts, and last week's expired login must not
+// pause an account that has been working since.
+const breakerRecency = 10 * time.Minute
+
+// breakerClock is tripBreaker's clock — a package var so a test can place "now"
+// beside a fixture's timestamp.
+var breakerClock = time.Now
+
+// tripBreaker opens account's circuit breaker when r — already known to be a
+// flagged API-error record — IS an auth or quota failure line
+// (claudeprobe.AccountFailure; an `API Error:` line never trips) and its
+// timestamp is within breakerRecency of now. The opening and its alert are
+// written through in.tx, like everything else this tail writes.
+//
+// No row carries the message text: the breaker stores the kind and a fixed
+// reason phrase, the finding a fixed sentence per kind.
+func (in *ingester) tripBreaker(account string, r *record, text string) error {
+	kind, reason, ok := claudeprobe.AccountFailure(text)
+	if !ok {
+		return nil
+	}
+	at, err := time.Parse(time.RFC3339, r.Timestamp)
+	if err != nil {
+		return nil // no usable timestamp, no evidence the failure is current
+	}
+	now := breakerClock()
+	if age := now.Sub(at); age > breakerRecency || age < -breakerRecency {
+		return nil
+	}
+	changed, err := store.TripAccountBreaker(in.tx, account, kind, reason, store.BreakerSourceTranscript, now)
+	if err != nil || !changed {
+		return err
+	}
+	log.Printf("ingest: account breaker OPEN account=%s kind=%s source=transcript", account, kind)
+	return findings.Upsert(in.tx, store.AccountBreakerTarget(account), store.AccountBreakerRule,
+		"error", store.AccountBreakerMessage(kind))
 }
 
 // apiErrorText is the prose of an assistant record: its text blocks joined, or
