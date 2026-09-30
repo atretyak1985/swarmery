@@ -588,7 +588,11 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bound, err := h.bindingsByAccount()
+	// Fresh, never the cached view: its TTL is a display trade-off, and a
+	// binding written by `swarmery account use` or by hand never invalidates
+	// it — a removal answering from it would leave that project's dangling
+	// binding unreported.
+	bound, err := h.discoverBindingView()
 	if err != nil {
 		writeErr(w, err)
 		return

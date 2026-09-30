@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"os/exec"
@@ -98,5 +99,31 @@ func TestAccountsBindingCacheExpires(t *testing.T) {
 	bindingCacheNow = func() time.Time { return later }
 	if work := accountNamed(t, listAccountsOK(t, srv), "work"); !slices.Equal(work.Projects, []string{proj}) {
 		t.Errorf("past the TTL: %v, want the hand-edited binding", work.Projects)
+	}
+}
+
+// DELETE never answers from the cache: a binding written outside this API
+// (`swarmery account use`, a hand edit) inside the TTL is still reported as
+// dangling — the TTL is a display trade-off, not a removal's.
+func TestAccountsDeleteIgnoresTheBindingCache(t *testing.T) {
+	attachHomeAccounts(t, ingest.DefaultAccount, "work")
+	proj := t.TempDir()
+	_, srv := accountsTestDB(t, "delete-cache.db", proj)
+	if work := accountNamed(t, listAccountsOK(t, srv), "work"); len(work.Projects) != 0 {
+		t.Fatalf("precondition: %v", work.Projects)
+	}
+	writeBindingFile(t, proj, `{"claudeAccount":"work"}`) // not through the API: no invalidation
+
+	status, body := acctDo(t, http.MethodDelete, srv.URL+"/api/accounts/work", "")
+	if status != http.StatusOK {
+		t.Fatalf("DELETE = %d\n%s", status, body)
+	}
+	var resp removeAccountResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("decode: %v\n%s", err, body)
+	}
+	if !slices.Equal(resp.DanglingBindings, []string{proj}) {
+		t.Errorf("danglingBindings = %v, want [%s] — a binding written inside the cache TTL went unreported",
+			resp.DanglingBindings, proj)
 	}
 }
