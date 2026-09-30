@@ -18,9 +18,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/signal"
 	"strings"
@@ -105,6 +107,12 @@ func decideEval(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		return 2
 	}
 	if err := fs.Parse(args); err != nil {
+		// Asking for help is not a usage error: same stream and exit code as
+		// `swarmery decide help`.
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(stderr, decideUsage)
+			return 0
+		}
 		return usageErr("%v", err)
 	}
 	if fs.NArg() != 0 {
@@ -140,7 +148,9 @@ func decideEval(ctx context.Context, args []string, stdout, stderr io.Writer, ge
 		if !ok {
 			return
 		}
-		if v := *floorFlags[id]; v < 0 || v > 1 {
+		// NaN fails every comparison, so it is rejected by name: as a floor it
+		// would never trip.
+		if v := *floorFlags[id]; math.IsNaN(v) || v < 0 || v > 1 {
 			badFloor = f.Name
 		} else {
 			floors[id] = v

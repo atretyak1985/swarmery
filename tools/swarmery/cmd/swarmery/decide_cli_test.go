@@ -190,9 +190,26 @@ func TestDecideEval_Floors(t *testing.T) {
 	}
 }
 
+// Asking for help is not an error: usage on stderr, no report, exit 0 — the
+// same contract as `swarmery decide help`.
+func TestDecideEval_HelpExitsZero(t *testing.T) {
+	for _, flagName := range []string{"-h", "--help"} {
+		t.Run(flagName, func(t *testing.T) {
+			code, stdout, stderr := runDecideEval(t, noEnv, flagName)
+			if code != 0 {
+				t.Errorf("exit = %d, want 0\nstderr: %s", code, stderr)
+			}
+			if stdout != "" || !strings.HasPrefix(stderr, "usage:") {
+				t.Errorf("help must print the usage alone on stderr: stdout %q stderr %q", stdout, stderr)
+			}
+		})
+	}
+}
+
 // Exit 2: usage and database errors — including --llm with no local model.
 func TestDecideEval_UsageAndDBErrors(t *testing.T) {
 	path, _ := evalDB(t)
+	absent := filepath.Join(t.TempDir(), "absent.db")
 	for name, args := range map[string][]string{
 		"unknown flag":          {"--db", path, "--nope"},
 		"positional argument":   {"--db", path, "extra"},
@@ -200,9 +217,10 @@ func TestDecideEval_UsageAndDBErrors(t *testing.T) {
 		"negative limit":        {"--db", path, "--limit", "-1"},
 		"floor above one":       {"--db", path, "--min-outcome", "1.5"},
 		"negative floor":        {"--db", path, "--min-task", "-0.1"},
+		"NaN floor":             {"--db", path, "--min-outcome", "NaN"},
 		"unreplayable question": {"--db", path, "--questions", "d1.run_end"},
 		"unknown question":      {"--db", path, "--questions", "mood"},
-		"missing database":      {"--db", filepath.Join(t.TempDir(), "absent.db")},
+		"missing database":      {"--db", absent},
 		"llm without a url":     {"--db", path, "--llm"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -215,8 +233,8 @@ func TestDecideEval_UsageAndDBErrors(t *testing.T) {
 			}
 		})
 	}
-	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "absent.db")); err == nil {
-		t.Error("a missing database was created")
+	if _, err := os.Stat(absent); !os.IsNotExist(err) {
+		t.Errorf("a missing database was created at %s (stat err: %v)", absent, err)
 	}
 	if code := cmdDecide(nil); code != 2 {
 		t.Errorf("cmdDecide(nil) = %d, want 2", code)
