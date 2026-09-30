@@ -1246,9 +1246,11 @@ var recStatuses = map[string]bool{
 // that project — those whose evidence session_ids resolve to one of the
 // project's sessions. Recommendations are global by identity (dedup_key =
 // rule:target, aggregated cross-project), so this is a post-filter on the
-// evidence rather than a scoped query: fleet-level rules with no session
-// attribution (R5 process / R6 config / R7 architecture) drop out of a
-// project-scoped view, which is correct — they belong to the whole fleet.
+// evidence rather than a scoped query. A rule whose TARGET is the project
+// itself (target_kind project/memory = its DB slug, e.g. R7 stale map, R10
+// memory over budget) is attributed too, evidence or not. Fleet-level rules
+// with neither (R5 process / R6 config) drop out of a project-scoped view,
+// which is correct — they belong to the whole fleet.
 func (h *Handler) retroRecommendations(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("status")
 	if filter == "" {
@@ -1298,8 +1300,12 @@ func (h *Handler) buildRetroRecommendations(statuses []string, projectID string)
 	q += ` ORDER BY updated_at DESC, id DESC`
 
 	// Resolve the optional project scope to its evidence-session set up front
-	// (empty set ⇒ nothing matches, an unknown project yields no recs).
+	// (empty set ⇒ nothing matches, an unknown project yields no recs), plus the
+	// project's own DB slug: rules that name a project as their TARGET (R7 stale
+	// architecture map, R10 memory index over budget) carry no session evidence,
+	// yet plainly belong to that project.
 	var projectUUIDs map[string]struct{}
+	var projectSlugs map[string]struct{}
 	scoped := false
 	if projectID != "" {
 		scoped = true
@@ -1308,6 +1314,9 @@ func (h *Handler) buildRetroRecommendations(statuses []string, projectID string)
 			return recommendationsDTO{}, err
 		}
 		projectUUIDs = set
+		if projectSlugs, err = h.projectSlugs(projectID); err != nil {
+			return recommendationsDTO{}, err
+		}
 	}
 
 	rows, err := h.DB.Query(q, args...)
@@ -1324,7 +1333,7 @@ func (h *Handler) buildRetroRecommendations(statuses []string, projectID string)
 			&d.Detail, &evidence, &base, &d.Status, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			return recommendationsDTO{}, err
 		}
-		if scoped && !evidenceInProject(evidence, projectUUIDs) {
+		if scoped && !evidenceInProject(evidence, projectUUIDs) && !targetsProject(d.TargetKind, d.Target, projectSlugs) {
 			continue
 		}
 		d.Evidence = json.RawMessage(evidence)
@@ -1332,6 +1341,35 @@ func (h *Handler) buildRetroRecommendations(statuses []string, projectID string)
 		out.Recommendations = append(out.Recommendations, d)
 	}
 	return out, rows.Err()
+}
+
+// projectSlugs returns the DB slug(s) of the project a scope value resolves to
+// (slug, id or name) — the form a project-targeted recommendation stores.
+func (h *Handler) projectSlugs(project string) (map[string]struct{}, error) {
+	rows, err := h.DB.Query(`SELECT slug FROM projects WHERE `+projectMatchExpr(""), scopeArgs(project)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	set := map[string]struct{}{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		set[slug] = struct{}{}
+	}
+	return set, rows.Err()
+}
+
+// targetsProject reports whether a recommendation's target IS the scoped
+// project: target kinds that name a project by its DB slug.
+func targetsProject(kind, target string, slugs map[string]struct{}) bool {
+	if kind != "project" && kind != "memory" {
+		return false
+	}
+	_, ok := slugs[target]
+	return ok
 }
 
 // projectSessionUUIDs returns the set of session_uuids belonging to a project

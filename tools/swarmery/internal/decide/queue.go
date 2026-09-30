@@ -44,8 +44,10 @@ type QueueItem struct {
 // LabelQueue lists answered decisions that have no ground truth yet, newest
 // first. Errored rows are excluded (there is no answer to judge), and so are
 // questions outside KnownQuestions. since ("" ⇒ no bound) keeps the queue to a
-// window, e.g. the one a measurement counts.
-func LabelQueue(db *sql.DB, limit int, since string) ([]QueueItem, error) {
+// window, e.g. the one a measurement counts. projectID (0 ⇒ every project)
+// narrows the queue to decisions about that project's sessions; a decision with
+// no session belongs to the whole fleet and drops out of a project view.
+func LabelQueue(db *sql.DB, limit int, since string, projectID int64) ([]QueueItem, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -57,8 +59,9 @@ func LabelQueue(db *sql.DB, limit int, since string) ([]QueueItem, error) {
 		  LEFT JOIN sessions s ON s.session_uuid = d.session_uuid AND d.session_uuid <> ''
 		 WHERE d.ground_truth IS NULL AND d.error = '' AND d.answer <> ''
 		   AND (? = '' OR d.created_at >= ?)
+		   AND (? = 0 OR s.project_id = ?)
 		 ORDER BY d.id DESC
-		 LIMIT ?`, since, since, limit)
+		 LIMIT ?`, since, since, projectID, projectID, limit)
 	if err != nil {
 		return nil, err
 	}
