@@ -47,11 +47,6 @@ was asked to do, and the model is given the same meanings to label by as you are
 | `planning` | wrote or revised a plan for later work and built nothing |
 | `other` | was a trivial probe or a bare command with no task; rare |
 
-For `d2.failure_cause`, `none` means the session finished what it was asked. A session
-whose last message reports the work blocked, or asks you for a decision, an approval, a
-permission or a manual step, is `blocked-on-operator`; one that stopped with no final
-answer and no other cause is `other`.
-
 A finished session with **no turns at all** is left alone: there is nothing for a
 question to read, so D2 never asks about it, and any answers already recorded for such
 a session are hidden from the labelling queue (hidden, not deleted — they come back

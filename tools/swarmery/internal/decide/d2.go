@@ -233,9 +233,7 @@ var (
 // The outcome and failure-cause prompts. The outcome prompt defines each option
 // against the evidence block so "stopped talking" is not read as "abandoned"
 // when the work landed — or when the work WAS the answer: a one-shot
-// question-and-answer session commits nothing and still ships. The failure
-// prompt keeps `none` for a session that finished what it was asked: a last
-// message that reports the work blocked is a cause, however calmly it ends.
+// question-and-answer session commits nothing and still ships.
 const (
 	d2OutcomePrompt = "How did the session end? Judge by the evidence block first. " +
 		"shipped = work was committed, pushed or merged, or every phase criterion was ticked; " +
@@ -245,11 +243,7 @@ const (
 		"failed = the work was attempted and did not work, or the account or the API stopped it."
 	d2FailurePrompt = "If the session did not ship, what was the main cause? " +
 		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped, " +
-		"and so does a final answer that finished what was asked, with no error; " +
-		"a last message that reports the work BLOCKED is never none) " +
-		"blocked-on-operator = the session ended waiting on the operator: its last message says BLOCKED, " +
-		"or asks for a decision, an approval, a permission or a manual step; " +
-		"other = it stopped with no final answer (final answer: no) and no cause named here; " +
+		"and so does a final answer with no error) " +
 		"auth = the CLI was not logged in or its login expired; " +
 		"quota = a usage or spend limit stopped the session; " +
 		"api-error = the API was unreachable, overloaded or dropped the response."

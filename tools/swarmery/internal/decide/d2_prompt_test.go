@@ -89,23 +89,19 @@ func TestTaskTypeOpeningLine(t *testing.T) {
 	}
 }
 
-// The failure prompt keeps `none` for a session that finished what it was
-// asked, names the blocked ending and the no-answer ending, and keeps the
-// account and API clauses word for word.
-func TestFailurePromptReservesNone(t *testing.T) {
-	for _, want := range []string{
-		"none if it shipped",
-		"a final answer that finished what was asked, with no error",
-		"a last message that reports the work BLOCKED is never none",
-		"blocked-on-operator = the session ended waiting on the operator",
-		"other = it stopped with no final answer (final answer: no)",
+// The failure prompt is pinned word for word. A version that defined
+// blocked-on-operator and other and reserved `none` for a finished session
+// scored 84.4% against the operator's labels, below this text's 88.2% (348
+// sessions): any change to it needs a fresh measurement first.
+func TestFailurePromptPinned(t *testing.T) {
+	const want = "If the session did not ship, what was the main cause? " +
+		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped, " +
+		"and so does a final answer with no error) " +
 		"auth = the CLI was not logged in or its login expired; " +
-			"quota = a usage or spend limit stopped the session; " +
-			"api-error = the API was unreachable, overloaded or dropped the response.",
-	} {
-		if !strings.Contains(d2FailurePrompt, want) {
-			t.Errorf("failure prompt lacks %q:\n%s", want, d2FailurePrompt)
-		}
+		"quota = a usage or spend limit stopped the session; " +
+		"api-error = the API was unreachable, overloaded or dropped the response."
+	if d2FailurePrompt != want {
+		t.Errorf("failure prompt changed:\n got %q\nwant %q", d2FailurePrompt, want)
 	}
 	// Every cause the prompt defines is one the model may answer.
 	for _, clause := range strings.Split(d2FailurePrompt, "; ") {
