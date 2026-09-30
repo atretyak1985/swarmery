@@ -157,6 +157,9 @@ type d2Facts struct {
 	filesEdited, additions, deletions int
 	filesOK                           bool
 	run                               d2Run
+	// opening is the head of the first user turn on one line (at most
+	// d2OpeningBytes), "" when the session has no user turn. No rule reads it.
+	opening string
 }
 
 // oneShot reports a session that is not a plan engine run and ended on the
@@ -218,10 +221,13 @@ func loadD2Ending(db *sql.DB, uuid string) (d2Ending, error) {
 // The goal comes from the doc on disk and, when that is gone (a plan moved to
 // the archive) or was never linked, from the copy of the doc the engine put in
 // the session's prompt.
-func loadD2Run(db *sql.DB, uuid string) (d2Run, error) {
+//
+// The same read of the first prompt yields its opening (d2Facts.opening),
+// returned for every session, run or not.
+func loadD2Run(db *sql.DB, uuid string) (r d2Run, opening string, err error) {
 	r, docPath, err := linkedRun(db, uuid)
 	if err != nil {
-		return d2Run{}, err
+		return d2Run{}, "", err
 	}
 	var prompt string
 	err = db.QueryRow(`
@@ -230,14 +236,16 @@ func loadD2Run(db *sql.DB, uuid string) (d2Run, error) {
 		 WHERE se.session_uuid = ? AND tr.role = 'user'
 		 ORDER BY tr.seq LIMIT 1`, d2DocReadBytes, uuid).Scan(&prompt)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return d2Run{}, fmt.Errorf("first prompt: %w", err)
+		return d2Run{}, "", fmt.Errorf("first prompt: %w", err)
 	}
+	// Whitespace is collapsed over a bounded head, not the whole prompt.
+	opening = truncate(strings.Join(strings.Fields(truncate(prompt, 4*d2OpeningBytes)), " "), d2OpeningBytes)
 	promptKind, doc := enginePrompt(prompt)
 	if r.kind == "" {
 		r.kind = promptKind
 	}
 	if r.kind == "" {
-		return d2Run{}, nil
+		return d2Run{}, opening, nil
 	}
 	if r.goal = fileGoal(docPath); r.goal == "" && promptKind == r.kind {
 		r.goal = goalOf(doc)
@@ -246,7 +254,7 @@ func loadD2Run(db *sql.DB, uuid string) (d2Run, error) {
 		r.name = titleOf(doc)
 	}
 	r.name = strings.Join(strings.Fields(r.name), " ")
-	return r, nil
+	return r, opening, nil
 }
 
 // linkedRun reads the run a row links to the session, with the doc that
@@ -336,11 +344,11 @@ func loadD2Facts(db *sql.DB, uuid string) (d2Facts, error) {
 	} else {
 		f.git, f.gitOK = git, true
 	}
-	run, err := loadD2Run(db, uuid)
+	run, opening, err := loadD2Run(db, uuid)
 	if err != nil {
 		errs = append(errs, err)
 	} else {
-		f.run = run
+		f.run, f.opening = run, opening
 	}
 	f.ok = len(errs) == 0
 	return f, errors.Join(errs...)

@@ -170,16 +170,74 @@ func d2Digest(db *sql.DB, s d2Session, facts d2Facts) string {
 		tail(runcore.LastAssistantText(db, s.uuid), d2DigestBytes))
 }
 
-// D2 prompts. The outcome prompt defines each option against the evidence
-// block so "stopped talking" is not read as "abandoned" when the work landed —
-// or when the work WAS the answer: a one-shot question-and-answer session
-// commits nothing and still ships.
+// d2OpeningBytes caps the first user turn quoted to the task-type question;
+// d2OpeningMatchBytes is how much of it a title must repeat to make the quote
+// redundant.
 const (
-	d2TaskTypePrompt = "What kind of task was this coding session?"
-	// d2RunTaskTypeSuffix is added for a session that ran a plan phase (or a
-	// whole plan), whose options also drop `planning` (runTaskTypes).
-	d2RunTaskTypeSuffix = " A session that executes a plan phase is the kind of work the phase does, never planning."
-	d2OutcomePrompt     = "How did the session end? Judge by the evidence block first. " +
+	d2OpeningBytes      = 200
+	d2OpeningMatchBytes = 40
+)
+
+// openingLine is the one evidence line only the task-type question reads: the
+// head of the session's first user turn. It says what the session was asked to
+// do when the title does not — a title is written later, from the whole
+// session, so a session that was asked to write a handoff file is titled after
+// the work it hands off. "" for a plan engine run (its digest names the phase
+// instead) and when the title already opens with the same words.
+func openingLine(f d2Facts, title string) string {
+	if f.run.kind != "" || f.opening == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.Join(strings.Fields(title), " "), truncate(f.opening, d2OpeningMatchBytes)) {
+		return ""
+	}
+	return "first request: " + f.opening + "\n"
+}
+
+// d2TaskTypeDefs says what each task type means, one clause per option, as the
+// operator's own labels use them: `docs` is any text written for people (a
+// how-to block and a session handoff file included), `review` judges existing
+// work, `ops` is git and machine chores, `other` is a probe with no task.
+var d2TaskTypeDefs = map[string]string{
+	"feature":  "built or changed what the product does",
+	"bugfix":   "something was broken, wrong or slow and the session found the cause or fixed it",
+	"refactor": "restructured existing code without changing what it does",
+	"docs":     "wrote text for people to read: documentation, a how-to block, a README, licence or contributor files, a post or reply, a session handoff file",
+	"research": "answered a question about how something works and changed nothing",
+	"review":   "scored, checked or judged existing work (a pull request, finished work, an agent's run) without changing it",
+	"ops":      "only git or machine chores: commit, push, pull requests, merges, branch clean-up, install, deploy, login, settings",
+	"planning": "wrote or revised a plan for later work and built nothing",
+	"other":    "a trivial probe or bare command with no task (`p`, `say ok`), rare: only when nothing else fits",
+}
+
+// taskTypePrompt is the task-type question over opts: the lead, then the
+// definition of each option offered and of no other.
+func taskTypePrompt(opts []string) string {
+	defs := make([]string, 0, len(opts))
+	for _, o := range opts {
+		defs = append(defs, o+" = "+d2TaskTypeDefs[o])
+	}
+	return "What kind of task was this coding session? Judge by what it was asked to do. " + strings.Join(defs, "; ") + "."
+}
+
+// d2RunTaskTypeSuffix closes the prompt of a session that ran a plan phase (or
+// a whole plan), whose options also drop `planning` (runTaskTypes).
+const d2RunTaskTypeSuffix = " A session that executes a plan phase is the kind of work the phase does, never planning."
+
+// The task-type prompts: for any session, and for a plan engine run.
+var (
+	d2TaskTypePrompt    = taskTypePrompt(TaskTypes)
+	d2RunTaskTypePrompt = taskTypePrompt(runTaskTypes) + d2RunTaskTypeSuffix
+)
+
+// The outcome and failure-cause prompts. The outcome prompt defines each option
+// against the evidence block so "stopped talking" is not read as "abandoned"
+// when the work landed — or when the work WAS the answer: a one-shot
+// question-and-answer session commits nothing and still ships. The failure
+// prompt keeps `none` for a session that finished what it was asked: a last
+// message that reports the work blocked is a cause, however calmly it ends.
+const (
+	d2OutcomePrompt = "How did the session end? Judge by the evidence block first. " +
 		"shipped = work was committed, pushed or merged, or every phase criterion was ticked; " +
 		"a one-shot question-and-answer session that ended with a final answer and no error shipped; " +
 		"partial = some work landed but not all of it; " +
@@ -187,7 +245,11 @@ const (
 		"failed = the work was attempted and did not work, or the account or the API stopped it."
 	d2FailurePrompt = "If the session did not ship, what was the main cause? " +
 		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped, " +
-		"and so does a final answer with no error) " +
+		"and so does a final answer that finished what was asked, with no error; " +
+		"a last message that reports the work BLOCKED is never none) " +
+		"blocked-on-operator = the session ended waiting on the operator: its last message says BLOCKED, " +
+		"or asks for a decision, an approval, a permission or a manual step; " +
+		"other = it stopped with no final answer (final answer: no) and no cause named here; " +
 		"auth = the CLI was not logged in or its login expired; " +
 		"quota = a usage or spend limit stopped the session; " +
 		"api-error = the API was unreachable, overloaded or dropped the response."
@@ -196,25 +258,27 @@ const (
 // d2Questions builds the three D2 questions for one session, in asking order
 // (task type, outcome, failure cause): id, prompt, options, the shared digest
 // and the deterministic rules' answer where a rule applies (d2_rules.go), the
-// operator's own verdict first. It is the single path the labeler and the
-// offline eval (eval.go) share, so a replay asks exactly what the daemon asks.
-// phaseRunFeature switches rule R5 on (Engine.R5PhaseRunFeature). It only reads.
+// operator's own verdict first. The task-type question alone reads one line
+// more, ahead of the digest (openingLine); the other two read the digest as it
+// is. It is the single path the labeler and the offline eval (eval.go) share,
+// so a replay asks exactly what the daemon asks. phaseRunFeature switches rule
+// R5 on (Engine.R5PhaseRunFeature). It only reads.
 func d2Questions(db *sql.DB, s d2Session, phaseRunFeature bool) []Question {
 	facts := d2FactsFor(db, s.uuid)
 	rules := d2Rules(facts, s.outcome, phaseRunFeature)
 	digest := d2Digest(db, s, facts)
 	taskPrompt, taskTypes := d2TaskTypePrompt, TaskTypes
 	if facts.run.kind != "" {
-		taskPrompt, taskTypes = d2TaskTypePrompt+d2RunTaskTypeSuffix, runTaskTypes
+		taskPrompt, taskTypes = d2RunTaskTypePrompt, runTaskTypes
 	}
-	q := func(id, prompt string, opts []string, rule d2RuleAnswer) Question {
+	q := func(id, prompt string, opts []string, input string, rule d2RuleAnswer) Question {
 		return Question{ID: id, Kind: KindChoice, Opts: opts, Prompt: prompt,
-			Input: digest, RuleAnswer: rule.value, RuleID: rule.rule, Subject: s.uuid, SessionUUID: s.uuid}
+			Input: input, RuleAnswer: rule.value, RuleID: rule.rule, Subject: s.uuid, SessionUUID: s.uuid}
 	}
 	return []Question{
-		q(QD2TaskType, taskPrompt, taskTypes, rules.taskType),
-		q(QD2Outcome, d2OutcomePrompt, Outcomes, rules.outcome),
-		q(QD2Failure, d2FailurePrompt, FailureCauses, rules.failure),
+		q(QD2TaskType, taskPrompt, taskTypes, openingLine(facts, s.title)+digest, rules.taskType),
+		q(QD2Outcome, d2OutcomePrompt, Outcomes, digest, rules.outcome),
+		q(QD2Failure, d2FailurePrompt, FailureCauses, digest, rules.failure),
 	}
 }
 

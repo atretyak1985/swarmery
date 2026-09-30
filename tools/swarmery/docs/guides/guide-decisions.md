@@ -31,6 +31,27 @@ and pull requests, files edited, the plan phase it ran, how many turns it had, w
 it ended on the model's own final answer, the stop reason of its last turn, and whether
 the account or the API ended it.
 
+The task-type question reads one line more: the opening of the session's first
+request, when the title does not already repeat it. A session is labelled by what it
+was asked to do, and the model is given the same meanings to label by as you are:
+
+| `d2.task_type` | The session |
+|---|---|
+| `feature` | built or changed what the product does |
+| `bugfix` | found the cause of, or fixed, something broken, wrong or slow |
+| `refactor` | restructured existing code without changing what it does |
+| `docs` | wrote text for people to read — documentation, a how-to block, a README, licence or contributor files, a post or reply, a session handoff file |
+| `research` | answered a question about how something works and changed nothing |
+| `review` | scored, checked or judged existing work — a pull request, finished work, an agent's run — without changing it |
+| `ops` | did only git or machine chores — commit, push, pull requests, merges, branch clean-up, install, deploy, login, settings |
+| `planning` | wrote or revised a plan for later work and built nothing |
+| `other` | was a trivial probe or a bare command with no task; rare |
+
+For `d2.failure_cause`, `none` means the session finished what it was asked. A session
+whose last message reports the work blocked, or asks you for a decision, an approval, a
+permission or a manual step, is `blocked-on-operator`; one that stopped with no final
+answer and no other cause is `other`.
+
 A finished session with **no turns at all** is left alone: there is nothing for a
 question to read, so D2 never asks about it, and any answers already recorded for such
 a session are hidden from the labelling queue (hidden, not deleted — they come back
