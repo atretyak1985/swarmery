@@ -12,7 +12,7 @@ package main
 //	swarmery account doctor [--fast|--probe] [--json] the account doctor, names only (account_doctor.go)
 //	swarmery account switch <key> [--estate <root>]  move a declared estate's payer (account_switch.go)
 //	swarmery account move-session <uuid> --to <key>  copy a session to another account (account_switch.go)
-//	swarmery account prune  [--path <dir>] [--dry-run] remove settings keys the estate already supplies (internal/accountprune)
+//	swarmery account prune  [--path <dir>] [--apply] remove settings keys the estate already supplies (internal/accountprune)
 //
 // # Two properties this file exists to preserve
 //
@@ -85,11 +85,11 @@ const accountUsage = `usage:
                                                      copy a session's transcript, its <uuid>/ dir and the
                                                      project memory/ into <key>'s config dir, and re-point
                                                      its database row; prints the resume command
-  swarmery account prune [--path <dir>] [--dry-run] [--include-tracked] [--json]
+  swarmery account prune [--path <dir>] [--apply] [--include-tracked] [--json]
                                                      remove the settings keys the estate already supplies
                                                      (pluginConfigs, extraKnownMarketplaces — whole keys,
                                                      only when every entry is the estate's) from the files
-                                                     under <dir>; see ` + "`swarmery account prune --help`" + `
+                                                     under <dir>; a dry run unless --apply; see ` + "`swarmery account prune --help`" + `
 
   --path defaults to the current directory. A binding lives in
   <path>/` + claudeacct.BindingFile + `; a path with none inherits the account
@@ -606,8 +606,12 @@ const accountPruneUsage = `usage: swarmery account prune [--path <dir>] [flags]
   and the swarmery binding are never touched. The estate's own two files are
   listed "estate source" and never written.
 
+  Without --apply it is a dry run: it lists every file considered and writes
+  nothing.
+
   --path <dir>        where to look (default: the current directory)
-  --dry-run           list every file considered and write nothing
+  --apply             write the eligible files
+  --dry-run           the default, spelled out; refused together with --apply
   --include-tracked   also write an eligible file git TRACKS (or cannot classify);
                       without it such a file refuses the WHOLE run, exit 1
   --json              print {"targets": […], "result": {…}} instead of text
@@ -615,22 +619,34 @@ const accountPruneUsage = `usage: swarmery account prune [--path <dir>] [flags]
   Every listed line ends in its git status: TRACKED, untracked or NO-REPO.
   Before its first write to a file the prune copies it to
   ~/.swarmery/quarantine/<date>/prune/ — the only rollback for an ignored file.
-  It never reads a credential store and never prints a settings value.`
+  It never reads a credential store and never prints a settings value.
+
+  After a prune the removed keys reach a session only through the estate's
+  --settings, which only a swarmery launch passes (account exec, the claude
+  shell function, the PATH shim, daemon runs). A claude started any other way
+  in those directories — an IDE extension, the desktop app, ` + "`command claude`" + ` —
+  runs without them; every run that changes a file says so on stderr.`
 
 // accountPrune parses the flags, plans, prints the targets, and applies
-// (internal/accountprune holds every decision). Text mode: the target lines on
-// stdout — nothing else in a dry run, so every stdout line ends in a git status
-// — and, after an apply, one line per changed file plus "<n> files changed".
+// (internal/accountprune holds every decision). It writes only under --apply:
+// a bare run is the dry run, so the one-keystroke form cannot rewrite a
+// subtree. Text mode: the target lines on stdout — nothing else in a dry run,
+// so every stdout line ends in a git status — and, after an apply, one line
+// per changed file plus "<n> files changed". stderr carries a dry run's count,
+// the LaunchNotice whenever a file changes or would, and a dry run's pointer
+// to --apply.
 func accountPrune(args []string, out, errOut io.Writer) error {
 	fs := flag.NewFlagSet("account prune", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	path := pathFlag(fs)
-	dryRun := fs.Bool("dry-run", false, "list what would change and write nothing")
+	apply := fs.Bool("apply", false, "write the eligible files")
+	dryRunFlag := fs.Bool("dry-run", false, "list what would change and write nothing (the default)")
 	includeTracked := fs.Bool("include-tracked", false, "also write eligible git-tracked files")
 	asJSON := fs.Bool("json", false, "print the plan and result as one JSON object")
-	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || (*apply && *dryRunFlag) {
 		return usageError{accountPruneUsage}
 	}
+	dryRun := !*apply
 	dir, err := projectPath(*path)
 	if err != nil {
 		return err
@@ -639,7 +655,7 @@ func accountPrune(args []string, out, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
-	res, applyErr := accountprune.Apply(targets, accountprune.Options{DryRun: *dryRun, IncludeTracked: *includeTracked})
+	res, applyErr := accountprune.Apply(targets, accountprune.Options{DryRun: dryRun, IncludeTracked: *includeTracked})
 	if *asJSON {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
@@ -647,6 +663,9 @@ func accountPrune(args []string, out, errOut io.Writer) error {
 			Targets []accountprune.Target `json:"targets"`
 			Result  accountprune.Result   `json:"result"`
 		}{targets, res}); err != nil {
+			return err
+		}
+		if err := accountprune.RenderNotice(errOut, res); err != nil {
 			return err
 		}
 		return applyErr
@@ -662,13 +681,29 @@ func accountPrune(args []string, out, errOut io.Writer) error {
 			if err := accountprune.RenderResult(out, res); err != nil {
 				return err
 			}
+			if err := accountprune.RenderNotice(errOut, res); err != nil {
+				return err
+			}
 		}
 		return applyErr
 	}
-	if *dryRun {
-		return accountprune.RenderResult(errOut, res)
+	if !dryRun {
+		if err := accountprune.RenderResult(out, res); err != nil {
+			return err
+		}
+		return accountprune.RenderNotice(errOut, res)
 	}
-	return accountprune.RenderResult(out, res)
+	if err := accountprune.RenderResult(errOut, res); err != nil {
+		return err
+	}
+	if err := accountprune.RenderNotice(errOut, res); err != nil {
+		return err
+	}
+	if len(res.Changed) > 0 {
+		_, err := fmt.Fprintln(errOut, "nothing written — rerun with --apply to write them")
+		return err
+	}
+	return nil
 }
 
 // ── env ─────────────────────────────────────────────────────────────────────

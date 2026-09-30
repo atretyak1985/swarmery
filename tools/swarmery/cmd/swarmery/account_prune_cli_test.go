@@ -56,37 +56,62 @@ func pruneFixture(t *testing.T) (root, tracked string) {
 // The dry run's golden text: one line per listed file, each ending in its git
 // status, only the eligible ones carrying the word; the permissions-only file
 // is not listed. A dry run with an eligible TRACKED file already refuses.
+// Without --apply the run IS the dry run: a bare invocation writes nothing and
+// prints exactly what --dry-run prints; the two flags together are a usage
+// error.
 func TestAccountPruneDryRunGolden(t *testing.T) {
 	root, tracked := pruneFixture(t)
-	var out, errOut bytes.Buffer
-	err := accountPrune([]string{"--path", root, "--dry-run", "--include-tracked"}, &out, &errOut)
-	if err != nil {
-		t.Fatal(err)
+	wantErr := "2 files would change\n" + accountprune.LaunchNotice + "\n" +
+		"nothing written — rerun with --apply to write them\n"
+	var first string
+	for _, args := range [][]string{
+		{"--path", root, "--dry-run", "--include-tracked"},
+		{"--path", root, "--include-tracked"},
+	} {
+		var out, errOut bytes.Buffer
+		if err := accountPrune(args, &out, &errOut); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		got := strings.ReplaceAll(out.String(), root, "<root>")
+		got = regexp.MustCompile(` +`).ReplaceAllString(got, " ")
+		want := strings.Join([]string{
+			"skip <root>/.claude/settings.json estate source NO-REPO",
+			"skip <root>/.claude/settings.local.json estate source NO-REPO",
+			"skip <root>/other/.claude/settings.json nothing redundant (keep extraKnownMarketplaces[foreign]) NO-REPO",
+			"eligible <root>/plain/.claude/settings.local.json remove pluginConfigs NO-REPO",
+			"eligible <root>/repo/.claude/settings.json remove pluginConfigs TRACKED",
+		}, "\n") + "\n"
+		if got != want {
+			t.Errorf("%v dry run:\n%s\nwant:\n%s", args, got, want)
+		}
+		if errOut.String() != wantErr {
+			t.Errorf("%v stderr = %q", args, errOut.String())
+		}
+		if first == "" {
+			first = out.String()
+		} else if out.String() != first {
+			t.Errorf("the bare run differs from --dry-run:\n%s", out.String())
+		}
+		if !strings.Contains(read(t, tracked), "pluginConfigs") {
+			t.Errorf("%v: a dry run wrote", args)
+		}
 	}
-	got := strings.ReplaceAll(out.String(), root, "<root>")
-	got = regexp.MustCompile(` +`).ReplaceAllString(got, " ")
-	want := strings.Join([]string{
-		"skip <root>/.claude/settings.json estate source NO-REPO",
-		"skip <root>/.claude/settings.local.json estate source NO-REPO",
-		"skip <root>/other/.claude/settings.json nothing redundant (keep extraKnownMarketplaces[foreign]) NO-REPO",
-		"eligible <root>/plain/.claude/settings.local.json remove pluginConfigs NO-REPO",
-		"eligible <root>/repo/.claude/settings.json remove pluginConfigs TRACKED",
-	}, "\n") + "\n"
-	if got != want {
-		t.Errorf("dry run:\n%s\nwant:\n%s", got, want)
-	}
-	if errOut.String() != "2 files would change\n" {
-		t.Errorf("stderr = %q", errOut.String())
-	}
-	if !strings.Contains(read(t, tracked), "pluginConfigs") {
-		t.Error("a dry run wrote")
+	if _, err := os.Stat(filepath.Join(os.Getenv("HOME"), ".swarmery")); !os.IsNotExist(err) {
+		t.Error("a dry run created a quarantine")
 	}
 
 	// Without --include-tracked even the dry run refuses (exit 1, not usage).
-	out.Reset()
-	err = accountPrune([]string{"--path", root, "--dry-run"}, &out, &errOut)
+	var out, errOut bytes.Buffer
+	err := accountPrune([]string{"--path", root, "--dry-run"}, &out, &errOut)
 	if !accountprune.IsTrackedRefusal(err) || isUsage(err) {
 		t.Errorf("dry run err = %v, want the tracked refusal", err)
+	}
+	if strings.Contains(errOut.String(), "note:") {
+		t.Errorf("a refusal printed the launch notice: %q", errOut.String())
+	}
+
+	if err := accountPrune([]string{"--path", root, "--apply", "--dry-run"}, &out, &errOut); !isUsage(err) {
+		t.Errorf("--apply --dry-run = %v, want a usage error", err)
 	}
 }
 
@@ -100,7 +125,7 @@ func TestAccountPruneRefusesTracked(t *testing.T) {
 	before := map[string]string{tracked: read(t, tracked), plain: read(t, plain)}
 
 	var out, errOut bytes.Buffer
-	err := accountPrune([]string{"--path", root}, &out, &errOut)
+	err := accountPrune([]string{"--path", root, "--apply"}, &out, &errOut)
 	if err == nil || isUsage(err) || !accountprune.IsTrackedRefusal(err) || !strings.Contains(err.Error(), tracked) {
 		t.Fatalf("err = %v, want a non-usage refusal naming %s", err, tracked)
 	}
@@ -114,11 +139,15 @@ func TestAccountPruneRefusesTracked(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := accountPrune([]string{"--path", root, "--include-tracked"}, &out, &errOut); err != nil {
+	errOut.Reset()
+	if err := accountPrune([]string{"--path", root, "--apply", "--include-tracked"}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(out.String(), "2 files changed\n") || strings.Count(out.String(), "pre-image ") != 2 {
 		t.Errorf("apply output:\n%s", out.String())
+	}
+	if errOut.String() != accountprune.LaunchNotice+"\n" {
+		t.Errorf("apply stderr = %q, want the launch notice alone", errOut.String())
 	}
 	for p := range before {
 		if strings.Contains(read(t, p), "pluginConfigs") {
@@ -130,11 +159,15 @@ func TestAccountPruneRefusesTracked(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := accountPrune([]string{"--path", root}, &out, &errOut); err != nil {
+	errOut.Reset()
+	if err := accountPrune([]string{"--path", root, "--apply"}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(out.String(), "0 files changed\n") {
 		t.Errorf("second run:\n%s", out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("a run that changed nothing printed %q", errOut.String())
 	}
 }
 
@@ -160,7 +193,7 @@ func TestAccountPruneMidRunFailurePrintsPartial(t *testing.T) {
 		}
 		t.Cleanup(func() { os.Chmod(zz, 0o755) })
 
-		args := []string{"--path", root}
+		args := []string{"--path", root, "--apply"}
 		if asJSON {
 			args = append(args, "--json")
 		}
@@ -170,6 +203,9 @@ func TestAccountPruneMidRunFailurePrintsPartial(t *testing.T) {
 		}
 		if !strings.Contains(out.String(), plain) || !strings.Contains(out.String(), ".bak.json") {
 			t.Errorf("json=%v: output does not name the rewritten file and its pre-image:\n%s", asJSON, out.String())
+		}
+		if !strings.Contains(errOut.String(), accountprune.LaunchNotice) {
+			t.Errorf("json=%v: a partial apply did not print the launch notice: %q", asJSON, errOut.String())
 		}
 		if !asJSON && !strings.Contains(out.String(), "changed "+plain) {
 			t.Errorf("text output lacks the changed line:\n%s", out.String())
@@ -211,11 +247,11 @@ func TestAccountPruneJSONAndUsage(t *testing.T) {
 	}
 	n := 0
 	for _, l := range strings.Split(err.Error(), "\n") {
-		if strings.Contains(l, "--include-tracked") || strings.Contains(l, "--dry-run") {
+		if strings.Contains(l, "--include-tracked") || strings.Contains(l, "--dry-run") || strings.Contains(l, "--apply") {
 			n++
 		}
 	}
-	if n < 2 {
+	if n < 3 {
 		t.Errorf("usage names the flags on %d line(s)", n)
 	}
 	if err := accountPrune([]string{"stray"}, &out, &errOut); !isUsage(err) {

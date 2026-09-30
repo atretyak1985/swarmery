@@ -426,9 +426,22 @@ second place to forget on the next change. `swarmery account prune` removes
 them, and is the only supported way to:
 
 ```bash
-swarmery account prune --path <estate-root> --dry-run     # look first: one line per file
-swarmery account prune --path <estate-root>               # then apply
+swarmery account prune --path <estate-root>               # look first: one line per file, writes nothing
+swarmery account prune --path <estate-root> --apply       # then write
 ```
+
+Without `--apply` the prune is a dry run, so the short form can never rewrite
+a subtree by accident.
+
+- **What it costs.** After a prune the removed keys reach a session only
+  through the estate's `--settings`, which only a swarmery launch passes —
+  `account exec`, the `claude` shell function, the PATH shim, daemon runs. A
+  `claude` started any other way in a pruned directory (an IDE extension, the
+  desktop app, `command claude`) runs without that directory's
+  `pluginConfigs`, and without its `extraKnownMarketplaces` too — harmless only
+  where the marketplace is already added to the account. Every run that changes
+  (or would change) a file prints a `note:` line saying so. If you start
+  sessions there outside swarmery, keep the copies: don't prune.
 
 - **What it removes.** Only `pluginConfigs` and `extraKnownMarketplaces`, each
   as a whole key, and only when every entry of the file's copy (a plugin id, a

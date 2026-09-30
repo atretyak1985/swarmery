@@ -521,3 +521,22 @@ func RenderResult(w io.Writer, r Result) error {
 	_, err := fmt.Fprintf(w, "%d files %s\n", len(r.Changed), verb)
 	return err
 }
+
+// LaunchNotice is what a prune costs a session swarmery does not start. The
+// estate's keys reach a session only as the composed --settings file that
+// `account exec`, the shell function, the PATH shim and the daemon's spawns
+// pass, so once a sub-repo's own copy is gone, a `claude` started there any
+// other way runs without them.
+const LaunchNotice = "note: a pruned file's keys then reach a session only through the estate's --settings, " +
+	"which only a swarmery launch passes (account exec, the claude shell function, the PATH shim, daemon runs); " +
+	"a claude started any other way in those directories — an IDE extension, the desktop app, `command claude` — runs without them"
+
+// RenderNotice writes LaunchNotice when r changed — or, in a dry run, would
+// change — at least one file, and nothing otherwise.
+func RenderNotice(w io.Writer, r Result) error {
+	if len(r.Changed) == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintln(w, LaunchNotice)
+	return err
+}
