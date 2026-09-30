@@ -46,7 +46,7 @@
 // flips, lifecycle transitions, plan rescans) so progress ticks without a reload.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type {
   BoardColumn,
   Epic,
@@ -93,6 +93,17 @@ import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsAc
 import { ForecastStory } from './plans/ForecastStory';
 import { PhaseCard } from './plans/PhaseCard';
 import { PhaseDrawer, type PhaseTab } from './plans/PhaseDrawer';
+import {
+  parsePlansRoute,
+  plansHref,
+  sameHref,
+  type ParsedPlansRoute,
+  type PlanDetailTab,
+  type PlansDetail,
+  type PlansRouteParams,
+  type PlansStatus,
+  type PlansTarget,
+} from './plans/plansUrl';
 
 /** A board column that counts as "resolved" for the dependency gate. */
 function isResolvedColumn(col: BoardColumn | null): boolean {
@@ -706,7 +717,8 @@ const LIFECYCLE_ACTIONS: Record<Epic['status'], { action: EpicLifecycleAction; l
   archived: [{ action: 'restore', label: 'Restore' }],
 };
 
-type EpicFilter = 'active' | 'done' | 'archived';
+/** The Active/Done/Archived filter — the URL's `?status=` (plansUrl.ts). */
+type EpicFilter = PlansStatus;
 const FILTERS: EpicFilter[] = ['active', 'done', 'archived'];
 
 /** Which filter tab an epic belongs to (paused plans live under Active). */
@@ -714,9 +726,8 @@ function epicFilterOf(status: Epic['status']): EpicFilter {
   return status === 'active' || status === 'paused' ? 'active' : status;
 }
 
-/** Plan-details tab ids. Spec exists only on plans with a spec.md; Summary
- * only on complete plans. */
-type PlanDetailTab = 'plan' | 'spec' | 'summary' | 'revisions' | 'edit';
+// PlanDetailTab (plan/spec/summary/revisions/edit) lives in plans/plansUrl.ts:
+// it is part of the URL scheme now.
 
 /** Phase drawer tabs (story/criteria/runs/report/edit). Report always exists —
  * an empty note beats hiding it ("where do I read the summary?" was a dead end). */
@@ -740,27 +751,152 @@ type DetailSel =
   | { kind: 'phase'; phase: EpicPhase; tab: PhaseDetailTab }
   | { kind: 'plan'; tab: PlanDetailTab };
 
+/** Which URL-named level did not exist — phase 2 turns it into a notice. */
+type PlansMissing = 'plan' | 'phase' | null;
+
+/**
+ * The canonical target for a parsed Plans URL against the loaded epics: the
+ * numeric `?task=`/`?plan=` hand-off resolved to its externalId, the first plan
+ * of the filter chosen when none is named, an unknown plan / phase dropped to
+ * the nearest valid level, and an unavailable tab mapped to the tab its panel
+ * already falls back to (Edit on a done phase → Report; Summary on an
+ * incomplete plan or Spec without a spec.md → Plan).
+ *
+ * Pure and deterministic in (route, epics), so replacing to it is idempotent:
+ * its own output parses back to the same target. A revision id is validated
+ * separately, against the revisions EpicDetail fetches.
+ */
+function canonicalPlansTarget(
+  route: ParsedPlansRoute,
+  epics: Epic[],
+): { target: PlansTarget; missing: PlansMissing } {
+  const listOf = (f: EpicFilter, missing: PlansMissing): { target: PlansTarget; missing: PlansMissing } => {
+    const first = epics.find((e) => epicFilterOf(e.status) === f);
+    return { target: first !== undefined ? { plan: first.externalId } : { plan: null, status: f }, missing };
+  };
+
+  if (route.plan === null) {
+    if (route.legacy === null) return listOf(route.status ?? 'active', null);
+    const { taskId, phaseSeq, wantRevisions } = route.legacy;
+    const epic = epics.find((e) => e.taskId === taskId);
+    if (epic === undefined) return listOf('active', 'plan');
+    if (wantRevisions) {
+      return { target: { plan: epic.externalId, detail: { kind: 'plan', tab: 'revisions' } }, missing: null };
+    }
+    if (phaseSeq === null) return { target: { plan: epic.externalId }, missing: null };
+    return epic.phases.some((p) => p.seq === phaseSeq)
+      ? { target: { plan: epic.externalId, detail: { kind: 'phase', seq: phaseSeq, tab: 'story' } }, missing: null }
+      : { target: { plan: epic.externalId }, missing: 'phase' };
+  }
+
+  const epic = epics.find((e) => e.externalId === route.plan);
+  if (epic === undefined) return listOf('active', 'plan');
+  const d = route.detail;
+  if (d === null) return { target: { plan: epic.externalId }, missing: null };
+  const resolvedSeqs = computeResolvedSeqs(epic.phases);
+  if (d.kind === 'phase') {
+    const p = epic.phases.find((x) => x.seq === d.seq);
+    if (p === undefined) return { target: { plan: epic.externalId }, missing: 'phase' };
+    const tab: PhaseDetailTab = d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done' ? 'report' : d.tab;
+    return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
+  }
+  const complete = planComplete(epic, resolvedSeqs);
+  const tab: PlanDetailTab =
+    (d.tab === 'summary' && !complete) || (d.tab === 'spec' && !epic.hasSpec) ? 'plan' : d.tab;
+  const detail: PlansDetail =
+    tab === 'revisions' && d.revId !== undefined ? { kind: 'plan', tab, revId: d.revId } : { kind: 'plan', tab };
+  return { target: { plan: epic.externalId, detail }, missing: null };
+}
+
 export function Plans(): JSX.Element {
-  const { project, projectId, loading: projLoading } = useProjectWorkspace();
-  const [epics, setEpics] = useState<Epic[] | null>(null);
+  const { slug, project, projectId, loading: projLoading } = useProjectWorkspace();
+  // The loaded epics, stamped with the project they belong to. Plans is not
+  // remounted when /p/:slug changes and projectId follows the slug at once, so
+  // until the new project's fetch lands the rows are the PREVIOUS project's — and
+  // no URL may be judged against them (a correction would rewrite the new URL,
+  // and on Back the old entry). `epics` is therefore null until they match.
+  const [loaded, setLoaded] = useState<{ projectId: number | null; rows: Epic[] } | null>(null);
+  const epics = loaded !== null && loaded.projectId === projectId ? loaded.rows : null;
+  // The project the latest fetch was for: a slower fetch for a project we have
+  // since left must not land over it.
+  const fetchingFor = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<number | null>(null); // taskId
-  const [filter, setFilter] = useState<EpicFilter>('active');
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyLifecycle, setBusyLifecycle] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
+
+  // The URL IS the selection (plans-deep-links phase 1): the plan by externalId,
+  // the filter, the open phase (by seq) or plan-details tab, and the revision.
+  // Nothing here is useState any more — every operator click is a push
+  // navigation and every automatic correction a replace (see `go` / `correct`).
+  const params = useParams<keyof PlansRouteParams>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const route = useMemo(
+    () =>
+      parsePlansRoute(
+        {
+          plan: params.plan,
+          seq: params.seq,
+          phaseTab: params.phaseTab,
+          planTab: params.planTab,
+          revId: params.revId,
+        },
+        location.search,
+      ),
+    [params.plan, params.seq, params.phaseTab, params.planTab, params.revId, location.search],
+  );
+  const urlEpic = useMemo(
+    () => (route.plan !== null ? ((epics ?? []).find((e) => e.externalId === route.plan) ?? null) : null),
+    [epics, route.plan],
+  );
+  // A named plan decides its own filter (a lifecycle move to Archived keeps the
+  // URL on the plan and the filter follows); otherwise `?status=`, default Active.
+  const filter: EpicFilter = urlEpic !== null ? epicFilterOf(urlEpic.status) : (route.status ?? 'active');
+  const selected = urlEpic?.taskId ?? null; // taskId — everything keyed by it keeps working
+  const detailTarget: DetailTarget | null =
+    route.detail === null
+      ? null
+      : route.detail.kind === 'phase'
+        ? { kind: 'phase', seq: route.detail.seq, tab: route.detail.tab }
+        : { kind: 'plan', tab: route.detail.tab };
+  const urlRevId = route.detail?.kind === 'plan' ? (route.detail.revId ?? null) : null;
+
+  const here = `${location.pathname}${location.search}`;
+  /** An operator click: one history entry — none when it names where we are
+   * (react-router 7 would otherwise push a duplicate of the same location). */
+  const go = useCallback(
+    (t: PlansTarget): void => {
+      const href = plansHref(slug, t, location.search);
+      if (!sameHref(href, here)) navigate(href);
+    },
+    [slug, location.search, here, navigate],
+  );
+  /** An automatic correction: replace, and only when it changes something, so
+   * it can neither add a Back step nor loop. */
+  const correct = useCallback(
+    (t: PlansTarget): void => {
+      const href = plansHref(slug, t, location.search);
+      if (!sameHref(href, here)) navigate(href, { replace: true });
+    },
+    [slug, location.search, here, navigate],
+  );
 
   const reload = useCallback((): void => {
+    fetchingFor.current = projectId;
     if (projectId === null) {
-      setEpics([]);
+      setLoaded({ projectId: null, rows: [] });
       return;
     }
     fetchEpics(projectId)
       .then((rows) => {
-        setEpics(rows);
+        if (fetchingFor.current !== projectId) return;
+        setLoaded({ projectId, rows });
         setError(null);
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => {
+        if (fetchingFor.current !== projectId) return;
+        setError(e instanceof Error ? e.message : String(e));
+      });
   }, [projectId]);
 
   useEffect(() => {
@@ -807,69 +943,23 @@ export function Plans(): JSX.Element {
     return c;
   }, [epics]);
 
-  // Keep the selection while it stays inside the filtered set; when it leaves
-  // (filter switch, lifecycle transition, deletion) fall back to the first.
+  // Machine corrections, all replace (a correction is not a step): `/plans` →
+  // the first plan of its filter (an EMPTY filter stays put, empty state);
+  // `?task=`/`?plan=` [&phase=][&tab=revisions] → the canonical externalId path
+  // (the numeric hand-off is permanent — PlanningMode, PlanRunCard and old
+  // bookmarks use it); an unknown plan / phase → the nearest valid level; an
+  // unavailable or malformed tab → the tab its panel falls back to. Only once
+  // THIS project's epics have loaded (`epics` is null while the rows are another
+  // project's — see `loaded`): [] also means "project not resolved yet" on a cold
+  // visit, and ScopeProvider is still rewriting ?scope= then (main.tsx
+  // ProjectTabRedirect). Idempotent: `correct` no-ops when nothing changes.
   useEffect(() => {
-    setSelected((cur) => {
-      if (cur !== null && filtered.some((e) => e.taskId === cur)) return cur;
-      return filtered[0]?.taskId ?? null;
-    });
-  }, [filtered]);
-
-  // ?task=<id>[&tab=revisions] hand-off (Planning Mode's revise banner and its
-  // "Review changes" affordance): preselect the plan — switching the filter to
-  // the tab the plan lives under — and optionally open its Revisions tab.
-  // Consumed and STRIPPED in one pass (the self-disarming idiom PlanningMode
-  // uses for ?idea=), and only once the epics have loaded so the target can be
-  // resolved. The pending ref survives the [selected] reset effect below.
-  const [searchParams, setSearchParams] = useSearchParams();
-  // The deep link's target, pinned to ITS task id: the [selected] reset effect
-  // below may fire for the very transition the deep link caused (including the
-  // initial null → first-epic settle when the target IS the first epic), and
-  // must open the pending target instead of closing the panel — but only for
-  // that task, so a stale pending can never leak onto another plan.
-  const pendingDetailRef = useRef<{ taskId: number; target: DetailTarget | null } | null>(null);
-  useEffect(() => {
-    if (epics === null || epics.length === 0) return; // [] = project not resolved yet (cold visit)
-    const raw = searchParams.get('task');
-    if (raw === null) return;
-    const wantRevisions = searchParams.get('tab') === 'revisions';
-    const phaseSeq = Number(searchParams.get('phase') ?? NaN); // ?phase=<seq> opens the drawer
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        for (const k of ['task', 'tab', 'phase']) next.delete(k);
-        return next;
-      },
-      { replace: true },
-    );
-    const taskId = Number(raw);
-    const epic = epics.find((e) => e.taskId === taskId);
-    if (epic === undefined) return;
-    setFilter(epicFilterOf(epic.status));
-    const target: DetailTarget | null = wantRevisions
-      ? { kind: 'plan', tab: 'revisions' }
-      : epic.phases.some((p) => p.seq === phaseSeq)
-        ? { kind: 'phase', seq: phaseSeq, tab: 'story' }
-        : null;
-    pendingDetailRef.current = { taskId, target };
-    setSelected((cur) => {
-      // Already selected → the reset effect may never fire; open directly (the
-      // ref stays armed for the null→taskId settle race and is task-guarded).
-      if (cur === taskId && target !== null) setDetailTarget(target);
-      return taskId;
-    });
-  }, [epics, searchParams, setSearchParams]);
-
-  // The detail panel describes ONE epic's phase/plan — switching plans closes it,
-  // and the run-diagnosis modal with it (its phase id belongs to the old plan).
-  // A pending deep-link target for THIS task opens instead of the default close.
-  useEffect(() => {
-    const pending = pendingDetailRef.current;
-    pendingDetailRef.current = null;
-    setDetailTarget(pending !== null && pending.taskId === selected ? pending.target : null);
-    setOutcomeFor(null);
-  }, [selected]);
+    if (epics === null || epics.length === 0) return;
+    // phase 2: notice — canonicalPlansTarget's `missing` (and route.invalidTab)
+    // name what the link pointed at and could not be found; carry it as a
+    // one-line dismissible notice on this replace.
+    correct(canonicalPlansTarget(route, epics).target);
+  }, [epics, route, correct]);
 
   const activeEpic = useMemo(
     () => (selected !== null ? (filtered.find((e) => e.taskId === selected) ?? null) : null),
@@ -912,6 +1002,11 @@ export function Plans(): JSX.Element {
   // Which phase's run diagnosis is open (phase id) — the modal is read-only, so
   // it can be open over any state, including a live plan run.
   const [outcomeFor, setOutcomeFor] = useState<number | null>(null);
+  // Switching plans closes the run-diagnosis modal: its phase id belongs to the
+  // old plan. (The detail panel closes by itself — the new plan's URL names none.)
+  useEffect(() => {
+    setOutcomeFor(null);
+  }, [selected]);
 
   // Which model the next phase run starts with. Lives HERE, with startRun, so the
   // three places that can start one — the phase row's Run button, the detail
@@ -1087,7 +1182,13 @@ export function Plans(): JSX.Element {
                 type="button"
                 role="tab"
                 aria-selected={filter === f}
-                onClick={() => setFilter(f)}
+                // One push to the plan-less filter URL; the correction effect
+                // then REPLACES it with that filter's first plan (or leaves an
+                // empty filter on its empty state). Re-clicking the current
+                // filter is not a step — and must not re-pick its first plan.
+                onClick={() => {
+                  if (f !== filter) go({ plan: null, status: f });
+                }}
                 className={`rounded-md border px-2 py-1 font-mono text-[10.5px] capitalize transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
                   filter === f
                     ? 'border-line-strong bg-surface2 text-brand'
@@ -1114,12 +1215,15 @@ export function Plans(): JSX.Element {
                   // Own name, so the nested copy chip's "copy id: …" isn't folded
                   // into the row's accessible name (as TaskCard does).
                   aria-label={`plan ${e.externalId}: ${e.title}`}
-                  onClick={() => setSelected(e.taskId)}
+                  // Re-clicking the selected plan keeps its open details, as before.
+                  onClick={() => {
+                    if (selected !== e.taskId) go({ plan: e.externalId });
+                  }}
                   onKeyDown={(ev) => {
                     if (ev.target !== ev.currentTarget) return;
                     if (ev.key === 'Enter' || ev.key === ' ') {
                       ev.preventDefault();
-                      setSelected(e.taskId);
+                      if (selected !== e.taskId) go({ plan: e.externalId });
                     }
                   }}
                   aria-current={selected === e.taskId}
@@ -1179,9 +1283,17 @@ export function Plans(): JSX.Element {
               busyLifecycle={busyLifecycle}
               onLifecycle={lifecycle}
               onDocChanged={reload}
-              onOpenPhase={(seq, tab) => setDetailTarget({ kind: 'phase', seq, tab })}
-              onOpenPlan={(tab) => setDetailTarget({ kind: 'plan', tab })}
-              onCloseDetail={() => setDetailTarget(null)}
+              onOpenPhase={(seq, tab) => go({ plan: activeEpic.externalId, detail: { kind: 'phase', seq, tab } })}
+              onOpenPlan={(tab) => go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab } })}
+              onCloseDetail={() => go({ plan: activeEpic.externalId })}
+              revId={urlRevId}
+              onOpenRevision={(revId) =>
+                go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions', revId } })
+              }
+              onRevisionMissing={() =>
+                // phase 2: notice — the revision the link named is not this plan's.
+                correct({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } })
+              }
               runBusy={runBusy}
               runMsg={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.text : null}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
@@ -1222,7 +1334,7 @@ export function Plans(): JSX.Element {
           onRetry={() => startRun(activeEpic.taskId, outcomeFor)}
           onOpenRevisions={() => {
             setOutcomeFor(null);
-            setDetailTarget({ kind: 'plan', tab: 'revisions' });
+            go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } });
           }}
         />
       )}
@@ -1251,6 +1363,9 @@ function EpicDetail({
   onOpenPhase,
   onOpenPlan,
   onCloseDetail,
+  revId,
+  onOpenRevision,
+  onRevisionMissing,
   runBusy,
   runMsg,
   onRun,
@@ -1273,6 +1388,12 @@ function EpicDetail({
   onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
   onOpenPlan: (tab: PlanDetailTab) => void;
   onCloseDetail: () => void;
+  /** The revision the URL names (`/details/revisions/<revId>`), or null. */
+  revId: number | null;
+  /** Open one revision on the Revisions tab (a push). */
+  onOpenRevision: (revId: number) => void;
+  /** The URL's revision is not among this plan's — correct to Revisions. */
+  onRevisionMissing: () => void;
   runBusy: number | null;
   runMsg: string | null;
   onRun: (phaseId: number) => void;
@@ -1306,16 +1427,29 @@ function EpicDetail({
   // 503 planning not attached) surfaces in the tab, not as a page error.
   const [revisions, setRevisions] = useState<PlanRevision[] | null>(null);
   const [revisionsErr, setRevisionsErr] = useState<string | null>(null);
+  // Which plan `revisions` belongs to: this component is not keyed by plan, so
+  // for one render after a plan switch the list is still the OLD plan's — and a
+  // revId must never be judged against another plan's revisions.
+  const [revisionsOf, setRevisionsOf] = useState<number | null>(null);
+  // Reloads still out. While one is, the list may predate a revision the URL
+  // already names (ReviseModal links to a just-staged one as it reloads), so
+  // an unknown revId is not judged until they are all back.
+  const [revisionsInFlight, setRevisionsInFlight] = useState(0);
   const reloadRevisions = useCallback((): void => {
-    fetchRevisions(epic.taskId)
+    const taskId = epic.taskId;
+    setRevisionsInFlight((n) => n + 1);
+    fetchRevisions(taskId)
       .then((rs) => {
         setRevisions(rs);
         setRevisionsErr(null);
+        setRevisionsOf(taskId);
       })
       .catch((e: unknown) => {
         setRevisions([]);
         setRevisionsErr(e instanceof Error ? e.message : String(e));
-      });
+        setRevisionsOf(taskId);
+      })
+      .finally(() => setRevisionsInFlight((n) => n - 1));
   }, [epic.taskId]);
   useEffect(() => {
     setRevisions(null);
@@ -1326,6 +1460,14 @@ function EpicDetail({
     () => (revisions ?? []).filter((r) => r.status === 'staged').length,
     [revisions],
   );
+  // A link to a revision this plan does not have → the Revisions tab (replace).
+  // Judged only against THIS plan's loaded list; a failed fetch proves nothing.
+  const revisionsReady =
+    revisions !== null && revisionsOf === epic.taskId && revisionsErr === null && revisionsInFlight === 0;
+  const revisionKnown = revId === null || (revisions ?? []).some((r) => r.id === revId);
+  useEffect(() => {
+    if (revisionsReady && !revisionKnown) onRevisionMissing();
+  }, [revisionsReady, revisionKnown, onRevisionMissing]);
 
   // Revise-plan entry point: reason modal → POST → land on the planning page,
   // where the revise wizard interviews against this plan.
@@ -1520,6 +1662,7 @@ function EpicDetail({
               revisions={revisions}
               revisionsErr={revisionsErr}
               stagedCount={stagedCount}
+              focusRevId={revisionKnown ? revId : null}
               onRevisionsChanged={() => {
                 reloadRevisions();
                 onDocChanged();
@@ -1557,7 +1700,9 @@ function EpicDetail({
         onOpenRevision={() => {
           setReviseOpen(false);
           reloadRevisions();
-          onOpenPlan('revisions');
+          // The 409 named the open revision — link straight to it.
+          if (reviseOpenRevId !== null) onOpenRevision(reviseOpenRevId);
+          else onOpenPlan('revisions');
         }}
       />
     </div>
@@ -2864,6 +3009,7 @@ function PlanDetailPanel({
   revisions,
   revisionsErr,
   stagedCount,
+  focusRevId = null,
   onRevisionsChanged,
 }: {
   epic: Epic;
@@ -2874,6 +3020,9 @@ function PlanDetailPanel({
   revisions: PlanRevision[] | null;
   revisionsErr: string | null;
   stagedCount: number;
+  /** The revision a `/details/revisions/<revId>` link opened — expanded and
+   * marked current on the Revisions tab. */
+  focusRevId?: number | null;
   /** A revision was decided — refetch the list (and the docs, on apply). */
   onRevisionsChanged: () => void;
 }): JSX.Element {
@@ -2925,6 +3074,7 @@ function PlanDetailPanel({
         <PlanRevisionsTab
           revisions={revisions}
           revisionsErr={revisionsErr}
+          focusRevId={focusRevId}
           onChanged={onRevisionsChanged}
         />
 
@@ -2949,10 +3099,15 @@ const REVISION_STATUS_CHIP: Record<PlanRevision['status'], string> = {
 function PlanRevisionsTab({
   revisions,
   revisionsErr,
+  focusRevId,
   onChanged,
 }: {
   revisions: PlanRevision[] | null;
   revisionsErr: string | null;
+  /** The linked revision (`/details/revisions/<revId>`): the staged one is
+   * always shown as a full review; a decided row is expanded (reason unclamped)
+   * and both are marked aria-current. */
+  focusRevId: number | null;
   onChanged: () => void;
 }): JSX.Element {
   if (revisionsErr !== null) return <ErrorBox message={revisionsErr} onRetry={onChanged} />;
@@ -2969,15 +3124,27 @@ function PlanRevisionsTab({
   return (
     <div className="space-y-4">
       {staged !== undefined && (
-        <RailSection label="staged — awaiting your decision">
-          <RevisionReview revisionId={staged.id} onDecided={onChanged} />
-        </RailSection>
+        <div
+          data-revision-id={staged.id}
+          {...(staged.id === focusRevId ? { 'aria-current': 'true' as const } : {})}
+        >
+          <RailSection label="staged — awaiting your decision">
+            <RevisionReview revisionId={staged.id} onDecided={onChanged} />
+          </RailSection>
+        </div>
       )}
       {decided.length > 0 && (
         <RailSection label="history">
           <ul className="space-y-2">
             {decided.map((r) => (
-              <li key={r.id} className="rounded-lg border border-line bg-surface/40 px-3 py-2.5">
+              <li
+                key={r.id}
+                data-revision-id={r.id}
+                {...(r.id === focusRevId ? { 'aria-current': 'true' as const } : {})}
+                className={`rounded-lg border bg-surface/40 px-3 py-2.5 ${
+                  r.id === focusRevId ? 'border-brand/50' : 'border-line'
+                }`}
+              >
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span
                     className={`rounded border px-1.5 py-px font-mono text-[9.5px] ${REVISION_STATUS_CHIP[r.status]}`}
@@ -2993,7 +3160,11 @@ function PlanRevisionsTab({
                       : `created ${fmtDateTime(r.createdAt)}`}
                   </span>
                 </div>
-                <div className="mt-1.5 line-clamp-3 text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2">
+                <div
+                  className={`mt-1.5 text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2 ${
+                    r.id === focusRevId ? '' : 'line-clamp-3'
+                  }`}
+                >
                   {r.reason}
                 </div>
                 {r.error !== undefined && r.error !== '' && (
