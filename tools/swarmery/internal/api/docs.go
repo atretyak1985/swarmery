@@ -35,17 +35,22 @@ type docDetailDTO struct {
 // reading order, then the reference docs (onboarding → concepts → workflow →
 // extending → neutrality); anything else sorts alphabetically after both.
 //
-// The two bands are numbered 0–4 and 10–14 rather than 0–9 so a guide or a
-// reference doc can be slotted in later without renumbering the other band.
+// The guides follow the sidebar: one per place, in sidebar order (Docs itself
+// needs none), which fills the 0–9 band exactly. Reference docs start at 10.
 // The `guide-` prefix is load-bearing beyond ordering: the dashboard rail
 // groups on it (web/src/pages/docsRail.ts), and it is what survives the
 // Makefile flattening guides into the flat embed root.
 var docOrder = map[string]int{
 	"guide-getting-started": 0,
-	"guide-dashboard":       1,
-	"guide-plans":           2,
+	"guide-today":           1,
+	"guide-inbox":           2,
 	"guide-sessions":        3,
-	"guide-decisions":       4,
+	"guide-plans":           4,
+	"guide-health":          5,
+	"guide-learning":        6,
+	"guide-knowledge":       7,
+	"guide-system":          8,
+	"guide-settings":        9,
 
 	"onboarding": 10,
 	"concepts":   11,
