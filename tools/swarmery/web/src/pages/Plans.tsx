@@ -1111,6 +1111,9 @@ export function Plans(): JSX.Element {
                   key={e.taskId}
                   role="button"
                   tabIndex={0}
+                  // Own name, so the nested copy chip's "copy id: …" isn't folded
+                  // into the row's accessible name (as TaskCard does).
+                  aria-label={`plan ${e.externalId}: ${e.title}`}
                   onClick={() => setSelected(e.taskId)}
                   onKeyDown={(ev) => {
                     if (ev.target !== ev.currentTarget) return;
