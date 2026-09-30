@@ -109,6 +109,28 @@ var probeArgs = []string{"auth", "status"}
 // The child runs in its own process group (internal/procgroup), so a hung CLI
 // is killed as a tree, not as a lone leader.
 func Probe(ctx context.Context, configDir string) Result {
+	env := withoutConfigDir(os.Environ())
+	if configDir != "" {
+		env = append(env, configDirEnv+"="+configDir)
+	}
+	return ProbeEnv(ctx, env)
+}
+
+// ProbeEnv is Probe under a COMPLETE, caller-built environment: the child gets
+// exactly env, nothing is stripped and nothing is added.
+//
+// It exists for the caller whose question is not "is this config dir logged
+// in?" but "will the run I am about to admit be able to authenticate?" — the
+// admission pre-flight (internal/runcore). That question is only answered by
+// probing under the environment the run itself gets
+// (claudeacct.SpawnEnvResolved): an unbound project's run keeps whatever
+// CLAUDE_CONFIG_DIR the daemon inherited, so a probe that stripped it — Probe's
+// rule, right for an account-management screen — would vouch for, or condemn, a
+// different account than the one the run uses.
+//
+// A nil env means the current process's environment (os/exec's own rule).
+// Timeout and process-group handling are Probe's.
+func ProbeEnv(ctx context.Context, env []string) Result {
 	bin, err := resolveBin()
 	if err != nil {
 		return Result{Status: StatusUnknown, Reason: ReasonNoBinary}
@@ -120,10 +142,6 @@ func Probe(ctx context.Context, configDir string) Result {
 	}
 
 	cmd := exec.CommandContext(ctx, bin, probeArgs...)
-	env := withoutConfigDir(os.Environ())
-	if configDir != "" {
-		env = append(env, configDirEnv+"="+configDir)
-	}
 	cmd.Env = env
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -183,30 +201,32 @@ func pingArgs() []string {
 	return []string{"-p", PingPrompt, "--model", PingModel, "--effort", PingEffort, "--max-turns", "1"}
 }
 
-// ProbeRun is stage two of an account check: a minimal `claude -p` ping under
-// configDir, classified from its OUTPUT regardless of the exit code (see
-// classifyPing). Call it only after Probe answered ready — it costs one short
-// model turn, and an account with no login is already answered for free.
+// ProbeRun is stage two of an account check: a minimal `claude -p` ping,
+// classified from its OUTPUT regardless of the exit code (see classifyPing).
+// Call it only after stage one answered ready — it costs one short model turn,
+// and an account with no login is already answered for free.
 //
 //	ready    the account authenticated and the model answered
 //	no-login a recorded auth shape — a login demand, or access refused
 //	limited  a recorded usage-limit shape
 //	unknown  no binary, a timeout, an API error, an unrecognised failure
 //
-// attach places the spawn the way the daemon's other utility runs are placed —
-// production passes systemspawn.Attach, so the ping's transcript lands in the
-// System project instead of whatever directory the daemon was started in. It is
-// a parameter rather than an import because systemspawn sits above this
-// package (it imports ingest, which imports claudeprobe). nil leaves the
-// working directory alone.
+// env is the child's COMPLETE environment, exactly as ProbeEnv takes it: the
+// caller builds the environment the run it is vouching for would get, and the
+// ping runs under that and nothing else. A nil env means the current process's
+// environment.
 //
-// Whatever attach does to the environment is DISCARDED: a probe's whole job is
-// account identity, so the child's account comes from configDir and nowhere
-// else — exactly Probe's rule. An empty configDir means the default account,
-// selected by the ABSENCE of CLAUDE_CONFIG_DIR.
+// dir is the child's working directory ("" leaves it alone). Production passes
+// the System project's directory (systemspawn.Dir), so the ping's transcript
+// lands there instead of in whatever directory the daemon was started in. It is
+// a parameter rather than an import because systemspawn sits above this
+// package (it imports ingest, which imports claudeprobe). Only the DIRECTORY is
+// taken from there: no `--settings` is spliced into the argv, because the
+// System project's composed settings belong to a different project than the
+// run being vouched for.
 //
 // The default timeout is 60s; a caller-supplied ctx deadline overrides it.
-func ProbeRun(ctx context.Context, configDir string, attach func(*exec.Cmd)) Result {
+func ProbeRun(ctx context.Context, env []string, dir string) Result {
 	bin, err := resolveBin()
 	if err != nil {
 		return Result{Status: StatusUnknown, Reason: ReasonNoBinary}
@@ -218,13 +238,7 @@ func ProbeRun(ctx context.Context, configDir string, attach func(*exec.Cmd)) Res
 	}
 
 	cmd := exec.CommandContext(ctx, bin, pingArgs()...)
-	if attach != nil {
-		attach(cmd)
-	}
-	env := withoutConfigDir(os.Environ())
-	if configDir != "" {
-		env = append(env, configDirEnv+"="+configDir)
-	}
+	cmd.Dir = dir
 	cmd.Env = env
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

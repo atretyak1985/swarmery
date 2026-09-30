@@ -93,7 +93,11 @@ func (in *ingester) tripBreaker(account string, r *record, text string) error {
 	if age := now.Sub(at); age > breakerRecency || age < -breakerRecency {
 		return nil
 	}
-	changed, err := store.TripAccountBreaker(in.tx, account, kind, reason, store.BreakerSourceTranscript, now)
+	// The limit line says WHICH limit was hit (session, weekly, a model's); that
+	// picks the window whose reset time the breaker waits for. "" for an auth
+	// trip and for a limit whose wording names no scope.
+	scope, _ := claudeprobe.LimitScope(text)
+	changed, err := store.TripAccountBreaker(in.tx, account, kind, reason, store.BreakerSourceTranscript, scope, now)
 	if err != nil || !changed {
 		return err
 	}

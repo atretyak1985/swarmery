@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -83,7 +82,7 @@ func TestProbeRun(t *testing.T) {
 				name := shape.kind + "/" + shape.prefix + "/exit" + strconv.Itoa(code) + "/" + stream
 				t.Run(name, func(t *testing.T) {
 					fakePing(t, line, stream, code)
-					if got := ProbeRun(context.Background(), "", nil); got != want {
+					if got := ProbeRun(context.Background(), nil, ""); got != want {
 						t.Errorf("ProbeRun = %+v, want %+v", got, want)
 					}
 				})
@@ -103,7 +102,7 @@ func TestProbeRun(t *testing.T) {
 func TestProbeRunOrgDisabled(t *testing.T) {
 	fakePing(t, "Your organization has disabled Claude subscription access for Claude Code.", "stdout", 1)
 	want := Result{Status: StatusNoLogin, Reason: ReasonAccessRefused}
-	if got := ProbeRun(context.Background(), "", nil); got != want {
+	if got := ProbeRun(context.Background(), nil, ""); got != want {
 		t.Errorf("ProbeRun = %+v, want %+v", got, want)
 	}
 }
@@ -111,7 +110,7 @@ func TestProbeRunOrgDisabled(t *testing.T) {
 // TestProbeRunHealthy: the stub that answers "OK" is ready.
 func TestProbeRunHealthy(t *testing.T) {
 	fakePing(t, "OK", "stdout", 0)
-	if got := ProbeRun(context.Background(), "", nil); got != (Result{Status: StatusReady}) {
+	if got := ProbeRun(context.Background(), nil, ""); got != (Result{Status: StatusReady}) {
 		t.Errorf("ProbeRun = %+v, want ready", got)
 	}
 }
@@ -120,7 +119,7 @@ func TestProbeRunHealthy(t *testing.T) {
 // shape mid-line is not one — FailureKind matches a line's START.
 func TestProbeRunProseCannotFakeAMarker(t *testing.T) {
 	fakePing(t, "OK — earlier the CLI said: Not logged in · Please run /login", "stdout", 0)
-	if got := ProbeRun(context.Background(), "", nil); got != (Result{Status: StatusReady}) {
+	if got := ProbeRun(context.Background(), nil, ""); got != (Result{Status: StatusReady}) {
 		t.Errorf("ProbeRun = %+v, want ready", got)
 	}
 }
@@ -130,7 +129,7 @@ func TestProbeRunProseCannotFakeAMarker(t *testing.T) {
 func TestProbeRunUnrecognisedFailure(t *testing.T) {
 	fakePing(t, "segmentation fault", "stderr", 3)
 	want := Result{Status: StatusUnknown, Reason: ReasonUnrecognised}
-	if got := ProbeRun(context.Background(), "", nil); got != want {
+	if got := ProbeRun(context.Background(), nil, ""); got != want {
 		t.Errorf("ProbeRun = %+v, want %+v", got, want)
 	}
 }
@@ -142,7 +141,7 @@ func TestProbeRunMissingBinary(t *testing.T) {
 	t.Cleanup(func() { resolveBin = prev })
 
 	want := Result{Status: StatusUnknown, Reason: ReasonNoBinary}
-	if got := ProbeRun(context.Background(), "", nil); got != want {
+	if got := ProbeRun(context.Background(), nil, ""); got != want {
 		t.Errorf("ProbeRun = %+v, want %+v", got, want)
 	}
 }
@@ -154,7 +153,7 @@ func TestProbeRunStartFailed(t *testing.T) {
 	t.Cleanup(func() { resolveBin = prev })
 
 	want := Result{Status: StatusUnknown, Reason: ReasonStartFailed}
-	if got := ProbeRun(context.Background(), "", nil); got != want {
+	if got := ProbeRun(context.Background(), nil, ""); got != want {
 		t.Errorf("ProbeRun = %+v, want %+v", got, want)
 	}
 }
@@ -165,29 +164,36 @@ func TestProbeRunTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	want := Result{Status: StatusUnknown, Reason: ReasonTimeout}
-	if got := ProbeRun(ctx, "", nil); got != want {
+	if got := ProbeRun(ctx, nil, ""); got != want {
 		t.Errorf("ProbeRun = %+v, want %+v", got, want)
 	}
 }
 
-// TestProbeRunArgvAndAccount: the ping is the fixed cheap invocation, it runs
-// where attach put it, and its account comes from configDir alone — whatever
-// attach wrote into the environment, and whatever the daemon inherited, is
-// discarded.
-func TestProbeRunArgvAndAccount(t *testing.T) {
+// envWith is the test process's environment with CLAUDE_CONFIG_DIR replaced by
+// dir ("" = removed) and extra appended — a caller-built environment.
+func envWith(dir string, extra ...string) []string {
+	env := withoutConfigDir(os.Environ())
+	if dir != "" {
+		env = append(env, configDirEnv+"="+dir)
+	}
+	return append(env, extra...)
+}
+
+// TestProbeRunArgvAndEnv: the ping is the fixed cheap invocation with nothing
+// spliced into it, it runs in the directory it was given, and its environment
+// is EXACTLY the one the caller built — nothing stripped, nothing added. That
+// is what lets the caller hand it the environment of the run it vouches for.
+func TestProbeRunArgvAndEnv(t *testing.T) {
 	seen := filepath.Join(t.TempDir(), "seen")
-	fakeClaude(t, `{ printf '%s\n' "$@"; printf 'dir=%s\n' "$(pwd -P)"; printf 'cfg=%s\n' "${CLAUDE_CONFIG_DIR-__UNSET__}"; } > `+seen+`
+	fakeClaude(t, `{ printf '%s\n' "$@"; printf 'dir=%s\n' "$(pwd -P)"; printf 'cfg=%s\n' "${CLAUDE_CONFIG_DIR-__UNSET__}"; printf 'store=%s\n' "${SWARMERY_TEST_PROBE_VAR-__UNSET__}"; } > `+seen+`
 echo OK`)
+	// The hostile precondition: the probing process itself carries a config dir.
 	t.Setenv("CLAUDE_CONFIG_DIR", "/somewhere/inherited")
 	cwd := t.TempDir()
-	attach := func(cmd *exec.Cmd) {
-		cmd.Dir = cwd
-		cmd.Env = append(os.Environ(), "CLAUDE_CONFIG_DIR=/somewhere/attached")
-	}
 
-	run := func(configDir string) []string {
+	run := func(env []string, dir string) []string {
 		t.Helper()
-		if got := ProbeRun(context.Background(), configDir, attach); got.Status != StatusReady {
+		if got := ProbeRun(context.Background(), env, dir); got.Status != StatusReady {
 			t.Fatalf("ProbeRun = %+v, want ready", got)
 		}
 		raw, err := os.ReadFile(seen)
@@ -196,27 +202,85 @@ echo OK`)
 		}
 		return strings.Split(strings.TrimSpace(string(raw)), "\n")
 	}
+	tail := func(lines []string) string { return strings.Join(lines[len(lines)-2:], " ") }
 
-	lines := run("")
+	// A caller-built environment that names a config dir and carries a variable.
+	named := filepath.Join(t.TempDir(), ".claude-work")
+	lines := run(envWith(named, "SWARMERY_TEST_PROBE_VAR=delivered"), cwd)
 	wantArgv := []string{"-p", PingPrompt, "--model", PingModel, "--effort", PingEffort, "--max-turns", "1"}
-	if got := lines[:len(lines)-2]; strings.Join(got, "\x00") != strings.Join(wantArgv, "\x00") {
-		t.Errorf("argv = %q, want %q", got, wantArgv)
+	if got := lines[:len(lines)-3]; strings.Join(got, "\x00") != strings.Join(wantArgv, "\x00") {
+		t.Errorf("argv = %q, want exactly %q — nothing may be spliced into the ping", got, wantArgv)
 	}
 	resolved, err := filepath.EvalSymlinks(cwd)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimPrefix(lines[len(lines)-2], "dir="); got != resolved {
-		t.Errorf("ping ran in %q, want the attached dir %q", got, resolved)
+	if got := strings.TrimPrefix(lines[len(lines)-3], "dir="); got != resolved {
+		t.Errorf("ping ran in %q, want the given dir %q", got, resolved)
 	}
-	if got := lines[len(lines)-1]; got != "cfg=__UNSET__" {
-		t.Errorf("default-account ping saw %q, want CLAUDE_CONFIG_DIR absent", got)
+	if got, want := tail(lines), "cfg="+named+" store=delivered"; got != want {
+		t.Errorf("ping saw %q, want %q", got, want)
 	}
 
-	dir := filepath.Join(t.TempDir(), ".claude-work")
-	lines = run(dir)
-	if got := lines[len(lines)-1]; got != "cfg="+dir {
-		t.Errorf("named-account ping saw %q, want exactly its dir %q", got, dir)
+	// An environment with NO config dir: absent in the child, even though the
+	// probing process has one.
+	if got, want := tail(run(envWith(""), "")), "cfg=__UNSET__ store=__UNSET__"; got != want {
+		t.Errorf("ping saw %q, want %q", got, want)
+	}
+
+	// A nil environment is the process's own — an inherited config dir is KEPT,
+	// not stripped: that is an unbound project's run.
+	if got, want := tail(run(nil, "")), "cfg=/somewhere/inherited store=__UNSET__"; got != want {
+		t.Errorf("ping saw %q, want %q", got, want)
+	}
+}
+
+// TestProbeEnv: stage one under a caller-built environment. Unlike Probe, which
+// strips whatever config dir the daemon inherited, ProbeEnv hands the child
+// exactly what it was given.
+func TestProbeEnv(t *testing.T) {
+	seen := filepath.Join(t.TempDir(), "seen")
+	fakeClaude(t, `printf '%s %s' "$*" "${CLAUDE_CONFIG_DIR-__UNSET__}" > `+seen+`
+printf '{"loggedIn": true}\n'`)
+	t.Setenv("CLAUDE_CONFIG_DIR", "/somewhere/inherited")
+	read := func() string {
+		t.Helper()
+		raw, err := os.ReadFile(seen)
+		if err != nil {
+			t.Fatalf("read marker: %v", err)
+		}
+		return string(raw)
+	}
+
+	if got := ProbeEnv(context.Background(), nil); got != (Result{Status: StatusReady}) {
+		t.Fatalf("ProbeEnv = %+v, want ready", got)
+	}
+	if got := read(); got != "auth status /somewhere/inherited" {
+		t.Errorf("nil env: child saw %q, want `auth status` under the inherited dir", got)
+	}
+	if got := ProbeEnv(context.Background(), envWith("/cfg/work")); got.Status != StatusReady {
+		t.Fatalf("ProbeEnv = %+v, want ready", got)
+	}
+	if got := read(); got != "auth status /cfg/work" {
+		t.Errorf("built env: child saw %q", got)
+	}
+	// Probe keeps its own rule: the inherited dir is stripped.
+	if got := Probe(context.Background(), ""); got.Status != StatusReady {
+		t.Fatalf("Probe = %+v, want ready", got)
+	}
+	if got := read(); got != "auth status __UNSET__" {
+		t.Errorf("Probe: child saw %q, want the inherited dir stripped", got)
+	}
+
+	fakeClaude(t, `printf '{"loggedIn": false, "authMethod": "none"}\n'; exit 1`)
+	if got := ProbeEnv(context.Background(), nil); got != (Result{Status: StatusNoLogin, Reason: ReasonNoLogin}) {
+		t.Errorf("ProbeEnv on a dir with no login = %+v", got)
+	}
+	prev := resolveBin
+	resolveBin = func() (string, error) { return "", errors.New("claude not found") }
+	t.Cleanup(func() { resolveBin = prev })
+	if got := ProbeEnv(context.Background(), nil); got != (Result{Status: StatusUnknown, Reason: ReasonNoBinary}) {
+		t.Errorf("ProbeEnv with no binary = %+v", got)
 	}
 }
 

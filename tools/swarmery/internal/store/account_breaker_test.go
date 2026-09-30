@@ -160,41 +160,102 @@ func TestAccountBreakerRefusesOtherKinds(t *testing.T) {
 	}
 }
 
-// TestQuotaResetHint: the freshest reading's tightest still-ahead window, else
-// now + 1h.
+// TestQuotaResetHint: the scope's own window when the limit line named one,
+// else the EARLIEST still-ahead reset of the freshest poll, else now + 1h.
 func TestQuotaResetHint(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
-	const fallback = "2026-09-30T11:00:00Z"
+	const (
+		fallback = "2026-09-30T11:00:00Z"
+		session  = "2026-09-30T13:30:00Z"
+		weekly   = "2026-10-04T00:00:00Z"
+		opus     = "2026-10-02T00:00:00Z"
+	)
 
-	if got := QuotaResetHint(db, "work", now); got != fallback {
+	if got := QuotaResetHint(db, "work", "session", now); got != fallback {
 		t.Errorf("no reading: %q, want %q", got, fallback)
 	}
+	// The WEEKLY window is the tight one here (2% left) while the session window
+	// has plenty: the regression this guards is a session-limit trip taking the
+	// weekly reset and pausing the account for days.
 	if err := PutAccountQuota(db, "work", []QuotaRow{
-		{WindowKey: "five_hour", PercentLeft: 0, ResetsAt: "2026-09-30T13:30:00Z"},
-		{WindowKey: "seven_day", PercentLeft: 40, ResetsAt: "2026-10-04T00:00:00Z"},
+		{WindowKey: "five_hour", PercentLeft: 60, ResetsAt: session},
+		{WindowKey: "seven_day", PercentLeft: 2, ResetsAt: weekly},
+		{WindowKey: "seven_day_opus", PercentLeft: 30, ResetsAt: opus},
 	}, now.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if got := QuotaResetHint(db, "work", now); got != "2026-09-30T13:30:00Z" {
-		t.Errorf("tightest window: %q, want the five-hour reset", got)
+	for _, tc := range []struct{ scope, want, why string }{
+		{"session", session, "a session limit resets with the five-hour window"},
+		{"weekly", weekly, "a weekly limit resets with the seven-day window"},
+		{"model", opus, "a model limit resets with a per-model weekly window"},
+		{"", session, "an unknown scope takes the EARLIEST reset, not the tightest window's"},
+		{"monthly", session, "a scope with no window takes the earliest reset"},
+	} {
+		if got := QuotaResetHint(db, "work", tc.scope, now); got != tc.want {
+			t.Errorf("scope %q: %q, want %q — %s", tc.scope, got, tc.want, tc.why)
+		}
 	}
-	// The tight window's reset already passed: the next live one answers.
-	if got := QuotaResetHint(db, "work", now.Add(4*time.Hour)); got != "2026-10-04T00:00:00Z" {
-		t.Errorf("passed window: %q, want the weekly reset", got)
+	// The scope's window already reset: the earliest live one answers.
+	if got := QuotaResetHint(db, "work", "session", now.Add(4*time.Hour)); got != opus {
+		t.Errorf("passed session window: %q, want the next reset ahead (%q)", got, opus)
 	}
-	// Every reset passed, or none parses: the fallback.
-	if got := QuotaResetHint(db, "work", now.Add(30*24*time.Hour)); got != "2026-10-30T11:00:00Z" {
+	// Every reset passed: the fallback.
+	if got := QuotaResetHint(db, "work", "weekly", now.Add(30*24*time.Hour)); got != "2026-10-30T11:00:00Z" {
 		t.Errorf("all passed: %q, want now + 1h", got)
 	}
-	if err := PutAccountQuota(db, "other", []QuotaRow{{WindowKey: "five_hour", PercentLeft: 1}}, now); err != nil {
+	// A window with no (or an unparseable) reset says nothing.
+	if err := PutAccountQuota(db, "other", []QuotaRow{
+		{WindowKey: "five_hour", PercentLeft: 1},
+		{WindowKey: "seven_day", PercentLeft: 1, ResetsAt: "soon"},
+	}, now); err != nil {
 		t.Fatal(err)
 	}
-	if got := QuotaResetHint(db, "other", now); got != fallback {
-		t.Errorf("window with no reset: %q, want %q", got, fallback)
+	if got := QuotaResetHint(db, "other", "session", now); got != fallback {
+		t.Errorf("windows with no usable reset: %q, want %q", got, fallback)
+	}
+	// Only the FRESHEST poll counts: a window the endpoint stopped reporting
+	// cannot supply a reset (PutAccountQuota replaces the whole set).
+	if err := PutAccountQuota(db, "work", []QuotaRow{
+		{WindowKey: "seven_day", PercentLeft: 2, ResetsAt: weekly},
+	}, now); err != nil {
+		t.Fatal(err)
+	}
+	if got := QuotaResetHint(db, "work", "session", now); got != weekly {
+		t.Errorf("session scope with no session window stored: %q, want the earliest reset ahead (%q)", got, weekly)
+	}
+}
+
+// TestTripAccountBreakerUsesTheScope: a session-limit trip gets the session
+// window's reset even when the weekly window is the tighter one.
+func TestTripAccountBreakerUsesTheScope(t *testing.T) {
+	db := openRaw(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	if err := PutAccountQuota(db, "work", []QuotaRow{
+		{WindowKey: "five_hour", PercentLeft: 60, ResetsAt: "2026-09-30T13:30:00Z"},
+		{WindowKey: "seven_day", PercentLeft: 2, ResetsAt: "2026-10-04T00:00:00Z"},
+	}, now); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := TripAccountBreaker(db, "work", BreakerKindQuota, "limit", BreakerSourceTranscript, "session", now); err != nil || !changed {
+		t.Fatalf("trip: changed=%v err=%v", changed, err)
+	}
+	b, _, err := GetAccountBreaker(db, "work")
+	if err != nil || b.ResetsAt != "2026-09-30T13:30:00Z" || b.OpenedAt != "2026-09-30T10:00:00Z" {
+		t.Errorf("breaker = %+v (%v), want the session window's reset", b, err)
+	}
+	// An auth trip never carries a reset, whatever scope it is handed.
+	if _, err := TripAccountBreaker(db, "other", BreakerKindAuth, "login", BreakerSourceRun, "session", now); err != nil {
+		t.Fatal(err)
+	}
+	if b, _, _ := GetAccountBreaker(db, "other"); b.ResetsAt != "" {
+		t.Errorf("auth breaker resets_at = %q, want none", b.ResetsAt)
 	}
 }
 
@@ -203,7 +264,7 @@ func TestQuotaResetHint(t *testing.T) {
 func TestQuotaResetHintFailsToTheFallback(t *testing.T) {
 	db := openRaw(t)
 	now := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
-	if got := QuotaResetHint(db, "work", now); got != "2026-09-30T11:00:00Z" {
+	if got := QuotaResetHint(db, "work", "session", now); got != "2026-09-30T11:00:00Z" {
 		t.Errorf("unmigrated db: %q, want now + 1h", got)
 	}
 	if _, _, err := GetAccountBreaker(db, "work"); err == nil || !strings.Contains(err.Error(), "no such table") {

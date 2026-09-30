@@ -279,3 +279,26 @@ func TestAttachCarriesOnlyTheSystemProjectsEstate(t *testing.T) {
 		t.Error("a System run carried an estate that is not the System project's")
 	}
 }
+
+// Dir is Attach's guard on its own: the System directory when it is one, and
+// "no System project" for a missing path or a file — the same three states.
+func TestDir(t *testing.T) {
+	want := systemHome(t)
+	if got, ok := Dir(); !ok || got != want {
+		t.Errorf("Dir() = %q, %v; want %q, true", got, ok, want)
+	}
+
+	t.Setenv("HOME", t.TempDir()) // no .swarmery under it
+	if got, ok := Dir(); ok || got != "" {
+		t.Errorf("missing System home: Dir() = %q, %v; want \"\", false", got, ok)
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(home, ".swarmery"), []byte("not a dir"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := Dir(); ok || got != "" {
+		t.Errorf("System path is a file: Dir() = %q, %v; want \"\", false", got, ok)
+	}
+}

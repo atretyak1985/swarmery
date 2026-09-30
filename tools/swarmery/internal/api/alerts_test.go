@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -25,15 +26,36 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/usage"
 )
 
+// noConfigDir is what useProbeRun records for a probe environment that carries
+// no CLAUDE_CONFIG_DIR at all — absence, which is what selects ~/.claude.
+const noConfigDir = "(none)"
+
 // useProbeRun installs the two-stage probe seam behind "Probe & resume" and
-// returns a live call counter plus the config dirs it was asked about.
+// returns a live call counter plus, per call, the config dir selected by the
+// ENVIRONMENT the probe was handed (noConfigDir when it carries none). The test
+// process's own CLAUDE_CONFIG_DIR is removed first: the probe environment is
+// composed onto os.Environ(), so a developer's shell would otherwise decide the
+// assertions.
 func useProbeRun(t *testing.T, fn func(dir string) claudeprobe.Result) (*atomic.Int32, *[]string) {
 	t.Helper()
+	if prev, had := os.LookupEnv("CLAUDE_CONFIG_DIR"); had {
+		if err := os.Unsetenv("CLAUDE_CONFIG_DIR"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Setenv("CLAUDE_CONFIG_DIR", prev) })
+	}
 	var calls atomic.Int32
 	dirs := &[]string{}
 	prev := probeAccountRun
-	probeAccountRun = func(_ context.Context, dir string) claudeprobe.Result {
+	probeAccountRun = func(_ context.Context, env []string) claudeprobe.Result {
 		calls.Add(1)
+		dir := noConfigDir
+		for _, kv := range env {
+			if v, ok := strings.CutPrefix(kv, "CLAUDE_CONFIG_DIR="); ok {
+				dir = v
+				break
+			}
+		}
 		*dirs = append(*dirs, dir)
 		return fn(dir)
 	}
@@ -214,16 +236,35 @@ func TestResumeEndpoint(t *testing.T) {
 		t.Errorf("alerts after the resume = %+v, want only the default account's", alerts)
 	}
 
-	// The default account is probed with an EMPTY dir — absence selects it.
+	// The default key is probed under the environment an UNBOUND project's run
+	// gets. With nothing inherited that carries no config dir at all — absence
+	// selects ~/.claude.
 	if status, body := acctDo(t, http.MethodPost, resumeURL(ingest.DefaultAccount), ""); status != http.StatusOK {
 		t.Fatalf("resume default = %d\n%s", status, body)
 	}
 	named := filepath.Join(home, ".claude-nabu-org")
-	if want := []string{named, named, named, ""}; strings.Join(*dirs, "|") != strings.Join(want, "|") {
+	if want := []string{named, named, named, noConfigDir}; strings.Join(*dirs, "|") != strings.Join(want, "|") {
 		t.Errorf("probed dirs = %v, want %v", *dirs, want)
 	}
 	if len(listAlertsOK(t, srv)) != 0 {
 		t.Error("alerts remain after both accounts were resumed")
+	}
+
+	// A daemon that itself runs under a config dir (`install --claude-config-dir`):
+	// unbound runs inherit it, so resuming the default key must probe THAT dir —
+	// not ~/.claude, which those runs never touch. A named account still gets its
+	// own dir, replacing the inherited one.
+	inherited := filepath.Join(t.TempDir(), "daemon-config-dir")
+	t.Setenv("CLAUDE_CONFIG_DIR", inherited)
+	openTestBreaker(t, db, ingest.DefaultAccount, store.BreakerKindAuth, claudeprobe.ReasonNoLogin, opened)
+	openTestBreaker(t, db, "nabu-org", store.BreakerKindAuth, claudeprobe.ReasonNoLogin, opened)
+	for _, account := range []string{ingest.DefaultAccount, "nabu-org"} {
+		if status, body := acctDo(t, http.MethodPost, resumeURL(account), ""); status != http.StatusOK {
+			t.Fatalf("resume %s under an inherited config dir = %d\n%s", account, status, body)
+		}
+	}
+	if got := (*dirs)[len(*dirs)-2:]; got[0] != inherited || got[1] != named {
+		t.Errorf("probed dirs = %v, want [%s %s] — the default key must keep the inherited dir", got, inherited, named)
 	}
 
 	// An unknown account is refused before any probe runs.

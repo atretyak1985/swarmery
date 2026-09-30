@@ -148,13 +148,17 @@ func OpenAccountBreaker(q Querier, b AccountBreaker) (changed bool, err error) {
 // It is the one place a trip's row is put together, so the run path, the probe
 // and the transcript detector cannot open breakers of different shapes. The
 // caller surfaces the alert when changed is true.
-func TripAccountBreaker(q Querier, account, kind, reason, source string, now time.Time) (changed bool, err error) {
+//
+// scope is the limit scope of a quota trip when the caller knows it
+// ("session" | "weekly" | "model" — claudeprobe.LimitScope of the limit line),
+// "" when it does not; it only chooses which window's reset time is used.
+func TripAccountBreaker(q Querier, account, kind, reason, source, scope string, now time.Time) (changed bool, err error) {
 	b := AccountBreaker{
 		Account: account, Kind: kind, Reason: reason, Source: source,
 		OpenedAt: now.UTC().Format(time.RFC3339),
 	}
 	if kind == BreakerKindQuota {
-		b.ResetsAt = QuotaResetHint(q, account, now)
+		b.ResetsAt = QuotaResetHint(q, account, scope, now)
 	}
 	return OpenAccountBreaker(q, b)
 }
@@ -213,37 +217,79 @@ func ListAccountBreakers(q Querier, openOnly bool) ([]AccountBreaker, error) {
 	return out, rows.Err()
 }
 
-// QuotaResetHint is the resets_at a QUOTA opening at now gets: the reset time
-// of the account's freshest account_quota reading — the tightest window among
-// those whose reset is still ahead, since that is the one that ran out — or
-// now + 1h when no stored window says (never read, a failed read, every reset
-// already passed). Always RFC 3339 and always after now, so a quota breaker can
-// never be left without a time to close at.
-func QuotaResetHint(q Querier, account string, now time.Time) string {
+// scopeWindows maps a limit scope (claudeprobe.LimitScope's vocabulary, the one
+// account_limit_hits stores) to the account_quota window keys that scope runs
+// out of. A scope absent from this map — "" included — names no window.
+var scopeWindows = map[string][]string{
+	"session": {"five_hour", "session"},
+	"weekly":  {"seven_day"},
+	"model":   {"seven_day_opus", "seven_day_sonnet"},
+}
+
+// QuotaResetHint is the resets_at a QUOTA opening at now gets, read from the
+// account's FRESHEST account_quota poll:
+//
+//  1. scope known (the limit line said which limit was hit): the earliest
+//     still-ahead reset among that scope's windows;
+//  2. otherwise, or when that scope's window is not stored: the EARLIEST
+//     still-ahead reset of any window. Earliest on purpose — a guess that is too
+//     short costs one probe when the breaker closes and the account is still
+//     limited; a guess that is too long (a session limit read as the weekly
+//     reset) pauses a healthy account for days;
+//  3. no stored window says (never read, a failed read, every reset already
+//     passed): now + 1h.
+//
+// Always RFC 3339 and always after now, so a quota breaker can never be left
+// without a time to close at.
+func QuotaResetHint(q Querier, account, scope string, now time.Time) string {
 	fallback := now.Add(quotaResetFallback).UTC().Format(time.RFC3339)
 	rows, err := q.Query(`
-		SELECT resets_at, percent_left
+		SELECT window_key, resets_at
 		  FROM account_quota
 		 WHERE account = ?
-		   AND fetched_at = (SELECT MAX(fetched_at) FROM account_quota WHERE account = ?)
-		 ORDER BY percent_left, resets_at`, account, account)
+		   AND fetched_at = (SELECT MAX(fetched_at) FROM account_quota WHERE account = ?)`,
+		account, account)
 	if err != nil {
 		return fallback
 	}
 	defer rows.Close()
+	var scoped, earliest time.Time
 	for rows.Next() {
-		var resetsAt string
-		var left float64
-		if err := rows.Scan(&resetsAt, &left); err != nil {
+		var key, resetsAt string
+		if err := rows.Scan(&key, &resetsAt); err != nil {
 			return fallback
 		}
 		at, err := time.Parse(time.RFC3339, resetsAt)
 		if err != nil || !at.After(now) {
 			continue
 		}
-		return at.UTC().Format(time.RFC3339)
+		if earliest.IsZero() || at.Before(earliest) {
+			earliest = at
+		}
+		if inScope(scope, key) && (scoped.IsZero() || at.Before(scoped)) {
+			scoped = at
+		}
+	}
+	if rows.Err() != nil {
+		return fallback
+	}
+	switch {
+	case !scoped.IsZero():
+		return scoped.UTC().Format(time.RFC3339)
+	case !earliest.IsZero():
+		return earliest.UTC().Format(time.RFC3339)
 	}
 	return fallback
+}
+
+// inScope reports whether window key belongs to limit scope.
+func inScope(scope, key string) bool {
+	for _, k := range scopeWindows[scope] {
+		if k == key {
+			return true
+		}
+	}
+	return false
 }
 
 const breakerSelect = `

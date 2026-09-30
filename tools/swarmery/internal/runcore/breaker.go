@@ -108,9 +108,42 @@ func (e *AccountBreakerError) Is(target error) bool { return target == ErrAccoun
 // so its tests can refuse or admit without seeding account_breaker.
 type AccountCheckFunc func(ctx context.Context, db *sql.DB, res claudeacct.Resolution, now time.Time) error
 
-// AccountProbeFunc checks whether the CLI can actually run under configDir ("" =
-// the default account). ProbeAccount is production; tests substitute a stub.
-type AccountProbeFunc func(ctx context.Context, configDir string) claudeprobe.Result
+// AccountProbeFunc checks whether the CLI can actually run under env — the
+// COMPLETE environment of the run being vouched for, built the way a real spawn
+// builds it (RunEnv / AccountEnv). It is an environment and not a config dir on
+// purpose: a run's account is whatever its environment selects, and that is not
+// always what its account KEY suggests (an unbound project keeps the config dir
+// the daemon inherited). ProbeAccount is production; tests substitute a stub.
+type AccountProbeFunc func(ctx context.Context, env []string) claudeprobe.Result
+
+// RunEnv is the environment a run under res is spawned with — the SAME
+// composition ClaudeRunner.Start uses (claudeacct.SpawnEnvResolved), so the
+// pre-flight probes exactly what it admits:
+//
+//   - an UNBOUND project: os.Environ() untouched. A CLAUDE_CONFIG_DIR the daemon
+//     inherited (`swarmery install --claude-config-dir`) stays, because the run
+//     keeps it too;
+//   - a project bound to the default account: that variable removed;
+//   - a named account: its config dir, its secret store, the estate's store.
+func RunEnv(res claudeacct.Resolution) []string {
+	return claudeacct.SpawnEnvResolved(os.Environ(), res)
+}
+
+// AccountEnv is RunEnv for a caller that holds only a breaker's account KEY —
+// "Probe & resume" — and no project.
+//
+// The default key is the key of every UNBOUND project's runs (QuotaAccountKey),
+// so it gets the unbound environment: os.Environ() untouched, an inherited
+// CLAUDE_CONFIG_DIR kept. Stripping it here would re-probe ~/.claude while the
+// runs the breaker stopped use another directory, and the resume would answer
+// about the wrong account for ever. A named key gets the account layer
+// (claudeacct.SpawnEnv): its config dir and its secret store.
+func AccountEnv(key string) []string {
+	if key = strings.TrimSpace(key); key == "" || key == ingest.DefaultAccount {
+		return RunEnv(claudeacct.Resolution{})
+	}
+	return claudeacct.SpawnEnv(os.Environ(), key)
+}
 
 // preflight is the package's pre-flight state: the probe, the per-account
 // single-flight, and the memo of accounts whose last probe could not answer.
@@ -126,6 +159,10 @@ var preflight = struct {
 	probe     AccountProbeFunc
 	flights   map[string]*preflightFlight
 	unknownAt map[string]time.Time // account key → when its probe last answered unknown
+	// onWait, when set, is called by a caller that found a flight already in
+	// progress, just before it blocks on it. nil in production; the single-flight
+	// test uses it to know every waiter has joined before it lets the probe answer.
+	onWait func(key string)
 }{flights: map[string]*preflightFlight{}, unknownAt: map[string]time.Time{}}
 
 // preflightFlight is one in-flight pre-flight; waiters share its one result.
@@ -145,22 +182,41 @@ func SetPreflightProbe(p AccountProbeFunc) AccountProbeFunc {
 	return prev
 }
 
-// ProbeAccount is the production two-stage probe:
+// ProbeAccount is the production two-stage probe. BOTH stages run under env —
+// the environment of the run being vouched for — and nothing else:
 //
-//  1. claudeprobe.Probe — `claude auth status`: sub-second, no tokens. It
+//  1. claudeprobe.ProbeEnv — `claude auth status`: sub-second, no tokens. It
 //     separates a logged-in config dir from one with no login, and that is all
 //     it sees.
 //  2. claudeprobe.ProbeRun — the minimal `claude -p` ping, only when stage one
-//     answered ready: the one check that sees an account the API refuses.
-//     Spawned through systemspawn.Attach like the daemon's other utility runs,
-//     so its transcript lands in the System project. PreflightPingEnv=off skips
-//     it.
-func ProbeAccount(ctx context.Context, configDir string) claudeprobe.Result {
-	r := claudeprobe.Probe(ctx, configDir)
+//     answered ready: the one check that sees an account the API refuses. It
+//     starts in the System project's directory (systemspawn.Dir), the cwd
+//     convention of the daemon's other utility runs, so its transcript lands
+//     there — but it takes ONLY the directory from the System project: not its
+//     account environment and not its composed `--settings`, which belong to a
+//     different project than the run in question. PreflightPingEnv=off skips
+//     this stage.
+func ProbeAccount(ctx context.Context, env []string) claudeprobe.Result {
+	r := claudeprobe.ProbeEnv(ctx, env)
 	if r.Status != claudeprobe.StatusReady || !preflightPingEnabled() {
 		return r
 	}
-	return claudeprobe.ProbeRun(ctx, configDir, systemspawn.Attach)
+	dir, _ := systemspawn.Dir() // "" when there is no System project: cwd left alone
+	return claudeprobe.ProbeRun(ctx, env, dir)
+}
+
+// safeProbe runs probe and turns a panic inside it into an UNKNOWN result: a
+// probe that blew up has answered nothing, and unknown admits. The gate sits on
+// every engine's admission path, so a bug in a probe must cost one log line,
+// not the scheduler.
+func safeProbe(ctx context.Context, probe AccountProbeFunc, env []string, account string) (r claudeprobe.Result) {
+	defer func() {
+		if p := recover(); p != nil {
+			log.Printf("error: runcore: account probe for account=%s panicked: %v", account, p)
+			r = claudeprobe.Result{Status: claudeprobe.StatusUnknown, Reason: claudeprobe.ReasonStartFailed}
+		}
+	}()
+	return probe(ctx, env)
 }
 
 // preflightPingEnabled reads PreflightPingEnv. Anything but an explicit "off"
@@ -249,31 +305,11 @@ func CheckAccount(ctx context.Context, db *sql.DB, res claudeacct.Resolution, no
 		// must not abort the probe the others are blocked on.
 		pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), preflightTimeout)
 		defer cancel()
-		dir, ok := probeConfigDir(res, key)
-		if !ok {
-			// Probing without the account's dir would probe the DEFAULT account and
-			// file its verdict under this one. No answer is the honest answer.
-			return settlePreflight(db, key,
-				claudeprobe.Result{Status: claudeprobe.StatusUnknown, Reason: claudeprobe.ReasonStartFailed}, now, ttl)
-		}
-		return settlePreflight(db, key, probe(pctx, dir), now, ttl)
+		// Probed under RunEnv(res): the environment the run being admitted gets,
+		// composed by the same function its spawn uses. Anything else vouches for
+		// a different account than the one the run executes under.
+		return settlePreflight(db, key, safeProbe(pctx, probe, RunEnv(res), key), now, ttl)
 	})
-}
-
-// probeConfigDir is the config dir a run under res executes with, as the probe
-// must be told it: "" for the default account (selected by the ABSENCE of
-// CLAUDE_CONFIG_DIR), the resolution's own dir otherwise, and — for a
-// Resolution that carries only an account key — the dir the spawn env derives
-// from that key (claudeacct.ConfigDirForAccount, the answer EnvForAccount
-// encodes). ok=false when a named account's dir cannot be determined.
-func probeConfigDir(res claudeacct.Resolution, key string) (dir string, ok bool) {
-	if key == ingest.DefaultAccount {
-		return "", true
-	}
-	if res.ConfigDir != "" {
-		return res.ConfigDir, true
-	}
-	return claudeacct.ConfigDirForAccount(key)
 }
 
 // CheckAccountWith runs check, or CheckAccount when check is nil — so a Service
@@ -338,10 +374,21 @@ func preflightDue(db *sql.DB, key string, now time.Time, ttl time.Duration) bool
 
 // preflightDo runs fn once per account at a time; latecomers block on the
 // leader's result and return it. fn is handed the installed probe.
+//
+// The flight is torn down in a DEFER: whatever happens inside fn — a panic
+// included — the map entry is removed and the waiters are released. A flight
+// that ended without a result carries a nil error, so its waiters are admitted
+// (the gate fails open); the panic itself still propagates to the leader's
+// caller. A probe's own panic never gets that far: safeProbe turns it into an
+// unknown result.
 func preflightDo(key string, fn func(AccountProbeFunc) error) error {
 	preflight.mu.Lock()
 	if f, ok := preflight.flights[key]; ok {
+		onWait := preflight.onWait
 		preflight.mu.Unlock()
+		if onWait != nil {
+			onWait(key)
+		}
 		<-f.done
 		return f.err
 	}
@@ -350,13 +397,15 @@ func preflightDo(key string, fn func(AccountProbeFunc) error) error {
 	probe := preflight.probe
 	preflight.mu.Unlock()
 
+	defer func() {
+		preflight.mu.Lock()
+		delete(preflight.flights, key)
+		preflight.mu.Unlock()
+		close(f.done)
+	}()
 	if probe != nil {
 		f.err = fn(probe)
 	}
-	preflight.mu.Lock()
-	delete(preflight.flights, key)
-	preflight.mu.Unlock()
-	close(f.done)
 	return f.err
 }
 
@@ -416,15 +465,19 @@ func openFromProbe(db *sql.DB, key, kind, reason string, now time.Time) error {
 //
 // kind must be auth or quota — anything else (an API error) is refused and
 // nothing is written. A quota opening takes its reset time from the account's
-// freshest quota reading, else now + 1h (store.QuotaResetHint). Opening an
-// already-open breaker writes nothing, except that an auth failure escalates a
-// quota opening (store.OpenAccountBreaker). Only the account key and fixed tags
-// are ever logged.
+// freshest quota poll, else now + 1h (store.QuotaResetHint). The callers here —
+// a run's classified exit, a probe — carry a verdict and not the limit line, so
+// the limit's scope is unknown and the EARLIEST still-ahead reset is used: a
+// breaker that closes too soon costs one probe, one that closes too late pauses
+// a working account. (The transcript detector knows the scope and passes it to
+// the store itself.) Opening an already-open breaker writes nothing, except
+// that an auth failure escalates a quota opening (store.OpenAccountBreaker).
+// Only the account key and fixed tags are ever logged.
 func OpenBreaker(db *sql.DB, account, kind, reason, source string, now time.Time) error {
 	if db == nil {
 		return nil
 	}
-	changed, err := store.TripAccountBreaker(db, account, kind, reason, source, now)
+	changed, err := store.TripAccountBreaker(db, account, kind, reason, source, "", now)
 	if err != nil || !changed {
 		return err
 	}
@@ -462,13 +515,16 @@ func CloseBreaker(db *sql.DB, account, closedBy string, now time.Time) (closed b
 //	           own at the reset; a quota opening is left as it is
 //	unknown  → nothing changes: a probe that could not answer proves nothing
 //
-// The probe's result is returned so the caller can say why the account is still
-// paused. configDir "" is the default account.
-func ResumeBreaker(ctx context.Context, db *sql.DB, account, configDir string, probe AccountProbeFunc, now time.Time) (claudeprobe.Result, error) {
+// The probe runs under AccountEnv(account) — the environment a run filed under
+// that breaker key gets, so the resume answers about the account the stopped
+// runs actually use (for the default key: the unbound environment, an inherited
+// CLAUDE_CONFIG_DIR kept). The probe's result is returned so the caller can say
+// why the account is still paused; a probe that panics is unknown.
+func ResumeBreaker(ctx context.Context, db *sql.DB, account string, probe AccountProbeFunc, now time.Time) (claudeprobe.Result, error) {
 	if probe == nil {
 		probe = ProbeAccount
 	}
-	r := probe(ctx, configDir)
+	r := safeProbe(ctx, probe, AccountEnv(account), account)
 	switch r.Status {
 	case claudeprobe.StatusReady:
 		forgetUnknown(account)

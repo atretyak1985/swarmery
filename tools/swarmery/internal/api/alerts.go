@@ -167,18 +167,19 @@ func (h *Handler) resumeAccountBreaker(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusNotFound, "unknown account")
 		return
 	}
-	// The DEFAULT account is probed with an EMPTY configDir (claudeprobe's
-	// contract — absence of CLAUDE_CONFIG_DIR selects it).
-	dir := ""
-	if !acct.IsDefault {
-		dir = acct.ConfigDir
-	}
-
+	// No config dir is computed here, on purpose: runcore.ResumeBreaker probes
+	// under the environment a run filed under this breaker key gets
+	// (runcore.AccountEnv) — the same composition a real spawn uses. For the
+	// default key that is the UNBOUND environment, which keeps a
+	// CLAUDE_CONFIG_DIR the daemon inherited; the plain probe endpoint strips it,
+	// and doing so here would check ~/.claude while the stopped runs use another
+	// directory.
+	//
 	// The flight's value is what every caller reads — the leader and the clicks
 	// that waited on it alike — so the answer travels in it, not in a captured
 	// variable only the leader would have set.
 	verdict, err := h.probes.do("resume:"+acct.Key, func() (store.AccountRunnable, error) {
-		res, err := runcore.ResumeBreaker(context.Background(), h.DB, acct.Key, dir, probeAccountRun, time.Now())
+		res, err := runcore.ResumeBreaker(context.Background(), h.DB, acct.Key, probeAccountRun, time.Now())
 		return store.AccountRunnable{Status: string(res.Status), Reason: res.Reason}, err
 	})
 	if err != nil {

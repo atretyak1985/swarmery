@@ -146,6 +146,45 @@ func TestFreshQuotaTranscriptTripsBreaker(t *testing.T) {
 	}
 }
 
+// TestQuotaTranscriptTripUsesTheLimitsOwnWindow: the limit line says WHICH limit
+// was hit, and the breaker waits for THAT window's reset. A session limit on an
+// account whose weekly window happens to be the tighter one must not take the
+// weekly reset — that would pause the account for days over a limit that lifts
+// in hours. A weekly limit takes the weekly one.
+func TestQuotaTranscriptTripUsesTheLimitsOwnWindow(t *testing.T) {
+	const (
+		sessionReset = "2026-09-30T13:30:00Z"
+		weeklyReset  = "2026-10-04T00:00:00Z"
+	)
+	for _, tc := range []struct{ name, text, want string }{
+		{"session limit", limitText, sessionReset},
+		{"weekly limit", "You've hit your weekly limit · resets Oct 4 at 3am (Europe/Kiev)", weeklyReset},
+		{"limit with no scope in its wording", "Usage limit reached", sessionReset}, // the earliest reset ahead
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			breakerAt(t, breakerNoon)
+			if err := store.PutAccountQuota(db, "work", []store.QuotaRow{
+				{WindowKey: "five_hour", Label: "Session (5h)", PercentLeft: 60, ResetsAt: sessionReset},
+				{WindowKey: "seven_day", Label: "Weekly", PercentLeft: 2, ResetsAt: weeklyReset},
+			}, breakerNoon.Add(-time.Minute)); err != nil {
+				t.Fatal(err)
+			}
+			f, root := failureTranscript(t, "sess-scope", tc.text, "2026-09-30T11:59:00Z", true)
+			if _, err := fileFrom(db, f, root); err != nil {
+				t.Fatal(err)
+			}
+			b, ok := workBreaker(t, db)
+			if !ok || !b.IsOpen() || b.Kind != store.BreakerKindQuota {
+				t.Fatalf("breaker = %+v ok=%v, want an open quota breaker", b, ok)
+			}
+			if b.ResetsAt != tc.want {
+				t.Errorf("resets_at = %q, want %q", b.ResetsAt, tc.want)
+			}
+		})
+	}
+}
+
 // TestStaleTranscriptDoesNotTrip: the recency bound. A backfill or a re-tail
 // walks old transcripts; a failure record older than ten minutes — or stamped
 // further ahead than that — says nothing about the account NOW and must not

@@ -199,8 +199,15 @@ func (s *Service) activeCount() int {
 // created, moved to todo, unpaused, run exit, pause toggle, dependency
 // completion). Non-blocking: it runs Schedule inline (Schedule is itself
 // re-entrance-guarded, so concurrent Pokes coalesce). The api layer calls this
-// from request handlers — cheap enough to run synchronously (one indexed query
-// + a bounded admission loop).
+// from request handlers, so its cost is a request's cost: one indexed query
+// plus a bounded admission loop — and, since the account gate, at most ONE
+// account pre-flight probe per account per SWARMERY_PREFLIGHT_TTL (15m by
+// default) inside that loop. A pass that lands on a stale verdict therefore
+// blocks for the probe: a few seconds normally (`claude auth status`, then a
+// one-turn ping), capped at runcore's 90s pre-flight timeout when the CLI
+// hangs; every other pass inside the TTL reads the stored verdict and spawns
+// nothing. A probe that cannot answer is remembered for one TTL too, so a
+// machine with no CLI does not pay the timeout on every pass.
 func (s *Service) Poke() {
 	s.Schedule()
 }
