@@ -122,6 +122,12 @@ describe('TaskBrief source block', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 
+  it('links a plan card to that one plan (canonical /p/<slug>/plans/<externalId>)', () => {
+    renderBrief(makeTask({ planExternalId: '2026-07-18-plan-doc-lifecycle', projectSlug: 'swarmery' }));
+    const link = screen.getByRole('link', { name: 'plan 2026-07-18-plan-doc-lifecycle' });
+    expect(link.getAttribute('href')).toBe('/p/swarmery/plans/2026-07-18-plan-doc-lifecycle');
+  });
+
   it('renders a captured card with no quote without an empty blockquote', () => {
     // Rows captured before 0066, and rows whose session opened with nothing.
     renderBrief(

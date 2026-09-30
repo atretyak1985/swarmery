@@ -10,7 +10,10 @@
 //   legacy, permanent: /p/<slug>/plans?task=<id>|?plan=<id>[&phase=<seq>][&tab=revisions]
 //
 // The plan is addressed by `externalId` (survives a DB rebuild), the phase by
-// `seq` (phase row ids churn on every rescan). Every search param this module
+// `seq` (phase row ids churn on every rescan). Link producers outside Plans
+// (board cards, TaskBrief, PlanRunCard, PlanningMode) build their hrefs here
+// too — `plansPath` when they know the externalId, `plansTaskHref` (the
+// numeric hand-off) when they only know the task id. Every search param this module
 // does not own — notably ScopeProvider's `?scope=` and PlansPlace's own
 // `?tab=new|board|playbooks` — is carried through untouched.
 
@@ -108,6 +111,23 @@ export function plansHref(slug: string, target: PlansTarget, currentSearch = '')
   if (status !== null) q.set('status', status);
   const qs = q.toString();
   return qs === '' ? pathOf(slug, target) : `${pathOf(slug, target)}?${qs}`;
+}
+
+/**
+ * Href of the permanent numeric entry point, for producers that know a plan's
+ * task id but not its `externalId` (a plan run's session rows, the Planning
+ * wizard before its task summary loads). Plans resolves it and replaces to the
+ * canonical path: `?task=<id>[&phase=<seq>][&tab=revisions]`.
+ */
+export function plansTaskHref(
+  slug: string,
+  taskId: number,
+  opts: { phase?: number; revisions?: boolean } = {},
+): string {
+  const q = new URLSearchParams({ task: String(taskId) });
+  if (opts.phase !== undefined) q.set('phase', String(opts.phase));
+  if (opts.revisions === true) q.set('tab', 'revisions');
+  return `${pathOf(slug, { plan: null })}?${q.toString()}`;
 }
 
 /** The numeric hand-off (`?task=` / `?plan=`), resolved against the epics by

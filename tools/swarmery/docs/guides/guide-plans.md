@@ -154,6 +154,60 @@ to the neighbouring phase. The drawer has its own tabs:
 A plan is revised the same way it is written — in markdown. A revision is a staged
 proposal: nothing changes on disk until you apply it on the **Revisions** tab.
 
+## Links and Back
+
+Everything you select on the Plans tab is in the address bar: the filter, the plan,
+the open phase and its drawer tab, the plan-details tab, one revision. So any of
+them can be bookmarked, pasted to someone else or opened in a new tab, and the
+browser's Back button retraces what you clicked.
+
+| What is open | Address |
+|---|---|
+| The plan list (Active) | `/p/<slug>/plans` — lands on the first Active plan |
+| A filter with nothing selected | `/p/<slug>/plans?status=done` · `?status=archived` |
+| One plan | `/p/<slug>/plans/<externalId>` |
+| A phase, on Story | `/p/<slug>/plans/<externalId>/phase/<seq>` |
+| A phase, on another tab | `/p/<slug>/plans/<externalId>/phase/<seq>/{criteria,runs,report,edit}` |
+| A plan-details tab | `/p/<slug>/plans/<externalId>/details/{plan,spec,summary,revisions,edit}` |
+| One revision | `/p/<slug>/plans/<externalId>/details/revisions/<revId>` |
+| A plan by numeric id | `/p/<slug>/plans?task=<id>` or `?plan=<id>`, optionally `&phase=<seq>` and `&tab=revisions` |
+
+The plans in the list, the filter tabs, the phase names and every tab are real links, so
+⌘-click and middle-click open them in a new tab. Any `?scope=` already on the
+address rides along on every one of them. The four top tabs keep their own `?tab=`;
+a plan address is the **Plans** tab by definition, so it never carries one.
+
+**Every click is a Back step; automatic corrections are not.** Opening a plan, a
+phase or a tab adds one history entry, and Back undoes exactly that. When the page
+fixes the address for you — `/plans` resolving to the first Active plan, a numeric
+link turning into its canonical path, a tab the plan does not have falling back to
+the one its panel shows — it replaces the entry instead. That is why Back from a
+plan you landed on never bounces you forward again. The one thing that interrupts
+Back is an Edit tab with unsaved changes: leaving it asks first, and so does
+reloading or closing the page.
+
+**A stale link lands on the nearest level that still exists.** A plan that is gone
+(by external id or by numeric id) drops you on the plan list, at its first Active
+plan; a phase the plan no longer has drops you on the plan; a revision that is gone
+leaves you on the Revisions tab. Each says so in a one-line notice you can dismiss,
+naming what was not found — `Plan <externalId> not found — showing the plan list`,
+`Plan #<id> not found`, `Phase <seq> not found in <plan>`, `Revision #<revId> not
+found`. A mistyped tab name, or a tab the plan does not offer, is simply corrected,
+with no notice. In a project that has no plans at all there is nothing to land on, so
+the link stays as typed and the empty plan list shows instead.
+
+**`?task=` and `?plan=` are a permanent entry point.** Pages that know a plan only
+by its numeric task id — a plan run on the Sessions timeline, the Planning Mode
+banner before the plan's details have loaded, an old bookmark — link there, and the
+Plans tab swaps the address for the canonical one on arrival. Everything else links
+the canonical address directly: board cards, the task modal and the brief all point
+at `/p/<slug>/plans/<externalId>`.
+
+Prefer the canonical address when you save a link. The external id is the plan's
+own name (`yyyy-mm-dd-slug`) and a phase is addressed by its sequence number, both
+read from the plan documents — so the link survives the daemon rebuilding its
+database. The numeric id is a database row id, and a rebuild can renumber it.
+
 ## Running a plan
 
 You can run a single phase, or the whole plan. Either way the work happens in an
@@ -448,6 +502,7 @@ one of exactly three ways:
 | `plan/spec.md` | Optional acceptance criteria (`SC-n`) the phases declare they cover |
 | `plan/phase-N-<slug>.md` | One phase: design, agent prompt, criteria, Completion Report |
 | Plans → phase drawer → Report | Renders the `## Completion Report` section |
+| `/p/<slug>/plans/<externalId>[/phase/<seq>[/<tab>]]` | A plan's (or phase's) permanent address — see *Links and Back* |
 | `<project>/.claude/playbooks/` | Project playbooks; a name collision overrides the built-in |
 
 | Environment variable | Default | Effect |

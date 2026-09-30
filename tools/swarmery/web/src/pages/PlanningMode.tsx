@@ -40,6 +40,7 @@ import {
 } from '../api';
 import { fmtAgo } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
+import { plansPath, plansTaskHref } from './plans/plansUrl';
 import { useLiveUpdates } from '../lib/ws';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { Card, Empty, ErrorBox, ExpandButton, ExpandableSection, Loading } from '../components/ui';
@@ -655,7 +656,11 @@ export function PlanningMode(): JSX.Element {
             Revising{' '}
             {reviseTaskId !== null ? (
               <Link
-                to={`/p/${slug}/plans?task=${String(reviseTaskId)}`}
+                to={
+                  reviseTask !== null
+                    ? plansPath(slug, { plan: reviseTask.externalId })
+                    : plansTaskHref(slug, reviseTaskId)
+                }
                 className="text-brand hover:underline"
               >
                 {reviseTask?.title ?? 'the plan'}
@@ -723,7 +728,11 @@ export function PlanningMode(): JSX.Element {
             )}
             {stagedRevision !== null && reviseTaskId !== null && (
               <Link
-                to={`/p/${slug}/plans?task=${String(reviseTaskId)}&tab=revisions`}
+                to={
+                  reviseTask !== null
+                    ? plansPath(slug, { plan: reviseTask.externalId, detail: { kind: 'plan', tab: 'revisions' } })
+                    : plansTaskHref(slug, reviseTaskId, { revisions: true })
+                }
                 className="ml-auto rounded-lg border border-green/45 bg-green/12 px-3 py-1 font-mono text-[11px] font-semibold text-green transition-colors hover:bg-green/20"
               >
                 Review changes →
@@ -753,14 +762,14 @@ export function PlanningMode(): JSX.Element {
             <span className="text-[13px] font-semibold text-ink">Plan ready</span>
             {plan !== null ? (
               <Link
-                to={`/p/${slug}/plans`}
+                to={plansPath(slug, { plan: plan.externalId })}
                 className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
               >
                 {plan.title}
               </Link>
             ) : (
               <Link
-                to={`/p/${slug}/plans`}
+                to={plansPath(slug, { plan: null })}
                 className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
               >
                 open Plans →
@@ -808,7 +817,10 @@ export function PlanningMode(): JSX.Element {
           </div>
           <div className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
             Review it on the{' '}
-            <Link to={`/p/${slug}/plans`} className="text-brand hover:underline">
+            <Link
+              to={plansPath(slug, { plan: plan !== null ? plan.externalId : null })}
+              className="text-brand hover:underline"
+            >
               Plans page
             </Link>{' '}
             — phases run from there.

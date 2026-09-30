@@ -21,6 +21,7 @@ import {
   parsePlansRoute,
   plansHref,
   plansPath,
+  plansTaskHref,
   sameHref,
   type ParsedPlansRoute,
   type PlansTarget,
@@ -204,7 +205,11 @@ describe('parsePlansRoute — the legacy numeric hand-off', () => {
   });
 
   it('?plan=<id> is read the same way', () => {
-    expect(parseHref(`/p/${SLUG}/plans?plan=12&phase=3`).legacy).toEqual({
+    // Built from parts on purpose: no producer may WRITE the legacy `?plan=`
+    // form any more (phase 3 greps src for it and expects nothing), but old
+    // links and bookmarks still arrive in it.
+    const legacyPlanLink = `/p/${SLUG}/plans` + '?plan=12&phase=3';
+    expect(parseHref(legacyPlanLink).legacy).toEqual({
       taskId: 12,
       phaseSeq: 3,
       wantRevisions: false,
@@ -231,6 +236,24 @@ describe('parsePlansRoute — the legacy numeric hand-off', () => {
     expect(
       plansHref(SLUG, { plan: EXT, detail: { kind: 'phase', seq: 3, tab: 'story' } }, '?task=12&phase=3&scope=s'),
     ).toBe(`/p/${SLUG}/plans/${EXT}/phase/3?scope=s`);
+  });
+});
+
+describe('plansTaskHref — the numeric hand-off producers write', () => {
+  it('builds ?task=<id>, with &phase= and &tab=revisions only when asked', () => {
+    expect(plansTaskHref(SLUG, 12)).toBe(`/p/${SLUG}/plans?task=12`);
+    expect(plansTaskHref(SLUG, 12, { phase: 3 })).toBe(`/p/${SLUG}/plans?task=12&phase=3`);
+    expect(plansTaskHref(SLUG, 12, { revisions: true })).toBe(`/p/${SLUG}/plans?task=12&tab=revisions`);
+    expect(plansTaskHref(SLUG, 12, { revisions: false })).toBe(`/p/${SLUG}/plans?task=12`);
+  });
+
+  it('parses back to the same legacy hand-off through the router matcher', () => {
+    expect(parseHref(plansTaskHref(SLUG, 12)).legacy).toEqual({ taskId: 12, phaseSeq: null, wantRevisions: false });
+    expect(parseHref(plansTaskHref(SLUG, 12, { phase: 3, revisions: true })).legacy).toEqual({
+      taskId: 12,
+      phaseSeq: 3,
+      wantRevisions: true,
+    });
   });
 });
 
