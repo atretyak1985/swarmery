@@ -1520,6 +1520,37 @@ func parentProjectPath(q dbtx, path string) string {
 	return path
 }
 
+// freeSlug returns want, or a suffixed variant when another project already
+// answers to it.
+//
+// projects.slug carries a UNIQUE index (migration 0090). Without this the
+// derived slug could collide and the INSERT would FAIL — turning a routine
+// ingest of a new cwd into a hard error — because two distinct paths can
+// derive the same slug: SlugForPath only maps '/'→'-', so "/a/b" and "/a-b"
+// both become "-a-b", and an onboarding slug ("skygor") can equally be claimed
+// by a path-derived one. The suffix is the cheapest resolution that keeps the
+// row minting and keeps the name recognisable; a project that deserves a clean
+// name gets one from onboarding, which is the authority.
+//
+// The scan is bounded: each probe tests a distinct candidate and the loop can
+// only run as many times as there are rows already holding that prefix.
+func freeSlug(q dbtx, want string) string {
+	for i := 0; i < 64; i++ {
+		candidate := want
+		if i > 0 {
+			candidate = fmt.Sprintf("%s-%d", want, i+1)
+		}
+		var n int
+		if err := q.QueryRow(`SELECT COUNT(*) FROM projects WHERE slug = ?`, candidate).Scan(&n); err != nil {
+			return candidate // the INSERT reports any real trouble
+		}
+		if n == 0 {
+			return candidate
+		}
+	}
+	return want
+}
+
 // UpsertProject resolves or creates the projects row for a cwd path with the
 // canonical derivation (slug '/'→'-', display name = path base, name filled
 // only while NULL so a future rename UI always wins). It is THE single place
@@ -1546,7 +1577,7 @@ func UpsertProject(q dbtx, path, firstSeen, lastActivity string) (id int64, crea
 		}
 		res, ierr := q.Exec(
 			`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
-			path, SlugForPath(path), name, firstSeen, lastActivity)
+			path, freeSlug(q, SlugForPath(path)), name, firstSeen, lastActivity)
 		if ierr != nil {
 			return 0, false, fmt.Errorf("insert project: %w", ierr)
 		}
