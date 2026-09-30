@@ -30,8 +30,14 @@ build: copy-docs build-web build-go
 # survive for go:embed on fresh clones), so without this every build's hashed
 # bundles accumulate and go:embed packs ALL of them — a long-lived checkout
 # reached 211MB of stale assets and produced a 243MB daemon binary.
+#
+# npm ci, not npm install: the same install CI runs (swarmery-ci.yml), and it
+# never rewrites package-lock.json. npm install let the local npm re-serialise
+# the lockfile — an older npm drops the "libc" fields a newer one records — so
+# every `make install` left a dirty lockfile in the checkout. A package.json the
+# lockfile no longer matches now fails the build instead of being papered over.
 build-web:
-	cd web && rm -rf dist/assets dist/index.html && npm install && npm run build
+	cd web && rm -rf dist/assets dist/index.html && npm ci && npm run build
 
 build-go:
 	go build -ldflags "-X $(VERSION_PKG).Build=$(BUILD_ID)" -o swarmery ./cmd/swarmery
