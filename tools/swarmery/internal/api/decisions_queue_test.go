@@ -15,6 +15,12 @@ func TestDecisionsQueueAndTruthValidation(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO sessions (project_id, session_uuid, title, started_at) VALUES ((SELECT MIN(id) FROM projects), 's-q1', 'Refactor the parser', '2026-09-24T10:00:00Z')`); err != nil {
 		t.Fatal(err)
 	}
+	// The queue hides decisions of a session with no turns (nothing to judge
+	// them from), so the session under test has one.
+	if _, err := db.Exec(`INSERT INTO turns (session_id, seq, role, started_at, text)
+		VALUES ((SELECT id FROM sessions WHERE session_uuid = 's-q1'), 1, 'assistant', '2026-09-24T10:05:00Z', 'Refactored.')`); err != nil {
+		t.Fatal(err)
+	}
 	for _, row := range []struct{ q, sess, answer, errText, truth, at string }{
 		{"d2.task_type", "s-q1", "refactor", "", "", "2026-09-24T18:00:00Z"},           // id 1: in queue
 		{"d2.outcome", "s-q1", "shipped", "", "", "2026-09-24T18:00:01Z"},              // id 2: in queue
@@ -83,6 +89,9 @@ func TestDecisionsQueueProjectScope(t *testing.T) {
 	exec(`INSERT INTO sessions (project_id, session_uuid, title, started_at) VALUES
 		(901, 's-alpha', 'Alpha work', '2026-09-24T10:00:00Z'),
 		(902, 's-beta',  'Beta work',  '2026-09-24T10:00:00Z')`)
+	// One turn each: the queue hides decisions of a session that has none.
+	exec(`INSERT INTO turns (session_id, seq, role, started_at, text)
+		SELECT id, 1, 'assistant', '2026-09-24T10:05:00Z', 'Done.' FROM sessions WHERE session_uuid IN ('s-alpha', 's-beta')`)
 	for _, row := range []struct{ sess, at string }{
 		{"s-alpha", "2026-09-24T18:00:00Z"}, // id 1
 		{"s-alpha", "2026-09-24T18:00:01Z"}, // id 2

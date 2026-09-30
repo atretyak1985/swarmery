@@ -21,11 +21,39 @@ a hook, never trims a context window, never picks a tool, a model or an effort.
 | **D1** `d1.run_end` | A headless phase or plan run ended cleanly with acceptance criteria still unticked | `report-with-next-step` · `blocked` · `question-for-operator` · `done` | The run's settle loop: continue it, stop and notify you, or mark it blocked |
 | **D2** `d2.task_type` | Every 15 minutes, for finished sessions | `feature` · `bugfix` · `refactor` · `docs` · `research` · `review` · `ops` · `planning` · `other` | Analytics labels on the session |
 | **D2** `d2.outcome` | Same pass | `shipped` · `partial` · `abandoned` · `failed` | Analytics labels on the session |
-| **D2** `d2.failure_cause` | Same pass | `none` · `tool-error` · `test-failure` · `blocked-on-operator` · `refusal` · `timeout` · `context-exhausted` · `scope-misread` · `other` | Analytics labels on the session |
+| **D2** `d2.failure_cause` | Same pass | `none` · `tool-error` · `test-failure` · `blocked-on-operator` · `refusal` · `timeout` · `context-exhausted` · `scope-misread` · `other` · `auth` · `quota` · `api-error` | Analytics labels on the session |
 | **D3** `d3.divergence_cause` | A scored phase run landed far from its own forecast | `spec-wrong` · `code-differs` · `scope-grew` · `tooling-env` · `model-fallback` · `other` | Analytics, and the cause behind a lesson candidate |
 
 The evidence each question sees is deliberately small — the tail of the last
 assistant message, the session title and times — never a full transcript.
+
+A finished session with **no turns at all** is left alone: there is nothing for a
+question to read, so D2 never asks about it, and any answers already recorded for such
+a session are hidden from the labelling queue (hidden, not deleted — they come back
+the moment the session has a turn).
+
+### Account and API failures
+
+Three failure causes name sessions that did not fail at the work — the account or the
+API stopped them:
+
+| Cause | The session ended on |
+|---|---|
+| `auth` | A login problem: not logged in, login expired, the OAuth session could not be refreshed, subscription access disabled for the organization |
+| `quota` | A usage limit: the session, weekly, model, or a spend limit |
+| `api-error` | The API itself: unreachable, overloaded, a connection lost mid-response, a timeout |
+
+They were added after labelling had begun, when all three were labelled `other`. So
+each has `other` as its **parent**, and agreement follows one rule:
+
+- an answer of `auth`, `quota` or `api-error` **agrees** with a label of `other` — the
+  old label was the closest one available, and the answer is the more precise reading
+  of it;
+- an answer of `other` does **not** agree with a label of `auth`, `quota` or
+  `api-error` — once you have said which it was, the vaguer answer is a miss.
+
+Old labels therefore stay valid, and you never have to relabel a session to keep the
+agreement numbers honest.
 
 ## Where the answer comes from
 
@@ -138,6 +166,56 @@ Only D1 changes behaviour when active, and it fails safe: below the threshold, o
 uncalibrated, it does not continue the run — it stops and notifies you. Promote a
 question to *acting* with its mode switch once its agreement is high; the switch
 overrides the environment default for that one question.
+
+## Measuring a change before you trust it
+
+`swarmery decide eval` replays the classifier over the labels you have already recorded
+and reports how often the replayed answer agrees with them. Run it before and after a
+rule or prompt change and compare the two tables.
+
+```bash
+swarmery decide eval                                        # rules only, every label
+swarmery decide eval --truth-since 2026-09-29T00:00:00Z     # only labels recorded since then
+SWARMERY_DECIDE_URL=http://localhost:1234 SWARMERY_DECIDE_MODEL=<model-id> \
+  swarmery decide eval --llm                                # also ask the local model
+```
+
+It is **read-only**: it records no decision, writes no label and never migrates the
+database, so it is safe to run while the daemon is serving. Nothing leaves your
+machine — the only backend it can call is the local model, and only with `--llm`.
+
+| Flag | Meaning |
+|---|---|
+| `--db <path>` | The database (default `~/.swarmery/swarmery.db`) |
+| `--llm` | Also ask the local model. Needs `SWARMERY_DECIDE_URL`; the other `SWARMERY_DECIDE_*` variables apply. Without it only the rules answer, and every other question is counted as *unanswered* |
+| `--truth-since <RFC3339>` | Keep labels recorded at or after this instant |
+| `--questions <a,b>` | A subset of `d2.task_type`, `d2.outcome`, `d2.failure_cause` (the `d2.` prefix may be dropped) |
+| `--limit <n>` | Replay at most *n* sessions, newest label first |
+| `--json` | Emit the report as JSON instead of a table |
+| `--out <file>` | Also write the report to a file |
+| `--min-outcome` · `--min-failure` · `--min-task` `<f>` | Agreement floors in [0, 1] |
+
+When a session was labelled more than once, the **latest** label is the truth. Only the
+three D2 questions can be replayed: their evidence is rebuilt from the session, while D1
+and D3 read a run's state at the moment it ended, which is not kept.
+
+Per question the report gives:
+
+- **labelled / replayed / skipped** — labels found, questions rebuilt, and the ones
+  that could not be (`no-session`: the session is gone; `zero-turns`: it has no turn
+  left to read, for example after retention pruned it);
+- **agreement** — agreeing answers over replayed questions. An unanswered question is
+  a miss, so a rules-only run reads low by design: it is the floor the model adds to;
+- **recorded** — the same comparison over the answer the daemon stored when it first
+  asked, before any replay;
+- **by backend** — how many answers came from the rules and from the local model, and
+  the *precision* of each (agreeing answers over that backend's answers);
+- **confusions** — the most frequent *answer → label* disagreements;
+- **confidence** — ten buckets of the local model's answers, with how many in each
+  agreed. A well-calibrated model agrees more in the higher buckets.
+
+Exit code: `0` on success, `1` when a `--min-*` floor is missed, `2` on a usage or
+database error — so a script can gate a change on it.
 
 ## Turning it off
 

@@ -22,14 +22,38 @@ const (
 var KnownQuestions = []string{QD1, QD2TaskType, QD2Outcome, QD2Failure, QD3Cause}
 
 // Label vocabularies (fixed taxonomies). LabelUnknown is the below-threshold
-// safe default.
+// safe default. FailureCauses only ever grows at the END: the order is the one
+// the dashboard lists, and a cause added later names its FailureParent.
 var (
 	TaskTypes     = []string{"feature", "bugfix", "refactor", "docs", "research", "review", "ops", "planning", "other"}
 	Outcomes      = []string{"shipped", "partial", "abandoned", "failed"}
-	FailureCauses = []string{"none", "tool-error", "test-failure", "blocked-on-operator", "refusal", "timeout", "context-exhausted", "scope-misread", "other"}
+	FailureCauses = []string{"none", "tool-error", "test-failure", "blocked-on-operator", "refusal", "timeout", "context-exhausted", "scope-misread", "other",
+		"auth", "quota", "api-error"}
 )
 
 const LabelUnknown = "unknown"
+
+// FailureParent maps a cause added after labelling began onto the label an
+// operator would have used before it existed.
+var FailureParent = map[string]string{"auth": "other", "quota": "other", "api-error": "other"}
+
+// Agrees reports whether answer matches truth for questionID: equal, or (for
+// d2.failure_cause) truth is the answer's parent. Never the reverse: a truth of
+// "auth" does not agree with an answer of "other". An empty truth agrees with
+// nothing — there is no label to match.
+func Agrees(questionID, truth, answer string) bool {
+	if truth == "" {
+		return false
+	}
+	if strings.EqualFold(truth, answer) {
+		return true
+	}
+	if questionID != QD2Failure {
+		return false
+	}
+	parent, ok := FailureParent[strings.ToLower(answer)]
+	return ok && strings.EqualFold(truth, parent)
+}
 
 // d2DigestBytes caps the per-session digest; never a full transcript.
 const d2DigestBytes = 1500
@@ -69,7 +93,9 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 	// just the outcome one: a pass that answered outcome and then timed out on
 	// failure_cause must come back for it. A session is GIVEN UP after
 	// d2MaxFailures errored calls, so one digest the backend can never answer
-	// does not stall every older session behind it forever.
+	// does not stall every older session behind it forever. A session with no
+	// turn at all is never a candidate: there is nothing for a question to read,
+	// and its answers would only be noise in the labelling queue.
 	enabled := make([]any, 0, 3)
 	for _, q := range []string{QD2TaskType, QD2Outcome, QD2Failure} {
 		if e.Mode(q) != ModeOff {
@@ -84,6 +110,7 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 		       COALESCE(s.ended_at, ''), COALESCE(s.outcome, '')
 		  FROM sessions s
 		 WHERE s.ended_at IS NOT NULL AND s.ended_at <= ? AND s.hidden = 0
+		   AND EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id)
 		   AND (SELECT COUNT(DISTINCT d.question_id) FROM decisions d
 		         WHERE d.subject = s.session_uuid AND d.error = '' AND d.question_id IN (`+ph+`)) < ?
 		   AND (SELECT COUNT(*) FROM decisions d
@@ -155,28 +182,41 @@ const (
 		"(none if it shipped — commits, a merged PR or all criteria ticked in the evidence mean it shipped)"
 )
 
+// d2Questions builds the three D2 questions for one session, in asking order
+// (task type, outcome, failure cause): id, prompt, options, the shared digest
+// and the rules' answer when the operator's own verdict gives one. It is the
+// single path the labeler and the offline eval (eval.go) share, so a replay
+// asks exactly what the daemon asks. It only reads.
+func d2Questions(db *sql.DB, s d2Session) []Question {
+	digest := d2Digest(db, s)
+	q := func(id, prompt string, opts []string, rule string) Question {
+		return Question{ID: id, Kind: KindChoice, Opts: opts, Prompt: prompt,
+			Input: digest, RuleAnswer: rule, Subject: s.uuid, SessionUUID: s.uuid}
+	}
+	return []Question{
+		q(QD2TaskType, d2TaskTypePrompt, TaskTypes, ""),
+		q(QD2Outcome, d2OutcomePrompt, Outcomes, operatorOutcome[s.outcome]),
+		q(QD2Failure, d2FailurePrompt, FailureCauses, ""),
+	}
+}
+
 func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 	e := l.E
-	digest := d2Digest(e.DB, s)
-	ask := func(id, prompt string, opts []string, rule string) string {
-		mode := e.Mode(id)
-		if failed || mode == ModeOff {
-			return LabelUnknown
+	labels := map[string]string{}
+	for _, q := range d2Questions(e.DB, s) {
+		labels[q.ID] = LabelUnknown
+		if failed || e.Mode(q.ID) == ModeOff {
+			continue
 		}
-		a, err := e.Decide(ctx, Question{ID: id, Kind: KindChoice, Opts: opts, Prompt: prompt,
-			Input: digest, RuleAnswer: rule, Subject: s.uuid, SessionUUID: s.uuid})
+		a, err := e.Decide(ctx, q)
 		if err != nil {
 			failed = true
-			return LabelUnknown
+			continue
 		}
-		if !a.Calibrated || a.Confidence < e.Threshold(id) {
-			return LabelUnknown
+		if a.Calibrated && a.Confidence >= e.Threshold(q.ID) {
+			labels[q.ID] = a.Value
 		}
-		return a.Value
 	}
-	taskType := ask(QD2TaskType, d2TaskTypePrompt, TaskTypes, "")
-	outcome := ask(QD2Outcome, d2OutcomePrompt, Outcomes, operatorOutcome[s.outcome])
-	cause := ask(QD2Failure, d2FailurePrompt, FailureCauses, "")
 	if failed || e.Mode(QD2Outcome) != ModeActive {
 		return failed
 	}
@@ -185,7 +225,7 @@ func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_uuid) DO UPDATE SET task_type=excluded.task_type, outcome=excluded.outcome,
 		  failure_cause=excluded.failure_cause, backend=excluded.backend, labeled_at=excluded.labeled_at`,
-		s.uuid, taskType, outcome, cause, backendSummary(e), e.now().UTC().Format(time.RFC3339)); err != nil {
+		s.uuid, labels[QD2TaskType], labels[QD2Outcome], labels[QD2Failure], backendSummary(e), e.now().UTC().Format(time.RFC3339)); err != nil {
 		log.Printf("warning: decide: d2 labels for %s: %v", s.uuid, err)
 	}
 	return false
@@ -309,7 +349,7 @@ func Summary(db *sql.DB, e *Engine) ([]QuestionStats, error) {
 		}
 		if truth != "" {
 			s.WithTruth++
-			if strings.EqualFold(truth, answer) {
+			if Agrees(id, truth, answer) {
 				s.Agreed++
 			}
 		}

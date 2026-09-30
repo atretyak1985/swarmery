@@ -9,7 +9,8 @@
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
-//	swarmery install               auto-start: launchd (macOS) or systemd --user (Linux)
+//	swarmery decide eval           replay the classifier over recorded ground truth (read-only)
+//	swarmery install              auto-start: launchd (macOS) or systemd --user (Linux)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
@@ -175,6 +176,11 @@ func main() {
 		err = cmdAttach(os.Args[2:])
 	case "account":
 		err = cmdAccount(os.Args[2:])
+	case "decide":
+		// Exit code is the contract (decide_cli.go): 1 means an agreement floor
+		// was missed, 2 a usage or database error — log.Fatalf's blanket 1
+		// could not tell the two apart.
+		os.Exit(cmdDecide(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -275,6 +281,14 @@ func usage() {
                                    project runs under, bind/clear it, declare an estate root,
                                    print its env line, run a command under it
                                    (never contacts the daemon)
+  swarmery decide eval [--db <path>] [--llm] [--truth-since <RFC3339>] [--questions <a,b>]
+                    [--limit <n>] [--json] [--out <file>]
+                    [--min-outcome <f>] [--min-failure <f>] [--min-task <f>]
+                                   replay the local classifier over recorded ground truth and
+                                   report agreement per D2 question (read-only, never migrates;
+                                   safe while the daemon is serving). --llm also asks the local
+                                   model (SWARMERY_DECIDE_URL); exit 1 when a --min-* floor is
+                                   missed, 2 on a usage or database error
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;
        'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;

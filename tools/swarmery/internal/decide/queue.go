@@ -47,6 +47,9 @@ type QueueItem struct {
 // window, e.g. the one a measurement counts. projectID (0 ⇒ every project)
 // narrows the queue to decisions about that project's sessions; a decision with
 // no session belongs to the whole fleet and drops out of a project view.
+// A decision about a session that has NO turns is hidden, not deleted: there is
+// no transcript to judge it from, so it can never be labelled; a decision with
+// no session row at all (a run subject, a not-yet-ingested session) stays.
 // limit < 0 returns the whole queue (the Inbox lists every open question);
 // 0 or anything above 500 falls back to 100.
 func LabelQueue(db *sql.DB, limit int, since string, projectID int64) ([]QueueItem, error) {
@@ -65,6 +68,7 @@ func LabelQueue(db *sql.DB, limit int, since string, projectID int64) ([]QueueIt
 		 WHERE d.ground_truth IS NULL AND d.error = '' AND d.answer <> ''
 		   AND (? = '' OR d.created_at >= ?)
 		   AND (? = 0 OR s.project_id = ?)
+		   AND (s.id IS NULL OR EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id))
 		 ORDER BY d.id DESC
 		 LIMIT ?`, since, since, projectID, projectID, limit)
 	if err != nil {
