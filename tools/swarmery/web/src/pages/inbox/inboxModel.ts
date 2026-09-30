@@ -3,7 +3,8 @@
 // Seven sources each hold something that waits on the operator: pending
 // approvals, lesson candidates, advisor recommendations, agent-change proposals,
 // the classifier's label queue, lesson retirements, and alerts — the findings
-// that stop work until someone acts (an account the daemon has paused). There is
+// that mean work is stopped right now (an account the daemon has paused, or
+// Claude Code's auto mode permission check not answering). There is
 // no inbox endpoint: the page fetches the seven lists (useInboxItems) and this
 // module normalises them into one InboxItem shape, one sort order and one set of
 // tabs.
@@ -11,7 +12,7 @@
 // Wording follows the code → UI dictionary (lib/glossary.ts UI_TERMS): a
 // context line says "off-plan", never the code name `surprise`.
 
-import { ACCOUNT_BREAKER_RULE, type Alert } from '../../api/alerts';
+import { ACCOUNT_BREAKER_RULE, AUTO_MODE_NO_VERDICT_RULE, type Alert } from '../../api/alerts';
 import type { QueueItem } from '../../api/decisions';
 import type { Lesson, RetireReason, RetirementProposal } from '../../api/lessons';
 import type { AgentChangeProposal, PermissionRequest, Recommendation } from '../../api/types';
@@ -181,16 +182,31 @@ export function isAccountBreaker(a: Alert): a is Alert & { account: string } {
 }
 
 /**
- * An alert is urgent by definition: it stops work until someone acts. A paused
- * account's quota alert also expires — the breaker closes itself at `resetsAt`.
+ * Title and context line of an alert that has no action, by rule. The alert's
+ * own sentence (`message`) is the detail's body, so the title stays short. A
+ * rule missing here falls back to its message and target.
+ */
+const ALERT_RULE_UI: Readonly<Record<string, { title: string; context: string } | undefined>> = {
+  [AUTO_MODE_NO_VERDICT_RULE]: {
+    title: 'Permission checks are getting no verdict',
+    context: 'Claude Code auto mode',
+  },
+};
+
+/**
+ * An alert is urgent by definition, whatever its severity: work is stopped
+ * while it is open. A paused account's quota alert also expires — the breaker
+ * closes itself at `resetsAt`.
  */
 function alertItem(a: Alert): InboxItem {
   const account = isAccountBreaker(a) ? a.account : null;
+  const ui = ALERT_RULE_UI[a.rule];
   const base = {
     key: `alert:${String(a.id)}`,
     kind: 'alert' as const,
-    title: account === null ? a.message : `Account ${account} is paused`,
-    context: account === null ? a.target : a.kind === 'quota' ? 'usage limit' : 'sign-in or access',
+    title: account === null ? (ui?.title ?? a.message) : `Account ${account} is paused`,
+    context:
+      account === null ? (ui?.context ?? a.target) : a.kind === 'quota' ? 'usage limit' : 'sign-in or access',
     ageIso: a.openedAt ?? a.detectedAt,
     urgent: true,
     raw: a,

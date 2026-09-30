@@ -46,6 +46,7 @@ vi.mock('../../api/lessons', () => ({
 // The Inbox's seventh source (useInboxItems); no alert is open in these tests.
 vi.mock('../../api/alerts', () => ({
   ACCOUNT_BREAKER_RULE: 'account_breaker_open',
+  AUTO_MODE_NO_VERDICT_RULE: 'auto_mode_no_verdict',
   fetchAlerts: vi.fn(async () => []),
   resumeAccount: vi.fn(async () => undefined),
 }));

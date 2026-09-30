@@ -14,7 +14,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { patchProposal, patchRecommendation, resolveApproval } from '../../api';
-import { resumeAccount } from '../../api/alerts';
+import { AUTO_MODE_NO_VERDICT_RULE, resumeAccount } from '../../api/alerts';
 import { postGroundTruth, type QueueItem } from '../../api/decisions';
 import { acceptLesson, confirmRetirement, dismissLesson, keepLesson } from '../../api/lessons';
 import { QuestionForm } from '../../components/QuestionForm';
@@ -385,7 +385,19 @@ export function InboxDetail({
       const a = item.raw;
       if (!isAccountBreaker(a)) {
         // An alert with no action of its own: say what it reports and where.
-        body = <Body>{a.message}</Body>;
+        body = (
+          <>
+            <Body>
+              <b className="font-medium text-ink-2">What happened:</b> {a.message}
+            </Body>
+            {a.rule === AUTO_MODE_NO_VERDICT_RULE && (
+              <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
+                nothing to decide here — the check runs on Claude's side, and this alert closes on its own after
+                30 minutes without a failed check
+              </div>
+            )}
+          </>
+        );
         break;
       }
       const quota = a.kind === 'quota';

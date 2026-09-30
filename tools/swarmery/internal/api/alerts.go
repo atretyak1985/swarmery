@@ -11,7 +11,8 @@ package api
 // have a minute. An ALERT is the small subset that stops work until someone
 // acts — a rule listed in AlertRules. The first is the account circuit breaker
 // (internal/runcore): while it is open, no card, phase or plan is admitted onto
-// that account.
+// that account. The second is an outage of Claude Code's auto mode permission
+// check (internal/automode), which carries no action.
 //
 // Read-only over the findings table; the breaker row adds the facts a finding
 // cannot carry (kind, fixed reason, reset time). No field here is CLI output.
@@ -23,15 +24,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
 // AlertRules are the config_lint_findings rules GET /api/alerts surfaces. A rule
-// belongs here when its open finding stops work until the operator acts; adding
+// belongs here when its open finding means work is stopped right now; adding
 // one is all it takes for it to reach the Inbox.
-var AlertRules = []string{store.AccountBreakerRule}
+//
+//   - store.AccountBreakerRule — an account is paused until a probe succeeds;
+//     the one alert with an action.
+//   - automode.Rule — Claude Code's server-side auto mode permission check is
+//     not answering, so the sessions it hits pause. Nothing to press: the alert
+//     resolves itself once the check has answered for a while.
+var AlertRules = []string{store.AccountBreakerRule, automode.Rule}
 
 // probeAccountRun is the two-stage probe behind "Probe & resume" (`claude auth
 // status`, then the `claude -p` ping). A package var for the same reason as

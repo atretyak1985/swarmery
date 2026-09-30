@@ -1,7 +1,9 @@
 // Typed client for alerts (Go DTOs in internal/api/alerts.go): the findings
-// that stop work until the operator acts. The first is an open account circuit
+// that mean work is stopped right now. The first is an open account circuit
 // breaker — while it is open the daemon admits no card, phase or plan onto that
-// account. MOCK mode serves one fixture alert so the Inbox renders offline.
+// account. The second is an outage of Claude Code's auto mode permission check,
+// which has no action. MOCK mode serves one fixture alert so the Inbox renders
+// offline.
 
 import { MOCK } from '../api';
 
@@ -32,6 +34,13 @@ export interface Alert {
 
 /** The rule an open account breaker is surfaced under. */
 export const ACCOUNT_BREAKER_RULE = 'account_breaker_open';
+
+/**
+ * The rule raised while Claude Code's server-side auto mode permission check is
+ * leaving tool calls without a verdict (Go: internal/automode). It carries no
+ * action: the alert closes on its own once the check answers again.
+ */
+export const AUTO_MODE_NO_VERDICT_RULE = 'auto_mode_no_verdict';
 
 const MOCK_ALERTS: Alert[] = [
   {

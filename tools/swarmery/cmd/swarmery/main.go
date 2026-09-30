@@ -42,6 +42,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
@@ -1739,6 +1740,15 @@ func cmdServe(args []string) error {
 			log.Printf("swarmery plugin-drift scanner started (interval %s, claude %s)", *driftInterval, bin)
 		}
 	}
+
+	// auto mode classifier outage — Claude Code's server-side permission check
+	// refusing tool calls for want of a verdict. Counted off the already-ingested
+	// events and raised as ONE auto_mode_no_verdict finding per burst (Inbox
+	// alert + /api/health autoModeClassifier). Read-only over events; it changes
+	// nothing about how a run behaves.
+	go (&automode.Ticker{DB: db}).Run(context.Background())
+	log.Printf("swarmery auto-mode outage watch started (interval %s, alert at %d no-verdict checks / %s)",
+		automode.DefaultInterval, automode.AlertMin(), automode.AlertWindow)
 
 	// retro phase 3: the advisor rule engine — deterministic recommendations
 	// (R1..R6) refreshed once at startup and every 24h, plus on demand via

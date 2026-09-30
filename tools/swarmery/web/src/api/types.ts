@@ -504,6 +504,23 @@ export interface HealthResponse {
    * than the drift scanner.
    */
   pluginDrift?: { error: number; warn: number };
+  /**
+   * Whether Claude Code's server-side auto mode permission check is answering.
+   * Additive optional: absent when talking to a daemon older than the field.
+   */
+  autoModeClassifier?: HealthAutoMode;
+}
+
+/** Go: healthAutoMode — `autoModeClassifier` of GET /api/health. */
+export interface HealthAutoMode {
+  /** Tool calls refused for want of a verdict in the last hour. */
+  noVerdictLastHour: number;
+  /** Distinct sessions those calls belong to. */
+  sessionsLastHour: number;
+  /** ISO timestamp of the newest such call; null when there is none. */
+  lastAt: string | null;
+  /** True while the `auto_mode_no_verdict` alert is open. */
+  alerting: boolean;
 }
 
 /** GET /api/docs — list item. */

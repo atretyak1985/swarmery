@@ -233,6 +233,26 @@ describe('alerts', () => {
     expect(item?.context).toBe('thing:1');
     expect(item?.ageIso).toBe('2026-09-27T09:00:00Z');
   });
+
+  it('gives an auto mode outage a short title, keeps it urgent and never expiring', () => {
+    const outage: Alert = {
+      id: 5,
+      rule: 'auto_mode_no_verdict',
+      target: 'auto-mode-classifier',
+      severity: 'warn',
+      message:
+        "9 permission checks got no verdict in the last 10 minutes across 2 sessions — Claude Code's server-side classifier is failing; affected sessions pause until it recovers.",
+      detectedAt: '2026-09-28T06:39:00Z',
+    };
+    const [item] = toItems({ alerts: [outage] });
+    expect(item?.key).toBe('alert:5');
+    expect(item?.title).toBe('Permission checks are getting no verdict');
+    expect(item?.context).toBe('Claude Code auto mode');
+    // A warn alert sorts with the other alerts: work is stopped while it is open.
+    expect(item?.urgent).toBe(true);
+    expect(item?.expiresIso).toBeUndefined();
+    expect(item?.ageIso).toBe('2026-09-28T06:39:00Z');
+  });
 });
 
 describe('sortItems', () => {

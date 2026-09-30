@@ -53,6 +53,10 @@ type Handler struct {
 	// probes single-flights the account readiness probe (accounts.go) — one
 	// `claude` per account at a time; concurrent re-checks share the result.
 	probes probeFlights
+	// autoMode holds the last auto mode classifier summary GET /api/health
+	// computed, so the sidebar's health poll does not scan events on every
+	// request (health.go).
+	autoMode autoModeCache
 	// Wt re-attaches the worktree of a finished run so its session stays
 	// answerable after the janitor removed the directory (session_message.go).
 	// Its own instance rather than the dispatcher's: the Manager holds no run

@@ -106,6 +106,7 @@ vi.mock('../../api/decisions', () => ({
 // they always counted; the alert test below fills it.
 vi.mock('../../api/alerts', () => ({
   ACCOUNT_BREAKER_RULE: 'account_breaker_open',
+  AUTO_MODE_NO_VERDICT_RULE: 'auto_mode_no_verdict',
   fetchAlerts: vi.fn(async () => []),
   resumeAccount: vi.fn(async () => undefined),
 }));
@@ -299,5 +300,31 @@ describe('Inbox', () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
     expect(api.resolveApproval).not.toHaveBeenCalled();
+  });
+
+  it('shows an auto mode outage as an alert with nothing to press', async () => {
+    const message =
+      "9 permission checks got no verdict in the last 10 minutes across 2 sessions — Claude Code's server-side classifier is failing; affected sessions pause until it recovers.";
+    vi.mocked(alerts.fetchAlerts).mockResolvedValue([
+      {
+        id: 5,
+        rule: 'auto_mode_no_verdict',
+        target: 'auto-mode-classifier',
+        severity: 'warn',
+        message,
+        detectedAt: iso(-120),
+      },
+    ]);
+    await renderInbox('/inbox?tab=alerts');
+    expect(rows()).toHaveLength(1);
+    expect(selectedRow().textContent).toContain('Permission checks are getting no verdict');
+    // The daemon's sentence is the body; there is no button, and e does nothing.
+    expect(document.querySelector('article')?.textContent).toContain(message);
+    expect(primaries()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /probe & resume/ })).toBeNull();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(alerts.resumeAccount).not.toHaveBeenCalled();
   });
 });
