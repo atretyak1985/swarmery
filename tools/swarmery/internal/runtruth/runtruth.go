@@ -75,8 +75,8 @@ func NewRecorder(db *sql.DB) *Recorder {
 // A NEGATIVE verdict also opens the account's circuit breaker (runcore), so the
 // run that just died is the last one admitted onto the account: no-login opens
 // an `auth` breaker, limited a `quota` one. The runners classify a non-zero
-// exit through claudeprobe.ClassifyRun, which reads the output tail with
-// FailureKindOfTail — that is how a run refused because the organisation
+// exit through claudeprobe.ClassifyRun, which reads each tail's LAST line as an
+// account failure line — that is how a run refused because the organisation
 // disabled subscription access arrives here as no-login. Ready and unknown
 // never touch the breaker: a zero exit never trips it whatever the run printed,
 // and an API error is unknown. The opening is NOT debounced — it is idempotent,

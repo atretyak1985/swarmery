@@ -318,6 +318,20 @@ func TestClassifyRun(t *testing.T) {
 			Result{Status: StatusUnknown, Reason: ReasonUnrecognised}},
 		{"an ordinary failure is unknown", 2,
 			"tests failed", "exit status 2", Result{Status: StatusUnknown, Reason: ReasonUnrecognised}},
+		// A verdict opens the account's breaker, so a marker merely QUOTED in a
+		// tail must not become one — the older markers included.
+		{"a hook quoting auth status JSON is not a verdict", 1,
+			"", "hook: other dir → {\"loggedIn\": false, \"authMethod\": \"none\"}\nhook exited 1",
+			Result{Status: StatusUnknown, Reason: ReasonUnrecognised}},
+		{"a final message that mentions a limit is not a verdict", 1,
+			"I added a matcher for the TUI's \"Usage limit reached\" line.", "",
+			Result{Status: StatusUnknown, Reason: ReasonUnrecognised}},
+		{"an earlier limit line is history, not the ending", 1,
+			"You've hit your session limit · resets 1:30am (UTC)\nthe build failed", "",
+			Result{Status: StatusUnknown, Reason: ReasonUnrecognised}},
+		{"a login demand mid-sentence is not a verdict", 1,
+			"Fixed the case where the CLI said Not logged in · Please run /login", "",
+			Result{Status: StatusUnknown, Reason: ReasonUnrecognised}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := ClassifyRun(tc.exit, tc.stdout, tc.stderr); got != tc.want {

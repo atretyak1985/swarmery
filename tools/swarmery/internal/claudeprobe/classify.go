@@ -141,44 +141,53 @@ func FailureKind(text string) (kind string, ok bool) {
 // a run's output tail ends with the failure line when the failure is what ended
 // it; an earlier line that names one is history, not the ending.
 func FailureKindOfTail(output string) (kind string, ok bool) {
+	return FailureKind(lastLine(output))
+}
+
+// lastLine is output's last non-empty line, trimmed; "" when there is none.
+func lastLine(output string) string {
 	lines := strings.Split(output, "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		if line := strings.TrimSpace(lines[i]); line != "" {
-			return FailureKind(line)
+			return line
 		}
 	}
-	return "", false
+	return ""
 }
 
-// ClassifyRun is ClassifyExit for a finished RUN whose two output tails are
-// still apart, plus one more read of a NON-ZERO exit: when ClassifyExit cannot
-// name the failure, the last line of each tail is put through FailureKind. That
-// is what turns an exit the older markers do not know — the organisation
-// switched subscription access off, a 401 that demands a fresh login, the
-// account ran out of usage credits — into a verdict about the account instead
-// of an unexplained failed run.
+// ClassifyRun maps a finished RUN, whose two output tails are still apart, to a
+// Status. A NON-ZERO exit is a verdict about the account only when the LAST
+// line of a tail IS an account failure line (AccountFailure) — the way the CLI
+// ends a run it could not serve:
 //
-//	auth  → StatusNoLogin / ReasonAccessRefused   (the CLI cannot run under it)
+//	auth  → StatusNoLogin  (a login demand keeps its wording, other shapes are ReasonAccessRefused)
 //	quota → StatusLimited / ReasonRateLimited
+//
+// It deliberately does NOT reuse ClassifyExit's substring markers: a verdict
+// here opens the account's breaker, and a run's tails carry model prose, hook
+// output and the code under edit, any of which can QUOTE a marker (`"loggedIn":
+// false`, "Usage limit reached") without the account having failed. Every
+// measured run failure line (docs/claude-cli-credential-behaviour.md §1,
+// failureShapes) starts its line, so anchoring loses none of them; a wording
+// the shapes do not know degrades to StatusUnknown, never to a wrong verdict.
 //
 // An `API Error:` tail stays StatusUnknown: an overloaded or unreachable API
 // says nothing about the account. A ZERO exit is ready and nothing else — a run
 // that succeeded never reads as a failure because of what it printed, the rule
 // ClassifyExit already keeps.
 func ClassifyRun(exitCode int, stdoutTail, stderrTail string) Result {
-	r := ClassifyExit(exitCode, stdoutTail+"\n"+stderrTail)
-	if exitCode == 0 || r.Status != StatusUnknown {
-		return r
+	if exitCode == 0 {
+		return Result{Status: StatusReady}
 	}
 	for _, tail := range []string{stdoutTail, stderrTail} {
-		switch kind, _ := FailureKindOfTail(tail); kind {
-		case FailureAuth:
-			return Result{Status: StatusNoLogin, Reason: ReasonAccessRefused}
-		case FailureQuota:
-			return Result{Status: StatusLimited, Reason: ReasonRateLimited}
+		switch kind, reason, ok := AccountFailure(lastLine(tail)); {
+		case ok && kind == FailureAuth:
+			return Result{Status: StatusNoLogin, Reason: reason}
+		case ok:
+			return Result{Status: StatusLimited, Reason: reason}
 		}
 	}
-	return r
+	return Result{Status: StatusUnknown, Reason: ReasonUnrecognised}
 }
 
 // AccountFailure reports whether text IS a recorded failure line that says
