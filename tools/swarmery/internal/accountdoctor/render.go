@@ -9,12 +9,21 @@ package accountdoctor
 // environment holds for every variable the enabled packs reference — with a
 // fixed marker. render_redaction_test.go plants a value in a report and fails
 // the moment redact() is bypassed.
+//
+// One exception, and only one: an occurrence that lies wholly inside a
+// LOCATION — a path the doctor itself resolved, or an ancestor of one — is
+// coincidence, not a leak. A store value that happens to be the operator's
+// user name, a directory name or the estate root itself names the session's
+// own working tree; replacing it there would only corrupt the paths the
+// preflight hook reads (estateRoot) and every path a finding names. An
+// occurrence that spills past a location is redacted whole.
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -35,7 +44,7 @@ func RenderJSON(w io.Writer, rep Report) error {
 	if err != nil {
 		return err
 	}
-	raw = redactJSON(raw, secretValues(rep))
+	raw = redactJSON(raw, secretValues(rep), locations(rep))
 	_, err = w.Write(append(raw, '\n'))
 	return err
 }
@@ -44,7 +53,7 @@ func RenderJSON(w io.Writer, rep Report) error {
 func RenderText(w io.Writer, rep Report) error {
 	var b strings.Builder
 	text(&b, rep)
-	_, err := io.WriteString(w, redactText(b.String(), secretValues(rep)))
+	_, err := io.WriteString(w, redactText(b.String(), secretValues(rep), locations(rep)))
 	return err
 }
 
@@ -152,12 +161,85 @@ func secretValues(rep Report) []string {
 	return out
 }
 
-// redactText replaces every raw occurrence of every value.
-func redactText(s string, values []string) string {
-	for _, v := range values {
-		s = strings.ReplaceAll(s, v, redactedMarker)
+// locations is every path the doctor resolved itself — never a free-text
+// field such as a finding's detail or file — with each of its ancestors, so a
+// path the text names under the same tree (a parent rung's binding file, a
+// sibling store) is covered too. The filesystem root is left out.
+func locations(rep Report) []string {
+	paths := []string{rep.Path, rep.ConfigDir, rep.EstateRoot, rep.SettingsFile, rep.CredentialStore}
+	if dp := rep.DefaultProfile; dp != nil {
+		paths = append(paths, dp.Home.Path, dp.ConfigDir.Path, dp.Reads)
 	}
-	return s
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range paths {
+		for filepath.IsAbs(p) && filepath.Dir(p) != p && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+			p = filepath.Dir(p)
+		}
+	}
+	return out
+}
+
+// redactText replaces every raw occurrence of every value with the marker,
+// except an occurrence wholly inside an occurrence of a location. Overlapping
+// or adjacent hidden spans collapse into one marker.
+func redactText(s string, values, locs []string) string {
+	type span struct{ from, to int }
+	occurrences := func(sub string) []span {
+		var out []span
+		for i := 0; ; {
+			j := strings.Index(s[i:], sub)
+			if j < 0 {
+				return out
+			}
+			out = append(out, span{i + j, i + j + len(sub)})
+			i += j + 1
+		}
+	}
+	var kept []span
+	for _, l := range locs {
+		kept = append(kept, occurrences(l)...)
+	}
+	insideKept := func(o span) bool {
+		for _, k := range kept {
+			if k.from <= o.from && o.to <= k.to {
+				return true
+			}
+		}
+		return false
+	}
+	var hide []bool
+	for _, v := range values {
+		for _, o := range occurrences(v) {
+			if insideKept(o) {
+				continue
+			}
+			if hide == nil {
+				hide = make([]bool, len(s))
+			}
+			for i := o.from; i < o.to; i++ {
+				hide[i] = true
+			}
+		}
+	}
+	if hide == nil {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if !hide[i] {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		b.WriteString(redactedMarker)
+		for i < len(s) && hide[i] {
+			i++
+		}
+	}
+	return b.String()
 }
 
 // identifierFields are the object keys whose whole value — a string, or every
@@ -180,7 +262,7 @@ var identifierFields = map[string]bool{
 // the original field order and is valid JSON whenever the input is. On any
 // decoding failure it returns an empty object rather than the raw bytes — an
 // unredacted document is never the fallback.
-func redactJSON(raw []byte, values []string) []byte {
+func redactJSON(raw []byte, values, locs []string) []byte {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	var out bytes.Buffer
@@ -254,7 +336,7 @@ func redactJSON(raw []byte, values []string) []byte {
 			sep()
 			s := v
 			if !protected() && !identifierFields[valueKey()] {
-				s = redactText(s, values)
+				s = redactText(s, values, locs)
 			}
 			b, _ := json.Marshal(s)
 			out.Write(b)

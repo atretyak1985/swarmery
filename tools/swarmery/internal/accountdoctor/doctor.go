@@ -136,6 +136,10 @@ type Report struct {
 	DefaultProfile *DefaultProfile `json:"defaultProfile,omitempty"`
 	SettingsDelta  []SettingsDelta `json:"settingsDelta"` // arm (c). Never null.
 	Parity         []ParityEntry   `json:"parity"`        // arm (d). Never null.
+
+	// pending is the first-sight record this report owes its ledger: written by
+	// Commit once the report has gone out, never by the arms (firstsight.go).
+	pending *sightRecord
 }
 
 type Duplicate struct {
@@ -180,9 +184,6 @@ type run struct {
 	rep      *Report
 	deadline time.Time
 	timedOut bool
-	// ledgerFile is the first-sight ledger to record this path in once the
-	// run completes ("" when there is nothing to record).
-	ledgerFile string
 }
 
 // afterArm is a test seam called after each Fast arm; nil in production.
@@ -216,14 +217,14 @@ var userHomeDir = os.UserHomeDir
 
 // Fast is the read-only, turn-zero arm set (see the package doc). An input
 // that cannot be read becomes a Report field (an empty list, a zero count) or
-// a warn finding — never an error. The only error is ErrNoPath.
+// a warn finding — never an error. The only error is ErrNoPath. It writes
+// nothing: a first-sight record waits for Commit.
 func Fast(opts Options) (Report, error) {
 	r, err := start(opts)
 	if err != nil {
 		return emptyReport(""), err
 	}
 	r.fast()
-	r.commitLedger()
 	return *r.rep, nil
 }
 
@@ -238,7 +239,6 @@ func Full(opts Options) (Report, error) {
 	if !r.expired("full-trust") {
 		r.fullTrust()
 	}
-	r.commitLedger()
 	return *r.rep, nil
 }
 

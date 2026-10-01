@@ -258,11 +258,12 @@ healthy and silent — a project may enable a dozen plugins that reference no
 - otherwise → nothing supplies those names; add them to the estate's store.
 
 It stays silent (no stdout, exit 0) when `SWARMERY_SKIP_PREFLIGHT=1`, `jq` or
-`swarmery` is missing, the doctor fails, hangs or prints something that is not a
-report, or an account/estate key fails a character gate deliberately stricter
-than `swarmery`'s own (a hand-edited file can't smuggle text into the model's
-context). Every variable name must match `^[A-Za-z_][A-Za-z0-9_]*$` to reach it.
-Like every hook here it is fail-open.
+`swarmery` is missing, or the doctor fails, hangs or prints something that is not
+a report. An account/estate key that fails a character gate deliberately
+stricter than `swarmery`'s own is left out of the text (a hand-edited file can't
+smuggle text into the model's context) — the warning itself is still said. Every
+variable name must match `^[A-Za-z_][A-Za-z0-9_]*$` to reach it. Like every hook
+here it is fail-open.
 
 It also writes `~/.swarmery/run/preflight/<session_id>.env` (dir `0700`, file
 `0600`) — `account=`, `estate=`, `varsExpected=`, `varsPresent=` (list
@@ -407,13 +408,16 @@ Two consequences worth knowing:
 
 The SessionStart preflight runs `swarmery account doctor --fast --json
 --timeout 2.5s` — the inner bound sits below the hook's 3 s watchdog, so a slow
-arm is cut short and the report still arrives. Besides a credential-coverage
+arm is cut short and the report still arrives. A `swarmery` binary older than
+the pack, which rejects `--timeout`, is asked again without it, so updating the
+plugin before the binary never silences the preflight. Besides a credential-coverage
 gap it now says one more thing, once per directory: the **first session in a
 path under an estate root** names that root and the NUMBER of credentials the
 path inherits (never a name, never a value), so a checkout cloned into an
 estate does not inherit its credentials silently. The doctor keeps the
-already-reported paths in `~/.swarmery/doctor/estate-seen.json`; run it with
-`--no-record` to look without recording. Everything else the doctor reports —
+already-reported paths in `~/.swarmery/doctor/estate-seen.json`, and records a
+path only once its report has been written out — a run killed first shows the
+warning again next time; run it with `--no-record` to look without recording. Everything else the doctor reports —
 the default account's two profiles, trust findings, the settings delta and
 plugin parity between accounts, stale duplicates — is in `swarmery account
 doctor` (bare, or `--json`).

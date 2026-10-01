@@ -140,9 +140,12 @@ whether the next session in a directory will work. Three forms:
 
 `--json` prints one object; `--timeout <dur>` is checked between arms (a spent budget adds
 a `timeout` warn and skips the remaining arms; an arm already running finishes first);
-`--no-record` leaves the first-sight ledger untouched. Usage errors exit 2; a report with findings exits 0. No value from any
+`--no-record` leaves the first-sight ledger untouched, and a path is recorded only after its
+report has been written out. Usage errors exit 2; a report with findings exits 0. No value from any
 credential store ever reaches the output: every rendering passes one redaction choke
-point. Beyond the contract fields (`credentials`, `varsExpected`/`varsPresent`/
+point — except where a value lies wholly inside a path the doctor resolved itself (the
+project path, config dir, estate root, settings file, store, profiles — or an ancestor of
+one), which keeps its spelling: such a value names the session's own working tree. Beyond the contract fields (`credentials`, `varsExpected`/`varsPresent`/
 `varsMissing`, `staleDuplicates`, `findings`) the report carries `enabledPacks`,
 `admission` (the line `account which` prints), `defaultProfile` (the default account's
 two `.claude.json` files and which one is read), `settingsDelta` and `parity`.

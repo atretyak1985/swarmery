@@ -23,6 +23,7 @@ import (
 	"database/sql"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -84,9 +85,19 @@ func accountDoctor(args []string, out io.Writer) error {
 		return err
 	}
 	if *asJSON {
-		return accountdoctor.RenderJSON(out, rep)
+		err = accountdoctor.RenderJSON(out, rep)
+	} else {
+		err = accountdoctor.RenderText(out, rep)
 	}
-	return accountdoctor.RenderText(out, rep)
+	if err != nil {
+		return err
+	}
+	// Only now is the first-sight warning out: record it. A failure here
+	// costs one repeat of the warning, never the report.
+	if err := accountdoctor.Commit(rep); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: the first-sight ledger could not be written: %v\n", err)
+	}
+	return nil
 }
 
 // openIndexReadOnly opens the daemon's index read-only for the first-sight

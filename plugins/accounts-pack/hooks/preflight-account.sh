@@ -43,12 +43,10 @@ command -v jq >/dev/null 2>&1 || exit 0
 # ValidKey does is the safe direction: every extra character this refuses
 # is exactly the class — whitespace, quotes, backticks, non-ASCII — that
 # turns a config-dir name into something that reads like an instruction
-# once it lands in additionalContext below. The failure mode is silence,
-# not injection: a real key Go would accept can be turned down here, the
-# same fail-open outcome as Go's Binding() returning "" for a key that
-# fails ValidKey — never the other way around for these characters. Cost:
-# an operator whose account key contains a non-ASCII character gets no
-# mismatch warning at all.
+# once it lands in additionalContext below. A key the gate refuses is left
+# OUT of the text — never printed, never injected — but it never silences
+# the warning: the doctor has already recorded a first sight by the time
+# this runs, so dropping the sentence would spend it unseen.
 valid_account_key() {
   case "${1:-}" in
     ''|'.'|'..')          return 1 ;;
@@ -89,21 +87,32 @@ esac
 # 3 s, not 2: `doctor --fast` resolves the path, and resolution now runs the
 # provenance probe (a `git ls-files`) at every rung that declares a binding.
 OUT_FILE="$(mktemp 2>/dev/null)" || exit 0
-trap 'rm -f "$OUT_FILE"' EXIT
+ERR_FILE="$(mktemp 2>/dev/null)" || { rm -f "$OUT_FILE"; exit 0; }
+trap 'rm -f "$OUT_FILE" "$ERR_FILE"' EXIT
+# run_doctor [extra flags…] — one watchdogged doctor call; sets DOCTOR_RC.
+run_doctor() {
+  "$SWARMERY" account doctor --fast --json "$@" --path "$PROJECT_DIR" \
+    </dev/null >"$OUT_FILE" 2>"$ERR_FILE" &
+  DOCTOR_PID=$!
+  # The watchdog's own stdio goes to /dev/null: a sleeper that inherited this
+  # hook's stdout would hold Claude Code's pipe open for the full timeout.
+  ( sleep 3; kill -9 "$DOCTOR_PID" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
+  WATCHDOG_PID=$!
+  wait "$DOCTOR_PID" 2>/dev/null
+  DOCTOR_RC=$?
+  kill "$WATCHDOG_PID" 2>/dev/null
+}
 # --timeout is the doctor's own inner bound, strictly below the watchdog. It is
 # checked between arms: the arms still to run are skipped and the report still
 # arrives before the kill -9, but an arm already running finishes first — one
 # that alone outlasts the watchdog loses the whole report, vars-missing too.
-"$SWARMERY" account doctor --fast --json --timeout 2.5s --path "$PROJECT_DIR" \
-  </dev/null >"$OUT_FILE" 2>/dev/null &
-DOCTOR_PID=$!
-# The watchdog's own stdio goes to /dev/null: a sleeper that inherited this
-# hook's stdout would hold Claude Code's pipe open for the full timeout.
-( sleep 3; kill -9 "$DOCTOR_PID" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
-WATCHDOG_PID=$!
-wait "$DOCTOR_PID" 2>/dev/null
-DOCTOR_RC=$?
-kill "$WATCHDOG_PID" 2>/dev/null
+run_doctor --timeout 2.5s
+# A swarmery built before the flag existed refuses it at once, through Go's
+# flag package: ask again without it rather than go silent while the plugin
+# is newer than the binary.
+if [ "$DOCTOR_RC" -ne 0 ] && grep -q 'flag provided but not defined: -timeout' "$ERR_FILE" 2>/dev/null; then
+  run_doctor
+fi
 [ "$DOCTOR_RC" -eq 0 ] || exit 0
 
 # One jq pass over the Report's camelCase fields — no alias for any of them.
@@ -127,8 +136,8 @@ FIELDS="$(jq -r '
 [ -n "$FIELDS" ] || exit 0
 IFS=$'\x1f' read -r ACCOUNT ESTATE N_EXPECTED N_PRESENT LAUNCHED DAEMON FIRST_SIGHT ESTATE_ROOT N_CREDS MISSING_RAW <<<"$FIELDS" || exit 0
 
-valid_account_key "$ACCOUNT" || exit 0
-[ -z "$ESTATE" ] || valid_account_key "$ESTATE" || exit 0
+valid_account_key "$ACCOUNT" || ACCOUNT=""
+valid_account_key "$ESTATE" || ESTATE=""
 case "$N_EXPECTED$N_PRESENT" in ''|*[!0-9]*) exit 0 ;; esac
 
 # ── statusline cache: lengths and keys only, never a name or a value ──────────
@@ -178,9 +187,10 @@ CTX=""
 if [ "${#MISSING[@]}" -gt 0 ]; then
   NAMES="$(printf '%s, ' "${MISSING[@]}")"
   NAMES="${NAMES%, }"
-  WHERE="account '${ACCOUNT}'"
-  [ -n "$ESTATE" ] && WHERE="${WHERE}, estate '${ESTATE}'"
-  CTX="Credential coverage gap: ${#MISSING[@]} of ${N_EXPECTED} MCP variable(s) referenced by this project's enabled plugins are unset in this session (${WHERE}): ${NAMES}."
+  WHERE=""
+  [ -n "$ACCOUNT" ] && WHERE="account '${ACCOUNT}'"
+  [ -n "$ESTATE" ] && WHERE="${WHERE:+$WHERE, }estate '${ESTATE}'"
+  CTX="Credential coverage gap: ${#MISSING[@]} of ${N_EXPECTED} MCP variable(s) referenced by this project's enabled plugins are unset in this session${WHERE:+ (${WHERE})}: ${NAMES}."
   if [ "$DAEMON" = "1" ]; then
     CTX="${CTX} This session runs in a swarmery daemon worktree, so the gap is in the daemon's spawn seam, not in a terminal: check the estate's credential store and the environment the daemon spawns with."
   elif [ "$LAUNCHED" != "1" ]; then

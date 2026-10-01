@@ -12,8 +12,10 @@ import (
 // Redaction may only ever rewrite string VALUES: a store value that is `true`,
 // a digit run that also occurs in a number field, the account key itself, or a
 // JSON key name must leave the document valid and its structure — and its
-// identifier fields — intact, while a real secret disappears everywhere,
-// including from inside a path.
+// identifier fields — intact, while a real secret disappears from every
+// free-text field. A path the secret happens to be part of keeps its spelling:
+// it is the session's own working tree, and the preflight hook reads it
+// (render.go: locations).
 func TestRenderJSONRedactsStringValuesOnly(t *testing.T) {
 	f := newFixture(t)
 	f.loggedInAccount(t, "workacct")
@@ -59,8 +61,8 @@ func TestRenderJSONRedactsStringValuesOnly(t *testing.T) {
 	if !json.Valid(out) {
 		t.Fatalf("redaction produced invalid JSON:\n%s", out)
 	}
-	if bytes.Contains(out, []byte(secret)) {
-		t.Errorf("the secret survived: %s", out)
+	if strings.Contains(strings.ReplaceAll(string(out), root, ""), secret) {
+		t.Errorf("the secret survived outside the path: %s", out)
 	}
 	var back map[string]any
 	if err := json.Unmarshal(out, &back); err != nil {
@@ -81,7 +83,10 @@ func TestRenderJSONRedactsStringValuesOnly(t *testing.T) {
 	if !strings.Contains(string(out), `"varsExpected":["PACK_S","PACK_X"]`) {
 		t.Errorf("the variable NAMES were rewritten: %s", out)
 	}
-	if !strings.Contains(back["path"].(string), redactedMarker) {
-		t.Errorf("the secret inside the path was not replaced: %v", back["path"])
+	if back["path"] != root || back["estateRoot"] != root {
+		t.Errorf("the path was rewritten: path=%v estateRoot=%v, want %s", back["path"], back["estateRoot"], root)
+	}
+	if !strings.Contains(string(out), `"leak `+redactedMarker+`"`) {
+		t.Errorf("the secret in free text was not replaced: %s", out)
 	}
 }
