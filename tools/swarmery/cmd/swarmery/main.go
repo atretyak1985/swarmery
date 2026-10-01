@@ -1916,6 +1916,16 @@ func cmdServe(args []string) error {
 		Notifier:       notifier,
 	})
 	api.AttachApprovals(svc)
+	// Boot heal, same posture as the other HealStale sweeps below: a request
+	// still pending from before bootStart has no long-poll waiter in this
+	// process — its shim died with the previous daemon and Claude Code fell
+	// back to the native dialog — so it is expired now (resolved_via
+	// 'restart') instead of being shown as answerable until expires_at. Runs
+	// before the listener is up, so every pending row older than bootStart
+	// is by construction an orphan.
+	if _, err := svc.HealStale(bootStart); err != nil {
+		log.Printf("warning: approvals heal on startup: %v", err)
+	}
 	// D4 CSRF fence: the loopback origins are built in; any friendly alias the
 	// daemon is reached by (http://swarmery:7777 behind a hosts entry, a compose
 	// service name) is trusted only when the operator opts it in here.

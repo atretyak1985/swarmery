@@ -668,8 +668,10 @@ export function Approvals(): JSX.Element {
         );
       })
       .catch(() => {
-        // 409 (resolved elsewhere / expired first) or transport failure —
-        // silent refetch; the server list is the truth.
+        // 409 (resolved elsewhere / expired first), 410 (the hook died with a
+        // previous daemon — the row is gone from the list once the boot heal
+        // ran) or transport failure — silent refetch; the server list is the
+        // truth.
         load();
       })
       .finally(() => setBusyId(null));

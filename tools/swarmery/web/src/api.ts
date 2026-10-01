@@ -1611,10 +1611,29 @@ export function fetchApprovals(
 }
 
 /**
+ * Thrown by resolveApproval on a non-2xx. `status` lets a caller tell the two
+ * "nothing was decided" cases apart: 409 — the row raced to a terminal state
+ * (terminal dialog, expiry, the boot heal) and a refetch is the whole answer;
+ * 410 — the row is still pending but its hook is gone (the daemon restarted
+ * under it, or another daemon owns it — docs/hooks-protocol.md amendment 3),
+ * so the operator has to answer in the terminal. `message` is the daemon's
+ * `{error}` text when it sent one.
+ */
+export class ApprovalDecisionError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApprovalDecisionError';
+    this.status = status;
+  }
+}
+
+/**
  * POST /api/approvals/{id} → 200 with the updated PermissionRequest.
- * Non-2xx (e.g. 409 when the row raced to a terminal state via the terminal
- * dialog or expiry) throws — callers silently refetch; the WS
- * permission_resolved is the authoritative reconciliation either way.
+ * Non-2xx throws {@link ApprovalDecisionError}: 409 when the row raced to a
+ * terminal state via the terminal dialog or expiry, 410 when its hook died
+ * with a previous daemon — callers refetch; the WS permission_resolved is the
+ * authoritative reconciliation either way.
  */
 export async function resolveApproval(
   id: number,
@@ -1632,7 +1651,15 @@ export async function resolveApproval(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`POST /api/approvals/${String(id)}: ${String(res.status)}`);
+    const fallback = `POST /api/approvals/${String(id)}: ${String(res.status)}`;
+    let message = fallback;
+    try {
+      const payload = (await res.json()) as { error?: unknown };
+      if (typeof payload.error === 'string' && payload.error !== '') message = payload.error;
+    } catch {
+      // non-JSON body — keep the status line
+    }
+    throw new ApprovalDecisionError(res.status, message);
   }
   return (await res.json()) as PermissionRequest;
 }

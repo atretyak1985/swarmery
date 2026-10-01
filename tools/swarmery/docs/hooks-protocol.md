@@ -404,3 +404,36 @@ process-free) conversation.
 The `-r … -p` "append to same transcript" behavior is an observed property, not a
 documented contract — re-run the spike on Claude Code minor bumps alongside the
 approvals harness.
+
+---
+
+## Amendment 3 — daemon restart under a pending request (additive)
+
+A pending request is a `permission_requests` row **plus** an in-memory long-poll
+waiter. A daemon restart keeps the row and loses the waiter: the shim's
+connection dies with the old process, the shim exits 0 silent (fail-open, D3)
+and Claude Code falls back to its native dialog. Nothing can deliver a decision
+to that row any more, so the daemon treats it as gone rather than letting it
+sit in every pending list until `expires_at`:
+
+- **Boot heal.** Before the listener comes up, every row still `pending` with
+  `requested_at` earlier than the process start is resolved exactly like a
+  sweeper expiry — `status = 'expired'`, a `permission_resolved` event, the
+  session recomputed out of `waiting_approval`, WS `permission_resolved` — but
+  with `resolved_via = 'restart'` and a `reason` naming the cause, so History
+  tells a restart orphan from a genuine timeout. Rows minted after the process
+  start are never touched (they belong to a live waiter — ours, or another
+  daemon sharing the DB). Open dashboards refetch on WS reconnect, so the card
+  disappears without a reload.
+- **`approval_expired` webhook.** It fires for these rows too, with the restart
+  reason appended to the body: a receiver that got `approval_requested` from the
+  previous daemon gets its closing event and knows to answer in the terminal.
+- **`POST /api/approvals/{id}` → `410 Gone`** when the row is still `pending`
+  but no long-poll waiter is attached in this daemon — for every action
+  (`approve`, `deny`, `answer`, `terminal`). The old behaviour was a `200` that
+  recorded a decision nobody received. `404` / `409` keep their meaning
+  (unknown id / already terminal); a `410` writes nothing — the row is left for
+  the sweeper, or for the daemon that does own the waiter.
+
+The shim side is unchanged: nothing here adds a wire form, and the hook keeps
+its fail-open posture throughout.

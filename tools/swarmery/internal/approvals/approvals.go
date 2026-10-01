@@ -1,7 +1,8 @@
 // Package approvals implements the phase-2 remote-approval channel
 // (docs/hooks-protocol.md, FROZEN at gate 2.2): the permission_requests
 // store layer with the D6 dedup rule, the in-memory long-poll waiter
-// registry, the expiry sweeper, and the hooks heartbeat surfaced by
+// registry, the expiry sweeper, the boot-time heal of requests orphaned by
+// a daemon restart (amendment 3), and the hooks heartbeat surfaced by
 // GET /api/health.
 //
 // Concurrency model: all state transitions (Open / Resolve / Detach /
@@ -54,6 +55,23 @@ var (
 	// decision) and the shim fails open to the native dialog — but no
 	// session/project rows are persisted for the excluded path.
 	ErrExcludedProject = errors.New("project excluded from tracking")
+	// ErrNoWaiter: the row is still pending but no long-poll waiter is attached
+	// in THIS process, so a decision would be recorded and reach no one — the
+	// hook that asked died with a previous daemon (HealStale expires those at
+	// boot; a row minted by another daemon sharing the DB stays pending here
+	// for good). Mapped to HTTP 410: the request is gone from this daemon's
+	// point of view, answer it in the terminal.
+	ErrNoWaiter = errors.New("permission request has no live hook waiter")
+)
+
+// ViaRestart is the resolved_via of a request HealStale expired at boot: its
+// hook's long-poll died with the previous daemon process. RestartReason is
+// the reason stamped on such rows (and appended to the approval_expired
+// webhook body) so History and a notification receiver can tell a restart
+// orphan from a genuine timeout.
+const (
+	ViaRestart    = "restart"
+	RestartReason = "orphaned by daemon restart — the hook's long-poll died with the previous process; answer it in the terminal"
 )
 
 // maxPendingPerSession caps runaway hook storms: beyond it Open fails fast
@@ -334,7 +352,7 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 		}
 	}
 
-	s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput)
+	s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput, "")
 	return id, ch, true, nil
 }
 
@@ -413,6 +431,46 @@ func (s *Service) Resolve(id int64, status, via, reason string) error {
 	return s.resolveLocked(id, status, via, reason, nil)
 }
 
+// Decide is Resolve for a decision that must REACH a hook — the dashboard's
+// approve / deny / terminal handoff. It refuses with ErrNoWaiter when the row
+// is pending but no long-poll waiter is attached in this process: recording
+// such a decision would answer 200 while delivering nothing (the shim that
+// asked died with a previous daemon, and Claude Code is already in its native
+// dialog). The row is left untouched — the sweeper, or the daemon that does
+// own the waiter, still resolves it. Error precedence matches Resolve:
+// ErrNotFound for an unknown id, ErrAlreadyResolved for a terminal row,
+// ErrNoWaiter only for a pending row nobody is polling on.
+func (s *Service) Decide(id int64, status, via, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.requireWaiterLocked(id); err != nil {
+		return err
+	}
+	return s.resolveLocked(id, status, via, reason, nil)
+}
+
+// requireWaiterLocked reports nil when at least one long-poll waiter is
+// attached to id; otherwise it reads the row to return the most specific
+// error (unknown → ErrNotFound, terminal → ErrAlreadyResolved, pending →
+// ErrNoWaiter).
+func (s *Service) requireWaiterLocked(id int64) error {
+	if len(s.waiters[id]) > 0 {
+		return nil
+	}
+	var cur string
+	err := s.db.QueryRow(`SELECT status FROM permission_requests WHERE id = ?`, id).Scan(&cur)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if cur != StatusPending {
+		return ErrAlreadyResolved
+	}
+	return ErrNoWaiter
+}
+
 func (s *Service) resolveLocked(id int64, status, via, reason string, updatedInput json.RawMessage) error {
 	var sessionID int64
 	var cur, toolName string
@@ -462,7 +520,7 @@ func (s *Service) resolveLocked(id int64, status, via, reason string, updatedInp
 	s.publish(ingest.Notification{Type: ingest.NotePermissionResolved, SessionID: sessionID, RequestID: id})
 
 	if status == StatusExpired {
-		s.notifyApproval(notify.EventApprovalExpired, id, sessionID, toolName, nil)
+		s.notifyApproval(notify.EventApprovalExpired, id, sessionID, toolName, nil, reason)
 	}
 
 	d := Decision{Status: status, Reason: reason, UpdatedInput: updatedInput}
@@ -574,6 +632,11 @@ func (s *Service) Answer(id int64, answers map[string]json.RawMessage) error {
 	}
 	if cur != StatusPending {
 		return ErrAlreadyResolved
+	}
+	// Same guard as Decide: answers are delivered through the long-poll, so a
+	// pending row nobody is polling on cannot take one (ErrNoWaiter → 410).
+	if len(s.waiters[id]) == 0 {
+		return ErrNoWaiter
 	}
 	if toolName != AskUserQuestionTool {
 		return fmt.Errorf("%w: action 'answer' requires tool %s, request %d is %s",
@@ -767,12 +830,74 @@ func (s *Service) Sweep() {
 	}
 }
 
+// ── boot heal (amendment 3) ──────────────────────────────────────────────────
+
+// HealStale expires every request still pending from BEFORE this process
+// started. Called once at daemon boot, before the HTTP listener is up, next
+// to the other services' HealStale sweeps. A pending row's long-poll waiter
+// lived in the previous daemon process and died with it: the shim's
+// connection broke, Claude Code fell back to its native dialog (D3), and
+// nothing can deliver a decision to the row any more. Left alone it would sit
+// in every pending list (dashboard, notch, `swarmery console`) until
+// expires_at, and a decision POSTed on it would "succeed" into the void.
+//
+// Each orphan is resolved exactly like a sweeper expiry — status expired, the
+// permission_resolved event, the session status recomputed, WS
+// permission_resolved, the approval_expired webhook — with resolved_via =
+// ViaRestart and reason = RestartReason so History tells the two apart. Only
+// rows with requested_at < bootAt are touched: a row minted after this
+// process started belongs to a live waiter (ours, or another daemon sharing
+// the DB — never ours to expire). Returns the number of rows expired.
+func (s *Service) HealStale(bootAt time.Time) (int, error) {
+	cutoff := bootAt.UTC().Format(tsFormat)
+	rows, err := s.db.Query(
+		`SELECT id FROM permission_requests
+		 WHERE status = 'pending' AND requested_at < ?
+		 ORDER BY id`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("approvals heal query: %w", err)
+	}
+	var orphans []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("approvals heal scan: %w", err)
+		}
+		orphans = append(orphans, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("approvals heal rows: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	healed := 0
+	for _, id := range orphans {
+		err := s.resolveLocked(id, StatusExpired, ViaRestart, RestartReason, nil)
+		switch {
+		case errors.Is(err, ErrAlreadyResolved), errors.Is(err, ErrNotFound):
+			continue // raced to a terminal state between the query and the lock
+		case err != nil:
+			return healed, fmt.Errorf("approvals heal request %d: %w", id, err)
+		}
+		healed++
+	}
+	if healed > 0 {
+		log.Printf("swarmery approvals: expired %d pending request(s) orphaned by the restart", healed)
+	}
+	return healed, nil
+}
+
 // ── outbound webhooks (control-plane v2) ─────────────────────────────────────
 
 // notifyApproval emits one webhook event for a permission request. Never
 // blocks and never fails the caller: Notifier.Emit is nil-safe and
-// queue-dropping; the project lookup failing just blanks the label.
-func (s *Service) notifyApproval(typ string, requestID, sessionID int64, toolName string, toolInput json.RawMessage) {
+// queue-dropping; the project lookup failing just blanks the label. A
+// non-empty reason is appended to the body (the restart heal uses it to say
+// why an approval expired early).
+func (s *Service) notifyApproval(typ string, requestID, sessionID int64, toolName string, toolInput json.RawMessage, reason string) {
 	if s.opt.Notifier == nil {
 		return
 	}
@@ -789,6 +914,9 @@ func (s *Service) notifyApproval(typ string, requestID, sessionID int64, toolNam
 	}
 	if project != "" {
 		body = project + " — " + body
+	}
+	if reason != "" {
+		body += " · " + reason
 	}
 	title := "Approval needed: " + toolName
 	if typ == notify.EventApprovalExpired {

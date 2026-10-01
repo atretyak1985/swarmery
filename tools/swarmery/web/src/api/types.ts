@@ -1552,7 +1552,11 @@ export interface PermissionRequest {
   status: PermissionRequestStatus;
   requestedAt: string;
   resolvedAt: string | null;
-  /** dashboard | terminal | mobile — free-form string in the frozen contract. */
+  /**
+   * dashboard | terminal | mobile | rule | restart — free-form string in the
+   * frozen contract. `restart` = expired by the boot heal because its hook
+   * died with a previous daemon (docs/hooks-protocol.md amendment 3).
+   */
   resolvedVia: string | null;
   /** Human-entered deny/approve reason; delivered to Claude verbatim on deny. */
   reason: string | null;
