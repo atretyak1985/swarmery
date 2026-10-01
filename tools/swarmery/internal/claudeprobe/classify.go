@@ -62,10 +62,26 @@ var limitMarkers = []limitMarker{
 // the CLI's server-side auto-mode permission check fails to answer ("The
 // server-side auto mode classifier gave no verdict (error)", or "… (the
 // response ended before its verdict arrived)"): a transient failure of the
-// check, not a judgement about the call. A substring, never a prefix — the
-// sentence opens differently per variant. Exported so every reader keys on one
-// spelling.
+// check, not a judgement about the call. Exported so every reader keys on one
+// spelling; a reader deciding whether a call WAS refused uses
+// IsAutoModeNoVerdict, never a substring match.
 const AutoModeNoVerdictMarker = "auto mode classifier gave no verdict"
+
+// AutoModeNoVerdictOpening is how the refusal opens. Both measured variants
+// (2026-09-24, 2026-09-28) start with it — "Error: " in front, as the
+// transcript stores a tool call's error result — and differ only after the
+// opening parenthesis.
+const AutoModeNoVerdictOpening = "The server-side " + AutoModeNoVerdictMarker
+
+// IsAutoModeNoVerdict reports whether a tool call's RESULT is the auto mode
+// refusal itself: after leading whitespace and an optional "Error: ", it opens
+// with AutoModeNoVerdictOpening (case-sensitive). A result that only mentions
+// the sentence — a failing test that quotes it, a grep for it — is not one,
+// and neither is the call's input. The SQL twin is automode.Count's predicate.
+func IsAutoModeNoVerdict(result string) bool {
+	r := strings.TrimPrefix(strings.TrimSpace(result), "Error: ")
+	return strings.HasPrefix(r, AutoModeNoVerdictOpening)
+}
 
 // Failure kinds FailureKind reports. They are the d2.failure_cause values of
 // the same name (internal/decide), spelled here so this package stays a leaf.

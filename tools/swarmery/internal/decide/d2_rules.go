@@ -96,8 +96,8 @@ type d2Ending struct {
 	// model, stopReason and text are the NEWEST assistant turn's. stopReason is
 	// "" when unknown: every turn ingested before migration 0078 has none.
 	model, stopReason, text string
-	// autoModeStall: the session's last tool call is an error carrying
-	// claudeprobe.AutoModeNoVerdictMarker.
+	// autoModeStall: the session's last tool call is an error whose result is
+	// the auto mode no-verdict refusal (claudeprobe.IsAutoModeNoVerdict).
 	autoModeStall bool
 	// lastToolError: the session's last tool call ended in an error.
 	lastToolError bool
@@ -221,7 +221,7 @@ func loadD2Ending(db *sql.DB, uuid string) (d2Ending, error) {
 	switch {
 	case err == nil:
 		e.lastToolError = status == "error"
-		e.autoModeStall = status == "error" && strings.Contains(result, claudeprobe.AutoModeNoVerdictMarker)
+		e.autoModeStall = status == "error" && claudeprobe.IsAutoModeNoVerdict(result)
 	case !errors.Is(err, sql.ErrNoRows):
 		return d2Ending{}, fmt.Errorf("last tool call: %w", err)
 	}

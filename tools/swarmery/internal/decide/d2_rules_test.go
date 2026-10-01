@@ -282,6 +282,14 @@ func TestRuleAutoModeStall(t *testing.T) {
 	wantRule(t, qs, QD2Failure, "", "")
 	wantRule(t, qs, QD2Outcome, "", "")
 
+	// A failed call whose output merely QUOTES the refusal (the automode tests
+	// failing) is not a stall either: R2 needs the result to be the refusal.
+	seedOneShot(t, db, "s-quoted-error")
+	seedToolCall(t, db, "s-quoted-error", "Bash", "error", "2026-09-20T10:25:00.000Z",
+		"Error: Exit code 1\n--- FAIL: TestCount\n    want a row quoting \""+autoModeDenial+"\"")
+	qs = d2QuestionsFor(t, db, "s-quoted-error", false)
+	wantRule(t, qs, QD2Failure, "", "")
+
 	// An OK call whose output merely quotes the marker is not a stall.
 	seedOneShot(t, db, "s-quoted")
 	seedToolCall(t, db, "s-quoted", "Bash", "ok", "2026-09-20T10:25:00.000Z",

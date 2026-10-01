@@ -172,6 +172,33 @@ func TestFailureKind(t *testing.T) {
 	}
 }
 
+// IsAutoModeNoVerdict: a tool call's RESULT is the refusal when it OPENS with
+// it — both measured variants, with or without the "Error: " the transcript
+// puts in front — and never when it only mentions the sentence.
+func TestIsAutoModeNoVerdict(t *testing.T) {
+	const (
+		errVariant = "Error: The server-side auto mode classifier gave no verdict (error), so auto mode cannot " +
+			"determine the safety of Bash. This is a transient failure of the check, not a judgment about the action: " +
+			"a later response may get a verdict."
+		cutOff = "Error: The server-side auto mode classifier gave no verdict (the response ended before its " +
+			"verdict arrived), so auto mode cannot determine the safety of Bash."
+	)
+	for result, want := range map[string]bool{
+		errVariant:          true,
+		cutOff:              true,
+		"  \n" + errVariant: true,
+		"The server-side auto mode classifier gave no verdict (error), so auto mode cannot determine …": true,
+		"Error: Exit code 1\n--- FAIL: TestCount\n    want \"" + errVariant + "\"":                      false,
+		"grep: auto mode classifier gave no verdict: no such file":                                      false,
+		"the server-side auto mode classifier gave no verdict (error)":                                  false,
+		"": false,
+	} {
+		if got := IsAutoModeNoVerdict(result); got != want {
+			t.Errorf("IsAutoModeNoVerdict(%q) = %v, want %v", result, got, want)
+		}
+	}
+}
+
 // Only the LAST non-empty line of a run's output tail decides.
 func TestFailureKindOfTail(t *testing.T) {
 	cases := []struct {

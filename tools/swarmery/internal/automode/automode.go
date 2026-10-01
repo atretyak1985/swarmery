@@ -74,9 +74,16 @@ type Counts struct {
 // Count counts the no-verdict refusals at or after since.
 //
 // The rows are already ingested — events of type 'tool_call' with status
-// 'error', the refusal text inside payload — so this is one query and no parser
-// change. It rides idx_events_type (type, ts): the lower bound is what keeps the
-// payload scan small, so callers always pass a recent since.
+// 'error', the refusal text as the payload's result — so this is one query and
+// no parser change. It rides idx_events_type (type, ts): the lower bound is what
+// keeps the payload scan small, so callers always pass a recent since.
+//
+// A row counts when its RESULT is the refusal — claudeprobe.IsAutoModeNoVerdict
+// in SQL: after leading whitespace and an optional "Error: ", the result opens
+// with claudeprobe.AutoModeNoVerdictOpening (instr(...) = 1 is case-sensitive,
+// as HasPrefix is). A call whose input names the sentence, or whose output only
+// quotes it, is not a refusal. A payload that is not JSON is skipped (CASE keeps
+// json_extract off it).
 func Count(db *sql.DB, since time.Time) (Counts, error) {
 	var (
 		c    Counts
@@ -84,10 +91,13 @@ func Count(db *sql.DB, since time.Time) (Counts, error) {
 	)
 	err := db.QueryRow(`
 		SELECT count(*), count(DISTINCT session_id), max(ts)
-		  FROM events
-		 WHERE type = 'tool_call' AND ts >= ? AND status = 'error'
-		   AND payload LIKE '%' || ? || '%'`,
-		since.UTC().Format(tsLayout), claudeprobe.AutoModeNoVerdictMarker,
+		  FROM (SELECT session_id, ts,
+		               ltrim(CASE WHEN json_valid(payload) THEN json_extract(payload, '$.result') END,
+		                     char(32, 9, 10, 13)) AS r
+		          FROM events
+		         WHERE type = 'tool_call' AND ts >= ? AND status = 'error')
+		 WHERE instr(r, ?) = 1 OR instr(r, 'Error: ' || ?) = 1`,
+		since.UTC().Format(tsLayout), claudeprobe.AutoModeNoVerdictOpening, claudeprobe.AutoModeNoVerdictOpening,
 	).Scan(&c.Events, &c.Sessions, &last)
 	if err != nil {
 		return Counts{}, err

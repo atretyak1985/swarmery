@@ -143,6 +143,43 @@ func TestCountIgnoresOtherErrors(t *testing.T) {
 	}
 }
 
+// A failing call that merely MENTIONS the sentence is not a refusal: one whose
+// INPUT names it (a grep for it that found nothing), and one whose OUTPUT quotes
+// it mid-text (this daemon's own automode tests failing). Only a result that IS
+// the refusal — opening with it — counts.
+func TestCountIgnoresAMentionOfTheSentence(t *testing.T) {
+	db := testDB(t)
+	session(t, db, 1)
+	payload, err := json.Marshal(map[string]any{
+		"input":  map[string]any{"command": `grep -rn "auto mode classifier gave no verdict" internal/`},
+		"result": "Error: Exit code 1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO events (session_id, ts, type, tool_name, status, payload) VALUES (1, ?, 'tool_call', 'Bash', 'error', ?)`,
+		t0.Format(tsLayout), string(payload)); err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	toolCall(t, db, 1, t0.Add(time.Second), "error",
+		"Error: Exit code 1\n--- FAIL: TestCountMatchesBothVariants\n    want 3 rows quoting \""+variantError+"\"")
+	// A payload that is not JSON at all must not break the count either.
+	if _, err := db.Exec(
+		`INSERT INTO events (session_id, ts, type, tool_name, status, payload) VALUES (1, ?, 'tool_call', 'Bash', 'error', 'not json')`,
+		t0.Add(2*time.Second).Format(tsLayout)); err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+
+	got, err := Count(db, t0.Add(-time.Minute))
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if got.Events != 0 {
+		t.Errorf("Count = %d events, want 0 — a call that only mentions the sentence was counted as a refusal", got.Events)
+	}
+}
+
 func TestCountRespectsWindow(t *testing.T) {
 	db := testDB(t)
 	since := t0
