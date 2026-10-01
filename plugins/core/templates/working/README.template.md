@@ -1,7 +1,7 @@
 # {{TASK_NAME}}
 
 - **ID**: {{TASK_ID}}
-- **Статус**: active
+- **Status**: active
 - **Тип**: {{TASK_TYPE}}
 - **Старт**: {{START_DATE}} · **Завершено**: —
 - **Репо**: {{REPOS}}

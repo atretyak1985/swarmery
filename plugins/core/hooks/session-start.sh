@@ -162,14 +162,21 @@ if [ -d "$working_dir" ]; then
       find "$working_dir" -mindepth 5 -maxdepth 5 -name README.md 2>/dev/null
     } | head -50
   )
+  # The card's status line, in every spelling a card can carry: the canonical
+  # `- **Status**: <value>` (what agent-work.sh init and the daemon's taskdir
+  # write — core 3.9.7), the pre-3.9.7 `- **Статус**: <value>`, and the
+  # hand-written `Status:` / `**Status:**`. Anchored to the line start so prose
+  # that merely mentions a status cannot match. task-session-log.sh and
+  # session-context-bridge.sh select the active task by this same rule.
+  CARD_STATUS_RE='^[[:space:]]*(-[[:space:]]*)?[*]*(Status|Статус)[*]*:'
   while IFS= read -r readme; do
     [ -n "$readme" ] || continue
-    # Active = the "Status:" line reads active / in-progress.
-    status_line=$(grep -m1 'Status:' "$readme" 2>/dev/null || true)
-    [ -n "$status_line" ] || continue
-    status_val=$(printf '%s' "$status_line" | sed 's/^.*Status:[*]*[[:space:]]*//')
+    # Active = the status line reads active / in-progress.
+    status_val=$(grep -m1 -E "$CARD_STATUS_RE" "$readme" 2>/dev/null \
+      | sed -E "s/${CARD_STATUS_RE}[*]*[[:space:]]*//" | tr '[:upper:]' '[:lower:]' || true)
+    [ -n "$status_val" ] || continue
     case "$status_val" in
-      active*|Active*|ACTIVE*|in-progress*|in_progress*|"in progress"*|IN_PROGRESS*) ;;
+      active*|in-progress*|in_progress*|"in progress"*) ;;
       *) continue ;;
     esac
     # First goal line ("Goal:"), truncated to ~70 chars.

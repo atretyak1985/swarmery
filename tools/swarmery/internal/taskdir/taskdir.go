@@ -166,10 +166,12 @@ func PhaseDocPath(taskDir string) string {
 // cardReadme is the task-dir README wsingest parses (title, status, goal) and the
 // lifecycle actions rewrite.
 //
-// `- **Status**: active` satisfies both readers deliberately: wsingest's statusRe
-// accepts Status or Статус case-insensitively, and the lifecycle's
-// upsertCardStatus rewrites whichever spelling it finds. A generated file should
-// use the one the rest of this Go code is written in without breaking either.
+// `- **Status**: active` is the canonical status marker: agent-work.sh init writes
+// the same line (core 3.9.7) and the core SessionStart hooks select the active task
+// by it. It satisfies every reader deliberately: wsingest's statusRe accepts Status
+// or the legacy Статус case-insensitively, and the lifecycle's upsertCardStatus
+// rewrites whichever label it finds. A generated file uses the one the rest of this
+// Go code is written in without breaking any of them.
 func cardReadme(card Card, now time.Time) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", oneLine(card.Title, card.ExternalID))
