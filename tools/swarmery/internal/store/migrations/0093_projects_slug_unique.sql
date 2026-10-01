@@ -1,4 +1,4 @@
--- 0090: projects.slug becomes UNIQUE.
+-- 0093: projects.slug becomes UNIQUE.
 --
 -- projects.path was UNIQUE from 0001; projects.slug never was. But slug is the
 -- name everything else addresses a project BY — the dashboard label, the
@@ -21,8 +21,18 @@
 --
 -- Going forward the invariant is held at the write end too, because this index
 -- turns a clash from a silent wrong answer into a failed INSERT:
---   * ingest.freeSlug suffixes a derived slug that is already taken, so
---     discovering a new cwd can never fail on a name collision.
+--   * every writer that derives a slug inserts through ingest.InsertProject,
+--     which suffixes a slug that is already taken (freeSlug) and retries when a
+--     concurrent writer takes it first — the JSONL ingester (UpsertProject) and
+--     the workspace scanner (wsingest taskProjectID, whose workspace dir name
+--     can equal another project's slug), so neither discovering a new cwd nor
+--     indexing a new workspace can fail on a name collision;
+--   * onboarding (ingest.SetOnboardedSlug) chooses its slug on purpose and
+--     already refuses one that is taken.
+--
+-- Tests match this file by NAME (%_projects_slug_unique.sql), never by the
+-- number: written as 0090, it was renumbered to 0093 when 0090-0092 merged
+-- first.
 --
 -- IF NOT EXISTS: a dev machine that already carried this fix locally, under an
 -- earlier ad hoc migration number, before it landed here — a fresh install has

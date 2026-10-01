@@ -1529,11 +1529,11 @@ func parentProjectPath(q dbtx, path string) string {
 // freeSlug returns want, or a suffixed variant when another project already
 // answers to it.
 //
-// projects.slug carries a UNIQUE index (migration 0090). Without this the
-// derived slug could collide and the INSERT would FAIL — turning a routine
-// ingest of a new cwd into a hard error — because two distinct paths can
+// projects.slug carries a UNIQUE index (migration projects_slug_unique). Without
+// this the derived slug could collide and the INSERT would FAIL — turning a
+// routine ingest of a new cwd into a hard error — because two distinct paths can
 // derive the same slug: SlugForPath only maps '/'→'-', so "/a/b" and "/a-b"
-// both become "-a-b", and an onboarding slug ("skygor") can equally be claimed
+// both become "-a-b", and an onboarding slug ("my-app") can equally be claimed
 // by a path-derived one. The suffix is the cheapest resolution that keeps the
 // row minting and keeps the name recognisable; a project that deserves a clean
 // name gets one from onboarding, which is the authority.
@@ -1555,6 +1555,51 @@ func freeSlug(q dbtx, want string) string {
 		}
 	}
 	return want
+}
+
+// slugInsertAttempts bounds InsertProject's retry when a concurrent writer
+// takes the probed slug between freeSlug and the INSERT.
+const slugInsertAttempts = 3
+
+// InsertProject mints the projects row for path under want, or under the free
+// suffixed variant freeSlug picks when another project already answers to want.
+// It is the one way a writer that derives a slug inserts a project — the JSONL
+// ingester and the workspace scanner both go through it — so the unique slug
+// index can never turn a new project into a failed write.
+//
+// The probe and the INSERT are separate statements, so two writers on
+// different connections (the ingester and the approvals hook path) can pick
+// the same candidate; the loser's INSERT fails on the slug index and is
+// retried with a fresh probe. ON CONFLICT(path) DO NOTHING: a row for path
+// that appeared meanwhile is returned with created=false.
+func InsertProject(q dbtx, path, want, name string, firstSeen, lastActivity any) (id int64, created bool, err error) {
+	for attempt := 0; attempt < slugInsertAttempts; attempt++ {
+		res, ierr := q.Exec(
+			`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT(path) DO NOTHING`,
+			path, freeSlug(q, want), name, firstSeen, lastActivity)
+		if ierr != nil {
+			if isSlugConflict(ierr) {
+				continue
+			}
+			return 0, false, fmt.Errorf("insert project: %w", ierr)
+		}
+		if n, _ := res.RowsAffected(); n == 1 {
+			id, _ = res.LastInsertId()
+			return id, true, nil
+		}
+		if err := q.QueryRow(`SELECT id FROM projects WHERE path = ?`, path).Scan(&id); err != nil {
+			return 0, false, fmt.Errorf("insert project: re-read %s: %w", path, err)
+		}
+		return id, false, nil
+	}
+	return 0, false, fmt.Errorf("insert project %s: slug %q still taken after %d attempts", path, want, slugInsertAttempts)
+}
+
+// isSlugConflict reports whether err is the projects.slug unique index
+// rejecting a write (SQLite names the column in the message).
+func isSlugConflict(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed: projects.slug")
 }
 
 // UpsertProject resolves or creates the projects row for a cwd path with the
@@ -1581,14 +1626,7 @@ func UpsertProject(q dbtx, path, firstSeen, lastActivity string) (id int64, crea
 		if path == systemBase() {
 			name = "System"
 		}
-		res, ierr := q.Exec(
-			`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
-			path, freeSlug(q, SlugForPath(path)), name, firstSeen, lastActivity)
-		if ierr != nil {
-			return 0, false, fmt.Errorf("insert project: %w", ierr)
-		}
-		id, _ = res.LastInsertId()
-		return id, true, nil
+		return InsertProject(q, path, SlugForPath(path), name, firstSeen, lastActivity)
 	case err != nil:
 		return 0, false, err
 	}
