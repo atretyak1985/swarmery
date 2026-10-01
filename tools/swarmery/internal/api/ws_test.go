@@ -26,6 +26,8 @@ var (
 		// multi-subscription wave: which Claude Code account ran the session
 		// (migration 0047; '' = the stock one).
 		"account",
+		// what the run was LAUNCHED as (migration session_launch_account).
+		"launchAccount",
 		// parity wave: additive per-session aggregates (nullable).
 		"tokens", "costUsd",
 		// fat-session wave: last-assistant-turn context occupancy (nullable).

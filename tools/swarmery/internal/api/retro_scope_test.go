@@ -16,7 +16,9 @@ import (
 
 // recScopeServer seeds two projects, each with its own session, plus four
 // recommendations: two attributable to project A (evidence names A's session),
-// one to project B, one fleet-level (no session_ids — an R5-style row).
+// one to project B, one fleet-level (no session_ids — an R5-style row), and two
+// that name a project as their TARGET with no session evidence (R10 memory for
+// A, R7 architecture map for B) — attributed by target, not by evidence.
 func recScopeServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "recscope.db"))
@@ -39,7 +41,8 @@ func recScopeServer(t *testing.T) *httptest.Server {
 		(1, 1, 'sess-alpha', 'completed', ?),
 		(2, 2, 'sess-beta',  'completed', ?)`, today, today)
 
-	// Two recs for A, one for B, one fleet-level (R5, no session_ids).
+	// Two recs for A, one for B, one fleet-level (R5, no session_ids), and one
+	// project-targeted rec each for A (R10) and B (R7).
 	rows := []struct {
 		id       int
 		rule     string
@@ -51,6 +54,8 @@ func recScopeServer(t *testing.T) *httptest.Server {
 		{2, "R1", "tool", "Bash", `{"session_ids":["sess-alpha","other-x"]}`},
 		{3, "R2", "agent", "agent-b1", `{"session_ids":["sess-beta"]}`},
 		{4, "R5", "process", "stale-improvement", `{"counts":{"stale":2}}`},
+		{5, "R10", "memory", "-work-alpha", `{"counts":{"index_lines":400}}`},
+		{6, "R7", "project", "-work-beta", `{"counts":{"age_days":40}}`},
 	}
 	for _, r := range rows {
 		mustExec(`INSERT INTO recommendations
@@ -84,32 +89,39 @@ func TestRecommendationsProjectScope(t *testing.T) {
 
 	t.Run("scoped to project A keeps only A-attributed recs", func(t *testing.T) {
 		got := recTargets(t, srv, "/api/retro/recommendations?projectId=-work-alpha")
-		if len(got) != 2 || !got["agent-a1"] || !got["Bash"] {
-			t.Errorf("targets = %v, want exactly {agent-a1, Bash}", got)
+		if len(got) != 3 || !got["agent-a1"] || !got["Bash"] || !got["-work-alpha"] {
+			t.Errorf("targets = %v, want exactly {agent-a1, Bash, -work-alpha}", got)
 		}
-		if got["agent-b1"] || got["stale-improvement"] {
+		if got["agent-b1"] || got["stale-improvement"] || got["-work-beta"] {
 			t.Errorf("targets = %v leaked B or fleet-level recs into project A", got)
 		}
 	})
 
 	t.Run("scoped by numeric id resolves the same set", func(t *testing.T) {
 		got := recTargets(t, srv, "/api/retro/recommendations?projectId=1")
-		if len(got) != 2 || !got["agent-a1"] || !got["Bash"] {
-			t.Errorf("targets = %v, want {agent-a1, Bash} by id", got)
+		if len(got) != 3 || !got["agent-a1"] || !got["Bash"] || !got["-work-alpha"] {
+			t.Errorf("targets = %v, want {agent-a1, Bash, -work-alpha} by id", got)
+		}
+	})
+
+	t.Run("scoped by pretty name resolves the project-targeted rec too", func(t *testing.T) {
+		got := recTargets(t, srv, "/api/retro/recommendations?projectId=alpha")
+		if !got["-work-alpha"] {
+			t.Errorf("targets = %v, want the R10 rec targeting -work-alpha by name", got)
 		}
 	})
 
 	t.Run("project B sees only its own rec", func(t *testing.T) {
 		got := recTargets(t, srv, "/api/retro/recommendations?projectId=-work-beta")
-		if len(got) != 1 || !got["agent-b1"] {
-			t.Errorf("targets = %v, want exactly {agent-b1}", got)
+		if len(got) != 2 || !got["agent-b1"] || !got["-work-beta"] {
+			t.Errorf("targets = %v, want exactly {agent-b1, -work-beta}", got)
 		}
 	})
 
-	t.Run("unscoped returns all four", func(t *testing.T) {
+	t.Run("unscoped returns all six", func(t *testing.T) {
 		got := recTargets(t, srv, "/api/retro/recommendations")
-		if len(got) != 4 {
-			t.Errorf("unscoped targets = %v, want all 4", got)
+		if len(got) != 6 {
+			t.Errorf("unscoped targets = %v, want all 6", got)
 		}
 	})
 

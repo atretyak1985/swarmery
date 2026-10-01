@@ -1,0 +1,23 @@
+-- The blocked re-run guard (inbox-triage-fixes, phase 4).
+--
+-- A phase run that ends `blocked` is asking for a human. Re-running it while
+-- nothing about its situation has changed buys the same answer at full price: on
+-- 2026-09-27 the same phases were re-run against the same unmerged dependency and
+-- the same stale base, each run reading the code again to reach the refusal the
+-- previous one had already written down.
+--
+-- run_blocked_fingerprint is what "nothing changed" is measured against: a sha256
+-- over the inputs a re-run would actually see — the commit the next run would
+-- start from, the criteria ticked in the doc, the doc body (minus the two sections
+-- a blocked run rewrites itself), and the tips of the dependency run branches.
+-- phaserun stamps it when a run settles `blocked` and clears it on every other
+-- terminal state and at the next start; phaserun.Start refuses a re-run whose
+-- current fingerprint still equals it, inside SWARMERY_BLOCKED_RERUN_COOLDOWN and
+-- unless the request sets `force`.
+--
+-- Daemon-owned, like run_branch and run_start_point: the doc authors nothing here,
+-- so a rescan that re-mints the row on a doc rename must carry it
+-- (wsingest.carryAcrossRenames). NULL for every phase that has never been blocked,
+-- and a NULL never refuses anything — a row from before this migration re-runs
+-- exactly as it always did.
+ALTER TABLE epic_phases ADD COLUMN run_blocked_fingerprint TEXT;

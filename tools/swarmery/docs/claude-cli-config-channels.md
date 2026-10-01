@@ -117,3 +117,53 @@ cd tools/swarmery && go test -tags ccprobe ./internal/channelprobe/ -run TestLiv
 Per-fact verdicts are `pass | drift | inconclusive`; exit status 1 means a fact drifted
 from the baseline. A drift is a CLI behaviour change: update this note, the baseline and
 the rules in `secrets.go` together, or not at all.
+
+From the installed binary, without the repo: `swarmery account doctor --probe` runs the
+copy of the harness `make build` embeds (its `copy-probe` step snapshots the script and
+its fixture plugin into `internal/channelprobe/script/`, gitignored), or the script at
+`$SWARMERY_PROBE_SCRIPT`. The child gets a scrubbed environment (no name from any store
+under `~/.swarmery/secrets/`) and a fresh temporary `CLAUDE_CONFIG_DIR`; the verdict is
+saved as `~/.swarmery/probes/<cliVersion>.json` (0600, dir 0700). The daemon re-probes
+only when the installed version has no verdict file yet (`SWARMERY_CHANNEL_PROBE=0`
+turns that ticker off).
+
+## The account doctor
+
+`swarmery account doctor` answers, without the daemon and without spending a token,
+whether the next session in a directory will work. Three forms:
+
+| form | what runs | spawns |
+|---|---|---|
+| `--fast` | the turn-zero arms below — what the accounts-pack SessionStart preflight calls | git only: the Lock 1 `git ls-files` probe, for `Resolve` and at most once more per binding file under the estate (the pin scan and the settings-block detector share the display verdict cache) |
+| bare | `--fast` plus the two findings that cost further git calls | git only |
+| `--probe` | the channel probe above, then a `--fast` report | the harness (and through it `claude mcp list`) |
+
+`--json` prints one object; `--timeout <dur>` is checked between arms (a spent budget adds
+a `timeout` warn and skips the remaining arms; an arm already running finishes first);
+`--no-record` leaves the first-sight ledger untouched. Usage errors exit 2; a report with findings exits 0. No value from any
+credential store ever reaches the output: every rendering passes one redaction choke
+point. Beyond the contract fields (`credentials`, `varsExpected`/`varsPresent`/
+`varsMissing`, `staleDuplicates`, `findings`) the report carries `enabledPacks`,
+`admission` (the line `account which` prints), `defaultProfile` (the default account's
+two `.claude.json` files and which one is read), `settingsDelta` and `parity`.
+
+Finding ids:
+
+| id | severity | form | meaning |
+|---|---|---|---|
+| `vars-missing` | error | fast | an enabled pack's `.mcp.json` references a `${VAR}` this environment does not carry — the only escalation |
+| `estate-unanchored` | warn | fast | the estate's store is absent, has no `# swarmery-root:` line, or its roots do not admit the estate root: no credentials and no estate settings |
+| `store-rootless` | warn | fast | an account store with no root line, released to every directory bound to that account |
+| `estate-settings-unusable` | error | fast | `<estateRoot>/.claude/settings.json` is malformed, not an object, carries an estate key of the wrong type, is too large, not regular, not owned, group/other-writable, hard-linked, or resolves outside the root |
+| `store-refused` | warn | fast | a store in the secrets dir that the loader refuses (mode, owner, type) |
+| `binding-ignored` | info | fast | a binding under the estate that the read side ignores, with its reason |
+| `shadowed-pin` | info | fast | a descendant pin that overrides the estate's account |
+| `first-sight` | warn | fast | first report of a path under an estate root with no projects row (once per path; ledger `~/.swarmery/doctor/estate-seen.json`) |
+| `first-sight-no-db` | warn | fast | the projects index could not be read; the first-sight arm used its ledger alone |
+| `probe-stale` | warn | fast | no stored channel-probe verdict for the installed CLI version (or the version cannot be read from the binary's `versions/<V>` path) |
+| `probe-drift` | error | fast | the stored verdict for the installed version drifted from the embedded baseline (fact ids named) |
+| `sysscan-single-account` | info | fast | the System Hub scans only `~/.claude` |
+| `memory-single-account` | info | fast | the Memory surface reads only `~/.claude` |
+| `binding-tracked` | warn | bare | a binding under the estate that Lock 1 ignores (git-tracked or indeterminate) |
+| `estate-settings-tracked` | warn | bare | the estate's `.claude/settings.json` is git-tracked |
+| `timeout` | warn | any | `--timeout` ran out; later arms were skipped |

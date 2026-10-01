@@ -134,7 +134,7 @@ func TestShipEvidence(t *testing.T) {
 			db := openDB(t)
 			seedSession(t, db, "s", "2026-09-20T11:00:00.000Z", "")
 			tc.seed(t, db)
-			got := shipEvidence(db, "s", tc.operator)
+			got := shipEvidence(db, d2FactsFor(db, "s"), "s", tc.operator)
 			if !strings.HasPrefix(got, "evidence:\n") {
 				t.Fatalf("no evidence header:\n%s", got)
 			}
@@ -156,7 +156,7 @@ func TestShipEvidence(t *testing.T) {
 func TestShipEvidence_DBErrorKeepsWhatItHas(t *testing.T) {
 	db := openDB(t)
 	db.Close()
-	got := shipEvidence(db, "s", "fail")
+	got := shipEvidence(db, d2FactsFor(db, "s"), "s", "fail")
 	if got != "evidence:\noperator verdict: fail\n" {
 		t.Fatalf("got %q", got)
 	}
@@ -178,6 +178,12 @@ func TestLandingAction(t *testing.T) {
 		"echo git commit":              "",
 		"gh issue create":              "",
 		"FOO=1 BAR=2 git commit -am x": "commit",
+		// An option value with a space in it stays one token.
+		`git -c user.name="First Last" -c user.email="a@b.c" commit -q -m "feat: x"`: "commit",
+		`git -c user.name='First Last' push origin main`:                             "push",
+		`git -c user.name="First Last" log --grep commit`:                            "",
+		`git commit -m "unclosed message`:                                            "commit",
+		`echo "git commit later"`:                                                    "",
 	} {
 		if got := landingAction(seg); got != want {
 			t.Errorf("landingAction(%q) = %q, want %q", seg, got, want)

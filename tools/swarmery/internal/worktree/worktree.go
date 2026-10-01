@@ -63,6 +63,12 @@ var (
 	// branch's own tip makes that fallback report 0 commits ahead, and the branch —
 	// the only ref holding those commits — is then deleted. No base, no count.
 	ErrDetachedHead = errors.New("worktree: refusing to reclaim a branch while the repo is on a detached HEAD")
+	// ErrStartRefUnresolved: AcquireAt was handed a start ref that does not name a
+	// commit in repoRoot. Pinning a worktree is the one thing a start ref is for, so
+	// a ref that cannot be resolved is refused rather than quietly replaced by the
+	// default-branch tip — that substitution is exactly the "phase started on a tree
+	// without its dependency's work" failure an explicit start ref exists to prevent.
+	ErrStartRefUnresolved = errors.New("worktree: start ref does not resolve to a commit")
 )
 
 // staleLockAge is how old a .git/worktrees/*/index.lock must be before the
@@ -178,7 +184,43 @@ func taskIDForBranch(branch string) string {
 //     proven mismatch, never destroy on a transient probe failure;
 //  5. stale-lock sweep before acquisition;
 //  6. (trailer format lives in trailer.go).
+//
+// It is AcquireAt with no start ref: the worktree is pinned to the repo's current
+// branch tip, which is what dispatch and planrun have always asked for.
 func (m *Manager) Acquire(repoRoot, projectSlug, taskID string) (Acquired, error) {
+	return m.AcquireAt(repoRoot, projectSlug, taskID, "")
+}
+
+// AcquireAt is Acquire with the start point chosen by the caller. startRef ""
+// keeps Acquire's behaviour exactly (the repo's current branch tip, and the same
+// git calls in the same order). A non-empty startRef — a SHA or a ref name — is
+// resolved to a commit in repoRoot and becomes the SHA `git worktree add -b` is
+// pinned to; one that does not resolve is refused (ErrStartRefUnresolved), never
+// replaced by the default tip.
+//
+// It exists for a STACKED run: a phase whose dependency's work lives on a run
+// branch that has not merged yet has to start on that branch's tip, or it builds
+// on a tree that does not contain what it depends on.
+//
+// Every invariant above holds unchanged — invariant 1 most of all: the start
+// point is still explicit and still a resolved SHA, never the ambient HEAD.
+//
+// Warm reuse (invariant 4) is the one place the two differ in what they REPORT.
+// A branch-matched worktree is handed back as it stands, so its branch was cut
+// from wherever startRef pointed when the worktree was first created, and the
+// dependency branch may have moved since. StartPoint is therefore the merge base
+// of the run branch and startRef — the commit this run's own work actually starts
+// after — not the freshly resolved tip, which the branch may not even contain.
+//
+// That difference is also the caller's signal. A StartPoint equal to the commit
+// startRef resolves to means the worktree contains it — always true for a fresh
+// one, and true for a reused one whose branch was cut at or after that commit. A
+// StartPoint that differs means a reused branch forks EARLIER and lacks whatever
+// startRef gained since; a caller that needs the tree to contain startRef must
+// compare the two and refuse (phaserun.Start does). This function does not refuse
+// on its own: it never destroys a leftover worktree, and whether an older fork
+// point is acceptable is the caller's contract, not this package's.
+func (m *Manager) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (Acquired, error) {
 	path, err := m.Path(projectSlug, taskID)
 	if err != nil {
 		return Acquired{}, err
@@ -196,6 +238,14 @@ func (m *Manager) Acquire(repoRoot, projectSlug, taskID string) (Acquired, error
 	startSHA, err := m.resolveStartPoint(repoRoot)
 	if err != nil {
 		return Acquired{}, err
+	}
+	// An explicit start ref replaces the default tip — after the probe above, so a
+	// non-repo still fails as ErrNotARepo rather than as an unresolvable ref.
+	if startRef != "" {
+		startSHA, err = m.resolveCommit(repoRoot, startRef)
+		if err != nil {
+			return Acquired{}, err
+		}
 	}
 
 	// Invariant 5: stale-lock sweep + prune before touching worktrees.
@@ -232,7 +282,16 @@ func (m *Manager) Acquire(repoRoot, projectSlug, taskID string) (Acquired, error
 			// the source checkout's first install, or have had its link removed by
 			// a run that reinstalled.
 			lendDependencies(repoRoot, path)
-			return Acquired{Path: path, Branch: branch, StartPoint: startSHA}, nil
+			reused := startSHA
+			if startRef != "" {
+				// The branch predates this call, so it was not cut from startSHA as
+				// resolved NOW. Report where it actually forks from (see AcquireAt).
+				reused, err = m.mergeBase(repoRoot, branch, startSHA)
+				if err != nil {
+					return Acquired{}, err
+				}
+			}
+			return Acquired{Path: path, Branch: branch, StartPoint: reused}, nil
 		}
 		// Foreign branch / detached at our path → reclaim in place: remove then
 		// recreate below.
@@ -395,6 +454,43 @@ func (m *Manager) resolveStartPoint(repoRoot string) (string, error) {
 		return "", fmt.Errorf("worktree: resolve tip of %s: %w", def, err)
 	}
 	return strings.TrimSpace(sha), nil
+}
+
+// resolveCommit resolves ref — a SHA or a ref name — to the commit it names in
+// repoRoot, or fails with ErrStartRefUnresolved.
+//
+// A ref beginning with "-" is refused before git sees it: the value reaches an
+// argv slot, and a recorded start point or a branch name read back from the store
+// is not something this package minted. `^{commit}` peels a tag and rejects a
+// tree or a blob, so what comes back can always be handed to `worktree add`.
+func (m *Manager) resolveCommit(repoRoot, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || strings.HasPrefix(ref, "-") {
+		return "", fmt.Errorf("%w: %q", ErrStartRefUnresolved, ref)
+	}
+	out, err := m.Git.Run(repoRoot, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return "", fmt.Errorf("%w: %s: %v", ErrStartRefUnresolved, ref, err)
+	}
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "", fmt.Errorf("%w: %s (git answered with nothing)", ErrStartRefUnresolved, ref)
+	}
+	return sha, nil
+}
+
+// mergeBase returns the commit branch forks from relative to sha — the start
+// point of a warm-reused stacked worktree (see AcquireAt).
+func (m *Manager) mergeBase(repoRoot, branch, sha string) (string, error) {
+	out, err := m.Git.Run(repoRoot, "merge-base", "refs/heads/"+branch, sha)
+	if err != nil {
+		return "", fmt.Errorf("worktree: merge base of %s and %s: %w", branch, sha, err)
+	}
+	base := strings.TrimSpace(out)
+	if base == "" {
+		return "", fmt.Errorf("worktree: %s and %s share no history", branch, sha)
+	}
+	return base, nil
 }
 
 // Remove tears down an acquired worktree. keepBranch preserves swarm/<taskID>
@@ -584,7 +680,42 @@ func (m *Manager) reclaimBase(repoRoot string) (string, error) {
 // never existed, or is still checked out in THIS task's own worktree — the crash
 // leftover Acquire recovers by warm reuse, where there is nothing to reclaim and the
 // commits (if any) are continued rather than reported as blocking.
+//
+// It is ReclaimEmptyBranchAt with no recorded start point.
 func (m *Manager) ReclaimEmptyBranch(repoRoot, branch string) (int, error) {
+	return m.ReclaimEmptyBranchAt(repoRoot, branch, "")
+}
+
+// ReclaimEmptyBranchAt is ReclaimEmptyBranch for a branch that may have been
+// STACKED: baseRef is the start point the run recorded when it cut the branch
+// (AcquireAt's StartPoint). baseRef "" is ReclaimEmptyBranch exactly — the same
+// git calls in the same order.
+//
+// Why it is needed: a branch stacked on an unmerged dependency branch carries
+// that dependency's commits. Measured against the repo's base branch alone, a
+// stacked branch with NO commits of its own reads as "N commits ahead" — N being
+// the dependency's — and the caller refuses the retry as a dirty branch the
+// operator is then asked to merge or delete, when it holds none of this run's
+// work at all.
+//
+// What is counted: the commits on branch reachable from NEITHER the repo's base
+// branch tip NOR baseRef — this run's own, unmerged work. Both exclusions are
+// load bearing, and counting `baseRef..branch` alone would be wrong in the other
+// direction: a run whose commits have since merged into the base branch would
+// count them again (they are not reachable from the old start point) and a
+// finished, merged phase could never be re-run.
+//
+// The exclusion can only ever LOWER the count relative to ReclaimEmptyBranch,
+// and only by commits the recorded start point already reaches — commits that
+// belong to whatever the branch was stacked on, not to this branch. A baseRef
+// that no longer resolves (the dependency branch was deleted and its objects
+// collected) is dropped, which leaves the base-branch count: the larger number,
+// and so the refusing rather than the deleting direction.
+//
+// A detached HEAD is still refused (ErrDetachedHead) even though baseRef names a
+// base of its own: the base-branch half of the measurement has nothing to
+// measure against, and "no base, no count, no delete" is not relaxed here.
+func (m *Manager) ReclaimEmptyBranchAt(repoRoot, branch, baseRef string) (int, error) {
 	exists, err := m.checkBranchReclaimable(repoRoot, branch, true /* reuseOwn */)
 	if err != nil {
 		return 0, err
@@ -596,7 +727,15 @@ func (m *Manager) ReclaimEmptyBranch(repoRoot, branch string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	out, err := m.Git.Run(repoRoot, "rev-list", "--count", base+"..refs/heads/"+branch)
+	countArgs := []string{"rev-list", "--count", base + "..refs/heads/" + branch}
+	if baseRef != "" {
+		// Best-effort by design: an unresolvable start point falls back to the
+		// base-branch count above (see the doc comment for why that is safe).
+		if start, startErr := m.resolveCommit(repoRoot, baseRef); startErr == nil && start != base {
+			countArgs = []string{"rev-list", "--count", "refs/heads/" + branch, "^" + base, "^" + start}
+		}
+	}
+	out, err := m.Git.Run(repoRoot, countArgs...)
 	if err != nil {
 		return 0, fmt.Errorf("worktree: count commits on %s: %w", branch, err)
 	}

@@ -18,7 +18,7 @@ import { useState } from 'react';
 import type { BoardTask } from '../../api/types';
 import { displaySlug, findProject } from '../../lib/projectSlug';
 import { useScope } from '../../lib/scope';
-import { isQuotaWait, stateLabel } from '../boardModel';
+import { isAccountPause, isQuotaWait, stateLabel } from '../boardModel';
 import { TaskDiff } from '../TaskDiff';
 import { FieldLabel } from '../TaskFields';
 
@@ -124,12 +124,15 @@ export function RunLog({
         </button>
       )}
 
-      {/* A quota wait lands in the same column as a real failure but is not one:
-       * the card is held until its account's window resets. Amber, not red. */}
+      {/* A quota wait and an account pause land in the same column as a real
+       * failure but are not one: the card is held until its account's window
+       * resets or its breaker closes. Amber, not red. */}
       {task.dispatchError !== null && (
         <div
           className={`mt-1 rounded-md border px-2 py-1.5 font-mono text-[10.5px] whitespace-pre-wrap ${
-            isQuotaWait(task) ? 'border-amber/30 bg-amber/5 text-amber' : 'border-red/30 bg-red/5 text-red'
+            isQuotaWait(task) || isAccountPause(task)
+              ? 'border-amber/30 bg-amber/5 text-amber'
+              : 'border-red/30 bg-red/5 text-red'
           }`}
         >
           {task.dispatchError}

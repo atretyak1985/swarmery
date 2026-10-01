@@ -18,6 +18,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { BoardTask } from '../../api/types';
 import { useSessionHref } from '../../lib/sessionHref';
+import { plansPath } from '../../pages/plans/plansUrl';
 import { labelColor, sourceLine } from '../boardModel';
 import { FieldLabel } from '../TaskFields';
 import type { DraftSetter, TaskDraft } from './useTaskDraft';
@@ -74,7 +75,7 @@ function SourceBlock({ task }: { task: BoardTask }): JSX.Element {
       ? null
       : line.target.kind === 'session'
         ? sessionHref(line.target.sessionId)
-        : `/p/${line.target.slug}/plans`;
+        : plansPath(line.target.slug, { plan: line.target.externalId });
   const quote = task.source?.quote ?? null;
   const files = task.source?.files ?? [];
   return (

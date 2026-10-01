@@ -475,7 +475,18 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 }
 
+// seedSession is a finished session with one assistant turn — the normal case.
+// The labeler, the queue and the eval all leave a session with no turn alone
+// (seedEmptySession).
 func seedSession(t *testing.T, db *sql.DB, uuid, ended, outcome string) {
+	t.Helper()
+	seedEmptySession(t, db, uuid, ended, outcome)
+	mustExec(t, db, `INSERT INTO turns (session_id, seq, role, started_at, text)
+		VALUES ((SELECT id FROM sessions WHERE session_uuid = ?), 1, 'assistant', '2026-09-20T10:30:00.000Z', 'The parser is fixed.')`, uuid)
+}
+
+// seedEmptySession is a finished session with NO turns: nothing to read.
+func seedEmptySession(t *testing.T, db *sql.DB, uuid, ended, outcome string) {
 	t.Helper()
 	var out any
 	if outcome != "" {

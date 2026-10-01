@@ -19,6 +19,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
+import * as alerts from '../../api/alerts';
 import * as decisions from '../../api/decisions';
 import { Inbox } from './Inbox';
 
@@ -101,9 +102,19 @@ vi.mock('../../api/decisions', () => ({
   postGroundTruth: vi.fn(async () => undefined),
 }));
 
+// The seventh source. Empty by default, so the six-kind claims above count what
+// they always counted; the alert test below fills it.
+vi.mock('../../api/alerts', () => ({
+  ACCOUNT_BREAKER_RULE: 'account_breaker_open',
+  AUTO_MODE_NO_VERDICT_RULE: 'auto_mode_no_verdict',
+  fetchAlerts: vi.fn(async () => []),
+  resumeAccount: vi.fn(async () => undefined),
+}));
+
 vi.mock('../../lib/ws', () => ({ useLiveUpdates: () => undefined }));
 
 function defaultFetchers(): void {
+  vi.mocked(alerts.fetchAlerts).mockResolvedValue([]);
   vi.mocked(api.fetchApprovals).mockResolvedValue([
     approvalRow(1, 'Bash', { command: 'rm -rf node_modules && npm ci' }, 78),
     approvalRow(2, 'AskUserQuestion', ASK, 300),
@@ -253,5 +264,67 @@ describe('Inbox', () => {
     await renderInbox();
     expect(screen.getByRole('alert').textContent).toContain("couldn't load proposals");
     expect(rows()).toHaveLength(6);
+  });
+
+  it('puts a paused account first, and e probes and resumes it', async () => {
+    vi.mocked(alerts.fetchAlerts).mockResolvedValue([
+      {
+        id: 4,
+        rule: 'account_breaker_open',
+        target: 'account:work',
+        severity: 'error',
+        message: 'Claude refused this account. Runs on it are paused until a probe succeeds.',
+        detectedAt: iso(-600),
+        account: 'work',
+        kind: 'auth',
+        reason: "Claude refused this account's access",
+        openedAt: iso(-600),
+      },
+    ]);
+    await renderInbox();
+    const list = rows();
+    expect(list).toHaveLength(8);
+    expect(list[0]?.textContent).toContain('Account work is paused');
+    expect(selectedRow().textContent).toContain('Account work is paused');
+    expect(primaries()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /probe & resume/ })).toBeTruthy();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(alerts.resumeAccount).toHaveBeenCalledWith('work');
+    // x is a no-op: an alert cannot be dismissed.
+    cleanup();
+    await renderInbox('/inbox?tab=alerts');
+    expect(rows()).toHaveLength(1);
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'x' });
+    });
+    expect(api.resolveApproval).not.toHaveBeenCalled();
+  });
+
+  it('shows an auto mode outage as an alert with nothing to press', async () => {
+    const message =
+      "9 permission checks got no verdict in the last 10 minutes across 2 sessions — Claude Code's server-side classifier is failing; affected sessions pause until it recovers.";
+    vi.mocked(alerts.fetchAlerts).mockResolvedValue([
+      {
+        id: 5,
+        rule: 'auto_mode_no_verdict',
+        target: 'auto-mode-classifier',
+        severity: 'warn',
+        message,
+        detectedAt: iso(-120),
+      },
+    ]);
+    await renderInbox('/inbox?tab=alerts');
+    expect(rows()).toHaveLength(1);
+    expect(selectedRow().textContent).toContain('Permission checks are getting no verdict');
+    // The daemon's sentence is the body; there is no button, and e does nothing.
+    expect(document.querySelector('article')?.textContent).toContain(message);
+    expect(primaries()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /probe & resume/ })).toBeNull();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(alerts.resumeAccount).not.toHaveBeenCalled();
   });
 });

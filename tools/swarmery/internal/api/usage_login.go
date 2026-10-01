@@ -63,6 +63,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/usage"
 )
 
@@ -300,6 +301,10 @@ func (h *Handler) completeLoginOutcome(account string, src usage.Source) complet
 		resp.Reason = verdict.Reason
 		if claudeprobe.Status(verdict.Status) != claudeprobe.StatusReady {
 			resp.NextStep = nextStepPTYLogin
+		} else {
+			// The login the operator just completed is what an auth breaker was
+			// waiting for.
+			h.closeAuthBreaker(account, store.BreakerClosedByLogin)
 		}
 	}
 	// Fixed vocabulary values only — never an error's text, which could carry

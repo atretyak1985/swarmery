@@ -10,11 +10,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { CopyIdBadge } from '../components/CopyIdBadge';
 import type { BoardTask } from '../api/types';
 import type { PatchBoardTaskInput } from '../api';
 import { ConfirmDialog } from '../components/ui';
 import { useDiscardGuard } from '../components/useDiscardGuard';
 import { fmtAgo } from '../lib/format';
+import { plansPath } from '../pages/plans/plansUrl';
 import { useAgentRoster } from './AgentPicker';
 import { stateLabel } from './boardModel';
 import { usePlaybooks } from './PlaybookPicker';
@@ -114,14 +116,16 @@ export function TaskModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-          <span className="font-mono text-[10.5px] text-ink-faint">{task.externalId}</span>
+          <CopyIdBadge id={task.externalId} label="task" />
           <span className="font-mono text-[10.5px] text-ink-2">· {stateLabel(task)}</span>
           <span className="font-mono text-[10px] text-ink-faint">· created {fmtAgo(task.createdAt)}</span>
           {/* The card's micro-plan: the same unit of work under the plans-flow
-              honesty contract (ticked criteria + a Completion Report). */}
-          {task.planExternalId !== null && (
+              honesty contract (ticked criteria + a Completion Report). Plans is
+              project-scoped, so a card with no slug gets no chip rather than a
+              link that would 404 (its brief still names the plan). */}
+          {task.planExternalId !== null && task.projectSlug !== null && (
             <Link
-              to="/plans"
+              to={plansPath(task.projectSlug, { plan: task.planExternalId })}
               data-tip={`plan ${task.planExternalId} — acceptance criteria and completion report`}
               className="rounded border border-line px-1 py-px font-mono text-[9px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
             >

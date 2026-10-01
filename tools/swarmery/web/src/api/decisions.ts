@@ -198,10 +198,23 @@ const MOCK_QUEUE: QueueItem[] = [
   },
 ];
 
-/** GET /api/decisions/queue — answered decisions awaiting ground truth, newest first. */
-export async function fetchLabelQueue(limit = 100): Promise<QueueItem[]> {
+/**
+ * GET /api/decisions/queue — answered decisions awaiting ground truth, newest first.
+ * Answers the rules gave are left out unless `includeRules` is set: they follow from
+ * the session's own record, so the Inbox never asks for them.
+ */
+export async function fetchLabelQueue(
+  limit: number | 'all' = 100,
+  project: string | null = null,
+  includeRules = false,
+): Promise<QueueItem[]> {
   if (MOCK) return MOCK_QUEUE;
-  const path = `/api/decisions/queue?limit=${String(limit)}`;
+  // 'all' is the whole open queue (the Inbox); a number is a page (the Decisions page).
+  const qs = new URLSearchParams({ limit: String(limit) });
+  // A project scope narrows to decisions about that project's sessions.
+  if (project !== null) qs.set('project', project);
+  if (includeRules) qs.set('rules', '1');
+  const path = `/api/decisions/queue?${qs.toString()}`;
   const body = await jsonOrThrow<{ items: QueueItem[] }>(await fetch(path), `GET ${path}`);
   return body.items;
 }

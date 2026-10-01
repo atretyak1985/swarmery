@@ -100,3 +100,87 @@ func TestShadowingPins_MalformedRootExcludedSorted(t *testing.T) {
 		t.Fatalf("ShadowingPins(missing) = %v", got)
 	}
 }
+
+// ScanSettingsFiles enumerates both settings files at root and below, through
+// the SAME bounds as the pin walk: a file at PinScanMaxDepth is found, one a
+// level deeper is not, and no skip dir is entered.
+func TestScanSettingsFiles_SameBoundsAsThePinWalk(t *testing.T) {
+	fakeHome(t)
+	root := t.TempDir()
+	writeAt(t, filepath.Join(root, ".claude", "settings.json"), "{}")
+	writeAt(t, filepath.Join(root, ".claude", "settings.local.json"), "{}")
+	deep := nest(root, PinScanMaxDepth)
+	writeAt(t, filepath.Join(deep, ".claude", "settings.json"), "{}")
+	tooDeep := nest(root, PinScanMaxDepth+1)
+	writeAt(t, filepath.Join(tooDeep, ".claude", "settings.local.json"), "{}")
+	for _, skip := range PinScanSkipDirs {
+		writeAt(t, filepath.Join(root, "a", skip, "p", ".claude", "settings.json"), "{}")
+	}
+	// a symlinked directory is not followed
+	elsewhere := t.TempDir()
+	writeAt(t, filepath.Join(elsewhere, ".claude", "settings.json"), "{}")
+	if err := os.Symlink(elsewhere, filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+
+	got := ScanSettingsFiles(root)
+	want := []string{
+		filepath.Join(root, ".claude", "settings.json"),
+		filepath.Join(root, ".claude", "settings.local.json"),
+		filepath.Join(deep, ".claude", "settings.json"),
+	}
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("ScanSettingsFiles = %v, want %v", got, want)
+	}
+	if ScanSettingsFiles("") != nil {
+		t.Error("ScanSettingsFiles(\"\") walked something")
+	}
+}
+
+// A pin in a file git TRACKS is not a pin in effect: ScanPins lists it among
+// the skipped files with Lock 1's reason, and ScanPinsDetail keeps the key it
+// declares so a surface can say what the ignored file names.
+func TestScanPins_ReportsATrackedPinAsIgnored(t *testing.T) {
+	fakeHome(t)
+	repo := newRepo(t)
+	tracked := filepath.Join(repo, "sub")
+	writeBinding(t, tracked, "work")
+	runGit(t, repo, "add", "-f", ".")
+	runGit(t, repo, "commit", "-q", "-m", "fixture")
+	honoured := filepath.Join(repo, "other")
+	writeBinding(t, honoured, "home")
+
+	pins, skipped := ScanPins(repo)
+	if !slices.Equal(pins, []string{honoured}) {
+		t.Errorf("pins = %v, want only %s", pins, honoured)
+	}
+	if len(skipped) != 1 || !strings.HasPrefix(skipped[0], bindingPath(tracked)+" ") ||
+		!strings.Contains(skipped[0], "tracked by git") {
+		t.Errorf("skipped = %v, want the tracked binding with Lock 1's reason", skipped)
+	}
+	detail := ScanPinsDetail(repo)
+	if len(detail) != 2 || detail[1].Dir != tracked || detail[1].Key != "work" || detail[1].Ignored == "" {
+		t.Fatalf("ScanPinsDetail = %+v", detail)
+	}
+	if detail[0].Dir != honoured || detail[0].Key != "home" || detail[0].Ignored != "" {
+		t.Errorf("ScanPinsDetail[0] = %+v", detail[0])
+	}
+	// The hint follows the cause: never chmod advice for a tracked pin.
+	if h := SkippedPinHint(skipped[0]); strings.Contains(h, "chmod") {
+		t.Errorf("hint for a tracked pin = %q", h)
+	}
+	if h := SkippedPinHint(bindingPath(tracked) + " is writable by group or other (mode 0664), so the walk ignores it"); !strings.Contains(h, "chmod") {
+		t.Errorf("hint for a group-writable pin = %q", h)
+	}
+	// The display variant agrees, and prune keeps a subtree out.
+	if got := ScanPinsDetailForDisplay(repo); len(got) != 2 {
+		t.Errorf("ScanPinsDetailForDisplay = %+v", got)
+	}
+	if got := ScanPinsDetailForDisplay(repo, tracked); len(got) != 1 || got[0].Dir != honoured {
+		t.Errorf("pruned ScanPinsDetailForDisplay = %+v", got)
+	}
+	if r := ResolveForDisplay(filepath.Join(tracked, "x")); r.Account != "" || r.IgnoredNote == "" {
+		t.Errorf("ResolveForDisplay under a tracked pin = %+v", r)
+	}
+}

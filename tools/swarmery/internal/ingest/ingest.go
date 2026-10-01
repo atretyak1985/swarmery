@@ -367,6 +367,12 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 				in.sessionID); err != nil {
 				return fmt.Errorf("apply parked terminal identity: %w", err)
 			}
+			if term.LaunchAccount != "" {
+				if _, err := in.tx.Exec(`UPDATE sessions SET launch_account = ? WHERE id = ?`,
+					term.LaunchAccount, in.sessionID); err != nil {
+					return fmt.Errorf("apply parked launch account: %w", err)
+				}
+			}
 		}
 	case err != nil:
 		return err

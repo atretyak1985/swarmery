@@ -25,10 +25,25 @@
 // this file — the runner surfaces type errors as failures instead.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase } from '../api/types';
 import { Plans } from './Plans';
+import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+
+/** Plans reads its selection from the route (plans-deep-links phase 1), so it
+ * mounts under the real /p/:slug/plans… child paths, not a bare router. */
+function PlansAtRoute(): JSX.Element {
+  return (
+    <MemoryRouter initialEntries={['/p/swarmery/plans']}>
+      <Routes>
+        {PLANS_ROUTE_PATHS.map((p) => (
+          <Route key={p} path={`/p/:slug/${p}`} element={<Plans />} />
+        ))}
+      </Routes>
+    </MemoryRouter>
+  );
+}
 
 vi.mock('../workspace/ProjectContext', () => ({
   useProjectWorkspace: () => ({
@@ -135,9 +150,7 @@ function stubFetch(): void {
 /** Mount the page and wait for the phase row's Run button. */
 async function mountPlans(): Promise<void> {
   render(
-    <MemoryRouter>
-      <Plans />
-    </MemoryRouter>,
+    <PlansAtRoute />,
   );
   await screen.findByRole('button', { name: 'Run phase' });
 }
@@ -281,9 +294,7 @@ describe('which model a finished run used (SC-6)', () => {
       ]),
     ];
     render(
-      <MemoryRouter>
-        <Plans />
-      </MemoryRouter>,
+      <PlansAtRoute />,
     );
     const chip = await screen.findByText('fable');
     // The full pinned ID stays reachable — the label shortens, it does not erase.
@@ -305,9 +316,7 @@ describe('which model a finished run used (SC-6)', () => {
       ]),
     ];
     render(
-      <MemoryRouter>
-        <Plans />
-      </MemoryRouter>,
+      <PlansAtRoute />,
     );
     const chip = await screen.findByText('opus');
     expect(chip.getAttribute('data-tip')).toContain('claude-opus-5[1m]');
@@ -328,9 +337,7 @@ describe('which model a finished run used (SC-6)', () => {
       ]),
     ];
     render(
-      <MemoryRouter>
-        <Plans />
-      </MemoryRouter>,
+      <PlansAtRoute />,
     );
     await screen.findByText(/Running/);
     expect(screen.queryByText('opus')).toBeNull();

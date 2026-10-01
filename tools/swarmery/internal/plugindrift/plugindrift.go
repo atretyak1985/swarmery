@@ -227,6 +227,12 @@ func ResolveInstalled(ctx context.Context, r Runner, id, projectPath string) (In
 // this project when it is user-scoped, or scoped to a matching projectPath.
 // Caller-supplied projectPath must already be canonicalised.
 //
+// The FIRST applicable entry wins, by list position — deliberately, with no
+// scope ranking. Claude Code's loader does the same over installed_plugins.json
+// (CLI 2.1.285), so the verdict describes the copy a session actually loads: a
+// stale project-scope record listed after a fresh user-scope one never loads
+// and is not drift. Ranking by scope here would report copies nobody runs.
+//
 // "local" is the CLI's own name for a project-local install (recorded in
 // .claude/settings.local.json rather than settings.json) and carries the same
 // projectPath as "project" — treating only the latter as available reported

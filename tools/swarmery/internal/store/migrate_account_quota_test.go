@@ -64,6 +64,19 @@ func TestMigrateAccountQuotaPreservesRows(t *testing.T) {
 	}
 }
 
+func quotaVersion(t *testing.T) int {
+	t.Helper()
+	db := openRaw(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	var v int
+	if err := db.QueryRow(`SELECT version FROM schema_migrations WHERE name LIKE '%_account_quota.sql'`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
 func latestVersion(t *testing.T) int {
 	t.Helper()
 	db := openRaw(t)
@@ -80,7 +93,9 @@ func latestVersion(t *testing.T) int {
 // TestOpenNoMigrate: a database missing the newest migration keeps missing it
 // after OpenNoMigrate — schema_migrations is byte-for-byte the same.
 func TestOpenNoMigrate(t *testing.T) {
-	latest := latestVersion(t)
+	// The account_quota migration, found by NAME: a later migration must not
+	// turn "one below the quota table" into "one below the newest".
+	latest := quotaVersion(t)
 	path := filepath.Join(t.TempDir(), "old.db")
 	raw, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)")
 	if err != nil {
@@ -104,9 +119,14 @@ func TestOpenNoMigrate(t *testing.T) {
 	if maxV != latest-1 {
 		t.Errorf("MAX(version) = %d after OpenNoMigrate, want %d (it migrated)", maxV, latest-1)
 	}
-	// The table the pending migration would add is absent — callers see "no such table".
-	if _, err := QuotaForAccount(db, "default"); err == nil || !strings.Contains(err.Error(), "no such table") {
-		t.Errorf("QuotaForAccount on a pre-migration db: err = %v, want no such table", err)
+	// What the pending migration would add is absent — callers see "no such
+	// column". The pending migration is whichever one is newest:
+	// phase_blocked_fingerprint (a column on epic_phases) since it landed on top of
+	// account_breaker, which had landed on top of account_quota.
+	var fp sql.NullString
+	if err := db.QueryRow(`SELECT run_blocked_fingerprint FROM epic_phases LIMIT 1`).Scan(&fp); err == nil ||
+		!strings.Contains(err.Error(), "no such column") {
+		t.Errorf("run_blocked_fingerprint on a pre-migration db: err = %v, want no such column", err)
 	}
 
 	if _, err := OpenNoMigrate(filepath.Join(t.TempDir(), "absent.db")); err == nil {

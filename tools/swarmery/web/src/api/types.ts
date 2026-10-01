@@ -244,6 +244,13 @@ export interface Session {
    * machine sees no account UI at all.
    */
   account?: string;
+  /**
+   * What the run was LAUNCHED as (migration session_launch_account), read by
+   * the SessionStart shim from its own CLAUDE_CONFIG_DIR. '' = unknown. It
+   * differs from `account` when a terminal under one account ran a session
+   * whose transcript landed under another. Absent on an older daemon.
+   */
+  launchAccount?: string;
   /** Aggregate SUM(turns.tokens_in + tokens_out) — parity wave; optional until backend lands. */
   tokens?: number | null;
   /** Aggregate SUM(turns.cost_usd) — parity wave; optional until backend lands. */
@@ -504,6 +511,23 @@ export interface HealthResponse {
    * than the drift scanner.
    */
   pluginDrift?: { error: number; warn: number };
+  /**
+   * Whether Claude Code's server-side auto mode permission check is answering.
+   * Additive optional: absent when talking to a daemon older than the field.
+   */
+  autoModeClassifier?: HealthAutoMode;
+}
+
+/** Go: healthAutoMode — `autoModeClassifier` of GET /api/health. */
+export interface HealthAutoMode {
+  /** Tool calls refused for want of a verdict in the last hour. */
+  noVerdictLastHour: number;
+  /** Distinct sessions those calls belong to. */
+  sessionsLastHour: number;
+  /** ISO timestamp of the newest such call; null when there is none. */
+  lastAt: string | null;
+  /** True while the `auto_mode_no_verdict` alert is open. */
+  alerting: boolean;
 }
 
 /** GET /api/docs — list item. */
@@ -3133,10 +3157,24 @@ export interface Account {
   ingested: boolean;
   /** Project paths EXPLICITLY bound to this account (not "every unbound project"). */
   projects: string[];
+  /** Bound paths with NO live (non-archived) projects row — visible, never
+   * presented as indexed. Absent on an older daemon. */
+  projectsUnindexed?: string[];
+}
+
+/** A binding file the read side ignores (git-tracked, indeterminate, or an
+ * untrusted mode/owner/type) — counted under no account. */
+export interface IgnoredBinding {
+  path: string;
+  /** The account key the file names ('' when it cannot be read). */
+  declares: string;
+  reason: string;
 }
 
 export interface AccountsResponse {
   accounts: Account[];
+  /** Never null on a current daemon; absent on an older one. */
+  ignoredBindings?: IgnoredBinding[];
 }
 
 /** Go: provisionResponse (internal/api/accounts.go:113) */
@@ -3359,7 +3397,23 @@ export type RunConflictCode =
   | 'phase-running'
   | 'plan-not-active'
   | 'no-phases'
-  | 'plan-complete';
+  | 'plan-complete'
+  /** the run's account cannot run — its circuit breaker is open (sign-in or access
+   *  refused, or a usage limit). Resolved from the Inbox alert's "Probe & resume". */
+  | 'account-breaker'
+  /** phase run only: the dependencies are complete, but on run branches that are
+   *  unmerged and have diverged — the body names `branches` and `base`, and the fix
+   *  is a merge the operator performs. */
+  | 'deps-unmerged'
+  /** phase run only: the last run ended blocked and nothing a re-run would see has
+   *  changed. Lapses at `retryAfter`; `{force: true}` on the request runs it anyway. */
+  | 'blocked-unchanged'
+  /** phase run only: the run was resolved onto a dependency branch but a leftover
+   *  worktree of this phase predates that branch's tip — `message` names it. */
+  | 'cannot-stack'
+  /** phase run only: the dependency commit to start from stopped resolving between
+   *  resolution and acquisition; the same request resolves afresh. */
+  | 'start-ref-unresolved';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';

@@ -1,21 +1,25 @@
 // The Inbox model (Canvas v3 phase 3, artboards 1b/2b) — pure, no React.
 //
-// Six sources each hold decisions that wait on the operator: pending approvals,
-// lesson candidates, advisor recommendations, agent-change proposals, the
-// classifier's label queue and lesson retirements. There is no inbox endpoint: the
-// page fetches the six lists (useInboxItems) and this module normalises them
-// into one InboxItem shape, one sort order and one set of tabs.
+// Seven sources each hold something that waits on the operator: pending
+// approvals, lesson candidates, advisor recommendations, agent-change proposals,
+// the classifier's label queue, lesson retirements, and alerts — the findings
+// that mean work is stopped right now (an account the daemon has paused, or
+// Claude Code's auto mode permission check not answering). There is
+// no inbox endpoint: the page fetches the seven lists (useInboxItems) and this
+// module normalises them into one InboxItem shape, one sort order and one set of
+// tabs.
 //
 // Wording follows the code → UI dictionary (lib/glossary.ts UI_TERMS): a
 // context line says "off-plan", never the code name `surprise`.
 
+import { ACCOUNT_BREAKER_RULE, AUTO_MODE_NO_VERDICT_RULE, type Alert } from '../../api/alerts';
 import type { QueueItem } from '../../api/decisions';
 import type { Lesson, RetireReason, RetirementProposal } from '../../api/lessons';
 import type { AgentChangeProposal, PermissionRequest, Recommendation } from '../../api/types';
 import { questionsOf, requestSummary } from '../../lib/approvals';
 import { UI_TERMS } from '../../lib/glossary';
 
-export type InboxKind = 'approval' | 'lesson' | 'advisor' | 'proposal' | 'classifier' | 'retire';
+export type InboxKind = 'approval' | 'lesson' | 'advisor' | 'proposal' | 'classifier' | 'retire' | 'alert';
 
 export const INBOX_KINDS: readonly InboxKind[] = [
   'approval',
@@ -24,6 +28,7 @@ export const INBOX_KINDS: readonly InboxKind[] = [
   'proposal',
   'classifier',
   'retire',
+  'alert',
 ];
 
 interface InboxItemBase {
@@ -34,7 +39,7 @@ interface InboxItemBase {
   context: string;
   /** When the decision started waiting. */
   ageIso: string;
-  /** Pending approvals — the only thing here that expires. */
+  /** Sorted first: pending approvals (they expire) and alerts (they stop work). */
   urgent: boolean;
   expiresIso?: string;
   project?: string;
@@ -49,10 +54,19 @@ export type InboxItem = InboxItemBase &
     | { kind: 'proposal'; raw: AgentChangeProposal }
     | { kind: 'classifier'; raw: readonly QueueItem[] }
     | { kind: 'retire'; raw: RetirementProposal }
+    | { kind: 'alert'; raw: Alert }
   );
 
 /** URL value of `?tab=` — plural words, as the redirects and 1b/2b say them. */
-export type InboxTabId = 'all' | 'approvals' | 'lessons' | 'advisor' | 'proposals' | 'classifier' | 'retire';
+export type InboxTabId =
+  | 'all'
+  | 'approvals'
+  | 'lessons'
+  | 'advisor'
+  | 'proposals'
+  | 'classifier'
+  | 'retire'
+  | 'alerts';
 
 /** Tab order and wording follow 1b/2b; `kind` is what the tab filters to. */
 export const INBOX_TABS: readonly { id: InboxTabId; label: string; kind?: InboxKind }[] = [
@@ -63,6 +77,7 @@ export const INBOX_TABS: readonly { id: InboxTabId; label: string; kind?: InboxK
   { id: 'proposals', label: 'proposals', kind: 'proposal' },
   { id: 'classifier', label: 'classifier', kind: 'classifier' },
   { id: 'retire', label: 'stop using a lesson?', kind: 'retire' },
+  { id: 'alerts', label: 'alerts', kind: 'alert' },
 ];
 
 /** Per-kind presentation: label after the dot, and the dot / label colour token. */
@@ -73,6 +88,7 @@ export const KIND_META: Record<InboxKind, { label: string; dot: string; text: st
   proposal: { label: 'agent change', dot: 'bg-ink-dim', text: 'text-ink-dim' },
   classifier: { label: 'check the classifier', dot: 'bg-green', text: 'text-green' },
   retire: { label: 'stop using a lesson?', dot: 'bg-red', text: 'text-red' },
+  alert: { label: 'alert', dot: 'bg-red', text: 'text-red' },
 };
 
 /** Plain-language retirement reasons (never the enum). */
@@ -90,6 +106,7 @@ export interface InboxSources {
   proposals?: readonly AgentChangeProposal[] | undefined;
   classifier?: readonly QueueItem[] | undefined;
   retirements?: readonly RetirementProposal[] | undefined;
+  alerts?: readonly Alert[] | undefined;
 }
 
 function approvalItem(r: PermissionRequest): InboxItem {
@@ -159,6 +176,44 @@ function retireItem(p: RetirementProposal): InboxItem {
   };
 }
 
+/** Whether an alert is an open account breaker — the one alert with an action. */
+export function isAccountBreaker(a: Alert): a is Alert & { account: string } {
+  return a.rule === ACCOUNT_BREAKER_RULE && a.account !== undefined && a.account !== '';
+}
+
+/**
+ * Title and context line of an alert that has no action, by rule. The alert's
+ * own sentence (`message`) is the detail's body, so the title stays short. A
+ * rule missing here falls back to its message and target.
+ */
+const ALERT_RULE_UI: Readonly<Record<string, { title: string; context: string } | undefined>> = {
+  [AUTO_MODE_NO_VERDICT_RULE]: {
+    title: 'Permission checks are getting no verdict',
+    context: 'Claude Code auto mode',
+  },
+};
+
+/**
+ * An alert is urgent by definition, whatever its severity: work is stopped
+ * while it is open. A paused account's quota alert also expires — the breaker
+ * closes itself at `resetsAt`.
+ */
+function alertItem(a: Alert): InboxItem {
+  const account = isAccountBreaker(a) ? a.account : null;
+  const ui = ALERT_RULE_UI[a.rule];
+  const base = {
+    key: `alert:${String(a.id)}`,
+    kind: 'alert' as const,
+    title: account === null ? (ui?.title ?? a.message) : `Account ${account} is paused`,
+    context:
+      account === null ? (ui?.context ?? a.target) : a.kind === 'quota' ? 'usage limit' : 'sign-in or access',
+    ageIso: a.openedAt ?? a.detectedAt,
+    urgent: true,
+    raw: a,
+  };
+  return a.resetsAt === undefined || a.resetsAt === '' ? base : { ...base, expiresIso: a.resetsAt };
+}
+
 /** One item per session: its questions are answered together. */
 export function groupClassifier(queue: readonly QueueItem[]): InboxItem[] {
   const bySession = new Map<string, QueueItem[]>();
@@ -193,6 +248,7 @@ export function toItems(src: InboxSources): InboxItem[] {
     ...(src.proposals ?? []).map(proposalItem),
     ...groupClassifier(src.classifier ?? []),
     ...(src.retirements ?? []).map(retireItem),
+    ...(src.alerts ?? []).map(alertItem),
   ];
 }
 

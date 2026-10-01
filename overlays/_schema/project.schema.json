@@ -67,6 +67,72 @@
       },
       "required": ["baseUrl", "projectKey", "qaStatus", "repro"]
     },
+    "prReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Pull-request review contract consumed by review-pack. Required for /pr-review. This fragment is mirrored in plugins/review-pack/requirements.json, which the dashboard renders the config form from; scripts/check-plugin-requirements.sh fails CI when the two drift, so change both in one commit.",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "GitHub org or user that owns the repos, e.g. <org>"
+        },
+        "worktreeRoot": {
+          "type": "string",
+          "description": "Directory for throwaway review worktrees. Default: pr-review/ under AGENT_WORKSPACE_ROOT, else TMPDIR."
+        },
+        "knowledge": {
+          "type": "string",
+          "description": "Optional path (relative to the project root) of a markdown file with project-specific verification heuristics and known CI flake signatures; /pr-review reads it in full."
+        },
+        "repos": {
+          "type": "object",
+          "description": "One entry per reviewable repo, keyed by the GitHub repo name.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Absolute path of the local main checkout (never modified; worktrees are cut from it)."
+              },
+              "setup": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Commands run inside a fresh worktree before anything else (submodules, dependency install)."
+              },
+              "gates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Commands that must all pass before a fix is pushed or a reply is posted."
+              },
+              "reviewSkills": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Skills to load before reviewing a diff in this repo."
+              },
+              "notes": {
+                "type": "string",
+                "description": "Free-text quirks a reviewer must know for this repo."
+              }
+            },
+            "required": [
+              "path",
+              "gates"
+            ]
+          }
+        }
+      },
+      "required": [
+        "owner",
+        "repos"
+      ]
+    },
     "design": {
       "type": "object",
       "additionalProperties": false,

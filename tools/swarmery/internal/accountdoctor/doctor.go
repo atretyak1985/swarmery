@@ -24,14 +24,43 @@
 // declaring no store, a store file that does not exist): an estate may
 // legitimately supply nothing because nothing asks for anything.
 //
-// Fast is pure filesystem and read-only: no socket, no database, no `claude`
-// spawn. Nothing in Report, Finding or Duplicate ever holds a variable's value.
+// # The arms
+//
+// Fast is pure filesystem plus the Lock 1 git probe claudeacct.Resolve runs
+// itself (and, for the pins under the estate and the settings-block detector,
+// the same probe through the display verdict cache: at most one per distinct
+// binding file per run), plus at most one optional read-only SQLite lookup
+// (the first-sight arm). Options.Timeout is checked BETWEEN arms: an arm
+// already running finishes, and a walk of a very large estate is bounded only
+// by the pin walk's own depth and skip list. It never opens a
+// socket and never starts a `claude` process — it runs at turn zero from a
+// SessionStart hook. Its arms, each in its own file:
+//
+//	resolution.go    the account, the rung that decided it, the estate, the
+//	                 default account's two profiles, shadowing / ignored pins
+//	enabled.go       the enabled-pack union (three layers, never the estate)
+//	doctor.go        coverage: varsExpected / varsPresent / varsMissing
+//	trust.go         estate-unanchored, store-rootless, estate-settings-unusable
+//	settingsdelta.go the two accounts' settings.json, by key name and hash
+//	parity.go        installed_plugins.json per (id, scope), orphan checkouts
+//	firstsight.go    the once-per-path warning under an estate root (D3)
+//	probe.go         the stored channel-probe verdict for the installed CLI
+//	sysgaps.go       two fixed info findings (surfaces still single-account)
+//	duplicates.go    staleDuplicates: second live copies of a store, of an
+//	                 estate settings block, of a lent binding
+//
+// Full is Fast plus two findings that cost further git calls (binding-tracked,
+// estate-settings-tracked). Probe (probe.go) is the only arm that spawns
+// anything, and neither Fast nor Full reaches it. Nothing in Report, Finding
+// or Duplicate ever holds a variable's value; render.go is the one choke point
+// every printed string goes through.
 package accountdoctor
 
 import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -61,12 +90,15 @@ const maxConfigBytes = 1 << 20
 // with DB nil, Now zero (=> time.Now()), StateDir empty, Timeout zero (=> no
 // deadline) and Record false (=> every arm read-only).
 type Options struct {
-	Path     string        // the project path to diagnose
-	DB       *sql.DB       // nil: no arm reads the database
-	Now      time.Time     // zero => time.Now()
-	StateDir string        // "" => no cached state is read or written
-	Timeout  time.Duration // 0 => no deadline
-	Record   bool          // false => every arm read-only
+	Path string // the project path to diagnose
+	// DB is an OPTIONAL read-only handle, used ONLY by the first-sight arm's
+	// `projects`-row lookup. nil, a missing file or a locked one: that arm
+	// relies on its ledger alone and a warn finding says so — never a failure.
+	DB       *sql.DB
+	Now      time.Time     // the ledger's clock; zero => time.Now()
+	StateDir string        // the first-sight ledger root; "" => no ledger is read or written
+	Timeout  time.Duration // bounds the whole call; 0 => no deadline
+	Record   bool          // false => the ledger arm is read-only
 }
 
 // internal/accountdoctor — the whole JSON contract. Two SHELL consumers parse it on the hot
@@ -94,7 +126,16 @@ type Report struct {
 
 	LaunchedViaSwarmery bool      `json:"launchedViaSwarmery"` // SWARMERY_LAUNCH_PATH covers Path
 	Daemon              bool      `json:"daemon"`              // Path is under the daemon's worktree root
-	Findings            []Finding `json:"findings"`            // Never null; [] in this phase.
+	Findings            []Finding `json:"findings"`            // Never null; [] when clean.
+
+	// Added by the doctor phase — additive only; nothing above changes.
+	EnabledPacks []string `json:"enabledPacks"` // the three-layer union arm (b) computes. Never null.
+	Admission    string   `json:"admission"`    // the admission line(s) `swarmery account which` prints, or its ignored lines
+	// DefaultProfile names the two .claude.json files a DEFAULT resolution can
+	// read and which one it will. Absent for any other account.
+	DefaultProfile *DefaultProfile `json:"defaultProfile,omitempty"`
+	SettingsDelta  []SettingsDelta `json:"settingsDelta"` // arm (c). Never null.
+	Parity         []ParityEntry   `json:"parity"`        // arm (d). Never null.
 }
 
 type Duplicate struct {
@@ -105,8 +146,10 @@ type Duplicate struct {
 	Count   int      `json:"count"`
 }
 
-// Finding is one diagnosed problem. Declared now, filled by a later arm; the
-// list is never null.
+// Finding is one diagnosed problem; the list is never null. ID is a stable
+// kebab-case identifier (docs/claude-cli-config-channels.md lists every one), Severity one
+// of the Sev* constants. Detail and File name paths, counts and variable NAMES
+// only — never a value.
 type Finding struct {
 	ID       string `json:"id"`
 	Severity string `json:"severity"`
@@ -115,8 +158,55 @@ type Finding struct {
 	File     string `json:"file"`
 }
 
+// Severities.
+const (
+	SevInfo  = "info"
+	SevWarn  = "warn"
+	SevError = "error"
+)
+
 // ErrNoPath is Fast's only error: an Options without a project path.
 var ErrNoPath = errors.New("accountdoctor: Options.Path is required")
+
+// wallClock is the deadline clock (Options.Timeout). Options.Now is the
+// LEDGER's clock and may be pinned by a test; a deadline must see real time.
+var wallClock = time.Now
+
+// run carries one doctor call's state between arms.
+type run struct {
+	opts     Options
+	path     string
+	res      claudeacct.Resolution
+	rep      *Report
+	deadline time.Time
+	timedOut bool
+	// ledgerFile is the first-sight ledger to record this path in once the
+	// run completes ("" when there is nothing to record).
+	ledgerFile string
+}
+
+// afterArm is a test seam called after each Fast arm; nil in production.
+var afterArm func(name string)
+
+// add appends a finding.
+func (r *run) add(f Finding) { r.rep.Findings = append(r.rep.Findings, f) }
+
+// expired reports — once, with a warn finding — that Options.Timeout has run
+// out, so the caller skips every arm that is left. The report keeps what the
+// arms before it found: a partial answer beats none at turn zero.
+func (r *run) expired(next string) bool {
+	if r.timedOut {
+		return true
+	}
+	if r.deadline.IsZero() || !wallClock().After(r.deadline) {
+		return false
+	}
+	r.timedOut = true
+	r.add(Finding{ID: "timeout", Severity: SevWarn, Title: "the doctor ran out of time",
+		Detail: "Options.Timeout (" + r.opts.Timeout.String() + ") expired before the " + next +
+			" arm; it and every arm after it were skipped"})
+	return true
+}
 
 // getenv is the environment seam varsPresent and the launch marker read.
 var getenv = os.Getenv
@@ -124,35 +214,73 @@ var getenv = os.Getenv
 // userHomeDir is the $HOME seam for the daemon worktree root.
 var userHomeDir = os.UserHomeDir
 
-// Fast is the read-only arm: resolution, estate, store count, coverage, launch
-// marker, daemon flag. An input that cannot be read becomes a Report field (an
-// empty list, a zero count) — never an error. The only error is ErrNoPath.
+// Fast is the read-only, turn-zero arm set (see the package doc). An input
+// that cannot be read becomes a Report field (an empty list, a zero count) or
+// a warn finding — never an error. The only error is ErrNoPath.
 func Fast(opts Options) (Report, error) {
+	r, err := start(opts)
+	if err != nil {
+		return emptyReport(""), err
+	}
+	r.fast()
+	r.commitLedger()
+	return *r.rep, nil
+}
+
+// Full is Fast plus the two findings that need further git calls and so never
+// run at turn zero: binding-tracked and estate-settings-tracked (trust.go).
+func Full(opts Options) (Report, error) {
+	r, err := start(opts)
+	if err != nil {
+		return emptyReport(""), err
+	}
+	r.fast()
+	if !r.expired("full-trust") {
+		r.fullTrust()
+	}
+	r.commitLedger()
+	return *r.rep, nil
+}
+
+// start validates opts and resolves the path.
+func start(opts Options) (*run, error) {
 	if strings.TrimSpace(opts.Path) == "" {
-		return emptyReport(""), ErrNoPath
+		return nil, ErrNoPath
 	}
 	path := opts.Path
 	if abs, err := filepath.Abs(path); err == nil {
 		path = abs
 	}
 	rep := emptyReport(path)
+	r := &run{opts: opts, path: path, rep: &rep}
+	if opts.Timeout > 0 {
+		r.deadline = wallClock().Add(opts.Timeout)
+	}
+	r.res = claudeacct.Resolve(path)
+	return r, nil
+}
 
-	r := claudeacct.Resolve(path)
-	rep.Account = r.Account
+// fast runs every Fast arm in order, stopping early only on the deadline.
+func (r *run) fast() {
+	rep, res, path := r.rep, r.res, r.path
+	rep.Account = res.Account
 	if rep.Account == "" {
 		rep.Account = ingest.DefaultAccount
 	}
-	rep.Source = r.Source
+	rep.Source = res.Source
 	rep.ConfigDir = accountConfigDir(rep.Account)
-	rep.Estate = r.Estate
-	rep.EstateRoot = r.EstateRoot
-	rep.SettingsFile = r.SettingsFile
+	rep.Estate = res.Estate
+	rep.EstateRoot = res.EstateRoot
+	rep.SettingsFile = res.SettingsFile
 
-	rep.Credentials = r.CredentialCount()
-	if state, _ := r.CredentialStore(); state != claudeacct.StoreAbsent {
-		rep.CredentialStore = claudeacct.SecretsPath(r.Estate)
+	// credentials / credentialStore gate on admission (D5): a store present but
+	// rootless, or rooted elsewhere, releases nothing and counts 0 / "".
+	rep.Credentials = res.CredentialCount()
+	if res.EstateAdmitted && res.HasCredentialStore() {
+		rep.CredentialStore = claudeacct.SecretsPath(res.Estate)
 	}
 
+	rep.EnabledPacks = EnabledPacks(path, rep.ConfigDir)
 	rep.VarsExpected = expectedVars(rep.ConfigDir, path)
 	for _, name := range rep.VarsExpected {
 		if getenv(name) != "" {
@@ -161,10 +289,38 @@ func Fast(opts Options) (Report, error) {
 			rep.VarsMissing = append(rep.VarsMissing, name)
 		}
 	}
+	if len(rep.VarsMissing) > 0 {
+		r.add(Finding{ID: "vars-missing", Severity: SevError,
+			Title: fmt.Sprintf("%d referenced MCP variable(s) unset", len(rep.VarsMissing)),
+			Detail: "the enabled packs' MCP configs reference " + strings.Join(rep.VarsMissing, ", ") +
+				", and nothing in this environment supplies them"})
+	}
 
-	rep.LaunchedViaSwarmery = launchedFor(getenv(LaunchPathEnv), path, r)
+	rep.LaunchedViaSwarmery = launchedFor(getenv(LaunchPathEnv), path, res)
 	rep.Daemon = underDaemonRoot(path)
-	return rep, nil
+
+	arms := []struct {
+		name string
+		fn   func()
+	}{
+		{"resolution", r.resolution},
+		{"trust", r.trust},
+		{"settings-delta", r.settingsDelta},
+		{"parity", r.parity},
+		{"first-sight", r.firstSight},
+		{"probe-verdict", r.probeVerdict},
+		{"sysgaps", r.sysgaps},
+		{"stale-duplicates", r.staleDuplicates},
+	}
+	for _, a := range arms {
+		if r.expired(a.name) {
+			return
+		}
+		a.fn()
+		if afterArm != nil {
+			afterArm(a.name)
+		}
+	}
 }
 
 // emptyReport is the zero report with every list non-nil, so each marshals as
@@ -179,6 +335,9 @@ func emptyReport(path string) Report {
 		VarsMissing:     []string{},
 		StaleDuplicates: []Duplicate{},
 		Findings:        []Finding{},
+		EnabledPacks:    []string{},
+		SettingsDelta:   []SettingsDelta{},
+		Parity:          []ParityEntry{},
 	}
 }
 
@@ -289,39 +448,6 @@ func expectedVars(configDir, path string) []string {
 	return out
 }
 
-// enabledPlugins merges enabledPlugins across the layers Claude Code reads for
-// a session at path — the account's settings.json, then the project's
-// .claude/settings.json, then .claude/settings.local.json; a later layer's
-// explicit false disables. Returns the enabled plugin ids, sorted.
-func enabledPlugins(configDir, path string) []string {
-	state := map[string]bool{}
-	for _, f := range []string{
-		filepath.Join(configDir, "settings.json"),
-		filepath.Join(path, ".claude", "settings.json"),
-		filepath.Join(path, ".claude", "settings.local.json"),
-	} {
-		var doc struct {
-			EnabledPlugins map[string]any `json:"enabledPlugins"`
-		}
-		if !readJSON(f, &doc) {
-			continue
-		}
-		for id, v := range doc.EnabledPlugins {
-			if b, ok := v.(bool); ok {
-				state[id] = b
-			}
-		}
-	}
-	ids := make([]string, 0, len(state))
-	for id, on := range state {
-		if on {
-			ids = append(ids, id)
-		}
-	}
-	sort.Strings(ids)
-	return ids
-}
-
 // installRecord is one entry of <configDir>/plugins/installed_plugins.json.
 type installRecord struct {
 	Scope       string `json:"scope"`
@@ -341,7 +467,7 @@ func enabledInstallPaths(configDir, path string) []string {
 		return nil
 	}
 	var out []string
-	for _, id := range enabledPlugins(configDir, path) {
+	for _, id := range EnabledPacks(path, configDir) {
 		if p := pickInstall(doc.Plugins[id], path); p != "" {
 			out = append(out, p)
 		}
