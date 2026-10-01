@@ -45,6 +45,9 @@ export interface PhaseDrawerProps {
   onClose: () => void;
   /** A done phase retires its Edit tab (its doc is the record, not a plan). */
   editable?: boolean;
+  /** The URL of each tab — when given, the tabs are real links (their click
+   * navigates; `onTab` then only serves callers without it). */
+  hrefFor?: ((tab: PhaseTab) => string) | undefined;
   children: ReactNode;
 }
 
@@ -57,13 +60,16 @@ export function PhaseDrawer({
   onNext,
   onClose,
   editable = true,
+  hrefFor,
   children,
 }: PhaseDrawerProps): JSX.Element {
-  const tabs = PHASE_TABS.filter((t) => editable || t.id !== 'edit').map((t) =>
-    t.id === 'criteria' && phase.checkboxesTotal > 0
-      ? { ...t, count: `${String(phase.checkboxesDone)}/${String(phase.checkboxesTotal)}` }
-      : t,
-  );
+  const tabs = PHASE_TABS.filter((t) => editable || t.id !== 'edit').map((t): TabItem<PhaseTab> => ({
+    ...t,
+    ...(t.id === 'criteria' && phase.checkboxesTotal > 0
+      ? { count: `${String(phase.checkboxesDone)}/${String(phase.checkboxesTotal)}` }
+      : {}),
+    ...(hrefFor !== undefined ? { href: hrefFor(t.id) } : {}),
+  }));
   const label = tabs.find((t) => t.id === tab)?.label ?? tab;
   return (
     <Drawer

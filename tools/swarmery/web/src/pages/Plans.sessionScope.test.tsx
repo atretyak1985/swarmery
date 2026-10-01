@@ -23,10 +23,25 @@
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, LinkedSession, Session, SessionPlanGroup } from '../api/types';
 import { Plans } from './Plans';
+import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+
+/** Plans reads its selection from the route (plans-deep-links phase 1), so it
+ * mounts under the real /p/:slug/plans… child paths, not a bare router. */
+function PlansAtRoute(): JSX.Element {
+  return (
+    <MemoryRouter initialEntries={['/p/swarmery/plans']}>
+      <Routes>
+        {PLANS_ROUTE_PATHS.map((p) => (
+          <Route key={p} path={`/p/:slug/${p}`} element={<Plans />} />
+        ))}
+      </Routes>
+    </MemoryRouter>
+  );
+}
 
 vi.mock('../workspace/ProjectContext', () => ({
   useProjectWorkspace: () => ({
@@ -249,9 +264,7 @@ function rowTitles(): string[] {
 /** Mount the page and wait for the column to have loaded its sessions. */
 async function mountPlans(): Promise<void> {
   render(
-    <MemoryRouter>
-      <Plans />
-    </MemoryRouter>,
+    <PlansAtRoute />,
   );
   await waitFor(() => {
     expect(rowTitles().some((t) => t.includes('controller run'))).toBe(true);
@@ -278,7 +291,8 @@ function queryScopeToggle(): HTMLElement | null {
 }
 
 function selectPlan(title: string): void {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(title) }));
+  // Plan-list items are links since plans-deep-links phase 2.
+  fireEvent.click(screen.getByRole('link', { name: new RegExp(title) }));
 }
 
 beforeEach(() => {
@@ -460,9 +474,7 @@ describe('plan sessions column — a plan that never ran', () => {
   it('says so even with a phase open, and offers no dead toggle', async () => {
     epics = [emptyEpic()];
     render(
-      <MemoryRouter>
-        <Plans />
-      </MemoryRouter>,
+      <PlansAtRoute />,
     );
     await screen.findByText('no sessions ran this plan');
 

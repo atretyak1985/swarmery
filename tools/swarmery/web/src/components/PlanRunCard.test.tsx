@@ -150,7 +150,7 @@ describe('PlanRunCard', () => {
     const onToggle = vi.fn();
     renderCard(false, onToggle);
     const link = screen.getByRole('link', { name: /open plan/i });
-    expect(link.getAttribute('href')).toBe('/p/swarmery/plans?plan=7');
+    expect(link.getAttribute('href')).toBe('/p/swarmery/plans?task=7');
     fireEvent.click(link);
     expect(onToggle).not.toHaveBeenCalled();
   });

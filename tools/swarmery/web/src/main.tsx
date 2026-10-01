@@ -30,6 +30,7 @@ import { Architecture } from './pages/Architecture';
 import { Serena } from './pages/Serena';
 import { Graphify } from './pages/Graphify';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
+import { PLANS_ROUTE_PATHS } from './pages/plans/plansUrl';
 import { Today } from './pages/today/Today';
 import './index.css';
 
@@ -305,7 +306,12 @@ const router = createBrowserRouter([
         element: ws(<WorkspaceShell />),
         children: [
           { index: true, element: ws(<Today detail={ws(<ProjectOverview />)} />) },
-          { path: 'plans', element: ws(<PlansPlace />) },
+          // Plans deep links: /plans plus /plans/:plan[/phase/:seq[/:phaseTab] |
+          // /details/:planTab | /details/revisions/:revId] — the URL is the
+          // Plans selection (pages/plans/plansUrl.ts). Same element on every
+          // path: react-router keys nothing here, so moving between them
+          // re-renders PlansPlace instead of remounting it.
+          ...PLANS_ROUTE_PATHS.map((path) => ({ path, element: ws(<PlansPlace />) })),
           { path: 'planning', element: <ProjectTabRedirect place="plans" tab="new" /> },
           { path: 'board', element: <ProjectTabRedirect place="plans" tab="board" /> },
           { path: 'playbooks', element: <ProjectTabRedirect place="plans" tab="playbooks" /> },

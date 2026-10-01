@@ -25,10 +25,25 @@
 // this file.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase } from '../api/types';
 import { Plans } from './Plans';
+import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+
+/** Plans reads its selection from the route (plans-deep-links phase 1), so it
+ * mounts under the real /p/:slug/plans… child paths, not a bare router. */
+function PlansAtRoute(): JSX.Element {
+  return (
+    <MemoryRouter initialEntries={['/p/swarmery/plans']}>
+      <Routes>
+        {PLANS_ROUTE_PATHS.map((p) => (
+          <Route key={p} path={`/p/:slug/${p}`} element={<Plans />} />
+        ))}
+      </Routes>
+    </MemoryRouter>
+  );
+}
 
 vi.mock('../workspace/ProjectContext', () => ({
   useProjectWorkspace: () => ({
@@ -127,9 +142,7 @@ function stubFetch(): void {
 
 async function mountPlans(): Promise<void> {
   render(
-    <MemoryRouter>
-      <Plans />
-    </MemoryRouter>,
+    <PlansAtRoute />,
   );
   await screen.findByRole('button', { name: 'Run phase' });
 }

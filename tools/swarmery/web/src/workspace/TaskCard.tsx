@@ -30,6 +30,7 @@ import { Link } from 'react-router-dom';
 import { CopyIdBadge } from '../components/CopyIdBadge';
 import type { BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { useSessionHref } from '../lib/sessionHref';
+import { plansPath } from '../pages/plans/plansUrl';
 import type { AttentionSignal, AttentionTone, SourceLine } from './boardModel';
 import {
   ageLabel,
@@ -96,7 +97,7 @@ function SourceRow({ task, now }: { task: BoardTask; now: number }): JSX.Element
       ? null
       : line.target.kind === 'session'
         ? sessionHref(line.target.sessionId)
-        : `/p/${line.target.slug}/plans`;
+        : plansPath(line.target.slug, { plan: line.target.externalId });
   return (
     <div className="mt-1 flex items-baseline gap-1.5 font-mono text-[9.5px] leading-snug text-ink-faint">
       {href === null ? (

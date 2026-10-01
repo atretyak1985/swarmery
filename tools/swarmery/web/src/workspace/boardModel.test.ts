@@ -255,12 +255,12 @@ describe('sourceLine', () => {
     expect(line.tip).toBe('spawned by verification to repair T-12');
   });
 
-  it('links a plan card to its project plan list', () => {
+  it('links a plan card to that one plan by its external id', () => {
     const line = sourceLine(
       makeTask({ origin: 'manual', planExternalId: '2026-07-18-plan-doc-lifecycle', projectSlug: 'swarmery' }),
     );
     expect(line.text).toBe('plan 2026-07-18-plan-doc-lifecycle');
-    expect(line.target).toEqual({ kind: 'plans', slug: 'swarmery' });
+    expect(line.target).toEqual({ kind: 'plans', slug: 'swarmery', externalId: '2026-07-18-plan-doc-lifecycle' });
   });
 
   it('drops the plan link, not the prose, when the card has no project slug', () => {
