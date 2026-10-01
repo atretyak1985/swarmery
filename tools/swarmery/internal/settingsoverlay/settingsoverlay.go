@@ -32,6 +32,17 @@
 // short operator-chosen label echoed back as provenance (overlaySources on the
 // API DTOs) so a reader can tell WHERE a managed:true came from.
 //
+// Superseded — the descriptor FILE, not this package. For a project under an
+// estate (`swarmery.estate` in a .claude/settings.local.json at or above it),
+// the descriptor file ~/.swarmery/overlays.json is superseded: the estate
+// binding carries the estate's settings to every session, and the dashboard
+// answers from each repo's own .claude/settings.local.json, which
+// internal/api/settings_overlays.go folds in first (localSettingsOverlay). No
+// estate settings file is folded into overlaysFor() — the dashboard's rows come
+// from the repo's own files. The PACKAGE is not retired: it remains the
+// SWARMERY_SETTINGS_OVERLAYS mechanism for setups without an estate, and with
+// no descriptor on disk it resolves nothing, silently (below).
+//
 // Degradation is the hard requirement: a missing, unreadable or malformed
 // descriptor, an entry with no roots, or a settingsPath that has since been
 // deleted must all collapse to repo-only detection. None of them may fail a

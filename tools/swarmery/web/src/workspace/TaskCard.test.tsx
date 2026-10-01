@@ -21,7 +21,7 @@
 // *.test.tsx, so `npm run build` does NOT type-check this file — check it
 // explicitly with `npx tsc --noEmit --project tsconfig.json <file>` if in doubt.
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardTask, TaskOrigin } from '../api/types';
@@ -227,9 +227,19 @@ describe('TaskCard stale', () => {
 });
 
 describe('TaskCard id chip', () => {
+  // The chip reads navigator.clipboard and document.execCommand; both are swapped
+  // per test, so put the originals back or they leak into every later test.
+  const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const realExecCommand = document.execCommand;
+  afterEach(() => {
+    if (realClipboard) Object.defineProperty(navigator, 'clipboard', realClipboard);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+    document.execCommand = realExecCommand;
+  });
+
   it('copies the id and does not open the card', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const onOpen = vi.fn();
     renderCard({ externalId: 'T-a1b2c3' }, { onOpen });
 
@@ -240,6 +250,45 @@ describe('TaskCard id chip', () => {
     // The id is the readout, not just a control label — it must stay visible
     // through the confirmation, not swap out for "copied".
     expect(screen.getByText('T-a1b2c3')).toBeDefined();
+  });
+
+  // Both paths failing used to be a silent no-op — the dead button the chip
+  // exists to replace. It must say so, visibly and to a screen reader.
+  it('shows and announces a failed copy', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+      configurable: true,
+    });
+    document.execCommand = vi.fn().mockReturnValue(false);
+    renderCard({ externalId: 'T-a1b2c3' });
+
+    screen.getByRole('button', { name: 'copy id: T-a1b2c3' }).click();
+
+    await waitFor(() => expect(screen.getByText('copy failed')).toBeDefined());
+    expect(screen.getByText('✕')).toBeDefined();
+  });
+
+  // The legacy fallback focuses an off-screen textarea; removing it must hand
+  // focus back to the chip, not drop it to <body>.
+  it('keeps focus on the chip through the fallback copy', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    document.execCommand = vi.fn().mockReturnValue(true);
+    // jsdom's select() leaves focus alone; a browser's moves it into the textarea,
+    // which is what strands focus on <body> once the textarea is removed.
+    const select = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'select')
+      .mockImplementation(function (this: HTMLTextAreaElement) {
+        this.focus();
+      });
+    renderCard({ externalId: 'T-a1b2c3' });
+    const chip = screen.getByRole('button', { name: 'copy id: T-a1b2c3' });
+    chip.focus();
+
+    chip.click();
+
+    await waitFor(() => expect(screen.getByText('copied')).toBeDefined());
+    expect(document.activeElement).toBe(chip);
+    select.mockRestore();
   });
 });
 

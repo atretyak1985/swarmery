@@ -618,6 +618,37 @@ func createTargetDistrusted(path string) string {
 	return ""
 }
 
+// Provenance is the probe's verdict on one file, exported for a caller that
+// must CLASSIFY a settings file rather than gate a binding — the prune's three
+// git states (internal/accountprune). ProvenanceUnknown is the zero value, for
+// the same reason trackUnknown is: a verdict nobody set reads as "we do not
+// know", and a caller maps that to its fail-closed side.
+type Provenance int
+
+const (
+	ProvenanceUnknown Provenance = iota
+	ProvenanceUntracked
+	ProvenanceNotRepo
+	ProvenanceTracked
+)
+
+// FileProvenance runs the ONE hardened probe (probeGitTracked: every symlink
+// hop, then the file at its real location; scrubbed GIT_* env, no fsmonitor,
+// no hooks, 2 s timeout) on path and reports its verdict. detail is set only
+// for ProvenanceUnknown: why git gave no answer. No caching: every call probes.
+func FileProvenance(path string) (Provenance, string) {
+	f := probeGitTracked(path)
+	switch f.verdict {
+	case trackTracked:
+		return ProvenanceTracked, ""
+	case trackUntracked:
+		return ProvenanceUntracked, ""
+	case trackNotRepo:
+		return ProvenanceNotRepo, ""
+	}
+	return ProvenanceUnknown, f.detail
+}
+
 // bindingDistrusted is the gate Binding() calls. It probes FRESH every time:
 // this is a spawn path, and a cached verdict there would be a cached security
 // decision.

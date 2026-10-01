@@ -58,16 +58,19 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/accountdoctor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/usage"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
 // maxAccountBodyBytes caps the request bodies here. Both carry a single account
@@ -135,11 +138,20 @@ type accountDTO struct {
 	// to it, not every unbound project that implicitly runs under it — a count
 	// of "all of them" would carry no information.
 	Projects []string `json:"projects"`
+	// ProjectsUnindexed are paths bound to this account that have NO live
+	// (non-archived) projects row — a sub-repo nobody opened a session in yet,
+	// or an archived estate root. Listed so the binding is visible, apart from
+	// Projects so the UI never pretends they are indexed. Never null.
+	ProjectsUnindexed []string `json:"projectsUnindexed"`
 }
 
 // accountsResponse is the GET /api/accounts body.
 type accountsResponse struct {
 	Accounts []accountDTO `json:"accounts"`
+	// IgnoredBindings are binding files the read side ignores (git-tracked or
+	// indeterminate — Lock 1 — or an untrusted mode/owner/type), counted under
+	// no account and listed with their reason instead of dropped. Never null.
+	IgnoredBindings []ignoredBindingDTO `json:"ignoredBindings"`
 }
 
 // provisionResponse is the POST /api/accounts body.
@@ -207,43 +219,175 @@ func ingestedRoots() map[string]bool {
 	return set
 }
 
-// bindingsByAccount maps account key → the project paths bound to it.
-//
-// One settings-file read per indexed project. That is a handful of small local
-// reads on a machine with tens of projects, and the alternative — caching a
-// binding the operator edits by hand in their editor — would go stale silently.
-func (h *Handler) bindingsByAccount() (map[string][]string, error) {
-	rows, err := h.DB.Query(`SELECT path FROM projects ORDER BY path`)
-	if err != nil {
-		return nil, err
+// bindingView is every on-disk binding, split the way the account screen shows
+// it: bound paths WITH a live (non-archived) projects row, bound paths without
+// one, and binding files the read side ignores.
+type bindingView struct {
+	indexed   map[string][]string // account key → paths with a live projects row
+	unindexed map[string][]string // account key → bound paths with no live row
+	ignored   []ignoredBindingDTO
+}
+
+// all is every path bound to key, indexed or not — what a removal leaves
+// dangling.
+func (v bindingView) all(key string) []string {
+	return append(append([]string{}, v.indexed[key]...), v.unindexed[key]...)
+}
+
+// ignoredBindingDTO is a binding file that exists but that Lock 1 (or its
+// mode, owner or type) keeps any reader from honouring: listed as ignored,
+// with the key it declares and why — never counted under an account.
+type ignoredBindingDTO struct {
+	Path     string `json:"path"`
+	Declares string `json:"declares"`
+	Reason   string `json:"reason"`
+}
+
+// discoverBindings is accountdoctor.DiscoverBindings, a seam for tests.
+var discoverBindings = accountdoctor.DiscoverBindings
+
+// bindingCacheTTL bounds how stale GET /api/accounts' binding view may be.
+// The trade-off: discovery walks every estate subtree and classifies each
+// binding (through the 60 s display verdict cache, never a fresh git probe),
+// and every SPA load and project mount waits on this endpoint; a binding the
+// operator edits by hand in an editor shows up within this TTL instead of at
+// once. This API's own binding writes invalidate it immediately.
+const bindingCacheTTL = 10 * time.Second
+
+// bindingCacheNow is the cache's clock, a seam for tests.
+var bindingCacheNow = time.Now
+
+// bindingCache is a short-TTL, single-flight cache of one bindingView.
+type bindingCache struct {
+	mu     sync.Mutex
+	view   bindingView
+	at     time.Time
+	valid  bool
+	gen    uint64 // bumped by invalidate; a flight that straddles one is not stored
+	flight *bindingFlight
+}
+
+type bindingFlight struct {
+	done chan struct{}
+	view bindingView
+	err  error
+}
+
+// get returns the cached view, or runs load once for every concurrent caller.
+func (c *bindingCache) get(load func() (bindingView, error)) (bindingView, error) {
+	c.mu.Lock()
+	if c.valid && bindingCacheNow().Sub(c.at) < bindingCacheTTL {
+		v := c.view
+		c.mu.Unlock()
+		return v, nil
 	}
-	defer rows.Close()
-	out := map[string][]string{}
+	if f := c.flight; f != nil {
+		c.mu.Unlock()
+		<-f.done
+		return f.view, f.err
+	}
+	f := &bindingFlight{done: make(chan struct{})}
+	c.flight = f
+	gen := c.gen
+	c.mu.Unlock()
+
+	f.view, f.err = load()
+	c.mu.Lock()
+	if c.flight == f { // invalidate may have detached it and a newer load taken its place
+		c.flight = nil
+	}
+	if f.err == nil && gen == c.gen {
+		c.view, c.at, c.valid = f.view, bindingCacheNow(), true
+	}
+	c.mu.Unlock()
+	close(f.done)
+	return f.view, f.err
+}
+
+// invalidate drops the cached view; called after every binding write here. It
+// also DETACHES a load already in flight: that load began before the write,
+// so a caller arriving now must start a fresh one rather than join it (the
+// detached load still answers the callers already waiting on it, and its
+// result is never stored — gen moved).
+func (c *bindingCache) invalidate() {
+	c.mu.Lock()
+	c.valid = false
+	c.gen++
+	c.flight = nil
+	c.mu.Unlock()
+}
+
+// bindingsByAccount returns every binding on disk — not only those that happen
+// to have a projects row (SC-10) — through the short-TTL cache above.
+func (h *Handler) bindingsByAccount() (bindingView, error) {
+	return h.bindings.get(h.discoverBindingView)
+}
+
+// discoverBindingView does the work. Seeds are the non-archived projects rows;
+// accountdoctor.DiscoverBindings adds each seed's estate root and every pin
+// below it (the one shared downward walk, with Lock 1 answered through the
+// display verdict cache), and walks the configured onboard roots once. A path
+// under the daemon's worktree root is dropped by path: a lent binding copy
+// there is indistinguishable from a real one by content.
+func (h *Handler) discoverBindingView() (bindingView, error) {
+	v := bindingView{indexed: map[string][]string{}, unindexed: map[string][]string{}, ignored: []ignoredBindingDTO{}}
+	rows, err := h.DB.Query(`SELECT path FROM projects WHERE archived = 0 ORDER BY path`)
+	if err != nil {
+		return v, err
+	}
+	live := map[string]bool{}
+	var seeds []string
 	for rows.Next() {
 		var path string
 		if err := rows.Scan(&path); err != nil {
-			return nil, err
+			rows.Close()
+			return v, err
 		}
-		if key := claudeacct.BindingForDisplay(path); key != "" {
-			out[key] = append(out[key], path)
+		live[filepath.Clean(path)] = true
+		seeds = append(seeds, path)
+	}
+	if err := rows.Close(); err != nil {
+		return v, err
+	}
+	wtRoot := ""
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		wtRoot = filepath.Join(home, filepath.FromSlash(worktree.DefaultRoot))
+	}
+	for _, b := range discoverBindings(seeds, onboardCfg.Roots...) {
+		if wtRoot != "" && (b.Path == wtRoot || strings.HasPrefix(b.Path, wtRoot+string(filepath.Separator))) {
+			continue
+		}
+		switch {
+		case b.Ignored:
+			v.ignored = append(v.ignored, ignoredBindingDTO{Path: b.Path, Declares: b.Key, Reason: b.Reason})
+		case b.Key == "":
+			// an estate declaration with no account pin binds no account
+		case live[b.Path]:
+			v.indexed[b.Key] = append(v.indexed[b.Key], b.Path)
+		default:
+			v.unindexed[b.Key] = append(v.unindexed[b.Key], b.Path)
 		}
 	}
-	return out, rows.Err()
+	return v, nil
 }
 
 // accountRow builds one account's DTO. runnable is the STORED verdict map
 // (store.AllAccountRunnable) — this function must stay a pure read; the probe
 // itself runs only from the explicit POST …/probe endpoint.
-func accountRow(ctx context.Context, a claudeacct.Account, roots map[string]bool, bound map[string][]string, runnable map[string]store.AccountRunnable) accountDTO {
+func accountRow(ctx context.Context, a claudeacct.Account, roots map[string]bool, bound bindingView, runnable map[string]store.AccountRunnable) accountDTO {
 	row := accountDTO{
-		Key:       a.Key,
-		ConfigDir: a.ConfigDir,
-		IsDefault: a.IsDefault,
-		Ingested:  roots[filepath.Clean(a.ProjectsRoot())],
-		Projects:  bound[a.Key],
+		Key:               a.Key,
+		ConfigDir:         a.ConfigDir,
+		IsDefault:         a.IsDefault,
+		Ingested:          roots[filepath.Clean(a.ProjectsRoot())],
+		Projects:          bound.indexed[a.Key],
+		ProjectsUnindexed: bound.unindexed[a.Key],
 	}
 	if row.Projects == nil {
 		row.Projects = []string{}
+	}
+	if row.ProjectsUnindexed == nil {
+		row.ProjectsUnindexed = []string{}
 	}
 	if verdict, ok := runnable[a.Key]; ok {
 		row.Runnable, row.RunnableReason, row.RunnableCheckedAt = runnableDTOFields(verdict)
@@ -371,7 +515,7 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	for _, a := range accounts {
 		rows = append(rows, accountRow(r.Context(), a, roots, bound, runnable))
 	}
-	writeJSON(w, accountsResponse{Accounts: rows}, nil)
+	writeJSON(w, accountsResponse{Accounts: rows, IgnoredBindings: bound.ignored}, nil)
 }
 
 // createAccount handles POST /api/accounts — provision a config dir.
@@ -389,6 +533,7 @@ func (h *Handler) createAccount(w http.ResponseWriter, r *http.Request) {
 	key := strings.TrimSpace(req.Key)
 
 	acct, err := claudeacct.Provision(key)
+	h.bindings.invalidate() // a new account changes which bindings resolve
 	switch {
 	case errors.Is(err, claudeacct.ErrDefaultAccount):
 		writeClientErr(w, http.StatusBadRequest,
@@ -443,11 +588,16 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bound, err := h.bindingsByAccount()
+	// Fresh, never the cached view: its TTL is a display trade-off, and a
+	// binding written by `swarmery account use` or by hand never invalidates
+	// it — a removal answering from it would leave that project's dangling
+	// binding unreported.
+	bound, err := h.discoverBindingView()
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	defer h.bindings.invalidate()
 	switch err := claudeacct.Remove(key); {
 	case errors.Is(err, claudeacct.ErrDefaultAccount):
 		writeClientErr(w, http.StatusBadRequest, "the default account cannot be removed")
@@ -456,7 +606,7 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, removeAccountResponse{OK: true, DanglingBindings: bound[key]}, nil)
+	writeJSON(w, removeAccountResponse{OK: true, DanglingBindings: bound.all(key)}, nil)
 }
 
 // accountProbeResponse is the POST /api/accounts/{account}/probe body — the same
@@ -657,6 +807,8 @@ func (h *Handler) putProjectAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	existedBefore := claudeacct.BindingFileExists(path)
+	// Whatever happens next, the cached binding view may now be wrong.
+	defer h.bindings.invalidate()
 	if err := claudeacct.SetBinding(path, key); err != nil {
 		// SetBinding refuses an invalid key and an unparseable settings file
 		// (400), and an existing file the walk ignores — group/other-writable,

@@ -37,6 +37,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/accountdoctor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/actuals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/advisor"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
@@ -189,6 +190,10 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+	if isUsage(err) {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
@@ -282,6 +287,11 @@ func usage() {
                                    project runs under, bind/clear it, declare an estate root,
                                    print its env line, run a command under it
                                    (never contacts the daemon)
+  swarmery account prune [--path <dir>] [--apply] [--include-tracked] [--json]
+                                   remove the settings keys the project's estate already supplies
+                                   from the files under <dir>; a dry run unless --apply; refuses a
+                                   git-tracked file without --include-tracked (not the retention
+                                   prune above)
   swarmery decide eval [--db <path>] [--llm] [--truth-since <RFC3339>] [--questions <a,b>]
                     [--limit <n>] [--json] [--out <file>]
                     [--min-outcome <f>] [--min-failure <f>] [--min-task <f>]
@@ -1866,6 +1876,30 @@ func cmdServe(args []string) error {
 			}
 		}()
 		log.Printf("swarmery inbox sweeper started (interval 1h, ttl %s)", inboxTTL)
+	}
+
+	// A8 (D13): re-measure the CLI's config channels once per CLI VERSION. The
+	// decision — probe only when ~/.swarmery/probes/<V>.json is absent — lives in
+	// accountdoctor; this only wires the ticker. SWARMERY_CHANNEL_PROBE=0 disables it.
+	if os.Getenv("SWARMERY_CHANNEL_PROBE") != "0" {
+		go func() {
+			probe := func() {
+				ran, err := accountdoctor.ProbeIfNewVersion(context.Background())
+				switch {
+				case err != nil:
+					log.Printf("warning: channel probe: %v", err)
+				case ran:
+					log.Printf("swarmery channel probe: measured the installed CLI version")
+				}
+			}
+			probe()
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				probe()
+			}
+		}()
+		log.Printf("swarmery channel-probe ticker started (interval 6h, runs only on a CLI version change)")
 	}
 
 	// phase 2: approvals — long-poll registry + expiry sweeper + heartbeat.

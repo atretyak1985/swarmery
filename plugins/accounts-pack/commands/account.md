@@ -1,5 +1,5 @@
 ---
-description: Thin entry point for `/account [list|use <key>|clear|switch <key>|setup-shell [--shim] [--uninstall]]` — shows which Claude Code account this project runs under and switches it. Every decision lives in the `swarmery account` CLI; no run logic lives here.
+description: Thin entry point for `/account [list|use <key>|clear|switch <key>|prune [--apply] [--include-tracked]|setup-shell [--shim] [--uninstall]]` — shows which Claude Code account this project runs under and switches it. Every decision lives in the `swarmery account` CLI; no run logic lives here.
 allowed-tools:
   - Bash
 docs:
@@ -17,6 +17,8 @@ docs:
 /account use <key>                    bind this project to an account
 /account clear                        drop the binding (back to the default account)
 /account switch <key>                 move this project's whole declared estate to an account
+/account prune [--apply] [--include-tracked]
+                                      remove settings keys the estate already supplies
 /account setup-shell [--uninstall]    install/remove the `claude` shell function in your profile
 /account setup-shell --shim [--uninstall]
                                       install/remove the `claude` PATH shim in ~/.swarmery/bin
@@ -94,6 +96,21 @@ asked for it this turn. The output lists the descendant pins that disagree (they
 keep their own account) and a credential **count**; relay it unchanged. As with
 `use`, a running session keeps its own account.
 
+### `/account prune [--apply] [--include-tracked]`
+
+```bash
+swarmery account prune --path "${CLAUDE_PROJECT_DIR:-$PWD}"
+```
+
+Without `--apply` the CLI writes nothing: it lists every file it would change.
+Always run this form first and relay its lines unchanged — the `note:` line
+too: it says which sessions lose the pruned keys (anything swarmery does not
+launch, such as an IDE extension or the desktop app). Add `--apply` only when
+the operator asked to apply it this turn, after they have seen that list. Pass
+`--include-tracked` only when the operator named it this turn. If the CLI
+refuses because a file it would write is tracked by git, report the refusal
+and the paths as-is — do not add the flag on your own.
+
 ### `/account setup-shell [--uninstall]`
 
 ```bash
@@ -133,6 +150,8 @@ not already export it. Same consent rule as above: only when asked this turn.
 3. `clear` → takes no further arguments.
 3a. `switch` → requires exactly one following token, the account key; `--force`
     and `--dry-run` are passed through. Missing key → usage, stop.
+3b. `prune` → takes no positional token; `--apply`, `--dry-run` and
+    `--include-tracked` are passed through. Any other flag → usage error, stop.
 4. `setup-shell` → optional `--uninstall` or `--status`, or `--shim` optionally
    followed by `--uninstall` (→ `--shim-uninstall`). Any other flag → usage
    error, stop.
@@ -169,6 +188,7 @@ You have more than one Claude Code account installed on this machine and want to
 /account
 /account use <key>
 /account clear
+/account prune [--apply] [--include-tracked]
 /account setup-shell [--uninstall]
 /account setup-shell --shim [--uninstall]
 ```

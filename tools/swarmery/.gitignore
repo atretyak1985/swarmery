@@ -7,6 +7,9 @@ web/dist/*
 !web/dist/.gitkeep
 internal/docsfs/content/*
 !internal/docsfs/content/.gitkeep
+# the channel-probe harness snapshot (Makefile copy-probe) — .gitkeep keeps go:embed valid
+internal/channelprobe/script/*
+!internal/channelprobe/script/.gitkeep
 .DS_Store
 
 # `go test -coverprofile` leftovers — the raw profile and the gated one the CI

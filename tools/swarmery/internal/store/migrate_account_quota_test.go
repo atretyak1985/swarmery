@@ -64,6 +64,19 @@ func TestMigrateAccountQuotaPreservesRows(t *testing.T) {
 	}
 }
 
+func quotaVersion(t *testing.T) int {
+	t.Helper()
+	db := openRaw(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	var v int
+	if err := db.QueryRow(`SELECT version FROM schema_migrations WHERE name LIKE '%_account_quota.sql'`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
 func latestVersion(t *testing.T) int {
 	t.Helper()
 	db := openRaw(t)
@@ -80,7 +93,9 @@ func latestVersion(t *testing.T) int {
 // TestOpenNoMigrate: a database missing the newest migration keeps missing it
 // after OpenNoMigrate — schema_migrations is byte-for-byte the same.
 func TestOpenNoMigrate(t *testing.T) {
-	latest := latestVersion(t)
+	// The account_quota migration, found by NAME: a later migration must not
+	// turn "one below the quota table" into "one below the newest".
+	latest := quotaVersion(t)
 	path := filepath.Join(t.TempDir(), "old.db")
 	raw, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)")
 	if err != nil {
