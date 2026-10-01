@@ -1760,6 +1760,11 @@ func cmdServe(args []string) error {
 	log.Printf("swarmery auto-mode outage watch started (interval %s, alert at %d no-verdict checks / %s)",
 		automode.DefaultInterval, automode.AlertMin(), automode.AlertWindow)
 
+	// Expired quota breakers: admission closes a quota breaker once its reset has
+	// passed, but an account nothing is admitted onto would keep its Inbox alert
+	// ("paused") up long after the limit reset. The sweep closes it on time.
+	go (&runcore.BreakerTicker{DB: db}).Run(context.Background())
+
 	// retro phase 3: the advisor rule engine — deterministic recommendations
 	// (R1..R6) refreshed once at startup and every 24h, plus on demand via
 	// POST /api/retro/advise. Works purely off the DB, so it runs with or

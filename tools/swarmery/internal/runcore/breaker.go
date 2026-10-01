@@ -329,15 +329,94 @@ func breakerRefusal(db *sql.DB, key string, now time.Time) error {
 		// predates migration 0091 (detected from the query's own error).
 		return nil
 	}
-	if b.Kind == store.BreakerKindQuota && b.ResetsAt != "" {
-		if at, perr := time.Parse(time.RFC3339, b.ResetsAt); perr == nil && !at.After(now) {
-			if _, cerr := CloseBreaker(db, key, store.BreakerClosedByReset, now); cerr != nil {
-				log.Printf("warning: runcore: close breaker account=%s after its reset: %v", key, cerr)
-			}
-			return nil
+	if quotaResetPassed(b, now) {
+		if _, cerr := CloseBreaker(db, key, store.BreakerClosedByReset, now); cerr != nil {
+			log.Printf("warning: runcore: close breaker account=%s after its reset: %v", key, cerr)
 		}
+		return nil
 	}
 	return refusalOf(b)
+}
+
+// quotaResetPassed reports whether b is a quota opening whose reset time is not
+// after now — the one way a breaker closes on time. An auth opening never does.
+func quotaResetPassed(b store.AccountBreaker, now time.Time) bool {
+	if b.Kind != store.BreakerKindQuota || b.ResetsAt == "" {
+		return false
+	}
+	at, err := time.Parse(time.RFC3339, b.ResetsAt)
+	return err == nil && !at.After(now)
+}
+
+// CloseExpiredBreakers closes ('reset') every open quota breaker whose reset
+// time has passed, resolving its alert, and reports how many it closed.
+// breakerRefusal does the same for one account, but only when something is
+// admitted onto it; without this sweep an idle account stays "paused" on the
+// Inbox long after its limit reset.
+func CloseExpiredBreakers(db *sql.DB, now time.Time) (int, error) {
+	if db == nil {
+		return 0, nil
+	}
+	open, err := store.ListAccountBreakers(db, true)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, b := range open {
+		if !quotaResetPassed(b, now) {
+			continue
+		}
+		closed, err := CloseBreaker(db, b.Account, store.BreakerClosedByReset, now)
+		if err != nil {
+			return n, err
+		}
+		if closed {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// DefaultBreakerSweepInterval is how often BreakerTicker sweeps.
+const DefaultBreakerSweepInterval = time.Minute
+
+// BreakerTicker runs CloseExpiredBreakers periodically — automode.Ticker's shape.
+type BreakerTicker struct {
+	DB       *sql.DB
+	Interval time.Duration
+	// Now is the clock; nil means time.Now. A seam for tests.
+	Now func() time.Time
+}
+
+// Run sweeps once immediately, then on every tick, until ctx is cancelled.
+func (t *BreakerTicker) Run(ctx context.Context) {
+	iv := t.Interval
+	if iv <= 0 {
+		iv = DefaultBreakerSweepInterval
+	}
+	t.Once()
+	tick := time.NewTicker(iv)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			t.Once()
+		}
+	}
+}
+
+// Once runs a single sweep. A failure is logged and the breakers are left as
+// they were; the admission path still closes an expired one on its own.
+func (t *BreakerTicker) Once() {
+	now := time.Now
+	if t.Now != nil {
+		now = t.Now
+	}
+	if _, err := CloseExpiredBreakers(t.DB, now()); err != nil {
+		log.Printf("warning: runcore: sweep expired breakers: %v", err)
+	}
 }
 
 func refusalOf(b store.AccountBreaker) *AccountBreakerError {
