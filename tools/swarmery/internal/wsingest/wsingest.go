@@ -29,6 +29,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
@@ -788,11 +789,13 @@ func (s *Scanner) taskProjectID(ws *workspace, now time.Time) (int64, error) {
 	if name == "" {
 		name = ws.slug
 	}
+	// The workspace slug can already belong to another project (projects.slug
+	// is UNIQUE): suffix it rather than fail the insert and drop every card.
 	if _, err := s.db.Exec(`
 		INSERT INTO projects (path, slug, name, first_seen)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(path) DO NOTHING`,
-		path, ws.slug, name, now.Format(time.RFC3339)); err != nil {
+		path, ingest.FreeSlug(s.db, ws.slug), name, now.Format(time.RFC3339)); err != nil {
 		return 0, err
 	}
 	var id int64

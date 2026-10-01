@@ -5,9 +5,9 @@ import "testing"
 // The migration must run on a store that ALREADY holds the duplicate it exists
 // to outlaw — that is the whole live case. Lowest id keeps the name; the loser
 // is renamed, never deleted.
-func TestMigrate0090DeduplicatesExistingSlugs(t *testing.T) {
+func TestMigrate0093DeduplicatesExistingSlugs(t *testing.T) {
 	db := openRaw(t)
-	migrateUpTo(t, db, 89)
+	migrateUpTo(t, db, 92)
 
 	// The live shape: a real checkout and the workspace dir that shadowed it,
 	// both answering to one path-derived slug.
@@ -53,7 +53,7 @@ func TestMigrate0090DeduplicatesExistingSlugs(t *testing.T) {
 // The point of the migration: a second row claiming a taken slug must now be
 // rejected by the store instead of silently making every by-slug lookup a coin
 // flip.
-func TestMigrate0090RejectsADuplicateAfterwards(t *testing.T) {
+func TestMigrate0093RejectsADuplicateAfterwards(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -69,7 +69,7 @@ func TestMigrate0090RejectsADuplicateAfterwards(t *testing.T) {
 }
 
 // Distinct paths must still be insertable; the index constrains slug, not path.
-func TestMigrate0090LeavesDistinctSlugsAlone(t *testing.T) {
+func TestMigrate0093LeavesDistinctSlugsAlone(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -87,9 +87,9 @@ func TestMigrate0090LeavesDistinctSlugsAlone(t *testing.T) {
 // earlier, unmerged migration number (this dev machine's real history) must
 // not fail — IF NOT EXISTS makes it a no-op on the index, and the dedup UPDATE
 // is naturally a no-op once there is nothing left to rename.
-func TestMigrate0090IsIdempotentWhenIndexAlreadyExists(t *testing.T) {
+func TestMigrate0093IsIdempotentWhenIndexAlreadyExists(t *testing.T) {
 	db := openRaw(t)
-	migrateUpTo(t, db, 89)
+	migrateUpTo(t, db, 92)
 	if _, err := db.Exec(`CREATE UNIQUE INDEX idx_projects_slug ON projects(slug)`); err != nil {
 		t.Fatalf("simulate pre-applied index: %v", err)
 	}

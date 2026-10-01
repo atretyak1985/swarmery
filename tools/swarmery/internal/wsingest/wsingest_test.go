@@ -339,3 +339,31 @@ func TestExplicitRefsHookWrittenRow(t *testing.T) {
 			"rows for one session must dedupe", n)
 	}
 }
+
+// A workspace whose slug already belongs to another project must still mint
+// its registry row (suffixed) and keep its cards. Before FreeSlug the INSERT
+// hit projects.slug's UNIQUE index, Scan logged a warning, and every card of
+// the workspace vanished from the board on every scan.
+func TestScanSuffixesWorkspaceSlugTakenByAnotherProject(t *testing.T) {
+	db := testDB(t)
+	seed(t, db)
+	mustExec(t, db, `INSERT INTO projects (id, path, slug, name, first_seen)
+		VALUES (4, '/code/projgamma', 'projgamma', 'Gamma checkout', '2026-06-01T00:00:00Z')`)
+	pinMtime(t)
+
+	stats := scan(t, db)
+
+	if stats.Tasks != 6 {
+		t.Errorf("tasks = %d, want 6 (warnings: %v)", stats.Tasks, stats.Warnings)
+	}
+	if got := count(t, db, `SELECT COUNT(*) FROM projects WHERE path='/work/gamma-app' AND slug='projgamma-2'`); got != 1 {
+		t.Errorf("workspace project row not minted under the suffixed slug")
+	}
+	if got := count(t, db, `SELECT COUNT(*) FROM projects WHERE id=4 AND slug='projgamma'`); got != 1 {
+		t.Errorf("the existing owner of the slug was renamed")
+	}
+	if got := count(t, db, `SELECT COUNT(*) FROM tasks t JOIN projects p ON p.id = t.project_id
+		WHERE p.path='/work/gamma-app'`); got != 1 {
+		t.Errorf("the workspace's card is not attached to its own project")
+	}
+}

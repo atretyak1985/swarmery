@@ -1526,10 +1526,12 @@ func parentProjectPath(q dbtx, path string) string {
 	return path
 }
 
-// freeSlug returns want, or a suffixed variant when another project already
-// answers to it.
+// FreeSlug returns want, or a suffixed variant when another project already
+// answers to it. Every writer that mints a projects row from a derived slug
+// goes through it: UpsertProject here and the workspace scanner
+// (wsingest.taskProjectID).
 //
-// projects.slug carries a UNIQUE index (migration 0090). Without this the
+// projects.slug carries a UNIQUE index (migration 0093). Without this the
 // derived slug could collide and the INSERT would FAIL — turning a routine
 // ingest of a new cwd into a hard error — because two distinct paths can
 // derive the same slug: SlugForPath only maps '/'→'-', so "/a/b" and "/a-b"
@@ -1540,7 +1542,7 @@ func parentProjectPath(q dbtx, path string) string {
 //
 // The scan is bounded: each probe tests a distinct candidate and the loop can
 // only run as many times as there are rows already holding that prefix.
-func freeSlug(q dbtx, want string) string {
+func FreeSlug(q dbtx, want string) string {
 	for i := 0; i < 64; i++ {
 		candidate := want
 		if i > 0 {
@@ -1583,7 +1585,7 @@ func UpsertProject(q dbtx, path, firstSeen, lastActivity string) (id int64, crea
 		}
 		res, ierr := q.Exec(
 			`INSERT INTO projects (path, slug, name, first_seen, last_activity) VALUES (?, ?, ?, ?, ?)`,
-			path, freeSlug(q, SlugForPath(path)), name, firstSeen, lastActivity)
+			path, FreeSlug(q, SlugForPath(path)), name, firstSeen, lastActivity)
 		if ierr != nil {
 			return 0, false, fmt.Errorf("insert project: %w", ierr)
 		}

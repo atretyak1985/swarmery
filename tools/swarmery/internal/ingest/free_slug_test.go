@@ -2,7 +2,7 @@ package ingest
 
 // projects.slug carries a UNIQUE index (store migration 0091). Two distinct
 // paths can derive the same slug — SlugForPath only maps '/'→'-', so "/a/b"
-// and "/a-b" both become "-a-b" — and without freeSlug that second INSERT
+// and "/a-b" both become "-a-b" — and without FreeSlug that second INSERT
 // would fail outright, turning routine ingest of a new cwd into a hard error.
 
 import "testing"
