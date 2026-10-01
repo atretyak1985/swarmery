@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -480,6 +481,76 @@ func TestStartRefusesAStackTipThatLacksAMergedDependency(t *testing.T) {
 	}
 	if out := strings.TrimSpace(e.repo.run("worktree", "list", "--porcelain")); strings.Count(out, "worktree ") != 1 {
 		t.Errorf("worktrees after the refusal:\n%s\nwant only the repo itself", out)
+	}
+}
+
+// TestStartIgnoresADependencyThatRanInAnotherRepo: in a multi-repo plan a
+// dependency that ran in a DIFFERENT repository has its run branch there, not
+// here. It says nothing about this repo's base, so it must not be read as a
+// deleted (merged) branch — which, with the base moved past the stack tip, is the
+// step-4b refusal the operator could never clear.
+//
+// The REAL resolver: it reads the project registry, so this also proves the
+// dependency's repo is resolved without holding the store's one connection.
+func TestStartIgnoresADependencyThatRanInAnotherRepo(t *testing.T) {
+	e := newStackEnv(t)
+	e.svc.RepoRoot = nil
+	other := mkRepo(t, filepath.Join(t.TempDir(), "other"))
+	mustExec(t, e.db, `INSERT INTO projects(id, path, slug, first_seen) VALUES(2, ?, 'other', '2026-01-01T00:00:00Z')`, other)
+	// Phase 3 is complete, in the other repo, on a branch this repo never had.
+	const elsewhere = "swarm/phase-778"
+	mustExec(t, e.db, "INSERT INTO epic_phases "+
+		"(workspace_task_id, seq, name, doc_path, depends_on, checkboxes_total, checkboxes_done, run_state, run_branch, repo) "+
+		"VALUES (?, 3, 'Phase 3', '/plan/phase-3.md', '[]', 1, 1, 'done', ?, ?)", e.taskID, elsewhere, "`"+other+"`")
+	mustExec(t, e.db, `UPDATE epic_phases SET depends_on='[1,3]' WHERE id=?`, e.p2)
+	// This repo's base moves on past phase 1's fork point.
+	e.repo.commit("unrelated work on main")
+
+	var headAtSpawn string
+	e.setRun(func(spec RunSpec) (*Run, error) {
+		headAtSpawn = strings.TrimSpace(e.repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+		e.finishPhase2(t, spec)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := e.svc.Start(e.p2, "", "")
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Start: %v — a dependency in another repo must not refuse this one", err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("Start did not return in 20s — resolving the dependency's repo blocked on the store")
+	}
+	if headAtSpawn != e.depTip {
+		t.Errorf("worktree HEAD at spawn = %s, want phase 1's tip %s (the only dependency in this repo)", headAtSpawn, e.depTip)
+	}
+}
+
+// TestStartStacksOnADependencyDeclaringAnotherCellForThisRepo: a dependency whose
+// Repo cell differs but resolves to the same checkout (a single-repo project falls
+// back to its own path) ran HERE — dropping it would start the run without its work.
+func TestStartStacksOnADependencyDeclaringAnotherCellForThisRepo(t *testing.T) {
+	e := newStackEnv(t)
+	// The identity resolver newTestService wires sends every cell to the project path.
+	mustExec(t, e.db, "UPDATE epic_phases SET repo='`ghost-repo`' WHERE id=?", e.p1)
+
+	var headAtSpawn string
+	e.setRun(func(spec RunSpec) (*Run, error) {
+		headAtSpawn = strings.TrimSpace(e.repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+		e.finishPhase2(t, spec)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	})
+
+	if _, err := e.svc.Start(e.p2, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if headAtSpawn != e.depTip {
+		t.Errorf("worktree HEAD at spawn = %s, want the dependency tip %s — its branch is in this repo", headAtSpawn, e.depTip)
 	}
 }
 

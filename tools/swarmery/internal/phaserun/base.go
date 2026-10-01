@@ -19,6 +19,7 @@ package phaserun
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -682,23 +683,31 @@ func uniqueSorted(in []string) []string {
 // from row ids, for the reason RunBranch itself is recorded. A dependency that
 // never ran has none and contributes nothing: there is no branch its work could be
 // stranded on.
+//
+// Only dependencies that run in THIS phase's repository (info.RepoRoot) count. In
+// a multi-repo plan a dependency declaring another repo has its run branch there:
+// probed here it would read as a deleted — merged — branch and trip step 4b with a
+// refusal no merge in this repo can clear. Its root is resolved by the same rules
+// as this phase's (runRoot); a dependency whose root cannot be resolved is kept,
+// which is how every dependency was treated before.
 func (s *Service) depRunBranches(info phaseInfo) ([]string, error) {
-	var out []string
+	type dep struct{ branch, repo string }
+	var deps []dep
 	for _, seq := range info.DependsOn {
 		rows, err := s.DB.Query(`
-			SELECT COALESCE(run_branch, '') FROM epic_phases
+			SELECT COALESCE(run_branch, ''), COALESCE(repo, '') FROM epic_phases
 			 WHERE workspace_task_id = ? AND seq = ?`, info.WorkspaceTaskID, seq)
 		if err != nil {
 			return nil, err
 		}
 		for rows.Next() {
-			var branch string
-			if err := rows.Scan(&branch); err != nil {
+			var d dep
+			if err := rows.Scan(&d.branch, &d.repo); err != nil {
 				rows.Close()
 				return nil, err
 			}
-			if branch != "" {
-				out = append(out, branch)
+			if d.branch != "" {
+				deps = append(deps, d)
 			}
 		}
 		if err := rows.Err(); err != nil {
@@ -707,7 +716,31 @@ func (s *Service) depRunBranches(info phaseInfo) ([]string, error) {
 		}
 		rows.Close()
 	}
+	// Filtered only once every cursor is closed: resolving a repository reads the
+	// project registry, and the store runs one connection.
+	var out []string
+	for _, d := range deps {
+		if s.sameRepo(info, d.repo) {
+			out = append(out, d.branch)
+		}
+	}
 	return out, nil
+}
+
+// sameRepo reports whether a dependency of info declaring depRepo (its raw Repo
+// cell) runs in info.RepoRoot. Same project, same workspace — so the same cell
+// resolves to the same repository and needs no lookup; a different cell may still
+// land on the same checkout (a single-repo project falls back to its path), so it
+// is resolved. An unresolvable root is "same": see depRunBranches.
+func (s *Service) sameRepo(info phaseInfo, depRepo string) bool {
+	if strings.TrimSpace(depRepo) == strings.TrimSpace(info.Repo) {
+		return true
+	}
+	root, err := s.runRoot(phaseInfo{ProjectPath: info.ProjectPath, WorkspaceRoot: info.WorkspaceRoot, Repo: depRepo})
+	if err != nil {
+		return true
+	}
+	return filepath.Clean(root) == filepath.Clean(info.RepoRoot)
 }
 
 // resolveRunBase is resolveBase for a loaded phase: its dependencies' stamped run
