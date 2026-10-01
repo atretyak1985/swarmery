@@ -447,3 +447,50 @@ func TestLoginCompleteClosesAuthBreaker(t *testing.T) {
 		t.Errorf("breaker = %+v, want closed by login", b)
 	}
 }
+
+// TestAlertsAreNotLintFindings: an alert is stored as a config_lint_findings row
+// (AlertRules) but is not config lint. The System page's severity badges and the
+// hub's lint count must leave it out — its target matches no component, so a
+// badge that counted it would filter to a list where nothing shows.
+func TestAlertsAreNotLintFindings(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "alerts-lint.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.Exec(`INSERT INTO config_lint_findings (target, rule, severity, message, detected_at, resolved_at) VALUES
+	      ('hook:1', 'hook_no_timeout', 'warn', 'no timeout set', '2026-09-30T00:00:00Z', NULL),
+	      (?, ?, 'error', 'paused', '2026-09-30T00:00:00Z', NULL),
+	      ('auto-mode-classifier', 'auto_mode_no_verdict', 'warn', 'no verdict', '2026-09-30T00:00:00Z', NULL)`,
+		store.AccountBreakerTarget("work"), store.AccountBreakerRule); err != nil {
+		t.Fatal(err)
+	}
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	var s struct {
+		Lint struct {
+			Error int64 `json:"error"`
+			Warn  int64 `json:"warn"`
+		} `json:"lint"`
+	}
+	getJSON(t, srv.URL+"/api/system/summary", &s)
+	if s.Lint.Error != 0 || s.Lint.Warn != 1 {
+		t.Errorf("summary.lint = %+v, want error=0 warn=1 (the hook finding only)", s.Lint)
+	}
+	var hub struct {
+		LintFindings int64 `json:"lintFindings"`
+	}
+	getJSON(t, srv.URL+"/api/system/hub/summary", &hub)
+	if hub.LintFindings != 1 {
+		t.Errorf("hub lintFindings = %d, want 1 (the hook finding only)", hub.LintFindings)
+	}
+	// Both alerts are still alerts.
+	if got := listAlertsOK(t, srv); len(got) != 2 {
+		t.Errorf("alerts = %d, want 2", len(got))
+	}
+}
