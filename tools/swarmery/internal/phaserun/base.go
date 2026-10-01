@@ -639,16 +639,21 @@ func probeMerge(git worktree.Git, caps *gitCapability, repoRoot, into, from stri
 		}
 		return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: %w", from, into, err)
 	}
-	merged := firstLine(out)
-	if merged == "" {
+	if strings.TrimSpace(out) == "" {
 		return mergeUnsupported, fmt.Errorf("merge probe of %s into %s: git answered with nothing", from, into)
 	}
 	tree, err := git.Run(repoRoot, "rev-parse", into+"^{tree}")
 	if err != nil {
 		return mergeUnsupported, fmt.Errorf("resolve tree of %s: %w", into, err)
 	}
-	if merged == strings.TrimSpace(tree) {
-		return mergeNoOp, nil
+	// The answer is searched for, not read off the first line: worktree.ExecGit
+	// returns stderr in the same buffer, so a warning printed during the merge
+	// comes ahead of the tree id. No warning line is ever a tree id.
+	want := strings.TrimSpace(tree)
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == want {
+			return mergeNoOp, nil
+		}
 	}
 	return mergeChanges, nil
 }
