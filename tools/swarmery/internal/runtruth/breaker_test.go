@@ -2,6 +2,8 @@ package runtruth
 
 import (
 	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
@@ -122,4 +124,64 @@ func TestRecordBreakerStoreError(t *testing.T) {
 	db.Close()
 	rec.Record("x", noLogin)
 	rec.Record("x", limited)
+}
+
+// inheritAccountDir makes the daemon look like it inherited CLAUDE_CONFIG_DIR =
+// a real account's dir: a hermetic HOME holding <home>/.claude-<key>/projects
+// (what claudeacct.Discover lists), and the variable pointing at that dir.
+func inheritAccountDir(t *testing.T, key string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".claude-"+key)
+	if err := os.MkdirAll(filepath.Join(dir, "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+}
+
+// TestRecordPausesEveryKeyOnTheFailedDir: an unbound run executes under the
+// config dir the daemon inherited but is paused under the default key; runs of
+// projects bound to the account that owns that dir use the same dir under its
+// own key. A failure of either kind of run hits the other, so both keys open.
+func TestRecordPausesEveryKeyOnTheFailedDir(t *testing.T) {
+	t.Run("an unbound run's failure pauses the dir's account too", func(t *testing.T) {
+		inheritAccountDir(t, "inherited")
+		rec, db, _ := newRecorder(t)
+		rec.Record("", noLogin)
+		for _, key := range []string{"default", "inherited"} {
+			if b, ok := breaker(t, db, key); !ok || !b.IsOpen() || b.Kind != store.BreakerKindAuth {
+				t.Errorf("breaker %s = %+v ok=%v, want an open auth breaker", key, b, ok)
+			}
+		}
+	})
+	t.Run("a bound run on that dir pauses the unbound runs too", func(t *testing.T) {
+		inheritAccountDir(t, "inherited")
+		rec, db, _ := newRecorder(t)
+		rec.Record("inherited", limited)
+		for _, key := range []string{"inherited", "default"} {
+			if b, ok := breaker(t, db, key); !ok || !b.IsOpen() || b.Kind != store.BreakerKindQuota {
+				t.Errorf("breaker %s = %+v ok=%v, want an open quota breaker", key, b, ok)
+			}
+		}
+	})
+	t.Run("another account's failure pauses only itself", func(t *testing.T) {
+		inheritAccountDir(t, "inherited")
+		rec, db, _ := newRecorder(t)
+		rec.Record("nabu-org", noLogin)
+		for _, key := range []string{"default", "inherited"} {
+			if _, ok := breaker(t, db, key); ok {
+				t.Errorf("breaker %s exists after another account's failure", key)
+			}
+		}
+	})
+	t.Run("an inherited dir that is no account adds nothing", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(t.TempDir(), "daemon-config-dir"))
+		rec, db, _ := newRecorder(t)
+		rec.Record("", noLogin)
+		if _, ok := breaker(t, db, "daemon-config-dir"); ok {
+			t.Error("opened a breaker for a dir no project can be bound to — its alert could never be resumed")
+		}
+	})
 }

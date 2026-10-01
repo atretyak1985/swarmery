@@ -14,9 +14,11 @@ package runtruth
 import (
 	"database/sql"
 	"log"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
@@ -83,11 +85,14 @@ func NewRecorder(db *sql.DB) *Recorder {
 // and an operator who closed the breaker by hand must see the very next failing
 // run reopen it.
 func (rec *Recorder) Record(account string, r claudeprobe.Result) {
-	if account == "" {
+	unbound := account == ""
+	if unbound {
 		account = ingest.DefaultAccount
 	}
 	if r.Status == claudeprobe.StatusLimited {
-		rec.trip(account, store.BreakerKindQuota, r.Reason)
+		for _, key := range tripKeys(account, unbound) {
+			rec.trip(key, store.BreakerKindQuota, r.Reason)
+		}
 		rec.recordLimit(account)
 		return
 	}
@@ -95,7 +100,9 @@ func (rec *Recorder) Record(account string, r claudeprobe.Result) {
 		return
 	}
 	if r.Status == claudeprobe.StatusNoLogin {
-		rec.trip(account, store.BreakerKindAuth, r.Reason)
+		for _, key := range tripKeys(account, unbound) {
+			rec.trip(key, store.BreakerKindAuth, r.Reason)
+		}
 	}
 
 	rec.mu.Lock()
@@ -122,6 +129,29 @@ func (rec *Recorder) Record(account string, r claudeprobe.Result) {
 		return
 	}
 	rec.lastWrite[account] = now
+}
+
+// tripKeys is every breaker key a failed run's verdict opens: the key the run
+// was admitted under, and the other key whose runs execute under the same
+// config dir. An UNBOUND run is admitted under the default key but executes
+// under the dir the daemon inherited (ingest.UnboundAccount); a project bound
+// to the account that owns that dir runs there too, under that account's key.
+// Either one's failure hits the other. The dir's key is added for an unbound
+// run only when it is a real account (claudeacct.Discover): no project can be
+// bound to anything else, and its alert could never be resumed.
+func tripKeys(account string, unbound bool) []string {
+	keys := []string{account}
+	dirKey := ingest.UnboundAccount()
+	if dirKey == ingest.DefaultAccount {
+		return keys
+	}
+	switch {
+	case unbound && slices.ContainsFunc(claudeacct.Discover(), func(a claudeacct.Account) bool { return a.Key == dirKey }):
+		keys = append(keys, dirKey)
+	case !unbound && account == dirKey:
+		keys = append(keys, ingest.DefaultAccount)
+	}
+	return keys
 }
 
 // trip opens account's breaker from a run's verdict. Best-effort, like every

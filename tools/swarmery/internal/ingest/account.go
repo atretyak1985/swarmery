@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -47,4 +48,17 @@ func AccountFor(originRoot string) string {
 		return DefaultAccount
 	}
 	return key
+}
+
+// UnboundAccount is the AccountFor key of the config dir an UNBOUND project's
+// runs execute under: the CLAUDE_CONFIG_DIR this process inherited (an unbound
+// run keeps it), or DefaultAccount when it inherited none. Those runs are
+// admitted and paused under DefaultAccount whatever this returns, so a failure
+// seen in the transcripts of THIS dir must pause DefaultAccount too.
+func UnboundAccount() string {
+	dir := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
+	if dir == "" {
+		return DefaultAccount
+	}
+	return AccountFor(filepath.Join(dir, "projects"))
 }

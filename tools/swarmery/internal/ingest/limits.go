@@ -97,13 +97,28 @@ func (in *ingester) tripBreaker(account string, r *record, text string) error {
 	// picks the window whose reset time the breaker waits for. "" for an auth
 	// trip and for a limit whose wording names no scope.
 	scope, _ := claudeprobe.LimitScope(text)
-	changed, err := store.TripAccountBreaker(in.tx, account, kind, reason, store.BreakerSourceTranscript, scope, now)
-	if err != nil || !changed {
-		return err
+	// The dir's own key, and the default key when this is the dir unbound runs
+	// execute under (UnboundAccount): they are paused under that key, and they
+	// would die on the same failure.
+	keys := []string{account}
+	if account != DefaultAccount && account == UnboundAccount() {
+		keys = append(keys, DefaultAccount)
 	}
-	log.Printf("ingest: account breaker OPEN account=%s kind=%s source=transcript", account, kind)
-	return findings.Upsert(in.tx, store.AccountBreakerTarget(account), store.AccountBreakerRule,
-		"error", store.AccountBreakerMessage(kind))
+	for _, key := range keys {
+		changed, err := store.TripAccountBreaker(in.tx, key, kind, reason, store.BreakerSourceTranscript, scope, now)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			continue
+		}
+		log.Printf("ingest: account breaker OPEN account=%s kind=%s source=transcript", key, kind)
+		if err := findings.Upsert(in.tx, store.AccountBreakerTarget(key), store.AccountBreakerRule,
+			"error", store.AccountBreakerMessage(kind)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // apiErrorText is the prose of an assistant record: its text blocks joined, or
