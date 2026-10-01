@@ -29,6 +29,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
@@ -788,19 +789,16 @@ func (s *Scanner) taskProjectID(ws *workspace, now time.Time) (int64, error) {
 	if name == "" {
 		name = ws.slug
 	}
-	if _, err := s.db.Exec(`
-		INSERT INTO projects (path, slug, name, first_seen)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(path) DO NOTHING`,
-		path, ws.slug, name, now.Format(time.RFC3339)); err != nil {
-		return 0, err
-	}
-	var id int64
-	if err := s.db.QueryRow(`SELECT id FROM projects WHERE path = ?`, path).Scan(&id); err != nil {
+	// Through ingest.InsertProject, never a bare INSERT: projects.slug is
+	// unique, and a workspace dir named after a slug another project already
+	// holds (a registry slug, a path-derived one) must still get its row — a
+	// failed insert here would drop every card of the workspace on every scan.
+	id, _, err := ingest.InsertProject(s.db, path, ws.slug, name, now.Format(time.RFC3339), nil)
+	if err != nil {
 		return 0, err
 	}
 	ws.projectID = sql.NullInt64{Int64: id, Valid: true}
-	_, err := s.db.Exec(`UPDATE workspaces SET project_id = ? WHERE id = ?`, id, ws.id)
+	_, err = s.db.Exec(`UPDATE workspaces SET project_id = ? WHERE id = ?`, id, ws.id)
 	return id, err
 }
 
