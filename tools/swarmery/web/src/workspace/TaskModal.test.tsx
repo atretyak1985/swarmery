@@ -157,6 +157,20 @@ describe('a card that has never run', () => {
   });
 });
 
+describe('the micro-plan chip', () => {
+  it('links to that one plan on its project (canonical /p/<slug>/plans/<externalId>)', () => {
+    renderModal(makeTask({ planExternalId: '2026-07-18-plan-doc-lifecycle' }));
+    expect(screen.getByRole('link', { name: 'plan' }).getAttribute('href')).toBe(
+      '/p/swarmery/plans/2026-07-18-plan-doc-lifecycle',
+    );
+  });
+
+  it('is left out, not linked to a 404, when the card has no project slug', () => {
+    renderModal(makeTask({ planExternalId: '2026-07-18-plan-doc-lifecycle', projectSlug: null }));
+    expect(screen.queryByRole('link', { name: 'plan' })).toBeNull();
+  });
+});
+
 describe('a card that has run', () => {
   it('offers the run-log tab and keeps the brief selected until it is clicked', () => {
     renderModal(ranTask());

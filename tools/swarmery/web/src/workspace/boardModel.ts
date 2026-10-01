@@ -326,7 +326,7 @@ export function ageLabel(task: BoardTask, nowMs: number): string | null {
  */
 export type SourceTarget =
   | { readonly kind: 'session'; readonly sessionId: number }
-  | { readonly kind: 'plans'; readonly slug: string };
+  | { readonly kind: 'plans'; readonly slug: string; readonly externalId: string };
 
 /** How a card's provenance reads on one line. */
 export interface SourceLine {
@@ -374,10 +374,13 @@ export function sourceLine(task: BoardTask): SourceLine {
     return {
       text: `plan ${task.planExternalId}`,
       // The Plans page is project-scoped only (main.tsx: /p/:slug/plans), so a
-      // card with no slug gets the prose without a link that would 404. It also
-      // deep-links by numeric task id rather than external id, which is why the
-      // target is the project's plan list and not this one plan.
-      target: task.projectSlug === null ? null : { kind: 'plans', slug: task.projectSlug },
+      // card with no slug gets the prose without a link that would 404. With a
+      // slug the target is this one plan, addressed by its external id — the
+      // component turns it into /p/<slug>/plans/<externalId> (plansUrl.ts).
+      target:
+        task.projectSlug === null
+          ? null
+          : { kind: 'plans', slug: task.projectSlug, externalId: task.planExternalId },
       tip: `plan ${task.planExternalId} — acceptance criteria and completion report`,
     };
   }

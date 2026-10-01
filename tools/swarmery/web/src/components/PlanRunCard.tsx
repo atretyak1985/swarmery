@@ -13,6 +13,7 @@
 
 import { Link } from 'react-router-dom';
 import { projectLabel } from '../lib/format';
+import { plansTaskHref } from '../pages/plans/plansUrl';
 import { useProjectColor } from '../lib/projectColors';
 import {
   planRowNotes,
@@ -43,7 +44,9 @@ export function PlanRunCard({
   nowById?: Record<number, string>;
 }): JSX.Element {
   const colorFor = useProjectColor();
-  const plansHref = `/p/${slug ?? run.projectSlug}/plans?plan=${String(run.taskId)}`;
+  // A run knows its plan's task id, not its externalId: hand off through the
+  // permanent ?task= resolver, which replaces to the canonical plan path.
+  const plansHref = plansTaskHref(slug ?? run.projectSlug, run.taskId);
   const running = runIsRunning(run.rows);
   const notes = planRowNotes(run.rows);
   const count = run.rows.length;

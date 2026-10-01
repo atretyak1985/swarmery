@@ -98,10 +98,10 @@ describe('TaskCard source line', () => {
     expect(link.getAttribute('data-tip')).toBe('add waypoint editing');
   });
 
-  it('links a plan card to its project plan list', () => {
+  it('links a plan card to that one plan (canonical /p/<slug>/plans/<externalId>)', () => {
     renderCard({ planExternalId: '2026-07-18-plan-doc-lifecycle', projectSlug: 'swarmery' });
     const link = screen.getByText('plan 2026-07-18-plan-doc-lifecycle');
-    expect(link.getAttribute('href')).toBe('/p/swarmery/plans');
+    expect(link.getAttribute('href')).toBe('/p/swarmery/plans/2026-07-18-plan-doc-lifecycle');
   });
 
   it('renders a verify-fix card without throwing, and names what it repairs', () => {
