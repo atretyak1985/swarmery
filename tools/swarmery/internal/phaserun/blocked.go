@@ -64,7 +64,7 @@ func (e *BlockedUnchangedError) Error() string {
 	return fmt.Sprintf("this phase has been blocked since %s and nothing has changed since then "+
 		"(same base commit, same dependency branches, same ticked criteria, same phase doc) — "+
 		"a re-run would hit the same block: %s. Change one of them, wait until %s, "+
-		"or force the re-run (`\"force\": true` on the run request).",
+		"or force the re-run (Run anyway in the dashboard, `\"force\": true` on the run request).",
 		e.Since, reason, e.RetryAfter)
 }
 
