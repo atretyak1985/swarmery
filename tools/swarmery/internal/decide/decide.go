@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Kind is the shape of a question's answer.
@@ -417,11 +418,14 @@ func truncate(s string, n int) string {
 		return s
 	}
 	cut := s[:n]
-	for len(cut) > 0 && cut[len(cut)-1]&0xC0 == 0x80 {
-		cut = cut[:len(cut)-1]
+	// Only the LAST rune can be split: find where it starts and drop it when its
+	// bytes run past the cut. A rune that ends exactly at n is kept.
+	i := len(cut) - 1
+	for i > 0 && i > len(cut)-utf8.UTFMax && !utf8.RuneStart(cut[i]) {
+		i--
 	}
-	if len(cut) > 0 && cut[len(cut)-1]&0x80 != 0 {
-		cut = cut[:len(cut)-1]
+	if i >= 0 && !utf8.FullRuneInString(cut[i:]) {
+		cut = cut[:i]
 	}
 	return cut
 }
