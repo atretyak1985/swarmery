@@ -180,6 +180,35 @@ func TestRuleSyntheticFailure(t *testing.T) {
 	wantRule(t, qs, QD2Failure, "", "")
 }
 
+// R1 stays out of a session whose work landed before the failure line: the
+// outcome prompt calls committed, pushed or merged work shipped, so "failed" at
+// confidence 1 would contradict the evidence — the operator who merged and then
+// hit a limit on a follow-up did not fail. Both questions go to the model.
+func TestRuleSyntheticFailureAfterLandedWork(t *testing.T) {
+	db := openDB(t)
+	for i, cmd := range []string{
+		`git commit -m "fix: parser"`,
+		`git push -u origin fix/parser`,
+		`gh pr create --fill`,
+		`gh pr merge 12 --squash`,
+	} {
+		uuid := fmt.Sprintf("s-landed-%d", i)
+		seedEnding(t, db, uuid, syntheticModel, "stop_sequence", "You've hit your session limit · resets 1:30am (UTC)")
+		seedBash(t, db, uuid, cmd, "ok")
+		qs := d2QuestionsFor(t, db, uuid, false)
+		wantRule(t, qs, QD2Outcome, "", "")
+		wantRule(t, qs, QD2Failure, "", "")
+	}
+
+	// Reading git, or a landing command that failed, landed nothing: R1 stands.
+	seedEnding(t, db, "s-nothing-landed", syntheticModel, "stop_sequence", "You've hit your session limit · resets 1:30am (UTC)")
+	seedBash(t, db, "s-nothing-landed", `git status && git log --oneline -3`, "ok")
+	seedBash(t, db, "s-nothing-landed", `git push`, "error")
+	qs := d2QuestionsFor(t, db, "s-nothing-landed", false)
+	wantRule(t, qs, QD2Outcome, "failed", RuleSyntheticFailure)
+	wantRule(t, qs, QD2Failure, claudeprobe.FailureQuota, RuleSyntheticFailure)
+}
+
 // A synthetic last turn that names no failure — empty, the CLI's `No response
 // requested.` filler, an unrecorded wording — matches no rule, and neither does
 // a MODEL turn that merely opens with a failure line. All go to the model.

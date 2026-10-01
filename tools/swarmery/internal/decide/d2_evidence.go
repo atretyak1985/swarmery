@@ -67,6 +67,12 @@ type gitTally struct {
 	commits, pushes, prsOpened, prsMerged int
 }
 
+// landed reports any landing action: a commit, a push, or a PR opened (which
+// pushes its branch) or merged — the work the outcome prompt calls shipped.
+func (t gitTally) landed() bool {
+	return t.commits+t.pushes+t.prsOpened+t.prsMerged > 0
+}
+
 // gitActivity tallies git commit/push and gh pr create/merge across the
 // session's Bash calls that exited ok. An errored call (nothing to commit, a
 // rejected push, a failed merge) landed nothing and is not counted.

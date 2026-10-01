@@ -396,6 +396,12 @@ func d2Rules(f d2Facts, verdict string, phaseRunFeature bool) d2RuleSet {
 		return out
 	}
 	kind, allTicked, oneShot := f.ending.failureKind(), f.run.allTicked(), f.oneShot()
+	// R1 only when nothing landed first: the outcome prompt calls committed,
+	// pushed or merged work shipped, so a session that merged its PR and then hit
+	// a limit on a follow-up did not fail — that judgement is the model's.
+	if f.git.landed() {
+		kind = ""
+	}
 
 	if out.outcome.value == "" {
 		switch {
