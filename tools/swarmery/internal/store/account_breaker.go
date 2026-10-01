@@ -111,22 +111,12 @@ func OpenAccountBreaker(q Querier, b AccountBreaker) (changed bool, err error) {
 	if b.Account == "" {
 		return false, errors.New("account breaker: empty account")
 	}
-	cur, ok, err := GetAccountBreaker(q, b.Account)
-	if err != nil {
-		return false, err
-	}
-	if ok && cur.IsOpen() {
-		if cur.Kind != BreakerKindQuota || b.Kind != BreakerKindAuth {
-			return false, nil
-		}
-		_, err = q.Exec(`
-			UPDATE account_breaker
-			   SET kind = ?, reason = ?, source = ?, resets_at = NULL
-			 WHERE account = ? AND state = 'open'`,
-			b.Kind, b.Reason, b.Source, b.Account)
-		return err == nil, err
-	}
-	_, err = q.Exec(`
+	// ONE statement, so nothing can land between deciding and writing: two
+	// openers that both read "no row" would otherwise both write, and a quota
+	// opening could overwrite an auth one. The DO UPDATE's WHERE is the rule
+	// above; every SET reads the row as it was, so an escalation keeps opened_at
+	// and drops the reset time (excluded.resets_at is NULL for auth).
+	res, err := q.Exec(`
 		INSERT INTO account_breaker
 		  (account, state, kind, reason, opened_at, resets_at, source, closed_at, closed_by)
 		VALUES (?, 'open', ?, ?, ?, ?, ?, NULL, NULL)
@@ -134,13 +124,20 @@ func OpenAccountBreaker(q Querier, b AccountBreaker) (changed bool, err error) {
 		  state = 'open',
 		  kind = excluded.kind,
 		  reason = excluded.reason,
-		  opened_at = excluded.opened_at,
+		  opened_at = CASE WHEN account_breaker.state = 'open'
+		                   THEN account_breaker.opened_at ELSE excluded.opened_at END,
 		  resets_at = excluded.resets_at,
 		  source = excluded.source,
 		  closed_at = NULL,
-		  closed_by = NULL`,
+		  closed_by = NULL
+		WHERE account_breaker.state <> 'open'
+		   OR (account_breaker.kind = 'quota' AND excluded.kind = 'auth')`,
 		b.Account, b.Kind, b.Reason, b.OpenedAt, nullIfEmpty(b.ResetsAt), b.Source)
-	return err == nil, err
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return err == nil && n > 0, err
 }
 
 // TripAccountBreaker is OpenAccountBreaker for a failure observed at now: it
