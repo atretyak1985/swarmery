@@ -3,6 +3,7 @@ package accountdoctor
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -72,6 +73,64 @@ func TestRenderRedactsEveryStoreValue(t *testing.T) {
 		}
 		if !strings.Contains(out, redactedMarker) {
 			t.Error("nothing was redacted — the poison must have been")
+		}
+	}
+}
+
+// A credential VALUE that coincides with a location the doctor resolved — the
+// estate root itself, or one component of it such as the operator's user name —
+// is not a leak: the path is the session's own working tree. Every location,
+// and every path under one of its ancestors, keeps its spelling in both forms,
+// so the preflight hook still reads estateRoot. The same value OUTSIDE a
+// location is still redacted, and a value that spills past one is redacted
+// whole.
+func TestRenderKeepsLocationsAValueCoincidesWith(t *testing.T) {
+	f := newFixture(t)
+	owner := "zzqowner"
+	root := filepath.Join(t.TempDir(), owner, "estate")
+	fresh := filepath.Join(root, "fresh")
+	mustMkdir(t, fresh, 0o755)
+	spill := "pg://zzq-user:zzq-pass@" + root
+	f.anchoredEstate(t, root, "estate", "PACK_OWNER="+owner+"\nPACK_DSN="+spill+"\n")
+	installed := map[string][]installRecord{}
+	f.plugin(t, installed, "fs@m", `{"mcpServers":{"fs":{"env":{"R":"${PACK_FS_ROOT}"}}}}`)
+	f.writeInstalled(t, installed)
+	f.enable(t, map[string]bool{"fs@m": true})
+	t.Setenv("PACK_FS_ROOT", root)
+
+	rep, err := Fast(Options{Path: fresh})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ancestorFile := filepath.Join(filepath.Dir(root), ".claude", "settings.local.json")
+	rep.Findings = append(rep.Findings, Finding{ID: "poison", Severity: SevInfo, Title: "poison",
+		Detail: "owner " + owner + " | dsn " + spill + " | parent " + ancestorFile})
+
+	var js, txt bytes.Buffer
+	if err := RenderJSON(&js, rep); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenderText(&txt, rep); err != nil {
+		t.Fatal(err)
+	}
+	var got Report
+	if err := json.Unmarshal(js.Bytes(), &got); err != nil {
+		t.Fatalf("redaction broke the JSON: %v\n%s", err, js.String())
+	}
+	if got.Path != fresh || got.EstateRoot != root {
+		t.Errorf("path = %q, estateRoot = %q; want %q and %q", got.Path, got.EstateRoot, fresh, root)
+	}
+	for name, out := range map[string]string{"json": js.String(), "text": txt.String()} {
+		for _, loc := range []string{fresh, root, ancestorFile} {
+			if !strings.Contains(out, loc) {
+				t.Errorf("%s: location %q lost its spelling:\n%s", name, loc, out)
+			}
+		}
+		if strings.Contains(out, "owner "+owner) {
+			t.Errorf("%s: the value outside every location survived", name)
+		}
+		if strings.Contains(out, "zzq-user:zzq-pass") {
+			t.Errorf("%s: a value that spills past a location survived", name)
 		}
 	}
 }

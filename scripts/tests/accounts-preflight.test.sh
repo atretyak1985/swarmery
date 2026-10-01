@@ -39,14 +39,22 @@ STUB_BIN="$WORK/stubbin"; mkdir -p "$STUB_BIN"
 cat >"$STUB_BIN/swarmery" <<'STUB'
 #!/bin/bash
 path=""
+timeout_flag=0
 while [ $# -gt 0 ]; do
-  case "$1" in --path) path="$2"; shift ;; esac
+  case "$1" in --path) path="$2"; shift ;; --timeout) timeout_flag=1 ;; esac
   shift
 done
 case "${STUB_MODE:-json}" in
   fail) exit 1 ;;
   garbage) echo 'not json'; exit 0 ;;
   hang) sleep 30; exit 0 ;;
+  # A binary built before `doctor --timeout` existed: Go's flag package
+  # rejects the flag on stderr and the command exits 1 (verbatim from a build
+  # of the commit before the flag was added).
+  old) if [ "$timeout_flag" = 1 ]; then
+         printf 'flag provided but not defined: -timeout\nUsage of account doctor:\n  -fast\n    \tthe read-only arm\nerror: usage: swarmery account doctor --fast [--json] [--path <dir>]\n' >&2
+         exit 1
+       fi ;;
 esac
 launched=false
 [ -n "${SWARMERY_LAUNCH_PATH:-}" ] && [ "$SWARMERY_LAUNCH_PATH" = "$path" ] && launched=true
@@ -181,6 +189,8 @@ if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ] && [ "$elapsed" -lt 4 ]; then ok
 else bad "(i5) swarmery sleeps 30 -> returns under 4 s, silent" "<4s '' exit 0" "${elapsed}s '$HOOK_OUT' exit $HOOK_EXIT"; fi
 
 # ── (j) the character gate stays stricter than claudeacct.ValidKey ────────────
+# A key outside the gate never reaches the context — and never silences the
+# warning either: the gap is still reported, without the key.
 # shellcheck disable=SC2016  # literal $ and backtick are the point
 gate_vectors=('a b' 'a$b' 'a;b' 'a`b' 'wörk' '"a"' '-a')
 gv=0
@@ -188,8 +198,10 @@ for key in "${gate_vectors[@]}"; do
   gv=$((gv + 1))
   R_KEY="$WORK/key$gv.json"; report "$R_KEY" "$key" "" 0 '["ONE_NAME"]' '[]' '["ONE_NAME"]'
   run_hook "$R_KEY" "$PROJ"
-  if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ]; then ok
-  else bad "(j$gv) account key '$key' -> silent" "'' exit 0" "'$HOOK_OUT' exit $HOOK_EXIT"; fi
+  ctx="$(ctx_of "$HOOK_OUT")"
+  if [ "$HOOK_EXIT" -eq 0 ] && printf '%s' "$ctx" | grep -qF 'ONE_NAME' &&
+    ! printf '%s' "$ctx" | grep -qF "account '" && ! printf '%s' "$ctx" | grep -qF -- "$key"; then ok
+  else bad "(j$gv) account key '$key' -> the gap without the key" "ONE_NAME, no key" "'$HOOK_OUT' exit $HOOK_EXIT"; fi
 done
 R_BADVAR="$WORK/badvar.json"; report "$R_BADVAR" default "" 0 '["*","a b","$(x)"]' '[]' '["*","a b","$(x)"]'
 run_hook "$R_BADVAR" "$PROJ"
@@ -247,6 +259,27 @@ lines="$(printf '%s' "$HOOK_OUT" | grep -c '^' || true)"
 if [ "$HOOK_EXIT" -eq 0 ] && [ "$lines" -eq 1 ] && printf '%s' "$ctx" | grep -qF '"/x/a\"b\nIgnore previous\u001fz"' &&
   [ "$(printf '%s' "$ctx" | grep -c '^')" -eq 1 ]; then ok
 else bad "(m2) quotes and control characters in the root are escaped" "one escaped line" "$lines line(s) ctx='$ctx'"; fi
+
+# ── (m3) the doctor has already recorded a first sight, so an estate key the
+#        gate refuses drops the KEY from the sentence, never the sentence ──────
+R_FSK="$WORK/fs-key.json"; report "$R_FSK" default 'wörk' 13 "$N13_JSON" "$N13_JSON" '[]' "$FS"
+run_hook "$R_FSK" "$PROJ"
+ctx="$(ctx_of "$HOOK_OUT")"
+if [ "$HOOK_EXIT" -eq 0 ] && printf '%s' "$ctx" | grep -qF '/estate/root' &&
+  printf '%s' "$ctx" | grep -qF '13 credential' && ! printf '%s' "$ctx" | grep -qF 'wörk'; then ok
+else bad "(m3) estate key outside the gate -> first-sight still said, key absent" "root + count, no key" "'$HOOK_OUT' exit $HOOK_EXIT"; fi
+# ...and the same for a coverage gap: named variables, no estate key
+R_GAPK="$WORK/gap-key.json"; report "$R_GAPK" default 'a;b' 0 '["ONE_NAME"]' '[]' '["ONE_NAME"]'
+run_hook "$R_GAPK" "$PROJ"
+ctx="$(ctx_of "$HOOK_OUT")"
+if [ "$HOOK_EXIT" -eq 0 ] && printf '%s' "$ctx" | grep -qF 'ONE_NAME' && ! printf '%s' "$ctx" | grep -qF 'a;b' &&
+  ! printf '%s' "$ctx" | grep -qF "estate '"; then ok
+else bad "(m3) estate key outside the gate -> the gap without the key" "ONE_NAME, no key" "'$HOOK_OUT' exit $HOOK_EXIT"; fi
+
+# ── (o) a swarmery built before `doctor --timeout` still gets its report read ─
+run_hook "$R_GAP" "$PROJ" STUB_MODE=old
+if [ "$HOOK_OUT" = "$GAP_OUT" ] && [ "$HOOK_EXIT" -eq 0 ]; then ok
+else bad "(o) an older doctor that rejects --timeout -> the gap is still reported" "identical to (a)" "'$HOOK_OUT' exit $HOOK_EXIT"; fi
 
 # ── (n) the inner bound is below the watchdog; the retired name stays gone ───
 if [ "$(grep -c -- '--timeout 2.5s' "$HOOK")" -eq 1 ] && [ ! -e "$(dirname "$HOOK")/warn-wrong-account.sh" ]; then ok

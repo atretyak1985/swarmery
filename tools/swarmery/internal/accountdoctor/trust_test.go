@@ -167,3 +167,32 @@ func TestResolutionShadowedPin(t *testing.T) {
 		t.Error("a non-default account carries defaultProfile")
 	}
 }
+
+// The estate's account is what the estate root RESOLVES to — an account it
+// inherits from a parent pin included — not the root's own pin alone. A
+// descendant pinning that inherited account shadows nothing; one pinning
+// another account does.
+func TestResolutionShadowedPinInheritedAccount(t *testing.T) {
+	f := newFixture(t)
+	f.loggedInAccount(t, "work")
+	parent := t.TempDir()
+	bindingAt(t, parent, `{"claudeAccount":"work"}`)
+	root := filepath.Join(parent, "estate")
+	f.anchoredEstate(t, root, "estate", "")
+	same := filepath.Join(root, "same")
+	bindingAt(t, same, `{"claudeAccount":"work"}`)
+	other := filepath.Join(root, "other")
+	bindingAt(t, other, `{"claudeAccount":"default"}`)
+
+	rep, _ := Fast(Options{Path: same})
+	var shadowed []Finding
+	for _, fd := range rep.Findings {
+		if fd.ID == "shadowed-pin" {
+			shadowed = append(shadowed, fd)
+		}
+	}
+	otherFile := filepath.Join("other", ".claude", "settings.local.json")
+	if len(shadowed) != 1 || !strings.HasSuffix(shadowed[0].File, otherFile) || !strings.Contains(shadowed[0].Title, "(work)") {
+		t.Errorf("shadowed-pin = %+v, want exactly the default pin under %s, against the estate's work", shadowed, other)
+	}
+}

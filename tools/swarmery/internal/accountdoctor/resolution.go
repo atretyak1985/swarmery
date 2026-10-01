@@ -65,7 +65,10 @@ func (r *run) resolution() {
 	if res.EstateRoot == "" {
 		return
 	}
-	estateAccount := claudeacct.Binding(res.EstateRoot)
+	// What the root RESOLVES to, an account inherited from a parent pin
+	// included — the root's own pin alone would call every pin of that
+	// inherited account an override. acctops.Switch reads it the same way.
+	estateAccount := claudeacct.ResolveForDisplay(res.EstateRoot).Account
 	if estateAccount == "" {
 		estateAccount = ingest.DefaultAccount
 	}

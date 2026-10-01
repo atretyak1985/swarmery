@@ -26,6 +26,9 @@ func TestFirstSightOncePerPath(t *testing.T) {
 	opts := Options{Path: fresh, StateDir: state, Record: true, Now: now}
 
 	rep, _ := Fast(opts)
+	if err := Commit(rep); err != nil {
+		t.Fatal(err)
+	}
 	var fs []Finding
 	for _, fd := range rep.Findings {
 		if fd.ID == "first-sight" {
@@ -46,13 +49,13 @@ func TestFirstSightOncePerPath(t *testing.T) {
 		t.Errorf("ledger dir mode = %v, want 0700", di.Mode().Perm())
 	}
 
-	if rep, _ := Fast(opts); countFindings(rep, "first-sight", "") != 0 {
+	if rep, _ := Fast(opts); countFindings(rep, "first-sight", "") != 0 || Commit(rep) != nil {
 		t.Error("second run warned again")
 	}
 	if err := os.Remove(ledger); err != nil {
 		t.Fatal(err)
 	}
-	if rep, _ := Fast(opts); countFindings(rep, "first-sight", "") != 1 {
+	if rep, _ := Fast(opts); countFindings(rep, "first-sight", "") != 1 || Commit(rep) != nil {
 		t.Error("after removing the ledger: no warning")
 	}
 
@@ -62,7 +65,7 @@ func TestFirstSightOncePerPath(t *testing.T) {
 	before, _ := os.Stat(ledger)
 	ro := opts
 	ro.Path, ro.Record = other, false
-	if rep, _ := Fast(ro); countFindings(rep, "first-sight", "") != 1 {
+	if rep, _ := Fast(ro); countFindings(rep, "first-sight", "") != 1 || Commit(rep) != nil {
 		t.Error("read-only run did not warn")
 	}
 	after, _ := os.Stat(ledger)
@@ -70,7 +73,7 @@ func TestFirstSightOncePerPath(t *testing.T) {
 		t.Error("--no-record modified the ledger")
 	}
 	os.Remove(ledger)
-	if _, err := Fast(ro); err != nil {
+	if rep, err := Fast(ro); err != nil || Commit(rep) != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(ledger); !os.IsNotExist(err) {

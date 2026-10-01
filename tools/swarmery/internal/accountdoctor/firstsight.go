@@ -8,6 +8,12 @@ package accountdoctor
 // once-per-path, not once-per-session (a warning at every start is a warning
 // nobody reads).
 //
+// The arm only DECIDES: the report carries the record, and Commit writes it
+// once the caller has put the report out. A run that never delivers its
+// report — killed by a hook watchdog mid-arm or mid-render, or a write to a
+// closed pipe — leaves the path unrecorded, so the warning comes back next
+// time instead of being spent unseen.
+//
 // The ledger is <StateDir>/estate-seen.json, dir 0700 / file 0600, written
 // atomically. Options.Record false makes the arm read-only (the file is never
 // created or modified); Options.StateDir "" means no ledger at all. The
@@ -47,6 +53,12 @@ type ledger struct {
 	Seen map[string]string `json:"seen"`
 }
 
+// sightRecord is one first-sight warning a report owes its ledger.
+type sightRecord struct {
+	file, path string
+	at         time.Time
+}
+
 func (r *run) firstSight() {
 	res, rep := r.res, r.rep
 	if res.EstateRoot == "" || rep.Daemon {
@@ -78,30 +90,24 @@ func (r *run) firstSight() {
 	if file == "" || !r.opts.Record {
 		return
 	}
-	// Recorded only when the whole run completes (commitLedger): a hook
-	// watchdog that kills the doctor mid-run must not mark the warning as
-	// shown when it never reached the session.
-	r.ledgerFile = file
-}
-
-// commitLedger records the first-sight warning this run emitted, once the
-// run has completed. A no-op when nothing is pending.
-func (r *run) commitLedger() {
-	if r.ledgerFile == "" {
-		return
-	}
-	file := r.ledgerFile
-	r.ledgerFile = ""
-	l := readLedger(file)
 	now := r.opts.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
-	l.Seen[r.path] = now.UTC().Format(time.RFC3339)
-	if err := writeLedger(file, l); err != nil {
-		r.add(Finding{ID: "first-sight-ledger", Severity: SevWarn,
-			Title: "the first-sight ledger could not be written", Detail: err.Error(), File: file})
+	rep.pending = &sightRecord{file: file, path: r.path, at: now}
+}
+
+// Commit records the first-sight warning rep carries, if any. Call it only
+// after rep has been written out: a warning recorded before it reached anyone
+// would never be shown again. A report with nothing pending is a no-op.
+func Commit(rep Report) error {
+	p := rep.pending
+	if p == nil {
+		return nil
 	}
+	l := readLedger(p.file)
+	l.Seen[p.path] = p.at.UTC().Format(time.RFC3339)
+	return writeLedger(p.file, l)
 }
 
 // hasProjectRow asks the index whether r.path has a projects row. ok is false

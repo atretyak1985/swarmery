@@ -62,3 +62,24 @@ func TestParityPerIDAndScope(t *testing.T) {
 		t.Error("Parity(nil) = nil, want []")
 	}
 }
+
+// An empty recorded version is still a version: "" under one account and
+// "1.0.0" under the other differ, whichever account the comparison meets
+// first (map order is random, hence the repeats).
+func TestParityEmptyVersionStillDiffers(t *testing.T) {
+	root := t.TempDir()
+	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
+	writeInstalledAt(t, a, map[string][]map[string]string{"p@m": {{"scope": "user", "version": ""}}})
+	writeInstalledAt(t, b, map[string][]map[string]string{"p@m": {{"scope": "user", "version": "1.0.0"}}})
+	for i := 0; i < 50; i++ {
+		got := Parity([]AccountPlugins{{"a", a}, {"b", b}})
+		if len(got) != 1 || got[0].Kind != "version" {
+			t.Fatalf("run %d: Parity = %+v, want one version entry for p@m", i, got)
+		}
+	}
+	// Both empty is parity.
+	writeInstalledAt(t, b, map[string][]map[string]string{"p@m": {{"scope": "user", "version": ""}}})
+	if got := Parity([]AccountPlugins{{"a", a}, {"b", b}}); len(got) != 0 {
+		t.Errorf("both empty: Parity = %+v, want none", got)
+	}
+}

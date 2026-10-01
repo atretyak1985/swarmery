@@ -89,14 +89,16 @@ func Parity(accts []AccountPlugins) []ParityEntry {
 	if len(accts) > 1 {
 		for k, byAcct := range versions {
 			entry := ParityEntry{ID: k.id, Scope: k.scope, Versions: map[string][]string{}}
+			// first, not sig == "": an account whose only version is the empty
+			// string has the signature "" too, and must still be compared.
 			var sig string
-			same := true
+			first, same := true, true
 			for acct, set := range byAcct {
 				vs := sortedSet(set)
 				entry.Versions[acct] = vs
 				s := strings.Join(vs, ",")
-				if sig == "" {
-					sig = s
+				if first {
+					sig, first = s, false
 				} else if s != sig {
 					same = false
 				}

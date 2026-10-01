@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,5 +90,48 @@ func TestAccountEnvStillOneLine(t *testing.T) {
 	out.Reset()
 	if err := accountEnv([]string{"--path", t.TempDir()}, &out); err != nil || out.Len() != 0 {
 		t.Errorf("unbound account env = %q %v, want zero lines", out.String(), err)
+	}
+}
+
+// failingWriter is a stdout whose reader is gone (a hook watchdog killed it).
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
+
+// The first-sight ledger is recorded only once the report is out: when the
+// report cannot be written, the path stays unrecorded and the warning is
+// shown next time instead of never.
+func TestAccountDoctorRecordsFirstSightOnlyAfterTheReport(t *testing.T) {
+	_, proj := hermeticDoctor(t)
+	if err := os.MkdirAll(filepath.Join(proj, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, ".claude", "settings.local.json"),
+		[]byte(`{"swarmery":{"estate":"e1"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fresh := filepath.Join(proj, "fresh")
+	if err := os.MkdirAll(fresh, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ledger := filepath.Join(os.Getenv("SWARMERY_DOCTOR_DIR"), "estate-seen.json")
+	args := []string{"--fast", "--json", "--path", fresh}
+
+	if err := accountDoctor(args, failingWriter{}); err == nil {
+		t.Fatal("a report that could not be written returned nil")
+	}
+	if _, err := os.Stat(ledger); !os.IsNotExist(err) {
+		t.Errorf("the path was recorded although its report never went out (stat: %v)", err)
+	}
+
+	var out bytes.Buffer
+	if err := accountDoctor(args, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"first-sight"`) {
+		t.Fatalf("no first-sight finding in %s", out.String())
+	}
+	if _, err := os.Stat(ledger); err != nil {
+		t.Errorf("the path was not recorded once its report went out: %v", err)
 	}
 }
