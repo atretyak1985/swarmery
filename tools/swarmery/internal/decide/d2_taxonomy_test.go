@@ -22,6 +22,11 @@ func TestAgrees(t *testing.T) {
 		{"truth other agrees with answer quota", QD2Failure, "other", "quota", true},
 		{"truth other agrees with answer api-error", QD2Failure, "other", "api-error", true},
 		{"parent match ignores case", QD2Failure, "Other", "API-Error", true},
+		{"truth blocked-on-operator agrees with answer auth", QD2Failure, "blocked-on-operator", "auth", true},
+		{"truth tool-error agrees with answer api-error", QD2Failure, "tool-error", "api-error", true},
+		{"truth blocked-on-operator does not agree with answer quota", QD2Failure, "blocked-on-operator", "quota", false},
+		{"truth tool-error does not agree with answer auth", QD2Failure, "tool-error", "auth", false},
+		{"truth auth does not agree with answer blocked-on-operator", QD2Failure, "auth", "blocked-on-operator", false},
 		{"truth auth does not agree with answer other", QD2Failure, "auth", "other", false},
 		{"truth quota does not agree with answer other", QD2Failure, "quota", "other", false},
 		{"truth api-error does not agree with answer other", QD2Failure, "api-error", "other", false},
@@ -48,9 +53,14 @@ func TestFailureCausesTaxonomy(t *testing.T) {
 	if !slices.Equal(FailureCauses, want) {
 		t.Fatalf("FailureCauses = %v, want the old order with auth, quota, api-error appended", FailureCauses)
 	}
-	for child, parent := range FailureParent {
-		if !slices.Contains(FailureCauses, child) || !slices.Contains(FailureCauses, parent) {
-			t.Errorf("FailureParent[%q] = %q: both must be failure causes", child, parent)
+	for child, parents := range FailureParent {
+		if !slices.Contains(FailureCauses, child) || len(parents) == 0 {
+			t.Errorf("FailureParent[%q] = %v: the child must be a failure cause with a parent", child, parents)
+		}
+		for _, parent := range parents {
+			if !slices.Contains(FailureCauses, parent) || FailureParent[parent] != nil {
+				t.Errorf("FailureParent[%q] names %q: a parent must be an original failure cause", child, parent)
+			}
 		}
 	}
 	if !slices.Equal(OptionsFor(QD2Failure), FailureCauses) {

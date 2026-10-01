@@ -106,14 +106,23 @@ API stopped them:
 | `quota` | A usage limit: the session, weekly, model, or a spend limit |
 | `api-error` | The API itself: unreachable, overloaded, a connection lost mid-response, a timeout |
 
-They were added after labelling had begun, when all three were labelled `other`. So
-each has `other` as its **parent**, and agreement follows one rule:
+They were added after labelling had begun, so each has the labels operators used for
+it before it existed as its **parents**:
 
-- an answer of `auth`, `quota` or `api-error` **agrees** with a label of `other` — the
-  old label was the closest one available, and the answer is the more precise reading
-  of it;
-- an answer of `other` does **not** agree with a label of `auth`, `quota` or
-  `api-error` — once you have said which it was, the vaguer answer is a miss.
+| Cause | Parents |
+|---|---|
+| `auth` | `other`, `blocked-on-operator` — a logged-out CLI waits for you to log in |
+| `quota` | `other` |
+| `api-error` | `other`, `tool-error` |
+
+Agreement follows one rule:
+
+- an answer of `auth`, `quota` or `api-error` **agrees** with a label naming one of its
+  parents — the old label was the closest one available, and the answer is the more
+  precise reading of it;
+- the reverse does **not** agree: an answer of `other` (or `blocked-on-operator`)
+  against a label of `auth` is a miss — once you have said which it was, the vaguer
+  answer is a miss.
 
 Old labels therefore stay valid, and you never have to relabel a session to keep the
 agreement numbers honest.

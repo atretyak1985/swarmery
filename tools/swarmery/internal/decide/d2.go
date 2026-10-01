@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,14 +34,20 @@ var (
 
 const LabelUnknown = "unknown"
 
-// FailureParent maps a cause added after labelling began onto the label an
-// operator would have used before it existed.
-var FailureParent = map[string]string{"auth": "other", "quota": "other", "api-error": "other"}
+// FailureParent maps a cause added after labelling began onto every label an
+// operator used for it before it existed: `other` by default, and the cause the
+// 2026-09-29/30 triage actually wrote — a logged-out CLI was blocked on the
+// operator, an API error was filed as a tool error.
+var FailureParent = map[string][]string{
+	"auth":      {"other", "blocked-on-operator"},
+	"quota":     {"other"},
+	"api-error": {"other", "tool-error"},
+}
 
 // Agrees reports whether answer matches truth for questionID: equal, or (for
-// d2.failure_cause) truth is the answer's parent. Never the reverse: a truth of
-// "auth" does not agree with an answer of "other". An empty truth agrees with
-// nothing — there is no label to match.
+// d2.failure_cause) truth is one of the answer's parents. Never the reverse: a
+// truth of "auth" does not agree with an answer of "other". An empty truth
+// agrees with nothing — there is no label to match.
 func Agrees(questionID, truth, answer string) bool {
 	if truth == "" {
 		return false
@@ -51,8 +58,9 @@ func Agrees(questionID, truth, answer string) bool {
 	if questionID != QD2Failure {
 		return false
 	}
-	parent, ok := FailureParent[strings.ToLower(answer)]
-	return ok && strings.EqualFold(truth, parent)
+	return slices.ContainsFunc(FailureParent[strings.ToLower(answer)], func(p string) bool {
+		return strings.EqualFold(truth, p)
+	})
 }
 
 // d2DigestBytes caps the per-session digest; never a full transcript.
