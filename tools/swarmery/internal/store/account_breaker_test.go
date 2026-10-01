@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
@@ -141,6 +142,52 @@ func TestAccountBreakerEscalatesQuotaToAuth(t *testing.T) {
 	}
 	if changed, err := OpenAccountBreaker(db, quota); err != nil || changed {
 		t.Fatalf("quota over auth: changed=%v err=%v, want a no-op", changed, err)
+	}
+}
+
+// interleaved is a Querier that lands another writer's opening just ahead of
+// the first write it is asked to make — where a second opener arrives between
+// this opening's read of the row and its write.
+type interleaved struct {
+	Querier
+	before func()
+	landed bool
+}
+
+func (q *interleaved) Exec(query string, args ...any) (sql.Result, error) {
+	if !q.landed {
+		q.landed = true
+		q.before()
+	}
+	return q.Querier.Exec(query, args...)
+}
+
+// TestAccountBreakerConcurrentOpeningsKeepAuth: an auth opening that lands while
+// a quota opening of the same account is in flight is not overwritten by it —
+// the escalation rule (quota never downgrades auth) holds under a race too, so
+// the reset time cannot close a breaker whose login is still broken.
+func TestAccountBreakerConcurrentOpeningsKeepAuth(t *testing.T) {
+	db := breakerDB(t)
+	quota := AccountBreaker{Account: "work", Kind: BreakerKindQuota, Reason: "limit",
+		OpenedAt: "2026-09-30T10:00:00Z", ResetsAt: "2026-09-30T15:00:00Z", Source: BreakerSourceTranscript}
+	auth := AccountBreaker{Account: "work", Kind: BreakerKindAuth, Reason: "login",
+		OpenedAt: "2026-09-30T09:59:59Z", Source: BreakerSourceRun}
+
+	racing := &interleaved{Querier: db, before: func() {
+		if _, err := OpenAccountBreaker(db, auth); err != nil {
+			t.Fatalf("the racing auth opening: %v", err)
+		}
+	}}
+	changed, err := OpenAccountBreaker(racing, quota)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Error("the quota opening reported a write over an open auth breaker")
+	}
+	got, _, _ := GetAccountBreaker(db, "work")
+	if got.Kind != BreakerKindAuth || got.ResetsAt != "" || got.OpenedAt != auth.OpenedAt {
+		t.Errorf("row = %+v, want the auth opening untouched", got)
 	}
 }
 

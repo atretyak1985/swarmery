@@ -268,11 +268,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 
 // reportVerdict feeds one finished run's exit through the probe's shared
 // classifier and into the AccountVerdict hook. The two tails exist only for the
-// duration of this call — matched, never stored. ClassifyRun is ClassifyExit
-// plus one more read of a NON-ZERO exit's last output line (FailureKindOfTail),
+// duration of this call — matched, never stored. ClassifyRun reads a NON-ZERO
+// exit's last output line as an account failure line (claudeprobe.AccountFailure),
 // so a run refused because the organisation disabled subscription access, or
 // because the account is out of credits, reads as an account verdict instead of
-// an unexplained failure — which is what lets run-truth open the breaker.
+// an unexplained failure — which is what lets run-truth open the breaker — while
+// output that merely quotes such a line does not.
 func (r ClaudeRunner) reportVerdict(spec RunSpec, exitCode int, stdoutTail, stderrTail string) {
 	if r.AccountVerdict == nil {
 		return

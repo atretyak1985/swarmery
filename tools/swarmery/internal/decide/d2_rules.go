@@ -96,9 +96,11 @@ type d2Ending struct {
 	// model, stopReason and text are the NEWEST assistant turn's. stopReason is
 	// "" when unknown: every turn ingested before migration 0078 has none.
 	model, stopReason, text string
-	// autoModeStall: the session's last tool call is an error carrying
-	// claudeprobe.AutoModeNoVerdictMarker.
+	// autoModeStall: the session's last tool call is an error whose result is
+	// the auto mode no-verdict refusal (claudeprobe.IsAutoModeNoVerdict).
 	autoModeStall bool
+	// lastToolError: the session's last tool call ended in an error.
+	lastToolError bool
 }
 
 // synthetic reports a last turn the CLI wrote itself.
@@ -117,6 +119,13 @@ func (e d2Ending) failureKind() string {
 // finalAnswer reports a last assistant turn that is the model's own prose.
 func (e d2Ending) finalAnswer() bool {
 	return e.hasAssistant && !e.synthetic() && strings.TrimSpace(e.text) != ""
+}
+
+// asksOperator reports a final reply whose last line is a question: the
+// session ended waiting on the operator, not on delivered work.
+func (e d2Ending) asksOperator() bool {
+	lines := strings.Split(strings.TrimSpace(e.text), "\n")
+	return strings.Contains(lines[len(lines)-1], "?")
 }
 
 // apiError reports an ending the account or the API caused.
@@ -165,12 +174,16 @@ type d2Facts struct {
 // oneShot reports a session that is not a plan engine run and ended on the
 // model's own final answer with nothing edited, nothing committed and no
 // account or API failure. It never holds without an end_turn stop reason: a
-// session whose stop reason was not recorded is left to the model.
+// session whose stop reason was not recorded is left to the model. Nor when
+// the answer ends on a question to the operator, or the last tool call failed
+// (tests failed and the reply explains why): neither ending is delivered work,
+// and an R4 answer is never put in front of the operator to correct.
 func (f d2Facts) oneShot() bool {
 	return f.run.kind == "" &&
 		strings.EqualFold(strings.TrimSpace(f.ending.stopReason), stopEndTurn) &&
 		f.filesEdited == 0 && f.git.commits == 0 &&
-		f.ending.finalAnswer() && !f.ending.apiError()
+		f.ending.finalAnswer() && !f.ending.apiError() &&
+		!f.ending.asksOperator() && !f.ending.lastToolError
 }
 
 // loadD2Ending reads how the session's transcript ends.
@@ -207,7 +220,8 @@ func loadD2Ending(db *sql.DB, uuid string) (d2Ending, error) {
 		 ORDER BY ev.ts DESC, ev.id DESC LIMIT 1`, uuid).Scan(&status, &result)
 	switch {
 	case err == nil:
-		e.autoModeStall = status == "error" && strings.Contains(result, claudeprobe.AutoModeNoVerdictMarker)
+		e.lastToolError = status == "error"
+		e.autoModeStall = status == "error" && claudeprobe.IsAutoModeNoVerdict(result)
 	case !errors.Is(err, sql.ErrNoRows):
 		return d2Ending{}, fmt.Errorf("last tool call: %w", err)
 	}
@@ -382,6 +396,12 @@ func d2Rules(f d2Facts, verdict string, phaseRunFeature bool) d2RuleSet {
 		return out
 	}
 	kind, allTicked, oneShot := f.ending.failureKind(), f.run.allTicked(), f.oneShot()
+	// R1 only when nothing landed first: the outcome prompt calls committed,
+	// pushed or merged work shipped, so a session that merged its PR and then hit
+	// a limit on a follow-up did not fail — that judgement is the model's.
+	if f.git.landed() {
+		kind = ""
+	}
 
 	if out.outcome.value == "" {
 		switch {

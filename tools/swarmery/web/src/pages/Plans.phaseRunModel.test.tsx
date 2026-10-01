@@ -127,6 +127,9 @@ const epic = (phases: EpicPhase[]): Epic => ({
 
 let epics: Epic[] = [];
 
+/** Replies the next run POSTs get, in order; once empty, a run is accepted (202). */
+let runReplies: { status: number; body: unknown }[] = [];
+
 function stubFetch(): void {
   calls = [];
   vi.stubGlobal(
@@ -134,14 +137,18 @@ function stubFetch(): void {
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push({ url, init });
-      const json = (body: unknown): Promise<Response> =>
+      const json = (body: unknown, status = url.includes('/run') ? 202 : 200): Promise<Response> =>
         Promise.resolve({
-          ok: true,
-          status: url.includes('/run') ? 202 : 200,
+          ok: status < 400,
+          status,
           json: () => Promise.resolve(body),
         } as Response);
       if (url.startsWith('/api/epics?')) return json(epics);
-      if (/\/phases\/\d+\/run$/.test(url)) return json({ status: 'running', sessionUuid: 'u-1' });
+      if (/\/phases\/\d+\/run$/.test(url)) {
+        const reply = runReplies.shift();
+        if (reply !== undefined) return json(reply.body, reply.status);
+        return json({ status: 'running', sessionUuid: 'u-1' });
+      }
       return json([]);
     }),
   );
@@ -161,6 +168,7 @@ function picker(): HTMLSelectElement {
 
 beforeEach(() => {
   epics = [epic([phase()])];
+  runReplies = [];
   localStorage.clear();
   stubFetch();
 });
@@ -348,5 +356,71 @@ describe('which model a finished run used (SC-6)', () => {
     await mountPlans();
     expect(screen.queryByText('opus')).toBeNull();
     expect(screen.queryByText('sonnet')).toBeNull();
+  });
+});
+
+describe('a blocked phase nothing has changed for', () => {
+  const blocked = {
+    status: 409,
+    body: {
+      error: 'blocked-unchanged',
+      code: 'blocked-unchanged',
+      message: 'this phase has been blocked since 2026-09-30T10:00:00Z and nothing has changed since then',
+      reason: 'the dependency is not on the base',
+      since: '2026-09-30T10:00:00Z',
+      retryAfter: '2026-10-01T10:00:00Z',
+    },
+  };
+
+  /** Every run POST the page made, in order. */
+  const runCalls = (): { url: string; init: RequestInit | undefined }[] =>
+    calls.filter((c) => /\/phases\/\d+\/run$/.test(c.url));
+
+  // The refusal says the operator may force the re-run; the page is the only place
+  // they can act on it, so the strip that shows the refusal offers it.
+  it('offers "Run anyway", which repeats the run with force', async () => {
+    runReplies = [blocked];
+    await mountPlans();
+    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+
+    const anyway = await screen.findByRole('button', { name: 'Run anyway' });
+    expect(screen.getByText(/has been blocked since/)).toBeTruthy();
+    fireEvent.click(anyway);
+
+    await waitFor(() => {
+      expect(runCalls()).toHaveLength(2);
+    });
+    expect(runCalls()[0]?.init?.body).toBeUndefined();
+    expect(runCalls()[1]?.init?.body).toBe('{"force":true}');
+  });
+
+  // Force overrides that ONE refusal; the model the operator chose still rides along.
+  it('keeps the chosen model on the forced run', async () => {
+    runReplies = [blocked];
+    await mountPlans();
+    fireEvent.change(picker(), { target: { value: 'sonnet' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Run anyway' }));
+
+    await waitFor(() => {
+      expect(runCalls()).toHaveLength(2);
+    });
+    expect(runCalls()[1]?.init?.body).toBe('{"model":"sonnet","force":true}');
+  });
+
+  // Any other refusal is not overridable by force — offering it there would only
+  // buy the same 409 again.
+  it('offers nothing to force for any other refusal', async () => {
+    runReplies = [
+      {
+        status: 409,
+        body: { error: 'phase dependencies unmet', code: 'deps-unmet', unmetDeps: [2] },
+      },
+    ];
+    await mountPlans();
+    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+
+    await screen.findByText('phase dependencies unmet');
+    expect(screen.queryByRole('button', { name: 'Run anyway' })).toBeNull();
   });
 });

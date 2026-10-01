@@ -82,7 +82,9 @@ func TestBlockedUnchangedRefused(t *testing.T) {
 	if want := since.Add(24 * time.Hour).UTC().Format(time.RFC3339); unchanged.RetryAfter != want {
 		t.Errorf("RetryAfter = %q, want Since + the default 24h cooldown = %q", unchanged.RetryAfter, want)
 	}
-	for _, want := range []string{blockedReason, unchanged.Since, unchanged.RetryAfter, "force"} {
+	// "Run anyway" is the dashboard's action for this refusal: the sentence the run
+	// strip shows has to name what the operator can press there.
+	for _, want := range []string{blockedReason, unchanged.Since, unchanged.RetryAfter, "force", "Run anyway"} {
 		if !strings.Contains(unchanged.Error(), want) {
 			t.Errorf("message %q does not carry %q", unchanged.Error(), want)
 		}

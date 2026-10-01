@@ -1082,6 +1082,28 @@ func TestService_MergeProbeSupportIsCachedPerService(t *testing.T) {
 	}
 }
 
+// worktree.ExecGit hands back stdout AND stderr in one buffer, so a warning git
+// prints while it merges (a rename limit hit, say) lands ahead of the tree id. A
+// squash-merged dependency must still read as merged — not as unmerged work the
+// run would then be stacked on, on a tree missing everything merged since.
+func TestResolveBase_WarningAheadOfTheMergedTreeIsStillANoOp(t *testing.T) {
+	git := scripted(map[string]scriptedAnswer{
+		"rev-parse --verify --quiet":              {out: "dep111\n"},
+		"merge-base --is-ancestor dep111 base000": {err: exitErr(1)},
+		"merge-tree": {out: "warning: inexact rename detection was skipped due to too many files.\n" +
+			"warning: you may want to set your merge.renamelimit variable to at least 1234 and retry the command.\n" +
+			"tree000\n"},
+		"rev-parse base000^{tree}": {out: "tree000\n"},
+	})
+	res, err := resolveBase(git, "/repo", []string{depA})
+	if err != nil {
+		t.Fatalf("resolveBase: %v", err)
+	}
+	if res.StartRef != "" || res.StackedOn != "" {
+		t.Errorf("StartRef=%q StackedOn=%q, want none — the merge changes nothing, the dependency is merged", res.StartRef, res.StackedOn)
+	}
+}
+
 // An absent run branch — exit status 1, nothing printed — is the ONE failure of
 // the ref lookup that is an answer, and it counts as merged.
 func TestResolveBase_AbsentBranchIsExitStatusOne(t *testing.T) {

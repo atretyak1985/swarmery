@@ -180,6 +180,35 @@ func TestRuleSyntheticFailure(t *testing.T) {
 	wantRule(t, qs, QD2Failure, "", "")
 }
 
+// R1 stays out of a session whose work landed before the failure line: the
+// outcome prompt calls committed, pushed or merged work shipped, so "failed" at
+// confidence 1 would contradict the evidence — the operator who merged and then
+// hit a limit on a follow-up did not fail. Both questions go to the model.
+func TestRuleSyntheticFailureAfterLandedWork(t *testing.T) {
+	db := openDB(t)
+	for i, cmd := range []string{
+		`git commit -m "fix: parser"`,
+		`git push -u origin fix/parser`,
+		`gh pr create --fill`,
+		`gh pr merge 12 --squash`,
+	} {
+		uuid := fmt.Sprintf("s-landed-%d", i)
+		seedEnding(t, db, uuid, syntheticModel, "stop_sequence", "You've hit your session limit · resets 1:30am (UTC)")
+		seedBash(t, db, uuid, cmd, "ok")
+		qs := d2QuestionsFor(t, db, uuid, false)
+		wantRule(t, qs, QD2Outcome, "", "")
+		wantRule(t, qs, QD2Failure, "", "")
+	}
+
+	// Reading git, or a landing command that failed, landed nothing: R1 stands.
+	seedEnding(t, db, "s-nothing-landed", syntheticModel, "stop_sequence", "You've hit your session limit · resets 1:30am (UTC)")
+	seedBash(t, db, "s-nothing-landed", `git status && git log --oneline -3`, "ok")
+	seedBash(t, db, "s-nothing-landed", `git push`, "error")
+	qs := d2QuestionsFor(t, db, "s-nothing-landed", false)
+	wantRule(t, qs, QD2Outcome, "failed", RuleSyntheticFailure)
+	wantRule(t, qs, QD2Failure, claudeprobe.FailureQuota, RuleSyntheticFailure)
+}
+
 // A synthetic last turn that names no failure — empty, the CLI's `No response
 // requested.` filler, an unrecorded wording — matches no rule, and neither does
 // a MODEL turn that merely opens with a failure line. All go to the model.
@@ -245,17 +274,28 @@ func TestRuleAutoModeStall(t *testing.T) {
 	wantRule(t, qs, QD2Failure, "none", RuleOneShotShipped)
 	wantRule(t, qs, QD2Outcome, "shipped", RuleOneShotShipped)
 
-	// An ordinary tool error, and an OK call whose output merely quotes the
-	// marker, are not stalls.
+	// An ordinary tool error is not a stall — and, as the last call, keeps R4
+	// out too, so both questions go to the model.
 	seedOneShot(t, db, "s-plain-error")
 	seedToolCall(t, db, "s-plain-error", "Bash", "error", "2026-09-20T10:25:00.000Z", "Error: exit status 1")
+	qs = d2QuestionsFor(t, db, "s-plain-error", false)
+	wantRule(t, qs, QD2Failure, "", "")
+	wantRule(t, qs, QD2Outcome, "", "")
+
+	// A failed call whose output merely QUOTES the refusal (the automode tests
+	// failing) is not a stall either: R2 needs the result to be the refusal.
+	seedOneShot(t, db, "s-quoted-error")
+	seedToolCall(t, db, "s-quoted-error", "Bash", "error", "2026-09-20T10:25:00.000Z",
+		"Error: Exit code 1\n--- FAIL: TestCount\n    want a row quoting \""+autoModeDenial+"\"")
+	qs = d2QuestionsFor(t, db, "s-quoted-error", false)
+	wantRule(t, qs, QD2Failure, "", "")
+
+	// An OK call whose output merely quotes the marker is not a stall.
 	seedOneShot(t, db, "s-quoted")
 	seedToolCall(t, db, "s-quoted", "Bash", "ok", "2026-09-20T10:25:00.000Z",
 		map[string]any{"stdout": "grep: " + claudeprobe.AutoModeNoVerdictMarker})
-	for _, uuid := range []string{"s-plain-error", "s-quoted"} {
-		qs = d2QuestionsFor(t, db, uuid, false)
-		wantRule(t, qs, QD2Failure, "none", RuleOneShotShipped)
-	}
+	qs = d2QuestionsFor(t, db, "s-quoted", false)
+	wantRule(t, qs, QD2Failure, "none", RuleOneShotShipped)
 }
 
 // R3: a phase run that ended done with every criterion ticked shipped, with no
@@ -318,8 +358,8 @@ func TestRulePhaseDoneNotAllTicked(t *testing.T) {
 func TestRuleOneShotShipped(t *testing.T) {
 	db := openDB(t)
 	seedOneShot(t, db, "s-qa")
-	seedBash(t, db, "s-qa", `git status && git log --oneline -3`, "ok")   // reading git is not a commit
-	seedBash(t, db, "s-qa", `git commit -m "nothing to commit"`, "error") // nor is a failed one
+	seedBash(t, db, "s-qa", `git commit -m "nothing to commit"`, "error") // a failed commit is not a commit
+	seedBash(t, db, "s-qa", `git status && git log --oneline -3`, "ok")   // nor is reading git
 	qs := d2QuestionsFor(t, db, "s-qa", false)
 	wantRule(t, qs, QD2Outcome, "shipped", RuleOneShotShipped)
 	wantRule(t, qs, QD2Failure, "none", RuleOneShotShipped)
@@ -349,6 +389,39 @@ func TestRuleOneShotShipped(t *testing.T) {
 	qs = d2QuestionsFor(t, db, "s-verdict-vs-failure", false)
 	wantRule(t, qs, QD2Outcome, "shipped", RuleOperatorVerdict)
 	wantRule(t, qs, QD2Failure, "", "") // `auth` beside a shipped verdict: left to the model
+}
+
+// R4 is answered at confidence 1 and hidden from the Inbox queue, so it stays
+// out of the two endings a final prose reply does not make shipped: the reply
+// asks the operator something (its last line is a question), or the session's
+// last tool call failed (the tests failed and the model explains why). Both go
+// to the model. A question earlier in the reply is not the ending.
+func TestRuleOneShotNotOnQuestionOrFailedCall(t *testing.T) {
+	db := openDB(t)
+	noRule := func(uuid string) {
+		t.Helper()
+		qs := d2QuestionsFor(t, db, uuid, false)
+		wantRule(t, qs, QD2Outcome, "", "")
+		wantRule(t, qs, QD2Failure, "", "")
+	}
+
+	seedEnding(t, db, "s-asks", testModel, "end_turn", "I can do this two ways.\n\nShould I use approach A or B?\n")
+	noRule("s-asks")
+
+	seedOneShot(t, db, "s-tests-failed")
+	seedToolCall(t, db, "s-tests-failed", "Bash", "ok", "2026-09-20T10:20:00.000Z", map[string]any{"stdout": "built"})
+	seedToolCall(t, db, "s-tests-failed", "Bash", "error", "2026-09-20T10:25:00.000Z", "FAIL: TestParser (0.01s)")
+	noRule("s-tests-failed")
+
+	seedEnding(t, db, "s-asked-earlier", testModel, "end_turn", "Does it handle unicode? Yes.\nIt tokenises the input and builds the tree.")
+	qs := d2QuestionsFor(t, db, "s-asked-earlier", false)
+	wantRule(t, qs, QD2Outcome, "shipped", RuleOneShotShipped)
+
+	seedOneShot(t, db, "s-failed-then-ok")
+	seedToolCall(t, db, "s-failed-then-ok", "Bash", "error", "2026-09-20T10:20:00.000Z", "FAIL: TestParser (0.01s)")
+	seedToolCall(t, db, "s-failed-then-ok", "Bash", "ok", "2026-09-20T10:25:00.000Z", map[string]any{"stdout": "ok"})
+	qs = d2QuestionsFor(t, db, "s-failed-then-ok", false)
+	wantRule(t, qs, QD2Outcome, "shipped", RuleOneShotShipped)
 }
 
 // R4 never fires without an end_turn stop reason — a turn ingested before

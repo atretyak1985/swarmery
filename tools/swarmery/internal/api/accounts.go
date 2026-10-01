@@ -68,6 +68,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/usage"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -736,13 +737,27 @@ func (h *Handler) probeAccountHandler(w http.ResponseWriter, r *http.Request) {
 	// A ready verdict closes an AUTH breaker: the operator re-checked the account
 	// and the CLI is logged in. (`auth status` cannot see an account the API
 	// refuses — if that is what opened the breaker, the next run reopens it; the
-	// alert's "Probe & resume" runs the ping that can.)
-	if claudeprobe.Status(verdict.Status) == claudeprobe.StatusReady {
+	// alert's "Probe & resume" runs the ping that can.) Only when this probe
+	// checked the config dir the breaker's runs use: for the default key those
+	// keep a CLAUDE_CONFIG_DIR the daemon inherited, which this probe strips.
+	if claudeprobe.Status(verdict.Status) == claudeprobe.StatusReady && configDirOf(runcore.AccountEnv(acct.Key)) == dir {
 		h.closeAuthBreaker(acct.Key, store.BreakerClosedByProbe)
 	}
 	var resp accountProbeResponse
 	resp.Runnable, resp.RunnableReason, resp.RunnableCheckedAt = runnableDTOFields(verdict)
 	writeJSON(w, resp, nil)
+}
+
+// configDirOf is the CLAUDE_CONFIG_DIR env selects — its last entry, the one a
+// spawned process sees — or "" when it carries none.
+func configDirOf(env []string) string {
+	dir := ""
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "CLAUDE_CONFIG_DIR="); ok {
+			dir = v
+		}
+	}
+	return dir
 }
 
 // projectAccount handles GET /api/projects/{id}/account.

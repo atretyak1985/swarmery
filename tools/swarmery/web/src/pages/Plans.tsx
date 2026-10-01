@@ -1080,11 +1080,15 @@ export function Plans(): JSX.Element {
   // Keyed by the plan the failure belongs to. A bare string here was rendered under
   // whichever epic happened to be selected, so one plan's acquire error appeared to
   // afflict every plan in the workspace — and survived switching between them.
-  const [runMsg, setRunMsg] = useState<{ taskId: number; text: string } | null>(null);
+  // forcePhaseId is set only for the one refusal `force` overrides
+  // (`blocked-unchanged`): the phase the strip's "Run anyway" re-runs.
+  const [runMsg, setRunMsg] = useState<{ taskId: number; text: string; forcePhaseId: number | null } | null>(
+    null,
+  );
   const failRunMsg = useCallback(
     (taskId: number) =>
       (e: unknown): void =>
-        setRunMsg({ taskId, text: e instanceof Error ? e.message : String(e) }),
+        setRunMsg({ taskId, text: e instanceof Error ? e.message : String(e), forcePhaseId: null }),
     [],
   );
   // Which phase's run diagnosis is open (phase id) — the modal is read-only, so
@@ -1105,7 +1109,7 @@ export function Plans(): JSX.Element {
   const [phaseRunEffort, setPhaseRunEffort] = useState<PhaseRunEffort>(readStoredPhaseRunEffort);
 
   const startRun = useCallback(
-    (taskId: number, phaseId: number): void => {
+    (taskId: number, phaseId: number, force = false): void => {
       setRunBusy(phaseId);
       setRunMsg(null);
       try {
@@ -1121,6 +1125,7 @@ export function Plans(): JSX.Element {
         phaseId,
         phaseRunModel === 'default' ? undefined : phaseRunModel,
         phaseRunEffort === 'default' ? undefined : phaseRunEffort,
+        force,
       )
         .then(() => reload())
         .catch((e: unknown) => {
@@ -1130,13 +1135,23 @@ export function Plans(): JSX.Element {
           // happens to carry `branch`. The branch-holds-commits 409 is not a
           // message to read, it is a blocker with an action, so land the user
           // on the diagnosis (which offers Delete branch) instead of a toast.
-          if (e instanceof Error && (e as PhaseRunBranchError).code === 'branch-dirty')
-            setOutcomeFor(phaseId);
+          const code = e instanceof Error ? (e as PhaseRunBranchError).code : undefined;
+          if (code === 'branch-dirty') setOutcomeFor(phaseId);
+          // The refusal `force` overrides: the strip offers to run it anyway.
+          if (code === 'blocked-unchanged' && e instanceof Error)
+            setRunMsg({ taskId, text: e.message, forcePhaseId: phaseId });
         })
         .finally(() => setRunBusy(null));
     },
     [reload, failRunMsg, phaseRunModel, phaseRunEffort],
   );
+  // The strip's "Run anyway" for the plan on screen, or null when its refusal is
+  // not the one `force` overrides.
+  const forceRunFor = (taskId: number): (() => void) | null => {
+    if (runMsg === null || runMsg.taskId !== taskId) return null;
+    const phaseId = runMsg.forcePhaseId;
+    return phaseId === null ? null : () => startRun(taskId, phaseId, true);
+  };
   const cancelRun = useCallback(
     (taskId: number, phaseId: number): void => {
       setRunBusy(phaseId);
@@ -1403,6 +1418,7 @@ export function Plans(): JSX.Element {
               }}
               runBusy={runBusy}
               runMsg={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.text : null}
+              onForceRun={forceRunFor(activeEpic.taskId)}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
               phaseRunModel={phaseRunModel}
@@ -1477,6 +1493,7 @@ function EpicDetail({
   onRevisionMissing,
   runBusy,
   runMsg,
+  onForceRun,
   onRun,
   onCancelRun,
   phaseRunModel,
@@ -1508,6 +1525,9 @@ function EpicDetail({
   onRevisionMissing: () => void;
   runBusy: number | null;
   runMsg: string | null;
+  /** Re-run the refused phase with `force` — set only for a `blocked-unchanged`
+   *  refusal, the one `force` overrides; null hides the action. */
+  onForceRun: (() => void) | null;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
   /** The model every per-phase run on this plan starts with — owned by the page
@@ -1723,8 +1743,19 @@ function EpicDetail({
       </div>
 
       {runMsg !== null && (
-        <div className="mb-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
-          {runMsg}
+        <div className="mb-2 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
+          <span className="min-w-0 flex-1">{runMsg}</span>
+          {onForceRun !== null && (
+            <button
+              type="button"
+              disabled={runBusy !== null}
+              onClick={onForceRun}
+              data-tip="run this phase again even though nothing has changed since it blocked"
+              className="shrink-0 rounded-md border border-red/40 px-2 py-0.5 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Run anyway
+            </button>
+          )}
         </div>
       )}
 

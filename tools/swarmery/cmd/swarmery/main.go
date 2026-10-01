@@ -10,7 +10,7 @@
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
 //	swarmery decide eval           replay the classifier over recorded ground truth (read-only)
-//	swarmery install              auto-start: launchd (macOS) or systemd --user (Linux)
+//	swarmery install               auto-start: launchd (macOS) or systemd --user (Linux)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
@@ -1759,6 +1759,11 @@ func cmdServe(args []string) error {
 	go (&automode.Ticker{DB: db}).Run(context.Background())
 	log.Printf("swarmery auto-mode outage watch started (interval %s, alert at %d no-verdict checks / %s)",
 		automode.DefaultInterval, automode.AlertMin(), automode.AlertWindow)
+
+	// Expired quota breakers: admission closes a quota breaker once its reset has
+	// passed, but an account nothing is admitted onto would keep its Inbox alert
+	// ("paused") up long after the limit reset. The sweep closes it on time.
+	go (&runcore.BreakerTicker{DB: db}).Run(context.Background())
 
 	// retro phase 3: the advisor rule engine — deterministic recommendations
 	// (R1..R6) refreshed once at startup and every 24h, plus on demand via

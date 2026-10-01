@@ -447,3 +447,86 @@ func TestLoginCompleteClosesAuthBreaker(t *testing.T) {
 		t.Errorf("breaker = %+v, want closed by login", b)
 	}
 }
+
+// TestAlertsAreNotLintFindings: an alert is stored as a config_lint_findings row
+// (AlertRules) but is not config lint. The System page's severity badges and the
+// hub's lint count must leave it out — its target matches no component, so a
+// badge that counted it would filter to a list where nothing shows.
+func TestAlertsAreNotLintFindings(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "alerts-lint.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.Exec(`INSERT INTO config_lint_findings (target, rule, severity, message, detected_at, resolved_at) VALUES
+	      ('hook:1', 'hook_no_timeout', 'warn', 'no timeout set', '2026-09-30T00:00:00Z', NULL),
+	      (?, ?, 'error', 'paused', '2026-09-30T00:00:00Z', NULL),
+	      ('auto-mode-classifier', 'auto_mode_no_verdict', 'warn', 'no verdict', '2026-09-30T00:00:00Z', NULL)`,
+		store.AccountBreakerTarget("work"), store.AccountBreakerRule); err != nil {
+		t.Fatal(err)
+	}
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	var s struct {
+		Lint struct {
+			Error int64 `json:"error"`
+			Warn  int64 `json:"warn"`
+		} `json:"lint"`
+	}
+	getJSON(t, srv.URL+"/api/system/summary", &s)
+	if s.Lint.Error != 0 || s.Lint.Warn != 1 {
+		t.Errorf("summary.lint = %+v, want error=0 warn=1 (the hook finding only)", s.Lint)
+	}
+	var hub struct {
+		LintFindings int64 `json:"lintFindings"`
+	}
+	getJSON(t, srv.URL+"/api/system/hub/summary", &hub)
+	if hub.LintFindings != 1 {
+		t.Errorf("hub lintFindings = %d, want 1 (the hook finding only)", hub.LintFindings)
+	}
+	// Both alerts are still alerts.
+	if got := listAlertsOK(t, srv); len(got) != 2 {
+		t.Errorf("alerts = %d, want 2", len(got))
+	}
+}
+
+// TestProbeKeepsDefaultAuthBreakerUnderAnInheritedConfigDir: the plain probe
+// checks the default account with NO CLAUDE_CONFIG_DIR (~/.claude), but the
+// runs its breaker stopped — unbound projects' — keep the config dir the daemon
+// inherited. A ready answer about ~/.claude says nothing about them, so it must
+// not close their auth breaker (Probe & resume probes their environment). With
+// nothing inherited the two are the same directory, and it closes.
+func TestProbeKeepsDefaultAuthBreakerUnderAnInheritedConfigDir(t *testing.T) {
+	attachHomeAccounts(t, ingest.DefaultAccount, "nabu-org")
+	db, srv := accountsTestDB(t, "alerts-probe-inherited.db")
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(t.TempDir(), ".claude-inherited"))
+	openTestBreaker(t, db, ingest.DefaultAccount, store.BreakerKindAuth, claudeprobe.ReasonNoLogin,
+		time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))
+	useProbe(t, func(context.Context, string) claudeprobe.Result {
+		return claudeprobe.Result{Status: claudeprobe.StatusReady}
+	})
+
+	probe := func() {
+		t.Helper()
+		if status, body := acctDo(t, http.MethodPost, srv.URL+"/api/accounts/"+ingest.DefaultAccount+"/probe", ""); status != http.StatusOK {
+			t.Fatalf("probe = %d\n%s", status, body)
+		}
+	}
+	probe()
+	if b := storedBreaker(t, db, ingest.DefaultAccount); !b.IsOpen() {
+		t.Errorf("breaker = %+v, want still open — the probe checked ~/.claude, the stopped runs use the inherited dir", b)
+	}
+
+	if err := os.Unsetenv("CLAUDE_CONFIG_DIR"); err != nil {
+		t.Fatal(err)
+	}
+	probe()
+	if b := storedBreaker(t, db, ingest.DefaultAccount); b.IsOpen() || b.ClosedBy != store.BreakerClosedByProbe {
+		t.Errorf("breaker = %+v, want closed by probe once nothing is inherited", b)
+	}
+}

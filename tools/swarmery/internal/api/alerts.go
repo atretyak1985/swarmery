@@ -41,6 +41,20 @@ import (
 //     resolves itself once the check has answered for a while.
 var AlertRules = []string{store.AccountBreakerRule, automode.Rule}
 
+// notAlertRule is the predicate (with its args) that keeps every AlertRules row
+// out of a config-lint COUNT: an alert is stored as a finding, but it is not
+// lint, and its target matches no component a lint badge could filter to.
+func notAlertRule() (pred string, args []any) {
+	if len(AlertRules) == 0 {
+		return "", nil
+	}
+	args = make([]any, len(AlertRules))
+	for i, rule := range AlertRules {
+		args[i] = rule
+	}
+	return ` AND rule NOT IN (?` + strings.Repeat(`,?`, len(AlertRules)-1) + `)`, args
+}
+
 // probeAccountRun is the two-stage probe behind "Probe & resume" (`claude auth
 // status`, then the `claude -p` ping). A package var for the same reason as
 // probeAccount: tests answer deterministically and never spawn the real CLI.

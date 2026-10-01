@@ -45,22 +45,62 @@ var FailureParent = map[string][]string{
 }
 
 // Agrees reports whether answer matches truth for questionID: equal, or (for
-// d2.failure_cause) truth is one of the answer's parents. Never the reverse: a
-// truth of "auth" does not agree with an answer of "other". An empty truth
-// agrees with nothing — there is no label to match.
-func Agrees(questionID, truth, answer string) bool {
+// d2.failure_cause, and only when the truth is a LEGACY label — legacyTruth)
+// truth is one of the answer's parents. Never the reverse: a truth of "auth"
+// does not agree with an answer of "other". A parent label written after the
+// new causes were in use was chosen over them and is matched as written. An
+// empty truth agrees with nothing — there is no label to match.
+func Agrees(questionID, truth, answer string, legacy bool) bool {
 	if truth == "" {
 		return false
 	}
 	if strings.EqualFold(truth, answer) {
 		return true
 	}
-	if questionID != QD2Failure {
+	if questionID != QD2Failure || !legacy {
 		return false
 	}
 	return slices.ContainsFunc(FailureParent[strings.ToLower(answer)], func(p string) bool {
 		return strings.EqualFold(truth, p)
 	})
+}
+
+// legacyTruth reports whether a ground truth recorded at truthAt predates
+// since — the moment the operator started using the causes FailureParent maps
+// (newCausesInUseSince). No cutoff yet, no recorded time, or a time that does
+// not parse are all legacy: the parent mapping is how every label was read
+// before the cutoff existed.
+func legacyTruth(truthAt, since string) bool {
+	if since == "" || truthAt == "" {
+		return true
+	}
+	at, errAt := time.Parse(time.RFC3339, truthAt)
+	cut, errCut := time.Parse(time.RFC3339, since)
+	if errAt != nil || errCut != nil {
+		return true
+	}
+	return at.Before(cut)
+}
+
+// newCausesInUseSince is when the operator first recorded one of the causes
+// FailureParent maps as d2.failure_cause ground truth — the first moment those
+// causes demonstrably existed for them — or "" when they never have. A data
+// cutoff, not a release date: the causes reach an operator whenever their
+// daemon is updated. ground_truth_at is written as RFC 3339 UTC
+// (RecordGroundTruth), so MIN over the text is the earliest instant.
+func newCausesInUseSince(db *sql.DB) (string, error) {
+	causes := make([]any, 0, len(FailureParent)+1)
+	causes = append(causes, QD2Failure)
+	for c := range FailureParent {
+		causes = append(causes, c)
+	}
+	var since string
+	err := db.QueryRow(`
+		SELECT COALESCE(MIN(ground_truth_at), '') FROM decisions
+		 WHERE question_id = ? AND COALESCE(ground_truth_at, '') <> ''
+		   AND LOWER(ground_truth) IN (`+strings.TrimSuffix(strings.Repeat("?,", len(FailureParent)), ",")+`)`,
+		causes...).Scan(&since)
+	return since, err
 }
 
 // d2DigestBytes caps the per-session digest; never a full transcript.
@@ -458,16 +498,22 @@ func Summary(db *sql.DB, e *Engine) ([]QuestionStats, error) {
 		out[i] = QuestionStats{QuestionID: id, Mode: string(mode), Threshold: e.Threshold(id), Histogram: make([]int, 10)}
 		byID[id] = &out[i]
 	}
-	rows, err := db.Query(`SELECT question_id, answer, confidence, error, acted, COALESCE(ground_truth, '') FROM decisions`)
+	// Read before the cursor opens: the store runs one connection.
+	since, err := newCausesInUseSince(db)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.Query(`SELECT question_id, answer, confidence, error, acted, COALESCE(ground_truth, ''),
+		COALESCE(ground_truth_at, '') FROM decisions`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, answer, errText, truth string
+		var id, answer, errText, truth, truthAt string
 		var conf sql.NullFloat64
 		var acted int
-		if err := rows.Scan(&id, &answer, &conf, &errText, &acted, &truth); err != nil {
+		if err := rows.Scan(&id, &answer, &conf, &errText, &acted, &truth, &truthAt); err != nil {
 			return nil, err
 		}
 		s := byID[id]
@@ -486,7 +532,7 @@ func Summary(db *sql.DB, e *Engine) ([]QuestionStats, error) {
 		}
 		if truth != "" {
 			s.WithTruth++
-			if Agrees(id, truth, answer) {
+			if Agrees(id, truth, answer, legacyTruth(truthAt, since)) {
 				s.Agreed++
 			}
 		}

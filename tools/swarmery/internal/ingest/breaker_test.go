@@ -240,3 +240,44 @@ func TestStaleTranscriptDoesNotTrip(t *testing.T) {
 		}
 	})
 }
+
+// TestTranscriptUnderTheUnboundDirAlsoPausesDefault: an unbound project's runs
+// keep the config dir the daemon inherited and are admitted under the default
+// key. A failure line in a transcript under THAT dir hits them too, so it also
+// pauses the default key; under any other dir it pauses the dir's own key only.
+func TestTranscriptUnderTheUnboundDirAlsoPausesDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		inherited   bool
+		wantDefault bool
+	}{
+		{"the daemon inherited this dir", true, true},
+		{"nothing inherited", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			breakerAt(t, breakerNoon)
+			f, root := failureTranscript(t, "sess-unbound", orgDisabledText, "2026-09-30T11:55:00.000Z", true)
+			t.Setenv("CLAUDE_CONFIG_DIR", "")
+			if tc.inherited {
+				t.Setenv("CLAUDE_CONFIG_DIR", filepath.Dir(root))
+			}
+			if _, err := fileFrom(db, f, root); err != nil {
+				t.Fatal(err)
+			}
+			if b, ok := workBreaker(t, db); !ok || !b.IsOpen() {
+				t.Errorf("work breaker = %+v ok=%v, want open", b, ok)
+			}
+			b, ok, err := store.GetAccountBreaker(db, DefaultAccount)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := ok && b.IsOpen(); got != tc.wantDefault {
+				t.Errorf("default breaker open = %v (%+v), want %v", got, b, tc.wantDefault)
+			}
+			if tc.wantDefault && (b.Kind != store.BreakerKindAuth || b.Source != store.BreakerSourceTranscript) {
+				t.Errorf("default breaker = %+v, want the same auth opening", b)
+			}
+		})
+	}
+}

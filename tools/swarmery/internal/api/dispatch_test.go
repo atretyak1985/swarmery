@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -10,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -142,4 +145,48 @@ func postBody(t *testing.T, url, body string) *http.Response {
 		t.Fatal(err)
 	}
 	return resp
+}
+
+// TestBoardWriteDoesNotWaitForTheSchedulingPass: a board write pokes the
+// dispatcher, and the pass's admission may first probe the card's account — up
+// to runcore's 90s pre-flight when the CLI hangs. The write's response must not
+// wait for that pass; the pass still runs.
+func TestBoardWriteDoesNotWaitForTheSchedulingPass(t *testing.T) {
+	srv, _, svc := serverWithDispatch(t)
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	svc.AccountCheck = func(context.Context, *sql.DB, claudeacct.Resolution, time.Time) error {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		<-release // a pre-flight probe that hangs
+		return &runcore.AccountBreakerError{Account: "default", Kind: store.BreakerKindAuth}
+	}
+	t.Cleanup(func() { close(release) })
+
+	done := make(chan int, 1)
+	go func() {
+		resp, err := http.Post(srv.URL+"/api/board/tasks", "application/json",
+			strings.NewReader(`{"projectId":1,"title":"t","prompt":"p","boardColumn":"todo"}`))
+		if err != nil {
+			done <- -1
+			return
+		}
+		resp.Body.Close()
+		done <- resp.StatusCode
+	}()
+	select {
+	case code := <-done:
+		if code != http.StatusCreated {
+			t.Fatalf("create = %d, want 201", code)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the board write waited on the scheduling pass's account check")
+	}
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no scheduling pass reached the account gate after the write")
+	}
 }

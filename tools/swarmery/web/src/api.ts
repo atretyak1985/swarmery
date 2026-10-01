@@ -2256,21 +2256,27 @@ function runConflictError(
  * below that, SWARMERY_PHASERUN_EFFORT and the engine default. Omitting it is
  * NOT "cheap": the daemon pins a default precisely because a `claude -p` with no
  * --effort runs at the CLI's xhigh, the deepest setting there is.
+ *
+ * `force` is the operator's "run it anyway" for ONE refusal, the
+ * `blocked-unchanged` 409; it is sent only when true, so every ordinary run
+ * keeps its exact wire shape.
  */
 export async function runEpicPhase(
   taskId: number,
   phaseId: number,
   model?: string,
   effort?: string,
+  force?: boolean,
 ): Promise<{ status: string; sessionUuid: string }> {
   if (MOCK) return { status: 'running', sessionUuid: 'mock-run-uuid' };
   // Built field by field so an unchosen one is ABSENT rather than empty. The API
   // treats absent and empty alike, but only absent says "I did not choose" in a
   // network log — and the two rungs below each key (the doc's header, then the
   // daemon's knob) are exactly what an absent key hands the decision to.
-  const payload: { model?: string; effort?: string } = {};
+  const payload: { model?: string; effort?: string; force?: true } = {};
   if (model !== undefined && model !== '') payload.model = model;
   if (effort !== undefined && effort !== '') payload.effort = effort;
+  if (force === true) payload.force = true;
   const init: RequestInit =
     Object.keys(payload).length === 0
       ? { method: 'POST' }

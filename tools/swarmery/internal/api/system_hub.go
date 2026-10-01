@@ -199,6 +199,8 @@ func (h *Handler) systemHubSummary(w http.ResponseWriter, r *http.Request) {
 	scoped := esc.scoped()
 	withOrigin, originArgs := esc.predicate("t.", true)
 	noOrigin, noOriginArgs := esc.predicate("t.", false)
+	// Alerts are stored as findings but are not config lint (notAlertRule).
+	notAlert, alertArgs := notAlertRule()
 
 	// A nil scopePred leaves the query untouched (fleet mode). lintFindings has
 	// no item table to scope against and stays global in BOTH modes — the config
@@ -213,7 +215,7 @@ func (h *Handler) systemHubSummary(w http.ResponseWriter, r *http.Request) {
 		{&s.Skills, `SELECT COUNT(*) FROM skills t WHERE t.deleted = 0`, withOrigin, originArgs},
 		{&s.Hooks, `SELECT COUNT(*) FROM hooks t WHERE 1 = 1`, noOrigin, noOriginArgs},
 		{&s.Commands, `SELECT COUNT(*) FROM commands t WHERE t.deleted = 0`, withOrigin, originArgs},
-		{&s.LintFindings, `SELECT COUNT(*) FROM config_lint_findings WHERE resolved_at IS NULL`, ``, nil},
+		{&s.LintFindings, `SELECT COUNT(*) FROM config_lint_findings WHERE resolved_at IS NULL`, notAlert, alertArgs},
 	} {
 		if err := h.DB.QueryRow(c.query+c.pred, c.args...).Scan(c.dst); err != nil {
 			writeErr(w, err)

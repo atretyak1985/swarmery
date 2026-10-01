@@ -326,11 +326,13 @@ func (h *Handler) systemSummary(w http.ResponseWriter, r *http.Request) {
 	// (System.tsx), so a count that included the guide rules would advertise ~one
 	// warn per component and then filter to a list where none of them show —
 	// the badge and the list would disagree. Guide coverage has its own headline
-	// in s.Docs right above.
+	// in s.Docs right above. Alerts (AlertRules) are left out for the same
+	// reason: they are stored as findings, but no component carries them.
+	notAlert, alertArgs := notAlertRule()
 	rows, err := h.DB.Query(`
 		SELECT severity, COUNT(*) FROM config_lint_findings
-		WHERE resolved_at IS NULL AND rule NOT LIKE ` + docsRuleLike + `
-		GROUP BY severity`)
+		WHERE resolved_at IS NULL AND rule NOT LIKE `+docsRuleLike+notAlert+`
+		GROUP BY severity`, alertArgs...)
 	if err != nil {
 		writeErr(w, err)
 		return

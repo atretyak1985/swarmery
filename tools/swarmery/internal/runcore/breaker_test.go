@@ -364,7 +364,7 @@ func TestPreflightProbesTheRunsOwnEnvironment(t *testing.T) {
 			t.Errorf("ping ran outside the System project dir %s:\n  %s", systemResolved, ping)
 		}
 		wantArgv := "argv=-p " + claudeprobe.PingPrompt + " --model " + claudeprobe.PingModel +
-			" --effort " + claudeprobe.PingEffort + " --max-turns 1"
+			" --effort " + claudeprobe.PingEffort + " --max-turns 1 --no-session-persistence"
 		if !strings.HasSuffix(ping, wantArgv) || strings.Contains(ping, "--settings") {
 			t.Errorf("ping argv is not the fixed one:\n  %s\nwant suffix %q", ping, wantArgv)
 		}
@@ -826,6 +826,67 @@ func TestQuotaBreakerAutoCloses(t *testing.T) {
 	}
 	if err := CheckAccount(context.Background(), db, bare, breakerNow.Add(time.Hour)); err != nil {
 		t.Errorf("an hour in: %v, want admitted", err)
+	}
+}
+
+// TestCloseExpiredBreakers: a quota opening whose reset has passed is closed
+// ('reset') and its alert resolved WITHOUT an admission — an idle account must not
+// stay "paused" on the Inbox for hours after its limit reset. An opening still
+// before its reset, and an auth opening (which never closes on time), stay open.
+func TestCloseExpiredBreakers(t *testing.T) {
+	db := quotaDB(t)
+	// No stored quota window: each quota opening resets an hour after it opened.
+	for _, o := range []struct {
+		account, kind string
+		at            time.Time
+	}{
+		{"expired", store.BreakerKindQuota, breakerNow},
+		{"pending", store.BreakerKindQuota, breakerNow.Add(30 * time.Minute)},
+		{"login", store.BreakerKindAuth, breakerNow},
+	} {
+		if err := OpenBreaker(db, o.account, o.kind, claudeprobe.ReasonRateLimited, store.BreakerSourceRun, o.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	closed, err := CloseExpiredBreakers(db, breakerNow.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CloseExpiredBreakers: %v", err)
+	}
+	if closed != 1 {
+		t.Errorf("closed = %d, want 1", closed)
+	}
+	b, _ := breakerRow(t, db, "expired")
+	if b.IsOpen() || b.ClosedBy != store.BreakerClosedByReset || b.ClosedAt != "2026-09-30T13:00:00Z" {
+		t.Errorf("expired breaker = %+v, want closed by reset at 13:00", b)
+	}
+	if n := openAlerts(t, db, "expired"); n != 0 {
+		t.Errorf("open alerts for the reset account = %d, want 0", n)
+	}
+	for _, account := range []string{"pending", "login"} {
+		if b, _ := breakerRow(t, db, account); !b.IsOpen() {
+			t.Errorf("%s breaker = %+v, want still open", account, b)
+		}
+		if n := openAlerts(t, db, account); n != 1 {
+			t.Errorf("open alerts for %s = %d, want 1", account, n)
+		}
+	}
+}
+
+// TestBreakerTickerClosesOnItsClock: one tick sweeps as of the ticker's clock.
+func TestBreakerTickerClosesOnItsClock(t *testing.T) {
+	db := quotaDB(t)
+	if err := OpenBreaker(db, "work", store.BreakerKindQuota, claudeprobe.ReasonRateLimited,
+		store.BreakerSourceRun, breakerNow); err != nil {
+		t.Fatal(err)
+	}
+	(&BreakerTicker{DB: db, Now: func() time.Time { return breakerNow.Add(59 * time.Minute) }}).Once()
+	if b, _ := breakerRow(t, db, "work"); !b.IsOpen() {
+		t.Fatalf("closed before its reset: %+v", b)
+	}
+	(&BreakerTicker{DB: db, Now: func() time.Time { return breakerNow.Add(time.Hour) }}).Once()
+	if b, _ := breakerRow(t, db, "work"); b.IsOpen() {
+		t.Errorf("still open at its reset: %+v", b)
 	}
 }
 

@@ -163,6 +163,12 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 	if opts.Limit > 0 && len(subjects) > opts.Limit {
 		subjects = subjects[:opts.Limit]
 	}
+	// Over EVERY label, not only the TruthSince window: the cutoff is when the
+	// operator first used a new cause, wherever that label falls.
+	since, err := newCausesInUseSince(db)
+	if err != nil {
+		return EvalReport{}, err
+	}
 
 	rep := EvalReport{LLM: e.Local != nil, Subjects: len(subjects)}
 	if !opts.TruthSince.IsZero() {
@@ -181,7 +187,7 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 		for id, tr := range sub.truths {
 			t := tallies[id]
 			t.labelled++
-			if Agrees(id, tr.truth, tr.recorded) {
+			if Agrees(id, tr.truth, tr.recorded, legacyTruth(tr.at, since)) {
 				t.recordedAgree++
 			}
 		}
@@ -206,7 +212,7 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 				if err != nil && !errors.Is(err, ErrNotConfigured) {
 					errs++
 				}
-				tallies[q.ID].answer(q.ID, tr.truth, a, err)
+				tallies[q.ID].answer(q.ID, tr.truth, legacyTruth(tr.at, since), a, err)
 			}
 		}
 		if opts.Progress != nil {
@@ -375,7 +381,8 @@ func (t *evalTally) backend(name string) *EvalBackend {
 
 // answer tallies one replayed question. A failed or absent answer is
 // unanswered: it counts against the agreement and into no backend's precision.
-func (t *evalTally) answer(questionID, truth string, a Answer, err error) {
+// legacy is legacyTruth for the truth's record time.
+func (t *evalTally) answer(questionID, truth string, legacy bool, a Answer, err error) {
 	t.replayed++
 	if err != nil {
 		if !errors.Is(err, ErrNotConfigured) {
@@ -384,7 +391,7 @@ func (t *evalTally) answer(questionID, truth string, a Answer, err error) {
 		t.backend(evalUnanswered).N++
 		return
 	}
-	agrees := Agrees(questionID, truth, a.Value)
+	agrees := Agrees(questionID, truth, a.Value, legacy)
 	b := t.backend(a.Backend)
 	b.N++
 	if agrees {
