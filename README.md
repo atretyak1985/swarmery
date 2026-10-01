@@ -79,7 +79,10 @@ arm64), verifies it against `SHA256SUMS`, and drops it in `~/.local/bin`
 binaries are on the [Releases](https://github.com/atretyak1985/swarmery/releases) page;
 building from source is under [Working on swarmery itself](#working-on-swarmery-itself).
 
-On macOS, `swarmery install` registers a launchd service so the daemon starts with your machine.
+`swarmery install` registers a launchd service (macOS) or a `systemd --user` unit (Linux) so
+the daemon starts with your machine. Re-run it after each release install: the service and the
+project hooks run the copy it keeps under `~/.swarmery/bin`, not the one the installer just
+replaced ([details](tools/swarmery/README.md#install-as-a-service-and-upgrading-it)).
 
 The `claude` CLI is what swarmery watches — install it separately if you have not already.
 
@@ -368,7 +371,7 @@ cd tools/swarmery
 make build          # snapshot docs → vite bundle → go:embed → single ./swarmery binary
 make test           # go vet ./... && go test ./...
 make dev            # go daemon + vite dev server (proxies /api to :7777)
-make install        # rebuild + swap the launchd-managed binary (macOS)
+make install        # rebuild + swap the service-managed binary and restart it (launchd on macOS, systemd --user on Linux)
 ```
 
 Marketplace-side checks (mirrors [`ci.yml`](.github/workflows/ci.yml)):

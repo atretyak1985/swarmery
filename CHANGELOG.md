@@ -51,6 +51,22 @@ Two things ship from this repository on separate clocks:
 
 ### Fixed
 
+- **Linux `make install` restarted the service on the old binary.** The
+  Makefile installed the rebuilt daemon into `~/.local/bin/swarmery`, while the
+  `systemd --user` unit that `swarmery install` writes and the hook entries that
+  `swarmery hooks install` writes both run `~/.swarmery/bin/swarmery` — so the
+  restart brought the previous build back up and every hook kept using it.
+  `make install` now installs into `~/.swarmery/bin` on both platforms, with the
+  same copy-then-rename as macOS, restarts the unit whenever the user manager
+  has it loaded, and prints the build the service came back up on. The
+  control-plane README now says that a release install (`scripts/install.sh`
+  only replaces `~/.local/bin/swarmery`) needs a `swarmery install` afterwards
+  so the service and hooks pick up the new binary — the installer prints that
+  reminder when it finds a service definition — and its Rollback section no
+  longer claims an older binary refuses a newer database: migrations are
+  forward-only and an older binary opens the newer schema without complaint,
+  so an incompatibility shows up as runtime SQL errors and the clean rollback
+  is restoring the pre-upgrade snapshot.
 - **Micro-plans go into the onboarded workspace (#386).** A dispatched card's
   micro-plan used to go into a duplicate tree. It now goes into the project's own
   workspace namespace: the most recently scanned mapping, the same one its repo
