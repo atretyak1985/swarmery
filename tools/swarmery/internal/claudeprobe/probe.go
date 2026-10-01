@@ -197,8 +197,14 @@ const pingTimeout = 60 * time.Second
 // is `claude -p <prompt> --max-turns 1` — and it is never empty: an empty
 // prompt fails argument validation before any auth check, so it would tell a
 // working account from a broken one no better than a coin.
+//
+// --no-session-persistence keeps the ping out of the transcript store: a
+// pre-flight runs before the first admission after every quiet period, and a
+// saved ping would be ingested as one more "Reply with exactly: OK" session
+// for the session lists, the cost analytics and the D2 labeller to read.
 func pingArgs() []string {
-	return []string{"-p", PingPrompt, "--model", PingModel, "--effort", PingEffort, "--max-turns", "1"}
+	return []string{"-p", PingPrompt, "--model", PingModel, "--effort", PingEffort, "--max-turns", "1",
+		"--no-session-persistence"}
 }
 
 // ProbeRun is stage two of an account check: a minimal `claude -p` ping,
@@ -217,8 +223,9 @@ func pingArgs() []string {
 // environment.
 //
 // dir is the child's working directory ("" leaves it alone). Production passes
-// the System project's directory (systemspawn.Dir), so the ping's transcript
-// lands there instead of in whatever directory the daemon was started in. It is
+// the System project's directory (systemspawn.Dir), so the ping does not run in
+// whatever directory the daemon was started in (it saves no transcript: see
+// pingArgs). It is
 // a parameter rather than an import because systemspawn sits above this
 // package (it imports ingest, which imports claudeprobe). Only the DIRECTORY is
 // taken from there: no `--settings` is spliced into the argv, because the

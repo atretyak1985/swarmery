@@ -364,7 +364,7 @@ func TestPreflightProbesTheRunsOwnEnvironment(t *testing.T) {
 			t.Errorf("ping ran outside the System project dir %s:\n  %s", systemResolved, ping)
 		}
 		wantArgv := "argv=-p " + claudeprobe.PingPrompt + " --model " + claudeprobe.PingModel +
-			" --effort " + claudeprobe.PingEffort + " --max-turns 1"
+			" --effort " + claudeprobe.PingEffort + " --max-turns 1 --no-session-persistence"
 		if !strings.HasSuffix(ping, wantArgv) || strings.Contains(ping, "--settings") {
 			t.Errorf("ping argv is not the fixed one:\n  %s\nwant suffix %q", ping, wantArgv)
 		}

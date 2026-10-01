@@ -207,7 +207,11 @@ echo OK`)
 	// A caller-built environment that names a config dir and carries a variable.
 	named := filepath.Join(t.TempDir(), ".claude-work")
 	lines := run(envWith(named, "SWARMERY_TEST_PROBE_VAR=delivered"), cwd)
-	wantArgv := []string{"-p", PingPrompt, "--model", PingModel, "--effort", PingEffort, "--max-turns", "1"}
+	// --no-session-persistence: a ping must leave no transcript, or every
+	// pre-flight becomes an ingested "Reply with exactly: OK" session that the
+	// session lists, cost analytics and the D2 labeller all pick up.
+	wantArgv := []string{"-p", PingPrompt, "--model", PingModel, "--effort", PingEffort, "--max-turns", "1",
+		"--no-session-persistence"}
 	if got := lines[:len(lines)-3]; strings.Join(got, "\x00") != strings.Join(wantArgv, "\x00") {
 		t.Errorf("argv = %q, want exactly %q — nothing may be spliced into the ping", got, wantArgv)
 	}
