@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"sort"
@@ -385,5 +386,65 @@ func TestWSWithoutBus(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 503 {
 		t.Errorf("status = %d, want 503", resp.StatusCode)
+	}
+}
+
+// TestWSOriginFence: the live stream carries raw prompts, tool input and
+// approval requestJson, so /api/ws sits behind the same origin fence as every
+// write. A page on a foreign origin — another local port included — cannot
+// subscribe; the daemon's own origin and an opted-in alias can; and no Origin
+// at all (the console, the notch companion) still upgrades.
+func TestWSOriginFence(t *testing.T) {
+	bus := ingest.NewBus()
+	AttachBus(bus)
+	t.Cleanup(func() { AttachBus(nil) })
+	srv := testServer(t)
+	port, other := serverPort(t, srv), otherPort(t, srv)
+	AttachTrustedOrigins([]string{"http://swarmery:" + port})
+	t.Cleanup(func() { AttachTrustedOrigins(nil) })
+	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "/api/ws"
+
+	cases := []struct {
+		name   string
+		origin string // "" ⇒ no Origin header sent
+		ok     bool
+	}{
+		{"no origin (console, notch)", "", true},
+		{"own origin", srv.URL, true},
+		{"own origin by name", "http://localhost:" + port, true},
+		{"opted-in alias", "http://swarmery:" + port, true},
+		{"localhost on another port", "http://localhost:" + other, false},
+		{"127.0.0.1 on another port", "http://127.0.0.1:" + other, false},
+		{"alias on another port", "http://swarmery:" + other, false},
+		{"foreign site", "https://evil.example", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			opts := &websocket.DialOptions{HTTPHeader: http.Header{}}
+			if tc.origin != "" {
+				opts.HTTPHeader.Set("Origin", tc.origin)
+			}
+			c, resp, err := websocket.Dial(ctx, wsURL, opts)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("Origin %q should upgrade: %v", tc.origin, err)
+				}
+				c.Close(websocket.StatusNormalClosure, "")
+				return
+			}
+			if err == nil {
+				c.Close(websocket.StatusNormalClosure, "")
+				t.Fatalf("Origin %q should have been rejected", tc.origin)
+			}
+			if resp == nil || resp.StatusCode != http.StatusForbidden {
+				got := 0
+				if resp != nil {
+					got = resp.StatusCode
+				}
+				t.Errorf("Origin %q rejected with status %d, want 403", tc.origin, got)
+			}
+		})
 	}
 }

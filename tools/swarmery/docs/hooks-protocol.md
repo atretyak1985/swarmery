@@ -22,13 +22,19 @@ Every behavior below is grounded in the live spike
 - Both endpoints are localhost-trust like the rest of the API (D4): no auth in v1;
   state-changing endpoints reject cross-origin browser `Origin` headers. The shim
   sends no `Origin`.
-- Only `localhost`, `127.0.0.1` and `::1` are trusted origins by default. Reaching the
-  dashboard by a friendly alias (a `/etc/hosts` entry, a compose service name) needs that
-  alias opted in explicitly: `SWARMERY_TRUSTED_ORIGINS=http://swarmery:7777` (comma-separated,
+- Only the daemon's **own** origin is trusted by default: `localhost`, `127.0.0.1` and `::1`
+  on the port it is actually serving, over its own scheme. `localhost` on another port — a
+  second dev server, an SSH port-forward — is a different process and is rejected like any
+  foreign site. Reaching the dashboard by a friendly alias (a `/etc/hosts` entry, a compose
+  service name) needs that alias opted in explicitly: `SWARMERY_TRUSTED_ORIGINS=http://swarmery:7777` (comma-separated,
   `swarmery install --trusted-origins …` bakes it into the service definition). Entries are
   matched as full origins — scheme, host and port — because the daemon controls no name beyond
   the loopback ones: a bare `swarmery` can be expanded by a DNS search domain to a host someone
   else serves, and that page would otherwise pass the fence.
+- Every route, reads included, also requires a `Host` header that names the daemon — the
+  same loopback names on the bound port, the listener's own address, or a trusted origin's
+  host — which is the DNS-rebinding fence (`403` otherwise). The shim dials a loopback
+  address on the daemon's port, so it passes by construction.
 - Errors follow the existing API convention: non-2xx with `{"error": string}`.
   The shim treats **any** transport or non-contract response as fail-open (below).
 
@@ -372,7 +378,7 @@ binary):
 | 404  | no session with that id |
 | 409  | session has a **live process** (`proc_state` `running` or `orphaned`) — a real terminal owns the transcript; a parallel resume would race on the JSONL. Stop it first (see below). |
 | 409  | session has no `cwd` to resume in, or a resume is already in flight for this uuid (single-flight) |
-| 403  | cross-origin browser POST (D4 `requireLocalOrigin`, same as every write endpoint) |
+| 403  | cross-origin browser POST (D4 `requireLocalOrigin`, same as every write endpoint), or a `Host` that does not name the daemon (`requireLocalHost`, every route) |
 | 503  | `claude` executable not found (override with `SWARMERY_CLAUDE_BIN`; the daemon also probes `/opt/homebrew/bin`, `/usr/local/bin`, `~/.claude/local`, `~/.local/bin`, npm-global, `~/bin` because launchd runs with a minimal PATH) |
 
 The guard is on the **live process**, not the time-based `status`: a session that

@@ -163,7 +163,9 @@ func TestTermCwdAllowList(t *testing.T) {
 
 // TestTermOriginGate proves the STRICT origin rule: unlike requireLocalOrigin, a
 // MISSING Origin is rejected (browser-only endpoint), and a foreign Origin is
-// rejected too. Only a local Origin upgrades.
+// rejected too — localhost on a port the daemon does not serve included, since
+// any local dev server could otherwise open a shell. Only the daemon's own
+// Origin upgrades.
 func TestTermOriginGate(t *testing.T) {
 	srv, projectDir, _ := termTestServer(t)
 
@@ -175,7 +177,10 @@ func TestTermOriginGate(t *testing.T) {
 		{"no origin rejected", "", false},
 		{"foreign origin rejected", "https://evil.example.com", false},
 		{"non-http scheme rejected", "file://localhost", false},
+		{"localhost on another port rejected", "http://localhost:" + otherPort(t, srv), false},
+		{"127.0.0.1 on another port rejected", "http://127.0.0.1:" + otherPort(t, srv), false},
 		{"local origin accepted", srv.URL, true},
+		{"own origin by name accepted", "http://localhost:" + serverPort(t, srv), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

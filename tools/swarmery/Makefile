@@ -97,9 +97,14 @@ copy-probe:
 	cp ../../scripts/tests/cc-channel-probe.sh $(PROBE_DST)/
 	cp -R ../../scripts/tests/fixtures/cc-channel-probe $(PROBE_DST)/fixtures/
 
-# dev: run the API daemon and the vite dev server (proxying /api to :7777)
+# dev: run the API daemon and the vite dev server (proxying /api to :7777).
+# The proxy forwards the dev origin
+# (http://localhost:5173) as Origin and Host, which the daemon's D4 fences only
+# accept once opted in (internal/api/origin.go) — so it is, on top of whatever
+# SWARMERY_TRUSTED_ORIGINS already holds in the calling shell.
 dev: copy-docs copy-probe
-	go run ./cmd/swarmery serve & \
+	SWARMERY_TRUSTED_ORIGINS="$${SWARMERY_TRUSTED_ORIGINS:+$${SWARMERY_TRUSTED_ORIGINS},}http://localhost:5173,http://127.0.0.1:5173" \
+		go run ./cmd/swarmery serve & \
 	cd web && npm run dev; \
 	kill %1 2>/dev/null
 

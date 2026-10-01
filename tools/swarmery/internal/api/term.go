@@ -7,8 +7,9 @@
 //
 // Security contract (normative, phase-15 spec):
 //   - The endpoint is browser-originated, so the origin gate is STRICTER than
-//     requireLocalOrigin: a MISSING Origin is rejected too (only a local http/https
-//     Origin passes). This closes DNS-rebinding on a raw ws:// dial.
+//     requireLocalOrigin: a MISSING Origin is rejected too (only the daemon's own
+//     origin, or one opted in via SWARMERY_TRUSTED_ORIGINS, passes — origin.go).
+//     This closes a raw ws:// dial that would ride the no-Origin exemption.
 //   - cwd MUST EvalSymlinks to either a registered project path or a live task
 //     worktree_path — anything else (e.g. /etc, a symlink escape) is 403.
 //   - account MUST be a well-formed key (claudeacct.ValidKey) naming an account
@@ -28,7 +29,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,8 +63,8 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 			map[string]string{"error": "terminal service not attached"})
 		return
 	}
-	// Strict origin gate: browser-originated ⇒ a local Origin is REQUIRED.
-	if !isStrictLocalOrigin(r.Header.Get("Origin")) {
+	// Strict origin gate: browser-originated ⇒ the daemon's own Origin is REQUIRED.
+	if !isStrictLocalOrigin(r) {
 		writeJSONStatus(w, http.StatusForbidden,
 			map[string]string{"error": "cross-origin or origin-less terminal upgrade rejected"})
 		return
@@ -108,8 +108,9 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// We enforce origin ourselves above (stricter than coder's check), so
-		// the library gate is opened; the loopback bind is the outer fence.
+		// Origin is enforced above (stricter than the library's Host-derived
+		// check, and aware of the opt-in list), so the library gate is opened;
+		// the Host fence (requireLocalHost, routes.go) ran before the handler.
 		OriginPatterns: []string{"*"},
 	})
 	if err != nil {
@@ -371,29 +372,4 @@ func (h *Handler) scanColumn(query string) []string {
 		}
 	}
 	return out
-}
-
-// isStrictLocalOrigin requires a present, parseable, http/https, localhost Origin.
-// Unlike isLocalOrigin (which lets an ABSENT origin through for the hook shim),
-// an empty Origin is rejected: the terminal is only ever opened from the SPA.
-// The SPA is also served from any origin the operator opted into via
-// SWARMERY_TRUSTED_ORIGINS, so the same allow-list applies here — otherwise a
-// dashboard reached by a trusted alias gets working writes but a dead terminal.
-func isStrictLocalOrigin(origin string) bool {
-	if origin == "" {
-		return false
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	switch u.Hostname() {
-	case "localhost", "127.0.0.1", "::1":
-		return true
-	}
-	n, ok := normalizeOrigin(origin)
-	return ok && trustedOrigins[n]
 }

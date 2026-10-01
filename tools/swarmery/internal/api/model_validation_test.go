@@ -32,7 +32,7 @@ func TestModelValidationEndpoint(t *testing.T) {
 
 	t.Run("recorded verdict", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/models/claude-opus-6/validation", nil))
+		mux.ServeHTTP(rec, localRequest(t, "GET", "/api/models/claude-opus-6/validation", nil))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 		}
@@ -56,7 +56,7 @@ func TestModelValidationEndpoint(t *testing.T) {
 	// recorded validation" and blocks a model the operator has already validated.
 	t.Run("a context-marked id resolves to the same row", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/models/claude-opus-6[1m]/validation", nil))
+		mux.ServeHTTP(rec, localRequest(t, "GET", "/api/models/claude-opus-6[1m]/validation", nil))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 		}
@@ -74,7 +74,7 @@ func TestModelValidationEndpoint(t *testing.T) {
 
 	t.Run("never evaluated is 404, not a default", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/models/claude-opus-9/validation", nil))
+		mux.ServeHTTP(rec, localRequest(t, "GET", "/api/models/claude-opus-9/validation", nil))
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want 404: an unknown model must not read as fine", rec.Code)
 		}

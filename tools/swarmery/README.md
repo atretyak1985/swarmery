@@ -39,6 +39,37 @@ node, `~/.claude/local`, Homebrew, `/usr/local/bin`) so the `claude` it spawns c
 start `npx`/`uvx`-based MCP servers. `SWARMERY_SPAWN_PATH=/dir1:/dir2` (bake it
 into the plist like any other knob) prepends extra dirs verbatim.
 
+## Security model
+
+The daemon has no authentication: it binds loopback (`--bind 127.0.0.1`) and
+trusts whoever can reach it. A browser lends that reach to every page it
+renders, so two fences stand in front of the API (`internal/api/origin.go`).
+Both derive "this daemon" from the address it actually listens on, and both
+are extended only by `SWARMERY_TRUSTED_ORIGINS` (comma-separated
+`scheme://host[:port]`; `swarmery install --trusted-origins …` bakes it into
+the service definition):
+
+- **Origin.** Every write, the `/api/ws` live stream and the terminal upgrade
+  refuse a browser `Origin` other than the daemon's own — scheme, host **and
+  port**. A page on `http://localhost:5173` (another dev server, an SSH
+  port-forward) is as foreign as one on the internet; opt it in if it must
+  drive the daemon (`make dev` does so for the vite dev server). The terminal
+  also refuses a request with no `Origin` at all. Elsewhere a request without
+  an `Origin` (the hook shim, `curl`, `swarmery console`, the notch companion)
+  passes: a non-browser client cannot be driven by a web page.
+- **Host.** Every route — reads included — refuses a `Host` header that does
+  not name the daemon: a loopback name or address on the bound port, the
+  listener's own address (`--bind 192.168.1.5` is reached as
+  `192.168.1.5:7777`), or the host of a trusted origin. This closes DNS
+  rebinding, where a page re-points its own name at `127.0.0.1` and reads the
+  API as same-origin. Reaching the daemon by any other name or port — a
+  hosts-file alias, a reverse proxy that forwards the original `Host`, a
+  tunnel on another port — needs that origin opted in, for every client.
+  That includes a routine's webhook sender (`POST /api/hooks/routine/…` is
+  token-gated and exempt from the Origin fence, not from this one).
+
+Both fences answer `403 {"error": …}` before any handler runs.
+
 ## Backup & restore
 
 The daemon's operational database (`~/.swarmery/swarmery.db` by default — sessions,
