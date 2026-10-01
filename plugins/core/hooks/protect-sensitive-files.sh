@@ -48,16 +48,50 @@ for dir in "${protected_dirs[@]}"; do
   fi
 done
 
-# Block edits to protected lock files (exact basename match).
-for f in "${protected_files[@]}"; do
-  if [[ "$base_name" == "$f" ]]; then
-    echo "🚫 BLOCKED: Cannot modify protected file: $file_path" >&2
-    echo "Protected pattern: $f" >&2
-    echo "" >&2
-    echo "If you need to modify this file, please do it manually." >&2
-    exit 2  # Exit code 2 blocks the operation
-  fi
-done
+# Canonicalize a relative file_path against the hook's cwd. Two rules below need
+# the absolute form: the lock-file temp-dir exemption, and the root-artifact
+# guard — where `dirname` of a relative path (e.g. "PLAN-x.md" → ".") would
+# otherwise never equal an absolute workspace_root and silently bypass it. The
+# hook JSON carries `cwd`; if it is absent, fall back to $PWD.
+abs_file_path="$file_path"
+case "$file_path" in
+  /*) ;;  # already absolute — use as-is
+  *)
+    hook_cwd=$(echo "$input" | jq -r '.cwd // empty')
+    [ -n "$hook_cwd" ] || hook_cwd="$PWD"
+    abs_file_path="${hook_cwd%/}/$file_path"
+    ;;
+esac
+
+# A lock file in a scratch copy under the OS temp dir is not the project's lock
+# file. A path with a ".." segment never qualifies.
+under_os_tmp=0
+case "$abs_file_path" in
+  */../*|*/..) ;;
+  /tmp/*|/private/tmp/*) under_os_tmp=1 ;;
+esac
+tmp_root="${TMPDIR%/}"
+if [ "$under_os_tmp" -eq 0 ] && [ -n "$tmp_root" ] && [ "$tmp_root" != "/" ]; then
+  case "$abs_file_path" in
+    */../*|*/..) ;;
+    "$tmp_root"/*|/private"$tmp_root"/*) under_os_tmp=1 ;;
+  esac
+fi
+
+# Block edits to protected lock files (exact basename match) — except under the
+# OS temp dir (above). Only this loop reads under_os_tmp: the protected-directory
+# loop, the credential block and every later rule apply there as everywhere else.
+if [ "$under_os_tmp" -eq 0 ]; then
+  for f in "${protected_files[@]}"; do
+    if [[ "$base_name" == "$f" ]]; then
+      echo "🚫 BLOCKED: Cannot modify protected file: $file_path" >&2
+      echo "Protected pattern: $f" >&2
+      echo "" >&2
+      echo "If you need to modify this file, please do it manually." >&2
+      exit 2  # Exit code 2 blocks the operation
+    fi
+  done
+fi
 
 # Block edits to credential material. Extended 2026-08-24. Historical note:
 # the retired read-before-write.sh hook echoed a refused file's CONTENTS to
@@ -81,9 +115,16 @@ if [[ "$base_name" == *.pem || "$base_name" == *.key || "$base_name" == *.p12 ||
   exit 2
 fi
 
-# Block edits to any .env* file (basename prefix match — covers
-# .env, .env.local, .env.production, .env.example, …).
-if [[ "$base_name" == .env* ]]; then
+# Template dotenv files document variable NAMES and are committed; they hold no
+# secrets. Only a TRAILING suffix counts: .env.example.local stays blocked.
+case "$base_name" in
+  .env*.example|.env*.sample|.env*.template) env_template=1 ;;
+  *) env_template=0 ;;
+esac
+
+# Block edits to any other .env* file (basename prefix match — covers
+# .env, .env.local, .env.production, …). Only this rule reads env_template.
+if [[ "$env_template" -eq 0 && "$base_name" == .env* ]]; then
   echo "🚫 BLOCKED: Cannot modify protected file: $file_path" >&2
   echo "Protected pattern: .env*" >&2
   echo "" >&2
@@ -159,21 +200,7 @@ fi
 #
 # The workspace root is the directory that contains .claude-workspace. Prefer
 # $CLAUDE_PROJECT_DIR; fall back to the file's own parent directory (path heuristic).
-#
-# Canonicalize a relative file_path against the hook's cwd FIRST — otherwise
-# `dirname` of a relative path (e.g. "PLAN-x.md" → ".") never equals an absolute
-# workspace_root, silently bypassing the root-artifact guard below. The hook JSON
-# carries `cwd`; if it is absent, fall back to $PWD.
-abs_file_path="$file_path"
-case "$file_path" in
-  /*) ;;  # already absolute — use as-is
-  *)
-    hook_cwd=$(echo "$input" | jq -r '.cwd // empty')
-    [ -n "$hook_cwd" ] || hook_cwd="$PWD"
-    abs_file_path="${hook_cwd%/}/$file_path"
-    ;;
-esac
-
+# abs_file_path is the cwd-canonicalized path computed above the lock-file loop.
 file_dir=$(dirname "$abs_file_path")
 if [ -n "$CLAUDE_PROJECT_DIR" ]; then
   workspace_root="${CLAUDE_PROJECT_DIR%/}"

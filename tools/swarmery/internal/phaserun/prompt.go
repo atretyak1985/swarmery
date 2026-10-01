@@ -87,6 +87,18 @@ func BuildPrompt(docPath, docRelPath, docContent string) string {
 // another. A zero Budget renders no budget line at all (the BuildPrompt shape and
 // the prompt tests that predate the clock).
 func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath string, budget runcore.Budget) string {
+	return BuildPromptStacked(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, "", budget)
+}
+
+// BuildPromptStacked is BuildPromptIn for a run whose worktree was cut from an
+// unmerged DEPENDENCY branch instead of the repo's base branch (base.go).
+// stackedOn is that branch's name; "" renders nothing, so an unstacked run's
+// prompt is byte-identical to BuildPromptIn's.
+//
+// The executor has to be told, because nothing in the worktree says so: `git log`
+// shows the dependency's commits directly under HEAD, indistinguishable from
+// history, and an agent asked to summarise or review "its" work would claim them.
+func BuildPromptStacked(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn string, budget runcore.Budget) string {
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
 		DocPath      string
@@ -94,8 +106,28 @@ func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath, workt
 		DocContent   string
 		RepoNote     string
 		TurnContract string
-	}{docPath, docRelPath, docContent, repoNote(repoRoot, projectPath, worktreePath), runcore.TurnContract(budget)})
+	}{docPath, docRelPath, docContent,
+		repoNote(repoRoot, projectPath, worktreePath) + stackNote(stackedOn),
+		runcore.TurnContract(budget)})
 	return b.String()
+}
+
+// stackNote is the orientation block for a stacked run, or "" when the run starts
+// on the repo's base branch.
+//
+// The first two sentences are the design's, verbatim. The third is there because
+// the contract above them forbids pushing and opening PRs: without it "Open your
+// PR against that branch" reads as an instruction to the executor, when it
+// describes how the WORK lands once a human takes it from here.
+func stackNote(stackedOn string) string {
+	if stackedOn == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"STACKED BASE: This worktree is stacked on `%s`; its commits are not yours. "+
+			"Open your PR against that branch, or rebase onto the default branch once it merges. "+
+			"That describes how this work lands later — the rule above still holds for this run: commit locally, do NOT push, do NOT open a PR.\n\n",
+		stackedOn)
 }
 
 // repoNote renders the multi-repo orientation block plus, when the project

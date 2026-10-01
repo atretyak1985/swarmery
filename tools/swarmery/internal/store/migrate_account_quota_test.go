@@ -119,9 +119,14 @@ func TestOpenNoMigrate(t *testing.T) {
 	if maxV != latest-1 {
 		t.Errorf("MAX(version) = %d after OpenNoMigrate, want %d (it migrated)", maxV, latest-1)
 	}
-	// The table the pending migration would add is absent — callers see "no such table".
-	if _, err := QuotaForAccount(db, "default"); err == nil || !strings.Contains(err.Error(), "no such table") {
-		t.Errorf("QuotaForAccount on a pre-migration db: err = %v, want no such table", err)
+	// What the pending migration would add is absent — callers see "no such
+	// column". The pending migration is whichever one is newest:
+	// phase_blocked_fingerprint (a column on epic_phases) since it landed on top of
+	// account_breaker, which had landed on top of account_quota.
+	var fp sql.NullString
+	if err := db.QueryRow(`SELECT run_blocked_fingerprint FROM epic_phases LIMIT 1`).Scan(&fp); err == nil ||
+		!strings.Contains(err.Error(), "no such column") {
+		t.Errorf("run_blocked_fingerprint on a pre-migration db: err = %v, want no such column", err)
 	}
 
 	if _, err := OpenNoMigrate(filepath.Join(t.TempDir(), "absent.db")); err == nil {

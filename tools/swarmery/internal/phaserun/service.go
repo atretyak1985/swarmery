@@ -127,10 +127,18 @@ type Service struct {
 	DB  *sql.DB
 	Wt  runcore.WorktreeManager // shared worktree mechanics (runcore's seam)
 	Run Runner
-	// Git is an OPTIONAL read-only seam, used for one thing: naming the branch a
-	// commits-ahead count was measured against (BranchDirtyError.Base). nil ⇒ the
-	// base is reported as unknown; no run behaviour depends on it.
+	// Git is an OPTIONAL seam with two readers. It names the branch a commits-ahead
+	// count was measured against (BranchDirtyError.Base), and it is what base
+	// resolution asks whether a dependency's run branch has merged (base.go). nil ⇒
+	// the base is reported as unknown and NOTHING is stacked or refused for unmerged
+	// dependencies: every run starts on the repo's current branch tip, as it did
+	// before base resolution existed. The daemon always wires it.
 	Git worktree.Git
+	// gitCaps remembers what the git behind Git can do — today one thing: whether
+	// it has `merge-tree --write-tree` (git ≥ 2.38), which base resolution decides
+	// once from `git version` instead of inferring from a failing probe. The zero
+	// value is ready; it answers for whichever Git was wired when first asked.
+	gitCaps gitCapability
 	// RepoRoot resolves the git repository a run executes in from the project path
 	// and the repo the phase declares. nil ⇒ repopath.Resolve. A seam because the
 	// production resolver stats the filesystem, and the run gates have to be
@@ -193,6 +201,11 @@ type Service struct {
 	// before the slot: a fresh reading below the floor refuses Start with a
 	// *runcore.LowQuotaError and stamps nothing. nil ⇒ runcore.CheckQuota.
 	QuotaCheck runcore.QuotaCheckFunc
+	// AccountCheck is the account circuit-breaker gate (runcore.CheckAccount), run
+	// right after QuotaCheck and before the slot: an account whose breaker is open
+	// refuses Start with a *runcore.AccountBreakerError and stamps nothing.
+	// nil ⇒ runcore.CheckAccount.
+	AccountCheck runcore.AccountCheckFunc
 }
 
 // NewService builds a phase-run service. The caller wires DB + Run
@@ -200,13 +213,14 @@ type Service struct {
 // production impls.
 func NewService(db *sql.DB, r Runner, wt runcore.WorktreeManager) *Service {
 	return &Service{
-		DB:         db,
-		Run:        r,
-		Wt:         wt,
-		UUID:       runcore.NewUUID,
-		now:        time.Now,
-		Slots:      runcore.NewSlots(0),
-		QuotaCheck: runcore.CheckQuota,
+		DB:           db,
+		Run:          r,
+		Wt:           wt,
+		UUID:         runcore.NewUUID,
+		now:          time.Now,
+		Slots:        runcore.NewSlots(0),
+		QuotaCheck:   runcore.CheckQuota,
+		AccountCheck: runcore.CheckAccount,
 	}
 }
 
@@ -275,6 +289,33 @@ type phaseInfo struct {
 	// resolveModel is the one place that judges it, and it fails the run rather than
 	// dropping it.
 	DocModel string
+	// RunStartPoint is the SHA the PREVIOUS run's worktree was pinned to
+	// (run_start_point, migration 0057); "" for a phase that never ran. Start hands
+	// it to the branch reclaim: a leftover branch that was stacked on a dependency
+	// carries that dependency's commits, and without the start point they would be
+	// counted as this phase's own unmerged work.
+	RunStartPoint string
+	// RunError, RunEndedAt and RunBlockedFingerprint describe how the previous run
+	// ended. They are read for one decision — the blocked re-run guard (blocked.go)
+	// — and are all "" for a phase that never ran. RunError is the blocked run's
+	// reason; RunEndedAt (RFC 3339) is when it blocked; RunBlockedFingerprint
+	// (migration 0092) is the situation it blocked in.
+	RunError              string
+	RunEndedAt            string
+	RunBlockedFingerprint string
+}
+
+// StartOptions are the operator's choices for one run. The zero value is a plain
+// "Run phase": no model or effort picked, no override of any guard.
+type StartOptions struct {
+	// Model and Effort are the request rungs of their ladders ("" = not chosen);
+	// see resolveModel and resolveEffort.
+	Model  string
+	Effort string
+	// Force runs a phase the blocked re-run guard would refuse: its last run ended
+	// blocked and nothing has changed since. It overrides that ONE refusal and no
+	// other — a forced run still answers to every other gate.
+	Force bool
 }
 
 // runRoot resolves the repository this phase runs in: what the phase doc declares
@@ -474,7 +515,17 @@ func resolveEffort(choice, doc, docPath, routed string) (string, error) {
 // model and effort are the operator's choices for THIS run ("" = none, for
 // either). resolveModel and resolveEffort above own the two ladders and both run
 // before anything is acquired or stamped, so a bad value in either costs nothing.
+//
+// It is StartWith without the force override — what every caller that is not the
+// operator pressing "run anyway" wants.
 func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string, err error) {
+	return s.StartWith(phaseID, StartOptions{Model: model, Effort: effort})
+}
+
+// StartWith is Start with every per-run choice the operator can make, including
+// Force (see StartOptions). Start's contract above is this function's.
+func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID string, err error) {
+	model, effort := opts.Model, opts.Effort
 	// loadPhase is a pure READ — one SELECT, no stamp, no acquire — and rung 2 of
 	// the ladder lives on the row it returns (epic_phases.doc_model), so model
 	// resolution cannot precede it. It sits right after the already-running gates
@@ -545,13 +596,44 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	if err != nil {
 		return "", err
 	}
+	// Where the run starts. The dependency gate above accepts TICKED criteria, and
+	// a dependency can be fully ticked on a run branch nobody merged — so the tree
+	// this run would get from the repo's branch tip may not contain the work it
+	// depends on. Base resolution answers with a dependency branch to stack on, or
+	// refuses (*DepsUnmergedError) when the unmerged branches diverged and there is
+	// no single commit to start from. Still an admission verdict: read-only, ahead
+	// of the slot, the worktree and every stamp. It sits here because it is the
+	// first line that knows the repository, and ahead of the two account gates
+	// because those can spend a probe on an account this run would never use.
+	base, err := s.resolveRunBase(info)
+	if err != nil {
+		return "", err
+	}
+	// The blocked re-run guard: a phase whose last run ended blocked, re-run with
+	// nothing changed, reaches the same block at the price of a full run. Refused
+	// here — after base resolution, because where the run would start is one of the
+	// things that may have changed — unless the operator forces it or the cooldown
+	// has lapsed (blocked.go).
+	if err := s.checkBlockedUnchanged(info, base, string(doc), opts.Force); err != nil {
+		return "", err
+	}
 	// Account quota: the last admission verdict before the slot. A fresh reading
 	// below the floor is refused as itself (*runcore.LowQuotaError — the API
 	// renders 429 with the reset time); unknown headroom admits. Nothing is
 	// stamped and no slot is taken, exactly like ErrNoSlot. Wall-clock time, not
 	// s.clock(): account_quota's fetched_at is the poller's wall time, and the
 	// service clock is the run's stamp source (budget.Started reads it below).
-	if err := runcore.CheckQuotaWith(s.QuotaCheck, s.DB, runcore.AccountFor(info.ProjectPath), time.Now()); err != nil {
+	account := runcore.AccountFor(info.ProjectPath)
+	if err := runcore.CheckQuotaWith(s.QuotaCheck, s.DB, account, time.Now()); err != nil {
+		return "", err
+	}
+	// Account circuit breaker: the same posture one gate later. An account that
+	// cannot run — its login is gone, its access was refused, it hit a usage
+	// limit — is refused as itself (*runcore.AccountBreakerError — the API
+	// renders 409 account-breaker), before the slot and the worktree, so a phase
+	// is never spent on it. It may first probe the account (once per account per
+	// SWARMERY_PREFLIGHT_TTL); an account it cannot judge is admitted.
+	if err := runcore.CheckAccountWith(context.Background(), s.AccountCheck, s.DB, account, time.Now()); err != nil {
 		return "", err
 	}
 
@@ -587,9 +669,15 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// The name comes from runcore, which owns the one derivation worktree.Acquire
 	// performs (taskName ⇒ swarm/<taskName>): the pair below must agree, and when the
 	// literals were spelled out here that agreement was a comment rather than code.
+	//
+	// Both reclaims below measure against the start point the previous run RECORDED
+	// (run_start_point), when there is one. A previous run that was stacked on a
+	// dependency branch left a branch carrying that dependency's commits; counted
+	// against the repo's base branch alone they read as this phase's unmerged work,
+	// and a retry of a run that committed nothing is refused as a dirty branch.
 	taskName := runcore.PhaseTaskName(phaseID)
 	branch := runcore.PhaseBranch(phaseID)
-	ahead, err := s.Wt.ReclaimEmptyBranch(info.RepoRoot, branch)
+	ahead, err := s.reclaimEmptyBranch(info.RepoRoot, branch, info.RunStartPoint)
 	if err != nil {
 		release()
 		return "", fmt.Errorf("reclaim run branch: %w", err)
@@ -607,7 +695,7 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// contract the deterministic branch gets, applied to the branch that actually holds
 	// the commits.
 	if prev := info.RunBranch; prev != "" && prev != branch {
-		prevAhead, err := s.Wt.ReclaimEmptyBranch(info.RepoRoot, prev)
+		prevAhead, err := s.reclaimEmptyBranch(info.RepoRoot, prev, info.RunStartPoint)
 		if err != nil {
 			release()
 			return "", fmt.Errorf("reclaim previous run branch %s: %w", prev, err)
@@ -618,10 +706,29 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		}
 	}
 
-	acq, err := s.Wt.Acquire(info.RepoRoot, info.ProjectSlug, taskName)
+	// Pinned to the dependency tip base resolution chose, or to the repo's current
+	// branch tip when it chose none (StartRef "" — exactly the old Acquire).
+	acq, err := s.acquire(info.RepoRoot, info.ProjectSlug, taskName, base.StartRef)
 	if err != nil {
 		release()
 		return "", fmt.Errorf("worktree acquire: %w", err)
+	}
+	// A FRESH worktree is cut from base.StartRef, so its start point is that SHA.
+	// A different start point means the manager WARM-REUSED a leftover worktree of
+	// this phase (a crashed run's), whose branch forks from the dependency earlier
+	// than the dependency's current tip — AcquireAt reports that fork point. The
+	// tree is then missing dependency work the run was resolved to start on, and
+	// the prompt below would call it "stacked" regardless. Refuse instead.
+	//
+	// The worktree is deliberately NOT removed: this call did not create it, and it
+	// may hold the only copy of the crashed run's uncommitted work. The slot is
+	// released and nothing is stamped, exactly as for every refusal above.
+	if base.StartRef != "" && acq.StartPoint != base.StartRef {
+		release()
+		return "", fmt.Errorf("worktree acquire: %w: a leftover worktree of this phase at %s (branch %s) forks from %s at %s "+
+			"and does not contain that branch's current tip %s — finish or remove the leftover worktree "+
+			"(`git worktree remove`, after saving anything in it worth keeping), then run the phase again",
+			ErrCannotStack, acq.Path, acq.Branch, base.StackedOn, acq.StartPoint, base.StartRef)
 	}
 
 	// run_checkboxes_before=checkboxes_done snapshots the ticked-criteria baseline
@@ -649,6 +756,10 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	// the deadline for the whole loop rather than giving each continuation a fresh
 	// full window. Reading the clock a second time would put the prompt's
 	// "started" a tick after the column's, for no gain.
+	//
+	// run_blocked_fingerprint is cleared in the same statement: it describes the
+	// situation the PREVIOUS run blocked in, and a row that is running has no
+	// blocked run to guard against. stamp() writes a new one if this run blocks too.
 	budget := runcore.Budget{Timeout: timeoutFromEnv(), Started: s.clock()}
 	if _, err := s.DB.Exec(`
 		UPDATE epic_phases
@@ -656,7 +767,7 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 		       run_error=NULL, run_ended_at=NULL, run_branch=?,
 		       run_start_point=NULLIF(?, ''),
 		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL,
-		       run_effort=NULLIF(?, '')
+		       run_effort=NULLIF(?, ''), run_blocked_fingerprint=NULL
 		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, runEffort, phaseID); err != nil {
 		// Worktree FIRST, slot LAST — the same invariant runAndHandle's defer
 		// enforces. Releasing the slot while the worktree still exists lets a
@@ -689,7 +800,11 @@ func (s *Service) Start(phaseID int64, model, effort string) (sessionUUID string
 	if lendErr != nil {
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
 	}
-	prompt := BuildPromptIn(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, budget)
+	if base.StackedOn != "" {
+		log.Printf("phaserun: phase=%d stacked on %s at %s (its dependency is not merged into %q)",
+			phaseID, base.StackedOn, acq.StartPoint, base.BaseBranch)
+	}
+	prompt := BuildPromptStacked(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, budget)
 	// After run_session_uuid is stamped (so every lesson_uses row names a run the
 	// pending-session registry already answers for) and before the spawn.
 	if s.InjectLessons != nil {
@@ -1194,6 +1309,13 @@ func (s *Service) event(phaseID int64, uuid, kind string, attempt int, detail st
 // plan rescan mid-run) still closes the interval on the live count, because leaving
 // run_checkboxes_after NULL would hand the outcome back to the column that keeps
 // moving.
+//
+// run_blocked_fingerprint (migration 0092) is written in the same statement: the
+// situation's fingerprint when state is `blocked`, NULL on every other terminal
+// state. One statement, so there is never a row that says `blocked` with a stale
+// fingerprint or `done` with a leftover one. It is computed BEFORE the write and
+// after the lent doc came home (every caller returns the doc first), because the
+// doc body and its ticks are two of the things it hashes.
 func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 	var re any
 	if runError != "" {
@@ -1206,11 +1328,18 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 		log.Printf("warning: phaserun: stamp phase=%d: phase doc %q unreadable, closing the run interval on the live count instead",
 			phaseID, docPath)
 	}
+	var fingerprint any // NULL unless the run blocked AND its situation could be read
+	if state == "blocked" {
+		if fp := s.fingerprintForStamp(phaseID, docPath); fp != "" {
+			fingerprint = fp
+		}
+	}
 	res, err := s.DB.Exec(`
 		UPDATE epic_phases
 		   SET run_state=?, run_error=?, run_ended_at=?,
-		       run_checkboxes_after=COALESCE(?, checkboxes_done)
-		 WHERE id=?`, state, re, s.ts(), after, phaseID)
+		       run_checkboxes_after=COALESCE(?, checkboxes_done),
+		       run_blocked_fingerprint=?
+		 WHERE id=?`, state, re, s.ts(), after, fingerprint, phaseID)
 	if err != nil {
 		log.Printf("error: phaserun: stamp phase=%d state=%s: %v", phaseID, state, err)
 		return
@@ -1380,19 +1509,24 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 		// NULL for every phase whose doc declares no `**Model:**` — which is every
 		// phase predating migration 0069.
 		docModel sql.NullString
+		// The previous run's facts; NULL for a phase that never ran (and the
+		// fingerprint for one that never blocked).
+		startPoint, runError, endedAt, fingerprint sql.NullString
 	)
 	// LEFT JOIN workspaces: the overlay's project.json is a repo-hint source, and a
 	// project with no workspace mapped must still load (the join is advisory).
 	err := s.DB.QueryRow(`
 		SELECT e.workspace_task_id, e.seq, e.name, e.doc_path, e.depends_on, e.run_state,
-		       e.run_branch, e.repo, e.verify_mode, e.doc_model, p.path, p.slug, w.root_path
+		       e.run_branch, e.repo, e.verify_mode, e.doc_model, p.path, p.slug, w.root_path,
+		       e.run_start_point, e.run_error, e.run_ended_at, e.run_blocked_fingerprint
 		  FROM epic_phases e
 		  JOIN tasks t ON t.id = e.workspace_task_id
 		  JOIN projects p ON p.id = t.project_id
 		  LEFT JOIN workspaces w ON w.project_id = p.id
 		 WHERE e.id = ?`, phaseID).Scan(
 		&info.WorkspaceTaskID, &info.Seq, &info.Name, &info.DocPath, &depsJSON,
-		&info.RunState, &runBranch, &repo, &info.VerifyMode, &docModel, &path, &info.ProjectSlug, &wsRoot)
+		&info.RunState, &runBranch, &repo, &info.VerifyMode, &docModel, &path, &info.ProjectSlug, &wsRoot,
+		&startPoint, &runError, &endedAt, &fingerprint)
 	if errors.Is(err, sql.ErrNoRows) {
 		return info, ErrPhaseNotFound
 	}
@@ -1404,6 +1538,10 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 	info.Repo = repo.String
 	info.DocModel = docModel.String
 	info.RunBranch = runBranch.String
+	info.RunStartPoint = startPoint.String
+	info.RunError = runError.String
+	info.RunEndedAt = endedAt.String
+	info.RunBlockedFingerprint = fingerprint.String
 	if err := json.Unmarshal([]byte(depsJSON), &info.DependsOn); err != nil {
 		info.DependsOn = nil // garbage depends_on ⇒ no gate (same posture as epics.go decodeIntList)
 	}

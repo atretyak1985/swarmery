@@ -14,12 +14,13 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { patchProposal, patchRecommendation, resolveApproval } from '../../api';
+import { AUTO_MODE_NO_VERDICT_RULE, resumeAccount } from '../../api/alerts';
 import { postGroundTruth, type QueueItem } from '../../api/decisions';
 import { acceptLesson, confirmRetirement, dismissLesson, keepLesson } from '../../api/lessons';
 import { QuestionForm } from '../../components/QuestionForm';
 import { questionsOf, requestSummary } from '../../lib/approvals';
 import { UI_TERMS } from '../../lib/glossary';
-import { ageLabel, expiresInLabel, KIND_META, type InboxItem } from './inboxModel';
+import { ageLabel, expiresInLabel, isAccountBreaker, KIND_META, type InboxItem } from './inboxModel';
 
 type Action = () => Promise<unknown>;
 
@@ -41,6 +42,11 @@ export function primaryAction(item: InboxItem): Action | null {
     }
     case 'retire':
       return () => confirmRetirement(item.raw.id);
+    case 'alert': {
+      // "Probe & resume" — only a paused account has an action to take.
+      const alert = item.raw;
+      return isAccountBreaker(alert) ? () => resumeAccount(alert.account) : null;
+    }
   }
 }
 
@@ -60,6 +66,9 @@ export function denyAction(item: InboxItem): Action | null {
       return null;
     case 'retire':
       return () => keepLesson(item.raw.id);
+    case 'alert':
+      // An alert cannot be dismissed: it goes away when what it reports does.
+      return null;
   }
 }
 
@@ -369,6 +378,59 @@ export function InboxDetail({
             <KeyHint k="x" />
           </button>
         </>
+      );
+      break;
+    }
+    case 'alert': {
+      const a = item.raw;
+      if (!isAccountBreaker(a)) {
+        // An alert with no action of its own: say what it reports and where.
+        body = (
+          <>
+            <Body>
+              <b className="font-medium text-ink-2">What happened:</b> {a.message}
+            </Body>
+            {a.rule === AUTO_MODE_NO_VERDICT_RULE && (
+              <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
+                nothing to decide here — the check runs on Claude's side, and this alert closes on its own after
+                30 minutes without a failed check
+              </div>
+            )}
+          </>
+        );
+        break;
+      }
+      const quota = a.kind === 'quota';
+      title = `Account ${a.account} is paused`;
+      body = (
+        <>
+          <Body>
+            <b className="font-medium text-ink-2">What happened:</b>{' '}
+            {quota
+              ? 'This account hit a Claude usage limit.'
+              : 'Claude refused this account: its sign-in expired, or its access was switched off.'}{' '}
+            The daemon stopped starting cards, phases and plans on it {ageLabel(item.ageIso, now)} ago, so no
+            more runs are spent finding that out.
+          </Body>
+          {a.reason !== undefined && a.reason !== '' && <Code>{a.reason}</Code>}
+          <Consequences
+            yes={[
+              'if you probe & resume',
+              'The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why.',
+            ]}
+          />
+          <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
+            {quota && a.resetsAt !== undefined && a.resetsAt !== ''
+              ? `resumes on its own in ${expiresInLabel(a.resetsAt, now)}, when the limit resets`
+              : 'stays paused until a check succeeds — sign in to the account again first if it needs it'}
+          </div>
+        </>
+      );
+      buttons = (
+        <button type="button" data-primary="" className={PRIMARY_BRAND} disabled={busy} onClick={act(primary)}>
+          probe &amp; resume
+          <KeyHint k="e" />
+        </button>
       );
       break;
     }

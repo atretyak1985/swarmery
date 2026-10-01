@@ -1431,6 +1431,12 @@ type phaseState struct {
 	// The --effort the run was spawned with (0086), stamped at run start; calibration
 	// reads it back per run, so it must follow the run across a rename.
 	runEffort sql.NullString
+	// The situation a run blocked in (0092), stamped when it settles `blocked`.
+	// phaserun.Start compares it against the situation as it stands to refuse an
+	// unchanged re-run; dropped on a rename, the guard would forget the block the
+	// moment a plan is archived or a phase doc is renamed — and run_state, which IS
+	// carried, would still say `blocked`.
+	runBlockedFingerprint sql.NullString
 }
 
 // runDerivedPhaseTables hold one row per RUN (keyed on its session uuid) and name the
@@ -1460,7 +1466,8 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 		SELECT id, seq, doc_path, run_state, run_session_uuid, run_started_at,
 		       run_ended_at, run_error, run_branch, run_checkboxes_before,
 		       run_checkboxes_after, activated_at, activated_board_task_id,
-		       run_start_point, verify_verdict, verify_detail, run_effort
+		       run_start_point, verify_verdict, verify_detail, run_effort,
+		       run_blocked_fingerprint
 		  FROM epic_phases
 		 WHERE workspace_task_id = ?`, taskID)
 	if err != nil {
@@ -1474,7 +1481,8 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 			&p.runStartedAt, &p.runEndedAt, &p.runError, &p.runBranch,
 			&p.runCheckboxesBefore, &p.runCheckboxesAfter, &p.activatedAt,
 			&p.activatedBoardTaskID,
-			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail, &p.runEffort); err != nil {
+			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail, &p.runEffort,
+			&p.runBlockedFingerprint); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -1535,12 +1543,14 @@ func carryAcrossRenames(tx *sql.Tx, taskID int64, phases []epicPhase, before []p
 			   SET run_state=?, run_session_uuid=?, run_started_at=?, run_ended_at=?,
 			       run_error=?, run_branch=?, run_checkboxes_before=?,
 			       run_checkboxes_after=?, activated_at=?, activated_board_task_id=?,
-			       run_start_point=?, verify_verdict=?, verify_detail=?, run_effort=?
+			       run_start_point=?, verify_verdict=?, verify_detail=?, run_effort=?,
+			       run_blocked_fingerprint=?
 			 WHERE workspace_task_id = ? AND doc_path = ?`,
 			old.runState, old.runSessionUUID, old.runStartedAt, old.runEndedAt,
 			old.runError, old.runBranch, old.runCheckboxesBefore, old.runCheckboxesAfter,
 			old.activatedAt, old.activatedBoardTaskID,
 			old.runStartPoint, old.verifyVerdict, old.verifyDetail, old.runEffort,
+			old.runBlockedFingerprint,
 			taskID, dst.docPath); err != nil {
 			return nil, err
 		}

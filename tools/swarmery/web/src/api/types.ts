@@ -511,6 +511,23 @@ export interface HealthResponse {
    * than the drift scanner.
    */
   pluginDrift?: { error: number; warn: number };
+  /**
+   * Whether Claude Code's server-side auto mode permission check is answering.
+   * Additive optional: absent when talking to a daemon older than the field.
+   */
+  autoModeClassifier?: HealthAutoMode;
+}
+
+/** Go: healthAutoMode — `autoModeClassifier` of GET /api/health. */
+export interface HealthAutoMode {
+  /** Tool calls refused for want of a verdict in the last hour. */
+  noVerdictLastHour: number;
+  /** Distinct sessions those calls belong to. */
+  sessionsLastHour: number;
+  /** ISO timestamp of the newest such call; null when there is none. */
+  lastAt: string | null;
+  /** True while the `auto_mode_no_verdict` alert is open. */
+  alerting: boolean;
 }
 
 /** GET /api/docs — list item. */
@@ -3380,7 +3397,23 @@ export type RunConflictCode =
   | 'phase-running'
   | 'plan-not-active'
   | 'no-phases'
-  | 'plan-complete';
+  | 'plan-complete'
+  /** the run's account cannot run — its circuit breaker is open (sign-in or access
+   *  refused, or a usage limit). Resolved from the Inbox alert's "Probe & resume". */
+  | 'account-breaker'
+  /** phase run only: the dependencies are complete, but on run branches that are
+   *  unmerged and have diverged — the body names `branches` and `base`, and the fix
+   *  is a merge the operator performs. */
+  | 'deps-unmerged'
+  /** phase run only: the last run ended blocked and nothing a re-run would see has
+   *  changed. Lapses at `retryAfter`; `{force: true}` on the request runs it anyway. */
+  | 'blocked-unchanged'
+  /** phase run only: the run was resolved onto a dependency branch but a leftover
+   *  worktree of this phase predates that branch's tip — `message` names it. */
+  | 'cannot-stack'
+  /** phase run only: the dependency commit to start from stopped resolving between
+   *  resolution and acquisition; the same request resolves afresh. */
+  | 'start-ref-unresolved';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';

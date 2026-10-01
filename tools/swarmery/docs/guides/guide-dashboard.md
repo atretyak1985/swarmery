@@ -122,6 +122,35 @@ because of you. Then:
 
 The [Retro reference](retro.md) explains every metric and advisor rule.
 
+### The auto mode permission check
+
+In auto mode, Claude Code clears every tool call with a permission check that runs
+on Claude's servers. When that check fails to answer, the call is refused with
+*"The server-side auto mode classifier gave no verdict"*, and after ten such
+answers in a row the turn stops by itself. The cause is outside swarmery and nothing
+here retries or resumes a session — the dashboard only makes the outage visible
+while it is happening:
+
+- **Overview** carries one line, *Auto mode permission check*: how many checks went
+  without a verdict in the last hour, in how many sessions, and when the last one
+  was. It reads *answering* when there were none.
+- Three or more within ten minutes raise **one alert in the Inbox** (*alerts* tab)
+  for the whole burst. It has no button: it closes on its own after thirty minutes
+  without a failed check. `SWARMERY_AUTOMODE_ALERT_MIN` changes the threshold
+  (default `3`; read when the daemon evaluates, once a minute).
+
+`GET /api/health` reports the same facts in `autoModeClassifier`:
+
+| Field | Meaning |
+|---|---|
+| `noVerdictLastHour` | Tool calls refused for want of a verdict in the last hour |
+| `sessionsLastHour` | Distinct sessions those calls belong to |
+| `lastAt` | Timestamp of the newest such call; `null` when there is none |
+| `alerting` | `true` while the `auto_mode_no_verdict` alert is open |
+
+The numbers are recomputed at most every 30 seconds, and a read that fails reports
+zeroes rather than failing the health endpoint.
+
 ## Learning
 
 | Tab | What it shows |

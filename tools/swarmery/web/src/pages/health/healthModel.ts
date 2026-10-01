@@ -9,6 +9,7 @@
 
 import type {
   AgentChangeProposal,
+  HealthAutoMode,
   Recommendation,
   RetroAgentRow,
   RetroAgentsResp,
@@ -210,4 +211,30 @@ export function waitingText(findings: number, rewrites: number): string {
 
 export function becauseText(verified: number, gathering: number): string {
   return `${plural(verified, 'change', 'changes')} verified · ${String(gathering)} gathering proof`;
+}
+
+/* ----- the auto mode permission check row ----- */
+
+/** quiet: nothing in the last hour · seen: some, below the alert · alerting: the alert is open. */
+export type AutoModeTone = 'quiet' | 'seen' | 'alerting';
+
+export interface AutoModeRowText {
+  tone: AutoModeTone;
+  text: string;
+}
+
+/**
+ * The Overview row about Claude Code's server-side auto mode permission check
+ * (`autoModeClassifier` of GET /api/health): how many tool calls it left without
+ * a verdict in the last hour, in how many sessions, and when last. `lastSeen` is
+ * the already-rendered age of `lastAt` ("12 min ago"), null when there is none.
+ */
+export function autoModeRow(m: HealthAutoMode, lastSeen: string | null): AutoModeRowText {
+  const tone: AutoModeTone = m.alerting ? 'alerting' : m.noVerdictLastHour > 0 ? 'seen' : 'quiet';
+  if (m.noVerdictLastHour === 0) {
+    return { tone, text: 'answering — no check went without a verdict in the last hour' };
+  }
+  const head = `${plural(m.noVerdictLastHour, 'check', 'checks')} got no verdict in the last hour`;
+  const sessions = `in ${plural(m.sessionsLastHour, 'session', 'sessions')}`;
+  return { tone, text: `${head} · ${sessions}${lastSeen !== null ? ` · last ${lastSeen}` : ''}` };
 }

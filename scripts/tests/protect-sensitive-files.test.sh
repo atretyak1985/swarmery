@@ -12,21 +12,47 @@ HOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/plugins/core/hooks/pro
 pass=0
 fail=0
 
-# assert <expected-exit> <description> <json-payload>
-assert() {
-  local expected="$1" desc="$2" payload="$3" actual
-  printf '%s' "$payload" | "$HOOK" >/dev/null 2>&1
-  actual=$?
+# record <expected-exit> <actual-exit> <description> — tally one case. Passing
+# cases are silent unless VERBOSE is set (`VERBOSE=1 bash <this file>`).
+record() {
+  local expected="$1" actual="$2" desc="$3"
   if [ "$actual" -eq "$expected" ]; then
     pass=$((pass + 1))
+    if [ -n "${VERBOSE:-}" ]; then
+      printf '  ✓ %s (exit %s)\n' "$desc" "$actual"
+    fi
   else
     fail=$((fail + 1))
     printf '  ✗ %s (expected exit %s, got %s)\n' "$desc" "$expected" "$actual"
   fi
 }
 
+# assert <expected-exit> <description> <json-payload>
+assert() {
+  local expected="$1" desc="$2" payload="$3"
+  printf '%s' "$payload" | "$HOOK" >/dev/null 2>&1
+  record "$expected" "$?" "$desc"
+}
+
+# assert_tmpdir <expected-exit> <description> <TMPDIR value | --unset> <json-payload>
+# Same as assert, but runs the hook with TMPDIR pinned to a value or removed
+# from its environment, so the temp-dir exemption is tested hermetically.
+assert_tmpdir() {
+  local expected="$1" desc="$2" tmpdir="$3" payload="$4"
+  if [ "$tmpdir" = "--unset" ]; then
+    printf '%s' "$payload" | ( unset TMPDIR; "$HOOK" ) >/dev/null 2>&1
+  else
+    printf '%s' "$payload" | TMPDIR="$tmpdir" "$HOOK" >/dev/null 2>&1
+  fi
+  record "$expected" "$?" "$desc"
+}
+
 # jp <path> — build a minimal hook payload naming a target file_path.
 jp() { printf '{"tool_input":{"file_path":"%s"}}' "$1"; }
+
+# jpc <path> <cwd> — the same payload plus the session `cwd`, which the hook
+# uses to canonicalize a relative file_path.
+jpc() { printf '{"cwd":"%s","tool_input":{"file_path":"%s"}}' "$2" "$1"; }
 
 # ── BLOCK (exit 2) ────────────────────────────────────────────────
 assert 2 ".env file"                 "$(jp '/repo/.env')"
@@ -68,6 +94,40 @@ assert 0 "environment.ts not dotenv" "$(jp '/repo/environment.ts')"
 assert 0 "keyboard.ts is not a .key"  "$(jp '/repo/src/keyboard.ts')"
 assert 0 "credentials.test.ts ok"     "$(jp '/repo/src/credentials.test.ts')"
 assert 0 "settings.json (not local)"  "$(jp '/repo/.claude/settings.json')"
+
+# ── Exemption 1: dotenv templates ─────────────────────────────────
+# A template documents variable NAMES and is committed. Only a TRAILING
+# .example/.sample/.template suffix qualifies; every other .env* stays blocked.
+assert 0 "tpl allow: .env.example"               "$(jp '/repo/.env.example')"
+assert 0 "tpl allow: .env.sample"                "$(jp '/repo/.env.sample')"
+assert 0 "tpl allow: .env.template"              "$(jp '/repo/.env.template')"
+assert 0 "tpl allow: .env.local.example"         "$(jp '/repo/.env.local.example')"
+assert 2 "tpl block: .env"                       "$(jp '/repo/.env')"
+assert 2 "tpl block: .env.production"            "$(jp '/repo/.env.production')"
+assert 2 "tpl block: .env.example.local"         "$(jp '/repo/.env.example.local')"
+
+# ── Exemption 2: lock files under the OS temp dir ─────────────────
+# A lock file in a scratch copy under /tmp, /private/tmp or $TMPDIR is not the
+# project's lock file. The exemption is lock-files-only and path-anchored.
+assert 0 "tmp allow: /tmp package-lock.json"     "$(jp '/tmp/w/package-lock.json')"
+assert 0 "tmp allow: /private/tmp yarn.lock"     "$(jp '/private/tmp/s/u/scratchpad/wt/yarn.lock')"
+assert 0 "tmp allow: /tmp pnpm-lock.yaml"        "$(jp '/tmp/w/pnpm-lock.yaml')"
+assert_tmpdir 0 "tmp allow: \$TMPDIR package-lock.json" '/var/folders/x/T/' \
+  "$(jp '/var/folders/x/T/w/package-lock.json')"
+assert 0 "tmp allow: relative lock, cwd /tmp/w"  "$(jpc 'package-lock.json' '/tmp/w')"
+
+assert 2 "tmp block: /repo package-lock.json"    "$(jp '/repo/package-lock.json')"
+assert 2 "tmp block: relative lock, cwd /repo"   "$(jpc 'package-lock.json' '/repo')"
+# A ".." segment never qualifies — the path escapes the temp dir.
+assert 2 "tmp block: /tmp/../repo lock"          "$(jp '/tmp/../repo/package-lock.json')"
+# Every other rule applies under the temp dir exactly as elsewhere.
+assert 2 "tmp block: /tmp .env"                  "$(jp '/tmp/w/.env')"
+assert 2 "tmp block: /tmp server.pem"            "$(jp '/tmp/w/server.pem')"
+assert 2 "tmp block: /tmp .git/config"           "$(jp '/tmp/w/.git/config')"
+assert 2 "tmp block: /tmp node_modules lock"     "$(jp '/tmp/w/node_modules/x/package-lock.json')"
+# A degenerate TMPDIR must not turn the whole filesystem into "temp".
+assert_tmpdir 2 "tmp block: /repo lock, TMPDIR=/"    '/'       "$(jp '/repo/package-lock.json')"
+assert_tmpdir 2 "tmp block: /repo lock, TMPDIR unset" '--unset' "$(jp '/repo/package-lock.json')"
 
 printf 'protect-sensitive-files: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

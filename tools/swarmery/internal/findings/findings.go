@@ -23,8 +23,17 @@ type Item struct {
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 
+// Execer is what Upsert and Resolve write through: a *sql.DB, or the *sql.Tx a
+// caller already holds. The store runs one connection, so a writer inside a
+// transaction (ingest's tail) must surface its finding through that same
+// transaction rather than reach for the pool.
+type Execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 // Upsert refreshes the active row for (target, rule) or INSERTs one.
-func Upsert(db *sql.DB, target, rule, severity, message string) error {
+func Upsert(db Execer, target, rule, severity, message string) error {
 	var id int64
 	err := db.QueryRow(
 		`SELECT id FROM config_lint_findings WHERE target = ? AND rule = ? AND resolved_at IS NULL`,
@@ -44,7 +53,7 @@ func Upsert(db *sql.DB, target, rule, severity, message string) error {
 }
 
 // Resolve closes the active row for (target, rule), if any.
-func Resolve(db *sql.DB, target, rule string) error {
+func Resolve(db Execer, target, rule string) error {
 	_, err := db.Exec(
 		`UPDATE config_lint_findings SET resolved_at = ? WHERE target = ? AND rule = ? AND resolved_at IS NULL`,
 		now(), target, rule)

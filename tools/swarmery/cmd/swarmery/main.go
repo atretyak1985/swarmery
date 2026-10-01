@@ -9,7 +9,8 @@
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
-//	swarmery install               auto-start: launchd (macOS) or systemd --user (Linux)
+//	swarmery decide eval           replay the classifier over recorded ground truth (read-only)
+//	swarmery install              auto-start: launchd (macOS) or systemd --user (Linux)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
@@ -42,6 +43,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/agentsync"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
@@ -176,6 +178,11 @@ func main() {
 		err = cmdAttach(os.Args[2:])
 	case "account":
 		err = cmdAccount(os.Args[2:])
+	case "decide":
+		// Exit code is the contract (decide_cli.go): 1 means an agreement floor
+		// was missed, 2 a usage or database error — log.Fatalf's blanket 1
+		// could not tell the two apart.
+		os.Exit(cmdDecide(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -285,6 +292,14 @@ func usage() {
                                    from the files under <dir>; a dry run unless --apply; refuses a
                                    git-tracked file without --include-tracked (not the retention
                                    prune above)
+  swarmery decide eval [--db <path>] [--llm] [--truth-since <RFC3339>] [--questions <a,b>]
+                    [--limit <n>] [--json] [--out <file>]
+                    [--min-outcome <f>] [--min-failure <f>] [--min-task <f>]
+                                   replay the local classifier over recorded ground truth and
+                                   report agreement per D2 question (read-only, never migrates;
+                                   safe while the daemon is serving). --llm also asks the local
+                                   model (SWARMERY_DECIDE_URL); exit 1 when a --min-* floor is
+                                   missed, 2 on a usage or database error
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;
        'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;
@@ -1736,6 +1751,15 @@ func cmdServe(args []string) error {
 		}
 	}
 
+	// auto mode classifier outage — Claude Code's server-side permission check
+	// refusing tool calls for want of a verdict. Counted off the already-ingested
+	// events and raised as ONE auto_mode_no_verdict finding per burst (Inbox
+	// alert + /api/health autoModeClassifier). Read-only over events; it changes
+	// nothing about how a run behaves.
+	go (&automode.Ticker{DB: db}).Run(context.Background())
+	log.Printf("swarmery auto-mode outage watch started (interval %s, alert at %d no-verdict checks / %s)",
+		automode.DefaultInterval, automode.AlertMin(), automode.AlertWindow)
+
 	// retro phase 3: the advisor rule engine — deterministic recommendations
 	// (R1..R6) refreshed once at startup and every 24h, plus on demand via
 	// POST /api/retro/advise. Works purely off the DB, so it runs with or
@@ -1991,6 +2015,16 @@ func cmdServe(args []string) error {
 	// verdicts with source='run' under runtruth's write rules (negative-only,
 	// no-login→ready recovery, debounced).
 	runTruth := runtruth.NewRecorder(db)
+	// The account circuit breaker's PRE-FLIGHT (internal/runcore/breaker.go):
+	// before the first run after a quiet period, admission probes the account —
+	// `claude auth status`, then a one-turn `claude -p` ping — so an account that
+	// cannot run is caught before a volley of runs starts on it. The probe is
+	// installed HERE and nowhere else: without it the three engines still enforce
+	// the stored breaker state (run-truth and ingest open it) but spawn nothing,
+	// which is what keeps every test that starts a run away from the real CLI.
+	// Knobs: SWARMERY_PREFLIGHT_TTL (default 15m, 0 = off) and
+	// SWARMERY_PREFLIGHT_PING=off (stage one only).
+	runcore.SetPreflightProbe(runcore.ProbeAccount)
 
 	// ONE run budget for the whole daemon (SWARMERY_MAX_RUNS, default 4). Every
 	// engine below is handed this same registry: board, phase and plan runs draw
@@ -2203,7 +2237,7 @@ func cmdServe(args []string) error {
 	// epic_phases, no board task). Shares the worktree.Manager with dispatch/
 	// verify so all three agree on the worktree root and git boundary. Heal any
 	// 'running' rows a crashed daemon left behind to failed before serving.
-	phaserunSvc := phaserun.NewService(db, phaserun.ClaudeRunner{}, wtMgr)
+	phaserunSvc := phaserun.NewService(db, phaserun.ClaudeRunner{AccountVerdict: runTruth.Record}, wtMgr)
 	phaserunSvc.Slots = runSlots // the one daemon-wide budget (see runSlots above)
 	// Read-only git seam, through the same boundary the worktree manager uses: it
 	// NAMES the base a dirty-branch refusal counted commits against. NewService
@@ -2354,7 +2388,7 @@ func cmdServe(args []string) error {
 	// Plan runs: hand a WHOLE plan to one agent — one headless session in one
 	// worktree, driving core's run-plan skill (state on plan_runs). Same
 	// worktree.Manager as dispatch/verify/phaserun; same startup heal posture.
-	planrunSvc := planrun.NewService(db, planrun.ClaudeRunner{}, wtMgr)
+	planrunSvc := planrun.NewService(db, planrun.ClaudeRunner{AccountVerdict: runTruth.Record}, wtMgr)
 	planrunSvc.Slots = runSlots // the one daemon-wide budget (see runSlots above)
 	planrunSvc.InjectLessons = lessonInjector.ForPlan
 	planrunSvc.LessonCitations = lessonInjector.AfterPlanRun

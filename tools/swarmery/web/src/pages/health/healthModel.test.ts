@@ -14,6 +14,7 @@ import type { RetroAgentRow, RetroAgentsResp, RetroFrictionResp } from '../../ap
 import {
   FALLBACK_SENTENCE,
   HEALTH_PRESETS,
+  autoModeRow,
   countRecs,
   daysFromParam,
   frictionCount,
@@ -161,5 +162,33 @@ describe('counts', () => {
     >[0];
     expect(countRecs(recs, ['proposed'])).toBe(1);
     expect(countRecs(recs, ['accepted', 'adopted'])).toBe(1);
+  });
+});
+
+describe('autoModeRow', () => {
+  it('reads quiet when no check went without a verdict', () => {
+    expect(autoModeRow({ noVerdictLastHour: 0, sessionsLastHour: 0, lastAt: null, alerting: false }, null)).toEqual({
+      tone: 'quiet',
+      text: 'answering — no check went without a verdict in the last hour',
+    });
+  });
+
+  it('counts the last hour, its sessions and the last one seen', () => {
+    const one = { noVerdictLastHour: 1, sessionsLastHour: 1, lastAt: '2026-09-28T11:30:47.643Z', alerting: false };
+    expect(autoModeRow(one, '12 min ago')).toEqual({
+      tone: 'seen',
+      text: '1 check got no verdict in the last hour · in 1 session · last 12 min ago',
+    });
+  });
+
+  it('is alerting while the alert is open, whatever the count', () => {
+    const burst = { noVerdictLastHour: 9, sessionsLastHour: 2, lastAt: '2026-09-28T06:38:57.594Z', alerting: true };
+    expect(autoModeRow(burst, '1 min ago')).toEqual({
+      tone: 'alerting',
+      text: '9 checks got no verdict in the last hour · in 2 sessions · last 1 min ago',
+    });
+    expect(autoModeRow({ ...burst, noVerdictLastHour: 0, sessionsLastHour: 0, lastAt: null }, null).tone).toBe(
+      'alerting',
+    );
   });
 });

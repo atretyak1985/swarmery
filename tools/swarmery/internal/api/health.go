@@ -15,12 +15,17 @@ package api
 //   uptimeSec, migrationVersion, wsClients, ingestLagSec, dispatch{active,paused}
 // dbSizeBytes duplicates db_size_bytes in camelCase for the new CLI without
 // breaking the frozen snake_case reader.
+//
+// Two more additive fields follow the same rule — pluginDrift{error,warn} and
+// autoModeClassifier{noVerdictLastHour,sessionsLastHour,lastAt,alerting}.
 
 import (
 	"database/sql"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/version"
 )
 
@@ -57,6 +62,38 @@ type healthDTO struct {
 	// PluginDrift counts unresolved plugin_* findings — enabled plugins Claude
 	// Code cannot actually load. The sidebar health line badges off this.
 	PluginDrift healthPluginDrift `json:"pluginDrift"`
+	// AutoModeClassifier says whether Claude Code's server-side auto mode
+	// permission check is answering: how many tool calls it left without a
+	// verdict in the last hour, and whether the outage alert is open.
+	AutoModeClassifier healthAutoMode `json:"autoModeClassifier"`
+}
+
+// healthAutoMode is the auto mode classifier summary (internal/automode). Zero
+// values mean "no refusal seen in the last hour" — and also "could not be
+// read", because health never fails over this field.
+type healthAutoMode struct {
+	// NoVerdictLastHour counts the tool calls refused for want of a verdict.
+	NoVerdictLastHour int `json:"noVerdictLastHour"`
+	// SessionsLastHour is how many distinct sessions those calls belong to.
+	SessionsLastHour int `json:"sessionsLastHour"`
+	// LastAt is the newest such call's timestamp; null when there is none.
+	LastAt *string `json:"lastAt"`
+	// Alerting is true while the auto_mode_no_verdict alert is open.
+	Alerting bool `json:"alerting"`
+}
+
+// autoModeCacheTTL is how long one computed summary is served. The ticker that
+// raises the alert runs every minute, so a fresher number would not be a truer
+// one.
+const autoModeCacheTTL = 30 * time.Second
+
+// autoModeCache is the in-memory copy of the last summary and when it was
+// computed. The mutex is held across the recompute, so a burst of health polls
+// on an expired entry costs one query, not one each.
+type autoModeCache struct {
+	mu  sync.Mutex
+	at  time.Time
+	val healthAutoMode
 }
 
 // healthPluginDrift counts unresolved plugin_* findings by severity. Zero
@@ -98,6 +135,8 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 		IngestLagSec:     h.ingestLagSec(),
 		Dispatch:         dispatchHealth(),
 		PluginDrift:      h.pluginDriftCounts(),
+
+		AutoModeClassifier: h.autoModeHealth(time.Now()),
 	}
 	if !processStart.IsZero() {
 		dto.UptimeSec = int64(time.Since(processStart).Seconds())
@@ -195,5 +234,33 @@ func (h *Handler) pluginDriftCounts() healthPluginDrift {
 			out.Warn = n
 		}
 	}
+	return out
+}
+
+// autoModeHealth summarises the auto mode classifier as of now: the no-verdict
+// refusals of the last hour and whether the alert is open. Best effort, like
+// every operational field here: a query that fails leaves its part at the zero
+// value, never a 500. The result is kept for autoModeCacheTTL — the count is a
+// bounded scan (the last hour of tool calls), but the health line is polled by
+// every open dashboard tab.
+func (h *Handler) autoModeHealth(now time.Time) healthAutoMode {
+	c := &h.autoMode
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.at.IsZero() && now.Sub(c.at) >= 0 && now.Sub(c.at) < autoModeCacheTTL {
+		return c.val
+	}
+	var out healthAutoMode
+	if n, err := automode.Count(h.DB, now.Add(-automode.HealthWindow)); err == nil {
+		out.NoVerdictLastHour, out.SessionsLastHour = n.Events, n.Sessions
+		if n.LastAt != "" {
+			last := n.LastAt
+			out.LastAt = &last
+		}
+	}
+	if alerting, err := automode.Alerting(h.DB); err == nil {
+		out.Alerting = alerting
+	}
+	c.at, c.val = now, out
 	return out
 }

@@ -44,8 +44,8 @@ import (
 // and its per-account secret store exactly as a bound repo does, and an unbound
 // one gets os.Environ() back unchanged (same backing array).
 func Attach(cmd *exec.Cmd) {
-	dir := ingest.SystemDir()
-	if dir == "" || !isDir(dir) {
+	dir, ok := Dir()
+	if !ok {
 		return
 	}
 	cmd.Dir = dir
@@ -62,6 +62,24 @@ func Attach(cmd *exec.Cmd) {
 	if f := runsettings.Compose("systemspawn", res, runsettings.Inputs{}); f != "" && len(cmd.Args) > 0 {
 		cmd.Args = append([]string{cmd.Args[0], "--settings", f}, cmd.Args[1:]...)
 	}
+}
+
+// Dir is the System project's directory — the working directory a
+// daemon-spawned utility run starts in — and whether it exists. It is Attach's
+// own guard, exported for the ONE caller that wants the directory and nothing
+// else: the account pre-flight ping (internal/runcore), whose transcript must
+// attribute to the System project like every other utility run's, but whose
+// account environment and settings must be those of the run it vouches for,
+// not the System project's. Every other spawn uses Attach.
+//
+// ok=false means there is no System project on this machine; the caller then
+// leaves its working directory alone, exactly as Attach does.
+func Dir() (dir string, ok bool) {
+	dir = ingest.SystemDir()
+	if dir == "" || !isDir(dir) {
+		return "", false
+	}
+	return dir, true
 }
 
 // isDir reports whether path exists and is a directory. A file at that path is

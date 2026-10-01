@@ -18,6 +18,7 @@ import {
   fetchProposals,
   fetchRecommendations,
 } from '../../api';
+import { fetchAlerts } from '../../api/alerts';
 import { fetchLabelQueue } from '../../api/decisions';
 import { fetchLessons, fetchRetirements } from '../../api/lessons';
 import type { WSMessage } from '../../api/types';
@@ -38,6 +39,7 @@ export const FLEET_WIDE_KINDS: ReadonlySet<InboxKind> = new Set([
   'lesson',
   'proposal',
   'retire',
+  'alert',
 ]);
 
 const REFETCH_DEBOUNCE_MS = 400;
@@ -47,13 +49,14 @@ function value<T>(r: PromiseSettledResult<T>): T | undefined {
 }
 
 async function loadSources(scope: string | null): Promise<{ src: InboxSources; errors: InboxKind[] }> {
-  const [approvals, lessons, recs, proposals, classifier, retirements] = await Promise.allSettled([
+  const [approvals, lessons, recs, proposals, classifier, retirements, alerts] = await Promise.allSettled([
     fetchApprovals('pending', scope),
     fetchLessons('candidate'),
     scope === null ? fetchRecommendations('proposed') : fetchProjectRecommendations(scope, 'proposed'),
     fetchProposals('proposed,needs_target'),
     fetchLabelQueue('all', scope),
     fetchRetirements(),
+    fetchAlerts(),
   ]);
   const errors: InboxKind[] = [];
   const settled: [PromiseSettledResult<unknown>, InboxKind][] = [
@@ -63,6 +66,7 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
     [proposals, 'proposal'],
     [classifier, 'classifier'],
     [retirements, 'retire'],
+    [alerts, 'alert'],
   ];
   for (const [r, kind] of settled) if (r.status === 'rejected') errors.push(kind);
   return {
@@ -73,6 +77,7 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
       proposals: value(proposals)?.proposals,
       classifier: value(classifier),
       retirements: value(retirements),
+      alerts: value(alerts),
     },
     errors,
   };

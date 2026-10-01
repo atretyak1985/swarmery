@@ -192,6 +192,126 @@ func writeLowQuota(w http.ResponseWriter, err error) {
 	writeJSONStatus(w, http.StatusTooManyRequests, body)
 }
 
+// codeAccountBreaker is the account circuit-breaker refusal: the run's account
+// cannot run right now — its login is gone, its access was refused, or it hit a
+// usage limit — and the daemon will not spend a run finding that out again. A
+// 409, unlike codeLowQuota's 429: for an auth opening "retry later" is not the
+// answer — the operator has to fix the account and resume it (the Inbox alert's
+// "Probe & resume", POST /api/accounts/{account}/breaker/resume).
+const codeAccountBreaker = "account-breaker"
+
+// writeAccountBreaker renders a run refused by the account gate
+// (runcore.ErrAccountBreaker): 409 {"error":"account-breaker","code":
+// "account-breaker","message",…,"account","kind","reason","openedAt",
+// "resetsAt"}. `error` carries the discriminator, as specified for this refusal
+// (the writeLowQuota shape); `code` repeats it so a client switching on `code`
+// reads it the same way. reason is a fixed phrase, never CLI output. A bare
+// sentinel with no evidence still answers 409, with the structured fields empty.
+func writeAccountBreaker(w http.ResponseWriter, err error) {
+	body := map[string]any{
+		"error":    codeAccountBreaker,
+		"code":     codeAccountBreaker,
+		"message":  err.Error(),
+		"account":  "",
+		"kind":     "",
+		"reason":   "",
+		"openedAt": "",
+		"resetsAt": "",
+	}
+	var open *runcore.AccountBreakerError
+	if errors.As(err, &open) {
+		body["account"] = open.Account
+		body["kind"] = open.Kind
+		body["reason"] = open.Reason
+		body["openedAt"] = open.OpenedAt
+		body["resetsAt"] = open.ResetsAt
+	}
+	writeJSONStatus(w, http.StatusConflict, body)
+}
+
+// codeDepsUnmerged: the phase's dependencies are complete, but their work sits on
+// run branches that are not merged into the repo's base branch and have DIVERGED
+// from one another — so there is no single commit a run could start from that
+// contains all of it. Distinct from codeDepsUnmet ("the dependency is not
+// finished"): here it is finished and stranded, and the fix is a merge the
+// operator performs, which is why the body names the branches. One unmerged
+// branch (or a linear chain of them) never reaches this code — the run is simply
+// stacked on it. Phase-run-only: a whole-plan run executes every phase in one
+// worktree and has nothing to stack.
+const codeDepsUnmerged = "deps-unmerged"
+
+// writeDepsUnmerged renders that refusal: 409 {"error":"deps-unmerged","code":
+// "deps-unmerged","message",…,"branches":[…],"base":"<branch>"}. `error` carries
+// the discriminator, as specified for this refusal (the writeAccountBreaker
+// shape), `code` repeats it for a client switching on `code`, and `message` is
+// the sentence a toast shows. branches is never null — a client iterates it —
+// and base is "" when the repo is on a detached HEAD and there is no name to give.
+func writeDepsUnmerged(w http.ResponseWriter, message string, branches []string, base string) {
+	if branches == nil {
+		branches = []string{}
+	}
+	writeJSONStatus(w, http.StatusConflict, map[string]any{
+		"error":    codeDepsUnmerged,
+		"code":     codeDepsUnmerged,
+		"message":  message,
+		"branches": branches,
+		"base":     base,
+	})
+}
+
+// codeBlockedUnchanged: the phase's last run ended `blocked`, and nothing a re-run
+// would see has changed since — same base commit, same dependency branches, same
+// ticked criteria, same phase doc. Running it again would buy the same refusal at
+// the price of a run. NOT terminal: it lapses on its own at `retryAfter`
+// (SWARMERY_BLOCKED_RERUN_COOLDOWN, 24h by default), and a request carrying
+// {"force": true} runs the phase regardless.
+const codeBlockedUnchanged = "blocked-unchanged"
+
+// writeBlockedUnchanged renders that refusal: 409 {"error":"blocked-unchanged",
+// "code":"blocked-unchanged","message",…,"reason","since","retryAfter"}. reason
+// is the blocked run's own one-line reason, since when it ended, and retryAfter
+// the instant the refusal lapses — both RFC 3339, so a client can render "blocked
+// 3 h ago, retry after 09:00" without parsing the message.
+func writeBlockedUnchanged(w http.ResponseWriter, message, reason, since, retryAfter string) {
+	writeJSONStatus(w, http.StatusConflict, map[string]any{
+		"error":      codeBlockedUnchanged,
+		"code":       codeBlockedUnchanged,
+		"message":    message,
+		"reason":     reason,
+		"since":      since,
+		"retryAfter": retryAfter,
+	})
+}
+
+// The two ways a STACKED phase run can be resolved onto a dependency branch and
+// still not be given a worktree that contains it. Both used to fall through to the
+// generic 500 arm carrying a wrapped Go error; both are states the operator can
+// resolve, so both are 409s with a discriminator. Phase-run-only, like
+// codeDepsUnmerged: nothing else stacks.
+const (
+	// codeCannotStack: the run cannot be started on its dependency branch — in
+	// practice, a leftover worktree of this phase (a crashed run's) was about to be
+	// reused, and its branch was cut before the dependency's current tip. The
+	// message names the worktree and says to finish or remove it.
+	codeCannotStack = "cannot-stack"
+	// codeStartRefUnresolved: the commit the run was resolved to start on no longer
+	// resolves in the repository (the dependency branch was deleted or rewritten
+	// between resolution and acquisition). Nothing about the phase is wrong; the
+	// same request resolves afresh.
+	codeStartRefUnresolved = "start-ref-unresolved"
+)
+
+// writeStackRefusal renders either of them: 409 {"error": code, "code": code,
+// "message": …} — the shape codeDepsUnmerged uses, so the three refusals base
+// resolution can end in read alike on the wire and the client shows `message`.
+func writeStackRefusal(w http.ResponseWriter, code, message string) {
+	writeJSONStatus(w, http.StatusConflict, map[string]any{
+		"error":   code,
+		"code":    code,
+		"message": message,
+	})
+}
+
 // writeConflict replies 409 {"error": msg, "code": code}.
 func writeConflict(w http.ResponseWriter, code, msg string) {
 	writeConflictFields(w, code, msg, nil)

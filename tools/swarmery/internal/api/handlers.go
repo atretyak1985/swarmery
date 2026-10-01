@@ -53,6 +53,10 @@ type Handler struct {
 	// probes single-flights the account readiness probe (accounts.go) — one
 	// `claude` per account at a time; concurrent re-checks share the result.
 	probes probeFlights
+	// autoMode holds the last auto mode classifier summary GET /api/health
+	// computed, so the sidebar's health poll does not scan events on every
+	// request (health.go).
+	autoMode autoModeCache
 	// bindings caches GET /api/accounts' binding discovery for a few seconds,
 	// single-flighted, and is invalidated by this API's own binding writes
 	// (accounts.go bindingCache).

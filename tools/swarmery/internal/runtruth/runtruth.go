@@ -19,6 +19,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -70,16 +71,31 @@ func NewRecorder(db *sql.DB) *Recorder {
 //   - At most one write per account per debounceWindow.
 //   - Nothing from the run's output reaches this function; only the account
 //     key and the classified status are ever logged.
+//
+// A NEGATIVE verdict also opens the account's circuit breaker (runcore), so the
+// run that just died is the last one admitted onto the account: no-login opens
+// an `auth` breaker, limited a `quota` one. The runners classify a non-zero
+// exit through claudeprobe.ClassifyRun, which reads the output tail with
+// FailureKindOfTail — that is how a run refused because the organisation
+// disabled subscription access arrives here as no-login. Ready and unknown
+// never touch the breaker: a zero exit never trips it whatever the run printed,
+// and an API error is unknown. The opening is NOT debounced — it is idempotent,
+// and an operator who closed the breaker by hand must see the very next failing
+// run reopen it.
 func (rec *Recorder) Record(account string, r claudeprobe.Result) {
 	if account == "" {
 		account = ingest.DefaultAccount
 	}
 	if r.Status == claudeprobe.StatusLimited {
+		rec.trip(account, store.BreakerKindQuota, r.Reason)
 		rec.recordLimit(account)
 		return
 	}
 	if r.Status == claudeprobe.StatusUnknown {
 		return
+	}
+	if r.Status == claudeprobe.StatusNoLogin {
+		rec.trip(account, store.BreakerKindAuth, r.Reason)
 	}
 
 	rec.mu.Lock()
@@ -106,6 +122,14 @@ func (rec *Recorder) Record(account string, r claudeprobe.Result) {
 		return
 	}
 	rec.lastWrite[account] = now
+}
+
+// trip opens account's breaker from a run's verdict. Best-effort, like every
+// other write here: a failure is logged and the run's own outcome is untouched.
+func (rec *Recorder) trip(account, kind, reason string) {
+	if err := runcore.OpenBreaker(rec.db, account, kind, reason, store.BreakerSourceRun, rec.now()); err != nil {
+		log.Printf("warning: runtruth: open breaker account=%s kind=%s: %v", account, kind, err)
+	}
 }
 
 // recordLimit appends one run-sourced limit hit for account, at most once per

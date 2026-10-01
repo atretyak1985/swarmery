@@ -29,6 +29,7 @@ vi.mock('../../api', async (importOriginal) => {
     fetchRetroFriction: vi.fn(),
     fetchRecommendations: vi.fn(),
     fetchProposals: vi.fn(),
+    fetchHealth: vi.fn(),
   };
 });
 
@@ -123,6 +124,8 @@ beforeEach(() => {
   vi.mocked(api.fetchProposals).mockResolvedValue({
     proposals: [{ id: 9, status: 'proposed' }],
   } as never);
+  // The daemon is unreachable unless a test says otherwise: no auto mode row.
+  vi.mocked(api.fetchHealth).mockRejectedValue(new Error('offline in test'));
 });
 
 afterEach(() => {
@@ -187,6 +190,34 @@ describe('Health', () => {
     expect(screen.getByText('50 % → 10 % failed')).toBeTruthy();
     expect(screen.getByRole('button', { name: '+ always allow' })).toBeTruthy();
     expect(screen.getByText('Same error 4 times in this window')).toBeTruthy();
+  });
+
+  it('shows the auto mode permission check on the overview, alerting into the Inbox', async () => {
+    vi.mocked(api.fetchHealth).mockResolvedValue({
+      status: 'ok',
+      version: '0.2.1',
+      db_size_bytes: 1,
+      watching: true,
+      autoModeClassifier: {
+        noVerdictLastHour: 9,
+        sessionsLastHour: 2,
+        lastAt: new Date().toISOString(),
+        alerting: true,
+      },
+    });
+    renderAt('/p/shop/health');
+    const row = await screen.findByRole('status', { name: 'Auto mode permission check' });
+    expect(row.textContent).toContain('9 checks got no verdict in the last hour · in 2 sessions');
+    expect(within(row).getByRole('link', { name: /alerting/ }).getAttribute('href')).toBe(
+      '/p/shop/inbox?tab=alerts',
+    );
+  });
+
+  it('renders no auto mode row when the daemon does not report the field', async () => {
+    vi.mocked(api.fetchHealth).mockResolvedValue({ status: 'ok', version: '0.2.0', db_size_bytes: 1, watching: true });
+    renderAt('/health');
+    await screen.findByRole('link', { name: /waiting on you/i });
+    expect(screen.queryByRole('status', { name: 'Auto mode permission check' })).toBeNull();
   });
 
   it('keeps exactly one range control on the Agents tab', async () => {

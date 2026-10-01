@@ -10,7 +10,7 @@
 // Recharts, so it loads only when the Cost tab is opened.
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   type AnalyticsRange,
   fetchProjectRecommendations,
@@ -21,6 +21,7 @@ import {
 } from '../../api';
 import type {
   AgentChangeProposal,
+  HealthAutoMode,
   Recommendation,
   RetroAgentsResp,
   RetroFrictionResp,
@@ -28,16 +29,19 @@ import type {
 import { StatusStrip, type StatusCell } from '../../components/StatusStrip';
 import { type TabItem, Tabs, useTabParam } from '../../components/Tabs';
 import { Loading } from '../../components/ui';
-import { isoDay } from '../../lib/format';
+import { fmtAgo, isoDay } from '../../lib/format';
+import { useHealth } from '../../lib/health';
 import { PLACES, type PlaceId } from '../../lib/nav';
 import { useScope } from '../../lib/scope';
 import { HealthOverview } from './HealthOverview';
 import {
+  type AutoModeTone,
   DEFAULT_DAYS,
   HEALTH_PRESETS,
   HEALTH_TABS,
   type HealthPreset,
   type HealthTab,
+  autoModeRow,
   becauseText,
   countProposals,
   countRecs,
@@ -62,6 +66,39 @@ const OPEN_PROPOSALS = ['proposed', 'needs_target'] as const;
 
 function placeHref(id: PlaceId, slug: string | null): string {
   return PLACES.find((p) => p.id === id)?.href(slug) ?? '/';
+}
+
+const AUTO_MODE_TONE: Record<AutoModeTone, string> = {
+  quiet: 'text-ink-faint',
+  seen: 'text-amber',
+  alerting: 'text-red',
+};
+
+/**
+ * Whether Claude Code's server-side auto mode permission check is answering —
+ * a fact about the machine, not about the range or the project, so it sits
+ * above the Overview rather than inside a windowed section. The state is
+ * carried by the words, the colour only repeats it.
+ */
+function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: string }): JSX.Element {
+  const row = autoModeRow(mode, mode.lastAt !== null ? fmtAgo(mode.lastAt) : null);
+  return (
+    <div
+      role="status"
+      aria-label="Auto mode permission check"
+      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-4 py-2.5 desk:px-7"
+    >
+      <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
+        Auto mode permission check
+      </span>
+      <span className={`font-mono text-[11px] ${AUTO_MODE_TONE[row.tone]}`}>{row.text}</span>
+      {mode.alerting && (
+        <Link to={inboxHref} className="font-mono text-[11px] font-semibold text-red hover:underline">
+          alerting → Inbox
+        </Link>
+      )}
+    </div>
+  );
 }
 
 /** `?days=` as the one range for every tab; the default is left out of the URL. */
@@ -104,6 +141,8 @@ export function Health(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [proposals, setProposals] = useState<AgentChangeProposal[] | null>(null);
+  // Absent while the daemon is unreachable or older than the field: no row.
+  const autoMode = useHealth().health?.autoModeClassifier;
 
   const load = useCallback((): void => {
     setError(null);
@@ -205,6 +244,9 @@ export function Health(): JSX.Element {
         cells={cells}
         tabs={<Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Health" />}
       />
+      {tab === 'overview' && autoMode !== undefined && (
+        <AutoModeRow mode={autoMode} inboxHref={`${placeHref('inbox', projectSlug)}?tab=alerts`} />
+      )}
       <div role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.label}>
         {tab === 'overview' ? (
           <HealthOverview

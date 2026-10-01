@@ -6,6 +6,7 @@ import (
 	"log"
 	"path"
 	"strings"
+	"unicode"
 )
 
 // d2EvidenceBashRows bounds how many successful git/gh Bash calls one session's
@@ -14,40 +15,51 @@ const d2EvidenceBashRows = 2000
 
 // shipEvidence is D2's deterministic "did the work land" block: commits, push
 // and PR activity from successful Bash calls, files edited, the phase run the
-// session drove (if any) and the operator's own verdict (if set). The last
-// assistant message alone cannot tell a shipped session from an abandoned
-// one; this can.
+// session drove (if any), how the transcript ends (endingLines) and the
+// operator's own verdict (if set). The last assistant message alone cannot tell
+// a shipped session from an abandoned one; this can.
 //
-// A DB error never fails labelling: the failing line is dropped with a
-// warning and the rest is still emitted, so the block is never empty.
-func shipEvidence(db *sql.DB, uuid, operatorOutcome string) string {
+// The git, file and ending lines are rendered from the session's facts, which
+// the caller loaded once (d2FactsFor) and the rules read too — nothing is
+// queried twice. A DB error never fails labelling: the lines of a part that
+// failed to load are dropped (the load already logged why) and the rest is
+// still emitted, so the block is never empty.
+func shipEvidence(db *sql.DB, f d2Facts, uuid, operatorOutcome string) string {
 	var b strings.Builder
 	b.WriteString("evidence:\n")
-	if g, err := gitActivity(db, uuid); err != nil {
-		log.Printf("warning: decide: d2 git evidence for %s: %v", uuid, err)
-	} else {
+	if f.gitOK {
 		fmt.Fprintf(&b, "commits: %d\npushed: %s\npr opened: %d, pr merged: %d\n",
-			g.commits, yesNo(g.pushes > 0), g.prsOpened, g.prsMerged)
+			f.git.commits, yesNo(f.git.pushes > 0), f.git.prsOpened, f.git.prsMerged)
 	}
-	var files, adds, dels int
-	if err := db.QueryRow(`
-		SELECT COUNT(DISTINCT file_path), COALESCE(SUM(additions), 0), COALESCE(SUM(deletions), 0)
-		  FROM file_changes
-		 WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)`, uuid).
-		Scan(&files, &adds, &dels); err != nil {
-		log.Printf("warning: decide: d2 file evidence for %s: %v", uuid, err)
-	} else {
-		fmt.Fprintf(&b, "files edited: %d (+%d/-%d)\n", files, adds, dels)
+	if f.filesOK {
+		fmt.Fprintf(&b, "files edited: %d (+%d/-%d)\n", f.filesEdited, f.additions, f.deletions)
 	}
 	if line, err := phaseRunLine(db, uuid); err != nil {
 		log.Printf("warning: decide: d2 phase-run evidence for %s: %v", uuid, err)
 	} else if line != "" {
 		b.WriteString(line)
 	}
+	if f.endingOK {
+		b.WriteString(endingLines(f.ending))
+	}
 	if operatorOutcome != "" {
 		fmt.Fprintf(&b, "operator verdict: %s\n", operatorOutcome)
 	}
 	return b.String()
+}
+
+// endingLines says how the transcript ends: how long the session was, whether
+// its last assistant turn is the model's own final answer, the stop reason of
+// that turn (`unknown` when it was not recorded) and whether the account or the
+// API ended it. These are what tell a one-shot question-and-answer session that
+// shipped its answer from one that stopped with nothing.
+func endingLines(e d2Ending) string {
+	stop := strings.TrimSpace(e.stopReason)
+	if stop == "" {
+		stop = "unknown"
+	}
+	return fmt.Sprintf("turns: %d\nfinal answer: %s\nlast stop reason: %s\napi error: %s\n",
+		e.turns, yesNo(e.finalAnswer()), stop, yesNo(e.apiError()))
 }
 
 // gitTally counts the landing actions of a session's successful Bash calls.
@@ -110,9 +122,11 @@ func shellSegments(cmd string) []string {
 // landingAction names the landing action a simple command performs: "commit",
 // "push", "pr-create", "pr-merge", or "" for anything else. It skips leading
 // VAR=value assignments, subshell/group openers and git's global options
-// (`git -C dir commit`, `git -c k=v push`).
+// (`git -C dir commit`, `git -c k=v push`). Tokens are split quote-aware, so an
+// option value with a space in it (`-c user.name="First Last"`) stays one
+// token and the verb after it is still found.
 func landingAction(seg string) string {
-	f := strings.Fields(strings.TrimLeft(strings.TrimSpace(seg), "({ "))
+	f := shellFields(strings.TrimLeft(strings.TrimSpace(seg), "({ "))
 	for len(f) > 0 && isAssignment(f[0]) {
 		f = f[1:]
 	}
@@ -136,6 +150,41 @@ func landingAction(seg string) string {
 		}
 	}
 	return ""
+}
+
+// shellFields splits a simple command on whitespace that is outside single or
+// double quotes. Quotes stay in the token; an unclosed quote (a segment cut
+// inside a commit message by shellSegments) runs to the end of the segment.
+func shellFields(seg string) []string {
+	var out []string
+	var quote rune
+	start := -1
+	for i, r := range seg {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+			if start < 0 {
+				start = i
+			}
+		case unicode.IsSpace(r):
+			if start >= 0 {
+				out = append(out, seg[start:i])
+				start = -1
+			}
+		default:
+			if start < 0 {
+				start = i
+			}
+		}
+	}
+	if start >= 0 {
+		out = append(out, seg[start:])
+	}
+	return out
 }
 
 // Global options that take a separate value, per CLI.
