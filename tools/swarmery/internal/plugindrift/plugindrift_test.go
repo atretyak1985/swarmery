@@ -236,6 +236,51 @@ func TestScan_VersionBehind(t *testing.T) {
 	}
 }
 
+// TestResolveForMirrorsLoaderOrder pins the rule Claude Code's loader uses:
+// when a plugin has both a user-scope and a project-scope record for the same
+// project, the first applicable record in list order is the one that loads, so
+// it is the one drift is judged on. A stale project copy listed after a fresh
+// user copy is not drift; listed before it, it is.
+func TestResolveForMirrorsLoaderOrder(t *testing.T) {
+	stale := Installed{ID: "core@swarmery", Scope: "project", ProjectPath: "/my/project", Version: "2.2.0"}
+	fresh := Installed{ID: "core@swarmery", Scope: "user", Version: "2.4.0"}
+	other := Installed{ID: "core@swarmery", Scope: "project", ProjectPath: "/other/project", Version: "1.0.0"}
+
+	tests := []struct {
+		name       string
+		installed  []Installed
+		wantScope  string
+		wantBehind bool
+	}{
+		{name: "stale project copy first loads", installed: []Installed{stale, fresh}, wantScope: "project", wantBehind: true},
+		{name: "fresh user copy first loads", installed: []Installed{fresh, stale}, wantScope: "user"},
+		{name: "another project's record is skipped", installed: []Installed{other, fresh, stale}, wantScope: "user"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			in, ok := resolveFor(tc.installed, "core@swarmery", "/my/project")
+			if !ok || in.Scope != tc.wantScope {
+				t.Fatalf("resolveFor = (%+v, %v), want the %s entry", in, ok, tc.wantScope)
+			}
+
+			claudeDir := t.TempDir()
+			writeCatalog(t, claudeDir, "swarmery", "core", "2.4.0")
+			d := &Detector{ClaudeDir: claudeDir, Runner: stubRunner{out: listJSON(t, tc.installed...)}}
+			res := d.Scan(context.Background(), []Project{{Path: "/my/project", Enabled: []string{"core@swarmery"}}})
+
+			if !tc.wantBehind {
+				if n := len(res[RuleVersionBehind]); n != 0 {
+					t.Fatalf("%s findings = %d, want 0 (%+v)", RuleVersionBehind, n, res[RuleVersionBehind])
+				}
+				return
+			}
+			if it := only(t, res, RuleVersionBehind); !strings.Contains(it.Message, "2.2.0") {
+				t.Errorf("message = %q, want the loaded 2.2.0 copy named", it.Message)
+			}
+		})
+	}
+}
+
 func TestScan_VersionBehindNoCatalog(t *testing.T) {
 	// No marketplace clone at all: the pack version is unknowable, which must
 	// stay silent rather than fire a warning the user cannot act on.
