@@ -10,7 +10,7 @@
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
 //	swarmery decide eval           replay the classifier over recorded ground truth (read-only)
-//	swarmery install              auto-start: launchd (macOS) or systemd --user (Linux)
+//	swarmery install               auto-start: launchd (macOS) or systemd --user (Linux)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
