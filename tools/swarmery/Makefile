@@ -1,4 +1,4 @@
-.PHONY: build build-web build-go copy-docs dev test clean install
+.PHONY: build build-web build-go copy-docs copy-probe dev test clean install
 
 # Repo docs snapshotted into the go:embed content dir for /api/docs.
 DOCS_SRC := ../../docs
@@ -24,7 +24,7 @@ LAUNCHD_LABEL := com.swarmery.daemon
 endif
 
 # build: docs snapshot + vite bundle → go:embed → single binary ./swarmery
-build: copy-docs build-web build-go
+build: copy-docs copy-probe build-web build-go
 
 # dist is pruned first: vite keeps emptyOutDir=false (web/dist/.gitkeep must
 # survive for go:embed on fresh clones), so without this every build's hashed
@@ -85,8 +85,20 @@ copy-docs:
 	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_SRC)/PLUGINS.md docs/concepts.md docs/retro.md docs/usage.md docs/api-project-config.md $(DOCS_DST)/
 	find docs/guides -maxdepth 1 -name 'guide-*.md' -exec cp {} $(DOCS_DST)/ \;
 
+# copy-probe: snapshot the channel-probe harness (script + fixture plugin) into
+# internal/channelprobe/script/ for go:embed, so `swarmery account doctor
+# --probe` and the daemon's version-change ticker run it from the installed
+# binary, which has no path to the repo. The copies are gitignored; the
+# committed .gitkeep keeps `//go:embed all:script` valid without them (CI).
+PROBE_DST := internal/channelprobe/script
+copy-probe:
+	rm -rf $(PROBE_DST)/cc-channel-probe.sh $(PROBE_DST)/fixtures
+	mkdir -p $(PROBE_DST)/fixtures
+	cp ../../scripts/tests/cc-channel-probe.sh $(PROBE_DST)/
+	cp -R ../../scripts/tests/fixtures/cc-channel-probe $(PROBE_DST)/fixtures/
+
 # dev: run the API daemon and the vite dev server (proxying /api to :7777)
-dev: copy-docs
+dev: copy-docs copy-probe
 	go run ./cmd/swarmery serve & \
 	cd web && npm run dev; \
 	kill %1 2>/dev/null
@@ -99,3 +111,4 @@ clean:
 	rm -f swarmery
 	find web/dist -mindepth 1 ! -name .gitkeep -delete
 	find $(DOCS_DST) -mindepth 1 ! -name .gitkeep -delete
+	rm -rf $(PROBE_DST)/cc-channel-probe.sh $(PROBE_DST)/fixtures

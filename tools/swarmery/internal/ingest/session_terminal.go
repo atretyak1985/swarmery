@@ -14,11 +14,15 @@ type SessionTerminal struct {
 	FocusURL string
 	BundleID string
 	TTY      string
+	// LaunchAccount is the account the session was LAUNCHED as (the shim's own
+	// CLAUDE_CONFIG_DIR), destined for sessions.launch_account. It rides the
+	// same park/pop as the terminal identity: the hook can beat the row.
+	LaunchAccount string
 }
 
-// isEmpty reports whether none of the four values were ever set.
+// isEmpty reports whether none of the values were ever set.
 func (t SessionTerminal) isEmpty() bool {
-	return t.Program == "" && t.FocusURL == "" && t.BundleID == "" && t.TTY == ""
+	return t.Program == "" && t.FocusURL == "" && t.BundleID == "" && t.TTY == "" && t.LaunchAccount == ""
 }
 
 // pendingTerminal parks a SessionStart hook's terminal identity for a session

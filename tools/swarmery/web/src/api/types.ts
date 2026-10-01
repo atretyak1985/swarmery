@@ -244,6 +244,13 @@ export interface Session {
    * machine sees no account UI at all.
    */
   account?: string;
+  /**
+   * What the run was LAUNCHED as (migration session_launch_account), read by
+   * the SessionStart shim from its own CLAUDE_CONFIG_DIR. '' = unknown. It
+   * differs from `account` when a terminal under one account ran a session
+   * whose transcript landed under another. Absent on an older daemon.
+   */
+  launchAccount?: string;
   /** Aggregate SUM(turns.tokens_in + tokens_out) — parity wave; optional until backend lands. */
   tokens?: number | null;
   /** Aggregate SUM(turns.cost_usd) — parity wave; optional until backend lands. */
@@ -3133,10 +3140,24 @@ export interface Account {
   ingested: boolean;
   /** Project paths EXPLICITLY bound to this account (not "every unbound project"). */
   projects: string[];
+  /** Bound paths with NO live (non-archived) projects row — visible, never
+   * presented as indexed. Absent on an older daemon. */
+  projectsUnindexed?: string[];
+}
+
+/** A binding file the read side ignores (git-tracked, indeterminate, or an
+ * untrusted mode/owner/type) — counted under no account. */
+export interface IgnoredBinding {
+  path: string;
+  /** The account key the file names ('' when it cannot be read). */
+  declares: string;
+  reason: string;
 }
 
 export interface AccountsResponse {
   accounts: Account[];
+  /** Never null on a current daemon; absent on an older one. */
+  ignoredBindings?: IgnoredBinding[];
 }
 
 /** Go: provisionResponse (internal/api/accounts.go:113) */

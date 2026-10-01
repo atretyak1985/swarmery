@@ -403,6 +403,85 @@ Two consequences worth knowing:
   path, so an anchored account store is not released there. A project-scoped
   terminal resolves (and is admitted) from its project.
 
+## The doctor, at session start (0.6.1)
+
+The SessionStart preflight runs `swarmery account doctor --fast --json
+--timeout 2.5s` — the inner bound sits below the hook's 3 s watchdog, so a slow
+arm is cut short and the report still arrives. Besides a credential-coverage
+gap it now says one more thing, once per directory: the **first session in a
+path under an estate root** names that root and the NUMBER of credentials the
+path inherits (never a name, never a value), so a checkout cloned into an
+estate does not inherit its credentials silently. The doctor keeps the
+already-reported paths in `~/.swarmery/doctor/estate-seen.json`; run it with
+`--no-record` to look without recording. Everything else the doctor reports —
+the default account's two profiles, trust findings, the settings delta and
+plugin parity between accounts, stale duplicates — is in `swarmery account
+doctor` (bare, or `--json`).
+
+## Pruning what the estate already supplies (0.7.0)
+
+Once an estate root hands its `.claude/settings.json` to every session, the
+copies of its plugin wiring that sub-repos still carry are dead weight — and a
+second place to forget on the next change. `swarmery account prune` removes
+them, and is the only supported way to:
+
+```bash
+swarmery account prune --path <estate-root>               # look first: one line per file, writes nothing
+swarmery account prune --path <estate-root> --apply       # then write
+```
+
+Without `--apply` the prune is a dry run, so the short form can never rewrite
+a subtree by accident.
+
+- **What it costs.** After a prune the removed keys reach a session only
+  through the estate's `--settings`, which only a swarmery launch passes —
+  `account exec`, the `claude` shell function, the PATH shim, daemon runs. A
+  `claude` started any other way in a pruned directory (an IDE extension, the
+  desktop app, `command claude`) runs without that directory's
+  `pluginConfigs`, and without its `extraKnownMarketplaces` too — harmless only
+  where the marketplace is already added to the account. Every run that changes
+  (or would change) a file prints a `note:` line saying so. If you start
+  sessions there outside swarmery, keep the copies: don't prune.
+
+- **What it removes.** Only `pluginConfigs` and `extraKnownMarketplaces`, each
+  as a whole key, and only when every entry of the file's copy (a plugin id, a
+  marketplace name) exists in the estate's with an identical value — the same
+  rule the doctor's stale-duplicates report uses, so the doctor lists exactly
+  what the prune removes. A key with one entry the estate lacks stays whole, and
+  the dry run names that entry. `permissions`, `enabledMcpjsonServers`,
+  `enabledPlugins` and the `swarmery` binding object are never touched.
+- **Every file is judged against its own estate** — the one a session started
+  in that directory resolves to. A file under a nested estate (a sub-tree that
+  declares its own `estate`) is listed `other estate: <root>` and never written.
+- **Every estate's own two files** (`<root>/.claude/settings.json` and
+  `<root>/.claude/settings.local.json`, nested estates included) are listed
+  `estate source` and never written: compared with themselves they are all
+  redundant, and pruning them would empty the estate.
+- **A symlinked path is never written.** A file reached through a symlink below
+  the estate root — a linked `.claude` directory, a linked parent — is listed
+  `symlinked path`: the write would land in the link's target, possibly outside
+  the estate and shared with other projects.
+- **It writes what the dry run showed, or nothing.** Each file is re-checked on
+  its current bytes just before the write; one edited since the plan is
+  skipped `changed since plan`.
+- **Three git states.** Every listed line ends in `TRACKED`, `untracked` or
+  `NO-REPO`, from the same hardened git probe the binding's provenance lock uses.
+  A file git cannot classify counts as `TRACKED`.
+- **The tracked-file refusal.** If any file the prune would write is `TRACKED`,
+  the whole run refuses — nothing is written, exit 1, the paths are named —
+  unless you pass `--include-tracked`. Writing a tracked file would commit this
+  machine's settings for everyone who pulls. A tracked file with nothing
+  redundant is listed `nothing redundant` and never written either way.
+- **Rollback.** Before its first write to a file the prune copies it to
+  `~/.swarmery/quarantine/<date>/prune/<path with / as ->.<12-hex hash>.bak.json`
+  (directory mode `0700`) and names that copy in its output — also when a later
+  file fails mid-run. Every pre-image path is checked before the first write, so
+  an existing, different pre-image aborts with nothing written. For a gitignored
+  file that copy is the only way back: `cp` it over the original.
+- **No secrets.** The prune never reads or prints a credential store and never
+  prints a settings value — key and entry names only. `--json` prints the same
+  plan as one object.
+
 ## Known edges
 
 - **0.6.0 ignores a hard-linked binding file.** Up to 0.5.x a

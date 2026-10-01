@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
 // Hook event names (the `swarmery hook <event>` argument = URL path suffix).
@@ -251,7 +253,21 @@ func injectSessionStartExtras(body []byte) ([]byte, error) {
 	}
 	m["pid"] = os.Getppid()
 	m["terminal"] = readTerminalIdentity()
+	m["launchAccount"] = readLaunchAccount()
 	return json.Marshal(m)
+}
+
+// readLaunchAccount is the account this session was LAUNCHED as, read from the
+// shim's own environment the way readTerminalIdentity reads its variables: an
+// unset CLAUDE_CONFIG_DIR is the default account, any other dir is keyed the
+// way ingest.AccountFor keys a transcript root (<configDir>/projects). The
+// daemon stores it beside sessions.account (where the transcript landed).
+func readLaunchAccount() string {
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		return ingest.DefaultAccount
+	}
+	return ingest.AccountFor(filepath.Join(dir, "projects"))
 }
 
 // terminalIdentity is the terminal tab that owns this session, captured once
