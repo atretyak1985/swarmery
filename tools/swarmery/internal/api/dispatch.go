@@ -35,10 +35,14 @@ func AttachDispatch(s *dispatch.Service) {
 }
 
 // pokeDispatch triggers a scheduling pass when the dispatcher is attached. A
-// nil-safe wrapper so every board write site can call it unconditionally.
+// nil-safe wrapper so every board write site can call it unconditionally. The
+// pass runs in its own goroutine: its admission may first probe a card's
+// account (runcore's pre-flight — seconds normally, up to 90s when the CLI
+// hangs), and the board write that poked it must not wait for that. Schedule is
+// re-entrance-guarded, so pokes still coalesce.
 func pokeDispatch() {
-	if dispatchSvc != nil {
-		dispatchSvc.Poke()
+	if s := dispatchSvc; s != nil {
+		go s.Poke()
 	}
 }
 
