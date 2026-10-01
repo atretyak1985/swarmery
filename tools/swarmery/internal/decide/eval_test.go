@@ -149,6 +149,30 @@ func TestEvalLatestTruthWins(t *testing.T) {
 	}
 }
 
+// The eval applies the same cutoff to both of its comparisons — the replayed
+// answer and the recorded one: an `other` label written after the operator's
+// first `quota` label no longer agrees with a `quota` answer.
+func TestEvalParentAgreementStopsOnceTheNewCausesAreInUse(t *testing.T) {
+	db := openDB(t)
+	const limit = "You've hit your session limit · resets 1:30am (UTC)" // R1 answers quota
+	for _, uuid := range []string{"s-first-quota", "s-legacy-other", "s-late-other"} {
+		seedEnding(t, db, uuid, syntheticModel, "stop_sequence", limit)
+	}
+	seedTruth(t, db, QD2Failure, "s-first-quota", "quota", "quota", "2026-10-02T10:00:00Z")
+	seedTruth(t, db, QD2Failure, "s-legacy-other", "quota", "other", "2026-09-29T10:00:00Z")
+	seedTruth(t, db, QD2Failure, "s-late-other", "quota", "other", "2026-10-03T10:00:00Z")
+
+	rep, err := Eval(context.Background(), db, nil, EvalOptions{Questions: []string{QD2Failure}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := evalQ(t, rep, QD2Failure)
+	if q.Labelled != 3 || q.Replayed != 3 || q.Agree != 2 || q.RecordedAgree != 2 {
+		t.Errorf("failure cause = labelled %d, replayed %d, agree %d, recorded agree %d — want 3, 3, 2, 2",
+			q.Labelled, q.Replayed, q.Agree, q.RecordedAgree)
+	}
+}
+
 // The eval reads and nothing else: with the local backend answering every
 // question, every table's row count, the full content of decisions and the
 // connection's change counter are identical before and after.

@@ -38,10 +38,48 @@ func TestAgrees(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := Agrees(tc.question, tc.truth, tc.answer); got != tc.want {
-				t.Errorf("Agrees(%q, truth=%q, answer=%q) = %v, want %v", tc.question, tc.truth, tc.answer, got, tc.want)
+			if got := Agrees(tc.question, tc.truth, tc.answer, true); got != tc.want {
+				t.Errorf("Agrees(%q, truth=%q, answer=%q, legacy) = %v, want %v", tc.question, tc.truth, tc.answer, got, tc.want)
 			}
 		})
+	}
+
+	// A label written once the new causes were in use is matched as written:
+	// the parent rule is off, equality is not.
+	for _, tc := range []struct {
+		truth, answer string
+		want          bool
+	}{
+		{"other", "auth", false},
+		{"blocked-on-operator", "auth", false},
+		{"tool-error", "api-error", false},
+		{"auth", "auth", true},
+		{"Other", "other", true},
+	} {
+		if got := Agrees(QD2Failure, tc.truth, tc.answer, false); got != tc.want {
+			t.Errorf("Agrees(failure, truth=%q, answer=%q, not legacy) = %v, want %v", tc.truth, tc.answer, got, tc.want)
+		}
+	}
+}
+
+// legacyTruth: before the cutoff (exclusive), with no cutoff, with no recorded
+// time, or with a time that does not parse.
+func TestLegacyTruth(t *testing.T) {
+	const cut = "2026-10-02T10:00:00Z"
+	for _, tc := range []struct {
+		at, since string
+		want      bool
+	}{
+		{"2026-10-02T09:59:59Z", cut, true},
+		{"2026-10-02T13:00:00+03:00", cut, false}, // the same instant in another zone
+		{"2026-10-02T10:00:01Z", cut, false},
+		{"2026-10-03T00:00:00Z", "", true},
+		{"", cut, true},
+		{"yesterday", cut, true},
+	} {
+		if got := legacyTruth(tc.at, tc.since); got != tc.want {
+			t.Errorf("legacyTruth(%q, %q) = %v, want %v", tc.at, tc.since, got, tc.want)
+		}
 	}
 }
 
@@ -98,6 +136,37 @@ func TestSummaryParentAgreement(t *testing.T) {
 	}
 	if tt := byID[QD2TaskType]; tt.WithTruth != 2 || tt.Agreed != 1 {
 		t.Errorf("d2.task_type = %+v, want 1 of 2 agreed", tt)
+	}
+}
+
+// The parent mapping covers labels written BEFORE the new causes existed for
+// the operator — before their first ground truth using one. A parent label
+// written after that was chosen over the new cause and is matched as written;
+// a label with no recorded time counts as legacy.
+func TestSummaryParentAgreementStopsOnceTheNewCausesAreInUse(t *testing.T) {
+	db := openDB(t)
+	for _, row := range []struct{ answer, truth, at string }{
+		{"auth", "blocked-on-operator", "2026-09-29T10:00:00Z"}, // before: agrees
+		{"quota", "quota", "2026-10-02T10:00:00Z"},              // the first new-cause label: equal, agrees
+		{"api-error", "tool-error", "2026-10-03T10:00:00Z"},     // after: chosen as written, a miss
+		{"auth", "other", "2026-10-02T10:00:00Z"},               // at the cutoff: not before it, a miss
+		{"auth", "other", ""},                                   // no recorded time: legacy, agrees
+	} {
+		var at any
+		if row.at != "" {
+			at = row.at
+		}
+		mustExec(t, db, `INSERT INTO decisions (question_id, subject, input_hash, answer, confidence, backend, ground_truth, ground_truth_at, created_at)
+			VALUES (?, 's', 'h', ?, 0.9, 'local', ?, ?, '2026-09-30T10:00:00Z')`, QD2Failure, row.answer, row.truth, at)
+	}
+	stats, err := Summary(db, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range stats {
+		if s.QuestionID == QD2Failure && (s.WithTruth != 5 || s.Agreed != 3) {
+			t.Errorf("d2.failure_cause = %d of %d agreed, want 3 of 5", s.Agreed, s.WithTruth)
+		}
 	}
 }
 
