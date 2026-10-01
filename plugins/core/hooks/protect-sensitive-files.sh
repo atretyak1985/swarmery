@@ -63,18 +63,57 @@ case "$file_path" in
     ;;
 esac
 
+# existing_dir <path> — the deepest directory of <path> that exists.
+existing_dir() {
+  local p="$1"
+  while [ ! -d "$p" ]; do p=$(dirname "$p"); done
+  printf '%s\n' "$p"
+}
+
+# physical <path> — <path> with its existing directory prefix resolved through
+# every symlink (cd -P / pwd -P: stock macOS has no readlink -f) and the part
+# that does not exist yet appended as written.
+physical() {
+  local dir rest phys
+  dir=$(existing_dir "$1")
+  rest="${1#"${dir%/}"}"
+  phys=$(cd -P "$dir" 2>/dev/null && pwd -P) || phys="$dir"
+  printf '%s%s\n' "${phys%/}" "$rest"
+}
+
 # A lock file in a scratch copy under the OS temp dir is not the project's lock
-# file. A path with a ".." segment never qualifies.
+# file. It is judged by where the write would LAND: a path with a ".." segment
+# never qualifies; symlinks in the existing part of the path are resolved first
+# (/tmp/link → /repo makes /tmp/link/package-lock.json the repo's); a symlinked
+# lock file never qualifies; and nothing inside a git work tree qualifies — a
+# checkout or worktree under the temp dir (agent scratchpads live there) is a
+# real project. Resolved only for a lock-file basename, the one rule that reads it.
 under_os_tmp=0
-case "$abs_file_path" in
-  */../*|*/..) ;;
-  /tmp/*|/private/tmp/*) under_os_tmp=1 ;;
-esac
-tmp_root="${TMPDIR%/}"
-if [ "$under_os_tmp" -eq 0 ] && [ -n "$tmp_root" ] && [ "$tmp_root" != "/" ]; then
+is_lock=0
+for f in "${protected_files[@]}"; do
+  [[ "$base_name" == "$f" ]] && is_lock=1
+done
+if [ "$is_lock" -eq 1 ] && [ ! -L "$abs_file_path" ]; then
   case "$abs_file_path" in
     */../*|*/..) ;;
-    "$tmp_root"/*|/private"$tmp_root"/*) under_os_tmp=1 ;;
+    *)
+      land=$(physical "$abs_file_path")
+      tmp_roots=(/tmp /private/tmp "$(physical /tmp)")
+      tmp_root="${TMPDIR%/}"
+      if [ -n "$tmp_root" ] && [ "$tmp_root" != "/" ]; then
+        tmp_roots+=("$tmp_root" "/private$tmp_root" "$(physical "$tmp_root")")
+      fi
+      for root in "${tmp_roots[@]}"; do
+        # A root that resolves to the filesystem root must not make everything "temp".
+        [ -n "$root" ] && [ "$root" != "/" ] || continue
+        case "$land" in "$root"/*) under_os_tmp=1 ;; esac
+      done
+      if [ "$under_os_tmp" -eq 1 ] && command -v git >/dev/null 2>&1 &&
+        [ "$(env -u GIT_DIR -u GIT_WORK_TREE git -C "$(existing_dir "$land")" \
+          rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ]; then
+        under_os_tmp=0
+      fi
+      ;;
   esac
 fi
 

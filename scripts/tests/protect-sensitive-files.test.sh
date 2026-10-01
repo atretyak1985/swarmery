@@ -129,5 +129,20 @@ assert 2 "tmp block: /tmp node_modules lock"     "$(jp '/tmp/w/node_modules/x/pa
 assert_tmpdir 2 "tmp block: /repo lock, TMPDIR=/"    '/'       "$(jp '/repo/package-lock.json')"
 assert_tmpdir 2 "tmp block: /repo lock, TMPDIR unset" '--unset' "$(jp '/repo/package-lock.json')"
 
+# Real paths under the OS temp dir. A git checkout or worktree there is a real
+# project (agent scratchpads live under /private/tmp), and a symlink there can
+# point anywhere — the exemption must judge where a write would LAND.
+scratch=$(mktemp -d /tmp/psf-test.XXXXXX)
+trap 'rm -rf "$scratch"' EXIT
+mkdir -p "$scratch/copy" "$scratch/repo" "$scratch/w"
+git -C "$scratch/repo" init -q
+ln -s /usr "$scratch/link"
+ln -s /usr/package-lock.json "$scratch/w/package-lock.json"
+assert 0 "tmp allow: lock in a plain temp copy"      "$(jp "$scratch/copy/package-lock.json")"
+assert 2 "tmp block: lock in a temp-dir git repo"    "$(jp "$scratch/repo/package-lock.json")"
+assert 2 "tmp block: lock deep in a temp-dir repo"   "$(jp "$scratch/repo/sub/yarn.lock")"
+assert 2 "tmp block: lock through a temp symlink"    "$(jp "$scratch/link/package-lock.json")"
+assert 2 "tmp block: a symlinked lock file"          "$(jp "$scratch/w/package-lock.json")"
+
 printf 'protect-sensitive-files: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
