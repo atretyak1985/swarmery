@@ -1,6 +1,6 @@
 package store
 
-// The account_breaker rows (0090): the per-account circuit breaker every
+// The account_breaker rows (0091): the per-account circuit breaker every
 // engine's admission reads before it spends a run. Package-level functions,
 // exactly like account_runnable.go and account_quota.go — but over a Querier
 // rather than a *sql.DB, because ingest opens the breaker from INSIDE its tail
@@ -26,7 +26,7 @@ type Querier interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-// Breaker vocabulary — the closed sets migration 0090 documents.
+// Breaker vocabulary — the closed sets migration 0091 documents.
 const (
 	BreakerOpen   = "open"
 	BreakerClosed = "closed"

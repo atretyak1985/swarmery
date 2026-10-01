@@ -210,7 +210,7 @@ func TestApplyEpicsCarriedSourceIsPrunedWhileRunning(t *testing.T) {
 	}
 }
 
-// A rescan that re-mints a phase row must carry the blocked fingerprint (0091) with
+// A rescan that re-mints a phase row must carry the blocked fingerprint (0092) with
 // the rest of the run's state. run_state='blocked' IS carried, so a dropped
 // fingerprint leaves a row that says "blocked" with nothing to compare against:
 // phaserun's re-run guard reads a NULL fingerprint as "never blocked" and admits

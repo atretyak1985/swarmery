@@ -13,7 +13,7 @@ package runcore
 //
 // Two halves:
 //
-//   - the stored state (account_breaker, migration 0090), opened by a run's
+//   - the stored state (account_breaker, migration 0091), opened by a run's
 //     classified exit (runtruth), a fresh API-error transcript record (ingest)
 //     or a probe, and closed by a reset, a ready probe, a login or the operator;
 //   - the PRE-FLIGHT: before the first run after a quiet period a single-flight
@@ -326,7 +326,7 @@ func breakerRefusal(db *sql.DB, key string, now time.Time) error {
 	b, ok, err := store.GetAccountBreaker(db, key)
 	if err != nil || !ok || !b.IsOpen() {
 		// A failed read is UNKNOWN, and unknown admits — including a database that
-		// predates migration 0090 (detected from the query's own error).
+		// predates migration 0091 (detected from the query's own error).
 		return nil
 	}
 	if b.Kind == store.BreakerKindQuota && b.ResetsAt != "" {

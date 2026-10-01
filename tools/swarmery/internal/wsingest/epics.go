@@ -1431,7 +1431,7 @@ type phaseState struct {
 	// The --effort the run was spawned with (0086), stamped at run start; calibration
 	// reads it back per run, so it must follow the run across a rename.
 	runEffort sql.NullString
-	// The situation a run blocked in (0091), stamped when it settles `blocked`.
+	// The situation a run blocked in (0092), stamped when it settles `blocked`.
 	// phaserun.Start compares it against the situation as it stands to refuse an
 	// unchanged re-run; dropped on a rename, the guard would forget the block the
 	// moment a plan is archived or a phase doc is renamed — and run_state, which IS

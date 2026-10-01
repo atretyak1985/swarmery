@@ -1,4 +1,4 @@
--- 0090: the per-account CIRCUIT BREAKER — the daemon's memory that an account
+-- 0091: the per-account CIRCUIT BREAKER — the daemon's memory that an account
 -- cannot run right now, so it stops spending runs on it.
 --
 -- account_runnable (0054) answers "can the CLI log in" and account_quota (0089)
@@ -28,8 +28,9 @@
 --   closed_at  RFC 3339, NULL while open
 --   closed_by  'reset' | 'probe' | 'login' | 'operator', NULL while open
 --
--- WHY 0090: migrate.go applies unapplied files in FILENAME order and 0089
--- (account_quota) is the highest existing one. Tests match this file by NAME
+-- WHY 0091: migrate.go applies unapplied files in FILENAME order and 0090
+-- (session_launch_account) is the highest existing one; this file was written
+-- as 0090 and renumbered when that one merged first. Tests match this file by NAME
 -- (%_account_breaker.sql), never by the number, so a merge-time renumber costs
 -- nothing (see 0089's header for why that happens).
 --

@@ -299,7 +299,7 @@ type phaseInfo struct {
 	// ended. They are read for one decision — the blocked re-run guard (blocked.go)
 	// — and are all "" for a phase that never ran. RunError is the blocked run's
 	// reason; RunEndedAt (RFC 3339) is when it blocked; RunBlockedFingerprint
-	// (migration 0091) is the situation it blocked in.
+	// (migration 0092) is the situation it blocked in.
 	RunError              string
 	RunEndedAt            string
 	RunBlockedFingerprint string
@@ -1310,7 +1310,7 @@ func (s *Service) event(phaseID int64, uuid, kind string, attempt int, detail st
 // run_checkboxes_after NULL would hand the outcome back to the column that keeps
 // moving.
 //
-// run_blocked_fingerprint (migration 0091) is written in the same statement: the
+// run_blocked_fingerprint (migration 0092) is written in the same statement: the
 // situation's fingerprint when state is `blocked`, NULL on every other terminal
 // state. One statement, so there is never a row that says `blocked` with a stale
 // fingerprint or `done` with a leftover one. It is computed BEFORE the write and
