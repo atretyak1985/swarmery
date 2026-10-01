@@ -494,3 +494,39 @@ func TestAlertsAreNotLintFindings(t *testing.T) {
 		t.Errorf("alerts = %d, want 2", len(got))
 	}
 }
+
+// TestProbeKeepsDefaultAuthBreakerUnderAnInheritedConfigDir: the plain probe
+// checks the default account with NO CLAUDE_CONFIG_DIR (~/.claude), but the
+// runs its breaker stopped — unbound projects' — keep the config dir the daemon
+// inherited. A ready answer about ~/.claude says nothing about them, so it must
+// not close their auth breaker (Probe & resume probes their environment). With
+// nothing inherited the two are the same directory, and it closes.
+func TestProbeKeepsDefaultAuthBreakerUnderAnInheritedConfigDir(t *testing.T) {
+	attachHomeAccounts(t, ingest.DefaultAccount, "nabu-org")
+	db, srv := accountsTestDB(t, "alerts-probe-inherited.db")
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(t.TempDir(), ".claude-inherited"))
+	openTestBreaker(t, db, ingest.DefaultAccount, store.BreakerKindAuth, claudeprobe.ReasonNoLogin,
+		time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))
+	useProbe(t, func(context.Context, string) claudeprobe.Result {
+		return claudeprobe.Result{Status: claudeprobe.StatusReady}
+	})
+
+	probe := func() {
+		t.Helper()
+		if status, body := acctDo(t, http.MethodPost, srv.URL+"/api/accounts/"+ingest.DefaultAccount+"/probe", ""); status != http.StatusOK {
+			t.Fatalf("probe = %d\n%s", status, body)
+		}
+	}
+	probe()
+	if b := storedBreaker(t, db, ingest.DefaultAccount); !b.IsOpen() {
+		t.Errorf("breaker = %+v, want still open — the probe checked ~/.claude, the stopped runs use the inherited dir", b)
+	}
+
+	if err := os.Unsetenv("CLAUDE_CONFIG_DIR"); err != nil {
+		t.Fatal(err)
+	}
+	probe()
+	if b := storedBreaker(t, db, ingest.DefaultAccount); b.IsOpen() || b.ClosedBy != store.BreakerClosedByProbe {
+		t.Errorf("breaker = %+v, want closed by probe once nothing is inherited", b)
+	}
+}
