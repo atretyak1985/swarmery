@@ -42,7 +42,7 @@ make build          # snapshot docs → vite bundle → go:embed → single ./sw
 make test           # go vet ./... && go test ./...
 go test ./internal/store -run TestName   # single test
 make dev            # go daemon + vite dev server (proxies /api to :7777)
-make install        # rebuild + swap the launchd-managed binary (macOS)
+make install        # rebuild + swap the service-managed binary and restart it (launchd on macOS, systemd --user on Linux)
 
 cd web && npm run build   # includes tsc --noEmit (React 19 + Vite 8 + Tailwind 4)
 ```

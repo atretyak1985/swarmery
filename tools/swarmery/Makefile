@@ -11,15 +11,19 @@ DOCS_DST := internal/docsfs/content
 VERSION_PKG := github.com/atretyak1985/swarmery/tools/swarmery/internal/version
 BUILD_ID    := $(shell git describe --tags --match 'swarmery-v*' --always --dirty 2>/dev/null)
 
-# Where the OS service manager expects the daemon binary, and the unit it
-# runs under. macOS uses `swarmery install`'s launchd plist; Linux here runs
-# it as a systemd --user unit pointed at ~/.local/bin/swarmery instead.
-UNAME_S := $(shell uname -s)
+# Where the service manager runs the daemon from, and the service it runs
+# under. `swarmery install` copies the binary to ~/.swarmery/bin/swarmery on
+# BOTH platforms (internal/installer: homeBinPath) and points the launchd
+# plist (macOS) or the systemd --user unit (Linux) at that path; the hook
+# entries `swarmery hooks install` writes into projects invoke the same path
+# (internal/hookcfg: InstalledBin). So the path has no per-OS branch: installing
+# anywhere else — as the Linux branch once did, into ~/.local/bin — restarts
+# the service on the OLD binary and leaves every hook on it too.
+UNAME_S     := $(shell uname -s)
+INSTALL_BIN := $(HOME)/.swarmery/bin/swarmery
 ifeq ($(UNAME_S),Linux)
-INSTALL_BIN    := $(HOME)/.local/bin/swarmery
-SYSTEMD_UNIT   := swarmery.service
+SYSTEMD_UNIT  := swarmery.service
 else
-INSTALL_BIN   := $(HOME)/.swarmery/bin/swarmery
 LAUNCHD_LABEL := com.swarmery.daemon
 endif
 
@@ -44,23 +48,31 @@ build-go:
 
 # install: rebuild, then replace the service-managed binary and restart it.
 # The binary is swapped via atomic rename (mv) so it never overwrites the
-# running executable in place ("Text file busy" / ETXTBSY). If no service is
-# loaded yet, install the binary and point to the right setup command.
+# running executable in place ("Text file busy" / ETXTBSY). The service
+# definition itself (plist / unit file, with the env baked into it) is left
+# alone — that is `swarmery install`'s job. If no service is loaded yet,
+# install the binary and point to that setup command.
+#
+# Linux probes LoadState rather than `is-enabled`: the question is whether the
+# user manager knows the unit at all (the twin of `launchctl print` succeeding),
+# and a unit the operator disabled from login start but left running must still
+# be restarted onto the new binary. The echo runs the installed binary's own
+# `version` so the line proves which build the service came back up on.
 install: build
 	mkdir -p $(dir $(INSTALL_BIN))
 	cp -f swarmery $(INSTALL_BIN).new
 	mv -f $(INSTALL_BIN).new $(INSTALL_BIN)
 ifeq ($(UNAME_S),Linux)
-	@if systemctl --user is-enabled $(SYSTEMD_UNIT) >/dev/null 2>&1; then \
+	@if systemctl --user show -p LoadState $(SYSTEMD_UNIT) 2>/dev/null | grep -qx 'LoadState=loaded'; then \
 		systemctl --user restart $(SYSTEMD_UNIT) && \
-		echo "→ restarted $(SYSTEMD_UNIT) on the new binary"; \
+		echo "→ restarted $(SYSTEMD_UNIT) on the new binary ($$($(INSTALL_BIN) version))"; \
 	else \
-		echo "→ installed $(INSTALL_BIN); no systemd --user unit found — see tools/swarmery/README.md to set one up"; \
+		echo "→ installed $(INSTALL_BIN); no systemd --user unit loaded — run '$(INSTALL_BIN) install' to set up auto-start"; \
 	fi
 else
 	@if launchctl print gui/$$(id -u)/$(LAUNCHD_LABEL) >/dev/null 2>&1; then \
 		launchctl kickstart -k gui/$$(id -u)/$(LAUNCHD_LABEL) && \
-		echo "→ restarted $(LAUNCHD_LABEL) on the new binary"; \
+		echo "→ restarted $(LAUNCHD_LABEL) on the new binary ($$($(INSTALL_BIN) version))"; \
 	else \
 		echo "→ installed $(INSTALL_BIN); service not loaded — run '$(INSTALL_BIN) install' to set up launchd auto-start"; \
 	fi

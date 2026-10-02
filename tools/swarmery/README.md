@@ -29,7 +29,7 @@ Design reference: [swarmery-design.md](swarmery-design.md) ·
 ```bash
 make build          # snapshot docs → vite bundle → go:embed → single ./swarmery binary
 ./swarmery serve    # listens on :7777 (override with SWARMERY_PORT)
-# or: make install  # deploy + launchd auto-start (see repo-root README)
+# or: make install  # copy into ~/.swarmery/bin + restart the installed service (see below)
 ```
 
 Under launchd the daemon starts with `PATH=/usr/bin:/bin:/usr/sbin:/sbin`. `serve`
@@ -38,6 +38,42 @@ widens its own PATH once at boot with the tool dirs that exist on the machine
 node, `~/.claude/local`, Homebrew, `/usr/local/bin`) so the `claude` it spawns can
 start `npx`/`uvx`-based MCP servers. `SWARMERY_SPAWN_PATH=/dir1:/dir2` (bake it
 into the plist like any other knob) prepends extra dirs verbatim.
+
+## Install as a service, and upgrading it
+
+`swarmery install` copies **the binary it is run from** to `~/.swarmery/bin/swarmery`,
+writes the service definition — a launchd plist on macOS
+(`~/Library/LaunchAgents/com.swarmery.daemon.plist`), a `systemd --user` unit on
+Linux (`~/.config/systemd/user/swarmery.service`) — with its start command pointing
+at that copy, and starts or restarts the service. The hook entries that
+`swarmery hooks install` and `swarmery onboard` write into a project's
+`.claude/settings.local.json` invoke the same `~/.swarmery/bin/swarmery hook …`
+path, never whichever binary happened to run the install. Variables already baked
+into the definition survive a re-run (`swarmery install -h` lists the flags that
+set them).
+
+That one path is what makes an upgrade a two-step on a machine that runs the
+service. Installing a release — `scripts/install.sh`, the one-liner in the repo-root
+README — only replaces `~/.local/bin/swarmery` and starts nothing; the service and
+the hooks keep running the previous copy under `~/.swarmery/bin` until you re-run
+the installer **from the new binary**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh | bash
+swarmery install        # re-point the service (and with it the hooks) at the new binary
+swarmery version        # the build you just installed …
+swarmery status         # … and, first line, the build the daemon now runs (GET /api/health "build")
+```
+
+`scripts/install.sh` prints that reminder itself when it finds a service definition
+on the machine.
+
+From a source checkout, `make install` does the copy-then-rename into
+`~/.swarmery/bin` and the restart itself (`launchctl kickstart -k` on macOS,
+`systemctl --user restart` on Linux) and prints the build the service came back up
+on. It leaves the service definition alone — change baked variables with
+`swarmery install --<flag> …`, not with `make install`. With no service loaded yet
+it drops the binary in place and names the setup command.
 
 ## Backup & restore
 
@@ -231,9 +267,17 @@ git checkout <last-good-tag>   # e.g. swarmery-v0.1.0  (git tag -l 'swarmery-v*'
 make build
 ```
 
-Back up the database first (above) if the version you are rolling away from ran a
-newer schema migration — migrations are forward-only, so an older binary may
-refuse a database it does not recognize.
+Back up the database **before** upgrading (above) whenever the new version adds a
+schema migration, because there is no way back through the schema itself.
+Migrations are forward-only and an older binary does **not** refuse a newer
+database: `store.Open` only checks that the migrations it embeds are recorded in
+`schema_migrations`, ignores the newer rows, and starts on whatever schema is
+there. A migration that merely added tables or columns goes unnoticed; one that
+renamed, dropped or constrained something the older code touches surfaces later as
+runtime SQL errors (`no such column`, `NOT NULL constraint failed`) on the affected
+pages and ingest paths, not as a refusal at startup. To roll back cleanly, restore
+the pre-upgrade snapshot (stop-copy-start, above) rather than running the older
+binary on the migrated database.
 
 ## Excluding throwaway projects
 
