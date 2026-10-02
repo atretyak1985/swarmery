@@ -116,9 +116,18 @@ func (h *Handler) onboardProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Per-project workspace override; empty falls back to the server default.
-	wsRoot := strings.TrimSpace(req.WorkspaceRoot)
-	if wsRoot == "" {
-		wsRoot = onboardCfg.WorkspaceRoot
+	// The default is operator config and trusted as is. An override comes from
+	// the request body and is fenced like the target path: onboarding carves
+	// directories and writes overlay/project.json under it, so an unfenced
+	// value would let any caller create files anywhere the daemon can write.
+	wsRoot := onboardCfg.WorkspaceRoot
+	if override := strings.TrimSpace(req.WorkspaceRoot); override != "" {
+		fenced, ferr := resolveUnderRoots(override, onboardCfg.Roots)
+		if ferr != nil {
+			writeJSONStatus(w, http.StatusForbidden, map[string]string{"error": "workspace root: " + ferr.Error()})
+			return
+		}
+		wsRoot = fenced
 	}
 
 	cfg := onboard.Config{

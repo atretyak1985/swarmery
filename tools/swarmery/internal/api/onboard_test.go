@@ -91,7 +91,11 @@ func TestOnboardConfigDisabledWhenNoRoots(t *testing.T) {
 func TestOnboardWorkspaceRootOverride(t *testing.T) {
 	root := t.TempDir()
 	serverWS := t.TempDir()
-	overrideWS := t.TempDir()
+	// An override is fenced like the target path, so it must sit under a root.
+	overrideWS := filepath.Join(root, "ws-override")
+	if err := os.MkdirAll(overrideWS, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	proj := filepath.Join(root, "ovr-project")
 	if err := os.MkdirAll(proj, 0o755); err != nil {
 		t.Fatal(err)
@@ -102,8 +106,14 @@ func TestOnboardWorkspaceRootOverride(t *testing.T) {
 		map[string]any{"slug": "ovr-project", "path": proj, "workspaceRoot": overrideWS},
 		http.StatusCreated)
 
-	if out["workspaceRoot"] != overrideWS {
-		t.Errorf("workspaceRoot echo = %v, want %v", out["workspaceRoot"], overrideWS)
+	// The fence resolves symlinks (macOS tmp is /var → /private/var), so the
+	// echo is the resolved directory, exactly as for the target path.
+	wantWS, err := filepath.EvalSymlinks(overrideWS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out["workspaceRoot"] != wantWS {
+		t.Errorf("workspaceRoot echo = %v, want %v", out["workspaceRoot"], wantWS)
 	}
 	// Namespace carved under the OVERRIDE, not the server default.
 	if _, err := os.Stat(filepath.Join(overrideWS, "ovr-project", "workspace", "working")); err != nil {
@@ -111,6 +121,30 @@ func TestOnboardWorkspaceRootOverride(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(serverWS, "ovr-project")); !os.IsNotExist(err) {
 		t.Errorf("server-default workspace should be untouched")
+	}
+}
+
+// A workspaceRoot override outside every onboarding root is refused before
+// anything is written: onboarding carves directories and writes
+// overlay/project.json under it, so an unfenced override would let a caller
+// create files anywhere the daemon can write.
+func TestOnboardRejectsWorkspaceRootOutsideRoots(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir() // a sibling tmp dir, NOT under root
+	proj := filepath.Join(root, "ws-evil")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv, _ := onboardServer(t, OnboardConfig{Roots: []string{root}, WorkspaceRoot: t.TempDir()})
+
+	doJSON(t, http.MethodPost, srv.URL+"/api/projects/onboard",
+		map[string]any{"slug": "ws-evil", "path": proj, "workspaceRoot": outside}, http.StatusForbidden)
+
+	if _, err := os.Stat(filepath.Join(outside, "ws-evil")); !os.IsNotExist(err) {
+		t.Errorf("nothing may be carved under a refused workspace root (stat err = %v)", err)
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".claude")); !os.IsNotExist(err) {
+		t.Errorf("the target must stay untouched when the workspace root is refused (stat err = %v)", err)
 	}
 }
 
