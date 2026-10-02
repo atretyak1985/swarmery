@@ -2548,6 +2548,7 @@ func cmdServe(args []string) error {
 			MinIdle:    wtjCfg.MinIdle,
 			DaemonRoot: wtRoot,
 			Remover:    wtjanitor.NewRealRemover(wtMgr),
+			Plugins:    &wtjanitor.PluginRecords{},
 		}
 		go func() {
 			sweep := func() {
@@ -2555,9 +2556,9 @@ func cmdServe(args []string) error {
 				switch {
 				case err != nil:
 					log.Printf("warning: worktree janitor sweep: %v", err)
-				case res.Removed+res.Salvaged > 0:
-					log.Printf("worktree janitor: removed %d, salvaged %d, kept %d, skipped %d",
-						res.Removed, res.Salvaged, res.Kept, res.Skipped)
+				case res.Removed+res.Salvaged+res.PluginRecords > 0:
+					log.Printf("worktree janitor: removed %d, salvaged %d, kept %d, skipped %d, plugin records pruned %d",
+						res.Removed, res.Salvaged, res.Kept, res.Skipped, res.PluginRecords)
 				}
 			}
 			sweep()
@@ -2716,6 +2717,7 @@ func cmdWorktrees(args []string) error {
 		OnlyRepo:   *repo,
 		DaemonRoot: wtRoot,
 		Remover:    wtjanitor.NewRealRemover(mgr),
+		Plugins:    &wtjanitor.PluginRecords{},
 	}
 	// Stamp the journal cursor BEFORE sweeping so the report prints this pass's
 	// rows only, not the whole history.
@@ -2760,7 +2762,7 @@ func cmdWorktrees(args []string) error {
 	if *dryRun {
 		mode = "would sweep (dry-run)"
 	}
-	fmt.Printf("worktrees %s: inspected %d, removed %d, salvaged %d, kept %d, skipped %d, errors %d\n",
-		mode, res.Inspected, res.Removed, res.Salvaged, res.Kept, res.Skipped, res.Errors)
+	fmt.Printf("worktrees %s: inspected %d, removed %d, salvaged %d, kept %d, skipped %d, errors %d, plugin records %d\n",
+		mode, res.Inspected, res.Removed, res.Salvaged, res.Kept, res.Skipped, res.Errors, res.PluginRecords)
 	return nil
 }

@@ -45,4 +45,14 @@
 // identity, never by name, mtime or similarity — or through a SUCCESSFUL
 // salvage commit. A salvage that fails degrades the verdict and leaves the
 // worktree alone. Nothing this package does can be the reason work was lost.
+//
+// # Plugin install records
+//
+// A worktree where Claude Code installed or updated a plugin at project scope
+// leaves a record keyed by its path in <config-dir>/plugins/installed_plugins.json,
+// and removing the worktree does not remove the record. With Service.Plugins
+// set, every sweep ends by pruning the records whose path is agent-owned (the
+// same rule as above) AND no longer exists, across ~/.claude and every
+// ~/.claude-* account dir (plugins.go). The file is rewritten atomically and
+// only if Claude Code has not changed it since it was read.
 package wtjanitor

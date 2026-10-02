@@ -119,6 +119,10 @@ type Service struct {
 	// daemon's own and in scope. "" leaves only the harness's agent worktrees.
 	DaemonRoot string
 	Remover    Remover
+	// Plugins, when set, also prunes Claude Code plugin install records that
+	// point at an agent-owned worktree that no longer exists (see
+	// PluginRecords). nil leaves installed_plugins.json alone.
+	Plugins *PluginRecords
 	// now is a test seam.
 	now func() time.Time
 }
@@ -126,6 +130,8 @@ type Service struct {
 // Result counts one sweep for the caller's log line.
 type Result struct {
 	Inspected, Removed, Salvaged, Kept, Skipped, Errors int
+	// PluginRecords counts install records pruned (dryRun: that would be).
+	PluginRecords int
 }
 
 type repo struct {
@@ -165,6 +171,24 @@ func (s *Service) Sweep(dryRun bool) (Result, error) {
 			if perr := s.Remover.Prune(r.path); perr != nil {
 				log.Printf("wtjanitor: prune %s: %v", r.path, perr)
 			}
+		}
+	}
+	// After the worktrees: a record becomes stale only once its directory is
+	// gone, which this same sweep may just have caused.
+	if s.Plugins != nil {
+		ownedAny := func(p string) bool {
+			for _, r := range repos {
+				if agentOwned(r.path, s.DaemonRoot, p) {
+					return true
+				}
+			}
+			return s.DaemonRoot != "" && agentOwned("", s.DaemonRoot, p)
+		}
+		n, perr := s.Plugins.Prune(ownedAny, dryRun)
+		res.PluginRecords = n
+		if perr != nil {
+			log.Printf("wtjanitor: plugin records: %v", perr)
+			res.Errors++
 		}
 	}
 	return res, nil
