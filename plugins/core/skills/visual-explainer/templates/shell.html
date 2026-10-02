@@ -510,6 +510,26 @@ var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function sanitizeHTML(html) {
+  var tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  var blocked = 'script,iframe,object,embed,link,meta,base,form';
+  $$(blocked, tpl.content).forEach(function (n) { n.remove(); });
+  $$('*', tpl.content).forEach(function (el) {
+    Array.prototype.slice.call(el.attributes).forEach(function (a) {
+      var name = a.name.toLowerCase();
+      var value = String(a.value || '').trim();
+      if (name.indexOf('on') === 0) {
+        el.removeAttribute(a.name);
+        return;
+      }
+      if ((name === 'href' || name === 'src' || name === 'xlink:href') && /^javascript:/i.test(value)) {
+        el.removeAttribute(a.name);
+      }
+    });
+  });
+  return tpl.innerHTML;
+}
 function island(el) {
   if (!el) return null;
   try { return JSON.parse(el.textContent); } catch (e) { console.error('[explainer] bad JSON island', el, e); return null; }
@@ -556,7 +576,7 @@ function openD(key) {
   if (tpl) c = { k: tpl.getAttribute('data-k'), t: tpl.getAttribute('data-title'), html: tpl.innerHTML };
   else if (DETAILS[key]) c = DETAILS[key];
   if (!c) { console.warn('[explainer] no drawer content for', key); return; }
-  drK.textContent = c.k || ''; drT.textContent = c.t || ''; drB.innerHTML = c.html || ''; drB.scrollTop = 0;
+  drK.textContent = c.k || ''; drT.textContent = c.t || ''; drB.innerHTML = sanitizeHTML(c.html || ''); drB.scrollTop = 0;
   wire(drB);
   if (!drawer.classList.contains('open')) lastFocus = document.activeElement;
   drawer.classList.add('open'); drawer.removeAttribute('inert'); drawer.setAttribute('aria-hidden', 'false'); scrim.classList.add('show');
