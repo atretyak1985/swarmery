@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeprobe"
@@ -103,5 +104,36 @@ func TestQuotaFailureNeverCallsTheConfirmingProbe(t *testing.T) {
 	}
 	if b, ok := workBreaker(t, db); !ok || !b.IsOpen() || b.Kind != store.BreakerKindQuota {
 		t.Errorf("breaker = %+v ok=%v, want an open quota breaker", b, ok)
+	}
+}
+
+// The default account is probed with NO CLAUDE_CONFIG_DIR. Naming $HOME/.claude
+// explicitly makes the CLI look up a different keychain entry and report "not
+// logged in" for a logged-in account, which would confirm the very false trip
+// the probe exists to stop. Account dirs keep their own path.
+func TestProbeConfigDirDefaultAccountIsEmpty(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	def := filepath.Join(home, ".claude")
+	work := filepath.Join(home, ".claude-work")
+	for _, d := range []string{def, work} {
+		if err := os.MkdirAll(filepath.Join(d, "projects"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := filepath.Join(home, "claude-link")
+	if err := os.Symlink(def, link); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct{ root, want string }{
+		{"", ""},
+		{filepath.Join(def, "projects"), ""},
+		{filepath.Join(link, "projects"), ""},
+		{filepath.Join(work, "projects"), work},
+	} {
+		if got := probeConfigDir(tc.root); got != tc.want {
+			t.Errorf("probeConfigDir(%q) = %q, want %q", tc.root, got, tc.want)
+		}
 	}
 }

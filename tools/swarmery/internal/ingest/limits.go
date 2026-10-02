@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -94,14 +95,42 @@ type pendingAuthTrip struct {
 
 // probeConfigDir derives the CLAUDE_CONFIG_DIR a transcript's account was
 // discovered under, mirroring AccountFor's own path math: originRoot is
-// "<configDir>/projects", so configDir is its parent. "" (the default
-// account's own config dir) when originRoot carries no root context.
+// "<configDir>/projects", so configDir is its parent.
+//
+// It returns "" for the DEFAULT account: when originRoot carries no root
+// context, and when the parent is the default config dir ($HOME/.claude).
+// claudeprobe.Probe("") runs with no CLAUDE_CONFIG_DIR at all, which is what
+// selects the default account. Naming $HOME/.claude explicitly is not the
+// same thing: the CLI then looks the login up under a different keychain
+// entry and reports "not logged in" for an account that is logged in. That
+// would turn this confirming probe into a confirmation of exactly the false
+// trip it exists to stop.
 func probeConfigDir(originRoot string) string {
 	root := strings.TrimSpace(originRoot)
 	if root == "" {
 		return ""
 	}
-	return filepath.Dir(filepath.Clean(root))
+	dir := filepath.Dir(filepath.Clean(root))
+	if isDefaultConfigDir(dir) {
+		return ""
+	}
+	return dir
+}
+
+// isDefaultConfigDir reports whether dir is $HOME/.claude, compared both as
+// written and symlink-resolved.
+func isDefaultConfigDir(dir string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+	def := filepath.Join(home, ".claude")
+	if dir == def {
+		return true
+	}
+	a, errA := filepath.EvalSymlinks(dir)
+	b, errB := filepath.EvalSymlinks(def)
+	return errA == nil && errB == nil && a == b
 }
 
 // tripBreaker opens account's circuit breaker when r — already known to be a
