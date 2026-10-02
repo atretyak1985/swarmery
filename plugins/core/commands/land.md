@@ -68,11 +68,12 @@ done | sort -u
 
 For **each** task this session advanced:
 
-- Read its `README.md`. The card's status line is `- **Статус**: active | done | abandoned`
-  (the field name the CLI greps for). Normalize any legacy vocab first
-  (`in_progress` → `active`, `completed` → `done`) so the card, `list`, and the
-  session-start hook agree.
-- **Genuinely still in-flight** → keep `Статус: active`. Do not flip it.
+- Read its `README.md`. The card's status line is `- **Status**: active | done | abandoned`
+  (the one marker the CLI, the daemon and the SessionStart hooks all read; cards from
+  core 3.9.6 and earlier spell the label `**Статус**` — leave that label as it is,
+  every reader accepts both). Normalize any legacy vocab first (`in_progress` →
+  `active`, `completed` → `done`) so the card, `list`, and the session-start hook agree.
+- **Genuinely still in-flight** → keep `Status: active`. Do not flip it.
 - **Actually finished** → do NOT hand-flip the status; step 5 (`agent-work.sh complete`)
   does the `active → done` flip for you. Your job here is to make **SUMMARY.md** true first:
   - Ensure `SUMMARY.md` exists at the task root and reflects the **final** state — mandatory
@@ -129,7 +130,7 @@ bash "$AW" complete <task-id>   # e.g. 2026-07-06-land-command
 # --latest is accepted if it is unambiguously the task you mean
 ```
 
-`complete` flips `Статус: active → done`, stamps the completion date, writes a SUMMARY
+`complete` flips `Status: active → done`, stamps the completion date, writes a SUMMARY
 skeleton only if none exists, moves the dir to `archive/YYYY/MM/DD/<slug>/`, and regenerates
 the index. Then regenerate explicitly to be safe (idempotent):
 

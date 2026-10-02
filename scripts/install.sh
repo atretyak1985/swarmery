@@ -159,6 +159,21 @@ if [ "$os" = "darwin" ]; then
   xattr -d com.apple.quarantine "${INSTALL_DIR}/swarmery" 2>/dev/null || true
 fi
 
+# A machine that runs the daemon as a service runs the copy `swarmery install`
+# made under ~/.swarmery/bin, and the project hooks invoke that same copy — this
+# script replaces neither. Say so, or the new release sits installed but unused.
+if [ "$os" = "darwin" ]; then
+  service_def="$HOME/Library/LaunchAgents/com.swarmery.daemon.plist"
+else
+  service_def="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/swarmery.service"
+fi
+if [ -f "$service_def" ]; then
+  echo ""
+  echo "  A swarmery service is installed; it and the project hooks still run the"
+  echo "  previous binary under $HOME/.swarmery/bin. Re-point them at this release:"
+  echo "    ${INSTALL_DIR}/swarmery install"
+fi
+
 case ":$PATH:" in
   *":${INSTALL_DIR}:"*) ;;
   *) echo ""

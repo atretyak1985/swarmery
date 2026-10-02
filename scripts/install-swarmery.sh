@@ -12,8 +12,9 @@
 #
 # What it does: verify prerequisites (git, Go, Node) → locate or clone the repo
 # → `make build` the single embedded binary → print how to serve it. It does NOT
-# start a background service unless you pass --serve (foreground) — installing a
-# launchd auto-start service is a separate, macOS-only `swarmery install`.
+# start a background service unless you pass --serve (foreground) — installing an
+# auto-start service (launchd on macOS, systemd --user on Linux) is a separate
+# `swarmery install`.
 set -euo pipefail
 
 REPO_SLUG="atretyak1985/swarmery"
@@ -90,5 +91,5 @@ echo ""
 echo "  # enable the dashboard's '+ new project' button (allow-list its write roots):"
 echo "  SWARMERY_ONBOARD_ROOTS=\"\$HOME/projects\" ${BIN} serve"
 echo ""
-echo "  # macOS only — install as a launchd auto-start service (bakes env into the plist):"
+echo "  # install as an auto-start service — launchd on macOS, systemd --user on Linux (bakes env into it):"
 echo "  ${BIN} install --onboard-roots \"\$HOME/projects\""

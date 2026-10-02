@@ -131,8 +131,11 @@ attach to the existing pending row and do **not** re-emit. The payload is the fu
 Emitted by the approvals layer whenever a pending request leaves `pending` — for
 **every** terminal status: `approved`, `denied`, `expired`, and
 `resolved_elsewhere` (expiry and client-disconnect emit it too, so badge counters
-always converge). The payload is the same full `PermissionRequest` DTO with the
-resolution fields populated; clients upsert by `id`.
+always converge). The boot-time heal of requests orphaned by a daemon restart
+emits it as well (`status: "expired"`, `resolvedVia: "restart"` —
+[`hooks-protocol.md`](hooks-protocol.md) amendment 3). The payload is the same
+full `PermissionRequest` DTO with the resolution fields populated; clients
+upsert by `id`.
 
 ```json
 {"type":"permission_resolved","payload":{

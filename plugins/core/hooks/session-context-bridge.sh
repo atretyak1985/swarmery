@@ -77,12 +77,18 @@ if [ -d "$working_dir" ]; then
 fi
 
 # task_active <NEXT.md> — the task card beside it says the task is still open.
-# Same Status: vocabulary session-start.sh uses for its in-flight list.
+# Same status-line rule session-start.sh uses for its in-flight list. The line
+# comes in every spelling a card can carry: the canonical `- **Status**: <value>`
+# (what agent-work.sh init and the daemon's taskdir write — core 3.9.7), the
+# pre-3.9.7 `- **Статус**: <value>`, and the hand-written `Status:` /
+# `**Status:**`. Anchored to the line start so prose that merely mentions a
+# status cannot match.
+CARD_STATUS_RE='^[[:space:]]*(-[[:space:]]*)?[*]*(Status|Статус)[*]*:'
 task_active() {
   local card="$(dirname "$1")/README.md"
   [ -f "$card" ] || return 1
-  grep -m1 'Status:' "$card" 2>/dev/null \
-    | grep -qiE 'Status:[*]*[[:space:]]*(active|in[-_ ]?progress)'
+  grep -m1 -E "$CARD_STATUS_RE" "$card" 2>/dev/null \
+    | grep -qiE "${CARD_STATUS_RE}[*]*[[:space:]]*(active|in[-_ ]?progress)"
 }
 
 # The newest ACTIVE task's NEXT.md; the newest overall only when none is active.

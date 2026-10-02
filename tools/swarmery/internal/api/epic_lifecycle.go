@@ -48,8 +48,10 @@ import (
 )
 
 var (
-	// The task-card README status line (`- **Статус**: active`); the replace
-	// touches the value only, whatever trails it (` · **Ціль**: …`) survives.
+	// The task-card README status line — the canonical `- **Status**: active`
+	// (agent-work.sh init, taskdir.cardReadme, the core SessionStart hooks) or
+	// the legacy `- **Статус**: active`. The replace touches the value only:
+	// whatever trails it (` · **Ціль**: …`) survives and the label is kept as found.
 	cardStatusRe = regexp.MustCompile(`(?mi)^(\s*-\s+\*\*(?:Статус|Status)\*\*:\s*)(\S+)`)
 	// The completion-date field, empty (`**Завершено**: —`) and filled forms.
 	doneDateEmptyRe  = regexp.MustCompile(`(\*\*Завершено\*\*:\s*)—`)
@@ -347,12 +349,16 @@ func rewriteCardReadme(taskDir string, edit func(string) string) error {
 }
 
 // upsertCardStatus sets the README status-line value, inserting a fresh
-// `- **Статус**: <v>` after the H1 (or at the top) when no status line exists.
+// `- **Status**: <v>` after the H1 (or at the top) when no status line exists.
+// The inserted label is the canonical one every writer uses (agent-work.sh init,
+// taskdir.cardReadme) and every reader accepts (the core SessionStart hooks,
+// agent-work.sh, wsingest). An existing line keeps whichever label it has: a
+// legacy **Статус** card is edited, never re-spelled.
 func upsertCardStatus(text, status string) string {
 	if cardStatusRe.MatchString(text) {
 		return cardStatusRe.ReplaceAllString(text, "${1}"+status)
 	}
-	line := "- **Статус**: " + status
+	line := "- **Status**: " + status
 	if loc := cardH1Re.FindStringIndex(text); loc != nil {
 		return text[:loc[1]] + "\n\n" + line + text[loc[1]:]
 	}

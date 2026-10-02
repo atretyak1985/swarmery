@@ -23,6 +23,15 @@ import (
 // bus, approvals service (short timeout for the 204 tests), API routes.
 func approvalsTestServer(t *testing.T, opt approvals.Options) (*httptest.Server, *sql.DB, *approvals.Service) {
 	t.Helper()
+	srv, db, svc, _ := approvalsTestServerWithBus(t, opt)
+	return srv, db, svc
+}
+
+// approvalsTestServerWithBus is approvalsTestServer plus the bus, for tests
+// that need to publish their own notification (the WS subscription race in
+// approvals_restart_test.go).
+func approvalsTestServerWithBus(t *testing.T, opt approvals.Options) (*httptest.Server, *sql.DB, *approvals.Service, *ingest.Bus) {
+	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -41,7 +50,7 @@ func approvalsTestServer(t *testing.T, opt approvals.Options) (*httptest.Server,
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return srv, db, svc
+	return srv, db, svc, bus
 }
 
 func hookBody(uuid, tool, command string) string {

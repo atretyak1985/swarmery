@@ -114,3 +114,44 @@ func TestDenyEmitsNothingExtra(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 }
+
+// TestHealStaleEmitsApprovalExpired: a request orphaned by a daemon restart
+// fires the same approval_expired webhook a timeout does — the receiver that
+// got approval_requested from the previous daemon gets its closing event —
+// with the restart reason in the body so the operator knows to answer in the
+// terminal rather than look for the card.
+func TestHealStaleEmitsApprovalExpired(t *testing.T) {
+	db := testDB(t)
+	sid := seedSession(t, db, "uuid-notify-heal")
+	t0 := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
+
+	// Previous daemon (no sink attached: only the post-restart events matter).
+	previous := New(db, nil, Options{Now: func() time.Time { return t0 }})
+	id, _, _, err := previous.Open(hookInput(t, "uuid-notify-heal", "Bash", "terraform apply"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, got := notifyTestSink(t)
+	bootAt := t0.Add(time.Minute)
+	svc := New(db, nil, Options{Notifier: n, Now: func() time.Time { return bootAt }})
+	if healed, err := svc.HealStale(bootAt); err != nil || healed != 1 {
+		t.Fatalf("HealStale = %d, %v; want 1, nil", healed, err)
+	}
+
+	e := waitNotifyEvent(t, got, notify.EventApprovalExpired)
+	if e.RequestID != id || e.SessionID != sid || e.Tool != "Bash" || e.Project != "proj" {
+		t.Errorf("event = %+v", e)
+	}
+	if !strings.Contains(e.Title, "expired") {
+		t.Errorf("title = %q, want an expiry title", e.Title)
+	}
+	if !strings.Contains(e.Body, RestartReason) {
+		t.Errorf("body = %q, want the restart reason appended", e.Body)
+	}
+	select {
+	case extra := <-got:
+		t.Fatalf("unexpected second webhook: %+v", extra)
+	case <-time.After(300 * time.Millisecond):
+	}
+}

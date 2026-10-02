@@ -43,16 +43,22 @@ if [ -n "${AGENT_TASK_ID:-}" ]; then
     task_dir=$(find "$working_dir" -type d -path "*/${slug}" 2>/dev/null | head -1)
   fi
 else
-  # Exactly one active task, by the same README "Status:" rule session-start.sh
-  # uses. Zero or several → stay out of it.
+  # Exactly one active task, by the same README status-line rule session-start.sh
+  # uses for its banner. Zero or several → stay out of it.
+  # The card's status line in every spelling a card can carry: the canonical
+  # `- **Status**: <value>` (what agent-work.sh init and the daemon's taskdir
+  # write — core 3.9.7), the pre-3.9.7 `- **Статус**: <value>`, and the
+  # hand-written `Status:` / `**Status:**`. Anchored to the line start so prose
+  # that merely mentions a status cannot match.
+  card_status_re='^[[:space:]]*(-[[:space:]]*)?[*]*(Status|Статус)[*]*:'
   active=""
   count=0
   while IFS= read -r readme; do
     [ -n "$readme" ] || continue
-    status_val=$(grep -m1 'Status:' "$readme" 2>/dev/null \
-      | sed 's/^.*Status:[*]*[[:space:]]*//')
+    status_val=$(grep -m1 -E "$card_status_re" "$readme" 2>/dev/null \
+      | sed -E "s/${card_status_re}[*]*[[:space:]]*//" | tr '[:upper:]' '[:lower:]')
     case "$status_val" in
-      active*|Active*|ACTIVE*|in-progress*|in_progress*|"in progress"*|IN_PROGRESS*) ;;
+      active*|in-progress*|in_progress*|"in progress"*) ;;
       *) continue ;;
     esac
     active=$(dirname "$readme")

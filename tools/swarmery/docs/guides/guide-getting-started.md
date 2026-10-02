@@ -131,8 +131,9 @@ From `tools/swarmery/`:
 
 Running `./swarmery serve` by hand keeps the daemon in the foreground, which is the
 easiest way to watch it while you are getting your bearings. Once you want it always
-on, `make install` copies the binary to `~/.swarmery/bin/swarmery` and hands it to
-launchd so it starts with your machine.
+on, `./swarmery install` copies the binary to `~/.swarmery/bin/swarmery` and registers
+it with launchd (macOS) or `systemd --user` (Linux) so it starts with your machine;
+from then on `make install` rebuilds, swaps that copy and restarts the service.
 
 The daemon needs no instrumentation, because it reads what Claude Code already
 writes: JSONL session transcripts under `~/.claude/projects/`, watched with

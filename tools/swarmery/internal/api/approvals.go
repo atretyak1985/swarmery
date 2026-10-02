@@ -203,11 +203,15 @@ func (h *Handler) resolveApproval(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
 		return
 	}
+	// Every action goes through the waiter-aware entry points (Decide /
+	// Answer): a decision is only recorded when a long-poll in THIS process
+	// can deliver it. A pending row with no waiter — its hook died with a
+	// previous daemon (hooks-protocol amendment 3) — answers 410 below.
 	switch body.Action {
 	case "approve":
-		err = approvalsSvc.Resolve(id, approvals.StatusApproved, "dashboard", body.Reason)
+		err = approvalsSvc.Decide(id, approvals.StatusApproved, "dashboard", body.Reason)
 	case "deny":
-		err = approvalsSvc.Resolve(id, approvals.StatusDenied, "dashboard", body.Reason)
+		err = approvalsSvc.Decide(id, approvals.StatusDenied, "dashboard", body.Reason)
 	case "answer":
 		// AskUserQuestion answers (hooks-protocol amendment 1, spike E12).
 		err = approvalsSvc.Answer(id, body.Answers)
@@ -216,7 +220,7 @@ func (h *Handler) resolveApproval(w http.ResponseWriter, r *http.Request) {
 		// would resolve AskUserQuestion with empty answers (E12d). The row
 		// resolves as resolved_elsewhere so the long-poll answers 204, the
 		// shim fails open, and the native selector renders (E12e).
-		err = approvalsSvc.Resolve(id, approvals.StatusResolvedElsewhere, "dashboard", "handed off to terminal")
+		err = approvalsSvc.Decide(id, approvals.StatusResolvedElsewhere, "dashboard", "handed off to terminal")
 	default:
 		http.Error(w, `{"error":"action must be 'approve', 'deny', 'answer' or 'terminal'"}`, http.StatusBadRequest)
 		return
@@ -228,6 +232,13 @@ func (h *Handler) resolveApproval(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, approvals.ErrAlreadyResolved):
 		http.Error(w, `{"error":"permission request already resolved"}`, http.StatusConflict)
+		return
+	case errors.Is(err, approvals.ErrNoWaiter):
+		// 410, not 409: the row is still pending, but the hook that asked is
+		// gone from this daemon (it died with a previous process, or belongs
+		// to another daemon on the same DB). Recording a decision here would
+		// reach no one; the row is left for the sweeper / its owner.
+		http.Error(w, `{"error":"permission request has no live hook waiter — its hook died with a previous daemon process; answer it in the terminal"}`, http.StatusGone)
 		return
 	case errors.Is(err, approvals.ErrInvalidAnswer):
 		w.Header().Set("Content-Type", "application/json")

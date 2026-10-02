@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.9.3,
+  `/plugin update`, not through these tags. Current: `core` 3.9.7,
   `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
   `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
@@ -51,6 +51,38 @@ Two things ship from this repository on separate clocks:
 
 ### Fixed
 
+- **The SessionStart hooks find the active task card again (core 3.9.7).**
+  `session-start.sh`, `task-session-log.sh` and `session-context-bridge.sh`
+  selected the active task by grepping its README for the substring `Status:`,
+  but the card `agent-work.sh init` writes said `- **Статус**: active` and the
+  daemon's said `- **Status**: active` — neither contains that substring (the
+  colon follows the closing `**`), so the in-flight banner stayed empty, the
+  explicit task↔session link was never written and the bridge could carry a
+  finished task's NEXT.md into a cold session. The canonical status line is now
+  `- **Status**: <value>`: `agent-work.sh init` and the README card template
+  write it, and the daemon's lifecycle inserts it on a card that has none.
+  Every reader accepts it alongside the legacy `**Статус**` label and the
+  hand-written `Status:` / `**Status:**` forms: the three hooks,
+  `agent-work.sh pause|resume|complete|restore|list|index|metrics` (which edit
+  a legacy card in place and keep its label) and the daemon's card parser.
+  Guarded by `scripts/tests/task-card-status.test.sh`, which drives the real
+  `init` against the real hooks.
+- **Linux `make install` restarted the service on the old binary.** The
+  Makefile installed the rebuilt daemon into `~/.local/bin/swarmery`, while the
+  `systemd --user` unit that `swarmery install` writes and the hook entries that
+  `swarmery hooks install` writes both run `~/.swarmery/bin/swarmery` — so the
+  restart brought the previous build back up and every hook kept using it.
+  `make install` now installs into `~/.swarmery/bin` on both platforms, with the
+  same copy-then-rename as macOS, restarts the unit whenever the user manager
+  has it loaded, and prints the build the service came back up on. The
+  control-plane README now says that a release install (`scripts/install.sh`
+  only replaces `~/.local/bin/swarmery`) needs a `swarmery install` afterwards
+  so the service and hooks pick up the new binary — the installer prints that
+  reminder when it finds a service definition — and its Rollback section no
+  longer claims an older binary refuses a newer database: migrations are
+  forward-only and an older binary opens the newer schema without complaint,
+  so an incompatibility shows up as runtime SQL errors and the clean rollback
+  is restoring the pre-upgrade snapshot.
 - **Micro-plans go into the onboarded workspace (#386).** A dispatched card's
   micro-plan used to go into a duplicate tree. It now goes into the project's own
   workspace namespace: the most recently scanned mapping, the same one its repo
