@@ -676,7 +676,7 @@ $$('[data-stepper]').forEach(function (g) {
   }
   nodes.forEach(function (n) {
     var i = +n.getAttribute('data-step');
-    if (!n.hasAttribute('aria-label') && steps[i]) n.setAttribute('aria-label', i + ': ' + String(steps[i].t || '').replace(/<[^>]+>/g, ''));
+    if (!n.hasAttribute('aria-label') && steps[i]) n.setAttribute('aria-label', i + ': ' + esc(String(steps[i].t || '')));
     n.addEventListener('click', function () { set(i); });
   });
   if (prev) prev.addEventListener('click', function () { set(cur - 1); });
