@@ -38,6 +38,8 @@ function rosterRow(name: string): AgentRosterRow {
     model: null,
     path: `/agents/${name}.md`,
     description: null,
+    role: 'implement',
+    enabledInProject: true,
     improvable: true,
     runs30d: 0,
     successRate: null,

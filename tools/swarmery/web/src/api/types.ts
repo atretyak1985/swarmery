@@ -3855,6 +3855,10 @@ export interface PlanDoc {
 // Reuses Recommendation / AgentChangeProposal / RetroLesson for the Insights tab
 // (same shapes the Retro page renders) — no forked contracts.
 
+/** An agent's picker group (fixed vocabulary; scripts/tests/agent-roles.test.sh
+ * enforces it on the shipped roles.json files). Go: knownRoles. */
+export type AgentRole = 'orchestrate' | 'implement' | 'review' | 'research' | 'ops' | 'domain';
+
 /** One roster card: a registry identity + its 30-day rollups (folded by
  * normalised agent name). Go: agentRosterRow. */
 export interface AgentRosterRow {
@@ -3867,6 +3871,13 @@ export interface AgentRosterRow {
   model: string | null;
   path: string;
   description: string | null;
+  /** Picker group, read from the roles.json beside the agent's file
+   * (plugins/<pack>/agents/ or a project's .claude/agents/); 'domain' when the
+   * file names no role. */
+  role: AgentRole;
+  /** False for a plugin agent whose pack the scoped project does not enable;
+   * local agents and the unscoped fleet view are always true. */
+  enabledInProject: boolean;
   /** The agent resolves to a live registry row the rewriter can act on. */
   improvable: boolean;
   runs30d: number;

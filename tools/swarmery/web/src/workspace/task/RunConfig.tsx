@@ -21,8 +21,8 @@
 
 import { useEffect, useState } from 'react';
 import { fetchRouteDecision, type RouteDecision } from '../../api/route';
-import type { AgentRosterRow, Playbook, TaskPriority } from '../../api/types';
-import { AgentHint, AgentSelect } from '../AgentPicker';
+import type { Playbook, TaskPriority } from '../../api/types';
+import { AgentHint, AgentSelect, type PickerAgent } from '../AgentPicker';
 import { TASK_MODELS, TASK_PRIORITIES } from '../boardModel';
 import { PlaybookHint, PlaybookSelect } from '../PlaybookPicker';
 import { ChipEditor, FieldLabel } from '../TaskFields';
@@ -129,7 +129,7 @@ export function RunConfig({
   /** Autosave: a select's change IS its commit, so both fire in one handler. */
   commit: () => void;
   playbooks: Playbook[];
-  agents: AgentRosterRow[];
+  agents: PickerAgent[];
   /** The card's id — enables the read-only route line once it has a decision. */
   taskId?: number;
 }): JSX.Element {
