@@ -308,7 +308,9 @@ comma-separated mix of `approval_requested`, `approval_expired`,
 the two moments a human is blocking work (a pending tool approval, a headless
 run that stopped to ask the operator). An explicit value **replaces** the
 default rather than extending it, so keep both names in the list when adding
-others.
+others. `approval_expired` also fires for approvals a daemon restart orphaned
+(the hook died with the old process, so the request can no longer be answered
+from the dashboard) — the body says so, and the answer belongs in the terminal.
 
 ## Complexity routing
 
