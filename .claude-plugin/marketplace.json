@@ -57,7 +57,7 @@
     {
       "name": "architecture-pack",
       "source": "./plugins/architecture-pack",
-      "description": "Repo-wide architecture map: /architecture-map generates a machine-readable JSON contract (layers, modules, file-anchored flows) + self-contained HTML viewer, freshness-stamped per commit; the swarmery dashboard serves both on its Architecture page."
+      "description": "Repo-wide architecture map: /architecture-map generates a machine-readable JSON contract (layers, modules, file-anchored flows) + self-contained HTML viewer, freshness-stamped per commit; the swarmery dashboard serves both on its Architecture page. Also /visualize: turn a document or an explanation into one interactive, self-contained HTML explainer page."
     },
     {
       "name": "jira-pack",

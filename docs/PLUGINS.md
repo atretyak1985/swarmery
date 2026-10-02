@@ -132,9 +132,9 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 
 ---
 
-## architecture-pack — repo-wide architecture map
+## architecture-pack — architecture map and explainer pages
 
-**What it is.** The `/architecture-map` skill: produces `architecture-out/architecture-map.json` — a machine-readable contract with named layers, modules, and file-anchored end-to-end flows — plus a self-contained `architecture-map.html` viewer.
+**What it is.** Two self-contained HTML viewers. The `/architecture-map` skill produces `architecture-out/architecture-map.json` — a machine-readable contract with named layers, modules, and file-anchored end-to-end flows — plus a self-contained `architecture-map.html` viewer. The `/visualize` command (skill `visual-explainer`) turns a document or an explanation into one explainer page: a plain-language thesis, a diagram, chart or table per chapter, glossary tooltips and a details drawer.
 
 **Requires.** No extra CLI. Works standalone; when `graphify-out/graph.json` is present the skill uses it as a curated grouping source and falls back to direct repo exploration if it trails HEAD.
 
@@ -143,6 +143,7 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 - **Machine contract** — `architecture-map.json` (schema v1) is consumed by agents that need a repo-wide mental model: layers, modules with `keyFiles`/`exports`/`dependencies`, and 5–10 named flows.
 - **Self-contained viewer** — `architecture-map.html` is rendered by the bundled `scripts/build.sh`; never write HTML by hand.
 - **Artifacts** land in `architecture-out/` (git-ignored by convention).
+- **Explainer pages** — `/visualize <doc.md>` starts from a shell that owns navigation, light/dark theming, the drawer, tooltips, tabs, a step-through player and scenario switches (a project can override it at `.claude/templates/explainer-shell.html`), then measures the page with `check.mjs` and `probe.js` at desktop and phone width in both themes, served by a loopback, one-page server. System fonts by default, so the file works offline. Needs `node`.
 
 **How to work with it.**
 1. Enable `architecture-pack` for the project (plugin toggles or `settings.json`).
