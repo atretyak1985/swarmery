@@ -45,6 +45,7 @@ make dev            # go daemon + vite dev server (proxies /api to :7777)
 make install        # rebuild + swap the service-managed binary and restart it (launchd on macOS, systemd --user on Linux)
 
 cd web && npm run build   # includes tsc --noEmit (React 19 + Vite 8 + Tailwind 4)
+cd web && npm test        # vitest + jsdom, the web app's unit/component tests (also in swarmery-ci)
 ```
 
 Releases of the control plane are cut by pushing a `swarmery-v*` tag (`swarmery-release.yml`).

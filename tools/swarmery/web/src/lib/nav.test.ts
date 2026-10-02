@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The nav model's two contracts:
 //
 //   1. hrefs per scope — fleet (slug null) vs project, including the

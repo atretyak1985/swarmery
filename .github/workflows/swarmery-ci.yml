@@ -32,6 +32,10 @@ jobs:
           npm ci
           npm run build
 
+      - name: Test web
+        working-directory: tools/swarmery/web
+        run: npm test
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tools/swarmery/go.mod

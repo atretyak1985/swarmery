@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "lint": "biome lint src",
+    "test": "vitest run",
     "preview": "vite preview",
     "screenshots": "node scripts/screenshot.mjs"
   },
@@ -23,14 +24,17 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
     "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^29.1.1",
     "playwright-core": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vitest": "^5.0.3"
   },
   "overrides": {
     "lodash-es": "^4.18.1"
