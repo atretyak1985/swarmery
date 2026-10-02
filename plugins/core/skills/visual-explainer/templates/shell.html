@@ -669,7 +669,7 @@ $$('[data-stepper]').forEach(function (g) {
     if (svg) svg.classList.toggle('stepping', cur > 0);
     nodes.forEach(function (n) { n.classList.toggle('cur', +n.getAttribute('data-step') === cur); });
     var s = steps[cur] || {};
-    if (panel) panel.innerHTML = '<div class="k">' + (cur ? cur + ' / ' + last : esc(s.k || 'overview')) + '</div><h4>' + (s.t || '') + '</h4><p>' + (s.p || '') + '</p>' + (s.x ? '<p class="tech">' + s.x + '</p>' : '');
+    if (panel) panel.innerHTML = '<div class="k">' + (cur ? cur + ' / ' + last : esc(s.k || 'overview')) + '</div><h4>' + esc(s.t || '') + '</h4><p>' + esc(s.p || '') + '</p>' + (s.x ? '<p class="tech">' + esc(s.x) + '</p>' : '');
     if (count) count.textContent = cur ? cur + ' / ' + last : '';
     if (prev) prev.disabled = cur === 0;
     if (next) next.disabled = cur === last;
