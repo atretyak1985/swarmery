@@ -54,6 +54,26 @@ func TestMintedCardReadmeSatisfiesTheLifecycleContract(t *testing.T) {
 	}
 }
 
+// TestUpsertCardStatusInsertsTheCanonicalMarker: a card with no status line (a
+// hand-made task dir) gets one inserted after its H1, spelled the way every
+// writer spells it — `- **Status**: <v>`, the marker agent-work.sh init writes
+// and the core SessionStart hooks read. A legacy **Статус** card is edited in
+// place with its label kept: readers accept both, writers add only the
+// canonical one.
+func TestUpsertCardStatusInsertsTheCanonicalMarker(t *testing.T) {
+	got := upsertCardStatus("# Hand-made task\n\nsome prose\n", "paused")
+	if want := "# Hand-made task\n\n- **Status**: paused\n\nsome prose\n"; got != want {
+		t.Errorf("insert after the H1:\n got %q\nwant %q", got, want)
+	}
+	if got := upsertCardStatus("no heading at all\n", "done"); !strings.HasPrefix(got, "- **Status**: done\n") {
+		t.Errorf("insert at the top when there is no H1:\n%s", got)
+	}
+	legacy := upsertCardStatus("# Old card\n\n- **Статус**: active · **Ціль**: keep me\n", "done")
+	if want := "# Old card\n\n- **Статус**: done · **Ціль**: keep me\n"; legacy != want {
+		t.Errorf("a legacy label must be kept and only its value replaced:\n got %q\nwant %q", legacy, want)
+	}
+}
+
 // TestMicroPlanChipsResolveBothWays: the card and its micro-plan are one unit of
 // work seen from two pages, so each side has to be able to name the other. Without
 // both ids in the DTOs the relationship exists only in a path column nobody renders.

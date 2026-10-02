@@ -1,6 +1,10 @@
 #!/bin/bash
 # Agent Work CLI
-# Version: 5.3 (lifecycle parity with the control-plane UI: pause/resume flip the
+# Version: 5.4 (the task-card status line is `- **Status**: <value>` — the one
+#               marker the daemon's taskdir writes and the core SessionStart hooks
+#               read; cards from 5.3 and earlier spell the label **Статус** and
+#               are still read and edited in place, label kept, never re-spelled.
+#               5.3: lifecycle parity with the control-plane UI: pause/resume flip the
 #               README card status active↔paused, restore moves an archived task
 #               back to working/ and re-activates it, and `archive` is an alias
 #               of `complete`. Workspace standard: working/YYYY/MM/DD/<slug> task
@@ -102,6 +106,18 @@ _readme_field() {
     grep -m1 "\*\*${field}\*\*" "$readme" 2>/dev/null | sed -e 's/^.*\*\*'"${field}"'\*\*:[[:space:]]*//' -e 's/[[:space:]]*·.*$//' || echo "?"
 }
 
+# Status value of a README card. The canonical line is `- **Status**: <value>` —
+# written by cmd_init and by the daemon's taskdir, read by the core SessionStart
+# hooks (session-start.sh, task-session-log.sh, session-context-bridge.sh).
+# Cards from v5.3 and earlier spell the label **Статус**; both are read, only
+# the canonical one is ever written new.
+_card_status() {
+    local readme="$1" st
+    st=$(_readme_field "$readme" "Status")
+    [ -n "$st" ] || st=$(_readme_field "$readme" "Статус")
+    echo "$st"
+}
+
 # Tasks live under working/YYYY/MM/DD/<slug> (mirrors archive/). The canonical task-id
 # stays <yyyy-mm-dd-slug>: the YYYY/MM/DD are derived from its embedded start date and
 # the leaf folder is just the slug, so no lookup is needed for the common path. A find()
@@ -155,14 +171,21 @@ _archived_dir_for() {
 }
 
 # Flip the README card status value in place (gsed-free, BSD-sed compatible;
-# same edit style as cmd_complete — the daemon's lifecycle endpoint writes the
-# identical values, so CLI and UI stay convergent).
+# cmd_complete and cmd_restore route their status edit through here too — the
+# daemon's lifecycle endpoint writes the identical values, so CLI and UI stay
+# convergent). Both spellings of the label are edited and kept as found: the
+# canonical **Status**, and **Статус** on cards from v5.3 and earlier. `from`
+# is a sed BRE (cmd_restore passes one that matches any status).
 _set_status() {
     local task_dir="$1" from="$2" to="$3"
     [ -f "${task_dir}/README.md" ] || { log_error "No README.md card in ${task_dir}"; return 1; }
     # BSD-first sed idiom: on GNU the -i '' call "fails" yet still applies the edit before the || retry — substitutions here must stay idempotent.
-    sed -i '' -e "s/\*\*Статус\*\*: ${from}/\*\*Статус\*\*: ${to}/" "${task_dir}/README.md" 2>/dev/null \
-    || sed -i -e "s/\*\*Статус\*\*: ${from}/\*\*Статус\*\*: ${to}/" "${task_dir}/README.md"
+    sed -i '' -e "s/\*\*Status\*\*: ${from}/\*\*Status\*\*: ${to}/" \
+              -e "s/\*\*Статус\*\*: ${from}/\*\*Статус\*\*: ${to}/" \
+              "${task_dir}/README.md" 2>/dev/null \
+    || sed -i -e "s/\*\*Status\*\*: ${from}/\*\*Status\*\*: ${to}/" \
+              -e "s/\*\*Статус\*\*: ${from}/\*\*Статус\*\*: ${to}/" \
+              "${task_dir}/README.md"
 }
 
 _resolve_task_dir() {
@@ -201,7 +224,7 @@ cmd_init() {
 # ${task_name}
 
 - **ID**: ${task_id}
-- **Статус**: active
+- **Status**: active
 - **Тип**: ${task_type}
 - **Старт**: $(date +%Y-%m-%d) · **Завершено**: —
 - **Репо**:
@@ -238,7 +261,7 @@ cmd_phase() {
 cmd_pause() {
     local task_dir; task_dir=$(_resolve_task_dir "$1")
     local task_id; task_id=$(_id_from_dir "$task_dir")
-    local st; st=$(_readme_field "${task_dir}/README.md" "Статус")
+    local st; st=$(_card_status "${task_dir}/README.md")
     if [ "$st" != "active" ]; then
         if [ "$st" = "paused" ]; then
             log_warn "Already paused: ${task_id} — nothing to do"
@@ -257,7 +280,7 @@ cmd_pause() {
 cmd_resume() {
     local task_dir; task_dir=$(_resolve_task_dir "$1")
     local task_id; task_id=$(_id_from_dir "$task_dir")
-    local st; st=$(_readme_field "${task_dir}/README.md" "Статус")
+    local st; st=$(_card_status "${task_dir}/README.md")
     if [ "$st" != "paused" ]; then
         if [ "$st" = "active" ]; then
             log_warn "Already active: ${task_id} — nothing to do"
@@ -300,11 +323,10 @@ cmd_restore() {
     # README: any status back to active + reset the completion date.
     # BSD-first sed idiom: on GNU the -i '' call "fails" yet still applies the edit before the || retry — substitutions here must stay idempotent.
     if [ -f "${dest}/README.md" ]; then
-        sed -i '' -e "s/\*\*Статус\*\*: [a-z][a-z]*/\*\*Статус\*\*: active/" \
-                  -e "s/\*\*Завершено\*\*: [0-9][0-9-]*/\*\*Завершено\*\*: —/" \
+        _set_status "$dest" "[a-z][a-z]*" "active"
+        sed -i '' -e "s/\*\*Завершено\*\*: [0-9][0-9-]*/\*\*Завершено\*\*: —/" \
                   "${dest}/README.md" 2>/dev/null \
-        || sed -i -e "s/\*\*Статус\*\*: [a-z][a-z]*/\*\*Статус\*\*: active/" \
-                  -e "s/\*\*Завершено\*\*: [0-9][0-9-]*/\*\*Завершено\*\*: —/" \
+        || sed -i -e "s/\*\*Завершено\*\*: [0-9][0-9-]*/\*\*Завершено\*\*: —/" \
                   "${dest}/README.md"
     else
         log_info "README.md відсутній у ${dest} — відновлюю без статус-картки"
@@ -329,11 +351,10 @@ cmd_complete() {
     # README: status + completion date (gsed-free, BSD-sed compatible).
     # Guard: a task dir without a README card (e.g. hand-made plans) must still archive.
     if [ -f "${task_dir}/README.md" ]; then
-        sed -i '' -e "s/\*\*Статус\*\*: active/\*\*Статус\*\*: done/" \
-                  -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
+        _set_status "$task_dir" "active" "done"
+        sed -i '' -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
                   "${task_dir}/README.md" 2>/dev/null \
-        || sed -i -e "s/\*\*Статус\*\*: active/\*\*Статус\*\*: done/" \
-                  -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
+        || sed -i -e "s/\*\*Завершено\*\*: —/\*\*Завершено\*\*: ${today}/" \
                   "${task_dir}/README.md"
     else
         log_info "README.md відсутній у ${task_dir} — архівую без статус-картки"
@@ -391,7 +412,7 @@ cmd_index() {
             local id; id=$(_id_from_dir "$dir")
             local rel; rel=${dir#"${WORKSPACE_DIR}/"}
             local typ; typ=$(_readme_field "${dir}README.md" "Тип")
-            local st; st=$(_readme_field "${dir}README.md" "Статус")
+            local st; st=$(_card_status "${dir}README.md")
             local mtime; mtime=$(_mtime_date "$dir")
             echo "| [${id}](${rel}README.md) | ${typ} | ${st} | ${mtime} |"
         done
@@ -418,7 +439,7 @@ cmd_list() {
     for dir in "${WORKING_DIR}"/*/*/*/*/; do
         [ -d "$dir" ] || continue
         local id; id=$(_id_from_dir "$dir")
-        local st; st=$(_readme_field "${dir}README.md" "Статус")
+        local st; st=$(_card_status "${dir}README.md")
         [ "$filter" = "all" ] || [ "$filter" = "$st" ] || continue
         case "$st" in
             done) echo -e "${GREEN}✓${NC} ${id}";;
@@ -448,7 +469,7 @@ cmd_metrics() {
     local active=0 done_n=0 paused=0 archived=0
     for dir in "${WORKING_DIR}"/*/*/*/*/; do
         [ -d "$dir" ] || continue
-        case "$(_readme_field "${dir}README.md" "Статус")" in
+        case "$(_card_status "${dir}README.md")" in
             done) done_n=$((done_n+1));; paused) paused=$((paused+1));; *) active=$((active+1));;
         esac
     done
@@ -465,7 +486,7 @@ cmd_cleanup() {
 }
 
 cmd_help() {
-    echo "Agent Work CLI v5.3 — workspace standard working/YYYY/MM/DD/<slug> (id: yyyy-mm-dd-slug)"
+    echo "Agent Work CLI v5.4 — workspace standard working/YYYY/MM/DD/<slug> (id: yyyy-mm-dd-slug)"
     echo "Usage: agent-work.sh <command> [options]"
     echo ""
     echo "  setup                       Create workspace directories"
