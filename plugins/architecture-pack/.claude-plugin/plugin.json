@@ -1,6 +1,6 @@
 {
   "name": "architecture-pack",
-  "description": "Architecture-map pack: the /architecture-map skill — generate a repo-wide architecture map as architecture-out/architecture-map.json (machine contract with layers, modules, and file-anchored flows for AI agents) plus a self-contained architecture-map.html viewer. Freshness-stamped per commit with incremental refresh; grounded in the graphify knowledge graph when present, falls back to direct exploration without it. Opt-in; the swarmery dashboard serves the artifacts on its Architecture page.",
-  "version": "1.5.0",
+  "description": "Architecture-map pack: the /architecture-map skill — generate a repo-wide architecture map as architecture-out/architecture-map.json (machine contract with layers, modules, and file-anchored flows for AI agents) plus a self-contained architecture-map.html viewer. Freshness-stamped per commit with incremental refresh; grounded in the graphify knowledge graph when present, falls back to direct exploration without it. Also /visualize: the visual-explainer skill turns a document or an explanation into one interactive, self-contained HTML explainer page (diagrams, glossary tooltips, a details drawer), measured at desktop and phone width in light and dark. Opt-in; the swarmery dashboard serves the architecture artifacts on its Architecture page.",
+  "version": "1.6.0",
   "author": {"name": "atretyak", "email": "atretiak.work@gmail.com"}
 }

@@ -1,4 +1,4 @@
-# Components — markup for `templates/shell.html`
+# Components — markup for `templates/explainer-shell.html`
 
 Contents: 1 Page skeleton · 2 Text and terms · 3 Drawer content · 4 Lists and cards ·
 5 Charts · 6 Interactive groups · 7 SVG diagrams · 8 Coordinates discipline
@@ -56,8 +56,10 @@ Glossary island (one per page): `{"wal": ["WAL", "Write-ahead log: changes go to
 </template>
 ```
 
-Generated items (rows of a table, risk items) can use the `#details` island instead:
-`{"r-3": {"k": "Risk · P2", "t": "Orphaned requests", "html": "<p>…<\/p>"}}` — write `<\/` for `</`.
+Generated items (rows of a table, risk items) can use the `#details` island instead. Its entries are
+data, rendered as plain text — use a `<template>` whenever you need markup:
+`{"r-3": {"k": "Risk · P2", "t": "Orphaned requests", "body": [{"p": "What happens."}, {"dl": [["Stage", "P2"]]}, {"src": "approvals.go:254"}]}}`.
+Body blocks: `p`, `h`, `ul` (array), `dl` (array of pairs), `pre`, `note`, `src`.
 Any element with `data-d` opens it: buttons, `<tr>`, SVG `<g>`, `.card`.
 
 ## 4. Lists and cards
@@ -123,7 +125,9 @@ ticks and labels, and run the data-viz skill's palette validator if you have one
   <div class="panel" data-panel="l1"><div class="panel-grid"><div><h4>What</h4><p>…</p></div>…</div></div>
 </div>
 ```
-**Step-through sequence** — index 0 of the steps array is the overview:
+**Step-through sequence** — one `<template data-step-info="n">` per step, `0` is the overview; the
+template content (markup allowed) is cloned into the panel. A plain-text alternative is a
+`<script type="application/json" data-steps>[{"t","p","x"}]</script>` array.
 ```html
 <div data-stepper>
   <figure><div class="fig"><svg class="d w-lg" viewBox="0 0 980 540" role="img" aria-label="…">
@@ -131,10 +135,11 @@ ticks and labels, and run the data-viz skill's palette validator if you have one
   </svg></div></figure>
   <div class="step-ctl"><button class="btn" data-step-prev>← Back</button><button class="btn on" data-step-next>Next →</button><button class="btn" data-step-all>Show all</button><span data-step-count></span></div>
   <div class="step-panel" data-step-panel aria-live="polite"></div>
-  <script type="application/json" data-steps>[{"t":"Nine steps","p":"Plain overview.","x":"Legend."},{"t":"Step 1","p":"Plain.","x":"<code>POST /x</code> · file.go:12"}]</script>
+  <template data-step-info="0"><h4>Nine steps</h4><p>Plain overview.</p><p class="tech">Solid lines stay inside the host.</p></template>
+  <template data-step-info="1"><h4>The client asks</h4><p>Plain sentence.</p><p class="tech"><code>POST /x</code> · file.go:12</p></template>
 </div>
 ```
-**Scenario switcher** — one diagram, states per scenario:
+**Scenario switcher** — one diagram, states per scenario; `out` values are plain text:
 ```html
 <div data-scenarios>
   <div class="sc-btns"><button class="btn" data-sc="ok">All up</button><button class="btn" data-sc="hub">Hub down</button></div>

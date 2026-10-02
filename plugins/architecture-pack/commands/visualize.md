@@ -4,7 +4,7 @@ allowed-tools:
   - Bash
 docs:
   status: draft
-  updated: 2026-10-01
+  updated: 2026-10-02
 ---
 
 # /visualize — explain a document or a topic as an interactive page
@@ -29,7 +29,7 @@ depend on the skill being picked from free text.
 
 This is a **thin proxy**. It parses `$ARGUMENTS`, checks the *shape* of the sources and flags, and
 delegates everything else to the `visual-explainer` skill
-(`plugins/core/skills/visual-explainer/SKILL.md`), which owns reading the source, the page plan,
+(`plugins/architecture-pack/skills/visual-explainer/SKILL.md`), which owns reading the source, the page plan,
 building from the shell, verification and delivery.
 
 It does **not** read the sources' content, choose visuals, write HTML, start a browser or publish
@@ -68,7 +68,7 @@ this command only for "here are sources that exist and flags that parse."
 
 ## Related
 
-- `plugins/core/skills/visual-explainer/SKILL.md` — the procedure, shell, scripts and checks.
+- `plugins/architecture-pack/skills/visual-explainer/SKILL.md` — the procedure, shell, scripts and checks.
 - `plugins/core/skills/html-reporting/SKILL.md` — agent reports in the house style, not explainers.
 - `plugins/design-pack/commands/design-implement.md` — the thin-proxy command format this file follows.
 

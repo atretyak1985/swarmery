@@ -56,12 +56,11 @@ A component in a project's own `.claude/` **wins** over a plugin component with 
 
 ## core — the mandatory baseline
 
-**What it is.** The vendor-neutral agent-development framework: a 13-agent judgment-style fleet, 38 progressively-disclosed skills, 9 commands, 18 hooks, plus the project-aware `agent-work` workspace CLI and the statusline.
+**What it is.** The vendor-neutral agent-development framework: a 13-agent judgment-style fleet, 36 progressively-disclosed skills, 8 commands, 18 hooks, plus the project-aware `agent-work` workspace CLI and the statusline.
 
 **What it can do.**
 - **Orchestration** — `@tech-lead` routes work by size (understand → plan → implement → independent review → close) across a 13-agent fleet: `planner`, `architect`, `researcher`, `implementation-agent`, `ui-developer`, `debugger`, `test-writer`, `test-runner`, `code-reviewer`, `security-auditor`, `verification-agent`, `system-improver` (see `plugins/core/AGENTS.md`).
 - **Everyday commands** — `/search`, `/find`, `/impact` (graph-aware with ripgrep fallback), `/code-quality`, `/test-coverage`, `/security-audit`, `/deps-check`, `/env-check`, `/migration-check`, `/refactor-plan`, `/run-plan`, `/new-feature-branch`, `/dashboard`, `/land`.
-- **Explainer pages** — `/visualize <doc.md>` (skill `visual-explainer`) turns a document or an explanation into one self-contained HTML page: diagrams, charts, glossary tooltips and a details drawer, measured at desktop and phone width in light and dark.
 - **Guardrails** — hooks for sensitive-file protection, approvals/liveness wiring for the control plane, and the graduation rule tooling that keeps components flowing project → pack → core.
 
 **How to work with it.** Enabled everywhere by definition; a project without core is telemetry-only in the dashboard. Templates resolve project-first (`.claude/templates/` overrides the pack's `templates/`).
@@ -133,9 +132,9 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 
 ---
 
-## architecture-pack — repo-wide architecture map
+## architecture-pack — architecture map and explainer pages
 
-**What it is.** The `/architecture-map` skill: produces `architecture-out/architecture-map.json` — a machine-readable contract with named layers, modules, and file-anchored end-to-end flows — plus a self-contained `architecture-map.html` viewer.
+**What it is.** Two self-contained HTML viewers. The `/architecture-map` skill produces `architecture-out/architecture-map.json` — a machine-readable contract with named layers, modules, and file-anchored end-to-end flows — plus a self-contained `architecture-map.html` viewer. The `/visualize` command (skill `visual-explainer`) turns a document or an explanation into one explainer page: a plain-language thesis, a diagram, chart or table per chapter, glossary tooltips and a details drawer.
 
 **Requires.** No extra CLI. Works standalone; when `graphify-out/graph.json` is present the skill uses it as a curated grouping source and falls back to direct repo exploration if it trails HEAD.
 
@@ -144,6 +143,7 @@ Per-session kill switches: `SWARMERY_GRAFT_PROMPT=0` and `SWARMERY_GRAFT_BLAST=0
 - **Machine contract** — `architecture-map.json` (schema v1) is consumed by agents that need a repo-wide mental model: layers, modules with `keyFiles`/`exports`/`dependencies`, and 5–10 named flows.
 - **Self-contained viewer** — `architecture-map.html` is rendered by the bundled `scripts/build.sh`; never write HTML by hand.
 - **Artifacts** land in `architecture-out/` (git-ignored by convention).
+- **Explainer pages** — `/visualize <doc.md>` starts from a shell that owns navigation, light/dark theming, the drawer, tooltips, tabs, a step-through player and scenario switches (a project can override it at `.claude/templates/explainer-shell.html`), then measures the page with `check.mjs` and `probe.js` at desktop and phone width in both themes, served by a loopback, one-page server. System fonts by default, so the file works offline. Needs `node`.
 
 **How to work with it.**
 1. Enable `architecture-pack` for the project (plugin toggles or `settings.json`).

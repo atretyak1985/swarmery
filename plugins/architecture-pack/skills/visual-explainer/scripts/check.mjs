@@ -36,7 +36,7 @@ const lineOf = (idx) => html.slice(0, idx).split('\n').length;
 
 // Strip <template> and <script> bodies for structural checks that must not
 // count drawer content twice or match strings inside JS.
-const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script[^>]*>/gi;
 const templateRe = /<template\b[^>]*>[\s\S]*?<\/template>/gi;
 const withoutScripts = html.replace(scriptRe, (m) => ' '.repeat(m.length));
 
@@ -97,6 +97,7 @@ for (const m of html.matchAll(scriptRe)) {
 // ---------- external stylesheets ----------
 for (const m of withoutScripts.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/gi)) {
   if (!/^https:\/\/fonts\.googleapis\.com\//.test(m[1])) add('WARN', 'css-host', `stylesheet ${m[1]} is not from Google Fonts — inline it`);
+  else add('WARN', 'external-font', 'web fonts load from Google: every viewer\'s browser contacts it and the file is not offline-ready — keep it only for a page published online with the user\'s consent');
 }
 
 // ---------- theme ----------

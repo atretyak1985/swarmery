@@ -6,10 +6,10 @@
 <!-- ═══ EDIT: page name — two to four words, a name, never "Name: explainer" ═══ -->
 <title>Page name</title>
 <meta name="description" content="One sentence: what this page explains and for whom.">
-<!-- ═══ EDIT: fonts — pick per subject; every face must cover the page language (Cyrillic needs cyrillic-ext) ═══ -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Unbounded:wght@400;500;600&display=swap">
+<!-- ═══ FONTS: system faces by default — the file makes no network request and works offline.
+     Web fonts are opt-in for a page published online, when the user accepts that every viewer's browser
+     contacts the font host: add the font <link> here (or embed the faces as data: URIs) and name them first
+     in --f-display / --f-body. Every face must cover the page language. ═══ -->
 <style>
 /* ═══ EDIT: TOKENS — re-derive the palette and type for every subject. Keep the token NAMES.
    Layout: <one line on the layout concept>.
@@ -29,9 +29,9 @@
   --tip-bg:#111a2c; --tip-fg:#f3f5f9; --tip-accent:#f2b44a;
   --on-fill:#ffffff;
   --shadow:0 1px 2px rgba(17,26,44,.06),0 10px 28px rgba(17,26,44,.10);
-  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
-  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --f-display:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -482,8 +482,9 @@ footer.foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);fo
 {"sample": ["dotted term", "A word a newcomer would not know, defined in one plain sentence."]}
 </script>
 
-<!-- ═══ DATA: drawer entries for [data-d], when JSON is easier than a <template>.
-     { "key": { "k": "kicker", "t": "Title", "html": "<p>…</p>" } }. Write "<\/" for "</" inside strings. ═══ -->
+<!-- ═══ DATA: drawer entries for [data-d] that are generated (table rows, matrix items) — plain text, no markup:
+     { "key": { "k": "kicker", "t": "Title", "body": [ {"p": "…"}, {"dl": [["term", "value"]]}, {"ul": ["…"]},
+       {"h": "…"}, {"pre": "…"}, {"note": "…"}, {"src": "file:line"} ] } }. Use a <template> when you need markup. ═══ -->
 <script type="application/json" id="details">
 {}
 </script>
@@ -499,8 +500,8 @@ footer.foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);fo
   [data-t=key]            tooltip from #glossary
   [data-d=key]            drawer from <template id="d-key"> or #details
   [data-tabs]             group: [data-tab=k] buttons, [data-panel=k] panels, [data-tab-trigger=k] SVG lanes
-  [data-stepper]          group: svg [data-step=n], [data-step-prev|next|all|count|panel], <script type="application/json" data-steps>[{t,p,x}…] (index 0 = overview)
-  [data-scenarios]        group: [data-sc=k] buttons, svg [data-el=id], [data-sc-out=field] outputs, <script type="application/json" data-scenario-map>{k:{down:[],off:[],out:{field:"text"}}}
+  [data-stepper]          group: svg [data-step=n], [data-step-prev|next|all|count|panel], and either <template data-step-info="n"> (markup, index 0 = overview) or <script type="application/json" data-steps>[{t,p,x}…] (plain text)
+  [data-scenarios]        group: [data-sc=k] buttons, svg [data-el=id], [data-sc-out=field] outputs (plain text), <script type="application/json" data-scenario-map>{k:{down:[],off:[],out:{field:"text"}}}
   [data-filter]           group: [data-f=all|tag] buttons, items with [data-tags="a b"]
 ═══ -->
 <script>
@@ -509,26 +510,13 @@ footer.foot{margin-top:72px;padding-top:20px;border-top:1px solid var(--line);fo
 var $ = function (s, r) { return (r || document).querySelector(s); };
 var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-function sanitizeHTML(html) {
-  var tpl = document.createElement('template');
-  tpl.innerHTML = String(html || '');
-  var blocked = 'script,iframe,object,embed,link,meta,base,form';
-  $$(blocked, tpl.content).forEach(function (n) { n.remove(); });
-  $$('*', tpl.content).forEach(function (el) {
-    Array.prototype.slice.call(el.attributes).forEach(function (a) {
-      var name = a.name.toLowerCase();
-      var value = String(a.value || '').trim();
-      if (name.indexOf('on') === 0) {
-        el.removeAttribute(a.name);
-        return;
-      }
-      if ((name === 'href' || name === 'src' || name === 'xlink:href') && /^javascript:/i.test(value)) {
-        el.removeAttribute(a.name);
-      }
-    });
-  });
-  return tpl.innerHTML;
+// No HTML strings are ever parsed here: page text goes in through textContent, and markup
+// only arrives by cloning <template> content the page author wrote.
+function node(tag, cls, text) {
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = String(text);
+  return n;
 }
 function island(el) {
   if (!el) return null;
@@ -543,8 +531,9 @@ var rail = $('#railList'), chipnav = $('#chipnav'), topSec = $('#topSec');
 sections.forEach(function (s, i) {
   var name = s.getAttribute('data-name') || (($('h2', s) || $('h1', s) || {}).textContent || s.id);
   var n = String(i + 1).padStart(2, '0');
-  rail.insertAdjacentHTML('beforeend', '<li><a href="#' + s.id + '"><span class="n">' + n + '</span>' + esc(name) + '</a></li>');
-  chipnav.insertAdjacentHTML('beforeend', '<a href="#' + s.id + '">' + esc(name) + '</a>');
+  var a = node('a'); a.href = '#' + s.id; a.append(node('span', 'n', n), document.createTextNode(name));
+  var li = node('li'); li.append(a); rail.append(li);
+  var chip = node('a', null, name); chip.href = '#' + s.id; chipnav.append(chip);
 });
 var railLinks = $$('a', rail), chipLinks = $$('a', chipnav), lastIdx = -1;
 function currentIndex() { var idx = 0; sections.forEach(function (s, i) { if (s.getBoundingClientRect().top <= 110) idx = i; }); return idx; }
@@ -554,7 +543,7 @@ function markActive() {
   railLinks.forEach(function (a, j) { a.classList.toggle('on', j === i); if (j === i) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
   chipLinks.forEach(function (a, j) { a.classList.toggle('on', j === i); if (j === i && chipnav.offsetParent) chipnav.scrollTo({ left: a.offsetLeft - 16, behavior: reduce ? 'auto' : 'smooth' }); });
   var nm = sections[i].getAttribute('data-name') || '';
-  topSec.innerHTML = '<span class="mono">' + String(i + 1).padStart(2, '0') + '</span> · <b>' + esc(nm) + '</b>';
+  topSec.replaceChildren(node('span', 'mono', String(i + 1).padStart(2, '0')), document.createTextNode(' · '), node('b', null, nm));
 }
 function stepSection(dir) { var i = Math.max(0, Math.min(sections.length - 1, currentIndex() + dir)); if (sections[i]) sections[i].scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }); }
 var prog = $('#progress'), ticking = false;
@@ -571,12 +560,27 @@ window.addEventListener('resize', onScroll);
 
 /* drawer */
 var drawer = $('#drawer'), drK = $('#drKicker'), drT = $('#drTitle'), drB = $('#drBody'), scrim = $('#scrim'), lastFocus = null;
+// #details entries: { "k": "kicker", "t": "Title", "body": [ {"p": "…"} | {"h": "…"} | {"ul": ["…"]} |
+//   {"dl": [["term", "value"]]} | {"pre": "…"} | {"note": "…"} | {"src": "…"} ] } — all plain text.
+function renderDetail(e) {
+  var f = document.createDocumentFragment();
+  (e.body || []).forEach(function (b) {
+    if (b.p != null) f.append(node('p', null, b.p));
+    else if (b.h != null) f.append(node('h4', null, b.h));
+    else if (b.note != null) f.append(node('p', 'note', b.note));
+    else if (b.src != null) f.append(node('div', 'src', b.src));
+    else if (b.pre != null) f.append(node('pre', null, b.pre));
+    else if (b.ul) { var ul = node('ul'); b.ul.forEach(function (x) { ul.append(node('li', null, x)); }); f.append(ul); }
+    else if (b.dl) { var dl = node('dl'); b.dl.forEach(function (r) { dl.append(node('dt', null, r[0]), node('dd', null, r[1])); }); f.append(dl); }
+  });
+  return f;
+}
 function openD(key) {
-  var c = null, tpl = document.getElementById('d-' + key);
-  if (tpl) c = { k: tpl.getAttribute('data-k'), t: tpl.getAttribute('data-title'), html: tpl.innerHTML };
-  else if (DETAILS[key]) c = DETAILS[key];
-  if (!c) { console.warn('[explainer] no drawer content for', key); return; }
-  drK.textContent = c.k || ''; drT.textContent = c.t || ''; drB.innerHTML = sanitizeHTML(c.html || ''); drB.scrollTop = 0;
+  var tpl = document.getElementById('d-' + key), entry = DETAILS[key], k, t, body;
+  if (tpl && tpl.content) { k = tpl.getAttribute('data-k'); t = tpl.getAttribute('data-title'); body = tpl.content.cloneNode(true); }
+  else if (entry) { k = entry.k; t = entry.t; body = renderDetail(entry); }
+  else { console.warn('[explainer] no drawer content for', key); return; }
+  drK.textContent = k || ''; drT.textContent = t || ''; drB.replaceChildren(body); drB.scrollTop = 0;
   wire(drB);
   if (!drawer.classList.contains('open')) lastFocus = document.activeElement;
   drawer.classList.add('open'); drawer.removeAttribute('inert'); drawer.setAttribute('aria-hidden', 'false'); scrim.classList.add('show');
@@ -603,7 +607,7 @@ function placeTip(el) {
 }
 function showTip(el) {
   var g = GLOSSARY[el.getAttribute('data-t')]; if (!g) return;
-  tip.innerHTML = '<b>' + esc(g[0]) + '</b>' + esc(g[1]); tip.classList.add('show'); tipFor = el; placeTip(el);
+  tip.replaceChildren(node('b', null, g[0]), document.createTextNode(g[1])); tip.classList.add('show'); tipFor = el; placeTip(el);
 }
 function hideTip() { tip.classList.remove('show'); tipFor = null; }
 document.addEventListener('mouseover', function (e) { var t = e.target.closest && e.target.closest('.term'); if (t && t !== tipFor) showTip(t); });
@@ -661,22 +665,37 @@ $$('[data-tabs]').forEach(function (g) {
 
 /* stepper */
 $$('[data-stepper]').forEach(function (g) {
-  var steps = island($('script[data-steps]', g)) || [], svg = $('svg', g), cur = 0, last = steps.length - 1;
+  // Steps come from <template data-step-info="n"> (markup allowed, cloned) or, failing that, from
+  // <script type="application/json" data-steps>[{t,p,x}] rendered as plain text. Index 0 is the overview.
+  var infos = $$('template[data-step-info]', g);
+  var steps = infos.length ? [] : (island($('script[data-steps]', g)) || []);
+  var svg = $('svg', g), cur = 0, last = (infos.length || steps.length) - 1;
+  function infoFor(i) { return infos.filter(function (t) { return +t.getAttribute('data-step-info') === i; })[0]; }
+  function titleFor(i) {
+    var t = infoFor(i), h = t && t.content.querySelector('h4');
+    return h ? h.textContent : String((steps[i] || {}).t || '');
+  }
   var nodes = $$('[data-step]', g), panel = $('[data-step-panel]', g), count = $('[data-step-count]', g);
   var prev = $('[data-step-prev]', g), next = $('[data-step-next]', g), all = $('[data-step-all]', g);
   function set(i) {
     cur = Math.max(0, Math.min(last, i));
     if (svg) svg.classList.toggle('stepping', cur > 0);
     nodes.forEach(function (n) { n.classList.toggle('cur', +n.getAttribute('data-step') === cur); });
-    var s = steps[cur] || {};
-    if (panel) panel.innerHTML = '<div class="k">' + (cur ? cur + ' / ' + last : esc(s.k || 'overview')) + '</div><h4>' + esc(s.t || '') + '</h4><p>' + esc(s.p || '') + '</p>' + (s.x ? '<p class="tech">' + esc(s.x) + '</p>' : '');
+    if (panel) {
+      var f = document.createDocumentFragment(), tpl = infoFor(cur), s = steps[cur] || {};
+      f.append(node('div', 'k', cur ? cur + ' / ' + last : (s.k || 'overview')));
+      if (tpl) f.append(tpl.content.cloneNode(true));
+      else { f.append(node('h4', null, s.t || ''), node('p', null, s.p || '')); if (s.x) f.append(node('p', 'tech', s.x)); }
+      panel.replaceChildren(f);
+      wire(panel);
+    }
     if (count) count.textContent = cur ? cur + ' / ' + last : '';
     if (prev) prev.disabled = cur === 0;
     if (next) next.disabled = cur === last;
   }
   nodes.forEach(function (n) {
     var i = +n.getAttribute('data-step');
-    if (!n.hasAttribute('aria-label') && steps[i]) n.setAttribute('aria-label', i + ': ' + esc(String(steps[i].t || '')));
+    if (!n.hasAttribute('aria-label') && titleFor(i)) n.setAttribute('aria-label', i + ': ' + titleFor(i));
     n.addEventListener('click', function () { set(i); });
   });
   if (prev) prev.addEventListener('click', function () { set(cur - 1); });
