@@ -36,7 +36,7 @@ const lineOf = (idx) => html.slice(0, idx).split('\n').length;
 
 // Strip <template> and <script> bodies for structural checks that must not
 // count drawer content twice or match strings inside JS.
-const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const scriptRe = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
 const templateRe = /<template\b[^>]*>[\s\S]*?<\/template>/gi;
 const withoutScripts = html.replace(scriptRe, (m) => ' '.repeat(m.length));
 
