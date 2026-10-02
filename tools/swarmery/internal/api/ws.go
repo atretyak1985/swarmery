@@ -87,8 +87,11 @@ func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// The daemon is a localhost tool; the vite dev server proxies /api
-		// from another origin, so cross-origin upgrades must be allowed.
+		// Origin is enforced by requireLocalOrigin at the route (origin.go):
+		// the daemon's own origin or an opted-in one, and no Origin at all for
+		// non-browser clients. The library's own Host-derived check is opened so
+		// it cannot re-derive a different policy (the vite dev proxy forwards the
+		// dev origin, which `make dev` opts in via SWARMERY_TRUSTED_ORIGINS).
 		OriginPatterns: []string{"*"},
 	})
 	if err != nil {

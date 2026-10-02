@@ -306,7 +306,8 @@ func usage() {
        unset: serve reads ~/.claude/projects only, backfill behaves as 'auto')
        SWARMERY_ONBOARD_ROOTS (comma-separated allow-list; enables POST /api/projects/onboard), SWARMERY_STATUSLINE_SRC
        SWARMERY_TRUSTED_ORIGINS (comma-separated extra browser origins, scheme://host[:port], that
-       pass the cross-origin fence on writes; empty = localhost/127.0.0.1/::1 only)
+       pass the cross-origin fence on writes and /api/ws, and whose hosts pass the Host fence
+       on every route; empty = the daemon's own origin only: loopback on the bound port)
        SWARMERY_SETTINGS_OVERLAYS (descriptor of settings files that also apply to given project
        roots; default ~/.swarmery/overlays.json — missing = repo-only plugin detection)
        SWARMERY_NOTIFY_URL, SWARMERY_NOTIFY_EVENTS, SWARMERY_NOTIFY_TEMPLATE, SWARMERY_NOTIFY_TELEGRAM_CHAT
@@ -1321,8 +1322,10 @@ func onboardRoots() []string {
 }
 
 // trustedOrigins parses SWARMERY_TRUSTED_ORIGINS (comma-separated browser
-// origins, scheme://host[:port]) into the opt-in extra-origin allow-list for
-// the D4 CSRF fence. Empty/unset ⇒ only localhost/127.0.0.1/::1 pass.
+// origins, scheme://host[:port]) into the opt-in allow-list for the D4
+// origin and Host fences. Empty/unset ⇒ only the daemon's own origin passes:
+// the loopback names on the port it serves, derived per request from the
+// listener (internal/api/origin.go).
 func trustedOrigins() []string {
 	v := os.Getenv("SWARMERY_TRUSTED_ORIGINS")
 	if strings.TrimSpace(v) == "" {
@@ -1512,7 +1515,8 @@ func cmdServe(args []string) error {
 	dbPath := dbFlag(fs)
 	port := fs.Int("port", envPort(), "HTTP port (env: SWARMERY_PORT)")
 	// D4 hardening: loopback by default; --bind is the conscious override.
-	bind := fs.String("bind", "127.0.0.1", "listen address (default loopback; set explicitly to expose beyond this machine)")
+	bind := fs.String("bind", "127.0.0.1", "listen address (default loopback; set explicitly to expose beyond this machine — "+
+		"the daemon is then reached by that address literal, or by a name opted in with SWARMERY_TRUSTED_ORIGINS)")
 	noIngest := fs.Bool("no-ingest", false, "serve the API only, without the live ingest pipeline")
 	approvalTimeout := fs.Duration("approval-timeout", envApprovalTimeout(),
 		"how long a permission request stays answerable from the dashboard before fail-open to the terminal prompt (env: SWARMERY_APPROVAL_TIMEOUT)")
@@ -1926,9 +1930,11 @@ func cmdServe(args []string) error {
 	if _, err := svc.HealStale(bootStart); err != nil {
 		log.Printf("warning: approvals heal on startup: %v", err)
 	}
-	// D4 CSRF fence: the loopback origins are built in; any friendly alias the
-	// daemon is reached by (http://swarmery:7777 behind a hosts entry, a compose
-	// service name) is trusted only when the operator opts it in here.
+	// D4 fences (origin + Host): the daemon's own origin — the loopback names on
+	// the port it serves, derived per request from the listener — is built in;
+	// any other name or port the daemon is reached by (http://swarmery:7777
+	// behind a hosts entry, a compose service name, a port-forward) is trusted
+	// only when the operator opts it in here.
 	api.AttachTrustedOrigins(trustedOrigins())
 	go svc.RunSweeper(context.Background())
 

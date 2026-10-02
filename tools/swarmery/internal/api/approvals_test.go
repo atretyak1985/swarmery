@@ -310,7 +310,8 @@ func TestResolveConflictAndNotFound(t *testing.T) {
 }
 
 // TestOriginMiddleware: foreign browser Origins are rejected on ALL write
-// endpoints; localhost Origins and no-Origin (curl/shim) pass (D4).
+// endpoints — localhost on another port included; the daemon's own origins
+// and no-Origin (curl/shim) pass (D4).
 func TestOriginMiddleware(t *testing.T) {
 	srv, _, _ := approvalsTestServer(t, approvals.Options{})
 	endpoints := []string{"/api/hooks/stop", "/api/approvals/1"}
@@ -336,8 +337,10 @@ func TestOriginMiddleware(t *testing.T) {
 		t.Errorf("permission-request foreign Origin status = %d, want 403", resp.StatusCode)
 	}
 
-	// Local origins pass through to the handler (which then 202s / 404s).
-	for _, origin := range []string{"http://localhost:5173", "http://127.0.0.1:7777"} {
+	// The daemon's OWN origins — the loopback names on the port it serves —
+	// pass through to the handler (which then 202s).
+	port, other := serverPort(t, srv), otherPort(t, srv)
+	for _, origin := range []string{srv.URL, "http://localhost:" + port, "http://[::1]:" + port} {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/hooks/stop", strings.NewReader(`{}`))
 		req.Header.Set("Origin", origin)
 		resp, err := http.DefaultClient.Do(req)
@@ -347,6 +350,20 @@ func TestOriginMiddleware(t *testing.T) {
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusAccepted {
 			t.Errorf("stop with Origin %s: status = %d, want 202", origin, resp.StatusCode)
+		}
+	}
+	// "localhost" on another port is a different local process (a second dev
+	// server, a port-forward): foreign, 403 — the hole this fence closes.
+	for _, origin := range []string{"http://localhost:" + other, "http://127.0.0.1:" + other} {
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/hooks/stop", strings.NewReader(`{}`))
+		req.Header.Set("Origin", origin)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("stop with Origin %s: status = %d, want 403 (localhost on a foreign port)", origin, resp.StatusCode)
 		}
 	}
 	// No Origin (the shim, curl) passes.

@@ -77,8 +77,9 @@ func CmdInstall(args []string) error {
 			"a second account's sessions and usage visible (env: SWARMERY_PROJECTS_ROOTS)")
 	trustedOrigins := fs.String("trusted-origins", "",
 		"comma-separated extra browser origins (scheme://host[:port]) allowed through the "+
-			"cross-origin fence on write endpoints — set it when the dashboard is reached by a "+
-			"friendly alias instead of localhost (env: SWARMERY_TRUSTED_ORIGINS; empty = loopback only)")
+			"cross-origin fence on writes and /api/ws, and whose hosts pass the Host fence on every "+
+			"route — set it when the dashboard is reached by any name or port other than the daemon's "+
+			"own loopback address (env: SWARMERY_TRUSTED_ORIGINS; empty = the daemon's own origin only)")
 	claudeConfigDir := fs.String("claude-config-dir", "",
 		"CLAUDE_CONFIG_DIR baked into the plist — the account every daemon-spawned run uses when a "+
 			"project has no binding. Set it when the operator's own sessions always export one: Claude "+

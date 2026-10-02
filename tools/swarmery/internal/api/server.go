@@ -82,7 +82,10 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("embedded SPA: %w", err)
 	}
-	mux.Handle("/", spaHandler(dist))
+	// The SPA shell is fenced like the API (origin.go): one rule for the whole
+	// daemon — a request must name it in Host — is simpler to reason about
+	// than a public shell whose every fetch then fails.
+	mux.Handle("/", requireLocalHost(spaHandler(dist)))
 	return mux, nil
 }
 

@@ -6,7 +6,15 @@ import "net/http"
 //
 // Parallel-wave contract: each wave adds routes ONLY inside its own section
 // below, so branches never conflict in one spot.
-func Routes(mux *http.ServeMux, h *Handler) {
+//
+// D4 Host fence: the routes are registered on an inner mux mounted under
+// /api/ behind requireLocalHost (origin.go), so a request whose Host header
+// does not name this daemon (DNS rebinding) is refused before any handler —
+// reads included — runs. Writes additionally sit behind requireLocalOrigin.
+func Routes(root *http.ServeMux, h *Handler) {
+	mux := http.NewServeMux()
+	root.Handle("/api/", requireLocalHost(mux))
+
 	// ── core: vertical slice (this file's owner) ──
 	// The PreModelSwitch gate's only read: has this model a recorded verdict?
 	mux.HandleFunc("GET /api/models/{id}/validation", h.modelValidation)
@@ -73,7 +81,11 @@ func Routes(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/sessions/{id}/extract-tasks", requireLocalOrigin(h.extractSessionTasks))
 
 	// wave A: WS
-	mux.HandleFunc("GET /api/ws", h.ws)
+	// The live stream carries raw prompts, tool input and approval requestJson,
+	// so the upgrade sits behind the same origin fence as every write: a page on
+	// a foreign origin (another local port included) cannot subscribe, while an
+	// Origin-less client (the console, notch) still can.
+	mux.HandleFunc("GET /api/ws", requireLocalOrigin(h.ws))
 
 	// wave C: stats
 	mux.HandleFunc("GET /api/stats/today", h.statsToday)

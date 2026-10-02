@@ -13,8 +13,15 @@ GET /api/ws        → WebSocket upgrade (RFC 6455), no subprotocol
 ```
 
 - Same host/port as the REST API (default `localhost:7777`).
-- Cross-origin upgrades are allowed (the vite dev server proxies from another
-  origin); the daemon is a localhost-only tool.
+- The upgrade sits behind the same origin fence as every write (D4,
+  `internal/api/origin.go`): a browser `Origin` must be the daemon's own —
+  scheme, host **and** port — or one opted in via `SWARMERY_TRUSTED_ORIGINS`
+  (`make dev` opts the vite dev origin in, since the proxy forwards it). Any
+  other Origin, `localhost` on another port included, is `403` before the
+  upgrade: the stream carries raw prompts, tool input and approval
+  `requestJson`. A dial with no `Origin` (`swarmery console`, the notch
+  companion) upgrades — the fence is against pages, not local processes. The
+  `Host` header must name the daemon too, as on every route.
 - The client never sends application frames; anything it sends is discarded.
 - If the daemon runs without the ingest pipeline (`serve --no-ingest`), the
   endpoint returns `503` instead of upgrading.
