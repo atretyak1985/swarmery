@@ -36,6 +36,12 @@ const DefaultEffort = "high"
 // rebuild. internal/claudeflags owns the resolution and the "off" escape hatch.
 const effortEnv = "SWARMERY_IMPROVE_EFFORT"
 
+// resolveClaudeBin locates the claude binary for ClaudeRunner.Run. A package
+// var only so tests can substitute a resolver that NEVER finds a real
+// binary — claudebin.Resolve also probes well-known install dirs outside
+// PATH (for launchd), which emptying PATH alone cannot neutralize.
+var resolveClaudeBin = claudebin.Resolve
+
 // ClaudeRunner runs `claude -p --output-format text` with the prompt on
 // stdin. Binary resolution is a plain PATH lookup — the same pattern as
 // internal/toolproc launching `serena` (the daemon's launchd/service PATH
@@ -64,7 +70,7 @@ func (r ClaudeRunner) Run(ctx context.Context, prompt string) (string, error) {
 	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
 	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT
 	// under the service while working in the operator's shell. Resolve explicitly.
-	bin, err := claudebin.Resolve()
+	bin, err := resolveClaudeBin()
 	if err != nil {
 		return "", err
 	}

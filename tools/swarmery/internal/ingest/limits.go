@@ -13,8 +13,11 @@ package ingest
 // the fixed-vocabulary scope and the two uuids.
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,6 +75,35 @@ const breakerRecency = 10 * time.Minute
 // beside a fixture's timestamp.
 var breakerClock = time.Now
 
+// breakerProbe is the confirming probe tripBreaker consults before opening an
+// AUTH breaker from a transcript — claudeprobe.Probe in production. A
+// transcript is not necessarily a run the daemon spawned (a leaked test
+// process, a terminal session with a broken env), so an auth failure line
+// alone is not trusted; a quota failure is — LimitScope already reads the
+// line's own wording, nothing to confirm.
+var breakerProbe = claudeprobe.Probe
+
+// pendingAuthTrip is an auth-kind breaker opening deferred until a confirming
+// probe runs, after the tail's write transaction has committed.
+type pendingAuthTrip struct {
+	keys       []string
+	reason     string
+	configDir  string
+	observedAt time.Time
+}
+
+// probeConfigDir derives the CLAUDE_CONFIG_DIR a transcript's account was
+// discovered under, mirroring AccountFor's own path math: originRoot is
+// "<configDir>/projects", so configDir is its parent. "" (the default
+// account's own config dir) when originRoot carries no root context.
+func probeConfigDir(originRoot string) string {
+	root := strings.TrimSpace(originRoot)
+	if root == "" {
+		return ""
+	}
+	return filepath.Dir(filepath.Clean(root))
+}
+
 // tripBreaker opens account's circuit breaker when r — already known to be a
 // flagged API-error record — IS an auth or quota failure line
 // (claudeprobe.AccountFailure; an `API Error:` line never trips) and its
@@ -104,6 +136,17 @@ func (in *ingester) tripBreaker(account string, r *record, text string) error {
 	if account != DefaultAccount && account == UnboundAccount() {
 		keys = append(keys, DefaultAccount)
 	}
+	if kind == claudeprobe.FailureAuth {
+		// An auth line alone is not trusted — it may come from a transcript the
+		// daemon never spawned (a leaked test process, a terminal session with a
+		// broken env). Defer the opening until a confirming probe, run AFTER this
+		// tail's write transaction commits, also says the account isn't runnable.
+		in.pendingAuthTrips = append(in.pendingAuthTrips, pendingAuthTrip{
+			keys: keys, reason: reason, configDir: probeConfigDir(in.originRoot),
+			observedAt: now,
+		})
+		return nil
+	}
 	for _, key := range keys {
 		changed, err := store.TripAccountBreaker(in.tx, key, kind, reason, store.BreakerSourceTranscript, scope, now)
 		if err != nil {
@@ -116,6 +159,40 @@ func (in *ingester) tripBreaker(account string, r *record, text string) error {
 		if err := findings.Upsert(in.tx, store.AccountBreakerTarget(key), store.AccountBreakerRule,
 			"error", store.AccountBreakerMessage(kind)); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// confirmPendingAuthTrips runs breakerProbe against each deferred auth trip's
+// config dir, AFTER the tail's write transaction has committed — see
+// pendingAuthTrip's doc for why it can't run inside that transaction. Only a
+// confirmed StatusNoLogin opens the breaker; StatusReady and StatusUnknown
+// both fail open (an inconclusive probe must never pause a working account),
+// matching runcore's own rule for an inconclusive pre-flight probe.
+func confirmPendingAuthTrips(db *sql.DB, trips []pendingAuthTrip) error {
+	for _, trip := range trips {
+		result := breakerProbe(context.Background(), trip.configDir)
+		if result.Status != claudeprobe.StatusNoLogin {
+			log.Printf("ingest: deferred auth trip NOT confirmed account=%v status=%s reason=%s",
+				trip.keys, result.Status, result.Reason)
+			continue
+		}
+		for _, key := range trip.keys {
+			changed, err := store.TripAccountBreaker(db, key, claudeprobe.FailureAuth, trip.reason,
+				store.BreakerSourceTranscript, "", trip.observedAt)
+			if err != nil {
+				return err
+			}
+			if !changed {
+				continue
+			}
+			log.Printf("ingest: account breaker OPEN account=%s kind=%s source=transcript (confirmed)",
+				key, claudeprobe.FailureAuth)
+			if err := findings.Upsert(db, store.AccountBreakerTarget(key), store.AccountBreakerRule,
+				"error", store.AccountBreakerMessage(claudeprobe.FailureAuth)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
