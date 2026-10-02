@@ -134,9 +134,15 @@ load them live for one session:
 claude --plugin-dir plugins/core                 # repeatable: --plugin-dir plugins/infra-pack …
 ```
 
-`scripts/sync-cache.sh` rsyncs local `plugins/**` into the installed cache (designed
-to run from a `.git/hooks/post-commit` hook; can also be run manually) — useful after
-committing, but `--plugin-dir` remains the way to test uncommitted work.
+`scripts/sync-cache.sh` rsyncs local `plugins/**` into the installed cache. The
+hook that calls it is versioned at `scripts/git-hooks/post-commit` — install once
+per clone with `git config core.hooksPath scripts/git-hooks`. The hook, and the
+script itself when run manually, only fire for a commit/checkout in the **primary
+worktree on `main`**: a linked worktree (daemon phase runs, plan runs, subagent
+worktrees) or any other branch refuses and exits 0, so unmerged plugin code never
+reaches the installed caches. Override a deliberate "test my branch live" run with
+`--force` or `SWARMERY_SYNC_CACHE_FORCE=1`; `--plugin-dir` remains the preferred way
+to test uncommitted or branch work live without touching any installed cache.
 
 Never re-register the local checkout as a marketplace: `marketplace.json` `name` is
 `swarmery`, and a local-path registration would **replace** the GitHub source globally,

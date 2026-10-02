@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# scripts/git-hooks/post-commit — versioned post-commit hook for this repo.
+# Install with: git config core.hooksPath scripts/git-hooks
+#
+# Thin caller: if the commit touched plugins/, run scripts/sync-cache.sh with
+# no flags so its own guard applies (primary worktree + main branch only; a
+# linked worktree or a feature branch commit refuses and exits 0). The guard
+# lives in the script, not here, so a stale copy of this hook can't bypass it.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^plugins/'; then
+  bash "$REPO_ROOT/scripts/sync-cache.sh"
+fi

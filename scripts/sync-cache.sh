@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 # scripts/sync-cache.sh — sync local plugins/ edits into the Claude Code plugin cache.
-# Runs automatically via .git/hooks/post-commit whenever plugins/** changes.
+# Runs automatically via the versioned post-commit hook (scripts/git-hooks/post-commit,
+# installed via `git config core.hooksPath scripts/git-hooks`) whenever plugins/** changes.
 # Can also be run manually: bash scripts/sync-cache.sh
+#
+# GUARD. Refuses to run (prints why, exits 0) unless BOTH hold:
+#   - this is the PRIMARY worktree (`git rev-parse --absolute-git-dir` resolves
+#     to the same path as `git rev-parse --git-common-dir`, i.e. not a linked
+#     worktree created by a daemon phase run, a plan run, or a subagent);
+#   - HEAD is on `main`.
+# A linked worktree or a feature branch holds unreviewed/unmerged plugin code —
+# syncing that into every installed cache on the machine means every Claude
+# Code session on this box runs it, reviewed or not. Override for a deliberate
+# "test my branch live" run with `--force` or `SWARMERY_SYNC_CACHE_FORCE=1`;
+# `claude --plugin-dir <plugin>` remains the preferred way to try uncommitted
+# plugin work without touching any installed cache at all.
 #
 # WHERE IT WRITES. Only into the version directory a config dir has actually
 # INSTALLED, as recorded in <config-dir>/plugins/installed_plugins.json — and
@@ -19,12 +32,43 @@
 # the installed version is not the source version.
 #
 # Overrides (tests): SWARMERY_PLUGINS_DIR (source tree), SWARMERY_CONFIG_DIRS
-# (space-separated config dirs instead of the $HOME glob).
+# (space-separated config dirs instead of the $HOME glob), SWARMERY_REPO_ROOT
+# (repo root to run the guard against, instead of this script's own location —
+# lets tests point the guard at a disposable fixture repo).
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FORCE=0
+args=()
+for a in "$@"; do
+  if [ "$a" = "--force" ]; then
+    FORCE=1
+  else
+    args+=("$a")
+  fi
+done
+[ "${#args[@]}" -gt 0 ] && set -- "${args[@]}" || set --
+[ "${SWARMERY_SYNC_CACHE_FORCE:-0}" = "1" ] && FORCE=1
+
+REPO_ROOT="${SWARMERY_REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 PLUGINS_DIR="${SWARMERY_PLUGINS_DIR:-$REPO_ROOT/plugins}"
 MARKETPLACE="swarmery"
+
+if [ "$FORCE" -ne 1 ]; then
+  ABS_GIT_DIR="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --absolute-git-dir 2>/dev/null || true)"
+  ABS_GIT_COMMON_DIR="$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
+  if [ -z "$ABS_GIT_DIR" ] || [ "$ABS_GIT_DIR" != "$ABS_GIT_COMMON_DIR" ]; then
+    echo "sync-cache: refusing to run — $REPO_ROOT is a linked worktree, not the primary worktree." >&2
+    echo "sync-cache: use \`claude --plugin-dir <plugin>\` to try uncommitted plugin work, or re-run with --force / SWARMERY_SYNC_CACHE_FORCE=1 to sync this worktree's content deliberately." >&2
+    exit 0
+  fi
+  if [ "$BRANCH" != "main" ]; then
+    echo "sync-cache: refusing to run — HEAD is on '${BRANCH:-detached}', not main." >&2
+    echo "sync-cache: use \`claude --plugin-dir <plugin>\` to try uncommitted plugin work, or re-run with --force / SWARMERY_SYNC_CACHE_FORCE=1 to sync this branch's content deliberately." >&2
+    exit 0
+  fi
+fi
 
 command -v node >/dev/null 2>&1 || { echo "sync-cache: node is required to read installed_plugins.json" >&2; exit 1; }
 
