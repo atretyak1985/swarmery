@@ -1,0 +1,5 @@
+{
+  "gitlab-ci-specialist": "ops",
+  "helm-deployment": "ops",
+  "keycloak-specialist": "ops"
+}

@@ -62,6 +62,12 @@ type agentRosterRow struct {
 	Model       *string `json:"model"`
 	Path        string  `json:"path"`
 	Description *string `json:"description"`
+	// Role groups the agent in the task picker. Read from the roles.json beside
+	// the agent's file (agent_roles.go); "domain" when it names no role.
+	Role string `json:"role"`
+	// EnabledInProject is false for a plugin agent whose pack the scoped project
+	// does not enable; local agents and the unscoped fleet view are always true.
+	EnabledInProject bool `json:"enabledInProject"`
 	// Improvable mirrors the retro scorecard flag: the agent resolves to a live
 	// registry row the rewriter can act on (built-ins are false).
 	Improvable bool `json:"improvable"`
@@ -321,7 +327,7 @@ func (h *Handler) agentsHub(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err)
 			return
 		}
-		out.Agents = append(out.Agents, rosterRowFrom(a, rollups, registrySet))
+		out.Agents = append(out.Agents, rosterRowFrom(a, rollups, registrySet, esc))
 	}
 	if err := rows.Err(); err != nil {
 		writeErr(w, err)
@@ -339,10 +345,11 @@ func (h *Handler) agentsHub(w http.ResponseWriter, r *http.Request) {
 
 // rosterRowFrom projects a registry row + its rollup into a roster card. The
 // rollup is looked up by the normalised name — the registry-id↔name bridge.
-func rosterRowFrom(a registryAgentRow, rollups map[string]rosterRollup, registrySet map[string]struct{}) agentRosterRow {
+func rosterRowFrom(a registryAgentRow, rollups map[string]rosterRollup, registrySet map[string]struct{}, esc *effectiveScope) agentRosterRow {
 	key := normAgentType(a.name)
 	row := agentRosterRow{
 		ID: a.id, Name: a.name, Scope: a.scope, Origin: a.origin, Path: a.path,
+		Role: agentRoles.roleOf(a.name, a.path),
 	}
 	if a.projectSlug.Valid {
 		row.ProjectSlug = &a.projectSlug.String
@@ -356,6 +363,7 @@ func rosterRowFrom(a registryAgentRow, rollups map[string]rosterRollup, registry
 	if a.description.Valid {
 		row.Description = &a.description.String
 	}
+	row.EnabledInProject = esc.enabledIn(a.origin, row.PluginName)
 	if _, ok := registrySet[advisor.NormAgent(key)]; ok {
 		row.Improvable = true
 	}
@@ -411,6 +419,12 @@ func (h *Handler) agentHub(w http.ResponseWriter, r *http.Request) {
 	}
 	key := normAgentType(a.name)
 
+	esc, err := h.resolveEffectiveScope(r.URL.Query().Get("projectId"))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+
 	dr := hubRange()
 	rollups, err := h.agentRollupsByName(dr, pf, pargs)
 	if err != nil {
@@ -428,7 +442,7 @@ func (h *Handler) agentHub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := agentProfileDTO{
-		agentRosterRow: rosterRowFrom(a, rollups, registrySet),
+		agentRosterRow: rosterRowFrom(a, rollups, registrySet, esc),
 		Runs:           []agentRunRow{},
 		Activity:       []agentActivityRow{},
 		Tasks:          []agentTaskRow{},

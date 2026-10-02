@@ -3,23 +3,53 @@
 // shape — a fetch hook plus a plain, labelled <select> so the control is
 // keyboard-native (WCAG).
 //
-// The roster comes from GET /api/agents/hub, which does NO scope filtering; the
-// server's own validation (resolveAgentName in internal/api/tasks_board.go)
+// The roster comes from GET /api/agents/hub?projectId=…, which narrows to the
+// project's effective set but still returns other projects' rows in fleet mode.
+// The server's own validation (resolveAgentName in internal/api/tasks_board.go)
 // accepts only a global agent or one scoped to THIS project, so the same
 // predicate is applied here — otherwise the picker would offer names the POST
-// then rejects with "unknown agent". Same-named rows across scopes fold to one
-// option (the project-scoped row wins, as it is the definition that overrides).
+// then rejects with "unknown agent". Agents from packs the project does not
+// enable (enabledInProject=false) are dropped too. Same-named rows across scopes
+// fold to one option (the project-scoped row wins, as it is the definition that
+// overrides).
+//
+// Options are grouped by role into <optgroup>s in a fixed order. The role comes
+// from the pack's agents/roles.json (read by the daemon, never decided here).
+// "" is not "no agent picked yet": the dispatcher never chooses an agent, so ""
+// runs the playbook's stages with no persona — the first option says so.
 
-import { useEffect, useState } from 'react';
-import type { AgentRosterRow } from '../api/types';
+import { useEffect, useMemo, useState } from 'react';
+import type { AgentRole, AgentRosterRow } from '../api/types';
 import { fetchAgentRoster } from '../api/agentHub';
+
+/** A selectable roster row plus whether it overrides an inherited agent. */
+export interface PickerAgent extends AgentRosterRow {
+  /** A project-scoped agent that shadows a global or pack agent of the same name. */
+  projectOverride: boolean;
+}
+
+/** Group order in the picker. */
+export const ROLE_ORDER: readonly AgentRole[] = [
+  'orchestrate',
+  'implement',
+  'review',
+  'research',
+  'ops',
+  'domain',
+];
+
+/** Label of the "" option. */
+export const NO_AGENT_LABEL = 'Без агента — лише стейджі playbook';
+
+/** Past this many agents the picker grows a filter box. */
+export const SEARCH_THRESHOLD = 12;
 
 /** Roster entries selectable for a project, name-sorted and de-duplicated. */
 export function useAgentRoster(
   projectId: number | null,
   projectSlug: string | null,
-): { agents: AgentRosterRow[]; loading: boolean } {
-  const [agents, setAgents] = useState<AgentRosterRow[]>([]);
+): { agents: PickerAgent[]; loading: boolean } {
+  const [agents, setAgents] = useState<PickerAgent[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     if (projectId === null) {
@@ -47,23 +77,52 @@ export function useAgentRoster(
   return { agents, loading };
 }
 
-/** Pure part of the hook: scope filter + fold-by-name + sort. Exported for tests. */
-export function selectableAgents(rows: AgentRosterRow[], projectSlug: string | null): AgentRosterRow[] {
-  const byName = new Map<string, AgentRosterRow>();
-  for (const a of rows) {
-    if (a.scope !== 'global' && a.projectSlug !== projectSlug) continue;
+/** "core:tech-lead" → "tech-lead"; a bare name is returned as is. */
+function bareName(name: string): string {
+  return name.slice(name.lastIndexOf(':') + 1);
+}
+
+/**
+ * Pure part of the hook: scope + enabled-pack filter, fold-by-name, override
+ * flag, sort. Exported for tests.
+ */
+export function selectableAgents(rows: AgentRosterRow[], projectSlug: string | null): PickerAgent[] {
+  const eligible = rows.filter(
+    (a) => a.enabledInProject && (a.scope === 'global' || a.projectSlug === projectSlug),
+  );
+  // Bare names of every inherited (global) agent: a project agent named after
+  // one of them — "tech-lead" next to "core:tech-lead", or a same-named
+  // user-level agent — is an override.
+  const inherited = new Set(eligible.filter((a) => a.scope === 'global').map((a) => bareName(a.name)));
+  const byName = new Map<string, PickerAgent>();
+  for (const a of eligible) {
     const seen = byName.get(a.name);
     // A project-scoped definition overrides a global one of the same name.
-    if (seen === undefined || (seen.scope === 'global' && a.scope === 'project')) byName.set(a.name, a);
+    if (seen === undefined || (seen.scope === 'global' && a.scope === 'project')) {
+      byName.set(a.name, { ...a, projectOverride: a.scope === 'project' && inherited.has(bareName(a.name)) });
+    }
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Agents in `ROLE_ORDER` groups; empty groups are dropped. Exported for tests. */
+export function groupByRole(agents: PickerAgent[]): { role: AgentRole; agents: PickerAgent[] }[] {
+  return ROLE_ORDER.map((role) => ({ role, agents: agents.filter((a) => a.role === role) })).filter(
+    (g) => g.agents.length > 0,
+  );
+}
+
+function matches(a: PickerAgent, q: string): boolean {
+  return a.name.toLowerCase().includes(q) || (a.description ?? '').toLowerCase().includes(q);
+}
+
 /**
  * A <select> bound to an agent name. `value` is the selected name ("" = no
- * agent, a plain run); `onChange` receives the new name ("" when "none" is
- * picked). Renders an unknown stored value as its own option so an agent whose
- * file has since gone does not silently reset the field.
+ * agent: the playbook's stages run without a persona); `onChange` receives the
+ * new name. Renders an unknown stored value as its own option so an agent
+ * whose file has since gone does not silently reset the field. Past
+ * SEARCH_THRESHOLD agents a filter box narrows the options; the selected one
+ * always stays listed.
  */
 export function AgentSelect({
   agents,
@@ -72,52 +131,86 @@ export function AgentSelect({
   disabled = false,
   id,
 }: {
-  agents: AgentRosterRow[];
+  agents: PickerAgent[];
   value: string;
   onChange: (name: string) => void;
   disabled?: boolean;
   id?: string;
 }): JSX.Element {
+  const [query, setQuery] = useState('');
   const known = agents.some((a) => a.name === value);
+  const searchable = agents.length > SEARCH_THRESHOLD;
+  const q = searchable ? query.trim().toLowerCase() : '';
+  const groups = useMemo(
+    () => groupByRole(q === '' ? agents : agents.filter((a) => a.name === value || matches(a, q))),
+    [agents, q, value],
+  );
+  const fieldClass =
+    'w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none transition-colors hover:border-line-strong focus:border-ink-dim disabled:opacity-50';
   return (
-    <select
-      id={id}
-      value={value}
-      disabled={disabled}
-      aria-label="agent"
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none transition-colors hover:border-line-strong focus:border-ink-dim disabled:opacity-50"
-    >
-      <option value="">none (plain run)</option>
-      {value !== '' && !known && <option value={value}>@{value} (unknown)</option>}
-      {agents.map((a) => (
-        <option key={`${a.name}:${String(a.id)}`} value={a.name}>
-          @{a.name} · {a.scope}
-        </option>
-      ))}
-    </select>
+    <div className="flex flex-col gap-1">
+      {searchable && (
+        <input
+          type="search"
+          value={query}
+          disabled={disabled}
+          aria-label="filter agents"
+          placeholder="filter agents…"
+          onChange={(e) => setQuery(e.target.value)}
+          className={fieldClass}
+        />
+      )}
+      <select
+        id={id}
+        value={value}
+        disabled={disabled}
+        aria-label="agent"
+        onChange={(e) => onChange(e.target.value)}
+        className={fieldClass}
+      >
+        <option value="">{NO_AGENT_LABEL}</option>
+        {value !== '' && !known && <option value={value}>@{value} (unknown)</option>}
+        {groups.map((g) => (
+          <optgroup key={g.role} label={g.role}>
+            {g.agents.map((a) => (
+              <option key={`${a.name}:${String(a.id)}`} value={a.name}>
+                @{a.name}
+                {a.projectOverride ? ' (project override)' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
   );
 }
 
-/** Scope chip + one-line description of the selected agent (null when none). */
+/**
+ * The selected agent's one-line description, with a `project override` badge
+ * when the project's own .claude/agents/ definition shadows an inherited one.
+ * Null when nothing (or an unknown name) is selected.
+ */
 export function AgentHint({
   agents,
   value,
 }: {
-  agents: AgentRosterRow[];
+  agents: PickerAgent[];
   value: string;
 }): JSX.Element | null {
   if (value === '') return null;
   const agent = agents.find((a) => a.name === value);
   if (agent === undefined) return null;
+  if (!agent.projectOverride && agent.description === null) return null;
   return (
     <div className="mt-1 flex items-start gap-1.5">
-      <span
-        className="shrink-0 rounded-full border border-line px-1.5 py-[1px] font-mono text-[9px] text-ink-dim uppercase"
-        data-tip={agent.scope === 'global' ? 'available to every project' : 'defined by this project'}
-      >
-        {agent.scope}
-      </span>
+      {agent.projectOverride && (
+        <span
+          className="shrink-0 rounded-full border border-line px-1.5 py-[1px] font-mono text-[9px] text-ink-dim uppercase"
+          data-tip="this project's .claude/agents/ definition replaces the inherited one"
+        >
+          project override
+        </span>
+      )}
       {agent.description !== null && (
         <span className="font-mono text-[10px] leading-snug text-ink-faint">{agent.description}</span>
       )}
