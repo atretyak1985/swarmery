@@ -692,7 +692,7 @@ $$('[data-scenarios]').forEach(function (g) {
     var s = map[k]; if (!s) return;
     btns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-sc') === k ? 'true' : 'false'); });
     els.forEach(function (el) { var id = el.getAttribute('data-el'); el.classList.toggle('down', (s.down || []).indexOf(id) > -1); el.classList.toggle('off', (s.off || []).indexOf(id) > -1); });
-    outs.forEach(function (o) { o.innerHTML = (s.out || {})[o.getAttribute('data-sc-out')] || ''; });
+    outs.forEach(function (o) { o.textContent = (s.out || {})[o.getAttribute('data-sc-out')] || ''; });
   }
   btns.forEach(function (b) { b.addEventListener('click', function () { set(b.getAttribute('data-sc')); }); });
   if (btns[0]) set(btns[0].getAttribute('data-sc'));
