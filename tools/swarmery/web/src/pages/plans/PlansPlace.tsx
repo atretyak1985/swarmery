@@ -22,6 +22,7 @@ import { type TabItem, Tabs, tabParamHref, useTabParam } from '../../components/
 import { Loading } from '../../components/ui';
 import { useDocumentTitle } from '../../lib/useDocumentTitle';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
+import { PARKED_PLANS_TABS } from '../../lib/parked';
 import { plansHref } from './plansUrl';
 
 const Plans = lazy(() => import('../Plans').then((m) => ({ default: m.Plans })));
@@ -79,7 +80,12 @@ export function PlansPlace(): JSX.Element {
     const search = tabParamHref(location.search, 'tab', id, 'plans');
     return inPlan && id === 'plans' && plan !== undefined ? plansHref(slug, { plan }, search) : `${place}${search}`;
   };
-  const tabs = PLANS_PLACE_TABS.map((t) => ({ ...t, href: hrefOf(t.id) }));
+  // A parked tab stays out of the strip unless a direct link has opened it,
+  // so the strip never hides the tab you're on.
+  const tabs = PLANS_PLACE_TABS.filter((t) => !PARKED_PLANS_TABS.has(t.id) || t.id === tab).map((t) => ({
+    ...t,
+    href: hrefOf(t.id),
+  }));
 
   const label = PLANS_PLACE_TABS.find((t) => t.id === tab)?.label ?? tab;
   useDocumentTitle(tab === 'plans' ? null : `${label} · ${project?.name ?? slug} — Swarmery`);
