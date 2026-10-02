@@ -17,7 +17,7 @@ jobs:
         run: |
           set -e
           for f in .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json \
-                   plugins/*/requirements.json \
+                   plugins/*/requirements.json plugins/*/agents/roles.json \
                    plugins/*/hooks/hooks.json overlays/_schema/*.json overlays/example/*.json; do
             [ -f "$f" ] || continue
             node -e "JSON.parse(require('fs').readFileSync('$f'))" \

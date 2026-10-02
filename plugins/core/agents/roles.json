@@ -1,0 +1,15 @@
+{
+  "architect": "research",
+  "code-reviewer": "review",
+  "debugger": "implement",
+  "implementation-agent": "implement",
+  "planner": "orchestrate",
+  "researcher": "research",
+  "security-auditor": "review",
+  "system-improver": "ops",
+  "tech-lead": "orchestrate",
+  "test-runner": "ops",
+  "test-writer": "implement",
+  "ui-developer": "implement",
+  "verification-agent": "review"
+}

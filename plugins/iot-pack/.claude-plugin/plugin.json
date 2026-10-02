@@ -1,7 +1,7 @@
 {
   "name": "iot-pack",
   "description": "IoT domain pack: BLE communication, device telemetry ingestion, and health-metrics processing agents and skills. Opt-in; requires core.",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"

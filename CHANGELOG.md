@@ -9,11 +9,11 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.9.7,
-  `infra-pack` 1.4.0, `architecture-pack` 1.5.0, `iot-pack` 1.2.1,
-  `uav-pack` 1.3.0, `web-pack` 1.3.0, `claude-eng-pack` 1.1.1,
-  `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.6.2,
-  `design-pack` 0.4.1, `accounts-pack` 0.3.4, `graft-pack` 0.1.0. The
+  `/plugin update`, not through these tags. Current: `core` 3.10.0,
+  `infra-pack` 1.5.0, `architecture-pack` 1.6.0, `iot-pack` 1.3.0,
+  `uav-pack` 1.4.0, `web-pack` 1.4.0, `claude-eng-pack` 1.1.1,
+  `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.7.0,
+  `design-pack` 0.5.0, `accounts-pack` 0.3.4, `graft-pack` 0.1.0. The
   marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
@@ -31,6 +31,19 @@ Two things ship from this repository on separate clocks:
   Known edges, `/account`).
 
 ### Added
+
+- **The task modal's agent picker groups agents by role (core 3.10.0, design-pack 0.5.0,
+  infra-pack 1.5.0, iot-pack 1.3.0, jira-pack 0.7.0, uav-pack 1.4.0, web-pack 1.4.0).**
+  Every pack with agents now ships `agents/roles.json` (`{"<agent>": "<role>"}`, role ∈
+  `orchestrate | implement | review | research | ops | domain`); agent frontmatter is
+  unchanged. A project can add its own `.claude/agents/roles.json`. The daemon's
+  `GET /api/agents/hub` reads the file next to each agent (`role`, `domain` when missing)
+  and reports `enabledInProject` against the project's effective `enabledPlugins`. The
+  picker's first option is now `Без агента — лише стейджі playbook`, agents sit in one
+  `<optgroup>` per role, packs disabled in the project are hidden, a project override
+  gets a badge, the `· global` suffix is gone, and a search box appears past 12 agents.
+  `scripts/tests/agent-roles.test.sh` fails CI when an agent has no role or a role names
+  a missing agent.
 
 - **Explainer pages from a document: `/visualize` and the `visual-explainer` skill (architecture-pack 1.6.0).**
   The skill turns a markdown file, several files or an explanation from the conversation into
