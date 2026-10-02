@@ -25,6 +25,7 @@ import { FiltersRow } from './system/shared';
 import { HubShell, healthTone, type HubTab } from './agent-hub/HubShell';
 import { ActivityTab, InsightsTab, OverviewTab, RunsTab, TasksTab } from './agent-hub/Tabs';
 import { RunNowButton } from './agent-hub/RunNow';
+import { boardParked } from '../lib/parked';
 
 type ProfileTab = 'overview' | 'docs' | 'runs' | 'tasks' | 'activity' | 'insights' | 'definition';
 const TABS: ProfileTab[] = [
@@ -121,7 +122,7 @@ function ProfileHeader({
       )}
       <span className="font-mono text-[10px] text-ink-faint">{health.label}</span>
       <span className="ml-auto flex items-center gap-2">
-        <RunNowButton agentName={agent.name} scopeSlug={scopeSlug} />
+        {!boardParked() && <RunNowButton agentName={agent.name} scopeSlug={scopeSlug} />}
       </span>
     </div>
   );

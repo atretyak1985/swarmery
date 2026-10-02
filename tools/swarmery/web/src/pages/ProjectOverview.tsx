@@ -26,6 +26,7 @@ import {
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
+import { boardParked } from '../lib/parked';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -190,16 +191,18 @@ function InlineFunnel({ funnel, slug }: { funnel: FunnelResp; slug: string }): J
     <>
       <SectionRule
         label="Where work sits"
-        right={
-          (
-            <Link
-              to={`/p/${slug}/board`}
-              className="font-mono text-[10.5px] text-ink-dim hover:text-brand transition-colors"
-            >
-              open board →
-            </Link>
-          ) as unknown as string
-        }
+        {...(boardParked()
+          ? {}
+          : {
+              right: (
+                <Link
+                  to={`/p/${slug}/board`}
+                  className="font-mono text-[10.5px] text-ink-dim hover:text-brand transition-colors"
+                >
+                  open board →
+                </Link>
+              ),
+            })}
       />
       <div className="mt-[10px] rounded-[12px] border border-line px-4 py-[14px]">
         <div className="flex items-flex-end gap-2">

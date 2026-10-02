@@ -362,8 +362,10 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     expect(screen.getByRole('button', { name: 'open Phase 2 — Beta 2 details' }).contains(name)).toBe(true);
 
     expect(tabIn('Plans', /^Plans$/).getAttribute('href')).toBe(`${BASE}/${B.externalId}?scope=swarmery`);
-    expect(tabIn('Plans', /^Board$/).getAttribute('href')).toBe(`${BASE}?scope=swarmery&tab=board`);
-    expect(tabIn('Plans', /^Playbooks$/).getAttribute('href')).toBe(`${BASE}?scope=swarmery&tab=playbooks`);
+    // Board and Playbooks are parked (lib/parked.ts): out of the strip.
+    const strip = within(screen.getByRole('tablist', { name: 'Plans' }));
+    expect(strip.queryByRole('tab', { name: /^Board$/ })).toBeNull();
+    expect(strip.queryByRole('tab', { name: /^Playbooks$/ })).toBeNull();
     expect(tabIn('Plans', /^New plan$/).getAttribute('href')).toBe(`${BASE}?scope=swarmery&tab=new`);
   });
 
@@ -435,31 +437,33 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
 });
 
 describe('SC-10 — the PlansPlace top tabs switch with push', () => {
-  it('Plans → Board → Back returns to the Plans tab', async () => {
+  it('Plans → New plan → Back returns to the Plans tab', async () => {
     const r = mount(`${BASE}/${B.externalId}`);
     await waitFor(() => {
       expect(listItem('Beta').getAttribute('aria-current')).toBe('true');
     });
-    fireEvent.click(tabIn('Plans', /^Board$/));
-    await settled(r, `${BASE}?tab=board`);
+    fireEvent.click(tabIn('Plans', /^New plan$/));
+    await settled(r, `${BASE}?tab=new`);
     expect(r.state.historyAction).toBe('PUSH');
-    await screen.findByText('board body');
+    await screen.findByText('new plan body');
 
     await back(r);
     await settled(r, `${BASE}/${B.externalId}`);
     await waitFor(() => {
       expect(listItem('Beta').getAttribute('aria-current')).toBe('true');
     });
-    expect(screen.queryByText('board body')).toBeNull();
+    expect(screen.queryByText('new plan body')).toBeNull();
   });
 
-  it('Board → Playbooks is one entry too', async () => {
-    const r = mount('/elsewhere', `${BASE}?tab=board`);
+  // Parked tabs (lib/parked.ts) keep their bodies and their URLs: a direct link
+  // still opens the board, and the strip then shows the tab you are on, but never
+  // the other parked one.
+  it('a parked tab opened by a direct link renders and shows only itself in the strip', async () => {
+    mount('/elsewhere', `${BASE}?tab=board`);
     await screen.findByText('board body');
-    fireEvent.click(tabIn('Plans', /^Playbooks$/));
-    await settled(r, `${BASE}?tab=playbooks`);
-    await back(r);
-    await settled(r, `${BASE}?tab=board`);
+    const strip = within(screen.getByRole('tablist', { name: 'Plans' }));
+    expect(strip.getByRole('tab', { name: /^Board$/ }).getAttribute('aria-selected')).toBe('true');
+    expect(strip.queryByRole('tab', { name: /^Playbooks$/ })).toBeNull();
   });
 });
 
