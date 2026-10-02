@@ -251,6 +251,46 @@ func TestWriteCodePathOverlayRefusesSlugEscape(t *testing.T) {
 	}
 }
 
+// slugSegment is the local guarantee behind both workspace joins: the value
+// joined onto the root is one kebab-case path element. A slug that stays
+// inside the root but nests ("a/b") is refused too; the prefix fence alone
+// let that through.
+func TestSlugSegment(t *testing.T) {
+	for _, tc := range []struct {
+		slug string
+		ok   bool
+	}{
+		{"acme-app", true},
+		{"a1", true},
+		{"", false},
+		{".", false},
+		{"..", false},
+		{"../evil", false},
+		{"a/b", false},
+		{"/abs", false},
+		{"Acme", false},
+		{"acme app", false},
+	} {
+		seg, err := slugSegment(tc.slug)
+		if tc.ok && (err != nil || seg != tc.slug) {
+			t.Errorf("slugSegment(%q) = (%q, %v), want (%q, nil)", tc.slug, seg, err, tc.slug)
+		}
+		if !tc.ok && err == nil {
+			t.Errorf("slugSegment(%q) = %q, want an error", tc.slug, seg)
+		}
+	}
+}
+
+func TestCarveWorkspaceRefusesNestedSlug(t *testing.T) {
+	wsRoot := t.TempDir()
+	if err := carveWorkspace(wsRoot, "a/b", &Result{}); err == nil {
+		t.Fatal("expected carveWorkspace to refuse a nested slug")
+	}
+	if _, err := os.Stat(filepath.Join(wsRoot, "a")); err == nil {
+		t.Fatal("nested slug carved a directory")
+	}
+}
+
 // The overlay dir can already exist (carveWorkspace's sibling namespace, or a
 // prior partial run) without project.json in it — that must still be treated
 // as "write it", not "skip: exists".

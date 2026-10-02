@@ -259,14 +259,32 @@ func statuslineSrcDir(src string) bool {
 	return err == nil && info.IsDir()
 }
 
+// slugSegment returns slug as the single path element it must be. Validate
+// and the attach path already restrict slugs to [a-z0-9-]+, but that check
+// lives in another function, so it does not guard the joins below as far as
+// a reader (or a path-injection scanner) can see. Taking filepath.Base and
+// re-checking it here makes the guarantee local: the value joined onto the
+// workspace root is the Base result, and it has no separator and no "..".
+func slugSegment(slug string) (string, error) {
+	seg := filepath.Base(slug)
+	if seg != slug || !slugRe.MatchString(seg) {
+		return "", fmt.Errorf("invalid slug %q: want one kebab-case path element", slug)
+	}
+	return seg, nil
+}
+
 func carveWorkspace(wsRoot, slug string, res *Result) error {
 	// wsRoot is the trusted base; slug is validated to [a-z0-9-]+ by Validate (and
 	// on the attach path), so it carries no path separators. Re-fence every carved
 	// dir under a cleaned wsRoot anyway as defense-in-depth: a malformed slug from
 	// any future caller can then never MkdirAll outside the workspace root. The
 	// HasPrefix guard is also the sanitizing barrier for the path-injection sink.
+	seg, err := slugSegment(slug)
+	if err != nil {
+		return err
+	}
 	cleanRoot := filepath.Clean(wsRoot)
-	base := filepath.Join(cleanRoot, slug)
+	base := filepath.Join(cleanRoot, seg)
 	dirs := []string{filepath.Join(base, "wiki")}
 	// No "plans" entry: that tree is frozen history, and scaffolding it invited
 	// planners to save where the epic scanner never looks (issue #188).
@@ -312,8 +330,12 @@ func carveWorkspace(wsRoot, slug string, res *Result) error {
 // top of this file (see the swarmery incident above: healing it worked only
 // because project 27 already existed with the right path).
 func writeCodePathOverlay(wsRoot, slug, projectDir string, res *Result) error {
+	seg, err := slugSegment(slug)
+	if err != nil {
+		return err
+	}
 	cleanRoot := filepath.Clean(wsRoot)
-	dir := filepath.Join(cleanRoot, slug, "overlay")
+	dir := filepath.Join(cleanRoot, seg, "overlay")
 	// Same re-fencing carveWorkspace documents as a per-sink invariant: a
 	// malformed slug must never MkdirAll outside the workspace root.
 	if dir != cleanRoot && !strings.HasPrefix(dir, cleanRoot+string(filepath.Separator)) {
