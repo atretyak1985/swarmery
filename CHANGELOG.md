@@ -32,6 +32,18 @@ Two things ship from this repository on separate clocks:
 
 ### Added
 
+- **Explainer pages from a document: `/visualize` and the `visual-explainer` skill (core 3.10.0).**
+  The skill turns a markdown file, several files or an explanation from the conversation into
+  one self-contained HTML page: a plain-language thesis, one diagram, chart or table per
+  chapter, glossary tooltips, and a side drawer for the technical depth. It builds on a shell
+  (`templates/shell.html`) that already owns navigation, theming, the drawer, tooltips, tabs, a
+  step-through player, scenario switches and filters, so the agent writes content and diagrams
+  only. `scripts/check.mjs` (static: ids, references, scripts, glossary and drawer wiring, theme,
+  ligatures, accessible diagram labels) and `scripts/probe.js` (inside the page: sideways overflow, SVG
+  labels outside the viewBox or overlapping) measure the result at 1440 and 400 px in light and
+  dark. Companion design, diagramming and data-viz skills are loaded when the session has
+  them. Covered by `scripts/tests/visual-explainer.test.sh`.
+
 - **Plain-language plan summary (core 3.9.2).** `session-closeout` now also
   writes `plan/SUMMARY.md`: the overview the dashboard shows at the top of a
   plan's Summary tab. It covers what the task was, what was built and how it

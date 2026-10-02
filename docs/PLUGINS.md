@@ -56,11 +56,12 @@ A component in a project's own `.claude/` **wins** over a plugin component with 
 
 ## core — the mandatory baseline
 
-**What it is.** The vendor-neutral agent-development framework: a 13-agent judgment-style fleet, 36 progressively-disclosed skills, 8 commands, 18 hooks, plus the project-aware `agent-work` workspace CLI and the statusline.
+**What it is.** The vendor-neutral agent-development framework: a 13-agent judgment-style fleet, 38 progressively-disclosed skills, 9 commands, 18 hooks, plus the project-aware `agent-work` workspace CLI and the statusline.
 
 **What it can do.**
 - **Orchestration** — `@tech-lead` routes work by size (understand → plan → implement → independent review → close) across a 13-agent fleet: `planner`, `architect`, `researcher`, `implementation-agent`, `ui-developer`, `debugger`, `test-writer`, `test-runner`, `code-reviewer`, `security-auditor`, `verification-agent`, `system-improver` (see `plugins/core/AGENTS.md`).
 - **Everyday commands** — `/search`, `/find`, `/impact` (graph-aware with ripgrep fallback), `/code-quality`, `/test-coverage`, `/security-audit`, `/deps-check`, `/env-check`, `/migration-check`, `/refactor-plan`, `/run-plan`, `/new-feature-branch`, `/dashboard`, `/land`.
+- **Explainer pages** — `/visualize <doc.md>` (skill `visual-explainer`) turns a document or an explanation into one self-contained HTML page: diagrams, charts, glossary tooltips and a details drawer, measured at desktop and phone width in light and dark.
 - **Guardrails** — hooks for sensitive-file protection, approvals/liveness wiring for the control plane, and the graduation rule tooling that keeps components flowing project → pack → core.
 
 **How to work with it.** Enabled everywhere by definition; a project without core is telemetry-only in the dashboard. Templates resolve project-first (`.claude/templates/` overrides the pack's `templates/`).
