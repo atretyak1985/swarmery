@@ -10,6 +10,12 @@
 #   (b) into every config dir, not just ~/.claude;
 #   (c) a version drift between installed and source is said out loud;
 #   (d) a recorded-but-missing install path is skipped, not created.
+# It also exercises the primary-worktree/main-branch guard: a linked worktree
+# or a non-main branch must refuse (exit 0, nothing synced) unless overridden
+# with --force or SWARMERY_SYNC_CACHE_FORCE=1. These cases use the
+# SWARMERY_REPO_ROOT test override so the guard runs against a disposable
+# fixture git repo instead of this real checkout (whose own branch is
+# whatever the test happens to run from).
 # Run locally with `bash scripts/tests/sync-cache.test.sh`; CI discovers
 # scripts/tests/*.test.sh.
 set -uo pipefail
@@ -23,6 +29,19 @@ ok_case() { pass=$((pass + 1)); }
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+
+# --- git fixture (primary worktree on main + a linked worktree + a branch) -
+GIT_FIXTURE="$tmp/git-fixture"
+mkdir -p "$GIT_FIXTURE"
+git init -q -b main "$GIT_FIXTURE"
+git -C "$GIT_FIXTURE" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+PRIMARY_MAIN="$GIT_FIXTURE"
+git -C "$GIT_FIXTURE" worktree add -q -b feature/x "$tmp/git-fixture-wt" >/dev/null
+LINKED_WORKTREE="$tmp/git-fixture-wt"
+git -C "$GIT_FIXTURE" branch -q feature/y
+PRIMARY_NON_MAIN="$tmp/git-fixture-branch"
+cp -R "$GIT_FIXTURE" "$PRIMARY_NON_MAIN"
+git -C "$PRIMARY_NON_MAIN" checkout -q feature/y
 
 # --- fixture ---------------------------------------------------------------
 SRC="$tmp/plugins"
@@ -62,7 +81,7 @@ EOF
 # a third config dir with no swarmery installs at all
 mkdir -p "$HOME_DIR/.claude-empty/plugins"
 
-out="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" bash "$SCRIPT" 2>&1)"
+out="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$PRIMARY_MAIN" bash "$SCRIPT" 2>&1)"
 rc=$?
 
 # --- assertions ------------------------------------------------------------
@@ -100,6 +119,44 @@ printf '%s\n' "$out" | grep -q '1 with a version drift' && ok_case \
 
 printf '%s\n' "$out" | grep -q '1 config dir(s) without swarmery installs' && ok_case \
   || fail_case "summary should count the empty config dir; output: $out"
+
+# --- guard: linked worktree refuses ----------------------------------------
+before="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
+out_wt="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$LINKED_WORKTREE" bash "$SCRIPT" 2>&1)"
+rc_wt=$?
+after_wt="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
+
+[ "$rc_wt" -eq 0 ] && ok_case || fail_case "linked worktree: expected exit 0, got $rc_wt"
+printf '%s\n' "$out_wt" | grep -qi 'not the primary worktree' && ok_case \
+  || fail_case "linked worktree: refusal message missing; output: $out_wt"
+[ "$before" = "$after_wt" ] && ok_case \
+  || fail_case "linked worktree: cache files changed despite refusal"
+
+# --- guard: non-main branch in primary worktree refuses ---------------------
+before="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
+out_branch="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$PRIMARY_NON_MAIN" bash "$SCRIPT" 2>&1)"
+rc_branch=$?
+after_branch="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
+
+[ "$rc_branch" -eq 0 ] && ok_case || fail_case "non-main branch: expected exit 0, got $rc_branch"
+printf '%s\n' "$out_branch" | grep -qi "feature/y" && ok_case \
+  || fail_case "non-main branch: refusal message missing branch name; output: $out_branch"
+[ "$before" = "$after_branch" ] && ok_case \
+  || fail_case "non-main branch: cache files changed despite refusal"
+
+# --- override: SWARMERY_SYNC_CACHE_FORCE=1 proceeds -------------------------
+out_force_env="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$PRIMARY_NON_MAIN" SWARMERY_SYNC_CACHE_FORCE=1 bash "$SCRIPT" 2>&1)"
+rc_force_env=$?
+[ "$rc_force_env" -eq 0 ] && ok_case || fail_case "SWARMERY_SYNC_CACHE_FORCE=1: expected exit 0, got $rc_force_env"
+printf '%s\n' "$out_force_env" | grep -q 'installed dir(s) updated' && ok_case \
+  || fail_case "SWARMERY_SYNC_CACHE_FORCE=1 did not sync; output: $out_force_env"
+
+# --- override: --force flag proceeds ----------------------------------------
+out_force_flag="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$PRIMARY_NON_MAIN" bash "$SCRIPT" --force 2>&1)"
+rc_force_flag=$?
+[ "$rc_force_flag" -eq 0 ] && ok_case || fail_case "--force: expected exit 0, got $rc_force_flag"
+printf '%s\n' "$out_force_flag" | grep -q 'installed dir(s) updated' && ok_case \
+  || fail_case "--force did not sync; output: $out_force_flag"
 
 printf 'sync-cache: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
