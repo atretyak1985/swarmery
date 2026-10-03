@@ -30,6 +30,7 @@ Design reference: [swarmery-design.md](swarmery-design.md) ·
 make build          # snapshot docs → vite bundle → go:embed → single ./swarmery binary
 ./swarmery serve    # listens on :7777 (override with SWARMERY_PORT)
 # or: make install  # copy into ~/.swarmery/bin + restart the installed service (see below)
+(cd web && npm test) # the web app's unit/component tests (vitest + jsdom); swarmery-ci runs them too
 ```
 
 Under launchd the daemon starts with `PATH=/usr/bin:/bin:/usr/sbin:/sbin`. `serve`

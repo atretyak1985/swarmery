@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The nav model's two contracts:
 //
 //   1. hrefs per scope — fleet (slug null) vs project, including the
@@ -7,11 +8,10 @@
 //      itself, so adding a route without extending a place's segments fails
 //      here instead of rendering a page with no highlighted sidebar row.
 //
-// Dev-only suite (web/tsconfig.json excludes *.test.ts). Run with
-//   npx vitest run src/lib/nav.test.ts
-// after `npm i --no-save vitest`.
+// Dev-only suite (web/tsconfig.json excludes *.test.ts). Run with `npm test`.
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PLACES, activePlace, placeSegment, placesIn, resolvePlaceHref, type PlaceId } from './nav';
 
@@ -81,7 +81,7 @@ describe('nav model', () => {
 
 /** Every `path: '…'` literal in the router table, as concrete pathnames. */
 function routedPaths(): string[] {
-  const source = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(fileURLToPath(new URL('../main.tsx', import.meta.url)), 'utf8');
   const literals = [...source.matchAll(/path: '([^']+)'/g)].map((m) => m[1] ?? '');
   expect(literals.length).toBeGreaterThan(30); // the regex still sees the table
   const concrete = (p: string): string => p.replace(/:[a-zA-Z]+/g, 'x').replace(/\*/g, 'x');
