@@ -18,15 +18,12 @@
 //   - a late revisions fetch for a plan already left does not land over the
 //     current plan's list (phase-1 review carry-over).
 //
-// The web app ships no committed test runner (CI is `npm run build` only), so
-// this suite is dev-only. Run it with
-//   npx vitest run src/pages/Plans.affordances.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/Plans.affordances.test.tsx`.
 // web/tsconfig.json EXCLUDES *.test.tsx and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +31,12 @@ import type { Epic, EpicPhase, PlanRevision } from '../api/types';
 import { Tabs, useTabParam } from '../components/Tabs';
 import { PlansPlace } from './plans/PlansPlace';
 import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+
+// The Plans page mounts the whole PlansPlace tree, and on a loaded machine its
+// first render can outlast Testing Library's 1 s default, so every waitFor and
+// findBy* in this file gets a longer budget. Still under vitest's 5 s test
+// timeout. Vitest isolates each test file, so this doesn't leak into others.
+configure({ asyncUtilTimeout: 3000 });
 
 // The project follows the URL's :slug, as the real ProjectWorkspaceProvider
 // does; its display NAME differs from the slug so the title test can tell them apart.
