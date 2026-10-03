@@ -122,6 +122,9 @@ func fileFrom(db *sql.DB, path, originRoot string) (Stats, error) {
 	if err := tx.Commit(); err != nil {
 		return stats, err
 	}
+	if err := confirmPendingAuthTrips(db, ing.pendingAuthTrips); err != nil {
+		return stats, err
+	}
 	return stats, nil
 }
 
@@ -219,6 +222,11 @@ type ingester struct {
 	// contributes neither.
 	skipCapture     *bool
 	capturedTaskIDs []int64
+
+	// pendingAuthTrips collects auth-kind breaker openings this batch deferred
+	// until a confirming probe (see limits.go's tripBreaker / pendingAuthTrip).
+	// Run by the caller (fileFrom, TailFile) after tx.Commit().
+	pendingAuthTrips []pendingAuthTrip
 }
 
 type pendingTool struct {

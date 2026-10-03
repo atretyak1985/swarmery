@@ -2,11 +2,14 @@ package improve
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
 )
 
 // stubClaude installs an executable `claude` stub on PATH. The script body
@@ -55,10 +58,13 @@ func TestClaudeRunnerTimeout(t *testing.T) {
 }
 
 func TestClaudeRunnerMissingBinary(t *testing.T) {
-	t.Setenv("PATH", t.TempDir()) // no claude anywhere
+	prev := resolveClaudeBin
+	resolveClaudeBin = func() (string, error) { return "", claudebin.ErrNotFound }
+	t.Cleanup(func() { resolveClaudeBin = prev })
+
 	_, err := ClaudeRunner{}.Run(context.Background(), "p")
-	if err == nil {
-		t.Fatal("want error when claude is not on PATH")
+	if !errors.Is(err, claudebin.ErrNotFound) {
+		t.Fatalf("Run error = %v, want claudebin.ErrNotFound", err)
 	}
 }
 

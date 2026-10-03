@@ -152,6 +152,9 @@ func TailFile(db *sql.DB, path, originRoot string, th Thresholds) (TailResult, e
 	if err := tx.Commit(); err != nil {
 		return res, err
 	}
+	if err := confirmPendingAuthTrips(db, ing.pendingAuthTrips); err != nil {
+		return res, err
+	}
 
 	res.SessionID = ing.sessionID
 	res.SessionCreated = ing.sessionCreated
