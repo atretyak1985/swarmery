@@ -98,7 +98,12 @@ type pendingAuthTrip struct {
 // "<configDir>/projects", so configDir is its parent.
 //
 // It returns "" for the DEFAULT account: when originRoot carries no root
-// context, and when the parent is the default config dir ($HOME/.claude).
+// context, when AccountFor resolves it to DefaultAccount (a `.claude` dir
+// wherever it lives — the same rule that picked the breaker this trip opens,
+// so the probe always checks the account it is about to pause), and when the
+// parent is the default config dir ($HOME/.claude) as written or
+// symlink-resolved (a link with another name, which AccountFor alone would
+// read as its own account).
 // claudeprobe.Probe("") runs with no CLAUDE_CONFIG_DIR at all, which is what
 // selects the default account. Naming $HOME/.claude explicitly is not the
 // same thing: the CLI then looks the login up under a different keychain
@@ -111,7 +116,7 @@ func probeConfigDir(originRoot string) string {
 		return ""
 	}
 	dir := filepath.Dir(filepath.Clean(root))
-	if isDefaultConfigDir(dir) {
+	if AccountFor(root) == DefaultAccount || isDefaultConfigDir(dir) {
 		return ""
 	}
 	return dir
