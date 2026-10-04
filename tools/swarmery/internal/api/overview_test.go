@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -238,4 +239,94 @@ func TestStatsOverview(t *testing.T) {
 			t.Errorf("invalid day status = %d, want 400", resp.StatusCode)
 		}
 	})
+}
+
+// The 14-day series is computed in one grouped pass per table; each point must
+// still equal that day's own scalar aggregates, which are computed day by day
+// (windowAggregates). Rows sit on the exact local-midnight bounds, one
+// millisecond before them, and one day past each end of the window, so an
+// off-by-one bucket shows up as a mismatch. Checked fleet-wide and scoped.
+func TestStatsOverviewSeriesMatchesPerDayAggregates(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "series.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	const tsFmt = "2006-01-02T15:04:05.000Z"
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	at := func(d time.Time) string { return d.UTC().Format(tsFmt) }
+
+	mustExec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+	first := at(todayStart.AddDate(0, 0, -20))
+	mustExec(`INSERT INTO projects (id, path, slug, name, first_seen) VALUES
+		(1, '/work/alpha', '-work-alpha', 'Alpha', ?),
+		(2, '/work/beta',  '-work-beta',  NULL,    ?)`, first, first)
+
+	// Days -14 (just outside) through 0, plus 1 (tomorrow, outside).
+	sid, ev := 0, 0
+	for back := -1; back <= 14; back++ {
+		day := todayStart.AddDate(0, 0, -back)
+		for k, ts := range []time.Time{day, day.Add(12 * time.Hour), day.AddDate(0, 0, 1).Add(-time.Millisecond)} {
+			sid++
+			proj := 1 + (sid % 2)
+			mustExec(`INSERT INTO sessions (id, project_id, session_uuid, model, status, started_at)
+				VALUES (?, ?, ?, 'm', 'completed', ?)`, sid, proj, fmt.Sprintf("s%d", sid), at(ts))
+			// Priced on even days, unpriced on odd ones (the cost NULL rule),
+			// and every third turn carries no usage at all.
+			var cost any
+			if back%2 == 0 {
+				cost = 0.125 * float64(k+1)
+			}
+			var tin, tout any = 10 * (k + 1), 3 * (k + 1)
+			if sid%3 == 0 {
+				tin, tout, cost = nil, nil, nil
+			}
+			mustExec(`INSERT INTO turns (session_id, seq, role, model, started_at, tokens_in, tokens_out, cost_usd)
+				VALUES (?, 0, 'assistant', 'm', ?, ?, ?, ?)`, sid, at(ts), tin, tout, cost)
+			for _, st := range []string{"error", "ok"} {
+				ev++
+				mustExec(`INSERT INTO events (session_id, ts, type, status, dedup_key) VALUES (?, ?, 'tool_call', ?, ?)`,
+					sid, at(ts), st, fmt.Sprintf("e%d", ev))
+			}
+		}
+	}
+
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	for _, scope := range []string{"", "&project=-work-alpha"} {
+		var o overviewStats
+		getJSON(t, srv.URL+"/api/stats/overview?day="+todayStart.Format("2006-01-02")+scope, &o)
+		if len(o.Series) != 14 {
+			t.Fatalf("scope %q: series length = %d, want 14", scope, len(o.Series))
+		}
+		for i, p := range o.Series {
+			var d overviewStats
+			getJSON(t, srv.URL+"/api/stats/overview?day="+p.Day+scope, &d)
+			if p.Sessions != d.Sessions || p.Tokens != d.TokensIn+d.TokensOut || p.Errors != d.Errors {
+				t.Errorf("scope %q series[%d] %s = sessions %d tokens %d errors %d; per-day = %d %d %d",
+					scope, i, p.Day, p.Sessions, p.Tokens, p.Errors, d.Sessions, d.TokensIn+d.TokensOut, d.Errors)
+			}
+			switch {
+			case (p.CostUSD == nil) != (d.CostUSD == nil):
+				t.Errorf("scope %q series[%d] %s cost null-ness = %v, per-day %v", scope, i, p.Day, p.CostUSD, d.CostUSD)
+			case p.CostUSD != nil && *p.CostUSD != *d.CostUSD:
+				t.Errorf("scope %q series[%d] %s cost = %v, per-day %v", scope, i, p.Day, *p.CostUSD, *d.CostUSD)
+			}
+			if p.Sessions == 0 {
+				t.Errorf("scope %q series[%d] %s has no sessions; the fixture plants three per day", scope, i, p.Day)
+			}
+		}
+	}
 }

@@ -117,17 +117,7 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 	if err != nil {
 		return a, err
 	}
-	// SUM rule: NULL only if ALL usage-bearing turns are unpriced; otherwise
-	// sum the priced ones (a partial sum beats lying with zero).
-	if a.UsageTurns > 0 && a.PricedTurns == 0 {
-		a.CostUSD = nil
-	} else {
-		v := 0.0
-		if costSum.Valid {
-			v = costSum.Float64
-		}
-		a.CostUSD = &v
-	}
+	a.CostUSD = windowCost(costSum, a.PricedTurns, a.UsageTurns)
 
 	// Errors: api_error events and failed tool calls both carry status='error'.
 	err = h.DB.QueryRow(`
@@ -152,6 +142,21 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 		WHERE e.type = 'test_run' AND e.ts >= ? AND e.ts < ? AND p.archived = 0`+projFilter, args...).Scan(
 		&a.TestRuns, &a.TestsPassed, &a.TestsFailed, &a.TestsSkipped)
 	return a, err
+}
+
+// windowCost applies the cost SUM rule to one window's turn aggregates: NULL
+// only if ALL usage-bearing turns are unpriced; otherwise the sum of the priced
+// ones (a partial sum beats lying with zero). Shared by windowAggregates and
+// the overview's grouped series so both apply the same rule.
+func windowCost(costSum sql.NullFloat64, pricedTurns, usageTurns int64) *float64 {
+	if usageTurns > 0 && pricedTurns == 0 {
+		return nil
+	}
+	v := 0.0
+	if costSum.Valid {
+		v = costSum.Float64
+	}
+	return &v
 }
 
 // activeSessions counts currently-active sessions (not day-scoped: a session
