@@ -6,11 +6,8 @@
 // is always false there and its Escape/backdrop/Cancel behavior is unchanged
 // — this suite only exercises Reject, the one path with something to lose.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only. Run it with
-//   npx vitest run --environment jsdom src/pages/planning/RevisionReview.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/planning/RevisionReview.test.tsx`.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

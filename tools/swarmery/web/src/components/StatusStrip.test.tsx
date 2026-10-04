@@ -4,8 +4,10 @@
 // three cells (label + value + delta, optional link, tone) and the segmented
 // range control, which fires onChange only for a NEW value.
 //
-// Dev-only suite (web/tsconfig.json excludes *.test.tsx). Run with
-//   npx vitest run src/components/StatusStrip.test.tsx
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/components/StatusStrip.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

@@ -10,13 +10,10 @@
 //   4. No scope suffix after the name; a badge marks only a project override.
 //   5. A filter box appears only past 12 agents.
 //
-// The web app ships no committed test runner (CI is `npm run build` only), so
-// this suite is dev-only. Run it with
-//   npx vitest run --environment jsdom src/workspace/AgentPicker.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
-// (none of them are committed dependencies). web/tsconfig.json EXCLUDES
-// *.test.tsx, so `npm run build` does NOT type-check this file.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/workspace/AgentPicker.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';

@@ -3,10 +3,8 @@
 // the regression that fences with any OTHER info string still render exactly
 // the <pre> they always did.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only: run it with
-//   npx vitest run src/lib/markdown.test.tsx
-// (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/lib/markdown.test.tsx`.
 //
 // Rendering goes through react-dom/server's renderToStaticMarkup, so no DOM
 // environment is needed. Consequence: effects never run, so MermaidBlock's

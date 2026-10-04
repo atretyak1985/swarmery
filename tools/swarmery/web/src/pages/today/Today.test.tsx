@@ -10,9 +10,8 @@
 //      Live now lists the running session.
 //   3. /p/:slug renders the same page with the project deck.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/today
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/today`.
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';

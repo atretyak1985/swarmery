@@ -8,9 +8,8 @@
 //   3. Clicking a tab writes `?tab=` and swaps the body.
 //   4. A stale `?tab=docs` link falls back to Memory.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/knowledge
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/knowledge`.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';

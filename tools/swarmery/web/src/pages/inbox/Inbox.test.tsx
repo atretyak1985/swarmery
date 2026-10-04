@@ -11,9 +11,8 @@
 //      approval renders QuestionForm instead of approve.
 //   6. A failed source is a "couldn't load" row, not a blank Inbox.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/inbox
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/inbox`.
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';

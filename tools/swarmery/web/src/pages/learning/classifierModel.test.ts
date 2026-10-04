@@ -3,9 +3,8 @@
 // The classifier copy model (Canvas v3 phase 6, artboard 1e): one status
 // sentence per question — no data, unchecked, a percentage, or suspicious.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/learning
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/learning`.
 
 import { describe, expect, it } from 'vitest';
 import type { QuestionStats } from '../../api/decisions';

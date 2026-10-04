@@ -12,11 +12,8 @@
 //      not touch follows the server, and a field they DID touch is never
 //      written over a server change that landed underneath it.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only. Run it with
-//   npx vitest run --environment jsdom src/workspace/TaskModal.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/workspace/TaskModal.test.tsx`.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

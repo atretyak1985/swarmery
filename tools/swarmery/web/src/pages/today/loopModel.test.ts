@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
-// The loop map model (Canvas v3 phase 4). Dev-only suite:
-//   npx vitest run src/pages/today
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// The loop map model (Canvas v3 phase 4).
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/today`.
 
 import { describe, expect, it } from 'vitest';
 import type { Epic, EpicPhase } from '../../api/types';

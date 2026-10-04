@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 //
 // The two honest states of a session that the daemon minted but ingest has not
-// seen yet. Dev-only suite (see PlanRunCard.test.tsx for how to run it):
-//   npx vitest run --environment jsdom src/pages/detail/PendingRunNotice.test.tsx
+// seen yet.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/detail/PendingRunNotice.test.tsx`.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
