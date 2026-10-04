@@ -18,10 +18,9 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { fetchStatsOverview } from '../api';
+import { fetchSessions } from '../api';
 import type { WSMessage } from '../api/types';
 import { ProjectSwitcher } from '../workspace/ProjectSwitcher';
-import { isoDay } from '../lib/format';
 import { loadLastProject } from '../lib/lastProject';
 import { PLACES, placesIn, resolvePlaceHref, type Place } from '../lib/nav';
 import { useScope } from '../lib/scope';
@@ -51,10 +50,15 @@ export function useSidebarSignals(scope: string | null = null): SidebarSignals {
   const reloadInbox = inbox.reload;
 
   const syncLive = useCallback((): void => {
-    // `active` / `waiting_approval` count sessions in that state NOW (not
-    // day-scoped — internal/api/stats.go activeSessions).
-    fetchStatsOverview(isoDay())
-      .then((o) => setLive(o.active + o.waiting_approval > 0))
+    // One active session lights the dot, so a one-row page of active sessions
+    // answers it (same filter as stats.go activeSessions: status 'active',
+    // archived projects excluded, plus soft-hidden rows). NOT stats/overview:
+    // its 14-day series runs ~60 queries and, on the daemon's single DB
+    // connection, stalled every other page while it ran — and this fires on
+    // every page load and 2 s after every session update. Its
+    // `waiting_approval` was a constant 0, so nothing is lost.
+    fetchSessions({ status: 'active' }, { limit: 1 })
+      .then((r) => setLive(r.sessions.length > 0))
       .catch(() => setLive(false));
   }, []);
   useEffect(syncLive, [syncLive]);
