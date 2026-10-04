@@ -8,7 +8,10 @@ package api
 // currently-active sessions only when the requested day is today, else 0.
 
 import (
+	"database/sql"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -109,23 +112,13 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// series: the last 14 local days ending at `day`, ascending, zero days
-	// included (each day reuses the exact stats/today window semantics).
-	for i := 13; i >= 0; i-- {
-		d := dayStart.AddDate(0, 0, -i)
-		ds, de := dayBounds(d)
-		da, err := h.windowAggregates(ds, de, projFilter, projArgs)
-		if err != nil {
-			writeErr(w, err)
-			return
-		}
-		o.Series = append(o.Series, seriesPointDTO{
-			Day:      d.Format(dayFmt),
-			Sessions: da.Sessions,
-			Tokens:   da.TokensIn + da.TokensOut,
-			CostUSD:  da.CostUSD,
-			Errors:   da.Errors,
-		})
+	// included (each day has the exact stats/today window semantics).
+	series, err := h.seriesAggregates(dayStart, projFilter, projArgs)
+	if err != nil {
+		writeErr(w, err)
+		return
 	}
+	o.Series = series
 
 	// errors_by_project: that day, descending, max 8.
 	rows, err := h.DB.Query(`
@@ -206,4 +199,131 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 	writeJSON(w, o, rows.Err())
+}
+
+// seriesDays is the length of the overview's trailing series.
+const seriesDays = 14
+
+// seriesAggregates computes the overview's 14-day series ending at lastDay in
+// one grouped pass per table: sessions, turns and error events. It used to call
+// windowAggregates once per day — 14 × 4 queries, several scanning a table —
+// which held the store's single connection for seconds on every overview
+// request and stalled every other page behind it.
+//
+// Each row is assigned to its day by the SAME [start, end) bounds dayBounds
+// gives windowAggregates, through a CASE ladder over those bounds rather than
+// date arithmetic in SQL, so local days stay exact across DST changes and in
+// zones with non-hour offsets. Every point therefore equals that day's own
+// windowAggregates (TestStatsOverviewSeriesMatchesPerDayAggregates).
+func (h *Handler) seriesAggregates(lastDay time.Time, projFilter string, projArgs []any) ([]seriesPointDTO, error) {
+	days := make([]time.Time, seriesDays)
+	bounds := make([]any, seriesDays+1) // bounds[i] .. bounds[i+1] is days[i]
+	for i := range days {
+		days[i] = lastDay.AddDate(0, 0, i-(seriesDays-1))
+		start, end := dayBounds(days[i])
+		bounds[i], bounds[i+1] = start, end
+	}
+
+	// grouped runs one aggregate over [bounds[0], bounds[14]) grouped by day
+	// index, and hands each row (day index first) to scan.
+	grouped := func(col, aggCols, from, where string, scan func(*sql.Rows) error) error {
+		var day strings.Builder
+		day.WriteString("CASE")
+		for i := 1; i < seriesDays; i++ {
+			day.WriteString(" WHEN " + col + " < ? THEN " + strconv.Itoa(i-1))
+		}
+		// Rows past bounds[14] never get here (WHERE), so ELSE is the last day.
+		day.WriteString(" ELSE " + strconv.Itoa(seriesDays-1) + " END")
+
+		args := append([]any{}, bounds[1:seriesDays]...)
+		args = append(args, bounds[0], bounds[seriesDays])
+		args = append(args, projArgs...)
+		rows, err := h.DB.Query(`SELECT `+day.String()+` AS d, `+aggCols+` FROM `+from+
+			` WHERE `+where+col+` >= ? AND `+col+` < ? AND p.archived = 0`+projFilter+
+			` GROUP BY d`, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			if err := scan(rows); err != nil {
+				return err
+			}
+		}
+		return rows.Err()
+	}
+
+	var (
+		sessions, tokensIn, tokensOut, errs, priced, usage [seriesDays]int64
+		costSum                                            [seriesDays]sql.NullFloat64
+	)
+
+	// Sessions started on each day.
+	err := grouped("s.started_at", "COUNT(*)",
+		"sessions s JOIN projects p ON p.id = s.project_id", "",
+		func(r *sql.Rows) error {
+			var d int
+			var n int64
+			if err := r.Scan(&d, &n); err != nil {
+				return err
+			}
+			sessions[d] = n
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// Token and cost aggregates over each day's turns: the same columns, and
+	// the same SUM-rule inputs, as windowAggregates.
+	err = grouped("t.started_at", `COALESCE(SUM(t.tokens_in), 0),
+		       COALESCE(SUM(t.tokens_out), 0),
+		       SUM(t.cost_usd),
+		       COUNT(t.cost_usd),
+		       COALESCE(SUM(CASE WHEN t.tokens_in IS NOT NULL OR t.tokens_out IS NOT NULL
+		                           OR t.tokens_cache_read IS NOT NULL OR t.tokens_cache_write IS NOT NULL
+		                         THEN 1 ELSE 0 END), 0)`,
+		"turns t JOIN sessions s ON s.id = t.session_id JOIN projects p ON p.id = s.project_id", "",
+		func(r *sql.Rows) error {
+			var d int
+			var in, out, pr, us int64
+			var c sql.NullFloat64
+			if err := r.Scan(&d, &in, &out, &c, &pr, &us); err != nil {
+				return err
+			}
+			tokensIn[d], tokensOut[d], costSum[d], priced[d], usage[d] = in, out, c, pr, us
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// Errors: api_error events and failed tool calls both carry status='error'.
+	err = grouped("e.ts", "COUNT(*)",
+		"events e JOIN sessions s ON s.id = e.session_id JOIN projects p ON p.id = s.project_id",
+		"e.status = 'error' AND ",
+		func(r *sql.Rows) error {
+			var d int
+			var n int64
+			if err := r.Scan(&d, &n); err != nil {
+				return err
+			}
+			errs[d] = n
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]seriesPointDTO, seriesDays)
+	for i := range out {
+		out[i] = seriesPointDTO{
+			Day:      days[i].Format(dayFmt),
+			Sessions: sessions[i],
+			Tokens:   tokensIn[i] + tokensOut[i],
+			CostUSD:  windowCost(costSum[i], priced[i], usage[i]),
+			Errors:   errs[i],
+		}
+	}
+	return out, nil
 }

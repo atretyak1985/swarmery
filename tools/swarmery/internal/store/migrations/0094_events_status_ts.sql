@@ -1,0 +1,13 @@
+-- 0094: an index for the error-event counts the stats endpoints run.
+--
+-- /api/stats/overview, /api/stats/today and the overview's errors_by_project all
+-- count `events WHERE status = 'error' AND ts >= ? AND ts < ?`. With no index
+-- leading on status, each of those is a FULL SCAN of events, payloads included:
+-- on the operator store (168k events, 4.6k of them errors) one scan took ~0.7 s
+-- cold and ~0.07 s warm, and the overview ran it several times per request on
+-- the store's single connection, so every other page queued behind it.
+--
+-- (status, ts) turns each count into a range seek over the error rows of the
+-- window only. Index-only; no data changes. Rollback is
+-- `DROP INDEX IF EXISTS idx_events_status_ts;`.
+CREATE INDEX IF NOT EXISTS idx_events_status_ts ON events(status, ts);
