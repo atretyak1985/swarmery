@@ -15,7 +15,9 @@
 # with --force or SWARMERY_SYNC_CACHE_FORCE=1. These cases use the
 # SWARMERY_REPO_ROOT test override so the guard runs against a disposable
 # fixture git repo instead of this real checkout (whose own branch is
-# whatever the test happens to run from).
+# whatever the test happens to run from). Finally it commits plugins/ changes
+# through scripts/git-hooks/post-commit in a fixture repo whose sync script is
+# a stale, unguarded stub, proving the hook refuses on its own.
 # Run locally with `bash scripts/tests/sync-cache.test.sh`; CI discovers
 # scripts/tests/*.test.sh.
 set -uo pipefail
@@ -120,6 +122,11 @@ printf '%s\n' "$out" | grep -q '1 with a version drift' && ok_case \
 printf '%s\n' "$out" | grep -q '1 config dir(s) without swarmery installs' && ok_case \
   || fail_case "summary should count the empty config dir; output: $out"
 
+# New source content the guarded runs below must NOT deliver: a refused run
+# that re-synced only already-synced files would leave no trace otherwise.
+printf 'echo after-guard\n' > "$SRC/core/hooks/after-guard.sh"
+guarded_copy="$DEF/plugins/cache/swarmery/core/1.9.0/hooks/after-guard.sh"
+
 # --- guard: linked worktree refuses ----------------------------------------
 before="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
 out_wt="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$LINKED_WORKTREE" bash "$SCRIPT" 2>&1)"
@@ -129,7 +136,7 @@ after_wt="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
 [ "$rc_wt" -eq 0 ] && ok_case || fail_case "linked worktree: expected exit 0, got $rc_wt"
 printf '%s\n' "$out_wt" | grep -qi 'not the primary worktree' && ok_case \
   || fail_case "linked worktree: refusal message missing; output: $out_wt"
-[ "$before" = "$after_wt" ] && ok_case \
+[ "$before" = "$after_wt" ] && [ ! -e "$guarded_copy" ] && ok_case \
   || fail_case "linked worktree: cache files changed despite refusal"
 
 # --- guard: non-main branch in primary worktree refuses ---------------------
@@ -141,22 +148,75 @@ after_branch="$(find "$DEF/plugins/cache" -newer "$tmp" 2>/dev/null | sort)"
 [ "$rc_branch" -eq 0 ] && ok_case || fail_case "non-main branch: expected exit 0, got $rc_branch"
 printf '%s\n' "$out_branch" | grep -qi "feature/y" && ok_case \
   || fail_case "non-main branch: refusal message missing branch name; output: $out_branch"
-[ "$before" = "$after_branch" ] && ok_case \
+[ "$before" = "$after_branch" ] && [ ! -e "$guarded_copy" ] && ok_case \
   || fail_case "non-main branch: cache files changed despite refusal"
 
 # --- override: SWARMERY_SYNC_CACHE_FORCE=1 proceeds -------------------------
 out_force_env="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$PRIMARY_NON_MAIN" SWARMERY_SYNC_CACHE_FORCE=1 bash "$SCRIPT" 2>&1)"
 rc_force_env=$?
 [ "$rc_force_env" -eq 0 ] && ok_case || fail_case "SWARMERY_SYNC_CACHE_FORCE=1: expected exit 0, got $rc_force_env"
-printf '%s\n' "$out_force_env" | grep -q 'installed dir(s) updated' && ok_case \
+printf '%s\n' "$out_force_env" | grep -q 'installed dir(s) updated' && [ -f "$guarded_copy" ] && ok_case \
   || fail_case "SWARMERY_SYNC_CACHE_FORCE=1 did not sync; output: $out_force_env"
+rm -f "$guarded_copy"
 
 # --- override: --force flag proceeds ----------------------------------------
 out_force_flag="$(HOME="$HOME_DIR" SWARMERY_PLUGINS_DIR="$SRC" SWARMERY_REPO_ROOT="$PRIMARY_NON_MAIN" bash "$SCRIPT" --force 2>&1)"
 rc_force_flag=$?
 [ "$rc_force_flag" -eq 0 ] && ok_case || fail_case "--force: expected exit 0, got $rc_force_flag"
-printf '%s\n' "$out_force_flag" | grep -q 'installed dir(s) updated' && ok_case \
+printf '%s\n' "$out_force_flag" | grep -q 'installed dir(s) updated' && [ -f "$guarded_copy" ] && ok_case \
   || fail_case "--force did not sync; output: $out_force_flag"
+
+# --- hook: scripts/git-hooks/post-commit guards on its own ------------------
+# The fixture repo's scripts/sync-cache.sh is a STALE, unguarded stub that only
+# drops a sentinel, so every refusal below proves the hook's own guard — the
+# case where an old worktree still carries a pre-guard copy of the script.
+HOOK_REPO="$tmp/hook-repo"
+SENTINEL="$tmp/hook-sentinel"
+HOOK_SRC="$(dirname "$SCRIPT")/git-hooks/post-commit"
+mkdir -p "$HOOK_REPO/scripts/git-hooks"
+git init -q -b main "$HOOK_REPO"
+cp "$HOOK_SRC" "$HOOK_REPO/scripts/git-hooks/post-commit"
+printf '#!/usr/bin/env bash\ntouch "%s"\n' "$SENTINEL" > "$HOOK_REPO/scripts/sync-cache.sh"
+git -C "$HOOK_REPO" config core.hooksPath scripts/git-hooks
+gitc() { git -c user.email=t@t -c user.name=t -c commit.gpgsign=false "$@"; }
+gitc -C "$HOOK_REPO" add -A
+gitc -C "$HOOK_REPO" commit -q -m init 2>/dev/null
+rm -f "$SENTINEL"
+git -C "$HOOK_REPO" worktree add -q -b feature/z "$tmp/hook-wt" >/dev/null 2>&1
+# commit_plugin <dir> <file> [env...] — commit a plugins/ change, print hook output
+commit_plugin() {
+  local dir="$1" file="$2"
+  shift 2
+  mkdir -p "$dir/plugins"
+  echo x > "$dir/plugins/$file"
+  gitc -C "$dir" add -A
+  env "$@" git -c user.email=t@t -c user.name=t -c commit.gpgsign=false -C "$dir" commit -q -m "$file" 2>&1
+}
+
+out_hook_wt="$(commit_plugin "$tmp/hook-wt" a)"
+[ ! -e "$SENTINEL" ] && printf '%s\n' "$out_hook_wt" | grep -q 'linked worktree' && ok_case \
+  || fail_case "hook: a linked-worktree plugin commit reached the (stale) script or printed no refusal; output: $out_hook_wt"
+
+gitc -C "$HOOK_REPO" checkout -q -b feature/w
+out_hook_branch="$(commit_plugin "$HOOK_REPO" b)"
+[ ! -e "$SENTINEL" ] && printf '%s\n' "$out_hook_branch" | grep -q "feature/w" && ok_case \
+  || fail_case "hook: a non-main plugin commit reached the (stale) script or printed no refusal; output: $out_hook_branch"
+gitc -C "$HOOK_REPO" checkout -q main
+
+echo y > "$HOOK_REPO/README"
+gitc -C "$HOOK_REPO" add -A
+gitc -C "$HOOK_REPO" commit -q -m readme 2>/dev/null
+[ ! -e "$SENTINEL" ] && ok_case \
+  || fail_case "hook: a commit that did not touch plugins/ ran the script"
+
+commit_plugin "$HOOK_REPO" c >/dev/null
+[ -e "$SENTINEL" ] && ok_case \
+  || fail_case "hook: a plugin commit in the primary worktree on main did not run the script"
+rm -f "$SENTINEL"
+
+commit_plugin "$tmp/hook-wt" d SWARMERY_SYNC_CACHE_FORCE=1 >/dev/null
+[ -e "$SENTINEL" ] && ok_case \
+  || fail_case "hook: SWARMERY_SYNC_CACHE_FORCE=1 did not let a linked-worktree commit run the script"
 
 printf 'sync-cache: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
