@@ -19,10 +19,12 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, useSidebarSignals } from './Sidebar';
+import { fetchSessions, fetchStatsOverview } from '../api';
 
 vi.mock('../api', () => ({
   fetchApprovals: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
   fetchStatsOverview: vi.fn(async () => ({ active: 1, waiting_approval: 0 })),
+  fetchSessions: vi.fn(async () => ({ sessions: [{ id: 1 }], nextCursor: null })),
 }));
 
 vi.mock('../lib/ws', () => ({ useLiveUpdates: () => undefined }));
@@ -62,6 +64,7 @@ function row(name: string): HTMLElement {
 
 beforeEach(() => {
   window.localStorage.clear();
+  vi.clearAllMocks();
 });
 
 afterEach(cleanup);
@@ -164,5 +167,35 @@ describe('useSidebarSignals', () => {
       await Promise.resolve();
     });
     expect(screen.getByRole('status').textContent).toBe('5|true');
+  });
+
+  // The live dot is a now-property: one active session is enough. It must come
+  // from the cheap one-row sessions page, never from stats/overview, whose
+  // 14-day series held the daemon's single DB connection for seconds on every
+  // page and every session update.
+  it('asks for one active session, not the overview stats', async () => {
+    render(
+      <MemoryRouter>
+        <SignalsProbe />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchSessions).toHaveBeenCalledWith({ status: 'active' }, { limit: 1 });
+    expect(fetchStatsOverview).not.toHaveBeenCalled();
+  });
+
+  it('turns the live dot off when no session is active', async () => {
+    vi.mocked(fetchSessions).mockResolvedValueOnce({ sessions: [], nextCursor: null } as never);
+    render(
+      <MemoryRouter>
+        <SignalsProbe />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('status').textContent).toBe('5|false');
   });
 });
