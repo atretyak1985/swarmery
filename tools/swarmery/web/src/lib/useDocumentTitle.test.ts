@@ -4,10 +4,10 @@
 // mounted, follows changes, restores the previous title on unmount, and leaves
 // the title alone for `null`.
 //
-// Dev-only suite (web/tsconfig.json excludes test files). Run with
-//   npx vitest run src/lib/useDocumentTitle.test.ts
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/lib/useDocumentTitle.test.ts`.
+// web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

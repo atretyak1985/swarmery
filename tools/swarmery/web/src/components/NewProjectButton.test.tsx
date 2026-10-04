@@ -5,11 +5,8 @@
 // field, Escape asks first, a second Escape dismisses the confirm (typed
 // value survives), and confirming discard actually closes.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only. Run it with
-//   npx vitest run --environment jsdom src/components/NewProjectButton.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/components/NewProjectButton.test.tsx`.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

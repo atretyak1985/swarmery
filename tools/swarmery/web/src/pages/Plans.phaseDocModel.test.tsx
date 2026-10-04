@@ -18,11 +18,10 @@
 // ABSENCE — "picker on default ⇒ no body" — rather than about the UI sending the
 // doc's value, which would be a second ladder to drift.
 //
-// Same dev-only runner story as Plans.phaseRunModel.test.tsx:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
-//   npx vitest run src/pages/Plans.phaseDocModel.test.tsx
-// web/tsconfig.json EXCLUDES *.test.tsx, so `npm run build` does not type-check
-// this file.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/Plans.phaseDocModel.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';

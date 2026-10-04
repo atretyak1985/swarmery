@@ -9,9 +9,8 @@
 //   3. Choosing "watching" calls putDecisionMode with 'shadow'.
 //   4. Proof renders its empty state and performs no network call.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/learning
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/learning`.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';

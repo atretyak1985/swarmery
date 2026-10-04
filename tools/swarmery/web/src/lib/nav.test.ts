@@ -8,7 +8,10 @@
 //      itself, so adding a route without extending a place's segments fails
 //      here instead of rendering a page with no highlighted sidebar row.
 //
-// Dev-only suite (web/tsconfig.json excludes *.test.ts). Run with `npm test`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/lib/nav.test.ts`.
+// web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

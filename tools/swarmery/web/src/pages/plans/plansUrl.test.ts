@@ -6,11 +6,8 @@
 // a hand-rolled split), parsed back and rebuilt: build → parse → build must be
 // the identity for every canonical target.
 //
-// The web app ships no committed test runner (CI is `npm run build` only), so
-// this suite is dev-only. Run it with
-//   npx vitest run src/pages/plans/plansUrl.test.ts
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/plans/plansUrl.test.ts`.
 // web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 

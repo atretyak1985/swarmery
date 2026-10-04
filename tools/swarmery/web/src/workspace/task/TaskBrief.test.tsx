@@ -8,11 +8,8 @@
 // which has no provenance at all and must still say something rather than render
 // a blank where a fact should be.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only. Run it with
-//   npx vitest run --environment jsdom src/workspace/task/TaskBrief.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/workspace/task/TaskBrief.test.tsx`.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

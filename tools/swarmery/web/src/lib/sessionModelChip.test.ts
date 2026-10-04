@@ -1,6 +1,5 @@
-// Run with:
-//   npx vitest run src/lib/sessionModelChip.test.ts
-// (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/lib/sessionModelChip.test.ts`.
 //
 // The bug pinned here is a SILENT one: modelLast/modelChanged rode the session
 // DTO with no reader, so a session an Opus 5.5 safeguard moved onto an older

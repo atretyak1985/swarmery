@@ -4,8 +4,10 @@
 // ArrowLeft/ArrowRight with wraparound, Home/End, selection follows focus, a
 // roving tabindex — plus useTabParam's `?tab=` mirror.
 //
-// Dev-only suite (web/tsconfig.json excludes *.test.tsx). Run with
-//   npx vitest run src/components/Tabs.test.tsx
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/components/Tabs.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';

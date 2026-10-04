@@ -4,9 +4,8 @@
 // approvals sort first by expiry, the rest oldest-first, classifier questions
 // group per session, tabs filter and count.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/inbox/inboxModel.test.ts
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/inbox/inboxModel.test.ts`.
 
 import { describe, expect, it } from 'vitest';
 import type { Alert } from '../../api/alerts';

@@ -1,10 +1,8 @@
 // Unit tests for the plan-sessions column's slice rules (plan-sessions phase
 // filter, phase 1). Pure logic, no DOM.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only: run it with
-//   npx vitest run src/lib/planSessionScope.test.ts
-// (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/lib/planSessionScope.test.ts`.
 // web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 //

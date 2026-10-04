@@ -1,11 +1,10 @@
 // Unit tests for the Sessions page's arrangement rules (day-first timeline
 // redesign). Pure logic, no DOM.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only: run it with
-//   npx vitest run src/lib/sessionsView.test.ts
-// (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
-// The file still type-checks under `tsc --noEmit` in the normal build.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/lib/sessionsView.test.ts`.
+// web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { describe, expect, it } from 'vitest';
 import type { Session, SessionPlanGroup, SessionStatus } from '../api/types';

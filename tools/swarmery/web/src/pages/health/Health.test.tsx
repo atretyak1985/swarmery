@@ -10,9 +10,8 @@
 //   4. The embedded Retro (Agents) and Analytics (Cost) render no range row of
 //      their own: exactly one range control on the page.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/health
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/health`.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';

@@ -1,6 +1,6 @@
 // Sessions page view model — the whole arrangement decision, as pure functions
 // over the loaded session window. No React, no DOM: the page renders whatever
-// this module returns, and the (dev-only) vitest suite next to it locks the
+// this module returns, and the vitest suite next to it locks the
 // rules the UI used to bury inside JSX.
 //
 // The contract the page relies on:

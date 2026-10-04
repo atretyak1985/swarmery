@@ -5,9 +5,8 @@
 // the previous window), the one sentence (with its honest fallback) and the
 // agent ranking.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/health
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/health`.
 
 import { describe, expect, it } from 'vitest';
 import type { RetroAgentRow, RetroAgentsResp, RetroFrictionResp } from '../../api/types';

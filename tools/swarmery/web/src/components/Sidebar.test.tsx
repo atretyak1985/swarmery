@@ -11,9 +11,10 @@
 //   4. ⌘K / Ctrl+K opens the command palette (the sidebar owns the listener).
 //   5. useSidebarSignals feeds Inbox = the Inbox's own count (useInboxItems).
 //
-// Dev-only suite (web/tsconfig.json excludes *.test.tsx). Run with
-//   npx vitest run src/components/Sidebar.test.tsx
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/components/Sidebar.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

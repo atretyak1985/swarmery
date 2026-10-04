@@ -3,10 +3,8 @@
 // notice, the file a guide belongs in, and the SectionTabs keyboard reducer.
 // Pure logic, no DOM.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only: run it with
-//   npx vitest run src/pages/system/docsSection.test.ts
-// (vitest is fetched on demand; it is intentionally NOT a committed dependency.)
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/system/docsSection.test.ts`.
 
 import { describe, expect, it } from 'vitest';
 import type { SystemDocs } from '../../api/types';

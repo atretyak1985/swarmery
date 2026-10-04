@@ -5,8 +5,10 @@
 // close, Esc closes, Tab stays inside, ↑/↓ step when onPrev/onNext are given
 // (but not while typing).
 //
-// Dev-only suite (web/tsconfig.json excludes *.test.tsx). Run with
-//   npx vitest run src/components/Drawer.test.tsx
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/components/Drawer.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';

@@ -9,9 +9,8 @@
 //   4. Plugins lists the project's plugins under /p/:slug/system and shows an
 //      empty state in the fleet.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/system/SystemShell.tabs.test.tsx
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/system/SystemShell.tabs.test.tsx`.
 
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';

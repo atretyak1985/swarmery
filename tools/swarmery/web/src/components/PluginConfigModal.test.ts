@@ -6,10 +6,10 @@
 // (no JSX loader is configured for it), so the rendered case builds its
 // element with React.createElement instead of JSX.
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only: run it with
-//   npx vitest run --environment jsdom src/components/PluginConfigModal.test.ts
-// The file still type-checks under `tsc --noEmit` in the normal build.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/components/PluginConfigModal.test.ts`.
+// web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { createElement } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';

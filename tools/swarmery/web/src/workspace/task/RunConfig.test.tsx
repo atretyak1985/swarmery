@@ -8,13 +8,10 @@
 // three states are asserted one by one, plus the fourth (nothing chosen at all,
 // where the honest answer is "at dispatch").
 //
-// The web app ships no committed test runner (CI is `npm run build` only, and
-// the Go coverage gate excludes web/), so this suite is dev-only. Run it with
-//   npx vitest run --environment jsdom src/workspace/task/RunConfig.test.tsx
-// after fetching the runner on demand:
-//   npm i --no-save vitest jsdom @testing-library/react @testing-library/dom
-// web/tsconfig.json EXCLUDES *.test.tsx, so `npm run build` does NOT type-check
-// this file — the runner reports type errors as runtime failures instead.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/workspace/task/RunConfig.test.tsx`.
+// web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
+// checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

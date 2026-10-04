@@ -7,9 +7,8 @@
 //   2. `?tab=projects` shows the project list, embedded (no heading of its own).
 //   3. Accounts and Notifications each render their section alone.
 //
-// Dev-only suite. Run with
-//   npx vitest run src/pages/settings
-// after `npm i --no-save vitest jsdom @testing-library/react @testing-library/dom`.
+// Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
+// step). On its own: `npx vitest run src/pages/settings`.
 
 import { cleanup, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
