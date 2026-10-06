@@ -17,6 +17,7 @@ Agent roster and ownership metadata live in `AGENTS.md`, not here.
 |---|---|---|---|
 | PreToolUse(Edit\|Write) | `protect-sensitive-files.sh` | Blocks edits to secrets, keys, and other protected paths | — |
 | PreToolUse(Bash) | `bash-shape-guard.sh` | Refuses malformed Bash command shapes before the permission classifier sees them | — |
+| PreToolUse(Bash) | `prod-deploy-guard.sh` | Answers `ask` for a command matching a production-deploy pattern, so the native dialog shows even when an allow rule, auto mode or `bypassPermissions` would skip it; in a headless `-p` run that resolves to a denial. Never emits `allow`; burn-in in `docs/GATE-HARDENING.md` | `approvals.prodDeployPatterns` in `.claude/project.json`, `PROD_DEPLOY_GUARD_LOG` |
 | PreToolUse(Agent) | `architecture-freshness.sh` | Refuses a research-shaped subagent spawn once per session while the architecture map is stale | `SWARMERY_MAP_FRESHNESS=0`, `SWARMERY_MAP_STALE_DAYS` |
 | PostToolUse(Edit\|Write) | `code-formatter.sh` | Formats the edited file with the stack's formatter | — |
 | PostToolUse(Edit\|Write) | `type-checker.sh` | Type-checks after an edit | — |
