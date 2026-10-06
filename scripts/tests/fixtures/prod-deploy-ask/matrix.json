@@ -1,0 +1,273 @@
+{
+  "cli_version": "2.1.291 (Claude Code)",
+  "measured_at": "2026-10-06T15:47:37Z",
+  "model": "haiku",
+  "auto_model": "sonnet",
+  "auth": "operator-login",
+  "legs": {
+    "p-default-ask": {
+      "result": "honoured",
+      "hook": "ask",
+      "attempts": 1,
+      "hook_invoked": true,
+      "expected_mode": "default",
+      "cli_permission_mode": "default",
+      "permission_mode": "default",
+      "entrypoint_env": "sdk-cli",
+      "claude_env_names": [
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR"
+      ],
+      "session_env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+        "CLAUDE_CODE_SESSION_ATTENDED": "0"
+      },
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "p-allowlisted-ask": {
+      "result": "honoured",
+      "hook": "ask",
+      "attempts": 1,
+      "hook_invoked": true,
+      "expected_mode": "default",
+      "cli_permission_mode": "default",
+      "permission_mode": "default",
+      "entrypoint_env": "sdk-cli",
+      "claude_env_names": [
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR"
+      ],
+      "session_env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+        "CLAUDE_CODE_SESSION_ATTENDED": "0"
+      },
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "p-bypass-ask": {
+      "result": "honoured",
+      "hook": "ask",
+      "attempts": 1,
+      "hook_invoked": true,
+      "expected_mode": "bypassPermissions",
+      "cli_permission_mode": "bypassPermissions",
+      "permission_mode": "bypassPermissions",
+      "entrypoint_env": "sdk-cli",
+      "claude_env_names": [
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR"
+      ],
+      "session_env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+        "CLAUDE_CODE_SESSION_ATTENDED": "0"
+      },
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "p-bypass-deny": {
+      "result": "honoured",
+      "hook": "deny",
+      "attempts": 1,
+      "hook_invoked": true,
+      "expected_mode": "bypassPermissions",
+      "cli_permission_mode": "bypassPermissions",
+      "permission_mode": "bypassPermissions",
+      "entrypoint_env": "sdk-cli",
+      "claude_env_names": [
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR"
+      ],
+      "session_env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+        "CLAUDE_CODE_SESSION_ATTENDED": "0"
+      },
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "p-allowlisted-deny": {
+      "result": "honoured",
+      "hook": "deny",
+      "attempts": 1,
+      "hook_invoked": true,
+      "expected_mode": "default",
+      "cli_permission_mode": "default",
+      "permission_mode": "default",
+      "entrypoint_env": "sdk-cli",
+      "claude_env_names": [
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR"
+      ],
+      "session_env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+        "CLAUDE_CODE_SESSION_ATTENDED": "0"
+      },
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "p-auto-ask": {
+      "result": "honoured",
+      "hook": "ask",
+      "attempts": 1,
+      "hook_invoked": true,
+      "expected_mode": "auto",
+      "cli_permission_mode": "auto",
+      "permission_mode": "auto",
+      "entrypoint_env": "sdk-cli",
+      "claude_env_names": [
+        "CLAUDECODE",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_EFFORT",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR"
+      ],
+      "session_env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "sdk-cli",
+        "CLAUDE_CODE_SESSION_ATTENDED": "0"
+      },
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "i-default-ask": {
+      "result": "pending-manual",
+      "source": "not yet run"
+    },
+    "i-allowlisted-ask": {
+      "result": "pending-manual",
+      "source": "not yet run"
+    },
+    "i-auto-ask": {
+      "result": "pending-manual",
+      "source": "not yet run"
+    },
+    "i-bypass-ask": {
+      "result": "pending-manual",
+      "source": "not yet run"
+    },
+    "i-bypass-deny": {
+      "result": "pending-manual",
+      "source": "not yet run"
+    }
+  },
+  "controls": {
+    "ctl-default": {
+      "result": "blocked",
+      "hook": "none",
+      "attempts": 1,
+      "hook_invoked": false,
+      "expected_mode": "default",
+      "cli_permission_mode": "default",
+      "permission_mode": null,
+      "entrypoint_env": null,
+      "claude_env_names": [],
+      "session_env": {},
+      "cli_exit": 0,
+      "permission_denials": 1,
+      "is_error": false
+    },
+    "ctl-allowlisted": {
+      "result": "ran",
+      "hook": "none",
+      "attempts": 1,
+      "hook_invoked": false,
+      "expected_mode": "default",
+      "cli_permission_mode": "default",
+      "permission_mode": null,
+      "entrypoint_env": null,
+      "claude_env_names": [],
+      "session_env": {},
+      "cli_exit": 0,
+      "permission_denials": 0,
+      "is_error": false
+    },
+    "ctl-bypass": {
+      "result": "ran",
+      "hook": "none",
+      "attempts": 1,
+      "hook_invoked": false,
+      "expected_mode": "bypassPermissions",
+      "cli_permission_mode": "bypassPermissions",
+      "permission_mode": null,
+      "entrypoint_env": null,
+      "claude_env_names": [],
+      "session_env": {},
+      "cli_exit": 0,
+      "permission_denials": 0,
+      "is_error": false
+    },
+    "ctl-auto": {
+      "result": "ran",
+      "hook": "none",
+      "attempts": 1,
+      "hook_invoked": false,
+      "expected_mode": "auto",
+      "cli_permission_mode": "auto",
+      "permission_mode": null,
+      "entrypoint_env": null,
+      "claude_env_names": [],
+      "session_env": {},
+      "cli_exit": 0,
+      "permission_denials": 0,
+      "is_error": false
+    }
+  },
+  "headless_detectable": true
+}
