@@ -1776,7 +1776,15 @@ func cmdServe(args []string) error {
 	// Expired quota breakers: admission closes a quota breaker once its reset has
 	// passed, but an account nothing is admitted onto would keep its Inbox alert
 	// ("paused") up long after the limit reset. The sweep closes it on time.
-	go (&runcore.BreakerTicker{DB: db}).Run(context.Background())
+	//
+	// The same sweep re-probes open AUTH breakers: an account whose login came
+	// back through a `/login` in a terminal resumes on its own instead of
+	// waiting for "Probe & resume". Stage one every 2m, the full probe only
+	// after it answers ready and at most every 30m; SWARMERY_PREFLIGHT_TTL=0
+	// switches it off with the pre-flight.
+	go (&runcore.BreakerTicker{
+		DB: db, LoginProbe: runcore.ProbeLogin, RunProbe: runcore.ProbeAccount,
+	}).Run(context.Background())
 
 	// retro phase 3: the advisor rule engine — deterministic recommendations
 	// (R1..R6) refreshed once at startup and every 24h, plus on demand via
