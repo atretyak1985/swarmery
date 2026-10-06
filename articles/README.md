@@ -12,7 +12,8 @@ articles/
 │   ├── PUBLICATION      one line, https://<name>.substack.com;
 │   │                    written on the first /publish-substack run
 │   └── <slug>/
-│       ├── article.md   the article: front matter + body
+│       ├── article.md   the article as published: front matter + body
+│       ├── article.uk.md  the same article in the author's working language
 │       ├── brief.md     thesis, outline, fact sources, interview record
 │       ├── assets/      images and screenshots the article embeds
 │       ├── links.txt    where it went live, one `outlet = url` per line

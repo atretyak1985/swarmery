@@ -103,6 +103,15 @@ Show the thesis and the outline in chat. Draft once the author approves them.
 
 ## 4. Draft `article.md`
 
+When `STYLE.md` names a working language for the author that differs from the
+article's language, the article exists in two files. Write
+`article.<lang>.md` in the author's language first (`article.uk.md` for
+Ukrainian): that is the version the author reads and edits. Then write
+`article.md` in the article's language as its translation; that is the version
+that gets published. Both carry the same paragraphs in the same order with the
+same numbers, and every later edit to one is carried into the other in the same
+turn.
+
 - **Every sentence has a source.** A fact about the project comes from the fact
   sheet. An experience, motive, opinion or reaction comes from an interview
   answer. What someone else's post says is attributed to that post and linked.
@@ -140,8 +149,8 @@ Show the thesis and the outline in chat. Draft once the author approves them.
 
 ## 6. Hand over
 
-Report the path, the word count, three title options with a subtitle of at most
-255 characters, what is still unverified, and the images the author has to
+Report the path of each version, the word count, three title options with a
+subtitle of at most 255 characters, what is still unverified, and the images the author has to
 supply. When the author edits the draft or comments on it, write the part that
 will hold for the next article into `articles/STYLE.md`.
 

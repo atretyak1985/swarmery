@@ -46,7 +46,12 @@ author edits a draft or comments on one.
 
 ## Process
 
-- The interview is held in Ukrainian; the article is written in English.
+- The author's working language is Ukrainian. The interview is held in
+  Ukrainian and the article is published in English.
+- Every article exists in two versions: `article.uk.md`, which the author reads
+  and edits, and `article.md` in English, which is published. An edit to one is
+  carried into the other (asked for on 2026-10-06, after the first article
+  arrived in English only).
 - Still owed to readers: a post on lessons and forecasts with results,
   promised on 2026-09-28 and again on 2026-09-29.
 
