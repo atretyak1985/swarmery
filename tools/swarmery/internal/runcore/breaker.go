@@ -15,7 +15,9 @@ package runcore
 //
 //   - the stored state (account_breaker, migration 0091), opened by a run's
 //     classified exit (runtruth), a fresh API-error transcript record (ingest)
-//     or a probe, and closed by a reset, a ready probe, a login or the operator;
+//     or a probe, and closed by a reset, a ready probe (the operator's, or the
+//     sweep's own re-probe of an auth opening — BreakerTicker), a login or the
+//     operator;
 //   - the PRE-FLIGHT: before the first run after a quiet period a single-flight
 //     probe checks the account, so a failure is caught before a volley of runs
 //     starts rather than after the first of them has died.
@@ -197,7 +199,7 @@ func SetPreflightProbe(p AccountProbeFunc) AccountProbeFunc {
 //     different project than the run in question. PreflightPingEnv=off skips
 //     this stage.
 func ProbeAccount(ctx context.Context, env []string) claudeprobe.Result {
-	r := claudeprobe.ProbeEnv(ctx, env)
+	r := ProbeLogin(ctx, env)
 	if r.Status != claudeprobe.StatusReady || !preflightPingEnabled() {
 		return r
 	}
@@ -380,12 +382,61 @@ func CloseExpiredBreakers(db *sql.DB, now time.Time) (int, error) {
 // DefaultBreakerSweepInterval is how often BreakerTicker sweeps.
 const DefaultBreakerSweepInterval = time.Minute
 
-// BreakerTicker runs CloseExpiredBreakers periodically — automode.Ticker's shape.
+// The re-probe gaps of an open AUTH breaker (BreakerTicker).
+const (
+	// DefaultAuthLoginGap is how often stage one (`claude auth status`: local,
+	// no tokens, no API call) is asked about an account whose auth breaker is
+	// open, counted from the opening.
+	DefaultAuthLoginGap = 2 * time.Minute
+	// DefaultAuthPingGap is the least time between two FULL probes of one
+	// opening. The full probe ends in a real API call, and an account whose
+	// login is intact but which Claude refuses answers ready at stage one every
+	// time — without the gap it would be pinged on every sweep for as long as
+	// it stays refused.
+	DefaultAuthPingGap = 30 * time.Minute
+)
+
+// ProbeLogin is stage one of ProbeAccount on its own — `claude auth status`
+// under env, nothing else. The sweep's LoginProbe in production.
+func ProbeLogin(ctx context.Context, env []string) claudeprobe.Result {
+	return claudeprobe.ProbeEnv(ctx, env)
+}
+
+// BreakerTicker is the breakers' periodic sweep — automode.Ticker's shape. It
+// closes what can close without the operator:
+//
+//   - a quota opening whose reset time has passed (CloseExpiredBreakers);
+//   - an AUTH opening whose account can run again — when LoginProbe and
+//     RunProbe are both set. An auth breaker has no reset time, and the usual
+//     way its account recovers is a `/login` typed in a terminal, which tells
+//     the daemon nothing: without the re-probe the account stays "paused" until
+//     someone presses "Probe & resume".
+//
+// One goroutine drives a ticker: Run and Once are not safe to call concurrently.
 type BreakerTicker struct {
 	DB       *sql.DB
 	Interval time.Duration
 	// Now is the clock; nil means time.Now. A seam for tests.
 	Now func() time.Time
+	// LoginProbe is stage one alone (ProbeLogin in production) and RunProbe the
+	// full probe (ProbeAccount). BOTH nil-able, and the re-probe runs only when
+	// both are set — the same default as the pre-flight's, for the same reason:
+	// a ticker built as a bare literal must never spawn the real CLI.
+	// SWARMERY_PREFLIGHT_TTL=0 switches the re-probe off too: it is the knob
+	// that says the daemon probes nothing on its own.
+	LoginProbe AccountProbeFunc
+	RunProbe   AccountProbeFunc
+
+	auth map[string]authReprobe // account key → the re-probe state of its open auth breaker
+}
+
+// authReprobe is when one auth OPENING was last asked. It is keyed by the
+// opening (openedAt), so a breaker that closed and opened again owes the
+// previous opening's gaps nothing.
+type authReprobe struct {
+	openedAt string
+	loginAt  time.Time // the last stage-one probe; zero before the first
+	pingAt   time.Time // the last full probe; zero before the first
 }
 
 // Run sweeps once immediately, then on every tick, until ctx is cancelled.
@@ -394,7 +445,7 @@ func (t *BreakerTicker) Run(ctx context.Context) {
 	if iv <= 0 {
 		iv = DefaultBreakerSweepInterval
 	}
-	t.Once()
+	t.sweep(ctx)
 	tick := time.NewTicker(iv)
 	defer tick.Stop()
 	for {
@@ -402,7 +453,7 @@ func (t *BreakerTicker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-			t.Once()
+			t.sweep(ctx)
 		}
 	}
 }
@@ -410,13 +461,98 @@ func (t *BreakerTicker) Run(ctx context.Context) {
 // Once runs a single sweep. A failure is logged and the breakers are left as
 // they were; the admission path still closes an expired one on its own.
 func (t *BreakerTicker) Once() {
+	t.sweep(context.Background())
+}
+
+func (t *BreakerTicker) sweep(ctx context.Context) {
 	now := time.Now
 	if t.Now != nil {
 		now = t.Now
 	}
-	if _, err := CloseExpiredBreakers(t.DB, now()); err != nil {
+	at := now()
+	if _, err := CloseExpiredBreakers(t.DB, at); err != nil {
 		log.Printf("warning: runcore: sweep expired breakers: %v", err)
 	}
+	t.reprobeAuth(ctx, at)
+}
+
+// reprobeAuth asks about every open auth breaker that is due, in two steps:
+//
+//  1. LoginProbe, once per DefaultAuthLoginGap. Not ready → nothing changes and
+//     nothing is written: the account is exactly as paused as it was.
+//  2. Only when step 1 answered ready, and at most once per DefaultAuthPingGap:
+//     ResumeBreaker with RunProbe — the operator's "Probe & resume", with all of
+//     its outcomes (ready closes the breaker, a limit replaces it with a quota
+//     opening, anything else leaves it).
+//
+// Both steps run under AccountEnv(account), like the resume they stand in for.
+// The probes run inline, each bounded by preflightTimeout: a sweep with a paused
+// account may take that long, and the next tick simply follows it.
+func (t *BreakerTicker) reprobeAuth(ctx context.Context, now time.Time) {
+	if t.DB == nil || t.LoginProbe == nil || t.RunProbe == nil || PreflightTTLFromEnv() <= 0 {
+		return
+	}
+	open, err := store.ListAccountBreakers(t.DB, true)
+	if err != nil {
+		log.Printf("warning: runcore: list open breakers for the auth re-probe: %v", err)
+		return
+	}
+	// Rebuilt every sweep, so an account whose breaker closed is forgotten.
+	states := make(map[string]authReprobe, len(open))
+	for _, b := range open {
+		if b.Kind != store.BreakerKindAuth {
+			continue
+		}
+		st := t.auth[b.Account]
+		if st.openedAt != b.OpenedAt {
+			st = authReprobe{openedAt: b.OpenedAt}
+		}
+		if t.reprobeOne(ctx, b, &st, now) {
+			continue // closed, or replaced by a quota opening: no auth state left to keep
+		}
+		states[b.Account] = st
+	}
+	t.auth = states
+}
+
+// reprobeOne runs the due steps for one open auth breaker and reports whether
+// the auth opening is gone.
+func (t *BreakerTicker) reprobeOne(ctx context.Context, b store.AccountBreaker, st *authReprobe, now time.Time) (gone bool) {
+	// Before the first probe the gap is counted from the opening: whatever
+	// opened the breaker has only just watched the account fail.
+	last := st.loginAt
+	if last.IsZero() {
+		last, _ = time.Parse(time.RFC3339, b.OpenedAt) // unparseable → zero → due now
+	}
+	if now.Sub(last) < DefaultAuthLoginGap {
+		return false
+	}
+	st.loginAt = now
+	if !t.probeLogin(ctx, b.Account) {
+		return false
+	}
+	if !st.pingAt.IsZero() && now.Sub(st.pingAt) < DefaultAuthPingGap {
+		return false
+	}
+	st.pingAt = now
+
+	pctx, cancel := context.WithTimeout(ctx, preflightTimeout)
+	defer cancel()
+	r, err := ResumeBreaker(pctx, t.DB, b.Account, t.RunProbe, now)
+	if err != nil {
+		log.Printf("warning: runcore: auth re-probe account=%s: %v", b.Account, err)
+		return false
+	}
+	log.Printf("runcore: auth re-probe account=%s status=%s", b.Account, r.Status)
+	return r.Status == claudeprobe.StatusReady || r.Status == claudeprobe.StatusLimited
+}
+
+// probeLogin is step 1 for one account: whether stage one says its login is
+// there.
+func (t *BreakerTicker) probeLogin(ctx context.Context, account string) bool {
+	pctx, cancel := context.WithTimeout(ctx, preflightTimeout)
+	defer cancel()
+	return safeProbe(pctx, t.LoginProbe, AccountEnv(account), account).Status == claudeprobe.StatusReady
 }
 
 func refusalOf(b store.AccountBreaker) *AccountBreakerError {
