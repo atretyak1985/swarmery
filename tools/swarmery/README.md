@@ -393,3 +393,38 @@ effort from `SWARMERY_RESUME_EFFORT`, not from the routed effort.
 4. Roll back by setting the surface to `off` — identical to pre-feature
    behaviour, pinned argv-for-argv by `TestRouteOffGolden` — or back to
    `shadow` to keep recording.
+
+## Nightly inbox triage
+
+`config/routines/inbox-triage.json` ships a routine, `inbox-triage-nightly`,
+that labels the classifier queue every night at 03:30 without the operator. Its
+one `command` step runs
+`swarmery triage run --kinds classifier --cap 60 --trigger schedule --wait`:
+a triage run on the running daemon limited to **the classifier kind**, and to
+**at most 60 sessions a night**. It writes classifier labels and records its
+verdicts; it does not accept lessons, dismiss recommendations or decide anything
+else in the inbox. A machine
+asleep at 03:30 runs it once on wake (`catchUp: run_one`).
+
+The daemon never seeds it by itself. Seed it once, from `tools/swarmery/`
+(idempotent by name — seeding again updates the same routine):
+
+```bash
+swarmery routine seed --from config/routines/inbox-triage.json
+```
+
+Two ways to stop it:
+
+- **Disable the routine** on the Routines page (`enabled=false`): the scheduler
+  never fires it again; every other routine keeps running.
+- **`SWARMERY_ROUTINES=0`** in the daemon env stops the scheduler for every
+  routine. A manual **Run now** on the Routines page still works with the
+  switch off — on purpose: the switch stops what fires on its own, not what the
+  operator asks for.
+
+The two subcommands behind it:
+
+| Command | What it does | Exit codes |
+|---|---|---|
+| `swarmery triage run [--kinds <a,b>] [--project <slug>] [--cap <n>] [--trigger operator\|schedule] [--wait] [--wait-timeout <dur>] [--port <n>] [--url <base>]` | Starts a run on the running daemon over HTTP (never opens the database). `--wait` polls it every 5 s until it ends and prints `triage run <id>: ok · applied N · suggested N · skipped N · failed N · $X.XX`; `--wait-timeout` (default 50m) stops waiting, not the run. | `0` the run ended ok, **or another run was already active** (the work is being done) · `1` the run ended failed, it no longer exists (404 on the poll), the wait timed out, or the command was cancelled (SIGINT/SIGTERM) · `2` usage, or the daemon is unreachable |
+| `swarmery triage check [--run <id>] [--strict-leftovers] [--db <path>]` | Read-only audit (opens the database without migrating, `query_only`): the run's status is `ok` and its counters match its verdict rows — both always strict. The classifier sessions still queued in the run's **own scope** (its project, or the whole fleet) are split into four buckets: **covered by this run** (a `sample`/`skipped`/`failed`/`rejected`/`suggested`/`undone`/`undoing` verdict from it on a queued decision — `applied` does not count, an applied label takes the question out of the queue; `undone` does, the operator took the label back), **held by an earlier run** (the engine's own blocking rule, applied to each queued decision over the runs with a lower id: a `sample`/`suggested`/`undone`/`undoing` verdict, a `skipped` one from the 7 days before this run started, or three `failed`/`rejected` ones in those 7 days — so this run skipped the session and wrote no row), **arrived after the run started**, and **unexplained** (listed by session). Unexplained sessions fail the check only with `--strict-leftovers`; without it they are informational, since a run that stopped at its cap leaves them too. Queue decisions the classifier cannot reach — no session, or a session not ingested — are counted for information and never fail the check. A run whose kinds exclude `classifier` skips the queue checks. Default run: the newest fleet-wide run the operator started. | `0` everything matches · `1` a mismatch, or no such run · `2` usage or database error |

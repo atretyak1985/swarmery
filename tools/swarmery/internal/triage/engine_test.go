@@ -200,6 +200,31 @@ func TestPartBlockedRules(t *testing.T) {
 	}
 }
 
+// BlockedBefore is the blocking rule seen from one run's start: only the
+// verdicts of earlier runs count, and the windows are counted back from that
+// start — while partBlocked (the engine, now) counts every run.
+func TestBlockedBeforeCountsOnlyEarlierRuns(t *testing.T) {
+	start := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	s := newTestService(t, nil)
+	s.now = func() time.Time { return start.Add(2 * time.Hour) }
+	seedVerdict(t, s, "friction", "held", StateSample, start.Add(-time.Hour))
+	seedVerdict(t, s, "friction", "old-skip", StateSkipped, start.Add(-8*24*time.Hour))
+	seedVerdict(t, s, "friction", "recent-skip", StateSkipped, start.Add(-time.Hour))
+	this := mustInsertRun(t, s) // the audited run
+	seedVerdict(t, s, "friction", "later", StateSample, start.Add(time.Hour))
+
+	for ref, want := range map[string]bool{"held": true, "old-skip": false, "recent-skip": true, "later": false, "none": false} {
+		got, err := BlockedBefore(s.DB, "friction", ref, this, start)
+		if err != nil || got != want {
+			t.Errorf("BlockedBefore(%q) = %v, %v; want %v", ref, got, err, want)
+		}
+	}
+	// The engine's own view still blocks the part a later run holds.
+	if got, err := s.partBlocked("friction", "later"); err != nil || !got {
+		t.Errorf("partBlocked(later) = %v, %v; want true", got, err)
+	}
+}
+
 // B2: one blocked part blocks the whole item.
 func TestRunItemBlockedByAnyPart(t *testing.T) {
 	j := &stubJudge{value: "noise"}
