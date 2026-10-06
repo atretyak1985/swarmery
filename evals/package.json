@@ -3,7 +3,7 @@
   "private": true,
   "description": "promptfoo agent eval suites (pinned) for the swarmery marketplace CI gate",
   "devDependencies": {
-    "promptfoo": "0.121.20"
+    "promptfoo": "0.124.0"
   },
   "overrides": {
     "adm-zip": "^0.6.1",
