@@ -588,6 +588,8 @@ type frictionErrGroupDTO struct {
 	LastTs  string `json:"last_ts"`
 	// Up to 3 distinct sample session uuids, newest first.
 	Sessions []string `json:"sessions"`
+	// Triage is the group's derived triage state (friction_triage.go).
+	Triage frictionTriageDTO `json:"triage"`
 }
 
 type frictionApprovalsDTO struct {
@@ -694,6 +696,14 @@ func (h *Handler) buildRetroFriction(dr dateRange, pf string, pargs []any, proje
 	if len(groups) > frictionTopN {
 		groups = groups[:frictionTopN]
 	}
+	keys := make([]string, 0, len(groups))
+	for _, g := range groups {
+		keys = append(keys, g.Key)
+	}
+	states, err := h.frictionTriageStates(keys, time.Now())
+	if err != nil {
+		return frictionDTO{}, err
+	}
 	for _, g := range groups {
 		uuids := make([]string, 0, len(g.Samples))
 		for _, s := range g.Samples {
@@ -701,7 +711,7 @@ func (h *Handler) buildRetroFriction(dr dateRange, pf string, pargs []any, proje
 		}
 		out.ErrorGroups = append(out.ErrorGroups, frictionErrGroupDTO{
 			Key: g.Key, Example: g.Example, Count: g.Count, LastTs: g.LastTs,
-			Sessions: uuids,
+			Sessions: uuids, Triage: states[g.Key],
 		})
 	}
 

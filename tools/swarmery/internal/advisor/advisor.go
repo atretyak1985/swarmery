@@ -848,8 +848,9 @@ func relImprovement(rule string, base, cur float64) float64 {
 
 // perDayRule reports whether the rule's metric is a per-day rate — count
 // metrics normalized by window length so windows of different lengths
-// compare fairly. Ratio metrics (R2/R4/R6) and the R5 flag are not.
-func perDayRule(rule string) bool { return rule == "R1" || rule == "R3" }
+// compare fairly. Ratio metrics (R2/R4/R6, T2) and the R5 flag are not. T1/T2
+// are the rule ids triage files under; they reuse R3's/R2's metric.
+func perDayRule(rule string) bool { return rule == "R1" || rule == "R3" || rule == "T1" }
 
 // BaselineFor computes the rule's metric snapshot over the trailing
 // WindowDays window ending now and returns the baseline JSON (metric name +
@@ -900,7 +901,7 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 			return "denied_per_day", 0, false, err
 		}
 		return "denied_per_day", float64(denied) / wd, true, nil
-	case "R2":
+	case "R2", "T2": // T2: triage's agent recommendation, measured like R2
 		// behavior_failed_run_share is the behavior-failed-run share (distinct
 		// runs with ≥1 BehaviorFixable error / runs) — the same grain as
 		// r2AgentErrorRate and the Retro scorecards; infra noise and harness
@@ -916,7 +917,7 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 			return "behavior_failed_run_share", min(1, float64(a.behaviorFailedRuns())/float64(a.runs)), true, nil
 		}
 		return "behavior_failed_run_share", 0, false, nil
-	case "R3":
+	case "R3", "T1": // T1: triage's error-group recommendation, measured like R3
 		days, derr := errGroupDays(db, target, win)
 		if derr != nil || wd <= 0 {
 			return "error_days_per_day", 0, false, derr

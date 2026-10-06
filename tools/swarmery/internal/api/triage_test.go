@@ -95,14 +95,16 @@ func serverWithTriage(t *testing.T) (string, *triage.Service, *apiTriageSource) 
 	}
 	svc := triage.NewService(db, apiTriageJudge{})
 	svc.Go = func(fn func()) { fn() }
-	src := &apiTriageSource{}
-	svc.Register(src)
 	AttachTriage(svc)
 	t.Cleanup(func() { AttachTriage(nil) })
 	h, err := NewServer(db, false)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}
+	// Registered AFTER NewServer: the fake shares the "friction" kind with the
+	// real friction Source NewServer registers, and replaces it here.
+	src := &apiTriageSource{}
+	svc.Register(src)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return srv.URL, svc, src

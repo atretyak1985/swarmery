@@ -83,9 +83,13 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 	// too, with lessonVerifyCfg: it must list retirement proposals under the SAME
 	// verification config the accept path confirms them with, and main.go sets
 	// that config (AttachLessonVerify) only after it builds the triage service.
+	// The friction (recurring error groups) and agent (failing agents) Sources
+	// read the Retro aggregates on this Handler, so they register here as well.
 	if triageSvc != nil {
 		triageSvc.Register(&advisorSource{h: h})
 		triageSvc.Register(&triage.RetireSource{DB: db, Cfg: lessonVerifyCfg})
+		triageSvc.Register(&frictionSource{h: h})
+		triageSvc.Register(&agentSource{h: h})
 	}
 	Routes(mux, h)
 
