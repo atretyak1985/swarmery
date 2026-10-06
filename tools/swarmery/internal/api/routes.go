@@ -151,6 +151,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/route/report", h.routeReport)
 	mux.HandleFunc("GET /api/route/decision", h.routeDecision)
 	mux.HandleFunc("GET /api/retro/friction", h.retroFriction)
+	// Lift a mute on one error group (a triage-made mute's verdict → undone).
+	mux.HandleFunc("DELETE /api/retro/friction/mute", requireLocalOrigin(h.unmuteFrictionGroup))
 	mux.HandleFunc("GET /api/retro/lessons", h.retroLessons)
 	mux.HandleFunc("GET /api/retro/tasks", h.retroTasks)
 	// phase 3: internal/advisor recommendations. The writes carry the same D4

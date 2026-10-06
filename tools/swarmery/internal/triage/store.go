@@ -238,6 +238,34 @@ func (s *Service) GetVerdict(id int64) (Verdict, error) {
 	return v, err
 }
 
+// LatestApplied returns the newest applied verdict of kind on ref with value
+// (ok=false when there is none). It links an action reverted outside the
+// engine back to the verdict that made it — e.g. a mute written by a Source,
+// which carries no verdict id because the verdict row did not exist yet.
+func (s *Service) LatestApplied(kind, ref, value string) (Verdict, bool, error) {
+	v, err := scanVerdict(s.DB.QueryRow(`SELECT `+verdictCols+` FROM triage_verdicts v
+		WHERE v.kind=? AND v.ref=? AND v.value=? AND v.state=? ORDER BY v.id DESC LIMIT 1`,
+		kind, ref, value, StateApplied))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Verdict{}, false, nil
+	}
+	if err != nil {
+		return Verdict{}, false, err
+	}
+	return v, true, nil
+}
+
+// AppliedAfter reports whether an applied verdict of kind on ref with value
+// exists with an id above afterID: a later verdict re-did the action, so
+// undoing the earlier one must leave the action in place.
+func AppliedAfter(db *sql.DB, kind, ref, value string, afterID int64) (bool, error) {
+	var n int
+	err := db.QueryRow(`SELECT COUNT(*) FROM triage_verdicts
+		WHERE kind=? AND ref=? AND value=? AND state=? AND id>?`,
+		kind, ref, value, StateApplied, afterID).Scan(&n)
+	return n > 0, err
+}
+
 // ErrNotOpen is returned when a verdict is not (or no longer) a suggestion waiting for the operator.
 var ErrNotOpen = errors.New("triage: verdict is not an open suggestion")
 
@@ -280,6 +308,28 @@ func (s *Service) ReopenSuggestion(id int64) (Verdict, error) {
 			return Verdict{}, err
 		}
 		return Verdict{}, ErrNotOpen
+	}
+	return s.GetVerdict(id)
+}
+
+// MarkUndone moves an applied verdict to undone (decided_at = now) WITHOUT
+// calling Source.Undo: it records that the action was already reverted by
+// other means (e.g. the operator unmuted a group by hand). ONE UPDATE guarded
+// by state='applied'; a zero-row result is ErrNotFound for an unknown id and
+// ErrNotUndoable otherwise.
+func (s *Service) MarkUndone(id int64) (Verdict, error) {
+	res, err := s.DB.Exec(`UPDATE triage_verdicts SET state=?, decided_at=? WHERE id=? AND state=?`,
+		StateUndone, fmtTS(s.clock()), id, StateApplied)
+	if err != nil {
+		return Verdict{}, err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return Verdict{}, err
+	} else if n == 0 {
+		if _, err := s.GetVerdict(id); err != nil {
+			return Verdict{}, err
+		}
+		return Verdict{}, ErrNotUndoable
 	}
 	return s.GetVerdict(id)
 }
