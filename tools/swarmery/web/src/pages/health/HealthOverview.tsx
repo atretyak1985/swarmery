@@ -12,9 +12,9 @@ import {
   type HealthTab,
   fmtPct,
   oneSentence,
-  repeatedErrors,
   topAgents,
   uncoveredDenied,
+  untriagedErrors,
 } from './healthModel';
 
 const LABEL = 'font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase';
@@ -134,7 +134,7 @@ export function HealthOverview({
 
   const rows = topAgents(agents, 3);
   const denied = friction !== null ? uncoveredDenied(friction)[0] : undefined;
-  const repeated = friction !== null ? repeatedErrors(friction)[0] : undefined;
+  const repeated = friction !== null ? untriagedErrors(friction)[0] : undefined;
 
   return (
     <div className="grid gap-[22px] px-4 pt-[22px] pb-[26px] desk:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] desk:px-7">

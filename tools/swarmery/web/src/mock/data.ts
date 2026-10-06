@@ -2504,7 +2504,51 @@ export const mockApi = {
     await delay(120);
     return {
       denied_tools: [],
-      error_groups: [],
+      error_groups: [
+        {
+          key: 'bash:exit-1:npm-test',
+          example: 'npm test exited with code 1',
+          count: 6,
+          last_ts: '2026-07-12T09:30:00Z',
+          sessions: ['8f3a1c20-0000-4000-8000-000000000001'],
+        },
+        {
+          key: 'read:enoent:config',
+          example: 'ENOENT: no such file or directory, open config.json',
+          count: 5,
+          last_ts: '2026-07-12T08:10:00Z',
+          sessions: ['8f3a1c20-0000-4000-8000-000000000002'],
+          triage: { state: 'untriaged' },
+        },
+        {
+          key: 'bash:timeout:build',
+          example: 'command timed out after 120s',
+          count: 4,
+          last_ts: '2026-07-11T17:00:00Z',
+          sessions: [],
+          triage: { state: 'fix_proposed', recommendationId: 41 },
+        },
+        {
+          key: 'edit:stale-read:file',
+          example: 'File has been modified since read',
+          count: 3,
+          last_ts: '2026-07-11T12:00:00Z',
+          sessions: [],
+          triage: { state: 'tracked', recommendationId: 40 },
+        },
+        {
+          key: 'web:fetch:404',
+          example: 'WebFetch failed: 404',
+          count: 2,
+          last_ts: '2026-07-10T12:00:00Z',
+          sessions: [],
+          triage: {
+            state: 'muted',
+            reason: 'External links rot; nothing to fix here.',
+            mutedUntil: '2026-08-10T00:00:00Z',
+          },
+        },
+      ],
       approvals: { resolved: 0, avg_resolve_sec: null, wait_total_min: 0, pending: 0 },
       approx: false,
     };

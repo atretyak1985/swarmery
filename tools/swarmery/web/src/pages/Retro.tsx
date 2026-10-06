@@ -11,8 +11,10 @@
 // fetched Verified history section.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type {
   AgentChangeProposal,
+  FrictionTriageState,
   Recommendation,
   RecommendationTargetKind,
   RetroAgentRow,
@@ -43,6 +45,7 @@ import {
   patchRecommendation,
   retryProposal,
   runAdvise,
+  unmuteFrictionGroup,
 } from '../api';
 import {
   addDays,
@@ -54,7 +57,9 @@ import {
   isoDay,
 } from '../lib/format';
 import { ScopeChip } from '../components/ScopeChip';
+import { PLACES } from '../lib/nav';
 import { useScope } from '../lib/scope';
+import { triageStateOf } from './health/healthModel';
 import { Explain } from '../components/Explain';
 import { RetroImproveCard } from '../components/RetroImproveCard';
 import { HowItWorks } from '../components/HowItWorks';
@@ -1493,46 +1498,140 @@ function DeniedToolsPanel({ data }: { data: RetroFrictionResp }): JSX.Element {
   );
 }
 
-function ErrorGroupsPanel({ groups }: { groups: RetroErrorGroup[] }): JSX.Element {
+/** Row order of the error panel: what still needs a decision first, noise last. */
+const TRIAGE_ORDER: readonly FrictionTriageState[] = ['untriaged', 'fix_proposed', 'tracked', 'muted'];
+
+/** "noise · until Mon, Aug 10" — the viewer's local day of the instant the mute ends. */
+function mutedLabel(mutedUntil: string | undefined): string {
+  const until = mutedUntil === undefined ? null : new Date(mutedUntil);
+  if (until === null || Number.isNaN(until.getTime())) return 'noise';
+  return `noise · until ${fmtDayShort(isoDay(until))}`;
+}
+
+function TriageChip({ group }: { group: RetroErrorGroup }): JSX.Element | null {
+  switch (triageStateOf(group)) {
+    case 'untriaged':
+      return null;
+    case 'muted':
+      return <span className="shrink-0 text-ink-faint">{mutedLabel(group.triage?.mutedUntil)}</span>;
+    case 'tracked':
+      return <span className="shrink-0 text-blue">tracked</span>;
+    case 'fix_proposed':
+      return <span className="shrink-0 text-green">fix proposed</span>;
+  }
+}
+
+function ErrorGroupsPanel({
+  groups,
+  inboxHref,
+  onChanged,
+}: {
+  groups: RetroErrorGroup[];
+  inboxHref: string;
+  onChanged: () => void;
+}): JSX.Element {
   const [open, setOpen] = useState<string | null>(null);
+  const [unmuting, setUnmuting] = useState<string | null>(null);
+  const [unmuteError, setUnmuteError] = useState<string | null>(null);
+  const sorted = useMemo(
+    () =>
+      [...groups].sort(
+        (a, b) =>
+          TRIAGE_ORDER.indexOf(triageStateOf(a)) - TRIAGE_ORDER.indexOf(triageStateOf(b)) ||
+          b.count - a.count,
+      ),
+    [groups],
+  );
+  // One unmute at a time: every "not noise" button is disabled while one is in flight.
+  const unmute = (key: string): void => {
+    if (unmuting !== null) return;
+    setUnmuting(key);
+    setUnmuteError(null);
+    unmuteFrictionGroup(key)
+      .then(onChanged)
+      .catch((e: unknown) => setUnmuteError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setUnmuting(null));
+  };
   if (groups.length === 0) {
     return <Empty>no errors in this range</Empty>;
   }
   return (
     <div className="flex flex-col gap-2">
-      {groups.map((g) => (
-        <div key={g.key}>
+      {unmuteError !== null && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
+        >
+          <span className="min-w-0 flex-1">{unmuteError}</span>
           <button
             type="button"
-            onClick={() => setOpen((o) => (o === g.key ? null : g.key))}
-            aria-expanded={open === g.key}
-            className="flex w-full items-baseline gap-2 text-left font-mono text-[11.5px]"
+            onClick={() => setUnmuteError(null)}
+            aria-label="dismiss"
+            className="text-red/70 transition-colors hover:text-red"
           >
-            <span className="min-w-0 flex-1 truncate text-ink-3">
-              {open === g.key ? '▾ ' : '▸ '}
-              {g.example}
-            </span>
-            <span className="w-10 text-right text-red">{g.count}×</span>
-            <span className="w-16 text-right text-ink-faint">{fmtAgo(g.last_ts)}</span>
+            ×
           </button>
-          {open === g.key && (
-            <div className="mt-1.5 mb-1 ml-4 flex flex-col gap-1 border-l border-line pl-3 font-mono text-[10.5px] text-ink-dim">
-              <div className="break-all text-ink-2">{g.example}</div>
-              <div className="text-ink-faint">group key: {g.key}</div>
-              {g.sessions.length > 0 && (
-                <div>
-                  sessions:{' '}
-                  {g.sessions.map((u) => (
-                    <span key={u} className="mr-2 text-ink-2">
-                      {u.slice(0, 8)}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
-      ))}
+      )}
+      {sorted.map((g) => {
+        const state = triageStateOf(g);
+        return (
+          <div key={g.key}>
+            {/* Only the collapsed line of a muted group is dimmed: its reason and its button stay readable. */}
+            <button
+              type="button"
+              onClick={() => setOpen((o) => (o === g.key ? null : g.key))}
+              aria-expanded={open === g.key}
+              className={`flex w-full items-baseline gap-2 text-left font-mono text-[11.5px] ${state === 'muted' ? 'opacity-60' : ''}`}
+            >
+              <span className="min-w-0 flex-1 truncate text-ink-3">
+                {open === g.key ? '▾ ' : '▸ '}
+                {g.example}
+              </span>
+              <span className="w-10 text-right text-red">{g.count}×</span>
+              <TriageChip group={g} />
+              <span className="w-16 text-right text-ink-faint">{fmtAgo(g.last_ts)}</span>
+            </button>
+            {open === g.key && (
+              <div className="mt-1.5 mb-1 ml-4 flex flex-col gap-1 border-l border-line pl-3 font-mono text-[10.5px] text-ink-dim">
+                <div className="break-all text-ink-2">{g.example}</div>
+                <div className="text-ink-faint">group key: {g.key}</div>
+                {g.sessions.length > 0 && (
+                  <div>
+                    sessions:{' '}
+                    {g.sessions.map((u) => (
+                      <span key={u} className="mr-2 text-ink-2">
+                        {u.slice(0, 8)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {state === 'muted' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {g.triage?.reason !== undefined && (
+                      <span className="text-ink-2">reason: {g.triage.reason}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => unmute(g.key)}
+                      disabled={unmuting !== null}
+                      aria-label={`not noise: ${g.example}`}
+                      className="rounded border border-line px-2 py-0.5 text-ink-3 transition-colors hover:text-ink disabled:opacity-50"
+                    >
+                      not noise
+                    </button>
+                  </div>
+                )}
+                {(state === 'tracked' || state === 'fix_proposed') && (
+                  <Link to={inboxHref} className="text-blue hover:underline">
+                    open in Inbox →
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1554,7 +1653,16 @@ export type RetroSection = 'agents' | 'friction' | 'estimates' | 'advisor';
 export function Retro({
   section,
   range: outerRange,
-}: { section?: RetroSection; range?: AnalyticsRange } = {}): JSX.Element {
+  inboxHref = `${PLACES.find((p) => p.id === 'inbox')?.href(null) ?? '/inbox'}?tab=advisor`,
+  onFrictionChanged,
+}: {
+  section?: RetroSection;
+  range?: AnalyticsRange;
+  /** Scoped Inbox advisor-tab href for tracked groups; the host page knows the project slug. */
+  inboxHref?: string;
+  /** Called after a mute is lifted, so the host can refresh what it derives from friction. */
+  onFrictionChanged?: () => void;
+} = {}): JSX.Element {
   const today = isoDay();
   const [preset, setPreset] = useState<number | null>(14);
   const [ownFrom, setFrom] = useState<string>(addDays(today, -13));
@@ -1609,6 +1717,12 @@ export function Retro({
     [from, to, scope],
   );
 
+  const loadFriction = useCallback((): void => {
+    fetchRetroFriction(range)
+      .then(setFriction)
+      .catch(() => setFriction(null));
+  }, [range]);
+
   const load = useCallback((): void => {
     setError(null);
     if (wantAgents) {
@@ -1616,11 +1730,7 @@ export function Retro({
         .then(setAgents)
         .catch((e: unknown) => setError(String(e)));
     }
-    if (wantFriction) {
-      fetchRetroFriction(range)
-        .then(setFriction)
-        .catch(() => setFriction(null));
-    }
+    if (wantFriction) loadFriction();
     if (wantEstimates) {
       // Cleared before the refetch, not just on failure: both feeds describe a
       // WINDOW, so keeping the previous range's rows on screen while the new ones
@@ -1655,7 +1765,7 @@ export function Retro({
         })
         .catch(() => setTrajectoryKindsMap({}));
     }
-  }, [range, wantAgents, wantFriction, wantEstimates]);
+  }, [range, loadFriction, wantAgents, wantFriction, wantEstimates]);
 
   useEffect(load, [load]);
 
@@ -1792,7 +1902,14 @@ export function Retro({
                 Top error groups
               </div>
               <div className="rounded-[14px] border border-line px-3.5 py-3.5">
-                <ErrorGroupsPanel groups={friction.error_groups} />
+                <ErrorGroupsPanel
+                  groups={friction.error_groups}
+                  inboxHref={inboxHref}
+                  onChanged={() => {
+                    loadFriction();
+                    onFrictionChanged?.();
+                  }}
+                />
               </div>
             </section>
           </div>

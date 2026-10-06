@@ -29,6 +29,7 @@ vi.mock('../../api', async (importOriginal) => {
     fetchRecommendations: vi.fn(),
     fetchProposals: vi.fn(),
     fetchHealth: vi.fn(),
+    unmuteFrictionGroup: vi.fn(),
   };
 });
 
@@ -275,5 +276,177 @@ describe('standalone pages keep their own range row without props', () => {
     );
     expect(screen.getByRole('heading', { name: 'Analytics' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '14d' })).toBeTruthy();
+  });
+});
+
+describe('friction triage', () => {
+  const now = new Date().toISOString();
+  const group = (key: string, example: string, count: number, triage?: object): object => ({
+    key,
+    example,
+    count,
+    last_ts: now,
+    sessions: [],
+    ...(triage !== undefined ? { triage } : {}),
+  });
+  const triagedResp = {
+    ...frictionResp,
+    error_groups: [
+      group('m', 'muted failure', 9, {
+        state: 'muted',
+        reason: 'flaky upstream, nothing to fix',
+        mutedUntil: '2026-08-10T00:00:00Z',
+      }),
+      group('t', 'tracked failure', 8, { state: 'tracked', recommendationId: 5 }),
+      group('f', 'fix proposed failure', 7, { state: 'fix_proposed', recommendationId: 6 }),
+      group('u', 'plain untriaged failure', 4),
+      group('u2', 'explicit untriaged failure', 2, { state: 'untriaged' }),
+    ],
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.fetchRetroFriction).mockResolvedValue(triagedResp as never);
+    vi.mocked(api.unmuteFrictionGroup).mockResolvedValue(undefined);
+  });
+
+  function rowOrder(): string[] {
+    return screen
+      .getAllByRole('button')
+      .filter((b) => b.hasAttribute('aria-expanded'))
+      .map((b) => b.textContent ?? '')
+      .filter((t) => t.includes('failure'));
+  }
+
+  it('renders each state as a chip and lists untriaged groups first', async () => {
+    renderAt('/health?tab=friction');
+    expect(await screen.findByText(/noise · until/)).toBeTruthy();
+    expect(screen.getByText('tracked')).toBeTruthy();
+    expect(screen.getByText('fix proposed')).toBeTruthy();
+    const order = rowOrder();
+    expect(order).toHaveLength(5);
+    expect(order[0]).toContain('plain untriaged failure');
+    expect(order[1]).toContain('explicit untriaged failure');
+    expect(order[2]).toContain('fix proposed failure');
+    expect(order[3]).toContain('tracked failure');
+    expect(order[4]).toContain('muted failure');
+    // Both untriaged rows, with and without a triage block, carry no chip.
+    expect(order[0]).not.toMatch(/tracked|fix proposed|noise/);
+    expect(order[1]).not.toMatch(/tracked|fix proposed|noise/);
+  });
+
+  it('shows the reason of a muted group once its row is expanded', async () => {
+    renderAt('/health?tab=friction');
+    const row = (await screen.findByText(/noise · until/)).closest('button') as HTMLElement;
+    expect(screen.queryByText(/flaky upstream/)).toBeNull();
+    fireEvent.click(row);
+    expect(screen.getByText(/flaky upstream, nothing to fix/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'not noise: muted failure' })).toBeTruthy();
+  });
+
+  it('links tracked groups to the scoped Inbox advisor tab', async () => {
+    renderAt('/p/shop/health?tab=friction');
+    const row = (await screen.findByText('tracked')).closest('button') as HTMLElement;
+    fireEvent.click(row);
+    expect(screen.getByRole('link', { name: /open in Inbox/ }).getAttribute('href')).toBe(
+      '/p/shop/inbox?tab=advisor',
+    );
+  });
+
+  it('links to the fleet Inbox advisor tab outside a project', async () => {
+    renderAt('/health?tab=friction');
+    const row = (await screen.findByText('fix proposed')).closest('button') as HTMLElement;
+    fireEvent.click(row);
+    expect(screen.getByRole('link', { name: /open in Inbox/ }).getAttribute('href')).toBe(
+      '/inbox?tab=advisor',
+    );
+  });
+
+  it('unmutes with the group key; the panel and the tab count both show the fresh server state', async () => {
+    renderAt('/health?tab=friction');
+    fireEvent.click((await screen.findByText(/noise · until/)).closest('button') as HTMLElement);
+    // After the unmute the server reports the group as untriaged.
+    vi.mocked(api.fetchRetroFriction).mockResolvedValue({
+      ...triagedResp,
+      error_groups: [group('m', 'muted failure', 9), ...triagedResp.error_groups.slice(1)],
+    } as never);
+    fireEvent.click(screen.getByRole('button', { name: 'not noise: muted failure' }));
+    await waitFor(() => expect(api.unmuteFrictionGroup).toHaveBeenCalledWith('m'));
+    // The panel (Retro's own state) lost the chip …
+    await waitFor(() => expect(screen.queryByText(/noise · until/)).toBeNull());
+    // … and the tab count (Health's own state) gained the group: 1 denial + 3 untriaged.
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/4/));
+  });
+
+  it('disables every "not noise" button while one unmute is in flight', async () => {
+    let release = (): void => undefined;
+    vi.mocked(api.unmuteFrictionGroup).mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    vi.mocked(api.fetchRetroFriction).mockResolvedValue({
+      ...frictionResp,
+      error_groups: [
+        group('m', 'muted failure', 9, { state: 'muted' }),
+        group('m2', 'other muted failure', 3, { state: 'muted' }),
+      ],
+    } as never);
+    renderAt('/health?tab=friction');
+    await screen.findAllByText('noise');
+    const row = (example: string): HTMLElement =>
+      screen
+        .getAllByRole('button')
+        .find((b) => b.hasAttribute('aria-expanded') && (b.textContent ?? '').includes(`▸ ${example}`)) as HTMLElement;
+    fireEvent.click(row('muted failure'));
+    fireEvent.click(screen.getByRole('button', { name: 'not noise: muted failure' }));
+    fireEvent.click(row('other muted failure'));
+    const other = screen.getByRole('button', { name: 'not noise: other muted failure' }) as HTMLButtonElement;
+    expect(other.disabled).toBe(true);
+    fireEvent.click(other);
+    expect(api.unmuteFrictionGroup).toHaveBeenCalledTimes(1);
+    release();
+    await waitFor(() => expect(other.disabled).toBe(false));
+  });
+
+  it('treats a state this client does not know as untriaged: no chip, listed first, counted', async () => {
+    vi.mocked(api.fetchRetroFriction).mockResolvedValue({
+      ...frictionResp,
+      error_groups: [
+        group('t', 'tracked failure', 8, { state: 'tracked', recommendationId: 5 }),
+        group('s', 'snoozed failure', 5, { state: 'snoozed' }),
+      ],
+    } as never);
+    renderAt('/health?tab=friction');
+    expect(await screen.findByText('tracked')).toBeTruthy();
+    expect(screen.queryByText('fix proposed')).toBeNull();
+    const order = rowOrder();
+    expect(order[0]).toContain('snoozed failure');
+    expect(order[0]).not.toMatch(/tracked|fix proposed|noise/);
+    // 1 uncovered denial + the group whose state is unknown.
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/2/));
+  });
+
+  it('shows an alert and does not refetch when the unmute fails', async () => {
+    vi.mocked(api.unmuteFrictionGroup).mockRejectedValue(new Error('no active mute'));
+    renderAt('/health?tab=friction');
+    fireEvent.click((await screen.findByText(/noise · until/)).closest('button') as HTMLElement);
+    const before = vi.mocked(api.fetchRetroFriction).mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'not noise: muted failure' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('no active mute');
+    expect(vi.mocked(api.fetchRetroFriction).mock.calls.length).toBe(before);
+  });
+
+  it('does not offer a muted top group on the overview', async () => {
+    renderAt('/health');
+    expect(await screen.findByText('Same error 4 times in this window')).toBeTruthy();
+    expect(screen.queryByText('Same error 9 times in this window')).toBeNull();
+  });
+
+  it('counts only untriaged groups and uncovered denials on the Friction tab', async () => {
+    renderAt('/health');
+    const tab = await screen.findByRole('tab', { name: /Friction/ });
+    // 1 uncovered denial + 2 untriaged groups; muted, tracked and fix_proposed are out.
+    expect(tab.textContent).toMatch(/3/);
+    expect(tab.textContent).not.toMatch(/[4-9]/);
   });
 });
