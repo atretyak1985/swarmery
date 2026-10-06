@@ -35,7 +35,11 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
   header, click the tab again, or click anywhere outside the widget. It also
   opens by itself on a pending approval, a session awaiting your reply
   (labelled "awaiting reply" in its row), or a failed session, and closes after
-  the linger period.
+  the linger period. A panel that opened by itself stays open while something
+  is still asking — an outside click does not close it, the `×` button does:
+  what was asking at that moment no longer holds the panel open (the tab keeps
+  its tint and badge), and the next new approval, question or failure opens it
+  again.
 - **Usage panel** — the dashboard's Usage modal, natively: click the usage tab.
   One card per provider (an account switcher appears when the daemon reports
   more than one account), each plan window with a progress bar, `N% used`,

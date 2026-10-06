@@ -129,6 +129,92 @@ final class AttentionModelTests: XCTestCase {
         XCTAssertEqual(state.rows.first?.bucket, .error)
     }
 
+    // MARK: - dismissed by the operator ⇒ stays closed until something new
+
+    func testDismissingAnAwaitingReplySessionClosesThePanel() {
+        // awaiting_reply lasts until the operator answers — hours, sometimes.
+        // The × button has to win over it or the panel can never be closed.
+        let state = AttentionModel.reduce(
+            AttentionState(), .snapshot(sessions: [makeSession(id: 7, status: "awaiting_reply")], approvals: [], usage: nil)
+        )
+        var dismissal = AttentionDismissal()
+        dismissal.dismiss(state)
+
+        XCTAssertTrue(state.needsAttention)
+        XCTAssertFalse(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3, dismissal: dismissal))
+    }
+
+    func testDismissalCoversApprovalsAndErroredSessionsToo() {
+        var state = AttentionModel.reduce(
+            AttentionState(), .snapshot(sessions: [makeSession(id: 5, status: "active", procState: "dead")], approvals: [], usage: nil)
+        )
+        state = AttentionModel.reduce(state, .permissionRequested(makeApproval(id: 1, sessionId: 10)))
+        var dismissal = AttentionDismissal()
+        dismissal.dismiss(state)
+
+        XCTAssertFalse(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3, dismissal: dismissal))
+    }
+
+    func testSomethingNewAfterADismissalExpandsThePanelAgain() {
+        var state = AttentionModel.reduce(
+            AttentionState(), .snapshot(sessions: [makeSession(id: 7, status: "awaiting_reply")], approvals: [], usage: nil)
+        )
+        var dismissal = AttentionDismissal()
+        dismissal.dismiss(state)
+
+        state = AttentionModel.reduce(state, .permissionRequested(makeApproval(id: 1, sessionId: 10)))
+        dismissal.observe(state)
+
+        XCTAssertTrue(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3, dismissal: dismissal))
+    }
+
+    func testADismissedSessionThatAsksAgainExpandsThePanelAgain() {
+        var state = AttentionModel.reduce(
+            AttentionState(), .snapshot(sessions: [makeSession(id: 7, status: "awaiting_reply")], approvals: [], usage: nil)
+        )
+        var dismissal = AttentionDismissal()
+        dismissal.dismiss(state)
+
+        // The operator replied, the session went back to work…
+        state = AttentionModel.reduce(state, .sessionUpdated(makeSession(id: 7, status: "active")))
+        dismissal.observe(state)
+        XCTAssertFalse(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3, dismissal: dismissal))
+
+        // …and ended its next turn with another question: that one is new.
+        state = AttentionModel.reduce(state, .sessionUpdated(makeSession(id: 7, status: "awaiting_reply")))
+        dismissal.observe(state)
+        XCTAssertTrue(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3, dismissal: dismissal))
+    }
+
+    func testDismissingDuringTheLingerWindowClosesAtOnce() {
+        var state = AttentionModel.reduce(AttentionState(), .permissionRequested(makeApproval(id: 1, sessionId: 10)))
+        let resolvedAt = Date(timeIntervalSince1970: 1_000)
+        state = AttentionModel.reduce(
+            state, .permissionResolved(makeApproval(id: 1, sessionId: 10, status: "approved"), at: resolvedAt)
+        )
+        var dismissal = AttentionDismissal()
+        dismissal.dismiss(state)
+
+        XCTAssertFalse(state.shouldExpand(now: resolvedAt.addingTimeInterval(1), linger: 3, dismissal: dismissal))
+
+        // A later resolution is a new outcome and lingers as usual.
+        state = AttentionModel.reduce(state, .permissionRequested(makeApproval(id: 2, sessionId: 10)))
+        let secondResolvedAt = resolvedAt.addingTimeInterval(60)
+        state = AttentionModel.reduce(
+            state, .permissionResolved(makeApproval(id: 2, sessionId: 10, status: "approved"), at: secondResolvedAt)
+        )
+        dismissal.observe(state)
+        XCTAssertTrue(state.shouldExpand(now: secondResolvedAt.addingTimeInterval(1), linger: 3, dismissal: dismissal))
+    }
+
+    func testWithoutADismissalNothingChanges() {
+        let state = AttentionModel.reduce(
+            AttentionState(), .snapshot(sessions: [makeSession(id: 7, status: "awaiting_reply")], approvals: [], usage: nil)
+        )
+
+        XCTAssertTrue(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3, dismissal: AttentionDismissal()))
+    }
+
     // MARK: - reconnect ⇒ snapshot replaces
 
     func testSnapshotReplacesRatherThanMergesStaleState() {
