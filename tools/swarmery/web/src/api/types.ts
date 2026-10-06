@@ -1578,6 +1578,57 @@ export interface PermissionRequest {
   riskClass?: '' | 'prod-deploy';
 }
 
+// --- needs-you queue (GET /api/needs-you; internal/api/needs_you.go) ---------
+
+/**
+ * What blocks on the operator: a pending approval, a pending AskUserQuestion,
+ * a production deploy handed to the session's own terminal, a session that
+ * ended its turn waiting for a typed reply, or a recently failed session.
+ */
+export type NeedsYouKind =
+  | 'approval'
+  | 'question'
+  | 'prod_deploy_local'
+  | 'awaiting_reply'
+  | 'failed';
+
+/** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
+export interface ReplySuggestion {
+  question: string;
+  options: string[];
+  recommended: string;
+}
+
+/** One blocker in the needs-you queue. */
+export interface NeedsYouItem {
+  kind: NeedsYouKind;
+  sessionId: number;
+  sessionUuid: string;
+  /** COALESCE(custom_title, title, first 8 chars of the session uuid). */
+  sessionName: string;
+  projectSlug: string;
+  /** permission_requests.id — approval, question and prod_deploy_local only. */
+  requestId: number | null;
+  toolName: string;
+  /** ≤200 chars: the tool argument, the question text, or the head of an awaiting_reply question. */
+  preview: string;
+  /** awaiting_reply: last paragraph of the newest main-thread assistant prose, ≤600 chars. */
+  question: string;
+  /** That paragraph contains a '?' — a display hint only, never a filter. */
+  asksQuestion: boolean;
+  blockingSince: string;
+  blockingSeconds: number;
+  /** The session's terminal deep link (WARP_FOCUS_URL), when known. */
+  termFocusUrl: string | null;
+  suggestion: ReplySuggestion | null;
+}
+
+/** GET /api/needs-you — items sorted oldest blocker first. */
+export interface NeedsYouResponse {
+  items: NeedsYouItem[];
+  generatedAt: string;
+}
+
 /**
  * One auto-approve rule (control-plane v2 — approval_rules row). A matching
  * enabled rule resolves incoming permission requests as approved with

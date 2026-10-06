@@ -39,6 +39,12 @@ func argOf(toolName string, toolInput json.RawMessage) (string, bool) {
 	return v, v != ""
 }
 
+// ArgOf is argOf for callers outside the package (the needs-you queue's
+// previews), so the tool → argument-field allow-list stays in one place.
+func ArgOf(toolName string, toolInput json.RawMessage) (string, bool) {
+	return argOf(toolName, toolInput)
+}
+
 // truncate trims and caps s at max runes with an ellipsis (webhook bodies).
 func truncate(s string, max int) string {
 	runes := []rune(strings.TrimSpace(s))

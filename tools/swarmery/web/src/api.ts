@@ -39,6 +39,7 @@ import type {
   MemoryConsolidateResp,
   MemoryFileContent,
   MemoryListResp,
+  NeedsYouResponse,
   OnboardConfig,
   PlaybookRollup,
   ProductivityResp,
@@ -1608,6 +1609,16 @@ export function fetchApprovals(
   if (project !== undefined && project !== null && project !== '') qs.set('project', project);
   const query = qs.toString();
   return get(`/api/approvals${query === '' ? '' : `?${query}`}`);
+}
+
+/**
+ * GET /api/needs-you[?project=] — every blocker on the operator, oldest first.
+ * Mock mode has no fixture yet and answers an empty queue.
+ */
+export function getNeedsYou(project?: string | null): Promise<NeedsYouResponse> {
+  if (MOCK) return Promise.resolve({ items: [], generatedAt: new Date().toISOString() });
+  if (project === undefined || project === null || project === '') return get('/api/needs-you');
+  return get(`/api/needs-you?${new URLSearchParams({ project }).toString()}`);
 }
 
 /**
