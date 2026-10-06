@@ -1,0 +1,24 @@
+# Canonical production-deploy patterns — read by hooks/prod-deploy-guard.sh.
+#
+# Format: one rule pattern per line, `Tool(argGlob)` or a bare `Tool`. A line
+# whose first non-blank character is `#` is a comment, a blank line is ignored,
+# and every other line is trimmed and taken whole (there are no inline comments).
+# `*` matches any run of characters, including spaces, `/` and newlines;
+# everything else is literal; the glob is anchored at both ends and matched
+# case-insensitively against the Bash command.
+#
+# This list must stay identical, in content and order, to the control plane's
+# default prod-deploy list. A parity test pins the two together: change both in
+# the same commit, never one.
+#
+# Bare `--prod` / `--production` globs are deliberately absent: they match
+# `npm ci --production`. A deploy tool whose command line does not contain the
+# word "deploy" belongs in the project's own `approvals.prodDeployPatterns`
+# (.claude/project.json).
+Bash(*deploy*prod*)
+Bash(*release*prod*)
+Bash(terraform apply*)
+Bash(*terraform*apply*prod*)
+Bash(*kubectl*prod*)
+Bash(*helm*upgrade*prod*)
+Bash(*git push*prod*)
