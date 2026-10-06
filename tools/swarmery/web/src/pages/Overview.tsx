@@ -744,7 +744,10 @@ function blockedContext(request: PermissionRequest): string {
 }
 
 function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: number }): JSX.Element {
-  const okLabel = request.toolName === 'AskUserQuestion' ? 'answer' : 'approve';
+  // A production deploy has no remote approve: it is confirmed in the
+  // session's own terminal, so the card says so instead of offering one.
+  const localOnly = request.riskClass === 'prod-deploy';
+  const okLabel = localOnly ? 'confirm locally' : request.toolName === 'AskUserQuestion' ? 'answer' : 'approve';
   const age = fmtWait(waitMs(request, nowMs));
   return (
     <div className="mt-3.5 rounded-xl border border-amber/28 bg-amber/5 px-3.5 py-3">
@@ -766,12 +769,21 @@ function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: nu
         </span>
       </div>
       <div className="mt-2.5 flex gap-1.5">
-        <Link
-          to="/approvals"
-          className="flex-1 rounded-lg border border-green/40 bg-green/10 py-1.5 text-center font-mono text-[11px] font-semibold text-green transition-colors hover:bg-green/20 focus-visible:outline-2 focus-visible:outline-brand"
-        >
-          {okLabel}
-        </Link>
+        {localOnly ? (
+          <Link
+            to={`/sessions/${String(request.sessionId)}`}
+            className="flex-1 rounded-lg border border-amber/40 bg-amber/10 py-1.5 text-center font-mono text-[11px] font-semibold text-amber transition-colors hover:bg-amber/20 focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            {okLabel}
+          </Link>
+        ) : (
+          <Link
+            to="/approvals"
+            className="flex-1 rounded-lg border border-green/40 bg-green/10 py-1.5 text-center font-mono text-[11px] font-semibold text-green transition-colors hover:bg-green/20 focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            {okLabel}
+          </Link>
+        )}
         <Link
           to="/approvals"
           className="flex-1 rounded-lg border border-line-strong py-1.5 text-center font-mono text-[11px] text-ink-3 transition-colors hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-brand"

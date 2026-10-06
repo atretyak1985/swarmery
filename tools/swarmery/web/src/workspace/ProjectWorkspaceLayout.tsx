@@ -82,7 +82,7 @@ function WorkspaceInner(): JSX.Element {
   // (main.tsx `handle: { fill: true }`), never matched on the pathname here.
   const fill = useFillRoute();
   // Inbox badge counts this project's waiting decisions, not the fleet's.
-  const { inboxCount, liveSessions } = useSidebarSignals(slug);
+  const { inboxCount, needsYouCount, liveSessions } = useSidebarSignals(slug);
 
   const counts = useMemo(() => boardCounts(board.tasks), [board.tasks]);
   const subPath = activeSubPath(pathname, slug);
@@ -112,7 +112,13 @@ function WorkspaceInner(): JSX.Element {
     <WorkspaceTerminalContext.Provider value={openWorktree}>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
-          <Sidebar slug={slug} subPath={subPath} inboxCount={inboxCount} liveSessions={liveSessions} />
+          <Sidebar
+            slug={slug}
+            subPath={subPath}
+            inboxCount={inboxCount}
+            needsYouCount={needsYouCount}
+            liveSessions={liveSessions}
+          />
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Mobile tab strip (the desktop rail is hidden < desk). */}

@@ -1,4 +1,4 @@
-// The single navigation model (Canvas v3, artboards 2a/2b): ten places in one
+// The single navigation model (Canvas v3, artboards 2a/2b): eleven places in one
 // sidebar, shared by the fleet shell (App.tsx), the project shell
 // (workspace/ProjectWorkspaceLayout.tsx) and both mobile navs. It replaces the
 // two per-shell nav arrays and the Sessions/Projects mode toggle.
@@ -15,11 +15,14 @@
 // and /decisions redirect into it), Knowledge is /p/:slug/knowledge since phase
 // 8, whose System absorbs /routines and whose Settings absorbs /projects.
 // Docs is its own fleet place above System: it documents swarmery itself, not
-// what a project knows, so it left Knowledge's tabs.
+// what a project knows, so it left Knowledge's tabs. Needs you (/needs-you) is
+// the session-blocker queue: approvals, questions, local-only prod deploys,
+// sessions awaiting a typed reply, recent failures (GET /api/needs-you).
 
 export type PlaceId =
   | 'today'
   | 'inbox'
+  | 'needs-you'
   | 'sessions'
   | 'plans'
   | 'health'
@@ -71,6 +74,7 @@ const DEFS: readonly PlaceDef[] = [
   // Inbox owns /approvals too: it redirects here, and approvals/manage keeps
   // the rules + history page (phase 3).
   { id: 'inbox', glyph: '☐', label: 'Inbox', section: 'main', projectOnly: false, path: 'inbox', segments: ['inbox', 'approvals'] },
+  { id: 'needs-you', glyph: '⚑', label: 'Needs you', section: 'main', projectOnly: false, path: 'needs-you', segments: ['needs-you'] },
   { id: 'sessions', glyph: '❯', label: 'Sessions', section: 'main', projectOnly: false, path: 'sessions', segments: ['sessions'] },
   {
     id: 'plans',

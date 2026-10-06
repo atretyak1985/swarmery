@@ -40,7 +40,10 @@ function Row({
   const [busy, setBusy] = useState(false);
   const age =
     item.kind === 'approval' && item.expiresIso !== undefined ? expiresInLabel(item.expiresIso) : ageLabel(item.ageIso);
-  const approvable = item.kind === 'approval' && questionsOf(item.raw) === null;
+  // A production deploy is confirmed only in the session's terminal (the
+  // daemon refuses a remote approve), so it opens its Inbox tab instead.
+  const approvable =
+    item.kind === 'approval' && item.raw.riskClass !== 'prod-deploy' && questionsOf(item.raw) === null;
 
   const approve = (): void => {
     if (item.kind !== 'approval') return;

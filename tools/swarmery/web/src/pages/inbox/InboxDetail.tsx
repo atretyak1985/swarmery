@@ -25,10 +25,12 @@ import { ageLabel, expiresInLabel, isAccountBreaker, KIND_META, type InboxItem }
 type Action = () => Promise<unknown>;
 
 /** The one primary decision of an item — bound to the `e` key. Null when the
- * item has no single yes (an AskUserQuestion approval needs its answers). */
+ * item has no single yes (an AskUserQuestion approval needs its answers; a
+ * production deploy is confirmed only in the session's own terminal). */
 export function primaryAction(item: InboxItem): Action | null {
   switch (item.kind) {
     case 'approval':
+      if (item.raw.riskClass === 'prod-deploy') return null;
       return questionsOf(item.raw) === null ? () => resolveApproval(item.raw.id, 'approve') : null;
     case 'lesson':
       return () => acceptLesson(item.raw.id);
@@ -147,7 +149,22 @@ export function InboxDetail({
     case 'approval': {
       const r = item.raw;
       const questions = questionsOf(r);
-      if (questions !== null) {
+      if (r.riskClass === 'prod-deploy') {
+        // The daemon refuses a remote approve/answer with 403: no allow here.
+        title = `Production deploy via ${r.toolName} — confirm locally`;
+        body = (
+          <>
+            <Code>{requestSummary(r)}</Code>
+            <Body>Production deploy — confirm in the session's terminal. Nothing runs until you do.</Body>
+          </>
+        );
+        buttons = (
+          <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
+            deny
+            <KeyHint k="x" />
+          </button>
+        );
+      } else if (questions !== null) {
         title = `Claude is asking you ${String(questions.length)} question${questions.length === 1 ? '' : 's'}`;
         body = (
           <>

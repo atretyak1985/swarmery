@@ -48,7 +48,7 @@ function AppShell(): JSX.Element {
   // Does the active route own its vertical scroll? Declared on the route itself
   // (main.tsx `handle: { fill: true }`), never matched on the pathname here.
   const fill = useFillRoute();
-  const { inboxCount, liveSessions } = useSidebarSignals();
+  const { inboxCount, needsYouCount, liveSessions } = useSidebarSignals();
 
   const daemonOk = !unreachable;
 
@@ -107,7 +107,7 @@ function AppShell(): JSX.Element {
 
       <div className="flex min-h-0 flex-1">
         {/* Desktop sidebar (212px, desk and up) in its All-projects state. */}
-        <Sidebar slug={null} inboxCount={inboxCount} liveSessions={liveSessions} />
+        <Sidebar slug={null} inboxCount={inboxCount} needsYouCount={needsYouCount} liveSessions={liveSessions} />
 
         {/* Fill routes (lib/fillRoute.ts) own their own scroll: this container
             hands it over — overflow-hidden plus the flex/min-h-0 chain the page
@@ -134,7 +134,7 @@ function AppShell(): JSX.Element {
       </div>
 
       {/* Mobile bottom nav */}
-      <MobileNav slug={null} variant="bottom" inboxCount={inboxCount} />
+      <MobileNav slug={null} variant="bottom" inboxCount={inboxCount} needsYouCount={needsYouCount} />
     </div>
     </NotifyPrefsContext.Provider>
   );

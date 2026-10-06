@@ -236,12 +236,12 @@ function AddRuleForm({
   );
 }
 
-/* ----- one pending card ----- */
+/* ----- one pending card (also rendered by pages/NeedsYou.tsx) ----- */
 
 const ACTION_BTN =
   'flex-1 rounded-lg border px-4 py-[7px] text-center font-mono text-[11.5px] transition-colors disabled:opacity-50 desk:flex-none';
 
-function PendingCard({
+export function PendingCard({
   request,
   session,
   nowMs,
@@ -255,7 +255,8 @@ function PendingCard({
   nowMs: number;
   busy: boolean;
   onResolve: (action: ApprovalAction, reason?: string, answers?: AnswerMap) => void;
-  onAlwaysAllow: () => void;
+  /** Omitted → no "always allow…" button (a caller with no rules form). */
+  onAlwaysAllow?: () => void;
 }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const [denying, setDenying] = useState(false);
@@ -268,6 +269,10 @@ function PendingCard({
     (questions ?? []).map(() => EMPTY_DRAFT),
   );
   const answers = questions !== null ? buildAnswers(questions, drafts) : null;
+  // A production deploy is confirmed only in the session's own terminal: the
+  // daemon answers a remote approve/answer with 403, so neither is offered
+  // (nor "always allow…" — such a request is never auto-approved). Deny stays.
+  const localOnly = request.riskClass === 'prod-deploy';
 
   const updateDraft = (i: number, patch: Partial<AnswerDraft>): void => {
     setDrafts((prev) => prev.map((d, j) => (j === i ? { ...d, ...patch } : d)));
@@ -340,7 +345,7 @@ function PendingCard({
         </pre>
       )}
 
-      {questions !== null && (
+      {questions !== null && !localOnly && (
         <div className="mt-3 flex flex-col gap-2.5">
           {questions.map((q, i) => (
             <QuestionBlock
@@ -356,8 +361,14 @@ function PendingCard({
         </div>
       )}
 
+      {localOnly && (
+        <div className="mt-3 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 font-mono text-[11px] text-amber">
+          Production deploy — confirm in the session's terminal
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {questions !== null ? (
+        {localOnly ? null : questions !== null ? (
           <button
             type="button"
             disabled={busy || answers === null}
@@ -387,7 +398,7 @@ function PendingCard({
         >
           deny{denying ? ' ▴' : ''}
         </button>
-        {questions === null && (
+        {questions === null && !localOnly && onAlwaysAllow !== undefined && (
           <button
             type="button"
             disabled={busy}
@@ -398,7 +409,7 @@ function PendingCard({
             always allow…
           </button>
         )}
-        {questions !== null && (
+        {questions !== null && !localOnly && (
           <button
             type="button"
             disabled={busy}
