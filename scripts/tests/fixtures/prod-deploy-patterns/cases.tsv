@@ -1,0 +1,50 @@
+# Shared matching fixture for the production-deploy pattern list
+# (plugins/core/hooks/lib/prod-deploy-patterns.txt). Consumed by
+# scripts/tests/prod-deploy-guard.test.sh (the PreToolUse hook) and by the
+# control plane's Go parity test, so both matchers must agree on every row.
+#
+# Format: command<TAB>expect, where expect is `ask` (some default pattern
+# matches) or `none`. Lines starting with `#` and blank lines are ignored.
+# The command column is decoded with three escapes, applied left to right with
+# no overlap: `\\` -> `\`, `\n` -> newline, `\t` -> tab. Nothing else is special.
+# Only the DEFAULT list applies here; project extras are tested by the suites.
+#
+# Each default pattern, hit at least once
+npm run deploy:prod	ask
+acme-cli deploy --prod	ask
+./scripts/release.sh --env production	ask
+terraform apply	ask
+terraform apply -auto-approve	ask
+terraform -chdir=infra apply -var-file=prod.tfvars	ask
+kubectl --context prod-cluster apply -f app.yaml	ask
+helm upgrade api ./chart -n production	ask
+git push origin production	ask
+git push --force origin prod-hotfix	ask
+# Case-insensitive on both sides
+NPM run DEPLOY:PROD	ask
+TERRAFORM APPLY	ask
+# Breadth: `*` spans operators, quotes and lines, so these match on purpose
+echo deploy && echo prod	ask
+make build\nmake deploy ENV=prod	ask
+deploy[1]? --target prod	ask
+# A backslash in the command is literal text
+deploy\\prod	ask
+# Literal `?` and `[` with nothing for a pattern to hit
+ls [abc]? notes.txt	none
+# D1: bare --prod / --production are not in the list
+npm ci --production	none
+yarn install --production	none
+echo production	none
+# Near misses: right tool, wrong verb or target
+terraform plan	none
+git push origin main	none
+kubectl get pods	none
+helm upgrade api ./chart -n staging	none
+npm run deploy:staging	none
+# Anchoring and order: documented gaps, not wishes (a project extra closes them)
+env TF_LOG=debug terraform apply	none
+./prod-deploy.sh	none
+prod\ndeploy	none
+# Ordinary commands
+ls -la	none
+git log --oneline	none

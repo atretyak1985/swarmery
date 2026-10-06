@@ -124,6 +124,61 @@ func TestTriageAPIUnattached(t *testing.T) {
 	}
 }
 
+func TestTriageAuditUnattached(t *testing.T) {
+	srv, _, _ := serverWithTriage(t)
+	AttachTriage(nil)
+	resp, _ := doRoutineReq(t, http.MethodGet, srv+"/api/triage/audit", nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestTriageAuditEmpty(t *testing.T) {
+	srv, _, _ := serverWithTriage(t)
+	resp, body := doRoutineReq(t, http.MethodGet, srv+"/api/triage/audit", nil)
+	if resp.StatusCode != http.StatusOK || string(body) != `{"answered":0,"agree":0,"byQuestion":[]}`+"\n" {
+		t.Fatalf("audit = %d %q", resp.StatusCode, body)
+	}
+}
+
+// One sampled answer the operator confirmed and one they overruled: 2 answered,
+// 1 agreeing, both questions listed in question-id order.
+func TestTriageAuditCounts(t *testing.T) {
+	srv, svc, _ := serverWithTriage(t)
+	res, err := svc.DB.Exec(`INSERT INTO triage_runs(trigger, status, started_at) VALUES('operator','ok','2026-10-06T12:00:00Z')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, _ := res.LastInsertId()
+	seed := func(question, truth, agentValue, state string) {
+		t.Helper()
+		res, err := svc.DB.Exec(`INSERT INTO decisions (question_id, subject, session_uuid, input_hash, answer, confidence,
+			calibrated, backend, created_at, ground_truth, ground_truth_source)
+			VALUES (?, 's1', 's1', 'h', 'x', 0.6, 1, 'local', '2026-10-02T10:00:00Z', ?, 'operator')`, question, truth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := res.LastInsertId()
+		if _, err := svc.DB.Exec(`INSERT INTO triage_verdicts(run_id, kind, ref, value, state, created_at)
+			VALUES(?, 'classifier', ?, ?, ?, '2026-10-06T12:00:00Z')`, run, fmt.Sprint(id), agentValue, state); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seed("d2.outcome", "shipped", "shipped", triage.StateAudited)
+	seed("d2.task_type", "bugfix", "feature", triage.StateSample)
+
+	resp, body := doRoutineReq(t, http.MethodGet, srv+"/api/triage/audit", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("audit = %d %s", resp.StatusCode, body)
+	}
+	want := `{"answered":2,"agree":1,"byQuestion":[` +
+		`{"questionId":"d2.outcome","answered":1,"agree":1},` +
+		`{"questionId":"d2.task_type","answered":1,"agree":0}]}` + "\n"
+	if string(body) != want {
+		t.Fatalf("audit = %s, want %s", body, want)
+	}
+}
+
 func TestTriageAPIRunLifecycle(t *testing.T) {
 	srv, svc, src := serverWithTriage(t)
 
