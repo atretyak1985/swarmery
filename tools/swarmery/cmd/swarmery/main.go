@@ -2172,9 +2172,12 @@ func cmdServe(args []string) error {
 
 	// inbox triage agent: recorded single-flight triage runs judged by a
 	// headless `claude -p` (ClaudeJudge), every write gated by the Go policy
-	// table in internal/triage. No Source is registered yet, so a run completes
-	// with zero items. Heal 'running' rows a crashed daemon left behind first.
+	// table in internal/triage. The classifier source offers the label queue
+	// (System-project sessions left out); its answers become `agent` labels, up
+	// to 5 sessions per run kept back as the audit sample. Heal 'running' rows a
+	// crashed daemon left behind first.
 	triageSvc := triage.NewService(db, triage.ClaudeJudge{})
+	triageSvc.Register(&triage.ClassifierSource{DB: db, SystemPath: ingest.SystemDir()})
 	if err := triageSvc.HealStale(); err != nil {
 		log.Printf("warning: triage heal on startup: %v", err)
 	}

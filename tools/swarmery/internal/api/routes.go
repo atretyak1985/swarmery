@@ -370,6 +370,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/triage/runs/{id}", h.getTriageRun)
 	mux.HandleFunc("GET /api/triage/verdicts", h.listTriageVerdicts)
 	mux.HandleFunc("POST /api/triage/verdicts/{id}/undo", requireLocalOrigin(h.undoTriageVerdict))
+	mux.HandleFunc("GET /api/triage/audit", h.getTriageAudit)
 
 	// fusion phase 11: permission presets — a project's human-readable policy
 	// (unrestricted | approval-required | locked-down + per-category overrides)
