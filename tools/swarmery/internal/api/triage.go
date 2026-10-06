@@ -202,3 +202,29 @@ func (h *Handler) undoTriageVerdict(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, v, err)
 	}
 }
+
+// triageAudit is the GET /api/triage/audit body: totals plus one row per question.
+type triageAudit struct {
+	Answered   int               `json:"answered"`
+	Agree      int               `json:"agree"`
+	ByQuestion []triage.AuditRow `json:"byQuestion"`
+}
+
+// GET /api/triage/audit → how often the agent's audit-sample answers agreed
+// with the labels the operator later gave. Read-only.
+func (h *Handler) getTriageAudit(w http.ResponseWriter, _ *http.Request) {
+	if !triageReady(w) {
+		return
+	}
+	rows, err := triage.ClassifierAudit(triageSvc.DB)
+	if err != nil {
+		writeJSON(w, nil, err)
+		return
+	}
+	out := triageAudit{ByQuestion: rows}
+	for _, r := range rows {
+		out.Answered += r.Answered
+		out.Agree += r.Agree
+	}
+	writeJSON(w, out, nil)
+}
