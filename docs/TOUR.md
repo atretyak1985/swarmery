@@ -87,6 +87,18 @@ kind — **approvals**, **lessons**, **advisor** recommendations, agent-change
 and the keyboard does the work: `j`/`k` to move, `e` for the primary action, `x` to deny
 or dismiss, `s` to skip.
 
+An agent can work the backlog for you. When something it could handle has waited a day,
+a strip under the header offers **run triage**. The agent labels the classifier's guesses
+(it keeps a sample of its labels for you to check, and the Inbox shows how often it
+matched you), closes what is only informational, and leaves a suggestion with its reasoning
+on lessons, advisor recommendations and retirements. The strip lists the suggestions
+whenever any are waiting, and **accept all** confirms them except fix tasks, which you
+open and read one at a time. On a single item the primary button names the action and
+whose idea it is (for example **mark not useful · agent's suggestion**), and `e` performs
+that same action, negative ones (not useful, dismiss, stop) included. Everything it closed is listed under **handled by agent**
+for seven days, each with an **undo**. Approvals, agent changes and alerts are never
+handled by the agent: they always wait for you.
+
 An approval shows the tool, the essential part of its input (expandable to the full hook
 payload), which session it belongs to, how long it has been hanging, and a countdown
 before it expires. `AskUserQuestion` prompts render as what they actually are — radio

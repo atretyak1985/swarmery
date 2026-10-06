@@ -65,6 +65,9 @@ before: git commits/pushes · database migrations · breaking API changes ·
 security-sensitive changes · production deployments. Risky actions get a structured
 go/no-go from the `guardrails` skill (Impact × Reversibility; Critical never
 auto-approves). Autonomous runs resolve user-only questions BEFORE the fan-out starts.
+These gates always wait for you: a triage agent may label the classifier's guesses and
+close purely informational items from the Inbox (undoable for seven days), but it never
+answers an approval, an agent change or an alert.
 
 ## Where this lives
 

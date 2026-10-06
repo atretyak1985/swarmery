@@ -11,7 +11,7 @@
 // task_updated, debounced so a burst of frames is one refetch of six calls,
 // plus the reconnect/reconcile resync.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchApprovals,
   fetchProjectRecommendations,
@@ -23,7 +23,15 @@ import { fetchLabelQueue } from '../../api/decisions';
 import { fetchLessons, fetchRetirements } from '../../api/lessons';
 import type { WSMessage } from '../../api/types';
 import { useLiveUpdates } from '../../lib/ws';
-import { sortItems, toItems, type InboxItem, type InboxKind, type InboxSources } from './inboxModel';
+import {
+  attachSuggestions,
+  sortItems,
+  toItems,
+  type InboxItem,
+  type InboxKind,
+  type InboxSources,
+} from './inboxModel';
+import { useTriage, type TriageState } from './useTriage';
 
 export interface InboxState {
   items: InboxItem[];
@@ -32,6 +40,8 @@ export interface InboxState {
   /** Sources whose fetch failed on the latest load. */
   errors: InboxKind[];
   reload: () => void;
+  /** The triage agent's state; empty and inert unless the hook was called `withTriage`. */
+  triage: TriageState;
 }
 
 /** Kinds that stay fleet-wide under a project scope. */
@@ -83,8 +93,13 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
   };
 }
 
-export function useInboxItems(scope: string | null): InboxState {
-  const [items, setItems] = useState<InboxItem[]>([]);
+/**
+ * `withTriage` (the Inbox page) adds the triage agent's state and attaches its
+ * open suggestions to the items. Without it the hook makes no triage requests,
+ * so the sidebar badge and the Today page stay as cheap as before.
+ */
+export function useInboxItems(scope: string | null, withTriage = false): InboxState {
+  const [rawItems, setItems] = useState<InboxItem[]>([]);
   const [errors, setErrors] = useState<InboxKind[]>([]);
   const [loading, setLoading] = useState(true);
   // Drops a slow response that lands after a newer load (or a scope switch).
@@ -129,5 +144,9 @@ export function useInboxItems(scope: string | null): InboxState {
   );
   useLiveUpdates(onMessage, reload);
 
-  return { items, count: items.length, loading, errors, reload };
+  // A finished run changed what is open: refetch the items too.
+  const triage = useTriage(scope, reload, withTriage);
+  const items = useMemo(() => attachSuggestions(rawItems, triage.open), [rawItems, triage.open]);
+
+  return { items, count: items.length, loading, errors, reload, triage };
 }

@@ -20,6 +20,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
 import * as alerts from '../../api/alerts';
 import * as decisions from '../../api/decisions';
+import * as lessons from '../../api/lessons';
+import * as triage from '../../api/triage';
+import type { TriageVerdict } from '../../api/triage';
 import { Inbox } from './Inbox';
 
 const NOW = Date.now();
@@ -110,9 +113,28 @@ vi.mock('../../api/alerts', () => ({
   resumeAccount: vi.fn(async () => undefined),
 }));
 
+// The triage agent: nothing open, nothing handled, no run by default.
+vi.mock('../../api/triage', () => ({
+  TriageBusyError: class TriageBusyError extends Error {},
+  TriageConflictError: class TriageConflictError extends Error {
+    readonly state = 'stale';
+  },
+  fetchActiveTriageRun: vi.fn(async () => null),
+  fetchTriageRun: vi.fn(async () => null),
+  fetchTriageVerdicts: vi.fn(async () => []),
+  fetchTriageAudit: vi.fn(async () => ({ answered: 0, agree: 0, byQuestion: [] })),
+  startTriageRun: vi.fn(async () => ({ id: 1 })),
+  acceptTriageVerdict: vi.fn(async () => ({})),
+  acceptAllTriageVerdicts: vi.fn(async () => ({ accepted: [], stale: [], failed: [], remaining: 0 })),
+  undoTriageVerdict: vi.fn(async () => ({})),
+}));
+
 vi.mock('../../lib/ws', () => ({ useLiveUpdates: () => undefined }));
 
 function defaultFetchers(): void {
+  vi.mocked(triage.fetchTriageVerdicts).mockResolvedValue([]);
+  vi.mocked(triage.fetchActiveTriageRun).mockResolvedValue(null);
+  vi.mocked(triage.fetchTriageAudit).mockResolvedValue({ answered: 0, agree: 0, byQuestion: [] });
   vi.mocked(alerts.fetchAlerts).mockResolvedValue([]);
   vi.mocked(api.fetchApprovals).mockResolvedValue([
     approvalRow(1, 'Bash', { command: 'rm -rf node_modules && npm ci' }, 78),
@@ -325,5 +347,280 @@ describe('Inbox', () => {
       fireEvent.keyDown(window, { key: 'e' });
     });
     expect(alerts.resumeAccount).not.toHaveBeenCalled();
+  });
+
+  describe('triage agent', () => {
+    function verdict(over: Partial<TriageVerdict>): TriageVerdict {
+      return {
+        id: 1,
+        runId: 7,
+        kind: 'lesson',
+        class: '',
+        ref: '5',
+        itemKey: '',
+        title: 'Run the fixture generator first',
+        value: 'accept',
+        reason: 'Seen in three runs.',
+        payload: null,
+        prior: null,
+        state: 'suggested',
+        createdAt: new Date(Date.now() - 3600_000).toISOString(),
+        decidedAt: null,
+        projectId: null,
+        ...over,
+      };
+    }
+
+    function serve(byState: Partial<Record<string, TriageVerdict[]>>): void {
+      vi.mocked(triage.fetchTriageVerdicts).mockImplementation(async (states) =>
+        states.flatMap((st) => byState[st] ?? []),
+      );
+    }
+
+    async function openLesson(): Promise<void> {
+      await renderInbox('/inbox?tab=lessons');
+    }
+
+    it('drops the old header sentence', async () => {
+      await renderInbox();
+      expect(screen.queryByText(/Everything the system/)).toBeNull();
+      expect(screen.getByText(/Decisions that wait on you\./)).toBeTruthy();
+    });
+
+    it('offers a run for an old agent-eligible item and starts it unscoped on /inbox', async () => {
+      await renderInbox();
+      expect(screen.getByText(/can be handled by an agent/)).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+      });
+      expect(triage.startTriageRun).toHaveBeenCalledWith(null);
+    });
+
+    it('starts the run with the project slug on /p/:slug/inbox', async () => {
+      render(
+        <MemoryRouter initialEntries={['/p/shop/inbox']}>
+          <Routes>
+            <Route path="/p/:slug/inbox" element={<Inbox />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+      });
+      expect(triage.startTriageRun).toHaveBeenCalledWith('shop');
+    });
+
+    function triageRun(over: Record<string, unknown>): never {
+      return { id: 9, status: 'running', error: '', total: 4, done: 0, applied: 0, suggested: 0, failed: 0, ...over } as never;
+    }
+
+    it('a failed run shows its error; dismissing it removes the whole line and keeps the offer', async () => {
+      vi.mocked(triage.startTriageRun).mockResolvedValueOnce({ id: 9 });
+      vi.mocked(triage.fetchTriageRun).mockResolvedValueOnce(triageRun({ status: 'failed', error: 'budget exhausted' }));
+      await renderInbox();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+      });
+      expect(await screen.findByText('budget exhausted')).toBeTruthy();
+      expect(screen.queryByText(/agent closed/)).toBeNull();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'dismiss error' }));
+      });
+      expect(screen.queryByText('budget exhausted')).toBeNull();
+      expect(screen.queryByText('The triage run failed.')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'retry' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'run triage' })).toBeTruthy();
+    });
+
+    it('retry after a failed run shows the new run only, never the old failure beside it', async () => {
+      vi.mocked(triage.startTriageRun).mockResolvedValueOnce({ id: 9 });
+      vi.mocked(triage.fetchTriageRun).mockResolvedValueOnce(triageRun({ status: 'failed', error: 'budget exhausted' }));
+      await renderInbox();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+      });
+      expect(await screen.findByText('budget exhausted')).toBeTruthy();
+
+      vi.mocked(triage.startTriageRun).mockResolvedValueOnce({ id: 10 });
+      vi.mocked(triage.fetchActiveTriageRun).mockResolvedValue(triageRun({ id: 10 }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+      });
+      expect(await screen.findByText('triage running · 0 of 4')).toBeTruthy();
+      expect(screen.queryByText('budget exhausted')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'retry' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
+    });
+
+    it('shows the reasoning on a suggested lesson; e accepts the verdict, x still dismisses manually', async () => {
+      serve({ suggested: [verdict({ id: 41 })] });
+      await openLesson();
+      expect(screen.getByText('agent suggests: accept')).toBeTruthy();
+      expect(screen.getByText('Seen in three runs.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /^accept · agent's suggestion/ })).toBeTruthy();
+      expect(screen.getByText('if you press e')).toBeTruthy();
+      expect(screen.getByText(/Every future run touching/)).toBeTruthy();
+      expect(primaries()).toHaveLength(1);
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'e' });
+      });
+      expect(triage.acceptTriageVerdict).toHaveBeenCalledWith(41);
+      expect(lessons.acceptLesson).not.toHaveBeenCalled();
+      cleanup();
+      await openLesson();
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'x' });
+      });
+      expect(lessons.dismissLesson).toHaveBeenCalledWith(5, 'not useful');
+    });
+
+    it('a not-useful suggestion: the button, the box and e all say not useful', async () => {
+      serve({ suggested: [verdict({ id: 42, value: 'not-useful' })] });
+      await openLesson();
+      expect(screen.getByRole('button', { name: /mark not useful/ })).toBeTruthy();
+      expect(screen.getByText('The candidate is closed as not useful. Nothing is added to any brief.')).toBeTruthy();
+      expect(screen.queryByText(/Every future run touching/)).toBeNull();
+      expect(screen.getByText(/e mark not useful/)).toBeTruthy();
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'e' });
+      });
+      expect(triage.acceptTriageVerdict).toHaveBeenCalledWith(42);
+    });
+
+    it('keep, dismiss and fix-card suggestions each describe their own action', async () => {
+      serve({ suggested: [verdict({ id: 43, kind: 'retire', ref: '8', value: 'keep' })] });
+      await renderInbox('/inbox?tab=retire');
+      expect(screen.getByRole('button', { name: /^keep it · agent's suggestion/ })).toBeTruthy();
+      expect(
+        screen.getByText('The proposal closes and this reason is held off for 30 days. The lesson stays in use.'),
+      ).toBeTruthy();
+      expect(screen.queryByText('if you confirm')).toBeNull();
+      cleanup();
+
+      serve({ suggested: [verdict({ id: 44, kind: 'advisor', ref: '6', value: 'dismiss' })] });
+      await renderInbox('/inbox?tab=advisor');
+      expect(screen.getByRole('button', { name: /^dismiss · agent's suggestion/ })).toBeTruthy();
+      expect(screen.getByText(/The recommendation is closed\. It reopens on its own/)).toBeTruthy();
+      cleanup();
+
+      serve({
+        suggested: [
+          verdict({ id: 45, kind: 'advisor', ref: '6', value: 'fix-card', payload: { title: 'Fix it', prompt: 'Do it' } }),
+        ],
+      });
+      await renderInbox('/inbox?tab=advisor');
+      expect(screen.getByRole('button', { name: /^open the fix task · agent's suggestion/ })).toBeTruthy();
+      expect(screen.getByText(/A task is created on the project's board with the text below/)).toBeTruthy();
+    });
+
+    it('accept all confirms the open suggestions except fix tasks, one call each, and says so first', async () => {
+      serve({
+        suggested: [
+          verdict({ id: 71, value: 'accept' }),
+          verdict({ id: 72, ref: '99', value: 'not-useful' }),
+          verdict({ id: 73, kind: 'advisor', ref: '6', value: 'fix-card' }),
+          verdict({ id: 74, kind: 'retire', ref: '8', value: 'keep' }),
+        ],
+      });
+      vi.mocked(triage.acceptTriageVerdict).mockImplementation(async (id: number) => {
+        if (id === 72) throw new Error('boom');
+        return {} as never;
+      });
+      await renderInbox();
+      expect(screen.getByText(/4 suggestions from the agent/)).toBeTruthy();
+      expect(screen.getByText(/1 accept · 1 not useful · 1 keep it/)).toBeTruthy();
+      expect(screen.getByText(/1 fix task to read first/)).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'accept 3 suggestions' }));
+      });
+      expect(triage.acceptTriageVerdict).toHaveBeenCalledTimes(3);
+      const ids = vi.mocked(triage.acceptTriageVerdict).mock.calls.map((c) => c[0]);
+      expect(ids).toEqual([71, 72, 74]);
+      expect(ids).not.toContain(73);
+      expect(triage.acceptAllTriageVerdicts).not.toHaveBeenCalled();
+      expect(screen.getByText('accepted 2 · 1 failed')).toBeTruthy();
+    });
+
+    it('with only fix-task suggestions there is no accept-all control', async () => {
+      serve({ suggested: [verdict({ id: 73, kind: 'advisor', ref: '6', value: 'fix-card' })] });
+      await renderInbox();
+      expect(screen.getByText(/1 fix task to read first/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /^accept \d+ suggestion/ })).toBeNull();
+    });
+
+    it('answering a sampled classifier question reloads the triage state', async () => {
+      serve({ sample: [verdict({ id: 51, kind: 'classifier', ref: '9', value: 'bugfix', state: 'sample' })] });
+      vi.mocked(triage.fetchTriageAudit).mockResolvedValue({ answered: 10, agree: 9, byQuestion: [] });
+      await renderInbox('/inbox?tab=classifier');
+      expect(screen.getByText('agent matched you on 9 of 10')).toBeTruthy();
+      const before = vi.mocked(triage.fetchTriageAudit).mock.calls.length;
+      vi.mocked(triage.fetchTriageAudit).mockResolvedValue({ answered: 11, agree: 10, byQuestion: [] });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'feature' }));
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(triage.fetchTriageAudit).mock.calls.length).toBeGreaterThan(before);
+      expect(screen.queryByText('agent matched you on 9 of 10')).toBeNull();
+    });
+
+    it('undo in the handled list reloads the Inbox items as well as the triage lists', async () => {
+      serve({ applied: [verdict({ id: 62, state: 'applied', title: 'Dup lesson', value: 'dismiss' })] });
+      await renderInbox('/inbox?tab=handled');
+      const items = vi.mocked(api.fetchApprovals).mock.calls.length;
+      const lists = vi.mocked(triage.fetchTriageVerdicts).mock.calls.length;
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'undo Dup lesson' }));
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(api.fetchApprovals).mock.calls.length).toBeGreaterThan(items);
+      expect(vi.mocked(triage.fetchTriageVerdicts).mock.calls.length).toBeGreaterThan(lists);
+    });
+
+    it('an item without a suggestion behaves as before', async () => {
+      await openLesson();
+      expect(screen.queryByText(/agent suggests/)).toBeNull();
+      expect(screen.getByText('if you accept')).toBeTruthy();
+      expect(screen.queryByText('if you press e')).toBeNull();
+      expect(screen.getByText('e approve')).toBeTruthy();
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'e' });
+      });
+      expect(lessons.acceptLesson).toHaveBeenCalledWith(5);
+      expect(triage.acceptTriageVerdict).not.toHaveBeenCalled();
+    });
+
+    it('marks the agent label on a sampled classifier item; e posts the local answers', async () => {
+      serve({ sample: [verdict({ id: 51, kind: 'classifier', ref: '9', value: 'bugfix', state: 'sample' })] });
+      vi.mocked(triage.fetchTriageAudit).mockResolvedValue({ answered: 10, agree: 9, byQuestion: [] });
+      await renderInbox('/inbox?tab=classifier');
+      expect(screen.getByRole('button', { name: /bugfix.*agent says/ })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'feature' })).toBeTruthy();
+      expect(screen.getByText('agent matched you on 9 of 10')).toBeTruthy();
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'e' });
+      });
+      expect(decisions.postGroundTruth).toHaveBeenCalledWith(9, 'feature');
+      expect(triage.acceptTriageVerdict).not.toHaveBeenCalled();
+    });
+
+    it('lists applied verdicts under the handled tab and undo calls the endpoint', async () => {
+      serve({ applied: [verdict({ id: 61, state: 'applied', title: 'Dup lesson', value: 'dismiss' })] });
+      await renderInbox('/inbox?tab=handled');
+      expect(screen.getByRole('tab', { name: /handled by agent/ }).textContent).toContain('1');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'undo Dup lesson' }));
+      });
+      expect(triage.undoTriageVerdict).toHaveBeenCalledWith(61);
+    });
   });
 });
