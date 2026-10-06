@@ -46,16 +46,20 @@ type permissionRequestDTO struct {
 	ResolvedVia *string `json:"resolvedVia"`
 	Reason      *string `json:"reason"`
 	ExpiresAt   string  `json:"expiresAt"`
+	// RiskClass is '' (ordinary) or 'prod-deploy' (approvals.RiskProdDeploy):
+	// a production deploy that only the session's terminal may confirm.
+	RiskClass string `json:"riskClass"`
 }
 
 const permissionRequestSelect = `
 	SELECT id, session_id, tool_name, request_json, status,
-	       requested_at, resolved_at, resolved_via, reason, COALESCE(expires_at, '')
+	       requested_at, resolved_at, resolved_via, reason, COALESCE(expires_at, ''),
+	       COALESCE(risk_class, '')
 	FROM permission_requests`
 
 func scanPermissionRequest(scan func(...any) error, p *permissionRequestDTO) error {
 	return scan(&p.ID, &p.SessionID, &p.ToolName, &p.RequestJSON, &p.Status,
-		&p.RequestedAt, &p.ResolvedAt, &p.ResolvedVia, &p.Reason, &p.ExpiresAt)
+		&p.RequestedAt, &p.ResolvedAt, &p.ResolvedVia, &p.Reason, &p.ExpiresAt, &p.RiskClass)
 }
 
 func (h *Handler) permissionRequestByID(id int64) (*permissionRequestDTO, error) {
@@ -203,6 +207,21 @@ func (h *Handler) resolveApproval(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
 		return
 	}
+	// Production deploys are confirmed only in the session's own terminal: no
+	// remote approve or answer, whatever state the row is in.
+	if body.Action == "approve" || body.Action == "answer" {
+		var risk string
+		err := h.DB.QueryRow(
+			`SELECT COALESCE(risk_class, '') FROM permission_requests WHERE id = ?`, id).Scan(&risk)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, err)
+			return
+		}
+		if risk == approvals.RiskProdDeploy {
+			writeLocalOnly(w)
+			return
+		}
+	}
 	// Every action goes through the waiter-aware entry points (Decide /
 	// Answer): a decision is only recorded when a long-poll in THIS process
 	// can deliver it. A pending row with no waiter — its hook died with a
@@ -227,6 +246,9 @@ func (h *Handler) resolveApproval(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case errors.Is(err, approvals.ErrLocalOnly):
+		writeLocalOnly(w)
+		return
 	case errors.Is(err, approvals.ErrNotFound):
 		http.Error(w, `{"error":"permission request not found"}`, http.StatusNotFound)
 		return
@@ -253,6 +275,16 @@ func (h *Handler) resolveApproval(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, p, err)
 }
 
+// writeLocalOnly answers a remote approve/answer on a production deploy.
+func writeLocalOnly(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error": "production deploys must be confirmed in the session's terminal",
+		"code":  "prod_deploy_local_only",
+	})
+}
+
 // ── GET /api/approvals?status=&limit= ────────────────────────────────────────
 
 // listApprovals lists permission requests newest-first. status defaults to
@@ -267,7 +299,7 @@ func (h *Handler) listApprovals(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT pr.id, pr.session_id, pr.tool_name, pr.request_json, pr.status,
 		       pr.requested_at, pr.resolved_at, pr.resolved_via, pr.reason,
-		       COALESCE(pr.expires_at, '')
+		       COALESCE(pr.expires_at, ''), COALESCE(pr.risk_class, '')
 		FROM permission_requests pr
 		JOIN sessions s ON s.id = pr.session_id
 		JOIN projects p ON p.id = s.project_id

@@ -305,6 +305,18 @@
           "description": "Most dependents the blast-radius note lists before it truncates to a `+N more` line. A hook is a nudge, not a report — a long list is scrolled past."
         }
       }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Remote-approval policy read by the swarmery daemon. Optional.",
+      "properties": {
+        "prodDeployPatterns": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*(\\(.+\\))?$" },
+          "description": "Extra approval-rule globs, e.g. `Bash(<deploy-cli> ship*)`, that mark a tool call in this project as a production deploy. They are ADDED to the daemon's built-in defaults, which cannot be turned off. The tool part matches exactly; the argument glob matches case-insensitively and `*` matches any run of characters. A matching call is never auto-approved, cannot be approved from the dashboard or a phone, and is confirmed only in the session's own terminal. The file is re-read when it changes; an invalid entry is skipped and logged."
+        }
+      }
     }
   }
 }

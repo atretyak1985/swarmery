@@ -3,6 +3,7 @@ package approvals
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -193,4 +194,146 @@ func svcOpenPending(t *testing.T, db *sql.DB, uuid, tool, command string) (int64
 	t.Helper()
 	svc := New(db, nil, Options{})
 	return svc.Open(hookInput(t, uuid, tool, command))
+}
+
+// ── production-deploy class (needs-you-queue phase 2) ────────────────────────
+
+func prodGuardSvc(t *testing.T, db *sql.DB) *Service {
+	t.Helper()
+	g, err := NewProdGuard(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return New(db, nil, Options{ProdGuard: g})
+}
+
+type prodRow struct{ status, via, reason, risk string }
+
+func readProdRow(t *testing.T, db *sql.DB, id int64) prodRow {
+	t.Helper()
+	var r prodRow
+	if err := db.QueryRow(
+		`SELECT status, COALESCE(resolved_via,''), COALESCE(reason,''), risk_class
+		 FROM permission_requests WHERE id = ?`, id).Scan(&r.status, &r.via, &r.reason, &r.risk); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// TestOpenProdDeployHandsOffToTerminal: a matching request is recorded as
+// risk_class='prod-deploy' and resolved_elsewhere via 'local-only' at once —
+// the waiter wakes with resolved_elsewhere (the long-poll answers 204).
+func TestOpenProdDeployHandsOffToTerminal(t *testing.T) {
+	db := testDB(t)
+	sid := seedSession(t, db, "uuid-prod")
+	svc := prodGuardSvc(t, db)
+
+	id, ch, isNew, err := svc.Open(hookInput(t, "uuid-prod", "Bash", "acme-cli deploy --prod"))
+	if err != nil || !isNew {
+		t.Fatalf("Open: id=%d isNew=%v err=%v", id, isNew, err)
+	}
+	select {
+	case d := <-ch:
+		if d.Status != StatusResolvedElsewhere || d.Reason != LocalOnlyReason {
+			t.Fatalf("decision = %+v, want resolved_elsewhere with the local-only reason", d)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("waiter not woken by the prod-deploy hand-off")
+	}
+	got := readProdRow(t, db, id)
+	want := prodRow{StatusResolvedElsewhere, ViaLocalOnly, LocalOnlyReason, RiskProdDeploy}
+	if got != want {
+		t.Errorf("row = %+v, want %+v", got, want)
+	}
+	if s := sessionStatus(t, db, sid); s == "waiting_approval" {
+		t.Error("session stuck in waiting_approval after the hand-off")
+	}
+
+	// An ordinary command on the same service stays an ordinary pending row.
+	id2, _, _, err := svc.Open(hookInput(t, "uuid-prod", "Bash", "npm ci --production"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := readProdRow(t, db, id2); r.status != StatusPending || r.risk != "" {
+		t.Errorf("npm ci --production row = %+v, want pending with no risk class", r)
+	}
+}
+
+// TestOpenProdDeployIgnoresApproveRules: an enabled `Bash(*)` rule and a
+// global bare `Bash` rule exist — the prod-deploy row is STILL not approved.
+func TestOpenProdDeployIgnoresApproveRules(t *testing.T) {
+	db := testDB(t)
+	seedSession(t, db, "uuid-prod-rules")
+	seedRule(t, db, nil, "Bash(*)")
+	seedRule(t, db, nil, "Bash")
+	svc := prodGuardSvc(t, db)
+
+	id, ch, _, err := svc.Open(hookInput(t, "uuid-prod-rules", "Bash", "kubectl --context prod apply -f app.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case d := <-ch:
+		if d.Status == StatusApproved {
+			t.Fatalf("prod-deploy request auto-approved by a rule: %+v", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("prod-deploy request was never handed off (no decision within 5s)")
+	}
+	if r := readProdRow(t, db, id); r.status == StatusApproved || r.via == "rule" || r.risk != RiskProdDeploy {
+		t.Errorf("row = %+v, want an unapproved prod-deploy row", r)
+	}
+
+	// Control: the same rules DO approve an ordinary command.
+	id2, ch2, _, err := svc.Open(hookInput(t, "uuid-prod-rules", "Bash", "ls -la"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case d := <-ch2:
+		if d.Status != StatusApproved {
+			t.Fatalf("control: ordinary command decision = %+v, want approved by rule", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("control: ordinary command got no decision within 5s")
+	}
+	if r := readProdRow(t, db, id2); r.via != "rule" {
+		t.Errorf("control row = %+v, want resolved via rule", r)
+	}
+}
+
+// TestDecideProdDeployRefusesApprove: a pending prod-deploy row (seeded
+// directly, with a live waiter) refuses approval with ErrLocalOnly; the row
+// stays pending and deny still works.
+func TestDecideProdDeployRefusesApprove(t *testing.T) {
+	db := testDB(t)
+	sid := seedSession(t, db, "uuid-prod-decide")
+	svc := prodGuardSvc(t, db)
+	res, err := db.Exec(
+		`INSERT INTO permission_requests (session_id, tool_name, request_json, status, requested_at, expires_at, risk_class)
+		 VALUES (?, 'Bash', '{}', 'pending', '2026-10-06T00:00:00.000Z', '2099-01-01T00:00:00.000Z', ?)`,
+		sid, RiskProdDeploy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+	svc.mu.Lock()
+	ch := svc.attachLocked(id)
+	svc.mu.Unlock()
+
+	if err := svc.Decide(id, StatusApproved, "dashboard", ""); !errors.Is(err, ErrLocalOnly) {
+		t.Fatalf("Decide(approved) err = %v, want ErrLocalOnly", err)
+	}
+	if err := svc.Resolve(id, StatusApproved, "rule", ""); !errors.Is(err, ErrLocalOnly) {
+		t.Fatalf("Resolve(approved) err = %v, want ErrLocalOnly", err)
+	}
+	if got := requestStatus(t, db, id); got != StatusPending {
+		t.Fatalf("status after refused approvals = %s, want pending", got)
+	}
+	if err := svc.Decide(id, StatusDenied, "dashboard", "no"); err != nil {
+		t.Fatalf("Decide(denied) on a prod-deploy row: %v", err)
+	}
+	if d := <-ch; d.Status != StatusDenied {
+		t.Errorf("decision = %+v, want denied", d)
+	}
 }

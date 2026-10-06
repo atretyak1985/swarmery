@@ -127,6 +127,11 @@ type Options struct {
 	// Notifier is the outbound webhook dispatcher (nil = disabled). Emit is
 	// nil-receiver-safe and never blocks (buffered queue, drop on overflow).
 	Notifier *notify.Notifier
+
+	// ProdGuard classifies production-deploy tool calls (prodguard.go). nil
+	// disables classification — only tests leave it unset; serve always
+	// builds one.
+	ProdGuard *ProdGuard
 }
 
 // Service owns the approvals lifecycle. Bus may be nil (no live WS updates,
@@ -304,14 +309,16 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 		return 0, nil, false, ErrTooManyPending
 	}
 
+	riskClass := s.riskClassLocked(sessionID, in)
+
 	now := s.opt.Now().UTC()
 	requestedAt := now.Format(tsFormat)
 	expiresAt := now.Add(s.opt.Timeout).Format(tsFormat)
 	res, err := s.db.Exec(
 		`INSERT INTO permission_requests
-		   (session_id, tool_name, request_json, status, requested_at, dedup_hash, expires_at)
-		 VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
-		sessionID, in.ToolName, string(in.Raw), requestedAt, hash, expiresAt)
+		   (session_id, tool_name, request_json, status, requested_at, dedup_hash, expires_at, risk_class)
+		 VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`,
+		sessionID, in.ToolName, string(in.Raw), requestedAt, hash, expiresAt, riskClass)
 	if err != nil {
 		return 0, nil, false, fmt.Errorf("insert permission_request: %w", err)
 	}
@@ -336,6 +343,22 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 	s.publish(ingest.Notification{Type: ingest.NoteEventAppended, SessionID: sessionID, EventID: eventID})
 	s.publish(ingest.Notification{Type: ingest.NotePermissionRequested, SessionID: sessionID, RequestID: id})
 
+	// Production deploy: hand it straight back to the session's own terminal.
+	// resolved_elsewhere wakes the waiter just attached → the long-poll answers
+	// 204 → the shim prints nothing → Claude Code shows its native dialog
+	// (internal/hookshim/shim.go). Rule evaluation is never reached, and
+	// resolveLocked refuses any later approval of the row (ErrLocalOnly). On a
+	// failed hand-off the error goes back to the hook (5xx → the shim fails
+	// open to the same native dialog) — never on to the rules below.
+	if riskClass == RiskProdDeploy {
+		if err := s.resolveLocked(id, StatusResolvedElsewhere, ViaLocalOnly, LocalOnlyReason, nil); err != nil {
+			delete(s.waiters, id) // nobody will receive on ch; the sweeper expires the row
+			return 0, nil, false, fmt.Errorf("hand prod-deploy request %d to the terminal: %w", id, err)
+		}
+		s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput, LocalOnlyReason)
+		return id, ch, true, nil
+	}
+
 	// control-plane v2 — auto-approve rules: a matching enabled rule resolves
 	// the row immediately (resolved_via='rule'). The pending row above is
 	// KEPT as the audit trail; resolveLocked inserts permission_resolved,
@@ -354,6 +377,26 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 
 	s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput, "")
 	return id, ch, true, nil
+}
+
+// riskClassLocked classifies one hook call: RiskProdDeploy when the guard
+// matches it for the session's project (projects.path), else the empty
+// class. A failed project lookup still runs the defaults and daemon extras.
+func (s *Service) riskClassLocked(sessionID int64, in HookInput) string {
+	if s.opt.ProdGuard == nil {
+		return ""
+	}
+	var projectDir string
+	if err := s.db.QueryRow(
+		`SELECT p.path FROM sessions se JOIN projects p ON p.id = se.project_id WHERE se.id = ?`,
+		sessionID).Scan(&projectDir); err != nil {
+		log.Printf("warn: approvals: project dir for session %d: %v (prod-deploy guard uses defaults only)", sessionID, err)
+		projectDir = ""
+	}
+	if s.opt.ProdGuard.Match(projectDir, in.ToolName, in.ToolInput) {
+		return RiskProdDeploy
+	}
+	return ""
 }
 
 // attachLocked registers a buffered waiter channel for a request id.
@@ -473,15 +516,20 @@ func (s *Service) requireWaiterLocked(id int64) error {
 
 func (s *Service) resolveLocked(id int64, status, via, reason string, updatedInput json.RawMessage) error {
 	var sessionID int64
-	var cur, toolName string
+	var cur, toolName, riskClass string
 	err := s.db.QueryRow(
-		`SELECT session_id, status, tool_name FROM permission_requests WHERE id = ?`, id).
-		Scan(&sessionID, &cur, &toolName)
+		`SELECT session_id, status, tool_name, risk_class FROM permission_requests WHERE id = ?`, id).
+		Scan(&sessionID, &cur, &toolName, &riskClass)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
+	}
+	// Defense in depth: no path — dashboard Decide, Answer, a rule, any future
+	// caller — may approve a production deploy remotely.
+	if riskClass == RiskProdDeploy && status == StatusApproved {
+		return ErrLocalOnly
 	}
 	if cur != StatusPending {
 		return ErrAlreadyResolved
