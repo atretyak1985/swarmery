@@ -17,10 +17,20 @@ import { patchProposal, patchRecommendation, resolveApproval } from '../../api';
 import { AUTO_MODE_NO_VERDICT_RULE, resumeAccount } from '../../api/alerts';
 import { postGroundTruth, type QueueItem } from '../../api/decisions';
 import { acceptLesson, confirmRetirement, dismissLesson, keepLesson } from '../../api/lessons';
+import { acceptTriageVerdict, type TriageAudit } from '../../api/triage';
 import { QuestionForm } from '../../components/QuestionForm';
 import { questionsOf, requestSummary } from '../../lib/approvals';
 import { UI_TERMS } from '../../lib/glossary';
-import { ageLabel, expiresInLabel, isAccountBreaker, KIND_META, type InboxItem } from './inboxModel';
+import {
+  ageLabel,
+  expiresInLabel,
+  isAccountBreaker,
+  KIND_META,
+  suggestionButtonLabel,
+  suggestionConsequence,
+  valueWording,
+  type InboxItem,
+} from './inboxModel';
 
 type Action = () => Promise<unknown>;
 
@@ -28,6 +38,19 @@ type Action = () => Promise<unknown>;
  * item has no single yes (an AskUserQuestion approval needs its answers; a
  * production deploy is confirmed only in the session's own terminal). */
 export function primaryAction(item: InboxItem): Action | null {
+  return suggestionAction(item) ?? manualPrimaryAction(item);
+}
+
+/** Accepting the agent's open (non-sample) suggestion, when the item has one. */
+function suggestionAction(item: InboxItem): Action | null {
+  const suggested = item.suggestion;
+  if (suggested === undefined || suggested.sample) return null;
+  const id = suggested.verdictIds[0];
+  return id === undefined ? null : () => acceptTriageVerdict(id);
+}
+
+/** The item's own yes — what `e` did before the agent could suggest anything. */
+function manualPrimaryAction(item: InboxItem): Action | null {
   switch (item.kind) {
     case 'approval':
       if (item.raw.riskClass === 'prod-deploy') return null;
@@ -81,8 +104,8 @@ const SECONDARY = `${BTN} border-line-strong px-3 text-ink-3 hover:text-ink`;
 const DENY = `${BTN} border-red/40 px-3 text-red hover:bg-red/10`;
 const LINK = 'ml-auto font-mono text-[10.5px] text-ink-faint hover:text-ink-dim';
 
-function KeyHint({ k }: { k: string }): JSX.Element {
-  return <span className="ml-1 font-normal opacity-60">{k}</span>;
+function KeyHint({ k }: { k: string }): JSX.Element | null {
+  return k === '' ? null : <span className="ml-1 font-normal opacity-60">{k}</span>;
 }
 
 function Consequences({ yes, no }: { yes: [string, string]; no?: [string, string] }): JSX.Element {
@@ -124,6 +147,7 @@ export function InboxDetail({
   error,
   onAct,
   now = Date.now(),
+  audit = null,
 }: {
   item: InboxItem;
   /** Shown under a project scope for the sources that do not narrow. */
@@ -133,13 +157,33 @@ export function InboxDetail({
   /** Runs a decision; the page owns busy/error state and the refetch. */
   onAct: (action: Action) => void;
   now?: number;
+  /** How often the agent's audit-sample labels matched the operator's. */
+  audit?: TriageAudit | null;
 }): JSX.Element {
   const meta = KIND_META[item.kind];
-  const primary = primaryAction(item);
+  const primary = manualPrimaryAction(item);
+  const suggestion = item.suggestion;
+  const accept = suggestionAction(item);
+  const hasSuggestion = accept !== null;
+  // With a suggestion, "accept suggestion" owns the primary slot and the `e`
+  // key; the item's own buttons stay as secondaries.
+  const manualPrimary = hasSuggestion ? {} : { 'data-primary': '' };
+  const manualKey = hasSuggestion ? '' : 'e';
+  const primaryGreen = hasSuggestion ? SECONDARY : PRIMARY_GREEN;
+  const primaryBrand = hasSuggestion ? SECONDARY : PRIMARY_BRAND;
   const deny = denyAction(item);
   const act = (a: Action | null) => (): void => {
     if (a !== null) onAct(a);
   };
+  // While a suggestion is open the box describes what `e` does, not the item's ordinary yes/no.
+  const suggestedBox =
+    hasSuggestion && suggestion !== undefined ? suggestionConsequence(item, suggestion.value) : null;
+  const Conseq = ({ yes, no }: { yes: [string, string]; no?: [string, string] }): JSX.Element =>
+    suggestedBox === null ? (
+      <Consequences yes={yes} {...(no === undefined ? {} : { no })} />
+    ) : (
+      <Consequences yes={['if you press e', suggestedBox]} />
+    );
 
   let title: ReactNode = item.title;
   let body: ReactNode = null;
@@ -202,9 +246,9 @@ export function InboxDetail({
         );
         buttons = (
           <>
-            <button type="button" data-primary="" className={PRIMARY_GREEN} disabled={busy} onClick={act(primary)}>
+            <button type="button" {...manualPrimary} className={primaryGreen} disabled={busy} onClick={act(primary)}>
               approve
-              <KeyHint k="e" />
+              <KeyHint k={manualKey} />
             </button>
             <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
               deny
@@ -230,7 +274,7 @@ export function InboxDetail({
             seen {l.recurrences}×{offPlan !== null && ` · ${UI_TERMS.surprise.ui} ${offPlan}`}
             {l.phaseName !== '' && ` · ${l.phaseName}`}
           </div>
-          <Consequences
+          <Conseq
             yes={[
               'if you accept',
               `Every future run touching ${l.areaGlobs.length > 0 ? l.areaGlobs.join(', ') : 'these areas'} gets this sentence in its brief. We then watch whether those runs land closer to plan.`,
@@ -240,9 +284,9 @@ export function InboxDetail({
       );
       buttons = (
         <>
-          <button type="button" data-primary="" className={PRIMARY_BRAND} disabled={busy} onClick={act(primary)}>
+          <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
             accept
-            <KeyHint k="e" />
+            <KeyHint k={manualKey} />
           </button>
           <Link to="/lessons" className={SECONDARY}>
             edit wording
@@ -261,7 +305,7 @@ export function InboxDetail({
       body = (
         <>
           <Body>{r.detail}</Body>
-          <Consequences
+          <Conseq
             yes={[
               'if you accept',
               "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved.",
@@ -271,9 +315,9 @@ export function InboxDetail({
       );
       buttons = (
         <>
-          <button type="button" data-primary="" className={PRIMARY_BRAND} disabled={busy} onClick={act(primary)}>
+          <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
             I'll fix it — track this
-            <KeyHint k="e" />
+            <KeyHint k={manualKey} />
           </button>
           <button type="button" className={SECONDARY} disabled={busy} onClick={act(deny)}>
             dismiss
@@ -300,9 +344,9 @@ export function InboxDetail({
       );
       buttons = (
         <>
-          <button type="button" data-primary="" className={PRIMARY_BRAND} disabled={busy} onClick={act(primary)}>
+          <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
             approve
-            <KeyHint k="e" />
+            <KeyHint k={manualKey} />
           </button>
           <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
             reject
@@ -349,18 +393,26 @@ export function InboxDetail({
                       className={`${BTN} px-2.5 ${opt === q.answer ? 'border-brand/50 text-brand' : 'border-line-strong text-ink-3 hover:text-ink'}`}
                     >
                       {opt}
+                      {suggestion?.answers?.[q.id] === opt && (
+                        <span className="ml-1.5 font-normal text-ink-faint">· agent says</span>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
             ))}
+            {audit !== null && audit.answered > 0 && (
+              <div className="font-mono text-[10.5px] text-ink-faint">
+                agent matched you on {audit.agree} of {audit.answered}
+              </div>
+            )}
           </div>
         </>
       );
       buttons = (
-        <button type="button" data-primary="" className={PRIMARY_GREEN} disabled={busy} onClick={act(primary)}>
+        <button type="button" {...manualPrimary} className={primaryGreen} disabled={busy} onClick={act(primary)}>
           {group.length === 1 ? 'yes' : `yes, all ${String(group.length)}`}
-          <KeyHint k="e" />
+          <KeyHint k={manualKey} />
         </button>
       );
       break;
@@ -373,7 +425,7 @@ export function InboxDetail({
             <b className="font-medium text-ink-2">What happened:</b> {p.detail}
           </Body>
           <Code>{p.guidance}</Code>
-          <Consequences
+          <Conseq
             yes={['if you confirm', 'The lesson stops appearing in briefs. Its history stays.']}
             no={['if you keep it', 'The proposal closes and this reason is held off for 30 days.']}
           />
@@ -386,9 +438,9 @@ export function InboxDetail({
       );
       buttons = (
         <>
-          <button type="button" data-primary="" className={PRIMARY_BRAND} disabled={busy} onClick={act(primary)}>
+          <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
             stop using it
-            <KeyHint k="e" />
+            <KeyHint k={manualKey} />
           </button>
           <button type="button" className={SECONDARY} disabled={busy} onClick={act(deny)}>
             keep it
@@ -444,9 +496,9 @@ export function InboxDetail({
         </>
       );
       buttons = (
-        <button type="button" data-primary="" className={PRIMARY_BRAND} disabled={busy} onClick={act(primary)}>
+        <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
           probe &amp; resume
-          <KeyHint k="e" />
+          <KeyHint k={manualKey} />
         </button>
       );
       break;
@@ -467,12 +519,39 @@ export function InboxDetail({
       </div>
       <h2 className="mt-3 font-display text-[19px] leading-[1.3] font-medium text-ink">{title}</h2>
       {body}
+      {hasSuggestion && suggestion !== undefined && (
+        <section aria-label="agent suggestion" className="mt-3.5 rounded-[10px] border border-brand/30 bg-brand/5 px-3 py-2.5">
+          <div className="text-[12.5px] font-medium text-ink-2">agent suggests: {valueWording(suggestion.value)}</div>
+          {suggestion.reason !== '' && (
+            <div className="mt-1 text-[12px] leading-[1.5] text-ink-3">{suggestion.reason}</div>
+          )}
+          {suggestion.card !== undefined && (
+            <>
+              <div className="mt-2 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">the task</div>
+              <Code>
+                {suggestion.card.title}
+                {'\n\n'}
+                {suggestion.card.prompt}
+              </Code>
+              <div className="mt-1.5 text-[11.5px] text-ink-faint">
+                Accepting creates a task on the project's board; an agent picks it up.
+              </div>
+            </>
+          )}
+        </section>
+      )}
       {error !== null && (
         <div role="alert" className="mt-3 font-mono text-[11px] text-red">
           {error}
         </div>
       )}
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-[18px]">
+        {hasSuggestion && (
+          <button type="button" data-primary="" className={PRIMARY_GREEN} disabled={busy} onClick={act(accept)}>
+            {suggestion === undefined ? 'accept' : suggestionButtonLabel(suggestion.value)}
+            <KeyHint k="e" />
+          </button>
+        )}
         {buttons}
         {(item.kind === 'approval' || item.kind === 'classifier') && (
           <Link

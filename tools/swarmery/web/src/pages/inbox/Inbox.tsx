@@ -9,13 +9,19 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SplitPane, type SplitPaneKey } from '../../components/SplitPane';
 import { Tabs, useTabParam } from '../../components/Tabs';
+import { TriageConflictError, acceptTriageVerdict } from '../../api/triage';
+import { HandledList } from './HandledList';
 import { InboxDetail, denyAction, primaryAction } from './InboxDetail';
+import { TriageBanner } from './TriageBanner';
 import {
   INBOX_TABS,
+  agentOffer,
   KIND_META,
   ageLabel,
   expiresInLabel,
   filterTab,
+  suggestionActionLabel,
+  suggestionBreakdown,
   tabCounts,
   waitingLine,
   type InboxItem,
@@ -48,16 +54,20 @@ function GroupLabel({ urgent }: { urgent: boolean }): JSX.Element {
 export function Inbox(): JSX.Element {
   const { slug } = useParams<{ slug?: string }>();
   const scope = slug ?? null;
-  const { items, loading, errors, reload } = useInboxItems(scope);
+  const { items, loading, errors, reload, triage } = useInboxItems(scope, true);
   const [tab, setTab] = useTabParam<InboxTabId>('tab', TAB_IDS, 'all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [dismissedRunId, setDismissedRunId] = useState<number | null>(null);
+  const [acceptResult, setAcceptResult] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
   const now = useNow(1000);
 
   const visible = filterTab(items, tab);
   const selected = visible.find((i) => i.key === selectedId) ?? visible[0];
-  const counts = tabCounts(items);
+  const counts = tabCounts(items, triage.handled.length);
   const firstUrgent = visible.find((i) => i.urgent)?.key;
   const firstCalm = visible.find((i) => !i.urgent)?.key;
 
@@ -67,7 +77,8 @@ export function Inbox(): JSX.Element {
   };
 
   const run = (item: InboxItem, action: () => Promise<unknown>): void => {
-    if (busy) return;
+    // One write at a time: a single-item action and "accept all" never overlap.
+    if (busy || accepting) return;
     const next = neighbour(item);
     setBusy(true);
     setActionError(null);
@@ -75,15 +86,71 @@ export function Inbox(): JSX.Element {
       .then(() => {
         setSelectedId(next);
         reload();
+        triage.reload();
       })
-      .catch((e: unknown) => setActionError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => {
+        setActionError(e instanceof Error ? e.message : String(e));
+        // The item changed under the agent's suggestion: show what is there now.
+        if (e instanceof TriageConflictError) {
+          reload();
+          triage.reload();
+        }
+      })
       .finally(() => setBusy(false));
   };
+
+  const breakdown = suggestionBreakdown(triage.open);
+
+  // One after another, never stopping at a failure. Fix-task suggestions are not
+  // in `breakdown.acceptable`: the operator opens and reads those one by one.
+  const acceptAll = (): void => {
+    if (accepting || busy) return;
+    const todo = breakdown.acceptable;
+    setAccepting(true);
+    setAcceptResult(null);
+    setActionError(null);
+    void (async () => {
+      let accepted = 0;
+      let failed = 0;
+      let stale = 0;
+      for (const [i, v] of todo.entries()) {
+        setAcceptResult(`accepting ${String(i + 1)} of ${String(todo.length)}…`);
+        try {
+          await acceptTriageVerdict(v.id);
+          accepted += 1;
+        } catch (e) {
+          if (e instanceof TriageConflictError) stale += 1;
+          else failed += 1;
+        }
+      }
+      const parts = [`accepted ${String(accepted)}`];
+      if (failed > 0) parts.push(`${String(failed)} failed`);
+      if (stale > 0) parts.push(`${String(stale)} changed meanwhile`);
+      setAcceptResult(parts.join(' · '));
+      reload();
+      triage.reload();
+      setAccepting(false);
+    })();
+  };
+
+  // The error line has one identity (this start attempt, or that failed run), so
+  // dismissing it hides exactly that error and a later one shows again.
+  const lastRun = triage.lastRun;
+  const runFailed = lastRun?.status === 'failed';
+  const runError = triage.startError ?? (runFailed ? lastRun.error || 'The triage run failed.' : null);
+  const errorKey =
+    triage.startError !== null ? `start:${triage.startError}` : runFailed ? `run:${String(lastRun.id)}` : null;
+  const bannerError = errorKey !== null && dismissedError === errorKey ? null : runError;
+
+  const primaryLabel =
+    selected?.suggestion !== undefined && !selected.suggestion.sample
+      ? suggestionActionLabel(selected.suggestion.value)
+      : 'approve';
 
   const keymap: SplitPaneKey<InboxItem>[] = [
     {
       key: 'e',
-      label: 'approve',
+      label: primaryLabel,
       run: (item) => {
         const a = primaryAction(item);
         if (a !== null) run(item, a);
@@ -117,8 +184,8 @@ export function Inbox(): JSX.Element {
           )}
         </div>
         <p className="mt-1.5 max-w-[66ch] text-[13px] text-ink-dim">
-          Everything the system will not do without you. Nothing here is urgent except approvals; the rest can
-          wait, but it does not move until you answer.
+          Decisions that wait on you. An agent can label the classifier's guesses and close what is only
+          informational; approvals, agent changes and alerts always wait for you.
         </p>
         <div className="mt-4">
           <Tabs
@@ -133,6 +200,39 @@ export function Inbox(): JSX.Element {
         </div>
       </header>
 
+      <TriageBanner
+        offer={agentOffer(items, now)}
+        running={triage.run === null ? null : { done: triage.run.done, total: triage.run.total }}
+        summary={
+          lastRun === null || runFailed
+            ? null
+            : { applied: lastRun.applied, suggested: lastRun.suggested, failed: lastRun.failed }
+        }
+        error={bannerError}
+        suggestions={{
+          total: breakdown.acceptable.length + breakdown.fixTasks,
+          acceptable: breakdown.acceptable.length,
+          fixTasks: breakdown.fixTasks,
+          parts: breakdown.parts,
+        }}
+        acceptResult={acceptResult}
+        dismissed={lastRun !== null && dismissedRunId === lastRun.id}
+        busy={accepting}
+        onStart={() => {
+          setAcceptResult(null);
+          setDismissedError(null);
+          void triage.start();
+        }}
+        onAcceptAll={acceptAll}
+        onOpenHandled={() => {
+          setTab('handled');
+          setSelectedId(null);
+        }}
+        onDismiss={() => setDismissedRunId(lastRun?.id ?? null)}
+        onDismissError={() => setDismissedError(errorKey)}
+      />
+
+
       {errors.length > 0 && (
         <div className="flex flex-wrap gap-3 border-b border-line px-9 py-2 font-mono text-[11px] text-red">
           {errors.map((k) => (
@@ -144,7 +244,16 @@ export function Inbox(): JSX.Element {
       )}
 
       <div className="min-h-0 flex-1">
-        {!loading && visible.length === 0 ? (
+        {tab === 'handled' ? (
+          <HandledList
+            verdicts={triage.handled}
+            onChanged={() => {
+              reload();
+              triage.reload();
+            }}
+            now={now}
+          />
+        ) : !loading && visible.length === 0 ? (
           <div className="px-9 py-10 text-[13px] text-ink-dim">Nothing is waiting on you.</div>
         ) : (
           <SplitPane
@@ -185,6 +294,7 @@ export function Inbox(): JSX.Element {
                 error={actionError}
                 onAct={(a) => run(item, a)}
                 now={now}
+                audit={triage.audit}
               />
             )}
           />
