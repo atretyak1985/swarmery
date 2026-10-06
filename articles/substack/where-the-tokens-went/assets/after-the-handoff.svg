@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="220" viewBox="0 0 800 220" font-family='system-ui, -apple-system, "Segoe UI", sans-serif' role="img">
+<title>After the handoff note was ready</title><desc>One horizontal bar splitting the sessions that received a handoff note by how many more answers they had afterwards.</desc>
+<rect width="800" height="220" fill="#fcfcfb"/>
+<text x="32.0" y="44.0" font-size="20" font-weight="600" fill="#0b0b0b" text-anchor="start">After the handoff note was ready</text>
+<text x="32.0" y="68.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">267 sessions that received a note · 10 Aug to 4 Oct 2026</text>
+<text x="32.0" y="106.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">79 · no answer after the note</text>
+<path fill="#86b6ef" d="M32.0,116.0 H247.8 Q247.8,116.0 247.8,116.0 V138.0 Q247.8,138.0 247.8,138.0 H32.0 Z"/>
+<text x="249.8" y="106.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">72 · up to 100 more answers</text>
+<path fill="#2a78d6" d="M249.8,116.0 H446.2 Q446.2,116.0 446.2,116.0 V138.0 Q446.2,138.0 446.2,138.0 H249.8 Z"/>
+<text x="448.2" y="106.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">116 · more than 100 more answers</text>
+<path fill="#104281" d="M448.2,116.0 H764.0 Q768.0,116.0 768.0,120.0 V134.0 Q768.0,138.0 764.0,138.0 H448.2 Z"/>
+<text x="32.0" y="172.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">$11,736 of the $15,277 these sessions cost came after the first note was ready.</text>
+<text x="32.0" y="198.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">The daemon writes a note once a session's context passes 150k tokens. Cost at API list price.</text>
+</svg>

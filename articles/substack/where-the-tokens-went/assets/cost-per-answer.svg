@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="280" viewBox="0 0 800 280" font-family='system-ui, -apple-system, "Segoe UI", sans-serif' role="img">
+<title>The fuller the session, the dearer each answer</title><desc>Four horizontal bars: the average cost of one model answer rises with the size of the context it had to read.</desc>
+<rect width="800" height="280" fill="#fcfcfb"/>
+<text x="32.0" y="44.0" font-size="20" font-weight="600" fill="#0b0b0b" text-anchor="start">The fuller the session, the dearer each answer</text>
+<text x="32.0" y="68.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">All model answers in 1,947 sessions · 10 Aug to 4 Oct 2026</text>
+<text x="156.0" y="112.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">Under 50k</text>
+<path fill="#eb6834" d="M170.0,96.0 H300.4 Q304.4,96.0 304.4,100.0 V114.0 Q304.4,118.0 300.4,118.0 H170.0 Z"/>
+<text x="312.4" y="112.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">7.7¢</text>
+<text x="156.0" y="148.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">50k to 150k</text>
+<path fill="#eb6834" d="M170.0,132.0 H309.1 Q313.1,132.0 313.1,136.0 V150.0 Q313.1,154.0 309.1,154.0 H170.0 Z"/>
+<text x="321.1" y="148.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">8.2¢</text>
+<text x="156.0" y="184.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">150k to 300k</text>
+<path fill="#eb6834" d="M170.0,168.0 H401.6 Q405.6,168.0 405.6,172.0 V186.0 Q405.6,190.0 401.6,190.0 H170.0 Z"/>
+<text x="413.6" y="184.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">13.5¢</text>
+<text x="156.0" y="220.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">300k and over</text>
+<path fill="#eb6834" d="M170.0,204.0 H646.0 Q650.0,204.0 650.0,208.0 V222.0 Q650.0,226.0 646.0,226.0 H170.0 Z"/>
+<text x="658.0" y="220.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">27.5¢</text>
+<line x1="170.0" y1="90" x2="170.0" y2="232" stroke="#c3c2b7" stroke-width="1"/>
+<text x="32.0" y="258.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Average cost of one model answer, by the context that answer had to read. API list price.</text>
+</svg>

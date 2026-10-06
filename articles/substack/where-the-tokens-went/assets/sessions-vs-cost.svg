@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="366" viewBox="0 0 800 366" font-family='system-ui, -apple-system, "Segoe UI", sans-serif' role="img">
+<title>19% of sessions, 79% of the cost</title><desc>Grouped horizontal bars comparing each context-size group's share of sessions with its share of cost.</desc>
+<rect width="800" height="366" fill="#fcfcfb"/>
+<text x="32.0" y="44.0" font-size="20" font-weight="600" fill="#0b0b0b" text-anchor="start">19% of sessions, 79% of the cost</text>
+<text x="32.0" y="68.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">624 working sessions grouped by the largest context they reached · 10 Aug to 4 Oct 2026</text>
+<rect x="32.0" y="90.0" width="12" height="12" rx="2" fill="#2a78d6"/>
+<text x="50.0" y="100.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of sessions</text>
+<rect x="196.4" y="90.0" width="12" height="12" rx="2" fill="#eb6834"/>
+<text x="214.4" y="100.0" font-size="13" font-weight="400" fill="#52514e" text-anchor="start">Share of cost</text>
+<text x="156.0" y="153.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">Under 150k</text>
+<path fill="#2a78d6" d="M170.0,126.0 H446.8 Q450.8,126.0 450.8,130.0 V144.0 Q450.8,148.0 446.8,148.0 H170.0 Z"/>
+<text x="458.8" y="142.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">54.0%</text>
+<path fill="#eb6834" d="M170.0,150.0 H185.2 Q189.2,150.0 189.2,154.0 V168.0 Q189.2,172.0 185.2,172.0 H170.0 Z"/>
+<text x="197.2" y="166.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">3.7%</text>
+<text x="156.0" y="225.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">150k to 300k</text>
+<path fill="#2a78d6" d="M170.0,198.0 H305.4 Q309.4,198.0 309.4,202.0 V216.0 Q309.4,220.0 305.4,220.0 H170.0 Z"/>
+<text x="317.4" y="214.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">26.8%</text>
+<path fill="#eb6834" d="M170.0,222.0 H256.0 Q260.0,222.0 260.0,226.0 V240.0 Q260.0,244.0 256.0,244.0 H170.0 Z"/>
+<text x="268.0" y="238.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">17.3%</text>
+<text x="156.0" y="297.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="end">300k and over</text>
+<path fill="#2a78d6" d="M170.0,270.0 H265.8 Q269.8,270.0 269.8,274.0 V288.0 Q269.8,292.0 265.8,292.0 H170.0 Z"/>
+<text x="277.8" y="286.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">19.2%</text>
+<path fill="#eb6834" d="M170.0,294.0 H576.8 Q580.8,294.0 580.8,298.0 V312.0 Q580.8,316.0 576.8,316.0 H170.0 Z"/>
+<text x="588.8" y="310.0" font-size="13" font-weight="400" fill="#0b0b0b" text-anchor="start">79.0%</text>
+<line x1="170.0" y1="118" x2="170.0" y2="324" stroke="#c3c2b7" stroke-width="1"/>
+<text x="32.0" y="346.0" font-size="12" font-weight="400" fill="#898781" text-anchor="start">Context = the most a session had to read before one answer, in tokens. Cost at API list price.</text>
+</svg>
