@@ -98,6 +98,7 @@ func newCausesInUseSince(db *sql.DB) (string, error) {
 	err := db.QueryRow(`
 		SELECT COALESCE(MIN(ground_truth_at), '') FROM decisions
 		 WHERE question_id = ? AND COALESCE(ground_truth_at, '') <> ''
+		   AND ground_truth_source <> 'agent'
 		   AND LOWER(ground_truth) IN (`+strings.TrimSuffix(strings.Repeat("?,", len(FailureParent)), ",")+`)`,
 		causes...).Scan(&since)
 	return since, err
@@ -474,16 +475,21 @@ func LabelCounts(db *sql.DB, fromDay, toDay string) ([]LabelCount, error) {
 
 // QuestionStats is one row of the Decisions view.
 type QuestionStats struct {
-	QuestionID string   `json:"questionId"`
-	Mode       string   `json:"mode"`
-	Threshold  float64  `json:"threshold"`
-	Calls      int      `json:"calls"`
-	Errors     int      `json:"errors"`
-	Acted      int      `json:"acted"`
-	WithTruth  int      `json:"withTruth"`
-	Agreed     int      `json:"agreed"`
-	Agreement  *float64 `json:"agreement"`
-	Histogram  []int    `json:"histogram"` // 10 confidence buckets, [0,0.1) … [0.9,1]
+	QuestionID string  `json:"questionId"`
+	Mode       string  `json:"mode"`
+	Threshold  float64 `json:"threshold"`
+	Calls      int     `json:"calls"`
+	Errors     int     `json:"errors"`
+	Acted      int     `json:"acted"`
+	// WithTruth / Agreed / Agreement count operator and observed labels only;
+	// agent labels are counted apart in AgentTruth / AgentAgreed and never feed
+	// the agreement a threshold reads.
+	WithTruth   int      `json:"withTruth"`
+	Agreed      int      `json:"agreed"`
+	Agreement   *float64 `json:"agreement"`
+	AgentTruth  int      `json:"agentTruth"`
+	AgentAgreed int      `json:"agentAgreed"`
+	Histogram   []int    `json:"histogram"` // 10 confidence buckets, [0,0.1) … [0.9,1]
 }
 
 // Summary computes the per-question stats for every known question.
@@ -504,16 +510,16 @@ func Summary(db *sql.DB, e *Engine) ([]QuestionStats, error) {
 		return nil, err
 	}
 	rows, err := db.Query(`SELECT question_id, answer, confidence, error, acted, COALESCE(ground_truth, ''),
-		COALESCE(ground_truth_at, '') FROM decisions`)
+		COALESCE(ground_truth_at, ''), ground_truth_source FROM decisions`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, answer, errText, truth, truthAt string
+		var id, answer, errText, truth, truthAt, source string
 		var conf sql.NullFloat64
 		var acted int
-		if err := rows.Scan(&id, &answer, &conf, &errText, &acted, &truth, &truthAt); err != nil {
+		if err := rows.Scan(&id, &answer, &conf, &errText, &acted, &truth, &truthAt, &source); err != nil {
 			return nil, err
 		}
 		s := byID[id]
@@ -530,11 +536,20 @@ func Summary(db *sql.DB, e *Engine) ([]QuestionStats, error) {
 			b := int(conf.Float64 * 10)
 			s.Histogram[min(max(b, 0), 9)]++
 		}
-		if truth != "" {
-			s.WithTruth++
-			if Agrees(id, truth, answer, legacyTruth(truthAt, since)) {
-				s.Agreed++
+		if truth == "" {
+			continue
+		}
+		agrees := Agrees(id, truth, answer, legacyTruth(truthAt, since))
+		if source == TruthAgent {
+			s.AgentTruth++
+			if agrees {
+				s.AgentAgreed++
 			}
+			continue
+		}
+		s.WithTruth++
+		if agrees {
+			s.Agreed++
 		}
 	}
 	for i := range out {

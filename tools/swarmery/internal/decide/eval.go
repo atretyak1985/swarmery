@@ -90,6 +90,20 @@ type EvalQuestion struct {
 	// Buckets are ten confidence buckets, [0,0.1) … [0.9,1], over NON-rule
 	// answers (a rule's confidence is always 1 and says nothing).
 	Buckets []EvalBucket `json:"buckets"`
+	// Sources splits the labels by who wrote them. The headline numbers above
+	// are the "operator" row (operator and observed labels); an "agent" label
+	// is replayed the same way and reported here only, never in the headline.
+	Sources []EvalSource `json:"sources"`
+}
+
+// EvalSource is one label source's share of a question: how many subjects it
+// labelled, how many of those were replayed and how many replays agreed.
+type EvalSource struct {
+	Source    string   `json:"source"` // "operator" (incl. observed) | "agent"
+	Labelled  int      `json:"labelled"`
+	Replayed  int      `json:"replayed"`
+	Agree     int      `json:"agree"`
+	Agreement *float64 `json:"agreement"`
 }
 
 // EvalBackend is one backend's share of a question: how many it answered and
@@ -134,11 +148,15 @@ type evalTruth struct {
 	truth, at, recorded string
 }
 
-// evalSubject is one subject's labels, keyed by question id.
+// evalSubject is one subject's labels, keyed by question id. truths holds the
+// operator and observed labels (the ones a threshold may count); agent holds
+// the labels a triage agent wrote, kept apart so they never feed one.
 type evalSubject struct {
-	uuid   string
-	newest string // greatest ground_truth_at among its labels
-	truths map[string]evalTruth
+	uuid        string
+	newest      string // greatest ground_truth_at among its NON-agent labels
+	agentNewest string // greatest ground_truth_at among its agent labels
+	truths      map[string]evalTruth
+	agent       map[string]evalTruth
 }
 
 // Eval replays the classifier over existing ground truth and reports per
@@ -174,9 +192,13 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 	if !opts.TruthSince.IsZero() {
 		rep.TruthSince = opts.TruthSince.UTC().Format(time.RFC3339)
 	}
+	// tallies count operator and observed labels (the headline); agentTallies
+	// count agent labels, replayed the same way but reported only in Sources.
 	tallies := map[string]*evalTally{}
+	agentTallies := map[string]*evalTally{}
 	for _, id := range questions {
 		tallies[id] = newEvalTally()
+		agentTallies[id] = newEvalTally()
 	}
 
 	errs := 0
@@ -184,11 +206,17 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 		if err := ctx.Err(); err != nil {
 			return EvalReport{}, err
 		}
-		for id, tr := range sub.truths {
-			t := tallies[id]
-			t.labelled++
-			if Agrees(id, tr.truth, tr.recorded, legacyTruth(tr.at, since)) {
-				t.recordedAgree++
+		sets := []struct {
+			truths  map[string]evalTruth
+			tallies map[string]*evalTally
+		}{{sub.truths, tallies}, {sub.agent, agentTallies}}
+		for _, set := range sets {
+			for id, tr := range set.truths {
+				t := set.tallies[id]
+				t.labelled++
+				if Agrees(id, tr.truth, tr.recorded, legacyTruth(tr.at, since)) {
+					t.recordedAgree++
+				}
 			}
 		}
 		s, reason, err := evalSession(ctx, db, sub.uuid)
@@ -196,15 +224,19 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 			return EvalReport{}, err
 		}
 		if reason != "" {
-			for id := range sub.truths {
-				tallies[id].skip(reason)
+			for _, set := range sets {
+				for id := range set.truths {
+					set.tallies[id].skip(reason)
+				}
 			}
 		} else {
 			for _, q := range d2Questions(db, s, e.R5PhaseRunFeature) {
-				tr, ok := sub.truths[q.ID]
-				if !ok {
+				_, op := sub.truths[q.ID]
+				_, ag := sub.agent[q.ID]
+				if !op && !ag {
 					continue
 				}
+				// One replay per question, compared against each source's label.
 				a, err := e.ask(ctx, q)
 				if ctx.Err() != nil {
 					return EvalReport{}, ctx.Err()
@@ -212,7 +244,11 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 				if err != nil && !errors.Is(err, ErrNotConfigured) {
 					errs++
 				}
-				tallies[q.ID].answer(q.ID, tr.truth, legacyTruth(tr.at, since), a, err)
+				for _, set := range sets {
+					if tr, ok := set.truths[q.ID]; ok {
+						set.tallies[q.ID].answer(q.ID, tr.truth, legacyTruth(tr.at, since), a, err)
+					}
+				}
 			}
 		}
 		if opts.Progress != nil {
@@ -221,7 +257,13 @@ func Eval(ctx context.Context, db *sql.DB, e *Engine, opts EvalOptions) (EvalRep
 	}
 
 	for _, id := range questions {
-		rep.Questions = append(rep.Questions, tallies[id].report(id))
+		q := tallies[id].report(id)
+		ag := agentTallies[id]
+		q.Sources = []EvalSource{
+			{Source: TruthOperator, Labelled: q.Labelled, Replayed: q.Replayed, Agree: q.Agree, Agreement: q.Agreement},
+			{Source: TruthAgent, Labelled: ag.labelled, Replayed: ag.replayed, Agree: ag.agree, Agreement: ratio(ag.agree, ag.replayed)},
+		}
+		rep.Questions = append(rep.Questions, q)
 	}
 	return rep, nil
 }
@@ -247,8 +289,12 @@ func evalQuestionSet(want []string) ([]string, error) {
 }
 
 // evalTruthSet reads the truth set: for each (subject, question) with ground
-// truth, the row with the greatest ground_truth_at, then id. Subjects come back
-// newest label first (then by uuid), so a Limit keeps the most recent labels.
+// truth, the row with the greatest ground_truth_at, then id, kept apart per
+// source (operator/observed vs agent). Subjects with at least one non-agent
+// label come first, newest non-agent label first (then by uuid); subjects with
+// only agent labels follow, newest agent label first (then by uuid). A Limit
+// therefore fills with operator-labelled subjects and reaches agent-only ones
+// only when there is room: an agent label never steers the headline sample.
 func evalTruthSet(ctx context.Context, db *sql.DB, questions []string, since time.Time) ([]evalSubject, error) {
 	args := make([]any, len(questions))
 	for i, q := range questions {
@@ -258,7 +304,8 @@ func evalTruthSet(ctx context.Context, db *sql.DB, questions []string, since tim
 	// Ascending by (ground_truth_at, id) within a key, so the LAST row read for a
 	// key is the one that wins.
 	rows, err := db.QueryContext(ctx, `
-		SELECT subject, question_id, ground_truth, COALESCE(ground_truth_at, ''), answer, error
+		SELECT subject, question_id, ground_truth, COALESCE(ground_truth_at, ''), answer, error,
+		       ground_truth_source
 		  FROM decisions
 		 WHERE ground_truth IS NOT NULL AND question_id IN (`+ph+`)
 		 ORDER BY subject, question_id, COALESCE(ground_truth_at, ''), id`, args...)
@@ -268,43 +315,64 @@ func evalTruthSet(ctx context.Context, db *sql.DB, questions []string, since tim
 	defer rows.Close()
 	bySubject := map[string]*evalSubject{}
 	for rows.Next() {
-		var subject, id, truth, at, answer, errText string
-		if err := rows.Scan(&subject, &id, &truth, &at, &answer, &errText); err != nil {
+		var subject, id, truth, at, answer, errText, source string
+		if err := rows.Scan(&subject, &id, &truth, &at, &answer, &errText, &source); err != nil {
 			return nil, err
 		}
 		sub := bySubject[subject]
 		if sub == nil {
-			sub = &evalSubject{uuid: subject, truths: map[string]evalTruth{}}
+			sub = &evalSubject{uuid: subject, truths: map[string]evalTruth{}, agent: map[string]evalTruth{}}
 			bySubject[subject] = sub
 		}
 		if errText != "" {
 			answer = "" // an errored call recorded no answer to compare
 		}
-		sub.truths[id] = evalTruth{truth: truth, at: at, recorded: answer}
+		set := sub.truths
+		if source == TruthAgent {
+			set = sub.agent
+		}
+		set[id] = evalTruth{truth: truth, at: at, recorded: answer}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	out := make([]evalSubject, 0, len(bySubject))
 	for _, sub := range bySubject {
-		for id, tr := range sub.truths {
-			if !since.IsZero() && !evalAtOrAfter(tr.at, since) {
-				delete(sub.truths, id)
-				continue
-			}
-			sub.newest = max(sub.newest, tr.at)
-		}
-		if len(sub.truths) > 0 {
+		sub.newest = evalKeepSince(sub.truths, since)
+		sub.agentNewest = evalKeepSince(sub.agent, since)
+		if len(sub.truths)+len(sub.agent) > 0 {
 			out = append(out, *sub)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].newest != out[j].newest {
-			return out[i].newest > out[j].newest
+		a, b := out[i], out[j]
+		if (len(a.truths) > 0) != (len(b.truths) > 0) {
+			return len(a.truths) > 0 // operator-labelled subjects first
 		}
-		return out[i].uuid < out[j].uuid
+		ka, kb := a.newest, b.newest
+		if len(a.truths) == 0 {
+			ka, kb = a.agentNewest, b.agentNewest
+		}
+		if ka != kb {
+			return ka > kb
+		}
+		return a.uuid < b.uuid
 	})
 	return out, nil
+}
+
+// evalKeepSince drops the labels older than since (zero ⇒ keep all) and
+// returns the greatest ground_truth_at among the rest.
+func evalKeepSince(set map[string]evalTruth, since time.Time) string {
+	newest := ""
+	for id, tr := range set {
+		if !since.IsZero() && !evalAtOrAfter(tr.at, since) {
+			delete(set, id)
+			continue
+		}
+		newest = max(newest, tr.at)
+	}
+	return newest
 }
 
 // evalAtOrAfter reports whether the stored ground_truth_at is at or after
@@ -526,6 +594,10 @@ func RenderEval(w io.Writer, rep EvalReport, asJSON bool) error {
 				continue
 			}
 			fmt.Fprintf(w, "  %-11s %6d %6d %9s\n", b.Backend, b.N, b.Agree, evalPct(b.Precision))
+		}
+		for _, s := range q.Sources {
+			fmt.Fprintf(w, "  source %-8s labelled %d, replayed %d, agree %d, agreement %s\n",
+				s.Source, s.Labelled, s.Replayed, s.Agree, evalPct(s.Agreement))
 		}
 		if len(q.Rules) > 0 {
 			fmt.Fprintf(w, "  %-11s %6s %6s %9s %9s\n", "rule", "n", "agree", "precision", "coverage")

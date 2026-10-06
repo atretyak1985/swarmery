@@ -205,6 +205,51 @@ func TestLabelerSkipsZeroTurn(t *testing.T) {
 	}
 }
 
+// The labelling queue hides decisions about System-project sessions (the
+// daemon's own utility runs) unless asked for; a non-System session and a
+// decision with no session row are unaffected.
+func TestLabelQueueHidesSystemSessions(t *testing.T) {
+	db := openDB(t)
+	const sysPath = "/home/op/.swarmery"
+	mustExec(t, db, `INSERT INTO projects(id, path, slug, first_seen) VALUES(2, ?, 'system', '2026-01-01T00:00:00Z')`, sysPath)
+	seedSession(t, db, "s-work", "2026-09-20T11:00:00.000Z", "")
+	seedSession(t, db, "s-sys", "2026-09-20T11:30:00.000Z", "")
+	mustExec(t, db, `UPDATE sessions SET project_id = 2 WHERE session_uuid = 's-sys'`)
+	for _, row := range []struct{ q, subject, sess string }{
+		{QD2TaskType, "s-work", "s-work"}, // id 1: listed
+		{QD2TaskType, "s-sys", "s-sys"},   // id 2: System — hidden by default
+		{QD1, "phaserun:7", ""},           // id 3: no session — listed
+	} {
+		mustExec(t, db, `INSERT INTO decisions (question_id, subject, session_uuid, input_hash, answer, confidence, backend, created_at)
+			VALUES (?, ?, ?, 'h', ?, 0.8, 'local', '2026-09-24T18:00:00Z')`, row.q, row.subject, row.sess, OptionsFor(row.q)[0])
+	}
+	ids := func(o QueueOptions) []int64 {
+		t.Helper()
+		o.Limit = -1
+		items, err := LabelQueue(db, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []int64{}
+		for _, it := range items {
+			out = append(out, it.ID)
+		}
+		return out
+	}
+	if got := ids(QueueOptions{SystemPath: sysPath}); !slices.Equal(got, []int64{3, 1}) {
+		t.Errorf("queue = %v, want [3 1] (the System session hidden)", got)
+	}
+	if got := ids(QueueOptions{SystemPath: sysPath, IncludeSystem: true}); !slices.Equal(got, []int64{3, 2, 1}) {
+		t.Errorf("queue with system = %v, want [3 2 1]", got)
+	}
+	if got := ids(QueueOptions{}); !slices.Equal(got, []int64{3, 2, 1}) {
+		t.Errorf("queue without a System path = %v, want [3 2 1] (no filter)", got)
+	}
+	if got := ids(QueueOptions{SystemPath: sysPath, ProjectID: 2}); len(got) != 0 {
+		t.Errorf("System project queue = %v, want empty unless IncludeSystem", got)
+	}
+}
+
 // The labelling queue hides the decisions of a session that has no turn —
 // nothing to judge them from — without deleting them; a decision with no
 // session row at all stays.
@@ -225,7 +270,7 @@ func TestLabelQueueHidesZeroTurn(t *testing.T) {
 	}
 	ids := func(projectID int64) []int64 {
 		t.Helper()
-		items, err := LabelQueue(db, -1, "", projectID, false)
+		items, err := LabelQueue(db, QueueOptions{Limit: -1, ProjectID: projectID})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -174,7 +174,7 @@ func (t *D1Tracker) Observe(end string, done int) {
 		return
 	}
 	truth := D1TruthAfterContinuation(end, t.doneBefore, done)
-	if err := RecordGroundTruth(t.e.DB, t.pendingID, truth, t.e.now()); err != nil {
+	if err := RecordGroundTruth(t.e.DB, t.pendingID, truth, TruthObserved, t.e.now()); err != nil {
 		log.Printf("warning: decide: ground truth for decision %d: %v", t.pendingID, err)
 	}
 	t.pendingID = 0

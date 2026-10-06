@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
 var decideEngine *decide.Engine
@@ -97,7 +98,7 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	switch err := decide.RecordGroundTruth(h.DB, id, body.Value, time.Now()); {
+	switch err := decide.RecordGroundTruth(h.DB, id, body.Value, decide.TruthOperator, time.Now()); {
 	case errors.Is(err, sql.ErrNoRows):
 		writeClientErr(w, http.StatusNotFound, "no such decision")
 	case err != nil:
@@ -114,7 +115,9 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 // yields an empty queue, never the whole fleet's. limit=all returns every open
 // decision (the Inbox); a missing or out-of-range number keeps the 100 default.
 // Answers the rules gave are left out — nothing in them needs the operator's
-// judgement — unless rules=1 asks for them (the Inbox never does).
+// judgement — unless rules=1 asks for them (the Inbox never does). Decisions
+// about System-project sessions (the daemon's own utility runs) are left out
+// unless system=1 asks for them.
 func (h *Handler) decisionsQueue(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if strings.TrimSpace(r.URL.Query().Get("limit")) == "all" {
@@ -133,13 +136,24 @@ func (h *Handler) decisionsQueue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var includeRules bool
-	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("rules"))) {
-	case "1", "true":
-		includeRules = true
-	}
-	items, err := decide.LabelQueue(h.DB, limit, strings.TrimSpace(r.URL.Query().Get("since")), projectID, includeRules)
+	items, err := decide.LabelQueue(h.DB, decide.QueueOptions{
+		Limit:         limit,
+		Since:         strings.TrimSpace(r.URL.Query().Get("since")),
+		ProjectID:     projectID,
+		IncludeRules:  queryFlag(r, "rules"),
+		SystemPath:    ingest.SystemDir(),
+		IncludeSystem: queryFlag(r, "system"),
+	})
 	writeJSON(w, map[string]any{"items": items}, err)
+}
+
+// queryFlag reports whether query parameter name is "1" or "true".
+func queryFlag(r *http.Request, name string) bool {
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get(name))) {
+	case "1", "true":
+		return true
+	}
+	return false
 }
 
 func (h *Handler) sessionDecisionLabels(w http.ResponseWriter, r *http.Request) {
