@@ -247,6 +247,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/hooks/stop", requireLocalOrigin(h.hookStop))
 	mux.HandleFunc("POST /api/approvals/{id}", requireLocalOrigin(h.resolveApproval))
 	mux.HandleFunc("GET /api/approvals", h.listApprovals)
+	// needs-you queue (phase 3): read-only list of every blocker on the
+	// operator — approvals, questions, local-only prod deploys, sessions
+	// awaiting a reply, recent failures — oldest first. See needs_you.go.
+	mux.HandleFunc("GET /api/needs-you", h.needsYou)
 
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
