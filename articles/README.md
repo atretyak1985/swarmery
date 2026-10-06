@@ -17,7 +17,9 @@ articles/
 │       ├── assets/      images and screenshots the article embeds
 │       ├── links.txt    where it went live, one `outlet = url` per line
 │       └── build/       generated paste-ready HTML (gitignored)
-└── medium/
+├── medium/
+│   └── <slug>/          same shape
+└── devto/
     └── <slug>/          same shape
 ```
 
@@ -33,7 +35,7 @@ included, is readable by anyone from the moment it is pushed.
 
 | Step | Command | Ends with |
 | --- | --- | --- |
-| Write | `/write-article <topic direction> [substack\|medium]` | `brief.md` + `article.md`, after an interview |
+| Write | `/write-article <topic direction> [substack\|medium\|devto]` | `brief.md` + `article.md`, after an interview |
 | Publish | `/publish-substack <slug>` | a Substack **draft**; goes live only on an explicit yes |
 
 The skills live in `.claude/skills/`.
@@ -58,11 +60,12 @@ published: false
   are `##`, subsections `###`, nothing deeper.
 - Images are relative paths into `assets/` and carry alt text.
 
-## What each outlet's editor drops
+## What each outlet does to an article
 
-Neither outlet has a publishing API; the body is pasted into a web editor, and
-the editor discards what it cannot hold without reporting an error. Write
-around these from the first draft.
+Substack and Medium have no publishing API: the body is pasted into a web
+editor, and the editor discards what it cannot hold without reporting an error.
+dev.to takes the markdown file as it is, front matter included, and has rules of
+its own. Write around these from the first draft.
 
 **Substack**
 
@@ -80,7 +83,21 @@ around these from the first draft.
 - Image alt text is blanked on paste.
 - Two heading sizes only.
 
-These were measured on 2026-10-05 by the author of
+**dev.to**
+
+- Tables and multi-line code blocks render as written.
+- A line break inside a paragraph is shown as a line break. Write each
+  paragraph on one line.
+- `article.md` is pasted whole, so its front matter follows dev.to's format:
+  `tags` is a comma-separated line (`tags: agents, claudecode`) of at most four
+  tags, letters and digits only, and a fifth is dropped without a warning.
+- Images need absolute URLs: the public GitHub URL of a committed and pushed
+  file, or an upload through dev.to's editor.
+- `cover_image` is cropped to about 2.38:1, for example 1000×420.
+- `canonical_url` in the front matter marks a cross-post.
+
+The editor and rendering behaviours above were measured between August and
+October 2026 by the author of
 [publishing-kit](https://github.com/xbill9/publishing-kit), not by this
-project, and an editor can change. `/publish-substack` reads back the draft
+project, and an outlet can change. `/publish-substack` reads back the draft
 Substack saved and compares it with the source, which is what catches a change.

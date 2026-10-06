@@ -1,7 +1,7 @@
 ---
 name: write-article
-description: Use when the author wants a new article, post or essay about this project for Substack, Medium or another outlet and gives a topic direction to start from — "напиши статтю про…", "стаття для сабстеку", "write an article about…", "/write-article <direction>". Not for docs, READMEs, changelogs or release notes, and not for publishing an article that is already written (publish-substack).
-argument-hint: "<topic direction> [substack|medium]"
+description: Use when the author wants a new article, post or essay about this project for Substack, Medium, dev.to or another outlet and gives a topic direction to start from — "напиши статтю про…", "стаття для сабстеку", "пост на dev.to", "write an article about…", "/write-article <direction>". Not for docs, READMEs, changelogs or release notes, and not for publishing an article that is already written (publish-substack).
+argument-hint: "<topic direction> [substack|medium|devto]"
 ---
 
 # Write an article
@@ -16,7 +16,7 @@ The layout, the front matter and what each outlet's editor drops are in
 `articles/README.md`. The author's voice and standing facts are in
 `articles/STYLE.md` once the first interview has written it.
 
-## 1. Read before asking
+## 1. Research before asking
 
 - `articles/README.md`, `articles/STYLE.md`, and the front matter of every
   existing article, so the new one neither repeats an old one nor misses a
@@ -24,11 +24,27 @@ The layout, the front matter and what each outlet's editor drops are in
 - The direction itself, in the repository: code, `docs/`, `CHANGELOG.md`, ADRs,
   `git log`, merged PRs. Keep a fact sheet as you go, one line per fact with
   where it comes from (`path:line`, commit, PR number).
+- What the outlet's readers have been reading on this subject. Search the web
+  for what was published on it in about the last month, on the target outlet
+  first, and on all of them while the outlet is still open. dev.to has a public
+  listing, `https://dev.to/api/articles?tag=<tag>&top=30`, which returns a tag's
+  posts from the last 30 days with their reaction and comment counts. Substack
+  and Medium have none, so search by topic restricted to the site. For each
+  post that matters, note the title, author, date, link, its claim in one line,
+  and how it was received where that is visible. Then write down what these
+  posts agree on, what they argue about, and what none of them has said.
 
-The research decides the quality of the interview. It removes every question
-the repository can answer, and it turns the rest from generic ("what challenges
-did you face?") into specific ("PR #355 fixed an 11-hour hang; is that the story
-here, or a footnote?").
+The repository research decides the quality of the interview. It removes every
+question the repository can answer, and it turns the rest from generic ("what
+challenges did you face?") into specific ("PR #355 fixed an 11-hour hang; is
+that the story here, or a footnote?").
+
+The outlet research shows which conversation the article walks into: what the
+reader has already seen, the words they use for it, the tags that are active.
+It shapes the angles and the framing. The thesis still comes from what the
+author did and found; when that material does not support a trend, the article
+leaves the trend alone. If the web cannot be searched in this session, tell the
+author before the interview starts.
 
 ## 2. Interview
 
@@ -36,9 +52,11 @@ Hold the interview in the language the author writes to you in, whatever
 language the article will be in. Ask in rounds of at most four questions, and
 write each round after reading the answers to the one before.
 
-**First round: the frame.** Offer two to four angles you found in the research,
-each as a working title plus the one claim that article would defend. The author
-picks one, merges two, or redirects. Then settle whatever the invocation and
+**First round: the frame.** Open with what the outlet research found, in a few
+lines. Then offer two to four angles, each as a working title, the one claim
+that article would defend, and where it stands against the recent posts: which
+one it answers, extends or contradicts, or what gap it fills. The author picks
+one, merges two, or redirects. Then settle whatever the invocation and
 `STYLE.md` have not: the outlet, the reader (who they are, what they already
 know, what they should do after reading), the article's language, the rough
 length. These are choices, so `AskUserQuestion` suits them.
@@ -75,6 +93,8 @@ Create `articles/<outlet>/<slug>/` and write `brief.md`:
 - **Thesis**: one sentence.
 - **Reader**: who, and what they know coming in.
 - **Outline**: each section's point and the material that carries it.
+- **Landscape**: the recent posts found, each with its link, date and claim,
+  and what this article adds to them.
 - **Facts**: each claim about the project with its source.
 - **Interview**: the questions and the author's answers, verbatim.
 - **Open**: what is still unverified or undecided.
@@ -85,8 +105,9 @@ Show the thesis and the outline in chat. Draft once the author approves them.
 
 - **Every sentence has a source.** A fact about the project comes from the fact
   sheet. An experience, motive, opinion or reaction comes from an interview
-  answer. When a paragraph wants a detail you do not have, ask for it or drop
-  the paragraph.
+  answer. What someone else's post says is attributed to that post and linked.
+  When a paragraph wants a detail you do not have, ask for it or drop the
+  paragraph.
 - **The author's words are the raw material.** Reuse their phrasing. When the
   interview was in another language, translate the bluntness and the jokes along
   with the meaning. Write in the first person, as `STYLE.md` sets it.
@@ -97,8 +118,10 @@ Show the thesis and the outline in chat. Draft once the author approves them.
   sentence needs it.
 - **Code and commands are copied from the repository** and run before they are
   shown.
-- **Write within the outlet's limits** from `articles/README.md`: for Substack
-  and Medium that means no tables and no `# ` heading in the body.
+- **Write within the outlet's limits** from `articles/README.md`. They differ
+  by outlet: Substack and Medium take no tables, while dev.to takes them but
+  turns every line break inside a paragraph into a visible one and has its own
+  front matter format.
 - **Images**: list each one the article needs and what it must show, for the
   author to capture into `assets/`. Reference only files that exist.
 
