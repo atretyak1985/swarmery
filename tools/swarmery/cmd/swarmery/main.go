@@ -185,6 +185,10 @@ func main() {
 		// was missed, 2 a usage or database error — log.Fatalf's blanket 1
 		// could not tell the two apart.
 		os.Exit(cmdDecide(os.Args[2:]))
+	case "triage":
+		// Exit code is the contract (triage_cli.go): the nightly routine runs
+		// `triage run` as a command step, so 0 / 1 / 2 must stay distinct.
+		os.Exit(cmdTriage(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -304,6 +308,21 @@ func usage() {
                                    safe while the daemon is serving). --llm also asks the local
                                    model (SWARMERY_DECIDE_URL); exit 1 when a --min-* floor is
                                    missed, 2 on a usage or database error
+  swarmery triage run [--kinds <a,b>] [--project <slug>] [--cap <n>] [--trigger operator|schedule]
+                    [--wait] [--wait-timeout <dur>] [--port <n>] [--url <base>]
+                                   start an inbox triage run on the running daemon; --wait follows
+                                   it to the end and prints one summary line. exit 0 the run ended
+                                   ok or another run is already active, 1 it ended failed, the wait
+                                   timed out or was cancelled, or the run no longer exists, 2 usage
+                                   or the daemon is unreachable
+  swarmery triage check [--run <id>] [--strict-leftovers] [--db <path>]
+                                   read-only audit of one triage run (default: the newest
+                                   fleet-wide operator run): status ok, counters vs verdict rows,
+                                   and the classifier sessions still queued in the run's own scope
+                                   split into covered by this run, held by an earlier run, arrived
+                                   after the run started, and unexplained; unexplained ones fail
+                                   only with --strict-leftovers. exit 0 match, 1 mismatch or no
+                                   such run, 2 usage or database error
   env: SWARMERY_PORT, SWARMERY_PRICING, SWARMERY_EXCLUDE, SWARMERY_WORKSPACE_ROOT
        SWARMERY_PROJECTS_ROOTS (comma-separated transcript roots, one per Claude Code config dir;
        'auto' = every ~/.claude*/projects that exists — legacy singular: SWARMERY_PROJECTS_ROOT;

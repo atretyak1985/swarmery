@@ -96,14 +96,31 @@ const (
 // failed, until HealStale restores it), it was skipped within blockWindow, or
 // it failed or was rejected maxRecentFailures times within blockWindow.
 func (s *Service) partBlocked(kind, ref string) (bool, error) {
-	since := fmtTS(s.clock().Add(-blockWindow))
+	return blocked(s.DB, kind, ref, s.clock(), 0)
+}
+
+// BlockedBefore reports whether kind/ref was held back from run runID, which
+// started at startedAt, by the verdicts of EARLIER runs — the rule partBlocked
+// applies, with the 7-day windows counted back from startedAt. It is the
+// read-only audit's side of that rule (`swarmery triage check`): both go
+// through blocked, so the audit cannot drift from what the engine skips.
+// Verdict states are read as they are now: a verdict undone after the run
+// counts as holding, which is what keeps its decision in the queue today.
+func BlockedBefore(db *sql.DB, kind, ref string, runID int64, startedAt time.Time) (bool, error) {
+	return blocked(db, kind, ref, startedAt, runID)
+}
+
+// blocked is the one statement of the blocking rule. beforeRun 0 counts the
+// verdicts of every run; a positive beforeRun only those of runs with a lower id.
+func blocked(db *sql.DB, kind, ref string, at time.Time, beforeRun int64) (bool, error) {
+	since := fmtTS(at.Add(-blockWindow))
 	var open, failures int
-	err := s.DB.QueryRow(
+	err := db.QueryRow(
 		`SELECT
 		   COALESCE(SUM(state IN ('suggested','sample','undone','undoing') OR (state='skipped' AND created_at > ?)), 0),
 		   COALESCE(SUM(state IN ('failed','rejected') AND created_at > ?), 0)
-		 FROM triage_verdicts WHERE kind=? AND ref=?`,
-		since, since, kind, ref).Scan(&open, &failures)
+		 FROM triage_verdicts WHERE kind=? AND ref=? AND (? = 0 OR run_id < ?)`,
+		since, since, kind, ref, beforeRun, beforeRun).Scan(&open, &failures)
 	return open > 0 || failures >= maxRecentFailures, err
 }
 

@@ -1,0 +1,15 @@
+{
+  "name": "inbox-triage-nightly",
+  "cron": "30 3 * * *",
+  "enabled": true,
+  "catchUp": "run_one",
+  "timeoutSec": 3600,
+  "steps": [
+    {
+      "type": "command",
+      "name": "label the classifier queue",
+      "command": "swarmery triage run --kinds classifier --cap 60 --trigger schedule --wait",
+      "timeoutSec": 3300
+    }
+  ]
+}
