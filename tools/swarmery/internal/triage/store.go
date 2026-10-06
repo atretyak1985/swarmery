@@ -1,6 +1,7 @@
 package triage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -218,6 +219,148 @@ func (s *Service) GetVerdict(id int64) (Verdict, error) {
 		return v, ErrNotFound
 	}
 	return v, err
+}
+
+// ErrNotOpen is returned when a verdict is not (or no longer) a suggestion waiting for the operator.
+var ErrNotOpen = errors.New("triage: verdict is not an open suggestion")
+
+// MarkAccepted moves a suggested verdict to accepted (decided_at = now). When payload is
+// non-nil it replaces the stored payload (the accept handler records e.g. the created card id).
+func (s *Service) MarkAccepted(id int64, payload json.RawMessage) (Verdict, error) {
+	return s.closeSuggestion(id, StateAccepted, payload)
+}
+
+// MarkStale moves a suggested verdict to stale (decided_at = now): its item was decided elsewhere.
+func (s *Service) MarkStale(id int64) (Verdict, error) {
+	return s.closeSuggestion(id, StateStale, nil)
+}
+
+// VerdictOpen asks the registered source of v.Kind whether v.Ref still waits as
+// it did when the verdict was written. No source registered for that kind →
+// (false, ErrNotFound).
+func (s *Service) VerdictOpen(ctx context.Context, v Verdict) (bool, error) {
+	src := s.source(v.Kind)
+	if src == nil {
+		return false, ErrNotFound
+	}
+	return src.Open(ctx, v.Ref)
+}
+
+// ReopenSuggestion hands an accepted verdict back as a suggestion (decided_at
+// back to NULL): the accept handler claims first and calls this when the
+// action itself then fails. The UPDATE is guarded by state='accepted'; a
+// zero-row result is ErrNotFound for an unknown id and ErrNotOpen otherwise.
+func (s *Service) ReopenSuggestion(id int64) (Verdict, error) {
+	res, err := s.DB.Exec(`UPDATE triage_verdicts SET state=?, decided_at=NULL WHERE id=? AND state=?`,
+		StateSuggested, id, StateAccepted)
+	if err != nil {
+		return Verdict{}, err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return Verdict{}, err
+	} else if n == 0 {
+		if _, err := s.GetVerdict(id); err != nil {
+			return Verdict{}, err
+		}
+		return Verdict{}, ErrNotOpen
+	}
+	return s.GetVerdict(id)
+}
+
+// SetVerdictPayload replaces the stored payload of verdict id (valid JSON
+// required). An unknown id is ErrNotFound.
+func (s *Service) SetVerdictPayload(id int64, payload json.RawMessage) error {
+	if !json.Valid(payload) {
+		return errors.New("triage: verdict payload is not valid JSON")
+	}
+	res, err := s.DB.Exec(`UPDATE triage_verdicts SET payload=? WHERE id=?`, string(payload), id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// closeSuggestion is MarkAccepted/MarkStale: ONE UPDATE guarded by
+// state='suggested', so of two concurrent closes only one wins. A zero-row
+// result is ErrNotFound for an unknown id and ErrNotOpen otherwise (a sample,
+// an applied verdict, or a suggestion already closed). It returns the row as
+// it is after the change.
+func (s *Service) closeSuggestion(id int64, to string, payload json.RawMessage) (Verdict, error) {
+	q, args := `UPDATE triage_verdicts SET state=?, decided_at=?`, []any{to, fmtTS(s.clock())}
+	if payload != nil {
+		if !json.Valid(payload) {
+			return Verdict{}, errors.New("triage: verdict payload is not valid JSON")
+		}
+		q += `, payload=?`
+		args = append(args, string(payload))
+	}
+	res, err := s.DB.Exec(q+` WHERE id=? AND state=?`, append(args, id, StateSuggested)...)
+	if err != nil {
+		return Verdict{}, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return Verdict{}, err
+	}
+	if n == 0 {
+		if _, err := s.GetVerdict(id); err != nil {
+			return Verdict{}, err
+		}
+		return Verdict{}, ErrNotOpen
+	}
+	return s.GetVerdict(id)
+}
+
+// suggestedScope is the WHERE clause (and its args) shared by ListSuggestedAfter
+// and CountSuggested: state suggested, and — when projectID != 0 — the same
+// project rule as ListVerdicts (the item's project, or none).
+func suggestedScope(projectID int64) (string, []any) {
+	q, args := ` WHERE v.state=?`, []any{StateSuggested}
+	if projectID != 0 {
+		q += ` AND (v.project_id = ? OR v.project_id IS NULL)`
+		args = append(args, projectID)
+	}
+	return q, args
+}
+
+// ListSuggestedAfter is a keyset page of suggested verdicts: id > afterID,
+// oldest first, at most limit rows (limit <= 0 or > 1000 → 200), narrowed to
+// projectID like ListVerdicts when it is non-zero.
+func (s *Service) ListSuggestedAfter(afterID int64, limit int, projectID int64) ([]Verdict, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	where, args := suggestedScope(projectID)
+	rows, err := s.DB.Query(`SELECT `+verdictCols+` FROM triage_verdicts v`+where+
+		` AND v.id > ? ORDER BY v.id ASC LIMIT ?`, append(args, afterID, limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Verdict{}
+	for rows.Next() {
+		v, err := scanVerdict(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// CountSuggested counts the suggested verdicts in ListSuggestedAfter's scope.
+func (s *Service) CountSuggested(projectID int64) (int, error) {
+	where, args := suggestedScope(projectID)
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM triage_verdicts v`+where, args...).Scan(&n)
+	return n, err
 }
 
 // ListVerdicts returns verdicts newest first, narrowed by f (limit <= 0 → 200).

@@ -34,6 +34,10 @@ type Handler struct {
 	// read and its guarded status write — a test seam for the 409 conflict
 	// path (nil in production).
 	recPatchHook func()
+	// triageAcceptHook, when non-nil, runs between a triage accept's claim and
+	// its action — a test seam for an item that changes after the open check
+	// (nil in production).
+	triageAcceptHook func()
 	// Improve is the agent-rewriter service behind the /api/retro/proposals
 	// endpoints (self-improvement phase 3).
 	Improve *improve.Service

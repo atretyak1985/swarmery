@@ -2174,10 +2174,16 @@ func cmdServe(args []string) error {
 	// headless `claude -p` (ClaudeJudge), every write gated by the Go policy
 	// table in internal/triage. The classifier source offers the label queue
 	// (System-project sessions left out); its answers become `agent` labels, up
-	// to 5 sessions per run kept back as the audit sample. Heal 'running' rows a
-	// crashed daemon left behind first.
+	// to 5 sessions per run kept back as the audit sample. The lesson source
+	// (candidate review) is suggest-only and registered here too; the advisor
+	// and retire sources register in api.NewServer, where the Handler and the
+	// daemon's lesson-verification config (api.AttachLessonVerify, below)
+	// already exist. Their suggestions are performed only by
+	// POST /api/triage/verdicts/{id}/accept and accept-all.
+	// Heal 'running' rows a crashed daemon left behind first.
 	triageSvc := triage.NewService(db, triage.ClaudeJudge{})
 	triageSvc.Register(&triage.ClassifierSource{DB: db, SystemPath: ingest.SystemDir()})
+	triageSvc.Register(&triage.LessonSource{DB: db})
 	if err := triageSvc.HealStale(); err != nil {
 		log.Printf("warning: triage heal on startup: %v", err)
 	}
