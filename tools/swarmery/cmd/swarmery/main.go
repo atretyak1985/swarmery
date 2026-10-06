@@ -208,6 +208,7 @@ func usage() {
                     [--active-window <dur>] [--idle-window <dur>] [--no-ingest]
                     [--exclude-projects <globs>]  (default '/tmp/*,/private/tmp/*')
                     [--answer-delivery <updated-input|deny-message>]
+                    [--prod-deploy-patterns <rule globs>]  (added to the always-on defaults)
                     [--notify-url <url>] [--notify-events <list>] [--notify-template <generic|ntfy|telegram>]
                     [--notify-telegram-chat <id>]
   swarmery recost   [--db <path>]
@@ -1524,6 +1525,8 @@ func cmdServe(args []string) error {
 		"how long a permission request stays answerable from the dashboard before fail-open to the terminal prompt (env: SWARMERY_APPROVAL_TIMEOUT)")
 	answerDelivery := fs.String("answer-delivery", approvals.DeliveryUpdatedInput,
 		"AskUserQuestion dashboard-answer wire form: updated-input (hook updatedInput injection, spike-verified default) or deny-message (fallback: deny carrying the answers as the message)")
+	prodDeployPatterns := fs.String("prod-deploy-patterns", os.Getenv("SWARMERY_PROD_DEPLOY_PATTERNS"),
+		"comma-separated approval-rule globs (e.g. 'Bash(acme-ctl ship*)') that mark a tool call as a production deploy, ADDED to the built-in defaults, which cannot be turned off; such calls are never auto-approved and can only be confirmed in the session's own terminal (env: SWARMERY_PROD_DEPLOY_PATTERNS; per project: .claude/project.json approvals.prodDeployPatterns)")
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
 	notifyEvents := fs.String("notify-events", notify.EventsSetting(os.Getenv),
@@ -1543,6 +1546,10 @@ func cmdServe(args []string) error {
 	if *answerDelivery != approvals.DeliveryUpdatedInput && *answerDelivery != approvals.DeliveryDenyMessage {
 		return fmt.Errorf("--answer-delivery must be %q or %q, got %q",
 			approvals.DeliveryUpdatedInput, approvals.DeliveryDenyMessage, *answerDelivery)
+	}
+	prodGuard, err := approvals.NewProdGuard(approvals.SplitPatternList(*prodDeployPatterns))
+	if err != nil {
+		return fmt.Errorf("--prod-deploy-patterns: %w", err)
 	}
 
 	// trajjudge config (advisory LLM-judge, best-effort; cap<=0 disables).
@@ -1920,6 +1927,7 @@ func cmdServe(args []string) error {
 		Exclude:        cfg.Exclude,
 		AnswerDelivery: *answerDelivery,
 		Notifier:       notifier,
+		ProdGuard:      prodGuard,
 	})
 	api.AttachApprovals(svc)
 	// Boot heal, same posture as the other HealStale sweeps below: a request

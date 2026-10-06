@@ -1569,6 +1569,13 @@ export interface PermissionRequest {
   /** Human-entered deny/approve reason; delivered to Claude verbatim on deny. */
   reason: string | null;
   expiresAt: string;
+  /**
+   * '' = ordinary; 'prod-deploy' = a production deploy: never auto-approved,
+   * handed to the session's own terminal (resolvedVia 'local-only'), and
+   * refused with 403 by remote approve/answer. Optional because an older
+   * daemon omits it — treat absent as ''.
+   */
+  riskClass?: '' | 'prod-deploy';
 }
 
 /**

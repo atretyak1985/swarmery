@@ -65,6 +65,8 @@ var (
 	permissionRequestKeys = []string{
 		"id", "sessionId", "toolName", "requestJson", "status",
 		"requestedAt", "resolvedAt", "resolvedVia", "reason", "expiresAt",
+		// needs-you-queue phase 2 — additive: '' | 'prod-deploy'.
+		"riskClass",
 	}
 )
 
