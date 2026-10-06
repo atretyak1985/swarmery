@@ -21,6 +21,7 @@ import { UsageDataProvider } from './lib/usageData';
 import { Loading } from './components/ui';
 import { Approvals } from './pages/Approvals';
 import { Inbox } from './pages/inbox/Inbox';
+import { NeedsYou } from './pages/NeedsYou';
 import { Overview } from './pages/Overview';
 import { Sessions } from './pages/Sessions';
 import { SessionDetailPage } from './pages/SessionDetail';
@@ -189,6 +190,8 @@ const router = createBrowserRouter([
           { path: 'inbox', element: <Inbox />, handle: { fill: true } },
           { path: 'approvals', element: <Navigate to="/inbox?tab=approvals" replace /> },
           { path: 'approvals/manage', element: <Approvals /> },
+          // Needs you: every session blocker, oldest first (GET /api/needs-you).
+          { path: 'needs-you', element: <NeedsYou /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
           // Settings (Canvas v3 phase 8) absorbs the project list as a tab; the
@@ -317,6 +320,7 @@ const router = createBrowserRouter([
           { path: 'playbooks', element: <ProjectTabRedirect place="plans" tab="playbooks" /> },
           { path: 'sessions', element: <Sessions /> },
           { path: 'sessions/:id', element: <SessionDetailPage /> },
+          { path: 'needs-you', element: <NeedsYou /> },
           { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
           { path: 'approvals', element: <ProjectApprovalsRedirect /> },
           { path: 'approvals/manage', element: ws(<Approvals />) },

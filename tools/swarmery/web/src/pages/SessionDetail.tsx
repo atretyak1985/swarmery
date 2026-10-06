@@ -44,6 +44,19 @@ function LiveStateChip({ session }: { session: SessionDetail }): JSX.Element | n
   const now = useNowMs(15_000);
   const state = sessionState(session, now);
   if (state === 'done') return null;
+  // awaiting_reply is `running` in the tri-state, but nothing is working: the
+  // turn ended and the session waits for the operator's typed reply.
+  if (session.status === 'awaiting_reply') {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[10px] text-amber"
+        data-tip="the session ended its turn and waits for your typed reply"
+      >
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber" aria-hidden="true" />
+        awaiting reply · {fmtSpan(session.endedAt ?? session.startedAt, null)}
+      </span>
+    );
+  }
   if (state === 'running') {
     return (
       <span

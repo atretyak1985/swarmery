@@ -181,10 +181,15 @@ const CANVAS_CHIP_STYLE: Record<CanvasTone, string> = {
 
 /** Chip suffix: stuck shows QUIET TIME (silence since last transcript
  * activity), not session age — `working · 17 h 32 min` was the lie this
- * replaces. Everything else keeps the session span. */
+ * replaces. awaiting_reply names itself with how long the operator's reply
+ * has been owed (since the session's last activity). Everything else keeps
+ * the session span. */
 function chipSuffix(session: Session, tone: CanvasTone): string {
   if (tone === 'stuck') {
     return `quiet ${fmtSpan(session.endedAt ?? session.startedAt, null)}`;
+  }
+  if (session.status === 'awaiting_reply') {
+    return `awaiting reply · ${fmtSpan(session.endedAt ?? session.startedAt, null)}`;
   }
   return fmtSpan(session.startedAt, session.endedAt);
 }
