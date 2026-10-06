@@ -23,6 +23,14 @@ package runcore
 // mention the flag, and the mention set is A ∪ B ∪ mention-only, so no
 // mention-only entry changed.
 //
+// The triage engine then added one one-shot system spawn of the same shape as
+// decide/claude.go:
+//
+//	triage/judge.go      -> set A
+//
+// Set A went 9 -> 10, so A ∪ B went 12 -> 13 (G7's twelve plus the triage
+// judge).
+//
 // It pins TWO sets, not one, because "files containing the flag" is measurably
 // the wrong census — it counts fifteen files, three of which are not seams:
 //
@@ -69,6 +77,7 @@ var censusRawArgv = []string{
 	"internal/retroanalysis/runner.go",
 	"internal/routines/runner.go",
 	"internal/trajjudge/trajjudge.go",
+	"internal/triage/judge.go",
 }
 
 // censusSpecField is set B: the engines that set Spec.SettingSources.
@@ -140,8 +149,8 @@ func TestSettingSourceSeamCensus(t *testing.T) {
 	all = append(all, censusMentionOnly...)
 	censusAssert(t, "of files mentioning "+censusFlag+" at all", mentions, all)
 
-	if n := len(censusRawArgv) + len(censusSpecField); n != 12 {
-		t.Fatalf("G7 is twelve seams; the census lists %d", n)
+	if n := len(censusRawArgv) + len(censusSpecField); n != 13 {
+		t.Fatalf("G7's twelve seams plus the triage judge are thirteen; the census lists %d", n)
 	}
 }
 
