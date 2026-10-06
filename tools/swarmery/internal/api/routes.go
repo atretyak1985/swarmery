@@ -361,6 +361,16 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/routines/{id}/runs", h.listRoutineRuns)
 	mux.HandleFunc("POST /api/hooks/routine/{id}/{token}", h.hookRoutine)
 
+	// inbox triage agent: recorded single-flight triage runs + their verdicts.
+	// Start and undo are mutating, so they carry the D4 origin fence; every
+	// route answers 503 until the daemon attaches the service.
+	mux.HandleFunc("POST /api/triage/runs", requireLocalOrigin(h.startTriageRun))
+	mux.HandleFunc("GET /api/triage/runs", h.listTriageRuns)
+	mux.HandleFunc("GET /api/triage/runs/active", h.activeTriageRun)
+	mux.HandleFunc("GET /api/triage/runs/{id}", h.getTriageRun)
+	mux.HandleFunc("GET /api/triage/verdicts", h.listTriageVerdicts)
+	mux.HandleFunc("POST /api/triage/verdicts/{id}/undo", requireLocalOrigin(h.undoTriageVerdict))
+
 	// fusion phase 11: permission presets — a project's human-readable policy
 	// (unrestricted | approval-required | locked-down + per-category overrides)
 	// compiled into managed auto-approve rules. GET reads the effective policy;

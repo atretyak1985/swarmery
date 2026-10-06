@@ -17,6 +17,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/trajjudge"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/triage"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 )
 
@@ -70,6 +71,7 @@ func TestEverySpawnSiteDeclaresAModelAndAnEffort(t *testing.T) {
 		{"handoff", handoff.DefaultEffort, handoff.DefaultModel},
 		{"trajjudge", trajjudge.DefaultEffort, trajjudge.DefaultModel},
 		{"lessons", lessons.DefaultEffort, lessons.DefaultModel},
+		{"triage", triage.DefaultEffort, triage.DefaultModel},
 		{"probe", api.ProbeEffort, api.ProbeModel},
 	} {
 		t.Run(tc.site, func(t *testing.T) {
@@ -110,6 +112,7 @@ func TestPinnedDefaultsAreTheAgreedValues(t *testing.T) {
 		{"handoff", handoff.DefaultEffort, "low"},
 		{"trajjudge", trajjudge.DefaultEffort, "low"},
 		{"lessons", lessons.DefaultEffort, "low"},
+		{"triage", triage.DefaultEffort, "low"},
 		{"extract", extract.DefaultEffort, "medium"},
 		{"dispatch", dispatch.DefaultEffort, "medium"},
 		{"verify", verify.DefaultEffort, "medium"},

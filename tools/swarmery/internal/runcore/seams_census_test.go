@@ -29,6 +29,13 @@ package runcore
 // off by default; like decide, it needs no project config beyond what
 // systemspawn.Attach's --settings splice delivers.
 //
+// The triage engine then added one more one-shot system spawn of the same
+// shape as decide/claude.go:
+//
+//	triage/judge.go      -> set A
+//
+// Set A went 10 -> 11, so A ∪ B went 13 -> 14.
+//
 // It pins TWO sets, not one, because "files containing the flag" is measurably
 // the wrong census — it counts fifteen files, three of which are not seams:
 //
@@ -76,6 +83,7 @@ var censusRawArgv = []string{
 	"internal/retroanalysis/runner.go",
 	"internal/routines/runner.go",
 	"internal/trajjudge/trajjudge.go",
+	"internal/triage/judge.go",
 }
 
 // censusSpecField is set B: the engines that set Spec.SettingSources.
@@ -147,8 +155,8 @@ func TestSettingSourceSeamCensus(t *testing.T) {
 	all = append(all, censusMentionOnly...)
 	censusAssert(t, "of files mentioning "+censusFlag+" at all", mentions, all)
 
-	if n := len(censusRawArgv) + len(censusSpecField); n != 13 {
-		t.Fatalf("G7 is thirteen seams; the census lists %d", n)
+	if n := len(censusRawArgv) + len(censusSpecField); n != 14 {
+		t.Fatalf("G7 is fourteen seams (twelve, plus replyextract and the triage judge); the census lists %d", n)
 	}
 }
 

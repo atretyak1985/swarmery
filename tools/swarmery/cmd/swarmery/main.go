@@ -91,6 +91,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/toolproc"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/trajeval"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/trajjudge"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/triage"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
@@ -2168,6 +2169,16 @@ func cmdServe(args []string) error {
 		log.Printf("warning: routines heal on startup: %v", err)
 	}
 	api.AttachRoutines(routinesSvc)
+
+	// inbox triage agent: recorded single-flight triage runs judged by a
+	// headless `claude -p` (ClaudeJudge), every write gated by the Go policy
+	// table in internal/triage. No Source is registered yet, so a run completes
+	// with zero items. Heal 'running' rows a crashed daemon left behind first.
+	triageSvc := triage.NewService(db, triage.ClaudeJudge{})
+	if err := triageSvc.HealStale(); err != nil {
+		log.Printf("warning: triage heal on startup: %v", err)
+	}
+	api.AttachTriage(triageSvc)
 
 	// fusion phase 8: planning mode. A headless `claude -p --session-id <uuid>`
 	// planner run per project (single-flight, in-memory — no new tables) turns an
