@@ -711,6 +711,22 @@ export function fetchRetroFriction(range: AnalyticsRange = {}): Promise<RetroFri
   return get(`/api/retro/friction?${rangeQuery(range, {})}`);
 }
 
+/**
+ * DELETE /api/retro/friction/mute?key= — the operator's "this is not noise".
+ * A 404 (the mute already expired or was lifted elsewhere) resolves: the group
+ * is not muted, which is what was asked for, and the caller refetches.
+ */
+export async function unmuteFrictionGroup(key: string): Promise<void> {
+  if (MOCK) return;
+  const res = await fetch(`/api/retro/friction/mute?key=${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 404) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `unmute failed: ${String(res.status)}`);
+  }
+}
+
 /** Lessons-learned feed parsed from 09-retrospective.md docs (retro phase 2). */
 export function fetchRetroLessons(range: AnalyticsRange = {}): Promise<RetroLessonsResp> {
   if (MOCK) return mockApi.retroLessons();

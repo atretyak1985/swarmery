@@ -9,7 +9,7 @@
 // step). On its own: `npx vitest run src/pages/health`.
 
 import { describe, expect, it } from 'vitest';
-import type { RetroAgentRow, RetroAgentsResp, RetroFrictionResp } from '../../api/types';
+import type { RetroAgentRow, RetroAgentsResp, RetroErrorGroup, RetroFrictionResp } from '../../api/types';
 import {
   FALLBACK_SENTENCE,
   HEALTH_PRESETS,
@@ -20,6 +20,8 @@ import {
   oneSentence,
   rangeFor,
   topAgents,
+  triageStateOf,
+  untriagedErrors,
   windowCell,
   windowCellText,
 } from './healthModel';
@@ -189,5 +191,44 @@ describe('autoModeRow', () => {
     expect(autoModeRow({ ...burst, noVerdictLastHour: 0, sessionsLastHour: 0, lastAt: null }, null).tone).toBe(
       'alerting',
     );
+  });
+});
+
+describe('triage', () => {
+  const g = (key: string, triage?: RetroErrorGroup['triage']): RetroErrorGroup => ({
+    key,
+    example: key,
+    count: 3,
+    last_ts: '',
+    sessions: [],
+    ...(triage !== undefined ? { triage } : {}),
+  });
+  const friction = (groups: RetroErrorGroup[]): RetroFrictionResp => ({
+    denied_tools: [{ tool: 'Bash', denied: 7, calls: 12, has_rule: false }],
+    error_groups: groups,
+    approvals: { resolved: 0, avg_resolve_sec: null, wait_total_min: 0, pending: 0 },
+    approx: false,
+  });
+
+  it('reads a group without a triage block as untriaged', () => {
+    expect(triageStateOf(g('a'))).toBe('untriaged');
+    expect(untriagedErrors(friction([g('a')])).map((x) => x.key)).toEqual(['a']);
+  });
+
+  it('does not count muted, tracked or fix_proposed groups, but still counts uncovered denials', () => {
+    const f = friction([
+      g('m', { state: 'muted' }),
+      g('t', { state: 'tracked', recommendationId: 1 }),
+      g('p', { state: 'fix_proposed', recommendationId: 2 }),
+    ]);
+    expect(untriagedErrors(f)).toEqual([]);
+    expect(frictionCount(f)).toBe(1);
+  });
+
+  it('reads a state this client does not know as untriaged, so it is still counted', () => {
+    // A newer daemon: the value is outside the union this client was built with.
+    const snoozed = g('s', { state: 'snoozed' } as unknown as RetroErrorGroup['triage']);
+    expect(triageStateOf(snoozed)).toBe('untriaged');
+    expect(frictionCount(friction([snoozed]))).toBe(2);
   });
 });

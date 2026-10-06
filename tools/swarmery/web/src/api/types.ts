@@ -1119,6 +1119,18 @@ export interface RetroDeniedTool {
   has_rule: boolean;
 }
 
+/** What became of a recurring error group: nothing yet, muted as noise, filed or fixed. */
+export type FrictionTriageState = 'untriaged' | 'muted' | 'tracked' | 'fix_proposed';
+
+export interface FrictionTriage {
+  state: FrictionTriageState;
+  reason?: string;
+  /** RFC 3339 — when the mute lapses. */
+  mutedUntil?: string;
+  /** The advisor recommendation tracking / fixing the group. */
+  recommendationId?: number;
+}
+
 /** One error group of the friction board; sessions are sample session uuids. */
 export interface RetroErrorGroup {
   key: string;
@@ -1126,6 +1138,8 @@ export interface RetroErrorGroup {
   count: number;
   last_ts: string;
   sessions: string[];
+  /** Optional: a daemon without the triage backend omits it — read it as untriaged. */
+  triage?: FrictionTriage;
 }
 
 export interface RetroApprovals {
@@ -1248,7 +1262,8 @@ export interface RecommendationBaseline {
 /** One advisor recommendation (deterministic rule engine, R1..R7). */
 export interface Recommendation {
   id: number;
-  /** 'R1'..'R7'. */
+  /** 'R1'..'R7'; 'T1' = a fixable recurring error group filed by a triage run,
+   * 'T2' = an agent failing in most runs, filed by a triage run. */
   rule: string;
   target_kind: RecommendationTargetKind;
   target: string;

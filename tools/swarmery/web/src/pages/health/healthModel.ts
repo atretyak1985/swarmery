@@ -9,6 +9,7 @@
 
 import type {
   AgentChangeProposal,
+  FrictionTriageState,
   HealthAutoMode,
   Recommendation,
   RetroAgentRow,
@@ -181,9 +182,27 @@ export function repeatedErrors(f: RetroFrictionResp): RetroErrorGroup[] {
   return f.error_groups.filter((g) => g.count >= 2).sort((x, y) => y.count - x.count);
 }
 
-/** Friction tab count: removable denials + repeated error groups. */
+const KNOWN_TRIAGE_STATES: readonly FrictionTriageState[] = ['untriaged', 'muted', 'tracked', 'fix_proposed'];
+
+/**
+ * A group with no triage block (older daemon), or with a state this client
+ * does not know (newer daemon), counts as untriaged.
+ */
+export function triageStateOf(g: RetroErrorGroup): FrictionTriageState {
+  // The state arrives over the wire: a newer daemon may send one this client
+  // does not know. Unknown is never shown, sorted or counted as dealt with.
+  const state: string | undefined = g.triage?.state;
+  return KNOWN_TRIAGE_STATES.find((s) => s === state) ?? 'untriaged';
+}
+
+/** Repeated groups nobody has dealt with yet — what the tab counts and the overview offers. */
+export function untriagedErrors(f: RetroFrictionResp): RetroErrorGroup[] {
+  return repeatedErrors(f).filter((g) => triageStateOf(g) === 'untriaged');
+}
+
+/** Friction tab count: removable denials + repeated error groups still untriaged. */
 export function frictionCount(f: RetroFrictionResp): number {
-  return uncoveredDenied(f).length + repeatedErrors(f).length;
+  return uncoveredDenied(f).length + untriagedErrors(f).length;
 }
 
 /* ----- the strip's decision cells ----- */

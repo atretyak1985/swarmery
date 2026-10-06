@@ -156,6 +156,13 @@ export function Health(): JSX.Element {
   }, [range]);
   useEffect(load, [load]);
 
+  // A mute lifted on the Friction tab changes the tab count and the overview card.
+  const reloadFriction = useCallback((): void => {
+    fetchRetroFriction(range)
+      .then(setFriction)
+      .catch(() => setFriction(null));
+  }, [range]);
+
   // Decisions are not windowed: loaded once per scope. On a project page the
   // recommendations are the project's own, as on the project Today, so the
   // strip counts match the project Inbox it links to.
@@ -262,7 +269,12 @@ export function Health(): JSX.Element {
           </Suspense>
         ) : (
           <Suspense fallback={<Loading label={`${tab}…`} />}>
-            <Retro section={tab} range={range} />
+            <Retro
+              section={tab}
+              range={range}
+              inboxHref={`${placeHref('inbox', projectSlug)}?tab=advisor`}
+              onFrictionChanged={reloadFriction}
+            />
           </Suspense>
         )}
       </div>
