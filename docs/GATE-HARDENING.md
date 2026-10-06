@@ -129,6 +129,59 @@ raise `heredoc` to `block` from the 492-hit read. The fuller read above, done th
 reviewed false positives stays in `warn`. So the rules landed and the flip did not; it waits on the
 tightened regex and a fresh burn-in, exactly as the `heredoc` row says.
 
+## `prod-deploy-guard.sh`
+
+Log: `prod-deploy-guard.jsonl` · Reader: `scripts/guard-hits.sh --log <path>` · First read of the
+`ask` row: **2026-11-06**. `deny-fallback` has no review deadline: it cannot fire until a mode is
+measured where `ask` fails to block (see below), so a date would only start a clock on an empty log.
+
+The hook resolves its log the same way `bash-shape-guard.sh` does. The override is
+`PROD_DEPLOY_GUARD_LOG`; otherwise the log goes to the project's workspace metrics dir. The record
+shape is `bash-shape-guard.jsonl`'s plus a `pattern` field, so the reader works unchanged. It only
+needs to be pointed at the other basename, because its own default is `bash-shape-guard.jsonl`:
+
+```bash
+scripts/guard-hits.sh --log "$AGENT_WORKSPACE_ROOT/$AGENT_PROJECT/workspace/metrics/prod-deploy-guard.jsonl"
+scripts/guard-hits.sh --log <path> --rule ask --raw    # each matched command and the pattern that caught it
+```
+
+`BASH_SHAPE_GUARD_LOG=<path> scripts/guard-hits.sh` reads the same file; `--log` is the spelling
+used here, as for `agent-routing-guard.sh`. The `decision` column records the rule's mode (`block`
+for `ask`, `warn` for `deny-fallback`), not the JSON the hook printed: an `ask` hit shows under
+`BLOCK` because the rule is enforced, and the hook still printed `ask`.
+
+| Rule | Hits | Sessions | False positives reviewed | Decision | Reviewed on |
+|---|---|---|---|---|---|
+| `ask` | new rule, enforced from release (core 3.11.0) | — | — | **enforced** — a false positive costs one local prompt | — |
+| `deny-fallback` | new rule, burn-in starts with core 3.11.0 (2026-10-06) | — | — | stay in warn | — |
+
+**Why `ask` is enforced from day one.** It is the only rule in this document that ships at `block`,
+and that is deliberate. The cost of a false positive is one confirmation dialog in a terminal where
+a person is already sitting. The cost of a false negative is a production deploy with nobody asked.
+In a headless `-p` run, `ask` resolves to a denial because nobody can answer; that was measured
+(`scripts/tests/fixtures/prod-deploy-ask/matrix.json`, claude 2.1.291) and is the intended outcome:
+a headless run does not ship to production. The row is still filled from counted hits. A false
+positive here does not argue for `warn`. It argues for narrowing the pattern list, and the list has
+two copies: `plugins/core/hooks/lib/prod-deploy-patterns.txt` and the daemon's
+`DefaultProdDeployPatterns`. Edit both together; the Go parity test fails when they differ.
+
+**Why `deny-fallback` stays in `warn`, and what flips it.** The rule exists for a permission mode in
+which `ask` does not stop the call. Phase 1 of the plan measured no such mode, so
+`decision_for_mode()` never resolves to `deny` and the rule has never fired. An empty log for this
+rule means nothing has been tested yet; it is not evidence that the rule is safe to flip. It moves to
+`block` only when all of the following hold:
+
+1. A mode is **measured** where `ask` fails to block. That can be an interactive `i-*` leg of
+   `prod-deploy-ask-probe.sh` recorded as `ignored`, or a re-run on a newer CLI. The matrix is
+   updated, and `decision_for_mode()` gains the row that resolves to `deny`.
+2. The rule then burns in at `warn`. Each hit is logged and the hook still prints `ask`.
+3. This row is filled from `--rule deny-fallback --raw`. Every hit is reviewed: was the command a
+   real production deploy, in a session that could not have shown the prompt? Zero false positives
+   are recorded.
+
+A false `deny` breaks a headless plan run outright, with no prompt to fall back on. That is why this
+rule waits for a filled row, while `ask` did not.
+
 ## `agent-routing-guard.sh`
 
 Log: `agent-routing-guard.jsonl` · Reader: `scripts/guard-hits.sh --log <path>` · Review deadline:

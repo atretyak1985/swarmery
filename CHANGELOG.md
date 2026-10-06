@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.10.1,
+  `/plugin update`, not through these tags. Current: `core` 3.11.0,
   `infra-pack` 1.5.0, `architecture-pack` 1.6.0, `iot-pack` 1.3.0,
   `uav-pack` 1.4.0, `web-pack` 1.4.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.7.0,
@@ -31,6 +31,28 @@ Two things ship from this repository on separate clocks:
   Known edges, `/account`).
 
 ### Added
+
+- **Production deploys ask first, even when allowlisted or in bypass mode (core 3.11.0,
+  #480, #483, #485).** A new `PreToolUse(Bash)` hook, `prod-deploy-guard.sh`, answers
+  `permissionDecision: "ask"` for any command that matches a production-deploy pattern,
+  so Claude Code shows its own confirmation dialog in the terminal regardless of allow
+  rules, auto mode or `bypassPermissions`. In a headless `-p` run nobody can answer, so
+  the call is denied, which is the intended result — **this includes daemon plan and
+  phase runs, dispatched cards and scheduled `-p` jobs**: a deploy step they used to run
+  unattended now fails, and there is no switch to turn the guard off (project patterns
+  only add). Run such deploys from an interactive session. Patterns come from
+  `hooks/lib/prod-deploy-patterns.txt` plus the project's
+  `approvals.prodDeployPatterns` in `.claude/project.json`, in the daemon's
+  `Tool(argGlob)` grammar. A Go parity test keeps that list identical to the daemon's
+  `DefaultProdDeployPatterns`, and both matchers run the same
+  `scripts/tests/fixtures/prod-deploy-patterns/cases.tsv`. Every failure path asks
+  rather than allows: a missing defaults file asks on every Bash call, a malformed
+  `project.json` falls back to the defaults, and without `jq` the hook matches against
+  the raw payload. The hook never emits `allow`. The mode table comes from
+  `scripts/tests/prod-deploy-ask-probe.sh` (claude 2.1.291, headless legs measured,
+  interactive legs pending). Burn-in follows `docs/GATE-HARDENING.md`: rule `ask` is
+  enforced from this release, and rule `deny-fallback` stays in `warn`. Decisions are
+  logged to `prod-deploy-guard.jsonl`, which `scripts/guard-hits.sh --log` reads.
 
 - **The task modal's agent picker groups agents by role (core 3.10.0, design-pack 0.5.0,
   infra-pack 1.5.0, iot-pack 1.3.0, jira-pack 0.7.0, uav-pack 1.4.0, web-pack 1.4.0).**
