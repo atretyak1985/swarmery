@@ -97,12 +97,31 @@ extension AttentionState {
     /// more precisely specified against this trimmed Session projection, so
     /// this predicate is a judgment call — reviewer should confirm it matches
     /// intent before phase 3 wires it to a visual treatment.
+    ///
+    /// An `awaiting_reply` session whose process is dead is errored too: the
+    /// daemon flips such rows to `completed` within one procwatch tick, but a
+    /// stale snapshot must not ask the operator to reply to a dead process.
     public var erroredSessions: [Session] {
-        sessions.values.filter { $0.status == "active" && $0.procState == "dead" }
+        sessions.values.filter(Self.isErrored)
+    }
+
+    /// Sessions that ended their turn and wait for a plain-text reply from
+    /// the operator (daemon status `awaiting_reply`), excluding dead processes
+    /// — those count as `erroredSessions` instead.
+    public var awaitingReplySessions: [Session] {
+        sessions.values.filter(Self.isAwaitingReply)
     }
 
     public var needsAttention: Bool {
-        !pendingApprovals.isEmpty || !erroredSessions.isEmpty
+        !pendingApprovals.isEmpty || !erroredSessions.isEmpty || !awaitingReplySessions.isEmpty
+    }
+
+    private static func isErrored(_ session: Session) -> Bool {
+        (session.status == "active" || session.status == "awaiting_reply") && session.procState == "dead"
+    }
+
+    private static func isAwaitingReply(_ session: Session) -> Bool {
+        session.status == "awaiting_reply" && session.procState != "dead"
     }
 
     /// Sort order for `rows`: the user's own action items first, then genuine
@@ -137,7 +156,8 @@ extension AttentionState {
 
     private func bucket(for session: Session, awaitingApproval: Bool) -> RowBucket {
         if awaitingApproval { return .needsYou }
-        if session.status == "active" && session.procState == "dead" { return .error }
+        if Self.isErrored(session) { return .error }
+        if session.status == "awaiting_reply" { return .needsYou }
         if session.status == "active" || session.status == "waiting_approval" { return .working }
         return .idle
     }
