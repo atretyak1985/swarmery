@@ -890,6 +890,174 @@ func TestBreakerTickerClosesOnItsClock(t *testing.T) {
 	}
 }
 
+// reprobeTicker is a BreakerTicker whose re-probe of open auth breakers is on:
+// stage one answers with login, the full probe with run, and the clock is
+// whatever *now holds when a sweep starts.
+func reprobeTicker(db *sql.DB, now *time.Time, login, run *stubProbe) *BreakerTicker {
+	return &BreakerTicker{
+		DB: db, Now: func() time.Time { return *now },
+		LoginProbe: login.probe, RunProbe: run.probe,
+	}
+}
+
+// TestBreakerTickerReprobesAuth: an auth opening closes on its own once the
+// account can run again — the operator logged in again in a terminal, which
+// nothing tells the daemon. The sweep asks stage one (free) once per
+// DefaultAuthLoginGap and spends the full probe only when stage one says the
+// login is back; a quota opening is never probed.
+func TestBreakerTickerReprobesAuth(t *testing.T) {
+	db := quotaDB(t)
+	home := installProbe(t, nil)
+	if err := OpenBreaker(db, "work", store.BreakerKindAuth, claudeprobe.ReasonNoLogin,
+		store.BreakerSourceTranscript, breakerNow); err != nil {
+		t.Fatal(err)
+	}
+	if err := OpenBreaker(db, "limited", store.BreakerKindQuota, claudeprobe.ReasonRateLimited,
+		store.BreakerSourceRun, breakerNow); err != nil {
+		t.Fatal(err)
+	}
+	login := &stubProbe{result: claudeprobe.Result{Status: claudeprobe.StatusNoLogin, Reason: claudeprobe.ReasonNoLogin}}
+	run := &stubProbe{result: probeReady}
+	now := breakerNow
+	ticker := reprobeTicker(db, &now, login, run)
+	sweepAt := func(after time.Duration) {
+		now = breakerNow.Add(after)
+		ticker.Once()
+	}
+	wantCalls := func(when string, wantLogin, wantRun int32) {
+		t.Helper()
+		if l, r := login.calls.Load(), run.calls.Load(); l != wantLogin || r != wantRun {
+			t.Fatalf("%s: login probes = %d, full probes = %d, want %d and %d", when, l, r, wantLogin, wantRun)
+		}
+	}
+
+	sweepAt(DefaultAuthLoginGap - time.Second)
+	wantCalls("before the first gap has passed", 0, 0)
+
+	sweepAt(DefaultAuthLoginGap)
+	wantCalls("one gap after the opening", 1, 0)
+	if b, _ := breakerRow(t, db, "work"); !b.IsOpen() {
+		t.Fatalf("closed while the login is still missing: %+v", b)
+	}
+
+	sweepAt(DefaultAuthLoginGap + time.Minute)
+	wantCalls("inside the gap after a login probe", 1, 0)
+
+	// The operator logs in again in a terminal.
+	login.result = probeReady
+	sweepAt(2 * DefaultAuthLoginGap)
+	wantCalls("the login is back", 2, 1)
+	for _, dir := range append(login.dirs, run.dirs...) {
+		if dir != accountDir(home, "work") {
+			t.Errorf("a re-probe ran under %s, want only the paused account's own dir %s", dir, accountDir(home, "work"))
+		}
+	}
+	b, _ := breakerRow(t, db, "work")
+	if b.IsOpen() || b.ClosedBy != store.BreakerClosedByProbe {
+		t.Errorf("breaker = %+v, want closed by probe", b)
+	}
+	if n := openAlerts(t, db, "work"); n != 0 {
+		t.Errorf("open alerts = %d, want 0", n)
+	}
+	if err := CheckAccount(context.Background(), db, work(), now); err != nil {
+		t.Errorf("after the re-probe: %v, want admitted", err)
+	}
+
+	sweepAt(3 * DefaultAuthLoginGap)
+	wantCalls("nothing auth is open any more", 2, 1)
+}
+
+// TestBreakerTickerReprobeBacksOffThePing: an account whose login is intact but
+// which Claude refuses answers ready at stage one on every sweep. The full probe
+// — a real API call — is then made at most once per DefaultAuthPingGap, and a
+// stage one that cannot answer never reaches it. A NEW opening starts over.
+func TestBreakerTickerReprobeBacksOffThePing(t *testing.T) {
+	db := quotaDB(t)
+	installProbe(t, nil)
+	if err := OpenBreaker(db, "work", store.BreakerKindAuth, claudeprobe.ReasonAccessRefused,
+		store.BreakerSourceRun, breakerNow); err != nil {
+		t.Fatal(err)
+	}
+	login := &stubProbe{result: probeUnknown}
+	run := &stubProbe{result: probeNoLogin}
+	now := breakerNow
+	ticker := reprobeTicker(db, &now, login, run)
+	sweepAt := func(at time.Time) {
+		now = at
+		ticker.Once()
+	}
+	wantCalls := func(when string, wantLogin, wantRun int32) {
+		t.Helper()
+		if l, r := login.calls.Load(), run.calls.Load(); l != wantLogin || r != wantRun {
+			t.Fatalf("%s: login probes = %d, full probes = %d, want %d and %d", when, l, r, wantLogin, wantRun)
+		}
+	}
+
+	first := breakerNow.Add(DefaultAuthLoginGap)
+	sweepAt(first)
+	wantCalls("stage one could not answer", 1, 0)
+
+	login.result = probeReady
+	pinged := first.Add(DefaultAuthLoginGap)
+	sweepAt(pinged)
+	wantCalls("stage one ready", 2, 1)
+	if b, _ := breakerRow(t, db, "work"); !b.IsOpen() || b.Kind != store.BreakerKindAuth {
+		t.Fatalf("breaker = %+v, want the auth opening kept after a refused ping", b)
+	}
+
+	sweepAt(pinged.Add(DefaultAuthLoginGap))
+	wantCalls("inside the ping gap", 3, 1)
+
+	sweepAt(pinged.Add(DefaultAuthPingGap))
+	wantCalls("one ping gap later", 4, 2)
+
+	// The breaker closes and opens again: the new opening owes the old one's
+	// ping gap nothing.
+	reopened := pinged.Add(DefaultAuthPingGap + time.Minute)
+	if _, err := CloseBreaker(db, "work", store.BreakerClosedByOperator, reopened); err != nil {
+		t.Fatal(err)
+	}
+	if err := OpenBreaker(db, "work", store.BreakerKindAuth, claudeprobe.ReasonNoLogin,
+		store.BreakerSourceRun, reopened); err != nil {
+		t.Fatal(err)
+	}
+	sweepAt(reopened.Add(DefaultAuthLoginGap))
+	wantCalls("a new opening", 5, 3)
+}
+
+// TestBreakerTickerReprobeOff: without both probes the sweep spawns nothing —
+// the default, which keeps every test that builds a ticker away from the real
+// CLI — and SWARMERY_PREFLIGHT_TTL=0 (the daemon probes nothing on its own)
+// switches the re-probe off as well.
+func TestBreakerTickerReprobeOff(t *testing.T) {
+	db := quotaDB(t)
+	installProbe(t, nil)
+	if err := OpenBreaker(db, "work", store.BreakerKindAuth, claudeprobe.ReasonNoLogin,
+		store.BreakerSourceRun, breakerNow); err != nil {
+		t.Fatal(err)
+	}
+	later := breakerNow.Add(24 * time.Hour)
+	login, run := &stubProbe{result: probeReady}, &stubProbe{result: probeReady}
+
+	for _, ticker := range []*BreakerTicker{
+		{DB: db},
+		{DB: db, LoginProbe: login.probe},
+		{DB: db, RunProbe: run.probe},
+	} {
+		ticker.Now = func() time.Time { return later }
+		ticker.Once()
+	}
+	t.Setenv(PreflightTTLEnv, "0")
+	reprobeTicker(db, &later, login, run).Once()
+
+	if l, r := login.calls.Load(), run.calls.Load(); l != 0 || r != 0 {
+		t.Errorf("login probes = %d, full probes = %d, want none", l, r)
+	}
+	if b, _ := breakerRow(t, db, "work"); !b.IsOpen() {
+		t.Errorf("breaker = %+v, want still open", b)
+	}
+}
+
 // TestAuthBreakerNeedsReadyProbe: an auth opening never closes on time. A probe
 // that is not ready leaves it open; only a ready one closes it ('probe') — and
 // an API error never opens one at all.

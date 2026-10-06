@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 )
 
 // line builds one minimal user-prompt JSONL line.
@@ -628,5 +630,39 @@ func TestStatusTicker_OnSessionTerminal(t *testing.T) {
 
 	if len(got) != 1 || got[0].id != toDone || got[0].errs != 2 {
 		t.Fatalf("OnSessionTerminal calls = %+v, want [{%d 2}]", got, toDone)
+	}
+}
+
+// TestStatusTicker_OnAwaitingReply: the reply-extractor hook fires exactly
+// once per transition INTO awaiting_reply — not for a session that already
+// sits there, not for other transitions — and a nil hook is safe.
+func TestStatusTicker_OnAwaitingReply(t *testing.T) {
+	db := testDB(t)
+	now := time.Now()
+	cli := awaitFixture{status: "idle", entrypoint: "cli", procState: procwatch.StateRunning,
+		quiet: 4 * time.Minute, stopReason: "end_turn"}
+	toAwait := seedAwaitSession(t, db, "t-await", cli, now)
+	already := cli
+	already.status = StatusAwaitingReply
+	seedAwaitSession(t, db, "t-already", already, now) // no transition: must not fire
+	headless := cli
+	headless.entrypoint = "sdk-cli"
+	seedAwaitSession(t, db, "t-headless", headless, now) // stays idle: must not fire
+
+	// nil hook: the transition still happens, nothing panics.
+	NewPipeline(db, Config{}, nil).recomputeStatuses()
+	if _, err := db.Exec(`UPDATE sessions SET status = 'idle' WHERE id = ?`, toAwait); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []int64
+	p := NewPipeline(db, Config{OnAwaitingReply: func(id int64) { got = append(got, id) }}, nil)
+	p.recomputeStatuses()
+	if len(got) != 1 || got[0] != toAwait {
+		t.Fatalf("OnAwaitingReply calls = %v, want [%d]", got, toAwait)
+	}
+	p.recomputeStatuses() // already awaiting: no second call
+	if len(got) != 1 {
+		t.Errorf("OnAwaitingReply calls after a no-op tick = %v, want one call", got)
 	}
 }

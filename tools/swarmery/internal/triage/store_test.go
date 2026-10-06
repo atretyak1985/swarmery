@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestStoreMigrationConstraints proves migration 0099 applied with its CHECKs.
+// TestStoreMigrationConstraints proves migration 0100 applied with its CHECKs.
 func TestStoreMigrationConstraints(t *testing.T) {
 	s := newTestService(t, nil)
 	if _, err := s.DB.Exec(`INSERT INTO triage_runs(trigger, started_at) VALUES('cron','x')`); err == nil {

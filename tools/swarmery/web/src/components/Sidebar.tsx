@@ -8,8 +8,9 @@
 // Rows come from lib/nav.ts — ten places in three groups (main, Improve, the
 // bottom cluster). Project-only places (Plans, Knowledge) stay visible under All
 // projects, dimmed, and resolve through the last-visited project so muscle
-// memory never breaks. Exactly one numeric badge (Inbox) and one live dot
-// (Sessions) — every other nav badge was retired with the old rails.
+// memory never breaks. Two numeric badges — Inbox (every waiting decision) and
+// Needs you (every blocked session) — and one live dot (Sessions); every other
+// nav badge was retired with the old rails.
 //
 // The sidebar also owns the global ⌘K / Ctrl+K listener and the palette it
 // opens, so the shortcut works the same in both shells. The palette renders
@@ -26,11 +27,14 @@ import { PLACES, placesIn, resolvePlaceHref, type Place } from '../lib/nav';
 import { useScope } from '../lib/scope';
 import { useInboxItems } from '../pages/inbox/useInboxItems';
 import { useLiveUpdates } from '../lib/ws';
+import { useNeedsYou } from '../lib/useNeedsYou';
 import { CommandPalette } from './CommandPalette';
 
 export interface SidebarSignals {
   /** The Inbox badge: every waiting decision, all six sources (useInboxItems). */
   inboxCount: number;
+  /** The Needs you badge: undismissed session blockers (useNeedsYou). */
+  needsYouCount: number;
   /** At least one session is running or waiting on the operator. */
   liveSessions: boolean;
 }
@@ -47,6 +51,7 @@ export interface SidebarSignals {
 export function useSidebarSignals(scope: string | null = null): SidebarSignals {
   const [live, setLive] = useState(false);
   const inbox = useInboxItems(scope);
+  const needsYou = useNeedsYou(scope);
   const reloadInbox = inbox.reload;
 
   const syncLive = useCallback((): void => {
@@ -96,7 +101,7 @@ export function useSidebarSignals(scope: string | null = null): SidebarSignals {
   // Reconnect / 60s reconcile: every WS-driven signal may have drifted.
   useLiveUpdates(onMessage, syncLive);
 
-  return { inboxCount: inbox.count, liveSessions: live };
+  return { inboxCount: inbox.count, needsYouCount: needsYou.count, liveSessions: live };
 }
 
 /** Global ⌘K / Ctrl+K → command palette. Window-level so it works from any
@@ -118,6 +123,7 @@ export function Sidebar({
   slug,
   subPath = '',
   inboxCount,
+  needsYouCount = 0,
   liveSessions,
   children,
 }: {
@@ -126,6 +132,7 @@ export function Sidebar({
   /** Current project sub-tab to preserve across a switch (e.g. "/plans"). */
   subPath?: string;
   inboxCount: number;
+  needsYouCount?: number;
   liveSessions: boolean;
   /** Shell-specific extras rendered above the bottom cluster. */
   children?: ReactNode;
@@ -142,7 +149,7 @@ export function Sidebar({
       place={place}
       slug={slug}
       active={place.match(pathname)}
-      badge={place.id === 'inbox' && inboxCount > 0 ? inboxCount : null}
+      badge={badgeFor(place, inboxCount, needsYouCount)}
       live={place.id === 'sessions' && liveSessions}
     />
   );
@@ -180,6 +187,13 @@ export function Sidebar({
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </>
   );
+}
+
+/** The numeric badge of a row: Inbox and Needs you only, hidden at zero. */
+function badgeFor(place: Place, inboxCount: number, needsYouCount: number): number | null {
+  if (place.id === 'inbox') return inboxCount > 0 ? inboxCount : null;
+  if (place.id === 'needs-you') return needsYouCount > 0 ? needsYouCount : null;
+  return null;
 }
 
 function SidebarRow({
@@ -241,10 +255,12 @@ export function MobileNav({
   slug,
   variant,
   inboxCount = 0,
+  needsYouCount = 0,
 }: {
   slug: string | null;
   variant: 'bottom' | 'strip';
   inboxCount?: number;
+  needsYouCount?: number;
 }): JSX.Element {
   const { pathname } = useLocation();
   const last = slug === null ? loadLastProject() : null;
@@ -288,7 +304,7 @@ export function MobileNav({
           >
             <span className="relative text-[17px] leading-none" aria-hidden="true">
               {place.glyph}
-              {place.id === 'inbox' && inboxCount > 0 && (
+              {badgeFor(place, inboxCount, needsYouCount) !== null && (
                 <span className="absolute -top-0.5 -right-1.5 h-[6px] w-[6px] rounded-full bg-amber" />
               )}
             </span>

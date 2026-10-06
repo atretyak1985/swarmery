@@ -25,10 +25,11 @@ function place(id: PlaceId) {
 }
 
 describe('nav model', () => {
-  it('defines exactly the ten places, grouped main / improve / bottom', () => {
+  it('defines exactly the eleven places, grouped main / improve / bottom', () => {
     expect(PLACES.map((p) => p.id)).toEqual([
       'today',
       'inbox',
+      'needs-you',
       'sessions',
       'plans',
       'health',
@@ -38,7 +39,7 @@ describe('nav model', () => {
       'system',
       'settings',
     ]);
-    expect(placesIn('main').map((p) => p.label)).toEqual(['Today', 'Inbox', 'Sessions', 'Plans']);
+    expect(placesIn('main').map((p) => p.label)).toEqual(['Today', 'Inbox', 'Needs you', 'Sessions', 'Plans']);
     expect(placesIn('improve').map((p) => p.label)).toEqual(['Health', 'Learning', 'Knowledge']);
     expect(placesIn('bottom').map((p) => p.label)).toEqual(['Docs', 'System', 'Settings']);
     expect(PLACES.filter((p) => p.projectOnly).map((p) => p.id)).toEqual(['plans', 'knowledge']);
@@ -48,6 +49,7 @@ describe('nav model', () => {
     const cases: [PlaceId, string, string][] = [
       ['today', '/', '/p/shop'],
       ['inbox', '/inbox', '/p/shop/inbox'],
+      ['needs-you', '/needs-you', '/p/shop/needs-you'],
       ['sessions', '/sessions', '/p/shop/sessions'],
       ['plans', '/projects', '/p/shop/plans'],
       ['health', '/health', '/p/shop/health'],

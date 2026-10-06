@@ -23,13 +23,18 @@ package runcore
 // mention the flag, and the mention set is A ∪ B ∪ mention-only, so no
 // mention-only entry changed.
 //
-// The triage engine then added one one-shot system spawn of the same shape as
-// decide/claude.go:
+// 2026-10-06: replyextract/replyextract.go joined set A (needs-you queue,
+// phase 4 — the flag-gated Haiku reply extractor, a copy of decide/claude.go's
+// spawn). Set A went 9 -> 10, so A ∪ B went 12 -> 13. It is stdout-only and
+// off by default; like decide, it needs no project config beyond what
+// systemspawn.Attach's --settings splice delivers.
+//
+// The triage engine then added one more one-shot system spawn of the same
+// shape as decide/claude.go:
 //
 //	triage/judge.go      -> set A
 //
-// Set A went 9 -> 10, so A ∪ B went 12 -> 13 (G7's twelve plus the triage
-// judge).
+// Set A went 10 -> 11, so A ∪ B went 13 -> 14.
 //
 // It pins TWO sets, not one, because "files containing the flag" is measurably
 // the wrong census — it counts fifteen files, three of which are not seams:
@@ -74,6 +79,7 @@ var censusRawArgv = []string{
 	"internal/handoff/runner.go",
 	"internal/improve/runner.go",
 	"internal/lessons/runner.go",
+	"internal/replyextract/replyextract.go",
 	"internal/retroanalysis/runner.go",
 	"internal/routines/runner.go",
 	"internal/trajjudge/trajjudge.go",
@@ -149,8 +155,8 @@ func TestSettingSourceSeamCensus(t *testing.T) {
 	all = append(all, censusMentionOnly...)
 	censusAssert(t, "of files mentioning "+censusFlag+" at all", mentions, all)
 
-	if n := len(censusRawArgv) + len(censusSpecField); n != 13 {
-		t.Fatalf("G7's twelve seams plus the triage judge are thirteen; the census lists %d", n)
+	if n := len(censusRawArgv) + len(censusSpecField); n != 14 {
+		t.Fatalf("G7 is fourteen seams (twelve, plus replyextract and the triage judge); the census lists %d", n)
 	}
 }
 
