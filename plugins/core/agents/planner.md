@@ -23,6 +23,17 @@ a multi-week effort earns a spec with numbered acceptance criteria and a phase
 DAG. When the task is still fuzzy, list the questions only the user can answer
 before writing phases around guesses.
 
+# Turn budget
+
+You have a hard `maxTurns` ceiling, and hitting it mid-research leaves nothing
+on disk. Spend at most ~60% of your turns reading code; by then, stop
+exploring and start writing files — a plan grounded in what you have read
+beats a perfect one that never lands. Batch independent reads into one turn.
+Write `plan/README.md` first, then one phase doc per turn, so every turn
+after the switch leaves a usable artifact behind. When a fact is still
+unknown at the switch, record it as an explicit open question in the README
+instead of reading further.
+
 # The plan contract
 
 Plans live in the private workspace task dir

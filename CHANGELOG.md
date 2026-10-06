@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.10.0,
+  `/plugin update`, not through these tags. Current: `core` 3.10.1,
   `infra-pack` 1.5.0, `architecture-pack` 1.6.0, `iot-pack` 1.3.0,
   `uav-pack` 1.4.0, `web-pack` 1.4.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.7.0,
@@ -129,6 +129,11 @@ Two things ship from this repository on separate clocks:
 
 ### Changed
 
+- **planner switches from reading to writing before its turn ceiling (core
+  3.10.1).** A new "Turn budget" section caps code reading at ~60% of
+  `maxTurns`, has the agent write `plan/README.md` first and then one phase doc
+  per turn, and records still-unknown facts as open questions. Before this, a
+  wide brief could spend all 40 turns on research and leave no file on disk.
 - **Agent effort from a measured sweep (core 3.9.0).** An Opus 5.5 effort sweep
   over the eval suites (low / medium / high) set: tech-lead, planner,
   code-reviewer and security-auditor to `medium` (same pass rate as `high`,
