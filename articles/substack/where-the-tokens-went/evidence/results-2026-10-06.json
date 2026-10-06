@@ -1,0 +1,244 @@
+{
+  "window": {
+    "from": "2026-08-10",
+    "to_exclusive": "2026-10-05",
+    "days_with_turns": 52
+  },
+  "total": {
+    "sessions": 1947,
+    "cost": 16377.92
+  },
+  "background_sessions": {
+    "sessions": 1323,
+    "cost": 75.97,
+    "with_context_over_300k": 0
+  },
+  "working_sessions": {
+    "sessions": 624,
+    "cost": 16301.96
+  },
+  "working_sessions_by_peak_context": {
+    "under_150k": {
+      "sessions": 337,
+      "pct_sessions": 54.0,
+      "cost": 599.56,
+      "pct_cost": 3.7,
+      "avg_answers": 19,
+      "avg_hours_first_to_last_turn": 0.4,
+      "cost_per_session": 1.78
+    },
+    "150k_to_300k": {
+      "sessions": 167,
+      "pct_sessions": 26.8,
+      "cost": 2816.1,
+      "pct_cost": 17.3,
+      "avg_answers": 140,
+      "avg_hours_first_to_last_turn": 2.9,
+      "cost_per_session": 16.86
+    },
+    "300k_and_over": {
+      "sessions": 120,
+      "pct_sessions": 19.2,
+      "cost": 12886.3,
+      "pct_cost": 79.0,
+      "avg_answers": 727,
+      "avg_hours_first_to_last_turn": 14.2,
+      "cost_per_session": 107.39
+    }
+  },
+  "all_sessions_by_peak_context": {
+    "under_150k": {
+      "sessions": 1660,
+      "pct_sessions": 85.3,
+      "cost": 675.53,
+      "pct_cost": 4.1,
+      "avg_answers": 5,
+      "avg_hours_first_to_last_turn": 0.1,
+      "cost_per_session": 0.41
+    },
+    "150k_to_300k": {
+      "sessions": 167,
+      "pct_sessions": 8.6,
+      "cost": 2816.1,
+      "pct_cost": 17.2,
+      "avg_answers": 140,
+      "avg_hours_first_to_last_turn": 2.9,
+      "cost_per_session": 16.86
+    },
+    "300k_and_over": {
+      "sessions": 120,
+      "pct_sessions": 6.2,
+      "cost": 12886.3,
+      "pct_cost": 78.7,
+      "avg_answers": 727,
+      "avg_hours_first_to_last_turn": 14.2,
+      "cost_per_session": 107.39
+    }
+  },
+  "concentration": {
+    "top_10_sessions_pct_cost": 22.5,
+    "cheaper_half_sessions": 974,
+    "cheaper_half_cost": 34.63
+  },
+  "threads": {
+    "main_thread_pct": 65.2,
+    "subagent_pct": 34.8
+  },
+  "big_sessions_by_shape": {
+    "orchestrations": {
+      "note": "subagents are 30% or more of the session's cost",
+      "sessions": 51,
+      "cost": 6660.46,
+      "cost_per_session": 131,
+      "subagent_pct_of_their_cost": 70.4,
+      "highest_subagent_pct_in_one_session": 96.8
+    },
+    "mostly_main_conversation": {
+      "sessions": 69,
+      "cost": 6225.84,
+      "cost_per_session": 90
+    }
+  },
+  "cost_per_answer_by_context": {
+    "150k_to_300k": {
+      "answers": 42578,
+      "cost": 5738.69,
+      "pct_cost": 35.0,
+      "cents_per_answer": 13.5
+    },
+    "300k_and_over": {
+      "answers": 23281,
+      "cost": 6412.16,
+      "pct_cost": 39.2,
+      "cents_per_answer": 27.5
+    },
+    "50k_to_150k": {
+      "answers": 46638,
+      "cost": 3812.36,
+      "pct_cost": 23.3,
+      "cents_per_answer": 8.2
+    },
+    "under_50k": {
+      "answers": 5393,
+      "cost": 414.72,
+      "pct_cost": 2.5,
+      "cents_per_answer": 7.7
+    },
+    "answers_given_above_150k": {
+      "answers": 65859,
+      "cost": 12150.85,
+      "pct_cost": 74.2,
+      "cost_at_the_50k_to_150k_rate": 5400.44,
+      "difference": 6750.41,
+      "difference_pct_of_all_cost": 41.2
+    }
+  },
+  "cost_by_token_type_estimate": {
+    "repriced_total": 15624.37,
+    "stored_total": 16377.92,
+    "repriced_pct_of_stored": 95.4,
+    "new_input": {
+      "cost": 13.46,
+      "pct_cost": 0.1,
+      "pct_of_raw_tokens": 0.0
+    },
+    "output": {
+      "cost": 1372.19,
+      "pct_cost": 8.8,
+      "pct_of_raw_tokens": 0.2
+    },
+    "cache_read": {
+      "cost": 11229.55,
+      "pct_cost": 71.9,
+      "pct_of_raw_tokens": 98.2
+    },
+    "cache_write": {
+      "cost": 3009.17,
+      "pct_cost": 19.3,
+      "pct_of_raw_tokens": 1.6
+    }
+  },
+  "compactions_in_big_sessions": {
+    "big_sessions": 120,
+    "big_sessions_compacted_at_least_once": 5,
+    "compactions": 5
+  },
+  "handoff_notes": {
+    "notes_written": 546,
+    "sessions_with_a_note": 267,
+    "no_answer_after_the_note": 79,
+    "1_to_100_answers_after": 72,
+    "more_than_100_answers_after": 116,
+    "cost_total": 15277.27,
+    "cost_after_first_note": 11736.12,
+    "pct_cost_after_first_note": 76.8
+  },
+  "late_july_daily_rollups": {
+    "2026-07-26 background": {
+      "sessions": 30,
+      "cost": 1.91
+    },
+    "2026-07-26 projects": {
+      "sessions": 25,
+      "cost": 176.57
+    },
+    "2026-07-27 background": {
+      "sessions": 305,
+      "cost": 10.23
+    },
+    "2026-07-27 projects": {
+      "sessions": 28,
+      "cost": 534.57
+    },
+    "2026-07-28 background": {
+      "sessions": 55,
+      "cost": 2.44
+    },
+    "2026-07-28 projects": {
+      "sessions": 25,
+      "cost": 368.62
+    }
+  },
+  "weekly": [
+    {
+      "week_from": "2026-08-10",
+      "days_with_turns": 7,
+      "cost_per_day": 333
+    },
+    {
+      "week_from": "2026-08-17",
+      "days_with_turns": 7,
+      "cost_per_day": 306
+    },
+    {
+      "week_from": "2026-08-24",
+      "days_with_turns": 5,
+      "cost_per_day": 171
+    },
+    {
+      "week_from": "2026-08-31",
+      "days_with_turns": 6,
+      "cost_per_day": 316
+    },
+    {
+      "week_from": "2026-09-07",
+      "days_with_turns": 6,
+      "cost_per_day": 284
+    },
+    {
+      "week_from": "2026-09-14",
+      "days_with_turns": 7,
+      "cost_per_day": 525
+    },
+    {
+      "week_from": "2026-09-21",
+      "days_with_turns": 7,
+      "cost_per_day": 356
+    },
+    {
+      "week_from": "2026-09-28",
+      "days_with_turns": 7,
+      "cost_per_day": 184
+    }
+  ]
+}
