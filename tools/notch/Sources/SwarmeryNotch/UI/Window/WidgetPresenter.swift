@@ -126,6 +126,24 @@ public final class WidgetPresenter {
         apply(target())
     }
 
+    /// The × button in a panel header. Unlike an outside click it also lets
+    /// go of whatever opened the panel on its own: a session can wait for a
+    /// reply for hours, and attention would hold the panel open the whole
+    /// time with no way to close it.
+    public func closePanel() {
+        pinnedOpen = false
+        switch PanelCloseEffect.closing(viewState.panel, attentionWantsOpen: attentionWantsOpen) {
+        case .dismissAttention:
+            // Re-renders every presenter, this one included.
+            actions.dismissAttention()
+        case .showSessions:
+            viewState.panel = .sessions
+        case .collapse:
+            break
+        }
+        apply(target())
+    }
+
     /// Re-reads the screen after a `didChangeScreenParameters` and moves the
     /// window if anything it is positioned against moved.
     ///
@@ -188,7 +206,7 @@ public final class WidgetPresenter {
             actions: actions,
             onHover: { [weak self] hovering in self?.setHovering(hovering) },
             onTapTab: { [weak self] kind in self?.toggleExpanded(kind) },
-            onCollapse: { [weak self] in self?.dismissPinned() },
+            onCollapse: { [weak self] in self?.closePanel() },
             onContentGeometry: { [weak self] presentation, geometry in
                 self?.contentGeometryChanged(presentation, geometry)
             }

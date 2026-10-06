@@ -14,8 +14,8 @@ struct ExpandedPanel: View {
     /// needs no title.
     var showsHeader: Bool = false
     /// Right-edge only: the header's × button. A tab click or an outside
-    /// click also closes the panel, but the operator asked for the
-    /// conventional control to be there and visible.
+    /// click also closes a panel the operator opened; this is the one
+    /// control that closes a panel attention opened by itself.
     var onCollapse: (() -> Void)? = nil
     /// The notch panel carries the usage strip; the right-edge sessions panel
     /// does not — usage has its own tab and panel there.

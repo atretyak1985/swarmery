@@ -45,6 +45,25 @@ public enum WidgetPresentation: Equatable, Sendable {
     }
 }
 
+/// What the × button in a panel header does, as a pure function for the same
+/// reason `WidgetPresentation.target` is one.
+public enum PanelCloseEffect: Equatable, Sendable {
+    /// Close, and stop holding the panel open for what is asking right now.
+    case dismissAttention
+    /// Something is asking that the closed panel did not show: stay open and
+    /// switch to the sessions panel.
+    case showSessions
+    /// Close; nothing else to do.
+    case collapse
+
+    public static func closing(_ panel: PanelKind, attentionWantsOpen: Bool) -> PanelCloseEffect {
+        switch panel {
+        case .sessions: return .dismissAttention
+        case .usage: return attentionWantsOpen ? .showSessions : .collapse
+        }
+    }
+}
+
 public enum WidgetTiming {
     private static let factor: Double = {
         guard let raw = ProcessInfo.processInfo.environment["SWARMERY_NOTCH_ANIM"],

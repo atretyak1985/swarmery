@@ -167,6 +167,17 @@ final class WidgetPlacementTests: XCTestCase {
         )
     }
 
+    func testTheCloseButtonDismissesWhatTheSessionsPanelShowsButNeverWhatTheUsagePanelHides() {
+        // The sessions panel shows everything that asks, so closing it is the
+        // operator saying "seen" -- whether or not attention opened it.
+        XCTAssertEqual(PanelCloseEffect.closing(.sessions, attentionWantsOpen: true), .dismissAttention)
+        XCTAssertEqual(PanelCloseEffect.closing(.sessions, attentionWantsOpen: false), .dismissAttention)
+        // The usage panel shows none of it: an approval that arrived while it
+        // was pinned open must be shown, not waved away unseen.
+        XCTAssertEqual(PanelCloseEffect.closing(.usage, attentionWantsOpen: true), .showSessions)
+        XCTAssertEqual(PanelCloseEffect.closing(.usage, attentionWantsOpen: false), .collapse)
+    }
+
     // MARK: - Tab tint
 
     func testTabTintReflectsTheWorstStateOnScreen() {

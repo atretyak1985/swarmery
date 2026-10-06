@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// launch so it shows the same thing as its siblings instead of staying
     /// blank until the next daemon event.
     private var lastState = AttentionState()
+    /// What the operator closed the panel on with the × button -- app-wide,
+    /// so closing it on one display closes it on every display.
+    private var dismissal = AttentionDismissal()
 
     static func main() {
         let app = NSApplication.shared
@@ -49,7 +52,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             refreshUsage: { [weak self] in
                 guard let coordinator = self?.coordinator else { return }
                 Task { @MainActor in await coordinator.refreshUsage(fresh: true) }
-            }
+            },
+            dismissAttention: { [weak self] in self?.dismissAttention() }
         )
 
         setUpMenuBar()
@@ -167,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // A fresh presenter has no window until its first `update` -- without
         // this it would stay invisible until the next daemon event.
-        let shouldOpen = lastState.shouldExpand(now: Date(), linger: config.linger)
+        let shouldOpen = lastState.shouldExpand(now: Date(), linger: config.linger, dismissal: dismissal)
         for presenter in added {
             presenter.update(attention: lastState, shouldOpen: shouldOpen)
         }
@@ -182,13 +186,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func render(_ state: AttentionState) {
         collapseTask?.cancel()
         lastState = state
+        dismissal.observe(state)
         let now = Date()
-        let shouldOpen = state.shouldExpand(now: now, linger: config.linger)
+        let shouldOpen = state.shouldExpand(now: now, linger: config.linger, dismissal: dismissal)
         for presenter in presenters {
             presenter.update(attention: state, shouldOpen: shouldOpen)
         }
 
-        guard shouldOpen, !state.needsAttention, let lastResolvedAt = state.lastResolvedAt else { return }
+        // Open for the linger window alone -- nothing the operator has not
+        // already closed the panel on is still asking.
+        guard shouldOpen, dismissal.covers(state), let lastResolvedAt = state.lastResolvedAt else { return }
         let remaining = config.linger - now.timeIntervalSince(lastResolvedAt)
         guard remaining > 0 else { return }
         collapseTask = Task { @MainActor [weak self] in
@@ -196,5 +203,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard !Task.isCancelled, let self, let coordinator = self.coordinator else { return }
             self.render(coordinator.state)
         }
+    }
+
+    /// The panel's × button. Whatever is asking right now stops holding the
+    /// panel open; the next new approval, question or failure opens it again.
+    private func dismissAttention() {
+        dismissal.dismiss(lastState)
+        render(lastState)
     }
 }

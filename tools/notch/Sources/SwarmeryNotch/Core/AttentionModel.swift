@@ -162,15 +162,79 @@ extension AttentionState {
         return .idle
     }
 
+    /// Everything currently asking for the operator, as identities that
+    /// survive from one frame to the next — what `AttentionDismissal`
+    /// remembers the operator has already seen.
+    public var attentionItems: Set<AttentionItem> {
+        var items = Set(pendingApprovals.keys.map(AttentionItem.approval))
+        for session in sessions.values {
+            if Self.isErrored(session) {
+                items.insert(.errored(session.id))
+            } else if Self.isAwaitingReply(session) {
+                items.insert(.awaitingReply(session.id))
+            }
+        }
+        return items
+    }
+
     /// The panel opens immediately for anything that needs the user, and
     /// stays open for `linger` seconds after the most recent resolution so
     /// the outcome is visible before auto-collapsing. `now` is always
     /// caller-supplied — this type owns no clock of its own.
-    public func shouldExpand(now: Date, linger: TimeInterval) -> Bool {
-        if needsAttention { return true }
-        if let lastResolvedAt, now.timeIntervalSince(lastResolvedAt) < linger {
+    ///
+    /// What the operator closed by hand stays closed: an item already in
+    /// `dismissal` no longer opens the panel, and neither does the linger
+    /// window of a resolution they dismissed. Anything new still does.
+    public func shouldExpand(
+        now: Date,
+        linger: TimeInterval,
+        dismissal: AttentionDismissal = AttentionDismissal()
+    ) -> Bool {
+        if !dismissal.covers(self) { return true }
+        if let lastResolvedAt, lastResolvedAt != dismissal.resolvedAt,
+           now.timeIntervalSince(lastResolvedAt) < linger {
             return true
         }
         return false
+    }
+}
+
+/// One thing that asks for the operator. The same session can ask twice — a
+/// reply, then another question — so identity alone is not enough; see
+/// `AttentionDismissal.observe`.
+public enum AttentionItem: Hashable, Sendable {
+    case approval(Int)
+    case awaitingReply(Int)
+    case errored(Int)
+}
+
+/// What the operator closed the panel on. A session can wait for a reply for
+/// hours, so "attention always wins" alone would leave the panel's × button
+/// doing nothing for as long as one such session exists. A value type with no
+/// clock, like the rest of this file.
+public struct AttentionDismissal: Equatable, Sendable {
+    public private(set) var items: Set<AttentionItem> = []
+    /// `AttentionState.lastResolvedAt` at the moment of the dismissal, so the
+    /// linger window of that same resolution does not reopen the panel.
+    public private(set) var resolvedAt: Date?
+
+    public init() {}
+
+    /// True when nothing in `state` asks for the operator that they have not
+    /// already closed the panel on.
+    public func covers(_ state: AttentionState) -> Bool {
+        state.attentionItems.isSubset(of: items)
+    }
+
+    /// The operator closed the panel while `state` was on screen.
+    public mutating func dismiss(_ state: AttentionState) {
+        items = state.attentionItems
+        resolvedAt = state.lastResolvedAt
+    }
+
+    /// Call on every new state: forgets items that are no longer asking, so a
+    /// session that asks again later opens the panel again.
+    public mutating func observe(_ state: AttentionState) {
+        items.formIntersection(state.attentionItems)
     }
 }
