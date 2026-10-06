@@ -34,14 +34,15 @@ var argvMarkers = []string{"--output-format", "--session-id", "--setting-sources
 // mode: their entire contract is stdout, and the daemon — not the model — writes
 // whatever lands on disk. Key is "<path>:<func>", value is why it is safe.
 var readOnlySites = map[string]string{
-	"internal/improve/runner.go:Run":                "the model returns a unified diff on stdout; internal/improve/apply.go applies it",
-	"internal/retroanalysis/runner.go:Run":          "the model returns the analysis on stdout; internal/retroanalysis persists the row",
-	"internal/handoff/runner.go:Run":                "the model returns handoff prose on stdout; internal/handoff/handoff.go does the os.WriteFile",
-	"internal/extract/runner.go:Run":                "classification pass — stdout JSON only, the caller persists the rows",
-	"internal/trajjudge/trajjudge.go:Run":           "advisory judge — stdout verdict only, persisted by the daemon",
-	"internal/decide/claude.go:spawnClaude":         "decision classifier (phase 9) — stdout JSON answer only, internal/decide persists the decisions row",
-	"internal/lessons/runner.go:Run":                "lesson candidates (phase 14) — stdout JSON only, internal/lessons validates and persists the rows",
-	"internal/api/project_config_probe.go:runProbe": "documented non-writing probe: it returns config suggestions and nothing else",
+	"internal/improve/runner.go:Run":                    "the model returns a unified diff on stdout; internal/improve/apply.go applies it",
+	"internal/retroanalysis/runner.go:Run":              "the model returns the analysis on stdout; internal/retroanalysis persists the row",
+	"internal/handoff/runner.go:Run":                    "the model returns handoff prose on stdout; internal/handoff/handoff.go does the os.WriteFile",
+	"internal/extract/runner.go:Run":                    "classification pass — stdout JSON only, the caller persists the rows",
+	"internal/trajjudge/trajjudge.go:Run":               "advisory judge — stdout verdict only, persisted by the daemon",
+	"internal/decide/claude.go:spawnClaude":             "decision classifier (phase 9) — stdout JSON answer only, internal/decide persists the decisions row",
+	"internal/lessons/runner.go:Run":                    "lesson candidates (phase 14) — stdout JSON only, internal/lessons validates and persists the rows",
+	"internal/replyextract/replyextract.go:spawnClaude": "needs-you reply card — stdout JSON only, internal/replyextract validates and persists the reply_extracts row",
+	"internal/api/project_config_probe.go:runProbe":     "documented non-writing probe: it returns config suggestions and nothing else",
 }
 
 // mustDetect are sites the scanner has to keep finding. Without this a heuristic

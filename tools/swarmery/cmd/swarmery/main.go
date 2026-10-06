@@ -72,6 +72,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/quota"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/replyextract"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
@@ -211,6 +212,7 @@ func usage() {
                     [--prod-deploy-patterns <rule globs>]  (added to the always-on defaults)
                     [--notify-url <url>] [--notify-events <list>] [--notify-template <generic|ntfy|telegram>]
                     [--notify-telegram-chat <id>]
+                    [--reply-extract] [--reply-extract-daily-cap <n>]  (off by default; sends the waiting question to the Claude API)
   swarmery recost   [--db <path>]
   swarmery stale [--db <path>] [--project <id>] [--all]
   swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]
@@ -1539,6 +1541,11 @@ func cmdServe(args []string) error {
 		"path to the claude CLI used for plugin drift detection (default: PATH, then ~/.local/bin, /opt/homebrew/bin, /usr/local/bin)")
 	driftInterval := fs.Duration("plugin-drift-interval", plugindrift.DefaultInterval,
 		"plugin drift scan interval (0 disables the scanner)")
+	replyExtract := fs.Bool("reply-extract", false,
+		"when a session starts waiting for a plain-text reply, summarise its question into a suggested-reply card with one Haiku call (advisory, shown on the Needs-you queue). "+
+			"NOTE: the tail of that session's last assistant message (up to 4000 characters) is sent to the Claude API")
+	replyExtractCap := fs.Int("reply-extract-daily-cap", replyextract.DefaultDailyCap,
+		"most --reply-extract model calls per UTC day, failed ones included (0 disables)")
 	cfg := pipelineFlags(fs)
 	wsCfg := wsingestFlags(fs)
 	sysCfg := sysscanFlags(fs)
@@ -1630,6 +1637,14 @@ func cmdServe(args []string) error {
 			}
 			notifier.Emit(evt)
 		}
+	}
+
+	// needs-you phase 4: the Haiku reply extractor. Off by default — New
+	// returns nil and the hook stays unset, so nothing is built or called.
+	if extractor := replyextract.New(*replyExtract, db, *replyExtractCap); extractor != nil {
+		cfg.OnAwaitingReply = extractor.OnAwaitingReply
+		log.Printf("swarmery reply extractor on (%s, cap %d/day): awaiting_reply questions are sent to the Claude API",
+			route.ModelHaiku, *replyExtractCap)
 	}
 
 	// Attribution needs the onboarding roots before the pipeline starts: an
