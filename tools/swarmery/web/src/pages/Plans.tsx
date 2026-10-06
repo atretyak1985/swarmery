@@ -1864,6 +1864,7 @@ function EpicDetail({
 const SESSION_DOT: Record<SessionStatus, string> = {
   active: 'bg-green',
   waiting_approval: 'bg-amber',
+  awaiting_reply: 'bg-amber',
   idle: 'bg-ink-faint',
   completed: 'bg-brand/60',
   killed: 'bg-red/70',

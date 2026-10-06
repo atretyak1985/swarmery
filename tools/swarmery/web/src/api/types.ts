@@ -13,8 +13,16 @@
 
 // --- Enum-like unions (documented value sets from the DB schema) ------------
 
-/** sessions.status — MVP emits active|idle|completed; waiting_approval|killed reserved for hooks. */
-export type SessionStatus = 'active' | 'waiting_approval' | 'idle' | 'completed' | 'killed';
+/** sessions.status — ingest emits active|idle|completed; waiting_approval|killed come from
+ * hooks/kill; awaiting_reply from the status ticker (an interactive session that ended its
+ * turn and waits for the operator's typed reply). */
+export type SessionStatus =
+  | 'active'
+  | 'waiting_approval'
+  | 'awaiting_reply'
+  | 'idle'
+  | 'completed'
+  | 'killed';
 
 /** sessions.proc_state — null when PID is unknown (remote machine / no hook). */
 export type ProcState = 'running' | 'orphaned' | 'dead' | 'unknown';

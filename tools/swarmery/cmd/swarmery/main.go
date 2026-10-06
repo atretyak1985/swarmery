@@ -442,6 +442,8 @@ func pipelineFlagsWithRoots(fs *flag.FlagSet, roots []string) *ingest.Config {
 	fs.DurationVar(&cfg.StatusInterval, "status-tick", 10*time.Second, "session-status recompute interval")
 	fs.DurationVar(&cfg.Thresholds.Active, "active-window", 2*time.Minute, "session considered active within this window")
 	fs.DurationVar(&cfg.Thresholds.Idle, "idle-window", 30*time.Minute, "session considered idle within this window")
+	fs.DurationVar(&cfg.Thresholds.AwaitAfter, "awaiting-after", 3*time.Minute,
+		"quiet time after an end_turn before an interactive session counts as awaiting the operator's reply")
 	fs.Var(&cfg.Exclude, "exclude-projects",
 		"comma-separated path globs never tracked as projects (env: SWARMERY_EXCLUDE; '' disables)")
 	return cfg

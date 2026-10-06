@@ -19,6 +19,7 @@ import type { Session, SessionStatus } from '../api/types';
 export const STATUSES: SessionStatus[] = [
   'active',
   'waiting_approval',
+  'awaiting_reply',
   'idle',
   'completed',
   'killed',
@@ -27,6 +28,7 @@ export const STATUSES: SessionStatus[] = [
 export const STATUS_LABELS: Record<SessionStatus, string> = {
   active: 'active',
   waiting_approval: 'waiting',
+  awaiting_reply: 'awaiting reply',
   idle: 'idle',
   completed: 'done',
   killed: 'killed',
@@ -92,6 +94,7 @@ export function statusSummary(rows: readonly Session[]): string {
   const counts: Record<SessionStatus, number> = {
     active: 0,
     waiting_approval: 0,
+    awaiting_reply: 0,
     idle: 0,
     completed: 0,
     killed: 0,

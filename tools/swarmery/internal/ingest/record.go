@@ -13,6 +13,7 @@ type record struct {
 	SessionID        string          `json:"sessionId"`
 	Version          string          `json:"version"`
 	GitBranch        string          `json:"gitBranch"`
+	Entrypoint       string          `json:"entrypoint"` // cli | sdk-cli (headless) | claude-desktop | … → sessions.entrypoint (0095)
 	IsMeta           bool            `json:"isMeta"`
 	IsCompactSummary bool            `json:"isCompactSummary"`
 	PromptID         string          `json:"promptId"`
