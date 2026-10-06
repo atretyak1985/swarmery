@@ -69,6 +69,7 @@ function LiveStateChip({ session }: { session: SessionDetail }): JSX.Element | n
 const STATUS_TONES: Record<SessionStatus, string> = {
   active: 'text-green',
   waiting_approval: 'text-amber',
+  awaiting_reply: 'text-amber',
   idle: 'text-ink-dim',
   completed: 'text-ink-dim',
   killed: 'text-red',

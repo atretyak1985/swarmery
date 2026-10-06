@@ -10,9 +10,10 @@ import (
 
 const defaultInterval = 30 * time.Second
 
-// Ticker periodically checks process liveness for active/idle sessions with a
-// known PID and updates proc_state in the DB. Dead sessions are fast-forwarded
-// to status='completed' so "Active now" stops lying.
+// Ticker periodically checks process liveness for live (active / idle /
+// awaiting_reply) sessions with a known PID and updates proc_state in the DB.
+// Dead sessions are fast-forwarded to status='completed' so "Active now" stops
+// lying.
 type Ticker struct {
 	DB       *sql.DB
 	Provider Provider
@@ -36,7 +37,7 @@ func (t *Ticker) CheckAll(now time.Time) ([]int64, error) {
 	rows, err := t.DB.Query(`
 		SELECT id, pid, proc_started_at, proc_state, cwd
 		FROM sessions
-		WHERE status IN ('active','idle') AND pid IS NOT NULL`)
+		WHERE status IN ('active','idle','awaiting_reply') AND pid IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}
@@ -59,12 +60,13 @@ func (t *Ticker) CheckAll(now time.Time) ([]int64, error) {
 	for _, s := range sessions {
 		newState := t.checkOne(s.pid, s.procStartedAt.String, s.procState.String)
 		if newState == s.procState.String {
-			// No liveness transition — but this pass only scans active/idle
-			// sessions, so a steady-state 'dead' proc means the row was
-			// reactivated (a post-death JSONL flush) after we'd already flipped
-			// it dead. Re-assert 'completed' so "Active now" stops lying;
-			// otherwise nothing corrects it until it ages out. ('killed' rows
-			// never reach here — CheckAll scans only active/idle.)
+			// No liveness transition — but this pass only scans live
+			// (active/idle/awaiting_reply) sessions, so a steady-state 'dead'
+			// proc means the row was reactivated (a post-death JSONL flush)
+			// after we'd already flipped it dead. Re-assert 'completed' so
+			// "Active now" stops lying; otherwise nothing corrects it until it
+			// ages out. ('killed' rows never reach here — CheckAll scans only
+			// the live statuses.)
 			if newState == StateDead {
 				if _, err := t.DB.Exec(
 					`UPDATE sessions SET proc_checked_at = ?, status = 'completed' WHERE id = ?`,
@@ -130,12 +132,12 @@ func (t *Ticker) checkOne(pid int, procStartedAt, currentState string) string {
 	return StateRunning
 }
 
-// heuristicMatch tries to bind PIDs for active/idle sessions without one,
+// heuristicMatch tries to bind PIDs for live sessions without one,
 // using cwd + command matching. Skips ambiguous cases (multiple candidates).
 func (t *Ticker) heuristicMatch(nowStr string) error {
 	rows, err := t.DB.Query(`
 		SELECT id, cwd FROM sessions
-		WHERE status IN ('active','idle') AND pid IS NULL AND cwd IS NOT NULL AND cwd != ''`)
+		WHERE status IN ('active','idle','awaiting_reply') AND pid IS NULL AND cwd IS NOT NULL AND cwd != ''`)
 	if err != nil {
 		return err
 	}

@@ -23,7 +23,10 @@ export function quietMs(s: Session, nowMs: number): number {
  */
 export function sessionState(s: Session, nowMs: number): SessionState {
   if (s.status === 'completed' || s.status === 'killed') return 'done';
-  if (s.status === 'active' || s.status === 'waiting_approval') return 'running';
+  // awaiting_reply: the process is alive and waiting on the operator — running.
+  if (s.status === 'active' || s.status === 'waiting_approval' || s.status === 'awaiting_reply') {
+    return 'running';
+  }
   // idle — decide by quiet time + process liveness
   if (quietMs(s, nowMs) < STUCK_AFTER_MS) return 'running';
   return s.procState != null && ALIVE.has(s.procState) ? 'stuck' : 'done';

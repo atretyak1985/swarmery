@@ -2,6 +2,7 @@ package wtjanitor
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 )
@@ -14,7 +15,9 @@ import (
 // status appearing upstream would then read as terminal — so widen this list,
 // never the terminal side, when statuses change. An unknown status treated as
 // live costs one skipped sweep; treated as dead it costs a deleted worktree.
-var nonTerminalStatuses = []any{"active", "idle"}
+// awaiting_reply (2026-10-06): an interactive session waiting for the
+// operator's typed reply — its process and checkout are very much in use.
+var nonTerminalStatuses = []any{"active", "idle", "awaiting_reply"}
 
 // ProcLiveness answers Busy from two independent sources, either of which is
 // enough to veto: a live process cwd'd inside the path (procwatch's
@@ -41,7 +44,8 @@ func (l ProcLiveness) Busy(path string) (bool, error) {
 	}
 	var n int
 	err := l.DB.QueryRow(
-		`SELECT COUNT(*) FROM sessions WHERE cwd = ? AND status IN (?, ?)`,
+		`SELECT COUNT(*) FROM sessions WHERE cwd = ? AND status IN (?`+
+			strings.Repeat(", ?", len(nonTerminalStatuses)-1)+`)`,
 		append([]any{path}, nonTerminalStatuses...)...).Scan(&n)
 	if err != nil {
 		return false, err

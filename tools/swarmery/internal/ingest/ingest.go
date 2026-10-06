@@ -247,7 +247,7 @@ type pendingTool struct {
 func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, sidechain bool) error {
 	var (
 		sessionUUID, cwd, branch, model, firstTS, lastTS string
-		title, firstPrompt                               string
+		title, firstPrompt, entrypoint                   string
 	)
 	for i := range recs {
 		r := &recs[i]
@@ -266,6 +266,9 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 			}
 			if branch == "" && r.GitBranch != "" {
 				branch = r.GitBranch
+			}
+			if entrypoint == "" && r.Entrypoint != "" {
+				entrypoint = r.Entrypoint
 			}
 		}
 		if sidechain {
@@ -353,10 +356,10 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 
 		res, err := in.tx.Exec(
 			`INSERT INTO sessions (project_id, session_uuid, model, git_branch, cwd, status,
-			                       started_at, ended_at, title, source, account)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'jsonl', ?)`,
+			                       started_at, ended_at, title, source, account, entrypoint)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'jsonl', ?, ?)`,
 			in.projectID, sessionUUID, nullStr(model), nullStr(branch), cwd, status,
-			firstTS, nullStr(lastTS), nullStr(insertTitle), account)
+			firstTS, nullStr(lastTS), nullStr(insertTitle), account, entrypoint)
 		if err != nil {
 			return fmt.Errorf("insert session: %w", err)
 		}
@@ -442,7 +445,12 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 		// (migration 0047): a re-tail through a caller with no root context
 		// must never blank an account already stamped, and a session belongs
 		// to exactly one subscription for its whole life, so the first root
-		// that knew wins.
+		// that knew wins. entrypoint (migration 0095) is first-wins for the
+		// same reason: how a session was launched never changes mid-life.
+		//
+		// status='awaiting_reply' is deliberately NOT protected here: it is
+		// entered only by the status ticker, and a new batch (the operator's
+		// reply) is exactly what must clear it back to the time heuristic.
 		if _, err := in.tx.Exec(
 			`UPDATE sessions SET model = COALESCE(?, model),
 			                     git_branch = COALESCE(git_branch, ?),
@@ -454,9 +462,10 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 			                     ended_at = CASE WHEN ? = '' THEN ended_at
 			                                     ELSE MAX(COALESCE(ended_at,''), ?) END,
 			                     account = CASE WHEN account = '' THEN ? ELSE account END,
+			                     entrypoint = CASE WHEN entrypoint = '' THEN ? ELSE entrypoint END,
 			                     title = COALESCE(?, COALESCE(title, ?)) WHERE id = ?`,
 			nullStr(model), nullStr(branch), firstTS, firstTS, status, lastTS, lastTS,
-			account, nullStr(title), nullStr(firstPrompt), in.sessionID); err != nil {
+			account, entrypoint, nullStr(title), nullStr(firstPrompt), in.sessionID); err != nil {
 			return err
 		}
 	}

@@ -1,0 +1,11 @@
+-- session_entrypoint: how the session was launched, from the transcript envelope.
+--
+-- entrypoint: the transcript envelope's `entrypoint` ('cli' | 'sdk-cli' |
+-- 'claude-desktop' | …). 'sdk-cli' = a headless -p / SDK run, including every
+-- daemon spawn — such a session never waits for an operator's typed reply, so
+-- the awaiting_reply detector (internal/ingest/status.go) skips it.
+--
+-- '' (the default) means "unknown": every row ingested before this column.
+-- Ingest stamps it first-wins (like account, 0047). Additive with a default:
+-- no backfill, no rewrite. Rollback is `ALTER TABLE sessions DROP COLUMN entrypoint;`.
+ALTER TABLE sessions ADD COLUMN entrypoint TEXT NOT NULL DEFAULT '';

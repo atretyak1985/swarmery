@@ -147,9 +147,9 @@ function meta(session: Session): string {
  * "error" (killed rows keep their red accent). ----- */
 type CanvasTone = 'active' | 'waiting' | 'stuck' | 'error' | 'done';
 
-/** Tri-state → tone; waiting_approval and killed stay visible as nuances. */
+/** Tri-state → tone; waiting_approval, awaiting_reply and killed stay visible as nuances. */
 function toneOf(s: Session, nowMs: number): CanvasTone {
-  if (s.status === 'waiting_approval') return 'waiting';
+  if (s.status === 'waiting_approval' || s.status === 'awaiting_reply') return 'waiting';
   const state: SessionState = sessionState(s, nowMs);
   if (state === 'running') return 'active';
   if (state === 'stuck') return 'stuck';

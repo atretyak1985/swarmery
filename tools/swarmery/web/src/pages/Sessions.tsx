@@ -310,6 +310,7 @@ export function Sessions(): JSX.Element {
   const counts: Record<SessionStatus, number> = {
     active: 0,
     waiting_approval: 0,
+    awaiting_reply: 0,
     idle: 0,
     completed: 0,
     killed: 0,
