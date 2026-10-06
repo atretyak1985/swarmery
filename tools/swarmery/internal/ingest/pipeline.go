@@ -36,6 +36,12 @@ type Config struct {
 	// session_error through it). Deliberately NOT called for procwatch- or
 	// approvals-driven transitions (v1 scope). May be nil.
 	OnSessionTerminal func(sessionID int64, errorCount int)
+
+	// OnAwaitingReply fires once per status-ticker transition to
+	// 'awaiting_reply' — the reply-extractor wiring point (main.go sets it
+	// only under --reply-extract). It runs on the ticker goroutine, so it
+	// must not block. May be nil.
+	OnAwaitingReply func(sessionID int64)
 }
 
 func (c Config) withDefaults() Config {
@@ -337,7 +343,8 @@ func (p *Pipeline) rescan() {
 
 // recomputeStatuses ages sessions (active→idle→completed), emits
 // session_updated for every transition, and fires OnSessionTerminal for
-// completions (with the session's error-event count).
+// completions (with the session's error-event count) and OnAwaitingReply for
+// transitions into awaiting_reply.
 func (p *Pipeline) recomputeStatuses() {
 	changed, err := RecomputeStatuses(p.db, p.cfg.Thresholds, time.Now())
 	if err != nil {
@@ -346,6 +353,9 @@ func (p *Pipeline) recomputeStatuses() {
 	for _, c := range changed {
 		if p.bus != nil {
 			p.bus.Publish(Notification{Type: NoteSessionUpdated, SessionID: c.ID})
+		}
+		if c.Status == StatusAwaitingReply && p.cfg.OnAwaitingReply != nil {
+			p.cfg.OnAwaitingReply(c.ID)
 		}
 		// Board capture hook B (capture.go): a session that finished having
 		// captured no todos leaves one card built from its opening prompt. The

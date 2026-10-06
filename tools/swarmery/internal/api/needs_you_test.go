@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -20,6 +21,13 @@ import (
 // failure older than 24 h, a soft-hidden awaiting session, and a resolved
 // ordinary approval. Session 8 lives in an ARCHIVED project.
 func needsYouServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv, _ := needsYouServerDB(t)
+	return srv
+}
+
+// needsYouServerDB is needsYouServer plus its store, for tests that add rows.
+func needsYouServerDB(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "needs_you.db"))
 	if err != nil {
@@ -103,7 +111,7 @@ func needsYouServer(t *testing.T) *httptest.Server {
 	}
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, db
 }
 
 func getNeedsYou(t *testing.T, url string) needsYouResponse {
@@ -149,7 +157,7 @@ func TestNeedsYouOrderAndKinds(t *testing.T) {
 			t.Errorf("item %d requestId = %v, want %d", i, got.RequestID, w.request)
 		}
 		if got.Suggestion != nil {
-			t.Errorf("item %d suggestion = %+v, want null (phase 4)", i, got.Suggestion)
+			t.Errorf("item %d suggestion = %+v, want null (no reply_extracts rows in this fixture)", i, got.Suggestion)
 		}
 		if got.BlockingSince == "" || got.BlockingSeconds <= 0 {
 			t.Errorf("item %d blockingSince=%q blockingSeconds=%d, want set and positive", i, got.BlockingSince, got.BlockingSeconds)
@@ -348,5 +356,82 @@ func TestNeedsYouHelpers(t *testing.T) {
 		if got := requestPreview(c.tool, c.req); got != c.want {
 			t.Errorf("requestPreview(%s, %s) = %q, want %q", c.tool, c.req, got, c.want)
 		}
+	}
+}
+
+// TestNeedsYouSuggestion: an awaiting_reply item carries the reply_extracts
+// 'ok' row for its NEWEST main-thread assistant prose turn — never a row for an
+// older turn, never an 'error' row.
+func TestNeedsYouSuggestion(t *testing.T) {
+	srv, db := needsYouServerDB(t)
+	turnID := func(seq int) int64 {
+		t.Helper()
+		var id int64
+		if err := db.QueryRow(`SELECT id FROM turns WHERE session_id = 5 AND seq = ?`, seq).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	awaiting := func() needsYouItem {
+		t.Helper()
+		for _, it := range getNeedsYou(t, srv.URL+"/api/needs-you").Items {
+			if it.Kind == needsYouAwaitingReply && it.SessionID == 5 {
+				return it
+			}
+		}
+		t.Fatal("no awaiting_reply item for session 5")
+		return needsYouItem{}
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(q, args...); err != nil {
+			t.Fatalf("exec: %v\n%s", err, q)
+		}
+	}
+
+	// A row for an older turn (seq 1) is stale: the question moved on.
+	exec(`INSERT INTO reply_extracts (session_id, turn_id, status, question, options_json, recommended, model, created_at)
+		VALUES (5, ?, 'ok', 'Stale?', '["a"]', 'a', 'm', '2026-10-06T00:00:00.000Z')`, turnID(1))
+	// The newest prose turn (seq 2), first as an error row.
+	exec(`INSERT INTO reply_extracts (session_id, turn_id, status, model, error, created_at)
+		VALUES (5, ?, 'error', 'm', 'bad json', '2026-10-06T00:00:00.000Z')`, turnID(2))
+	if s := awaiting().Suggestion; s != nil {
+		t.Fatalf("suggestion = %+v, want null (stale-turn ok row and current-turn error row)", s)
+	}
+
+	exec(`UPDATE reply_extracts SET status = 'ok', error = NULL, question = 'Drop the old table?',
+		options_json = '["Yes, drop it","No, keep it"]', recommended = 'Yes, drop it'
+		WHERE session_id = 5 AND turn_id = ?`, turnID(2))
+	s := awaiting().Suggestion
+	if s == nil {
+		t.Fatal("suggestion = null, want the current turn's ok row")
+	}
+	if s.Question != "Drop the old table?" || s.Recommended != "Yes, drop it" ||
+		len(s.Options) != 2 || s.Options[0] != "Yes, drop it" || s.Options[1] != "No, keep it" {
+		t.Errorf("suggestion = %+v", s)
+	}
+
+	res, err := http.Get(srv.URL + "/api/needs-you")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(body),
+		`"suggestion":{"question":"Drop the old table?","options":["Yes, drop it","No, keep it"],"recommended":"Yes, drop it"}`) {
+		t.Errorf("response lacks the suggestion object: %s", body)
+	}
+}
+
+func TestNeedsYouSuggestionOf(t *testing.T) {
+	str := func(s string) sql.NullString { return sql.NullString{String: s, Valid: true} }
+	if s := suggestionOf(sql.NullString{}, str(`["a"]`), str("a")); s != nil {
+		t.Errorf("no question → %+v, want nil", s)
+	}
+	if s := suggestionOf(str("Q?"), str("not json"), str("")); s == nil || s.Options == nil || len(s.Options) != 0 {
+		t.Errorf("unreadable options → %+v, want a card with []", s)
+	}
+	if s := suggestionOf(str("Q?"), sql.NullString{}, sql.NullString{}); s == nil || s.Options == nil {
+		t.Errorf("NULL options → %+v, want a card with []", s)
 	}
 }

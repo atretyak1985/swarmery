@@ -51,8 +51,9 @@ const (
 	askUserQuestionTool = "AskUserQuestion"
 )
 
-// replySuggestion is the Haiku-extracted reply card. Filled by phase 4; always
-// null in this phase.
+// replySuggestion is the Haiku-extracted reply card (internal/replyextract):
+// the reply_extracts 'ok' row for the session's newest main-thread assistant
+// turn; null when the extractor is off or has nothing for that turn.
 type replySuggestion struct {
 	Question    string   `json:"question"`
 	Options     []string `json:"options"`
@@ -191,18 +192,24 @@ func queryNeedsYouRequests(db *sql.DB, where string, args []any, scope string, p
 
 // queryNeedsYouSessions reads sessions matching where as items of kind.
 // Soft-hidden sessions are skipped: the operator dismissed them. Only an
-// awaiting_reply item carries the newest main-thread assistant prose.
+// awaiting_reply item carries the newest main-thread assistant prose and,
+// when the extractor stored one for that same turn, its reply suggestion.
 func queryNeedsYouSessions(db *sql.DB, kind, where string, args []any, scope string, projArgs []any) ([]needsYouItem, error) {
-	textExpr := `NULL`
+	turnCols, turnJoins := `NULL, NULL, NULL, NULL`, ``
 	if kind == needsYouAwaitingReply {
-		textExpr = `(SELECT t.text FROM turns t
+		// The turn choice must match replyextract.latestTurn: that turn id is
+		// the reply_extracts cache key.
+		turnCols = `lt.text, rx.question, rx.options_json, rx.recommended`
+		turnJoins = `
+		LEFT JOIN turns lt ON lt.id = (SELECT t.id FROM turns t
 		             WHERE t.session_id = s.id AND t.agent_name IS NULL AND t.role = 'assistant'
 		               AND TRIM(COALESCE(t.text, '')) != ''
-		             ORDER BY t.seq DESC LIMIT 1)`
+		             ORDER BY t.seq DESC LIMIT 1)
+		LEFT JOIN reply_extracts rx ON rx.session_id = s.id AND rx.turn_id = lt.id AND rx.status = 'ok'`
 	}
-	q := `SELECT` + needsYouSessionCols + `, COALESCE(s.ended_at, s.started_at), ` + textExpr + `
+	q := `SELECT` + needsYouSessionCols + `, COALESCE(s.ended_at, s.started_at), ` + turnCols + `
 		FROM sessions s
-		JOIN projects p ON p.id = s.project_id
+		JOIN projects p ON p.id = s.project_id` + turnJoins + `
 		WHERE s.hidden = 0 AND ` + where + scope
 	rows, err := db.Query(q, append(append([]any{}, args...), projArgs...)...)
 	if err != nil {
@@ -212,9 +219,9 @@ func queryNeedsYouSessions(db *sql.DB, kind, where string, args []any, scope str
 	out := []needsYouItem{}
 	for rows.Next() {
 		var it needsYouItem
-		var text sql.NullString
+		var text, sugQuestion, sugOptions, sugRecommended sql.NullString
 		if err := rows.Scan(&it.SessionID, &it.SessionUUID, &it.SessionName, &it.ProjectSlug, &it.TermFocusURL,
-			&it.BlockingSince, &text); err != nil {
+			&it.BlockingSince, &text, &sugQuestion, &sugOptions, &sugRecommended); err != nil {
 			return nil, err
 		}
 		it.Kind = kind
@@ -223,10 +230,27 @@ func queryNeedsYouSessions(db *sql.DB, kind, where string, args []any, scope str
 			it.Question = clipTail(para, needsYouQuestionMax)
 			it.Preview = clipHead(para, needsYouPreviewMax)
 		}
+		it.Suggestion = suggestionOf(sugQuestion, sugOptions, sugRecommended)
 		it.at = parseNeedsYouTS(it.BlockingSince)
 		out = append(out, it)
 	}
 	return out, rows.Err()
+}
+
+// suggestionOf builds the reply card from a reply_extracts 'ok' row; nil when
+// there is none. Unreadable options degrade to [] rather than hiding the card.
+func suggestionOf(question, optionsJSON, recommended sql.NullString) *replySuggestion {
+	if !question.Valid || question.String == "" {
+		return nil
+	}
+	s := &replySuggestion{Question: question.String, Options: []string{}, Recommended: recommended.String}
+	if optionsJSON.Valid {
+		var opts []string
+		if json.Unmarshal([]byte(optionsJSON.String), &opts) == nil && opts != nil {
+			s.Options = opts
+		}
+	}
+	return s
 }
 
 // requestKind maps a permission_requests row onto its item kind: a pending
