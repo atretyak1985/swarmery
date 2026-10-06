@@ -15,6 +15,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskcap"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/triage"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/web"
 )
@@ -76,6 +77,16 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 	// The resume path re-creates a finished run's worktree on its existing branch
 	// so a stopped session can still be answered (session_message.go).
 	h.Wt = &worktree.Manager{Git: worktree.ExecGit{}}
+	// The advisor Source needs this Handler (recommendation attribution, the
+	// improve registry), so it registers here rather than in main.go;
+	// AttachTriage runs before NewServer there. The retire Source registers here
+	// too, with lessonVerifyCfg: it must list retirement proposals under the SAME
+	// verification config the accept path confirms them with, and main.go sets
+	// that config (AttachLessonVerify) only after it builds the triage service.
+	if triageSvc != nil {
+		triageSvc.Register(&advisorSource{h: h})
+		triageSvc.Register(&triage.RetireSource{DB: db, Cfg: lessonVerifyCfg})
+	}
 	Routes(mux, h)
 
 	dist, err := web.Dist()

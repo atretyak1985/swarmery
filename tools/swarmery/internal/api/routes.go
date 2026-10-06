@@ -370,6 +370,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/triage/runs/{id}", h.getTriageRun)
 	mux.HandleFunc("GET /api/triage/verdicts", h.listTriageVerdicts)
 	mux.HandleFunc("POST /api/triage/verdicts/{id}/undo", requireLocalOrigin(h.undoTriageVerdict))
+	// accept a suggestion (claim-first); accept-all is a literal path and never
+	// matches the {id}/accept pattern (different segment count).
+	mux.HandleFunc("POST /api/triage/verdicts/accept-all", requireLocalOrigin(h.acceptAllTriageVerdicts))
+	mux.HandleFunc("POST /api/triage/verdicts/{id}/accept", requireLocalOrigin(h.acceptTriageVerdict))
 
 	// fusion phase 11: permission presets — a project's human-readable policy
 	// (unrestricted | approval-required | locked-down + per-category overrides)

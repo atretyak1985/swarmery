@@ -2172,9 +2172,14 @@ func cmdServe(args []string) error {
 
 	// inbox triage agent: recorded single-flight triage runs judged by a
 	// headless `claude -p` (ClaudeJudge), every write gated by the Go policy
-	// table in internal/triage. No Source is registered yet, so a run completes
-	// with zero items. Heal 'running' rows a crashed daemon left behind first.
+	// table in internal/triage. The lesson source (candidate review) is
+	// suggest-only and registered here; the advisor and retire sources register
+	// in api.NewServer, where the Handler and the daemon's lesson-verification
+	// config (api.AttachLessonVerify, below) already exist. Their suggestions
+	// are performed only by POST /api/triage/verdicts/{id}/accept and accept-all.
+	// Heal 'running' rows a crashed daemon left behind first.
 	triageSvc := triage.NewService(db, triage.ClaudeJudge{})
+	triageSvc.Register(&triage.LessonSource{DB: db})
 	if err := triageSvc.HealStale(); err != nil {
 		log.Printf("warning: triage heal on startup: %v", err)
 	}

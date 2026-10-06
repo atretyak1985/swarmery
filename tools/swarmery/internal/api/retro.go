@@ -38,11 +38,13 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1438,7 +1440,6 @@ func legalRecTransition(from, to string) bool {
 // as the verification baseline (advisor.BaselineFor, with accepted_at baked
 // into the JSON for the adoption detector).
 func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
 	var body struct {
 		Status string `json:"status"`
 	}
@@ -1446,10 +1447,40 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if body.Status != "accepted" && body.Status != "dismissed" {
-		writeClientErr(w, http.StatusUnprocessableEntity,
-			"status must be accepted or dismissed")
-		return
+	d, code, err := h.setRecommendationStatus(pathRecID(r), body.Status)
+	switch {
+	case code == http.StatusConflict:
+		writeJSONStatus(w, code, map[string]string{"error": err.Error(), "status": d.Status})
+	case code >= http.StatusInternalServerError:
+		writeErr(w, err)
+	case err != nil:
+		writeClientErr(w, code, err.Error())
+	default:
+		writeJSON(w, d, nil)
+	}
+}
+
+// pathRecID parses the {id} path value of a recommendation route. A value that
+// is not a positive integer becomes 0, which no row carries, so it answers the
+// same 404 the raw text did when it was bound into the query.
+func pathRecID(r *http.Request) int64 {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 0 {
+		return 0
+	}
+	return id
+}
+
+// setRecommendationStatus is PATCH /api/retro/recommendations/{id} without the
+// HTTP layer: it validates the target status and the transition, snapshots the
+// baseline on accept (advisor.BaselineFor), runs the guarded UPDATE and
+// re-selects the row. It returns the DTO, the HTTP status the handler sends,
+// and an error whose text is the body's "error". On a 409 (a concurrent change)
+// the DTO's Status carries the row's CURRENT status so the client can resync.
+func (h *Handler) setRecommendationStatus(id int64, to string) (recommendationDTO, int, error) {
+	if to != "accepted" && to != "dismissed" {
+		return recommendationDTO{}, http.StatusUnprocessableEntity,
+			errors.New("status must be accepted or dismissed")
 	}
 
 	var rule, target, status string
@@ -1457,17 +1488,14 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 		`SELECT rule, target, status FROM recommendations WHERE id = ?`, id).
 		Scan(&rule, &target, &status)
 	if err == sql.ErrNoRows {
-		writeClientErr(w, http.StatusNotFound, "recommendation not found")
-		return
+		return recommendationDTO{}, http.StatusNotFound, errors.New("recommendation not found")
 	}
 	if err != nil {
-		writeErr(w, err)
-		return
+		return recommendationDTO{}, http.StatusInternalServerError, err
 	}
-	if !legalRecTransition(status, body.Status) {
-		writeClientErr(w, http.StatusUnprocessableEntity,
-			"illegal transition "+status+" -> "+body.Status)
-		return
+	if !legalRecTransition(status, to) {
+		return recommendationDTO{}, http.StatusUnprocessableEntity,
+			errors.New("illegal transition " + status + " -> " + to)
 	}
 
 	now := time.Now()
@@ -1479,11 +1507,10 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 	// the transition against, so a concurrent writer (advisor Run flipping to
 	// adopted/verified, another PATCH) can't be silently overwritten.
 	var res sql.Result
-	if body.Status == "accepted" {
+	if to == "accepted" {
 		base, berr := advisor.BaselineFor(h.DB, rule, target, now)
 		if berr != nil {
-			writeErr(w, berr)
-			return
+			return recommendationDTO{}, http.StatusInternalServerError, berr
 		}
 		res, err = h.DB.Exec(`UPDATE recommendations
 			SET status = 'accepted', baseline = ?, updated_at = ?
@@ -1494,25 +1521,19 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 			WHERE id = ? AND status = ?`, nowS, id, status)
 	}
 	if err != nil {
-		writeErr(w, err)
-		return
+		return recommendationDTO{}, http.StatusInternalServerError, err
 	}
 	if n, aerr := res.RowsAffected(); aerr != nil {
-		writeErr(w, aerr)
-		return
+		return recommendationDTO{}, http.StatusInternalServerError, aerr
 	} else if n == 0 {
 		// Lost the race — surface the CURRENT status so the client can resync.
 		var cur string
 		if rerr := h.DB.QueryRow(
 			`SELECT status FROM recommendations WHERE id = ?`, id).Scan(&cur); rerr != nil {
-			writeErr(w, rerr)
-			return
+			return recommendationDTO{}, http.StatusInternalServerError, rerr
 		}
-		writeJSONStatus(w, http.StatusConflict, map[string]string{
-			"error":  "status changed concurrently: now " + cur,
-			"status": cur,
-		})
-		return
+		return recommendationDTO{ID: id, Status: cur}, http.StatusConflict,
+			errors.New("status changed concurrently: now " + cur)
 	}
 
 	var d recommendationDTO
@@ -1524,12 +1545,11 @@ func (h *Handler) patchRecommendation(w http.ResponseWriter, r *http.Request) {
 		Scan(&d.ID, &d.Rule, &d.TargetKind, &d.Target, &d.Title, &d.Detail,
 			&evidence, &base, &d.Status, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return recommendationDTO{}, http.StatusInternalServerError, err
 	}
 	d.Evidence = json.RawMessage(evidence)
 	d.scanBaseline(base)
-	writeJSON(w, d, nil)
+	return d, http.StatusOK, nil
 }
 
 // POST /api/retro/advise — run the advisor engine now ("Analyze now") and

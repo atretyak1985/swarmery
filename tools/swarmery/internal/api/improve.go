@@ -86,17 +86,34 @@ func (h *Handler) spawnImprove(label string, fn func()) {
 // improveAccepted is the shared tail of both improve triggers: open-proposal
 // dedup (409) + async Generate + 202 envelope.
 func (h *Handler) improveAccepted(w http.ResponseWriter, agent string, recID *int64) {
+	code, body := h.startAgentImprove(agent, recID)
+	writeJSONStatus(w, code, body)
+}
+
+// improveErr is the (status, body) form of writeErr: it logs the internal error
+// the same way and answers 500 {"error": …}.
+func improveErr(err error) (int, map[string]any) {
+	log.Printf("error: api: %v", err)
+	return http.StatusInternalServerError, map[string]any{"error": err.Error()}
+}
+
+// improveClientErr is the (status, body) form of writeClientErr.
+func improveClientErr(code int, msg string) (int, map[string]any) {
+	return code, map[string]any{"error": msg}
+}
+
+// startAgentImprove is improveAccepted without the ResponseWriter: open-proposal
+// dedup (409) + async Generate + the 202 envelope, as (status, body).
+func (h *Handler) startAgentImprove(agent string, recID *int64) (int, map[string]any) {
 	open, err := h.Improve.OpenProposalID(agent)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return improveErr(err)
 	}
 	if open != 0 {
-		writeJSONStatus(w, http.StatusConflict, map[string]any{
+		return http.StatusConflict, map[string]any{
 			"error":       "an open proposal already exists for agent " + agent,
 			"proposal_id": open,
-		})
-		return
+		}
 	}
 	h.spawnImprove("generate agent "+agent, func() {
 		if _, err := h.Improve.Generate(context.Background(), improve.GenerateReq{
@@ -105,81 +122,77 @@ func (h *Handler) improveAccepted(w http.ResponseWriter, agent string, recID *in
 			log.Printf("error: improve: generate for agent %s: %v", agent, err)
 		}
 	})
-	writeJSONStatus(w, http.StatusAccepted, map[string]string{
-		"status": "generating", "agent": agent,
-	})
+	return http.StatusAccepted, map[string]any{"status": "generating", "agent": agent}
 }
 
 // POST /api/retro/recommendations/{id}/improve — generate a proposal for an
 // ACCEPTED agent-kind recommendation. 404 unknown id; 422 wrong status/kind
 // or target absent from the registry; 409 open proposal exists.
 func (h *Handler) improveRecommendation(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var recID int64
+	code, body := h.startImprove(pathRecID(r))
+	writeJSONStatus(w, code, body)
+}
+
+// startImprove is the body of POST /api/retro/recommendations/{id}/improve
+// without the HTTP layer: the accepted check, skill vs agent routing, the
+// open-proposal 409 and the async Generate / RouteSkill. It returns the status
+// and the JSON body the handler sends, so a caller outside an HTTP request (the
+// triage accept path) gets exactly the endpoint's semantics.
+func (h *Handler) startImprove(recID int64) (int, map[string]any) {
 	var targetKind, target, status string
 	err := h.DB.QueryRow(
-		`SELECT id, target_kind, target, status FROM recommendations WHERE id = ?`, id).
+		`SELECT id, target_kind, target, status FROM recommendations WHERE id = ?`, recID).
 		Scan(&recID, &targetKind, &target, &status)
 	if errors.Is(err, sql.ErrNoRows) {
-		writeClientErr(w, http.StatusNotFound, "recommendation not found")
-		return
+		return improveClientErr(http.StatusNotFound, "recommendation not found")
 	}
 	if err != nil {
-		writeErr(w, err)
-		return
+		return improveErr(err)
 	}
 	if status != "accepted" {
-		writeClientErr(w, http.StatusUnprocessableEntity,
+		return improveClientErr(http.StatusUnprocessableEntity,
 			"recommendation must be accepted (got "+status+")")
-		return
 	}
 	if targetKind == improve.TargetSkill {
-		h.improveSkillRecommendation(w, recID, target)
-		return
+		return h.startSkillImprove(recID, target)
 	}
 	if targetKind != improve.TargetAgent {
-		writeClientErr(w, http.StatusUnprocessableEntity,
+		return improveClientErr(http.StatusUnprocessableEntity,
 			"recommendation must be agent- or skill-kind (got "+targetKind+")")
-		return
 	}
 	agent := advisor.NormAgent(target)
 	ok, err := h.Improve.AgentInRegistry(agent)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return improveErr(err)
 	}
 	if !ok {
-		writeClientErr(w, http.StatusUnprocessableEntity,
+		return improveClientErr(http.StatusUnprocessableEntity,
 			"agent "+agent+" not found in registry")
-		return
 	}
-	h.improveAccepted(w, agent, &recID)
+	return h.startAgentImprove(agent, &recID)
 }
 
-// improveSkillRecommendation routes an accepted R11 (skill-kind)
+// startSkillImprove routes an accepted R11 (skill-kind)
 // recommendation into a SKILL.md proposal. The recommendation's `target` IS the
 // lesson identity (retro_lessons.norm_title) — that is what R11 puts there — so
 // no registry lookup applies: the target FILE is resolved from the lesson's
 // latest action inside improve.RouteSkill, which falls back to a needs_target
 // row rather than guessing. Both outcomes answer 202; the row on the Retro page
 // is the result.
-func (h *Handler) improveSkillRecommendation(w http.ResponseWriter, recID int64, norm string) {
+func (h *Handler) startSkillImprove(recID int64, norm string) (int, map[string]any) {
 	if strings.TrimSpace(norm) == "" {
-		writeClientErr(w, http.StatusUnprocessableEntity,
+		return improveClientErr(http.StatusUnprocessableEntity,
 			"skill recommendation has no lesson identity (empty target)")
-		return
 	}
 	open, err := h.Improve.OpenLessonProposalID(norm)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return improveErr(err)
 	}
 	if open != 0 {
-		writeJSONStatus(w, http.StatusConflict, map[string]any{
+		return http.StatusConflict, map[string]any{
 			"error":       "an open proposal already exists for lesson " + norm,
 			"proposal_id": open,
-		})
-		return
+		}
 	}
 	h.spawnImprove("route skill lesson "+norm, func() {
 		if _, err := h.Improve.RouteSkill(context.Background(), improve.SkillRouteReq{
@@ -188,9 +201,9 @@ func (h *Handler) improveSkillRecommendation(w http.ResponseWriter, recID int64,
 			log.Printf("error: improve: route skill lesson %s: %v", norm, err)
 		}
 	})
-	writeJSONStatus(w, http.StatusAccepted, map[string]string{
+	return http.StatusAccepted, map[string]any{
 		"status": "generating", "target_kind": improve.TargetSkill, "lesson": norm,
-	})
+	}
 }
 
 // POST /api/retro/agents/{agent}/improve — the ad-hoc trigger, same pipeline
