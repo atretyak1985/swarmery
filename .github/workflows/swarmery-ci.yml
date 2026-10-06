@@ -3,10 +3,24 @@ name: swarmery-ci
 on:
   push:
     branches: [main, 'feat/**']
-    paths: ['tools/swarmery/**', '.github/workflows/swarmery-ci.yml']
+    paths:
+      - 'tools/swarmery/**'
+      - '.github/workflows/swarmery-ci.yml'
+      # internal/approvals/prodguard_parity_test.go reads these: a change to
+      # either side of the hook/daemon pattern parity must run that test.
+      - 'plugins/core/hooks/lib/prod-deploy-patterns.txt'
+      - 'plugins/core/hooks/prod-deploy-guard.sh'
+      - 'scripts/tests/fixtures/prod-deploy-patterns/**'
   pull_request:
     branches: [main, 'feat/**']
-    paths: ['tools/swarmery/**', '.github/workflows/swarmery-ci.yml']
+    paths:
+      - 'tools/swarmery/**'
+      - '.github/workflows/swarmery-ci.yml'
+      # internal/approvals/prodguard_parity_test.go reads these: a change to
+      # either side of the hook/daemon pattern parity must run that test.
+      - 'plugins/core/hooks/lib/prod-deploy-patterns.txt'
+      - 'plugins/core/hooks/prod-deploy-guard.sh'
+      - 'scripts/tests/fixtures/prod-deploy-patterns/**'
 
 defaults:
   run:
