@@ -4,7 +4,8 @@ A native macOS 14+ companion for the [swarmery](../../README.md) daemon. It
 lives as a small tab docked to the **right edge** of every display — rounded on
 the left, flush on the right, the shape you know from Grammarly's desktop
 widget — and expands into a side panel on its own the moment an operator is
-needed: a permission request is pending, or a session has failed. From the
+needed: a permission request is pending, a session is awaiting your reply, or
+a session has failed. From the
 panel you can approve/deny, jump to the terminal tab that owns a session, see
 plan usage, and open the dashboard. The original notch placement (collapsed
 into the notch, or the top edge on displays without one) is still available
@@ -32,7 +33,8 @@ via `SWARMERY_NOTCH_PLACEMENT=notch`.
   jump-to-terminal / open-in-dashboard button and a stop button. **Click the
   sessions tab** to open it; it stays open until you click the round `×` button in its
   header, click the tab again, or click anywhere outside the widget. It also
-  opens by itself on a pending approval or a failed session and closes after
+  opens by itself on a pending approval, a session awaiting your reply
+  (labelled "awaiting reply" in its row), or a failed session, and closes after
   the linger period.
 - **Usage panel** — the dashboard's Usage modal, natively: click the usage tab.
   One card per provider (an account switcher appears when the daemon reports

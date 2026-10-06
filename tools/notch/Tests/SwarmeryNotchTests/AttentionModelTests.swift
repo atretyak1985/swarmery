@@ -84,6 +84,51 @@ final class AttentionModelTests: XCTestCase {
         XCTAssertFalse(state.shouldExpand(now: Date(), linger: 3))
     }
 
+    // MARK: - awaiting reply ⇒ needs you
+
+    func testAwaitingReplySessionExpandsThePanel() {
+        let awaiting = makeSession(id: 7, status: "awaiting_reply", procState: "running")
+        let state = AttentionModel.reduce(AttentionState(), .snapshot(sessions: [awaiting], approvals: [], usage: nil))
+
+        XCTAssertTrue(state.needsAttention)
+        XCTAssertEqual(state.awaitingReplySessions.map(\.id), [7])
+        XCTAssertTrue(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3))
+    }
+
+    func testAwaitingReplySessionSortsIntoNeedsYou() {
+        let working = makeSession(id: 1, status: "active", procState: "running")
+        let awaiting = makeSession(id: 2, status: "awaiting_reply", procState: "orphaned")
+        let state = AttentionModel.reduce(AttentionState(), .snapshot(sessions: [working, awaiting], approvals: [], usage: nil))
+
+        XCTAssertEqual(state.rows.map(\.session.id), [2, 1])
+        XCTAssertEqual(state.rows.first?.bucket, .needsYou)
+    }
+
+    func testAwaitingReplyMovingToActiveClearsAttention() {
+        var state = AttentionModel.reduce(
+            AttentionState(), .snapshot(sessions: [makeSession(id: 7, status: "awaiting_reply")], approvals: [], usage: nil)
+        )
+        XCTAssertTrue(state.needsAttention)
+
+        state = AttentionModel.reduce(state, .sessionUpdated(makeSession(id: 7, status: "active", procState: "running")))
+
+        XCTAssertFalse(state.needsAttention)
+        XCTAssertTrue(state.awaitingReplySessions.isEmpty)
+        XCTAssertEqual(state.rows.first?.bucket, .working)
+        XCTAssertFalse(state.shouldExpand(now: Date(timeIntervalSince1970: 1_000), linger: 3))
+    }
+
+    func testAwaitingReplyWithDeadProcessIsErroredNotNeedsYou() {
+        // A stale snapshot can still carry awaiting_reply for a process the
+        // daemon is about to flip to completed — nobody can reply to it.
+        let dead = makeSession(id: 8, status: "awaiting_reply", procState: "dead")
+        let state = AttentionModel.reduce(AttentionState(), .snapshot(sessions: [dead], approvals: [], usage: nil))
+
+        XCTAssertEqual(state.erroredSessions.map(\.id), [8])
+        XCTAssertTrue(state.awaitingReplySessions.isEmpty)
+        XCTAssertEqual(state.rows.first?.bucket, .error)
+    }
+
     // MARK: - reconnect ⇒ snapshot replaces
 
     func testSnapshotReplacesRatherThanMergesStaleState() {

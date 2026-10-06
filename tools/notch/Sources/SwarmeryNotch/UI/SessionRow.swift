@@ -9,6 +9,13 @@ struct SessionRow: View {
 
     private var session: Session { row.session }
 
+    /// The session ended its turn and waits for a plain-text reply. A dead
+    /// process in that status buckets as `.error`, so gating on the bucket
+    /// keeps the label off rows nobody can reply to.
+    private var isAwaitingReply: Bool {
+        session.status == "awaiting_reply" && row.bucket == .needsYou
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Circle()
@@ -18,6 +25,12 @@ struct SessionRow: View {
                 Text(session.title ?? session.projectName ?? "Session \(session.id)")
                     .font(.callout)
                     .lineLimit(1)
+                if isAwaitingReply {
+                    Text("awaiting reply")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
                 if let why = session.why {
                     Text(why)
                         .font(.caption2)
