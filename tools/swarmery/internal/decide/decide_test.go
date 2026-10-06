@@ -418,11 +418,83 @@ func TestD1_GroundTruthAfterContinuation(t *testing.T) {
 	if stats[0].QuestionID != QD1 || stats[0].Calls != 1 || stats[0].WithTruth != 1 || stats[0].Agreement == nil || *stats[0].Agreement != 1 || stats[0].Histogram[9] != 1 {
 		t.Errorf("stats = %+v", stats[0])
 	}
-	if err := RecordGroundTruth(db, 999, "x", time.Now()); !errors.Is(err, sql.ErrNoRows) {
+	if err := RecordGroundTruth(db, 999, "x", TruthOperator, time.Now()); !errors.Is(err, sql.ErrNoRows) {
 		t.Errorf("unknown id: %v", err)
 	}
-	if err := RecordGroundTruth(db, 1, " ", time.Now()); err == nil {
+	if err := RecordGroundTruth(db, 1, " ", TruthOperator, time.Now()); err == nil {
 		t.Error("empty truth must be refused")
+	}
+}
+
+// truthSource reads decision id's ground truth and who wrote it.
+func truthSource(t *testing.T, db *sql.DB, id int64) (truth, source string) {
+	t.Helper()
+	var tr sql.NullString
+	if err := db.QueryRow(`SELECT ground_truth, ground_truth_source FROM decisions WHERE id=?`, id).
+		Scan(&tr, &source); err != nil {
+		t.Fatal(err)
+	}
+	return tr.String, source
+}
+
+// TestRecordGroundTruthSource: the source is stored; an unknown source is
+// refused; an agent never overwrites a label (operator or agent); an operator
+// overwrites an agent label and the source becomes operator.
+func TestRecordGroundTruthSource(t *testing.T) {
+	db := openDB(t)
+	now := time.Now()
+	for _, id := range []int64{1, 2, 3} {
+		if _, err := db.Exec(`INSERT INTO decisions (id, question_id, input_hash, answer, created_at)
+			VALUES (?, ?, 'h', 'success', '2026-10-06T00:00:00Z')`, id, QD2Outcome); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := RecordGroundTruth(db, 1, "success", "robot", now); err == nil {
+		t.Error("unknown source must be refused")
+	}
+	if tr, src := truthSource(t, db, 1); tr != "" || src != "" {
+		t.Errorf("refused write left %q/%q", tr, src)
+	}
+
+	// operator label stored with its source; an agent cannot overwrite it
+	if err := RecordGroundTruth(db, 1, "failure", TruthOperator, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordGroundTruth(db, 1, "success", TruthAgent, now); !errors.Is(err, ErrAlreadyLabelled) {
+		t.Errorf("agent over operator: err = %v, want ErrAlreadyLabelled", err)
+	}
+	if tr, src := truthSource(t, db, 1); tr != "failure" || src != TruthOperator {
+		t.Errorf("decision 1 = %q/%q, want failure/operator", tr, src)
+	}
+
+	// agent label stored; a second agent label is refused
+	if err := RecordGroundTruth(db, 2, "success", TruthAgent, now); err != nil {
+		t.Fatal(err)
+	}
+	if tr, src := truthSource(t, db, 2); tr != "success" || src != TruthAgent {
+		t.Errorf("decision 2 = %q/%q, want success/agent", tr, src)
+	}
+	if err := RecordGroundTruth(db, 2, "failure", TruthAgent, now); !errors.Is(err, ErrAlreadyLabelled) {
+		t.Errorf("agent over agent: err = %v, want ErrAlreadyLabelled", err)
+	}
+
+	// operator overwrites the agent label
+	if err := RecordGroundTruth(db, 2, "failure", TruthOperator, now); err != nil {
+		t.Fatal(err)
+	}
+	if tr, src := truthSource(t, db, 2); tr != "failure" || src != TruthOperator {
+		t.Errorf("decision 2 after operator = %q/%q, want failure/operator", tr, src)
+	}
+
+	// observed source stored; an agent label on a missing id is ErrNoRows
+	if err := RecordGroundTruth(db, 3, "success", TruthObserved, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, src := truthSource(t, db, 3); src != TruthObserved {
+		t.Errorf("decision 3 source = %q, want observed", src)
+	}
+	if err := RecordGroundTruth(db, 999, "success", TruthAgent, now); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("agent on unknown id: err = %v, want sql.ErrNoRows", err)
 	}
 }
 

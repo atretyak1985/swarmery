@@ -385,8 +385,23 @@ func (e *Engine) MarkActed(id int64) {
 	}
 }
 
-// RecordGroundTruth stores what actually happened for one decision.
-func RecordGroundTruth(db *sql.DB, id int64, truth string, now time.Time) error {
+// Ground-truth sources: who wrote a decision's label
+// (decisions.ground_truth_source). Only operator and observed labels feed a
+// threshold; an agent label is reported beside them, never counted in them.
+const (
+	TruthOperator = "operator" // a person answered in the dashboard
+	TruthAgent    = "agent"    // a triage run answered
+	TruthObserved = "observed" // the daemon recorded what a run did (D1)
+)
+
+// ErrAlreadyLabelled: an agent label was refused because the decision already
+// has ground truth.
+var ErrAlreadyLabelled = errors.New("decide: decision already has ground truth")
+
+// RecordGroundTruth stores what actually happened for one decision and who said so.
+// An agent never overwrites a label; operator and observed labels always win.
+// sql.ErrNoRows when the decision does not exist.
+func RecordGroundTruth(db *sql.DB, id int64, truth, source string, now time.Time) error {
 	if db == nil || id == 0 {
 		return nil
 	}
@@ -394,15 +409,33 @@ func RecordGroundTruth(db *sql.DB, id int64, truth string, now time.Time) error 
 	if truth == "" {
 		return errors.New("decide: empty ground truth")
 	}
-	res, err := db.Exec(`UPDATE decisions SET ground_truth=?, ground_truth_at=? WHERE id=?`,
-		truth, now.UTC().Format(time.RFC3339), id)
+	switch source {
+	case TruthOperator, TruthAgent, TruthObserved:
+	default:
+		return fmt.Errorf("decide: unknown ground-truth source %q", source)
+	}
+	q := `UPDATE decisions SET ground_truth=?, ground_truth_at=?, ground_truth_source=? WHERE id=?`
+	if source == TruthAgent {
+		q += ` AND ground_truth IS NULL`
+	}
+	res, err := db.Exec(q, truth, now.UTC().Format(time.RFC3339), source, id)
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	if source != TruthAgent {
 		return sql.ErrNoRows
 	}
-	return nil
+	var one int
+	switch err := db.QueryRow(`SELECT 1 FROM decisions WHERE id=?`, id).Scan(&one); {
+	case errors.Is(err, sql.ErrNoRows):
+		return sql.ErrNoRows
+	case err != nil:
+		return err
+	}
+	return ErrAlreadyLabelled
 }
 
 func boolInt(b bool) int {

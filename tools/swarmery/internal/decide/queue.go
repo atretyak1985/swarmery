@@ -41,6 +41,18 @@ type QueueItem struct {
 	Options      []string `json:"options"`
 }
 
+// QueueOptions narrows LabelQueue.
+type QueueOptions struct {
+	Limit        int // <0 all; 0 or >500 → 100
+	Since        string
+	ProjectID    int64
+	IncludeRules bool
+	// SystemPath is projects.path of the System project. Its sessions are left
+	// out unless IncludeSystem: they are the daemon's own utility runs.
+	SystemPath    string
+	IncludeSystem bool
+}
+
 // LabelQueue lists answered decisions that have no ground truth yet, newest
 // first. Errored rows are excluded (there is no answer to judge), and so are
 // questions outside KnownQuestions. since ("" ⇒ no bound) keeps the queue to a
@@ -56,7 +68,11 @@ type QueueItem struct {
 // the Inbox passes false; a caller auditing the rules passes true.
 // limit < 0 returns the whole queue (the Inbox lists every open question);
 // 0 or anything above 500 falls back to 100.
-func LabelQueue(db *sql.DB, limit int, since string, projectID int64, includeRules bool) ([]QueueItem, error) {
+// A decision about a System-project session (projects.path = SystemPath) is
+// left out unless IncludeSystem: those are the daemon's own utility runs, not
+// work an operator judges. SystemPath "" disables the filter.
+func LabelQueue(db *sql.DB, o QueueOptions) ([]QueueItem, error) {
+	limit := o.Limit
 	switch {
 	case limit < 0:
 		limit = -1 // SQLite: a negative LIMIT is no limit
@@ -69,13 +85,16 @@ func LabelQueue(db *sql.DB, limit int, since string, projectID int64, includeRul
 		       d.answer, d.confidence, d.created_at
 		  FROM decisions d
 		  LEFT JOIN sessions s ON s.session_uuid = d.session_uuid AND d.session_uuid <> ''
+		  LEFT JOIN projects p ON p.id = s.project_id
 		 WHERE d.ground_truth IS NULL AND d.error = '' AND d.answer <> ''
 		   AND (? = '' OR d.created_at >= ?)
 		   AND (? = 0 OR s.project_id = ?)
 		   AND (s.id IS NULL OR EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id))
 		   AND (? = 1 OR d.backend <> ?)
+		   AND (? = 1 OR ? = '' OR p.path IS NULL OR p.path <> ?)
 		 ORDER BY d.id DESC
-		 LIMIT ?`, since, since, projectID, projectID, boolInt(includeRules), BackendRules, limit)
+		 LIMIT ?`, o.Since, o.Since, o.ProjectID, o.ProjectID, boolInt(o.IncludeRules), BackendRules,
+		boolInt(o.IncludeSystem), o.SystemPath, o.SystemPath, limit)
 	if err != nil {
 		return nil, err
 	}

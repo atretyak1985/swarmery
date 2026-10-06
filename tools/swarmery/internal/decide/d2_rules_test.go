@@ -747,7 +747,7 @@ func TestLabelQueueHidesRuleAnswers(t *testing.T) {
 	}
 	ids := func(includeRules bool, projectID int64) []int64 {
 		t.Helper()
-		items, err := LabelQueue(db, -1, "", projectID, includeRules)
+		items, err := LabelQueue(db, QueueOptions{Limit: -1, ProjectID: projectID, IncludeRules: includeRules})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -780,7 +780,7 @@ func TestLabelQueueHidesRuleAnswers(t *testing.T) {
 	if _, err := (&Labeler{E: e}).Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	items, err := LabelQueue(db, -1, "", 0, false)
+	items, err := LabelQueue(db, QueueOptions{Limit: -1})
 	if err != nil {
 		t.Fatal(err)
 	}
