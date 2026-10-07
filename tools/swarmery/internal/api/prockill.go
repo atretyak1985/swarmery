@@ -130,18 +130,20 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("prockill: bind pid for session %s: %v", body.SessionID, err)
 	} else if n, _ := res.RowsAffected(); n == 0 {
-		// The transcript hasn't been ingested yet, so there is no sessions row
-		// to UPDATE. Park the terminal identity — ingest applies it the moment
-		// it mints the row (session_started path) — so the session does not
-		// lose its terminal to this race. The pid/proc_state columns above are
-		// lost to the same race today; that gap predates this phase and stays
-		// out of scope here.
+		// No sessions row to UPDATE yet. Park everything the UPDATE above
+		// would have written — whichever path mints the row applies it
+		// (ingest.ApplyPendingTerminal: the JSONL tail, or the
+		// PermissionRequest hook's stub when no transcript is ever written),
+		// so neither the terminal nor the pid is lost to this race.
 		ingest.ParkPendingTerminal(body.SessionID, ingest.SessionTerminal{
 			Program:       body.Terminal.Program,
 			FocusURL:      body.Terminal.FocusURL,
 			BundleID:      body.Terminal.BundleID,
 			TTY:           info.TTY,
 			LaunchAccount: body.LaunchAccount,
+			PID:           body.PID,
+			ProcStartedAt: info.StartTime,
+			ProcCheckedAt: now,
 		})
 	}
 	if ctx := h.driftContext(body.CWD); ctx != "" {

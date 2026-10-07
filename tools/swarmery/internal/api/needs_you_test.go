@@ -292,6 +292,60 @@ func TestNeedsYouLastParagraph(t *testing.T) {
 	}
 }
 
+// TestNeedsYouProdLocalLiveness: a prod deploy handed to a terminal that never
+// wrote a transcript (a source='hook' stub — ended_at NULL, so the activity
+// term never drops it) leaves needs-you once the session is known to be over:
+// its process is dead, or its status is terminal. A live or unknown process
+// keeps it listed — liveness, not a shorter clock, is the signal.
+func TestNeedsYouProdLocalLiveness(t *testing.T) {
+	srv, db := needsYouServerDB(t)
+	at := time.Now().UTC().Add(-10 * time.Minute).Format(needsYouTSFormat)
+	sessions := []struct {
+		id        int64
+		status    string
+		procState any
+		listed    bool
+	}{
+		{20, "idle", "dead", false},         // the cancelled native dialog, process gone
+		{21, "completed", nil, false},       // terminal status, no pid ever bound
+		{22, "killed", "dead", false},       // operator kill
+		{23, "idle", nil, true},             // unknown liveness — still blocking
+		{24, "idle", "running", true},       // dialog legitimately still open
+		{25, "completed", "running", false}, // terminal status wins over a stale proc_state
+	}
+	for _, s := range sessions {
+		if _, err := db.Exec(`INSERT INTO sessions (id, project_id, session_uuid, status, started_at, ended_at,
+			title, proc_state, source, entrypoint) VALUES (?, 1, ?, ?, ?, NULL, ?, ?, 'hook', 'cli')`,
+			s.id, "uuid-hook-"+strconv.FormatInt(s.id, 10), s.status, at, "Hook "+strconv.FormatInt(s.id, 10), s.procState); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO permission_requests
+			(id, session_id, tool_name, request_json, status, requested_at, resolved_at, resolved_via, risk_class)
+			VALUES (?, ?, 'Bash', '{"tool_name":"Bash","tool_input":{"command":"make deploy-prod"}}',
+			        'resolved_elsewhere', ?, ?, 'local-only', 'prod-deploy')`,
+			200+s.id, s.id, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resp := getNeedsYou(t, srv.URL+"/api/needs-you")
+	listed := map[int64]bool{}
+	for _, it := range resp.Items {
+		if it.Kind == needsYouProdDeployLocal {
+			listed[it.SessionID] = true
+		}
+	}
+	for _, s := range sessions {
+		if listed[s.id] != s.listed {
+			t.Errorf("session %d (status=%s proc_state=%v): prod_deploy_local listed=%v, want %v",
+				s.id, s.status, s.procState, listed[s.id], s.listed)
+		}
+	}
+	if !listed[3] {
+		t.Error("fixture session 3's live prod deploy dropped — the liveness terms over-filter")
+	}
+}
+
 func TestNeedsYouSortTieBreak(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	id := func(n int64) *int64 { return &n }

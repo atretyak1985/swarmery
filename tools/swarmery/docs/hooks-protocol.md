@@ -217,13 +217,17 @@ On a PID that verifies as a live `claude` process (`hookSessionStart`,
    `term_focus_url`, `term_bundle_id`, `term_tty` (migration 0068) in the same
    `UPDATE`.
 3. **Race with ingest**: at `SessionStart` the transcript may not be ingested
-   yet, so the `UPDATE` above can affect zero rows. When that happens the
-   terminal identity is **parked** in an in-memory map keyed by
-   `session_uuid` (`ingest.ParkPendingTerminal`) and applied the moment the
-   JSONL tail mints the row (`ingest`'s session-creation path), in the same
-   transaction as the `INSERT` — a session never loses its terminal to this
-   race. `pid`/`proc_state` are not parked this way; that gap predates this
-   phase.
+   yet, so the `UPDATE` above can affect zero rows. When that happens
+   everything the `UPDATE` would have written — terminal identity, launch
+   account, and the verified `pid` (with its start time) — is **parked** in an
+   in-memory map keyed by `session_uuid` (`ingest.ParkPendingTerminal`) and
+   applied by `ingest.ApplyPendingTerminal` the moment any path mints the row:
+   the JSONL tail (`ingest`'s session-creation path, in the same transaction
+   as the `INSERT`) or the `PermissionRequest` hook's `source='hook'` stub
+   (`approvals.resolveSessionLocked`) for a session that never writes a
+   transcript. A session never loses its terminal or its `pid` to this race,
+   so procwatch can still see a hook-only session's process die. Parked
+   entries older than 1 h are swept.
 4. `driftContext(cwd)` renders the project's active error-severity plugin
    findings, capped at 5 lines, and — only when there is something to
    say — kicks an out-of-band drift refresh (`driftRefresher`).
