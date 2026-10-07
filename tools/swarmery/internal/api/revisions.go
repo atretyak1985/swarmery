@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/corrections"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrev"
 )
@@ -270,7 +271,8 @@ func (h *Handler) rejectRevision(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusNotFound, "revision not found")
 		return
 	}
-	ts := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now()
+	ts := now.UTC().Format(time.RFC3339)
 	won, err := planrev.Decide(h.DB, id, planrev.StatusRejected, "operator", ts)
 	if err != nil {
 		writeErr(w, err)
@@ -280,7 +282,8 @@ func (h *Handler) rejectRevision(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusConflict, "revision is not staged")
 		return
 	}
-	if note := strings.TrimSpace(body.Note); note != "" {
+	note := strings.TrimSpace(body.Note)
+	if note != "" {
 		if _, err := h.DB.Exec(
 			`UPDATE plan_revisions SET reason = reason || ? WHERE id = ?`,
 			"\n\nRejected: "+note, id); err != nil {
@@ -288,5 +291,14 @@ func (h *Handler) rejectRevision(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// The reject is the operator overriding a staged revision: one ledger row
+	// (internal/corrections), `before` = what the revision set out to do, the
+	// note = the operator's reason. Never fails the reject.
+	corrections.Record(h.DB, corrections.Correction{
+		Source: corrections.SourceRevisionReject,
+		Ref:    "revision:" + strconv.FormatInt(id, 10),
+		Before: rev.Reason,
+		Reason: note,
+	}, now)
 	writeJSON(w, map[string]any{"status": "rejected"}, nil)
 }

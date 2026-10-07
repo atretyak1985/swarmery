@@ -31,8 +31,8 @@
 //	memory      R10    none — the rule re-reads the     none: notification only. The
 //	project     R7     world every pass, so a fixed     baseline still snapshots the
 //	session     R8 R9  condition simply stops firing    metric where one exists (R10,
-//	skill       R11    and resolveVanished closes it    R11), but verify() never
-//	                                                    selects these kinds.
+//	skill       R11    and resolveVanished closes it    R11, R14), but verify()
+//	            R14                                     never selects these kinds.
 //
 // Verification never fires on absence of data: each metric carries an
 // activity floor (R1 ≥1 tool call, R2 ≥R2MinRuns runs, R4 ≥R4MinRows ledger
@@ -151,6 +151,7 @@ func Run(db *sql.DB, now time.Time) (Stats, error) {
 		{"R11", func() ([]finding, error) { return r11RecurringLesson(db, win) }},
 		{"R12", func() ([]finding, error) { return r12LessonBudget(db, win) }},
 		{"R13", func() ([]finding, error) { return r13StaleMemory(db, win) }},
+		{"R14", func() ([]finding, error) { return r14RepeatedCorrection(db, win) }},
 	}
 	// fired records every (rule, target) this pass produced, so the sweep below
 	// can tell "the condition is gone" from "the rule never ran".
@@ -1007,6 +1008,12 @@ func metricValue(db *sql.DB, rule, target string, win window) (name string, valu
 		// vanished memory dir reports ok=false (absence of data never verifies).
 		v, ok, verr := r13Metric(db, target)
 		return "memory_stale_claims", v, ok, verr
+	case "R14":
+		// R14 (a correction the operator keeps making) counts the ledger rows
+		// carrying the key inside the window. Lower is better; zero rows is
+		// ok=false — the same activity floor as R11, for the same reason.
+		v, ok, verr := correctionCount(db, target, win)
+		return "correction_count", v, ok, verr
 	default:
 		return "", 0, false, fmt.Errorf("unknown rule %q", rule)
 	}
