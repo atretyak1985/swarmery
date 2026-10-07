@@ -242,15 +242,19 @@ func usage() {
                                    retention: write daily_rollups for sessions ended > Nd ago,
                                    delete their events/file_changes/turns (headers kept, pruned=1),
                                    VACUUM at the end; --dry-run prints per-table counts only
-  swarmery memory consolidate --project <path> [--dry-run] [--claude-dir <dir>]
+  swarmery memory consolidate (--project <path> [--yes] [--dry-run] | --all [--db <path>]) [--claude-dir <dir>]
                                    shrink a project's ALWAYS-LOADED auto-memory index: move
                                    closed entries out of MEMORY.md into memory/closed/ (the
                                    topic file moves too — a file left behind stays a recall
-                                   candidate). --dry-run only PRINTS the plan and writes
-                                   nothing; without it every touched file is backed up first.
-                                   Entries with an open tail, and entries an open memory still
-                                   [[links]] to, are always held back. Needs no daemon and
-                                   never opens the database.
+                                   candidate). Without --yes it only PRINTS the plan and writes
+                                   nothing (--dry-run spells that default out); with --yes every
+                                   touched file is backed up first. Entries with an open tail,
+                                   and entries an open memory still [[links]] to, are always
+                                   held back. --project needs no daemon and never opens the
+                                   database. --all prints one dry-run plan per non-archived
+                                   project (read-only project list from the database, no
+                                   migrations) and REFUSES --yes — it is the weekly
+                                   memory-review routine's step, never an apply.
   swarmery memory lint (--project <path> | --all [--db <path>]) [--claude-dir <dir>] [--json]
                                    auto-memory lines that claim a PR is still open when the
                                    project's git history already carries its merge (merge
@@ -958,7 +962,7 @@ func cmdBackup(args []string) error {
 // shrinks the index, `lint` (memory_lint_cli.go) checks its facts against git.
 func cmdMemory(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: swarmery memory consolidate --project <path> [--yes] [--dry-run] [--claude-dir <dir>]\n       %s", memoryLintUsage)
+		return fmt.Errorf("%s\n       %s", memoryConsolidateUsage, strings.TrimPrefix(memoryLintUsage, "usage: "))
 	}
 	switch args[0] {
 	case "consolidate":
@@ -986,23 +990,43 @@ func cmdMemory(args []string) error {
 // i.e. an agent can run it, so the guard belongs in the code and not only in a
 // prose warning. --dry-run is the explicit spelling of that same default, and is
 // refused together with --yes rather than silently letting one of them win.
+//
+// --all (memory-engineering phase 4, the weekly review routine) is the ONE path
+// that opens the database, and it is DRY-RUN ONLY: it prints a plan block per
+// non-archived project and refuses --yes outright. Moving files across every
+// project in one unattended command is exactly what a scheduled routine must
+// never be able to do by a flag slip. The project list and the read-only store
+// open are the same ones `memory lint --all` uses.
 func cmdMemoryConsolidate(args []string) error {
 	fs := flag.NewFlagSet("memory consolidate", flag.ExitOnError)
 	project := fs.String("project", "",
-		"path of the project whose auto-memory index to consolidate (required)")
+		"path of the project whose auto-memory index to consolidate")
+	all := fs.Bool("all", false,
+		"plan (dry-run ONLY) for every non-archived project in the database; refuses --yes")
 	dryRun := fs.Bool("dry-run", false,
 		"print the plan and write nothing - already the default when --yes is absent")
 	apply := fs.Bool("yes", false,
 		"actually move the planned files (REQUIRED to write; without it this command only plans)")
 	claudeDir := fs.String("claude-dir", memconsolidate.DefaultClaudeDir(),
 		"Claude Code config dir holding projects/<slug>/memory")
+	dbPath := dbFlag(fs)
 	fs.Parse(args)
-	if fs.NArg() != 0 || *project == "" {
-		return fmt.Errorf("usage: swarmery memory consolidate --project <path> [--yes] [--dry-run] [--claude-dir <dir>]")
+	if fs.NArg() != 0 || (*project == "") == !*all {
+		if *project != "" && *all {
+			return fmt.Errorf("swarmery memory consolidate: --all and --project are mutually exclusive\n%s", memoryConsolidateUsage)
+		}
+		return fmt.Errorf("%s", memoryConsolidateUsage)
 	}
 
 	if *dryRun && *apply {
 		return fmt.Errorf("swarmery memory consolidate: --dry-run and --yes are mutually exclusive")
+	}
+
+	if *all {
+		if *apply {
+			return fmt.Errorf("swarmery memory consolidate: --all is dry-run only and refuses --yes — apply one project at a time with --project <path> --yes")
+		}
+		return consolidateAllDryRun(*dbPath, *claudeDir)
 	}
 
 	dir := memconsolidate.AutoMemoryDirIn(*claudeDir, *project)
@@ -1050,6 +1074,49 @@ func cmdMemoryConsolidate(args []string) error {
 	}
 	fmt.Printf("\n  moved %d → %s\n  backup: %s\n  index:  %s\n",
 		len(res.Moved), res.ClosedDir, res.BackupID, res.IndexPath)
+	return nil
+}
+
+const memoryConsolidateUsage = "usage: swarmery memory consolidate (--project <path> [--yes] [--dry-run] | --all [--db <path>]) [--claude-dir <dir>]"
+
+// consolidateAllDryRun prints one dry-run plan block per non-archived project,
+// in the order and from the same read-only store open as `memory lint --all`
+// (store.OpenNoMigrate + query_only — the verb issues SELECTs alone and can
+// never migrate a schema while the daemon serves). A project with no
+// auto-memory index is reported, not failed: it is the healthy state for most
+// projects, and one such project must not hide the plans of the others.
+func consolidateAllDryRun(dbPath, claudeDir string) error {
+	db, err := store.OpenNoMigrate(dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if _, err := db.Exec(`PRAGMA query_only = ON`); err != nil {
+		return fmt.Errorf("memory consolidate: set query_only: %w", err)
+	}
+	projects, err := nonArchivedProjects(db)
+	if err != nil {
+		return err
+	}
+	for i, p := range projects {
+		if i > 0 {
+			fmt.Println()
+		}
+		dir := memconsolidate.AutoMemoryDirIn(claudeDir, p.Path)
+		plan, err := memconsolidate.BuildPlan(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Printf("memory consolidate %s  (no auto-memory at %s)\n", p.Path, dir)
+				continue
+			}
+			return fmt.Errorf("memory consolidate %s: %w", p.Slug, err)
+		}
+		fmt.Printf("memory consolidate %s (dry-run)\n", p.Path)
+		fmt.Print(memconsolidate.FormatPlan(plan))
+		if len(plan.Move) > 0 {
+			fmt.Printf("\n  nothing was written — re-run with --project %s --yes to move these %d\n", p.Path, len(plan.Move))
+		}
+	}
 	return nil
 }
 

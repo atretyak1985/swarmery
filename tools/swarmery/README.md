@@ -428,3 +428,34 @@ The two subcommands behind it:
 |---|---|---|
 | `swarmery triage run [--kinds <a,b>] [--project <slug>] [--cap <n>] [--trigger operator\|schedule] [--wait] [--wait-timeout <dur>] [--port <n>] [--url <base>]` | Starts a run on the running daemon over HTTP (never opens the database). `--wait` polls it every 5 s until it ends and prints `triage run <id>: ok · applied N · suggested N · skipped N · failed N · $X.XX`; `--wait-timeout` (default 50m) stops waiting, not the run. | `0` the run ended ok, **or another run was already active** (the work is being done) · `1` the run ended failed, it no longer exists (404 on the poll), the wait timed out, or the command was cancelled (SIGINT/SIGTERM) · `2` usage, or the daemon is unreachable |
 | `swarmery triage check [--run <id>] [--strict-leftovers] [--db <path>]` | Read-only audit (opens the database without migrating, `query_only`): the run's status is `ok` and its counters match its verdict rows — both always strict. The classifier sessions still queued in the run's **own scope** (its project, or the whole fleet) are split into four buckets: **covered by this run** (a `sample`/`skipped`/`failed`/`rejected`/`suggested`/`undone`/`undoing` verdict from it on a queued decision — `applied` does not count, an applied label takes the question out of the queue; `undone` does, the operator took the label back), **held by an earlier run** (the engine's own blocking rule, applied to each queued decision over the runs with a lower id: a `sample`/`suggested`/`undone`/`undoing` verdict, a `skipped` one from the 7 days before this run started, or three `failed`/`rejected` ones in those 7 days — so this run skipped the session and wrote no row), **arrived after the run started**, and **unexplained** (listed by session). Unexplained sessions fail the check only with `--strict-leftovers`; without it they are informational, since a run that stopped at its cap leaves them too. Queue decisions the classifier cannot reach — no session, or a session not ingested — are counted for information and never fail the check. A run whose kinds exclude `classifier` skips the queue checks. Default run: the newest fleet-wide run the operator started. | `0` everything matches · `1` a mismatch, or no such run · `2` usage or database error |
+
+## Weekly memory review
+
+`config/routines/memory-review.json` ships a second routine, `memory-review-weekly`,
+that turns "read your memory every Friday" into a dated record in `routine_runs`.
+Every Friday at 09:00 it runs two `command` steps over **every non-archived
+project**, both read-only:
+
+1. `swarmery memory lint --all` — the stale-fact report: auto-memory lines that
+   still call a PR open when the project's git history already carries its merge.
+   A report, not a gate (exit 0 with findings); `continueOnFailure: true` so a
+   crash in the lint does not hide the next step.
+2. `swarmery memory consolidate --all` — a consolidation **dry-run** per project:
+   which closed entries would leave the always-loaded `MEMORY.md`, and which are
+   held back. `--all` refuses `--yes` by design — the routine can only plan; moving
+   files stays a per-project operator call (`--project <path> --yes`).
+
+A project with no auto-memory prints `(no auto-memory at <path>)` in both steps.
+A machine asleep on Friday morning runs it once on wake (`catchUp: run_one`); the
+run's step output keeps a bounded tail, enough for a weekly glance on the
+Routines page.
+
+The daemon never seeds it by itself. Seed it once, from `tools/swarmery/`
+(idempotent by name — seeding again updates the same routine):
+
+```bash
+swarmery routine seed --from config/routines/memory-review.json
+```
+
+Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
+`inbox-triage-nightly` above.

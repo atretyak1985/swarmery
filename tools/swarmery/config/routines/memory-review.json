@@ -1,0 +1,22 @@
+{
+  "name": "memory-review-weekly",
+  "cron": "0 9 * * 5",
+  "enabled": true,
+  "catchUp": "run_one",
+  "timeoutSec": 600,
+  "steps": [
+    {
+      "type": "command",
+      "name": "stale facts across projects",
+      "command": "swarmery memory lint --all",
+      "timeoutSec": 300,
+      "continueOnFailure": true
+    },
+    {
+      "type": "command",
+      "name": "consolidation dry-run across projects",
+      "command": "swarmery memory consolidate --all",
+      "timeoutSec": 300
+    }
+  ]
+}
