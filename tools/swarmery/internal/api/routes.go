@@ -446,6 +446,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// .../memory/file is more specific than .../memory so it wins the match.
 	mux.HandleFunc("GET /api/projects/{id}/memory", h.listMemory)
 	mux.HandleFunc("GET /api/projects/{id}/memory/file", h.getMemoryFile)
+	// memory-engineering phase 1: the stale-fact lint — auto-memory lines that
+	// claim a PR is open when the project's git history carries its merge.
+	// Read-only; the same report `swarmery memory lint` prints and R13 fires on.
+	mux.HandleFunc("GET /api/projects/{id}/memory/lint", h.lintMemory)
 	mux.HandleFunc("PUT /api/projects/{id}/memory/file", requireLocalOrigin(h.putMemoryFile))
 	// agent-memory phase 3: consolidate the always-loaded auto-memory index.
 	// Not project-scoped — the handle is the auto-memory DIRECTORY, and the

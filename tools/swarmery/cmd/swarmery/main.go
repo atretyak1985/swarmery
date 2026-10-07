@@ -9,6 +9,7 @@
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
 //	swarmery memory consolidate    shrink a project's always-loaded auto-memory index
+//	swarmery memory lint           auto-memory lines claiming merged PRs are open (read-only)
 //	swarmery decide eval           replay the classifier over recorded ground truth (read-only)
 //	swarmery install               auto-start: launchd (macOS) or systemd --user (Linux)
 //	swarmery hook <event>          runtime shim invoked by Claude Code hooks
@@ -250,6 +251,13 @@ func usage() {
                                    Entries with an open tail, and entries an open memory still
                                    [[links]] to, are always held back. Needs no daemon and
                                    never opens the database.
+  swarmery memory lint (--project <path> | --all [--db <path>]) [--claude-dir <dir>] [--json]
+                                   auto-memory lines that claim a PR is still open when the
+                                   project's git history already carries its merge (merge
+                                   commit or squash). A report, not a gate: exit 0 either way,
+                                   nothing is edited. --project never opens the database;
+                                   --all reads the non-archived project list from it (read-only,
+                                   no migrations). The same report R13 and the Memory page show.
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
   swarmery evals-import [--db <path>] --agent <name> <results.json>
                                    import a promptfoo results.json as an eval run for a
@@ -944,18 +952,21 @@ func cmdBackup(args []string) error {
 // backlog. The capped notice below says so, and points at how to size a backlog
 // honestly, because "--dry-run says 300, so the backlog is 300" is the natural
 // and wrong reading.
-// cmdMemory routes the `swarmery memory <verb>` family (agent-memory phase 3).
-// Only `consolidate` exists today; the sub-verb shape is deliberate, so the
-// later memory maintenance verbs do not each need a top-level command.
+// cmdMemory routes the `swarmery memory <verb>` family (agent-memory phase 3,
+// memory-engineering phase 1). The sub-verb shape is deliberate, so the memory
+// maintenance verbs do not each need a top-level command: `consolidate`
+// shrinks the index, `lint` (memory_lint_cli.go) checks its facts against git.
 func cmdMemory(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: swarmery memory consolidate --project <path> [--yes] [--dry-run] [--claude-dir <dir>]")
+		return fmt.Errorf("usage: swarmery memory consolidate --project <path> [--yes] [--dry-run] [--claude-dir <dir>]\n       %s", memoryLintUsage)
 	}
 	switch args[0] {
 	case "consolidate":
 		return cmdMemoryConsolidate(args[1:])
+	case "lint":
+		return cmdMemoryLint(args[1:])
 	default:
-		return fmt.Errorf("unknown memory subcommand %q (want: consolidate)", args[0])
+		return fmt.Errorf("unknown memory subcommand %q (want: consolidate, lint)", args[0])
 	}
 }
 

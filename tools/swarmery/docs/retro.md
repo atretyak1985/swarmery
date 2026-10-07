@@ -71,13 +71,14 @@ cited by a recommendation matches what the pages show.
 | **evals chip** | `passed/total` from the latest imported eval run for the agent. |
 | **approx flag** | Set when the range (or its comparison window) overlaps pruned days that only exist as daily rollups — counts there are honest but incomplete. |
 
-## 4. The advisor — rules R1–R6 (plus R10, R11)
+## 4. The advisor — rules R1–R6 (plus R10, R11, R13)
 
 > [!NOTE]
 > The advisor registers more rules than this section documents. `advisor.Run` in
 > `internal/advisor/advisor.go` is the authoritative list; the rules described below
-> are the original six, plus R10 (the auto-memory index budget) and R11 (the recurring
-> lesson), each with its own subsection after the table.
+> are the original six, plus R10 (the auto-memory index budget), R11 (the recurring
+> lesson) and R13 (auto-memory stating merged PRs as open), each with its own subsection
+> after the table.
 
 `internal/advisor` runs at daemon startup, on a 24 h ticker, and on demand
 (`Analyze now` → `POST /api/retro/advise`). Every rule evaluates the trailing
@@ -94,6 +95,7 @@ session ids.
 | **R5** stale improvement | process | a high-priority Process-Improvements row still open 14 d after its retro was ingested | do it, then mark the row `done` in the retro doc |
 | **R6** cache regression | config | cache hit rate dropped > 10 p.p. vs the preceding window | check prompt/session structure changes |
 | **R10** auto-memory index | memory | the project's `MEMORY.md` is > 6 KiB, **or** > 50 % of its ≥ 10 index lines are closed | run `swarmery memory consolidate` (see below) |
+| **R13** stale memory fact | memory | an auto-memory line names a PR and says it is open, and the project's git history already carries its merge | fix the line by hand or on Knowledge → Memory; `swarmery memory lint` lists them (see below) |
 | **R11** recurring lesson | skill | one lesson identity (`norm_title`) turns up in ≥ 3 **distinct** tasks in the window | move the lesson into the `SKILL.md` the next run actually reads |
 
 ### R10 — the auto-memory index budget
@@ -127,6 +129,43 @@ backed up into one timestamp dir first, and `--dry-run` (the default on the API)
 at all. Two entries are always held back: one with an open tail, and one whose file an **open**
 memory still references with a `[[link]]` — closing that would dangle a live dependency.
 There is no LLM merge here and no duplicate detection beyond these exact markers.
+
+### R13 — auto-memory that states merged PRs as open
+
+R10 measures the index's **size**; R13 measures its **truth**, for the one fact class that is cheap
+to verify offline. An auto-memory note is written once and trusted forever — `PR #366 UNMERGED
+(needs a review approval)` stayed in this repo's `MEMORY.md` weeks after the merge landed, and
+every later session planned around it. Nothing re-read the fact against the world.
+
+`internal/memlint` does, deterministically and without an LLM, network or `gh`: it reads every
+`*.md` directly under the project's auto-memory root (the same `memconsolidate.AutoMemoryDirIn`
+resolver R10, the Memory page and the CLI share; `closed/` is not descended), cuts each line into
+**clauses** (at `;`, `, `, `. `, a spaced dash or a table bar), and in every clause that carries an
+**open marker** (`OPEN|open|UNMERGED|needs a review/merge/approval|awaits|pending|not merged`) and
+**no closed marker** (`MERGED|CLOSED|DONE|SHIPPED|RESOLVED`) each `#<n>` ref at a word start is a
+**claim**, once per line. So `PR #340 … MERGED; #341 open` claims only #341, `MERGED + deployed
+(#260, #261); OPEN: flip the guard` claims nothing, and `issues/12#issuecomment-1` is no ref at all.
+The scope is a clause and not the line on purpose: the per-line first cut flagged 45 of this repo's
+46 claims, nearly all lines whose "open" was about something else. Each distinct claim is checked
+once against the project's own history with
+`git -C <project> log --all --max-count=1 --fixed-strings --grep="Merge pull request #<n> " --grep="(#<n>)"`
+— the two shapes GitHub leaves behind, a merge commit and a squash commit; the trailing space and the
+parentheses keep `#36` out of `#366`. A hit is a **finding** with the merge sha and committer date. A
+project without `.git` has claims it cannot verify and therefore no findings; a project without a
+memory directory is skipped.
+
+R13 fires once per non-archived project with ≥ 1 finding. `detail` names the first three —
+`model-lineup.md:12 says PR #366 is open; it merged 2026-09-22 (2151242)` — and the evidence carries
+`counts{claims, stale}`, every finding, and `index_path`. The baseline metric is `memory_stale_claims`
+(lower is better; 0 once the lines are fixed). `target_kind` is `memory`, like R10, and like R10 it is
+**self-checking**: it re-lints every pass, so a corrected line stops it firing and the row resolves on
+its own. The rule never edits a memory file — the correction is the operator's, by hand or through
+the project's Knowledge → Memory tab.
+
+The same report is `swarmery memory lint --project <path> [--json]` (never opens the database),
+`swarmery memory lint --all` (every non-archived project; the one path that reads the database,
+read-only and without migrations), and `GET /api/projects/{id}/memory/lint`. All three exit or answer
+successfully whether or not they found anything: it is a report, not a gate.
 
 ### R11 — the lesson the fleet keeps re-learning
 
