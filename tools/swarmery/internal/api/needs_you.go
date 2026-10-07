@@ -18,6 +18,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 )
 
 // Item kinds, in tie-break order (needsYouKindRank).
@@ -121,12 +122,18 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 		return nil, err
 	}
 	// A prod deploy handed to the terminal blocks until the transcript moves
-	// past it (requested_at >= ended_at: no activity since the hand-off).
+	// past it (requested_at >= ended_at: no activity since the hand-off) or
+	// the session is known to be over — its process dead, or its status
+	// terminal. The liveness terms matter for a hook-only stub (no transcript
+	// ever written, ended_at NULL): activity can never clear it, so without
+	// them it would outlive its session for the whole 24 h window.
 	// The status term lets SQLite use idx_pr_pending(status, requested_at).
 	local, err := queryNeedsYouRequests(db,
 		`pr.status = ? AND pr.risk_class = ? AND pr.resolved_via = ?
-		 AND pr.requested_at >= COALESCE(s.ended_at, '') AND pr.requested_at >= ?`,
-		[]any{approvals.StatusResolvedElsewhere, approvals.RiskProdDeploy, approvals.ViaLocalOnly, cutoff}, scope, projArgs)
+		 AND pr.requested_at >= COALESCE(s.ended_at, '') AND pr.requested_at >= ?
+		 AND COALESCE(s.proc_state, '') <> ? AND s.status NOT IN ('completed', 'killed')`,
+		[]any{approvals.StatusResolvedElsewhere, approvals.RiskProdDeploy, approvals.ViaLocalOnly, cutoff,
+			procwatch.StateDead}, scope, projArgs)
 	if err != nil {
 		return nil, err
 	}

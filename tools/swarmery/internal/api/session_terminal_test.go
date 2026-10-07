@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/approvals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
@@ -226,5 +227,92 @@ func TestGetSessionTerminalIsExplicitNullWhenUnset(t *testing.T) {
 	getJSON(t, srv.URL+"/api/sessions/1", &raw)
 	if got := string(raw["terminal"]); got != "null" {
 		t.Errorf(`terminal = %s, want the literal "null"`, got)
+	}
+}
+
+// openHookPermissionRequest drives the PermissionRequest path for uuid the way
+// the hook endpoint does: the transcript was never ingested, so the approvals
+// service mints a source='hook' stub row (resolveSessionLocked).
+func openHookPermissionRequest(t *testing.T, db *sql.DB, uuid, cwd string) {
+	t.Helper()
+	in, err := approvals.ParseHookStdin([]byte(`{"session_id":"` + uuid + `","transcript_path":"/x.jsonl","cwd":"` + cwd +
+		`","permission_mode":"default","hook_event_name":"PermissionRequest","tool_name":"Bash",` +
+		`"tool_input":{"command":"make deploy-prod","description":"d"},"permission_suggestions":[]}`))
+	if err != nil {
+		t.Fatalf("parse hook stdin: %v", err)
+	}
+	if _, _, _, err := approvals.New(db, nil, approvals.Options{}).Open(in); err != nil {
+		t.Fatalf("open permission request: %v", err)
+	}
+}
+
+type procCols struct {
+	source, pidSource, procState, procStartedAt sql.NullString
+	pid                                         sql.NullInt64
+}
+
+func readProcCols(t *testing.T, db *sql.DB, uuid string) procCols {
+	t.Helper()
+	var c procCols
+	if err := db.QueryRow(
+		`SELECT source, pid, pid_source, proc_state, proc_started_at FROM sessions WHERE session_uuid = ?`, uuid,
+	).Scan(&c.source, &c.pid, &c.pidSource, &c.procState, &c.procStartedAt); err != nil {
+		t.Fatalf("read proc columns for %s: %v", uuid, err)
+	}
+	return c
+}
+
+// SessionStart parks the identity (no row yet), then the PermissionRequest
+// path — not ingest — mints the row because Claude Code never wrote a
+// transcript (a session cancelled at the native prod-deploy dialog). The
+// parked pid must land on that stub, or procwatch can never see the process
+// die and a prod_deploy_local blocker outlives it for 24 h.
+func TestHookSessionStartParkedIdentityAppliedWhenApprovalsMintsTheRow(t *testing.T) {
+	db := openTerminalTestDB(t)
+	fakeClaudeProcInfo(t, "ttys011")
+
+	const uuid = "sid-hook-only"
+	h := &Handler{DB: db}
+	w := postSessionStart(t, h, `{"session_id":"`+uuid+`","pid":5151,"cwd":"/work/proj",
+		"terminal":{"program":"iTerm.app"}}`)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", w.Code)
+	}
+
+	openHookPermissionRequest(t, db, uuid, "/work/proj")
+
+	c := readProcCols(t, db, uuid)
+	if c.source.String != "hook" {
+		t.Fatalf("source = %q, want hook — test setup invalid", c.source.String)
+	}
+	if c.pid.Int64 != 5151 || c.pidSource.String != "hook" || c.procState.String != procwatch.StateRunning {
+		t.Errorf("pid/pid_source/proc_state = %v/%q/%q, want 5151/hook/running", c.pid, c.pidSource.String, c.procState.String)
+	}
+	if c.procStartedAt.String != "Mon Jan  2 15:04:05 2006" {
+		t.Errorf("proc_started_at = %q, want the verified process start time (procwatch's PID-reuse guard)", c.procStartedAt.String)
+	}
+	program, _, _, tty := readTerminalCols(t, db, uuid)
+	if program.String != "iTerm.app" || tty.String != "ttys011" {
+		t.Errorf("term_program/term_tty = %q/%q, want the parked iTerm.app/ttys011", program.String, tty.String)
+	}
+}
+
+// A SessionStart with no terminal identity at all (every terminal field empty,
+// no launch account) still carries a verified pid — that alone is worth
+// parking, or the hook-minted stub has no liveness signal.
+func TestHookSessionStartParksPIDWithoutTerminalIdentity(t *testing.T) {
+	db := openTerminalTestDB(t)
+	fakeClaudeProcInfo(t, "")
+
+	const uuid = "sid-hook-no-terminal"
+	h := &Handler{DB: db}
+	if w := postSessionStart(t, h, `{"session_id":"`+uuid+`","pid":6262,"cwd":"/work/proj"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", w.Code)
+	}
+
+	openHookPermissionRequest(t, db, uuid, "/work/proj")
+
+	if c := readProcCols(t, db, uuid); c.pid.Int64 != 6262 || c.procState.String != procwatch.StateRunning {
+		t.Errorf("pid/proc_state = %v/%q, want 6262/running", c.pid, c.procState.String)
 	}
 }

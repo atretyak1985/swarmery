@@ -367,23 +367,11 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 		in.stats.Sessions++
 		in.sessionCreated = true
 		// A SessionStart hook POST can beat this tail to the punch: apply any
-		// terminal identity it parked for this uuid (internal/api
-		// hookSessionStart, migration 0068) now that the row finally exists,
-		// in the same transaction as the INSERT above.
-		if term, ok := popPendingTerminal(sessionUUID); ok {
-			if _, err := in.tx.Exec(
-				`UPDATE sessions SET term_program = ?, term_focus_url = ?, term_bundle_id = ?, term_tty = ?
-				 WHERE id = ?`,
-				nullStr(term.Program), nullStr(term.FocusURL), nullStr(term.BundleID), nullStr(term.TTY),
-				in.sessionID); err != nil {
-				return fmt.Errorf("apply parked terminal identity: %w", err)
-			}
-			if term.LaunchAccount != "" {
-				if _, err := in.tx.Exec(`UPDATE sessions SET launch_account = ? WHERE id = ?`,
-					term.LaunchAccount, in.sessionID); err != nil {
-					return fmt.Errorf("apply parked launch account: %w", err)
-				}
-			}
+		// identity it parked for this uuid (internal/api hookSessionStart,
+		// migration 0068) now that the row finally exists, in the same
+		// transaction as the INSERT above.
+		if err := ApplyPendingTerminal(in.tx, sessionUUID, in.sessionID); err != nil {
+			return err
 		}
 	case err != nil:
 		return err

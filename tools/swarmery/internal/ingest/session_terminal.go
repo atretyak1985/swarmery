@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -18,11 +19,22 @@ type SessionTerminal struct {
 	// CLAUDE_CONFIG_DIR), destined for sessions.launch_account. It rides the
 	// same park/pop as the terminal identity: the hook can beat the row.
 	LaunchAccount string
+	// PID is the claude process SessionStart verified (command identity
+	// "claude"), destined for sessions.pid with pid_source='hook' and
+	// proc_state='running'; 0 = none. ProcStartedAt is that process's start
+	// time (procwatch's PID-reuse guard) and ProcCheckedAt when it was
+	// verified. Parked with the terminal identity because the row can be
+	// minted by ingest OR by the PermissionRequest hook (approvals) — and a
+	// hook-minted stub with no pid has no liveness signal at all.
+	PID           int
+	ProcStartedAt string
+	ProcCheckedAt string
 }
 
 // isEmpty reports whether none of the values were ever set.
 func (t SessionTerminal) isEmpty() bool {
-	return t.Program == "" && t.FocusURL == "" && t.BundleID == "" && t.TTY == "" && t.LaunchAccount == ""
+	return t.Program == "" && t.FocusURL == "" && t.BundleID == "" && t.TTY == "" && t.LaunchAccount == "" &&
+		t.PID <= 0
 }
 
 // pendingTerminal parks a SessionStart hook's terminal identity for a session
@@ -92,4 +104,41 @@ func popPendingTerminal(sessionUUID string) (SessionTerminal, bool) {
 		return SessionTerminal{}, false
 	}
 	return v.(parkedTerminal).term, true
+}
+
+// ApplyPendingTerminal pops the identity a SessionStart hook parked for
+// sessionUUID, if any, and writes it onto the freshly minted row sessionID:
+// the term_* columns, launch_account, and the verified pid (pid_source='hook',
+// proc_state='running'). Every site that mints a sessions row calls it right
+// after its INSERT — the JSONL ingest (inside its transaction) and the
+// PermissionRequest hook's stub (internal/approvals resolveSessionLocked) —
+// so whichever wins the race to create the row, the identity is never lost.
+func ApplyPendingTerminal(ex execer, sessionUUID string, sessionID int64) error {
+	term, ok := popPendingTerminal(sessionUUID)
+	if !ok {
+		return nil
+	}
+	if _, err := ex.Exec(
+		`UPDATE sessions SET term_program = ?, term_focus_url = ?, term_bundle_id = ?, term_tty = ?
+		 WHERE id = ?`,
+		nullStr(term.Program), nullStr(term.FocusURL), nullStr(term.BundleID), nullStr(term.TTY),
+		sessionID); err != nil {
+		return fmt.Errorf("apply parked terminal identity: %w", err)
+	}
+	if term.LaunchAccount != "" {
+		if _, err := ex.Exec(`UPDATE sessions SET launch_account = ? WHERE id = ?`,
+			term.LaunchAccount, sessionID); err != nil {
+			return fmt.Errorf("apply parked launch account: %w", err)
+		}
+	}
+	if term.PID > 0 {
+		if _, err := ex.Exec(
+			`UPDATE sessions SET pid = ?, pid_source = 'hook', proc_started_at = ?,
+			        proc_state = 'running', proc_checked_at = ?
+			 WHERE id = ?`,
+			term.PID, nullStr(term.ProcStartedAt), nullStr(term.ProcCheckedAt), sessionID); err != nil {
+			return fmt.Errorf("apply parked pid: %w", err)
+		}
+	}
+	return nil
 }

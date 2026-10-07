@@ -454,6 +454,14 @@ func (s *Service) resolveSessionLocked(in HookInput) (int64, error) {
 		return 0, fmt.Errorf("insert hook session: %w", err)
 	}
 	sessionID, _ = res.LastInsertId()
+	// The SessionStart hook parked this session's identity (verified pid,
+	// terminal) because no row existed yet. A session that never writes a
+	// transcript (e.g. cancelled at the native prod-deploy dialog) is only
+	// ever minted here, so apply it now — without the pid, procwatch never
+	// sees the process die. Best effort: the stub row is already useful.
+	if err := ingest.ApplyPendingTerminal(s.db, in.SessionUUID, sessionID); err != nil {
+		log.Printf("warn: approvals: session %d: %v", sessionID, err)
+	}
 	s.publish(ingest.Notification{Type: ingest.NoteSessionStarted, SessionID: sessionID})
 	return sessionID, nil
 }
