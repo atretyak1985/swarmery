@@ -16,12 +16,20 @@ import type {
   MemoryFile,
   MemoryFileContent,
   MemoryKind,
+  MemoryLintReport,
 } from '../api/types';
-import { consolidateMemory, fetchMemoryFile, fetchMemoryList, putMemoryFile } from '../api';
+import {
+  consolidateMemory,
+  fetchMemoryFile,
+  fetchMemoryLint,
+  fetchMemoryList,
+  putMemoryFile,
+} from '../api';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { Markdown } from '../lib/markdown';
 import { fmtAgo } from '../lib/format';
 import { ConfirmDialog, Empty, ErrorBox, Loading } from '../components/ui';
+import { StaleFactsPanel } from './memory/StaleFactsPanel';
 
 const KIND_LABELS: Record<MemoryKind, string> = {
   'claude-md': 'Project instructions',
@@ -57,6 +65,12 @@ export function Memory(): JSX.Element {
   const [listError, setListError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
+  // The stale-fact lint rides along with the list but keeps its own error:
+  // a lint failure (no history, a slow repo) shows inside its panel and never
+  // takes the file list down with it.
+  const [lint, setLint] = useState<MemoryLintReport | null>(null);
+  const [lintError, setLintError] = useState<string | null>(null);
+
   const loadList = useCallback((): void => {
     if (slug === '') return;
     fetchMemoryList(slug)
@@ -67,11 +81,27 @@ export function Memory(): JSX.Element {
       .catch((e: unknown) => setListError(e instanceof Error ? e.message : String(e)));
   }, [slug]);
 
+  const loadLint = useCallback((): void => {
+    if (slug === '') return;
+    setLintError(null);
+    fetchMemoryLint(slug)
+      .then((r) => setLint(r))
+      .catch((e: unknown) => setLintError(e instanceof Error ? e.message : String(e)));
+  }, [slug]);
+
   useEffect(() => {
     setFiles(null);
     setSelected(null);
+    setLint(null);
     loadList();
-  }, [loadList]);
+    loadLint();
+  }, [loadList, loadLint]);
+
+  // A save can fix (or introduce) a stale line, so re-lint alongside the list.
+  const onSaved = useCallback((): void => {
+    loadList();
+    loadLint();
+  }, [loadList, loadLint]);
 
   // Auto-select the first file (usually CLAUDE.md) once the list resolves.
   useEffect(() => {
@@ -117,8 +147,15 @@ export function Memory(): JSX.Element {
       ) : (
         <>
           {autoMemoryDir !== null && (
-            <ConsolidatePanel dir={autoMemoryDir} onApplied={loadList} />
+            <ConsolidatePanel dir={autoMemoryDir} onApplied={onSaved} />
           )}
+          <StaleFactsPanel
+            report={lint}
+            loading={lint === null && lintError === null}
+            error={lintError}
+            onOpen={setSelected}
+            onRetry={loadLint}
+          />
           <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
             <FileList
               groups={groups}
@@ -126,7 +163,7 @@ export function Memory(): JSX.Element {
               onSelect={setSelected}
             />
             {selected !== null ? (
-              <MemoryEditor key={selected} project={slug} path={selected} onSaved={loadList} />
+              <MemoryEditor key={selected} project={slug} path={selected} onSaved={onSaved} />
             ) : (
               <Empty>Select a file to view or edit.</Empty>
             )}

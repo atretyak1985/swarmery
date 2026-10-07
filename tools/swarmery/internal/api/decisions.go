@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/corrections"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
@@ -98,12 +99,38 @@ func (h *Handler) postDecisionTruth(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	switch err := decide.RecordGroundTruth(h.DB, id, body.Value, decide.TruthOperator, time.Now()); {
+	// Read the agent's answer BEFORE the truth lands: a truth that contradicts
+	// it is an operator correction (internal/corrections), a truth that agrees
+	// is a label and writes no ledger row. Same lookup key ValidateTruth used.
+	var question, answer string
+	switch err := h.DB.QueryRow(`SELECT question_id, COALESCE(answer, '') FROM decisions WHERE id = ?`, id).
+		Scan(&question, &answer); {
+	case errors.Is(err, sql.ErrNoRows):
+		writeClientErr(w, http.StatusNotFound, "no such decision")
+		return
+	case err != nil:
+		writeErr(w, err)
+		return
+	}
+	now := time.Now()
+	switch err := decide.RecordGroundTruth(h.DB, id, body.Value, decide.TruthOperator, now); {
 	case errors.Is(err, sql.ErrNoRows):
 		writeClientErr(w, http.StatusNotFound, "no such decision")
 	case err != nil:
 		writeErr(w, err)
 	default:
+		if truth := strings.TrimSpace(body.Value); truth != answer {
+			corrections.Record(h.DB, corrections.Correction{
+				Source: corrections.SourceTruthDisagree,
+				Ref:    "decision:" + strconv.FormatInt(id, 10),
+				Before: answer,
+				After:  truth,
+				// The question is the correction's identity: "task_type: refactor
+				// -> bugfix" repeated is one classifier mistake, not a coincidence
+				// of two decisions sharing a label.
+				Reason: question + ": " + answer + " -> " + truth,
+			}, now) // never fails the labelling
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

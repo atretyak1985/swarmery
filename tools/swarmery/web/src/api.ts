@@ -38,6 +38,7 @@ import type {
   DuplicatePlaybookResponse,
   MemoryConsolidateResp,
   MemoryFileContent,
+  MemoryLintReport,
   MemoryListResp,
   NeedsYouResponse,
   OnboardConfig,
@@ -982,6 +983,16 @@ export async function consolidateMemory(
     throw new Error(error);
   }
   return data as MemoryConsolidateResp;
+}
+
+/**
+ * GET /api/projects/{id}/memory/lint — the stale-fact report for the project's
+ * auto-memory: lines that still call a PR open after history says it merged.
+ * A project with no memory directory answers an empty report, not an error.
+ */
+export function fetchMemoryLint(project: string | number): Promise<MemoryLintReport> {
+  if (MOCK) return mockApi.memoryLint(project);
+  return get(`/api/projects/${encodeURIComponent(String(project))}/memory/lint`);
 }
 
 // --- self-improvement phase 4 — agent change proposals -----------------------

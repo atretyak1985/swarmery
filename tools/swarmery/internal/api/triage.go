@@ -13,7 +13,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/corrections"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/triage"
 )
 
@@ -198,6 +200,20 @@ func (h *Handler) undoTriageVerdict(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusNotFound, "verdict not found")
 	case errors.Is(err, triage.ErrNotUndoable):
 		writeClientErr(w, http.StatusConflict, "verdict is not undoable (state "+v.State+")")
+	case err == nil:
+		// An undo is the operator contradicting the triage agent: one ledger
+		// row (internal/corrections). The reason names the kind and value so
+		// R14 folds "undo friction/noise" repeats together instead of every
+		// undo of anything under one key. Never fails the undo.
+		corrections.Record(h.DB, corrections.Correction{
+			Source:    corrections.SourceTriageUndo,
+			Ref:       "verdict:" + strconv.FormatInt(v.ID, 10),
+			ProjectID: v.ProjectID,
+			Before:    v.Value,
+			After:     string(v.Prior),
+			Reason:    "undo " + v.Kind + "/" + v.Value,
+		}, time.Now())
+		writeJSON(w, v, nil)
 	default:
 		writeJSON(w, v, err)
 	}
