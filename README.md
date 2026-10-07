@@ -18,7 +18,9 @@ swarmery serve                            # listens on :7777
 
 <div align="center">
 
-![Swarmery demo](docs/screenshots/demo.gif)
+[![Swarmery demo](docs/screenshots/demo.gif)](docs/video/swarmery-promo.mp4)
+
+[▶ Watch the 75-second promo (1080p mp4)](docs/video/swarmery-promo.mp4)
 
 </div>
 
