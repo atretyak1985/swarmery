@@ -18,6 +18,10 @@ swarmery serve                            # listens on :7777
 
 <div align="center">
 
+https://github.com/atretyak1985/swarmery/raw/main/docs/video/swarmery-promo.mp4
+
+[▶ Watch the 75-second promo (1080p mp4)](docs/video/swarmery-promo.mp4)
+
 ![Swarmery demo](docs/screenshots/demo.gif)
 
 </div>
