@@ -303,6 +303,13 @@ export function filterTab(items: readonly InboxItem[], tab: InboxTabId): InboxIt
 /** Kinds the triage agent can take on. */
 export const AGENT_KINDS: ReadonlySet<InboxKind> = new Set<InboxKind>(['classifier', 'advisor', 'lesson', 'retire']);
 
+/**
+ * The kinds the Inbox banner's run visits: the same set the banner counts, so the
+ * two cannot drift apart. AGENT_KINDS is listed in the engine's kindOrder
+ * (internal/triage/policy.go), which its insertion order carries over here.
+ */
+export const TRIAGE_INBOX_KINDS: readonly string[] = [...AGENT_KINDS];
+
 /** An item the agent left alone this long is worth offering a run for. */
 export const AGENT_WAIT_MS = 24 * 3600 * 1000;
 

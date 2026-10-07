@@ -33,6 +33,8 @@ import { fmtAgo, isoDay } from '../../lib/format';
 import { useHealth } from '../../lib/health';
 import { PLACES, type PlaceId } from '../../lib/nav';
 import { useScope } from '../../lib/scope';
+import { useTriageRun } from '../inbox/useTriageRun';
+import { FrictionTriageStrip } from './FrictionTriageStrip';
 import { HealthOverview } from './HealthOverview';
 import {
   type AutoModeTone,
@@ -47,7 +49,9 @@ import {
   countRecs,
   daysFromParam,
   frictionCount,
+  frictionRunCap,
   rangeFor,
+  untriagedErrors,
   waitingText,
   windowCell,
   windowCellText,
@@ -63,6 +67,9 @@ const OPEN_RECS = ['proposed'] as const;
 const VERIFIED_RECS = ['verified'] as const;
 const GATHERING_RECS = ['accepted', 'adopted'] as const;
 const OPEN_PROPOSALS = ['proposed', 'needs_target'] as const;
+
+/** What the Friction tab's trigger visits: the error groups and the failing agents, nothing from the Inbox. */
+const FRICTION_TRIAGE_KINDS = ['friction', 'agent'] as const;
 
 function placeHref(id: PlaceId, slug: string | null): string {
   return PLACES.find((p) => p.id === id)?.href(slug) ?? '/';
@@ -162,6 +169,34 @@ export function Health(): JSX.Element {
       .then(setFriction)
       .catch(() => setFriction(null));
   }, [range]);
+
+  // The Friction tab's own triage trigger. When its run ends, the friction data
+  // is refetched twice over, as the unmute path does: Health's copy (tab count,
+  // overview) and the embedded Retro panel's copy (bumped key).
+  const [frictionReloadKey, setFrictionReloadKey] = useState(0);
+  const onFrictionRunEnd = useCallback((): void => {
+    reloadFriction();
+    setFrictionReloadKey((k) => k + 1);
+  }, [reloadFriction]);
+  const triage = useTriageRun(projectSlug, onFrictionRunEnd, tab === 'friction');
+  const [starting, setStarting] = useState(false);
+  const [dismissedRunId, setDismissedRunId] = useState<number | null>(null);
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const lastRun = triage.lastRun;
+  const runFailed = lastRun?.status === 'failed';
+  const runError = triage.startError ?? (runFailed ? lastRun.error || 'The triage run failed.' : null);
+  // One identity per error (this start attempt, or that failed run), as on the Inbox.
+  const errorKey =
+    triage.startError !== null ? `start:${triage.startError}` : runFailed ? `run:${String(lastRun.id)}` : null;
+  const triageError = errorKey !== null && dismissedError === errorKey ? null : runError;
+  const startFrictionRun = (): void => {
+    if (starting) return;
+    setStarting(true);
+    setDismissedError(null);
+    triage
+      .start({ kinds: FRICTION_TRIAGE_KINDS, cap: frictionRunCap(friction, agents) })
+      .finally(() => setStarting(false));
+  };
 
   // Decisions are not windowed: loaded once per scope. On a project page the
   // recommendations are the project's own, as on the project Today, so the
@@ -268,14 +303,34 @@ export function Health(): JSX.Element {
             <Analytics range={{ from: range.from, to: range.to }} />
           </Suspense>
         ) : (
-          <Suspense fallback={<Loading label={`${tab}…`} />}>
-            <Retro
-              section={tab}
-              range={range}
-              inboxHref={`${placeHref('inbox', projectSlug)}?tab=advisor`}
-              onFrictionChanged={reloadFriction}
-            />
-          </Suspense>
+          <>
+            {tab === 'friction' && (
+              <FrictionTriageStrip
+                untriaged={friction !== null ? untriagedErrors(friction).length : 0}
+                running={triage.run === null ? null : { done: triage.run.done, total: triage.run.total }}
+                summary={
+                  lastRun === null || runFailed
+                    ? null
+                    : { applied: lastRun.applied, suggested: lastRun.suggested, failed: lastRun.failed }
+                }
+                dismissed={lastRun !== null && dismissedRunId === lastRun.id}
+                error={triageError}
+                busy={starting}
+                onStart={startFrictionRun}
+                onDismiss={() => setDismissedRunId(lastRun?.id ?? null)}
+                onDismissError={() => setDismissedError(errorKey)}
+              />
+            )}
+            <Suspense fallback={<Loading label={`${tab}…`} />}>
+              <Retro
+                section={tab}
+                range={range}
+                inboxHref={`${placeHref('inbox', projectSlug)}?tab=advisor`}
+                onFrictionChanged={reloadFriction}
+                frictionReloadKey={frictionReloadKey}
+              />
+            </Suspense>
+          </>
         )}
       </div>
     </div>

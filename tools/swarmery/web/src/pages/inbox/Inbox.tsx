@@ -17,6 +17,7 @@ import {
   INBOX_TABS,
   agentOffer,
   KIND_META,
+  TRIAGE_INBOX_KINDS,
   ageLabel,
   expiresInLabel,
   filterTab,
@@ -141,6 +142,8 @@ export function Inbox(): JSX.Element {
   const errorKey =
     triage.startError !== null ? `start:${triage.startError}` : runFailed ? `run:${String(lastRun.id)}` : null;
   const bannerError = errorKey !== null && dismissedError === errorKey ? null : runError;
+  // The banner's count is the run's cap: a click covers exactly the items it shows.
+  const offer = agentOffer(items, now);
 
   const primaryLabel =
     selected?.suggestion !== undefined && !selected.suggestion.sample
@@ -201,7 +204,7 @@ export function Inbox(): JSX.Element {
       </header>
 
       <TriageBanner
-        offer={agentOffer(items, now)}
+        offer={offer}
         running={triage.run === null ? null : { done: triage.run.done, total: triage.run.total }}
         summary={
           lastRun === null || runFailed
@@ -221,7 +224,7 @@ export function Inbox(): JSX.Element {
         onStart={() => {
           setAcceptResult(null);
           setDismissedError(null);
-          void triage.start();
+          void triage.start({ kinds: TRIAGE_INBOX_KINDS, cap: offer.agent });
         }}
         onAcceptAll={acceptAll}
         onOpenHandled={() => {

@@ -17,6 +17,7 @@ import {
   AGENT_KINDS,
   AGENT_WAIT_MS,
   INBOX_TABS,
+  TRIAGE_INBOX_KINDS,
   ageLabel,
   agentOffer,
   attachSuggestions,
@@ -422,6 +423,11 @@ describe('agentOffer', () => {
 
   it('knows which kinds the agent handles', () => {
     expect([...AGENT_KINDS].sort()).toEqual(['advisor', 'classifier', 'lesson', 'retire']);
+  });
+
+  it('the banner run visits exactly the counted kinds, in the engine kindOrder', () => {
+    expect(TRIAGE_INBOX_KINDS).toEqual(['classifier', 'advisor', 'lesson', 'retire']);
+    expect(new Set(TRIAGE_INBOX_KINDS)).toEqual(new Set(AGENT_KINDS));
   });
 });
 

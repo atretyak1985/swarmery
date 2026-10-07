@@ -88,7 +88,10 @@ and the keyboard does the work: `j`/`k` to move, `e` for the primary action, `x`
 or dismiss, `s` to skip.
 
 An agent can work the backlog for you. When something it could handle has waited a day,
-a strip under the header offers **run triage**. The agent labels the classifier's guesses
+a strip under the header offers **run triage**. **run triage** starts a run over exactly the
+items the strip counts — the classifier's guesses, advisor findings, lesson candidates and
+retirements — and never over Health's friction groups or agents; a run visits at most 1000
+items. The agent labels the classifier's guesses
 (it keeps a sample of its labels for you to check, and the Inbox shows how often it
 matched you), closes what is only informational, and leaves a suggestion with its reasoning
 on lessons, advisor recommendations and retirements. The strip lists the suggestions
@@ -248,7 +251,10 @@ friction you can remove right now. **Agents** holds per-agent scorecards — run
 rate, error rate, cost, p95 — each compared against the previous window, so you see
 direction, not just a level. **Friction** is the diagnostic half: which tools got denied
 most (each one click from an auto-approve rule), the top error groups, and how long
-approvals kept agents waiting. **Estimates** sets estimated against actual hours per task,
+approvals kept agents waiting. On Friction, **run triage** starts a run over the recurring
+error groups and the agents that fail in most runs — nothing from the Inbox; a group judged
+noise is muted for 30 days, a fixable one gets a recommendation with a fix task to accept in
+the Inbox. **Estimates** sets estimated against actual hours per task,
 next to the lessons your workspace retrospectives recorded.
 
 **Advisor** is where a deterministic rule engine raises evidenced recommendations — every

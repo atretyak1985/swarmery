@@ -50,6 +50,17 @@ describe('triage api', () => {
     expect(fetchMock.mock.calls[1]?.[1]?.body).toBe('{}');
   });
 
+  it('startTriageRun: sends kinds and cap only when given, cap only when a positive integer', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(reply(202, { id: 9 })));
+    const kinds = ['classifier', 'advisor'];
+    await startTriageRun(null, {});
+    await startTriageRun('shop', { kinds, cap: 7 });
+    await startTriageRun(null, { cap: 0 });
+    await startTriageRun(null, { kinds, cap: 2.5 });
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(String(c[1]?.body)) as unknown);
+    expect(bodies).toEqual([{}, { project: 'shop', kinds, cap: 7 }, {}, { kinds }]);
+  });
+
   it('startTriageRun: a 409 throws busy with the active run id', async () => {
     fetchMock.mockResolvedValueOnce(reply(409, { error: 'triage: a run is already active', activeRunId: 12 }));
     const err = await startTriageRun(null).catch((e: unknown) => e);

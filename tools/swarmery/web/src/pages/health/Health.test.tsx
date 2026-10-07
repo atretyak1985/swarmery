@@ -17,6 +17,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
+import * as triageApi from '../../api/triage';
+import type { TriageRun } from '../../api/triage';
 import { addDays, isoDay } from '../../lib/format';
 import { Health } from './Health';
 
@@ -30,6 +32,16 @@ vi.mock('../../api', async (importOriginal) => {
     fetchProposals: vi.fn(),
     fetchHealth: vi.fn(),
     unmuteFrictionGroup: vi.fn(),
+  };
+});
+
+vi.mock('../../api/triage', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../api/triage')>();
+  return {
+    ...real,
+    fetchActiveTriageRun: vi.fn(),
+    fetchTriageRun: vi.fn(),
+    startTriageRun: vi.fn(),
   };
 });
 
@@ -126,6 +138,8 @@ beforeEach(() => {
   } as never);
   // The daemon is unreachable unless a test says otherwise: no auto mode row.
   vi.mocked(api.fetchHealth).mockRejectedValue(new Error('offline in test'));
+  // No triage run is in flight unless a test says otherwise.
+  vi.mocked(triageApi.fetchActiveTriageRun).mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -448,5 +462,120 @@ describe('friction triage', () => {
     // 1 uncovered denial + 2 untriaged groups; muted, tracked and fix_proposed are out.
     expect(tab.textContent).toMatch(/3/);
     expect(tab.textContent).not.toMatch(/[4-9]/);
+  });
+});
+
+describe('friction triage trigger', () => {
+  const now = new Date().toISOString();
+  function triageRun(over: Partial<TriageRun> = {}): TriageRun {
+    return {
+      id: 7,
+      trigger: 'operator',
+      scopeProjectId: null,
+      kinds: ['friction', 'agent'],
+      status: 'running',
+      total: 3,
+      done: 1,
+      applied: 0,
+      suggested: 0,
+      skipped: 0,
+      failed: 0,
+      rejected: 0,
+      costUsd: 0,
+      sessionUuids: [],
+      error: '',
+      startedAt: now,
+      finishedAt: null,
+      ...over,
+    };
+  }
+
+  /** The strip has counted the fixture's one untriaged group and Health holds its one agent row. */
+  async function ready(): Promise<void> {
+    expect(await screen.findByText('1 untriaged group · agents are checked by rule')).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Agents/ }).textContent).toMatch(/1/));
+  }
+
+  it('starts a friction + agent run capped at untriaged groups + agent rows, fleet-wide', async () => {
+    vi.mocked(triageApi.startTriageRun).mockResolvedValue({ id: 7 });
+    vi.mocked(triageApi.fetchActiveTriageRun).mockResolvedValueOnce(null).mockResolvedValue(triageRun());
+    renderAt('/health?tab=friction');
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+    // 1 untriaged group + 1 agent row.
+    await waitFor(() =>
+      expect(triageApi.startTriageRun).toHaveBeenCalledWith(null, { kinds: ['friction', 'agent'], cap: 2 }),
+    );
+    // Progress shows while the run is active, and no second run is offered.
+    expect((await screen.findByRole('status')).textContent).toBe('triage running · 1 of 3');
+    expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
+  });
+
+  it('starts the run in the project under /p/:slug', async () => {
+    vi.mocked(triageApi.startTriageRun).mockResolvedValue({ id: 7 });
+    vi.mocked(triageApi.fetchActiveTriageRun).mockResolvedValueOnce(null).mockResolvedValue(triageRun());
+    renderAt('/p/shop/health?tab=friction');
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+    await waitFor(() =>
+      expect(triageApi.startTriageRun).toHaveBeenCalledWith('shop', { kinds: ['friction', 'agent'], cap: 2 }),
+    );
+  });
+
+  it('refetches friction when the run ends: the result shows and the tab count follows the server', async () => {
+    vi.mocked(triageApi.startTriageRun).mockResolvedValue({ id: 7 });
+    // A fast run: over before the first poll.
+    vi.mocked(triageApi.fetchTriageRun).mockResolvedValue(
+      triageRun({ status: 'ok', done: 2, total: 2, applied: 1, finishedAt: now }),
+    );
+    renderAt('/health?tab=friction');
+    await ready();
+    // 1 uncovered denial + 1 untriaged group.
+    expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/2/);
+    const before = vi.mocked(api.fetchRetroFriction).mock.calls.length;
+    // The run muted the group: the server reports it so.
+    vi.mocked(api.fetchRetroFriction).mockResolvedValue({
+      ...frictionResp,
+      error_groups: [{ ...frictionResp.error_groups[0], triage: { state: 'muted', mutedUntil: now } }],
+    } as never);
+    fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+    expect((await screen.findByText(/agent closed 1/)).textContent).toBe('agent closed 1 · left 0 suggestions');
+    // Health's copy and the embedded Retro panel's copy are both refetched.
+    await waitFor(() => expect(vi.mocked(api.fetchRetroFriction).mock.calls.length).toBe(before + 2));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Friction/ }).textContent).not.toMatch(/2/));
+    expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/1/);
+    expect(await screen.findByText(/noise · until/)).toBeTruthy();
+    expect(screen.getByText('no untriaged groups · agents are checked by rule')).toBeTruthy();
+  });
+
+  it('a 409 follows the active run: its progress shows, nothing else starts, no error', async () => {
+    vi.mocked(triageApi.startTriageRun).mockRejectedValue(new triageApi.TriageBusyError(3));
+    vi.mocked(triageApi.fetchActiveTriageRun)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(triageRun({ id: 3, kinds: ['classifier'], done: 4, total: 9 }));
+    renderAt('/health?tab=friction');
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
+    expect((await screen.findByRole('status')).textContent).toBe('triage running · 4 of 9');
+    expect(triageApi.startTriageRun).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows a run already in flight when the tab opens', async () => {
+    vi.mocked(triageApi.fetchActiveTriageRun).mockResolvedValue(triageRun({ done: 2, total: 5 }));
+    renderAt('/health?tab=friction');
+    expect((await screen.findByRole('status')).textContent).toBe('triage running · 2 of 5');
+    expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
+  });
+
+  it('is absent on the other tabs and asks nothing about runs there', async () => {
+    renderAt('/health?tab=agents');
+    expect(await screen.findByText(/Agent scorecards/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
+    cleanup();
+    renderAt('/health');
+    expect(await screen.findByText('Same error 4 times in this window')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
+    expect(triageApi.fetchActiveTriageRun).not.toHaveBeenCalled();
   });
 });

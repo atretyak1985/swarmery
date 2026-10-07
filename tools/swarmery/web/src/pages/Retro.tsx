@@ -1655,6 +1655,7 @@ export function Retro({
   range: outerRange,
   inboxHref = `${PLACES.find((p) => p.id === 'inbox')?.href(null) ?? '/inbox'}?tab=advisor`,
   onFrictionChanged,
+  frictionReloadKey = 0,
 }: {
   section?: RetroSection;
   range?: AnalyticsRange;
@@ -1662,6 +1663,8 @@ export function Retro({
   inboxHref?: string;
   /** Called after a mute is lifted, so the host can refresh what it derives from friction. */
   onFrictionChanged?: () => void;
+  /** Bumped by the host when friction changed outside this page (a triage run ended): refetch it. */
+  frictionReloadKey?: number;
 } = {}): JSX.Element {
   const today = isoDay();
   const [preset, setPreset] = useState<number | null>(14);
@@ -1722,6 +1725,14 @@ export function Retro({
       .then(setFriction)
       .catch(() => setFriction(null));
   }, [range]);
+
+  // Only a change of the key refetches; a new range is the page load's job.
+  const seenReloadKey = useRef(frictionReloadKey);
+  useEffect(() => {
+    if (seenReloadKey.current === frictionReloadKey) return;
+    seenReloadKey.current = frictionReloadKey;
+    if (wantFriction) loadFriction();
+  }, [frictionReloadKey, wantFriction, loadFriction]);
 
   const load = useCallback((): void => {
     setError(null);
