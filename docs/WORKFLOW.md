@@ -70,7 +70,9 @@ close purely informational items from the Inbox (undoable for seven days), but i
 answers an approval, an agent change or an alert. The Inbox's **run triage** starts a run
 over exactly the items the strip counts — the classifier's guesses, advisor findings,
 lesson candidates and retirements — and never over Health's friction groups or agents; a
-run visits at most 1000 items.
+run visits at most 1000 items. Health → Friction has its own **run triage** for the recurring error
+groups and the failing agents, so the two triggers split the work; the nightly routine
+labels the classifier's guesses only.
 
 ## Where this lives
 

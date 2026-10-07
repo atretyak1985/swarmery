@@ -251,7 +251,10 @@ friction you can remove right now. **Agents** holds per-agent scorecards — run
 rate, error rate, cost, p95 — each compared against the previous window, so you see
 direction, not just a level. **Friction** is the diagnostic half: which tools got denied
 most (each one click from an auto-approve rule), the top error groups, and how long
-approvals kept agents waiting. **Estimates** sets estimated against actual hours per task,
+approvals kept agents waiting. On Friction, **run triage** starts a run over the recurring
+error groups and the agents that fail in most runs — nothing from the Inbox; a group judged
+noise is muted for 30 days, a fixable one gets a recommendation with a fix task to accept in
+the Inbox. **Estimates** sets estimated against actual hours per task,
 next to the lessons your workspace retrospectives recorded.
 
 **Advisor** is where a deterministic rule engine raises evidenced recommendations — every

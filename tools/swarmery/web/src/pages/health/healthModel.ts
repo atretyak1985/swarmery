@@ -205,6 +205,20 @@ export function frictionCount(f: RetroFrictionResp): number {
   return uncoveredDenied(f).length + untriagedErrors(f).length;
 }
 
+/** Agent rows the cap assumes before the agents payload has loaded. */
+export const AGENT_ROWS_FALLBACK = 25;
+
+/**
+ * Upper bound for a friction + agent run: every untriaged group and every agent
+ * row Health holds (25 when agents have not loaded), at least 1. The server's
+ * agent source lists a subset of those rows, so the bound holds; the engine
+ * ignores the excess.
+ */
+export function frictionRunCap(friction: RetroFrictionResp | null, agents: RetroAgentsResp | null): number {
+  const groups = friction !== null ? untriagedErrors(friction).length : 0;
+  return Math.max(1, groups + (agents?.agents.length ?? AGENT_ROWS_FALLBACK));
+}
+
 /* ----- the strip's decision cells ----- */
 
 /** The api mock ignores `?status=`; filtering here keeps counts honest on both. */

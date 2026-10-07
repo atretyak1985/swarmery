@@ -1,0 +1,92 @@
+// Health → Friction's own triage trigger: a run over the recurring error groups
+// and the agents that fail in most runs (kinds `friction` + `agent`), nothing
+// from the Inbox. Independent lines, each shown only when it applies, after the
+// Inbox's TriageBanner: progress of a running run; the result of a run this tab
+// saw end (dismissable); the offer to run triage (not while one runs); an error
+// (dismissable, never shown while a run is active). Driven entirely by props.
+
+import type { TriageProgress, TriageSummary } from '../inbox/TriageBanner';
+
+const BTN =
+  'rounded-[8px] border border-line-strong px-3 py-[5px] font-mono text-[11px] text-ink-3 transition-colors hover:text-ink disabled:opacity-50';
+const BTN_PRIMARY =
+  'rounded-[8px] border border-brand/50 bg-brand/10 px-3 py-[5px] font-mono text-[11px] font-bold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50';
+const LINE = 'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border px-3.5 py-2 text-[12.5px]';
+
+export interface FrictionTriageStripProps {
+  /** Repeated error groups nobody has dealt with yet. */
+  untriaged: number;
+  /** Progress of the active run, or null when none is running. */
+  running: TriageProgress | null;
+  /** The run that ended during this visit, or null. */
+  summary: TriageSummary | null;
+  /** The operator closed the run-result line. */
+  dismissed: boolean;
+  /** Start error, or the failed run's error text; null hides the error line. */
+  error: string | null;
+  busy: boolean;
+  onStart: () => void;
+  onDismiss: () => void;
+  onDismissError: () => void;
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${String(n)} ${n === 1 ? one : many}`;
+}
+
+/** The idle line's text; a failing agent can exist with no friction, so 0 still offers a run. */
+export function frictionOfferText(untriaged: number): string {
+  const groups = untriaged > 0 ? plural(untriaged, 'untriaged group', 'untriaged groups') : 'no untriaged groups';
+  return `${groups} · agents are checked by rule`;
+}
+
+export function FrictionTriageStrip(p: FrictionTriageStripProps): JSX.Element {
+  const running = p.running !== null;
+  const showResult = p.summary !== null && !p.dismissed;
+  const showError = p.error !== null && !running;
+
+  return (
+    <div className="mx-4 mt-3 flex flex-col gap-2 desk:mx-7">
+      {p.running !== null && (
+        <div role="status" aria-live="polite" className={`${LINE} border-brand/30 bg-brand/5 text-ink-2`}>
+          triage running · {p.running.done} of {p.running.total}
+        </div>
+      )}
+
+      {showResult && p.summary !== null && (
+        <div className={`${LINE} border-green/30 bg-green/5 text-ink-2`}>
+          <span role="status">
+            agent closed {p.summary.applied} · left {plural(p.summary.suggested, 'suggestion', 'suggestions')}
+            {p.summary.failed > 0 && ` · ${String(p.summary.failed)} failed`}
+          </span>
+          <button type="button" className={`${BTN} ml-auto`} onClick={p.onDismiss}>
+            dismiss
+          </button>
+        </div>
+      )}
+
+      {!running && (
+        <div className={`${LINE} border-line bg-bg text-ink-2`}>
+          <span>{frictionOfferText(p.untriaged)}</span>
+          <button type="button" className={`${BTN_PRIMARY} ml-auto`} disabled={p.busy} onClick={p.onStart}>
+            run triage
+          </button>
+        </div>
+      )}
+
+      {showError && (
+        <div className={`${LINE} border-red/40 bg-red/5 text-red`}>
+          <span role="alert">{p.error}</span>
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            <button type="button" className={BTN} disabled={p.busy} onClick={p.onStart}>
+              retry
+            </button>
+            <button type="button" className={BTN} aria-label="dismiss error" onClick={p.onDismissError}>
+              dismiss
+            </button>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}

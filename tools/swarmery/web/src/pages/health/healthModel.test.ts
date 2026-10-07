@@ -17,6 +17,7 @@ import {
   countRecs,
   daysFromParam,
   frictionCount,
+  frictionRunCap,
   oneSentence,
   rangeFor,
   topAgents,
@@ -230,5 +231,43 @@ describe('triage', () => {
     const snoozed = g('s', { state: 'snoozed' } as unknown as RetroErrorGroup['triage']);
     expect(triageStateOf(snoozed)).toBe('untriaged');
     expect(frictionCount(friction([snoozed]))).toBe(2);
+  });
+});
+
+describe('frictionRunCap', () => {
+  const g = (key: string, count = 3, triage?: RetroErrorGroup['triage']): RetroErrorGroup => ({
+    key,
+    example: key,
+    count,
+    last_ts: '',
+    sessions: [],
+    ...(triage !== undefined ? { triage } : {}),
+  });
+  const friction = (groups: RetroErrorGroup[]): RetroFrictionResp => ({
+    denied_tools: [{ tool: 'Bash', denied: 7, calls: 12, has_rule: false }],
+    error_groups: groups,
+    approvals: { resolved: 0, avg_resolve_sec: null, wait_total_min: 0, pending: 0 },
+    approx: false,
+  });
+  const agents = (n: number): RetroAgentsResp =>
+    resp(Array.from({ length: n }, (_, i) => row(`agent-${String(i)}`, 10, 0.5, { runs: 0, rate: 0 })));
+
+  it('adds the untriaged groups to the agent rows; denials and triaged groups do not count', () => {
+    const f = friction([g('a'), g('b'), g('once', 1), g('m', 3, { state: 'muted' })]);
+    expect(frictionRunCap(f, agents(3))).toBe(5);
+  });
+
+  it('counts the agent rows alone when no group is untriaged', () => {
+    expect(frictionRunCap(friction([g('m', 3, { state: 'muted' })]), agents(4))).toBe(4);
+  });
+
+  it('assumes 25 agent rows while agents have not loaded', () => {
+    expect(frictionRunCap(friction([g('a')]), null)).toBe(26);
+    expect(frictionRunCap(null, null)).toBe(25);
+  });
+
+  it('never goes below 1', () => {
+    expect(frictionRunCap(friction([]), agents(0))).toBe(1);
+    expect(frictionRunCap(null, agents(0))).toBe(1);
   });
 });
