@@ -88,7 +88,10 @@ and the keyboard does the work: `j`/`k` to move, `e` for the primary action, `x`
 or dismiss, `s` to skip.
 
 An agent can work the backlog for you. When something it could handle has waited a day,
-a strip under the header offers **run triage**. The agent labels the classifier's guesses
+a strip under the header offers **run triage**. **run triage** starts a run over exactly the
+items the strip counts — the classifier's guesses, advisor findings, lesson candidates and
+retirements — and never over Health's friction groups or agents; a run visits at most 1000
+items. The agent labels the classifier's guesses
 (it keeps a sample of its labels for you to check, and the Inbox shows how often it
 matched you), closes what is only informational, and leaves a suggestion with its reasoning
 on lessons, advisor recommendations and retirements. The strip lists the suggestions
