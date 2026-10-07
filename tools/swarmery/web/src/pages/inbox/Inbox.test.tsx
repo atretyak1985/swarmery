@@ -24,8 +24,12 @@ import * as lessons from '../../api/lessons';
 import * as triage from '../../api/triage';
 import type { TriageVerdict } from '../../api/triage';
 import { Inbox } from './Inbox';
+import { TRIAGE_INBOX_KINDS } from './inboxModel';
 
 const NOW = Date.now();
+// The fixture's agent-eligible items: one classifier guess, one advisor finding,
+// one lesson and one retirement (the banner's shown count, and the run's cap).
+const AGENT_ELIGIBLE = 4;
 const iso = (offsetSec: number): string => new Date(NOW + offsetSec * 1000).toISOString();
 
 function approvalRow(id: number, toolName: string, input: unknown, expiresIn: number): Record<string, unknown> {
@@ -389,11 +393,11 @@ describe('Inbox', () => {
 
     it('offers a run for an old agent-eligible item and starts it unscoped on /inbox', async () => {
       await renderInbox();
-      expect(screen.getByText(/can be handled by an agent/)).toBeTruthy();
+      expect(screen.getByText(`${String(AGENT_ELIGIBLE)} can be handled by an agent · 3 need you`)).toBeTruthy();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
       });
-      expect(triage.startTriageRun).toHaveBeenCalledWith(null);
+      expect(triage.startTriageRun).toHaveBeenCalledWith(null, { kinds: TRIAGE_INBOX_KINDS, cap: AGENT_ELIGIBLE });
     });
 
     it('starts the run with the project slug on /p/:slug/inbox', async () => {
@@ -408,10 +412,13 @@ describe('Inbox', () => {
         await Promise.resolve();
         await Promise.resolve();
       });
+      // The project's recommendations are not mocked, so the advisor finding is
+      // absent here: the banner shows 3, and 3 is the cap the click sends.
+      expect(screen.getByText('3 can be handled by an agent · 3 need you')).toBeTruthy();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
       });
-      expect(triage.startTriageRun).toHaveBeenCalledWith('shop');
+      expect(triage.startTriageRun).toHaveBeenCalledWith('shop', { kinds: TRIAGE_INBOX_KINDS, cap: 3 });
     });
 
     function triageRun(over: Record<string, unknown>): never {
@@ -454,6 +461,11 @@ describe('Inbox', () => {
       expect(screen.queryByText('budget exhausted')).toBeNull();
       expect(screen.queryByRole('button', { name: 'retry' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
+      // The retry sends the same body as the first click.
+      expect(vi.mocked(triage.startTriageRun).mock.calls).toEqual([
+        [null, { kinds: TRIAGE_INBOX_KINDS, cap: AGENT_ELIGIBLE }],
+        [null, { kinds: TRIAGE_INBOX_KINDS, cap: AGENT_ELIGIBLE }],
+      ]);
     });
 
     it('shows the reasoning on a suggested lesson; e accepts the verdict, x still dismisses manually', async () => {

@@ -13,6 +13,7 @@ import {
   fetchTriageRun,
   fetchTriageVerdicts,
   startTriageRun,
+  type StartTriageOptions,
   type TriageAudit,
   type TriageRun,
   type TriageVerdict,
@@ -33,7 +34,7 @@ export interface TriageState {
   lastRun: TriageRun | null;
   audit: TriageAudit | null;
   reload: () => void;
-  start: () => Promise<void>;
+  start: (opts?: StartTriageOptions) => Promise<void>;
   startError: string | null;
 }
 
@@ -131,13 +132,13 @@ export function useTriage(scope: string | null, onRunEnd?: () => void, enabled =
     };
   }, [runId, reload]);
 
-  const start = useCallback(async (): Promise<void> => {
+  const start = useCallback(async (opts?: StartTriageOptions): Promise<void> => {
     // A new attempt forgets the previous run's result and the previous error.
     setStartError(null);
     setLastRun(null);
     let startedId: number | null = null;
     try {
-      startedId = (await startTriageRun(scope)).id;
+      startedId = (await startTriageRun(scope, opts)).id;
     } catch (e) {
       // A run already in flight is not the operator's problem: just follow it.
       if (!(e instanceof TriageBusyError)) {

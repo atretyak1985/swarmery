@@ -230,14 +230,27 @@ export async function fetchTriageRun(id: number): Promise<TriageRun> {
   return readJson<TriageRun>(await fetch(path), `GET ${path}`);
 }
 
+export interface StartTriageOptions {
+  /** Kinds the run visits; the server's registry order applies. Omitted = every registered kind. */
+  kinds?: readonly string[];
+  /** Most items the run takes, across its kinds; omitted = the server's DefaultCap (50); the server clamps to MaxCap (1000). */
+  cap?: number;
+}
+
 /**
  * POST /api/triage/runs — start a run over the Inbox backlog (null = every project).
+ * A field is sent only when given; `cap` only when it is a positive integer.
  * A 409 throws a TriageBusyError (message starts with `busy`); its `activeRunId` is the run in flight.
  */
-export async function startTriageRun(project: string | null): Promise<{ id: number }> {
+export async function startTriageRun(project: string | null, opts: StartTriageOptions = {}): Promise<{ id: number }> {
   if (MOCK) return { id: MOCK_RUN.id };
   const path = '/api/triage/runs';
-  const res = await post(path, project === null ? {} : { project });
+  const { kinds, cap } = opts;
+  const res = await post(path, {
+    ...(project === null ? {} : { project }),
+    ...(kinds === undefined ? {} : { kinds }),
+    ...(cap !== undefined && Number.isInteger(cap) && cap > 0 ? { cap } : {}),
+  });
   if (res.status === 409) {
     const body = await errorBody(res);
     throw new TriageBusyError(typeof body.activeRunId === 'number' ? body.activeRunId : null);

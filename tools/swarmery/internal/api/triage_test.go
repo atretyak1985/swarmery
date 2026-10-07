@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
@@ -309,4 +310,80 @@ func TestTriageRawScalar(t *testing.T) {
 			t.Errorf("rawScalar(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+// apiCountSource is a Source of one Inbox kind that offers n distinct items.
+type apiCountSource struct {
+	kind string
+	n    int
+}
+
+func (s *apiCountSource) Kind() string { return s.kind }
+func (s *apiCountSource) Collect(context.Context, triage.Scope, int) ([]triage.Item, error) {
+	items := make([]triage.Item, s.n)
+	for i := range items {
+		ref := fmt.Sprintf("%s-%d", s.kind, i)
+		items[i] = triage.Item{Kind: s.kind, Key: ref, Title: ref,
+			Parts: []triage.Part{{Ref: ref, Allowed: []string{"noise", "fixable"}}}}
+	}
+	return items, nil
+}
+func (*apiCountSource) Apply(context.Context, triage.Item, triage.Part, string, string, json.RawMessage) (triage.Applied, error) {
+	return triage.Applied{Prior: json.RawMessage(`{}`)}, nil
+}
+func (*apiCountSource) Undo(context.Context, triage.Verdict) error { return nil }
+func (*apiCountSource) Open(context.Context, string) (bool, error) { return true, nil }
+
+// The Inbox banner's request body reaches StartReq: its kinds are recorded on
+// the run and its cap bounds the run; a cap above MaxCap is clamped, and a body
+// without a cap takes DefaultCap.
+func TestTriageAPIStartBodyReachesStartReq(t *testing.T) {
+	startRun := func(t *testing.T, srv string, body map[string]any) triage.Run {
+		t.Helper()
+		resp, raw := doRoutineReq(t, http.MethodPost, srv+"/api/triage/runs", body)
+		if resp.StatusCode != http.StatusAccepted {
+			t.Fatalf("start %v = %d %s", body, resp.StatusCode, raw)
+		}
+		var started struct{ ID int64 }
+		decodeInto(t, raw, &started)
+		resp, raw = doRoutineReq(t, http.MethodGet, fmt.Sprintf("%s/api/triage/runs/%d", srv, started.ID), nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("run = %d %s", resp.StatusCode, raw)
+		}
+		var run triage.Run
+		decodeInto(t, raw, &run)
+		return run
+	}
+
+	t.Run("kinds recorded, cap honoured", func(t *testing.T) {
+		srv, svc, _ := serverWithTriage(t)
+		for _, k := range []string{"classifier", "advisor", "lesson"} {
+			svc.Register(&apiCountSource{kind: k, n: 4})
+		}
+		run := startRun(t, srv, map[string]any{"kinds": []string{"classifier", "advisor"}, "cap": 3})
+		if !slices.Equal(run.Kinds, []string{"classifier", "advisor"}) {
+			t.Fatalf("kinds = %v", run.Kinds)
+		}
+		if run.Total != 3 {
+			t.Fatalf("total = %d, want the cap 3 (12 items offered)", run.Total)
+		}
+	})
+
+	t.Run("cap above MaxCap is clamped", func(t *testing.T) {
+		srv, svc, _ := serverWithTriage(t)
+		svc.Register(&apiCountSource{kind: "classifier", n: triage.MaxCap + 1})
+		run := startRun(t, srv, map[string]any{"kinds": []string{"classifier"}, "cap": 5000})
+		if run.Total != triage.MaxCap {
+			t.Fatalf("total = %d, want MaxCap %d", run.Total, triage.MaxCap)
+		}
+	})
+
+	t.Run("no cap takes DefaultCap", func(t *testing.T) {
+		srv, svc, _ := serverWithTriage(t)
+		svc.Register(&apiCountSource{kind: "classifier", n: triage.DefaultCap + 10})
+		run := startRun(t, srv, map[string]any{})
+		if run.Total != triage.DefaultCap {
+			t.Fatalf("total = %d, want DefaultCap %d", run.Total, triage.DefaultCap)
+		}
+	})
 }

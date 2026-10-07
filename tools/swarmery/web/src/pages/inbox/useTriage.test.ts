@@ -188,6 +188,23 @@ describe('useTriage', () => {
     expect(result.current.startError).toContain('503');
   });
 
+  it('start forwards its options to startTriageRun with the scope', async () => {
+    active.mockResolvedValue(null);
+    startRun.mockResolvedValue({ id: 7 });
+    finished.mockResolvedValue(run({ status: 'ok', finishedAt: '2026-10-05T12:00:01Z' }));
+    const { result } = renderHook(() => useTriage('web'));
+    await flush();
+    const opts = { kinds: ['classifier', 'advisor'], cap: 3 };
+    await act(async () => {
+      await result.current.start(opts);
+    });
+    expect(startRun).toHaveBeenCalledWith('web', opts);
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(startRun).toHaveBeenLastCalledWith('web', undefined);
+  });
+
   it('a run that already ended by the first poll still reports its result, once', async () => {
     const onRunEnd = vi.fn();
     active.mockResolvedValue(null);
