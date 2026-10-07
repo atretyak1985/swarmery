@@ -1489,6 +1489,33 @@ export interface MemoryConsolidateResp {
   error?: string;
 }
 
+// --- memory-engineering phase 1/2 — stale-fact lint -------------------------
+
+/** One stale claim: a memory line that calls a PR open after history says it merged. */
+export interface MemoryLintFinding {
+  /** Absolute path of the memory file (the same handle as MemoryFile.path). */
+  file: string;
+  /** 1-based line number of the claim. */
+  lineNo: number;
+  pr: number;
+  /** The claim text as written, trimmed. */
+  claim: string;
+  mergeSha: string;
+  /** RFC3339 commit time of the merge. */
+  mergedAt: string;
+}
+
+/** GET /api/projects/{id}/memory/lint — empty findings is the healthy state. */
+export interface MemoryLintReport {
+  dir: string;
+  project: string;
+  /** Memory files scanned. */
+  files: number;
+  /** PR claims parsed (stale or not). */
+  claims: number;
+  findings: MemoryLintFinding[];
+}
+
 /** 409 body of a PUT whose base_hash no longer matches disk. */
 export interface MemoryConflict {
   error: string;

@@ -62,6 +62,7 @@ import type {
   MatrixResp,
   MemoryConsolidateResp,
   MemoryFileContent,
+  MemoryLintReport,
   MemoryListResp,
   PlaybookRollup,
   ProductivityResp,
@@ -2717,6 +2718,31 @@ export const mockApi = {
       dryRun,
       plan,
       result: { moved: [], closedDir: plan.closedDir, indexPath: plan.indexPath },
+    };
+  },
+
+  // memory-engineering phase 2 — stale-fact lint. One finding so the panel has
+  // something to point at in the demo dataset.
+  async memoryLint(_project: string | number): Promise<MemoryLintReport> {
+    await delay(100);
+    const index = mockMemoryFiles.find((f) => f.kind === 'auto-memory');
+    const file = index?.path ?? '/home/dev/.claude/projects/-work-demo/memory/MEMORY.md';
+    const dir = file.slice(0, file.lastIndexOf('/'));
+    return {
+      dir,
+      project: '/work/demo',
+      files: 1,
+      claims: 3,
+      findings: [
+        {
+          file,
+          lineNo: 5,
+          pr: 212,
+          claim: 'PR #212 open: settings.local.json as implicit overlay',
+          mergeSha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
+          mergedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(),
+        },
+      ],
     };
   },
 
