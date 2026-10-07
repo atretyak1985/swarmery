@@ -76,7 +76,7 @@ export function TriageBanner(p: TriageBannerProps): JSX.Element | null {
   const nAccept = s.acceptable;
 
   return (
-    <div className="mx-9 mt-3 flex flex-col gap-2">
+    <div className="mx-9 my-3 flex flex-col gap-2">
       {p.running !== null && (
         <div role="status" aria-live="polite" className={`${LINE} border-brand/30 bg-brand/5 text-ink-2`}>
           triage running · {p.running.done} of {p.running.total}
