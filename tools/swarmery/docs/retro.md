@@ -71,13 +71,13 @@ cited by a recommendation matches what the pages show.
 | **evals chip** | `passed/total` from the latest imported eval run for the agent. |
 | **approx flag** | Set when the range (or its comparison window) overlaps pruned days that only exist as daily rollups — counts there are honest but incomplete. |
 
-## 4. The advisor — rules R1–R6 (plus R10, R11)
+## 4. The advisor — rules R1–R6 (plus R10, R11, R14)
 
 > [!NOTE]
 > The advisor registers more rules than this section documents. `advisor.Run` in
 > `internal/advisor/advisor.go` is the authoritative list; the rules described below
-> are the original six, plus R10 (the auto-memory index budget) and R11 (the recurring
-> lesson), each with its own subsection after the table.
+> are the original six, plus R10 (the auto-memory index budget), R11 (the recurring
+> lesson) and R14 (the repeated operator correction), each with its own subsection after the table.
 
 `internal/advisor` runs at daemon startup, on a 24 h ticker, and on demand
 (`Analyze now` → `POST /api/retro/advise`). Every rule evaluates the trailing
@@ -95,6 +95,7 @@ session ids.
 | **R6** cache regression | config | cache hit rate dropped > 10 p.p. vs the preceding window | check prompt/session structure changes |
 | **R10** auto-memory index | memory | the project's `MEMORY.md` is > 6 KiB, **or** > 50 % of its ≥ 10 index lines are closed | run `swarmery memory consolidate` (see below) |
 | **R11** recurring lesson | skill | one lesson identity (`norm_title`) turns up in ≥ 3 **distinct** tasks in the window | move the lesson into the `SKILL.md` the next run actually reads |
+| **R14** repeated operator correction | skill | one correction identity (`norm_key`) was made ≥ 2 times across ≥ 2 **distinct** refs in the window (a lesson rewritten/dismissed/retired by hand, a triage verdict undone, a plan revision rejected, a classifier answer contradicted) | put the correction into the procedure that produced the mistake, so nobody has to make it by hand again |
 
 ### R10 — the auto-memory index budget
 
@@ -160,6 +161,43 @@ in which the lesson was finally absorbed, and closing an `accepted` row on that 
 A `proposed` row is still swept when the rule goes quiet, and re-proposed if the lesson returns.
 
 The same fold backs the **Group by lesson** toggle on Health → Estimates — see `?group=1` in §7.
+
+### R14 — the correction the operator keeps making
+
+Every place where a person overrides what an agent produced already existed and already
+worked: the lesson review queue (edit, dismiss, retire), the triage verdict's **Undo**, the
+plan revision's **Reject**, the classifier's ground-truth label. What none of them did was
+*count*. Each correction was absorbed by its own feature and forgotten, so the same mistake
+could be corrected by hand a dozen times without anything noticing.
+
+Migration **0102** adds `operator_corrections` — one row per override, written by the operator
+**endpoint** (`internal/api` lessons/triage/revisions/decisions) after its own write succeeded,
+through `internal/corrections.Record`. The row carries `source`
+(`lesson_edit | lesson_dismiss | lesson_retire | triage_undo | revision_reject | truth_disagree`),
+a typed text `ref` (`lesson:12`, `verdict:88`, `revision:5`, `decision:1947` — no foreign keys to
+hot tables, per 0073), `before`/`after`, the operator's `reason`, and `norm_key`: the reason — or
+the after text when the surface has no reason field — folded by the **same**
+`wsingest.NormalizeLessonTitle` R11 uses, so two differently worded corrections of one thing are
+one identity and `''` is "no identity", skipped by every reader. Two deliberate silences: a lesson
+edit that changes neither the title nor the guidance (area globs only) writes no row, and a
+ground-truth label that *agrees* with the classifier writes no row — a label is not a correction.
+A failed ledger write is logged and never fails the operator's action. The ledger is written at
+the endpoint and **never inside `lessons.Retire`**: the verifier's auto-retire calls that too, and
+a daemon retiring its own lesson is not a person correcting it (`internal/lessons` pins this).
+
+R14 fires when one `norm_key` was corrected ≥ 2 times across ≥ 2 **distinct refs** inside the
+14-day window. Distinct refs, never rows: the same lesson edited twice is the operator finishing a
+thought, not a pattern. `detail` reads `"<sample>" was corrected N times across <ref…> (<sources>)`;
+the evidence carries `counts{corrections, refs}`, `refs`, `sources`, `norm_key`; the baseline
+metric is `correction_count` (lower is better, zero rows is "no data", not zero).
+
+`target_kind` is **`skill`** and the target is the `norm_key`, exactly like R11, so the improve
+loop's skill proposals route it unchanged and the recommendation is the human gate before anything
+is rewritten. Like R11 it is **not** self-checking: a fortnight in which nobody corrected anything
+looks identical to a fortnight in which the mistake stopped being made.
+
+`GET /api/corrections?window=14d&limit=200` returns the window as `{groups, rows}` — the same fold
+R14 reads, for a later page; there is no POST, a correction is something the operator *did*.
 
 ### Skill proposals — what R11 turns into
 
@@ -330,6 +368,9 @@ is the same threshold R11 fires on.
   Numbered **above 0071 on purpose**: migrations apply in filename order and 0071 rebuilds the
   table with its vocabulary spelled out in full, so a widening numbered below it would be
   silently undone on a fresh database with no error anywhere.
+- Migration **0102** — `operator_corrections` + `idx_operator_corrections_key (norm_key, created_at)`:
+  the operator correction ledger R14 reads (§4). `source` is a CHECK vocabulary, `ref` a typed text
+  pointer (no FKs, per 0073), `norm_key` the `NormalizeLessonTitle` fold of the reason/after text.
 - Migration **0074** — `agent_change_proposals.target_kind` + `target_path`, the `needs_target`
   status, and a one-open partial unique index keyed on
   `(target_kind, COALESCE(NULLIF(target_path,''), agent))` instead of `0022`'s `(agent)`. Numbered

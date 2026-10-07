@@ -142,6 +142,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// phase 16: the retirement queue (proposed, never silent — confirm or keep;
 	// unanswered proposals auto-retire after the documented window) and the
 	// forecast calibration view (groups under 20 samples are never returned).
+	// memory-engineering phase 3: the operator correction ledger, read-only.
+	mux.HandleFunc("GET /api/corrections", h.listCorrections)
 	mux.HandleFunc("GET /api/lessons/retirements", h.listRetirements)
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/confirm", requireLocalOrigin(h.confirmRetirement))
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/keep", requireLocalOrigin(h.keepLesson))

@@ -15,6 +15,13 @@ package api
 //
 // Every mutation is an operator action behind requireLocalOrigin. Errors:
 // 404 unknown lesson, 409 wrong state, 400 a body that breaks the contract.
+//
+// Edit, dismiss and retire are also operator CORRECTIONS of what the lesson
+// generator produced, so each writes one operator_corrections row after its
+// own write succeeded (internal/corrections; memory-engineering phase 3). The
+// ledger is written here, at the endpoint, and never inside lessons.Retire —
+// the verifier's auto-retire calls that too, and a daemon retiring its own
+// lesson is not an operator correction.
 
 import (
 	"encoding/json"
@@ -22,12 +29,17 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/corrections"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
+
+// lessonRef is the ledger's pointer at a lesson ('lesson:12').
+func lessonRef(id int64) string { return "lesson:" + strconv.FormatInt(id, 10) }
 
 var lessonStatuses = map[string]bool{
 	"": true, lessons.StatusCandidate: true, lessons.StatusActive: true, lessons.StatusRetired: true,
@@ -125,8 +137,40 @@ func (h *Handler) editLesson(w http.ResponseWriter, r *http.Request) {
 	if !decodeLessonBody(w, r, &body) {
 		return
 	}
-	l, err := lessons.Edit(h.DB, id, body, time.Now())
+	// The lesson BEFORE the edit is the correction's `before`; Edit returns
+	// only the result. A Get failure here is not the operator's problem — Edit
+	// reports its own 404/409 and the ledger simply gets no row.
+	before, beforeErr := lessons.Get(h.DB, id)
+	now := time.Now()
+	l, err := lessons.Edit(h.DB, id, body, now)
+	if err == nil && beforeErr == nil {
+		if c, changed := lessonEditCorrection(before, l); changed {
+			corrections.Record(h.DB, c, now) // logged inside; never fails the edit
+		}
+	}
 	writeLesson(w, l, err)
+}
+
+// lessonEditCorrection describes an edit as a correction: only the title and
+// the guidance count (an area-glob change re-scopes the lesson, it does not
+// contradict it), and an edit that changed neither writes no row.
+func lessonEditCorrection(before, after lessons.Lesson) (corrections.Correction, bool) {
+	var was, is []string
+	if before.Title != after.Title {
+		was, is = append(was, before.Title), append(is, after.Title)
+	}
+	if before.Guidance != after.Guidance {
+		was, is = append(was, before.Guidance), append(is, after.Guidance)
+	}
+	if len(is) == 0 {
+		return corrections.Correction{}, false
+	}
+	return corrections.Correction{
+		Source: corrections.SourceLessonEdit,
+		Ref:    lessonRef(after.ID),
+		Before: strings.Join(was, "\n"),
+		After:  strings.Join(is, "\n"),
+	}, true
 }
 
 func (h *Handler) mergeLesson(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +199,14 @@ func (h *Handler) dismissLesson(w http.ResponseWriter, r *http.Request) {
 	if !decodeLessonBody(w, r, &body) {
 		return
 	}
-	l, err := lessons.Dismiss(h.DB, id, body.Reason, time.Now())
+	now := time.Now()
+	l, err := lessons.Dismiss(h.DB, id, body.Reason, now)
+	if err == nil {
+		corrections.Record(h.DB, corrections.Correction{
+			Source: corrections.SourceLessonDismiss, Ref: lessonRef(id),
+			Before: l.Title, Reason: body.Reason,
+		}, now)
+	}
 	writeLesson(w, l, err)
 }
 
@@ -168,6 +219,13 @@ func (h *Handler) retireLesson(w http.ResponseWriter, r *http.Request) {
 	if !decodeLessonBody(w, r, &body) {
 		return
 	}
-	l, err := lessons.Retire(h.DB, id, body.Reason, time.Now())
+	now := time.Now()
+	l, err := lessons.Retire(h.DB, id, body.Reason, now)
+	if err == nil {
+		corrections.Record(h.DB, corrections.Correction{
+			Source: corrections.SourceLessonRetire, Ref: lessonRef(id),
+			Before: l.Title, Reason: body.Reason,
+		}, now)
+	}
 	writeLesson(w, l, err)
 }
