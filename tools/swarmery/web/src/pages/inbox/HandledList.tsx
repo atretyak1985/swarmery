@@ -35,7 +35,7 @@ export function HandledList({
   const rows = [...verdicts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
-    <div className="h-full overflow-y-auto px-9 py-4">
+    <div className="h-full overflow-y-auto py-4">
       {error !== null && (
         <div role="alert" className="mb-3 flex items-center gap-3 font-mono text-[11px] text-red">
           <span>{error}</span>

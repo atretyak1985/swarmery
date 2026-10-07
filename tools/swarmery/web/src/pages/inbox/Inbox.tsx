@@ -243,7 +243,7 @@ export function Inbox(): JSX.Element {
         </div>
       )}
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 px-9">
         {tab === 'handled' ? (
           <HandledList
             verdicts={triage.handled}
@@ -254,7 +254,7 @@ export function Inbox(): JSX.Element {
             now={now}
           />
         ) : !loading && visible.length === 0 ? (
-          <div className="px-9 py-10 text-[13px] text-ink-dim">Nothing is waiting on you.</div>
+          <div className="py-10 text-[13px] text-ink-dim">Nothing is waiting on you.</div>
         ) : (
           <SplitPane
             ariaLabel="waiting decisions"
