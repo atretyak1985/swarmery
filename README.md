@@ -47,7 +47,7 @@ open http://localhost:7777
 
 - **See everything** — every session across every project, live: tool calls, diffs, cost, sub-agents, errors.
 - **Stop being the bottleneck** — approve or deny permission prompts from one Inbox; turn a recurring prompt into an auto-approve rule.
-- **Delegate, don't babysit** — run a card from the board (Plans → Board); a headless agent moves it through Working to Review in its own git worktree, and a verifier grades the result.
+- **Delegate, don't babysit** — run a phase, or the whole plan, from Plans; a headless agent executes it in its own git worktree, ticks the acceptance criteria as it goes, and a verifier grades the result.
 - **Improve the system, not the prompt** — per-agent scorecards, a rule-based advisor, and agent-rewrite proposals you review as a diff.
 - **Ship agents once** — a real Claude Code plugin marketplace: `core` + opt-in domain packs, semver'd, adopted with `/plugin update`.
 

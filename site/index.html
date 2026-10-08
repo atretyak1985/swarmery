@@ -107,9 +107,14 @@
   .btn-primary:hover{background:var(--accent); border-color:var(--accent); color:var(--on-accent); opacity:.88;}
   .btn-sm{padding:6px 12px; font-size:.72rem;}
   .cta-row{display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 0;}
-  .promo{margin:30px 0 0;}
-  .promo video{display:block; width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line); border-radius:12px;}
-  .promo figcaption{margin:8px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
+  .vid{margin:30px 0 0;}
+  .vid video{display:block; width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line); border-radius:12px;}
+  .vid figcaption{margin:8px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
+  .vid.sec{margin:26px 0 22px;}
+  .shot{margin:0;}
+  .shot img{display:block; width:100%; height:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel);}
+  .shot figcaption{margin:8px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
+  .shot.wide{margin:0 0 28px;}
 
   /* ── sections ── */
   main section{padding:56px 0 8px;}
@@ -153,32 +158,6 @@
   .plugin.is-core .name{color:var(--accent);}
   .plugin p{margin:0; font-size:.84rem; color:var(--ink-dim); max-width:none;}
 
-  /* ── three-lane board mockup ── */
-  .board{
-    display:flex; gap:14px; margin:26px 0 10px; padding:18px;
-    background:var(--panel2); border:1px solid var(--line); border-radius:14px;
-    overflow-x:auto;
-  }
-  .lane{flex:1 1 0; min-width:210px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px;}
-  .lane-title{
-    font-family:var(--mono); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase;
-    color:var(--ink-dim); display:flex; justify-content:space-between; gap:8px; margin-bottom:10px;
-  }
-  .lane-title b{color:var(--ink); font-weight:600;}
-  .mcard{border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:.8rem; background:var(--bg);}
-  .mcard .tid{font-family:var(--mono); font-size:.68rem; color:var(--ink-dim);}
-  .mcard .row{display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;}
-  .chip{font-family:var(--mono); font-size:.64rem; border:1px solid var(--line-strong); border-radius:99px; padding:1px 8px; color:var(--ink-dim);}
-  .chip.act{border-color:var(--accent); color:var(--accent);}
-  .chip.good{border-color:var(--good); color:var(--good);}
-  .chip.bad{border-color:var(--bad); color:var(--bad);}
-  .grouphead{font-family:var(--mono); font-size:.68rem; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.1em; margin:10px 0 6px;}
-  .drawer{
-    padding:10px 16px; border:1px dashed var(--line-strong); border-radius:10px;
-    color:var(--ink-dim); font-size:.78rem; font-family:var(--mono);
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
-  }
-
   /* ── flow strip ── */
   .flow{display:flex; flex-wrap:wrap; align-items:center; gap:6px 0; list-style:none; padding:0; margin:18px 0 0;}
   .flow li{display:flex; align-items:center;}
@@ -194,16 +173,6 @@
   .feature-list{list-style:none; padding:0; margin:18px 0 0;}
   .feature-list li{padding:12px 0; border-top:1px solid var(--line); font-size:.92rem; color:var(--ink-dim);}
   .feature-list li b{font-family:var(--mono); font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink); display:block; margin-bottom:2px;}
-  .app{display:flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); min-height:230px;}
-  .app-side{width:132px; flex:0 0 132px; background:var(--panel2); border-right:1px solid var(--line); padding:12px 10px;}
-  .app-brand{display:block; font-family:var(--mono); font-size:.74rem; font-weight:600; color:var(--accent); margin-bottom:12px;}
-  .app-nav{display:block; font-family:var(--mono); font-size:.7rem; color:var(--ink-dim); padding:5px 8px; border-radius:6px;}
-  .app-nav.on{background:var(--accent-soft); color:var(--accent);}
-  .app-main{flex:1 1 auto; padding:12px 14px; min-width:0;}
-  .app-row{display:flex; justify-content:space-between; gap:10px; font-family:var(--mono); font-size:.68rem; color:var(--ink-dim); padding:7px 0; border-bottom:1px solid var(--line);}
-  .app-row b{color:var(--ink); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .app-row:last-child{border-bottom:none;}
-
   /* ── license note + footer ── */
   .note{
     border-left:3px solid var(--accent); background:var(--accent-soft);
@@ -219,8 +188,6 @@
 
   @media (prefers-reduced-motion: no-preference){
     html{scroll-behavior:smooth;}
-    .mcard{transition:border-color .15s ease;}
-    .mcard:hover{border-color:var(--accent);}
   }
 </style>
 </head>
@@ -233,7 +200,8 @@
     <a class="brand" href="#hero">swarmery</a>
     <nav class="nav-links" aria-label="Primary">
       <a href="#why">Why</a>
-      <a href="#how">How it works</a>
+      <a href="#planning">Planning</a>
+      <a href="#inbox">Inbox</a>
       <a href="#control-plane">Control plane</a>
       <a href="#plugins">Plugins</a>
       <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a>
@@ -253,7 +221,7 @@
         <a class="btn btn-primary" href="https://github.com/atretyak1985/swarmery">View on GitHub</a>
         <a class="btn" href="https://github.com/atretyak1985/swarmery/tree/main/docs">Read the docs</a>
       </div>
-      <figure class="promo">
+      <figure class="vid">
         <video controls preload="metadata" playsinline poster="promo-poster.jpg" aria-label="Swarmery promo: a 75-second tour of the dashboard — sessions, the approval queue, plans and headless agents">
           <source src="video/swarmery-promo.mp4" type="video/mp4">
           Your browser does not play mp4 — <a href="video/swarmery-promo.mp4">download the promo</a>.
@@ -292,8 +260,9 @@
         </div>
         <div class="code-card">
           <button class="copy" type="button" hidden>Copy</button>
-          <pre><code>cd tools/swarmery &amp;&amp; make build &amp;&amp; ./swarmery serve</code></pre>
-          <p class="cap">Build and run the control plane. One binary, one SQLite file, listening on <code>:7777</code>.</p>
+          <pre><code>curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh | bash
+swarmery serve</code></pre>
+          <p class="cap">Install and run the control plane: the script fetches the release binary for your platform, verifies it against <code>SHA256SUMS</code>, and the daemon listens on <code>:7777</code>. Sessions you already ran show up at once.</p>
         </div>
       </div>
     </div>
@@ -319,86 +288,106 @@
         </div>
         <div class="card">
           <p class="eyebrow">isolation</p>
-          <h3>One worktree per task</h3>
-          <p>Every dispatched task runs on its own <code>swarm/&lt;T-id&gt;</code> branch inside an isolated git worktree, cut from the tip of whatever branch your checkout is on. Your working tree is never the agent's workspace.</p>
+          <h3>One worktree per run</h3>
+          <p>Every phase run and every dispatched task gets its own branch inside an isolated git worktree, cut from the tip of whatever your checkout is on. Your working tree is never the agent's workspace, and a janitor prunes what finished runs leave behind.</p>
         </div>
         <div class="card">
           <p class="eyebrow">verification</p>
           <h3>Verdicts that can say no</h3>
-          <p>A read-only verifier diffs the work against the persisted <code>start_point</code> — not the branch against itself — and returns PASS, FAIL or INCONCLUSIVE. A FAIL births a fix card with a bounded retry budget instead of a quiet green tick.</p>
+          <p>A read-only verifier diffs the work against the persisted <code>start_point</code> — not the branch against itself — and returns PASS, FAIL or INCONCLUSIVE. A phase counts as done when its acceptance criteria are ticked and its completion report is written, never because a process exited 0.</p>
         </div>
         <div class="card">
           <p class="eyebrow">plans</p>
           <h3>A phase DAG, not a wish list</h3>
-          <p>An idea becomes a phased plan in which every phase carries measurable acceptance criteria and a completion report. Runs execute that graph in dependency order, with a review between phases.</p>
+          <p>An idea becomes a phased plan in which every phase carries measurable acceptance criteria, a forecast of its size, duration and outcome, and a completion report. Runs execute that graph in dependency order, and the markdown on disk stays the source of truth.</p>
         </div>
         <div class="card">
           <p class="eyebrow">observability</p>
           <h3>Everything on the record</h3>
-          <p>The control plane indexes every session transcript into local SQLite: tokens, cost, approvals, accounts and retro insights. Nothing has to leave the machine for any of it to work.</p>
+          <p>The control plane indexes every session transcript into local SQLite: tokens, cost, approvals, forecasts against actuals, and the lessons drawn from the gap. Nothing has to leave the machine for any of it to work.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="how">
+  <section id="planning">
     <div class="wrap">
       <div class="sec-head">
-        <p class="eyebrow">how it works</p>
-        <h2>A funnel, not a parallel kanban.</h2>
-        <p>Work enters as a proposal, gets dispatched into an isolated worktree, and leaves through a review with exactly three honest exits. Cards are moved by actions, never by dragging.</p>
+        <p class="eyebrow">planning · episode 1</p>
+        <h2>From an idea to a plan your agents can run.</h2>
+        <p>Describe what you want in prose. A planner interviews you, writes a phased plan with acceptance criteria and forecasts, and the same page runs it — one phase at a time or the whole graph — in isolated worktrees.</p>
       </div>
 
-      <div class="board" role="img" aria-label="Mockup of the swarmery board: three lanes side by side. Inbox holds captured proposals with Run, Plan and Dismiss actions. Working shows a queued card and a running card on its own swarm branch. Review shows a finished card with a passing verdict and Land, Re-run and Discard actions.">
-        <div class="lane">
-          <div class="lane-title"><b>Inbox</b><span>triage</span></div>
-          <div class="mcard">
-            <span class="tid">T-9k2f1a · session</span>
-            <div>Remove the dead flag in settings</div>
-            <div class="row"><span class="chip act">Run</span><span class="chip act">Plan</span><span class="chip">Dismiss</span></div>
-          </div>
-          <div class="mcard">
-            <span class="tid">T-4mq88x · llm</span>
-            <div>Add an index on the sessions table</div>
-            <div class="row"><span class="chip">awaiting triage</span></div>
-          </div>
-        </div>
-        <div class="lane">
-          <div class="lane-title"><b>Working</b><span>queued + running</span></div>
-          <div class="grouphead">Queued — waiting for a slot</div>
-          <div class="mcard">
-            <span class="tid">T-7pp3vd · plan-first</span>
-            <div>Migrate the routine config to v2</div>
-            <div class="row"><span class="chip">prio high</span><span class="chip">Back to Inbox</span><span class="chip">Pause</span></div>
-          </div>
-          <div class="grouphead">Running</div>
-          <div class="mcard">
-            <span class="tid">T-3mg7xy · standard</span>
-            <div>Fix the flaky worker test</div>
-            <div class="row"><span class="chip act">swarm/T-3mg7xy</span><span class="chip">Terminal</span></div>
-          </div>
-        </div>
-        <div class="lane">
-          <div class="lane-title"><b>Review</b><span>in_review</span></div>
-          <div class="mcard">
-            <span class="tid">T-5rr0bn · review-heavy</span>
-            <div>Add retries to the sync handshake</div>
-            <div class="row"><span class="chip good">verify: pass</span></div>
-            <div class="row"><span class="chip act">Land</span><span class="chip act">Re-run</span><span class="chip bad">Discard</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="drawer"><span>History</span><span>done and archived cards live in the drawer</span></div>
+      <figure class="vid sec">
+        <video controls preload="metadata" playsinline poster="ep1-poster.jpg" aria-label="Episode 1, Planning: from an idea typed in prose to a phased plan with acceptance criteria, then a headless run of a phase and its forecast against what actually happened">
+          <source src="video/swarmery-ep1-planning.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-ep1-planning.mp4">download episode 1</a>.
+        </video>
+        <figcaption>Episode 1 · Planning · 1:54</figcaption>
+      </figure>
 
-      <h3>The life of a card</h3>
       <ol class="flow">
-        <li><span>captured</span></li>
-        <li><span>queued</span></li>
-        <li class="now"><span>running</span></li>
-        <li><span>review</span></li>
-        <li><span>landed</span></li>
+        <li><span>idea</span></li>
+        <li><span>interview</span></li>
+        <li><span>phase DAG</span></li>
+        <li class="now"><span>run</span></li>
+        <li><span>forecast vs actual</span></li>
+        <li><span>lesson</span></li>
       </ol>
-      <p>A captured card is a proposal, not a commitment: it has a lifetime and an expiry. Once dispatched it gets an isolated worktree whose starting commit is persisted, so the verifier and the review diff both measure against the same honest baseline. Landing pushes the branch and opens the pull request; discarding removes the worktree and deletes the branch it names.</p>
+
+      <div class="grid-3" style="margin-top:22px">
+        <div class="card">
+          <p class="eyebrow">new plan</p>
+          <h3>An interview, not a form</h3>
+          <p>A planner session asks one question at a time on the left while the plan as it stands sits on the right, where you refine it or tell the planner to proceed. A reply the wizard cannot parse degrades into a conversation instead of a dead end.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">plans</p>
+          <h3>Markdown stays the truth</h3>
+          <p>A plan is a folder of phase documents with depends-on edges. Progress is the acceptance-criteria checkboxes inside them: ticking one in the dashboard rewrites that exact line. Revisions are staged proposals until you apply them; a phase opens in the centre of the page with its Story, Criteria, Runs and Report.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">runs</p>
+          <h3>Forecast first, then measure</h3>
+          <p>Before anything runs, the planner forecasts each phase's size, duration, outcome and the areas it will touch. A phase runs headlessly from its own document in a fresh worktree; afterwards the actuals are scored against the forecast, and a run that lands far from the plan becomes a lesson candidate.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="inbox">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">inbox · episode 2</p>
+        <h2>Every decision your agents wait on, in one place.</h2>
+        <p>Permission prompts, lesson candidates, advisor findings, agent-change proposals, classifier answers to check — one queue, worked from the keyboard, with an agent to clear the part that never needed you.</p>
+      </div>
+
+      <figure class="vid sec">
+        <video controls preload="metadata" playsinline poster="ep2-poster.jpg" aria-label="Episode 2, Inbox: one queue of every decision waiting on the operator, a triage run by an agent that labels and closes what it can, and the Needs-you list of sessions blocked on a human">
+          <source src="video/swarmery-ep2-inbox.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-ep2-inbox.mp4">download episode 2</a>.
+        </video>
+        <figcaption>Episode 2 · Inbox · 1:47</figcaption>
+      </figure>
+
+      <div class="grid-3">
+        <div class="card">
+          <p class="eyebrow">one queue</p>
+          <h3>Six kinds, one list</h3>
+          <p>Approvals, lessons, advisor recommendations, agent-change proposals, classifier checks and lesson retirements, split by tab or shown together. <code>j</code>/<code>k</code> move, <code>e</code> takes the primary action, <code>x</code> denies or dismisses, <code>s</code> skips. An approval shows the tool, its input, the owning session and an expiry countdown.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">run triage</p>
+          <h3>An agent clears the backlog</h3>
+          <p>When something it could handle has waited a day, the Inbox offers a triage run. The agent labels the classifier's guesses, closes what is only informational and leaves a suggestion with its reasoning on the rest; you accept them in one click, and everything it closed stays undoable for seven days. Approvals, agent changes and alerts always wait for you.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">needs you</p>
+          <h3>Sessions blocked on a human</h3>
+          <p>A second list, oldest blocker first: a permission prompt, a question, a session waiting on a plain-text reply, a production deploy that may only be confirmed from the terminal, a failed run. Nothing here answers for you — it puts the reply on your clipboard and names the session.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -408,6 +397,10 @@
         <p class="eyebrow">control plane</p>
         <h2>One binary that watches the whole swarm.</h2>
       </div>
+      <figure class="shot wide">
+        <img src="shot-today-loop.png" width="1440" height="400" alt="The Today place: five joined stages — Plan, Run, Measure, Learn, Change — each with this week's count and one line about what is waiting; the Learn stage is highlighted amber because proposals wait on the operator">
+        <figcaption>Today · the loop, this week — every stage feeds the next, and amber means something there is waiting on you.</figcaption>
+      </figure>
       <div class="split">
         <div>
           <p>A single Go daemon with an embedded React dashboard. It reads the session transcripts Claude Code already writes, indexes them into local SQLite, and serves everything on one port that never leaves the loopback interface.</p>
@@ -415,30 +408,19 @@
             <li><b>Today</b>What waits on you, what runs now, and this week's loop — plan, run, measure, learn, change.</li>
             <li><b>Inbox</b>Every decision in one queue — permission prompts, lessons, advisor findings, agent-change proposals — and it reaches your phone, so a waiting run is unblocked without going back to the desk.</li>
             <li><b>Sessions</b>Every transcript indexed as it is written, with the tool calls, files and errors of each run.</li>
-            <li><b>Plans</b>New plan, plans, the board and playbooks: phase documents stay the source of truth, and the three-lane funnel above runs single cards with a dispatcher underneath it.</li>
-            <li><b>Health</b>Agent scorecards, friction, estimates, an evidenced advisor, and cost and tokens per session, project and account against the live quota window.</li>
-            <li><b>Learning</b>Lessons from runs that missed their forecast, an optional local classifier, and how honest the forecasts are.</li>
+            <li><b>Needs you</b>Every session blocked on a human, oldest first — a prompt, a question, a plain-text reply, a production deploy to confirm locally — with the reply ready for your clipboard.</li>
+            <li><b>Plans</b>New plan and plans: the planner interview, the phase timeline with its dependencies, forecasts, runs and completion reports — the markdown on disk stays the source of truth.</li>
+            <li><b>Health</b>Agent scorecards, friction, estimates, an evidenced advisor, and cost and tokens per session, project and account against the live quota window. Friction gets its own triage run over recurring errors.</li>
+            <li><b>Learning</b>Lessons from runs that missed their forecast, an optional local classifier, how honest the forecasts are, and the proof of what your decisions changed.</li>
+            <li><b>Knowledge</b>What one project knows about itself: its memory files in one editor with a conflict guard, a stale-fact lint, and its architecture map with a staleness badge.</li>
+            <li><b>System</b>Every agent, skill, hook and command on the machine with scope, origin and a content-addressed version history, plus routines and pack toggles.</li>
           </ul>
         </div>
         <div>
-          <div class="app" role="img" aria-label="Mockup of the swarmery dashboard: a left sidebar listing Today, Inbox, Sessions, Plans, Health and Learning, with Sessions selected, next to a main panel listing recent sessions with their status and token counts.">
-            <div class="app-side">
-              <span class="app-brand">swarmery</span>
-              <span class="app-nav">Today</span>
-              <span class="app-nav">Inbox</span>
-              <span class="app-nav on">Sessions</span>
-              <span class="app-nav">Plans</span>
-              <span class="app-nav">Health</span>
-              <span class="app-nav">Learning</span>
-            </div>
-            <div class="app-main">
-              <div class="app-row"><b>landing-site</b><span>running</span></div>
-              <div class="app-row"><b>engine-unification</b><span>review</span></div>
-              <div class="app-row"><b>board-redesign</b><span>landed</span></div>
-              <div class="app-row"><b>security-alerts</b><span>landed</span></div>
-              <div class="app-row"><b>plugin-drift</b><span>queued</span></div>
-            </div>
-          </div>
+          <figure class="shot">
+            <img src="shot-plan-phase.png" width="1440" height="900" alt="The Plans place: a list of the project's plans on the left and one phase opened in the main column — its subtitle, Story, Criteria, Runs and Report tabs, a status card and the prior and posterior forecasts side by side">
+            <figcaption>Plans · a phase opened in the main column, forecasts beside the run.</figcaption>
+          </figure>
           <div class="stats">
             <!-- BEGIN generated:stats-control-plane -->
             <div class="stat"><div class="n">101</div><div class="l">Go packages</div></div>
@@ -456,7 +438,7 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="eyebrow">plugins</p>
-        <h2>One core, twelve opt-in packs.</h2>
+        <h2>One core, thirteen opt-in packs.</h2>
         <p>The core carries everything that is true for every project. Domain packs add the vocabulary and tooling of one kind of work, and a project enables only the ones it actually uses.</p>
       </div>
       <div class="grid-plugins">
@@ -507,6 +489,10 @@
         <div class="plugin">
           <span class="name">accounts-pack</span>
           <p>Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it, with a shell wrapper and a wrong-account warning.</p>
+        </div>
+        <div class="plugin">
+          <span class="name">review-pack</span>
+          <p>Pull-request review pack: <code>/pr-review</code> reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments already on it — fixing the valid ones behind the repo's gates and rebutting the rest with file:line evidence.</p>
         </div>
         <div class="plugin">
           <span class="name">design-pack</span>

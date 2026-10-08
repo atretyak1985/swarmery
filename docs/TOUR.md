@@ -14,19 +14,20 @@ inside the dashboard as the **The dashboard** guide under Docs.
 
 ---
 
-## Ten places, two scopes
+## Eleven places, two scopes
 
-The sidebar holds ten **places**, in three groups:
+The sidebar holds eleven **places**, in three groups:
 
 | Group | Places |
 |---|---|
-| Main | **Today** · **Inbox** · **Sessions** · **Plans** |
+| Main | **Today** · **Inbox** · **Needs you** · **Sessions** · **Plans** |
 | Improve | **Health** · **Learning** · **Knowledge** |
 | Bottom | **Docs** · **System** · **Settings** |
 
 A place is a destination, not a page: each gathers everything about one question under
 tabs, and absorbed the pages that used to answer it separately — Health took Analytics
-and Retro, Inbox took Approvals, Plans took the board, Planning Mode and Playbooks.
+and Retro, Inbox took Approvals, Plans took Planning Mode (the Board and Playbooks tabs are
+parked — see Plans).
 The old addresses redirect onto the matching tab, so bookmarks keep working.
 
 The **project switcher** at the top of the sidebar is the scope control. *All projects*
@@ -35,8 +36,8 @@ is the fleet view; picking a project re-scopes the same places to it under
 rows are dimmed and open the project you visited last. **⌘K** opens a global palette
 over sessions, message text, files and projects from anywhere.
 
-Only two rows carry a signal: **Inbox** counts the decisions waiting on you, and
-**Sessions** shows a live dot while anything runs.
+Only three rows carry a signal: **Inbox** counts the decisions waiting on you, **Needs you**
+counts the sessions blocked on you, and **Sessions** shows a live dot while anything runs.
 
 ---
 
@@ -118,6 +119,16 @@ including `answered in the terminal` — live one link away, at `/approvals/mana
   <br><sub><i>Pending cards carry the tool input, the owning session, and an expiry countdown.</i></sub>
 </div>
 
+### Needs you
+
+Every session blocked on a human, oldest blocker first, live over the same event stream
+as the Inbox. One row per blocker: a permission prompt or a question (the Inbox's own
+approval card, answered in place), a session **awaiting a plain-text reply** (**Copy
+reply** puts `[<session>] Re: <question>` on the clipboard, with the daemon's suggested
+answers prefilled when it has them), a **production deploy** that can only be confirmed
+from the session's terminal — there is no approve and no deny — and a failed run, linked
+to its session. Nothing here delivers a reply to a session: you paste it.
+
 ### Sessions
 
 Every session the daemon has indexed, newest first, grouped under day rules
@@ -168,9 +179,11 @@ churn.
   <br><sub><i>Chat keeps the run readable; the rail turns it into models, agents, skills, call tree and churn.</i></sub>
 </div>
 
-### Plans — New plan · Plans · Board · Playbooks
+### Plans — New plan · Plans
 
-Everything before and around a run, for one project.
+Everything before and around a run, for one project. The **Board** and **Playbooks** tabs
+are parked: their pages, routes and `?tab=board` / `?tab=playbooks` links keep working and
+the dispatcher keeps running board cards, but the tab strip no longer shows them.
 
 **New plan** is Planning Mode. Describe what you want to build, in prose. A planner
 session interviews you through a wizard — one question at a time on the left, the plan as
@@ -193,8 +206,8 @@ acceptance-criteria checkboxes in the doc itself. Lifecycle controls (pause / re
 archive / restore) are real file operations on the daemon side, not database flags.
 
 A plan opens into **Plan · Spec · Summary · Revisions · Edit** tabs (Spec only when the
-plan has a `spec.md`, Summary only once it is complete); a phase opens in a drawer over the
-list with **Story · Criteria · Runs · Report · Edit**. Ticking a criterion in the UI
+plan has a `spec.md`, Summary only once it is complete); a phase opens inline, in place of the
+list, with **Story · Criteria · Runs · Report · Edit**. Ticking a criterion in the UI
 patches that exact `- [ ]` ↔ `- [x]` line in the file. Revisions are staged proposals —
 nothing changes on disk until you apply one.
 
@@ -214,7 +227,7 @@ is doing.
   <br><sub><i>Criteria are clickable: ticking one rewrites that line in the phase document.</i></sub>
 </div>
 
-**Board** is for work that fits on one card. It has three lanes: **Inbox → Working →
+**Board** (parked) is for work that fits on one card. It has three lanes: **Inbox → Working →
 Review**, with done and archived cards in a collapsed strip below. Cards stay in the Inbox
 lane until you press their **▶ Run** verb; there is no drag and drop. Running a card
 dispatches it to a headless agent in a dedicated `swarm/<task-id>` git worktree — so the
@@ -228,7 +241,7 @@ in Review. From there it leaves by **Land** (push + PR), **Re-run** with feedbac
   <br><sub><i>Run is the trigger: worktree, headless agent, verification, then Review.</i></sub>
 </div>
 
-**Playbooks** makes the recipe a dispatched card runs under visible instead of implicit.
+**Playbooks** (parked) makes the recipe a dispatched card runs under visible instead of implicit.
 Selecting one renders its stage chain — boxes joined by arrows — with the model and the
 exact prompt each stage receives. Three built-ins ship with the daemon (`standard`,
 `plan-first`, `review-heavy`) and stay read-only. **Duplicate to project** copies the
