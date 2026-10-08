@@ -208,6 +208,7 @@
       <a href="#inbox">Inbox</a>
       <a href="#health">Health</a>
       <a href="#sessions">Sessions</a>
+      <a href="#learning">Learning</a>
       <a href="#control-plane">Control plane</a>
       <a href="#plugins">Plugins</a>
       <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a>
@@ -524,6 +525,57 @@ swarmery serve</code></pre>
         <figure class="shot">
           <img src="shot-session-diffs.png" width="1440" height="900" alt="The Diffs tab of a session: a unified diff of the phase document with its forecast block added, followed by the files the run created">
           <figcaption>Session · Diffs — every file the session touched, as unified diffs.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="learning">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">learning · episode 5</p>
+        <h2>What your agents learned, and whether to trust it.</h2>
+        <p>A run that lands far from its forecast becomes a lesson candidate with the evidence attached. Nothing becomes active without your accept, every active lesson is re-measured against the runs it reaches, and the local classifier stays in watching mode until its answers match yours.</p>
+      </div>
+
+      <figure class="vid sec">
+        <video controls preload="metadata" playsinline poster="ep5-poster.jpg" aria-label="Episode 5, Learning: lesson candidates drawn from runs that missed their forecast, accepted into active lessons with a measured effect, the local classifier's questions and how often they match the operator, and the forecast calibration view">
+          <source src="video/swarmery-ep5-learning.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-ep5-learning.mp4">download episode 5</a>.
+        </video>
+        <figcaption>Episode 5 · Learning · 1:21</figcaption>
+      </figure>
+
+      <div class="grid-3">
+        <div class="card">
+          <p class="eyebrow">lessons</p>
+          <h3>Earned, accepted, re-measured</h3>
+          <p>When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing the divergence and the files. A candidate reaches future runs only after you accept it; active lessons are injected into runs that touch their area, carry a measured effect, and are proposed for retirement once they stop earning their place.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">the classifier</p>
+          <h3>Watching before acting</h3>
+          <p>A small local model reads each finished session and answers a few fixed questions — how the run ended, what kind of task it was, why it failed, why it left the plan. It stays in watching mode, its answers go to the Inbox for checking, and the page tells you how often it matched you per question before acting makes sense.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">forecast honesty · proof</p>
+          <h3>Does the plan keep its word</h3>
+          <p>Calibration by model and effort, agent or project: how often the forecast's areas, bands and outcome held, and whether declared confidence matched reality. Proof is the ledger of what you accepted, what the system did with it, and whether the number it was meant to move actually moved.</p>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <figure class="shot span">
+          <img src="shot-learning-classifier.png" width="1440" height="900" alt="The classifier tab: five fixed questions, each with an off / watching / acting switch, how many times it guessed, how often it matched the operator, and a suspicious flag where it is sure of itself yet rarely right; a side note explains the three modes">
+          <figcaption>The classifier · every question with its agreement rate and a mode switch; watching until it earns acting.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-learning-active.png" width="1440" height="560" alt="An active lesson: its rule, the areas it applies to, the cause drawn from the run, the evidence links, the plan phase it came from, its measured effectiveness and the edit, retire and promote-to-CLAUDE.md actions">
+          <figcaption>Lessons · an active lesson with its cause, evidence and measured effect.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-learning-honesty-top.png" width="1440" height="540" alt="Forecast honesty: calibration grouped by model and effort — runs, mean surprise, area hit, band and outcome match rates, and how often each declared confidence band held">
+          <figcaption>Forecast honesty · how often the forecasts held, by model and effort.</figcaption>
         </figure>
       </div>
     </div>
