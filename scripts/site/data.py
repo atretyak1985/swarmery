@@ -122,7 +122,7 @@ FEATURES = [
     chapters=[("0:00","The same mistake, again"),("0:10","A run drafts a lesson"),("0:15","Cause and evidence"),("0:20","Only after you accept"),("0:30","Re-measured, then retired"),("0:40","The local classifier"),("0:45","Off, watching, acting"),("0:50","Did the forecast hold?"),("0:55","Who over-promises"),("1:00","Routing: the right model"),("1:05","A fifth of the cost")],
   ),
   dict(
-    slug="knowledge", n=6, name="Knowledge", ep="ep6-knowledge", dur="1:21", soon=True,
+    slug="knowledge", n=6, name="Knowledge", ep="ep6-knowledge", dur="1:21",
     kicker="What one project knows about itself",
     title="Every new session starts from zero. Give it <em>what the project already knows</em>.",
     lede="A session re-reads the repo and guesses the architecture. Knowledge keeps what one project knows about itself in one place: its memory files in one editor, an architecture map that says how stale it is, and code graphs agents can query instead of grepping.",

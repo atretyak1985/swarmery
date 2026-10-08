@@ -5,7 +5,7 @@
 #
 # Sources (not committed, kept next to the repo by the author):
 #   video/final/swarmery-<name>.mp4   voiced episodes and the promo, 1920x1080
-#   video/raw/swarmery-ep6-knowledge.mp4   episode 6, not voiced yet
+#   video/raw/swarmery-<name>.mp4     fallback when an episode has no voiced cut yet
 #   video/screens/<section>/*.png     2880x1620 screenshots (fictional data)
 # Outputs:
 #   site/assets/clips/<name>.mp4|.jpg   muted 1280x720 loops, ~0.5-1.5 MB each
@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-src() { if [ "$1" = ep6-knowledge ]; then echo "video/raw/swarmery-$1.mp4"; else echo "video/final/swarmery-$1.mp4"; fi; }
+src() { if [ -f "video/final/swarmery-$1.mp4" ]; then echo "video/final/swarmery-$1.mp4"; else echo "video/raw/swarmery-$1.mp4"; fi; }
 
 mkdir -p site/assets/clips site/assets/posters site/assets/img
 

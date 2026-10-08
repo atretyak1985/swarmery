@@ -44,3 +44,7 @@ articles/**/build/
 
 # Staged by the pages workflow from docs/video/ (never committed twice)
 site/video/
+
+# Python bytecode caches (scripts/site/build.py imports data.py)
+__pycache__/
+*.pyc
