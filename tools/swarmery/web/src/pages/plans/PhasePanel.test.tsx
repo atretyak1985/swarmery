@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, PhaseSurprise } from '../../api/types';
 import { ForecastStory } from './ForecastStory';
 import { PhaseCard } from './PhaseCard';
-import { PhaseDrawer, type PhaseDrawerProps, phaseDrawerSubtitle } from './PhaseDrawer';
+import { PhasePanel, type PhasePanelProps, phasePanelSubtitle } from './PhasePanel';
 
 afterEach(cleanup);
 
@@ -73,15 +73,14 @@ function phase(seq: number, over: Partial<EpicPhase> = {}): EpicPhase {
 const scored = phase(2, { name: 'API: bidding mode, journal', surprise: SURPRISE });
 const epic = { taskId: 7, phases: [phase(1), scored, phase(3)] } as unknown as Epic;
 
-function renderDrawer(over: Partial<PhaseDrawerProps> = {}) {
-  const props: PhaseDrawerProps = {
+function renderPanel(over: Partial<PhasePanelProps> = {}) {
+  const props: PhasePanelProps = {
     epic,
     phase: scored,
     tab: 'story',
     onTab: vi.fn(),
     onPrev: vi.fn(),
     onNext: vi.fn(),
-    onClose: vi.fn(),
     children: (
       <>
         <PhaseCard phase={scored} primary={{ label: 'Retry run', onClick: vi.fn() }} />
@@ -92,36 +91,43 @@ function renderDrawer(over: Partial<PhaseDrawerProps> = {}) {
   };
   render(
     <MemoryRouter>
-      <PhaseDrawer {...props} />
+      <PhasePanel {...props} />
     </MemoryRouter>,
   );
   return props;
 }
 
-describe('PhaseDrawer', () => {
-  it('is a dialog titled by the phase, with the "Phase n of m" subtitle', () => {
-    renderDrawer();
-    expect(screen.getByRole('dialog', { name: 'API: bidding mode, journal' })).toBeTruthy();
-    expect(phaseDrawerSubtitle(epic, scored)).toBe('Phase 2 of 3 · 0/8 criteria');
+describe('PhasePanel', () => {
+  it('is an inline region (not a dialog) titled by the phase, with the "Phase n of m" subtitle', () => {
+    renderPanel();
+    expect(screen.getByRole('region', { name: 'API: bidding mode, journal' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(phasePanelSubtitle(epic, scored)).toBe('Phase 2 of 3 · 0/8 criteria');
     expect(screen.getByText('Phase 2 of 3 · 0/8 criteria')).toBeTruthy();
   });
 
-  it('Esc closes', () => {
-    const p = renderDrawer();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(p.onClose).toHaveBeenCalledTimes(1);
+  it('takes focus on open so a keyboard user lands on the content', () => {
+    renderPanel();
+    expect(document.activeElement).toBe(screen.getByRole('region', { name: 'API: bidding mode, journal' }));
   });
 
   it('ArrowUp / ArrowDown step to the previous / next phase', () => {
-    const p = renderDrawer();
+    const p = renderPanel();
     fireEvent.keyDown(document, { key: 'ArrowDown' });
     fireEvent.keyDown(document, { key: 'ArrowUp' });
     expect(p.onNext).toHaveBeenCalledTimes(1);
     expect(p.onPrev).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('↑↓ next phase')).toBeTruthy();
+  });
+
+  it('the arrows leave a text field alone', () => {
+    const p = renderPanel({ children: <textarea aria-label="doc" /> });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'doc' }), { key: 'ArrowDown' });
+    expect(p.onNext).not.toHaveBeenCalled();
   });
 
   it('shows Story · Criteria · Runs · Report · Edit and switches tabs', () => {
-    const p = renderDrawer();
+    const p = renderPanel();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
     expect(tabs).toEqual(['Story', 'Criteria0/8', 'Runs', 'Report', 'Edit']);
     expect(screen.getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
@@ -130,12 +136,12 @@ describe('PhaseDrawer', () => {
   });
 
   it('retires the Edit tab on a done phase', () => {
-    renderDrawer({ editable: false });
+    renderPanel({ editable: false });
     expect(screen.queryByRole('tab', { name: 'Edit' })).toBeNull();
   });
 
   it('Story renders the phase card and the forecast story, breakdown folded', () => {
-    renderDrawer();
+    renderPanel();
     expect(screen.getByTestId('phase-card')).toBeTruthy();
     const story = screen.getByTestId('forecast-story');
     expect(story.textContent).toContain('what follows');

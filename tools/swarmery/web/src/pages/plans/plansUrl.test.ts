@@ -60,12 +60,12 @@ const ROWS: { name: string; target: PlansTarget; href: string }[] = [
   },
   { name: 'plan selected', target: { plan: EXT }, href: `/p/${SLUG}/plans/${EXT}` },
   {
-    name: 'phase drawer (Story)',
+    name: 'phase panel (Story)',
     target: { plan: EXT, detail: { kind: 'phase', seq: 3, tab: 'story' } },
     href: `/p/${SLUG}/plans/${EXT}/phase/3`,
   },
   ...(['criteria', 'runs', 'report', 'edit'] as const).map((tab) => ({
-    name: `phase drawer tab ${tab}`,
+    name: `phase panel tab ${tab}`,
     target: { plan: EXT, detail: { kind: 'phase' as const, seq: 3, tab } },
     href: `/p/${SLUG}/plans/${EXT}/phase/3/${tab}`,
   })),

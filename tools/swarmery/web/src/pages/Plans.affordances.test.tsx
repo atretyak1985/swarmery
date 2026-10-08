@@ -405,9 +405,9 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     }
   });
 
-  it('PhaseDrawer tabs link to their drawer URLs', async () => {
+  it('PhasePanel tabs link to their panel URLs', async () => {
     mount(`${BASE}/${B.externalId}/phase/2/runs?scope=swarmery`);
-    const d = await screen.findByRole('dialog', { name: 'Beta 2' });
+    const d = await screen.findByRole('region', { name: 'Beta 2' });
     const href = (name: RegExp): string | null => within(d).getByRole('tab', { name }).getAttribute('href');
     expect(href(/^Story/)).toBe(`${BASE}/${B.externalId}/phase/2?scope=swarmery`);
     expect(href(/^Criteria/)).toBe(`${BASE}/${B.externalId}/phase/2/criteria?scope=swarmery`);
@@ -433,7 +433,7 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     const name = await screen.findByRole('link', { name: 'Beta 3' });
     fireEvent.click(name);
     await settled(r, `${BASE}/${B.externalId}/phase/3`);
-    await screen.findByRole('dialog', { name: 'Beta 3' });
+    await screen.findByRole('region', { name: 'Beta 3' });
     await back(r);
     await settled(r, `${BASE}/${B.externalId}`);
   });
@@ -513,7 +513,7 @@ describe('SC-8 — a stale link names what it could not find', () => {
   it('a canonicalised tab is silent', async () => {
     const r = mount(`${BASE}/${B.externalId}/phase/2/bogus`);
     await settled(r, `${BASE}/${B.externalId}/phase/2`);
-    await screen.findByRole('dialog', { name: 'Beta 2' });
+    await screen.findByRole('region', { name: 'Beta 2' });
     expect(notice()).toBeNull();
     cleanup();
     const r2 = mount(`${BASE}/${B.externalId}/details/summary`);
@@ -553,7 +553,7 @@ describe('SC-8 — a stale link names what it could not find', () => {
 });
 
 describe('SC-11 — document.title names the open state', () => {
-  it('list, plan, details tab, drawer tab, Board — and restored on leaving', async () => {
+  it('list, plan, details tab, phase tab, Board — and restored on leaving', async () => {
     const r = mount(`${BASE}?status=archived`);
     await waitFor(() => {
       expect(document.title).toBe('Plans · swarmery project — Swarmery');
@@ -646,7 +646,7 @@ describe('SC-12 — an unsaved Edit cannot be lost without a prompt', () => {
     const r = mount(`${BASE}/${B.externalId}/phase/2/edit`);
     const ta = (await screen.findByRole('textbox', { name: 'plan doc source' })) as HTMLTextAreaElement;
     fireEvent.change(ta, { target: { value: 'changed' } });
-    const d = screen.getByRole('dialog', { name: 'Beta 2' });
+    const d = screen.getByRole('region', { name: 'Beta 2' });
     fireEvent.click(within(d).getByRole('tab', { name: /^Story/ }));
     await waitFor(() => {
       expect(confirm).toHaveBeenCalledWith('Discard unsaved changes to phase-2.md?');

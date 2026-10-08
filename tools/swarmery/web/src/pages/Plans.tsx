@@ -101,7 +101,7 @@ import { ReviseModal } from './planning/ReviseModal';
 import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsActual';
 import { ForecastStory } from './plans/ForecastStory';
 import { PhaseCard } from './plans/PhaseCard';
-import { PHASE_TABS, PhaseDrawer, type PhaseTab } from './plans/PhaseDrawer';
+import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import {
   parsePlansRoute,
   plansHref,
@@ -738,7 +738,7 @@ function epicFilterOf(status: Epic['status']): EpicFilter {
 // PlanDetailTab (plan/spec/summary/revisions/edit) lives in plans/plansUrl.ts:
 // it is part of the URL scheme now.
 
-/** Phase drawer tabs (story/criteria/runs/report/edit). Report always exists —
+/** Phase panel tabs (story/criteria/runs/report/edit). Report always exists —
  * an empty note beats hiding it ("where do I read the summary?" was a dead end). */
 type PhaseDetailTab = PhaseTab;
 
@@ -802,7 +802,7 @@ const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, string> = {
 
 /**
  * `document.title` of the Plans tab (SC-11):
- *   drawer        `Runs · Phase 3 — <plan> · <project> — Swarmery`
+ *   phase         `Runs · Phase 3 — <plan> · <project> — Swarmery`
  *   plan details  `Revisions — <plan> · <project> — Swarmery`
  *   plan          `<plan> · Plans · <project> — Swarmery`
  *   no plan       `Plans · <project> — Swarmery`
@@ -1514,7 +1514,7 @@ function EpicDetail({
   onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
   onOpenPlan: (tab: PlanDetailTab) => void;
   onCloseDetail: () => void;
-  /** The URLs of a phase drawer tab / a plan-details tab — what their links point at. */
+  /** The URLs of a phase panel tab / a plan-details tab — what their links point at. */
   phaseHref: (seq: number, tab: PhaseDetailTab) => string;
   planHref: (tab: PlanDetailTab) => string;
   /** The revision the URL names (`/details/revisions/<revId>`), or null. */
@@ -1673,7 +1673,7 @@ function EpicDetail({
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         {/* Leaving the details is the first thing offered while they are open,
             in the same row as the plan actions. */}
-        {detail?.kind === 'plan' && <BackToPhases onBack={onCloseDetail} />}
+        {detail !== null && <BackToPhases onBack={onCloseDetail} />}
         <button
           type="button"
           onClick={() => onOpenPlan('plan')}
@@ -1781,9 +1781,10 @@ function EpicDetail({
               disabled={runBusy !== null || planRunning}
             />
           </div>
-          {/* A phase opens in a drawer OVER the still-visible list (2d); plan-level
-              detail stays inline in place of the list. */}
-          {detail?.kind === 'phase' && (
+          {/* A detail — a phase or the plan itself — opens INLINE, in place of the
+              phase list, so it gets the whole column; "← all phases" (or Escape)
+              above the panel backs out to the list. */}
+          {detail?.kind === 'phase' ? (
             <PhaseDetailPanel
               epic={epic}
               phase={detail.phase}
@@ -1791,7 +1792,6 @@ function EpicDetail({
               onTab={(t) => onOpenPhase(detail.phase.seq, t)}
               tabHref={(t) => phaseHref(detail.phase.seq, t)}
               onStep={(seq) => onOpenPhase(seq, detail.tab)}
-              onClose={onCloseDetail}
               runBusy={runBusy}
               planRunning={planRunning}
               phaseRunModel={phaseRunModel}
@@ -1802,8 +1802,7 @@ function EpicDetail({
               revisions={revisions}
               onOpenRevisions={() => onOpenPlan('revisions')}
             />
-          )}
-          {detail?.kind === 'plan' ? (
+          ) : detail?.kind === 'plan' ? (
             <PlanDetailPanel
               epic={epic}
               tab={detail.tab}
@@ -2118,7 +2117,7 @@ function PhaseList({
    * second thing to drift. */
   phaseRunModel: PhaseRunModel;
   onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
-  /** The URL a phase opens at (its drawer's Story) — what its name links to. */
+  /** The URL a phase opens at (its panel's Story) — what its name links to. */
   phaseHref: (seq: number) => string;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
@@ -2924,7 +2923,7 @@ function RunStateChip({
   return null;
 }
 
-/** One phase's body inside PhaseDrawer (2d), tabbed: Story (PhaseCard + the
+/** One phase's body inside PhasePanel (inline, in place of the phase list), tabbed: Story (PhaseCard + the
  * forecast story), Criteria (interactive checks + the doc), Runs (run state,
  * diagnosis, provenance), Report (what was shipped) and Edit (raw markdown). */
 function PhaseDetailPanel({
@@ -2934,7 +2933,6 @@ function PhaseDetailPanel({
   onTab,
   tabHref,
   onStep,
-  onClose,
   runBusy,
   planRunning,
   phaseRunModel,
@@ -2949,11 +2947,10 @@ function PhaseDetailPanel({
   phase: EpicPhase;
   tab: PhaseDetailTab;
   onTab: (tab: PhaseDetailTab) => void;
-  /** Each drawer tab's URL — makes the tabs real links. */
+  /** Each panel tab's URL — makes the tabs real links. */
   tabHref?: ((tab: PhaseDetailTab) => string) | undefined;
   /** Open the neighbouring phase by seq (↑/↓), keeping the tab. */
   onStep: (seq: number) => void;
-  onClose: () => void;
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
@@ -3037,14 +3034,13 @@ function PhaseDetailPanel({
       : null;
 
   return (
-    <PhaseDrawer
+    <PhasePanel
       epic={epic}
       phase={phase}
       tab={activeTab}
       onTab={onTab}
       onPrev={prev !== undefined ? () => onStep(prev.seq) : undefined}
       onNext={next !== undefined ? () => onStep(next.seq) : undefined}
-      onClose={onClose}
       editable={editable}
       hrefFor={tabHref}
     >
@@ -3148,7 +3144,7 @@ function PhaseDetailPanel({
           <RailSection label="doc">{doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}</RailSection>
         </>
       )}
-    </PhaseDrawer>
+    </PhasePanel>
   );
 }
 

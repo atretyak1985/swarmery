@@ -252,8 +252,8 @@ function filterTab(name: 'active' | 'done' | 'archived'): HTMLElement {
   if (tab === undefined) throw new Error(`no filter tab ${name}`);
   return tab;
 }
-function drawer(): HTMLElement | null {
-  return screen.queryByRole('dialog');
+function phasePanel(): HTMLElement | null {
+  return screen.queryByRole('region', { name: /^(Beta|Shipped) [0-9]+$/ });
 }
 
 async function settled(r: Router, href: string): Promise<void> {
@@ -288,7 +288,7 @@ describe('SC-1 — a plan URL selects that plan and its filter', () => {
     });
     expect(selectedTab('plan status filter')).toMatch(/^active/);
     expect(at(r)).toBe(`${BASE}/${B.externalId}`);
-    expect(drawer()).toBeNull();
+    expect(phasePanel()).toBeNull();
   });
 
   it('opens a Done plan under the Done filter', async () => {
@@ -307,17 +307,17 @@ describe('SC-1 — a plan URL selects that plan and its filter', () => {
   });
 });
 
-describe('SC-2 — a phase URL opens the drawer on that tab', () => {
+describe('SC-2 — a phase URL opens the phase panel on that tab', () => {
   it('/phase/<seq>/<tab> opens that phase on that tab', async () => {
     const r = mount(`${BASE}/${B.externalId}/phase/2/runs`);
-    const d = await screen.findByRole('dialog', { name: 'Beta 2' });
+    const d = await screen.findByRole('region', { name: 'Beta 2' });
     expect(within(d).getByRole('tab', { name: 'Runs' }).getAttribute('aria-selected')).toBe('true');
     expect(at(r)).toBe(`${BASE}/${B.externalId}/phase/2/runs`);
   });
 
   it('/phase/<seq> alone is Story', async () => {
     mount(`${BASE}/${B.externalId}/phase/3`);
-    const d = await screen.findByRole('dialog', { name: 'Beta 3' });
+    const d = await screen.findByRole('region', { name: 'Beta 3' });
     expect(within(d).getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
   });
 
@@ -325,13 +325,13 @@ describe('SC-2 — a phase URL opens the drawer on that tab', () => {
     const r = mount('/elsewhere', `${BASE}/${B.externalId}/phase/2/bogus`);
     await settled(r, `${BASE}/${B.externalId}/phase/2`);
     expect(r.state.historyAction).toBe('REPLACE');
-    await screen.findByRole('dialog', { name: 'Beta 2' });
+    await screen.findByRole('region', { name: 'Beta 2' });
   });
 
   it('Edit on a done phase canonicalises to Report (the tab its panel falls back to)', async () => {
     const r = mount(`${BASE}/${DONE.externalId}/phase/1/edit`);
     await settled(r, `${BASE}/${DONE.externalId}/phase/1/report`);
-    const d = await screen.findByRole('dialog', { name: 'Shipped 1' });
+    const d = await screen.findByRole('region', { name: 'Shipped 1' });
     expect(within(d).getByRole('tab', { name: 'Report' }).getAttribute('aria-selected')).toBe('true');
   });
 
@@ -339,7 +339,7 @@ describe('SC-2 — a phase URL opens the drawer on that tab', () => {
     const r = mount('/elsewhere', `${BASE}/${B.externalId}/phase/9`);
     await settled(r, `${BASE}/${B.externalId}`);
     expect(r.state.historyAction).toBe('REPLACE');
-    expect(drawer()).toBeNull();
+    expect(phasePanel()).toBeNull();
   });
 });
 
@@ -394,7 +394,7 @@ describe('SC-3 — a details URL opens plan details on that tab / that revision'
 });
 
 describe('SC-4 — every click is one history entry; Back retraces them', () => {
-  it('A → B → phase 3 → Runs, then Back ×3 = Story → drawer closed → A', async () => {
+  it('A → B → phase 3 → Runs, then Back ×3 = Story → panel closed → A', async () => {
     const r = mount('/elsewhere', BASE);
     await settled(r, `${BASE}/${A.externalId}`);
     await waitFor(() => {
@@ -406,7 +406,7 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
 
     fireEvent.click(screen.getByRole('button', { name: 'open Phase 3 — Beta 3 details' }));
     await settled(r, `${BASE}/${B.externalId}/phase/3`);
-    const d = await screen.findByRole('dialog', { name: 'Beta 3' });
+    const d = await screen.findByRole('region', { name: 'Beta 3' });
 
     fireEvent.click(within(d).getByRole('tab', { name: 'Runs' }));
     await settled(r, `${BASE}/${B.externalId}/phase/3/runs`);
@@ -415,13 +415,13 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     await back(r);
     await settled(r, `${BASE}/${B.externalId}/phase/3`);
     await waitFor(() => {
-      expect(within(screen.getByRole('dialog', { name: 'Beta 3' })).getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
+      expect(within(screen.getByRole('region', { name: 'Beta 3' })).getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
     });
 
     await back(r);
     await settled(r, `${BASE}/${B.externalId}`);
     await waitFor(() => {
-      expect(drawer()).toBeNull();
+      expect(phasePanel()).toBeNull();
     });
     expect(selectedPlan()).toContain('Beta');
 
@@ -437,13 +437,13 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     await settled(r, '/elsewhere');
   });
 
-  it('closing the drawer and ↑/↓ stepping are one entry each', async () => {
+  it('leaving the phase panel and ↑/↓ stepping are one entry each', async () => {
     const r = mount(`${BASE}/${B.externalId}/phase/2/criteria`);
-    const d = await screen.findByRole('dialog', { name: 'Beta 2' });
-    fireEvent.keyDown(document, { key: 'ArrowDown' }); // Drawer listens on document
+    const d = await screen.findByRole('region', { name: 'Beta 2' });
+    fireEvent.keyDown(document, { key: 'ArrowDown' }); // the panel listens on document
     await settled(r, `${BASE}/${B.externalId}/phase/3/criteria`);
     expect(d).toBeTruthy();
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Beta 3' })).getByRole('button', { name: 'close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'all phases' }));
     await settled(r, `${BASE}/${B.externalId}`);
     await back(r);
     await settled(r, `${BASE}/${B.externalId}/phase/3/criteria`);
@@ -468,7 +468,7 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     fireEvent.click(listItem('Beta'));
     await settled(r, `${BASE}/${B.externalId}`);
     fireEvent.click(screen.getByRole('button', { name: 'open Phase 1 — Beta 1 details' }));
-    const d = await screen.findByRole('dialog', { name: 'Beta 1' });
+    const d = await screen.findByRole('region', { name: 'Beta 1' });
     fireEvent.click(within(d).getByRole('tab', { name: 'Report' }));
     await settled(r, `${BASE}/${B.externalId}/phase/1/report`);
     await back(r);
@@ -573,7 +573,7 @@ describe('SC-7 — the numeric ?task= / ?plan= hand-off resolves by replace', ()
   it('?plan=<id>&phase=<seq> → that phase on Story, keeping ?scope=', async () => {
     const r = mount(`${BASE}?plan=2&phase=3&scope=swarmery`);
     await settled(r, `${BASE}/${B.externalId}/phase/3?scope=swarmery`);
-    const d = await screen.findByRole('dialog', { name: 'Beta 3' });
+    const d = await screen.findByRole('region', { name: 'Beta 3' });
     expect(within(d).getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
   });
 

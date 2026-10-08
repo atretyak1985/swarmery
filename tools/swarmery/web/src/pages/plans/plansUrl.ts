@@ -17,7 +17,7 @@
 // does not own — notably ScopeProvider's `?scope=` and PlansPlace's own
 // `?tab=new|board|playbooks` — is carried through untouched.
 
-import type { PhaseTab } from './PhaseDrawer';
+import type { PhaseTab } from './PhasePanel';
 
 export type PlansStatus = 'active' | 'done' | 'archived';
 
