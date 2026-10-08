@@ -207,6 +207,7 @@
       <a href="#planning">Planning</a>
       <a href="#inbox">Inbox</a>
       <a href="#health">Health</a>
+      <a href="#sessions">Sessions</a>
       <a href="#control-plane">Control plane</a>
       <a href="#plugins">Plugins</a>
       <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a>
@@ -472,6 +473,57 @@ swarmery serve</code></pre>
         <figure class="shot span">
           <img src="shot-health-cost.png" width="1440" height="900" alt="Health Cost and tokens: metric and pivot switches, a headline of spend over 14 days with daily average, change against the previous window and a projected month, productivity by language, and KPI tiles for autonomy, tasks, cost per task and cache hit rate">
           <figcaption>Cost &amp; tokens · the metric decides the pivot; productivity and autonomy sit beside the spend.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="sessions">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">sessions · episode 4</p>
+        <h2>Every session, live, with what it is doing this second.</h2>
+        <p>The daemon reads the transcripts Claude Code already writes and indexes them as they land. A list that tells working from stuck, a detail view that replays the run as a conversation, and a rail that turns it into models, agents, files and cost — without instrumenting anything.</p>
+      </div>
+
+      <figure class="vid sec">
+        <video controls preload="metadata" playsinline poster="ep4-poster.jpg" aria-label="Episode 4, Sessions: the live session list with its status chips and the now line under each title, a session opened as Chat, Timeline and Diffs, and the usage rail of models, call tree and files changed">
+          <source src="video/swarmery-ep4-sessions.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-ep4-sessions.mp4">download episode 4</a>.
+        </video>
+        <figcaption>Episode 4 · Sessions · 1:27</figcaption>
+      </figure>
+
+      <div class="grid-3">
+        <div class="card">
+          <p class="eyebrow">the list</p>
+          <h3>Working, or only quiet</h3>
+          <p>Newest first under day rules, with chips that count and filter. A live row carries a <code>now:</code> line — what the agent is doing this second, pushed over WebSocket. A working session shows elapsed time; a stuck one shows how long the transcript has been silent, because <code>working · 17 h</code> is a lie worth deleting.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">the detail</p>
+          <h3>Chat · Timeline · Diffs</h3>
+          <p>Chat replays the run as a conversation, with tool activity folded into one line that expands into the real timeline rows, sub-agents included; a composer at the bottom resumes the session. Timeline is every tool call with its duration and verdict. Diffs aggregates every file the session touched.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">the rail</p>
+          <h3>Numbers without a second request</h3>
+          <p>Models by share of tokens, the call tree of who invoked what, every file ranked by churn, context hogs, tokens, cost and errors — pinned beside the run. Plan runs collapse into one card per plan, so a headless run of twelve phases reads as one thing, not twelve.</p>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <figure class="shot span">
+          <img src="shot-session-chat.png" width="1440" height="900" alt="A session opened on its Chat tab: the pinned header with tokens, cost and errors, the run's own prose — what changed, verification — and the rail with models, call tree and files changed">
+          <figcaption>Session · Chat — the run as prose, the rail as numbers, the reply box resumes it.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-sessions-runs.png" width="1440" height="900" alt="The Sessions list in its plan-runs view: one card per plan run, expanded into its phase sessions with attempt notes, model and duration">
+          <figcaption>Sessions · plan runs — one card per plan, fanned out into its phases.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-session-diffs.png" width="1440" height="900" alt="The Diffs tab of a session: a unified diff of the phase document with its forecast block added, followed by the files the run created">
+          <figcaption>Session · Diffs — every file the session touched, as unified diffs.</figcaption>
         </figure>
       </div>
     </div>
