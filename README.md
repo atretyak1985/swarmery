@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/
 swarmery serve                            # listens on :7777
 ```
 
-https://github.com/user-attachments/assets/5b181c0a-1327-433f-a897-ceabcfbf0971
+https://github.com/user-attachments/assets/db1360d7-2f55-483c-b253-299dec955f0c
 
 <div align="center">
 
