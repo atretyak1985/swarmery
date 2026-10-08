@@ -272,9 +272,9 @@ function openPhase(seq: number, name: string): void {
   fireEvent.click(screen.getByRole('button', { name: `open Phase ${String(seq)} — ${name} details` }));
 }
 
-/** A phase opens in the drawer (Canvas v3 2d); its "esc" button closes it. */
+/** A phase opens inline, in place of the list; "← all phases" above it backs out. */
 function backToPhases(): void {
-  fireEvent.click(screen.getByRole('button', { name: 'close' }));
+  fireEvent.click(screen.getByRole('button', { name: 'all phases' }));
 }
 
 /** The header toggle. Its accessible name carries the STATE (counts + which
