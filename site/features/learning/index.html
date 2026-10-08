@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" class="noscript">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0A0B0D">
+<title>Learning · Swarmery</title>
+<meta name="description" content="Forecasts sound confident, and miss. A run that lands far from its forecast becomes a lesson candidate with the evidence attached. Nothing becomes active without your accept, every active lesson is re-measured, and the local classifier only acts once it has earned it.">
+<link rel="canonical" href="https://atretyak1985.github.io/swarmery/features/learning/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Swarmery">
+<meta property="og:title" content="Learning · Swarmery">
+<meta property="og:description" content="Forecasts sound confident, and miss. A run that lands far from its forecast becomes a lesson candidate with the evidence attached. Nothing becomes active without your accept, every active lesson is re-measured, and the local classifier only acts once it has earned it.">
+<meta property="og:url" content="https://atretyak1985.github.io/swarmery/features/learning/">
+<meta property="og:image" content="https://atretyak1985.github.io/swarmery/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@SwarmeryDev">
+<meta name="twitter:title" content="Learning · Swarmery">
+<meta name="twitter:description" content="Forecasts sound confident, and miss. A run that lands far from its forecast becomes a lesson candidate with the evidence attached. Nothing becomes active without your accept, every active lesson is re-measured, and the local classifier only acts once it has earned it.">
+<meta name="twitter:image" content="https://atretyak1985.github.io/swarmery/og.png">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem('swarmery-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="../../" aria-label="Swarmery home"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M16 2.4 4.22 9.2v13.6L16 29.6l11.78-6.8V9.2ZM16 6.9 8.12 11.45v9.1L16 25.1l7.88-4.55v-9.1Z"/><path fill="currentColor" d="M16 11.5 12.1 13.75v4.5L16 20.5l3.9-2.25v-4.5Z"/></svg><span>SW<span class="o">&#x2B21;</span>RMERY</span></a>
+    <nav class="menu" aria-label="Main">
+      <div class="dd cur"><button type="button" aria-expanded="false" aria-haspopup="true">Features <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+        <div class="dd-panel"><a href="../../features/planning/"><span class="n">01</span><span><b>Planning</b><span>An interview that ends in a phased plan</span></span></a><a href="../../features/inbox/"><span class="n">02</span><span><b>Inbox</b><span>Approvals, questions and proposals in one queue</span></span></a><a href="../../features/health/"><span class="n">03</span><span><b>Health</b><span>Scorecards, friction, cost and an advisor</span></span></a><a href="../../features/sessions/"><span class="n">04</span><span><b>Sessions</b><span>Every session live: chat, timeline, diffs</span></span></a><a href="../../features/learning/"><span class="n">05</span><span><b>Learning</b><span>Lessons, a local classifier, forecast honesty</span></span></a><a href="../../features/knowledge/"><span class="n">06</span><span><b>Knowledge</b><span>Memory, architecture map and code graph</span></span></a><a class="all" href="../../features/">All features and the six rules behind them &rarr;</a></div>
+      </div>
+      <a href="../../videos/">Videos</a>
+      <a href="../../plugins/">Plugins</a>
+      <a href="../../install/">Get started</a>
+      <a href="../../blog/">Blog</a>
+      <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a>
+    </nav>
+    <div class="nav-r">
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch light or dark theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <a class="gh" href="https://github.com/atretyak1985/swarmery"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span class="lbl">GitHub</span><span class="stars" data-stars></span></a>
+      <button class="icon-btn burger" type="button" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</header>
+<main id="main">
+
+<section class="fhero"><div class="hexbg"></div><div class="wrap">
+  <div class="crumbs"><a href="../">Features</a><span>/</span><span>05 Learning</span></div>
+  <p class="eyebrow">What your agents learned, and whether to trust it</p>
+  <h1>Agents repeat the same mistake. Make them <em>learn from every run</em>.</h1>
+  <p class="lede">Forecasts sound confident, and miss. A run that lands far from its forecast becomes a lesson candidate with the evidence attached. Nothing becomes active without your accept, every active lesson is re-measured, and the local classifier only acts once it has earned it.</p>
+  <div class="row"><a class="btn btn-primary" href="../../install/">Get started <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a><a class="btn" href="https://github.com/atretyak1985/swarmery"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> View on GitHub</a></div>
+  <div class="player rv"><div class="window"><div class="bar"><i></i><i></i><i></i><span class="url">Episode 5 · Learning</span></div><video controls playsinline preload="none" poster="../../assets/posters/ep5-learning.jpg"><source src="../../video/swarmery-ep5-learning.mp4" type="video/mp4"></video></div>
+<div class="player-meta"><span>Episode 5 · Learning · 1:21 · 1080p with voiceover</span><a href="../../video/swarmery-ep5-learning.mp4" download>Download mp4</a></div></div>
+</div></section>
+<section class="beat"><div class="wrap"><div class="split">
+<div class="txt rv"><span class="k">01 · lessons</span><h3 class="big">Earned, accepted, re-measured</h3><p>When a run lands far from its forecast, Swarmery drafts a lesson. Each one cites its cause and the evidence from that run, and it reaches future runs only after you accept it. Lessons are re-measured, and one that stops helping is retired.</p><ul><li>Active lessons reach runs that touch their area</li><li>Every lesson carries a measured effect</li><li>Retirement proposals when a lesson stops earning its place</li></ul></div>
+<div class="rv"><div class="frame "><span class="live">LIVE</span><video data-clip muted loop playsinline preload="none" poster="../../assets/clips/learning-lessons.jpg" data-src="../../assets/clips/learning-lessons.mp4" aria-label="127.0.0.1:7777/learning"></video></div></div></div></div></section><section class="beat"><div class="wrap"><div class="split rev">
+<div class="txt rv"><span class="k">02 · the classifier</span><h3 class="big">Watching before acting</h3><p>A small local model reads each finished session and answers a few fixed questions: how the run ended, what kind of task it was, why it failed. You check its answers and see how often it matches you. Off, watching, acting: it acts only once it has earned it.</p><ul><li>Runs on your machine</li><li>Agreement rate per question</li><li>Its answers go to the Inbox for checking</li></ul></div>
+<div class="rv"><div class="frame "><span class="live">LIVE</span><video data-clip muted loop playsinline preload="none" poster="../../assets/clips/learning-classifier.jpg" data-src="../../assets/clips/learning-classifier.mp4" aria-label="127.0.0.1:7777/learning/classifier"></video></div></div></div></div></section><section class="beat"><div class="wrap"><div class="split">
+<div class="txt rv"><span class="k">03 · forecast honesty</span><h3 class="big">Does the plan keep its word</h3><p>Every phase starts with a forecast. Did it hold? Group by model or agent and see who over-promises. Routing shows which model would have been the right pick: here a cheaper model did the same work for a fifth of the cost.</p><ul><li>Calibration by model, effort, agent or project</li><li>Declared confidence against reality</li><li>Proof: what your decisions actually changed</li></ul></div>
+<div class="rv"><div class="frame "><span class="live">LIVE</span><video data-clip muted loop playsinline preload="none" poster="../../assets/clips/learning-honesty.jpg" data-src="../../assets/clips/learning-honesty.mp4" aria-label="127.0.0.1:7777/learning/honesty"></video></div></div></div></div></section>
+<section class="sec divider"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">screenshots</p><h2>The learning pages, up close.</h2><p>Click any screenshot to open it full size. The projects are fictional.</p></div>
+  <div class="gallery"><figure class="shot rv"><button type="button" data-zoom="../../assets/img/05-learning-1-lessons-lg.webp" data-alt="Lesson candidates with cause and evidence, and a retirement proposal"><img src="../../assets/img/05-learning-1-lessons.webp" srcset="../../assets/img/05-learning-1-lessons-sm.webp 800w, ../../assets/img/05-learning-1-lessons.webp 1600w" sizes="(max-width:760px) 100vw, 600px" alt="Lesson candidates with cause and evidence, and a retirement proposal" loading="lazy" width="1600" height="900"></button><figcaption><b>Learning</b>Lesson candidates with cause and evidence, and a retirement proposal</figcaption></figure>
+<figure class="shot rv"><button type="button" data-zoom="../../assets/img/05-learning-2-classifier-lg.webp" data-alt="The local classifier and how often it matches you"><img src="../../assets/img/05-learning-2-classifier.webp" srcset="../../assets/img/05-learning-2-classifier-sm.webp 800w, ../../assets/img/05-learning-2-classifier.webp 1600w" sizes="(max-width:760px) 100vw, 600px" alt="The local classifier and how often it matches you" loading="lazy" width="1600" height="900"></button><figcaption><b>Learning</b>The local classifier and how often it matches you</figcaption></figure>
+<figure class="shot rv"><button type="button" data-zoom="../../assets/img/05-learning-3-honesty-agent-lg.webp" data-alt="Forecast honesty by agent: who over-promises"><img src="../../assets/img/05-learning-3-honesty-agent.webp" srcset="../../assets/img/05-learning-3-honesty-agent-sm.webp 800w, ../../assets/img/05-learning-3-honesty-agent.webp 1600w" sizes="(max-width:760px) 100vw, 600px" alt="Forecast honesty by agent: who over-promises" loading="lazy" width="1600" height="900"></button><figcaption><b>Learning</b>Forecast honesty by agent: who over-promises</figcaption></figure>
+<figure class="shot rv"><button type="button" data-zoom="../../assets/img/05-learning-4-routing-lg.webp" data-alt="Routing: which model would have been the right pick"><img src="../../assets/img/05-learning-4-routing.webp" srcset="../../assets/img/05-learning-4-routing-sm.webp 800w, ../../assets/img/05-learning-4-routing.webp 1600w" sizes="(max-width:760px) 100vw, 600px" alt="Routing: which model would have been the right pick" loading="lazy" width="1600" height="900"></button><figcaption><b>Learning</b>Routing: which model would have been the right pick</figcaption></figure></div>
+</div></section>
+<section class="sec-tight divider"><div class="wrap"><div class="pager"><a href="../sessions/"><span class="d">&larr; Previous · 04</span><b>Sessions</b></a><a class="next" href="../knowledge/"><span class="d">Next · 06 &rarr;</span><b>Knowledge</b></a></div></div></section>
+<section class="cta"><div class="glow"></div><div class="wrap">
+<h2>Run your agents like a fleet.</h2><p>Free on GitHub. One binary on your machine, no cloud, no account. Your sessions show up the moment it starts.</p>
+<div class="row"><a class="btn btn-primary" href="../../install/">Get started <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a><a class="btn" href="https://github.com/atretyak1985/swarmery"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Star on GitHub</a></div>
+</div></section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="../../" aria-label="Swarmery home"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M16 2.4 4.22 9.2v13.6L16 29.6l11.78-6.8V9.2ZM16 6.9 8.12 11.45v9.1L16 25.1l7.88-4.55v-9.1Z"/><path fill="currentColor" d="M16 11.5 12.1 13.75v4.5L16 20.5l3.9-2.25v-4.5Z"/></svg><span>SW<span class="o">&#x2B21;</span>RMERY</span></a>
+        <p>A local-first control plane and plugin marketplace for Claude Code. Built in public from Lviv.</p>
+      </div>
+      <div><h4>Product</h4><ul><li><a href="../../features/planning/">Planning</a></li><li><a href="../../features/inbox/">Inbox</a></li><li><a href="../../features/health/">Health</a></li><li><a href="../../features/sessions/">Sessions</a></li><li><a href="../../features/learning/">Learning</a></li><li><a href="../../features/knowledge/">Knowledge</a></li></ul></div>
+      <div><h4>Learn</h4><ul>
+        <li><a href="../../install/">Get started</a></li>
+        <li><a href="../../videos/">Videos</a></li>
+        <li><a href="../../plugins/">Plugins</a></li>
+        <li><a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a></li>
+        <li><a href="https://github.com/atretyak1985/swarmery/blob/main/CHANGELOG.md">Changelog</a></li>
+      </ul></div>
+      <div><h4>Follow</h4><ul>
+        <li><a href="https://github.com/atretyak1985/swarmery">GitHub</a></li>
+        <li><a href="../../blog/">Blog</a></li>
+        <li><a href="https://swarmery.substack.com">Substack</a></li>
+        <li><a href="https://x.com/SwarmeryDev">X · @SwarmeryDev</a></li>
+      </ul></div>
+    </div>
+    <div class="foot-b">
+      <span>Framework: Apache-2.0 · Control plane: PolyForm Noncommercial 1.0.0</span>
+      <span>Not affiliated with Anthropic. Claude Code is a product of Anthropic.</span>
+    </div>
+  </div>
+</footer>
+<dialog class="modal" id="player" aria-label="Video player">
+  <div class="modal-wrap">
+    <button class="modal-close" type="button" aria-label="Close">&times;</button>
+    <div class="modal-inner">
+      <div class="modal-body"><video controls playsinline preload="none"></video><div class="side"></div></div>
+      <div class="modal-foot"><span data-title></span><a data-dl class="muted" href="#" download>Download mp4</a></div>
+    </div>
+  </div>
+</dialog>
+<dialog class="modal" id="lightbox" aria-label="Screenshot">
+  <div class="modal-wrap">
+    <button class="modal-close" type="button" aria-label="Close">&times;</button>
+    <div class="modal-inner"><img alt=""><div class="modal-foot"><span data-cap></span><span class="muted">Fictional data: TrailMap and Ledgerly API</span></div></div>
+  </div>
+</dialog>
+<script src="../../assets/site.js" defer></script>
+</body>
+</html>
