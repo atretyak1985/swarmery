@@ -115,6 +115,10 @@
   .shot img{display:block; width:100%; height:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel);}
   .shot figcaption{margin:8px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
   .shot.wide{margin:0 0 28px;}
+  .gallery{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 18px; margin:24px 0 0;}
+  .gallery .shot{margin:0;}
+  .gallery .span{grid-column:1 / -1;}
+  @media (max-width:640px){.gallery{grid-template-columns:1fr;}}
 
   /* ── sections ── */
   main section{padding:56px 0 8px;}
@@ -202,6 +206,7 @@
       <a href="#why">Why</a>
       <a href="#planning">Planning</a>
       <a href="#inbox">Inbox</a>
+      <a href="#health">Health</a>
       <a href="#control-plane">Control plane</a>
       <a href="#plugins">Plugins</a>
       <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a>
@@ -352,6 +357,21 @@ swarmery serve</code></pre>
           <p>Before anything runs, the planner forecasts each phase's size, duration, outcome and the areas it will touch. A phase runs headlessly from its own document in a fresh worktree; afterwards the actuals are scored against the forecast, and a run that lands far from the plan becomes a lesson candidate.</p>
         </div>
       </div>
+
+      <div class="gallery">
+        <figure class="shot span">
+          <img src="shot-new-plan-top.png" width="1440" height="600" alt="New plan: a finished planner session reports the plan ready and saved to the workspace, above the four steps — describe the idea, answer structured questions, refine or proceed, the plan lands in the workspace">
+          <figcaption>New plan · the planner's interview ends with phase documents in the workspace, tracked on the Plans page within seconds.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-phase-story.png" width="1440" height="900" alt="A phase's Story tab: an off-plan badge, the sentence 'Planned as a small phase, it ended in 7 minutes with the work done', and the expected-versus-happened-versus-why breakdown of the forecast against the run">
+          <figcaption>Story · what the planner expected, what happened, and why they differ.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-phase-criteria.png" width="1440" height="900" alt="A phase's Criteria tab: seven acceptance criteria, each ticked and struck through, followed by the rendered phase document">
+          <figcaption>Criteria · every tick is a line in the phase document, written back on click.</figcaption>
+        </figure>
+      </div>
     </div>
   </section>
 
@@ -387,6 +407,72 @@ swarmery serve</code></pre>
           <h3>Sessions blocked on a human</h3>
           <p>A second list, oldest blocker first: a permission prompt, a question, a session waiting on a plain-text reply, a production deploy that may only be confirmed from the terminal, a failed run. Nothing here answers for you — it puts the reply on your clipboard and names the session.</p>
         </div>
+      </div>
+
+      <div class="gallery">
+        <figure class="shot span">
+          <img src="shot-inbox-top.png" width="1440" height="560" alt="The Inbox: tabs for all, approvals, lessons, advisor, proposals, classifier, retirements, alerts and handled by agent; two strips offering to accept the agent's suggestions and to run triage; an advisor finding about a recurring error opened on the right with what happens if you accept">
+          <figcaption>Inbox · one list, tabbed by kind; the strips offer the agent's suggestions and a triage run over what it can handle.</figcaption>
+        </figure>
+        <figure class="shot span">
+          <img src="shot-inbox-handled.png" width="1440" height="900" alt="The handled-by-agent tab: classifier checks the triage run labelled, each with its label, the agent's one-line reasoning and an undo button">
+          <figcaption>Handled by agent · what the triage run closed, each with its reasoning and an undo for seven days.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="health">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">health · episode 3</p>
+        <h2>How your agents are doing, and what to change.</h2>
+        <p>One date range, one sentence about the fleet, and the agents that moved it. Scorecards compare every agent against the previous window, friction names the tools and errors that cost you time, and an evidenced advisor turns the pattern into a change you review as a diff.</p>
+      </div>
+
+      <figure class="vid sec">
+        <video controls preload="metadata" playsinline poster="ep3-poster.jpg" aria-label="Episode 3, Health: the one-sentence overview of the fleet, per-agent scorecards against the previous window, the friction board of denied tools and error groups, advisor recommendations with their evidence, and cost and tokens over the range">
+          <source src="video/swarmery-ep3-health.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-ep3-health.mp4">download episode 3</a>.
+        </video>
+        <figcaption>Episode 3 · Health · 1:23</figcaption>
+      </figure>
+
+      <div class="grid-3">
+        <div class="card">
+          <p class="eyebrow">scorecards</p>
+          <h3>Direction, not just a level</h3>
+          <p>Every agent gets runs, error rate, cost, p95 and re-dispatch rate, each against the previous window, and its errors split into behaviour, harness and infra. The overview reduces the window to one sentence and the three agents behind it.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">friction</p>
+          <h3>What cost you time</h3>
+          <p>Which tools got denied, the top recurring error groups, and how long approvals kept agents waiting. A triage run over the error groups mutes the noise for 30 days and files a fix task for what is fixable; a denied tool is one click from an auto-approve rule.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">advisor · cost</p>
+          <h3>Evidence, then a diff</h3>
+          <p>A deterministic rule engine raises recommendations that carry the data that triggered them; accept one and it moves through proposed, adopted and verified, and a rewrite of an agent arrives as a diff to review. Cost and tokens pivot by project, model or agent, with a projected monthly figure and CSV export.</p>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <figure class="shot span">
+          <img src="shot-health-overview.png" width="1440" height="900" alt="Health Overview: a status strip with this window's runs, failure rate and spend, what is waiting on you and what changed because of you; the one sentence about the fleet; three agents whose failure rate moved most, each with a before-and-after bar; the friction you can remove today">
+          <figcaption>Overview · the window in one sentence, the agents that moved it, and the friction to remove today.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-health-agents.png" width="1440" height="900" alt="Health Agents: a headline of agent runs and error events with cost, runs and errors against the previous window, then per-agent scorecards with behaviour, harness and infra error counts, runs, cost, p95 and re-dispatch rate">
+          <figcaption>Agents · scorecards against the previous window.</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="shot-health-friction.png" width="1440" height="900" alt="Health Friction: a run-triage strip, the friction board with denied tools and the top error groups — counts, fix proposed, noise until a date — and approval wait statistics">
+          <figcaption>Friction · error groups with their triage verdicts, and how long approvals waited.</figcaption>
+        </figure>
+        <figure class="shot span">
+          <img src="shot-health-cost.png" width="1440" height="900" alt="Health Cost and tokens: metric and pivot switches, a headline of spend over 14 days with daily average, change against the previous window and a projected month, productivity by language, and KPI tiles for autonomy, tasks, cost per task and cache hit rate">
+          <figcaption>Cost &amp; tokens · the metric decides the pivot; productivity and autonomy sit beside the spend.</figcaption>
+        </figure>
       </div>
     </div>
   </section>
