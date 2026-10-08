@@ -209,6 +209,7 @@
       <a href="#health">Health</a>
       <a href="#sessions">Sessions</a>
       <a href="#learning">Learning</a>
+      <a href="#knowledge">Knowledge</a>
       <a href="#control-plane">Control plane</a>
       <a href="#plugins">Plugins</a>
       <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Docs</a>
@@ -576,6 +577,53 @@ swarmery serve</code></pre>
         <figure class="shot">
           <img src="shot-learning-honesty-top.png" width="1440" height="540" alt="Forecast honesty: calibration grouped by model and effort — runs, mean surprise, area hit, band and outcome match rates, and how often each declared confidence band held">
           <figcaption>Forecast honesty · how often the forecasts held, by model and effort.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="knowledge">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">knowledge · episode 6</p>
+        <h2>What one project knows about itself.</h2>
+        <p>Everything a project remembers, in one editor: its instructions, Claude Code's auto-memory and Serena notes, with a lint that catches facts the git history has since overtaken. Beside it, the architecture map — modules by layer, named end-to-end flows, the API surface — with a staleness badge and a one-click rebuild.</p>
+      </div>
+
+      <figure class="vid sec">
+        <video controls preload="metadata" playsinline poster="ep6-poster.jpg" aria-label="Episode 6, Knowledge: the project's memory files in one editor with the stale-facts lint and the index consolidation, and the embedded architecture map with its staleness badge, module cards and named flows">
+          <source src="video/swarmery-ep6-knowledge.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-ep6-knowledge.mp4">download episode 6</a>.
+        </video>
+        <figcaption>Episode 6 · Knowledge · 1:21</figcaption>
+      </figure>
+
+      <div class="grid-3">
+        <div class="card">
+          <p class="eyebrow">memory</p>
+          <h3>Three roots, one editor</h3>
+          <p>Project instructions (<code>CLAUDE.md</code>), Claude Code's auto-memory and Serena notes, grouped by where they live, with markdown editing, a preview toggle and a versioned backup on every save. Saving checks a base hash and offers a reload instead of clobbering what a running agent wrote underneath you.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">stale facts</p>
+          <h3>Memory that admits it is old</h3>
+          <p>A lint reads every memory file for claims like "PR open" or "fix pending" and checks them against the repository's git history; a claim the history has overtaken is listed with the commit that settled it, one click from the file. A weekly routine runs the same lint across every project, and the always-loaded index can be consolidated when finished entries pile up.</p>
+        </div>
+        <div class="card">
+          <p class="eyebrow">architecture</p>
+          <h3>A map that knows its age</h3>
+          <p>The project's architecture map is embedded, not left as a file you forget you generated: layers, modules, API endpoints and named flows, with a badge comparing the commit the map was built at against <code>HEAD</code> and an incremental rebuild that runs headlessly from the page. Serena and Graphify dashboards embed the same way when their packs are enabled.</p>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <figure class="shot span">
+          <img src="shot-knowledge-memory.png" width="1440" height="900" alt="The Memory tab: a consolidate-index strip with dry run and apply, the stale-facts panel reporting no stale facts across 62 files, the file list grouped into project instructions and auto-memory, and CLAUDE.md open in the editor with edit, preview and save">
+          <figcaption>Memory · the stale-facts lint above the files, CLAUDE.md open in the editor.</figcaption>
+        </figure>
+        <figure class="shot span">
+          <img src="shot-knowledge-architecture.png" width="1440" height="900" alt="The Architecture tab: a strip saying when the map was built, which commit, how many commits behind and how many modules were touched since, with incremental-rebuild and expand buttons, and the embedded map — title, stack tags, a diagram of layers with module cards and a flows column">
+          <figcaption>Architecture · the embedded map with its staleness strip and a rebuild that runs from the page.</figcaption>
         </figure>
       </div>
     </div>
