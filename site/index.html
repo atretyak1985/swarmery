@@ -107,6 +107,9 @@
   .btn-primary:hover{background:var(--accent); border-color:var(--accent); color:var(--on-accent); opacity:.88;}
   .btn-sm{padding:6px 12px; font-size:.72rem;}
   .cta-row{display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 0;}
+  .promo{margin:30px 0 0;}
+  .promo video{display:block; width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line); border-radius:12px;}
+  .promo figcaption{margin:8px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink-dim);}
 
   /* ── sections ── */
   main section{padding:56px 0 8px;}
@@ -250,6 +253,13 @@
         <a class="btn btn-primary" href="https://github.com/atretyak1985/swarmery">View on GitHub</a>
         <a class="btn" href="https://github.com/atretyak1985/swarmery/tree/main/docs">Read the docs</a>
       </div>
+      <figure class="promo">
+        <video controls preload="metadata" playsinline poster="promo-poster.jpg" aria-label="Swarmery promo: a 75-second tour of the dashboard — sessions, the approval queue, plans and headless agents">
+          <source src="video/swarmery-promo.mp4" type="video/mp4">
+          Your browser does not play mp4 — <a href="video/swarmery-promo.mp4">download the promo</a>.
+        </video>
+        <figcaption>75-second promo · 1080p</figcaption>
+      </figure>
       <div class="stats">
         <!-- BEGIN generated:stats-hero -->
         <div class="stat"><div class="n">14</div><div class="l">plugin packs</div></div>

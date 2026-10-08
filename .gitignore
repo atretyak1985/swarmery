@@ -41,3 +41,6 @@ articles/**/build/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Staged by the pages workflow from docs/video/ (never committed twice)
+site/video/
