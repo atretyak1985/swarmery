@@ -16,11 +16,11 @@ curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/
 swarmery serve                            # listens on :7777
 ```
 
+https://github.com/user-attachments/assets/db1360d7-2f55-483c-b253-299dec955f0c
+
 <div align="center">
 
-[![Swarmery demo](docs/screenshots/demo.gif)](docs/video/swarmery-promo.mp4)
-
-[▶ Watch the 75-second promo (1080p mp4)](docs/video/swarmery-promo.mp4)
+<sub>75-second promo · <a href="docs/video/swarmery-promo.mp4">download the 1080p mp4</a> · <a href="docs/screenshots/demo.gif">dashboard demo (gif)</a></sub>
 
 </div>
 
