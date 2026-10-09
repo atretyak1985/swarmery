@@ -354,6 +354,13 @@ self-hosted). Every label the UI shows — "Open PR" / "Open MR", "PR #12" /
 "MR #12" — comes from the provider the daemon detected (the API's `terms`),
 never from a guess in the browser.
 
+The operator guide, [docs/landing.md](docs/landing.md), covers the lifecycle
+(none → ready → pushed → pr_open → merged, or returned), the three Review
+buttons, every 409/422 code with its remedy, and what is deferred. Signing the
+daemon in is covered in [docs/vcs-login.md](docs/vcs-login.md). To keep agents
+from seeing environment-carried VCS tokens, see `SWARMERY_AGENT_SCRUB_VCS_TOKENS`
+under [Agent spawn environment](#agent-spawn-environment).
+
 **Requirements.** `git` on the daemon's PATH, plus the host's CLI: `gh` ≥ 2.40
 for GitHub, `glab` ≥ 1.40 for GitLab. The daemon uses the CLI's own login
 (`gh auth login --hostname <host>` / `glab auth login --hostname <host>`); the
@@ -407,6 +414,7 @@ machine under `swarmery.vcs`:
 | `swarmery.vcs.provider` / `vcs.provider` | auto-detect | Pins the provider (`github` \| `gitlab`). |
 | `swarmery.vcs.baseBranch` / `vcs.baseBranch` | host's default branch | Target branch of the PR/MR. |
 | `swarmery.vcs.allowPushToBase` / `vcs.allowPushToBase` | `false` | Without it, landing a run branch that is the base branch is refused (409). |
+| `swarmery.vcs.clientIds.<host>` | unset | OAuth client id for the device-code sign-in on that host; wins over `SWARMERY_GITHUB_CLIENT_ID` / `SWARMERY_GITLAB_CLIENT_ID`. |
 
 `vcs.forkRemote` is reserved: the fork workflow is not supported yet, and a
 project that sets it is refused (409) rather than pushed somewhere surprising.
