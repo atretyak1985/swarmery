@@ -11,7 +11,7 @@
 // (the exact commands to finish by hand) + redacted `detail`, verbatim in a
 // <pre>; a 409 is a refusal with a known code, mapped to one inline sentence.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getPhaseReview, LandError, landPhase } from '../../api';
 import type {
   Epic,
@@ -126,22 +126,33 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   const [returnOpen, setReturnOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
 
+  // The phase this instance currently shows. The panel keeps the instance
+  // (and the tab) on ↑/↓ step navigation, so a response that comes back after
+  // the operator moved on belongs to ANOTHER phase and must be dropped.
+  // A layout effect, so it is current before the passive effects below run.
+  const shownPhase = useRef(phase.id);
+  useLayoutEffect(() => {
+    shownPhase.current = phase.id;
+  }, [phase.id]);
+
   const landingKey = phase.landing?.state ?? 'none';
   const load = useCallback((): (() => void) => {
     let live = true;
+    const forPhase = phase.id;
+    const current = (): boolean => live && shownPhase.current === forPhase;
     setLoading(true);
     setLoadError(null);
-    getPhaseReview(epic.taskId, phase.id)
+    getPhaseReview(epic.taskId, forPhase)
       .then((r) => {
-        if (!live) return;
+        if (!current()) return;
         setReview(r);
         setLanded(null);
       })
       .catch((e: unknown) => {
-        if (live) setLoadError(e);
+        if (current()) setLoadError(e);
       })
       .finally(() => {
-        if (live) setLoading(false);
+        if (current()) setLoading(false);
       });
     return () => {
       live = false;
@@ -152,9 +163,12 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   // (a finished run has new commits; a land elsewhere changed the strip).
   useEffect(() => load(), [load, phase.runState, landingKey]);
 
-  // A different phase starts clean: no stale error, draft flag or feedback.
+  // A different phase starts clean: no stale review, landing, in-flight action,
+  // error, draft flag or feedback.
   useEffect(() => {
     setReview(null);
+    setLanded(null);
+    setInFlight(null);
     setActionError(null);
     setDraft(false);
     setReturnOpen(false);
@@ -171,17 +185,27 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   const busy = inFlight !== null;
 
   const act = (body: PhaseLandRequest): void => {
+    const forPhase = phase.id;
+    // Still showing the phase this action was for? Otherwise its outcome is
+    // dropped here — it is not the shown phase's landing, error or spinner.
+    const current = (): boolean => shownPhase.current === forPhase;
     setInFlight(body.action);
     setActionError(null);
-    landPhase(epic.taskId, phase.id, body)
+    landPhase(epic.taskId, forPhase, body)
       .then((res) => {
+        // The land did happen: the page still refetches so the phase list follows.
+        onLanded?.();
+        if (!current()) return;
         setLanded(res.landing);
         setReturnOpen(false);
         setFeedback('');
-        onLanded?.();
       })
-      .catch((e: unknown) => setActionError(e))
-      .finally(() => setInFlight(null));
+      .catch((e: unknown) => {
+        if (current()) setActionError(e);
+      })
+      .finally(() => {
+        if (current()) setInFlight(null);
+      });
   };
 
   const landTitle = running

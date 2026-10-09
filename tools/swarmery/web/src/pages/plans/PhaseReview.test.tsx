@@ -278,3 +278,93 @@ describe('PhaseReview', () => {
     expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
   });
 });
+
+// ↑/↓ step navigation keeps the tab and re-renders the SAME instance with
+// another phase: whatever comes back late for the previous phase must not be
+// written onto the one now shown.
+describe('PhaseReview — a late response for another phase', () => {
+  const phaseB = (): EpicPhase => phase({ id: 308, seq: 3, name: 'Phase 3 — Totals', runSessionUuid: 'sess-308' });
+  const reviewB = (): PhaseReviewData => review({ branch: 'swarm/phase-308', commits: [{ sha: 'b0b', subject: 'add totals' }] });
+
+  function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void } {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  beforeEach(() => {
+    api.getPhaseReview.mockImplementation((_task: number, id: number) =>
+      Promise.resolve(id === 308 ? reviewB() : review()),
+    );
+  });
+
+  it('a land on phase A that resolves after the switch to B leaves B untouched', async () => {
+    const land = deferred<unknown>();
+    api.landPhase.mockReturnValue(land.promise);
+    const onLanded = vi.fn();
+    const { rerender } = render(<PhaseReview epic={EPIC} phase={phase()} terms={PR_TERMS} onLanded={onLanded} />);
+    await screen.findByText('add line items');
+    fireEvent.click(button('Push + open Pull Request'));
+    expect(api.landPhase).toHaveBeenCalledWith(9, 207, { action: 'pr', draft: false });
+
+    rerender(<PhaseReview epic={EPIC} phase={phaseB()} terms={PR_TERMS} onLanded={onLanded} />);
+    await screen.findByText('add totals');
+    await act(async () => {
+      land.resolve({
+        branch: 'swarm/phase-207',
+        base: 'main',
+        action: 'pr',
+        landing: landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/pull/77', prNumber: 77 }),
+      });
+      await land.promise;
+    });
+
+    expect(screen.queryByRole('link', { name: 'PR #77' })).toBeNull();
+    expect(screen.queryByText('PR open')).toBeNull();
+    expect(screen.getByText('ready to land')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(button('Push').disabled).toBe(false);
+    expect(button('Push + open Pull Request').disabled).toBe(false);
+    expect(button('Return to agent…').disabled).toBe(false);
+    // The land did happen, so the page still refetches.
+    expect(onLanded).toHaveBeenCalledTimes(1);
+  });
+
+  it('a land on phase A that fails after the switch to B shows B no error', async () => {
+    const land = deferred<unknown>();
+    api.landPhase.mockReturnValue(land.promise);
+    const { rerender } = render(<PhaseReview epic={EPIC} phase={phase()} terms={PR_TERMS} />);
+    await screen.findByText('add line items');
+    fireEvent.click(button('Push'));
+
+    rerender(<PhaseReview epic={EPIC} phase={phaseB()} terms={PR_TERMS} />);
+    await screen.findByText('add totals');
+    await act(async () => {
+      land.reject(new LandError(409, { error: 'raw', code: 'phase-running' }, 'land failed'));
+      await land.promise.catch(() => undefined);
+    });
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(button('Push').disabled).toBe(false);
+  });
+
+  it("phase A's review arriving after B's is dropped", async () => {
+    const slowA = deferred<PhaseReviewData>();
+    api.getPhaseReview.mockImplementation((_task: number, id: number) =>
+      id === 308 ? Promise.resolve(reviewB()) : slowA.promise,
+    );
+    const { rerender } = render(<PhaseReview epic={EPIC} phase={phase()} terms={PR_TERMS} />);
+    rerender(<PhaseReview epic={EPIC} phase={phaseB()} terms={PR_TERMS} />);
+    await screen.findByText('add totals');
+    await act(async () => {
+      slowA.resolve(review());
+      await slowA.promise;
+    });
+    expect(screen.getByText('add totals')).toBeTruthy();
+    expect(screen.queryByText('add line items')).toBeNull();
+  });
+});

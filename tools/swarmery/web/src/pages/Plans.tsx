@@ -3078,7 +3078,9 @@ function PhaseDetailPanel({
           {phase.surprise == null && <ForecastSection phase={phase} />}
         </div>
       ) : activeTab === 'review' ? (
-        <PhaseReview epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
+        // Keyed by phase: ↑/↓ step navigation keeps the tab, and a land still in
+        // flight for the previous phase must not render onto this one.
+        <PhaseReview key={phase.id} epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
       ) : activeTab === 'runs' ? (
         <>
           <div className="flex flex-wrap items-center gap-1.5">
