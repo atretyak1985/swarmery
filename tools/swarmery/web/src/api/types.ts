@@ -3723,6 +3723,24 @@ export interface EpicPhase {
   surprise: PhaseSurprise | null;
   /** The phase's landing lifecycle (migration 0103) — see PhaseLanding. */
   landing: PhaseLanding;
+  /** Every time this finished phase was reopened because a defect slipped past
+   *  its gates (migration 0104), oldest first. [] when never reopened. */
+  reopens: PhaseReopen[];
+}
+
+/** Which gate caught a defect in a finished phase — or that none did. */
+export type ReopenCaughtBy = 'verifier' | 'review' | 'operator' | 'none';
+
+/** One phase_reopens row (Go reopenDTO, internal/api/phase_reopen.go). */
+export interface PhaseReopen {
+  id: number;
+  reason: string;
+  /** The fix's PR/commit URL; '' when none was given. */
+  fixUrl: string;
+  caughtBy: ReopenCaughtBy;
+  /** The criterion labels the reopen unticked. */
+  criteria: string[];
+  createdAt: string;
 }
 
 /** Where a phase's run branch is on its way to the code host. `ready` is DERIVED

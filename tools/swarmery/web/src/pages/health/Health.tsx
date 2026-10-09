@@ -3,7 +3,7 @@
 //
 // A sticky StatusStrip answers the three questions (this window · waiting on
 // you · because of you) over ONE date range, then tabs: Overview · Agents ·
-// Friction · Estimates · Advisor · Cost & tokens. The range and the tab both
+// Friction · Estimates · Phase runs · Advisor · Cost & tokens. The range and the tab both
 // live in the URL (`?days=30&tab=agents`), so a view is shareable and the old
 // routes can redirect onto a specific tab. The retro and analytics pages render
 // embedded (their own range rows hidden) and are lazy — Analytics pulls in
@@ -36,6 +36,7 @@ import { useScope } from '../../lib/scope';
 import { useTriageRun } from '../inbox/useTriageRun';
 import { FrictionTriageStrip } from './FrictionTriageStrip';
 import { HealthOverview } from './HealthOverview';
+import { PhaseRunsTab } from './PhaseRunsTab';
 import {
   type AutoModeTone,
   DEFAULT_DAYS,
@@ -265,6 +266,7 @@ export function Health(): JSX.Element {
       ...(friction !== null && frictionCount(friction) > 0 ? { count: frictionCount(friction) } : {}),
     },
     { id: 'estimates', label: 'Estimates' },
+    { id: 'phaseruns', label: 'Phase runs' },
     {
       id: 'advisor',
       label: 'Advisor',
@@ -298,6 +300,8 @@ export function Health(): JSX.Element {
             onRetry={load}
             onTab={setTab}
           />
+        ) : tab === 'phaseruns' ? (
+          <PhaseRunsTab from={range.from} to={range.to} />
         ) : tab === 'cost' ? (
           <Suspense fallback={<Loading label="cost…" />}>
             <Analytics range={{ from: range.from, to: range.to }} />
