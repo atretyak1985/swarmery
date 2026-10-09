@@ -17,7 +17,7 @@ import (
 // commits locally, and never pushes.
 //
 // The doc is also where the phase's SUMMARY has to land. wsingest parses the
-// doc's `## Completion Report` section (parseCompletionReport) and the Plans UI
+// doc's `## Completion Report` section (ParseCompletionReport) and the Plans UI
 // renders exactly that as the phase summary; nothing else is read. Executors
 // that write their account into a reports/ file or only into their final reply
 // leave the operator staring at "no summary of the work written" over a phase

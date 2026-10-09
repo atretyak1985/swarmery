@@ -97,11 +97,11 @@ var (
 	nextSectionRe       = regexp.MustCompile(`(?m)^##\s`)
 )
 
-// parseCompletionReport extracts the body of the doc's `## Completion Report`
+// ParseCompletionReport extracts the body of the doc's `## Completion Report`
 // section (from the heading to the next `## ` heading or EOF), trimmed.
 // "" when the section is absent or empty — e.g. a template stub with nothing
 // filled in yet. Pure; unit-tested.
-func parseCompletionReport(text string) string {
+func ParseCompletionReport(text string) string {
 	loc := completionHeadingRe.FindStringIndex(text)
 	if loc == nil {
 		return ""
@@ -754,7 +754,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		}
 		phases[i].checkboxesDone, phases[i].checkboxesTotal = CountCheckboxes(string(body))
 		phases[i].docStatus = parseDocStatus(string(body))
-		phases[i].completionReport = parseCompletionReport(string(body))
+		phases[i].completionReport = ParseCompletionReport(string(body))
 		// The doc's own header outranks the README table cell: it is the more
 		// specific statement, it lives next to the work, and it is the form that
 		// carries an absolute path.
@@ -767,7 +767,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
 		// A prior written into a doc that ALREADY reports its work done is not a
-		// prediction; parseCompletionReport above has the only fact that can say so,
+		// prediction; ParseCompletionReport above has the only fact that can say so,
 		// which is why it is threaded in rather than re-read.
 		phases[i].forecasts = ParseForecasts(string(body), phases[i].completionReport != "")
 		if len(phases[i].forecasts) > 0 {
