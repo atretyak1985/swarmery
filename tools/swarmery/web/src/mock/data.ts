@@ -2941,7 +2941,9 @@ export const mockApi = {
           })
         : mockLanding({ state: body.action === 'push' ? 'pushed' : 'returned' });
     phase.landing = landing;
-    return { branch: `swarm/phase-${String(phaseId)}`, base: 'main', action: body.action, landing };
+    const base = { branch: `swarm/phase-${String(phaseId)}`, base: 'main', action: body.action, landing };
+    // The daemon answers push/pr with the provider vocabulary; a return carries none.
+    return body.action === 'return' ? base : { ...base, terms: MOCK_TERMS };
   },
 
   /** POST …/phases/{phaseId}/landing/refresh — re-reads the seeded phase's
