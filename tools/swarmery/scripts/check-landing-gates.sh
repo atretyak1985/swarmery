@@ -26,6 +26,13 @@
 # script says so ("flaky: <pkg> passed on isolated retry"). A second failure
 # fails the gate. Nothing is retried silently.
 #
+# Toolchain: a Go toolchain without the covdata tool (GOTOOLCHAIN=auto
+# downloads can lack it) makes go test exit 1 for every package with no tests
+# under -coverprofile. That is tolerated, with a printed note, ONLY for packages
+# that really have no tests; the local profile then lacks their 0% records, so
+# the local number can sit slightly above CI's. Every non-zero exit of go test
+# must be explained by a FAIL line or such a package, or the gate fails.
+#
 # Resolves every path from this script's location, so it runs from any cwd.
 # Exit codes: 0 all green, 1 a gate failed. Logs of a failed run are kept and
 # their directory printed.
@@ -102,9 +109,23 @@ if (cd "$sw_dir" && go test -coverprofile="$profile" ./...) >"$work/test.log" 2>
   pass "make test: go test ./..."
 else
   failed_pkgs="$(grep -E '^FAIL[[:space:]]+[^[:space:]]+' "$work/test.log" | awk '{print $2}' | sort -u)"
-  if [[ -z "$failed_pkgs" || ! -s "$profile" ]]; then
+  # A toolchain without the covdata tool (Go ≥1.25 toolchains fetched by
+  # GOTOOLCHAIN=auto ship without it) cannot write the 0% coverage record of a
+  # package that has no tests, and go test exits 1 for it with
+  # `go: no such tool "covdata"`. That is the machine, not the code — but only
+  # for a package with no tests at all; anywhere else it fails the gate.
+  covdata_pkgs="$(awk '/^# /{pkg=$2} /no such tool "covdata"/{print pkg}' "$work/test.log" | sort -u)"
+  if [[ -z "$failed_pkgs" && -z "$covdata_pkgs" ]] || [[ ! -s "$profile" ]]; then
     fail "make test: go test ./..." "go test failed without a FAIL <pkg> line or a coverage profile" "$work/test.log"
   fi
+  while IFS= read -r pkg; do
+    [[ -z "$pkg" ]] && continue
+    tests="$(cd "$sw_dir" && go list -f '{{len .TestGoFiles}}{{len .XTestGoFiles}}' "$pkg" 2>/dev/null)"
+    if [[ "$tests" != "00" ]]; then
+      fail "make test: go test ./..." "$pkg has tests but the toolchain has no covdata tool" "$work/test.log"
+    fi
+    note "env: this Go toolchain has no covdata tool, so test-less $pkg has no 0% record in the local profile (CI's has one)"
+  done <<<"$covdata_pkgs"
   flaky=()
   i=0
   while IFS= read -r pkg; do
@@ -125,7 +146,10 @@ else
   for pkg in ${flaky[@]+"${flaky[@]}"}; do
     note "flaky: $pkg passed on isolated retry"
   done
-  note "full-run failures: $(grep -E '^[[:space:]]*--- FAIL' "$work/test.log" | awk '{print $3}' | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  full_run_failures="$(grep -E '^[[:space:]]*--- FAIL' "$work/test.log" | awk '{print $3}' | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  if [[ -n "$full_run_failures" ]]; then
+    note "full-run failures: $full_run_failures"
+  fi
 fi
 
 # --- 4. coverage floor (CI's exact exclusion + aggregation) ------------------
