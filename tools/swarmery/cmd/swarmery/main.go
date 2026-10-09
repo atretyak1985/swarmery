@@ -2595,6 +2595,16 @@ func cmdServe(args []string) error {
 		}()
 	}
 
+	// The change-request status poller (landpoll.go): built and announced here,
+	// started below under the shutdown context. SWARMERY_LANDPOLL_INTERVAL=0 is a
+	// real off switch — no timer, no `gh`/`glab` call.
+	landpollEvery, landpollOn, landpollWarn := landpollInterval(os.Getenv)
+	if landpollWarn != nil {
+		log.Printf("warning: %v", landpollWarn)
+	}
+	log.Print(landpollBootLine(landpollEvery, landpollOn))
+	landPoller := newLandPoller(db, phaserunSvc.RunRoot)
+
 	buildStart := time.Now()
 	// The board derives each captured card's expiry from the same TTL the
 	// sweeper runs with, so the two can never tell the operator different dates.
@@ -2618,6 +2628,12 @@ func cmdServe(args []string) error {
 	// Graceful shutdown: SIGINT/SIGTERM → stop tool children, drain HTTP, exit.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Landing status poller (landpoll.go): first pass 30s after boot, then every
+	// landpollEvery, until shutdown.
+	if landpollOn {
+		go runLandpoll(ctx, landPoller.RunOnce, landpollFirstPass, landpollEvery, log.Printf)
+	}
 
 	// fusion phase 3: run the dispatcher poll-fallback ticker under the shutdown
 	// context. It runs an initial Schedule immediately (drains any Todo backlog

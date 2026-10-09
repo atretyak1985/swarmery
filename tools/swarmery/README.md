@@ -419,6 +419,22 @@ exact command that finishes the job by hand; tool output is passed through
 redaction, so a token a CLI echoes (`ghp_…`, `glpat-…`) never reaches the
 browser.
 
+**Status and merge.** Once a phase's PR/MR is open, the daemon reads its
+status every 10 minutes (first pass 30 s after boot; up to 20 change requests
+per tick, the longest-unread first) with `gh pr view` / `glab mr view`, and the
+Review tab shows it as chips — CI, review, state — with a **Refresh** button
+(`POST /api/epics/{taskId}/phases/{phaseId}/landing/refresh`) for an
+immediate read. When the change request merges, the phase moves to `merged` and
+its landed date is the merge time. A change request closed without merging keeps
+the phase at `pr_open`, with a `closed` chip: what that means for the phase is your call. The
+daemon never deletes a branch and never ticks a criterion on merge. A
+rejected credential marks the project's sign-in expired, so the banner asks for
+a fresh login.
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_LANDPOLL_INTERVAL` | Go duration (`5m`, `1h`) \| `0` | `10m` | How often the daemon reads open PR/MR status. `0` disables the poller (the Refresh button still works); an invalid value falls back to `10m` with a boot warning. The boot log says `landpoll: every 10m0s` or `landpoll: disabled`. |
+
 ## Notifications (webhook)
 
 `--notify-url` (env `SWARMERY_NOTIFY_URL`) turns on an outbound webhook;
