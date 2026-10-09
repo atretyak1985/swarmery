@@ -1325,6 +1325,7 @@ async function landError(res: Response, fallback: string): Promise<LandError> {
  * vocabulary. Throws LandError: 404 unknown phase, 409 `no-run-branch`.
  */
 export async function getPhaseReview(taskId: number, phaseId: number): Promise<PhaseReview> {
+  if (MOCK) return mockApi.phaseReview(taskId, phaseId);
   const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/review`);
   if (!res.ok) throw await landError(res, 'review failed');
   return (await res.json()) as PhaseReview;
@@ -1338,6 +1339,7 @@ export async function getPhaseReview(taskId: number, phaseId: number): Promise<P
  * `fork-workflow-unsupported`) and 422 with a manual-command `hint`.
  */
 export async function landPhase(taskId: number, phaseId: number, body: PhaseLandRequest): Promise<PhaseLandResponse> {
+  if (MOCK) return mockApi.landPhase(taskId, phaseId, body);
   const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/land`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1354,6 +1356,7 @@ export async function landPhase(taskId: number, phaseId: number, body: PhaseLand
  * banner's "Re-check" right after a terminal sign-in).
  */
 export function getProjectVcs(projectId: number, fresh = false): Promise<VcsInfo> {
+  if (MOCK) return mockApi.projectVcs(projectId);
   return get(`/api/projects/${String(projectId)}/vcs${fresh ? '?fresh=1' : ''}`);
 }
 
