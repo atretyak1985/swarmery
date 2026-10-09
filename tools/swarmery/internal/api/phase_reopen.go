@@ -13,10 +13,18 @@ package api
 // after wsingest's criterion normalisation; GET …/reopens hands the form the
 // ticked labels in exactly that form.
 //
-// Refusals, all before any write: 400 an empty reason, no criteria or an unknown
-// caughtBy; 404 an unknown phase (or one of another plan); 409 a phase that is
-// running or still finishing; 422 when no named criterion is a ticked line of
-// the doc — then neither the doc nor the ledger is touched.
+// Refusals, all before any write: 400 an empty reason, no criteria, an unknown
+// caughtBy or a fixUrl that is not http(s); 404 an unknown phase (or one of
+// another plan); 409 a phase that is running or still finishing, or not yet
+// finished (a criterion is still unticked); 422 when no named criterion is a
+// ticked line of the doc, or a label matches more than one ticked line — then
+// neither the doc nor the ledger is touched.
+//
+// The two writes are ordered so a failure leaves nothing half-done: the ledger
+// row is inserted inside a transaction, the doc is rewritten atomically, and
+// the transaction commits only once the doc is on disk. A failed insert never
+// unticks the doc (so a retry still finds the lines ticked); a failed doc write
+// rolls the row back.
 
 import (
 	"database/sql"
@@ -24,6 +32,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -36,7 +45,17 @@ import (
 const (
 	reopenReasonMax = 4000
 	reopenURLMax    = 2048
+
+	// codePhaseNotDone: reopen is for a finished phase; one with an unticked
+	// criterion is still open and needs no ledger row to be worked on.
+	codePhaseNotDone = "phase-not-done"
 )
+
+// isHTTPURL accepts only absolute http(s) URLs — fixUrl is rendered as a link.
+func isHTTPURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
 
 // reopenDTO is one phase_reopens row (camelCase, mirrored in web/src/api/types.ts
 // as PhaseReopen).
@@ -51,8 +70,9 @@ type reopenDTO struct {
 
 // reopenTarget is the phase a reopen route addresses.
 type reopenTarget struct {
-	DocPath  string
-	RunState string
+	DocPath     string
+	RunState    string
+	Done, Total int
 }
 
 // loadReopenTarget reads the phase; ok=false means it already wrote a 404/500.
@@ -61,8 +81,9 @@ func (h *Handler) loadReopenTarget(w http.ResponseWriter, taskID, phaseID int64)
 		t        reopenTarget
 		wsTaskID int64
 	)
-	err := h.DB.QueryRow(`SELECT workspace_task_id, doc_path, run_state FROM epic_phases WHERE id = ?`, phaseID).
-		Scan(&wsTaskID, &t.DocPath, &t.RunState)
+	err := h.DB.QueryRow(`SELECT workspace_task_id, doc_path, run_state, checkboxes_done, checkboxes_total
+		FROM epic_phases WHERE id = ?`, phaseID).
+		Scan(&wsTaskID, &t.DocPath, &t.RunState, &t.Done, &t.Total)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && wsTaskID != taskID) {
 		writeClientErr(w, http.StatusNotFound, "phase not found")
 		return reopenTarget{}, false
@@ -108,6 +129,9 @@ func (h *Handler) reopenPhase(w http.ResponseWriter, r *http.Request) {
 	case len(fixURL) > reopenURLMax:
 		writeClientErr(w, http.StatusBadRequest, "fixUrl is too long")
 		return
+	case fixURL != "" && !isHTTPURL(fixURL):
+		writeClientErr(w, http.StatusBadRequest, "fixUrl must be an absolute http(s) URL")
+		return
 	case len(criteria) == 0:
 		writeClientErr(w, http.StatusBadRequest, "name at least one criterion to untick")
 		return
@@ -123,15 +147,24 @@ func (h *Handler) reopenPhase(w http.ResponseWriter, r *http.Request) {
 		writeConflict(w, codePhaseRunning, "this phase is still running — let the run finish before reopening it")
 		return
 	}
-	matched, err := wsingest.UntickCriteriaMatched(t.DocPath, criteria)
-	if err != nil {
-		if os.IsNotExist(err) {
-			writeClientErr(w, http.StatusNotFound, "phase doc not found")
-			return
-		}
+	if t.Total == 0 || t.Done < t.Total {
+		writeConflict(w, codePhaseNotDone, "only a finished phase (every criterion ticked) can be reopened — this one still has open criteria")
+		return
+	}
+	pending, err := wsingest.PrepareUntick(t.DocPath, criteria)
+	switch {
+	case err == nil:
+	case os.IsNotExist(err):
+		writeClientErr(w, http.StatusNotFound, "phase doc not found")
+		return
+	case errors.Is(err, wsingest.ErrAmbiguousCriteria):
+		writeClientErr(w, http.StatusUnprocessableEntity, err.Error()+" — untick it in the doc by hand")
+		return
+	default:
 		writeErr(w, err)
 		return
 	}
+	matched := pending.Matched
 	if len(matched) == 0 {
 		writeClientErr(w, http.StatusUnprocessableEntity,
 			"none of the named criteria is a ticked criterion of this phase's doc — nothing was reopened")
@@ -139,11 +172,26 @@ func (h *Handler) reopenPhase(w http.ResponseWriter, r *http.Request) {
 	}
 	labels, _ := json.Marshal(matched)
 	now := time.Now().UTC().Format(time.RFC3339)
-	res, err := h.DB.Exec(`INSERT INTO phase_reopens
+	tx, err := h.DB.Begin()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	res, err := tx.Exec(`INSERT INTO phase_reopens
 		(phase_id, workspace_task_id, doc_path, reason, fix_url, caught_by, criteria_json, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		phaseID, taskID, t.DocPath, reason, fixURL, caughtBy, string(labels), now)
 	if err != nil {
+		_ = tx.Rollback()
+		writeErr(w, err)
+		return
+	}
+	if err := pending.Commit(); err != nil {
+		_ = tx.Rollback()
+		writeErr(w, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		writeErr(w, err)
 		return
 	}

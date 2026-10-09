@@ -1,6 +1,7 @@
 package wsingest
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -32,7 +33,7 @@ func TestTickedCriteriaLabels(t *testing.T) {
 func TestUntickCriteriaPure(t *testing.T) {
 	// Labels are matched after the same normalisation: surrounding emphasis and
 	// whitespace in the request do not matter.
-	out, matched := untickCriteria(untickDoc, []string{"  *Migration applies** on a fresh store ", "web build passes", "no such criterion"})
+	out, matched, _ := untickCriteria(untickDoc, []string{"  *Migration applies** on a fresh store ", "web build passes", "no such criterion"})
 	if want := []string{"Migration applies** on a fresh store", "web build passes"}; !reflect.DeepEqual(matched, want) {
 		t.Errorf("matched = %q, want %q", matched, want)
 	}
@@ -46,11 +47,11 @@ func TestUntickCriteriaPure(t *testing.T) {
 	if !strings.Contains(out, "- [X] `go test` passes") {
 		t.Errorf("unnamed criterion changed:\n%s", out)
 	}
-	if _, matched := untickCriteria(untickDoc, []string{"", "  "}); matched != nil {
+	if _, matched, _ := untickCriteria(untickDoc, []string{"", "  "}); matched != nil {
 		t.Errorf("blank labels matched %q", matched)
 	}
 	// An already-unticked criterion is not a match.
-	if _, matched := untickCriteria(untickDoc, []string{"not done yet"}); matched != nil {
+	if _, matched, _ := untickCriteria(untickDoc, []string{"not done yet"}); matched != nil {
 		t.Errorf("unticked criterion matched %q", matched)
 	}
 }
@@ -87,5 +88,52 @@ func TestUntickCriteriaFile(t *testing.T) {
 	}
 	if _, err := UntickCriteria(filepath.Join(t.TempDir(), "missing.md"), []string{"x"}); err == nil {
 		t.Error("missing doc: want an error")
+	}
+}
+
+// A label that matches two ticked lines is refused as a whole: nothing is
+// flipped, nothing is written, and the error names the label.
+func TestUntickCriteriaAmbiguousLabel(t *testing.T) {
+	doc := "- [x] go test passes\n- [x] docs updated\n- [x] go test passes\n"
+	out, matched, ambiguous := untickCriteria(doc, []string{"go test passes", "docs updated", "go test passes"})
+	if out != doc || matched != nil || len(ambiguous) != 1 || ambiguous[0] != "go test passes" {
+		t.Fatalf("untickCriteria = %q, %v, %v", out, matched, ambiguous)
+	}
+	path := filepath.Join(t.TempDir(), "phase-1.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := PrepareUntick(path, []string{"go test passes"})
+	if p != nil || !errors.Is(err, ErrAmbiguousCriteria) {
+		t.Fatalf("PrepareUntick = %v, %v; want nil, ErrAmbiguousCriteria", p, err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != doc {
+		t.Error("an ambiguous untick rewrote the doc")
+	}
+}
+
+// PrepareUntick writes nothing until Commit; Commit with no match is a no-op.
+func TestPrepareUntickDefersTheWrite(t *testing.T) {
+	doc := "- [x] go test passes\n- [ ] docs updated\n"
+	path := filepath.Join(t.TempDir(), "phase-1.md")
+	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := PrepareUntick(path, []string{"go test passes"})
+	if err != nil || len(p.Matched) != 1 {
+		t.Fatalf("PrepareUntick = %+v, %v", p, err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != doc {
+		t.Fatal("PrepareUntick wrote the doc")
+	}
+	if err := p.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "- [ ] go test passes\n- [ ] docs updated\n" {
+		t.Errorf("after Commit:\n%s", b)
+	}
+	none, err := PrepareUntick(path, []string{"docs updated"})
+	if err != nil || none.Matched != nil || none.Commit() != nil {
+		t.Errorf("no-match prepare = %+v, %v", none, err)
 	}
 }

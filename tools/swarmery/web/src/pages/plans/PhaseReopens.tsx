@@ -149,8 +149,8 @@ function ReopenForm({
         {ticked !== null && ticked.length === 0 && (
           <span className="text-ink-dim">No ticked criteria in this phase&apos;s doc — nothing to reopen.</span>
         )}
-        {(ticked ?? []).map((label) => (
-          <label key={label} className="flex items-start gap-2 text-ink-2">
+        {(ticked ?? []).map((label, i) => (
+          <label key={`${i}-${label}`} className="flex items-start gap-2 text-ink-2">
             <input
               type="checkbox"
               checked={chosen.has(label)}

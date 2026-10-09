@@ -43,7 +43,7 @@ func newReopenFixture(t *testing.T, runState string) reopenFixture {
 	}
 	taskID, _ := res.LastInsertId()
 	res, err = db.Exec(`INSERT INTO epic_phases (workspace_task_id, seq, name, doc_path, checkboxes_total, checkboxes_done, run_state)
-		VALUES (?, 1, 'Phase 1', ?, 3, 2, ?)`, taskID, docPath, runState)
+		VALUES (?, 1, 'Phase 1', ?, 3, 3, ?)`, taskID, docPath, runState)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +175,8 @@ func TestReopenPhaseRefusals(t *testing.T) {
 		{"no criteria", "", with("criteria", []string{}), http.StatusBadRequest},
 		{"blank criteria", "", with("criteria", []string{" "}), http.StatusBadRequest},
 		{"unknown caughtBy", "", with("caughtBy", "luck"), http.StatusBadRequest},
+		{"javascript fixUrl", "", with("fixUrl", "javascript:alert(1)"), http.StatusBadRequest},
+		{"relative fixUrl", "", with("fixUrl", "pulls/9"), http.StatusBadRequest},
 		{"bad json", "", "nope", http.StatusBadRequest},
 		{"unknown phase", f.url(f.taskID, 99999, "reopen"), ok, http.StatusNotFound},
 		{"phase of another plan", f.url(f.taskID+1, f.phaseID, "reopen"), ok, http.StatusNotFound},
@@ -243,5 +245,59 @@ func TestPhaseReopensMatchesRenamedPhase(t *testing.T) {
 	got := h.phaseReopens(f.taskID, map[int64]string{f.phaseID: f.docPath})
 	if len(got[f.phaseID]) != 1 || got[f.phaseID][0].Reason != "old id" || len(got[f.phaseID][0].Criteria) != 0 {
 		t.Errorf("reopens = %+v", got)
+	}
+}
+
+// A failed ledger insert must not untick the doc: the row is written first,
+// inside a transaction, and the doc only after it — so a retry still finds the
+// criteria ticked instead of answering 422 over a reopen that was never
+// recorded.
+func TestReopenPhaseInsertFailureLeavesDocUntouched(t *testing.T) {
+	f := newReopenFixture(t, "done")
+	before := f.doc(t)
+	if _, err := f.db.Exec(`DROP TABLE phase_reopens`); err != nil {
+		t.Fatal(err)
+	}
+	status, body := f.post(t, map[string]any{"reason": "r", "caughtBy": "operator", "criteria": []string{"DELETE removes it"}})
+	if status != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body %v; want 500", status, body)
+	}
+	if f.doc(t) != before {
+		t.Errorf("doc was unticked although the ledger insert failed:\n%s", f.doc(t))
+	}
+}
+
+// Only a finished phase is reopened: one with an unticked criterion is still
+// open and gets 409 phase-not-done, with nothing written.
+func TestReopenPhaseRefusesNotDone(t *testing.T) {
+	f := newReopenFixture(t, "done")
+	if _, err := f.db.Exec(`UPDATE epic_phases SET checkboxes_done = 2 WHERE id = ?`, f.phaseID); err != nil {
+		t.Fatal(err)
+	}
+	before := f.doc(t)
+	status, body := f.post(t, map[string]any{"reason": "r", "caughtBy": "none", "criteria": []string{"DELETE removes it"}})
+	if status != http.StatusConflict || body["code"] != codePhaseNotDone {
+		t.Fatalf("status = %d, body %v; want 409 %s", status, body, codePhaseNotDone)
+	}
+	if f.count(t) != 0 || f.doc(t) != before {
+		t.Error("a not-done phase was written to")
+	}
+}
+
+// A label that matches two ticked lines is refused (422) rather than unticking
+// both: the ledger would record one reopen for two criteria the operator did
+// not both choose.
+func TestReopenPhaseRefusesAmbiguousLabel(t *testing.T) {
+	f := newReopenFixture(t, "done")
+	if err := os.WriteFile(f.docPath, []byte(reopenTestDoc+"- [x] DELETE removes it\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := f.doc(t)
+	status, body := f.post(t, map[string]any{"reason": "r", "caughtBy": "review", "criteria": []string{"DELETE removes it"}})
+	if status != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(body["error"]), "more than one") {
+		t.Fatalf("status = %d, body %v; want 422 naming the ambiguity", status, body)
+	}
+	if f.count(t) != 0 || f.doc(t) != before {
+		t.Error("an ambiguous reopen was written")
 	}
 }
