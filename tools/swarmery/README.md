@@ -357,9 +357,20 @@ never from a guess in the browser.
 **Requirements.** `git` on the daemon's PATH, plus the host's CLI: `gh` ≥ 2.40
 for GitHub, `glab` ≥ 1.40 for GitLab. The daemon uses the CLI's own login
 (`gh auth login --hostname <host>` / `glab auth login --hostname <host>`); the
-project banner names the exact command when it is missing or expired. A token
-the daemon holds itself, imported through the sign-in flow, is a later
-alternative to the CLI login.
+project banner names the exact command when it is missing or expired.
+
+**Signing in from the dashboard.** Instead of the CLI login, the banner's
+*Sign in* gives the daemon a token of its own — an OAuth device code entered
+in any browser, or a pasted personal access token — stored in
+`~/.swarmery/secrets/vcs-<host>.env` (0600). The device code needs an OAuth
+application registered once per host and its client id; see
+[docs/vcs-login.md](docs/vcs-login.md) for the registration steps, where the
+token lives and how to revoke it.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SWARMERY_GITHUB_CLIENT_ID` | unset | Client id of a GitHub OAuth App with Device Flow enabled; enables the device-code sign-in for GitHub hosts. Overridden per host by `swarmery.vcs.clientIds.<host>` in `.claude/settings.local.json`. |
+| `SWARMERY_GITLAB_CLIENT_ID` | unset | Application id of a non-confidential GitLab application with scope `api`; enables the device-code sign-in for GitLab hosts. Same per-host override. |
 
 **How the provider is detected** — first match wins, read from `origin`:
 
