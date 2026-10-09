@@ -26,6 +26,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
 const (
@@ -909,6 +910,24 @@ func TestLandPhaseReturnStartRefusedKeepsFeedback(t *testing.T) {
 	}
 	if n := strings.Count(specs[0].Prompt, phaserun.ReturnedNote); n != 1 {
 		t.Errorf("its prompt carries the returned sentence %d times, want 1", n)
+	}
+}
+
+// TestLandPhaseReturnStartRefUnresolvedIs409: the return path answers a refused
+// start with the SAME mapping runPhase uses (writePhaseStartRefusal) — here the
+// start-ref-unresolved arm the return path's own copy once lacked (it answered
+// 500) — plus the phase's landing, still returned.
+func TestLandPhaseReturnStartRefUnresolvedIs409(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	attachPhaseRunWt(t, f.db, &phaseStubRunner{}, true,
+		&phaseWtStub{reclaimErr: fmt.Errorf("%w: deadbeef", worktree.ErrStartRefUnresolved)})
+
+	resp, body := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusConflict || body["code"] != codeStartRefUnresolved {
+		t.Fatalf("status/code = %d/%v, want 409 %s (body %v)", resp.StatusCode, body["code"], codeStartRefUnresolved, body)
+	}
+	if l := landingOf(t, body); l["state"] != landingReturned {
+		t.Errorf("landing = %v, want returned", l)
 	}
 }
 

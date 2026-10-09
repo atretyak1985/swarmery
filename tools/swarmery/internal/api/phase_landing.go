@@ -51,7 +51,6 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -795,65 +794,6 @@ func (h *Handler) returnPhase(w http.ResponseWriter, t landingTarget, feedback s
 	writeJSONStatus(w, http.StatusAccepted, map[string]any{
 		"status": "running", "sessionUuid": uuid, "action": landActionReturn, "landing": landing,
 	})
-}
-
-// writePhaseStartRefusal renders a phaserun.StartWith refusal for the return
-// path with the writers and codes runPhase uses for the same errors. Only the
-// refusals a Returned start can meet are named: the request carries no model or
-// effort, and the blocked re-run guard is bypassed. Anything else is a 500.
-func writePhaseStartRefusal(w http.ResponseWriter, err error) {
-	var (
-		depsErr     *phaserun.DepsUnmetError
-		unmergedErr *phaserun.DepsUnmergedError
-		dirtyErr    *phaserun.BranchDirtyError
-		noSlot      *runcore.NoSlotError
-		docModelErr *phaserun.DocModelError
-		docEffort   *phaserun.DocEffortError
-	)
-	wtCode, wtMsg, isWtConflict := worktreeConflict(err)
-	switch {
-	case errors.As(err, &docModelErr):
-		writeConflictFields(w, codeDocModelUnknown, docModelErr.Error(),
-			map[string]any{"doc": docModelErr.Doc, "declared": docModelErr.Declared})
-	case errors.As(err, &docEffort):
-		writeConflictFields(w, codeDocEffortUnknown, docEffort.Error(),
-			map[string]any{"doc": docEffort.Doc, "declared": docEffort.Declared})
-	case errors.Is(err, phaserun.ErrPhaseNotFound):
-		writeClientErr(w, http.StatusNotFound, "phase not found")
-	case errors.Is(err, phaserun.ErrRunning):
-		writeConflict(w, codeAlreadyRunning, "a run is already active for this phase")
-	case errors.Is(err, phaserun.ErrPlanRunning):
-		writeConflict(w, codePlanRunning, "a plan run is active for this plan — cancel it before running one phase")
-	case errors.As(err, &noSlot):
-		writeNoRunSlot(w, noSlot)
-	case errors.Is(err, runcore.ErrLowQuota):
-		writeLowQuota(w, err)
-	case errors.Is(err, runcore.ErrAccountBreaker):
-		writeAccountBreaker(w, err)
-	case errors.As(err, &depsErr):
-		writeConflictFields(w, codeDepsUnmet, depsErr.Error(), map[string]any{"unmetDeps": depsErr.Unmet})
-	case errors.As(err, &unmergedErr):
-		writeDepsUnmerged(w, unmergedErr.Error(), unmergedErr.Branches, unmergedErr.Base)
-	case errors.Is(err, phaserun.ErrCannotStack):
-		writeStackRefusal(w, codeCannotStack, err.Error())
-	case errors.Is(err, phaserun.ErrNoDoc):
-		writeConflict(w, codeDocUnreadable, "phase doc is unreadable")
-	case errors.Is(err, phaserun.ErrNoPath):
-		writeConflict(w, codeNoProjectPath, "project has no known path to run in")
-	// Checked BEFORE ErrNoRepoRoot, which it also wraps.
-	case errors.Is(err, phaserun.ErrRepoOutsideProject):
-		writeConflict(w, codeRepoOutsideProject, err.Error())
-	case errors.Is(err, phaserun.ErrNoRepoRoot):
-		writeConflict(w, codeNoRepoRoot, err.Error())
-	case errors.As(err, &dirtyErr):
-		writeConflictFields(w, codeBranchDirty, dirtyErr.Error(), map[string]any{
-			"branch": dirtyErr.Branch, "commitsAhead": dirtyErr.CommitsAhead, "base": dirtyErr.Base,
-		})
-	case isWtConflict:
-		writeConflict(w, wtCode, wtMsg)
-	default:
-		writeErr(w, err)
-	}
 }
 
 // jsonCapture buffers one JSON response so a caller can extend the body a shared

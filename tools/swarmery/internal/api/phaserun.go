@@ -151,6 +151,21 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 		Effort: body.Effort,
 		Force:  body.Force,
 	})
+	if err != nil {
+		writePhaseStartRefusal(w, err)
+		return
+	}
+	writeJSONStatus(w, http.StatusAccepted, map[string]string{
+		"status":      "running",
+		"sessionUuid": uuid,
+	})
+}
+
+// writePhaseStartRefusal renders a non-nil phaserun.StartWith error — the ONE
+// mapping of a refused phase start onto its HTTP answer, shared by every surface
+// that starts a phase run (runPhase, and landPhase's action "return") so the two
+// can never drift apart. Anything it does not name is a 500.
+func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 	var depsErr *phaserun.DepsUnmetError
 	var unmergedErr *phaserun.DepsUnmergedError
 	var blockedErr *phaserun.BlockedUnchangedError
@@ -160,7 +175,7 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 	var docEffortErr *phaserun.DocEffortError
 	// Start wraps the reclaim/acquire failures (fmt.Errorf("reclaim run branch:
 	// %w", …)), so errors.Is still matches through the wrap. Resolved BEFORE the
-	// switch and placed above the generic arm — an arm below `case err != nil` is
+	// switch and placed above the generic arm — an arm below `default` is
 	// unreachable, which no body assertion would ever reveal.
 	wtCode, wtMsg, isWtConflict := worktreeConflict(err)
 	switch {
@@ -268,13 +283,8 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 		})
 	case isWtConflict:
 		writeConflict(w, wtCode, wtMsg)
-	case err != nil:
-		writeErr(w, err)
 	default:
-		writeJSONStatus(w, http.StatusAccepted, map[string]string{
-			"status":      "running",
-			"sessionUuid": uuid,
-		})
+		writeErr(w, err)
 	}
 }
 
