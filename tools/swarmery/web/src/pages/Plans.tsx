@@ -100,6 +100,7 @@ import { RevisionReview, ORIGIN_LABEL } from './planning/RevisionReview';
 import { ReviseModal } from './planning/ReviseModal';
 import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsActual';
 import { ForecastStory } from './plans/ForecastStory';
+import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
 import { PhaseCard } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReview } from './plans/PhaseReview';
@@ -1056,13 +1057,18 @@ export function Plans(): JSX.Element {
   // afflict every plan in the workspace — and survived switching between them.
   // forcePhaseId is set only for the one refusal `force` overrides
   // (`blocked-unchanged`): the phase the strip's "Run anyway" re-runs.
-  const [runMsg, setRunMsg] = useState<{ taskId: number; text: string; forcePhaseId: number | null } | null>(
-    null,
-  );
+  // branches is set only for `deps-unmerged`: the diverged dependency branches
+  // the strip offers to open a change request for.
+  const [runMsg, setRunMsg] = useState<{
+    taskId: number;
+    text: string;
+    forcePhaseId: number | null;
+    branches: string[];
+  } | null>(null);
   const failRunMsg = useCallback(
     (taskId: number) =>
       (e: unknown): void =>
-        setRunMsg({ taskId, text: e instanceof Error ? e.message : String(e), forcePhaseId: null }),
+        setRunMsg({ taskId, text: e instanceof Error ? e.message : String(e), forcePhaseId: null, branches: [] }),
     [],
   );
   // Which phase's run diagnosis is open (phase id) — the modal is read-only, so
@@ -1113,7 +1119,10 @@ export function Plans(): JSX.Element {
           if (code === 'branch-dirty') setOutcomeFor(phaseId);
           // The refusal `force` overrides: the strip offers to run it anyway.
           if (code === 'blocked-unchanged' && e instanceof Error)
-            setRunMsg({ taskId, text: e.message, forcePhaseId: phaseId });
+            setRunMsg({ taskId, text: e.message, forcePhaseId: phaseId, branches: [] });
+          // Stranded dependency work: the strip offers "Open <change>" per branch.
+          if (code === 'deps-unmerged' && e instanceof Error)
+            setRunMsg({ taskId, text: e.message, forcePhaseId: null, branches: (e as PhaseRunBranchError).branches ?? [] });
         })
         .finally(() => setRunBusy(null));
     },
@@ -1392,6 +1401,7 @@ export function Plans(): JSX.Element {
               }}
               runBusy={runBusy}
               runMsg={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.text : null}
+              runBranches={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.branches : []}
               onForceRun={forceRunFor(activeEpic.taskId)}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
@@ -1468,6 +1478,7 @@ function EpicDetail({
   onRevisionMissing,
   runBusy,
   runMsg,
+  runBranches,
   onForceRun,
   onRun,
   onCancelRun,
@@ -1501,6 +1512,8 @@ function EpicDetail({
   onRevisionMissing: () => void;
   runBusy: number | null;
   runMsg: string | null;
+  /** A `deps-unmerged` refusal's diverged dependency branches; [] otherwise. */
+  runBranches: string[];
   /** Re-run the refused phase with `force` — set only for a `blocked-unchanged`
    *  refusal, the one `force` overrides; null hides the action. */
   onForceRun: (() => void) | null;
@@ -1723,7 +1736,18 @@ function EpicDetail({
 
       {runMsg !== null && (
         <div className="mb-2 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
-          <span className="min-w-0 flex-1">{runMsg}</span>
+          <div className="min-w-0 flex-1">
+            <span>{runMsg}</span>
+            {runBranches.length > 0 && terms !== null && (
+              <DepsUnmergedActions
+                taskId={epic.taskId}
+                phases={epic.phases}
+                branches={runBranches}
+                terms={terms}
+                onLanded={onDocChanged}
+              />
+            )}
+          </div>
           {onForceRun !== null && (
             <button
               type="button"

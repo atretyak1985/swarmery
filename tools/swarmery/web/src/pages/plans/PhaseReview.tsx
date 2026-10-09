@@ -64,8 +64,9 @@ export function conflictSentence(err: LandError, terms: ProviderTerms | null): s
   }
 }
 
-/** One land/return failure, rendered by kind. */
-function LandFailure({ err, terms }: { err: unknown; terms: ProviderTerms | null }): JSX.Element {
+/** One land/return failure, rendered by kind (also the deps-unmerged refusal's
+ *  "Open <change>" failures — DepsUnmergedActions.tsx). */
+export function LandFailure({ err, terms }: { err: unknown; terms: ProviderTerms | null }): JSX.Element {
   if (err instanceof LandError && err.status === 409) {
     return (
       <div role="alert" className={ERROR_BOX}>

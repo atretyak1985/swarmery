@@ -2344,6 +2344,9 @@ export type PhaseRunBranchError = Error & {
   branch?: string | undefined;
   commitsAhead?: number | undefined;
   base?: string | undefined;
+  /** `deps-unmerged` only: the diverged, unmerged run branches the phase
+   *  depends on — the UI offers to open a change request for each. */
+  branches?: string[] | undefined;
 };
 
 /**
@@ -2374,6 +2377,7 @@ function runConflictError(
     branch?: string;
     commitsAhead?: number;
     base?: string;
+    branches?: string[];
   },
   fallback: string,
 ): PhaseRunBranchError {
@@ -2382,6 +2386,10 @@ function runConflictError(
   if (body.code === 'branch-dirty') {
     err.branch = body.branch;
     err.commitsAhead = body.commitsAhead;
+    err.base = body.base;
+  }
+  if (body.code === 'deps-unmerged') {
+    err.branches = Array.isArray(body.branches) ? body.branches : [];
     err.base = body.base;
   }
   return err;
@@ -2442,13 +2450,14 @@ export async function runEpicPhase(
     // carries structured escape-hatch data (`branch`, `commitsAhead`, `base`) the
     // caller turns into a "delete the branch" affordance. Both ride along on the
     // Error rather than being flattened into the message, which would force the
-    // UI to parse prose.
+    // UI to parse prose. `deps-unmerged` names its diverged `branches` the same way.
     const body = (await res.json().catch(() => ({}))) as {
       error?: string;
       code?: RunConflictCode;
       branch?: string;
       commitsAhead?: number;
       base?: string;
+      branches?: string[];
     };
     throw runConflictError(body, `phase run failed (${String(res.status)})`);
   }
