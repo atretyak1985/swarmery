@@ -27,6 +27,7 @@ import type {
   PhaseLandResponse,
   PhaseReview,
   VcsInfo,
+  VcsProviderAnswer,
   TaskDiff,
   AutonomyResp,
   DocDetail,
@@ -1358,6 +1359,22 @@ export async function landPhase(taskId: number, phaseId: number, body: PhaseLand
 export function getProjectVcs(projectId: number, fresh = false): Promise<VcsInfo> {
   if (MOCK) return mockApi.projectVcs(projectId);
   return get(`/api/projects/${String(projectId)}/vcs${fresh ? '?fresh=1' : ''}`);
+}
+
+/**
+ * PUT /api/projects/{id}/vcs/provider — the operator's one-time answer for an
+ * origin whose host the daemon could not classify (`VcsInfo.askProvider`).
+ * Stored in the project's .claude/settings.local.json; the daemon drops its
+ * cached vcs answer, so the next getProjectVcs reflects it. 204 on success.
+ */
+export async function putProjectVcsProvider(projectId: number, provider: VcsProviderAnswer): Promise<void> {
+  if (MOCK) return;
+  const res = await fetch(`/api/projects/${String(projectId)}/vcs/provider`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider }),
+  });
+  if (!res.ok) throw new Error(await errText(res));
 }
 
 /**

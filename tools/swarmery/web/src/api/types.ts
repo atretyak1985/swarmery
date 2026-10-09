@@ -1995,6 +1995,8 @@ export interface LandTaskResponse {
   prUrl: string;
   branch: string;
   task: BoardTask;
+  /** The provider's vocabulary for the change request just opened. */
+  terms?: VcsTerms;
 }
 
 // --- fusion phase 13: playbooks (selectable workflows) ------------------------
@@ -4294,6 +4296,8 @@ export interface PhaseLandResponse {
   base: string;
   action: PhaseLandRequest['action'];
   landing: PhaseLanding;
+  /** The provider's vocabulary (push/pr only; absent on a return). */
+  terms?: VcsTerms;
 }
 
 /** The stable discriminators of a land/review refusal (409 and 422 bodies). */
@@ -4308,7 +4312,6 @@ export type PhaseLandErrorCode =
   | 'no-remote'
   | 'binary-missing'
   | 'provider-unknown'
-  | 'gitlab-unsupported'
   | 'push-failed'
   | 'change-request-failed';
 
@@ -4346,4 +4349,10 @@ export interface VcsInfo {
    *  --hostname <host>"), chosen by the daemon so the UI never branches on
    *  `provider`; '' when there is no CLI to name (unknown provider, no host). */
   cliLogin: string;
+  /** True when the origin exists but its host could not be classified: the UI
+   *  asks once which service hosts it (PUT …/vcs/provider). */
+  askProvider?: boolean;
 }
+
+/** The answer PUT /api/projects/{id}/vcs/provider accepts. */
+export type VcsProviderAnswer = 'github' | 'gitlab';

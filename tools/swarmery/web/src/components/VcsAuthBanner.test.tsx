@@ -11,11 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VcsInfo } from '../api/types';
 import { VcsAuthBanner } from './VcsAuthBanner';
 
-const api = vi.hoisted(() => ({ getProjectVcs: vi.fn() }));
+const api = vi.hoisted(() => ({ getProjectVcs: vi.fn(), putProjectVcsProvider: vi.fn() }));
 
 vi.mock('../api', async (importOriginal) => {
   const real = await importOriginal<typeof import('../api')>();
-  return { ...real, getProjectVcs: api.getProjectVcs };
+  return { ...real, getProjectVcs: api.getProjectVcs, putProjectVcsProvider: api.putProjectVcsProvider };
 });
 
 afterEach(cleanup);
@@ -36,6 +36,7 @@ const vcs = (over: Partial<VcsInfo> = {}, auth: Partial<VcsInfo['auth']> = {}): 
 
 beforeEach(() => {
   api.getProjectVcs.mockReset();
+  api.putProjectVcsProvider.mockReset();
 });
 
 async function settle(): Promise<void> {
@@ -117,6 +118,24 @@ describe('VcsAuthBanner', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
     expect(onSignIn).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/auth login/)).toBeNull();
+  });
+
+  it('asks which service hosts an unclassified origin instead of offering a sign-in', async () => {
+    api.getProjectVcs.mockResolvedValue(vcs({ askProvider: true, cliLogin: '' }, { status: 'unknown' }));
+    api.putProjectVcsProvider.mockResolvedValue(undefined);
+    render(<VcsAuthBanner projectId={3} />);
+    expect(await screen.findByRole('group', { name: 'Which service hosts code.example.com?' })).toBeTruthy();
+    expect(banner()).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull();
+
+    api.getProjectVcs.mockResolvedValue(
+      vcs({ askProvider: false, terms: { provider: 'Host B', change: 'Merge Request', changeShort: 'MR' } }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'GitLab' }));
+    expect(api.putProjectVcsProvider).toHaveBeenCalledWith(3, 'gitlab');
+    await waitFor(() => expect(api.getProjectVcs).toHaveBeenLastCalledWith(3, true));
+    expect(await screen.findByText('Host B repository · not signed in')).toBeTruthy();
+    expect(screen.queryByTestId('vcs-provider-ask')).toBeNull();
   });
 
   it('without onSignIn, expands the daemon-chosen command; Re-check bypasses the cache', async () => {

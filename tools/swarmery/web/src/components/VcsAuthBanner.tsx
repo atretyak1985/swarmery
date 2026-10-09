@@ -11,6 +11,9 @@
 // here branches on which provider a project uses (SC-11; enforced by
 // web/scripts/check-no-provider-branching.sh).
 //
+// When the daemon could not classify the origin's host (`askProvider`), the
+// banner asks which service hosts it instead (VcsProviderAsk), once.
+//
 // `onSignIn` is optional: Phase 8 provides the sign-in dialog. Until a caller
 // passes one, "Sign in" expands the terminal command plus "Re-check", which
 // re-asks the daemon past its 60s cache.
@@ -18,6 +21,7 @@
 import { useEffect, useId, useState } from 'react';
 import type { VcsInfo } from '../api/types';
 import { useProjectVcs } from '../lib/useProjectVcs';
+import { VcsProviderAsk } from './VcsProviderAsk';
 
 export interface VcsAuthBannerProps {
   projectId: number | null;
@@ -62,7 +66,13 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
     setChecking(false);
   }, [vcs]);
 
-  if (vcs === null || !needsSignIn(vcs)) return null;
+  if (vcs === null) return null;
+  // An origin on a host the daemon could not classify: ask which service
+  // hosts it (once — the answer is stored) instead of a sign-in it cannot name.
+  if (vcs.askProvider === true && projectId !== null) {
+    return <VcsProviderAsk projectId={projectId} host={vcs.host} onSaved={reload} />;
+  }
+  if (!needsSignIn(vcs)) return null;
 
   const { terms } = vcs;
   const unknown = vcs.auth.status === 'unknown';

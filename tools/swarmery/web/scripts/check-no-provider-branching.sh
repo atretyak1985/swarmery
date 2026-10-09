@@ -20,6 +20,7 @@ targets=(
   "$web_dir/src/pages/plans"
   "$web_dir/src/pages/Plans.tsx"
   "$web_dir/src/components/VcsAuthBanner.tsx"
+  "$web_dir/src/components/VcsProviderAsk.tsx"
   "$web_dir/src/lib/useProjectVcs.ts"
 )
 
