@@ -427,6 +427,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// run, and the push / push+PR exit. Land is the only one that mutates.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/review", h.getPhaseReview)
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/land", requireLocalOrigin(h.landPhase))
+	// Read the phase's change-request status now (phase_landing_refresh.go) — the
+	// manual twin of the daemon's landpoll ticker.
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/landing/refresh", requireLocalOrigin(h.refreshPhaseLanding))
 	// The cleanup action behind phasediag's orphan-branch blocker: a swarm/phase-<id>
 	// branch whose id matches no phase row — work stranded under a previous id
 	// generation, which the phase-scoped route above structurally cannot name. Kept a

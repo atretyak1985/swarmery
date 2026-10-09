@@ -153,6 +153,10 @@ const (
 	// merged. Its work is in the base branch; sending it back would continue a
 	// branch nothing will land again — the follow-up belongs in a new phase.
 	codePhaseMerged = "phase-merged"
+	// codeNoChangeRequest: a landing refresh (phase_landing_refresh.go) for a
+	// phase that has no change request to read — its landing_state is neither
+	// pr_open nor merged, or it carries neither a URL nor a number.
+	codeNoChangeRequest = "no-change-request"
 )
 
 // Phase landing 422 discriminators: the machine is missing something the
