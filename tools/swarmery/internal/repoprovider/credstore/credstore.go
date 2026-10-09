@@ -313,13 +313,16 @@ func ImportFromCLI(ctx context.Context, run Runner, kind, host string) error {
 	case KindGitHub:
 		stdout, stderr, err := run.Run(ctx, "", nil, "gh", "auth", "token", "--hostname", host)
 		if err != nil {
-			return fmt.Errorf("credstore: gh auth token: %s", Redact(tail(stderr, err)))
+			return fmt.Errorf("credstore: gh auth token: %s", RedactedTail(stderr, err, tailBytes))
 		}
 		key, tok = GitHubTokenKey, strings.TrimSpace(stdout)
 	case KindGitLab:
 		stdout, stderr, err := run.Run(ctx, "", nil, "glab", "auth", "status", "--hostname", host, "--show-token")
 		if err != nil {
-			return fmt.Errorf("credstore: glab auth status: %s", Redact(tail(stderr, err)))
+			// --show-token prints the token even on a failing status; mask the
+			// Token: line whatever shape the token has, then redact.
+			masked := glabTokenLine.ReplaceAllString(stderr, "Token: ***")
+			return fmt.Errorf("credstore: glab auth status: %s", RedactedTail(masked, err, tailBytes))
 		}
 		m := glabTokenLine.FindStringSubmatch(stdout + "\n" + stderr)
 		if m == nil {
@@ -335,14 +338,20 @@ func ImportFromCLI(ctx context.Context, run Runner, kind, host string) error {
 	return Write(host, key, tok)
 }
 
-// tail is the bounded, most informative text of a failed call.
-func tail(stderr string, err error) string {
+// tailBytes bounds the tool output a credstore error carries.
+const tailBytes = 2048
+
+// RedactedTail is the most informative text of a failed call — stderr when it
+// said something, the process error otherwise — REDACTED FIRST and only then
+// cut to its last max bytes. The order is the point: cutting first can split a
+// token at the boundary into a fragment no token pattern matches any more.
+func RedactedTail(stderr string, err error, max int) string {
 	s := strings.TrimSpace(stderr)
 	if s == "" && err != nil {
 		s = err.Error()
 	}
-	const max = 2048
-	if len(s) > max {
+	s = Redact(s)
+	if max > 0 && len(s) > max {
 		s = s[len(s)-max:]
 	}
 	return s

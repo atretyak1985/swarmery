@@ -197,7 +197,7 @@ func (p *Provider) OpenChangeRequest(ctx context.Context, t repoprovider.Target,
 	}
 	if url == "" {
 		return repoprovider.ChangeRef{}, fmt.Errorf("%w: %s", ErrNoURL,
-			credstore.Redact(repoprovider.Tail(stdout+"\n"+stderr, nil)))
+			repoprovider.RedactedTail(stdout+"\n"+stderr, nil))
 	}
 	return repoprovider.ChangeRef{URL: url, Number: prNumber(url), Provider: repoprovider.KindGitHub}, nil
 }
@@ -263,7 +263,7 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 	var v prView
 	if err := json.Unmarshal([]byte(stdout), &v); err != nil {
 		return repoprovider.ChangeStatus{}, fmt.Errorf("github: unreadable gh pr view output: %s",
-			credstore.Redact(repoprovider.Tail(stdout, err)))
+			repoprovider.RedactedTail(stdout, err))
 	}
 	return repoprovider.ChangeStatus{
 		State:     prState(v),

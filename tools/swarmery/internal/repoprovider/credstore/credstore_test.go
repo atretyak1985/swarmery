@@ -361,12 +361,51 @@ func TestRedactLoadedLiteral(t *testing.T) {
 	}
 }
 
-func TestTail(t *testing.T) {
-	if got := tail("", fmt.Errorf("boom")); got != "boom" {
+func TestRedactedTail(t *testing.T) {
+	if got := RedactedTail("", fmt.Errorf("boom"), tailBytes); got != "boom" {
 		t.Fatalf("tail = %q", got)
 	}
 	long := strings.Repeat("x", 3000) + "END"
-	if got := tail(long, nil); len(got) != 2048 || !strings.HasSuffix(got, "END") {
+	if got := RedactedTail(long, nil, tailBytes); len(got) != 2048 || !strings.HasSuffix(got, "END") {
 		t.Fatalf("tail len = %d", len(got))
+	}
+	if got := RedactedTail("abc", nil, 0); got != "abc" {
+		t.Fatalf("max 0 = %q", got)
+	}
+}
+
+// AssertNoFragment fails when any ≥8-byte substring of tok survives in s.
+func assertNoFragment(t *testing.T, s, tok string) {
+	t.Helper()
+	for i := 0; i+8 <= len(tok); i++ {
+		if strings.Contains(s, tok[i:i+8]) {
+			t.Fatalf("token fragment %q survived in %q…", tok[i:i+8], s[:min(len(s), 80)])
+		}
+	}
+}
+
+// A token that straddles the 2048-byte cut must be redacted BEFORE the cut:
+// cutting first leaves "…" + 30 token bytes no pattern matches.
+func TestRedactedTailTokenAtCutBoundary(t *testing.T) {
+	tok := "ghp_" + strings.Repeat("K", 36)
+	in := tok + strings.Repeat("f", 2018) // cut lands 10 bytes into the token
+	assertNoFragment(t, RedactedTail(in, nil, tailBytes), tok)
+
+	isolate(t)
+	r := &fakeRunner{stderr: in, err: fmt.Errorf("exit status 1")}
+	err := ImportFromCLI(context.Background(), r, KindGitHub, "github.com")
+	if err == nil {
+		t.Fatal("failure not reported")
+	}
+	assertNoFragment(t, err.Error(), tok)
+}
+
+func TestImportFromCLIGitLabFailureMasksTokenLine(t *testing.T) {
+	isolate(t)
+	odd := "customshapetoken0123456789"
+	r := &fakeRunner{stderr: "x Token: " + odd + "\nx 401 Unauthorized", err: fmt.Errorf("exit status 1")}
+	err := ImportFromCLI(context.Background(), r, KindGitLab, "git.corp")
+	if err == nil || strings.Contains(err.Error(), odd) {
+		t.Fatalf("glab token leaked: %v", err)
 	}
 }

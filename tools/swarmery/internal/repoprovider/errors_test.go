@@ -82,3 +82,19 @@ func TestClassifyRedactsAndBounds(t *testing.T) {
 		t.Fatal("empty Unwrap")
 	}
 }
+
+// Regression (review fix 1): a token straddling the OutputTail cut must be
+// redacted before the cut, or its tail survives as an unmatchable fragment.
+func TestClassifyRedactsBeforeTruncating(t *testing.T) {
+	tok := "ghp_" + strings.Repeat("R", 36)
+	in := tok + strings.Repeat("f", 2018) // cut lands 10 bytes into the token
+	msg := Classify(in, fmt.Errorf("exit status 1")).Error()
+	for i := 0; i+8 <= len(tok); i++ {
+		if strings.Contains(msg, tok[i:i+8]) {
+			t.Fatalf("token fragment %q survived", tok[i:i+8])
+		}
+	}
+	if got := RedactedTail("", fmt.Errorf("token %s", tok)); strings.Contains(got, tok) {
+		t.Fatalf("process-error text not redacted: %q", got)
+	}
+}

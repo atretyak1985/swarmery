@@ -87,7 +87,7 @@ func Classify(stderr string, err error) error {
 // classify is Classify for a non-nil err, typed so a caller can re-label the
 // sentinel (Detect turns any remote-lookup failure into ErrNoRemote).
 func classify(stderr string, err error) *Error {
-	detail := credstore.Redact(Tail(stderr, err))
+	detail := RedactedTail(stderr, err)
 	if errors.Is(err, exec.ErrNotFound) {
 		return &Error{Sentinel: ErrBinaryMissing, Detail: detail, Cause: err}
 	}
@@ -106,17 +106,11 @@ func classify(stderr string, err error) *Error {
 	return &Error{Detail: detail, Cause: err}
 }
 
-// Tail picks the most informative text of a failed call — the tool's own
-// stderr when it said something, the process error otherwise — bounded to
-// OutputTail bytes (the end, where tools put the reason). Not redacted; use
-// Classify for anything that leaves the package.
-func Tail(stderr string, err error) string {
-	s := strings.TrimSpace(stderr)
-	if s == "" && err != nil {
-		s = err.Error()
-	}
-	if len(s) > OutputTail {
-		s = s[len(s)-OutputTail:]
-	}
-	return s
+// RedactedTail picks the most informative text of a failed call — the tool's
+// own stderr when it said something, the process error otherwise — redacts it,
+// and only then bounds it to OutputTail bytes (the end, where tools put the
+// reason). Redacting first is what keeps a token straddling the cut from
+// surviving as an unmatchable fragment.
+func RedactedTail(stderr string, err error) string {
+	return credstore.RedactedTail(stderr, err, OutputTail)
 }
