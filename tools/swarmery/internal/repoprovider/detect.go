@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 )
 
 // DefaultRemote is the git remote Detect reads.
@@ -57,7 +59,7 @@ func ParseRemote(raw string) (Remote, error) {
 	if strings.Contains(s, "://") {
 		u, err := url.Parse(s)
 		if err != nil {
-			return Remote{}, fmt.Errorf("%w: %q", ErrBadRemote, s)
+			return Remote{}, badRemote(s)
 		}
 		switch u.Scheme {
 		case "https", "http":
@@ -80,7 +82,7 @@ func ParseRemote(raw string) (Remote, error) {
 		// scp-like: [user@]host:path — the colon must come before any slash.
 		hostPart, p, ok := strings.Cut(s, ":")
 		if !ok || strings.Contains(hostPart, "/") {
-			return Remote{}, fmt.Errorf("%w: %q", ErrBadRemote, s)
+			return Remote{}, badRemote(s)
 		}
 		if i := strings.LastIndex(hostPart, "@"); i >= 0 {
 			hostPart = hostPart[i+1:]
@@ -91,11 +93,11 @@ func ParseRemote(raw string) (Remote, error) {
 	path = strings.TrimSuffix(strings.Trim(path, "/"), ".git")
 	segs := strings.Split(path, "/")
 	if host == "" || len(segs) < 2 {
-		return Remote{}, fmt.Errorf("%w: %q", ErrBadRemote, s)
+		return Remote{}, badRemote(s)
 	}
 	for _, seg := range segs {
 		if seg == "" || seg == "." || seg == ".." {
-			return Remote{}, fmt.Errorf("%w: %q", ErrBadRemote, s)
+			return Remote{}, badRemote(s)
 		}
 	}
 	return Remote{
@@ -105,6 +107,33 @@ func ParseRemote(raw string) (Remote, error) {
 		Repo:     segs[len(segs)-1],
 		Protocol: proto,
 	}, nil
+}
+
+// badRemote is ParseRemote's error for s. The remote text is shown so the
+// operator can see what was wrong with it, but never its credentials: any
+// userinfo (user:password@, token@) is cut from the authority by string
+// surgery — url.Parse may be exactly what failed — and the rest is redacted.
+func badRemote(s string) error {
+	return fmt.Errorf("%w: %q", ErrBadRemote, credstore.Redact(stripUserinfo(s)))
+}
+
+// stripUserinfo removes everything up to the last "@" of a URL's authority
+// ("scheme://user:pw@host/…" → "scheme://host/…"). A string without "://" is
+// returned unchanged: the scp form's "user@" carries no password.
+func stripUserinfo(s string) string {
+	i := strings.Index(s, "://")
+	if i < 0 {
+		return s
+	}
+	rest := s[i+3:]
+	authEnd := strings.IndexAny(rest, "/?#")
+	if authEnd < 0 {
+		authEnd = len(rest)
+	}
+	if at := strings.LastIndex(rest[:authEnd], "@"); at >= 0 {
+		rest = rest[at+1:]
+	}
+	return s[:i+3] + rest
 }
 
 // Prober answers whether an unknown host runs GitLab.

@@ -60,6 +60,40 @@ func TestParseRemote(t *testing.T) {
 	}
 }
 
+// Review fix 5: a malformed remote's error never carries its userinfo or a
+// token, whether url.Parse succeeded (too few segments) or failed.
+func TestParseRemoteErrorHidesCredentials(t *testing.T) {
+	tok := "ghp_" + strings.Repeat("u", 36)
+	for _, in := range []string{
+		"https://user:s3cret@host/o",       // parses, one segment
+		"https://user:s3cret@%zz/o/r",      // url.Parse fails
+		"https://user:s3cret@host/o/../r",  // dot segment
+		"ssh://git:s3cret@host/o",          // ssh with a password
+		"https://" + tok + "@github.com/o", // token as the user name
+		"ftp://user:s3cret@host/o/r",       // bad scheme
+		"https://user:s3cret@host?x=@y/o",  // "@" past the authority
+	} {
+		_, err := ParseRemote(in)
+		if !errors.Is(err, ErrBadRemote) {
+			t.Fatalf("ParseRemote(%q) = %v, want ErrBadRemote", in, err)
+		}
+		if msg := err.Error(); strings.Contains(msg, "s3cret") || strings.Contains(msg, tok) || strings.Contains(msg, "user:") {
+			t.Errorf("ParseRemote(%q) error leaks credentials: %q", in, msg)
+		}
+	}
+	// Detect wraps the same text: still clean.
+	_, err := Detect(context.Background(), remoteFake("https://user:s3cret@host/o"), "/repo", Config{}, nil)
+	if !errors.Is(err, ErrNoRemote) || strings.Contains(err.Error(), "s3cret") {
+		t.Fatalf("Detect error = %v", err)
+	}
+	if got := stripUserinfo("git@github.com:a/b"); got != "git@github.com:a/b" {
+		t.Fatalf("scp form changed: %q", got)
+	}
+	if got := stripUserinfo("https://u:p@h"); got != "https://h" {
+		t.Fatalf("authority-only: %q", got)
+	}
+}
+
 type stubProber struct {
 	gitlab bool
 	asked  []string
