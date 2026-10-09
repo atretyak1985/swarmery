@@ -1,7 +1,10 @@
 // The project's code-host sign-in banner (Phase 5, SC-12), mounted under the
 // project header above every workspace page. It reads GET /api/projects/{id}/vcs
 // and says one thing: the daemon cannot act on this repository's host as the
-// operator — not signed in, or the sign-in expired — with a way out.
+// operator — not signed in, or the sign-in expired — with a way out. When the
+// daemon could not tell (status unknown: the provider CLI is missing or the
+// host did not answer) it says only that, in a softer tone: a signed-in
+// operator who is offline must not be told they are signed out.
 //
 // Every word comes from the response: the provider's name from `terms`, the
 // sign-in command from `cliLogin` (chosen by the daemon per provider). Nothing
@@ -29,8 +32,24 @@ function needsSignIn(vcs: VcsInfo): boolean {
   return !(vcs.auth.status === 'unknown' && vcs.cliLogin === '');
 }
 
-const BTN =
-  'rounded-md border border-amber/50 px-2 py-0.5 font-mono text-[10.5px] text-amber transition-colors hover:bg-amber/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber disabled:cursor-not-allowed disabled:opacity-50';
+const BTN_BASE =
+  'rounded-md border px-2 py-0.5 font-mono text-[10.5px] transition-colors focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50';
+const BTN_WARN = `${BTN_BASE} border-amber/50 text-amber hover:bg-amber/15 focus-visible:outline-amber`;
+const BTN_SOFT = `${BTN_BASE} border-line text-ink-2 hover:bg-surface2 focus-visible:outline-ink-dim`;
+const SECTION_WARN = 'border-amber/40 bg-amber/10 text-amber';
+const SECTION_SOFT = 'border-line bg-surface text-ink-2';
+
+/** The banner's one-line statement for an auth status it shows. */
+function headlineFor(status: VcsInfo['auth']['status'], provider: string): string {
+  switch (status) {
+    case 'expired':
+      return `${provider} repository · sign-in expired`;
+    case 'unknown':
+      return `${provider} repository · sign-in status unknown`;
+    default:
+      return `${provider} repository · not signed in`;
+  }
+}
 
 export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.Element | null {
   const { vcs, reload } = useProjectVcs(projectId);
@@ -46,7 +65,9 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
   if (vcs === null || !needsSignIn(vcs)) return null;
 
   const { terms } = vcs;
-  const headline = `${terms.provider} repository · ${vcs.auth.status === 'expired' ? 'sign-in expired' : 'not signed in'}`;
+  const unknown = vcs.auth.status === 'unknown';
+  const headline = headlineFor(vcs.auth.status, terms.provider);
+  const btn = unknown ? BTN_SOFT : BTN_WARN;
   const sshNote =
     vcs.remote.protocol === 'ssh' && vcs.auth.status === 'missing'
       ? `Push works over SSH; opening a ${terms.change} needs a ${terms.provider} token.`
@@ -61,7 +82,8 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
     <section
       aria-label={`${terms.provider} sign-in`}
       data-testid="vcs-auth-banner"
-      className="border-b border-amber/40 bg-amber/10 px-4 py-2 font-mono text-[11px] text-amber desk:px-6"
+      data-status={vcs.auth.status}
+      className={`border-b px-4 py-2 font-mono text-[11px] desk:px-6 ${unknown ? SECTION_SOFT : SECTION_WARN}`}
     >
       <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <span className="font-semibold">{headline}</span>
@@ -69,13 +91,13 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
         <span className="ml-auto flex items-center gap-2">
           <button
             type="button"
-            className={BTN}
+            className={btn}
             onClick={onSignIn ?? (() => setShowHelp((v) => !v))}
             {...(onSignIn === undefined ? { 'aria-expanded': showHelp, 'aria-controls': helpId } : {})}
           >
             Sign in
           </button>
-          <button type="button" className={BTN} onClick={recheck} disabled={checking} aria-busy={checking}>
+          <button type="button" className={btn} onClick={recheck} disabled={checking} aria-busy={checking}>
             Re-check
           </button>
         </span>

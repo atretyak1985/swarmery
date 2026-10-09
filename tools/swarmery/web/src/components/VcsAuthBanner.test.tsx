@@ -87,6 +87,16 @@ describe('VcsAuthBanner', () => {
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
   });
 
+  it('an unknown status (CLI missing, host unreachable) never claims "not signed in"', async () => {
+    api.getProjectVcs.mockResolvedValue(vcs({}, { status: 'unknown' }));
+    render(<VcsAuthBanner projectId={3} />);
+    expect(await screen.findByText('Host A repository · sign-in status unknown')).toBeTruthy();
+    expect(screen.queryByText(/not signed in/)).toBeNull();
+    expect(screen.queryByText(/sign-in expired/)).toBeNull();
+    expect(banner()?.getAttribute('data-status')).toBe('unknown');
+    expect(screen.getByRole('button', { name: 'Re-check' })).toBeTruthy();
+  });
+
   it('explains the SSH remote + missing token case with terms', async () => {
     api.getProjectVcs.mockResolvedValue(
       vcs({
