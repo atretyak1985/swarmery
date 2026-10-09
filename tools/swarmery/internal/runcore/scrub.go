@@ -11,9 +11,12 @@ import (
 // code host the way the daemon's own land path decides to — through
 // internal/repoprovider. Any other value (unset included) leaves the env alone.
 //
-// The cost is deliberate and documented in the README: a skill that calls
-// `gh`/`glab` itself loses API access under it. A push over SSH is unaffected
-// (git reads no token from these variables).
+// It removes ENVIRONMENT-carried credentials only. Without the config-dir
+// overrides gh/glab fall back to their default config and the keyring, where
+// the operator's own `gh auth login` lives, so this is not a full credential
+// boundary; and only spawns through this package are scrubbed (see the README
+// for the paths that are not). A skill calling `gh`/`glab` itself loses API
+// access only when that access came from an env token. SSH push is unaffected.
 const ScrubVCSTokensEnv = "SWARMERY_AGENT_SCRUB_VCS_TOKENS"
 
 // scrubbedVCSKeys are the variables removed under ScrubVCSTokensEnv: the
