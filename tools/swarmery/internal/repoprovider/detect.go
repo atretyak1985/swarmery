@@ -203,7 +203,10 @@ func (p HTTPProber) IsGitLab(ctx context.Context, host string) bool {
 // Detect reads the repo's DefaultRemote URL and decides its provider:
 // an explicit cfg.Provider wins; then the public hosts (github.com,
 // gitlab.com); then the GitLab API probe for any other host (a GitHub
-// Enterprise host must be declared explicitly); else unknown. A repo without
+// Enterprise host must be declared explicitly); else unknown. An SSH remote's
+// host is first resolved to the host it really reaches (resolveHost: a
+// provider's port-443 endpoint, an ssh_config alias), and that resolved host is
+// what Detection.Remote.Host carries; Remote.URL stays as configured. A repo without
 // the remote is ErrNoRemote whatever the config says — there is nothing to push
 // to.
 func Detect(ctx context.Context, ex Exec, repoDir string, cfg Config, probe Prober) (Detection, error) {
@@ -221,7 +224,80 @@ func Detect(ctx context.Context, ex Exec, repoDir string, cfg Config, probe Prob
 		c.Sentinel = ErrNoRemote
 		return Detection{}, c
 	}
+	remote.Host = resolveHost(ctx, ex, remote)
 	return classifyHost(ctx, remote, cfg, probe), nil
+}
+
+// SSHResolveTimeout bounds the `ssh -G` alias lookup.
+const SSHResolveTimeout = 3 * time.Second
+
+// sshEndpoints are the providers' alternative SSH endpoints, which reach the
+// same host as the canonical name (GitHub's and GitLab's port-443 SSH).
+var sshEndpoints = map[string]string{
+	"ssh.github.com":    "github.com",
+	"altssh.gitlab.com": "gitlab.com",
+}
+
+// knownHost reports whether host is a public provider host Detect classifies
+// without a probe.
+func knownHost(host string) bool { return host == "github.com" || host == "gitlab.com" }
+
+// resolveHost is the host an SSH remote actually reaches. git resolves an
+// ssh_config Host alias (git@github-work:acme/w.git) by itself when it pushes,
+// so the push keeps using the remote NAME; but classification and every
+// provider CLI argument (`gh --repo`, `--hostname`) need the real host. Two
+// steps, ssh remotes only:
+//
+//  1. a provider's alternative SSH endpoint maps to its canonical host;
+//  2. any other host is looked up with `ssh -G <host>` (the operator's own
+//     ssh_config, evaluated without connecting) and its `hostname` line wins,
+//     canonicalised again (an alias may point at ssh.github.com).
+//
+// Any failure — ssh missing, a non-zero exit, no hostname line, a host that
+// could be read as an option — keeps the parsed host: resolution only ever
+// improves a classification, it never turns a working remote into an error.
+func resolveHost(ctx context.Context, ex Exec, r Remote) string {
+	host := r.Host
+	if r.Protocol != "ssh" {
+		return host
+	}
+	if c, ok := sshEndpoints[host]; ok {
+		return c
+	}
+	if knownHost(host) || host == "" || strings.HasPrefix(host, "-") || strings.ContainsAny(host, " \t\n/\\") {
+		return host
+	}
+	ctx, cancel := context.WithTimeout(ctx, SSHResolveTimeout)
+	defer cancel()
+	stdout, _, err := ex.Run(ctx, "", nil, "ssh", "-G", host)
+	if err != nil {
+		return host
+	}
+	resolved := sshConfigHostname(stdout)
+	if resolved == "" {
+		return host
+	}
+	if c, ok := sshEndpoints[resolved]; ok {
+		return c
+	}
+	return resolved
+}
+
+// sshConfigHostname is the value of the `hostname` line of `ssh -G` output,
+// lower-cased; "" when there is none or it is not a plain host name. Pure.
+func sshConfigHostname(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		key, val, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok || !strings.EqualFold(key, "hostname") {
+			continue
+		}
+		val = strings.ToLower(strings.TrimSpace(val))
+		if val == "" || strings.HasPrefix(val, "-") || strings.ContainsAny(val, " \t/\\@") {
+			return ""
+		}
+		return val
+	}
+	return ""
 }
 
 // classifyHost is Detect's decision on an already-parsed remote.

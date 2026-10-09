@@ -638,6 +638,116 @@ func TestLandUnknownProviderIs422(t *testing.T) {
 	}
 }
 
+// ghCalls are the recorded `gh …` invocations.
+func ghCalls(f *repoprovider.FakeExec) []string {
+	var out []string
+	for _, c := range f.Calls {
+		if strings.HasPrefix(c, "gh ") {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// TestLandThroughSSHAliasResolvesHost: an origin on an ssh_config Host alias
+// (git@github-work:…) landed before the provider layer — git resolved the alias
+// and gh resolved the repo from the remote. It must keep landing: the alias is
+// resolved with `ssh -G` for classification and gh's --repo, while the push
+// keeps going to the remote NAME so git resolves the alias itself.
+func TestLandThroughSSHAliasResolvesHost(t *testing.T) {
+	const branch = "swarm/T-alias1"
+	const prURL = "https://github.com/acme/widgets/pull/77"
+	repo, base := reviewRepo(t, branch)
+	srv, db := reviewServer(t, repo)
+	attachReviewDispatch(t, db, &reviewStubWt{})
+	fake := useFakeLand(t, &repoprovider.FakeExec{Out: map[string]string{
+		"git remote": "git@github-work:acme/widgets.git\n",
+		"ssh -G":     "user git\nhostname github.com\nport 22\n",
+		"gh pr":      prURL + "\n",
+	}})
+	id := seedReviewCard(t, db, "T-alias1", reviewCard{Branch: branch, StartPoint: base})
+
+	resp, body := postReview(t, srv.URL, id, "land", `{}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if body["prUrl"] != prURL {
+		t.Errorf("prUrl = %v, want %s", body["prUrl"], prURL)
+	}
+	if !fake.Ran("ssh -G github-work") {
+		t.Errorf("alias was not resolved; calls = %v", fake.Calls)
+	}
+	if !fake.Ran("git push -u origin " + branch) {
+		t.Errorf("push did not go to the remote name; calls = %v", fake.Calls)
+	}
+	gh := ghCalls(fake)
+	if len(gh) == 0 {
+		t.Fatalf("gh never ran; calls = %v", fake.Calls)
+	}
+	for _, c := range gh {
+		if strings.Contains(c, "github-work") {
+			t.Errorf("gh got the unresolved alias: %q", c)
+		}
+		if !strings.Contains(c, "--repo acme/widgets") {
+			t.Errorf("gh call %q does not target acme/widgets on github.com", c)
+		}
+	}
+}
+
+// TestLandThroughGitHubSSH443: GitHub's port-443 SSH endpoint is GitHub — no
+// alias lookup, no probe, a normal land.
+func TestLandThroughGitHubSSH443(t *testing.T) {
+	const branch = "swarm/T-ssh443"
+	const prURL = "https://github.com/acme/widgets/pull/78"
+	repo, base := reviewRepo(t, branch)
+	srv, db := reviewServer(t, repo)
+	attachReviewDispatch(t, db, &reviewStubWt{})
+	fake := useFakeLand(t, landOK(prURL))
+	fake.Out["git remote"] = "ssh://git@ssh.github.com:443/acme/widgets.git\n"
+	id := seedReviewCard(t, db, "T-ssh443", reviewCard{Branch: branch, StartPoint: base})
+
+	resp, body := postReview(t, srv.URL, id, "land", `{}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if fake.Ran("ssh -G") {
+		t.Errorf("a known endpoint was looked up; calls = %v", fake.Calls)
+	}
+	for _, c := range ghCalls(fake) {
+		if strings.Contains(c, "ssh.github.com") {
+			t.Errorf("gh got the SSH endpoint as its host: %q", c)
+		}
+	}
+}
+
+// TestLandSSHAliasUnresolvedIsUnknown: when `ssh -G` cannot resolve the alias,
+// the old outcome stands — an unknown provider, an honest 422, nothing pushed.
+func TestLandSSHAliasUnresolvedIsUnknown(t *testing.T) {
+	const branch = "swarm/T-alias2"
+	repo, base := reviewRepo(t, branch)
+	srv, db := reviewServer(t, repo)
+	fake := useFakeLand(t, &repoprovider.FakeExec{
+		Out:  map[string]string{"git remote": "git@github-work:acme/widgets.git\n"},
+		Errs: map[string]string{"ssh -G": "ssh: something went wrong\n"},
+	})
+	id := seedReviewCard(t, db, "T-alias2", reviewCard{Branch: branch, StartPoint: base})
+
+	resp, body := postReview(t, srv.URL, id, "land", `{}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	if body["error"] != "repository provider unknown" {
+		t.Errorf("error = %v, want %q", body["error"], "repository provider unknown")
+	}
+	hint, _ := body["hint"].(string)
+	if !strings.Contains(hint, "vcs.provider") {
+		t.Errorf("hint %q does not name vcs.provider", hint)
+	}
+	if fake.Ran("git push") {
+		t.Errorf("pushed to an unresolved alias; calls = %v", fake.Calls)
+	}
+}
+
 // ── pure helpers ─────────────────────────────────────────────────────────────
 
 func TestLandPRBody(t *testing.T) {

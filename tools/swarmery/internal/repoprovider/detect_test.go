@@ -154,6 +154,119 @@ func TestDetect(t *testing.T) {
 	}
 }
 
+// sshAliasFake scripts a remote URL and, when sshOut is non-empty, the
+// `ssh -G` answer; sshErr makes `ssh -G` fail instead.
+func sshAliasFake(url, sshOut, sshErr string) *FakeExec {
+	f := remoteFake(url)
+	if sshOut != "" {
+		f.Out["ssh -G"] = sshOut
+	}
+	if sshErr != "" {
+		f.Errs = map[string]string{"ssh -G": sshErr}
+	}
+	return f
+}
+
+// TestDetectResolvesSSHHost: an ssh_config alias and a provider's port-443 SSH
+// endpoint are classified by the host they really reach, and that host is what
+// Remote.Host carries (the URL stays as configured, for git to resolve itself).
+func TestDetectResolvesSSHHost(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name      string
+		f         *FakeExec
+		probe     *stubProber
+		wantKind  Kind
+		wantHost  string
+		wantSSH   bool // an `ssh -G` call is expected
+		wantProbe []string
+	}{
+		{"alias to github.com",
+			sshAliasFake("git@github-work:acme/widgets.git", "user git\nhostname github.com\nport 22\n", ""),
+			&stubProber{}, KindGitHub, "github.com", true, nil},
+		{"alias to ssh.github.com is canonicalised",
+			sshAliasFake("git@gh443:acme/widgets.git", "hostname ssh.github.com\nport 443\n", ""),
+			&stubProber{}, KindGitHub, "github.com", true, nil},
+		{"alias to a self-hosted GitLab probes the REAL host",
+			sshAliasFake("git@work-gl:team/app.git", "HostName GitLab.Corp.Example\n", ""),
+			&stubProber{gitlab: true}, KindGitLab, "gitlab.corp.example", true, []string{"gitlab.corp.example"}},
+		{"github port-443 endpoint needs no lookup",
+			sshAliasFake("ssh://git@ssh.github.com:443/acme/widgets.git", "", ""),
+			&stubProber{}, KindGitHub, "github.com", false, nil},
+		{"gitlab altssh endpoint needs no lookup",
+			sshAliasFake("ssh://git@altssh.gitlab.com:443/g/p.git", "", ""),
+			&stubProber{}, KindGitLab, "gitlab.com", false, nil},
+		{"known host needs no lookup",
+			sshAliasFake("git@github.com:acme/widgets.git", "", ""),
+			&stubProber{}, KindGitHub, "github.com", false, nil},
+		{"https is never looked up",
+			sshAliasFake("https://git.corp/acme/widgets.git", "", ""),
+			&stubProber{}, KindUnknown, "git.corp", false, []string{"git.corp"}},
+		{"ssh -G failing keeps the alias",
+			sshAliasFake("git@github-work:acme/widgets.git", "", "ssh: command failed"),
+			&stubProber{}, KindUnknown, "github-work", true, []string{"github-work"}},
+		{"ssh -G without a hostname line keeps the alias",
+			sshAliasFake("git@github-work:acme/widgets.git", "user git\n", ""),
+			&stubProber{}, KindUnknown, "github-work", true, []string{"github-work"}},
+		{"ssh missing keeps the alias",
+			func() *FakeExec {
+				f := remoteFake("git@github-work:acme/widgets.git")
+				f.Missing = map[string]bool{"ssh": true}
+				return f
+			}(),
+			&stubProber{}, KindUnknown, "github-work", true, []string{"github-work"}},
+	}
+	for _, c := range cases {
+		d, err := Detect(ctx, c.f, "/repo", Config{}, c.probe)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if d.Kind != c.wantKind || d.Remote.Host != c.wantHost {
+			t.Errorf("%s: kind=%s host=%q, want %s %q", c.name, d.Kind, d.Remote.Host, c.wantKind, c.wantHost)
+		}
+		if got := c.f.Ran("ssh -G"); got != c.wantSSH {
+			t.Errorf("%s: ssh -G ran=%v, want %v (calls %v)", c.name, got, c.wantSSH, c.f.Calls)
+		}
+		if fmt.Sprint(c.probe.asked) != fmt.Sprint(c.wantProbe) {
+			t.Errorf("%s: probed %v, want %v", c.name, c.probe.asked, c.wantProbe)
+		}
+	}
+	// An explicit provider still gets the resolved host (it feeds --repo).
+	f := sshAliasFake("git@github-work:acme/widgets.git", "hostname github.com\n", "")
+	d, err := Detect(ctx, f, "/repo", Config{Provider: "github"}, nil)
+	if err != nil || d.Remote.Host != "github.com" || d.Source != SourceConfig {
+		t.Fatalf("explicit github + alias: %+v %v", d, err)
+	}
+	if d.Remote.URL != "git@github-work:acme/widgets.git" {
+		t.Errorf("URL rewritten to %q; git must keep resolving the alias itself", d.Remote.URL)
+	}
+}
+
+func TestSSHConfigHostname(t *testing.T) {
+	cases := map[string]string{
+		"user git\nhostname github.com\n": "github.com",
+		"HostName Example.COM":            "example.com",
+		"  hostname   spaced.example  ":   "spaced.example",
+		"hostnamex nope\n":                "",
+		"hostname -oProxyCommand=x\n":     "",
+		"hostname a/b\n":                  "",
+		"":                                "",
+	}
+	for in, want := range cases {
+		if got := sshConfigHostname(in); got != want {
+			t.Errorf("sshConfigHostname(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestResolveHostRefusesOptionLikeHost(t *testing.T) {
+	f := &FakeExec{Out: map[string]string{"ssh -G": "hostname github.com\n"}}
+	r := Remote{Host: "-oproxycommand=x", Protocol: "ssh"}
+	if got := resolveHost(context.Background(), f, r); got != r.Host || len(f.Calls) != 0 {
+		t.Errorf("option-like host resolved to %q, calls %v", got, f.Calls)
+	}
+}
+
 func TestDetectFailures(t *testing.T) {
 	ctx := context.Background()
 	noRemote := &FakeExec{Errs: map[string]string{"git remote": "error: No such remote 'origin'"}}
