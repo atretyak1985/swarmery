@@ -40,12 +40,13 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
-// reviewFeedbackMax bounds the feedback a rerun appends. Generous — it is a
-// review note, not a document — but the prompt column is what a headless agent
-// is handed, so it cannot be unbounded.
-const reviewFeedbackMax = 20 << 10 // 20 KB
+// reviewFeedbackMax bounds the feedback a rerun appends — the one limit every
+// review note shares (wsingest.ReviewFeedbackMax, which also bounds a phase's
+// return feedback).
+const reviewFeedbackMax = wsingest.ReviewFeedbackMax
 
 // activeInDispatch reports whether the dispatcher currently holds a live run for
 // the card. The board columns are the durable truth, but they lag the in-memory
