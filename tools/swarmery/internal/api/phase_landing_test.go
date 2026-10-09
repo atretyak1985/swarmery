@@ -895,6 +895,50 @@ func TestLandPhaseReturnStartRefusedKeepsFeedback(t *testing.T) {
 	if n := specCount(r); n != 0 {
 		t.Errorf("a refused start spawned %d run(s)", n)
 	}
+
+	// The budget frees up; the operator presses the plain Run button. That start is
+	// the returned run the feedback asked for.
+	svc.Slots.Release(runcore.SlotKey("planrun", 77))
+	resp, body = landingJSON(t, http.MethodPost, f.url(f.phaseID, "run"), "")
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("plain run of a returned phase: status = %d, want 202 (body %v)", resp.StatusCode, body)
+	}
+	specs := waitSpecs(t, r, 1)
+	if !specs[0].Returned {
+		t.Error("the plain run of a returned phase was started without Returned")
+	}
+	if n := strings.Count(specs[0].Prompt, phaserun.ReturnedNote); n != 1 {
+		t.Errorf("its prompt carries the returned sentence %d times, want 1", n)
+	}
+}
+
+// TestLandPhaseReturnWhileSlotHeld409: run_state already says done, but the
+// service still holds the phase's slot (the run's teardown — doc return,
+// verification, worktree removal — is not over). A return now would race that
+// teardown's doc copy-back, so it is refused 409 phase-running before anything is
+// written.
+func TestLandPhaseReturnWhileSlotHeld409(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	r, svc := attachReturnRun(t, f)
+	key := runcore.SlotKey(phaserun.Engine, f.phaseID)
+	if _, err := svc.Slots.TryAcquire(key, "u-tearing-down", nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { svc.Slots.Release(key) })
+
+	resp, body := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusConflict || body["code"] != codePhaseRunning {
+		t.Fatalf("status/code = %d/%v, want 409 %s (body %v)", resp.StatusCode, body["code"], codePhaseRunning, body)
+	}
+	if got := readDoc(t, f.docPath); got != landTestDoc {
+		t.Errorf("a refused return changed the doc:\n%s", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingNone {
+		t.Errorf("landing_state = %q, want none", got)
+	}
+	if n := specCount(r); n != 0 {
+		t.Errorf("a refused return started %d run(s)", n)
+	}
 }
 
 // TestLandPhaseReturnWithoutPhaseRuns503: no phase-run service ⇒ 503 before the

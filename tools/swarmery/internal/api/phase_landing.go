@@ -750,11 +750,23 @@ func (h *Handler) writeLandFailure(w http.ResponseWriter, t landingTarget, det r
 // plus the phase's landing (state returned), so a later plain Run picks it up.
 //
 // 202 {status:"running", sessionUuid, action:"return", landing}; 503 phase runs
-// not attached (nothing written); 409 doc-unreadable when the note cannot be
-// written; the run refusals runPhase maps otherwise.
+// not attached (nothing written); 409 phase-running while the service still
+// holds the phase's slot (nothing written); 409 doc-unreadable when the note
+// cannot be written; the run refusals runPhase maps otherwise. A refused start
+// leaves the phase `returned`, and phaserun.StartWith admits ANY later start of a
+// returned phase as the returned run.
 func (h *Handler) returnPhase(w http.ResponseWriter, t landingTarget, feedback string) {
 	if phaserunSvc == nil {
 		writeClientErr(w, http.StatusServiceUnavailable, "phase runs not attached")
+		return
+	}
+	// run_state turns terminal before the run's teardown is over: until the service
+	// lets go of the slot, the run may still copy its lent doc back over the
+	// workspace doc (which would drop the note written below) and its worktree is
+	// still on the branch the returned run continues. Same answer as a running row.
+	if phaserunSvc.InFlight(t.PhaseID) {
+		writeConflict(w, codePhaseRunning,
+			"this phase's last run is still finishing — wait a moment, then return it")
 		return
 	}
 	if err := wsingest.AppendOperatorFeedback(t.DocPath, feedback, time.Now()); err != nil {

@@ -230,6 +230,96 @@ func TestReturnedContinuesOnOwnBranch(t *testing.T) {
 	}
 }
 
+// TestReturnedRefusedStartRetriedByPlainRun — real git. The return endpoint wrote
+// the feedback and stamped `returned`, then its start was refused (the run budget
+// is full). A later PLAIN start (StartOptions{}) — the operator pressing Run, or
+// a retry once a slot frees — is the returned run: admitted, continuing on the
+// phase's own branch (not refused as branch-dirty), with the returned sentence in
+// its prompt exactly once.
+func TestReturnedRefusedStartRetriedByPlainRun(t *testing.T) {
+	repo := newTempRepo(t)
+	db, _, p1, _ := fixture(t)
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, repo.dir)
+
+	r := &stubRunner{}
+	s := newTestService(db, r, &stubWt{})
+	s.Wt = &worktree.Manager{Git: repo.git, Root: filepath.Join(t.TempDir(), "wts")}
+	s.Git = repo.git
+	doc := phaseDocPath(t, db, p1)
+
+	var headAtSpawn, firstCommit, secondCommit string
+	work := func(msg string, out *string) func(spec RunSpec) (*Run, error) {
+		return func(spec RunSpec) (*Run, error) {
+			headAtSpawn = strings.TrimSpace(repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+			*out = repo.commitIn(spec.Cwd, msg)
+			mustWriteDoc(t, filepath.Join(spec.Cwd, worktree.LentPlanDocRel(doc)), "# Phase 1 — Schema\n\n- [x] a\n- [x] b\n")
+			return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+		}
+	}
+	r.runFn = work("phase 1 first pass", &firstCommit)
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	// The return: feedback written, phase stamped, and the start refused.
+	mustExec(t, db, `UPDATE epic_phases SET landing_state='returned' WHERE id=?`, p1)
+	s.Slots = runcore.NewSlots(1)
+	if _, err := s.Slots.TryAcquire(runcore.SlotKey("planrun", 77), "u-plan", nil); err != nil {
+		t.Fatal(err)
+	}
+	var noSlot *runcore.NoSlotError
+	if _, err := s.StartWith(p1, StartOptions{Returned: true}); !errors.As(err, &noSlot) {
+		t.Fatalf("returned start with a full budget: err = %v, want *runcore.NoSlotError", err)
+	}
+	if got := landingState(t, db, p1); got != "returned" {
+		t.Fatalf("landing_state = %q after the refused start, want returned kept", got)
+	}
+
+	// The slot frees; a plain start is the returned run.
+	s.Slots.Release(runcore.SlotKey("planrun", 77))
+	r.mu.Lock()
+	r.runFn = work("phase 1 after feedback", &secondCommit)
+	r.mu.Unlock()
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Fatalf("plain start of a returned phase: %v, want admitted on its own branch", err)
+	}
+	spec := r.lastSpec()
+	if !spec.Returned {
+		t.Error("RunSpec.Returned = false for a plain start of a returned phase")
+	}
+	if n := strings.Count(spec.Prompt, ReturnedNote); n != 1 {
+		t.Errorf("the prompt carries the returned sentence %d times, want exactly 1", n)
+	}
+	if headAtSpawn != firstCommit {
+		t.Errorf("worktree HEAD at spawn = %s, want the returned work's tip %s", headAtSpawn, firstCommit)
+	}
+	if got := repo.tip("refs/heads/" + runcore.PhaseBranch(p1)); got != secondCommit {
+		t.Errorf("branch tip = %s, want the returned run's commit %s", got, secondCommit)
+	}
+	if got := landingState(t, db, p1); got != "none" {
+		t.Errorf("landing_state = %q after the returned run ended, want none", got)
+	}
+}
+
+// TestReturnedPhaseBypassesBlockedGuardOnPlainStart: a returned phase whose last
+// run blocked is admitted by a plain start — the stamped `returned` is the
+// operator's feedback, which is what the guard waits for — while Force stays
+// false on the spec's options and a phase that is NOT returned is still refused.
+func TestReturnedPhaseBypassesBlockedGuardOnPlainStart(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	s, r, _ := blockPhase(t, db, p1)
+	if _, err := s.StartWith(p1, StartOptions{}); !errors.Is(err, ErrBlockedUnchanged) {
+		t.Fatalf("plain re-run of a blocked phase: err = %v, want ErrBlockedUnchanged (premise)", err)
+	}
+	mustExec(t, db, `UPDATE epic_phases SET landing_state='returned' WHERE id=?`, p1)
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Fatalf("plain start of a returned phase: %v, want admitted", err)
+	}
+	if !r.lastSpec().Returned {
+		t.Error("RunSpec.Returned = false for a plain start of a returned phase")
+	}
+}
+
 // TestReturnedRunRestoresOpenPR: a phase returned while its change request was
 // open goes back to pr_open when the returned run ends — not to none, which would
 // read `ready` and make the next `land pr` try to open a second change request.

@@ -303,7 +303,15 @@ type phaseInfo struct {
 	RunError              string
 	RunEndedAt            string
 	RunBlockedFingerprint string
+	// LandingState is epic_phases.landing_state (migration 0103), read for one
+	// decision: a phase the operator RETURNED (landingReturned) is admitted as a
+	// returned run whoever starts it — see StartWith.
+	LandingState string
 }
+
+// landingReturned is the landing state POST …/land {action:"return"} stamps and
+// the end of the returned run clears (landingAfterReturnedRun).
+const landingReturned = "returned"
 
 // StartOptions are the operator's choices for one run. The zero value is a plain
 // "Run phase": no model or effort picked, no override of any guard.
@@ -323,6 +331,10 @@ type StartOptions struct {
 	// run continue on the phase's own run branch when that branch holds the
 	// previous run's commits — the work being returned — instead of refusing it as
 	// a dirty branch (see continueOwnBranch).
+	//
+	// StartWith also sets it on its own for a phase whose landing_state is still
+	// `returned`, so the run the feedback asked for is the one a later plain start
+	// gets when the return endpoint's own start was refused.
 	Returned bool
 }
 
@@ -547,6 +559,16 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	}
 	if info.RunState == "running" {
 		return "", ErrRunning
+	}
+	// A phase still marked returned is waiting for the run its operator's feedback
+	// asked for: the start the return endpoint made may have been refused (no free
+	// slot, a quota gate, …) after the feedback was written and the phase stamped.
+	// Whoever starts it next (a plain Run, a retry) starts THAT run — the prompt
+	// points at the feedback, the blocked guard is bypassed and the own branch is
+	// continued — exactly as if the return endpoint's own start had been admitted.
+	// Force is untouched.
+	if info.LandingState == landingReturned {
+		opts.Returned = true
 	}
 	// The mirror of planrun's phaseRunActive gate: refuse while the whole plan is
 	// being run. Both directions are needed — one of them alone is not "mostly
@@ -1483,6 +1505,15 @@ func (s *Service) removeWorktree(repoRoot string, acq worktree.Acquired) {
 	}
 }
 
+// InFlight reports whether the service still holds the phase's run slot: a run
+// is executing, or its teardown (doc return, verification, actuals, worktree
+// removal) has not finished yet. run_state turns terminal BEFORE that teardown, so
+// a caller about to change what the next run will read — the phase doc, the
+// landing state — must ask this rather than trust run_state alone.
+func (s *Service) InFlight(phaseID int64) bool {
+	return s.Slots.IsActive(s.slotKey(phaseID))
+}
+
 // Cancel aborts an in-flight run: the context cancel kills the child claude,
 // and the run goroutine's exit path stamps failed/cancelled. Returns whether a
 // run was actually in flight.
@@ -1619,7 +1650,8 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 	err := s.DB.QueryRow(`
 		SELECT e.workspace_task_id, e.seq, e.name, e.doc_path, e.depends_on, e.run_state,
 		       e.run_branch, e.repo, e.verify_mode, e.doc_model, p.path, p.slug, w.root_path,
-		       e.run_start_point, e.run_error, e.run_ended_at, e.run_blocked_fingerprint
+		       e.run_start_point, e.run_error, e.run_ended_at, e.run_blocked_fingerprint,
+		       COALESCE(e.landing_state, '')
 		  FROM epic_phases e
 		  JOIN tasks t ON t.id = e.workspace_task_id
 		  JOIN projects p ON p.id = t.project_id
@@ -1627,7 +1659,7 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 		 WHERE e.id = ?`, phaseID).Scan(
 		&info.WorkspaceTaskID, &info.Seq, &info.Name, &info.DocPath, &depsJSON,
 		&info.RunState, &runBranch, &repo, &info.VerifyMode, &docModel, &path, &info.ProjectSlug, &wsRoot,
-		&startPoint, &runError, &endedAt, &fingerprint)
+		&startPoint, &runError, &endedAt, &fingerprint, &info.LandingState)
 	if errors.Is(err, sql.ErrNoRows) {
 		return info, ErrPhaseNotFound
 	}
