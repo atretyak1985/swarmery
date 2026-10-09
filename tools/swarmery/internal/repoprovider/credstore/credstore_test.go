@@ -237,10 +237,49 @@ func TestEnvCarriesTokenAndIsolatedConfigDirs(t *testing.T) {
 			t.Fatalf("%s mode = %04o, want 0700", d, info.Mode().Perm())
 		}
 	}
-	// No store: config dirs only, no token.
-	env = Env("gitlab.com")
-	if len(env) != 2 || strings.Contains(strings.Join(env, " "), "TOKEN") {
-		t.Fatalf("Env(no store) = %v", env)
+	// No store: nil — the CLI runs on the operator's own login.
+	if env := Env("gitlab.com"); env != nil {
+		t.Fatalf("Env(no store) = %v, want nil", env)
+	}
+	// A store with no usable token is nil too.
+	if err := os.WriteFile(filepath.Join(dir, "vcs-empty.example.env"), []byte("# nothing\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if env := Env("empty.example"); env != nil {
+		t.Fatalf("Env(empty store) = %v, want nil", env)
+	}
+}
+
+// gh reads GH_TOKEN only for github.com and *.ghe.com; any other host is
+// GitHub Enterprise Server and needs GH_ENTERPRISE_TOKEN.
+func TestEnvEnterpriseToken(t *testing.T) {
+	isolate(t)
+	cases := map[string]bool{
+		"github.com":        false,
+		"acme.ghe.com":      false,
+		"ghe.corp":          true,
+		"GHE.Corp:8443":     true,
+		"git.example.local": true,
+	}
+	for host, wantEnterprise := range cases {
+		tok := "tok-" + sanitize(host) + "-value"
+		if err := Write(host, GitHubTokenKey, tok); err != nil {
+			t.Fatal(err)
+		}
+		env := strings.Join(Env(host), "\n")
+		if !strings.Contains(env, "GH_TOKEN="+tok) {
+			t.Errorf("%s: GH_TOKEN missing: %q", host, env)
+		}
+		if got := strings.Contains(env, "GH_ENTERPRISE_TOKEN="+tok); got != wantEnterprise {
+			t.Errorf("%s: GH_ENTERPRISE_TOKEN present = %v, want %v", host, got, wantEnterprise)
+		}
+	}
+	// A GitLab-only store never gets a GitHub enterprise token.
+	if err := Write("gitlab.corp", GitLabTokenKey, "glab-only-token-value"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(Env("gitlab.corp"), "\n"), "GH_ENTERPRISE_TOKEN") {
+		t.Fatal("GitLab-only store exported GH_ENTERPRISE_TOKEN")
 	}
 }
 

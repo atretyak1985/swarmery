@@ -6,9 +6,9 @@
 //
 // Every call that needs credentials runs with the env delta returned by the
 // injected env func (production: credstore.Env — the daemon's own token and an
-// isolated GH_CONFIG_DIR). The one deliberate exception is AuthStatus's CLI
-// fallback, which asks the OPERATOR's own gh login (nil env) whether there is a
-// token worth importing.
+// isolated GH_CONFIG_DIR) when that delta carries a GitHub token, and with a
+// nil delta otherwise: an operator logged in only through `gh auth login`
+// keeps working exactly as board land always has, until a token is imported.
 package github
 
 import (
@@ -75,11 +75,24 @@ func netCtx(ctx context.Context) (context.Context, context.CancelFunc) {
 
 func hasToken(env []string) bool {
 	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, credstore.GitHubTokenKey+"="); ok && v != "" {
-			return true
+		for _, k := range []string{credstore.GitHubTokenKey, credstore.GitHubEnterpriseTokenKey} {
+			if v, ok := strings.CutPrefix(kv, k+"="); ok && v != "" {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+// callEnv is the env delta for a credentialed call to host: the injected env
+// when it carries a GitHub token, else nil — the operator's own gh login, which
+// is how board land has always run. An isolated GH_CONFIG_DIR without a token
+// would only turn a working CLI login into a not-authenticated failure.
+func (p *Provider) callEnv(host string) []string {
+	if env := p.env(host); hasToken(env) {
+		return env
+	}
+	return nil
 }
 
 // AuthStatus implements repoprovider.Provider.
@@ -100,14 +113,14 @@ func (p *Provider) AuthStatus(ctx context.Context, host string) (repoprovider.Au
 	ctx, cancel := netCtx(ctx)
 	defer cancel()
 
-	env := p.env(host)
+	env := p.callEnv(host)
 	source := repoprovider.SourceStore
-	if !hasToken(env) {
+	if env == nil {
 		// No daemon-owned token: does the operator's own gh login have one?
 		if _, _, err := p.exec.Run(ctx, "", nil, ghBinary, "auth", "token", "--hostname", host); err != nil {
 			return repoprovider.AuthStatus{Status: repoprovider.AuthMissing, Source: repoprovider.SourceNone}, nil
 		}
-		env, source = nil, repoprovider.SourceCLI
+		source = repoprovider.SourceCLI
 	}
 	stdout, stderr, err := p.exec.Run(ctx, "", env, ghBinary, "api", "user", "--hostname", host)
 	if err != nil {
@@ -147,7 +160,7 @@ func (p *Provider) Push(ctx context.Context, t repoprovider.Target, branch strin
 	}
 	ctx, cancel := netCtx(ctx)
 	defer cancel()
-	_, stderr, err := p.exec.Run(ctx, t.RepoDir, p.env(t.Remote.Host), gitBinary, "push", "-u", remote, branch)
+	_, stderr, err := p.exec.Run(ctx, t.RepoDir, p.callEnv(t.Remote.Host), gitBinary, "push", "-u", remote, branch)
 	return repoprovider.Classify(stderr, err)
 }
 
@@ -185,7 +198,7 @@ func (p *Provider) OpenChangeRequest(ctx context.Context, t repoprovider.Target,
 	}
 	ctx, cancel := netCtx(ctx)
 	defer cancel()
-	stdout, stderr, err := p.exec.Run(ctx, t.RepoDir, p.env(t.Remote.Host), ghBinary, args...)
+	stdout, stderr, err := p.exec.Run(ctx, t.RepoDir, p.callEnv(t.Remote.Host), ghBinary, args...)
 	if err != nil {
 		return repoprovider.ChangeRef{}, repoprovider.Classify(stderr, err)
 	}
@@ -256,7 +269,7 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 	args = append(args, "--json", statusFields)
 	ctx, cancel := netCtx(ctx)
 	defer cancel()
-	stdout, stderr, err := p.exec.Run(ctx, t.RepoDir, p.env(t.Remote.Host), ghBinary, args...)
+	stdout, stderr, err := p.exec.Run(ctx, t.RepoDir, p.callEnv(t.Remote.Host), ghBinary, args...)
 	if err != nil {
 		return repoprovider.ChangeStatus{}, repoprovider.Classify(stderr, err)
 	}

@@ -3,11 +3,12 @@
 // mode 0600, read back with the same refusal rule claudeacct applies to its
 // secret stores — a file with any group/other permission bit is not read.
 //
-// Every `gh`/`glab` call the daemon makes runs with Env(host): the token from
-// that file plus an ISOLATED config dir (GH_CONFIG_DIR / GLAB_CONFIG_DIR under
-// SecretsDir), so the daemon never reads or rewrites the operator's own CLI
-// config and never depends on which account the operator's shell is logged in
-// as.
+// Every `gh`/`glab` call the daemon makes runs with Env(host). Once a token is
+// stored, that is the token plus an ISOLATED config dir (GH_CONFIG_DIR /
+// GLAB_CONFIG_DIR under SecretsDir), so the daemon neither reads nor rewrites
+// the operator's own CLI config and does not depend on which account the
+// operator's shell is logged in as. Until then Env is nil and the CLI runs on
+// the operator's own login, exactly as board land always has.
 //
 // # Import direction
 //
@@ -261,28 +262,46 @@ func load(path string) (map[string]string, error) {
 
 func validKey(k string) bool { return k == GitHubTokenKey || k == GitLabTokenKey }
 
-// Env is the env DELTA every gh/glab call for host runs with: the store's
-// token(s), when the store exists and is accepted, plus GH_CONFIG_DIR and
+// GitHubEnterpriseTokenKey is the env name gh reads a token from for any host
+// other than github.com and *.ghe.com (GitHub Enterprise Server). gh ignores
+// GH_TOKEN for such a host.
+const GitHubEnterpriseTokenKey = "GH_ENTERPRISE_TOKEN"
+
+// Env is the env DELTA every gh/glab call for host runs with, when the daemon
+// holds a token for host: the store's token(s), plus GH_CONFIG_DIR and
 // GLAB_CONFIG_DIR pointing at isolated dirs under SecretsDir (created 0700).
-// nil when no secrets dir resolves. A refused store contributes no token and is
-// logged by path and mode only — never a value.
+// A GitHub token for a GitHub Enterprise Server host is also exported as
+// GH_ENTERPRISE_TOKEN, the only variable gh reads for such a host.
+//
+// nil — "run the CLI exactly as the operator's own login would" — when no
+// secrets dir resolves, when host has no store, and when the store is refused
+// or carries no token. An operator logged in only through `gh auth login`
+// therefore keeps working unchanged until a token is imported. A refused store
+// is logged by path and mode only — never a value.
 func Env(host string) []string {
 	base := claudeacct.SecretsDir()
 	if base == "" {
 		return nil
 	}
-	var out []string
 	vals, err := Load(host)
-	switch {
-	case err == nil:
-		for _, k := range []string{GitHubTokenKey, GitLabTokenKey} {
-			if v, ok := vals[k]; ok {
-				out = append(out, k+"="+v)
-			}
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Print(err) // path + mode only; ErrInsecure never carries a value
 		}
-	case errors.Is(err, fs.ErrNotExist):
-	default:
-		log.Print(err) // path + mode only; ErrInsecure never carries a value
+		return nil
+	}
+	var out []string
+	if v, ok := vals[GitHubTokenKey]; ok {
+		out = append(out, GitHubTokenKey+"="+v)
+		if isEnterpriseHost(host) {
+			out = append(out, GitHubEnterpriseTokenKey+"="+v)
+		}
+	}
+	if v, ok := vals[GitLabTokenKey]; ok {
+		out = append(out, GitLabTokenKey+"="+v)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	for _, kv := range [][2]string{
 		{"GH_CONFIG_DIR", filepath.Join(base, ghConfigDirName)},
@@ -294,6 +313,18 @@ func Env(host string) []string {
 		out = append(out, kv[0]+"="+kv[1])
 	}
 	return out
+}
+
+// isEnterpriseHost reports whether gh treats host as GitHub Enterprise Server,
+// i.e. reads GH_ENTERPRISE_TOKEN rather than GH_TOKEN for it: anything but
+// github.com and the *.ghe.com (GHE.com data residency) hosts. A port is
+// ignored.
+func isEnterpriseHost(host string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if i := strings.LastIndex(h, ":"); i >= 0 {
+		h = h[:i]
+	}
+	return h != "" && h != "github.com" && !strings.HasSuffix(h, ".ghe.com")
 }
 
 // glabTokenLine matches the token line `glab auth status --show-token` prints

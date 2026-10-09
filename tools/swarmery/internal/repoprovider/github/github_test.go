@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 )
 
 // Every test drives a repoprovider.FakeExec: no real gh, git or network.
@@ -377,5 +379,92 @@ func TestNetCtxKeepsCallerDeadline(t *testing.T) {
 	defer c2()
 	if _, ok := got2.Deadline(); !ok {
 		t.Fatal("no NetTimeout applied")
+	}
+}
+
+// isolatedSecrets points credstore at a fresh 0700 temp dir.
+func isolatedSecrets(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SWARMERY_SECRETS_DIR", dir)
+}
+
+// runAll drives Push, OpenChangeRequest and Status and returns the env each
+// recorded call ran with.
+func runAll(t *testing.T, tgt repoprovider.Target) [][]string {
+	t.Helper()
+	f := &repoprovider.FakeExec{Fn: func(_ string, _ []string, name string, args []string) (string, string, error, bool) {
+		if name == "gh" && len(args) > 1 && args[1] == "view" {
+			return `{"state":"OPEN"}`, "", nil, true
+		}
+		return "", "", nil, false
+	}, Out: map[string]string{"gh pr": "https://x/a/b/pull/1"}}
+	p := New(f, credstore.Env)
+	ctx := context.Background()
+	if err := p.Push(ctx, tgt, "b"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.OpenChangeRequest(ctx, tgt, repoprovider.ChangeRequest{Head: "b", Title: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Status(ctx, tgt, repoprovider.ChangeRef{Number: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Envs) != 3 {
+		t.Fatalf("calls: %v", f.Calls)
+	}
+	return f.Envs
+}
+
+// Review fix 2: with no stored token, every call runs on the operator's own
+// gh login (nil env), exactly like board land today.
+func TestCallsUseNilEnvWithoutStore(t *testing.T) {
+	isolatedSecrets(t)
+	for i, env := range runAll(t, target) {
+		if env != nil {
+			t.Fatalf("call %d ran with env %v, want nil", i, env)
+		}
+	}
+}
+
+func TestCallsUseStoreEnvWhenTokenStored(t *testing.T) {
+	isolatedSecrets(t)
+	if err := credstore.Write("github.com", credstore.GitHubTokenKey, "stored-token-value"); err != nil {
+		t.Fatal(err)
+	}
+	for i, env := range runAll(t, target) {
+		joined := strings.Join(env, "\n")
+		if !strings.Contains(joined, "GH_TOKEN=stored-token-value") || !strings.Contains(joined, "GH_CONFIG_DIR=") {
+			t.Fatalf("call %d env = %v", i, env)
+		}
+		if strings.Contains(joined, "GH_ENTERPRISE_TOKEN") {
+			t.Fatalf("call %d exported an enterprise token for github.com", i)
+		}
+	}
+}
+
+// Review fix 3: a GitHub Enterprise Server host gets GH_ENTERPRISE_TOKEN.
+func TestCallsUseEnterpriseTokenOnGHES(t *testing.T) {
+	isolatedSecrets(t)
+	if err := credstore.Write("ghe.corp", credstore.GitHubTokenKey, "ghes-token-value"); err != nil {
+		t.Fatal(err)
+	}
+	tgt := repoprovider.Target{RepoDir: "/r", Remote: repoprovider.Remote{Host: "ghe.corp", Owner: "t", Repo: "a"}}
+	for i, env := range runAll(t, tgt) {
+		if !strings.Contains(strings.Join(env, "\n"), "GH_ENTERPRISE_TOKEN=ghes-token-value") {
+			t.Fatalf("call %d env = %v", i, env)
+		}
+	}
+	// AuthStatus treats the enterprise token as a stored token.
+	f := &repoprovider.FakeExec{Out: map[string]string{"gh api": `{"login":"e"}`}}
+	st, err := New(f, credstore.Env).AuthStatus(context.Background(), "ghe.corp")
+	if err != nil || st.Source != repoprovider.SourceStore || st.Status != repoprovider.AuthOK {
+		t.Fatalf("auth = %+v %v", st, err)
+	}
+	if !hasToken([]string{"GH_ENTERPRISE_TOKEN=x"}) || hasToken([]string{"GH_CONFIG_DIR=/x"}) {
+		t.Fatal("hasToken")
 	}
 }
