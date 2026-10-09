@@ -64,9 +64,13 @@ var classifier = []struct {
 }{
 	{ErrNoPushAccess, []string{
 		"protected branch", "http 403", "returned error: 403", "403 forbidden",
+		// GitLab: "remote: You are not allowed to push code to this project."
+		"you are not allowed to push",
 	}},
 	{ErrNotAuthenticated, []string{
 		"not logged into", "gh auth login", "glab auth login", "http 401", "returned error: 401",
+		// GitLab over https with a bad or missing token.
+		"http basic: access denied",
 		"401 unauthorized", "bad credentials", "authentication failed", "could not read username",
 		"permission denied (publickey)",
 	}},

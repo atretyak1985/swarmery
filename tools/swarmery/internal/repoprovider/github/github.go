@@ -25,8 +25,7 @@ import (
 )
 
 const (
-	ghBinary  = "gh"
-	gitBinary = "git"
+	ghBinary = "gh"
 	// publicHost is the host whose repos gh addresses as bare OWNER/REPO;
 	// any other host (GitHub Enterprise) needs HOST/OWNER/REPO.
 	publicHost = "github.com"
@@ -37,9 +36,10 @@ const (
 // ErrNoURL is returned when `gh pr create` exits 0 but prints no PR URL.
 var ErrNoURL = errors.New("gh pr create printed no pull-request URL")
 
-// ErrInvalidRef is returned for a branch or remote name that could change the
-// meaning of the git command line (a leading "-" or "+", a refspec ":").
-var ErrInvalidRef = errors.New("invalid branch or remote name")
+// ErrInvalidRef is repoprovider.ErrInvalidRef, kept here so callers that
+// matched the GitHub provider's sentinel keep matching after the push moved
+// into the shared repoprovider.GitPush.
+var ErrInvalidRef = repoprovider.ErrInvalidRef
 
 // Provider is the GitHub implementation of repoprovider.Provider.
 type Provider struct {
@@ -67,10 +67,7 @@ func (p *Provider) Terms() repoprovider.Terms { return repoprovider.TermsFor(rep
 
 // netCtx gives a network-bound call NetTimeout unless the caller set a deadline.
 func netCtx(ctx context.Context) (context.Context, context.CancelFunc) {
-	if _, ok := ctx.Deadline(); ok {
-		return ctx, func() {}
-	}
-	return context.WithTimeout(ctx, repoprovider.NetTimeout)
+	return repoprovider.NetCtx(ctx)
 }
 
 func hasToken(env []string) bool {
@@ -137,31 +134,11 @@ func (p *Provider) AuthStatus(ctx context.Context, host string) (repoprovider.Au
 	return repoprovider.AuthStatus{Status: repoprovider.AuthOK, Login: user.Login, Source: source}, nil
 }
 
-// validRef refuses a name git would read as an option ("-…"), a forced
-// refspec ("+…") or a src:dst refspec — the ways a branch name could turn a
-// plain push into a forced or redirected one.
-func validRef(name string) bool {
-	if name == "" || strings.HasPrefix(name, "-") || strings.HasPrefix(name, "+") {
-		return false
-	}
-	return !strings.ContainsAny(name, ": \t\n")
-}
-
-// Push implements repoprovider.Provider: `git push -u <remote> <branch>`.
-// Never --force, and a branch name that would smuggle a force or a refspec in
-// is refused before git runs.
+// Push implements repoprovider.Provider through the shared
+// repoprovider.GitPush: `git push -u <remote> <branch>`, never forced, a
+// smuggled refspec refused before git runs.
 func (p *Provider) Push(ctx context.Context, t repoprovider.Target, branch string) error {
-	remote := t.RemoteName
-	if remote == "" {
-		remote = repoprovider.DefaultRemote
-	}
-	if !validRef(branch) || !validRef(remote) {
-		return fmt.Errorf("%w: %q %q", ErrInvalidRef, remote, branch)
-	}
-	ctx, cancel := netCtx(ctx)
-	defer cancel()
-	_, stderr, err := p.exec.Run(ctx, t.RepoDir, p.callEnv(t.Remote.Host), gitBinary, "push", "-u", remote, branch)
-	return repoprovider.Classify(stderr, err)
+	return repoprovider.GitPush(ctx, p.exec, p.callEnv(t.Remote.Host), t, branch)
 }
 
 // repoArg is the --repo value: OWNER/REPO on github.com, HOST/OWNER/REPO on an
@@ -183,7 +160,7 @@ func (p *Provider) OpenChangeRequest(ctx context.Context, t repoprovider.Target,
 	if err := p.exec.Look(ghBinary); err != nil {
 		return repoprovider.ChangeRef{}, repoprovider.Classify("", err)
 	}
-	if !validRef(req.Head) || (req.Base != "" && !validRef(req.Base)) {
+	if !repoprovider.ValidRef(req.Head) || (req.Base != "" && !repoprovider.ValidRef(req.Base)) {
 		return repoprovider.ChangeRef{}, fmt.Errorf("%w: head %q base %q", ErrInvalidRef, req.Head, req.Base)
 	}
 	args := []string{"pr", "create", "--head", req.Head, "--title", req.Title, "--body", req.Body}
