@@ -3744,6 +3744,11 @@ export interface PhaseLanding {
   error: string | null;
 }
 
+/** POST /api/epics/{taskId}/phases/{phaseId}/land `action`: push the run branch,
+ *  push it and open a change request, or send the phase back to its agent with
+ *  `feedback` (required for 'return', ≤ 20 KB; answers 202 and restarts the run). */
+export type PhaseLandAction = 'push' | 'pr' | 'return';
+
 /** Mirrors repoprovider.ChangeStatus. */
 export interface PhaseChangeStatus {
   state: 'open' | 'closed' | 'merged';
