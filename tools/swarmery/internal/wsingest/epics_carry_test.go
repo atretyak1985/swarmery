@@ -333,3 +333,66 @@ func TestApplyEpicsCarryKeepsEffortAndActuals(t *testing.T) {
 		}
 	}
 }
+
+// The landing lifecycle (0103) is daemon-owned run state like run_branch: a phase doc
+// rename (plan regeneration, an archive move) must hand all eight columns to the
+// replacement row. Dropped, a pr_open phase reads as "ready to land" again and a second
+// land opens a second change request for the same branch.
+func TestApplyEpicsCarriesLandingAcrossRename(t *testing.T) {
+	db := carryFixture(t)
+	const (
+		oldPath = "/ws/p/workspace/working/2026/10/09/epic/plan/phase-1-api.md"
+		newPath = "/ws/p/workspace/working/2026/10/09/epic/plan/phase-1-api-v2.md"
+		prURL   = "https://github.com/acme/repo/pull/42"
+	)
+	seedPhase(t, db, 1, "Phase 1", oldPath, "done", "uuid-1", "swarm/phase-1")
+	mustExec(t, db, `UPDATE epic_phases
+		   SET landing_state='pr_open', pr_url=?, pr_number=42, pr_provider='github',
+		       pr_status='open', pr_checked_at='2026-10-09T10:05:00Z',
+		       landed_at='2026-10-09T10:00:00Z', landing_error='previous attempt: push rejected'
+		 WHERE doc_path=?`, prURL, oldPath)
+	// A landing-only row (run state cleared) must still count as state worth carrying.
+	seedPhase(t, db, 2, "Phase 2", "/plan/phase-2-old.md", "idle", "", "")
+	mustExec(t, db, `UPDATE epic_phases SET landing_state='pushed', landed_at='2026-10-09T11:00:00Z'
+		 WHERE doc_path='/plan/phase-2-old.md'`)
+
+	applyPhases(t, db, []epicPhase{phase(1, "Phase 1", newPath), phase(2, "Phase 2", "/plan/phase-2-new.md")})
+
+	var (
+		state                                        string
+		url, provider, status, checked, landed, lerr sql.NullString
+		num                                          sql.NullInt64
+	)
+	if err := db.QueryRow(`SELECT landing_state, pr_url, pr_number, pr_provider, pr_status,
+		       pr_checked_at, landed_at, landing_error
+		  FROM epic_phases WHERE workspace_task_id=? AND doc_path=?`, carryTaskID, newPath).
+		Scan(&state, &url, &num, &provider, &status, &checked, &landed, &lerr); err != nil {
+		t.Fatalf("renamed row: %v", err)
+	}
+	if state != "pr_open" {
+		t.Errorf("landing_state = %q, want pr_open — a reset would let a second land open a second PR", state)
+	}
+	if url.String != prURL || !num.Valid || num.Int64 != 42 || provider.String != "github" {
+		t.Errorf("pr_url=%v pr_number=%v pr_provider=%v, want %s / 42 / github", url, num, provider, prURL)
+	}
+	if status.String != "open" || checked.String != "2026-10-09T10:05:00Z" {
+		t.Errorf("pr_status=%v pr_checked_at=%v, want open / 2026-10-09T10:05:00Z", status, checked)
+	}
+	if landed.String != "2026-10-09T10:00:00Z" || lerr.String != "previous attempt: push rejected" {
+		t.Errorf("landed_at=%v landing_error=%v, want both carried", landed, lerr)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM epic_phases WHERE pr_url=?`, prURL); n != 1 {
+		t.Errorf("rows holding the PR url = %d, want 1 (source pruned)", n)
+	}
+
+	var state2 string
+	var landed2 sql.NullString
+	if err := db.QueryRow(`SELECT landing_state, landed_at FROM epic_phases
+		 WHERE workspace_task_id=? AND doc_path='/plan/phase-2-new.md'`, carryTaskID).
+		Scan(&state2, &landed2); err != nil {
+		t.Fatalf("renamed phase 2: %v", err)
+	}
+	if state2 != "pushed" || landed2.String != "2026-10-09T11:00:00Z" {
+		t.Errorf("landing-only row after rename = %q/%v, want pushed / 2026-10-09T11:00:00Z", state2, landed2)
+	}
+}

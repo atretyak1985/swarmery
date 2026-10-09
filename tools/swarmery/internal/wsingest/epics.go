@@ -1448,6 +1448,17 @@ type phaseState struct {
 	// moment a plan is archived or a phase doc is renamed — and run_state, which IS
 	// carried, would still say `blocked`.
 	runBlockedFingerprint sql.NullString
+	// The landing lifecycle (0103): how the run's branch reached the remote and which
+	// change request it opened. Dropped on a rename, a pr_open phase would read as
+	// ready again and a second land would open a second change request.
+	landingState string
+	prURL        sql.NullString
+	prNumber     sql.NullInt64
+	prProvider   sql.NullString
+	prStatus     sql.NullString
+	prCheckedAt  sql.NullString
+	landedAt     sql.NullString
+	landingError sql.NullString
 }
 
 // runDerivedPhaseTables hold one row per RUN (keyed on its session uuid) and name the
@@ -1466,7 +1477,10 @@ func (p phaseState) carriesState() bool {
 		// A verdict outlives its run: a phase whose row is otherwise idle can still
 		// carry the grade of the run that produced it, and losing it on a doc rename
 		// would silently downgrade "verified" to "never verified".
-		p.verifyVerdict.Valid
+		p.verifyVerdict.Valid ||
+		// A landing outlives its run the same way: a pushed or opened phase must not
+		// fall back to "ready to land" because its doc was renamed.
+		p.landingState != "none" || p.prURL.Valid || p.landingError.Valid
 }
 
 // snapshotPhases reads every phase row of the task with its daemon-owned columns.
@@ -1478,7 +1492,9 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 		       run_ended_at, run_error, run_branch, run_checkboxes_before,
 		       run_checkboxes_after, activated_at, activated_board_task_id,
 		       run_start_point, verify_verdict, verify_detail, run_effort,
-		       run_blocked_fingerprint
+		       run_blocked_fingerprint,
+		       landing_state, pr_url, pr_number, pr_provider, pr_status,
+		       pr_checked_at, landed_at, landing_error
 		  FROM epic_phases
 		 WHERE workspace_task_id = ?`, taskID)
 	if err != nil {
@@ -1493,7 +1509,9 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 			&p.runCheckboxesBefore, &p.runCheckboxesAfter, &p.activatedAt,
 			&p.activatedBoardTaskID,
 			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail, &p.runEffort,
-			&p.runBlockedFingerprint); err != nil {
+			&p.runBlockedFingerprint,
+			&p.landingState, &p.prURL, &p.prNumber, &p.prProvider, &p.prStatus,
+			&p.prCheckedAt, &p.landedAt, &p.landingError); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -1555,13 +1573,17 @@ func carryAcrossRenames(tx *sql.Tx, taskID int64, phases []epicPhase, before []p
 			       run_error=?, run_branch=?, run_checkboxes_before=?,
 			       run_checkboxes_after=?, activated_at=?, activated_board_task_id=?,
 			       run_start_point=?, verify_verdict=?, verify_detail=?, run_effort=?,
-			       run_blocked_fingerprint=?
+			       run_blocked_fingerprint=?,
+			       landing_state=?, pr_url=?, pr_number=?, pr_provider=?, pr_status=?,
+			       pr_checked_at=?, landed_at=?, landing_error=?
 			 WHERE workspace_task_id = ? AND doc_path = ?`,
 			old.runState, old.runSessionUUID, old.runStartedAt, old.runEndedAt,
 			old.runError, old.runBranch, old.runCheckboxesBefore, old.runCheckboxesAfter,
 			old.activatedAt, old.activatedBoardTaskID,
 			old.runStartPoint, old.verifyVerdict, old.verifyDetail, old.runEffort,
 			old.runBlockedFingerprint,
+			old.landingState, old.prURL, old.prNumber, old.prProvider, old.prStatus,
+			old.prCheckedAt, old.landedAt, old.landingError,
 			taskID, dst.docPath); err != nil {
 			return nil, err
 		}
