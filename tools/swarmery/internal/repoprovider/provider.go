@@ -15,7 +15,7 @@
 //
 //	repoprovider/credstore  ← leaf: stdlib + claudeacct only
 //	repoprovider            → credstore (Redact)
-//	repoprovider/github     → repoprovider
+//	repoprovider/github     → repoprovider, credstore
 //
 // credstore must never import repoprovider (it would close a cycle through
 // Redact); it declares its own Runner interface, which Exec satisfies.

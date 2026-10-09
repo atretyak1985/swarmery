@@ -115,7 +115,7 @@ func TestFakeExecScripting(t *testing.T) {
 func TestFirstURL(t *testing.T) {
 	cases := map[string]string{
 		"Creating pull request…\nhttps://github.com/acme/widgets/pull/12\n": "https://github.com/acme/widgets/pull/12",
-		"see https://gitlab.com/g/p/-/merge_requests/3).":                  "https://gitlab.com/g/p/-/merge_requests/3",
+		"see https://gitlab.com/g/p/-/merge_requests/3).":                   "https://gitlab.com/g/p/-/merge_requests/3",
 		"http://git.corp/x/y/pull/1,":                                       "http://git.corp/x/y/pull/1",
 		"no url here":                                                       "",
 		"":                                                                  "",
