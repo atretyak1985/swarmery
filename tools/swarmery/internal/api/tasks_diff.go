@@ -35,6 +35,8 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/gitlab"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/providers"
 )
 
 // reviewMaxPatchBytes caps the unified patch a diff response carries. Past this
@@ -53,10 +55,10 @@ const (
 
 // landProvider resolves the code-host provider the land exit pushes to and
 // opens its change request on: the repo's `origin` is read and classified
-// (repoprovider.Detect over the project's vcs config), and a GitHub host gets
-// the gh-backed provider. Any other kind comes back with a nil Provider and its
-// Detection, for landBoardTask to refuse with a hint. An error means there is
-// no usable origin.
+// (repoprovider.Detect over the project's vcs config), and providers.Factory
+// builds the gh- or glab-backed provider for a GitHub or GitLab host. An
+// unknown kind comes back with a nil Provider and its Detection, for the land
+// handlers to refuse with a hint. An error means there is no usable origin.
 //
 // The caller passes cfg, already loaded from the PROJECT path: repoDir is where
 // git runs, which for a multi-repo plan phase is a sub-repo whose own .claude/
@@ -77,11 +79,54 @@ func newLandProvider(ex repoprovider.Exec, probe repoprovider.Prober, env func(h
 		if err != nil {
 			return nil, det, err
 		}
-		if det.Kind == repoprovider.KindGitHub {
-			return github.New(ex, env), det, nil
+		provider, err := providers.Factory(det.Kind, ex, env)
+		if errors.Is(err, repoprovider.ErrUnknownProvider) {
+			return nil, det, nil
 		}
-		return nil, det, nil
+		return provider, det, err
 	}
+}
+
+// landCLI names a provider's CLI in the land path's hints: the binary, its
+// change-request command, its display name and where to install it.
+type landCLI struct {
+	Bin     string // "gh"
+	Create  string // "gh pr create"
+	Name    string // "GitHub CLI"
+	Install string // install page
+}
+
+// landCLIFor is kind's CLI vocabulary; an unknown kind gets GitHub's, the
+// historical default of every manual-command hint.
+func landCLIFor(kind repoprovider.Kind) landCLI {
+	if kind == repoprovider.KindGitLab {
+		return landCLI{Bin: "glab", Create: "glab mr create", Name: "GitLab CLI", Install: "https://gitlab.com/gitlab-org/cli"}
+	}
+	return landCLI{Bin: "gh", Create: "gh pr create", Name: "GitHub CLI", Install: "https://cli.github.com"}
+}
+
+// changeRequestCmd is the terminal command that opens kind's change request
+// for head by hand (base "" = the host's default branch). Pure.
+func changeRequestCmd(kind repoprovider.Kind, head, base, title string, draft bool) string {
+	headFlag, baseFlag := " --head ", " --base "
+	if kind == repoprovider.KindGitLab {
+		headFlag, baseFlag = " --source-branch ", " --target-branch "
+	}
+	cmd := landCLIFor(kind).Create + headFlag + head
+	if base != "" {
+		cmd += baseFlag + base
+	}
+	cmd += " --title " + strconv.Quote(title)
+	if draft {
+		cmd += " --draft"
+	}
+	return cmd
+}
+
+// isNoURL reports whether err is a provider's "the CLI exited 0 but printed no
+// change-request URL" failure.
+func isNoURL(err error) bool {
+	return errors.Is(err, github.ErrNoURL) || errors.Is(err, gitlab.ErrNoURL)
 }
 
 // reviewExec is the process boundary of the diff endpoint: `git` reads of the

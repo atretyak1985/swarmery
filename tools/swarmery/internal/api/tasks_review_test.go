@@ -578,35 +578,46 @@ func TestLandRedactsTokenInDetail(t *testing.T) {
 	}
 }
 
-// TestLandGitLabNotSupportedYet pins the TEMPORARY refusal for a GitLab origin:
-// the GitLab provider arrives in a later phase, which flips this test. Until
-// then nothing may be pushed — a pushed branch with no way to open its merge
-// request is a worse state than an honest 422.
-func TestLandGitLabNotSupportedYet(t *testing.T) {
+// TestLandBoardGitLabOpensMR: a gitlab.com origin lands through the glab
+// provider — `git push`, then `glab mr create` (never gh) — and the card
+// finishes with the MR URL, its response worded in GitLab's terms.
+func TestLandBoardGitLabOpensMR(t *testing.T) {
 	const branch = "swarm/T-gitlab1"
+	const mrURL = "https://gitlab.com/acme/widgets/-/merge_requests/42"
 	repo, base := reviewRepo(t, branch)
 	srv, db := reviewServer(t, repo)
+	attachReviewDispatch(t, db, &reviewStubWt{})
 	fake := useFakeLand(t, &repoprovider.FakeExec{
 		Out: map[string]string{"git remote": "git@gitlab.com:acme/widgets.git\n"},
+		Fn:  glabMRCreate("Creating merge request for " + branch + "\n" + mrURL + "\n"),
 	})
 	id := seedReviewCard(t, db, "T-gitlab1", reviewCard{Branch: branch, StartPoint: base})
 
 	resp, body := postReview(t, srv.URL, id, "land", `{}`)
-	if resp.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
 	}
-	if body["error"] != "gitlab not supported yet" {
-		t.Errorf("error = %v, want %q", body["error"], "gitlab not supported yet")
+	if body["prUrl"] != mrURL || body["branch"] != branch {
+		t.Errorf("prUrl/branch = %v/%v, want %s/%s", body["prUrl"], body["branch"], mrURL, branch)
 	}
-	hint, _ := body["hint"].(string)
-	if !strings.Contains(hint, "push") || !strings.Contains(hint, branch) {
-		t.Errorf("hint %q does not carry the manual push command", hint)
+	terms, _ := body["terms"].(map[string]any)
+	if terms["change"] != "Merge Request" || terms["changeShort"] != "MR" {
+		t.Errorf("terms = %v, want Merge Request/MR", terms)
 	}
-	if fake.Ran("git push") || fake.Ran("gh ") || fake.Ran("glab ") {
-		t.Errorf("a GitLab land ran a push or a CLI; calls = %v", fake.Calls)
+	if !fake.Ran("git push -u origin " + branch) {
+		t.Errorf("branch was not pushed; calls = %v", fake.Calls)
 	}
-	if col := taskRow(t, db, id, "board_column"); col != "in_review" {
-		t.Errorf("column = %s, want in_review", col)
+	if !fake.Ran("glab mr create --source-branch " + branch) {
+		t.Errorf("MR was not created; calls = %v", fake.Calls)
+	}
+	if fake.Ran("gh ") || fake.Ran("--squash") || fake.Ran("--remove-source-branch") {
+		t.Errorf("a GitLab land ran gh or passed a merge-policy flag; calls = %v", fake.Calls)
+	}
+	if col := taskRow(t, db, id, "board_column"); col != "done" {
+		t.Errorf("column = %s, want done", col)
+	}
+	if note := taskRow(t, db, id, "result_note"); note != mrURL {
+		t.Errorf("result_note = %q, want the MR URL", note)
 	}
 }
 

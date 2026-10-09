@@ -21,7 +21,8 @@ package api
 // Every handler is requireLocalOrigin (they all mutate, two of them destroy) and
 // board-scoped (source='queue'). Land talks to the code host only through
 // internal/repoprovider, resolved by the landProvider factory in tasks_diff.go,
-// so `git push` and `gh pr create` are fakeable in tests (repoprovider.FakeExec).
+// so `git push` and `gh pr create` / `glab mr create` are fakeable in tests
+// (repoprovider.FakeExec).
 
 import (
 	"context"
@@ -40,6 +41,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/gitlab"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -324,18 +326,7 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 			landDetail(err))
 		return
 	}
-	switch det.Kind {
-	case repoprovider.KindGitHub:
-	case repoprovider.KindGitLab:
-		// Temporary: the GitLab provider lands in a later phase, which replaces
-		// this arm (TestLandGitLabNotSupportedYet pins it until then).
-		writeUnprocessable(w, "gitlab not supported yet",
-			"this repo's `origin` is a GitLab host ("+det.Remote.Host+"), and landing to GitLab is not supported yet. "+
-				"Push and open the merge request by hand:\n"+pushCmd+"\n"+
-				"glab mr create --source-branch "+tgt.Branch+" --title "+strconv.Quote(tgt.Title),
-			credstore.Redact(det.Remote.URL))
-		return
-	default:
+	if provider == nil {
 		writeUnprocessable(w, "repository provider unknown",
 			"the host of this repo's `origin` ("+det.Remote.Host+") is not a recognised code host. "+
 				"Set `vcs.provider` (\"github\" or \"gitlab\") in .claude/project.json, then land again — "+
@@ -343,6 +334,10 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 			credstore.Redact(det.Remote.URL))
 		return
 	}
+	// From here every hint names the detected host's own CLI and vocabulary.
+	cli := landCLIFor(det.Kind)
+	terms := provider.Terms()
+	prCmd = changeRequestCmd(det.Kind, tgt.Branch, "", tgt.Title, false)
 	target := repoprovider.Target{
 		RepoDir: tgt.ProjectPath, RemoteName: repoprovider.DefaultRemote, Remote: det.Remote,
 	}
@@ -354,28 +349,28 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. The branch is already pushed at this point, so every hint below has to
-	//    tell the user the ONE step left. The provider checks `gh` on PATH before
-	//    invoking it, which is what turns a missing CLI into its own sentence.
+	//    tell the user the ONE step left. The provider checks its CLI on PATH
+	//    before invoking it, which is what turns a missing CLI into its own sentence.
 	ref, err := provider.OpenChangeRequest(ctx, target, repoprovider.ChangeRequest{
 		Head: tgt.Branch, Title: tgt.Title, Body: landPRBody(tgt), Draft: body.Draft,
 	})
 	switch {
 	case errors.Is(err, repoprovider.ErrBinaryMissing):
-		writeUnprocessable(w, "gh not found",
-			"the branch is pushed, but the GitHub CLI is not on PATH so the PR was not opened. "+
-				"Install `gh` and land again, or open it by hand:\n"+prCmd,
+		writeUnprocessable(w, cli.Bin+" not found",
+			"the branch is pushed, but the "+cli.Name+" is not on PATH so the "+terms.ChangeShort+" was not opened. "+
+				"Install `"+cli.Bin+"` and land again, or open it by hand:\n"+prCmd,
 			landDetail(err))
 		return
-	case errors.Is(err, github.ErrNoURL):
-		// gh exited 0 but printed no URL on either stream: something changed
-		// under us, and claiming a PR exists would be worse than saying so.
-		writeUnprocessable(w, "gh pr create returned no URL",
-			"the branch is pushed and `gh` exited 0, but printed no pull-request URL. Check it by hand:\n"+prCmd,
+	case isNoURL(err):
+		// The CLI exited 0 but printed no URL on either stream: something changed
+		// under us, and claiming a change request exists would be worse than saying so.
+		writeUnprocessable(w, cli.Create+" returned no URL",
+			"the branch is pushed and `"+cli.Bin+"` exited 0, but printed no "+terms.Change+" URL. Check it by hand:\n"+prCmd,
 			landDetail(err))
 		return
 	case err != nil:
-		writeUnprocessable(w, "gh pr create failed",
-			"the branch is pushed, but the PR was not created. Open it by hand:\n"+prCmd,
+		writeUnprocessable(w, cli.Create+" failed",
+			"the branch is pushed, but the "+terms.ChangeShort+" was not created. Open it by hand:\n"+prCmd,
 			landDetail(err))
 		return
 	}
@@ -400,7 +395,7 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 	}
 	publishTaskUpdated(id)
 	pokeDispatch()
-	writeJSON(w, map[string]any{"prUrl": prURL, "branch": tgt.Branch, "task": d}, nil)
+	writeJSON(w, map[string]any{"prUrl": prURL, "branch": tgt.Branch, "task": d, "terms": terms}, nil)
 }
 
 // landDetail is the `detail` of a land 422: the tool's own output (stderr, or
@@ -414,8 +409,9 @@ func landDetail(err error) string {
 		return credstore.Redact(pe.Detail)
 	}
 	msg := err.Error()
-	if errors.Is(err, github.ErrNoURL) {
+	if isNoURL(err) {
 		msg = strings.TrimPrefix(msg, github.ErrNoURL.Error()+": ")
+		msg = strings.TrimPrefix(msg, gitlab.ErrNoURL.Error()+": ")
 	}
 	return credstore.RedactedTail("", errors.New(msg), repoprovider.OutputTail)
 }

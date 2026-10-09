@@ -166,7 +166,6 @@ const (
 	codeRemoteDiverged      = "remote-diverged"
 	codeBinaryMissing       = "binary-missing"
 	codeProviderUnknown     = "provider-unknown"
-	codeGitLabUnsupported   = "gitlab-unsupported"
 	codePushFailed          = "push-failed"
 	codeChangeRequestFailed = "change-request-failed"
 )

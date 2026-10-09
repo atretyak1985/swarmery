@@ -50,7 +50,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/providers"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -334,10 +334,15 @@ func (h *Handler) getPhaseReview(w http.ResponseWriter, r *http.Request) {
 		writeBranchDiffErr(w, err)
 		return
 	}
+	// Terms come from the provider Factory builds for the detected kind (the
+	// same one land uses), so a GitLab project reads "Merge Request"; an
+	// unknown host keeps the neutral vocabulary. Building a provider runs nothing.
 	terms := repoprovider.TermsFor(repoprovider.KindUnknown)
 	if det, err := repoprovider.Detect(r.Context(), landExec, repoDir,
 		repoprovider.LoadConfig(t.ProjectPath), nil); err == nil {
-		terms = det.Terms
+		if p, err := providers.Factory(det.Kind, landExec, nil); err == nil {
+			terms = p.Terms()
+		}
 	}
 	writeJSON(w, phaseReviewDTO{
 		Base:           diff.Base,
@@ -464,7 +469,8 @@ func writeLandingUnprocessable(w http.ResponseWriter, code, msg, hint, detail st
 // no-run-branch, fork-workflow-unsupported, push-to-base-refused, no repo root;
 // 422 {error, code, hint, detail} for every machine problem (no-remote,
 // not-authenticated, no-push-access, remote-diverged, binary-missing,
-// gitlab-unsupported, provider-unknown, push-failed, change-request-failed).
+// provider-unknown, push-failed, change-request-failed). A 200 carries the
+// provider's terms beside the landing, so the caller words the result.
 func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 	taskID, phaseID, ok := parseLandingParams(w, r)
 	if !ok {
@@ -561,18 +567,7 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 			landDetail(err))
 		return
 	}
-	switch det.Kind {
-	case repoprovider.KindGitHub:
-	case repoprovider.KindGitLab:
-		// Temporary, like board land's arm: the GitLab provider lands in a later
-		// phase, which replaces this (TestLandPhaseGitLabNotSupportedYet pins it).
-		writeLandingUnprocessable(w, codeGitLabUnsupported, "gitlab not supported yet",
-			"this repo's `origin` is a GitLab host ("+det.Remote.Host+"), and landing to GitLab is not supported yet. "+
-				"Push and open the merge request by hand:\n"+pushCmd+"\n"+
-				"glab mr create --source-branch "+branch+" --title "+strconv.Quote(title),
-			credstore.Redact(det.Remote.URL))
-		return
-	default:
+	if provider == nil {
 		writeLandingUnprocessable(w, codeProviderUnknown, "repository provider unknown",
 			"the host of this repo's `origin` ("+det.Remote.Host+") is not a recognised code host. "+
 				"Set `vcs.provider` (\"github\" or \"gitlab\") in .claude/project.json, then land again — "+
@@ -590,14 +585,8 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prCmd := "gh pr create --head " + branch
-	if base.PRBase != "" {
-		prCmd += " --base " + base.PRBase
-	}
-	prCmd += " --title " + strconv.Quote(title)
-	if body.Draft {
-		prCmd += " --draft"
-	}
+	prCmd := changeRequestCmd(det.Kind, branch, base.PRBase, title, body.Draft)
+	cli, terms := landCLIFor(det.Kind), provider.Terms()
 
 	target := repoprovider.Target{RepoDir: repoDir, RemoteName: repoprovider.DefaultRemote, Remote: det.Remote}
 	if err := provider.Push(ctx, target, branch); err != nil {
@@ -639,9 +628,9 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			h.writeLandFailure(w, t, det, err, landFailureHints{
 				pushed: true,
-				binary: "the branch is pushed, but the GitHub CLI (`gh`) is not on PATH so the pull request was not opened. " +
-					"Install it (https://cli.github.com), then land again — or open it by hand:\n" + prCmd,
-				other: "the branch is pushed, but the pull request was not opened. Open it by hand:\n" + prCmd,
+				binary: "the branch is pushed, but the " + cli.Name + " (`" + cli.Bin + "`) is not on PATH so the " +
+					terms.Change + " was not opened. Install it (" + cli.Install + "), then land again — or open it by hand:\n" + prCmd,
+				other: "the branch is pushed, but the " + terms.Change + " was not opened. Open it by hand:\n" + prCmd,
 				push:  pushCmd,
 				repo:  repoDir,
 			})
@@ -671,7 +660,7 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		baseName = base.Name
 	}
 	writeJSON(w, map[string]any{
-		"branch": branch, "base": baseName, "action": action, "landing": landing,
+		"branch": branch, "base": baseName, "action": action, "landing": landing, "terms": terms,
 	}, nil)
 }
 
@@ -702,7 +691,7 @@ func (h *Handler) writeLandFailure(w http.ResponseWriter, t landingTarget, det r
 		}
 		writeLandingUnprocessable(w, codeNotAuthenticated, "not authenticated",
 			stage+"the code host ("+host+") rejected the credentials. Log in, then land again:\n"+
-				"gh auth login --hostname "+host,
+				vcsCliLogin(det.Kind, host),
 			detail)
 	case errors.Is(err, repoprovider.ErrNoPushAccess):
 		writeLandingUnprocessable(w, codeNoPushAccess, "no push access",
@@ -725,9 +714,10 @@ func (h *Handler) writeLandFailure(w http.ResponseWriter, t landingTarget, det r
 			"this repo has no `origin` to push to. Add one, then land again:\n"+
 				"git -C "+hints.repo+" remote add origin <url>\n"+hints.push,
 			detail)
-	case errors.Is(err, github.ErrNoURL):
-		writeLandingUnprocessable(w, codeChangeRequestFailed, "gh pr create returned no URL",
-			"the branch is pushed and `gh` exited 0, but printed no pull-request URL. Check it by hand.\n"+hints.other,
+	case isNoURL(err):
+		cli := landCLIFor(det.Kind)
+		writeLandingUnprocessable(w, codeChangeRequestFailed, cli.Create+" returned no URL",
+			"the branch is pushed and `"+cli.Bin+"` exited 0, but printed no "+det.Terms.Change+" URL. Check it by hand.\n"+hints.other,
 			detail)
 	case hints.pushed:
 		writeLandingUnprocessable(w, codeChangeRequestFailed, "change request failed", hints.other, detail)

@@ -600,22 +600,77 @@ func TestLandPhaseRemoteDivergedIs422WithoutRetry(t *testing.T) {
 	}
 }
 
-// TestLandPhaseGitLabNotSupportedYet pins the temporary refusal for GitLab
-// origins (same contract as TestLandGitLabNotSupportedYet on the board); the
-// GitLab provider phase replaces it.
-func TestLandPhaseGitLabNotSupportedYet(t *testing.T) {
-	f := newPhaseLandingFixture(t, "done")
-	fake := useFakePhaseLand(t, &repoprovider.FakeExec{Out: map[string]string{
-		"git remote": "git@gitlab.com:acme/widgets.git\n",
-	}})
-
-	resp, body := f.land(t, `{"action":"pr"}`)
-	assert422(t, resp, body, codeGitLabUnsupported, "glab mr create --source-branch "+landTestBranch)
-	if body["error"] != "gitlab not supported yet" {
-		t.Errorf("error = %v, want %q", body["error"], "gitlab not supported yet")
+// glabMRCreate scripts `glab mr create` (FakeExec keys it with `glab mr view`
+// as "glab mr", so it is told apart through Fn) to print out on stdout.
+func glabMRCreate(out string) func(string, []string, string, []string) (string, string, error, bool) {
+	return func(_ string, _ []string, name string, args []string) (string, string, error, bool) {
+		if name == "glab" && len(args) > 1 && args[0] == "mr" && args[1] == "create" {
+			return out, "", nil, true
+		}
+		return "", "", nil, false
 	}
-	if fake.Ran("git push") {
-		t.Error("pushed to a host this phase cannot open a change request on")
+}
+
+// TestLandPhaseGitLabOpensMR: a gitlab.com origin lands as a Merge Request
+// through glab — pushed first, the MR iid recorded as the phase's number, the
+// provider stamped gitlab, and the response worded in GitLab's terms.
+func TestLandPhaseGitLabOpensMR(t *testing.T) {
+	const mrURL = "https://gitlab.com/acme/widgets/-/merge_requests/314"
+	f := newPhaseLandingFixture(t, "done")
+	fake := useFakePhaseLand(t, &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "git@gitlab.com:acme/widgets.git\n"},
+		Fn:  glabMRCreate("Creating merge request for " + landTestBranch + "\n" + mrURL + "\n"),
+	})
+
+	resp, body := f.land(t, `{"action":"pr","draft":true}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	l := landingOf(t, body)
+	if l["state"] != landingPROpen || l["prUrl"] != mrURL || l["prNumber"] != float64(314) ||
+		l["prProvider"] != "gitlab" {
+		t.Errorf("landing = %v, want pr_open %s !314 gitlab", l, mrURL)
+	}
+	terms, _ := body["terms"].(map[string]any)
+	if terms["change"] != "Merge Request" || terms["changeShort"] != "MR" || terms["provider"] != "GitLab" {
+		t.Errorf("terms = %v, want GitLab/Merge Request/MR", terms)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "pr_provider"); got != "gitlab" {
+		t.Errorf("pr_provider = %q, want gitlab", got)
+	}
+	if !fake.Ran("git push -u origin " + landTestBranch) {
+		t.Errorf("branch not pushed before the MR; calls = %v", fake.Calls)
+	}
+	if !fake.Ran("glab mr create --source-branch "+landTestBranch) || !fake.Ran("--draft") {
+		t.Errorf("draft MR not requested; calls = %v", fake.Calls)
+	}
+	if fake.Ran("gh ") || fake.Ran("--squash") || fake.Ran("--remove-source-branch") || fake.Ran("--force") {
+		t.Errorf("a GitLab land ran gh or passed a forbidden flag; calls = %v", fake.Calls)
+	}
+}
+
+// TestLandPhaseGitLabRedactsTokenInDetail: a GitLab push whose stderr echoes a
+// personal access token answers 422 with the tool output masked — the
+// glpat- token never reaches the body.
+func TestLandPhaseGitLabRedactsTokenInDetail(t *testing.T) {
+	const token = "glpat-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+	f := newPhaseLandingFixture(t, "done")
+	useFakePhaseLand(t, &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "https://gitlab.com/acme/widgets.git\n"},
+		Errs: map[string]string{
+			"git push": "fatal: unable to access 'https://oauth2:" + token + "@gitlab.com/acme/widgets.git/': " +
+				"the requested URL returned error: 500 token=" + token + "\n",
+		},
+	})
+
+	resp, body := f.land(t, `{"action":"push"}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 (body %v)", resp.StatusCode, body)
+	}
+	assertRedactedDetail(t, body)
+	raw, _ := json.Marshal(body)
+	if strings.Contains(string(raw), token) || strings.Contains(string(raw), token[6:26]) {
+		t.Errorf("the GitLab token reached the 422 body: %s", raw)
 	}
 }
 
