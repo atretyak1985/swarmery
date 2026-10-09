@@ -65,6 +65,12 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// …and the operator's one-time answer for a host detection could not
 	// classify, stored in .claude/settings.local.json (vcs_provider.go).
 	mux.HandleFunc("PUT /api/projects/{id}/vcs/provider", requireLocalOrigin(h.putProjectVcsProvider))
+	// …and signing the daemon in from the dashboard (vcs_login.go): a device
+	// flow or a pasted token into the daemon's credstore, and forgetting it.
+	// The poll GET is fenced too: a granted poll writes the token.
+	mux.HandleFunc("POST /api/projects/{id}/vcs/login", requireLocalOrigin(h.postProjectVcsLogin))
+	mux.HandleFunc("GET /api/projects/{id}/vcs/login/{loginId}", requireLocalOrigin(h.getProjectVcsLogin))
+	mux.HandleFunc("DELETE /api/projects/{id}/vcs/token", requireLocalOrigin(h.deleteProjectVcsToken))
 	// onboarding: bootstrap a new consumer project from the dashboard. Fenced
 	// by requireLocalOrigin + an explicit root allow-list (disabled when unset).
 	// The GET exposes defaults (workspace root, enabled state) to the modal.

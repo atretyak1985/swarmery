@@ -406,3 +406,29 @@ func worktreeConflict(err error) (code, msg string, ok bool) {
 	}
 	return "", "", false
 }
+
+// VCS sign-in (vcs_login.go). Stable wire values, like the codes above: the
+// sign-in dialog switches on them.
+const (
+	// codeDeviceFlowUnconfigured: the daemon has no OAuth client id for the
+	// project's code host, so a device flow cannot start. 409, with a `hint`
+	// naming the env var (SWARMERY_GITHUB_CLIENT_ID / SWARMERY_GITLAB_CLIENT_ID)
+	// and docs/vcs-login.md. The Token tab still works.
+	codeDeviceFlowUnconfigured = "device-flow-unconfigured"
+	// codeDeviceFlowDisabled: the host refused the device flow for this client
+	// id (GitHub's device_flow_disabled — the OAuth app has Device Flow off).
+	codeDeviceFlowDisabled = "device-flow-disabled"
+	// codeDeviceFlowFailed: any other device-flow failure the host answered
+	// (an unknown client id, a transport error). 502 — the host, not the
+	// request, is what went wrong.
+	codeDeviceFlowFailed = "device-flow-failed"
+	// codeTooManyLogins: the project already has the maximum number of pending
+	// device logins (vcsLoginCapPerProject). 429: they expire on their own.
+	codeTooManyLogins = "too-many-pending-logins"
+	// codeLoginNotFound: GET …/vcs/login/{loginId} for an id this daemon does
+	// not hold (never issued, finished, long expired, or lost on restart).
+	codeLoginNotFound = "login-not-found"
+	// codeTokenUnverified: a pasted token could not be checked (the provider
+	// CLI is missing, or the host did not answer). Nothing was stored.
+	codeTokenUnverified = "token-unverified"
+)

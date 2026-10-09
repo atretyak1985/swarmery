@@ -332,6 +332,30 @@ func Env(host string) []string {
 		}
 		return nil
 	}
+	return envFor(host, vals, base)
+}
+
+// CandidateEnv is the env delta a gh/glab call for host would run with if the
+// store held token under key — built WITHOUT writing anything, so a pasted
+// token can be validated before it is stored. The isolated config dirs are
+// rooted at configBase (the caller's throwaway temp dir) instead of
+// SecretsDir, so the validating call reads no CLI config at all. The token is
+// remembered for Redact first: whatever the validating call prints, the token
+// is masked in it, valid or not. nil for an invalid key, an empty or
+// multi-line token, or an empty configBase.
+func CandidateEnv(host, key, token, configBase string) []string {
+	token = strings.TrimSpace(token)
+	if !validKey(key) || token == "" || strings.ContainsAny(token, "\r\n") || configBase == "" {
+		return nil
+	}
+	remember(token)
+	return envFor(host, map[string]string{key: token}, configBase)
+}
+
+// envFor renders vals (a store's KEY=token pairs) as the env delta for host,
+// with the isolated CLI config dirs under base (created 0700). nil when vals
+// carries no token.
+func envFor(host string, vals map[string]string, base string) []string {
 	var out []string
 	if v, ok := vals[GitHubTokenKey]; ok {
 		out = append(out, GitHubTokenKey+"="+v)

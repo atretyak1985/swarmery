@@ -596,3 +596,38 @@ func TestDeleteNoSecretsDir(t *testing.T) {
 		t.Fatalf("Delete without secrets dir = %v, want ErrNoStoreDir", err)
 	}
 }
+
+// CandidateEnv builds the same delta as a stored token would, under a caller's
+// config base, writes no store file, and remembers the token for Redact.
+func TestCandidateEnvWritesNothing(t *testing.T) {
+	dir := isolate(t)
+	base := t.TempDir()
+	tok := "candidate-token-value-0123"
+	env := strings.Join(CandidateEnv("ghe.corp", GitHubTokenKey, tok, base), "\n")
+	for _, want := range []string{
+		"GH_TOKEN=" + tok,
+		"GH_ENTERPRISE_TOKEN=" + tok,
+		"GH_CONFIG_DIR=" + filepath.Join(base, ghConfigDirName),
+		"GLAB_CONFIG_DIR=" + filepath.Join(base, glabConfigDirName),
+	} {
+		if !strings.Contains(env, want) {
+			t.Errorf("CandidateEnv lacks %q: %q", want, env)
+		}
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("CandidateEnv touched the secrets dir: %v", entries)
+	}
+	if got := Redact("echo " + tok); strings.Contains(got, tok) {
+		t.Errorf("candidate token not remembered for Redact: %q", got)
+	}
+	for _, bad := range [][3]string{
+		{"BOGUS", tok, base},
+		{GitLabTokenKey, "", base},
+		{GitLabTokenKey, "a\nb-multi-line", base},
+		{GitLabTokenKey, tok, ""},
+	} {
+		if env := CandidateEnv("gitlab.com", bad[0], bad[1], bad[2]); env != nil {
+			t.Errorf("CandidateEnv(%q, %q, %q) = %v, want nil", bad[0], bad[1], bad[2], env)
+		}
+	}
+}
