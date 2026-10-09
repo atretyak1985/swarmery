@@ -278,8 +278,11 @@ func prState(v prView) string {
 	}
 }
 
+// reviewSummary maps gh's reviewDecision (APPROVED | CHANGES_REQUESTED |
+// REVIEW_REQUIRED | "" when the repo has no review policy) onto the neutral
+// review values; "" and anything unrecognised ⇒ none.
 func reviewSummary(decision string) string {
-	switch strings.ToUpper(decision) {
+	switch strings.ToUpper(strings.TrimSpace(decision)) {
 	case "APPROVED":
 		return repoprovider.ReviewApproved
 	case "CHANGES_REQUESTED":
@@ -291,51 +294,66 @@ func reviewSummary(decision string) string {
 	}
 }
 
-// ciSummary folds the rollup: any failure ⇒ failing; else any unfinished ⇒
-// pending; else passing; an empty rollup ⇒ none.
+// ciSummary folds the rollup into the neutral CI value: any failure ⇒
+// failure; else any unfinished check ⇒ pending; else (every check
+// SUCCESS|SKIPPED|NEUTRAL) ⇒ success; an empty rollup ⇒ none.
 func ciSummary(checks []ghCheck) string {
 	if len(checks) == 0 {
 		return repoprovider.CINone
 	}
-	failing, pending := false, false
+	failure, pending := false, false
 	for _, c := range checks {
 		switch checkOutcome(c) {
-		case repoprovider.CIFailing:
-			failing = true
+		case repoprovider.CIFailure:
+			failure = true
 		case repoprovider.CIPending:
 			pending = true
 		}
 	}
 	switch {
-	case failing:
-		return repoprovider.CIFailing
+	case failure:
+		return repoprovider.CIFailure
 	case pending:
 		return repoprovider.CIPending
 	default:
-		return repoprovider.CIPassing
+		return repoprovider.CISuccess
 	}
 }
 
+// checkOutcome is one rollup entry's CI value. The rollup mixes two shapes:
+//
+//   - a commit StatusContext carries only `state`
+//     (SUCCESS | FAILURE | ERROR | PENDING | EXPECTED);
+//   - a CheckRun carries `status` (QUEUED | IN_PROGRESS | WAITING | PENDING |
+//     REQUESTED | COMPLETED) and, once COMPLETED, `conclusion` (SUCCESS |
+//     NEUTRAL | SKIPPED | FAILURE | CANCELLED | TIMED_OUT | ACTION_REQUIRED |
+//     STARTUP_FAILURE | STALE).
+//
+// An unrecognised StatusContext state reads as pending (it may still turn
+// green); an unrecognised conclusion on a COMPLETED run reads as failure (it
+// finished, and not green).
 func checkOutcome(c ghCheck) string {
-	if c.Typename == "StatusContext" || (c.Status == "" && c.State != "") {
+	if c.Typename == "StatusContext" || (c.Status == "" && c.Conclusion == "" && c.State != "") {
 		switch strings.ToUpper(c.State) {
 		case "SUCCESS":
-			return repoprovider.CIPassing
+			return repoprovider.CISuccess
 		case "FAILURE", "ERROR":
-			return repoprovider.CIFailing
+			return repoprovider.CIFailure
 		default: // PENDING, EXPECTED
 			return repoprovider.CIPending
 		}
 	}
-	if strings.ToUpper(c.Status) != "COMPLETED" {
+	// A run that has not COMPLETED is pending whatever conclusion it carries (a
+	// re-run may still show the previous one).
+	if s := strings.ToUpper(c.Status); s != "" && s != "COMPLETED" {
 		return repoprovider.CIPending
 	}
 	switch strings.ToUpper(c.Conclusion) {
 	case "SUCCESS", "NEUTRAL", "SKIPPED":
-		return repoprovider.CIPassing
+		return repoprovider.CISuccess
 	case "":
-		return repoprovider.CIPending
+		return repoprovider.CIPending // COMPLETED (or status-less) without a conclusion yet
 	default: // FAILURE, CANCELLED, TIMED_OUT, ACTION_REQUIRED, STARTUP_FAILURE, STALE
-		return repoprovider.CIFailing
+		return repoprovider.CIFailure
 	}
 }

@@ -1,0 +1,20 @@
+{
+  "id": 9005,
+  "iid": 46,
+  "project_id": 77,
+  "title": "Reviewer asked for changes",
+  "state": "opened",
+  "draft": false,
+  "work_in_progress": false,
+  "source_branch": "swarm/phase-7",
+  "target_branch": "main",
+  "detailed_merge_status": "requested_changes",
+  "head_pipeline": {
+    "id": 558,
+    "status": "manual",
+    "ref": "swarm/phase-7"
+  },
+  "pipeline": null,
+  "approved": false,
+  "web_url": "https://gitlab.example.com/group/sub/widgets/-/merge_requests/46"
+}

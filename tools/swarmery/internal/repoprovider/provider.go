@@ -18,6 +18,12 @@
 //	repoprovider/github     → repoprovider, credstore
 //	repoprovider/gitlab     → repoprovider, credstore
 //	repoprovider/providers  → repoprovider, github, gitlab (Factory)
+//	repoprovider/landpoll   → repoprovider, credstore, database/sql
+//
+// landpoll (the PR/MR status poller) is the one subpackage that holds a DB
+// handle: it reads and stamps epic_phases' landing columns. It still never
+// imports internal/api or the store package — the daemon hands it the *sql.DB,
+// the provider factory and its api-side hooks (publish, auth-expired) as funcs.
 //
 // credstore must never import repoprovider (it would close a cycle through
 // Redact); it declares its own Runner interface, which Exec satisfies.
@@ -127,30 +133,36 @@ type ChangeRef struct {
 	Provider Kind   `json:"provider"`
 }
 
-// Change-request states, CI and review summaries (provider-neutral).
+// Change-request states, CI and review summaries (provider-neutral). These are
+// the ONLY values a Provider's Status may emit; they are stored verbatim in
+// epic_phases.pr_status and rendered by the Plans UI, so they are wire values.
 const (
+	// State: the change request's lifecycle. A draft is State open + Draft true.
 	StateOpen   = "open"
-	StateClosed = "closed"
+	StateClosed = "closed" // closed without merging
 	StateMerged = "merged"
 
-	CIPassing = "passing"
-	CIFailing = "failing"
-	CIPending = "pending"
-	CINone    = "none"
+	// CI: the fold of every check on the change request's head commit.
+	CISuccess = "success" // every check finished green (skipped/neutral count as green)
+	CIFailure = "failure" // at least one check failed, errored, was cancelled or timed out
+	CIPending = "pending" // nothing failed, but at least one check has not finished
+	CINone    = "none"    // the change request has no checks at all
 
+	// Review: the host's review verdict.
 	ReviewApproved         = "approved"
 	ReviewChangesRequested = "changes_requested"
-	ReviewRequired         = "review_required"
-	ReviewNone             = "none"
+	ReviewRequired         = "review_required" // a review is required and not yet given
+	ReviewNone             = "none"            // no review policy / no verdict
 )
 
-// ChangeStatus is a change request's state as last read from the host.
+// ChangeStatus is a change request's state as last read from the host. Every
+// string field carries exactly one of the constants above.
 type ChangeStatus struct {
-	State     string    `json:"state"` // open | closed | merged
-	Draft     bool      `json:"draft"`
-	CI        string    `json:"ci"`     // passing | failing | pending | none
-	Review    string    `json:"review"` // approved | changes_requested | review_required | none
-	CheckedAt time.Time `json:"checkedAt"`
+	State     string    `json:"state"`     // open | merged | closed
+	Draft     bool      `json:"draft"`     // the host marks it a draft / WIP
+	CI        string    `json:"ci"`        // success | failure | pending | none
+	Review    string    `json:"review"`    // approved | changes_requested | review_required | none
+	CheckedAt time.Time `json:"checkedAt"` // when it was read (UTC)
 }
 
 // Provider is one code host's implementation.

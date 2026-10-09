@@ -233,7 +233,7 @@ func TestStatusParsing(t *testing.T) {
 			{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"},
 			{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SKIPPED"},
 			{"__typename":"StatusContext","state":"SUCCESS"}]}`,
-			repoprovider.ChangeStatus{State: "open", CI: "passing", Review: "approved"}},
+			repoprovider.ChangeStatus{State: "open", CI: "success", Review: "approved"}},
 		{"pending run", `{"state":"OPEN","reviewDecision":"REVIEW_REQUIRED","statusCheckRollup":[
 			{"__typename":"CheckRun","status":"IN_PROGRESS","conclusion":""},
 			{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"}]}`,
@@ -245,9 +245,9 @@ func TestStatusParsing(t *testing.T) {
 		{"failing beats pending", `{"state":"OPEN","reviewDecision":"CHANGES_REQUESTED","statusCheckRollup":[
 			{"__typename":"CheckRun","status":"IN_PROGRESS"},
 			{"__typename":"CheckRun","status":"COMPLETED","conclusion":"TIMED_OUT"}]}`,
-			repoprovider.ChangeStatus{State: "open", CI: "failing", Review: "changes_requested"}},
+			repoprovider.ChangeStatus{State: "open", CI: "failure", Review: "changes_requested"}},
 		{"failing context", `{"state":"OPEN","statusCheckRollup":[{"__typename":"StatusContext","state":"ERROR"}]}`,
-			repoprovider.ChangeStatus{State: "open", CI: "failing", Review: "none"}},
+			repoprovider.ChangeStatus{State: "open", CI: "failure", Review: "none"}},
 		{"merged", `{"state":"MERGED","mergedAt":"2026-10-09T10:00:00Z","statusCheckRollup":null}`,
 			repoprovider.ChangeStatus{State: "merged", CI: "none", Review: "none"}},
 		{"merged by state", `{"state":"MERGED"}`, repoprovider.ChangeStatus{State: "merged", CI: "none", Review: "none"}},
@@ -268,6 +268,88 @@ func TestStatusParsing(t *testing.T) {
 		want := "gh pr view 42 --repo acme/widgets --json " + statusFields
 		if f.Calls[0] != want {
 			t.Errorf("%s: call = %q", c.name, f.Calls[0])
+		}
+	}
+}
+
+// TestCheckOutcomeValues pins every rollup value gh can print, in both entry
+// shapes, onto exactly one neutral CI value.
+func TestCheckOutcomeValues(t *testing.T) {
+	cases := []struct {
+		name string
+		c    ghCheck
+		want string
+	}{
+		// StatusContext: state only.
+		{"context SUCCESS", ghCheck{Typename: "StatusContext", State: "SUCCESS"}, repoprovider.CISuccess},
+		{"context FAILURE", ghCheck{Typename: "StatusContext", State: "FAILURE"}, repoprovider.CIFailure},
+		{"context ERROR", ghCheck{Typename: "StatusContext", State: "ERROR"}, repoprovider.CIFailure},
+		{"context PENDING", ghCheck{Typename: "StatusContext", State: "PENDING"}, repoprovider.CIPending},
+		{"context EXPECTED", ghCheck{Typename: "StatusContext", State: "EXPECTED"}, repoprovider.CIPending},
+		{"untyped context", ghCheck{State: "success"}, repoprovider.CISuccess},
+		// CheckRun: unfinished statuses.
+		{"run QUEUED", ghCheck{Typename: "CheckRun", Status: "QUEUED"}, repoprovider.CIPending},
+		{"run IN_PROGRESS", ghCheck{Typename: "CheckRun", Status: "IN_PROGRESS"}, repoprovider.CIPending},
+		{"run WAITING", ghCheck{Typename: "CheckRun", Status: "WAITING"}, repoprovider.CIPending},
+		{"run PENDING", ghCheck{Typename: "CheckRun", Status: "PENDING"}, repoprovider.CIPending},
+		{"run re-running keeps old conclusion", ghCheck{Typename: "CheckRun", Status: "IN_PROGRESS", Conclusion: "FAILURE"}, repoprovider.CIPending},
+		{"run COMPLETED no conclusion", ghCheck{Typename: "CheckRun", Status: "COMPLETED"}, repoprovider.CIPending},
+		// CheckRun: conclusions.
+		{"run SUCCESS", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "SUCCESS"}, repoprovider.CISuccess},
+		{"run SKIPPED", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "SKIPPED"}, repoprovider.CISuccess},
+		{"run NEUTRAL", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "NEUTRAL"}, repoprovider.CISuccess},
+		{"run FAILURE", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "FAILURE"}, repoprovider.CIFailure},
+		{"run CANCELLED", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "CANCELLED"}, repoprovider.CIFailure},
+		{"run TIMED_OUT", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "TIMED_OUT"}, repoprovider.CIFailure},
+		{"run ACTION_REQUIRED", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "ACTION_REQUIRED"}, repoprovider.CIFailure},
+		{"run STARTUP_FAILURE", ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "STARTUP_FAILURE"}, repoprovider.CIFailure},
+		{"status-less run with conclusion", ghCheck{Conclusion: "SUCCESS"}, repoprovider.CISuccess},
+	}
+	for _, c := range cases {
+		if got := checkOutcome(c.c); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestCISummaryFold pins the fold order: failure beats pending beats success;
+// an empty or null rollup is none.
+func TestCISummaryFold(t *testing.T) {
+	ok := ghCheck{Typename: "CheckRun", Status: "COMPLETED", Conclusion: "SUCCESS"}
+	run := ghCheck{Typename: "CheckRun", Status: "IN_PROGRESS"}
+	bad := ghCheck{Typename: "StatusContext", State: "ERROR"}
+	cases := []struct {
+		name   string
+		checks []ghCheck
+		want   string
+	}{
+		{"nil", nil, repoprovider.CINone},
+		{"empty", []ghCheck{}, repoprovider.CINone},
+		{"all green", []ghCheck{ok, ok}, repoprovider.CISuccess},
+		{"one pending", []ghCheck{ok, run}, repoprovider.CIPending},
+		{"failure beats pending", []ghCheck{run, bad, ok}, repoprovider.CIFailure},
+	}
+	for _, c := range cases {
+		if got := ciSummary(c.checks); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestReviewSummaryValues pins every reviewDecision gh prints (lower-cased onto
+// the neutral values) and the empty one.
+func TestReviewSummaryValues(t *testing.T) {
+	cases := map[string]string{
+		"APPROVED":          repoprovider.ReviewApproved,
+		"approved":          repoprovider.ReviewApproved,
+		"CHANGES_REQUESTED": repoprovider.ReviewChangesRequested,
+		"REVIEW_REQUIRED":   repoprovider.ReviewRequired,
+		"":                  repoprovider.ReviewNone,
+		"SOMETHING_NEW":     repoprovider.ReviewNone,
+	}
+	for in, want := range cases {
+		if got := reviewSummary(in); got != want {
+			t.Errorf("reviewSummary(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -2,6 +2,7 @@ package gitlab
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -324,11 +325,13 @@ func TestStatusNormalization(t *testing.T) {
 		{"mr_opened_head_pipeline_running.json", repoprovider.ChangeStatus{
 			State: repoprovider.StateOpen, Draft: true, CI: repoprovider.CIPending, Review: repoprovider.ReviewNone}},
 		{"mr_merged_pipeline_success.json", repoprovider.ChangeStatus{
-			State: repoprovider.StateMerged, CI: repoprovider.CIPassing, Review: repoprovider.ReviewApproved}},
+			State: repoprovider.StateMerged, CI: repoprovider.CISuccess, Review: repoprovider.ReviewApproved}},
 		{"mr_closed_no_pipeline.json", repoprovider.ChangeStatus{
 			State: repoprovider.StateClosed, CI: repoprovider.CINone, Review: repoprovider.ReviewNone}},
 		{"mr_opened_pipeline_failed_unapproved.json", repoprovider.ChangeStatus{
-			State: repoprovider.StateOpen, CI: repoprovider.CIFailing, Review: repoprovider.ReviewRequired}},
+			State: repoprovider.StateOpen, CI: repoprovider.CIFailure, Review: repoprovider.ReviewRequired}},
+		{"mr_opened_requested_changes_manual_pipeline.json", repoprovider.ChangeStatus{
+			State: repoprovider.StateOpen, CI: repoprovider.CIPending, Review: repoprovider.ReviewChangesRequested}},
 	}
 	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 	for _, c := range cases {
@@ -354,11 +357,15 @@ func TestStatusNormalization(t *testing.T) {
 }
 
 func TestCISummaryStatuses(t *testing.T) {
+	// Every pipeline status GitLab documents, plus the spellings drift has
+	// produced, onto exactly one neutral CI value.
 	cases := map[string]string{
-		"success": repoprovider.CIPassing, "skipped": repoprovider.CIPassing,
-		"failed": repoprovider.CIFailing, "canceled": repoprovider.CIFailing,
+		"success": repoprovider.CISuccess, "skipped": repoprovider.CISuccess, "SUCCESS": repoprovider.CISuccess,
+		"failed": repoprovider.CIFailure, "canceled": repoprovider.CIFailure, "cancelled": repoprovider.CIFailure,
 		"running": repoprovider.CIPending, "pending": repoprovider.CIPending,
 		"created": repoprovider.CIPending, "manual": repoprovider.CIPending,
+		"preparing": repoprovider.CIPending, "scheduled": repoprovider.CIPending,
+		"waiting_for_resource": repoprovider.CIPending, "some_future_status": repoprovider.CIPending,
 		"": repoprovider.CINone,
 	}
 	for status, want := range cases {
@@ -374,6 +381,38 @@ func TestCISummaryStatuses(t *testing.T) {
 	}
 	if got := mrState("locked"); got != repoprovider.StateOpen {
 		t.Errorf("locked: %q", got)
+	}
+	// A JSON null pipeline status (glab prints one for a pipeline still being
+	// created) reads as no CI, not as pending.
+	var v mrView
+	if err := json.Unmarshal([]byte(`{"head_pipeline":{"status":null},"pipeline":null}`), &v); err != nil {
+		t.Fatal(err)
+	}
+	if got := ciSummary(v); got != repoprovider.CINone {
+		t.Errorf("null status: %q", got)
+	}
+}
+
+func TestReviewSummaryValues(t *testing.T) {
+	yes, no := true, false
+	cases := []struct {
+		name string
+		v    mrView
+		want string
+	}{
+		{"approved", mrView{Approved: &yes, DetailedMergeStatus: "mergeable"}, repoprovider.ReviewApproved},
+		{"unapproved", mrView{Approved: &no, DetailedMergeStatus: "not_approved"}, repoprovider.ReviewRequired},
+		{"unapproved, other blocker", mrView{Approved: &no, DetailedMergeStatus: "ci_must_pass"}, repoprovider.ReviewRequired},
+		{"not_approved without the field", mrView{DetailedMergeStatus: "not_approved"}, repoprovider.ReviewRequired},
+		{"requested changes", mrView{Approved: &no, DetailedMergeStatus: "requested_changes"}, repoprovider.ReviewChangesRequested},
+		{"requested changes beats an approval", mrView{Approved: &yes, DetailedMergeStatus: "REQUESTED_CHANGES"}, repoprovider.ReviewChangesRequested},
+		{"no review data", mrView{DetailedMergeStatus: "mergeable"}, repoprovider.ReviewNone},
+		{"nothing at all", mrView{}, repoprovider.ReviewNone},
+	}
+	for _, c := range cases {
+		if got := reviewSummary(c.v); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 

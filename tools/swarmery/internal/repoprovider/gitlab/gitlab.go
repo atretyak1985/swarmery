@@ -298,7 +298,7 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 		State:     mrState(v.State),
 		Draft:     v.Draft || v.WorkInProgress,
 		CI:        ciSummary(v),
-		Review:    reviewSummary(v.Approved),
+		Review:    reviewSummary(v),
 		CheckedAt: p.now().UTC(),
 	}, nil
 }
@@ -317,7 +317,19 @@ func mrState(s string) string {
 }
 
 // ciSummary reads the MR's pipeline status — head_pipeline first, pipeline as
-// the fallback field name. No pipeline (or a null status) ⇒ none.
+// the fallback field name — onto the neutral CI values:
+//
+//	success                          ⇒ success
+//	skipped                          ⇒ success  (nothing ran that could fail; GitHub's SKIPPED reads the same)
+//	failed, canceled                 ⇒ failure  (a cancelled pipeline never went green, so the MR is not mergeable on CI)
+//	running, pending, created,
+//	preparing, scheduled,
+//	waiting_for_resource             ⇒ pending
+//	manual                           ⇒ pending  (blocked on a person pressing play — not finished, not failed)
+//	no pipeline / null / ""          ⇒ none
+//
+// Any status GitLab adds later reads as pending: it is neither a known green
+// nor a known red.
 func ciSummary(v mrView) string {
 	var status string
 	switch {
@@ -326,27 +338,42 @@ func ciSummary(v mrView) string {
 	case v.Pipeline != nil:
 		status = v.Pipeline.Status
 	}
-	switch strings.ToLower(status) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "":
 		return repoprovider.CINone
 	case "success", "skipped":
-		return repoprovider.CIPassing
+		return repoprovider.CISuccess
 	case "failed", "canceled", "cancelled":
-		return repoprovider.CIFailing
+		return repoprovider.CIFailure
 	default: // running, pending, created, preparing, scheduled, manual, waiting_for_resource, …
 		return repoprovider.CIPending
 	}
 }
 
-// reviewSummary maps the optional `approved` field: true ⇒ approved, false ⇒
-// review still required, absent ⇒ none.
-func reviewSummary(approved *bool) string {
+// requestedChanges is the detailed_merge_status a reviewer's "Request changes"
+// sets (GitLab 17+); notApproved is the one a missing required approval sets.
+const (
+	requestedChanges = "requested_changes"
+	notApproved      = "not_approved"
+)
+
+// reviewSummary maps the MR's review state onto the neutral review values:
+//
+//	detailed_merge_status requested_changes ⇒ changes_requested (wins over approvals)
+//	approved: true                          ⇒ approved
+//	approved: false                         ⇒ review_required
+//	approved absent, not_approved           ⇒ review_required
+//	approved absent otherwise               ⇒ none
+func reviewSummary(v mrView) string {
+	dms := strings.ToLower(strings.TrimSpace(v.DetailedMergeStatus))
 	switch {
-	case approved == nil:
-		return repoprovider.ReviewNone
-	case *approved:
+	case dms == requestedChanges:
+		return repoprovider.ReviewChangesRequested
+	case v.Approved != nil && *v.Approved:
 		return repoprovider.ReviewApproved
-	default:
+	case v.Approved != nil, dms == notApproved:
 		return repoprovider.ReviewRequired
+	default:
+		return repoprovider.ReviewNone
 	}
 }
