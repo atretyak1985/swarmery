@@ -119,6 +119,38 @@ func TestWriteMergesKeysAndRejectsBadInput(t *testing.T) {
 	}
 }
 
+// Review fix 4: Write into an existing secrets dir open to group/other fails
+// with ErrInsecure instead of "succeeding" into a store Load then refuses.
+func TestWriteRefusesOpenSecretsDir(t *testing.T) {
+	dir := isolate(t)
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	err := Write("github.com", GitHubTokenKey, "never-written-token")
+	if !errors.Is(err, ErrInsecure) {
+		t.Fatalf("Write into 0755 dir = %v, want ErrInsecure", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "vcs-github.com.env")); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Fatalf("store file was written anyway: %v", statErr)
+	}
+	if info, _ := os.Stat(dir); info.Mode().Perm() != 0o755 {
+		t.Fatalf("Write changed the dir mode to %04o", info.Mode().Perm())
+	}
+	// A dir Write creates itself is 0700 and accepted.
+	fresh := filepath.Join(t.TempDir(), "secrets")
+	if err := os.Chmod(filepath.Dir(fresh), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SWARMERY_SECRETS_DIR", fresh)
+	if err := Write("github.com", GitHubTokenKey, "fresh-dir-token"); err != nil {
+		t.Fatalf("Write into a fresh dir: %v", err)
+	}
+	if info, _ := os.Stat(fresh); info.Mode().Perm() != 0o700 {
+		t.Fatalf("created dir mode %04o", info.Mode().Perm())
+	}
+}
+
 func TestWriteReplacesRefusedFile(t *testing.T) {
 	dir := isolate(t)
 	p := filepath.Join(dir, "vcs-github.com.env")

@@ -131,8 +131,19 @@ func Write(host, key, token string) error {
 	if token == "" || strings.ContainsAny(token, "\r\n") {
 		return errors.New("credstore: empty or multi-line token")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return fmt.Errorf("credstore: create secrets dir: %w", err)
+	}
+	// MkdirAll leaves an EXISTING dir's mode alone. A store written into a
+	// dir open to group/other is one Load refuses, so Write refuses it too —
+	// rather than report a success the next read contradicts. The dir is not
+	// chmodded behind the operator's back: it is shared with claudeacct.
+	if info, err := os.Stat(dir); err != nil {
+		return fmt.Errorf("credstore: inspect secrets dir: %w", err)
+	} else if perm := info.Mode().Perm(); perm&groupOther != 0 {
+		return fmt.Errorf("%w: directory %s has mode %04o (want %04o); fix it with: chmod %04o %s",
+			ErrInsecure, dir, perm, dirMode, dirMode, dir)
 	}
 	vals, err := load(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
