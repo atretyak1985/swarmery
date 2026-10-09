@@ -307,3 +307,7 @@ also answers 403 to a cross-origin browser request (`requireLocalOrigin`).
   422 `change-request-failed` ("already exists"). There is no idempotent
   re-open, and the UI disables Push and Push + open once a PR/MR is open.
 - **Branch cleanup.** Merged run branches are not deleted automatically.
+
+## Dogfood log
+
+- 2026-10-09 — first phase landed from the Review tab on this repo (plan `2026-10-09-landing-dogfood`, Phase 1).
