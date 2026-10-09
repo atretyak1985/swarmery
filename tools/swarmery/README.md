@@ -111,7 +111,17 @@ Both fences answer `403 {"error": …}` before any handler runs.
 
 | Env | Values | Default | What it does |
 |---|---|---|---|
-| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, every agent the daemon spawns through `internal/runcore` loses `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN`, `GH_CONFIG_DIR` and `GLAB_CONFIG_DIR` from its environment — whether they came from the daemon's own env or an account/estate secret store — so code-host credentials stay with the daemon's land path. Any other value leaves the environment untouched. **Warning:** skills that call `gh`/`glab` themselves (`commit-push-pr`, `jira-delivery`) lose API access under it. A `git push` over SSH is unaffected. |
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. Any other value leaves the environment untouched. See the notes below the table. |
+
+Notes on `SWARMERY_AGENT_SCRUB_VCS_TOKENS`:
+
+- **It is not a full credential boundary.** Dropping `GH_CONFIG_DIR`/`GLAB_CONFIG_DIR` sends `gh`/`glab` back to their default config (`~/.config/gh`, `~/.config/glab-cli`) and the system keyring, where `gh auth login` keeps the operator's token, and agents inherit `HOME`. An operator logged in that way is still reachable from an agent.
+- **Skills lose access only if the token came from the environment.** Skills that call `gh`/`glab` themselves (`commit-push-pr`, `jira-delivery`) stop working only when their access came from an environment-carried token. A `git push` over SSH is unaffected.
+- **Not every spawn goes through `runcore`, so not every spawn is scrubbed.** These paths compose their own env with `claudeacct.SpawnEnvResolved` and are unaffected by the flag:
+  - `internal/routines/runner.go` (routines)
+  - `internal/api/resume.go` (session resume)
+  - `internal/systemspawn/systemspawn.go` (the one-shot system spawns: decide, triage judge, lessons, extract, handoff, improve, retro analysis, trajectory judge, reply extractor, account probe)
+  - `internal/provision/runner.go` (provisioning)
 
 ## Backup & restore
 
