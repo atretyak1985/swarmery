@@ -315,7 +315,7 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 	//    case gets its own sentence rather than arriving as a generic push failure
 	//    the user has to decode — and so a host this phase cannot open a change
 	//    request on is refused BEFORE the branch is pushed.
-	provider, det, err := landProvider(ctx, tgt.ProjectPath)
+	provider, det, err := landProvider(ctx, tgt.ProjectPath, repoprovider.LoadConfig(tgt.ProjectPath))
 	if err != nil {
 		writeUnprocessable(w, "no origin remote",
 			"this repo has no `origin` to push to. Add one, then land again — or push and open the PR by hand:\n"+

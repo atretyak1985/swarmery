@@ -11,6 +11,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 )
 
 const (
@@ -586,6 +589,69 @@ func TestLandPhaseGitLabNotSupportedYet(t *testing.T) {
 	}
 	if fake.Ran("git push") {
 		t.Error("pushed to a host this phase cannot open a change request on")
+	}
+}
+
+// failingProbe fails the test if the provider factory ever reaches for the
+// network GitLab probe.
+type failingProbe struct{ t *testing.T }
+
+func (p failingProbe) IsGitLab(_ context.Context, host string) bool {
+	p.t.Errorf("GitLab probe called for %q — the project's vcs.provider should have decided", host)
+	return false
+}
+
+// A multi-repo plan's phase runs in a sub-repo (RunRoot ≠ project path) whose own
+// .claude/ does not declare the provider; the PROJECT's .claude/project.json does.
+// Land must classify the self-hosted origin from the project's config — never from
+// the run repo's — so it lands as GitHub without a network probe.
+func TestLandPhaseMultiRepoUsesProjectVcsConfig(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	project := t.TempDir()
+	writeClaudeFile(t, project, "project.json", `{"vcs":{"provider":"github"}}`)
+	if _, err := f.db.Exec(`UPDATE projects SET path = ? WHERE id = 1`, project); err != nil {
+		t.Fatal(err)
+	}
+	prev := phaserunSvc
+	phaserunSvc = &phaserun.Service{DB: f.db, RepoRoot: func(projectPath string, _ ...string) (string, error) {
+		if projectPath != project {
+			t.Errorf("RepoRoot projectPath = %q, want %q", projectPath, project)
+		}
+		return f.repo, nil
+	}}
+	t.Cleanup(func() { phaserunSvc = prev })
+
+	const prURL = "https://git.corp.example/acme/widgets/pull/9"
+	fake := &repoprovider.FakeExec{Out: map[string]string{
+		"git remote": "https://git.corp.example/acme/widgets.git\n",
+		"gh pr":      "Creating pull request…\n" + prURL + "\n",
+	}}
+	useFakePhaseLand(t, fake)
+	landProvider = newLandProvider(fake, failingProbe{t}, credstore.Env)
+
+	resp, body := f.land(t, `{"action":"pr"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if l := landingOf(t, body); l["state"] != landingPROpen || l["prProvider"] != "github" || l["prUrl"] != prURL {
+		t.Errorf("landing = %v, want pr_open github %s", l, prURL)
+	}
+	if !fake.Ran("gh pr create --head " + landTestBranch) {
+		t.Errorf("GitHub change request not opened; calls = %v", fake.Calls)
+	}
+	for i, d := range fake.Dirs {
+		if d != f.repo && d != "" {
+			t.Errorf("call %q ran in %q, want the run repo %q", fake.Calls[i], d, f.repo)
+		}
+	}
+
+	// The review reads the same project config: GitHub vocabulary, no probe.
+	resp, body = f.review(t)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("review status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if terms, _ := body["terms"].(map[string]any); terms["provider"] != "GitHub" {
+		t.Errorf("review terms = %v, want GitHub", terms)
 	}
 }
 

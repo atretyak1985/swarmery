@@ -491,7 +491,9 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 	// budget inside the provider (repoprovider.NetTimeout).
 	ctx := context.WithoutCancel(r.Context())
 
-	provider, det, err := landProvider(ctx, repoDir)
+	// cfg is the PROJECT's vcs config, never repoDir's: a multi-repo phase runs in a
+	// sub-repo whose own .claude/ (if any) is not where vcs.provider is declared.
+	provider, det, err := landProvider(ctx, repoDir, cfg)
 	if err != nil {
 		if errors.Is(err, repoprovider.ErrBinaryMissing) {
 			writeLandingUnprocessable(w, codeBinaryMissing, "git not found",

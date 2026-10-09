@@ -58,6 +58,11 @@ const (
 // Detection, for landBoardTask to refuse with a hint. An error means there is
 // no usable origin.
 //
+// The caller passes cfg, already loaded from the PROJECT path: repoDir is where
+// git runs, which for a multi-repo plan phase is a sub-repo whose own .claude/
+// is not the project's, so reading the config from repoDir would drop the
+// project's vcs.provider and send a self-hosted origin to the network probe.
+//
 // A package var for the same reason reviewRun is one: tests swap it for a
 // factory over a repoprovider.FakeExec, with a restore in t.Cleanup.
 var landProvider = newLandProvider(repoprovider.OSExec{}, repoprovider.HTTPProber{}, credstore.Env)
@@ -66,9 +71,9 @@ var landProvider = newLandProvider(repoprovider.OSExec{}, repoprovider.HTTPProbe
 // for unknown hosts, and the per-host credential env (production: credstore.Env,
 // which is nil until the daemon holds a token, so the operator's own `gh` login
 // is used exactly as before).
-func newLandProvider(ex repoprovider.Exec, probe repoprovider.Prober, env func(host string) []string) func(ctx context.Context, repoDir string) (repoprovider.Provider, repoprovider.Detection, error) {
-	return func(ctx context.Context, repoDir string) (repoprovider.Provider, repoprovider.Detection, error) {
-		det, err := repoprovider.Detect(ctx, ex, repoDir, repoprovider.LoadConfig(repoDir), probe)
+func newLandProvider(ex repoprovider.Exec, probe repoprovider.Prober, env func(host string) []string) func(ctx context.Context, repoDir string, cfg repoprovider.Config) (repoprovider.Provider, repoprovider.Detection, error) {
+	return func(ctx context.Context, repoDir string, cfg repoprovider.Config) (repoprovider.Provider, repoprovider.Detection, error) {
+		det, err := repoprovider.Detect(ctx, ex, repoDir, cfg, probe)
 		if err != nil {
 			return nil, det, err
 		}
