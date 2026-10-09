@@ -107,6 +107,12 @@ the service definition):
 
 Both fences answer `403 {"error": …}` before any handler runs.
 
+### Agent spawn environment
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, every agent the daemon spawns through `internal/runcore` loses `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN`, `GH_CONFIG_DIR` and `GLAB_CONFIG_DIR` from its environment — whether they came from the daemon's own env or an account/estate secret store — so code-host credentials stay with the daemon's land path. Any other value leaves the environment untouched. **Warning:** skills that call `gh`/`glab` themselves (`commit-push-pr`, `jira-delivery`) lose API access under it. A `git push` over SSH is unaffected. |
+
 ## Backup & restore
 
 The daemon's operational database (`~/.swarmery/swarmery.db` by default — sessions,
