@@ -1893,8 +1893,10 @@ func cmdServe(args []string) error {
 	// The same sweep re-probes open AUTH breakers: an account whose login came
 	// back through a `/login` in a terminal resumes on its own instead of
 	// waiting for "Probe & resume". Stage one every 2m, the full probe only
-	// after it answers ready and at most every 30m; SWARMERY_PREFLIGHT_TTL=0
-	// switches it off with the pre-flight.
+	// after it answers ready and at most every 30m. It re-probes open QUOTA
+	// breakers too — the reset time is a hint the real limit can beat — with
+	// the full probe alone, every 10m. SWARMERY_PREFLIGHT_TTL=0 switches both
+	// off with the pre-flight.
 	go (&runcore.BreakerTicker{
 		DB: db, LoginProbe: runcore.ProbeLogin, RunProbe: runcore.ProbeAccount,
 	}).Run(context.Background())

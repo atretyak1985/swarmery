@@ -904,7 +904,8 @@ func reprobeTicker(db *sql.DB, now *time.Time, login, run *stubProbe) *BreakerTi
 // account can run again — the operator logged in again in a terminal, which
 // nothing tells the daemon. The sweep asks stage one (free) once per
 // DefaultAuthLoginGap and spends the full probe only when stage one says the
-// login is back; a quota opening is never probed.
+// login is back; a quota opening is never asked stage one, and its own full
+// probe (TestBreakerTickerReprobesQuota) is not due inside this test's window.
 func TestBreakerTickerReprobesAuth(t *testing.T) {
 	db := quotaDB(t)
 	home := installProbe(t, nil)
@@ -965,6 +966,94 @@ func TestBreakerTickerReprobesAuth(t *testing.T) {
 
 	sweepAt(3 * DefaultAuthLoginGap)
 	wantCalls("nothing auth is open any more", 2, 1)
+}
+
+// TestBreakerTickerReprobesQuota: a quota opening closes on its own once the
+// account can run again BEFORE its reset time — the reset is a hint derived from
+// the stored usage windows (or the fallback hour), and the real limit can lift
+// earlier (seen 2026-10-09: lifted 35 minutes before the hint). There is no free
+// stage one for a limit, so the sweep spends the full probe, once per
+// DefaultQuotaPingGap counted from the opening; a refused ping leaves the opening
+// — its opened_at and reset time included — exactly as it was.
+func TestBreakerTickerReprobesQuota(t *testing.T) {
+	db := quotaDB(t)
+	home := installProbe(t, nil)
+	if err := OpenBreaker(db, "work", store.BreakerKindQuota, claudeprobe.ReasonRateLimited,
+		store.BreakerSourceRun, breakerNow); err != nil {
+		t.Fatal(err)
+	}
+	opened, _ := breakerRow(t, db, "work")
+	if opened.ResetsAt == "" {
+		t.Fatalf("opening = %+v, want a reset hint", opened)
+	}
+	login := &stubProbe{result: probeReady}
+	run := &stubProbe{result: probeLimited}
+	now := breakerNow
+	ticker := reprobeTicker(db, &now, login, run)
+	sweepAt := func(after time.Duration) {
+		now = breakerNow.Add(after)
+		ticker.Once()
+	}
+	wantRuns := func(when string, want int32) {
+		t.Helper()
+		if l := login.calls.Load(); l != 0 {
+			t.Fatalf("%s: login probes = %d, want none for a quota opening", when, l)
+		}
+		if r := run.calls.Load(); r != want {
+			t.Fatalf("%s: full probes = %d, want %d", when, r, want)
+		}
+	}
+
+	sweepAt(DefaultQuotaPingGap - time.Second)
+	wantRuns("before the first gap has passed", 0)
+
+	sweepAt(DefaultQuotaPingGap)
+	wantRuns("one gap after the opening", 1)
+	b, _ := breakerRow(t, db, "work")
+	if !b.IsOpen() || b.Kind != store.BreakerKindQuota || b.OpenedAt != opened.OpenedAt || b.ResetsAt != opened.ResetsAt {
+		t.Fatalf("breaker = %+v after a refused ping, want the opening untouched (%+v)", b, opened)
+	}
+
+	sweepAt(DefaultQuotaPingGap + time.Minute)
+	wantRuns("inside the gap after a ping", 1)
+
+	// The limit lifts before the hinted reset.
+	run.result = probeReady
+	sweepAt(2 * DefaultQuotaPingGap)
+	wantRuns("the limit lifted", 2)
+	for _, dir := range run.dirs {
+		if dir != accountDir(home, "work") {
+			t.Errorf("a re-probe ran under %s, want only the paused account's own dir %s", dir, accountDir(home, "work"))
+		}
+	}
+	b, _ = breakerRow(t, db, "work")
+	if b.IsOpen() || b.ClosedBy != store.BreakerClosedByProbe {
+		t.Errorf("breaker = %+v, want closed by probe", b)
+	}
+	if n := openAlerts(t, db, "work"); n != 0 {
+		t.Errorf("open alerts = %d, want 0", n)
+	}
+	if err := CheckAccount(context.Background(), db, work(), now); err != nil {
+		t.Errorf("after the re-probe: %v, want admitted", err)
+	}
+
+	sweepAt(3 * DefaultQuotaPingGap)
+	wantRuns("nothing is open any more", 2)
+
+	// A new opening owes the old one's gap nothing: it is pinged one gap after
+	// ITS opening, not after the last ping.
+	reopened := breakerNow.Add(3*DefaultQuotaPingGap + time.Minute)
+	if err := OpenBreaker(db, "work", store.BreakerKindQuota, claudeprobe.ReasonRateLimited,
+		store.BreakerSourceRun, reopened); err != nil {
+		t.Fatal(err)
+	}
+	run.result = probeLimited
+	now = reopened.Add(DefaultQuotaPingGap - time.Second)
+	ticker.Once()
+	wantRuns("a new opening, before its gap", 2)
+	now = reopened.Add(DefaultQuotaPingGap)
+	ticker.Once()
+	wantRuns("a new opening, one gap in", 3)
 }
 
 // TestBreakerTickerReprobeBacksOffThePing: an account whose login is intact but
