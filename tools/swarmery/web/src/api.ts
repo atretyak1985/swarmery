@@ -22,6 +22,11 @@ import type {
   DiscardTaskResponse,
   DispatchStatus,
   LandTaskResponse,
+  PhaseLandErrorCode,
+  PhaseLandRequest,
+  PhaseLandResponse,
+  PhaseReview,
+  VcsInfo,
   TaskDiff,
   AutonomyResp,
   DocDetail,
@@ -1269,6 +1274,86 @@ export async function landBoardTask(id: number, draft = false): Promise<LandTask
   });
   if (!res.ok) throw await reviewActionError(res, 'land failed');
   return (await res.json()) as LandTaskResponse;
+}
+
+// --- phase landing (Phase 5): review, land, project VCS ----------------------
+
+/**
+ * A refused phase review/land, with the server's structured fields kept apart
+ * instead of flattened into one sentence: the Review tab maps a 409 `code` to
+ * its own inline sentence and renders a 422's `error` + `hint` (the exact manual
+ * commands) in a <pre>, exactly as the board card's Land does.
+ *
+ * `message` is the server's `error` sentence (or a status fallback). `code` is
+ * undefined only for a body the daemon did not shape (a 400, a 5xx).
+ */
+export class LandError extends Error {
+  readonly status: number;
+  readonly code: PhaseLandErrorCode | undefined;
+  /** 422: the manual commands that finish the job by hand; '' otherwise. */
+  readonly hint: string;
+  /** 422: the tool's own output, already redacted server-side; '' otherwise. */
+  readonly detail: string;
+  /** 409 `push-to-base-refused`: the run branch and the base it equals. */
+  readonly branch: string | undefined;
+  readonly base: string | undefined;
+
+  constructor(
+    status: number,
+    body: { error?: string; code?: PhaseLandErrorCode; hint?: string; detail?: string; branch?: string; base?: string },
+    fallback: string,
+  ) {
+    super(body.error ?? `${fallback}: ${String(status)}`);
+    this.name = 'LandError';
+    this.status = status;
+    this.code = body.code;
+    this.hint = body.hint ?? '';
+    this.detail = body.detail ?? '';
+    this.branch = body.branch;
+    this.base = body.base;
+  }
+}
+
+async function landError(res: Response, fallback: string): Promise<LandError> {
+  const body = (await res.json().catch(() => ({}))) as ConstructorParameters<typeof LandError>[1];
+  return new LandError(res.status, body, fallback);
+}
+
+/**
+ * GET /api/epics/{taskId}/phases/{phaseId}/review — the run branch's commits,
+ * files and patch, the verify verdict, the landing lifecycle and the provider
+ * vocabulary. Throws LandError: 404 unknown phase, 409 `no-run-branch`.
+ */
+export async function getPhaseReview(taskId: number, phaseId: number): Promise<PhaseReview> {
+  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/review`);
+  if (!res.ok) throw await landError(res, 'review failed');
+  return (await res.json()) as PhaseReview;
+}
+
+/**
+ * POST /api/epics/{taskId}/phases/{phaseId}/land — push the run branch
+ * (`push`), push and open a change request (`pr`, optionally draft), or send
+ * the phase back to its agent (`return`, a later phase's endpoint). Throws
+ * LandError: 409 (`phase-running`, `no-run-branch`, `push-to-base-refused`,
+ * `fork-workflow-unsupported`) and 422 with a manual-command `hint`.
+ */
+export async function landPhase(taskId: number, phaseId: number, body: PhaseLandRequest): Promise<PhaseLandResponse> {
+  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/land`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await landError(res, 'land failed');
+  return (await res.json()) as PhaseLandResponse;
+}
+
+/**
+ * GET /api/projects/{id}/vcs — the project's code host, its vocabulary
+ * (`terms`) and whether the daemon is signed in to it. Cached 60s server-side,
+ * so callers may fetch it on every page open.
+ */
+export function getProjectVcs(projectId: number): Promise<VcsInfo> {
+  return get(`/api/projects/${String(projectId)}/vcs`);
 }
 
 /**

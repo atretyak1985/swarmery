@@ -4268,3 +4268,73 @@ export interface WorktreesResponse {
    * then historical, not current, and the panel says so. */
   enabled: boolean;
 }
+
+// --- phase landing (Phase 5): land request/response + project VCS --------------
+// PhaseLanding / PhaseReview / ProviderTerms live with EpicPhase above.
+
+/** The provider vocabulary under the name the project VCS endpoint uses. */
+export type VcsTerms = ProviderTerms;
+
+/** Body of POST /api/epics/{taskId}/phases/{phaseId}/land. `return` (send the
+ *  phase back to its agent with the reviewer's feedback) is served by a later
+ *  phase; until then the daemon answers it 400. */
+export type PhaseLandRequest =
+  | { action: 'push' }
+  | { action: 'pr'; draft?: boolean }
+  | { action: 'return'; feedback: string };
+
+/** 200 of POST …/land — mirrors the land handler's response. */
+export interface PhaseLandResponse {
+  branch: string;
+  base: string;
+  action: PhaseLandRequest['action'];
+  landing: PhaseLanding;
+}
+
+/** The stable discriminators of a land/review refusal (409 and 422 bodies). */
+export type PhaseLandErrorCode =
+  | 'phase-running'
+  | 'no-run-branch'
+  | 'push-to-base-refused'
+  | 'fork-workflow-unsupported'
+  | 'not-authenticated'
+  | 'no-push-access'
+  | 'remote-diverged'
+  | 'no-remote'
+  | 'binary-missing'
+  | 'provider-unknown'
+  | 'gitlab-unsupported'
+  | 'push-failed'
+  | 'change-request-failed';
+
+/** Mirrors api.vcsRemoteDTO: the project's `origin`, credentials stripped. */
+export interface VcsRemote {
+  /** '' when the repo has no origin. */
+  url: string;
+  present: boolean;
+  /** '' when the repo has no origin. */
+  protocol: 'https' | 'ssh' | '';
+}
+
+/** Mirrors api.vcsAuthDTO: whether the daemon is signed in to the host. */
+export interface VcsAuth {
+  status: 'ok' | 'missing' | 'expired' | 'unknown';
+  /** '' when unknown. */
+  login: string;
+  source: 'cli' | 'store' | 'none';
+}
+
+/** GET /api/projects/{id}/vcs — mirrors api.vcsDTO (cached 60s server-side).
+ *  `provider` is for icon lookup only: every label comes from `terms`. */
+export interface VcsInfo {
+  provider: 'github' | 'gitlab' | 'unknown';
+  host: string;
+  terms: VcsTerms;
+  remote: VcsRemote;
+  auth: VcsAuth;
+  /** The configured change-request target; '' = the host's default branch. */
+  baseBranch: string;
+  allowPushToBase: boolean;
+  /** Why `provider` is what it is. */
+  source: 'config' | 'host' | 'probe' | 'unknown';
+}
