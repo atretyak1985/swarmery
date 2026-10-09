@@ -12,8 +12,11 @@
 #   site/assets/clips/[light/]<name>.mp4|.jpg   muted 1280x720 loops, ~0.5-1.5 MB each
 #   site/assets/posters/[light/]<episode>.jpg   poster frames for the full episodes
 #   site/assets/img/[light/]<shot>{,-sm,-lg}.webp   1600 / 800 / 2400 px wide
+#   docs/video/[light/]swarmery-<episode>.mp4   720p cuts of the full episodes, promo as-is
 # The site swaps to the light twins when the reader picks the light theme
-# (site.js themeMedia); the full light episodes go to docs/video/light/.
+# (site.js themeMedia). The full episodes are opt-in because they are ~10 MB
+# of committed binary each: EPISODES="ep3-health ep6-knowledge" re-encodes
+# those two (both themes), EPISODES=all re-encodes every episode and the promo.
 # Needs ffmpeg, bc and python3 with Pillow.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -62,6 +65,21 @@ for p in "promo 22" "ep1-planning 16" "ep2-inbox 16" "ep3-health 16" "ep4-sessio
   set -- $p
   ffmpeg -nostdin -v error -y -ss "$2" -i "$(src "$1")" -frames:v 1 -vf scale=1280:-2 -q:v 3 "site/assets/posters/$T$1.jpg"
 done
+
+# full episodes: 720p, audio untouched; the promo ships at 1080p
+if [ -n "${EPISODES:-}" ]; then
+  mkdir -p "docs/video/$T"
+  list="$EPISODES"; [ "$list" = all ] && list="promo ep1-planning ep2-inbox ep3-health ep4-sessions ep5-learning ep6-knowledge"
+  for ep in $list; do
+    in=$(src "$ep"); out="docs/video/${T}swarmery-$ep.mp4"
+    [ -f "$in" ] || { echo "skip $T$ep: no $in"; continue; }
+    if [ "$ep" = promo ]; then cp "$in" "$out"; else
+      ffmpeg -nostdin -v error -y -i "$in" -vf scale=1280:-2 -c:v libx264 -preset medium -crf 21 -pix_fmt yuv420p -profile:v high \
+        -c:a copy -movflags +faststart "$out"
+    fi
+    echo "episode $T$ep"
+  done
+fi
 
 V="$V" T="$T" python3 - <<'PY'
 import glob, os
