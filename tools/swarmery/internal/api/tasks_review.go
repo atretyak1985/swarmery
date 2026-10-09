@@ -19,12 +19,15 @@ package api
 // review UI calls that route.
 //
 // Every handler is requireLocalOrigin (they all mutate, two of them destroy) and
-// board-scoped (source='queue'); the exec boundary is reviewExec from
-// tasks_diff.go, so `git push` and `gh pr create` are fakeable in tests.
+// board-scoped (source='queue'). Land talks to the code host only through
+// internal/repoprovider, resolved by the landProvider factory in tasks_diff.go,
+// so `git push` and `gh pr create` are fakeable in tests (repoprovider.FakeExec).
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -33,6 +36,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
 )
 
 // reviewFeedbackMax bounds the feedback a rerun appends. Generous — it is a
@@ -297,57 +304,81 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 	pushCmd := "git -C " + tgt.ProjectPath + " push -u origin " + tgt.Branch
 	prCmd := "gh pr create --head " + tgt.Branch + " --title " + strconv.Quote(tgt.Title)
 
-	// 1. Origin must exist before anything is attempted. Probed separately so the
-	//    "no remote configured" case gets its own sentence rather than arriving as
-	//    a generic push failure the user has to decode.
-	if _, stderr, err := gitReview(tgt.ProjectPath, "remote", "get-url", "origin"); err != nil {
+	// The tool calls outlive the HTTP request on purpose: a browser that
+	// navigates away mid-push must not kill a `gh pr create` that may already
+	// have opened the PR, leaving a card that is not done over a PR that exists.
+	// Each call carries its own budget inside the provider (repoprovider.NetTimeout).
+	ctx := context.WithoutCancel(r.Context())
+
+	// 1. Origin must exist, and name a host the daemon can land to, before
+	//    anything is attempted. Detected separately so the "no remote configured"
+	//    case gets its own sentence rather than arriving as a generic push failure
+	//    the user has to decode — and so a host this phase cannot open a change
+	//    request on is refused BEFORE the branch is pushed.
+	provider, det, err := landProvider(ctx, tgt.ProjectPath)
+	if err != nil {
 		writeUnprocessable(w, "no origin remote",
 			"this repo has no `origin` to push to. Add one, then land again — or push and open the PR by hand:\n"+
 				pushCmd+"\n"+prCmd,
-			gitReason(stderr, err))
+			landDetail(err))
 		return
 	}
-	if _, stderr, err := reviewRun.Run(tgt.ProjectPath, reviewNetTimeout, reviewGitBinary,
-		"push", "-u", "origin", tgt.Branch); err != nil {
+	switch det.Kind {
+	case repoprovider.KindGitHub:
+	case repoprovider.KindGitLab:
+		// Temporary: the GitLab provider lands in a later phase, which replaces
+		// this arm (TestLandGitLabNotSupportedYet pins it until then).
+		writeUnprocessable(w, "gitlab not supported yet",
+			"this repo's `origin` is a GitLab host ("+det.Remote.Host+"), and landing to GitLab is not supported yet. "+
+				"Push and open the merge request by hand:\n"+pushCmd+"\n"+
+				"glab mr create --source-branch "+tgt.Branch+" --title "+strconv.Quote(tgt.Title),
+			credstore.Redact(det.Remote.URL))
+		return
+	default:
+		writeUnprocessable(w, "repository provider unknown",
+			"the host of this repo's `origin` ("+det.Remote.Host+") is not a recognised code host. "+
+				"Set `vcs.provider` (\"github\" or \"gitlab\") in .claude/project.json, then land again — "+
+				"or push and open the PR by hand:\n"+pushCmd+"\n"+prCmd,
+			credstore.Redact(det.Remote.URL))
+		return
+	}
+	target := repoprovider.Target{
+		RepoDir: tgt.ProjectPath, RemoteName: repoprovider.DefaultRemote, Remote: det.Remote,
+	}
+	if err := provider.Push(ctx, target, tgt.Branch); err != nil {
 		writeUnprocessable(w, "push failed",
 			"the branch could not be pushed. Resolve it and land again, or push by hand:\n"+pushCmd,
-			gitReason(stderr, err))
+			landDetail(err))
 		return
 	}
 
-	// 2. `gh` is checked on PATH before it is invoked: the branch is already
-	//    pushed at this point, so the hint has to tell the user the ONE step left.
-	if err := reviewRun.Look(reviewGhBinary); err != nil {
+	// 2. The branch is already pushed at this point, so every hint below has to
+	//    tell the user the ONE step left. The provider checks `gh` on PATH before
+	//    invoking it, which is what turns a missing CLI into its own sentence.
+	ref, err := provider.OpenChangeRequest(ctx, target, repoprovider.ChangeRequest{
+		Head: tgt.Branch, Title: tgt.Title, Body: landPRBody(tgt), Draft: body.Draft,
+	})
+	switch {
+	case errors.Is(err, repoprovider.ErrBinaryMissing):
 		writeUnprocessable(w, "gh not found",
 			"the branch is pushed, but the GitHub CLI is not on PATH so the PR was not opened. "+
 				"Install `gh` and land again, or open it by hand:\n"+prCmd,
-			err.Error())
+			landDetail(err))
 		return
-	}
-	args := []string{"pr", "create", "--head", tgt.Branch, "--title", tgt.Title, "--body", landPRBody(tgt)}
-	if body.Draft {
-		args = append(args, "--draft")
-	}
-	stdout, stderr, err := reviewRun.Run(tgt.ProjectPath, reviewNetTimeout, reviewGhBinary, args...)
-	if err != nil {
-		writeUnprocessable(w, "gh pr create failed",
-			"the branch is pushed, but the PR was not created. Open it by hand:\n"+prCmd,
-			gitReason(stderr, err))
-		return
-	}
-	prURL := firstURL(stdout)
-	if prURL == "" {
-		// gh narrates on stderr and prints the URL on stdout; if neither carried
-		// one, something changed under us and claiming a PR exists would be worse
-		// than saying so.
-		prURL = firstURL(stderr)
-	}
-	if prURL == "" {
+	case errors.Is(err, github.ErrNoURL):
+		// gh exited 0 but printed no URL on either stream: something changed
+		// under us, and claiming a PR exists would be worse than saying so.
 		writeUnprocessable(w, "gh pr create returned no URL",
 			"the branch is pushed and `gh` exited 0, but printed no pull-request URL. Check it by hand:\n"+prCmd,
-			gitReason(stdout+"\n"+stderr, nil))
+			landDetail(err))
+		return
+	case err != nil:
+		writeUnprocessable(w, "gh pr create failed",
+			"the branch is pushed, but the PR was not created. Open it by hand:\n"+prCmd,
+			landDetail(err))
 		return
 	}
+	prURL := ref.URL
 
 	// 3. Only now is the card done — and it goes through the SAME side effects the
 	//    →done PATCH performs (worktree reclaimed, branch kept, plan phase ticked),
@@ -371,11 +402,28 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"prUrl": prURL, "branch": tgt.Branch, "task": d}, nil)
 }
 
+// landDetail is the `detail` of a land 422: the tool's own output (stderr, or
+// the process error when it said nothing), bounded, and passed through
+// credstore.Redact so a token a CLI echoed never reaches the HTTP body. A
+// classified *repoprovider.Error already carries exactly that text; anything
+// else (ErrNoURL's captured output, a refused ref name) is reduced to its message.
+func landDetail(err error) string {
+	var pe *repoprovider.Error
+	if errors.As(err, &pe) {
+		return credstore.Redact(pe.Detail)
+	}
+	msg := err.Error()
+	if errors.Is(err, github.ErrNoURL) {
+		msg = strings.TrimPrefix(msg, github.ErrNoURL.Error()+": ")
+	}
+	return credstore.RedactedTail("", errors.New(msg), repoprovider.OutputTail)
+}
+
 // writeUnprocessable replies 422 {error, hint, detail}. The shape is specific to
 // the land path and deliberately not folded into writeConflictFields: a 409 says
 // "the server refuses given its state", while these say "your machine is missing
 // something and here is the command that finishes the job by hand". `detail`
-// carries the raw tool output; `hint` is the part meant to be pasted.
+// carries the (redacted) tool output; `hint` is the part meant to be pasted.
 func writeUnprocessable(w http.ResponseWriter, msg, hint, detail string) {
 	writeJSONStatus(w, http.StatusUnprocessableEntity, map[string]any{
 		"error": msg, "hint": hint, "detail": detail,
@@ -408,17 +456,4 @@ func landPRBody(t reviewTarget) string {
 	b.WriteString(t.ExternalID)
 	b.WriteString("\n")
 	return b.String()
-}
-
-// firstURL returns the first http(s) URL in s, trimmed of trailing punctuation.
-// `gh pr create` prints the PR URL on its own line, but it also prints progress
-// text, and which stream each lands on has changed across gh versions — scanning
-// for the URL is what keeps this working either way. Pure; unit-tested.
-func firstURL(s string) string {
-	for _, field := range strings.Fields(s) {
-		if strings.HasPrefix(field, "https://") || strings.HasPrefix(field, "http://") {
-			return strings.TrimRight(field, ".,);\"'")
-		}
-	}
-	return ""
 }

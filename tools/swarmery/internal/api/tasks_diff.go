@@ -16,9 +16,8 @@ package api
 // The exec boundary (reviewExec) lives here rather than reusing worktree.Git
 // because that interface returns stdout and stderr COMBINED: spliced into a
 // unified patch, git's own progress chatter would land inside the diff text the
-// UI renders, and — on the land path in tasks_review.go — inside the PR URL this
-// package has to parse back out of `gh`. A diff endpoint cannot use a combined
-// stream. Everything else about the runner (PATH resolution, a bounded timeout,
+// UI renders. A diff endpoint cannot use a combined stream (repoprovider.Exec,
+// which the land path uses, keeps the streams apart for the same reason). Everything else about the runner (PATH resolution, a bounded timeout,
 // an error carrying the output tail) mirrors worktree.ExecGit.
 
 import (
@@ -32,6 +31,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
 )
 
 // reviewMaxPatchBytes caps the unified patch a diff response carries. Past this
@@ -39,23 +42,45 @@ import (
 // patchTruncated and the UI points at the worktree terminal instead.
 const reviewMaxPatchBytes = 200 << 10 // 200 KB
 
-// Timeouts, split by what the command actually waits on. A local git read that
-// takes longer than gitReviewTimeout is a wedged lock, not slow work; a push or
-// a `gh pr create` waits on a network round-trip and a remote-side hook, so it
-// gets a budget an HTTP client will still sit through.
+// A local git read that takes longer than gitReviewTimeout is a wedged lock, not
+// slow work. (The land path's network budget lives in repoprovider.NetTimeout.)
 const (
 	gitReviewTimeout  = 10 * time.Second
-	reviewNetTimeout  = 90 * time.Second
 	reviewOutputTail  = 2048
 	reviewGitBinary   = "git"
-	reviewGhBinary    = "gh"
 	reviewPRBodyChars = 500
 )
 
-// reviewExec is the process boundary of the whole review loop: `git` for the
-// diff endpoint, `git` + `gh` for land. The timeout is a parameter rather than
-// runner state because one caller reads a local ref and the next one pushes over
-// the network, and a single value cannot be right for both.
+// landProvider resolves the code-host provider the land exit pushes to and
+// opens its change request on: the repo's `origin` is read and classified
+// (repoprovider.Detect over the project's vcs config), and a GitHub host gets
+// the gh-backed provider. Any other kind comes back with a nil Provider and its
+// Detection, for landBoardTask to refuse with a hint. An error means there is
+// no usable origin.
+//
+// A package var for the same reason reviewRun is one: tests swap it for a
+// factory over a repoprovider.FakeExec, with a restore in t.Cleanup.
+var landProvider = newLandProvider(repoprovider.OSExec{}, repoprovider.HTTPProber{}, credstore.Env)
+
+// newLandProvider builds a landProvider over an exec boundary, a GitLab prober
+// for unknown hosts, and the per-host credential env (production: credstore.Env,
+// which is nil until the daemon holds a token, so the operator's own `gh` login
+// is used exactly as before).
+func newLandProvider(ex repoprovider.Exec, probe repoprovider.Prober, env func(host string) []string) func(ctx context.Context, repoDir string) (repoprovider.Provider, repoprovider.Detection, error) {
+	return func(ctx context.Context, repoDir string) (repoprovider.Provider, repoprovider.Detection, error) {
+		det, err := repoprovider.Detect(ctx, ex, repoDir, repoprovider.LoadConfig(repoDir), probe)
+		if err != nil {
+			return nil, det, err
+		}
+		if det.Kind == repoprovider.KindGitHub {
+			return github.New(ex, env), det, nil
+		}
+		return nil, det, nil
+	}
+}
+
+// reviewExec is the process boundary of the diff endpoint: `git` reads of the
+// project repo root. (Land goes through landProvider instead.)
 type reviewExec interface {
 	// Run executes name+args with dir as the working directory, returning stdout
 	// and stderr SEPARATELY (see the file header for why that matters).

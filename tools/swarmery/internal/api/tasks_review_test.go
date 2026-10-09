@@ -5,11 +5,13 @@ package api
 // Unlike the diff endpoint (tasks_diff_test.go, real temp repos), these fake the
 // exec boundary: `git push` and `gh pr create` reach a network and a GitHub
 // account, and a test suite that touches either is a test suite that fails on a
-// plane. The fake is scripted per command so each failure mode — no origin, no
-// gh, gh erroring — is driven deliberately rather than hoped for.
+// plane. The fake (repoprovider.FakeExec behind useFakeLand) is scripted per
+// command so each failure mode — no origin, no gh, gh erroring — is driven
+// deliberately rather than hoped for.
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -21,66 +23,37 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskdir"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
-// fakeReview is a scripted reviewExec. Commands are keyed by binary + first
-// argument ("git push", "gh pr"), which is granular enough to distinguish every
-// step of the land sequence without the tests hard-coding whole argv lines.
-type fakeReview struct {
-	calls   []string
-	dirs    []string
-	out     map[string]string // key → stdout on success
-	errs    map[string]string // key → stderr; the call also fails
-	missing map[string]bool   // binaries Look() reports as absent
-}
+// noGitLabProbe answers "not GitLab" for every host, so no land test can ever
+// reach the network through repoprovider's HTTP probe of an unknown host.
+type noGitLabProbe struct{}
 
-func reviewKey(name string, args []string) string {
-	if len(args) == 0 {
-		return name
-	}
-	return name + " " + args[0]
-}
+func (noGitLabProbe) IsGitLab(context.Context, string) bool { return false }
 
-func (f *fakeReview) Run(dir string, _ time.Duration, name string, args ...string) (string, string, error) {
-	f.calls = append(f.calls, strings.Join(append([]string{name}, args...), " "))
-	f.dirs = append(f.dirs, dir)
-	k := reviewKey(name, args)
-	if msg, bad := f.errs[k]; bad {
-		return "", msg, fmt.Errorf("exit status 1")
-	}
-	return f.out[k], "", nil
-}
-
-func (f *fakeReview) Look(name string) error {
-	if f.missing[name] {
-		return fmt.Errorf("exec: %q: executable file not found in $PATH", name)
-	}
-	return nil
-}
-
-func (f *fakeReview) ran(substr string) bool {
-	for _, c := range f.calls {
-		if strings.Contains(c, substr) {
-			return true
-		}
-	}
-	return false
-}
-
-// useFakeReview swaps the package exec boundary, restoring it on cleanup.
-func useFakeReview(t *testing.T, f *fakeReview) *fakeReview {
+// useFakeLand swaps the land path's provider factory for the production
+// composition (Detect → github.New over credstore.Env) driven by a scripted
+// repoprovider.FakeExec, restoring it on cleanup. Commands are keyed by binary +
+// first argument ("git remote", "git push", "gh pr"), which is granular enough
+// to distinguish every step of the land sequence without the tests hard-coding
+// whole argv lines. SWARMERY_SECRETS_DIR points at an empty temp dir, so
+// credstore.Env finds no token and never reads the operator's real store.
+func useFakeLand(t *testing.T, f *repoprovider.FakeExec) *repoprovider.FakeExec {
 	t.Helper()
-	prev := reviewRun
-	reviewRun = f
-	t.Cleanup(func() { reviewRun = prev })
+	t.Setenv("SWARMERY_SECRETS_DIR", t.TempDir())
+	prev := landProvider
+	landProvider = newLandProvider(f, noGitLabProbe{}, credstore.Env)
+	t.Cleanup(func() { landProvider = prev })
 	return f
 }
 
 // landOK is the fake for a land that succeeds end to end.
-func landOK(prURL string) *fakeReview {
-	return &fakeReview{out: map[string]string{
+func landOK(prURL string) *repoprovider.FakeExec {
+	return &repoprovider.FakeExec{Out: map[string]string{
 		"git remote": "git@github.com:acme/widgets.git\n",
 		"gh pr":      "Creating pull request…\n" + prURL + "\n",
 	}}
@@ -378,7 +351,7 @@ func TestLandPushesCreatesPRAndFinishes(t *testing.T) {
 	srv, db := reviewServer(t, repo)
 	wt := &reviewStubWt{existed: true}
 	attachReviewDispatch(t, db, wt)
-	fake := useFakeReview(t, landOK(prURL))
+	fake := useFakeLand(t, landOK(prURL))
 	id := seedReviewCard(t, db, "T-land55", reviewCard{
 		Branch: branch, StartPoint: base, Worktree: "/tmp/wt/T-land55", Verdict: "pass",
 	})
@@ -390,17 +363,17 @@ func TestLandPushesCreatesPRAndFinishes(t *testing.T) {
 	if body["prUrl"] != prURL {
 		t.Errorf("prUrl = %v, want %s", body["prUrl"], prURL)
 	}
-	if !fake.ran("git push -u origin " + branch) {
-		t.Errorf("branch was not pushed; calls = %v", fake.calls)
+	if !fake.Ran("git push -u origin " + branch) {
+		t.Errorf("branch was not pushed; calls = %v", fake.Calls)
 	}
-	if !fake.ran("gh pr create --head " + branch) {
-		t.Errorf("PR was not created; calls = %v", fake.calls)
+	if !fake.Ran("gh pr create --head " + branch) {
+		t.Errorf("PR was not created; calls = %v", fake.Calls)
 	}
-	if fake.ran("--draft") {
+	if fake.Ran("--draft") {
 		t.Error("draft flag sent for a non-draft land")
 	}
 	// Git must run in the project repo root, not the (reclaimed) worktree.
-	for _, d := range fake.dirs {
+	for _, d := range fake.Dirs {
 		if d != repo {
 			t.Errorf("command ran in %q, want the project repo root %q", d, repo)
 		}
@@ -430,15 +403,15 @@ func TestLandDraftPassesTheFlag(t *testing.T) {
 	repo, base := reviewRepo(t, branch)
 	srv, db := reviewServer(t, repo)
 	attachReviewDispatch(t, db, &reviewStubWt{})
-	fake := useFakeReview(t, landOK("https://github.com/acme/widgets/pull/1"))
+	fake := useFakeLand(t, landOK("https://github.com/acme/widgets/pull/1"))
 	id := seedReviewCard(t, db, "T-draft6", reviewCard{Branch: branch, StartPoint: base})
 
 	resp, _ := postReview(t, srv.URL, id, "land", `{"draft":true}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	if !fake.ran("--draft") {
-		t.Errorf("draft flag not sent; calls = %v", fake.calls)
+	if !fake.Ran("--draft") {
+		t.Errorf("draft flag not sent; calls = %v", fake.Calls)
 	}
 }
 
@@ -446,7 +419,7 @@ func TestLandWithoutOriginIs422(t *testing.T) {
 	const branch = "swarm/T-noorg7"
 	repo, base := reviewRepo(t, branch)
 	srv, db := reviewServer(t, repo)
-	fake := useFakeReview(t, &fakeReview{errs: map[string]string{
+	fake := useFakeLand(t, &repoprovider.FakeExec{Errs: map[string]string{
 		"git remote": "error: No such remote 'origin'\n",
 	}})
 	id := seedReviewCard(t, db, "T-noorg7", reviewCard{Branch: branch, StartPoint: base})
@@ -463,7 +436,7 @@ func TestLandWithoutOriginIs422(t *testing.T) {
 		t.Errorf("hint %q does not carry the manual push command", hint)
 	}
 	// Nothing was pushed, so the card must stay where it was.
-	if fake.ran("git push") {
+	if fake.Ran("git push") {
 		t.Error("pushed despite having no origin")
 	}
 	if col := taskRow(t, db, id, "board_column"); col != "in_review" {
@@ -475,9 +448,9 @@ func TestLandWithoutGhIs422WithHint(t *testing.T) {
 	const branch = "swarm/T-nogh88"
 	repo, base := reviewRepo(t, branch)
 	srv, db := reviewServer(t, repo)
-	fake := useFakeReview(t, &fakeReview{
-		out:     map[string]string{"git remote": "git@github.com:acme/widgets.git\n"},
-		missing: map[string]bool{"gh": true},
+	fake := useFakeLand(t, &repoprovider.FakeExec{
+		Out:     map[string]string{"git remote": "git@github.com:acme/widgets.git\n"},
+		Missing: map[string]bool{"gh": true},
 	})
 	id := seedReviewCard(t, db, "T-nogh88", reviewCard{
 		Branch: branch, StartPoint: base, Prompt: "some work",
@@ -492,7 +465,7 @@ func TestLandWithoutGhIs422WithHint(t *testing.T) {
 		t.Errorf("hint %q does not carry the exact gh command", hint)
 	}
 	// The push DID happen — the hint has to describe only the step that is left.
-	if !fake.ran("git push") {
+	if !fake.Ran("git push") {
 		t.Error("expected the push to have run before the gh check")
 	}
 	if !strings.Contains(hint, "pushed") {
@@ -512,9 +485,11 @@ func TestLandWhenGhFailsIs422(t *testing.T) {
 	const branch = "swarm/T-ghbad9"
 	repo, base := reviewRepo(t, branch)
 	srv, db := reviewServer(t, repo)
-	useFakeReview(t, &fakeReview{
-		out:  map[string]string{"git remote": "origin\n"},
-		errs: map[string]string{"gh pr": "pull request already exists for branch\n"},
+	// The remote must be a real URL: Detect parses `git remote get-url origin`,
+	// and a bare "origin" reads as no remote at all.
+	useFakeLand(t, &repoprovider.FakeExec{
+		Out:  map[string]string{"git remote": "https://github.com/o/r.git\n"},
+		Errs: map[string]string{"gh pr": "pull request already exists for branch\n"},
 	})
 	id := seedReviewCard(t, db, "T-ghbad9", reviewCard{Branch: branch, StartPoint: base})
 
@@ -534,7 +509,7 @@ func TestLandWhenGhFailsIs422(t *testing.T) {
 func TestLandWithoutBranchIs409(t *testing.T) {
 	repo, base := reviewRepo(t, "swarm/T-unused2")
 	srv, db := reviewServer(t, repo)
-	useFakeReview(t, landOK("https://example.invalid/pr/1"))
+	useFakeLand(t, landOK("https://example.invalid/pr/1"))
 	id := seedReviewCard(t, db, "T-nobr10", reviewCard{StartPoint: base, BoardColumn: "triage"})
 
 	resp, body := postReview(t, srv.URL, id, "land", `{}`)
@@ -550,7 +525,7 @@ func TestLandRefusesRunningCard(t *testing.T) {
 	const branch = "swarm/T-busy11"
 	repo, base := reviewRepo(t, branch)
 	srv, db := reviewServer(t, repo)
-	fake := useFakeReview(t, landOK("https://example.invalid/pr/2"))
+	fake := useFakeLand(t, landOK("https://example.invalid/pr/2"))
 	id := seedReviewCard(t, db, "T-busy11", reviewCard{
 		Branch: branch, StartPoint: base, BoardColumn: "in_progress", Status: "running",
 	})
@@ -562,8 +537,104 @@ func TestLandRefusesRunningCard(t *testing.T) {
 	if body["code"] != codeAlreadyRunning {
 		t.Errorf("code = %v, want %q", body["code"], codeAlreadyRunning)
 	}
-	if len(fake.calls) != 0 {
-		t.Errorf("commands ran for a running card: %v", fake.calls)
+	if len(fake.Calls) != 0 {
+		t.Errorf("commands ran for a running card: %v", fake.Calls)
+	}
+}
+
+// TestLandRedactsTokenInDetail: a CLI that echoes a credential (a push URL with
+// an embedded token, a verbose auth error) must never get it into the 422 body.
+// `detail` is the raw tool output by contract, so it is the field that would
+// carry it — and the operator pastes these bodies into bug reports.
+func TestLandRedactsTokenInDetail(t *testing.T) {
+	const branch = "swarm/T-redact1"
+	const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	repo, base := reviewRepo(t, branch)
+	srv, db := reviewServer(t, repo)
+	useFakeLand(t, &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "https://github.com/acme/widgets.git\n"},
+		Errs: map[string]string{"git push": "remote: Invalid username or token " + token + "\n" +
+			"fatal: unable to access 'https://x-access-token:" + token + "@github.com/acme/widgets.git/'\n"},
+	})
+	id := seedReviewCard(t, db, "T-redact1", reviewCard{Branch: branch, StartPoint: base})
+
+	resp, body := postReview(t, srv.URL, id, "land", `{}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	if body["error"] != "push failed" {
+		t.Errorf("error = %v, want %q", body["error"], "push failed")
+	}
+	detail, _ := body["detail"].(string)
+	if !strings.Contains(detail, "***") {
+		t.Errorf("detail %q carries no redaction mark", detail)
+	}
+	raw, _ := json.Marshal(body)
+	if strings.Contains(string(raw), token) || strings.Contains(string(raw), token[:20]) {
+		t.Errorf("the token reached the 422 body: %s", raw)
+	}
+	if col := taskRow(t, db, id, "board_column"); col != "in_review" {
+		t.Errorf("column = %s, want in_review", col)
+	}
+}
+
+// TestLandGitLabNotSupportedYet pins the TEMPORARY refusal for a GitLab origin:
+// the GitLab provider arrives in a later phase, which flips this test. Until
+// then nothing may be pushed — a pushed branch with no way to open its merge
+// request is a worse state than an honest 422.
+func TestLandGitLabNotSupportedYet(t *testing.T) {
+	const branch = "swarm/T-gitlab1"
+	repo, base := reviewRepo(t, branch)
+	srv, db := reviewServer(t, repo)
+	fake := useFakeLand(t, &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "git@gitlab.com:acme/widgets.git\n"},
+	})
+	id := seedReviewCard(t, db, "T-gitlab1", reviewCard{Branch: branch, StartPoint: base})
+
+	resp, body := postReview(t, srv.URL, id, "land", `{}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	if body["error"] != "gitlab not supported yet" {
+		t.Errorf("error = %v, want %q", body["error"], "gitlab not supported yet")
+	}
+	hint, _ := body["hint"].(string)
+	if !strings.Contains(hint, "push") || !strings.Contains(hint, branch) {
+		t.Errorf("hint %q does not carry the manual push command", hint)
+	}
+	if fake.Ran("git push") || fake.Ran("gh ") || fake.Ran("glab ") {
+		t.Errorf("a GitLab land ran a push or a CLI; calls = %v", fake.Calls)
+	}
+	if col := taskRow(t, db, id, "board_column"); col != "in_review" {
+		t.Errorf("column = %s, want in_review", col)
+	}
+}
+
+// TestLandUnknownProviderIs422: an origin on a host that is neither a public
+// GitHub/GitLab host nor answers the GitLab probe cannot be landed to until the
+// operator names its provider — the hint must say how, and nothing is pushed.
+func TestLandUnknownProviderIs422(t *testing.T) {
+	const branch = "swarm/T-unknown1"
+	repo, base := reviewRepo(t, branch)
+	srv, db := reviewServer(t, repo)
+	fake := useFakeLand(t, &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "https://git.example.invalid/acme/widgets.git\n"},
+	})
+	id := seedReviewCard(t, db, "T-unknown1", reviewCard{Branch: branch, StartPoint: base})
+
+	resp, body := postReview(t, srv.URL, id, "land", `{}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	if body["error"] != "repository provider unknown" {
+		t.Errorf("error = %v, want %q", body["error"], "repository provider unknown")
+	}
+	hint, _ := body["hint"].(string)
+	if !strings.Contains(hint, "vcs.provider") || !strings.Contains(hint, branch) {
+		t.Errorf("hint %q does not name vcs.provider and the manual commands", hint)
+	}
+	if fake.Ran("git push") {
+		t.Errorf("pushed to an unknown provider; calls = %v", fake.Calls)
 	}
 }
 
@@ -607,8 +678,8 @@ func TestFirstURL(t *testing.T) {
 		"":                                                  "",
 	}
 	for in, want := range cases {
-		if got := firstURL(in); got != want {
-			t.Errorf("firstURL(%q) = %q, want %q", in, got, want)
+		if got := repoprovider.FirstURL(in); got != want {
+			t.Errorf("FirstURL(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
