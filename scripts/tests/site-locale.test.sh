@@ -77,7 +77,9 @@ trap 'rm -rf "$TMP"' EXIT
 
 # norm <file> — drop what the locale layer adds to an English page
 norm() {
+  # the 404 page's inline link to the Ukrainian home is the fifth allowed addition
   sed -E -e 's/ data-i18n-[a-z]+="[^"]*"//g' \
+         -e 's#<p class="muted"><a href="/swarmery/uk/"[^<]*</a></p>##g' \
          -e '/rel="alternate"|og:locale|class="lang"/d' -- "$1"
 }
 
