@@ -5,13 +5,14 @@
 // the phase-run lifecycle stays where it lives today.
 
 import type { ReactNode } from 'react';
-import type { EpicPhase, PhaseRunOutcome } from '../../api/types';
+import type { EpicPhase, PhaseLanding, PhaseRunOutcome, ProviderTerms } from '../../api/types';
 import { fmtAgo, fmtSpan } from '../../lib/format';
 import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { forecastStory } from './forecastStoryModel';
 import { ForecastVsActual } from './ForecastVsActual';
+import { landingChip, type LandingChip as LandingChipModel } from './landingModel';
 
 // OffPlanChip lives here so the story and the card share one band→tone mapping
 // (ForecastStory.tsx imports it from this file).
@@ -55,6 +56,9 @@ export interface PhaseCardProps {
   aside?: ReactNode;
   /** Body of the folded "agent's full report" — usually the Completion Report. */
   report?: ReactNode;
+  /** The project's code-host vocabulary; null (or absent) until it loads, and
+   *  the landing chip stays hidden until then — it never guesses a label. */
+  terms?: ProviderTerms | null;
 }
 
 const OUTCOME_SENTENCE: Record<PhaseRunOutcome, string> = {
@@ -84,6 +88,43 @@ const BAND_DOT: Record<OffPlanBand, string> = {
 const SECONDARY_BTN =
   'rounded-lg border border-line-strong px-3 py-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:text-ink disabled:opacity-50';
 
+const LANDING_TONE: Record<LandingChipModel['state'], string> = {
+  ready: 'border-brand/45 text-brand',
+  pushed: 'border-line-strong text-ink-3',
+  pr_open: 'border-brand/45 text-brand',
+  merged: 'border-green/45 text-green',
+  returned: 'border-amber/45 text-amber',
+};
+
+/** Where the phase's run branch is on its way to the code host — nothing
+ *  before the landing flow, a link to an open change request. */
+function LandingChip({
+  landing,
+  terms,
+}: {
+  landing: Pick<PhaseLanding, 'state' | 'prUrl' | 'prNumber'>;
+  terms: ProviderTerms;
+}): JSX.Element | null {
+  const chip = landingChip(landing, terms);
+  if (chip === null) return null;
+  const cls = `inline-flex shrink-0 items-center rounded-full border bg-transparent px-2 py-px font-mono text-[10px] normal-case tracking-[0.04em] ${LANDING_TONE[chip.state]}`;
+  return chip.href !== null ? (
+    <a
+      data-testid="phase-landing-chip"
+      href={chip.href}
+      target="_blank"
+      rel="noreferrer"
+      className={`${cls} hover:underline`}
+    >
+      {chip.text}
+    </a>
+  ) : (
+    <span data-testid="phase-landing-chip" className={cls}>
+      {chip.text}
+    </span>
+  );
+}
+
 function Fold({ label, children }: { label: string; children: ReactNode }): JSX.Element {
   return (
     <details className="group open:w-full">
@@ -96,7 +137,15 @@ function Fold({ label, children }: { label: string; children: ReactNode }): JSX.
   );
 }
 
-export function PhaseCard({ phase, state, primary, secondaries = [], aside, report }: PhaseCardProps): JSX.Element {
+export function PhaseCard({
+  phase,
+  state,
+  primary,
+  secondaries = [],
+  aside,
+  report,
+  terms = null,
+}: PhaseCardProps): JSX.Element {
   const story = forecastStory(phase);
   const band = phase.surprise == null ? null : offPlanBand(phase.surprise.index);
   const title = state?.title ?? story?.headline ?? OUTCOME_SENTENCE[phase.runOutcome];
@@ -126,11 +175,10 @@ export function PhaseCard({ phase, state, primary, secondaries = [], aside, repo
             <span>{modelShortName(model)}</span>
           </>
         )}
-        {band !== null && (
-          <span className="ml-auto">
-            <OffPlanChip band={band} compact />
-          </span>
-        )}
+        <span className="ml-auto flex items-center gap-1.5">
+          {terms != null && phase.landing != null && <LandingChip landing={phase.landing} terms={terms} />}
+          {band !== null && <OffPlanChip band={band} compact />}
+        </span>
       </div>
       <div className="mt-1.5 text-[15px] font-medium leading-[1.35] text-ink">{phase.name}</div>
 

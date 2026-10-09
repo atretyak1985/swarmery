@@ -84,3 +84,31 @@ export function branchToPhaseId(branch: string): number | null {
   const id = Number(m[1]);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
+
+/** What the phase card's landing chip shows: its text, and the change-request
+ * URL when the chip is a link. */
+export interface LandingChip {
+  state: Exclude<PhaseLandingState, 'none'>;
+  text: string;
+  href: string | null;
+}
+
+/**
+ * The phase card's landing chip, or null when there is nothing to say (the
+ * phase has not reached the landing flow). An open change request with a URL
+ * is a link labelled `prLinkText` ("PR #12"); a merge gets a check mark; every
+ * other state is `landingLabel`.
+ */
+export function landingChip(
+  landing: Pick<PhaseLanding, 'state' | 'prUrl' | 'prNumber'>,
+  terms: ProviderTerms,
+): LandingChip | null {
+  const { state } = landing;
+  if (state === 'none') return null;
+  if (state === 'pr_open') {
+    const text = prLinkText(landing, terms);
+    if (text !== null && landing.prUrl !== null) return { state, text, href: landing.prUrl };
+  }
+  const label = landingLabel(state, terms);
+  return { state, text: state === 'merged' ? `${label} ✓` : label, href: null };
+}

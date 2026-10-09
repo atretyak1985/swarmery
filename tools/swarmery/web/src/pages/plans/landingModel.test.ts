@@ -6,6 +6,7 @@ import {
   canReturn,
   hasReviewTab,
   type LandingPhase,
+  landingChip,
   landingLabel,
   prLinkText,
 } from './landingModel';
@@ -97,5 +98,34 @@ describe('branchToPhaseId', () => {
     for (const b of ['main', 'swarm/phase-', 'swarm/phase-12a', 'swarm/task-12', 'feat/swarm/phase-1', 'swarm/phase-0']) {
       expect(branchToPhaseId(b)).toBeNull();
     }
+  });
+});
+
+describe('landingChip', () => {
+  const base = { prUrl: null, prNumber: null };
+
+  it('says nothing before the landing flow', () => {
+    expect(landingChip({ ...base, state: 'none' }, PR)).toBeNull();
+  });
+
+  it('labels every other state, with a check mark on a merge', () => {
+    expect(landingChip({ ...base, state: 'ready' }, PR)?.text).toBe('ready to land');
+    expect(landingChip({ ...base, state: 'pushed' }, PR)?.text).toBe('pushed');
+    expect(landingChip({ ...base, state: 'merged' }, PR)?.text).toBe('merged ✓');
+    expect(landingChip({ ...base, state: 'returned' }, PR)).toEqual({
+      state: 'returned',
+      text: 'returned to agent',
+      href: null,
+    });
+  });
+
+  it('links an open change request, labelled from terms', () => {
+    const open = { state: 'pr_open' as const, prUrl: 'https://host.example/acme/w/7', prNumber: 7 };
+    expect(landingChip(open, PR)).toEqual({ state: 'pr_open', text: 'PR #7', href: open.prUrl });
+    expect(landingChip(open, MR)?.text).toBe('MR #7');
+  });
+
+  it('falls back to the state label when the change request has no URL', () => {
+    expect(landingChip({ ...base, state: 'pr_open' }, MR)).toEqual({ state: 'pr_open', text: 'MR open', href: null });
   });
 });

@@ -3048,6 +3048,7 @@ function PhaseDetailPanel({
               isUnresolvedOutcome(phase.runOutcome) ? [{ label: 'why it did not move', onClick: onOpenOutcome }] : []
             }
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
+            terms={terms}
           />
           <ForecastStory phase={phase} />
           {phase.surprise == null && <ForecastSection phase={phase} />}
