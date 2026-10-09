@@ -985,6 +985,38 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 	}
 }
 
+// PhaseUpsertSQL is the one statement applyEpics folds a parsed phase doc into
+// epic_phases with. Parameters, in order: workspace_task_id, seq, name, doc_path,
+// depends_on, checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
+// completion_report, repo, covers, verify_mode, doc_model.
+//
+// Exported so the store's migration tests can re-run the EXACT upsert and prove a
+// daemon-owned column survives it — the run_* family, run_branch (0043) and the
+// landing_* / pr_* columns (0103) are deliberately absent from the DO UPDATE SET
+// list, and adding one of them here would silently reset it on every re-scan.
+const PhaseUpsertSQL = `
+			INSERT INTO epic_phases
+				(workspace_task_id, seq, name, doc_path, depends_on,
+				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
+				 completion_report, repo, covers, verify_mode, doc_model)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
+				seq               = excluded.seq,
+				name              = excluded.name,
+				depends_on        = excluded.depends_on,
+				checkboxes_total  = excluded.checkboxes_total,
+				checkboxes_done   = excluded.checkboxes_done,
+				doc_status        = excluded.doc_status,
+				doc_updated_at    = excluded.doc_updated_at,
+				completion_report = excluded.completion_report,
+				repo              = excluded.repo,
+				covers            = excluded.covers,
+				verify_mode       = excluded.verify_mode,
+				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
+				-- from a doc must actually retract the declaration, the same way
+				-- deleting a **Covers:** line does.
+				doc_model         = excluded.doc_model`
+
 // applyEpics folds the parsed plan into the task's epic_phases rows by UPSERTING
 // on the natural key UNIQUE(workspace_task_id, doc_path).
 //
@@ -1067,28 +1099,7 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if p.docModel != "" {
 			docModel = p.docModel
 		}
-		if _, err := tx.Exec(`
-			INSERT INTO epic_phases
-				(workspace_task_id, seq, name, doc_path, depends_on,
-				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-				 completion_report, repo, covers, verify_mode, doc_model)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
-				seq               = excluded.seq,
-				name              = excluded.name,
-				depends_on        = excluded.depends_on,
-				checkboxes_total  = excluded.checkboxes_total,
-				checkboxes_done   = excluded.checkboxes_done,
-				doc_status        = excluded.doc_status,
-				doc_updated_at    = excluded.doc_updated_at,
-				completion_report = excluded.completion_report,
-				repo              = excluded.repo,
-				covers            = excluded.covers,
-				verify_mode       = excluded.verify_mode,
-				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
-				-- from a doc must actually retract the declaration, the same way
-				-- deleting a **Covers:** line does.
-				doc_model         = excluded.doc_model`,
+		if _, err := tx.Exec(PhaseUpsertSQL,
 			taskID, p.seq, p.name, p.docPath, string(depJSON),
 			p.checkboxesTotal, p.checkboxesDone, docStatus, docUpdatedAt,
 			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
