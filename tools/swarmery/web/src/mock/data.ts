@@ -1576,6 +1576,15 @@ const mockEpicPhase = (
   forecastLints: seq === 3 ? MOCK_FORECAST_BAD_LINTS : [],
   // Phase 2's run was scored; every other phase has no score (null, never 0).
   surprise: seq === 2 ? MOCK_SURPRISE : null,
+  landing: {
+    state: 'none',
+    prUrl: null,
+    prNumber: null,
+    prProvider: null,
+    prStatus: null,
+    landedAt: null,
+    error: null,
+  },
   id,
   seq,
   name,

@@ -3719,6 +3719,57 @@ export interface EpicPhase {
    *  scored: no forecast, no actuals, or nothing measurable. ADVISORY: nothing
    *  consults it for completion, and a run is never refused on it. */
   surprise: PhaseSurprise | null;
+  /** The phase's landing lifecycle (migration 0103) — see PhaseLanding. */
+  landing: PhaseLanding;
+}
+
+/** Where a phase's run branch is on its way to the code host. `ready` is DERIVED
+ *  server-side (nothing landed yet and the run finished) and never stored. */
+export type PhaseLandingState = 'none' | 'ready' | 'pushed' | 'pr_open' | 'merged' | 'returned';
+
+/** Mirrors api.landingDTO. Every nullable field stays null until the step that
+ *  writes it has happened. */
+export interface PhaseLanding {
+  state: PhaseLandingState;
+  prUrl: string | null;
+  prNumber: number | null;
+  /** The provider that opened the change request: 'github' | 'gitlab'. */
+  prProvider: string | null;
+  /** The change request's last polled status (repoprovider.ChangeStatus), null
+   *  until polled. */
+  prStatus: PhaseChangeStatus | null;
+  landedAt: string | null;
+  /** The last landing failure the operator has to act on (today:
+   *  `not-authenticated: …`); cleared by the next successful push. */
+  error: string | null;
+}
+
+/** Mirrors repoprovider.ChangeStatus. */
+export interface PhaseChangeStatus {
+  state: 'open' | 'closed' | 'merged';
+  draft: boolean;
+  ci: 'passing' | 'failing' | 'pending' | 'none';
+  review: 'approved' | 'changes_requested' | 'review_required' | 'none';
+  checkedAt: string;
+}
+
+/** Mirrors repoprovider.Terms: the provider's vocabulary, so no surface branches
+ *  on the provider to pick a label. */
+export interface ProviderTerms {
+  provider: string;
+  change: string;
+  changeShort: string;
+}
+
+/** GET /api/epics/{taskId}/phases/{phaseId}/review — mirrors api.phaseReviewDTO:
+ *  the run branch's diff (the same reader as the board card diff — `base` is the
+ *  run's start point, or the checked-out branch for a phase that predates it),
+ *  plus the verdict, the landing lifecycle and the provider vocabulary. */
+export interface PhaseReview extends TaskDiff {
+  verifyVerdict: PhaseVerifyVerdict | null;
+  verifyDetail: string | null;
+  landing: PhaseLanding;
+  terms: ProviderTerms;
 }
 
 /** Surprise components — the keys of `PhaseSurprise.components`. */
