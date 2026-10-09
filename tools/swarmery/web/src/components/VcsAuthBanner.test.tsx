@@ -2,8 +2,9 @@
 //
 // The project sign-in banner (Phase 5, SC-12): hidden when the daemon is
 // signed in or there is no remote; "not signed in" / "sign-in expired" with a
-// Sign in action otherwise; the SSH + missing-token sentence; the terminal
-// command fallback and a Re-check that bypasses the daemon's cache. The API is
+// Sign in action otherwise; the SSH + missing-token sentence; Sign in opening
+// the sign-in dialog (with the terminal command as its footer) and a Re-check
+// that bypasses the daemon's cache. The API is
 // mocked at getProjectVcs, so the real useProjectVcs hook runs.
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -11,11 +12,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VcsInfo } from '../api/types';
 import { VcsAuthBanner } from './VcsAuthBanner';
 
-const api = vi.hoisted(() => ({ getProjectVcs: vi.fn(), putProjectVcsProvider: vi.fn() }));
+const api = vi.hoisted(() => ({ getProjectVcs: vi.fn(), putProjectVcsProvider: vi.fn(), submitVcsToken: vi.fn() }));
 
 vi.mock('../api', async (importOriginal) => {
   const real = await importOriginal<typeof import('../api')>();
-  return { ...real, getProjectVcs: api.getProjectVcs, putProjectVcsProvider: api.putProjectVcsProvider };
+  return {
+    ...real,
+    getProjectVcs: api.getProjectVcs,
+    putProjectVcsProvider: api.putProjectVcsProvider,
+    submitVcsToken: api.submitVcsToken,
+  };
 });
 
 afterEach(cleanup);
@@ -37,6 +43,7 @@ const vcs = (over: Partial<VcsInfo> = {}, auth: Partial<VcsInfo['auth']> = {}): 
 beforeEach(() => {
   api.getProjectVcs.mockReset();
   api.putProjectVcsProvider.mockReset();
+  api.submitVcsToken.mockReset();
 });
 
 async function settle(): Promise<void> {
@@ -138,15 +145,46 @@ describe('VcsAuthBanner', () => {
     expect(screen.queryByTestId('vcs-provider-ask')).toBeNull();
   });
 
-  it('without onSignIn, expands the daemon-chosen command; Re-check bypasses the cache', async () => {
+  it('without onSignIn, opens the sign-in dialog with the daemon-chosen command as its footer', async () => {
     api.getProjectVcs.mockResolvedValue(vcs());
     render(<VcsAuthBanner projectId={3} />);
     const signIn = await screen.findByRole('button', { name: 'Sign in' });
-    expect(signIn.getAttribute('aria-expanded')).toBe('false');
+    expect(signIn.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(signIn);
-    expect(signIn.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByText('hostcli auth login --hostname code.example.com')).toBeTruthy();
+    const dialog = screen.getByRole('dialog', { name: /Sign in to Host A/ });
+    expect(dialog.textContent).toContain('or run in a terminal: hostcli auth login --hostname code.example.com');
+    // The old inline <details> fallback is gone.
+    expect(screen.queryByText('Sign in from a terminal')).toBeNull();
 
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Closing without a sign-in does not re-ask the daemon.
+    expect(api.getProjectVcs).toHaveBeenCalledTimes(1);
+  });
+
+  it('a sign-in from the dialog re-asks the daemon past its cache on close', async () => {
+    api.getProjectVcs.mockResolvedValue(vcs());
+    api.submitVcsToken.mockResolvedValue({ status: 'ok', login: 'octo' });
+    render(<VcsAuthBanner projectId={3} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Token' }));
+    fireEvent.change(screen.getByLabelText('Personal access token'), { target: { value: 'tok-value' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save token' }));
+    expect(await screen.findByText('Signed in as octo.')).toBeTruthy();
+    expect(api.submitVcsToken).toHaveBeenCalledWith(3, 'tok-value');
+
+    api.getProjectVcs.mockResolvedValue(vcs({}, { status: 'ok', login: 'octo', source: 'store' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(api.getProjectVcs).toHaveBeenLastCalledWith(3, true));
+    await waitFor(() => expect(banner()).toBeNull());
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('Re-check bypasses the cache', async () => {
+    api.getProjectVcs.mockResolvedValue(vcs());
+    render(<VcsAuthBanner projectId={3} />);
+    await screen.findByRole('button', { name: 'Sign in' });
     api.getProjectVcs.mockResolvedValue(vcs({}, { status: 'ok', login: 'octo', source: 'cli' }));
     fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
     await waitFor(() => expect(api.getProjectVcs).toHaveBeenLastCalledWith(3, true));

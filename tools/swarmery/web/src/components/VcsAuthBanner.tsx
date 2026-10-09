@@ -14,18 +14,20 @@
 // When the daemon could not classify the origin's host (`askProvider`), the
 // banner asks which service hosts it instead (VcsProviderAsk), once.
 //
-// `onSignIn` is optional: Phase 8 provides the sign-in dialog. Until a caller
-// passes one, "Sign in" expands the terminal command plus "Re-check", which
-// re-asks the daemon past its 60s cache.
+// "Sign in" opens VcsSignInDialog (Phase 8): a device code or a pasted token,
+// with the terminal command as its footer fallback. Closing the dialog after a
+// sign-in re-asks the daemon past its 60s cache, as "Re-check" does. A caller
+// may pass `onSignIn` to open a sign-in surface of its own instead.
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { VcsInfo } from '../api/types';
 import { useProjectVcs } from '../lib/useProjectVcs';
 import { VcsProviderAsk } from './VcsProviderAsk';
+import { VcsSignInDialog } from './VcsSignInDialog';
 
 export interface VcsAuthBannerProps {
   projectId: number | null;
-  /** Opens the sign-in dialog. Absent: "Sign in" expands the terminal command. */
+  /** Replaces the built-in sign-in dialog. Absent: "Sign in" opens VcsSignInDialog. */
   onSignIn?: () => void;
 }
 
@@ -57,9 +59,8 @@ function headlineFor(status: VcsInfo['auth']['status'], provider: string): strin
 
 export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.Element | null {
   const { vcs, reload } = useProjectVcs(projectId);
-  const [showHelp, setShowHelp] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [checking, setChecking] = useState(false);
-  const helpId = useId();
 
   // A new answer (or a project switch) ends the Re-check in flight.
   useEffect(() => {
@@ -89,46 +90,41 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
   };
 
   return (
-    <section
-      aria-label={`${terms.provider} sign-in`}
-      data-testid="vcs-auth-banner"
-      data-status={vcs.auth.status}
-      className={`border-b px-4 py-2 font-mono text-[11px] desk:px-6 ${unknown ? SECTION_SOFT : SECTION_WARN}`}
-    >
-      <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="font-semibold">{headline}</span>
-        {sshNote !== null && <span className="text-ink-3">{sshNote}</span>}
-        <span className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            className={btn}
-            onClick={onSignIn ?? (() => setShowHelp((v) => !v))}
-            {...(onSignIn === undefined ? { 'aria-expanded': showHelp, 'aria-controls': helpId } : {})}
-          >
-            Sign in
-          </button>
-          <button type="button" className={btn} onClick={recheck} disabled={checking} aria-busy={checking}>
-            Re-check
-          </button>
-        </span>
-      </div>
-      {onSignIn === undefined && showHelp && (
-        <details id={helpId} open onToggle={(e) => setShowHelp(e.currentTarget.open)} className="mt-2 text-ink-2">
-          <summary className="cursor-pointer text-ink-3">Sign in from a terminal</summary>
-          {vcs.cliLogin !== '' ? (
-            <>
-              <pre className="mt-1.5 overflow-x-auto rounded-md border border-line bg-bg px-2.5 py-1.5 text-[11px] text-ink">
-                {vcs.cliLogin}
-              </pre>
-              <p className="mt-1.5 text-ink-3">Run it on the machine the daemon runs on, then Re-check.</p>
-            </>
-          ) : (
-            <p className="mt-1.5 text-ink-3">
-              Sign the daemon in to {vcs.host === '' ? 'this host' : vcs.host}, then Re-check.
-            </p>
-          )}
-        </details>
+    <>
+      <section
+        aria-label={`${terms.provider} sign-in`}
+        data-testid="vcs-auth-banner"
+        data-status={vcs.auth.status}
+        className={`border-b px-4 py-2 font-mono text-[11px] desk:px-6 ${unknown ? SECTION_SOFT : SECTION_WARN}`}
+      >
+        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="font-semibold">{headline}</span>
+          {sshNote !== null && <span className="text-ink-3">{sshNote}</span>}
+          <span className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              className={btn}
+              onClick={onSignIn ?? (() => setDialogOpen(true))}
+              {...(onSignIn === undefined ? { 'aria-haspopup': 'dialog' as const } : {})}
+            >
+              Sign in
+            </button>
+            <button type="button" className={btn} onClick={recheck} disabled={checking} aria-busy={checking}>
+              Re-check
+            </button>
+          </span>
+        </div>
+      </section>
+      {dialogOpen && projectId !== null && (
+        <VcsSignInDialog
+          projectId={projectId}
+          vcs={vcs}
+          onClose={(signedIn) => {
+            setDialogOpen(false);
+            if (signedIn) recheck();
+          }}
+        />
       )}
-    </section>
+    </>
   );
 }

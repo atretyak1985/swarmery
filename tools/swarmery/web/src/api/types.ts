@@ -4356,3 +4356,51 @@ export interface VcsInfo {
 
 /** The answer PUT /api/projects/{id}/vcs/provider accepts. */
 export type VcsProviderAnswer = 'github' | 'gitlab';
+
+// --- vcs sign-in (phase 8) ---
+
+/** POST /api/projects/{id}/vcs/login {"method":"device"} → 202 — what the
+ *  human needs to finish a device-flow sign-in in a browser. The device code
+ *  itself never leaves the daemon; `loginId` is the handle to poll. */
+export interface VcsLoginStart {
+  loginId: string;
+  userCode: string;
+  verificationUri: string;
+  /** The verification URI with the user code pre-filled, when the host sends one. */
+  verificationUriComplete?: string;
+  /** Seconds until the user code expires. */
+  expiresIn: number;
+  /** Seconds to wait between polls. */
+  interval: number;
+}
+
+/** One device-flow poll step's outcome. */
+export type VcsLoginStatus = 'pending' | 'ok' | 'expired' | 'denied';
+
+/** GET /api/projects/{id}/vcs/login/{loginId} → 200 (ONE poll step). */
+export interface VcsLoginPoll {
+  status: VcsLoginStatus;
+  /** The signed-in account, on `ok` ('' when the host could not be asked). */
+  login?: string;
+  /** Seconds to wait before the next poll — raised when the host said slow_down. */
+  interval: number;
+}
+
+/** POST /api/projects/{id}/vcs/login {"method":"token","token":"…"} → 200. */
+export interface VcsTokenResult {
+  status: 'ok';
+  login: string;
+}
+
+/** The `code` of a refused sign-in request (409 / 422 / 429 / 404 / 502). */
+export type VcsLoginErrorCode =
+  | 'device-flow-unconfigured'
+  | 'device-flow-disabled'
+  | 'device-flow-failed'
+  | 'too-many-pending-logins'
+  | 'login-not-found'
+  | 'token-unverified'
+  | 'not-authenticated'
+  | 'no-remote'
+  | 'provider-unknown'
+  | 'no-project-path';

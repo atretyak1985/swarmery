@@ -2729,3 +2729,89 @@ export interface TrajectoryJudgment {
 export function fetchTrajectoryJudgments(sessionId: number): Promise<TrajectoryJudgment[]> {
   return get(`/api/analytics/trajectory-judgments?session=${String(sessionId)}`);
 }
+
+// --- vcs sign-in (phase 8) ---
+// The block keeps its own type import so it merges beside other phases'
+// additions to the import list at the top of this file.
+
+import type { VcsLoginErrorCode, VcsLoginPoll, VcsLoginStart, VcsTokenResult } from './api/types';
+
+/**
+ * A refused sign-in request, with the server's `code` and `hint` kept apart:
+ * the sign-in dialog shows a 409 `device-flow-unconfigured` hint (which env var
+ * to set) and a 422 `not-authenticated` as its own sentence. `code` is
+ * undefined for a body the daemon did not shape (a 400, a 5xx).
+ */
+export class VcsLoginError extends Error {
+  readonly status: number;
+  readonly code: VcsLoginErrorCode | undefined;
+  /** What the operator can do about it; '' when the server sent none. */
+  readonly hint: string;
+
+  constructor(status: number, body: { error?: string; code?: VcsLoginErrorCode; hint?: string }, fallback: string) {
+    super(body.error ?? `${fallback}: ${String(status)}`);
+    this.name = 'VcsLoginError';
+    this.status = status;
+    this.code = body.code;
+    this.hint = body.hint ?? '';
+  }
+}
+
+async function vcsLoginError(res: Response, fallback: string): Promise<VcsLoginError> {
+  const body = (await res.json().catch(() => ({}))) as ConstructorParameters<typeof VcsLoginError>[1];
+  return new VcsLoginError(res.status, body, fallback);
+}
+
+/**
+ * POST /api/projects/{id}/vcs/login {"method":"device"} → 202: open an OAuth
+ * device flow for the project's code host. Throws VcsLoginError: 409
+ * `device-flow-unconfigured` (no client id — `hint` names the env var) or
+ * `device-flow-disabled`, 422 `no-remote` / `provider-unknown`, 429
+ * `too-many-pending-logins`, 502 `device-flow-failed`.
+ */
+export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
+  const res = await fetch(`/api/projects/${String(projectId)}/vcs/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method: 'device' }),
+  });
+  if (!res.ok) throw await vcsLoginError(res, 'sign-in failed');
+  return (await res.json()) as VcsLoginStart;
+}
+
+/**
+ * GET /api/projects/{id}/vcs/login/{loginId} → ONE poll step. Call it every
+ * `interval` seconds (the answer's own interval wins: the host may ask to slow
+ * down) until the status is not `pending`. On `ok` the daemon has stored the
+ * token. Throws VcsLoginError: 404 `login-not-found`, 502 `device-flow-failed`.
+ */
+export async function pollVcsLogin(projectId: number, loginId: string): Promise<VcsLoginPoll> {
+  const res = await fetch(`/api/projects/${String(projectId)}/vcs/login/${encodeURIComponent(loginId)}`);
+  if (!res.ok) throw await vcsLoginError(res, 'sign-in poll failed');
+  return (await res.json()) as VcsLoginPoll;
+}
+
+/**
+ * POST /api/projects/{id}/vcs/login {"method":"token","token":"…"} → 200: the
+ * daemon validates the token with the host first and stores it only when it is
+ * accepted. Throws VcsLoginError: 422 `not-authenticated` (rejected — nothing
+ * stored), 502 `token-unverified` (could not check — nothing stored).
+ */
+export async function submitVcsToken(projectId: number, token: string): Promise<VcsTokenResult> {
+  const res = await fetch(`/api/projects/${String(projectId)}/vcs/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method: 'token', token }),
+  });
+  if (!res.ok) throw await vcsLoginError(res, 'token sign-in failed');
+  return (await res.json()) as VcsTokenResult;
+}
+
+/**
+ * DELETE /api/projects/{id}/vcs/token → 204: the daemon forgets the token it
+ * holds for the project's host (its CLI falls back to the operator's own login).
+ */
+export async function deleteVcsToken(projectId: number): Promise<void> {
+  const res = await fetch(`/api/projects/${String(projectId)}/vcs/token`, { method: 'DELETE' });
+  if (!res.ok) throw await vcsLoginError(res, 'sign-out failed');
+}
