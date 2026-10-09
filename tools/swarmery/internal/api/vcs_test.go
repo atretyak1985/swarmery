@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -235,6 +236,83 @@ func TestProjectVcsFreshBypassesCache(t *testing.T) {
 	f.get(t)
 	if got := f.calls(); got != afterFresh {
 		t.Errorf("a plain read after fresh=1 re-executed: %d calls, want %d", got, afterFresh)
+	}
+}
+
+// Concurrent uncached reads of one project run ONE probe: the banner and the
+// Plans page open together on a cold cache, and a Re-check (?fresh=1) landing
+// mid-probe joins it instead of starting a second one.
+func TestProjectVcsConcurrentColdReadsShareOneProbe(t *testing.T) {
+	fake := githubCLIOK("https://github.com/acme/widgets.git")
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	var remoteRuns atomic.Int32
+	fake.Fn = func(_ string, _ []string, name string, args []string) (string, string, error, bool) {
+		if repoprovider.FakeKey(name, args) == "git remote" {
+			remoteRuns.Add(1)
+			once.Do(func() { close(entered) })
+			<-release
+		}
+		return "", "", nil, false
+	}
+	f, _ := newVcsFixture(t, fake)
+	joined := make(chan int64, 4)
+	projectVcsCache.onJoin = func(id int64) { joined <- id }
+
+	// Each read runs on its own goroutine, so it reports instead of failing.
+	type result struct {
+		dto vcsDTO
+		err error
+	}
+	results := make(chan result, 3)
+	read := func(query string) {
+		url := f.srv + "/api/projects/1/vcs"
+		if query != "" {
+			url += "?" + query
+		}
+		resp, err := http.Get(url)
+		if err != nil {
+			results <- result{err: err}
+			return
+		}
+		defer resp.Body.Close()
+		var dto vcsDTO
+		if resp.StatusCode != http.StatusOK {
+			err = fmt.Errorf("status %d", resp.StatusCode)
+		} else {
+			err = json.NewDecoder(resp.Body).Decode(&dto)
+		}
+		results <- result{dto: dto, err: err}
+	}
+	go read("")
+	<-entered // the first request owns the probe and is blocked inside it
+	go read("")
+	go read("fresh=1")
+	for range 2 {
+		select {
+		case <-joined:
+		case <-time.After(5 * time.Second):
+			close(release)
+			t.Fatal("a concurrent read did not join the in-flight probe")
+		}
+	}
+	close(release)
+
+	for range 3 {
+		select {
+		case r := <-results:
+			if r.err != nil {
+				t.Errorf("read: %v", r.err)
+			} else if r.dto.Auth.Status != repoprovider.AuthOK || r.dto.Auth.Login != "octocat" {
+				t.Errorf("auth = %+v, want ok/octocat", r.dto.Auth)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("a read never returned")
+		}
+	}
+	if n := remoteRuns.Load(); n != 1 {
+		t.Errorf("the remote was read %d times across 3 concurrent reads, want 1 probe", n)
 	}
 }
 

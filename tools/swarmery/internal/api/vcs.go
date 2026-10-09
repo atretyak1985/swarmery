@@ -11,6 +11,11 @@ package api
 // rejected the credentials (a not-authenticated land) without waiting for the
 // TTL.
 //
+// Uncached answers are single-flight per project: the banner and the Plans
+// page open together on a cold cache, and a Re-check (?fresh=1) can land while
+// a probe is already running — each of those joins the in-flight probe and
+// shares its answer instead of starting a second `gh` round-trip.
+//
 // `auth.status = "expired"` rule. landing_error carries no timestamp of its
 // own, so "a not-authenticated landing failure newer than the last successful
 // probe" is decided from what is cheaply available:
@@ -98,12 +103,21 @@ type vcsCacheEntry struct {
 	at  time.Time
 }
 
-// vcsCache is the per-project cache. now is injectable for the TTL tests.
+// vcsProbeCall is one in-flight uncached answer; done closes once entry is set.
+type vcsProbeCall struct {
+	done  chan struct{}
+	entry vcsCacheEntry
+}
+
+// vcsCache is the per-project cache. now is injectable for the TTL tests;
+// onJoin (nil outside tests) observes a request joining an in-flight probe.
 type vcsCache struct {
 	mu        sync.Mutex
 	now       func() time.Time
 	entries   map[int64]vcsCacheEntry
 	expiredAt map[int64]time.Time
+	inflight  map[int64]*vcsProbeCall
+	onJoin    func(projectID int64)
 }
 
 func newVcsCache() *vcsCache {
@@ -111,6 +125,7 @@ func newVcsCache() *vcsCache {
 		now:       time.Now,
 		entries:   map[int64]vcsCacheEntry{},
 		expiredAt: map[int64]time.Time{},
+		inflight:  map[int64]*vcsProbeCall{},
 	}
 }
 
@@ -137,26 +152,54 @@ func MarkVcsAuthExpired(projectID int64) {
 	c.expiredAt[projectID] = c.now()
 }
 
-// lookup returns a fresh cached answer, with the expiry overlay applied.
-func (c *vcsCache) lookup(projectID int64) (vcsDTO, bool) {
+// get returns projectID's answer: the cached one while fresh (unless fresh is
+// set), else the answer of the probe already in flight for the project, else
+// the answer of a new probe run by compute. The entry is stamped with the
+// moment the probe STARTED, so a MarkVcsAuthExpired racing the probe is not
+// lost. A caller whose ctx ends while it waits on another request's probe
+// gets ctx's error; the probe itself runs on.
+func (c *vcsCache) get(ctx context.Context, projectID int64, fresh bool, compute func() vcsDTO) (vcsDTO, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	e, ok := c.entries[projectID]
-	if !ok || c.now().Sub(e.at) >= vcsCacheTTL {
-		return vcsDTO{}, false
+	if !fresh {
+		if e, ok := c.entries[projectID]; ok && c.now().Sub(e.at) < vcsCacheTTL {
+			d := c.overlayLocked(projectID, e)
+			c.mu.Unlock()
+			return d, nil
+		}
 	}
-	return c.overlayLocked(projectID, e), true
-}
+	if call, ok := c.inflight[projectID]; ok {
+		onJoin := c.onJoin
+		c.mu.Unlock()
+		if onJoin != nil {
+			onJoin(projectID)
+		}
+		select {
+		case <-call.done:
+		case <-ctx.Done():
+			return vcsDTO{}, ctx.Err()
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.overlayLocked(projectID, call.entry), nil
+	}
+	call := &vcsProbeCall{done: make(chan struct{})}
+	c.inflight[projectID] = call
+	call.entry.at = c.now()
+	c.mu.Unlock()
 
-// store caches dto as computed at `at` (the moment the probe STARTED, so a
-// MarkVcsAuthExpired racing the probe is not lost) and returns it with the
-// overlay applied.
-func (c *vcsCache) store(projectID int64, dto vcsDTO, at time.Time) vcsDTO {
+	// Deferred so a panicking probe still releases the requests joined to it.
+	defer func() {
+		c.mu.Lock()
+		delete(c.inflight, projectID)
+		c.mu.Unlock()
+		close(call.done)
+	}()
+	call.entry.dto = compute()
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	e := vcsCacheEntry{dto: dto, at: at}
-	c.entries[projectID] = e
-	return c.overlayLocked(projectID, e)
+	c.entries[projectID] = call.entry
+	return c.overlayLocked(projectID, call.entry), nil
 }
 
 // overlayLocked applies rule 2 of the file header. Caller holds mu.
@@ -181,21 +224,24 @@ func (h *Handler) projectVcs(w http.ResponseWriter, r *http.Request) {
 	}
 	// ?fresh=1 is the banner's "Re-check" after a terminal sign-in: the
 	// operator just changed what the probe would answer, so the cached answer
-	// is known stale. Every other read takes the cache.
-	if r.URL.Query().Get("fresh") != "1" {
-		if dto, hit := projectVcsCache.lookup(id); hit {
-			writeJSON(w, dto, nil)
-			return
+	// is known stale (a probe already in flight is still joined). Every other
+	// read takes the cache.
+	fresh := r.URL.Query().Get("fresh") == "1"
+	dto, err := projectVcsCache.get(r.Context(), id, fresh, func() vcsDTO {
+		// Detached from the request that happened to start it: other requests
+		// share this probe, so one client going away must not cut it short.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), vcsProbeTimeout)
+		defer cancel()
+		d := buildVcsDTO(ctx, path)
+		if d.Auth.Status == repoprovider.AuthUnknown && h.projectHasAuthLandingError(id) {
+			d.Auth.Status = repoprovider.AuthExpired // rule 3
 		}
+		return d
+	})
+	if err != nil {
+		return // the client went away while waiting on another request's probe
 	}
-	at := projectVcsCache.now()
-	ctx, cancel := context.WithTimeout(r.Context(), vcsProbeTimeout)
-	defer cancel()
-	dto := buildVcsDTO(ctx, path)
-	if dto.Auth.Status == repoprovider.AuthUnknown && h.projectHasAuthLandingError(id) {
-		dto.Auth.Status = repoprovider.AuthExpired // rule 3
-	}
-	writeJSON(w, projectVcsCache.store(id, dto, at), nil)
+	writeJSON(w, dto, nil)
 }
 
 // projectHasAuthLandingError reports whether any phase of the project carries a
