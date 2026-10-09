@@ -291,11 +291,15 @@ func TestLandPhasePushMarksPushed(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
 	}
-	if l := landingOf(t, body); l["state"] != landingPushed || l["landedAt"] == nil {
-		t.Errorf("landing = %v, want pushed with landedAt", l)
+	// landedAt is the MERGE time (SC-13): a push leaves it null.
+	if l := landingOf(t, body); l["state"] != landingPushed || l["landedAt"] != nil {
+		t.Errorf("landing = %v, want pushed with landedAt null", l)
 	}
 	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingPushed {
 		t.Errorf("landing_state = %q, want pushed", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landed_at"); got != "" {
+		t.Errorf("landed_at = %q after a push, want NULL (only a merge stamps it)", got)
 	}
 	if !fake.Ran("git push -u origin " + landTestBranch) {
 		t.Errorf("branch was not pushed; calls = %v", fake.Calls)
@@ -326,6 +330,9 @@ func TestLandPhasePROpensDraftChangeRequest(t *testing.T) {
 	}
 	if got := phaseCol(t, f.db, f.phaseID, "pr_url"); got != landTestPRURL {
 		t.Errorf("pr_url = %q", got)
+	}
+	if l["landedAt"] != nil || phaseCol(t, f.db, f.phaseID, "landed_at") != "" {
+		t.Errorf("landedAt = %v after opening a PR, want null (only a merge stamps it)", l["landedAt"])
 	}
 	if !fake.Ran("git push -u origin " + landTestBranch) {
 		t.Errorf("branch not pushed before the PR; calls = %v", fake.Calls)

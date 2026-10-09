@@ -92,7 +92,9 @@ type landingDTO struct {
 	// The change request's last polled status (repoprovider.ChangeStatus as JSON),
 	// null until polled. Passed through as stored.
 	PrStatus json.RawMessage `json:"prStatus"`
-	LandedAt *string         `json:"landedAt"`
+	// When the change request merged (the status poller stamps it with the
+	// pr_open → merged flip); null until then — a push never sets it.
+	LandedAt *string `json:"landedAt"`
 	// The last landing failure the operator has to act on (today: the host
 	// rejected the daemon's credentials). Cleared by the next successful push.
 	Error *string `json:"error"`
@@ -598,19 +600,21 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
 	// none|ready → pushed; returned → pushed, or back to pr_open when it was
 	// returned with a change request already open (the push updates that same
 	// change request). A phase already further along (pr_open, merged) keeps its
 	// state: a re-push of new commits does not un-open its PR.
+	//
+	// landed_at is NOT written here: it is the MERGE time (SC-13), stamped by the
+	// status poller (internal/repoprovider/landpoll) when the change lands.
 	if _, err := h.DB.Exec(`
 		UPDATE epic_phases
 		   SET landing_state = CASE
 		         WHEN landing_state = ? THEN ?
 		         WHEN landing_state = ? THEN CASE WHEN pr_url IS NOT NULL AND pr_url <> '' THEN ? ELSE ? END
 		         ELSE landing_state END,
-		       landed_at = ?, landing_error = NULL
-		 WHERE id = ?`, landingNone, landingPushed, landingReturned, landingPROpen, landingPushed, now, phaseID); err != nil {
+		       landing_error = NULL
+		 WHERE id = ?`, landingNone, landingPushed, landingReturned, landingPROpen, landingPushed, phaseID); err != nil {
 		writeErr(w, err)
 		return
 	}
