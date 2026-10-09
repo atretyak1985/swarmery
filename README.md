@@ -1,41 +1,30 @@
 <div align="center">
 
-# SW◆RMERY
+<a href="https://atretyak1985.github.io/swarmery/"><img src="site/favicon.svg" width="72" alt="Swarmery"></a>
 
-**Run your Claude Code agents like a fleet — not like a pile of terminal tabs.**
+# Swarmery
 
-A local-first control plane for Claude Code sessions. One Go binary, no cloud, no account. Ships with
-a versioned plugin marketplace so your agents live in one place and every project pulls them with `/plugin update`.
+### Run your Claude Code agents like a fleet — not like a pile of terminal tabs.
+
+A local-first control plane for Claude Code sessions: plan the work through an interview, run it in isolated
+worktrees, answer every waiting agent from one queue, and see what it cost. One Go binary, no cloud, no account —
+plus a versioned plugin marketplace so your agents live in one place and every project pulls them with `/plugin update`.
+
+**[Website](https://atretyak1985.github.io/swarmery/)** · **[Features](https://atretyak1985.github.io/swarmery/features/)** · **[Videos](https://atretyak1985.github.io/swarmery/videos/)** · **[Plugins](https://atretyak1985.github.io/swarmery/plugins/)** · **[Get started](https://atretyak1985.github.io/swarmery/install/)** · **[Docs](docs/TOUR.md)** · **[Blog](https://swarmery.substack.com)** · **[X @SwarmeryDev](https://x.com/SwarmeryDev)**
 
 [![Framework: Apache-2.0](https://img.shields.io/badge/framework-Apache--2.0-blue)](LICENSE) [![Control plane: PolyForm NC](https://img.shields.io/badge/control%20plane-PolyForm%20NC%201.0.0-blue)](tools/swarmery/LICENSE) [![Marketplace CI](https://github.com/atretyak1985/swarmery/actions/workflows/ci.yml/badge.svg)](https://github.com/atretyak1985/swarmery/actions/workflows/ci.yml) [![Control plane CI](https://github.com/atretyak1985/swarmery/actions/workflows/swarmery-ci.yml/badge.svg)](https://github.com/atretyak1985/swarmery/actions/workflows/swarmery-ci.yml) ![Local only](https://img.shields.io/badge/data-100%25%20local-brightgreen) ![Go](https://img.shields.io/badge/Go-1.25-00ADD8) ![React](https://img.shields.io/badge/React-19-61DAFB)
 
+<a href="https://atretyak1985.github.io/swarmery/videos/"><img src="docs/screenshots/hero-loop.gif" width="800" alt="Swarmery dashboard loop: every session live, the Inbox of decisions waiting on you, a plan phased and handed off, and the cost before the bill"></a>
+
+<sub>Every session. Every decision. Every plan. Every dollar. — the <a href="https://atretyak1985.github.io/swarmery/videos/">75-second tour and six feature episodes</a> play on the website.</sub>
+
 </div>
+
+## Quick start
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh | bash
 swarmery serve                            # listens on :7777
-```
-
-https://github.com/user-attachments/assets/db1360d7-2f55-483c-b253-299dec955f0c
-
-<div align="center">
-
-<sub>75-second promo · <a href="docs/video/swarmery-promo.mp4">download the 1080p mp4</a> · <a href="docs/screenshots/demo.gif">dashboard demo (gif)</a></sub>
-
-</div>
-
-## Install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh | bash
-swarmery serve                            # listens on :7777
-```
-
-Prefer to read what you run (recommended — a piped script executes whatever the server returns):
-
-```bash
-url=https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh
-curl -fsSL "$url" -o install.sh && less install.sh && bash install.sh
 ```
 
 ```bash
@@ -43,21 +32,63 @@ curl -s http://localhost:7777/api/health  # → {"status":"ok",…}
 open http://localhost:7777
 ```
 
+Sessions you have already run show up immediately — the daemon backfills from the JSONL transcripts Claude Code
+already writes under `~/.claude/projects/`. Nothing to instrument, nothing leaves the machine. Prefer to read what
+you run (a piped script executes whatever the server returns):
+
+```bash
+url=https://raw.githubusercontent.com/atretyak1985/swarmery/main/scripts/install.sh
+curl -fsSL "$url" -o install.sh && less install.sh && bash install.sh
+```
+
+Then [set up a project](#set-up-a-project) — one command writes its `.claude/` config.
+
 ## What it does
 
 - **See everything** — every session across every project, live: tool calls, diffs, cost, sub-agents, errors.
-- **Stop being the bottleneck** — approve or deny permission prompts from one Inbox; turn a recurring prompt into an auto-approve rule.
+- **Stop being the bottleneck** — approve or deny permission prompts from one Inbox; turn a recurring prompt into an auto-approve rule; an agent clears the part that never needed you.
 - **Delegate, don't babysit** — run a phase, or the whole plan, from Plans; a headless agent executes it in its own git worktree, ticks the acceptance criteria as it goes, and a verifier grades the result.
-- **Improve the system, not the prompt** — per-agent scorecards, a rule-based advisor, and agent-rewrite proposals you review as a diff.
+- **Improve the system, not the prompt** — per-agent scorecards, a rule-based advisor with evidence, lessons drawn from runs that missed their forecast, and agent-rewrite proposals you review as a diff.
 - **Ship agents once** — a real Claude Code plugin marketplace: `core` + opt-in domain packs, semver'd, adopted with `/plugin update`.
 
-Full tour of every place in the dashboard: [docs/TOUR.md](docs/TOUR.md)
+Each place below has its own page and episode on the [website](https://atretyak1985.github.io/swarmery/features/); the full place-by-place tour
+is [docs/TOUR.md](docs/TOUR.md). Screenshots use fictional projects (TrailMap, Ledgerly API).
 
-## Follow the build
+### Planning — [episode 1](https://atretyak1985.github.io/swarmery/features/planning/)
 
-Build-in-public series on [Substack](https://swarmery.substack.com) · updates on [X @SwarmeryDev](https://x.com/SwarmeryDev)
+Describe what you want in prose. A planner interviews you one question at a time while the plan rebuilds beside it, then lands as phase documents with acceptance criteria, forecasts and dependencies. Run one phase or the whole graph; a phase that lands far from its forecast gets a proposed fix you review as a diff.
 
-If Swarmery is useful to you, a ⭐ helps other people find it.
+<table><tr><td width="50%" valign="top"><a href="site/assets/img/01-planning-1-interview1-pros-lg.webp"><img src="site/assets/img/01-planning-1-interview1-pros.webp" alt="The planner interviews you: options with pros, cons and a recommended pick"></a><br><sub>The planner interviews you: options with pros, cons and a recommended pick</sub></td><td width="50%" valign="top"><a href="site/assets/img/01-planning-3-readme-lg.webp"><img src="site/assets/img/01-planning-3-readme.webp" alt="The plan lands as docs: goal, decisions from the interview, phases and dependencies"></a><br><sub>The plan lands as docs: goal, decisions from the interview, phases and dependencies</sub></td></tr></table>
+
+### Inbox — [episode 2](https://atretyak1985.github.io/swarmery/features/inbox/)
+
+Permission prompts, agent questions, lesson candidates, advisor findings, agent-change proposals and classifier checks — one queue worked from the keyboard (`j`/`k`, `e`, `x`, `s`). A triage agent labels and closes what it can and leaves a suggestion on the rest; approvals, agent changes and alerts always wait for you.
+
+<table><tr><td width="50%" valign="top"><a href="site/assets/img/02-inbox-1-all-lg.webp"><img src="site/assets/img/02-inbox-1-all.webp" alt="Every decision that waits on you, in one queue"></a><br><sub>Every decision that waits on you, in one queue</sub></td><td width="50%" valign="top"><a href="site/assets/img/02-inbox-2-askq-lg.webp"><img src="site/assets/img/02-inbox-2-askq.webp" alt="Agent questions as real choices, not a yes or no"></a><br><sub>Agent questions as real choices, not a yes or no</sub></td></tr></table>
+
+### Health — [episode 3](https://atretyak1985.github.io/swarmery/features/health/)
+
+One date range reduced to one sentence about the fleet and the agents that moved it. Scorecards against the previous window, the friction you can remove today — denied tools, repeated errors, time agents waited on you — and an advisor whose every recommendation carries its evidence. Cost and tokens pivot by project, model or agent.
+
+<table><tr><td width="50%" valign="top"><a href="site/assets/img/03-health-1-overview-lg.webp"><img src="site/assets/img/03-health-1-overview.webp" alt="One sentence about the fleet, and friction you can remove today"></a><br><sub>One sentence about the fleet, and friction you can remove today</sub></td><td width="50%" valign="top"><a href="site/assets/img/03-health-4-advisor-lg.webp"><img src="site/assets/img/03-health-4-advisor.webp" alt="Advisor recommendations with evidence, and agent proposals"></a><br><sub>Advisor recommendations with evidence, and agent proposals</sub></td></tr></table>
+
+### Sessions — [episode 4](https://atretyak1985.github.io/swarmery/features/sessions/)
+
+Every session the daemon indexes, newest first, with a `now:` line that says what the agent is doing this second and a chip that tells working from stuck. Open one as Chat, Timeline and Diffs, reply from the dashboard, and read the rail of models, call tree, files changed and cost.
+
+<table><tr><td width="50%" valign="top"><a href="site/assets/img/04-sessions-2-chattop-lg.webp"><img src="site/assets/img/04-sessions-2-chattop.webp" alt="One session: status, cost, chat and the side panel"></a><br><sub>One session: status, cost, chat and the side panel</sub></td><td width="50%" valign="top"><a href="site/assets/img/04-sessions-4-diffs-lg.webp"><img src="site/assets/img/04-sessions-4-diffs.webp" alt="Diffs: every file changed, changes outside the plan flagged"></a><br><sub>Diffs: every file changed, changes outside the plan flagged</sub></td></tr></table>
+
+### Learning — [episode 5](https://atretyak1985.github.io/swarmery/features/learning/)
+
+A run that lands far from its forecast becomes a lesson candidate with the evidence attached; nothing becomes active without your accept, and active lessons are re-measured and retired when they stop earning their place. A local classifier watches until its answers match yours, and forecast honesty shows who over-promises.
+
+<table><tr><td width="50%" valign="top"><a href="site/assets/img/05-learning-1-lessons-lg.webp"><img src="site/assets/img/05-learning-1-lessons.webp" alt="Lesson candidates with cause and evidence, and a retirement proposal"></a><br><sub>Lesson candidates with cause and evidence, and a retirement proposal</sub></td><td width="50%" valign="top"><a href="site/assets/img/05-learning-2-classifier-lg.webp"><img src="site/assets/img/05-learning-2-classifier.webp" alt="The local classifier and how often it matches you"></a><br><sub>The local classifier and how often it matches you</sub></td></tr></table>
+
+### Knowledge — [episode 6](https://atretyak1985.github.io/swarmery/features/knowledge/)
+
+What one project knows about itself: its instructions, auto-memory and Serena notes in one editor with a conflict guard and a stale-fact lint, and the architecture map embedded with a staleness badge and a one-click rebuild — plus the Serena and Graphify dashboards when their packs are enabled.
+
+<table><tr><td width="50%" valign="top"><a href="site/assets/img/06-knowledge-1-memory-preview-lg.webp"><img src="site/assets/img/06-knowledge-1-memory-preview.webp" alt="Memory: project instructions, auto-memory and Serena notes in one editor"></a><br><sub>Memory: project instructions, auto-memory and Serena notes in one editor</sub></td><td width="50%" valign="top"><a href="site/assets/img/06-knowledge-2-arch-flow-lg.webp"><img src="site/assets/img/06-knowledge-2-arch-flow.webp" alt="Architecture map with a flow traced step by step"></a><br><sub>Architecture map with a flow traced step by step</sub></td></tr></table>
 
 ## Why
 
@@ -69,11 +100,7 @@ Swarmery gives that fleet a single window — and then closes the loop.
 
 ---
 
-## Quickstart
-
-Sessions you have already run show up immediately — the daemon backfills from the JSONL
-transcripts Claude Code already writes under `~/.claude/projects/`. Nothing to instrument,
-no account, nothing leaves the machine.
+## Set up a project
 
 The installer downloads the release binary for your platform (macOS and Linux, amd64 and
 arm64), verifies it against `SHA256SUMS`, and drops it in `~/.local/bin`
@@ -152,8 +179,9 @@ The CLI `swarmery onboard` always works.
 
 ---
 
-**A place-by-place tour of the dashboard — Today, Inbox, Sessions, Plans, Health,
-Learning, Knowledge, Docs, System, Settings — lives in [docs/TOUR.md](docs/TOUR.md).**
+**A place-by-place tour of the dashboard — Today, Inbox, Needs you, Sessions, Plans, Health,
+Learning, Knowledge, Docs, System, Settings — lives in [docs/TOUR.md](docs/TOUR.md); the
+[website](https://atretyak1985.github.io/swarmery/) has a page and an episode per feature.**
 
 ---
 
@@ -167,7 +195,7 @@ flowchart LR
     APPR --> DB
     DB --> UI["Dashboard :7777"]
     UI -->|approve / deny| CC
-    UI -->|Run card| DISP[Dispatcher]
+    UI -->|Run phase| DISP[Dispatcher]
     DISP -->|git worktree| AGENT["headless claude -p"]
     AGENT --> VER[Verify]
     VER --> DB
@@ -394,6 +422,11 @@ Further reading: [docs/ONBOARDING.md](docs/ONBOARDING.md) ·
 [control plane README](tools/swarmery/README.md) · [SECURITY.md](SECURITY.md)
 
 ---
+
+## Follow the build
+
+Website: [atretyak1985.github.io/swarmery](https://atretyak1985.github.io/swarmery/) · build-in-public series on [Substack](https://swarmery.substack.com) ·
+updates on [X @SwarmeryDev](https://x.com/SwarmeryDev). If Swarmery is useful to you, a ⭐ helps other people find it.
 
 ## License
 
