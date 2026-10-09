@@ -194,6 +194,10 @@ type epicPhaseDTO struct {
 	// request's URL/number/provider once opened. `ready` is derived here, never
 	// stored: nothing landed yet and the run finished.
 	Landing landingDTO `json:"landing"`
+	// Reopens is the phase's reopen ledger (migration 0104, phase_reopen.go),
+	// oldest first: every time a finished phase was sent back because a defect
+	// slipped past its gates, with the gate that caught it. Never null.
+	Reopens []reopenDTO `json:"reopens"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -873,6 +877,11 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	usage := h.phaseRunModels(taskID)
 	forecasts := h.phaseForecasts(taskID) // same rule, same reason: one query, cursor closed
 	surprises := h.phaseSurprises(taskID) // and again
+	docs := make(map[int64]string, len(phases))
+	for _, p := range phases {
+		docs[p.ID] = p.DocPath
+	}
+	reopens := h.phaseReopens(taskID, docs) // and again
 	for i := range phases {
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]
@@ -884,6 +893,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		phases[i].Forecasts = forecastDTOs(fs)
 		phases[i].ForecastLints = wsingest.LintForecasts(forecastsOnly(fs))
 		phases[i].Surprise = surprises[phases[i].ID]
+		phases[i].Reopens = reopens[phases[i].ID]
+		if phases[i].Reopens == nil {
+			phases[i].Reopens = []reopenDTO{} // [] not null: the UI maps over it
+		}
 	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100

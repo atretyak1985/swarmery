@@ -508,17 +508,24 @@ func UntickedCheckboxes(text string) []string {
 		if strings.EqualFold(line[loc[2]:loc[3]], "x") {
 			return
 		}
-		label := strings.TrimSpace(line[loc[1]:])
-		label = strings.Trim(label, "*_` ")
-		if label == "" {
-			return
+		if label := criterionLabel(line[loc[1]:]); label != "" {
+			out = append(out, label)
 		}
-		if r := []rune(label); len(r) > untickedLabelCap {
-			label = string(r[:untickedLabelCap]) + "…"
-		}
-		out = append(out, label)
 	})
 	return out
+}
+
+// criterionLabel is THE rendering of a criterion's label: the text after the
+// checkbox marker, trimmed of markdown emphasis and capped at untickedLabelCap
+// runes. UntickedCheckboxes, TickedCriteriaLabels and UntickCriteria all go through
+// it, so a label one of them returned is a label the others recognise.
+func criterionLabel(rest string) string {
+	label := strings.TrimSpace(rest)
+	label = strings.Trim(label, "*_` ")
+	if r := []rune(label); len(r) > untickedLabelCap {
+		label = string(r[:untickedLabelCap]) + "…"
+	}
+	return label
 }
 
 // forEachLineOutsideFences calls fn for every line that is not inside a fenced
