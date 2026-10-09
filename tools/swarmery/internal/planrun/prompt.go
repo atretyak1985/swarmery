@@ -124,7 +124,7 @@ func manifest(phases []Phase) string {
 // The third: the skill's per-phase report contract points executors at
 // `<task-dir>/reports/phase-<N>-report.md`, a path the dashboard never reads.
 // The Plans UI renders a phase's summary from the doc's own `## Completion
-// Report` section (wsingest.parseCompletionReport) and from nothing else, so a
+// Report` section (wsingest.ParseCompletionReport) and from nothing else, so a
 // run whose phases landed can still show "no summary of the work written". The
 // prompt therefore makes the in-doc section part of finishing a phase.
 //

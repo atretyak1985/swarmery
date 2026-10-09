@@ -103,6 +103,12 @@ type RunSpec struct {
 	// site. "" (no known project path) means no account resolution at all;
 	// see runcore.AccountFor's guard.
 	ProjectPath string
+
+	// Returned records that the operator sent the phase back with feedback
+	// (StartOptions.Returned); Prompt already carries ReturnedNote. Informational
+	// for the runner — it changes no flag — and continuations copy it with the
+	// rest of the spec.
+	Returned bool
 }
 
 // Run is the outcome of a completed phase-run process.

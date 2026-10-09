@@ -26,7 +26,7 @@ export type PlansStatus = 'active' | 'done' | 'archived';
 export type PlanDetailTab = 'plan' | 'spec' | 'summary' | 'revisions' | 'edit';
 
 export const PLANS_STATUSES: readonly PlansStatus[] = ['active', 'done', 'archived'];
-export const PHASE_TAB_IDS: readonly PhaseTab[] = ['story', 'criteria', 'runs', 'report', 'edit'];
+export const PHASE_TAB_IDS: readonly PhaseTab[] = ['story', 'criteria', 'runs', 'review', 'report', 'edit'];
 export const PLAN_DETAIL_TAB_IDS: readonly PlanDetailTab[] = ['plan', 'spec', 'summary', 'revisions', 'edit'];
 
 export type PlansDetail =

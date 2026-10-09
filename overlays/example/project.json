@@ -33,5 +33,9 @@
     "qaStatus": "QA",
     "repro": { "setup": "npm ci", "test": "npm test" },
     "budget": { "maxFiles": 5, "maxAttempts": 3 }
+  },
+  "vcs": {
+    "provider": "auto",
+    "baseBranch": "main"
   }
 }

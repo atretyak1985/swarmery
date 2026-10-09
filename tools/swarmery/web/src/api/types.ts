@@ -1995,6 +1995,8 @@ export interface LandTaskResponse {
   prUrl: string;
   branch: string;
   task: BoardTask;
+  /** The provider's vocabulary for the change request just opened. */
+  terms?: VcsTerms;
 }
 
 // --- fusion phase 13: playbooks (selectable workflows) ------------------------
@@ -3719,6 +3721,65 @@ export interface EpicPhase {
    *  scored: no forecast, no actuals, or nothing measurable. ADVISORY: nothing
    *  consults it for completion, and a run is never refused on it. */
   surprise: PhaseSurprise | null;
+  /** The phase's landing lifecycle (migration 0103) — see PhaseLanding. */
+  landing: PhaseLanding;
+}
+
+/** Where a phase's run branch is on its way to the code host. `ready` is DERIVED
+ *  server-side (nothing landed yet and the run finished) and never stored. */
+export type PhaseLandingState = 'none' | 'ready' | 'pushed' | 'pr_open' | 'merged' | 'returned';
+
+/** Mirrors api.landingDTO. Every nullable field stays null until the step that
+ *  writes it has happened. */
+export interface PhaseLanding {
+  state: PhaseLandingState;
+  prUrl: string | null;
+  prNumber: number | null;
+  /** The provider that opened the change request: 'github' | 'gitlab'. */
+  prProvider: string | null;
+  /** The change request's last polled status (repoprovider.ChangeStatus), null
+   *  until polled. */
+  prStatus: PhaseChangeStatus | null;
+  landedAt: string | null;
+  /** The last landing failure the operator has to act on (today:
+   *  `not-authenticated: …`); cleared by the next successful push. */
+  error: string | null;
+}
+
+/** POST /api/epics/{taskId}/phases/{phaseId}/land `action`: push the run branch,
+ *  push it and open a change request, or send the phase back to its agent with
+ *  `feedback` (required for 'return', ≤ 20 KB; answers 202 and restarts the run). */
+export type PhaseLandAction = 'push' | 'pr' | 'return';
+
+/** Mirrors repoprovider.ChangeStatus — the normalized vocabulary every provider
+ *  maps onto (SC-13), so no surface branches on the provider to read it. A
+ *  draft is `state: 'open'` + `draft: true`. */
+export interface PhaseChangeStatus {
+  state: 'open' | 'merged' | 'closed';
+  draft: boolean;
+  ci: 'success' | 'failure' | 'pending' | 'none';
+  review: 'approved' | 'changes_requested' | 'review_required' | 'none';
+  /** When the daemon last read it (RFC 3339, UTC). */
+  checkedAt: string;
+}
+
+/** Mirrors repoprovider.Terms: the provider's vocabulary, so no surface branches
+ *  on the provider to pick a label. */
+export interface ProviderTerms {
+  provider: string;
+  change: string;
+  changeShort: string;
+}
+
+/** GET /api/epics/{taskId}/phases/{phaseId}/review — mirrors api.phaseReviewDTO:
+ *  the run branch's diff (the same reader as the board card diff — `base` is the
+ *  run's start point, or the checked-out branch for a phase that predates it),
+ *  plus the verdict, the landing lifecycle and the provider vocabulary. */
+export interface PhaseReview extends TaskDiff {
+  verifyVerdict: PhaseVerifyVerdict | null;
+  verifyDetail: string | null;
+  landing: PhaseLanding;
+  terms: ProviderTerms;
 }
 
 /** Surprise components — the keys of `PhaseSurprise.components`. */
@@ -4217,3 +4278,147 @@ export interface WorktreesResponse {
    * then historical, not current, and the panel says so. */
   enabled: boolean;
 }
+
+// --- phase landing (Phase 5): land request/response + project VCS --------------
+// PhaseLanding / PhaseReview / ProviderTerms live with EpicPhase above.
+
+/** The provider vocabulary under the name the project VCS endpoint uses. */
+export type VcsTerms = ProviderTerms;
+
+/** Body of POST /api/epics/{taskId}/phases/{phaseId}/land. `return` (send the
+ *  phase back to its agent with the reviewer's feedback) is served by a later
+ *  phase; until then the daemon answers it 400. */
+export type PhaseLandRequest =
+  | { action: 'push' }
+  | { action: 'pr'; draft?: boolean }
+  | { action: 'return'; feedback: string };
+
+/** 200 of POST …/land — mirrors the land handler's response. */
+export interface PhaseLandResponse {
+  branch: string;
+  base: string;
+  action: PhaseLandRequest['action'];
+  landing: PhaseLanding;
+  /** The provider's vocabulary (push/pr only; absent on a return). */
+  terms?: VcsTerms;
+}
+
+/** The stable discriminators of a land/review refusal (409 and 422 bodies). */
+export type PhaseLandErrorCode =
+  | 'phase-running'
+  | 'no-run-branch'
+  | 'push-to-base-refused'
+  | 'fork-workflow-unsupported'
+  | 'not-authenticated'
+  | 'no-push-access'
+  | 'remote-diverged'
+  | 'no-remote'
+  | 'binary-missing'
+  | 'provider-unknown'
+  | 'push-failed'
+  | 'change-request-failed';
+
+/** Mirrors api.vcsRemoteDTO: the project's `origin`, credentials stripped. */
+export interface VcsRemote {
+  /** '' when the repo has no origin. */
+  url: string;
+  present: boolean;
+  /** '' when the repo has no origin. */
+  protocol: 'https' | 'ssh' | '';
+}
+
+/** Mirrors api.vcsAuthDTO: whether the daemon is signed in to the host. */
+export interface VcsAuth {
+  status: 'ok' | 'missing' | 'expired' | 'unknown';
+  /** '' when unknown. */
+  login: string;
+  source: 'cli' | 'store' | 'none';
+}
+
+/** GET /api/projects/{id}/vcs — mirrors api.vcsDTO (cached 60s server-side).
+ *  `provider` is for icon lookup only: every label comes from `terms`. */
+export interface VcsInfo {
+  provider: 'github' | 'gitlab' | 'unknown';
+  host: string;
+  terms: VcsTerms;
+  remote: VcsRemote;
+  auth: VcsAuth;
+  /** The configured change-request target; '' = the host's default branch. */
+  baseBranch: string;
+  allowPushToBase: boolean;
+  /** Why `provider` is what it is. */
+  source: 'config' | 'host' | 'probe' | 'unknown';
+  /** The provider CLI's sign-in command for `host` ("<cli> auth login
+   *  --hostname <host>"), chosen by the daemon so the UI never branches on
+   *  `provider`; '' when there is no CLI to name (unknown provider, no host). */
+  cliLogin: string;
+  /** True when the origin exists but its host could not be classified: the UI
+   *  asks once which service hosts it (PUT …/vcs/provider). */
+  askProvider?: boolean;
+}
+
+/** The answer PUT /api/projects/{id}/vcs/provider accepts. */
+export type VcsProviderAnswer = 'github' | 'gitlab';
+
+// --- vcs sign-in (phase 8) ---
+
+/** POST /api/projects/{id}/vcs/login {"method":"device"} → 202 — what the
+ *  human needs to finish a device-flow sign-in in a browser. The device code
+ *  itself never leaves the daemon; `loginId` is the handle to poll. */
+export interface VcsLoginStart {
+  loginId: string;
+  userCode: string;
+  verificationUri: string;
+  /** The verification URI with the user code pre-filled, when the host sends one. */
+  verificationUriComplete?: string;
+  /** Seconds until the user code expires. */
+  expiresIn: number;
+  /** Seconds to wait between polls. */
+  interval: number;
+}
+
+/** One device-flow poll step's outcome. */
+export type VcsLoginStatus = 'pending' | 'ok' | 'expired' | 'denied';
+
+/** GET /api/projects/{id}/vcs/login/{loginId} → 200 (ONE poll step). */
+export interface VcsLoginPoll {
+  status: VcsLoginStatus;
+  /** The signed-in account, on `ok` ('' when the host could not be asked). */
+  login?: string;
+  /** Seconds to wait before the next poll — raised when the host said slow_down. */
+  interval: number;
+}
+
+/** POST /api/projects/{id}/vcs/login {"method":"token","token":"…"} → 200. */
+export interface VcsTokenResult {
+  status: 'ok';
+  login: string;
+}
+
+/** The `code` of a refused sign-in request (409 / 422 / 429 / 404 / 502). */
+export type VcsLoginErrorCode =
+  | 'device-flow-unconfigured'
+  | 'device-flow-disabled'
+  | 'device-flow-failed'
+  | 'too-many-pending-logins'
+  | 'login-not-found'
+  | 'token-unverified'
+  | 'not-authenticated'
+  | 'no-remote'
+  | 'provider-unknown'
+  | 'no-project-path';
+
+// --- landing status (phase 7) ---
+
+/** The stable discriminators of a refused POST
+ *  /api/epics/{taskId}/phases/{phaseId}/landing/refresh: 409
+ *  `no-change-request` (the phase has no PR/MR to read), or a 422 whose code is
+ *  the landing_error code the daemon stamped (`status-failed` for a read that
+ *  failed for any unclassified reason). */
+export type PhaseLandingRefreshErrorCode =
+  | 'no-change-request'
+  | 'not-authenticated'
+  | 'binary-missing'
+  | 'no-remote'
+  | 'provider-unknown'
+  | 'status-failed';

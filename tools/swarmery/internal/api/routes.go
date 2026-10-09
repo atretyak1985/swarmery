@@ -59,6 +59,18 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/config/{key}/probe", requireLocalOrigin(h.probeProjectConfig))
 	// canvas v2 parity: project editorial aggregate (rightNow + thisWeek + attention).
 	mux.HandleFunc("GET /api/projects/{id}/overview", h.projectOverview)
+	// phase landing: the project's code host, its vocabulary and the daemon's
+	// sign-in state (vcs.go; cached 60s per project).
+	mux.HandleFunc("GET /api/projects/{id}/vcs", h.projectVcs)
+	// …and the operator's one-time answer for a host detection could not
+	// classify, stored in .claude/settings.local.json (vcs_provider.go).
+	mux.HandleFunc("PUT /api/projects/{id}/vcs/provider", requireLocalOrigin(h.putProjectVcsProvider))
+	// …and signing the daemon in from the dashboard (vcs_login.go): a device
+	// flow or a pasted token into the daemon's credstore, and forgetting it.
+	// The poll GET is fenced too: a granted poll writes the token.
+	mux.HandleFunc("POST /api/projects/{id}/vcs/login", requireLocalOrigin(h.postProjectVcsLogin))
+	mux.HandleFunc("GET /api/projects/{id}/vcs/login/{loginId}", requireLocalOrigin(h.getProjectVcsLogin))
+	mux.HandleFunc("DELETE /api/projects/{id}/vcs/token", requireLocalOrigin(h.deleteProjectVcsToken))
 	// onboarding: bootstrap a new consumer project from the dashboard. Fenced
 	// by requireLocalOrigin + an explicit root allow-list (disabled when unset).
 	// The GET exposes defaults (workspace root, enabled state) to the modal.
@@ -411,6 +423,13 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// the escape hatch for the branch-dirty 409 the run endpoint returns.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/diagnosis", h.phaseDiagnosis)
 	mux.HandleFunc("DELETE /api/epics/{taskId}/phases/{phaseId}/branch", requireLocalOrigin(h.deletePhaseRunBranch))
+	// Phase landing (phase_landing.go): the Review screen's evidence for a finished
+	// run, and the push / push+PR exit. Land is the only one that mutates.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/review", h.getPhaseReview)
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/land", requireLocalOrigin(h.landPhase))
+	// Read the phase's change-request status now (phase_landing_refresh.go) — the
+	// manual twin of the daemon's landpoll ticker.
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/landing/refresh", requireLocalOrigin(h.refreshPhaseLanding))
 	// The cleanup action behind phasediag's orphan-branch blocker: a swarm/phase-<id>
 	// branch whose id matches no phase row — work stranded under a previous id
 	// generation, which the phase-scoped route above structurally cannot name. Kept a

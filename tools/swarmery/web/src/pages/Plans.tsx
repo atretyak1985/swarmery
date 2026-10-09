@@ -60,8 +60,8 @@ import type {
   Epic,
   EpicPhase,
   PhaseRunOutcome,
-  PhaseVerifyVerdict,
   PlanRevision,
+  ProviderTerms,
   Session,
   SessionStatus,
   WSMessage,
@@ -100,8 +100,13 @@ import { RevisionReview, ORIGIN_LABEL } from './planning/RevisionReview';
 import { ReviseModal } from './planning/ReviseModal';
 import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsActual';
 import { ForecastStory } from './plans/ForecastStory';
+import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
 import { PhaseCard } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
+import { PhaseReview } from './plans/PhaseReview';
+import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
+import { hasReviewTab, NEUTRAL_TERMS } from './plans/landingModel';
+import { useProjectVcs } from '../lib/useProjectVcs';
 import {
   parsePlansRoute,
   plansHref,
@@ -306,46 +311,6 @@ const OUTCOME_CHIP: Record<UnresolvedOutcome, { cls: string; title: string }> = 
     title: 'the run failed — click for why',
   },
 };
-
-/** Verdict chip copy + styling. `amber` is the app's semantic needs-a-human color,
- * which is exactly what an inconclusive grade is (the same token workspace/TaskCard
- * uses for a card's inconclusive verdict — one meaning, one color). */
-const VERDICT_CHIP: Record<PhaseVerifyVerdict, { cls: string; label: string; title: string }> = {
-  pass: {
-    cls: 'border-green/40 bg-green/10 text-green',
-    label: 'verified',
-    title: 'a read-only verifier confirmed this phase’s acceptance criteria',
-  },
-  fail: {
-    cls: 'border-red/40 bg-red/10 text-red',
-    label: 'verify failed',
-    title: 'a read-only verifier could NOT confirm the ticked criteria — open the run diagnosis',
-  },
-  inconclusive: {
-    cls: 'border-amber/40 bg-amber/10 text-amber',
-    label: 'verify inconclusive',
-    title: 'the verifier could not conclude (env or timeout) — this is not a failing grade',
-  },
-};
-
-/** The verification verdict, BESIDE the outcome chip and never instead of it: the
- * outcome answers "did work land?" (checkboxes — the single progress truth, decision
- * D5) and the verdict answers "was it confirmed?". Renders nothing when the phase was
- * never graded, which is the default — verification is opt-in per phase doc. */
-function VerifyVerdictChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
-  if (phase.verifyVerdict === null) return null;
-  const { cls, label, title } = VERDICT_CHIP[phase.verifyVerdict];
-  return (
-    <span
-      className={`rounded border px-1.5 py-px font-mono text-[9.5px] ${cls}`}
-      // The verifier's own reasons when it has any — the whole point of surfacing the
-      // verdict is carrying WHY, and the fallback keeps the tooltip meaningful.
-      data-tip={phase.verifyDetail !== null && phase.verifyDetail !== '' ? phase.verifyDetail : title}
-    >
-      {label}
-    </span>
-  );
-}
 
 /** Run/Retry button styling — keyed on the OUTCOME, so a retry after a
  * ticked-nothing run reads amber like its chip instead of neutral brand. */
@@ -865,7 +830,14 @@ function canonicalPlansTarget(
     if (p === undefined) {
       return { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: d.seq, planTitle: epic.title } };
     }
-    const tab: PhaseDetailTab = d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done' ? 'report' : d.tab;
+    // Edit on a done phase → Report; Review on a phase that never ran → Runs
+    // (the tabs each panel falls back to).
+    const tab: PhaseDetailTab =
+      d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done'
+        ? 'report'
+        : d.tab === 'review' && !hasReviewTab(p)
+          ? 'runs'
+          : d.tab;
     return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
   }
   const complete = planComplete(epic, resolvedSeqs);
@@ -878,6 +850,9 @@ function canonicalPlansTarget(
 
 export function Plans(): JSX.Element {
   const { slug, project, projectId, loading: projLoading } = useProjectWorkspace();
+  // The project's code host, fetched once per plan page (cached 60s by the
+  // daemon): its `terms` label every landing control in the Review tab.
+  const { vcs } = useProjectVcs(projectId);
   // The loaded epics, stamped with the project they belong to. Plans is not
   // remounted when /p/:slug changes and projectId follows the slug at once, so
   // until the new project's fetch lands the rows are the PREVIOUS project's — and
@@ -1082,13 +1057,18 @@ export function Plans(): JSX.Element {
   // afflict every plan in the workspace — and survived switching between them.
   // forcePhaseId is set only for the one refusal `force` overrides
   // (`blocked-unchanged`): the phase the strip's "Run anyway" re-runs.
-  const [runMsg, setRunMsg] = useState<{ taskId: number; text: string; forcePhaseId: number | null } | null>(
-    null,
-  );
+  // branches is set only for `deps-unmerged`: the diverged dependency branches
+  // the strip offers to open a change request for.
+  const [runMsg, setRunMsg] = useState<{
+    taskId: number;
+    text: string;
+    forcePhaseId: number | null;
+    branches: string[];
+  } | null>(null);
   const failRunMsg = useCallback(
     (taskId: number) =>
       (e: unknown): void =>
-        setRunMsg({ taskId, text: e instanceof Error ? e.message : String(e), forcePhaseId: null }),
+        setRunMsg({ taskId, text: e instanceof Error ? e.message : String(e), forcePhaseId: null, branches: [] }),
     [],
   );
   // Which phase's run diagnosis is open (phase id) — the modal is read-only, so
@@ -1139,7 +1119,10 @@ export function Plans(): JSX.Element {
           if (code === 'branch-dirty') setOutcomeFor(phaseId);
           // The refusal `force` overrides: the strip offers to run it anyway.
           if (code === 'blocked-unchanged' && e instanceof Error)
-            setRunMsg({ taskId, text: e.message, forcePhaseId: phaseId });
+            setRunMsg({ taskId, text: e.message, forcePhaseId: phaseId, branches: [] });
+          // Stranded dependency work: the strip offers "Open <change>" per branch.
+          if (code === 'deps-unmerged' && e instanceof Error)
+            setRunMsg({ taskId, text: e.message, forcePhaseId: null, branches: (e as PhaseRunBranchError).branches ?? [] });
         })
         .finally(() => setRunBusy(null));
     },
@@ -1418,6 +1401,7 @@ export function Plans(): JSX.Element {
               }}
               runBusy={runBusy}
               runMsg={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.text : null}
+              runBranches={runMsg !== null && runMsg.taskId === activeEpic.taskId ? runMsg.branches : []}
               onForceRun={forceRunFor(activeEpic.taskId)}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
@@ -1428,6 +1412,7 @@ export function Plans(): JSX.Element {
               planRunBusy={planRunBusy}
               onRunPlan={(agent, mode) => startPlanRun(activeEpic.taskId, agent, mode)}
               onCancelPlanRun={() => cancelPlanRun(activeEpic.taskId)}
+              terms={vcs?.terms ?? null}
               onOpenOutcome={setOutcomeFor}
             />
           )}
@@ -1493,6 +1478,7 @@ function EpicDetail({
   onRevisionMissing,
   runBusy,
   runMsg,
+  runBranches,
   onForceRun,
   onRun,
   onCancelRun,
@@ -1504,6 +1490,7 @@ function EpicDetail({
   onRunPlan,
   onCancelPlanRun,
   onOpenOutcome,
+  terms,
 }: {
   epic: Epic;
   detail: DetailSel | null;
@@ -1525,6 +1512,8 @@ function EpicDetail({
   onRevisionMissing: () => void;
   runBusy: number | null;
   runMsg: string | null;
+  /** A `deps-unmerged` refusal's diverged dependency branches; [] otherwise. */
+  runBranches: string[];
   /** Re-run the refused phase with `force` — set only for a `blocked-unchanged`
    *  refusal, the one `force` overrides; null hides the action. */
   onForceRun: (() => void) | null;
@@ -1544,6 +1533,9 @@ function EpicDetail({
   onCancelPlanRun: () => void;
   /** Open the run-diagnosis modal for a phase id. */
   onOpenOutcome: (phaseId: number) => void;
+  /** The project's code-host vocabulary (GET /api/projects/{id}/vcs), null
+   * until it loads — the Review tab then uses the terms its own response carries. */
+  terms: ProviderTerms | null;
 }): JSX.Element {
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const complete = planComplete(epic, resolvedSeqs);
@@ -1744,7 +1736,19 @@ function EpicDetail({
 
       {runMsg !== null && (
         <div className="mb-2 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
-          <span className="min-w-0 flex-1">{runMsg}</span>
+          <div className="min-w-0 flex-1">
+            <span>{runMsg}</span>
+            {runBranches.length > 0 && (
+              <DepsUnmergedActions
+                taskId={epic.taskId}
+                phases={epic.phases}
+                branches={runBranches}
+                // A failed /vcs fetch must not hide the way out: neutral words.
+                terms={terms ?? NEUTRAL_TERMS}
+                onLanded={onDocChanged}
+              />
+            )}
+          </div>
           {onForceRun !== null && (
             <button
               type="button"
@@ -1801,6 +1805,7 @@ function EpicDetail({
               onDocChanged={onDocChanged}
               revisions={revisions}
               onOpenRevisions={() => onOpenPlan('revisions')}
+              terms={terms}
             />
           ) : detail?.kind === 'plan' ? (
             <PlanDetailPanel
@@ -2925,7 +2930,8 @@ function RunStateChip({
 
 /** One phase's body inside PhasePanel (inline, in place of the phase list), tabbed: Story (PhaseCard + the
  * forecast story), Criteria (interactive checks + the doc), Runs (run state,
- * diagnosis, provenance), Report (what was shipped) and Edit (raw markdown). */
+ * diagnosis, provenance), Review (the run branch's diff, verdict and landing —
+ * plans/PhaseReview.tsx), Report (what was shipped) and Edit (raw markdown). */
 function PhaseDetailPanel({
   epic,
   phase,
@@ -2942,6 +2948,7 @@ function PhaseDetailPanel({
   onDocChanged,
   revisions,
   onOpenRevisions,
+  terms,
 }: {
   epic: Epic;
   phase: EpicPhase;
@@ -2965,6 +2972,8 @@ function PhaseDetailPanel({
   revisions: PlanRevision[] | null;
   /** Jump to the plan's Revisions tab. */
   onOpenRevisions: () => void;
+  /** The project's code-host vocabulary for the Review tab (null until loaded). */
+  terms: ProviderTerms | null;
 }): JSX.Element {
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const sessionHref = useSessionHref();
@@ -2978,7 +2987,9 @@ function PhaseDetailPanel({
   // A done phase retires its Edit tab (the doc is the record of shipped work); a
   // stale `edit` selection degrades to Report instead of a dead panel.
   const editable = status !== 'done';
-  const activeTab: PhaseDetailTab = tab === 'edit' && !editable ? 'report' : tab;
+  // Likewise a phase that never ran has no Review tab; `review` degrades to Runs.
+  const activeTab: PhaseDetailTab =
+    tab === 'edit' && !editable ? 'report' : tab === 'review' && !hasReviewTab(phase) ? 'runs' : tab;
   const at = epic.phases.findIndex((p) => p.seq === phase.seq);
   const prev = epic.phases[at - 1];
   const next = epic.phases[at + 1];
@@ -3062,10 +3073,15 @@ function PhaseDetailPanel({
               isUnresolvedOutcome(phase.runOutcome) ? [{ label: 'why it did not move', onClick: onOpenOutcome }] : []
             }
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
+            terms={terms}
           />
           <ForecastStory phase={phase} />
           {phase.surprise == null && <ForecastSection phase={phase} />}
         </div>
+      ) : activeTab === 'review' ? (
+        // Keyed by phase: ↑/↓ step navigation keeps the tab, and a land still in
+        // flight for the previous phase must not render onto this one.
+        <PhaseReview key={phase.id} epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
       ) : activeTab === 'runs' ? (
         <>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -3077,7 +3093,7 @@ function PhaseDetailPanel({
             <RunStateChip phase={phase} onOpenOutcome={onOpenOutcome} />
             <RunModelChip phase={phase} />
             <DocModelChip phase={phase} picked={phaseRunModel} />
-            <VerifyVerdictChip phase={phase} />
+            <VerifyVerdictChip verdict={phase.verifyVerdict} detail={phase.verifyDetail} />
             <SurpriseChip phase={phase} onOpen={() => onTab('story')} />
             {phase.dependsOn.map((seq) => (
               <span

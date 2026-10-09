@@ -233,6 +233,50 @@ func TestStartRefusesDivergentDeps(t *testing.T) {
 	}
 }
 
+// TestMergedPhaseUnblocksDependent (phase-landing plan, phase 7, SC-13): the
+// deps-unmerged refusal needs no landing code to lift. Two complete
+// dependencies on diverged branches refuse the dependent phase; once their
+// change requests merge into the base (simulated with --no-ff merges, the shape
+// a host's merge button leaves), the very same Start is admitted and the run
+// starts on the base tip, unstacked — phaserun reads git, not landing_state.
+func TestMergedPhaseUnblocksDependent(t *testing.T) {
+	e := newStackEnv(t)
+	const otherBranch = "swarm/phase-779"
+	e.repo.branch(otherBranch, "main", 1)
+	mustExec(t, e.db, `INSERT INTO epic_phases
+		(workspace_task_id, seq, name, doc_path, depends_on, checkboxes_total, checkboxes_done, run_state, run_branch)
+		VALUES (?, 3, 'Phase 3', '/plan/phase-3.md', '[]', 1, 1, 'done', ?)`, e.taskID, otherBranch)
+	mustExec(t, e.db, `UPDATE epic_phases SET depends_on='[1,3]' WHERE id=?`, e.p2)
+
+	if _, err := e.svc.Start(e.p2, "", ""); !errors.Is(err, ErrDepsUnmerged) {
+		t.Fatalf("before the merges: err = %v, want ErrDepsUnmerged", err)
+	}
+
+	// Both change requests merge into main.
+	e.repo.run("merge", "-q", "--no-ff", "-m", "Merge pull request #1", e.depBranch)
+	e.repo.run("merge", "-q", "--no-ff", "-m", "Merge pull request #2", otherBranch)
+	mainTip := e.repo.tip("main")
+
+	var headAtSpawn string
+	e.setRun(func(spec RunSpec) (*Run, error) {
+		headAtSpawn = strings.TrimSpace(e.repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+		e.finishPhase2(t, spec)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	})
+	if _, err := e.svc.Start(e.p2, "", ""); err != nil {
+		t.Fatalf("after the merges: Start = %v, want admitted", err)
+	}
+	if headAtSpawn != mainTip {
+		t.Errorf("worktree HEAD at spawn = %s, want main's tip %s (both dependencies merged)", headAtSpawn, mainTip)
+	}
+	if sp := phaseStartPoint(t, e.db, e.p2); sp.String != mainTip {
+		t.Errorf("run_start_point = %q, want main's tip %s", sp.String, mainTip)
+	}
+	if strings.Contains(e.runner.firstSpec().Prompt, "STACKED BASE") {
+		t.Error("a run on a base that holds every dependency carries the stacking note")
+	}
+}
+
 // TestVerifyDiffExcludesDependencyCommits: the verifier grades `base...HEAD`. For
 // a stacked run the base it is handed is the dependency tip, so the diff holds
 // this phase's commit and none of the dependency's — measured against main, the

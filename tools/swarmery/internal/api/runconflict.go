@@ -136,6 +136,42 @@ const (
 	// once a slot frees. The body carries `holders` (the runs in flight) and `max`,
 	// because "no free run slot" on its own leaves an operator with nowhere to look.
 	codeNoRunSlot = "no-free-run-slot"
+
+	// Phase landing (phase_landing.go) — policy refusals, answered 409 BEFORE any
+	// network call.
+	//
+	// codePushToBaseRefused: the phase's run branch IS the base branch (the
+	// configured vcs.baseBranch or origin's HEAD), so a "land" would push straight
+	// onto the base. Lifted only by swarmery.vcs.allowPushToBase=true in
+	// .claude/settings.local.json (or vcs.allowPushToBase in project.json).
+	codePushToBaseRefused = "push-to-base-refused"
+	// codeForkUnsupported: the project declares vcs.forkRemote — the fork workflow
+	// (push to a fork, open the change request against upstream) is reserved and
+	// not implemented, so landing refuses rather than pushing to the wrong remote.
+	codeForkUnsupported = "fork-workflow-unsupported"
+	// codePhaseMerged: a "return" for a phase whose change request is already
+	// merged. Its work is in the base branch; sending it back would continue a
+	// branch nothing will land again — the follow-up belongs in a new phase.
+	codePhaseMerged = "phase-merged"
+	// codeNoChangeRequest: a landing refresh (phase_landing_refresh.go) for a
+	// phase that has no change request to read — its landing_state is neither
+	// pr_open nor merged, or it carries neither a URL nor a number.
+	codeNoChangeRequest = "no-change-request"
+)
+
+// Phase landing 422 discriminators: the machine is missing something the
+// operator has to provide. Each body is {error, code, hint, detail} — `hint`
+// carries the exact commands that finish the job by hand, `detail` the tool's
+// own (redacted) output. Stable wire values, like the 409 codes above.
+const (
+	codeNoRemote            = "no-remote"
+	codeNotAuthenticated    = "not-authenticated"
+	codeNoPushAccess        = "no-push-access"
+	codeRemoteDiverged      = "remote-diverged"
+	codeBinaryMissing       = "binary-missing"
+	codeProviderUnknown     = "provider-unknown"
+	codePushFailed          = "push-failed"
+	codeChangeRequestFailed = "change-request-failed"
 )
 
 // writeNoRunSlot renders a full run budget: a retriable 409 that names what is
@@ -374,3 +410,29 @@ func worktreeConflict(err error) (code, msg string, ok bool) {
 	}
 	return "", "", false
 }
+
+// VCS sign-in (vcs_login.go). Stable wire values, like the codes above: the
+// sign-in dialog switches on them.
+const (
+	// codeDeviceFlowUnconfigured: the daemon has no OAuth client id for the
+	// project's code host, so a device flow cannot start. 409, with a `hint`
+	// naming the env var (SWARMERY_GITHUB_CLIENT_ID / SWARMERY_GITLAB_CLIENT_ID)
+	// and docs/vcs-login.md. The Token tab still works.
+	codeDeviceFlowUnconfigured = "device-flow-unconfigured"
+	// codeDeviceFlowDisabled: the host refused the device flow for this client
+	// id (GitHub's device_flow_disabled — the OAuth app has Device Flow off).
+	codeDeviceFlowDisabled = "device-flow-disabled"
+	// codeDeviceFlowFailed: any other device-flow failure the host answered
+	// (an unknown client id, a transport error). 502 — the host, not the
+	// request, is what went wrong.
+	codeDeviceFlowFailed = "device-flow-failed"
+	// codeTooManyLogins: the project already has the maximum number of pending
+	// device logins (vcsLoginCapPerProject). 429: they expire on their own.
+	codeTooManyLogins = "too-many-pending-logins"
+	// codeLoginNotFound: GET …/vcs/login/{loginId} for an id this daemon does
+	// not hold (never issued, finished, long expired, or lost on restart).
+	codeLoginNotFound = "login-not-found"
+	// codeTokenUnverified: a pasted token could not be checked (the provider
+	// CLI is missing, or the host did not answer). Nothing was stored.
+	codeTokenUnverified = "token-unverified"
+)

@@ -34,3 +34,12 @@ paths = [
   '''tools/swarmery/internal/usage/testdata/credentials\.json''',
   '''tools/swarmery/internal/api/usage_test\.go''',
 ]
+
+[[allowlists]]
+description = "repoprovider / phase-landing test fixtures — the VCS landing path stores and redacts gh/glab tokens, so its tests must carry `ghp_`/`glpat-`-shaped literals (e.g. `glpat-selfhostedselfhosted00`) to prove the credstore redactor scrubs them and that no token reaches a 422 body or a log line. Every value is a literal placeholder; the production redactor (credstore.go, api/redact.go) is what these tests pin. Scoped to *_test.go under repoprovider and the three api test files, so a real credential committed anywhere else is still caught."
+paths = [
+  '''tools/swarmery/internal/repoprovider/.*_test\.go''',
+  '''tools/swarmery/internal/api/phase_landing_test\.go''',
+  '''tools/swarmery/internal/api/vcs_test\.go''',
+  '''tools/swarmery/internal/api/tasks_review_test\.go''',
+]

@@ -19,6 +19,10 @@ import type {
   PhaseBlocker,
   PhaseDiagnosis,
   PhaseForecast,
+  PhaseLanding,
+  PhaseLandRequest,
+  PhaseLandResponse,
+  PhaseReview,
   PhaseSurprise,
   PlanDoc,
   Playbook,
@@ -33,6 +37,7 @@ import type {
   ProjectDetail,
   ProjectHealth,
   ProjectPluginsResponse,
+  ProviderTerms,
   ContextHogsReport,
   Session,
   SessionDetail,
@@ -44,6 +49,10 @@ import type {
   TaskDetail,
   TaskSummary,
   Turn,
+  VcsInfo,
+  VcsLoginPoll,
+  VcsLoginStart,
+  VcsTokenResult,
 } from '../api/types';
 import type {
   Account,
@@ -1540,6 +1549,24 @@ const MOCK_SURPRISE: PhaseSurprise = {
   computedAt: '2026-09-23T14:02:00Z',
 };
 
+/** A phase's landing lifecycle for the fixtures: `none` unless overridden.
+ *  Together the fixtures below cover every state — none (phases 2, 3), ready
+ *  (1), returned (4), pushed (5), pr_open (12) and merged (11) — so the phase
+ *  card chip and the Review tab render each variant offline. */
+/** The provider vocabulary the mock daemon answers with (repoprovider.TermsFor). */
+const MOCK_TERMS: ProviderTerms = { provider: 'GitHub', change: 'Pull Request', changeShort: 'PR' };
+
+const mockLanding = (over: Partial<PhaseLanding> = {}): PhaseLanding => ({
+  state: 'none',
+  prUrl: null,
+  prNumber: null,
+  prProvider: null,
+  prStatus: null,
+  landedAt: null,
+  error: null,
+  ...over,
+});
+
 // fusion phase 10: one demo epic for project 3 (swarmery) with a diamond
 // dependency shape (1 → 2,3 → 4) so the phase timeline + rollup render offline.
 const mockEpicPhase = (
@@ -1564,6 +1591,7 @@ const mockEpicPhase = (
       | 'verifyMode'
       | 'verifyVerdict'
       | 'verifyDetail'
+      | 'landing'
     >
   >,
 ): EpicPhase => ({
@@ -1576,6 +1604,7 @@ const mockEpicPhase = (
   forecastLints: seq === 3 ? MOCK_FORECAST_BAD_LINTS : [],
   // Phase 2's run was scored; every other phase has no score (null, never 0).
   surprise: seq === 2 ? MOCK_SURPRISE : null,
+  landing: mockLanding(),
   id,
   seq,
   name,
@@ -1696,6 +1725,8 @@ const mockEpics: Epic[] = [
         runEndedAt: iso(2 * 24 * 60 * MIN - 15 * MIN),
         runOutcome: 'completed',
         runCheckboxesBefore: 0,
+        // Finished, nothing pushed yet: the Review tab offers Push / Push + open.
+        landing: mockLanding({ state: 'ready' }),
       }),
       mockEpicPhase(2, 2, 'Dispatcher', [1], 3, 6, {
         runState: 'running',
@@ -1728,9 +1759,22 @@ const mockEpics: Epic[] = [
         runEndedAt: iso(85 * MIN),
         runOutcome: 'noop',
         runCheckboxesBefore: 0,
+        // The reviewer sent it back with feedback; the next run picks that up.
+        landing: mockLanding({ state: 'returned' }),
+      }),
+      // Pushed to the code host, no change request opened yet.
+      mockEpicPhase(5, 5, 'Landing smoke check', [1], 3, 3, {
+        runState: 'done',
+        runSessionUuid: 'mock-run-pushed-uuid',
+        runModel: 'claude-sonnet-5',
+        runStartedAt: iso(40 * MIN),
+        runEndedAt: iso(31 * MIN),
+        runOutcome: 'completed',
+        runCheckboxesBefore: 0,
+        landing: mockLanding({ state: 'pushed' }),
       }),
     ],
-    rollup: { done: 10, total: 25, pct: 40, incompletePhases: 3 },
+    rollup: { done: 13, total: 28, pct: 46, incompletePhases: 3 },
     cardExternalId: null,
     // The union the sessions panel renders: a daemon run the ?planTask= grouping also
     // finds, and an operator's own session that ONLY the inferred link can surface.
@@ -1794,6 +1838,14 @@ const mockEpics: Epic[] = [
         runEndedAt: iso(8 * 24 * 60 * MIN - 20 * MIN),
         runOutcome: 'completed',
         runCheckboxesBefore: 0,
+        landing: mockLanding({
+          state: 'merged',
+          prUrl: 'https://github.com/acme/swarmery/pull/41',
+          prNumber: 41,
+          prProvider: 'github',
+          prStatus: { state: 'merged', draft: false, ci: 'success', review: 'approved', checkedAt: iso(7 * 24 * 60 * MIN) },
+          landedAt: iso(7 * 24 * 60 * MIN),
+        }),
       }),
       mockEpicPhase(12, 2, 'Plans page lifecycle controls', [1], 6, 6, {
         runState: 'done',
@@ -1802,6 +1854,13 @@ const mockEpics: Epic[] = [
         runEndedAt: iso(7 * 24 * 60 * MIN - 25 * MIN),
         runOutcome: 'completed',
         runCheckboxesBefore: 1,
+        landing: mockLanding({
+          state: 'pr_open',
+          prUrl: 'https://github.com/acme/swarmery/pull/42',
+          prNumber: 42,
+          prProvider: 'github',
+          prStatus: { state: 'open', draft: true, ci: 'pending', review: 'review_required', checkedAt: iso(5 * MIN) },
+        }),
       }),
     ],
     rollup: { done: 10, total: 10, pct: 100, incompletePhases: 0 },
@@ -2792,6 +2851,121 @@ export const mockApi = {
     return mockEpics
       .filter((e) => projectId === undefined || e.projectId === projectId)
       .map((e) => ({ ...e, phases: e.phases.map((p) => ({ ...p })) }));
+  },
+
+  // --- landing Phase 5: project code host, phase review, land ---
+  /** GET /api/projects/{id}/vcs. The swarmery project (3) is signed in; every
+   *  other project demos the sign-in banner's SSH + missing-token variant. */
+  async projectVcs(projectId: number): Promise<VcsInfo> {
+    await delay(60);
+    const signedIn = projectId === 3;
+    return {
+      provider: 'github',
+      host: 'github.com',
+      terms: MOCK_TERMS,
+      remote: signedIn
+        ? { url: 'https://github.com/acme/swarmery.git', present: true, protocol: 'https' }
+        : { url: 'git@github.com:acme/project.git', present: true, protocol: 'ssh' },
+      auth: signedIn
+        ? { status: 'ok', login: 'octocat', source: 'cli' }
+        : { status: 'missing', login: '', source: 'none' },
+      baseBranch: '',
+      allowPushToBase: false,
+      source: 'host',
+      cliLogin: 'gh auth login --hostname github.com',
+      askProvider: false,
+    };
+  },
+
+  // --- landing Phase 8: dashboard sign-in (device code / pasted token) ---
+  /** POST /api/projects/{id}/vcs/login {"method":"device"} → 202. */
+  async startVcsLogin(): Promise<VcsLoginStart> {
+    await delay(120);
+    return {
+      loginId: 'mock-login',
+      userCode: 'WDJB-MJHT',
+      verificationUri: 'https://github.com/login/device',
+      expiresIn: 900,
+      interval: 5,
+    };
+  },
+
+  /** GET /api/projects/{id}/vcs/login/{loginId} — the mock host grants at once. */
+  async pollVcsLogin(): Promise<VcsLoginPoll> {
+    await delay(80);
+    return { status: 'ok', login: 'octocat', interval: 5 };
+  },
+
+  /** POST /api/projects/{id}/vcs/login {"method":"token"} — any token is accepted. */
+  async submitVcsToken(): Promise<VcsTokenResult> {
+    await delay(150);
+    return { status: 'ok', login: 'octocat' };
+  },
+
+  /** GET …/phases/{phaseId}/review — a one-commit diff over the seeded phase's
+   *  own verdict and landing, so the Review tab shows that phase's state. */
+  async phaseReview(taskId: number, phaseId: number): Promise<PhaseReview> {
+    await delay(80);
+    const phase = mockEpics.find((e) => e.taskId === taskId)?.phases.find((p) => p.id === phaseId);
+    if (phase === undefined) throw new Error('phase not found');
+    if (phase.runState === 'idle') throw new Error('this phase has no run branch yet');
+    const path = `internal/phase${String(phase.seq)}/handler.go`;
+    return {
+      base: 'a1b2c3d4e5f60718',
+      branch: `swarm/phase-${String(phaseId)}`,
+      commits: [{ sha: '4f2e9c1a7b3d5e6f', subject: `feat: ${phase.name.toLowerCase()}` }],
+      files: [{ path, additions: 3, deletions: 1 }],
+      patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,2 +1,4 @@\n package phase\n-// TODO\n+\n+// Handler serves the phase.\n+func Handler() {}\n`,
+      patchTruncated: false,
+      verifyVerdict: phase.verifyVerdict,
+      verifyDetail: phase.verifyDetail,
+      landing: { ...phase.landing },
+      terms: MOCK_TERMS,
+    };
+  },
+
+  /** POST …/phases/{phaseId}/land — moves the seeded phase along the
+   *  lifecycle (push → pushed, pr → pr_open with a link, return → returned). */
+  async landPhase(taskId: number, phaseId: number, body: PhaseLandRequest): Promise<PhaseLandResponse> {
+    await delay(300);
+    const phase = mockEpics.find((e) => e.taskId === taskId)?.phases.find((p) => p.id === phaseId);
+    if (phase === undefined) throw new Error('phase not found');
+    const number = 100 + phaseId;
+    const landing: PhaseLanding =
+      body.action === 'pr'
+        ? mockLanding({
+            state: 'pr_open',
+            prUrl: `https://github.com/acme/swarmery/pull/${String(number)}`,
+            prNumber: number,
+            prProvider: 'github',
+          })
+        : mockLanding({ state: body.action === 'push' ? 'pushed' : 'returned' });
+    phase.landing = landing;
+    const base = { branch: `swarm/phase-${String(phaseId)}`, base: 'main', action: body.action, landing };
+    // The daemon answers push/pr with the provider vocabulary; a return carries none.
+    return body.action === 'return' ? base : { ...base, terms: MOCK_TERMS };
+  },
+
+  /** POST …/phases/{phaseId}/landing/refresh — re-reads the seeded phase's
+   *  change request: the stored status with a fresh checkedAt (an open one with
+   *  no status yet reads as open, CI pending, review required). */
+  async refreshPhaseLanding(taskId: number, phaseId: number): Promise<PhaseLanding> {
+    await delay(250);
+    const phase = mockEpics.find((e) => e.taskId === taskId)?.phases.find((p) => p.id === phaseId);
+    if (phase === undefined) throw new Error('phase not found');
+    const { landing } = phase;
+    if (landing.state !== 'pr_open' && landing.state !== 'merged') {
+      throw new Error('this phase has no change request to refresh');
+    }
+    const prev: NonNullable<PhaseLanding['prStatus']> = landing.prStatus ?? {
+      state: 'open',
+      draft: false,
+      ci: 'pending',
+      review: 'review_required',
+      checkedAt: '',
+    };
+    phase.landing = { ...landing, prStatus: { ...prev, checkedAt: new Date().toISOString() } };
+    return phase.landing;
   },
 
   /** Phase-run diagnosis. Derived from the seeded phase so the modal renders the

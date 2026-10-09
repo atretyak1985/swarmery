@@ -218,6 +218,9 @@ interface ConfirmDialogProps {
   /** Approvals deny-button tones for destructive confirms. */
   danger?: boolean;
   busy?: boolean;
+  /** Keeps the confirm button disabled (e.g. until a required field in
+   * `children` is filled); cancel and Esc still work. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -228,6 +231,7 @@ function ConfirmDialogBody({
   confirmLabel,
   danger = false,
   busy = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): JSX.Element {
@@ -296,7 +300,8 @@ function ConfirmDialogBody({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
+            aria-busy={busy}
             className={`rounded-lg border px-3.5 py-1.5 font-mono text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
               danger
                 ? 'border-red/40 bg-red/10 text-red hover:bg-red/20'

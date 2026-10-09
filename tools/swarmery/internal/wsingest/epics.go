@@ -97,11 +97,11 @@ var (
 	nextSectionRe       = regexp.MustCompile(`(?m)^##\s`)
 )
 
-// parseCompletionReport extracts the body of the doc's `## Completion Report`
+// ParseCompletionReport extracts the body of the doc's `## Completion Report`
 // section (from the heading to the next `## ` heading or EOF), trimmed.
 // "" when the section is absent or empty — e.g. a template stub with nothing
 // filled in yet. Pure; unit-tested.
-func parseCompletionReport(text string) string {
+func ParseCompletionReport(text string) string {
 	loc := completionHeadingRe.FindStringIndex(text)
 	if loc == nil {
 		return ""
@@ -754,7 +754,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		}
 		phases[i].checkboxesDone, phases[i].checkboxesTotal = CountCheckboxes(string(body))
 		phases[i].docStatus = parseDocStatus(string(body))
-		phases[i].completionReport = parseCompletionReport(string(body))
+		phases[i].completionReport = ParseCompletionReport(string(body))
 		// The doc's own header outranks the README table cell: it is the more
 		// specific statement, it lives next to the work, and it is the form that
 		// carries an absolute path.
@@ -767,7 +767,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
 		// A prior written into a doc that ALREADY reports its work done is not a
-		// prediction; parseCompletionReport above has the only fact that can say so,
+		// prediction; ParseCompletionReport above has the only fact that can say so,
 		// which is why it is threaded in rather than re-read.
 		phases[i].forecasts = ParseForecasts(string(body), phases[i].completionReport != "")
 		if len(phases[i].forecasts) > 0 {
@@ -985,6 +985,38 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 	}
 }
 
+// PhaseUpsertSQL is the one statement applyEpics folds a parsed phase doc into
+// epic_phases with. Parameters, in order: workspace_task_id, seq, name, doc_path,
+// depends_on, checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
+// completion_report, repo, covers, verify_mode, doc_model.
+//
+// Exported so the store's migration tests can re-run the EXACT upsert and prove a
+// daemon-owned column survives it — the run_* family, run_branch (0043) and the
+// landing_* / pr_* columns (0103) are deliberately absent from the DO UPDATE SET
+// list, and adding one of them here would silently reset it on every re-scan.
+const PhaseUpsertSQL = `
+			INSERT INTO epic_phases
+				(workspace_task_id, seq, name, doc_path, depends_on,
+				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
+				 completion_report, repo, covers, verify_mode, doc_model)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
+				seq               = excluded.seq,
+				name              = excluded.name,
+				depends_on        = excluded.depends_on,
+				checkboxes_total  = excluded.checkboxes_total,
+				checkboxes_done   = excluded.checkboxes_done,
+				doc_status        = excluded.doc_status,
+				doc_updated_at    = excluded.doc_updated_at,
+				completion_report = excluded.completion_report,
+				repo              = excluded.repo,
+				covers            = excluded.covers,
+				verify_mode       = excluded.verify_mode,
+				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
+				-- from a doc must actually retract the declaration, the same way
+				-- deleting a **Covers:** line does.
+				doc_model         = excluded.doc_model`
+
 // applyEpics folds the parsed plan into the task's epic_phases rows by UPSERTING
 // on the natural key UNIQUE(workspace_task_id, doc_path).
 //
@@ -1067,28 +1099,7 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if p.docModel != "" {
 			docModel = p.docModel
 		}
-		if _, err := tx.Exec(`
-			INSERT INTO epic_phases
-				(workspace_task_id, seq, name, doc_path, depends_on,
-				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-				 completion_report, repo, covers, verify_mode, doc_model)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
-				seq               = excluded.seq,
-				name              = excluded.name,
-				depends_on        = excluded.depends_on,
-				checkboxes_total  = excluded.checkboxes_total,
-				checkboxes_done   = excluded.checkboxes_done,
-				doc_status        = excluded.doc_status,
-				doc_updated_at    = excluded.doc_updated_at,
-				completion_report = excluded.completion_report,
-				repo              = excluded.repo,
-				covers            = excluded.covers,
-				verify_mode       = excluded.verify_mode,
-				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
-				-- from a doc must actually retract the declaration, the same way
-				-- deleting a **Covers:** line does.
-				doc_model         = excluded.doc_model`,
+		if _, err := tx.Exec(PhaseUpsertSQL,
 			taskID, p.seq, p.name, p.docPath, string(depJSON),
 			p.checkboxesTotal, p.checkboxesDone, docStatus, docUpdatedAt,
 			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
@@ -1437,6 +1448,17 @@ type phaseState struct {
 	// moment a plan is archived or a phase doc is renamed — and run_state, which IS
 	// carried, would still say `blocked`.
 	runBlockedFingerprint sql.NullString
+	// The landing lifecycle (0103): how the run's branch reached the remote and which
+	// change request it opened. Dropped on a rename, a pr_open phase would read as
+	// ready again and a second land would open a second change request.
+	landingState string
+	prURL        sql.NullString
+	prNumber     sql.NullInt64
+	prProvider   sql.NullString
+	prStatus     sql.NullString
+	prCheckedAt  sql.NullString
+	landedAt     sql.NullString
+	landingError sql.NullString
 }
 
 // runDerivedPhaseTables hold one row per RUN (keyed on its session uuid) and name the
@@ -1455,7 +1477,10 @@ func (p phaseState) carriesState() bool {
 		// A verdict outlives its run: a phase whose row is otherwise idle can still
 		// carry the grade of the run that produced it, and losing it on a doc rename
 		// would silently downgrade "verified" to "never verified".
-		p.verifyVerdict.Valid
+		p.verifyVerdict.Valid ||
+		// A landing outlives its run the same way: a pushed or opened phase must not
+		// fall back to "ready to land" because its doc was renamed.
+		p.landingState != "none" || p.prURL.Valid || p.landingError.Valid
 }
 
 // snapshotPhases reads every phase row of the task with its daemon-owned columns.
@@ -1467,7 +1492,9 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 		       run_ended_at, run_error, run_branch, run_checkboxes_before,
 		       run_checkboxes_after, activated_at, activated_board_task_id,
 		       run_start_point, verify_verdict, verify_detail, run_effort,
-		       run_blocked_fingerprint
+		       run_blocked_fingerprint,
+		       landing_state, pr_url, pr_number, pr_provider, pr_status,
+		       pr_checked_at, landed_at, landing_error
 		  FROM epic_phases
 		 WHERE workspace_task_id = ?`, taskID)
 	if err != nil {
@@ -1482,7 +1509,9 @@ func snapshotPhases(tx *sql.Tx, taskID int64) ([]phaseState, error) {
 			&p.runCheckboxesBefore, &p.runCheckboxesAfter, &p.activatedAt,
 			&p.activatedBoardTaskID,
 			&p.runStartPoint, &p.verifyVerdict, &p.verifyDetail, &p.runEffort,
-			&p.runBlockedFingerprint); err != nil {
+			&p.runBlockedFingerprint,
+			&p.landingState, &p.prURL, &p.prNumber, &p.prProvider, &p.prStatus,
+			&p.prCheckedAt, &p.landedAt, &p.landingError); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -1544,13 +1573,17 @@ func carryAcrossRenames(tx *sql.Tx, taskID int64, phases []epicPhase, before []p
 			       run_error=?, run_branch=?, run_checkboxes_before=?,
 			       run_checkboxes_after=?, activated_at=?, activated_board_task_id=?,
 			       run_start_point=?, verify_verdict=?, verify_detail=?, run_effort=?,
-			       run_blocked_fingerprint=?
+			       run_blocked_fingerprint=?,
+			       landing_state=?, pr_url=?, pr_number=?, pr_provider=?, pr_status=?,
+			       pr_checked_at=?, landed_at=?, landing_error=?
 			 WHERE workspace_task_id = ? AND doc_path = ?`,
 			old.runState, old.runSessionUUID, old.runStartedAt, old.runEndedAt,
 			old.runError, old.runBranch, old.runCheckboxesBefore, old.runCheckboxesAfter,
 			old.activatedAt, old.activatedBoardTaskID,
 			old.runStartPoint, old.verifyVerdict, old.verifyDetail, old.runEffort,
 			old.runBlockedFingerprint,
+			old.landingState, old.prURL, old.prNumber, old.prProvider, old.prStatus,
+			old.prCheckedAt, old.landedAt, old.landingError,
 			taskID, dst.docPath); err != nil {
 			return nil, err
 		}

@@ -772,6 +772,13 @@ type StackingWorktrees interface {
 	ReclaimEmptyBranchAt(repoRoot, branch, baseRef string) (int, error)
 }
 
+// ExistingBranchWorktrees is the optional extension a RETURNED run continues
+// through (continueOwnBranch): check the phase's existing run branch out as it
+// stands instead of cutting a new one. *worktree.Manager satisfies it.
+type ExistingBranchWorktrees interface {
+	AcquireExisting(repoRoot, projectSlug, taskID string) (worktree.Acquired, error)
+}
+
 // acquire hands the run its worktree, pinned to startRef when base resolution
 // chose one. A manager that cannot stack still serves every unstacked run exactly
 // as before; asked to stack, it is refused — starting on the repo's branch tip

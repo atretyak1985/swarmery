@@ -137,6 +137,40 @@ const revision = (id: number, status: PlanRevision['status'], reason: string): P
 /** Beta's revisions: one staged (the "open" one) and one decided. */
 const BETA_REVISIONS = [revision(41, 'staged', 'tighten phase 2'), revision(40, 'applied', 'an older change')];
 
+/** GET /api/projects/{id}/vcs and GET …/phases/{id}/review (Phase 5 Review tab). */
+const VCS_TERMS = { provider: 'Host A', change: 'Pull Request', changeShort: 'PR' };
+const VCS = {
+  provider: 'unknown',
+  host: 'host.example',
+  terms: VCS_TERMS,
+  remote: { url: 'https://host.example/acme/w.git', present: true, protocol: 'https' },
+  auth: { status: 'ok', login: 'octo', source: 'cli' },
+  baseBranch: '',
+  allowPushToBase: false,
+  source: 'config',
+};
+const REVIEW = {
+  base: '0123456789abcdef',
+  branch: 'swarm/phase-22',
+  commits: [{ sha: 'deadbeefcafe', subject: 'beta two work' }],
+  files: [],
+  patch: '',
+  patchTruncated: false,
+  verifyVerdict: null,
+  verifyDetail: null,
+  landing: {
+    state: 'ready',
+    prUrl: null,
+    prNumber: null,
+    prProvider: null,
+    prStatus: null,
+    landedAt: null,
+    error: null,
+  },
+  // Deliberately NOT the project's terms: the tab must prefer the project's.
+  terms: { provider: 'Repository', change: 'Change request', changeShort: 'CR' },
+};
+
 let epics: Epic[] = [];
 let epicFetches = 0;
 /** Per-project epic lists; a project absent here gets `epics`. */
@@ -198,6 +232,8 @@ function stubFetch(): void {
         return json({ revision: r, files: [] });
       }
       if (/\/docs\?path=/.test(url)) return json({ path: 'doc.md', content: '# doc\n' });
+      if (/\/api\/projects\/\d+\/vcs$/.test(url)) return json(VCS);
+      if (/\/api\/epics\/\d+\/phases\/\d+\/review$/.test(url)) return json(REVIEW);
       return json([]);
     }),
   );
@@ -340,6 +376,26 @@ describe('SC-2 — a phase URL opens the phase panel on that tab', () => {
     await settled(r, `${BASE}/${B.externalId}`);
     expect(r.state.historyAction).toBe('REPLACE');
     expect(phasePanel()).toBeNull();
+  });
+
+  it('/phase/<seq>/review opens the Review tab of a phase that ran, labelled from the project terms', async () => {
+    const ran = { ...B, phases: B.phases.map((p) => (p.seq === 2 ? { ...p, runState: 'done' as const } : p)) };
+    epics = [A, ran, DONE];
+    const r = mount(`${BASE}/${B.externalId}/phase/2/review`);
+    const d = await screen.findByRole('region', { name: 'Beta 2' });
+    expect(within(d).getByRole('tab', { name: 'Review' }).getAttribute('aria-selected')).toBe('true');
+    expect(await within(d).findByText('beta two work')).toBeTruthy();
+    expect(await within(d).findByRole('button', { name: 'Push + open Pull Request' })).toBeTruthy();
+    expect(at(r)).toBe(`${BASE}/${B.externalId}/phase/2/review`);
+  });
+
+  it('Review on a phase that never ran canonicalises to Runs (replace)', async () => {
+    const r = mount('/elsewhere', `${BASE}/${B.externalId}/phase/2/review`);
+    await settled(r, `${BASE}/${B.externalId}/phase/2/runs`);
+    expect(r.state.historyAction).toBe('REPLACE');
+    const d = await screen.findByRole('region', { name: 'Beta 2' });
+    expect(within(d).getByRole('tab', { name: 'Runs' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(d).queryByRole('tab', { name: 'Review' })).toBeNull();
   });
 });
 

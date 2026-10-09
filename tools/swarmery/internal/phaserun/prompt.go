@@ -17,7 +17,7 @@ import (
 // commits locally, and never pushes.
 //
 // The doc is also where the phase's SUMMARY has to land. wsingest parses the
-// doc's `## Completion Report` section (parseCompletionReport) and the Plans UI
+// doc's `## Completion Report` section (ParseCompletionReport) and the Plans UI
 // renders exactly that as the phase summary; nothing else is read. Executors
 // that write their account into a reports/ file or only into their final reply
 // leave the operator staring at "no summary of the work written" over a phase
@@ -39,7 +39,7 @@ import (
 var promptTemplate = template.Must(template.New("phaserun").Parse(
 	`You are executing ONE phase of an approved implementation plan, headlessly, in an isolated git worktree of the project repo (your cwd). This worktree is your ONE root: every path you read or write must be inside it. An absolute path pointing outside this root will be refused by the sandbox, so reaching for one costs you the turn — everything you need has been placed inside.
 
-The phase document below is your complete contract. Follow it exactly:
+{{.ReturnedNote}}The phase document below is your complete contract. Follow it exactly:
 - Complete the numbered tasks / acceptance criteria of THIS phase only — do not start other phases.
 - As you complete each acceptance criterion, EDIT the phase document itself and tick its checkbox (- [ ] → - [x]). The document has been lent into this worktree at: {{.DocPath}} (relative to the worktree root) — edit it there. Your edits are copied back to the operator's workspace when the run ends.
 - FORECAST: after you have read the code this phase touches and before your first edit, add a ` + "`kind: posterior`" + ` yaml block to the document's ` + "`## Forecast`" + ` section, mirroring the shape of the ` + "`kind: prior`" + ` block already there (areas, size_band, duration_band, outcome, risks, confidence). It is a prediction, not a limit: do whatever the phase actually needs. If the work turns out different, add a short "Where reality diverged" paragraph to the Completion Report saying how and why.
@@ -99,6 +99,24 @@ func BuildPromptIn(docPath, docRelPath, docContent, repoRoot, projectPath, workt
 // shows the dependency's commits directly under HEAD, indistinguishable from
 // history, and an agent asked to summarise or review "its" work would claim them.
 func BuildPromptStacked(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn string, budget runcore.Budget) string {
+	return BuildPromptRun(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, false, budget)
+}
+
+// ReturnedNote is the sentence a RETURNED run's prompt carries (StartOptions.Returned):
+// the operator reviewed the previous run and sent the phase back, and their note
+// is the doc's most recent `## Operator feedback` section
+// (wsingest.AppendOperatorFeedback). Rendered exactly once, right after the
+// prompt's first paragraph, so it is read before the contract it amends.
+const ReturnedNote = `THIS PHASE WAS RETURNED BY THE OPERATOR. Read the most recent "## Operator feedback" section of the document first and address it before anything else.`
+
+// BuildPromptRun is BuildPromptStacked for a run that may have been RETURNED by
+// the operator: returned=true adds ReturnedNote after the first paragraph;
+// returned=false renders BuildPromptStacked's prompt byte for byte.
+func BuildPromptRun(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn string, returned bool, budget runcore.Budget) string {
+	note := ""
+	if returned {
+		note = ReturnedNote + "\n\n"
+	}
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
 		DocPath      string
@@ -106,9 +124,10 @@ func BuildPromptStacked(docPath, docRelPath, docContent, repoRoot, projectPath, 
 		DocContent   string
 		RepoNote     string
 		TurnContract string
+		ReturnedNote string
 	}{docPath, docRelPath, docContent,
 		repoNote(repoRoot, projectPath, worktreePath) + stackNote(stackedOn),
-		runcore.TurnContract(budget)})
+		runcore.TurnContract(budget), note})
 	return b.String()
 }
 

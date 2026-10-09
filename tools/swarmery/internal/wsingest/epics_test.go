@@ -94,8 +94,8 @@ func TestParseCompletionReport(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := parseCompletionReport(c.in); got != c.want {
-				t.Errorf("parseCompletionReport = %q, want %q", got, c.want)
+			if got := ParseCompletionReport(c.in); got != c.want {
+				t.Errorf("ParseCompletionReport = %q, want %q", got, c.want)
 			}
 		})
 	}

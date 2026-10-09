@@ -150,6 +150,11 @@ func (r ClaudeRunner) Start(ctx context.Context, spec Spec) (*Result, error) {
 	// account, so a config dir baked into the daemon's plist cannot override the
 	// operator's binding. An unbound project gets os.Environ() back untouched.
 	cmd.Env = claudeacct.SpawnEnvResolved(os.Environ(), spec.Resolution)
+	// Opt-in (SWARMERY_AGENT_SCRUB_VCS_TOKENS=1): strip code-host tokens and CLI
+	// config dirs AFTER the composition, so neither the daemon's env nor an
+	// account/estate store can hand an agent gh/glab credentials. Off, it is the
+	// identity — the same slice back.
+	cmd.Env = scrubVCSTokens(cmd.Env)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

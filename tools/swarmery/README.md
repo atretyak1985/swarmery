@@ -107,6 +107,22 @@ the service definition):
 
 Both fences answer `403 {"error": …}` before any handler runs.
 
+### Agent spawn environment
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. Any other value leaves the environment untouched. See the notes below the table. |
+
+Notes on `SWARMERY_AGENT_SCRUB_VCS_TOKENS`:
+
+- **It is not a full credential boundary.** Dropping `GH_CONFIG_DIR`/`GLAB_CONFIG_DIR` sends `gh`/`glab` back to their default config (`~/.config/gh`, `~/.config/glab-cli`) and the system keyring, where `gh auth login` keeps the operator's token, and agents inherit `HOME`. An operator logged in that way is still reachable from an agent.
+- **Skills lose access only if the token came from the environment.** Skills that call `gh`/`glab` themselves (`commit-push-pr`, `jira-delivery`) stop working only when their access came from an environment-carried token. A `git push` over SSH is unaffected.
+- **Not every spawn goes through `runcore`, so not every spawn is scrubbed.** These paths compose their own env with `claudeacct.SpawnEnvResolved` and are unaffected by the flag:
+  - `internal/routines/runner.go` (routines)
+  - `internal/api/resume.go` (session resume)
+  - `internal/systemspawn/systemspawn.go` (the one-shot system spawns: decide, triage judge, lessons, extract, handoff, improve, retro analysis, trajectory judge, reply extractor, account probe)
+  - `internal/provision/runner.go` (provisioning)
+
 ## Backup & restore
 
 The daemon's operational database (`~/.swarmery/swarmery.db` by default — sessions,
@@ -328,6 +344,104 @@ honor it:
 Exclusion gates row *creation* only — rows that already exist are never
 deleted by code; remove them with a one-off SQL cleanup. Set
 `SWARMERY_EXCLUDE=''` to disable.
+
+## Landing a phase
+
+A finished plan phase (or a reviewed board card) lands from the dashboard: a
+push sends its run branch to `origin`, and the change-request action also opens
+a pull request on GitHub or a merge request on GitLab (GitLab.com and
+self-hosted). Every label the UI shows — "Open PR" / "Open MR", "PR #12" /
+"MR #12" — comes from the provider the daemon detected (the API's `terms`),
+never from a guess in the browser.
+
+The operator guide, [docs/landing.md](docs/landing.md), covers the lifecycle
+(none → ready → pushed → pr_open → merged, or returned), the three Review
+buttons, every 409/422 code with its remedy, and what is deferred. Signing the
+daemon in is covered in [docs/vcs-login.md](docs/vcs-login.md). To keep agents
+from seeing environment-carried VCS tokens, see `SWARMERY_AGENT_SCRUB_VCS_TOKENS`
+under [Agent spawn environment](#agent-spawn-environment).
+
+**Requirements.** `git` on the daemon's PATH, plus the host's CLI: `gh` ≥ 2.40
+for GitHub, `glab` ≥ 1.40 for GitLab. The daemon uses the CLI's own login
+(`gh auth login --hostname <host>` / `glab auth login --hostname <host>`); the
+project banner names the exact command when it is missing or expired.
+
+**Signing in from the dashboard.** Instead of the CLI login, the banner's
+*Sign in* gives the daemon a token of its own — an OAuth device code entered
+in any browser, or a pasted personal access token — stored in
+`~/.swarmery/secrets/vcs-<host>.env` (0600). The device code needs an OAuth
+application registered once per host and its client id; see
+[docs/vcs-login.md](docs/vcs-login.md) for the registration steps, where the
+token lives and how to revoke it.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SWARMERY_GITHUB_CLIENT_ID` | unset | Client id of a GitHub OAuth App with Device Flow enabled; enables the device-code sign-in for GitHub hosts. Overridden per host by `swarmery.vcs.clientIds.<host>` in `.claude/settings.local.json`. |
+| `SWARMERY_GITLAB_CLIENT_ID` | unset | Application id of a non-confidential GitLab application with scope `api`; enables the device-code sign-in for GitLab hosts. Same per-host override. |
+
+**How the provider is detected** — first match wins, read from `origin`:
+
+1. `vcs.provider` in the project's config (below) — `github` or `gitlab`;
+2. the host itself: `github.com` → GitHub, `gitlab.com` → GitLab;
+3. an SSH remote's alias resolved through `ssh -G <alias>` (your
+   `~/.ssh/config`), and the providers' port-443 endpoints
+   (`ssh.github.com`, `altssh.gitlab.com`) mapped to their canonical hosts;
+4. a probe of an unknown HTTPS host's `GET /api/v4/version` — an answer means
+   self-hosted GitLab (the probe never guesses GitHub: GitHub Enterprise hosts
+   are configured explicitly with `vcs.provider: "github"`);
+5. otherwise the banner asks once — *"Which service hosts `<host>`?"* — and
+   stores the answer as `swarmery.vcs.provider` in
+   `.claude/settings.local.json` (`PUT /api/projects/{id}/vcs/provider`).
+
+**Configuration.** Shared defaults live in the `vcs` block of
+`.claude/project.json`; `.claude/settings.local.json` overrides any key per
+machine under `swarmery.vcs`:
+
+```jsonc
+// .claude/project.json (committed)
+{ "vcs": { "provider": "gitlab", "baseBranch": "main" } }
+
+// .claude/settings.local.json (local, wins per key)
+{ "swarmery": { "vcs": {
+  "provider": "gitlab",       // github | gitlab
+  "baseBranch": "develop",    // change-request target; empty = the host's default branch
+  "allowPushToBase": false    // let a run branch that IS the base branch be pushed
+} } }
+```
+
+| Key | Default | Effect |
+|---|---|---|
+| `swarmery.vcs.provider` / `vcs.provider` | auto-detect | Pins the provider (`github` \| `gitlab`). |
+| `swarmery.vcs.baseBranch` / `vcs.baseBranch` | host's default branch | Target branch of the PR/MR. |
+| `swarmery.vcs.allowPushToBase` / `vcs.allowPushToBase` | `false` | Without it, landing a run branch that is the base branch is refused (409). |
+| `swarmery.vcs.clientIds.<host>` | unset | OAuth client id for the device-code sign-in on that host; wins over `SWARMERY_GITHUB_CLIENT_ID` / `SWARMERY_GITLAB_CLIENT_ID`. |
+
+`vcs.forkRemote` is reserved: the fork workflow is not supported yet, and a
+project that sets it is refused (409) rather than pushed somewhere surprising.
+
+**What the daemon never does.** A push is never forced and never retried (a
+diverged remote branch is a 422 that tells you how to rebase), and merge policy
+stays with you on the PR/MR page: `--force`, `--squash` and
+`--remove-source-branch` are never passed. Every failure answers 422 with the
+exact command that finishes the job by hand; tool output is passed through
+redaction, so a token a CLI echoes (`ghp_…`, `glpat-…`) never reaches the
+browser.
+
+**Status and merge.** Once a phase's PR/MR is open, the daemon reads its
+status every 10 minutes (first pass 30 s after boot; up to 20 change requests
+per tick, the longest-unread first) with `gh pr view` / `glab mr view`, and the
+Review tab shows it as chips — CI, review, state — with a **Refresh** button
+(`POST /api/epics/{taskId}/phases/{phaseId}/landing/refresh`) for an
+immediate read. When the change request merges, the phase moves to `merged` and
+its landed date is the merge time. A change request closed without merging keeps
+the phase at `pr_open`, with a `closed` chip: what that means for the phase is your call. The
+daemon never deletes a branch and never ticks a criterion on merge. A
+rejected credential marks the project's sign-in expired, so the banner asks for
+a fresh login.
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_LANDPOLL_INTERVAL` | Go duration (`5m`, `1h`) \| `0` | `10m` | How often the daemon reads open PR/MR status. `0` disables the poller (the Refresh button still works); an invalid value falls back to `10m` with a boot warning. The boot log says `landpoll: every 10m0s` or `landpoll: disabled`. |
 
 ## Notifications (webhook)
 

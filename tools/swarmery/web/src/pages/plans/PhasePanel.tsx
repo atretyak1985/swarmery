@@ -2,7 +2,8 @@
 // of the phase list (the plan-level panel does the same), so the Story, the
 // criteria and the doc get the whole column rather than a 640px drawer at the
 // edge. The shell only: subtitle ("Phase 3 of 4 · 6/8 criteria · opus"),
-// title, the Story · Criteria · Runs · Report · Edit tab bar and ↑/↓ stepping.
+// title, the Story · Criteria · Runs · Review · Report · Edit tab bar (Review
+// only once the phase has run) and ↑/↓ stepping.
 // The body stays Plans.tsx's PhaseDetailPanel, which owns the doc, the checkbox
 // writes and the run handlers. The way out — "← all phases" and Escape — lives
 // above the panel in the plan's action row, like the plan-level panel's does.
@@ -11,13 +12,15 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import type { Epic, EpicPhase } from '../../api/types';
 import { type TabItem, Tabs } from '../../components/Tabs';
 import { modelShortName } from '../../lib/sessionModelChip';
+import { hasReviewTab } from './landingModel';
 
-export type PhaseTab = 'story' | 'criteria' | 'runs' | 'report' | 'edit';
+export type PhaseTab = 'story' | 'criteria' | 'runs' | 'review' | 'report' | 'edit';
 
 export const PHASE_TABS: readonly TabItem<PhaseTab>[] = [
   { id: 'story', label: 'Story' },
   { id: 'criteria', label: 'Criteria' },
   { id: 'runs', label: 'Runs' },
+  { id: 'review', label: 'Review' },
   { id: 'report', label: 'Report' },
   { id: 'edit', label: 'Edit' },
 ];
@@ -104,7 +107,11 @@ export function PhasePanel({
     };
   }, []);
 
-  const tabs = PHASE_TABS.filter((t) => editable || t.id !== 'edit').map((t): TabItem<PhaseTab> => ({
+  // A phase that never ran has no branch to review, so no Review tab.
+  const reviewable = hasReviewTab(phase);
+  const tabs = PHASE_TABS.filter(
+    (t) => (editable || t.id !== 'edit') && (reviewable || t.id !== 'review'),
+  ).map((t): TabItem<PhaseTab> => ({
     ...t,
     ...(t.id === 'criteria' && phase.checkboxesTotal > 0
       ? { count: `${String(phase.checkboxesDone)}/${String(phase.checkboxesTotal)}` }

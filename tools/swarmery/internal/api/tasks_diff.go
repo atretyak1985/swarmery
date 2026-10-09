@@ -16,9 +16,8 @@ package api
 // The exec boundary (reviewExec) lives here rather than reusing worktree.Git
 // because that interface returns stdout and stderr COMBINED: spliced into a
 // unified patch, git's own progress chatter would land inside the diff text the
-// UI renders, and — on the land path in tasks_review.go — inside the PR URL this
-// package has to parse back out of `gh`. A diff endpoint cannot use a combined
-// stream. Everything else about the runner (PATH resolution, a bounded timeout,
+// UI renders. A diff endpoint cannot use a combined stream (repoprovider.Exec,
+// which the land path uses, keeps the streams apart for the same reason). Everything else about the runner (PATH resolution, a bounded timeout,
 // an error carrying the output tail) mirrors worktree.ExecGit.
 
 import (
@@ -32,6 +31,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/gitlab"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/providers"
 )
 
 // reviewMaxPatchBytes caps the unified patch a diff response carries. Past this
@@ -39,23 +44,121 @@ import (
 // patchTruncated and the UI points at the worktree terminal instead.
 const reviewMaxPatchBytes = 200 << 10 // 200 KB
 
-// Timeouts, split by what the command actually waits on. A local git read that
-// takes longer than gitReviewTimeout is a wedged lock, not slow work; a push or
-// a `gh pr create` waits on a network round-trip and a remote-side hook, so it
-// gets a budget an HTTP client will still sit through.
+// A local git read that takes longer than gitReviewTimeout is a wedged lock, not
+// slow work. (The land path's network budget lives in repoprovider.NetTimeout.)
 const (
 	gitReviewTimeout  = 10 * time.Second
-	reviewNetTimeout  = 90 * time.Second
 	reviewOutputTail  = 2048
 	reviewGitBinary   = "git"
-	reviewGhBinary    = "gh"
 	reviewPRBodyChars = 500
 )
 
-// reviewExec is the process boundary of the whole review loop: `git` for the
-// diff endpoint, `git` + `gh` for land. The timeout is a parameter rather than
-// runner state because one caller reads a local ref and the next one pushes over
-// the network, and a single value cannot be right for both.
+// landProvider resolves the code-host provider the land exit pushes to and
+// opens its change request on: the repo's `origin` is read and classified
+// (repoprovider.Detect over the project's vcs config), and providers.Factory
+// builds the gh- or glab-backed provider for a GitHub or GitLab host. An
+// unknown kind comes back with a nil Provider and its Detection, for the land
+// handlers to refuse with a hint. An error means there is no usable origin.
+//
+// The caller passes cfg, already loaded from the PROJECT path: repoDir is where
+// git runs, which for a multi-repo plan phase is a sub-repo whose own .claude/
+// is not the project's, so reading the config from repoDir would drop the
+// project's vcs.provider and send a self-hosted origin to the network probe.
+//
+// A package var for the same reason reviewRun is one: tests swap it for a
+// factory over a repoprovider.FakeExec, with a restore in t.Cleanup.
+var landProvider = newLandProvider(repoprovider.OSExec{}, repoprovider.HTTPProber{}, credstore.Env)
+
+// newLandProvider builds a landProvider over an exec boundary, a GitLab prober
+// for unknown hosts, and the per-host credential env (production: credstore.Env,
+// which is nil until the daemon holds a token, so the operator's own `gh` login
+// is used exactly as before).
+func newLandProvider(ex repoprovider.Exec, probe repoprovider.Prober, env func(host string) []string) func(ctx context.Context, repoDir string, cfg repoprovider.Config) (repoprovider.Provider, repoprovider.Detection, error) {
+	return func(ctx context.Context, repoDir string, cfg repoprovider.Config) (repoprovider.Provider, repoprovider.Detection, error) {
+		det, err := repoprovider.Detect(ctx, ex, repoDir, cfg, probe)
+		if err != nil {
+			return nil, det, err
+		}
+		provider, err := providers.Factory(det.Kind, ex, env)
+		if errors.Is(err, repoprovider.ErrUnknownProvider) {
+			return nil, det, nil
+		}
+		return provider, det, err
+	}
+}
+
+// landCLI names a provider's CLI in the land path's hints: the binary, its
+// change-request command, its display name and where to install it.
+type landCLI struct {
+	Bin     string // "gh"
+	Create  string // "gh pr create"
+	Name    string // "GitHub CLI"
+	Install string // install page
+}
+
+// landCLIFor is kind's CLI vocabulary; an unknown kind gets GitHub's, the
+// historical default of every manual-command hint.
+func landCLIFor(kind repoprovider.Kind) landCLI {
+	if kind == repoprovider.KindGitLab {
+		return landCLI{Bin: "glab", Create: "glab mr create", Name: "GitLab CLI", Install: "https://gitlab.com/gitlab-org/cli"}
+	}
+	return landCLI{Bin: "gh", Create: "gh pr create", Name: "GitHub CLI", Install: "https://cli.github.com"}
+}
+
+// shellQuote renders s as ONE POSIX shell word for a copy-paste hint: a value
+// made only of characters no shell treats specially comes back as is (so a
+// plain branch or path reads naturally), anything else is wrapped in single
+// quotes, each embedded single quote closed, backslash-escaped and reopened.
+// Inside single quotes `$(…)`, backticks, `;` and the like are literal, so
+// pasting the hint can never run them. The empty string becomes an empty
+// single-quoted pair. Pure.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.IndexFunc(s, func(r rune) bool { return !isShellSafe(r) }) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// isShellSafe reports whether r is never special to a POSIX shell anywhere in
+// a word (the set Python's shlex.quote leaves bare).
+func isShellSafe(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	}
+	return strings.ContainsRune("@%+=:,./_-", r)
+}
+
+// changeRequestCmd is the terminal command that opens kind's change request
+// for head by hand (base "" = the host's default branch). Every caller-supplied
+// value is shellQuote'd: titles come from plan and card names. Pure.
+func changeRequestCmd(kind repoprovider.Kind, head, base, title string, draft bool) string {
+	headFlag, baseFlag := " --head ", " --base "
+	if kind == repoprovider.KindGitLab {
+		headFlag, baseFlag = " --source-branch ", " --target-branch "
+	}
+	cmd := landCLIFor(kind).Create + headFlag + shellQuote(head)
+	if base != "" {
+		cmd += baseFlag + shellQuote(base)
+	}
+	cmd += " --title " + shellQuote(title)
+	if draft {
+		cmd += " --draft"
+	}
+	return cmd
+}
+
+// isNoURL reports whether err is a provider's "the CLI exited 0 but printed no
+// change-request URL" failure.
+func isNoURL(err error) bool {
+	return errors.Is(err, github.ErrNoURL) || errors.Is(err, gitlab.ErrNoURL)
+}
+
+// reviewExec is the process boundary of the diff endpoint: `git` reads of the
+// project repo root. (Land goes through landProvider instead.)
 type reviewExec interface {
 	// Run executes name+args with dir as the working directory, returning stdout
 	// and stderr SEPARATELY (see the file header for why that matters).
@@ -231,58 +334,103 @@ func (h *Handler) boardTaskDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// `..` for the commit list, `...` for the diffs: the log wants the commits
-	// unique to the branch, the diff wants the change against the merge base. The
-	// trailing `--` pins both ranges into the revision slot so a name can never be
-	// re-read as a flag.
-	logRange := tgt.StartPoint + ".." + tgt.Branch
-	diffRange := tgt.StartPoint + "..." + tgt.Branch
+	diff, err := collectBranchDiff(tgt.ProjectPath, tgt.StartPoint, tgt.Branch)
+	if err != nil {
+		writeBranchDiffErr(w, err)
+		return
+	}
+	writeJSON(w, diff, nil)
+}
 
-	out, stderr, err := gitReview(tgt.ProjectPath, "log", "--format=%H%x00%s", logRange, "--")
+// branchGoneError: the run branch a diff was asked for no longer resolves in
+// the repo (deleted out of band). Answered 404 — the thing addressed is gone.
+type branchGoneError struct{ Branch, Reason string }
+
+func (e *branchGoneError) Error() string {
+	return "run branch " + e.Branch + " no longer exists: " + e.Reason
+}
+
+// baseUnreachableError: the base a diff is measured from is recorded, but git
+// can no longer resolve it (a force-push or a gc dropped it). Answered 409
+// base-unreachable — the repo moved out from under the recorded base.
+type baseUnreachableError struct{ Base, Reason string }
+
+func (e *baseUnreachableError) Error() string {
+	return "the start point " + e.Base + " is no longer reachable in this repo, " +
+		"so the branch cannot be measured against it: " + e.Reason
+}
+
+// collectBranchDiff reads what branch carries on top of base in repoDir: the
+// commits unique to it, the files they touched, and the unified patch (capped at
+// reviewMaxPatchBytes). Shared by the board card diff and the plan-phase review
+// (phase_landing.go), so both screens read a branch the same way.
+//
+// `..` for the commit list, `...` for the diffs: the log wants the commits unique
+// to the branch, the diff wants the change against the merge base. The trailing
+// `--` pins both ranges into the revision slot so a name can never be re-read as
+// a flag.
+//
+// A *branchGoneError or *baseUnreachableError says which end of the range is
+// gone; anything else is an unexpected git failure. writeBranchDiffErr maps all
+// three onto the HTTP answer.
+func collectBranchDiff(repoDir, base, branch string) (taskDiffDTO, error) {
+	logRange := base + ".." + branch
+	diffRange := base + "..." + branch
+
+	out, stderr, err := gitReview(repoDir, "log", "--format=%H%x00%s", logRange, "--")
 	if err != nil {
 		// Both a deleted branch and an unreachable base fail here with the same
 		// "unknown revision" shape, and they need opposite answers — probe which
 		// one is actually gone rather than guessing from the message.
 		switch {
-		case !gitRevExists(tgt.ProjectPath, tgt.Branch):
-			writeClientErr(w, http.StatusNotFound,
-				"run branch "+tgt.Branch+" no longer exists: "+gitReason(stderr, err))
-		case !gitRevExists(tgt.ProjectPath, tgt.StartPoint):
-			writeConflict(w, codeBaseUnreachable,
-				"the start point "+tgt.StartPoint+" is no longer reachable in this repo, "+
-					"so the branch cannot be measured against it: "+gitReason(stderr, err))
+		case !gitRevExists(repoDir, branch):
+			return taskDiffDTO{}, &branchGoneError{Branch: branch, Reason: gitReason(stderr, err)}
+		case !gitRevExists(repoDir, base):
+			return taskDiffDTO{}, &baseUnreachableError{Base: base, Reason: gitReason(stderr, err)}
 		default:
-			writeErr(w, fmt.Errorf("git log %s: %w: %s", logRange, err, gitReason(stderr, err)))
+			return taskDiffDTO{}, fmt.Errorf("git log %s: %w: %s", logRange, err, gitReason(stderr, err))
 		}
-		return
 	}
 	commits := parseReviewCommits(out)
 
-	numstat, nsErr, err := gitReview(tgt.ProjectPath, "diff", "--numstat", diffRange, "--")
+	numstat, nsErr, err := gitReview(repoDir, "diff", "--numstat", diffRange, "--")
 	if err != nil {
-		writeErr(w, fmt.Errorf("git diff --numstat %s: %w: %s", diffRange, err, gitReason(nsErr, err)))
-		return
+		return taskDiffDTO{}, fmt.Errorf("git diff --numstat %s: %w: %s", diffRange, err, gitReason(nsErr, err))
 	}
 	files := parseNumstat(numstat)
 
 	// The whole patch is buffered before it is capped. Acceptable for a
-	// single-user local daemon reviewing one card's branch; the cap is about what
-	// a browser can usefully render, not about bounding this process's memory.
-	raw, pErr, err := gitReview(tgt.ProjectPath, "diff", diffRange, "--")
+	// single-user local daemon reviewing one branch; the cap is about what a
+	// browser can usefully render, not about bounding this process's memory.
+	raw, pErr, err := gitReview(repoDir, "diff", diffRange, "--")
 	if err != nil {
-		writeErr(w, fmt.Errorf("git diff %s: %w: %s", diffRange, err, gitReason(pErr, err)))
-		return
+		return taskDiffDTO{}, fmt.Errorf("git diff %s: %w: %s", diffRange, err, gitReason(pErr, err))
 	}
 	patch, truncated := truncatePatch(raw, reviewMaxPatchBytes)
 
-	writeJSON(w, taskDiffDTO{
-		Base:           tgt.StartPoint,
-		Branch:         tgt.Branch,
+	return taskDiffDTO{
+		Base:           base,
+		Branch:         branch,
 		Commits:        commits,
 		Files:          files,
 		Patch:          patch,
 		PatchTruncated: truncated,
-	}, nil)
+	}, nil
+}
+
+// writeBranchDiffErr answers a collectBranchDiff failure: 404 when the branch is
+// gone, 409 base-unreachable when the base is, 500 otherwise.
+func writeBranchDiffErr(w http.ResponseWriter, err error) {
+	var gone *branchGoneError
+	var unreachable *baseUnreachableError
+	switch {
+	case errors.As(err, &gone):
+		writeClientErr(w, http.StatusNotFound, gone.Error())
+	case errors.As(err, &unreachable):
+		writeConflict(w, codeBaseUnreachable, unreachable.Error())
+	default:
+		writeErr(w, err)
+	}
 }
 
 // gitReason picks the most informative text available for a failed git call:
