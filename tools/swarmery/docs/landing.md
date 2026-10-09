@@ -311,3 +311,4 @@ also answers 403 to a cross-origin browser request (`requireLocalOrigin`).
 ## Dogfood log
 
 - 2026-10-09 — first phase landed from the Review tab on this repo (plan `2026-10-09-landing-dogfood`, Phase 1).
+- 2026-10-09 — dependent phase started after the merge was detected; no `deps-unmerged` (plan `2026-10-09-landing-dogfood`, Phase 2).
