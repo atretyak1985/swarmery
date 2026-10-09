@@ -91,8 +91,8 @@ func TestPersistProviderAnswerPreservesOtherKeys(t *testing.T) {
 		t.Errorf("swarmery.vcs = %v", vcs)
 	}
 	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0o644 {
-		t.Errorf("mode = %04o, want 0644", info.Mode().Perm())
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %04o, want the existing 0600 kept", info.Mode().Perm())
 	}
 	c := LoadConfig(project)
 	if c.ExplicitKind() != KindGitLab || c.BaseBranch != "develop" {
@@ -107,6 +107,41 @@ func TestPersistProviderAnswerPreservesOtherKeys(t *testing.T) {
 	}
 	if _, ok := readSettingsLocal(t, project)["permissions"]; !ok {
 		t.Fatal("permissions lost on the second answer")
+	}
+}
+
+// An operator who locked settings.local.json to 0600 (env secrets live there)
+// must not find it world-readable after an answer is saved.
+func TestPersistProviderAnswerKeepsExistingMode(t *testing.T) {
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(project, ".claude", "settings.local.json")
+	if err := os.WriteFile(path, []byte(`{"env":{"SECRET_TOKEN":"s3cr3t"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil { // umask-proof
+		t.Fatal(err)
+	}
+	for _, kind := range []Kind{KindGitHub, KindGitLab} {
+		if err := PersistProviderAnswer(project, kind); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("%s: mode = %04o, want 0600 kept", kind, info.Mode().Perm())
+		}
+		env, ok := readSettingsLocal(t, project)["env"].(map[string]any)
+		if !ok || env["SECRET_TOKEN"] != "s3cr3t" {
+			t.Fatalf("%s: unrelated key lost: %v", kind, env)
+		}
+		if got := LoadConfig(project).ExplicitKind(); got != kind {
+			t.Fatalf("provider = %q, want %q", got, kind)
+		}
 	}
 }
 

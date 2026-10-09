@@ -12,7 +12,8 @@ import (
 )
 
 // settingsLocalMode is the mode of a settings.local.json PersistProviderAnswer
-// creates or rewrites: an operator preference file, not a secret.
+// CREATES. An existing file keeps its own permission bits: operators keep env
+// secrets there and often lock it to 0600, which a rewrite must never widen.
 const settingsLocalMode = 0o644
 
 // persistMu serialises PersistProviderAnswer's read-modify-write, so two
@@ -27,7 +28,8 @@ var persistMu sync.Mutex
 // The write is a read-modify-write that keeps every other key of the file
 // (top-level ones, other `swarmery.*` blocks, other `swarmery.vcs` keys)
 // intact; `.claude/` and the file are created when absent, and the result is
-// written 0644 through a temp file renamed into place. Only github and gitlab
+// written through a temp file renamed into place — 0644 for a new file, the
+// existing file's own permission bits otherwise. Only github and gitlab
 // are accepted (anything else is ErrUnknownProvider), and a file that is not a
 // JSON object is refused rather than overwritten.
 func PersistProviderAnswer(projectPath string, kind Kind) error {
@@ -43,14 +45,22 @@ func PersistProviderAnswer(projectPath string, kind Kind) error {
 	dir := filepath.Join(projectPath, ".claude")
 	path := filepath.Join(dir, "settings.local.json")
 	root := map[string]json.RawMessage{}
+	mode := os.FileMode(settingsLocalMode)
 	raw, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
 		return fmt.Errorf("repoprovider: read %s: %w", path, err)
-	case len(bytes.TrimSpace(raw)) > 0:
-		if err := json.Unmarshal(raw, &root); err != nil || root == nil {
-			return fmt.Errorf("repoprovider: %s is not a JSON object; not overwriting it", path)
+	default:
+		fi, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("repoprovider: stat %s: %w", path, err)
+		}
+		mode = fi.Mode().Perm()
+		if len(bytes.TrimSpace(raw)) > 0 {
+			if err := json.Unmarshal(raw, &root); err != nil || root == nil {
+				return fmt.Errorf("repoprovider: %s is not a JSON object; not overwriting it", path)
+			}
 		}
 	}
 
@@ -79,7 +89,7 @@ func PersistProviderAnswer(projectPath string, kind Kind) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("repoprovider: create %s: %w", dir, err)
 	}
-	return writeFileAtomic(path, out, settingsLocalMode)
+	return writeFileAtomic(path, out, mode)
 }
 
 // encodeJSON marshals v WITHOUT HTML escaping, so the operator's other values
