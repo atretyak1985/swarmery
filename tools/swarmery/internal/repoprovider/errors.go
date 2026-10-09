@@ -21,6 +21,10 @@ var (
 	// fork workflow), never classified from tool output.
 	ErrBaseRefused     = errors.New("pushing to the base branch is refused")
 	ErrForkUnsupported = errors.New("fork workflow is not supported yet")
+	// ErrUnknownProvider is a Kind with no Provider implementation (the
+	// "unknown" detection result, or a typo in a config/answer): the caller
+	// asks the operator which service hosts the repo instead of guessing.
+	ErrUnknownProvider = errors.New("unknown code-host provider")
 )
 
 // Error is a classified tool failure. Its message is redacted; Unwrap exposes
