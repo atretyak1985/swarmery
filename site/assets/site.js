@@ -10,7 +10,33 @@
   if (tbtn) tbtn.addEventListener('click', function () {
     var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next); store('swarmery-theme', next);
+    themeMedia(next);
   });
+
+  /* themed media: clips, posters, screenshots and full videos each have a light
+     twin one folder down (assets/clips/light/…, video/light/…); paths in the
+     HTML are the dark ones and are rewritten whenever the theme changes */
+  var MEDIA_ATTRS = ['src', 'poster', 'srcset', 'href', 'data-src', 'data-clip', 'data-poster', 'data-play', 'data-zoom'];
+  function themedUrl(u, light) {
+    if (!u) return u;
+    var d = u.replace(/(assets\/(?:clips|posters|img)\/)light\//g, '$1').replace(/(^|[\/\s,])video\/light\/(swarmery-)/g, '$1video/$2');
+    return light ? d.replace(/(assets\/(?:clips|posters|img)\/)/g, '$1light/').replace(/(^|[\/\s,])video\/(swarmery-)/g, '$1video/light/$2') : d;
+  }
+  function themeMedia(theme) {
+    var light = theme === 'light';
+    document.querySelectorAll('video, img, source, a[download], [data-play], [data-zoom], [data-clip]').forEach(function (el) {
+      var changed = false;
+      MEDIA_ATTRS.forEach(function (a) {
+        var v = el.getAttribute(a);
+        if (!v || !/assets\/(clips|posters|img)\/|video\/(light\/)?swarmery-/.test(v)) return;
+        var n = themedUrl(v, light);
+        if (n !== v) { el.setAttribute(a, n); changed = true; }
+      });
+      if (changed && el.tagName === 'SOURCE' && el.parentNode && el.parentNode.load) el.parentNode.load();
+      if (changed && el.tagName === 'VIDEO' && !el.paused) { var p = el.play(); if (p && p.catch) p.catch(function () {}); }
+    });
+  }
+  if (root.getAttribute('data-theme') === 'light') themeMedia('light');
 
   /* nav: burger and features dropdown */
   var nav = document.querySelector('.nav');

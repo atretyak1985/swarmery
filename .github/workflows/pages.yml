@@ -30,7 +30,8 @@ jobs:
       # The videos live once, in docs/video/ (the README links the promo too);
       # the site's <video> players expect them at video/, so stage copies into
       # the artifact instead of committing the mp4s a second time under site/.
-      - run: mkdir -p site/video && cp docs/video/*.mp4 site/video/
+      # Light-theme cuts sit in docs/video/light/ and are served from video/light/.
+      - run: mkdir -p site/video/light && cp docs/video/*.mp4 site/video/ && cp docs/video/light/*.mp4 site/video/light/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site
