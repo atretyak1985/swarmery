@@ -20,10 +20,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
 
 const (
@@ -706,5 +708,208 @@ func TestPlanRelPath(t *testing.T) {
 		if got := planRelPath(c.t); got != c.want {
 			t.Errorf("planRelPath(%+v) = %q, want %q", c.t, got, c.want)
 		}
+	}
+}
+
+// ── land: return to agent ────────────────────────────────────────────────────
+
+const landTestFeedback = "DELETE ignores soft-deleted rows — filter them before the 404."
+
+// attachReturnRun wires a stub-backed phase-run service whose runs stay in flight
+// until cleanup, so a test can observe the `returned` stamp before the run's end
+// resets it. Cleanup releases the run and waits for its slot, so nothing outlives
+// the fixture's DB and temp dirs.
+func attachReturnRun(t *testing.T, f *phaseLandingFixture) (*phaseStubRunner, *phaserun.Service) {
+	t.Helper()
+	r := &phaseStubRunner{block: make(chan struct{})}
+	svc := attachPhaseRun(t, f.db, r, false)
+	t.Cleanup(func() {
+		close(r.block)
+		deadline := time.Now().Add(5 * time.Second)
+		for svc.Slots.IsActive(runcore.SlotKey(phaserun.Engine, f.phaseID)) && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+	})
+	return r, svc
+}
+
+// waitSpecs waits until the stub runner has been handed n specs.
+func waitSpecs(t *testing.T, r *phaseStubRunner, n int) []phaserun.RunSpec {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		got := append([]phaserun.RunSpec(nil), r.specs...)
+		r.mu.Unlock()
+		if len(got) >= n {
+			return got
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("runner never received %d spec(s)", n)
+	return nil
+}
+
+func specCount(r *phaseStubRunner) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.specs)
+}
+
+func readDoc(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestLandPhaseReturnAppendsFeedbackAndRestarts: the note lands in the phase doc
+// above its report, the phase is stamped returned (clearing a stale landing
+// error), and its run restarts with Returned:true — no code-host tool is touched.
+func TestLandPhaseReturnAppendsFeedbackAndRestarts(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	fake := useFakePhaseLand(t, phaseLandOK())
+	r, _ := attachReturnRun(t, f)
+	if _, err := f.db.Exec(`UPDATE epic_phases SET landing_error = 'not-authenticated: stale' WHERE id = ?`, f.phaseID); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := f.land(t, `{"action":"return","feedback":"  `+landTestFeedback+`  "}`)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (body %v)", resp.StatusCode, body)
+	}
+	if body["status"] != "running" || body["action"] != landActionReturn || body["sessionUuid"] != "phase-uuid-1" {
+		t.Errorf("body = %v, want status running, action return, the run's session", body)
+	}
+	if l := landingOf(t, body); l["state"] != landingReturned || l["error"] != nil {
+		t.Errorf("landing = %v, want returned with no error", l)
+	}
+
+	specs := waitSpecs(t, r, 1)
+	if !specs[0].Returned {
+		t.Error("the run was started without Returned:true")
+	}
+	if n := strings.Count(specs[0].Prompt, phaserun.ReturnedNote); n != 1 {
+		t.Errorf("the run's prompt carries the returned sentence %d times, want 1", n)
+	}
+
+	doc := readDoc(t, f.docPath)
+	fb := strings.Index(doc, "## Operator feedback (")
+	note := strings.Index(doc, landTestFeedback+"\n")
+	report := strings.Index(doc, "## Completion Report")
+	if fb < 0 || note < fb || report < note {
+		t.Errorf("doc does not carry the feedback section above the report:\n%s", doc)
+	}
+	// The run's prompt inlines the doc it read — the one carrying the note.
+	if !strings.Contains(specs[0].Prompt, landTestFeedback) {
+		t.Error("the restarted run's prompt does not carry the feedback")
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingReturned {
+		t.Errorf("landing_state = %q, want returned", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_error"); got != "" {
+		t.Errorf("landing_error = %q, want cleared", got)
+	}
+	if len(fake.Calls) != 0 {
+		t.Errorf("a return ran code-host tools: %v", fake.Calls)
+	}
+}
+
+// TestLandPhaseReturnRequiresFeedback: no note (absent, blank, or over the cap) is
+// a 400 that writes nothing and starts nothing.
+func TestLandPhaseReturnRequiresFeedback(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	r, _ := attachReturnRun(t, f)
+
+	big := strings.Repeat("x", 20<<10+1)
+	for _, b := range []string{
+		`{"action":"return"}`,
+		`{"action":"return","feedback":"  \n\t "}`,
+		`{"action":"return","feedback":"` + big + `"}`,
+	} {
+		resp, body := f.land(t, b)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("body %.60q: status = %d, want 400 (%v)", b, resp.StatusCode, body)
+		}
+	}
+	if got := readDoc(t, f.docPath); got != landTestDoc {
+		t.Errorf("a refused return changed the doc:\n%s", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingNone {
+		t.Errorf("landing_state = %q, want none", got)
+	}
+	if n := specCount(r); n != 0 {
+		t.Errorf("a refused return started %d run(s)", n)
+	}
+}
+
+// TestLandPhaseReturnWhileRunning409: a running phase cannot be returned.
+func TestLandPhaseReturnWhileRunning409(t *testing.T) {
+	f := newPhaseLandingFixture(t, "running")
+	r, _ := attachReturnRun(t, f)
+
+	resp, body := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusConflict || body["code"] != codePhaseRunning {
+		t.Fatalf("status/code = %d/%v, want 409 %s", resp.StatusCode, body["code"], codePhaseRunning)
+	}
+	if got := readDoc(t, f.docPath); got != landTestDoc {
+		t.Errorf("a refused return changed the doc:\n%s", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingNone {
+		t.Errorf("landing_state = %q, want none", got)
+	}
+	if n := specCount(r); n != 0 {
+		t.Errorf("a refused return started %d run(s)", n)
+	}
+}
+
+// TestLandPhaseReturnStartRefusedKeepsFeedback: the run cannot start (the run
+// budget is full). The refusal is runPhase's body plus the landing — still
+// returned — and the operator's note stays in the doc.
+func TestLandPhaseReturnStartRefusedKeepsFeedback(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	r, svc := attachReturnRun(t, f)
+	svc.Slots = runcore.NewSlots(1)
+	if _, err := svc.Slots.TryAcquire(runcore.SlotKey("planrun", 77), "u-plan", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusConflict || body["code"] != codeNoRunSlot {
+		t.Fatalf("status/code = %d/%v, want 409 %s (body %v)", resp.StatusCode, body["code"], codeNoRunSlot, body)
+	}
+	if holders, _ := body["holders"].([]any); len(holders) != 1 {
+		t.Errorf("holders = %v, want the plan run named", body["holders"])
+	}
+	if l := landingOf(t, body); l["state"] != landingReturned {
+		t.Errorf("landing = %v, want returned", l)
+	}
+	if !strings.Contains(readDoc(t, f.docPath), landTestFeedback) {
+		t.Error("the operator's note was dropped when the run could not start")
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingReturned {
+		t.Errorf("landing_state = %q, want returned", got)
+	}
+	if n := specCount(r); n != 0 {
+		t.Errorf("a refused start spawned %d run(s)", n)
+	}
+}
+
+// TestLandPhaseReturnWithoutPhaseRuns503: no phase-run service ⇒ 503 before the
+// doc or the row is touched.
+func TestLandPhaseReturnWithoutPhaseRuns503(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done") // leaves phaserunSvc nil
+
+	resp, _ := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+	if got := readDoc(t, f.docPath); got != landTestDoc {
+		t.Errorf("an unattached return changed the doc:\n%s", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingNone {
+		t.Errorf("landing_state = %q, want none", got)
 	}
 }

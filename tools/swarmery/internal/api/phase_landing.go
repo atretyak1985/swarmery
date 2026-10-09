@@ -5,13 +5,17 @@ package api
 //
 //	GET  /api/epics/{taskId}/phases/{phaseId}/review → 200 phaseReviewDTO
 //	POST /api/epics/{taskId}/phases/{phaseId}/land   {action:"push"|"pr", draft?} → 200 {branch, base, action, landing}
+//	POST /api/epics/{taskId}/phases/{phaseId}/land   {action:"return", feedback} → 202 {status, sessionUuid, action, landing}
 //
 // The review is the evidence the operator lands on — the commits the run branch
 // carries, the files and the patch (collectBranchDiff, the same reader the board
 // card diff uses), the verification verdict, the landing state and the
 // provider's vocabulary. Land pushes the branch through internal/repoprovider
 // (the landProvider factory board land uses, so tests script a FakeExec) and,
-// for action "pr", opens the change request.
+// for action "pr", opens the change request. Action "return" sends the phase
+// back to its agent instead: the operator's feedback is written into the phase
+// doc (wsingest.AppendOperatorFeedback), the phase is marked `returned`, and its
+// run restarts with phaserun.StartOptions.Returned.
 //
 // The landing lifecycle lives on epic_phases (migration 0103) and is
 // daemon-owned: wsingest's upsert never lists those columns, so a re-scan of the
@@ -28,10 +32,12 @@ package api
 // through credstore.Redact. A push is never forced and never retried.
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -45,6 +51,8 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/github"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // landExec is the process boundary of the landing path's own local git reads
@@ -64,11 +72,11 @@ const (
 	landingReturned = "returned"
 )
 
-// Land actions this phase implements. "return" (send the phase back to its
-// agent) is a later phase's and answers 400 until then.
+// Land actions (web/src/api/types.ts PhaseLandAction).
 const (
-	landActionPush = "push"
-	landActionPR   = "pr"
+	landActionPush   = "push"
+	landActionPR     = "pr"
+	landActionReturn = "return" // send the phase back to its agent with feedback
 )
 
 // landingDTO is a phase's landing lifecycle (camelCase, mirrored in
@@ -449,7 +457,9 @@ func writeLandingUnprocessable(w http.ResponseWriter, code, msg, hint, detail st
 // landPhase — POST /api/epics/{taskId}/phases/{phaseId}/land {action, draft}.
 // requireLocalOrigin. action "push" pushes the run branch (landing_state →
 // pushed); action "pr" pushes it and opens a change request (→ pr_open, with its
-// URL, number and provider). 200 {branch, base, action, landing}.
+// URL, number and provider). 200 {branch, base, action, landing}. Action
+// "return" {feedback} sends the phase back to its agent (returnPhase): 202, or
+// 400 when feedback is empty or over wsingest.ReviewFeedbackMax.
 // 400 unknown action / bad body; 404 unknown phase; 409 phase-running,
 // no-run-branch, fork-workflow-unsupported, push-to-base-refused, no repo root;
 // 422 {error, code, hint, detail} for every machine problem (no-remote,
@@ -461,25 +471,46 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Action string `json:"action"`
-		Draft  bool   `json:"draft"`
+		Action   string `json:"action"`
+		Draft    bool   `json:"draft"`
+		Feedback string `json:"feedback"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	action := strings.TrimSpace(body.Action)
-	if action != landActionPush && action != landActionPR {
-		writeClientErr(w, http.StatusBadRequest, `unknown action: choose "push" or "pr"`)
+	if action != landActionPush && action != landActionPR && action != landActionReturn {
+		writeClientErr(w, http.StatusBadRequest, `unknown action: choose "push", "pr" or "return"`)
 		return
+	}
+	feedback := strings.TrimSpace(body.Feedback)
+	if action == landActionReturn {
+		if feedback == "" {
+			writeClientErr(w, http.StatusBadRequest,
+				"feedback is required — returning a phase with no note would repeat the same work")
+			return
+		}
+		if len(feedback) > wsingest.ReviewFeedbackMax {
+			writeClientErr(w, http.StatusBadRequest,
+				fmt.Sprintf("feedback exceeds %d bytes", wsingest.ReviewFeedbackMax))
+			return
+		}
 	}
 	t, ok := h.loadLandingTarget(w, taskID, phaseID)
 	if !ok {
 		return
 	}
 	if t.RunState == "running" {
-		writeConflict(w, codePhaseRunning,
-			"this phase is still running — let the run finish before landing it")
+		msg := "this phase is still running — let the run finish before landing it"
+		if action == landActionReturn {
+			msg = "this phase is still running — let the run finish before returning it"
+		}
+		writeConflict(w, codePhaseRunning, msg)
+		return
+	}
+	if action == landActionReturn {
+		h.returnPhase(w, t, feedback)
 		return
 	}
 	if t.RunBranch == "" {
@@ -692,4 +723,154 @@ func (h *Handler) writeLandFailure(w http.ResponseWriter, t landingTarget, det r
 	default:
 		writeLandingUnprocessable(w, codePushFailed, "push failed", hints.other, detail)
 	}
+}
+
+// returnPhase is landPhase's action "return": send a finished phase back to its
+// agent. The caller has validated feedback and refused a running phase.
+//
+// Order: the operator's note is written into the WORKSPACE doc (epic_phases.doc_path
+// — the run has ended and its lent copy was already returned; the next run lends
+// the updated doc into its worktree), the phase is stamped `returned`, then its
+// run restarts with Returned:true (bypasses the blocked re-run guard only;
+// continues on the phase's own run branch). A refused start does NOT undo the
+// first two steps: the note is the operator's, and `returned` is what the phase
+// is waiting on — the refusal is answered with the same body runPhase gives,
+// plus the phase's landing (state returned), so a later plain Run picks it up.
+//
+// 202 {status:"running", sessionUuid, action:"return", landing}; 503 phase runs
+// not attached (nothing written); 409 doc-unreadable when the note cannot be
+// written; the run refusals runPhase maps otherwise.
+func (h *Handler) returnPhase(w http.ResponseWriter, t landingTarget, feedback string) {
+	if phaserunSvc == nil {
+		writeClientErr(w, http.StatusServiceUnavailable, "phase runs not attached")
+		return
+	}
+	if err := wsingest.AppendOperatorFeedback(t.DocPath, feedback, time.Now()); err != nil {
+		writeConflict(w, codeDocUnreadable, "could not write the feedback into the phase doc: "+err.Error())
+		return
+	}
+	if _, err := h.DB.Exec(`UPDATE epic_phases SET landing_state = ?, landing_error = NULL WHERE id = ?`,
+		landingReturned, t.PhaseID); err != nil {
+		writeErr(w, err)
+		return
+	}
+	publishPlanUpdated(t.TaskID)
+
+	uuid, startErr := phaserunSvc.StartWith(t.PhaseID, phaserun.StartOptions{Returned: true})
+	landing, err := h.phaseLanding(t.PhaseID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if startErr != nil {
+		rec := &jsonCapture{header: http.Header{}}
+		writePhaseStartRefusal(rec, startErr)
+		rec.replayWith(w, "landing", landing)
+		return
+	}
+	writeJSONStatus(w, http.StatusAccepted, map[string]any{
+		"status": "running", "sessionUuid": uuid, "action": landActionReturn, "landing": landing,
+	})
+}
+
+// writePhaseStartRefusal renders a phaserun.StartWith refusal for the return
+// path with the writers and codes runPhase uses for the same errors. Only the
+// refusals a Returned start can meet are named: the request carries no model or
+// effort, and the blocked re-run guard is bypassed. Anything else is a 500.
+func writePhaseStartRefusal(w http.ResponseWriter, err error) {
+	var (
+		depsErr     *phaserun.DepsUnmetError
+		unmergedErr *phaserun.DepsUnmergedError
+		dirtyErr    *phaserun.BranchDirtyError
+		noSlot      *runcore.NoSlotError
+		docModelErr *phaserun.DocModelError
+		docEffort   *phaserun.DocEffortError
+	)
+	wtCode, wtMsg, isWtConflict := worktreeConflict(err)
+	switch {
+	case errors.As(err, &docModelErr):
+		writeConflictFields(w, codeDocModelUnknown, docModelErr.Error(),
+			map[string]any{"doc": docModelErr.Doc, "declared": docModelErr.Declared})
+	case errors.As(err, &docEffort):
+		writeConflictFields(w, codeDocEffortUnknown, docEffort.Error(),
+			map[string]any{"doc": docEffort.Doc, "declared": docEffort.Declared})
+	case errors.Is(err, phaserun.ErrPhaseNotFound):
+		writeClientErr(w, http.StatusNotFound, "phase not found")
+	case errors.Is(err, phaserun.ErrRunning):
+		writeConflict(w, codeAlreadyRunning, "a run is already active for this phase")
+	case errors.Is(err, phaserun.ErrPlanRunning):
+		writeConflict(w, codePlanRunning, "a plan run is active for this plan — cancel it before running one phase")
+	case errors.As(err, &noSlot):
+		writeNoRunSlot(w, noSlot)
+	case errors.Is(err, runcore.ErrLowQuota):
+		writeLowQuota(w, err)
+	case errors.Is(err, runcore.ErrAccountBreaker):
+		writeAccountBreaker(w, err)
+	case errors.As(err, &depsErr):
+		writeConflictFields(w, codeDepsUnmet, depsErr.Error(), map[string]any{"unmetDeps": depsErr.Unmet})
+	case errors.As(err, &unmergedErr):
+		writeDepsUnmerged(w, unmergedErr.Error(), unmergedErr.Branches, unmergedErr.Base)
+	case errors.Is(err, phaserun.ErrCannotStack):
+		writeStackRefusal(w, codeCannotStack, err.Error())
+	case errors.Is(err, phaserun.ErrNoDoc):
+		writeConflict(w, codeDocUnreadable, "phase doc is unreadable")
+	case errors.Is(err, phaserun.ErrNoPath):
+		writeConflict(w, codeNoProjectPath, "project has no known path to run in")
+	// Checked BEFORE ErrNoRepoRoot, which it also wraps.
+	case errors.Is(err, phaserun.ErrRepoOutsideProject):
+		writeConflict(w, codeRepoOutsideProject, err.Error())
+	case errors.Is(err, phaserun.ErrNoRepoRoot):
+		writeConflict(w, codeNoRepoRoot, err.Error())
+	case errors.As(err, &dirtyErr):
+		writeConflictFields(w, codeBranchDirty, dirtyErr.Error(), map[string]any{
+			"branch": dirtyErr.Branch, "commitsAhead": dirtyErr.CommitsAhead, "base": dirtyErr.Base,
+		})
+	case isWtConflict:
+		writeConflict(w, wtCode, wtMsg)
+	default:
+		writeErr(w, err)
+	}
+}
+
+// jsonCapture buffers one JSON response so a caller can extend the body a shared
+// writer produced (writeNoRunSlot and its siblings take no extra fields).
+type jsonCapture struct {
+	header http.Header
+	status int
+	body   bytes.Buffer
+}
+
+func (c *jsonCapture) Header() http.Header { return c.header }
+
+func (c *jsonCapture) WriteHeader(status int) {
+	if c.status == 0 {
+		c.status = status
+	}
+}
+
+func (c *jsonCapture) Write(b []byte) (int, error) {
+	if c.status == 0 {
+		c.status = http.StatusOK
+	}
+	return c.body.Write(b)
+}
+
+// replayWith writes the captured response to w with key=value added to its JSON
+// object. A body that is not a JSON object is replayed unchanged.
+func (c *jsonCapture) replayWith(w http.ResponseWriter, key string, value any) {
+	status := c.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(c.body.Bytes(), &obj); err != nil || obj == nil {
+		for k, v := range c.header {
+			w.Header()[k] = v
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write(c.body.Bytes())
+		return
+	}
+	obj[key] = value
+	writeJSONStatus(w, status, obj)
 }
