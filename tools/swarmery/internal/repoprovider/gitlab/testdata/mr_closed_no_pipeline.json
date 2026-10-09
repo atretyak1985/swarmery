@@ -1,0 +1,13 @@
+{
+  "id": 9003,
+  "iid": 44,
+  "project_id": 77,
+  "title": "Abandoned change",
+  "state": "closed",
+  "draft": false,
+  "source_branch": "swarm/phase-4",
+  "target_branch": "main",
+  "detailed_merge_status": "not_open",
+  "head_pipeline": null,
+  "web_url": "https://gitlab.example.com/group/sub/widgets/-/merge_requests/44"
+}

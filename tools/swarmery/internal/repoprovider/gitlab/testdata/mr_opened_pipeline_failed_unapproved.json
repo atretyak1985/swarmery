@@ -1,0 +1,19 @@
+{
+  "id": 9004,
+  "iid": 45,
+  "project_id": 77,
+  "title": "Red pipeline",
+  "state": "opened",
+  "draft": false,
+  "source_branch": "swarm/phase-7",
+  "target_branch": "main",
+  "detailed_merge_status": "ci_must_pass",
+  "head_pipeline": null,
+  "pipeline": {
+    "id": 557,
+    "status": "failed",
+    "ref": "swarm/phase-7"
+  },
+  "approved": false,
+  "web_url": "https://gitlab.example.com/group/sub/widgets/-/merge_requests/45"
+}
