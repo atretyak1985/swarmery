@@ -50,6 +50,9 @@ import type {
   TaskSummary,
   Turn,
   VcsInfo,
+  VcsLoginPoll,
+  VcsLoginStart,
+  VcsTokenResult,
 } from '../api/types';
 import type {
   Account,
@@ -2870,7 +2873,33 @@ export const mockApi = {
       allowPushToBase: false,
       source: 'host',
       cliLogin: 'gh auth login --hostname github.com',
+      askProvider: false,
     };
+  },
+
+  // --- landing Phase 8: dashboard sign-in (device code / pasted token) ---
+  /** POST /api/projects/{id}/vcs/login {"method":"device"} → 202. */
+  async startVcsLogin(): Promise<VcsLoginStart> {
+    await delay(120);
+    return {
+      loginId: 'mock-login',
+      userCode: 'WDJB-MJHT',
+      verificationUri: 'https://github.com/login/device',
+      expiresIn: 900,
+      interval: 5,
+    };
+  },
+
+  /** GET /api/projects/{id}/vcs/login/{loginId} — the mock host grants at once. */
+  async pollVcsLogin(): Promise<VcsLoginPoll> {
+    await delay(80);
+    return { status: 'ok', login: 'octocat', interval: 5 };
+  },
+
+  /** POST /api/projects/{id}/vcs/login {"method":"token"} — any token is accepted. */
+  async submitVcsToken(): Promise<VcsTokenResult> {
+    await delay(150);
+    return { status: 'ok', login: 'octocat' };
   },
 
   /** GET …/phases/{phaseId}/review — a one-commit diff over the seeded phase's

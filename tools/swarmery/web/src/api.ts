@@ -2770,6 +2770,7 @@ async function vcsLoginError(res: Response, fallback: string): Promise<VcsLoginE
  * `too-many-pending-logins`, 502 `device-flow-failed`.
  */
 export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
+  if (MOCK) return mockApi.startVcsLogin();
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2786,6 +2787,7 @@ export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
  * token. Throws VcsLoginError: 404 `login-not-found`, 502 `device-flow-failed`.
  */
 export async function pollVcsLogin(projectId: number, loginId: string): Promise<VcsLoginPoll> {
+  if (MOCK) return mockApi.pollVcsLogin();
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/login/${encodeURIComponent(loginId)}`);
   if (!res.ok) throw await vcsLoginError(res, 'sign-in poll failed');
   return (await res.json()) as VcsLoginPoll;
@@ -2798,6 +2800,7 @@ export async function pollVcsLogin(projectId: number, loginId: string): Promise<
  * stored), 502 `token-unverified` (could not check — nothing stored).
  */
 export async function submitVcsToken(projectId: number, token: string): Promise<VcsTokenResult> {
+  if (MOCK) return mockApi.submitVcsToken();
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2812,6 +2815,7 @@ export async function submitVcsToken(projectId: number, token: string): Promise<
  * holds for the project's host (its CLI falls back to the operator's own login).
  */
 export async function deleteVcsToken(projectId: number): Promise<void> {
+  if (MOCK) return;
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/token`, { method: 'DELETE' });
   if (!res.ok) throw await vcsLoginError(res, 'sign-out failed');
 }
