@@ -418,6 +418,30 @@ func TestLandPhasePushToBaseRefused(t *testing.T) {
 	}
 }
 
+// With no vcs.baseBranch and no origin/HEAD the base falls back to the run's start
+// point — a SHA no branch name equals. The checked-out branch must still count as
+// the base, or the refusal is bypassed exactly where the base is least known.
+func TestLandPhasePushToCheckedOutBranchRefusedOnStartPointFallback(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	if _, err := f.db.Exec(`UPDATE epic_phases SET run_branch = 'trunk' WHERE id = ?`, f.phaseID); err != nil {
+		t.Fatal(err)
+	}
+	fake := phaseLandOK()
+	fake.Out["git rev-parse"] = "trunk\n" // checked out; no origin/HEAD scripted
+	useFakePhaseLand(t, fake)
+
+	resp, body := f.land(t, `{"action":"push"}`)
+	if resp.StatusCode != http.StatusConflict || body["code"] != codePushToBaseRefused {
+		t.Fatalf("status/code = %d/%v, want 409 %s (body %v)", resp.StatusCode, body["code"], codePushToBaseRefused, body)
+	}
+	if body["base"] != f.base {
+		t.Errorf("base = %v, want the start point %s", body["base"], f.base)
+	}
+	if fake.Ran("git push") {
+		t.Errorf("pushed onto the checked-out branch; calls = %v", fake.Calls)
+	}
+}
+
 func TestLandPhaseAllowPushToBaseLocalOverride(t *testing.T) {
 	f := newPhaseLandingFixture(t, "done")
 	if _, err := f.db.Exec(`UPDATE epic_phases SET run_branch = 'main' WHERE id = ?`, f.phaseID); err != nil {

@@ -354,11 +354,17 @@ type landingBase struct {
 	PRBase string
 	// OriginHead is origin's default branch as this clone knows it ("" unknown).
 	OriginHead string
+	// CheckedOut is the repo's checked-out branch, read only when Name fell back
+	// to the run's start point (a SHA no branch name can equal): in that case the
+	// checked-out branch is the best evidence of what the base is, so a run
+	// branch equal to it is refused like any other push onto the base.
+	CheckedOut string
 }
 
 // resolveLandingBase picks the base: vcs.baseBranch, else origin's HEAD, else
 // the run's start point (a commit, so the change request falls back to the
-// host default), else the repo's checked-out branch. Local reads only.
+// host default — the checked-out branch is still read, for the push-to-base
+// refusal), else the repo's checked-out branch. Local reads only.
 func resolveLandingBase(ctx context.Context, ex repoprovider.Exec, repoDir string, cfg repoprovider.Config, startPoint string) landingBase {
 	var b landingBase
 	if out, _, err := ex.Run(ctx, repoDir, nil, "git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
@@ -371,14 +377,25 @@ func resolveLandingBase(ctx context.Context, ex repoprovider.Exec, repoDir strin
 		b.Name, b.PRBase = b.OriginHead, b.OriginHead
 	case startPoint != "":
 		b.Name = startPoint
+		b.CheckedOut = checkedOutBranch(ctx, ex, repoDir)
 	default:
-		if out, _, err := ex.Run(ctx, repoDir, nil, "git", "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
-			if cur := strings.TrimSpace(out); cur != "HEAD" {
-				b.Name, b.PRBase = cur, cur
-			}
+		if cur := checkedOutBranch(ctx, ex, repoDir); cur != "" {
+			b.Name, b.PRBase = cur, cur
 		}
 	}
 	return b
+}
+
+// checkedOutBranch is the repo's checked-out branch, "" when detached or unreadable.
+func checkedOutBranch(ctx context.Context, ex repoprovider.Exec, repoDir string) string {
+	out, _, err := ex.Run(ctx, repoDir, nil, "git", "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return ""
+	}
+	if cur := strings.TrimSpace(out); cur != "HEAD" {
+		return cur
+	}
+	return ""
 }
 
 // isBase reports whether branch is the base branch by any of the names the
@@ -387,7 +404,7 @@ func (b landingBase) isBase(branch string, cfg repoprovider.Config) bool {
 	if branch == "" {
 		return false
 	}
-	return branch == b.Name || branch == cfg.BaseBranch || branch == b.OriginHead
+	return branch == b.Name || branch == cfg.BaseBranch || branch == b.OriginHead || branch == b.CheckedOut
 }
 
 // phaseNamePrefixRe matches a "Phase N — " / "Phase N: " lead a phase doc's H1
