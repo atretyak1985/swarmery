@@ -67,6 +67,32 @@
       },
       "required": ["baseUrl", "projectKey", "qaStatus", "repro"]
     },
+    "vcs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the swarmery daemon lands a finished plan phase (push its branch, optionally open a change request). Every key is optional; precedence is .claude/settings.local.json → swarmery.vcs, then this block, then auto-detection from the git remote. allowPushToBase is normally set in .claude/settings.local.json → swarmery.vcs (a per-machine override), not committed here.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["auto", "github", "gitlab"],
+          "default": "auto",
+          "description": "Hosting provider of the remote. auto detects it from the remote URL."
+        },
+        "baseBranch": {
+          "type": "string",
+          "description": "Branch a phase change request targets, e.g. main. Default: the remote's HEAD branch."
+        },
+        "forkRemote": {
+          "type": "string",
+          "description": "Remote name of a personal fork when the project uses a fork workflow. Landing refuses with fork-workflow-unsupported while this is set."
+        },
+        "allowPushToBase": {
+          "type": "boolean",
+          "default": false,
+          "description": "Permit landing a phase whose branch IS the base branch. Normally set in .claude/settings.local.json → swarmery.vcs."
+        }
+      }
+    },
     "prReview": {
       "type": "object",
       "additionalProperties": false,
