@@ -105,7 +105,7 @@ import { PhaseCard } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReview } from './plans/PhaseReview';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
-import { hasReviewTab } from './plans/landingModel';
+import { hasReviewTab, NEUTRAL_TERMS } from './plans/landingModel';
 import { useProjectVcs } from '../lib/useProjectVcs';
 import {
   parsePlansRoute,
@@ -1738,12 +1738,13 @@ function EpicDetail({
         <div className="mb-2 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
           <div className="min-w-0 flex-1">
             <span>{runMsg}</span>
-            {runBranches.length > 0 && terms !== null && (
+            {runBranches.length > 0 && (
               <DepsUnmergedActions
                 taskId={epic.taskId}
                 phases={epic.phases}
                 branches={runBranches}
-                terms={terms}
+                // A failed /vcs fetch must not hide the way out: neutral words.
+                terms={terms ?? NEUTRAL_TERMS}
                 onLanded={onDocChanged}
               />
             )}

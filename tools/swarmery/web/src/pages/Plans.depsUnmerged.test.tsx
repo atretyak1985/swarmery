@@ -129,6 +129,8 @@ const DEPS_UNMERGED = {
 };
 
 let calls: { url: string; init: RequestInit | undefined }[] = [];
+// The /vcs answer's HTTP status; a test sets 500 to simulate a failed fetch.
+let vcsStatus = 200;
 
 function stubFetch(): void {
   calls = [];
@@ -140,7 +142,8 @@ function stubFetch(): void {
       const json = (body: unknown, status = 200): Promise<Response> =>
         Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) } as Response);
       if (url.startsWith('/api/epics?')) return json([EPIC]);
-      if (url.startsWith('/api/projects/3/vcs')) return json(VCS);
+      if (url.startsWith('/api/projects/3/vcs'))
+        return vcsStatus === 200 ? json(VCS) : json({ error: 'vcs probe failed' }, vcsStatus);
       if (/\/phases\/\d+\/run$/.test(url)) return json(DEPS_UNMERGED, 409);
       if (/\/phases\/\d+\/land$/.test(url))
         return json({
@@ -162,7 +165,10 @@ function stubFetch(): void {
   );
 }
 
-beforeEach(stubFetch);
+beforeEach(() => {
+  vcsStatus = 200;
+  stubFetch();
+});
 
 afterEach(() => {
   cleanup();
@@ -191,5 +197,19 @@ describe('the deps-unmerged refusal', () => {
     expect(land?.init?.body).toBe('{"action":"pr"}');
     // The refusal sentence stays: the link joins it, it does not replace it.
     await waitFor(() => expect(screen.getByText(DEPS_UNMERGED.message)).toBeTruthy());
+  });
+
+  it('keeps the Open buttons when the project /vcs fetch failed, labelled with the neutral terms', async () => {
+    vcsStatus = 500;
+    render(<PlansAtRoute />);
+    const runs = await screen.findAllByRole('button', { name: 'Run phase' });
+    await waitFor(() => expect(calls.some((c) => c.url.startsWith('/api/projects/3/vcs'))).toBe(true));
+    fireEvent.click(runs[runs.length - 1] as HTMLElement);
+
+    await screen.findByText(DEPS_UNMERGED.message);
+    const open = await screen.findByRole('button', { name: 'Open CR for swarm/phase-11' });
+    fireEvent.click(open);
+    expect(await screen.findByRole('link', { name: 'CR #9' })).toBeTruthy();
+    expect(calls.find((c) => /\/phases\/\d+\/land$/.test(c.url))?.url).toBe('/api/epics/77/phases/11/land');
   });
 });

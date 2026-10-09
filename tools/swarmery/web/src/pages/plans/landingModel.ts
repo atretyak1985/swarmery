@@ -12,6 +12,15 @@ export type LandingPhase = Pick<EpicPhase, 'runState' | 'runSessionUuid'> & {
   landing?: Pick<PhaseLanding, 'state'> | null;
 };
 
+/** The vocabulary for a host the daemon could not name — the API's own terms
+ * for an unknown provider (repoprovider.TermsFor). The fallback when the
+ * project's GET /vcs failed and a landing control has no other terms to read. */
+export const NEUTRAL_TERMS: Readonly<ProviderTerms> = Object.freeze({
+  provider: 'Repository',
+  change: 'Change request',
+  changeShort: 'CR',
+});
+
 function stateOf(phase: LandingPhase): PhaseLandingState {
   return phase.landing?.state ?? 'none';
 }
