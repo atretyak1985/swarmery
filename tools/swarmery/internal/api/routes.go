@@ -62,6 +62,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// phase landing: the project's code host, its vocabulary and the daemon's
 	// sign-in state (vcs.go; cached 60s per project).
 	mux.HandleFunc("GET /api/projects/{id}/vcs", h.projectVcs)
+	// …and the operator's one-time answer for a host detection could not
+	// classify, stored in .claude/settings.local.json (vcs_provider.go).
+	mux.HandleFunc("PUT /api/projects/{id}/vcs/provider", requireLocalOrigin(h.putProjectVcsProvider))
 	// onboarding: bootstrap a new consumer project from the dashboard. Fenced
 	// by requireLocalOrigin + an explicit root allow-list (disabled when unset).
 	// The GET exposes defaults (workspace root, enabled state) to the modal.

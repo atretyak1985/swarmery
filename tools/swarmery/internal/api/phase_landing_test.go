@@ -649,6 +649,25 @@ func TestLandPhaseGitLabOpensMR(t *testing.T) {
 	}
 }
 
+// The review of a phase on a GitLab origin is worded in GitLab's terms.
+func TestPhaseReviewGitLabTerms(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	fake := useFakePhaseLand(t, &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "git@gitlab.com:acme/widgets.git\n"},
+	})
+	resp, body := f.review(t)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	terms, _ := body["terms"].(map[string]any)
+	if terms["provider"] != "GitLab" || terms["change"] != "Merge Request" || terms["changeShort"] != "MR" {
+		t.Errorf("terms = %v, want GitLab/Merge Request/MR", terms)
+	}
+	if fake.Ran("glab ") || fake.Ran("git push") {
+		t.Errorf("the review ran a network call; calls = %v", fake.Calls)
+	}
+}
+
 // TestLandPhaseGitLabRedactsTokenInDetail: a GitLab push whose stderr echoes a
 // personal access token answers 422 with the tool output masked — the
 // glpat- token never reaches the body.

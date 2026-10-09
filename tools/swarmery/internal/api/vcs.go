@@ -79,6 +79,10 @@ type vcsDTO struct {
 	// without a host. Computed here so the web app never branches on Provider
 	// to pick a CLI (SC-11).
 	CliLogin string `json:"cliLogin"`
+	// True when the origin exists but its host could not be classified: the UI
+	// asks the operator once which service hosts it, and PUT …/vcs/provider
+	// (vcs_provider.go) stores the answer.
+	AskProvider bool `json:"askProvider"`
 }
 
 type vcsRemoteDTO struct {
@@ -303,8 +307,12 @@ func buildVcsDTO(ctx context.Context, projectPath string) vcsDTO {
 	}
 	provider, err := providers.Factory(det.Kind, vcsExec, vcsEnv)
 	if err != nil {
-		return dto // unknown host (ErrUnknownProvider): there is no CLI to ask
+		// Unknown host (ErrUnknownProvider): there is no CLI to ask, so the
+		// operator is asked instead.
+		dto.AskProvider = true
+		return dto
 	}
+	dto.Terms = provider.Terms()
 	// A non-nil error comes with status unknown (an unclassified failure); the
 	// status is still the answer.
 	st, _ := provider.AuthStatus(ctx, dto.Host)
