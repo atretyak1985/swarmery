@@ -198,7 +198,7 @@ Object.assign(LABELS.en, {
 Object.assign(LABELS.uk, {
   packs: (n) => ukPlural(n, 'пакет плагінів', 'пакети плагінів', 'пакетів плагінів'),
   agents: (n) => ukPlural(n, 'агент', 'агенти', 'агентів'),
-  skills: (n) => ukPlural(n, 'навичка', 'навички', 'навичок'),
+  skills: (n) => ukPlural(n, 'скіл', 'скіли', 'скілів'),
   cp: 'локальний центр керування',
   go: (n) => ukPlural(n, 'Go-пакет', 'Go-пакети', 'Go-пакетів'),
   routes: (n) => ukPlural(n, 'REST-маршрут', 'REST-маршрути', 'REST-маршрутів'),
@@ -286,13 +286,18 @@ for (const t of targets) {
   );
 }
 
-try {
-  for (const t of targets) {
-    const abs = path.join(root, t.rel);
-    const before = fs.readFileSync(abs, 'utf8');
-    let after = before;
-    for (const region of t.regions) after = splice(after, region[0], region[1], t.rel);
+// Two passes: every splice is computed (and every marker error raised) before
+// the first file is written, so a bad marker cannot leave a half-applied run.
+const planned = targets.map((t) => {
+  const abs = path.join(root, t.rel);
+  const before = fs.readFileSync(abs, 'utf8');
+  let after = before;
+  for (const region of t.regions) after = splice(after, region[0], region[1], t.rel);
+  return { t, abs, before, after };
+});
 
+try {
+  for (const { t, abs, before, after } of planned) {
     if (mode === 'check') {
       if (after === before) continue;
       drift += 1;

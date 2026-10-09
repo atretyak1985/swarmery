@@ -236,8 +236,9 @@ allow += [t.split(": ", 1)[1] for t in (p[1] for p in data.POSTS) if ": " in t]
 with open(os.path.join(root, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
     allow += [p["description"] for p in json.load(fh)["plugins"]]
 allowed = [re.compile(r"(?<![A-Za-z])" + re.escape(a) + r"(?![A-Za-z])") for a in sorted(set(allow), key=len, reverse=True)]
-# two letters or more: "j, k, e, x" (keyboard keys) is not an English run
-word = re.compile(r"[A-Za-z]{2,}(?:[-\x27" + chr(0x2019) + r"][A-Za-z]+)*")
+# a one-letter token ("a", "I", the keys "j, k, e, x") extends a run but does not
+# count toward the four words that make it a leak
+word = re.compile(r"[A-Za-z]+(?:[-\x27" + chr(0x2019) + r"][A-Za-z]+)*")
 # straight and typographic quotes, brackets, punctuation and the ellipsis around a word
 edge = "\"\x27()[]{}.,:;!?" + "".join(map(chr, (0xAB, 0xBB, 0x201C, 0x201D, 0x2018, 0x2019, 0x2026)))
 for dp, _, files in sorted(os.walk(os.path.join(out, "uk"))):
@@ -251,13 +252,15 @@ for dp, _, files in sorted(os.walk(os.path.join(out, "uk"))):
         s = html.unescape(re.sub(r"<[^>]*>", "\n", s))
         for a in allowed: s = a.sub("\n", s)
         for line in s.split("\n"):
-            run = []
+            run, count = [], 0
             for tok in line.split() + [""]:
-                if tok and word.fullmatch(tok.strip(edge)):
+                core = tok.strip(edge)
+                if tok and word.fullmatch(core):
                     run.append(tok)
+                    if len(core) >= 2: count += 1
                     continue
-                if len(run) >= 4: print(os.path.relpath(path, out) + ": " + " ".join(run))
-                run = []
+                if count >= 4: print(os.path.relpath(path, out) + ": " + " ".join(run))
+                run, count = [], 0
 '
 if [ "${missing_n:-1}" -ne 0 ]; then
   skip "uk-no-english-leak" "strict-build-clean reports ${missing_n:-?} untranslated key(s); the English fallback would be the leak"
@@ -274,7 +277,7 @@ echo "uk-asset-paths"
 ASSETS_PY='
 import os, re, sys
 out, site, video = sys.argv[1:4]
-attr = re.compile(r"\s(?:src|data-src|data-play|data-poster|data-zoom|poster|href)=\"([^\"]*)\"")
+attr = re.compile(r"\s(?:src|srcset|data-src|data-clip|data-play|data-poster|data-zoom|poster|href)=\"([^\"]*)\"")
 named = re.compile(r"(?:^|/)(?:assets/|video/|favicon\.svg$)")
 n = 0
 for dp, _, files in sorted(os.walk(os.path.join(out, "uk"))):
@@ -282,7 +285,9 @@ for dp, _, files in sorted(os.walk(os.path.join(out, "uk"))):
         if not f.endswith(".html"): continue
         page = os.path.relpath(os.path.join(dp, f), out)
         with open(os.path.join(dp, f), encoding="utf-8") as fh: s = fh.read()
-        for v in attr.findall(s):
+        for raw in attr.findall(s):
+          # srcset: "<url> 800w, <url> 1600w"; other attributes carry one value
+          for v in (c.strip().split(" ")[0] for c in raw.split(",")):
             v = v.split("#")[0].split("?")[0]
             if "://" in v or v.startswith(("/", "data:", "mailto:")) or not named.search(v): continue
             n += 1

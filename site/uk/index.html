@@ -71,14 +71,14 @@
   <div class="hero-shot" style="margin-top:64px">
     <div class="glow"></div>
     <div class="frame "><span class="live">НАЖИВО</span><video data-clip muted loop playsinline preload="none" poster="../assets/clips/hero.jpg" data-src="../assets/clips/hero.mp4" aria-label="127.0.0.1:7777/sessions"></video></div>
-    <div class="float-chip fc-1"><span class="ic">3</span><span>агенти, що чекають на вас<small>Inbox · найдовше 7 хв</small></span></div>
+    <div class="float-chip fc-1"><span class="ic">3</span><span>агенти, що чекають на вас<small>Inbox (вхідні) · найдовше 7 хв</small></span></div>
     <div class="float-chip fc-2"><span class="ic">$</span><span>вартість ще до рахунку<small>за сесією · проєктом · моделлю</small></span></div>
   </div>
   <div class="stats rv" style="margin-top:56px">
         <!-- BEGIN generated:stats-hero -->
         <div class="stat"><div class="n">14</div><div class="l">пакетів плагінів</div></div>
         <div class="stat"><div class="n">26</div><div class="l">агентів</div></div>
-        <div class="stat"><div class="n">70</div><div class="l">навичок</div></div>
+        <div class="stat"><div class="n">70</div><div class="l">скілів</div></div>
         <div class="stat hot"><div class="n">:7777</div><div class="l">локальний центр керування</div></div>
         <!-- END generated:stats-hero -->
   </div>
@@ -137,7 +137,7 @@
     <div class="txt rv">
       <p class="eyebrow">маркетплейс плагінів</p>
       <h2>Один набір агентів. Кожен проєкт.</h2>
-      <p>Годі копіювати агентів між репозиторіями. Ядро, незалежне від постачальника, містить те, що справджується для кожного проєкту, пакети на вибір додають словник одного типу роботи, а кожен проєкт приносить свою специфіку під час виконання через <code>project.json</code>.</p>
+      <p>Годі копіювати агентів між репозиторіями. Ядро, незалежне від постачальника, містить те, що спільне для всіх проєктів, пакети на вибір додають словник одного типу роботи, а кожен проєкт приносить свою специфіку під час виконання через <code>project.json</code>.</p>
       <div class="row" style="margin-top:22px"><a class="btn" href="plugins/">Переглянути пакети <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
     </div>
     <div class="rv"><div class="frame "><video data-clip muted loop playsinline preload="none" poster="../assets/clips/promo-fleet.jpg" data-src="../assets/clips/promo-fleet.mp4" aria-label="core@swarmery → кожен проєкт"></video></div></div>
@@ -154,8 +154,8 @@
 </div></section>
 
 <section class="sec divider"><div class="wrap">
-  <div class="sec-head"><p class="eyebrow">на чому все тримається</p><h2>Шість правил, і кожне перевіряє інструмент, який можна запустити.</h2><p>Сканування, гейт, worktree, вердикт. Жодне з них — не домовленість, яку треба тримати в голові.</p></div>
-  <div class="grid-3"><div class="tile rv"><span class="k">нейтральність</span><h3>Ядро, яке нікого не називає</h3><p>Назви брендів заборонені будь-де в <code>plugins/</code>, а храповик у CI тримає їхню кількість на нулі. Специфіка кожного проєкту надходить під час виконання з його власного <code>project.json</code>.</p></div><div class="tile rv"><span class="k">просування</span><h3>Рух лише вгору</h3><p>Компонент народжується локально в проєкті, переходить у доменний пакет, коли знадобиться другому проєкту, і потрапляє в ядро, лише коли знадобиться всім. Униз нічого не копіюється.</p></div><div class="tile rv"><span class="k">ізоляція</span><h3>Один worktree на запуск</h3><p>Кожен запуск фази й кожна відправлена задача отримують власну гілку в ізольованому git worktree. Ваша робоча копія ніколи не стає майданчиком агента.</p></div><div class="tile rv"><span class="k">перевірка</span><h3>Вердикти, що вміють сказати «ні»</h3><p>Перевіряльник без права на запис порівнює роботу зі збереженою точкою старту й повертає PASS, FAIL або INCONCLUSIVE. Готово — це коли критерії відмічені й звіт написаний, а не коли процес завершився з кодом 0.</p></div><div class="tile rv"><span class="k">плани</span><h3>Граф фаз, а не список побажань</h3><p>Кожна фаза має вимірювані критерії приймання, прогноз і звіт про завершення. Запуски виконують граф у порядку залежностей, а markdown на диску лишається джерелом правди.</p></div><div class="tile rv"><span class="k">спостережуваність</span><h3>Усе зафіксовано</h3><p>Кожен транскрипт сесії індексується в локальну SQLite: токени, вартість, погодження, прогнози проти фактичних результатів і уроки, винесені з розриву між ними. Ніщо не покидає машину.</p></div></div>
+  <div class="sec-head"><p class="eyebrow">на чому все тримається</p><h2>Шість правил, і за кожним стежить інструмент, який можна запустити.</h2><p>Сканування, гейт, worktree, вердикт. Жодне з них — не домовленість, яку треба тримати в голові.</p></div>
+  <div class="grid-3"><div class="tile rv"><span class="k">нейтральність</span><h3>Ядро, яке нікого не називає</h3><p>Назви брендів заборонені будь-де в <code>plugins/</code>, а перевірка в CI не дає їхній кількості піднятися з нуля. Специфіка кожного проєкту надходить під час виконання з його власного <code>project.json</code>.</p></div><div class="tile rv"><span class="k">просування</span><h3>Рух лише вгору</h3><p>Компонент народжується локально в проєкті, переходить у доменний пакет, коли знадобиться другому проєкту, і потрапляє в ядро, лише коли знадобиться всім. Униз нічого не копіюється.</p></div><div class="tile rv"><span class="k">ізоляція</span><h3>Один worktree на запуск</h3><p>Кожен запуск фази й кожна відправлена задача отримують власну гілку в ізольованому git worktree. Ваша робоча копія ніколи не стає майданчиком агента.</p></div><div class="tile rv"><span class="k">перевірка</span><h3>Вердикти, що вміють сказати «ні»</h3><p>Перевіряльник без права на запис порівнює роботу зі збереженою точкою старту й повертає PASS, FAIL або INCONCLUSIVE. Готово — це коли критерії відмічені й звіт написаний, а не коли процес завершився з кодом 0.</p></div><div class="tile rv"><span class="k">плани</span><h3>Граф фаз, а не список побажань</h3><p>Кожна фаза має вимірювані критерії приймання, прогноз і звіт про завершення. Запуски виконують граф у порядку залежностей, а markdown на диску лишається джерелом правди.</p></div><div class="tile rv"><span class="k">спостережуваність</span><h3>Усе зафіксовано</h3><p>Кожен транскрипт сесії індексується в локальну SQLite: токени, вартість, погодження, прогнози проти фактичних результатів і уроки, винесені з розриву між ними. Ніщо не покидає машину.</p></div></div>
 </div></section>
 
 <section class="sec divider"><div class="wrap">
@@ -184,7 +184,7 @@
     <div class="foot">
       <div>
         <a class="brand" href="" aria-label="Swarmery, головна"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M16 2.4 4.22 9.2v13.6L16 29.6l11.78-6.8V9.2ZM16 6.9 8.12 11.45v9.1L16 25.1l7.88-4.55v-9.1Z"/><path fill="currentColor" d="M16 11.5 12.1 13.75v4.5L16 20.5l3.9-2.25v-4.5Z"/></svg><span>SW<span class="o">&#x2B21;</span>RMERY</span></a>
-        <p>Центр керування для Claude Code, де все локально, і маркетплейс плагінів. Створюється публічно у Львові.</p>
+        <p>Локальний центр керування й маркетплейс плагінів для Claude Code. Створюється публічно у Львові.</p>
       </div>
       <div><h4>Продукт</h4><ul><li><a href="features/planning/">Планування</a></li><li><a href="features/inbox/">Вхідні</a></li><li><a href="features/health/">Здоров’я</a></li><li><a href="features/sessions/">Сесії</a></li><li><a href="features/learning/">Навчання</a></li><li><a href="features/knowledge/">Знання</a></li></ul></div>
       <div><h4>Матеріали</h4><ul>
