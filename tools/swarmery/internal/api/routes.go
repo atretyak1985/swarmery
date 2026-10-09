@@ -411,6 +411,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// the escape hatch for the branch-dirty 409 the run endpoint returns.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/diagnosis", h.phaseDiagnosis)
 	mux.HandleFunc("DELETE /api/epics/{taskId}/phases/{phaseId}/branch", requireLocalOrigin(h.deletePhaseRunBranch))
+	// Phase landing (phase_landing.go): the Review screen's evidence for a finished
+	// run, and the push / push+PR exit. Land is the only one that mutates.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/review", h.getPhaseReview)
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/land", requireLocalOrigin(h.landPhase))
 	// The cleanup action behind phasediag's orphan-branch blocker: a swarm/phase-<id>
 	// branch whose id matches no phase row — work stranded under a previous id
 	// generation, which the phase-scoped route above structurally cannot name. Kept a

@@ -189,6 +189,11 @@ type epicPhaseDTO struct {
 	// ADVISORY, like the forecast: nothing in CompletionState, CompletionBlockers
 	// or RunOutcome consults it, and nothing may start to.
 	Surprise *surprise.Stored `json:"surprise"`
+	// Landing is the phase's landing lifecycle (migration 0103, phase_landing.go):
+	// none | ready | pushed | pr_open | merged | returned, with the change
+	// request's URL/number/provider once opened. `ready` is derived here, never
+	// stored: nothing landed yet and the run finished.
+	Landing landingDTO `json:"landing"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -705,7 +710,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		       e.run_ended_at, e.run_checkboxes_before, e.run_checkboxes_after,
 		       e.verify_mode, e.verify_verdict, e.verify_detail,
 		       e.doc_model,
-		       se.model
+		       se.model,
+		       `+landingColumns+`
 		FROM epic_phases e
 		LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
 		-- The run's own record of which model it used. LEFT, so a phase that never
@@ -753,15 +759,19 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			// every phase whose doc carries no `**Model:**` header, which is all of
 			// them until an author opts in.
 			docModel sql.NullString
+			// The landing columns (0103), daemon-owned.
+			landing landingRow
 		)
-		if err := rows.Scan(&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
+		dest := []any{&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
-			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel); err != nil {
+			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel}
+		if err := rows.Scan(append(dest, landing.dest()...)...); err != nil {
 			return nil, epicRollupDTO{}, nil, err
 		}
+		p.Landing = landing.dto(p.RunState)
 		p.DependsOn = decodeIntList(depsJSON)
 		covers = append(covers, phaseCovers{seq: p.Seq, cids: decodeStrList(coversJSON)})
 		p.DocRelPath = relToPlan(planDir, p.DocPath)

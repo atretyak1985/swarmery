@@ -136,6 +136,35 @@ const (
 	// once a slot frees. The body carries `holders` (the runs in flight) and `max`,
 	// because "no free run slot" on its own leaves an operator with nowhere to look.
 	codeNoRunSlot = "no-free-run-slot"
+
+	// Phase landing (phase_landing.go) — policy refusals, answered 409 BEFORE any
+	// network call.
+	//
+	// codePushToBaseRefused: the phase's run branch IS the base branch (the
+	// configured vcs.baseBranch or origin's HEAD), so a "land" would push straight
+	// onto the base. Lifted only by swarmery.vcs.allowPushToBase=true in
+	// .claude/settings.local.json (or vcs.allowPushToBase in project.json).
+	codePushToBaseRefused = "push-to-base-refused"
+	// codeForkUnsupported: the project declares vcs.forkRemote — the fork workflow
+	// (push to a fork, open the change request against upstream) is reserved and
+	// not implemented, so landing refuses rather than pushing to the wrong remote.
+	codeForkUnsupported = "fork-workflow-unsupported"
+)
+
+// Phase landing 422 discriminators: the machine is missing something the
+// operator has to provide. Each body is {error, code, hint, detail} — `hint`
+// carries the exact commands that finish the job by hand, `detail` the tool's
+// own (redacted) output. Stable wire values, like the 409 codes above.
+const (
+	codeNoRemote            = "no-remote"
+	codeNotAuthenticated    = "not-authenticated"
+	codeNoPushAccess        = "no-push-access"
+	codeRemoteDiverged      = "remote-diverged"
+	codeBinaryMissing       = "binary-missing"
+	codeProviderUnknown     = "provider-unknown"
+	codeGitLabUnsupported   = "gitlab-unsupported"
+	codePushFailed          = "push-failed"
+	codeChangeRequestFailed = "change-request-failed"
 )
 
 // writeNoRunSlot renders a full run budget: a retriable 409 that names what is
