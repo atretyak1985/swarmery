@@ -149,6 +149,10 @@ const (
 	// (push to a fork, open the change request against upstream) is reserved and
 	// not implemented, so landing refuses rather than pushing to the wrong remote.
 	codeForkUnsupported = "fork-workflow-unsupported"
+	// codePhaseMerged: a "return" for a phase whose change request is already
+	// merged. Its work is in the base branch; sending it back would continue a
+	// branch nothing will land again — the follow-up belongs in a new phase.
+	codePhaseMerged = "phase-merged"
 )
 
 // Phase landing 422 discriminators: the machine is missing something the

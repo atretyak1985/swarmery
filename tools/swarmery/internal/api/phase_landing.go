@@ -69,6 +69,7 @@ const (
 	landingReady    = "ready" // derived, never stored
 	landingPushed   = "pushed"
 	landingPROpen   = "pr_open"
+	landingMerged   = "merged"
 	landingReturned = "returned"
 )
 
@@ -510,6 +511,12 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == landActionReturn {
+		if t.Landing.State == landingMerged {
+			writeConflict(w, codePhaseMerged,
+				"this phase's change request is already merged — returning it would continue a branch that is already landed. "+
+					"Put the follow-up work in a new phase (or a follow-up task) instead")
+			return
+		}
 		h.returnPhase(w, t, feedback)
 		return
 	}
@@ -604,13 +611,18 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	// none|ready|returned → pushed. A phase already further along (pr_open,
-	// merged) keeps its state: a re-push of new commits does not un-open its PR.
+	// none|ready → pushed; returned → pushed, or back to pr_open when it was
+	// returned with a change request already open (the push updates that same
+	// change request). A phase already further along (pr_open, merged) keeps its
+	// state: a re-push of new commits does not un-open its PR.
 	if _, err := h.DB.Exec(`
 		UPDATE epic_phases
-		   SET landing_state = CASE WHEN landing_state IN (?, ?) THEN ? ELSE landing_state END,
+		   SET landing_state = CASE
+		         WHEN landing_state = ? THEN ?
+		         WHEN landing_state = ? THEN CASE WHEN pr_url IS NOT NULL AND pr_url <> '' THEN ? ELSE ? END
+		         ELSE landing_state END,
 		       landed_at = ?, landing_error = NULL
-		 WHERE id = ?`, landingNone, landingReturned, landingPushed, now, phaseID); err != nil {
+		 WHERE id = ?`, landingNone, landingPushed, landingReturned, landingPROpen, landingPushed, now, phaseID); err != nil {
 		writeErr(w, err)
 		return
 	}

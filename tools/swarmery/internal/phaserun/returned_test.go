@@ -229,3 +229,61 @@ func TestReturnedContinuesOnOwnBranch(t *testing.T) {
 		t.Errorf("main moved to %s — the daemon must never merge", got)
 	}
 }
+
+// TestReturnedRunRestoresOpenPR: a phase returned while its change request was
+// open goes back to pr_open when the returned run ends — not to none, which would
+// read `ready` and make the next `land pr` try to open a second change request.
+// pr_url and pr_number survive the return and the run untouched.
+func TestReturnedRunRestoresOpenPR(t *testing.T) {
+	const prURL = "https://github.com/acme/widgets/pull/9"
+	db, _, p1, _ := fixture(t)
+	mustExec(t, db, `UPDATE epic_phases SET landing_state='returned', pr_url=?, pr_number=9 WHERE id=?`, prURL, p1)
+
+	if _, err := newTestService(db, &stubRunner{}, &stubWt{}).StartWith(p1, StartOptions{Returned: true}); err != nil {
+		t.Fatalf("StartWith: %v", err)
+	}
+	if state, _, _, _ := phaseRow(t, db, p1); state != "done" {
+		t.Fatalf("run_state = %q, want done (test premise)", state)
+	}
+	if got := landingState(t, db, p1); got != "pr_open" {
+		t.Errorf("landing_state = %q after the returned run ended, want pr_open restored", got)
+	}
+	var url string
+	var num int
+	if err := db.QueryRow(`SELECT pr_url, pr_number FROM epic_phases WHERE id=?`, p1).Scan(&url, &num); err != nil {
+		t.Fatal(err)
+	}
+	if url != prURL || num != 9 {
+		t.Errorf("pr_url/pr_number = %q/%d, want %q/9 kept", url, num, prURL)
+	}
+}
+
+// TestHealStaleResetsReturned: a returned phase whose run a daemon restart
+// orphaned is healed like stamp() settles one — out of `returned`, back to pr_open
+// when a change request was open and to none otherwise. A returned phase that is
+// NOT running (its start was refused) is not the heal's to touch: it is still
+// waiting for its run.
+func TestHealStaleResetsReturned(t *testing.T) {
+	db, _, p1, p2 := fixture(t)
+	mustExec(t, db, `UPDATE epic_phases SET run_state='running', landing_state='returned',
+		pr_url='https://github.com/acme/widgets/pull/9' WHERE id=?`, p1)
+	mustExec(t, db, `UPDATE epic_phases SET run_state='running', landing_state='returned' WHERE id=?`, p2)
+	if err := newTestService(db, &stubRunner{}, &stubWt{}).HealStale(); err != nil {
+		t.Fatalf("HealStale: %v", err)
+	}
+	if got := landingState(t, db, p1); got != "pr_open" {
+		t.Errorf("healed returned phase with a PR: landing_state = %q, want pr_open", got)
+	}
+	if got := landingState(t, db, p2); got != "none" {
+		t.Errorf("healed returned phase without a PR: landing_state = %q, want none", got)
+	}
+
+	db2, _, q1, _ := fixture(t)
+	mustExec(t, db2, `UPDATE epic_phases SET run_state='done', landing_state='returned' WHERE id=?`, q1)
+	if err := newTestService(db2, &stubRunner{}, &stubWt{}).HealStale(); err != nil {
+		t.Fatalf("HealStale: %v", err)
+	}
+	if got := landingState(t, db2, q1); got != "returned" {
+		t.Errorf("idle returned phase: landing_state = %q, want returned kept", got)
+	}
+}

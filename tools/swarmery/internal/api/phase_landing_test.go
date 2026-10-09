@@ -913,3 +913,103 @@ func TestLandPhaseReturnWithoutPhaseRuns503(t *testing.T) {
 		t.Errorf("landing_state = %q, want none", got)
 	}
 }
+
+// waitSlotFree waits until the phase-run service has released the phase's slot —
+// the run's teardown is over.
+func waitSlotFree(t *testing.T, svc *phaserun.Service, phaseID int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for svc.Slots.IsActive(runcore.SlotKey(phaserun.Engine, phaseID)) {
+		if time.Now().After(deadline) {
+			t.Fatal("the phase's run slot was never released")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestLandPhaseReturnPROpenRestoredAfterRun: returning a phase whose change
+// request is open keeps the PR on the DTO while the phase is returned, and once
+// the returned run ends the phase is pr_open again with pr_url intact — so the
+// next `land pr` does not try to open a second change request.
+func TestLandPhaseReturnPROpenRestoredAfterRun(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	useFakePhaseLand(t, phaseLandOK())
+	if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = 'pr_open', pr_url = ?, pr_number = 77,
+		pr_provider = 'github' WHERE id = ?`, landTestPRURL, f.phaseID); err != nil {
+		t.Fatal(err)
+	}
+	r := &phaseStubRunner{block: make(chan struct{})}
+	svc := attachPhaseRun(t, f.db, r, false)
+	released := false
+	t.Cleanup(func() {
+		if !released {
+			close(r.block)
+		}
+		waitSlotFree(t, svc, f.phaseID)
+	})
+
+	resp, body := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202 (body %v)", resp.StatusCode, body)
+	}
+	l := landingOf(t, body)
+	if l["state"] != landingReturned || l["prUrl"] != landTestPRURL || l["prNumber"] != float64(77) {
+		t.Errorf("landing while returned = %v, want returned with prUrl/prNumber kept", l)
+	}
+
+	waitSpecs(t, r, 1)
+	close(r.block)
+	released = true
+	waitSlotFree(t, svc, f.phaseID)
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingPROpen {
+		t.Errorf("landing_state after the returned run = %q, want pr_open", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "pr_url"); got != landTestPRURL {
+		t.Errorf("pr_url = %q, want %q kept", got, landTestPRURL)
+	}
+}
+
+// TestLandPhaseReturnMergedIs409: a merged phase cannot be returned — its work is
+// already in the base branch. 409 phase-merged; the doc, the row and the run are
+// untouched.
+func TestLandPhaseReturnMergedIs409(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	r, _ := attachReturnRun(t, f)
+	if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = 'merged', pr_url = ? WHERE id = ?`,
+		landTestPRURL, f.phaseID); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := f.land(t, `{"action":"return","feedback":"`+landTestFeedback+`"}`)
+	if resp.StatusCode != http.StatusConflict || body["code"] != codePhaseMerged {
+		t.Fatalf("status/code = %d/%v, want 409 %s (body %v)", resp.StatusCode, body["code"], codePhaseMerged, body)
+	}
+	if got := readDoc(t, f.docPath); got != landTestDoc {
+		t.Errorf("a refused return changed the doc:\n%s", got)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingMerged {
+		t.Errorf("landing_state = %q, want merged kept", got)
+	}
+	if n := specCount(r); n != 0 {
+		t.Errorf("a refused return started %d run(s)", n)
+	}
+}
+
+// TestLandPhasePushFromReturnedKeepsOpenPR: a phase returned with its change
+// request open and then pushed (its returned run never started) is pr_open after
+// the push — the push updated that change request — not `pushed`.
+func TestLandPhasePushFromReturnedKeepsOpenPR(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	useFakePhaseLand(t, phaseLandOK())
+	if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = 'returned', pr_url = ?, pr_number = 77
+		WHERE id = ?`, landTestPRURL, f.phaseID); err != nil {
+		t.Fatal(err)
+	}
+	resp, body := f.land(t, `{"action":"push"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != landingPROpen {
+		t.Errorf("landing_state = %q, want pr_open", got)
+	}
+}

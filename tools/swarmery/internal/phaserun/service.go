@@ -1331,6 +1331,19 @@ func (s *Service) event(phaseID int64, uuid, kind string, attempt int, detail st
 	runcore.RecordRunEvent(s.DB, Engine, phaseID, uuid, kind, attempt, detail, s.ts())
 }
 
+// landingAfterReturnedRun is the SET fragment every terminal write of a phase run
+// carries (stamp, HealStale): a phase the operator RETURNED leaves `returned` once
+// the run its feedback started is over, however it ended. It goes back to where
+// its landing actually stands — `pr_open` when a change request was opened before
+// the return (pr_url survives the return; a re-push of the new commits updates that
+// same change request, so a second `land pr` must not try to open another), `none`
+// otherwise (which reads `ready` again when the run finished: a previously pushed
+// branch now carries commits the remote has not seen, so it needs a re-push).
+// Every other landing state is left alone.
+const landingAfterReturnedRun = `landing_state = CASE WHEN landing_state = 'returned'
+		       THEN CASE WHEN pr_url IS NOT NULL AND pr_url <> '' THEN 'pr_open' ELSE 'none' END
+		       ELSE landing_state END`
+
 // stamp writes the terminal run state; runError "" ⇒ NULL. run_ended_at is set on
 // every terminal transition so the UI can show a duration, and
 // run_checkboxes_after closes the measurement interval opened by
@@ -1376,14 +1389,14 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 	}
 	// landing_state 'returned' (migration 0103) lasts exactly as long as the run
 	// the operator's feedback started: once that run reaches ANY terminal state the
-	// phase is back to `none` — and so reads `ready` again when it finished — in
-	// the same statement, so no reader sees a settled run still marked returned.
+	// phase leaves `returned` in the same statement (landingAfterReturnedRun), so
+	// no reader sees a settled run still marked returned.
 	res, err := s.DB.Exec(`
 		UPDATE epic_phases
 		   SET run_state=?, run_error=?, run_ended_at=?,
 		       run_checkboxes_after=COALESCE(?, checkboxes_done),
 		       run_blocked_fingerprint=?,
-		       landing_state=CASE WHEN landing_state='returned' THEN 'none' ELSE landing_state END
+		       `+landingAfterReturnedRun+`
 		 WHERE id=?`, state, re, s.ts(), after, fingerprint, phaseID)
 	if err != nil {
 		log.Printf("error: phaserun: stamp phase=%d state=%s: %v", phaseID, state, err)
@@ -1556,9 +1569,12 @@ func (s *Service) HealStale() error {
 	// three engines each re-derived: `NOT IN ()` is invalid SQL and `id NOT IN
 	// (NULL)` is never true, so the clause may only exist when there is something to
 	// exclude.
+	// Healing is a terminal write like stamp(), so a RETURNED phase whose run the
+	// restart orphaned leaves `returned` here too (landingAfterReturnedRun).
 	n, err := runcore.HealExcluding(s.DB, `UPDATE epic_phases
 		   SET run_state='failed', run_error='daemon restart', run_ended_at=?,
-		       run_checkboxes_after=checkboxes_done
+		       run_checkboxes_after=checkboxes_done,
+		       `+landingAfterReturnedRun+`
 		 WHERE run_state='running'`, "id", adopted, s.ts())
 	if err != nil {
 		return err
