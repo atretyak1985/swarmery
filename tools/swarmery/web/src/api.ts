@@ -1350,10 +1350,11 @@ export async function landPhase(taskId: number, phaseId: number, body: PhaseLand
 /**
  * GET /api/projects/{id}/vcs — the project's code host, its vocabulary
  * (`terms`) and whether the daemon is signed in to it. Cached 60s server-side,
- * so callers may fetch it on every page open.
+ * so callers may fetch it on every page open. `fresh` bypasses that cache (the
+ * banner's "Re-check" right after a terminal sign-in).
  */
-export function getProjectVcs(projectId: number): Promise<VcsInfo> {
-  return get(`/api/projects/${String(projectId)}/vcs`);
+export function getProjectVcs(projectId: number, fresh = false): Promise<VcsInfo> {
+  return get(`/api/projects/${String(projectId)}/vcs${fresh ? '?fresh=1' : ''}`);
 }
 
 /**

@@ -14,6 +14,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { MobileNav, Sidebar, useSidebarSignals } from '../components/Sidebar';
+import { VcsAuthBanner } from '../components/VcsAuthBanner';
 import { useFillRoute } from '../lib/fillRoute';
 import {
   TerminalDock,
@@ -123,6 +124,9 @@ function WorkspaceInner(): JSX.Element {
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Mobile tab strip (the desktop rail is hidden < desk). */}
             <MobileNav slug={slug} variant="strip" />
+            {/* The code-host sign-in banner: renders nothing while the daemon
+                can act on the project's remote (or there is none). */}
+            <VcsAuthBanner projectId={projectId} />
             {/* Fill routes (lib/fillRoute.ts) own their own scroll — this
                 container hands it over. Every other route keeps the
                 byte-identical scroller it has always had. */}

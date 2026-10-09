@@ -78,7 +78,17 @@ func newVcsFixture(t *testing.T, fake *repoprovider.FakeExec) (*vcsFixture, func
 // raw object (for key-shape assertions).
 func (f *vcsFixture) get(t *testing.T) (vcsDTO, map[string]any) {
 	t.Helper()
-	resp, err := http.Get(fmt.Sprintf("%s/api/projects/1/vcs", f.srv))
+	return f.getQuery(t, "")
+}
+
+// getQuery is get with a raw query string ("fresh=1").
+func (f *vcsFixture) getQuery(t *testing.T, query string) (vcsDTO, map[string]any) {
+	t.Helper()
+	url := fmt.Sprintf("%s/api/projects/1/vcs", f.srv)
+	if query != "" {
+		url += "?" + query
+	}
+	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +125,7 @@ func TestProjectVcsGitHubOKViaCLI(t *testing.T) {
 	f, _ := newVcsFixture(t, githubCLIOK("https://github.com/acme/widgets.git"))
 	dto, raw := f.get(t)
 
-	for _, k := range []string{"provider", "host", "terms", "remote", "auth", "baseBranch", "allowPushToBase", "source"} {
+	for _, k := range []string{"provider", "host", "terms", "remote", "auth", "baseBranch", "allowPushToBase", "source", "cliLogin"} {
 		if _, ok := raw[k]; !ok {
 			t.Errorf("response lacks key %q: %v", k, raw)
 		}
@@ -205,6 +215,53 @@ func TestProjectVcsCachedFor60s(t *testing.T) {
 	f.get(t)
 	if got := f.calls(); got <= afterInvalidate {
 		t.Fatalf("call after the TTL did not re-execute (%d calls)", got)
+	}
+}
+
+// ?fresh=1 (the banner's Re-check) re-probes inside the TTL and refreshes the
+// cache for the reads that follow.
+func TestProjectVcsFreshBypassesCache(t *testing.T) {
+	f, _ := newVcsFixture(t, githubCLIOK("https://github.com/acme/widgets.git"))
+	f.get(t)
+	first := f.calls()
+
+	f.clock.advance(5 * time.Second)
+	f.getQuery(t, "fresh=1")
+	afterFresh := f.calls()
+	if afterFresh <= first {
+		t.Fatalf("fresh=1 within the TTL did not re-execute (%d calls, want > %d)", afterFresh, first)
+	}
+
+	f.get(t)
+	if got := f.calls(); got != afterFresh {
+		t.Errorf("a plain read after fresh=1 re-executed: %d calls, want %d", got, afterFresh)
+	}
+}
+
+// cliLogin names the provider's own CLI for the remote's host, and nothing
+// for a host no CLI is driven for.
+func TestProjectVcsCliLoginPerProvider(t *testing.T) {
+	cases := []struct {
+		name   string
+		remote string
+		gitlab bool
+		want   string
+	}{
+		{"github https", "https://github.com/acme/widgets.git", false, "gh auth login --hostname github.com"},
+		{"github ssh", "git@github.com:acme/widgets.git", false, "gh auth login --hostname github.com"},
+		{"gitlab", "https://gitlab.com/acme/widgets.git", false, "glab auth login --hostname gitlab.com"},
+		{"self-hosted gitlab by probe", "https://git.example.com/acme/widgets.git", true, "glab auth login --hostname git.example.com"},
+		{"unknown host", "https://git.example.com/acme/widgets.git", false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, _ := newVcsFixture(t, &repoprovider.FakeExec{Out: map[string]string{"git remote": tc.remote + "\n"}})
+			vcsProber = vcsStubProber(tc.gitlab)
+			dto, _ := f.get(t)
+			if dto.CliLogin != tc.want {
+				t.Errorf("cliLogin = %q, want %q (provider %q)", dto.CliLogin, tc.want, dto.Provider)
+			}
+		})
 	}
 }
 

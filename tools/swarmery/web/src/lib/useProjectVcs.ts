@@ -3,11 +3,11 @@
 //
 // Fetched once per mount and per project switch; the daemon caches the answer
 // for 60s, so a page open never spawns a CLI on every render. `reload` re-asks
-// (the banner's "Re-check"). A failed fetch is `vcs: null` plus `error` — a
+// past that cache (the banner's "Re-check"). A failed fetch is `vcs: null` plus `error` — a
 // caller degrades to the terms a review response carries, never to a label
 // guessed from the provider.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getProjectVcs } from '../api';
 import type { VcsInfo } from '../api/types';
 
@@ -24,11 +24,16 @@ export function useProjectVcs(projectId: number | null): ProjectVcsState {
     error: null,
   });
   const [nonce, setNonce] = useState(0);
+  // Set by `reload`, consumed by the fetch it triggers: a Re-check bypasses the
+  // daemon's 60s cache (the operator just signed in), a project switch does not.
+  const freshNext = useRef(false);
 
   useEffect(() => {
     if (projectId === null) return;
     let live = true;
-    getProjectVcs(projectId)
+    const fresh = freshNext.current;
+    freshNext.current = false;
+    getProjectVcs(projectId, fresh)
       .then((vcs) => {
         if (live) setState({ projectId, vcs, error: null });
       })
@@ -40,7 +45,10 @@ export function useProjectVcs(projectId: number | null): ProjectVcsState {
     };
   }, [projectId, nonce]);
 
-  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  const reload = useCallback(() => {
+    freshNext.current = true;
+    setNonce((n) => n + 1);
+  }, []);
   // An answer for the project just left is not this project's answer.
   const current = state.projectId === projectId;
   return { vcs: current ? state.vcs : null, error: current ? state.error : null, reload };

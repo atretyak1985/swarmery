@@ -69,6 +69,11 @@ type vcsDTO struct {
 	AllowPushToBase bool   `json:"allowPushToBase"`
 	// Why Provider is what it is: config | host | probe | unknown.
 	Source string `json:"source"`
+	// The terminal command that signs the provider's CLI in to Host
+	// ("gh auth login --hostname github.com"); "" for an unknown provider or
+	// without a host. Computed here so the web app never branches on Provider
+	// to pick a CLI (SC-11).
+	CliLogin string `json:"cliLogin"`
 }
 
 type vcsRemoteDTO struct {
@@ -174,9 +179,14 @@ func (h *Handler) projectVcs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if dto, hit := projectVcsCache.lookup(id); hit {
-		writeJSON(w, dto, nil)
-		return
+	// ?fresh=1 is the banner's "Re-check" after a terminal sign-in: the
+	// operator just changed what the probe would answer, so the cached answer
+	// is known stale. Every other read takes the cache.
+	if r.URL.Query().Get("fresh") != "1" {
+		if dto, hit := projectVcsCache.lookup(id); hit {
+			writeJSON(w, dto, nil)
+			return
+		}
 	}
 	at := projectVcsCache.now()
 	ctx, cancel := context.WithTimeout(r.Context(), vcsProbeTimeout)
@@ -201,6 +211,22 @@ func (h *Handler) projectHasAuthLandingError(projectID int64) bool {
 	return err == nil
 }
 
+// vcsCliLogin is the provider CLI's sign-in command for host, or "" when the
+// provider has no CLI the daemon drives (unknown) or there is no host.
+func vcsCliLogin(kind repoprovider.Kind, host string) string {
+	if host == "" {
+		return ""
+	}
+	switch kind {
+	case repoprovider.KindGitHub:
+		return "gh auth login --hostname " + host
+	case repoprovider.KindGitLab:
+		return "glab auth login --hostname " + host
+	default:
+		return ""
+	}
+}
+
 // buildVcsDTO computes the uncached answer for the repo at projectPath. Every
 // failure degrades to a field value — no remote, unknown provider, unknown
 // auth — never to an HTTP error: the banner has to render whatever is true.
@@ -223,6 +249,7 @@ func buildVcsDTO(ctx context.Context, projectPath string) vcsDTO {
 	}
 	dto.Provider, dto.Source, dto.Terms = det.Kind, det.Source, det.Terms
 	dto.Host = det.Remote.Host
+	dto.CliLogin = vcsCliLogin(det.Kind, dto.Host)
 	dto.Remote = vcsRemoteDTO{
 		URL:      credstore.Redact(det.Remote.URL),
 		Present:  true,

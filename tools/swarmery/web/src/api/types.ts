@@ -4337,4 +4337,8 @@ export interface VcsInfo {
   allowPushToBase: boolean;
   /** Why `provider` is what it is. */
   source: 'config' | 'host' | 'probe' | 'unknown';
+  /** The provider CLI's sign-in command for `host` ("<cli> auth login
+   *  --hostname <host>"), chosen by the daemon so the UI never branches on
+   *  `provider`; '' when there is no CLI to name (unknown provider, no host). */
+  cliLogin: string;
 }
