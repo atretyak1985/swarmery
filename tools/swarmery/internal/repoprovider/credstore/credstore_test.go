@@ -480,3 +480,54 @@ func TestImportFromCLIGitLabFailureMasksTokenLine(t *testing.T) {
 		t.Fatalf("glab token leaked: %v", err)
 	}
 }
+
+// A GitLab import (self-hosted host, token on stdout in older glab versions)
+// lands as GITLAB_TOKEN in a 0600 store, and Env then hands glab that token
+// plus the isolated GLAB_CONFIG_DIR — and no GitHub variable.
+func TestImportFromCLIGitLabStores0600AndEnv(t *testing.T) {
+	dir := isolate(t)
+	const gl = "gitlab.corp.example"
+	if env := Env(gl); env != nil {
+		t.Fatalf("Env before import = %v, want nil", env)
+	}
+	tok := "glpat-selfhostedselfhosted00"
+	r := &fakeRunner{stdout: gl + "\n  ✓ Logged in to " + gl + " as me (/home/me/.config/glab-cli/config.yml)\n  ✓ Token: " + tok + "\n"}
+	if err := ImportFromCLI(context.Background(), r, KindGitLab, gl); err != nil {
+		t.Fatal(err)
+	}
+	if r.envs[0] != nil {
+		t.Fatal("import must run against the operator's own glab config (nil env)")
+	}
+	info, err := os.Stat(filepath.Join(dir, "vcs-"+gl+".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("store mode = %04o, want 0600", info.Mode().Perm())
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "vcs-"+gl+".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != GitLabTokenKey+"="+tok+"\n" {
+		t.Fatalf("store = %q", raw)
+	}
+	env := strings.Join(Env(gl), "\n")
+	for _, want := range []string{
+		GitLabTokenKey + "=" + tok,
+		"GLAB_CONFIG_DIR=" + filepath.Join(dir, "vcs-glab-config"),
+	} {
+		if !strings.Contains(env, want) {
+			t.Errorf("Env missing %q:\n%s", want, env)
+		}
+	}
+	for _, unwanted := range []string{GitHubTokenKey + "=", GitHubEnterpriseTokenKey + "="} {
+		if strings.Contains(env, unwanted) {
+			t.Errorf("GitLab-only Env carries %q:\n%s", unwanted, env)
+		}
+	}
+	// The imported token is now masked by value too.
+	if got := Redact("echo " + tok); strings.Contains(got, tok) {
+		t.Fatalf("Redact = %q", got)
+	}
+}
