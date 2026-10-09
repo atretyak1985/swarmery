@@ -3751,12 +3751,15 @@ export interface PhaseLanding {
  *  `feedback` (required for 'return', ≤ 20 KB; answers 202 and restarts the run). */
 export type PhaseLandAction = 'push' | 'pr' | 'return';
 
-/** Mirrors repoprovider.ChangeStatus. */
+/** Mirrors repoprovider.ChangeStatus — the normalized vocabulary every provider
+ *  maps onto (SC-13), so no surface branches on the provider to read it. A
+ *  draft is `state: 'open'` + `draft: true`. */
 export interface PhaseChangeStatus {
-  state: 'open' | 'closed' | 'merged';
+  state: 'open' | 'merged' | 'closed';
   draft: boolean;
-  ci: 'passing' | 'failing' | 'pending' | 'none';
+  ci: 'success' | 'failure' | 'pending' | 'none';
   review: 'approved' | 'changes_requested' | 'review_required' | 'none';
+  /** When the daemon last read it (RFC 3339, UTC). */
   checkedAt: string;
 }
 
@@ -4404,3 +4407,18 @@ export type VcsLoginErrorCode =
   | 'no-remote'
   | 'provider-unknown'
   | 'no-project-path';
+
+// --- landing status (phase 7) ---
+
+/** The stable discriminators of a refused POST
+ *  /api/epics/{taskId}/phases/{phaseId}/landing/refresh: 409
+ *  `no-change-request` (the phase has no PR/MR to read), or a 422 whose code is
+ *  the landing_error code the daemon stamped (`status-failed` for a read that
+ *  failed for any unclassified reason). */
+export type PhaseLandingRefreshErrorCode =
+  | 'no-change-request'
+  | 'not-authenticated'
+  | 'binary-missing'
+  | 'no-remote'
+  | 'provider-unknown'
+  | 'status-failed';

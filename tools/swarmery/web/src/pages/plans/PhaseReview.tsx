@@ -25,6 +25,7 @@ import { DiffView } from '../../components/DiffView';
 import { ConfirmDialog, Loading } from '../../components/ui';
 import { fmtAgo } from '../../lib/format';
 import { canLand, canReturn, landingLabel, prLinkText } from './landingModel';
+import { LandingStatus } from './LandingStatus';
 import { VerifyVerdictChip } from './VerifyVerdictChip';
 
 // The same button primitives as TaskActions.tsx.
@@ -108,7 +109,8 @@ function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: Provid
           {link}
         </a>
       )}
-      {landing.landedAt !== null && <span>landed {fmtAgo(landing.landedAt)}</span>}
+      {/* landedAt is the merge time: shown for a merged phase only. */}
+      {landing.state === 'merged' && landing.landedAt !== null && <span>merged {fmtAgo(landing.landedAt)}</span>}
     </div>
   );
 }
@@ -222,6 +224,19 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
         {landing !== null && t !== null && <LandingStrip landing={landing} terms={t} />}
         <VerifyVerdictChip verdict={verdict} detail={verdictDetail} />
       </div>
+      {landing !== null && (
+        <LandingStatus
+          taskId={epic.taskId}
+          phaseId={phase.id}
+          landing={landing}
+          onRefreshed={(next) => {
+            const moved = next.state !== landing.state;
+            setLanded(next);
+            // A merge moves the phase list too (its chip, its landed date).
+            if (moved) onLanded?.();
+          }}
+        />
+      )}
       {(landing?.error ?? '') !== '' && (
         <div className="font-mono text-[10.5px] break-words text-amber">last landing failure: {landing?.error}</div>
       )}

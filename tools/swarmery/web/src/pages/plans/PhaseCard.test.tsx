@@ -71,6 +71,21 @@ describe('PhaseCard landing chip', () => {
     expect(el?.tagName).toBe('SPAN');
   });
 
+  it('dates only a merged chip, from landedAt (the merge time)', () => {
+    render(<PhaseCard phase={phase({ landing: landing({ state: 'merged', landedAt: '2026-10-09T10:00:00Z' }) })} terms={PR_TERMS} />);
+    expect(chip()?.getAttribute('title')).toMatch(/^merged /);
+    cleanup();
+
+    // A landedAt left on a non-merged phase (stamped at push by an older daemon) is not shown.
+    render(<PhaseCard phase={phase({ landing: landing({ state: 'pushed', landedAt: '2026-10-09T10:00:00Z' }) })} terms={PR_TERMS} />);
+    expect(chip()?.getAttribute('title')).toBeNull();
+    cleanup();
+
+    render(<PhaseCard phase={phase({ landing: landing({ state: 'merged' }) })} terms={PR_TERMS} />);
+    expect(chip()?.textContent).toBe('merged ✓');
+    expect(chip()?.getAttribute('title')).toBeNull();
+  });
+
   it('links an open change request in a new tab, labelled from terms', () => {
     const open = landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/12', prNumber: 12 });
     render(<PhaseCard phase={phase({ landing: open })} terms={PR_TERMS} />);

@@ -1840,7 +1840,7 @@ const mockEpics: Epic[] = [
           prUrl: 'https://github.com/acme/swarmery/pull/41',
           prNumber: 41,
           prProvider: 'github',
-          prStatus: { state: 'merged', draft: false, ci: 'passing', review: 'approved', checkedAt: iso(7 * 24 * 60 * MIN) },
+          prStatus: { state: 'merged', draft: false, ci: 'success', review: 'approved', checkedAt: iso(7 * 24 * 60 * MIN) },
           landedAt: iso(7 * 24 * 60 * MIN),
         }),
       }),
@@ -2913,6 +2913,28 @@ export const mockApi = {
         : mockLanding({ state: body.action === 'push' ? 'pushed' : 'returned' });
     phase.landing = landing;
     return { branch: `swarm/phase-${String(phaseId)}`, base: 'main', action: body.action, landing };
+  },
+
+  /** POST …/phases/{phaseId}/landing/refresh — re-reads the seeded phase's
+   *  change request: the stored status with a fresh checkedAt (an open one with
+   *  no status yet reads as open, CI pending, review required). */
+  async refreshPhaseLanding(taskId: number, phaseId: number): Promise<PhaseLanding> {
+    await delay(250);
+    const phase = mockEpics.find((e) => e.taskId === taskId)?.phases.find((p) => p.id === phaseId);
+    if (phase === undefined) throw new Error('phase not found');
+    const { landing } = phase;
+    if (landing.state !== 'pr_open' && landing.state !== 'merged') {
+      throw new Error('this phase has no change request to refresh');
+    }
+    const prev: NonNullable<PhaseLanding['prStatus']> = landing.prStatus ?? {
+      state: 'open',
+      draft: false,
+      ci: 'pending',
+      review: 'review_required',
+      checkedAt: '',
+    };
+    phase.landing = { ...landing, prStatus: { ...prev, checkedAt: new Date().toISOString() } };
+    return phase.landing;
   },
 
   /** Phase-run diagnosis. Derived from the seeded phase so the modal renders the

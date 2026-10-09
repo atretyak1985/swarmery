@@ -2815,3 +2815,23 @@ export async function deleteVcsToken(projectId: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/token`, { method: 'DELETE' });
   if (!res.ok) throw await vcsLoginError(res, 'sign-out failed');
 }
+
+// --- landing status (phase 7) ---
+
+/**
+ * POST /api/epics/{taskId}/phases/{phaseId}/landing/refresh — read the phase's
+ * PR/MR status now (the manual twin of the daemon's status poller) and return
+ * the phase's landing after the read: the stored `prStatus`, and `merged` +
+ * `landedAt` when the change request landed. Throws LandError: 404 unknown
+ * phase, 409 `no-change-request` (nothing opened yet), 422 with a manual
+ * `hint` when the code host could not be asked (`code` is
+ * PhaseLandingRefreshErrorCode).
+ */
+export async function refreshPhaseLanding(taskId: number, phaseId: number): Promise<PhaseLandResponse['landing']> {
+  if (MOCK) return mockApi.refreshPhaseLanding(taskId, phaseId);
+  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/landing/refresh`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw await landError(res, 'refresh failed');
+  return (await res.json()) as PhaseLandResponse['landing'];
+}

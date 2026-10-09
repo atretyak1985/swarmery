@@ -6,7 +6,7 @@
 
 import type { ReactNode } from 'react';
 import type { EpicPhase, PhaseLanding, PhaseRunOutcome, ProviderTerms } from '../../api/types';
-import { fmtAgo, fmtSpan } from '../../lib/format';
+import { fmtAgo, fmtDateTime, fmtSpan } from '../../lib/format';
 import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
 import { modelShortName } from '../../lib/sessionModelChip';
@@ -97,17 +97,27 @@ const LANDING_TONE: Record<LandingChipModel['state'], string> = {
 };
 
 /** Where the phase's run branch is on its way to the code host — nothing
- *  before the landing flow, a link to an open change request. */
+ *  before the landing flow, a link to an open change request. A merged chip
+ *  carries the merge date (`landedAt`) as its tooltip; no other state shows
+ *  `landedAt`, which only a merge sets. */
 function LandingChip({
   landing,
   terms,
 }: {
-  landing: Pick<PhaseLanding, 'state' | 'prUrl' | 'prNumber'>;
+  landing: Pick<PhaseLanding, 'state' | 'prUrl' | 'prNumber'> & Partial<Pick<PhaseLanding, 'landedAt'>>;
   terms: ProviderTerms;
 }): JSX.Element | null {
   const chip = landingChip(landing, terms);
   if (chip === null) return null;
   const cls = `inline-flex shrink-0 items-center rounded-full border bg-transparent px-2 py-px font-mono text-[10px] normal-case tracking-[0.04em] ${LANDING_TONE[chip.state]}`;
+  const landedAt = landing.landedAt ?? null;
+  if (chip.state === 'merged' && landedAt !== null) {
+    return (
+      <span data-testid="phase-landing-chip" className={cls} title={`merged ${fmtDateTime(landedAt)}`}>
+        {chip.text}
+      </span>
+    );
+  }
   return chip.href !== null ? (
     <a
       data-testid="phase-landing-chip"

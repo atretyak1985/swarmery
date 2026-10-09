@@ -13,11 +13,17 @@ import { PhaseReview } from './PhaseReview';
 const api = vi.hoisted(() => ({
   getPhaseReview: vi.fn(),
   landPhase: vi.fn(),
+  refreshPhaseLanding: vi.fn(),
 }));
 
 vi.mock('../../api', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../api')>();
-  return { ...real, getPhaseReview: api.getPhaseReview, landPhase: api.landPhase };
+  return {
+    ...real,
+    getPhaseReview: api.getPhaseReview,
+    landPhase: api.landPhase,
+    refreshPhaseLanding: api.refreshPhaseLanding,
+  };
 });
 
 const { LandError } = await import('../../api');
@@ -71,6 +77,7 @@ const review = (over: Partial<PhaseReviewData> = {}): PhaseReviewData => ({
 beforeEach(() => {
   api.getPhaseReview.mockReset();
   api.landPhase.mockReset();
+  api.refreshPhaseLanding.mockReset();
   api.getPhaseReview.mockResolvedValue(review());
 });
 
@@ -114,6 +121,34 @@ describe('PhaseReview', () => {
     expect(link.href).toBe('https://host.example/acme/w/pull/77');
     expect(screen.getByText('PR open')).toBeTruthy();
     expect(button('Push').disabled).toBe(true);
+  });
+
+  it('pr_open embeds the status chips; a refresh that finds it merged replaces the strip and fires onLanded', async () => {
+    const checkedAt = new Date().toISOString();
+    const open = landing({
+      state: 'pr_open',
+      prUrl: 'https://host.example/acme/w/pull/77',
+      prNumber: 77,
+      prStatus: { state: 'open', draft: false, ci: 'pending', review: 'review_required', checkedAt },
+    });
+    api.getPhaseReview.mockResolvedValue(review({ landing: open }));
+    const merged = landing({
+      ...open,
+      state: 'merged',
+      landedAt: checkedAt,
+      prStatus: { state: 'merged', draft: false, ci: 'success', review: 'approved', checkedAt },
+    });
+    api.refreshPhaseLanding.mockResolvedValue(merged);
+    const { onLanded } = renderReview(phase({ landing: open }));
+
+    expect((await screen.findByTestId('landing-status-ci')).textContent).toBe('◌CI running');
+    expect(screen.queryByText(/^merged \d/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(onLanded).toHaveBeenCalledTimes(1));
+    expect(api.refreshPhaseLanding).toHaveBeenCalledWith(EPIC.taskId, 207);
+    expect(screen.getByTestId('landing-status-ci').textContent).toBe('✓CI passed');
+    // landedAt (the merge time) shows only now that the phase is merged.
+    expect(screen.getByText(/^merged \d+ s ago$/)).toBeTruthy();
   });
 
   it('pr_open under the other vocabulary reads MR #n', async () => {
