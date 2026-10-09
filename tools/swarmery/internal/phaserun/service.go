@@ -316,6 +316,14 @@ type StartOptions struct {
 	// blocked and nothing has changed since. It overrides that ONE refusal and no
 	// other — a forced run still answers to every other gate.
 	Force bool
+	// Returned: the operator sent the phase back with feedback (POST …/land
+	// {action:"return"}, which has just appended a `## Operator feedback` section
+	// to the doc). It bypasses the blocked re-run guard only, like Force, and asks
+	// the prompt to point at the feedback section (ReturnedNote). It also lets the
+	// run continue on the phase's own run branch when that branch holds the
+	// previous run's commits — the work being returned — instead of refusing it as
+	// a dirty branch (see continueOwnBranch).
+	Returned bool
 }
 
 // runRoot resolves the repository this phase runs in: what the phase doc declares
@@ -614,7 +622,9 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// here — after base resolution, because where the run would start is one of the
 	// things that may have changed — unless the operator forces it or the cooldown
 	// has lapsed (blocked.go).
-	if err := s.checkBlockedUnchanged(info, base, string(doc), opts.Force); err != nil {
+	// A returned phase bypasses it like a forced one: the operator's feedback IS
+	// the change since the block.
+	if err := s.checkBlockedUnchanged(info, base, string(doc), opts.Force || opts.Returned); err != nil {
 		return "", err
 	}
 	// Account quota: the last admission verdict before the slot. A fresh reading
@@ -682,7 +692,15 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		release()
 		return "", fmt.Errorf("reclaim run branch: %w", err)
 	}
-	if ahead > 0 {
+	// A RETURNED phase's branch holding commits is not a collision: those commits
+	// are the work the operator reviewed and sent back, and the run continues on
+	// them (continueOwnBranch). Every other run still refuses. No Git seam ⇒ no tip
+	// to continue from ⇒ the refusal stands.
+	ownTip := ""
+	if ahead > 0 && opts.Returned {
+		ownTip = s.branchTip(info.RepoRoot, branch)
+	}
+	if ahead > 0 && ownTip == "" {
 		release()
 		return "", &BranchDirtyError{Branch: branch, CommitsAhead: ahead, Base: s.baseBranch(info.RepoRoot)}
 	}
@@ -708,7 +726,16 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 
 	// Pinned to the dependency tip base resolution chose, or to the repo's current
 	// branch tip when it chose none (StartRef "" — exactly the old Acquire).
-	acq, err := s.acquire(info.RepoRoot, info.ProjectSlug, taskName, base.StartRef)
+	// A returned run continuing on its own branch starts at that branch's tip
+	// instead — which already contains whatever it was stacked on.
+	startRef := base.StartRef
+	var acq worktree.Acquired
+	if ownTip != "" {
+		startRef = ownTip
+		acq, err = s.continueOwnBranch(info.RepoRoot, info.ProjectSlug, taskName, branch, ownTip)
+	} else {
+		acq, err = s.acquire(info.RepoRoot, info.ProjectSlug, taskName, startRef)
+	}
 	if err != nil {
 		release()
 		return "", fmt.Errorf("worktree acquire: %w", err)
@@ -723,12 +750,23 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// The worktree is deliberately NOT removed: this call did not create it, and it
 	// may hold the only copy of the crashed run's uncommitted work. The slot is
 	// released and nothing is stamped, exactly as for every refusal above.
-	if base.StartRef != "" && acq.StartPoint != base.StartRef {
+	if startRef != "" && acq.StartPoint != startRef {
 		release()
 		return "", fmt.Errorf("worktree acquire: %w: a leftover worktree of this phase at %s (branch %s) forks from %s at %s "+
 			"and does not contain that branch's current tip %s — finish or remove the leftover worktree "+
 			"(`git worktree remove`, after saving anything in it worth keeping), then run the phase again",
-			ErrCannotStack, acq.Path, acq.Branch, base.StackedOn, acq.StartPoint, base.StartRef)
+			ErrCannotStack, acq.Path, acq.Branch, base.StackedOn, acq.StartPoint, startRef)
+	}
+	// The continued run's own start point is the one the phase's work started
+	// after — the previous run's recorded start, not the tip it continues from —
+	// so the verifier, the review diff and the landing body keep measuring the
+	// WHOLE phase rather than only what this run adds.
+	if ownTip != "" && info.RunStartPoint != "" {
+		acq.StartPoint = info.RunStartPoint
+	}
+	if ownTip != "" {
+		log.Printf("phaserun: phase=%d returned by the operator: continuing on its own branch %s at %s (%d commit(s) of earlier work)",
+			phaseID, branch, ownTip, ahead)
 	}
 
 	// run_checkboxes_before=checkboxes_done snapshots the ticked-criteria baseline
@@ -804,7 +842,7 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		log.Printf("phaserun: phase=%d stacked on %s at %s (its dependency is not merged into %q)",
 			phaseID, base.StackedOn, acq.StartPoint, base.BaseBranch)
 	}
-	prompt := BuildPromptStacked(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, budget)
+	prompt := BuildPromptRun(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, opts.Returned, budget)
 	// After run_session_uuid is stamped (so every lesson_uses row names a run the
 	// pending-session registry already answers for) and before the spawn.
 	if s.InjectLessons != nil {
@@ -827,6 +865,8 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		// operator asked for "off". Continuations copy this whole spec, so they
 		// inherit both picks.
 		Effort: runEffort,
+		// The operator sent this phase back; the prompt above already says so.
+		Returned: opts.Returned,
 	}
 	if spec.SettingsFile != "" {
 		log.Printf("phaserun: phase=%d inheriting project settings %s (worktree is a checkout of %s)",
@@ -1334,11 +1374,16 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 			fingerprint = fp
 		}
 	}
+	// landing_state 'returned' (migration 0103) lasts exactly as long as the run
+	// the operator's feedback started: once that run reaches ANY terminal state the
+	// phase is back to `none` — and so reads `ready` again when it finished — in
+	// the same statement, so no reader sees a settled run still marked returned.
 	res, err := s.DB.Exec(`
 		UPDATE epic_phases
 		   SET run_state=?, run_error=?, run_ended_at=?,
 		       run_checkboxes_after=COALESCE(?, checkboxes_done),
-		       run_blocked_fingerprint=?
+		       run_blocked_fingerprint=?,
+		       landing_state=CASE WHEN landing_state='returned' THEN 'none' ELSE landing_state END
 		 WHERE id=?`, state, re, s.ts(), after, fingerprint, phaseID)
 	if err != nil {
 		log.Printf("error: phaserun: stamp phase=%d state=%s: %v", phaseID, state, err)
@@ -1372,6 +1417,46 @@ func (s *Service) baseBranch(repoRoot string) string {
 		return ""
 	}
 	return strings.TrimSpace(out)
+}
+
+// branchTip is the commit refs/heads/<branch> points at, or "" when it cannot be
+// read (no Git seam, missing branch, git failure) — and "" keeps the caller on its
+// refusing path.
+func (s *Service) branchTip(repoRoot, branch string) string {
+	if s.Git == nil || repoRoot == "" {
+		return ""
+	}
+	out, err := s.Git.Run(repoRoot, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch+"^{commit}")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// continueOwnBranch gives a RETURNED run a worktree on its own run branch, which
+// still holds the previous run's commits — the work the operator sent back.
+//
+// The worktree manager only ever cuts a branch fresh (`worktree add -b`), and a
+// branch with commits is exactly what its reclaim refuses to free, so the run
+// would otherwise die as branch-dirty on the very work it is meant to continue.
+// Instead the ref is released and re-cut AT ITS OWN TIP (tip, read before the
+// release): the branch ends up naming the same commit, every earlier commit stays
+// on it, and the run builds on top. The commits never depend on the ref in
+// between — they stay reachable by tip, and a failed acquire restores the ref at
+// tip (logged loudly with the recovery command if even that fails).
+func (s *Service) continueOwnBranch(repoRoot, projectSlug, taskName, branch, tip string) (worktree.Acquired, error) {
+	if _, err := s.Wt.DeleteBranch(repoRoot, branch); err != nil {
+		return worktree.Acquired{}, fmt.Errorf("release %s to continue on it: %w", branch, err)
+	}
+	acq, err := s.acquire(repoRoot, projectSlug, taskName, tip)
+	if err != nil {
+		if _, rerr := s.Git.Run(repoRoot, "branch", branch, tip); rerr != nil {
+			log.Printf("error: phaserun: could not restore %s at %s after a failed acquire (%v): %v — recover it with `git branch %s %s`",
+				branch, tip, err, rerr, branch, tip)
+		}
+		return worktree.Acquired{}, err
+	}
+	return acq, nil
 }
 
 // removeWorktree best-effort removes the run's worktree, KEEPING the branch
