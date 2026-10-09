@@ -271,6 +271,37 @@ func load(path string) (map[string]string, error) {
 	return vals, nil
 }
 
+// Delete removes host's store file — the daemon forgets the token, and the
+// next gh/glab call for host runs on the operator's own CLI login again (Env
+// returns nil). A missing store is not an error. A store path that is a
+// symlink or not a regular file is refused with ErrInsecure and left in place,
+// the same rule Load applies: the daemon only ever removes a file it would
+// itself have read. Token literals already remembered for Redact stay
+// remembered, so a forgotten token is still masked in later output.
+func Delete(host string) error {
+	path := Path(host)
+	if path == "" {
+		return ErrNoStoreDir
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("credstore: delete %s: %w", path, err)
+	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return fmt.Errorf("%w: %s is a symlink", ErrInsecure, path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: %s is not a regular file", ErrInsecure, path)
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("credstore: delete %s: %w", path, err)
+	}
+	return nil
+}
+
 func validKey(k string) bool { return k == GitHubTokenKey || k == GitLabTokenKey }
 
 // GitHubEnterpriseTokenKey is the env name gh reads a token from for any host

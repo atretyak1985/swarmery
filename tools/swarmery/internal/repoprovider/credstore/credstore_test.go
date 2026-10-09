@@ -531,3 +531,68 @@ func TestImportFromCLIGitLabStores0600AndEnv(t *testing.T) {
 		t.Fatalf("Redact = %q", got)
 	}
 }
+
+func TestDeleteRemovesStoreAndToleratesMissing(t *testing.T) {
+	dir := isolate(t)
+	const host = "github.com"
+	tok := "gho_" + strings.Repeat("d", 36)
+	if err := Write(host, GitHubTokenKey, tok); err != nil {
+		t.Fatal(err)
+	}
+	if !Has(host) {
+		t.Fatal("Has = false after Write")
+	}
+	if err := Delete(host); err != nil {
+		t.Fatalf("Delete = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "vcs-"+host+".env")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("store still present after Delete: %v", err)
+	}
+	if Has(host) || Env(host) != nil {
+		t.Fatal("Has/Env still see a token after Delete")
+	}
+	// Absent store: no error, idempotent.
+	if err := Delete(host); err != nil {
+		t.Fatalf("Delete(absent) = %v", err)
+	}
+	// A deleted token stays masked by value.
+	if got := Redact("x " + tok); strings.Contains(got, tok) {
+		t.Fatalf("Redact after Delete = %q", got)
+	}
+}
+
+func TestDeleteRefusesSymlinkAndNonRegular(t *testing.T) {
+	dir := isolate(t)
+	real := filepath.Join(t.TempDir(), "real.env")
+	if err := os.WriteFile(real, []byte("GH_TOKEN=linked-token-value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "vcs-github.com.env")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := Delete("github.com"); !errors.Is(err, ErrInsecure) {
+		t.Fatalf("Delete(symlink) = %v, want ErrInsecure", err)
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("symlink removed despite refusal: %v", err)
+	}
+	if _, err := os.Stat(real); err != nil {
+		t.Fatalf("symlink target touched: %v", err)
+	}
+
+	if err := os.Mkdir(filepath.Join(dir, "vcs-dir.example.env"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Delete("dir.example"); !errors.Is(err, ErrInsecure) {
+		t.Fatalf("Delete(directory) = %v, want ErrInsecure", err)
+	}
+}
+
+func TestDeleteNoSecretsDir(t *testing.T) {
+	t.Setenv("SWARMERY_SECRETS_DIR", "")
+	t.Setenv("HOME", "")
+	if err := Delete("github.com"); !errors.Is(err, ErrNoStoreDir) {
+		t.Fatalf("Delete without secrets dir = %v, want ErrNoStoreDir", err)
+	}
+}
