@@ -269,9 +269,9 @@ func vcsCliLogin(kind repoprovider.Kind, host string) string {
 	}
 	switch kind {
 	case repoprovider.KindGitHub:
-		return "gh auth login --hostname " + host
+		return "gh auth login --hostname " + shellQuote(host)
 	case repoprovider.KindGitLab:
-		return "glab auth login --hostname " + host
+		return "glab auth login --hostname " + shellQuote(host)
 	default:
 		return ""
 	}

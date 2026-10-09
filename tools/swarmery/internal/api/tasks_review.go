@@ -304,8 +304,8 @@ func (h *Handler) landBoardTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pushCmd := "git -C " + tgt.ProjectPath + " push -u origin " + tgt.Branch
-	prCmd := "gh pr create --head " + tgt.Branch + " --title " + strconv.Quote(tgt.Title)
+	pushCmd := "git -C " + shellQuote(tgt.ProjectPath) + " push -u origin " + shellQuote(tgt.Branch)
+	prCmd := changeRequestCmd(repoprovider.KindGitHub, tgt.Branch, "", tgt.Title, false)
 
 	// The tool calls outlive the HTTP request on purpose: a browser that
 	// navigates away mid-push must not kill a `gh pr create` that may already

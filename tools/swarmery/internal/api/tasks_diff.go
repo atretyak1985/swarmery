@@ -105,18 +105,46 @@ func landCLIFor(kind repoprovider.Kind) landCLI {
 	return landCLI{Bin: "gh", Create: "gh pr create", Name: "GitHub CLI", Install: "https://cli.github.com"}
 }
 
+// shellQuote renders s as ONE POSIX shell word for a copy-paste hint: a value
+// made only of characters no shell treats specially comes back as is (so a
+// plain branch or path reads naturally), anything else is wrapped in single
+// quotes, each embedded single quote closed, backslash-escaped and reopened.
+// Inside single quotes `$(…)`, backticks, `;` and the like are literal, so
+// pasting the hint can never run them. The empty string becomes an empty
+// single-quoted pair. Pure.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.IndexFunc(s, func(r rune) bool { return !isShellSafe(r) }) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// isShellSafe reports whether r is never special to a POSIX shell anywhere in
+// a word (the set Python's shlex.quote leaves bare).
+func isShellSafe(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	}
+	return strings.ContainsRune("@%+=:,./_-", r)
+}
+
 // changeRequestCmd is the terminal command that opens kind's change request
-// for head by hand (base "" = the host's default branch). Pure.
+// for head by hand (base "" = the host's default branch). Every caller-supplied
+// value is shellQuote'd: titles come from plan and card names. Pure.
 func changeRequestCmd(kind repoprovider.Kind, head, base, title string, draft bool) string {
 	headFlag, baseFlag := " --head ", " --base "
 	if kind == repoprovider.KindGitLab {
 		headFlag, baseFlag = " --source-branch ", " --target-branch "
 	}
-	cmd := landCLIFor(kind).Create + headFlag + head
+	cmd := landCLIFor(kind).Create + headFlag + shellQuote(head)
 	if base != "" {
-		cmd += baseFlag + base
+		cmd += baseFlag + shellQuote(base)
 	}
-	cmd += " --title " + strconv.Quote(title)
+	cmd += " --title " + shellQuote(title)
 	if draft {
 		cmd += " --draft"
 	}

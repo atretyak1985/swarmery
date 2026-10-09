@@ -542,7 +542,7 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	branch := t.RunBranch
-	pushCmd := "git -C " + repoDir + " push -u origin " + branch
+	pushCmd := "git -C " + shellQuote(repoDir) + " push -u origin " + shellQuote(branch)
 	title := phasePRTitle(t.PlanTitle, t.Seq, phaseDisplayName(t.Name))
 
 	// The tool calls outlive the HTTP request on purpose (as in landBoardTask): a
@@ -563,7 +563,7 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		}
 		writeLandingUnprocessable(w, codeNoRemote, "no origin remote",
 			"this repo has no `origin` to push to. Add one, then land again:\n"+
-				"git -C "+repoDir+" remote add origin <url>\n"+pushCmd,
+				"git -C "+shellQuote(repoDir)+" remote add origin <url>\n"+pushCmd,
 			landDetail(err))
 		return
 	}
@@ -704,15 +704,15 @@ func (h *Handler) writeLandFailure(w http.ResponseWriter, t landingTarget, det r
 		// lacks, and only the operator can decide how they combine.
 		writeLandingUnprocessable(w, codeRemoteDiverged, "remote branch has diverged",
 			"origin/"+t.RunBranch+" has commits this branch does not. In a checkout of "+t.RunBranch+
-				" (its run worktree, or `git -C "+hints.repo+" switch "+t.RunBranch+"`), bring them in, then land again:\n"+
-				"git fetch origin && git rebase origin/"+t.RunBranch,
+				" (its run worktree, or `git -C "+shellQuote(hints.repo)+" switch "+shellQuote(t.RunBranch)+"`), bring them in, then land again:\n"+
+				"git fetch origin && git rebase "+shellQuote("origin/"+t.RunBranch),
 			detail)
 	case errors.Is(err, repoprovider.ErrBinaryMissing):
 		writeLandingUnprocessable(w, codeBinaryMissing, "required CLI not found", hints.binary, detail)
 	case errors.Is(err, repoprovider.ErrNoRemote):
 		writeLandingUnprocessable(w, codeNoRemote, "no origin remote",
 			"this repo has no `origin` to push to. Add one, then land again:\n"+
-				"git -C "+hints.repo+" remote add origin <url>\n"+hints.push,
+				"git -C "+shellQuote(hints.repo)+" remote add origin <url>\n"+hints.push,
 			detail)
 	case isNoURL(err):
 		cli := landCLIFor(det.Kind)
