@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # apply-counts.sh — splice scripts/docgen/counts.sh's numbers into the docs.
 #
-# Two consumers, three marked regions, and nothing outside them is touched:
+# Every consumer and its marked regions are listed below; nothing outside them is touched:
 #
 #   README.md         <!-- BEGIN generated:packs -->                the pack table
+#   README.uk.md      <!-- BEGIN generated:packs -->                the same table, Ukrainian labels
 #   site/index.html   <!-- BEGIN generated:stats-hero -->           the hero counters
 #   site/index.html   <!-- BEGIN generated:stats-control-plane -->  the daemon counters
 #
@@ -123,21 +124,62 @@ const oneLiner = (d) => {
   return (head + ' ' + rest.charAt(0).toUpperCase() + rest.slice(1)).trim();
 };
 
-function packsTable() {
-  const rows = ["| Plugin | What's inside |", '|---|---|'];
+// Ukrainian noun form for a count: 1, 21 → one; 2–4, 22–24 → few; the rest
+// (5–20, 11–14, 25…) → many. A generated number must never read as a typo.
+const ukPlural = (n, one, few, many) => {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+};
+
+// Per-language labels for the generated regions. Only the header row and the
+// hand-written `core` sentence are localised: every other row is the pack's own
+// manifest description, which stays English in every language because the
+// manifests are not localised. `coreRow` takes counts.core and interpolates its
+// three numbers. Keyed by language so other targets can add their own keys
+// beside these without touching them.
+const LABELS = {
+  en: {
+    header: "| Plugin | What's inside |",
+    coreRow: (c) =>
+      '| **`core`** | The vendor-neutral framework every consumer enables: ' +
+      c.agents +
+      ' judgment-style agents (tech-lead, planner, architect, implementation-agent, ' +
+      'code-reviewer, … — see `plugins/core/AGENTS.md`), ' +
+      c.skills +
+      ' progressively-disclosed skills, ' +
+      c.commands +
+      ' commands, lifecycle/safety hooks, the statusline, and the project-aware ' +
+      '`agent-work` workspace CLI. |',
+  },
+  uk: {
+    header: '| Плагін | Що всередині |',
+    coreRow: (c) =>
+      '| **`core`** | Фреймворк, незалежний від постачальника, який вмикає кожен споживач: ' +
+      c.agents +
+      ' ' +
+      ukPlural(c.agents, 'агент', 'агенти', 'агентів') +
+      ' з власним судженням (tech-lead, planner, architect, implementation-agent, ' +
+      'code-reviewer, … — див. `plugins/core/AGENTS.md`), ' +
+      c.skills +
+      ' ' +
+      ukPlural(c.skills, 'скіл', 'скіли', 'скілів') +
+      ' із поступовим розкриттям, ' +
+      c.commands +
+      ' ' +
+      ukPlural(c.commands, 'команда', 'команди', 'команд') +
+      ', хуки життєвого циклу й безпеки, statusline і CLI робочого простору ' +
+      '`agent-work`, що знає про проєкт. |',
+  },
+};
+
+function packsTable(L) {
+  const rows = [L.header, '|---|---|'];
   for (const p of counts.plugins || []) {
     if (p.name === 'core') {
-      rows.push(
-        '| **`core`** | The vendor-neutral framework every consumer enables: ' +
-          counts.core.agents +
-          ' judgment-style agents (tech-lead, planner, architect, implementation-agent, ' +
-          'code-reviewer, … — see `plugins/core/AGENTS.md`), ' +
-          counts.core.skills +
-          ' progressively-disclosed skills, ' +
-          counts.core.commands +
-          ' commands, lifecycle/safety hooks, the statusline, and the project-aware ' +
-          '`agent-work` workspace CLI. |'
-      );
+      rows.push(L.coreRow(counts.core));
     } else {
       rows.push('| `' + p.name + '` | ' + mdCell(oneLiner(p.description)) + ' |');
     }
@@ -185,7 +227,8 @@ function controlPlaneStats() {
 }
 
 const targets = [
-  { rel: 'README.md', regions: [['generated:packs', packsTable()]] },
+  { rel: 'README.md', regions: [['generated:packs', packsTable(LABELS.en)]] },
+  { rel: 'README.uk.md', regions: [['generated:packs', packsTable(LABELS.uk)]] },
   {
     rel: 'site/index.html',
     regions: [

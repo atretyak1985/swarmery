@@ -6,6 +6,8 @@
 
 ### Run your Claude Code agents like a fleet — not like a pile of terminal tabs.
 
+**English** · [Українська](README.uk.md)
+
 A local-first control plane for Claude Code sessions: plan the work through an interview, run it in isolated
 worktrees, answer every waiting agent from one queue, and see what it cost. One Go binary, no cloud, no account —
 plus a versioned plugin marketplace so your agents live in one place and every project pulls them with `/plugin update`.
