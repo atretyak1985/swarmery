@@ -256,58 +256,103 @@ func (h *Handler) boardTaskDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// `..` for the commit list, `...` for the diffs: the log wants the commits
-	// unique to the branch, the diff wants the change against the merge base. The
-	// trailing `--` pins both ranges into the revision slot so a name can never be
-	// re-read as a flag.
-	logRange := tgt.StartPoint + ".." + tgt.Branch
-	diffRange := tgt.StartPoint + "..." + tgt.Branch
+	diff, err := collectBranchDiff(tgt.ProjectPath, tgt.StartPoint, tgt.Branch)
+	if err != nil {
+		writeBranchDiffErr(w, err)
+		return
+	}
+	writeJSON(w, diff, nil)
+}
 
-	out, stderr, err := gitReview(tgt.ProjectPath, "log", "--format=%H%x00%s", logRange, "--")
+// branchGoneError: the run branch a diff was asked for no longer resolves in
+// the repo (deleted out of band). Answered 404 — the thing addressed is gone.
+type branchGoneError struct{ Branch, Reason string }
+
+func (e *branchGoneError) Error() string {
+	return "run branch " + e.Branch + " no longer exists: " + e.Reason
+}
+
+// baseUnreachableError: the base a diff is measured from is recorded, but git
+// can no longer resolve it (a force-push or a gc dropped it). Answered 409
+// base-unreachable — the repo moved out from under the recorded base.
+type baseUnreachableError struct{ Base, Reason string }
+
+func (e *baseUnreachableError) Error() string {
+	return "the start point " + e.Base + " is no longer reachable in this repo, " +
+		"so the branch cannot be measured against it: " + e.Reason
+}
+
+// collectBranchDiff reads what branch carries on top of base in repoDir: the
+// commits unique to it, the files they touched, and the unified patch (capped at
+// reviewMaxPatchBytes). Shared by the board card diff and the plan-phase review
+// (phase_landing.go), so both screens read a branch the same way.
+//
+// `..` for the commit list, `...` for the diffs: the log wants the commits unique
+// to the branch, the diff wants the change against the merge base. The trailing
+// `--` pins both ranges into the revision slot so a name can never be re-read as
+// a flag.
+//
+// A *branchGoneError or *baseUnreachableError says which end of the range is
+// gone; anything else is an unexpected git failure. writeBranchDiffErr maps all
+// three onto the HTTP answer.
+func collectBranchDiff(repoDir, base, branch string) (taskDiffDTO, error) {
+	logRange := base + ".." + branch
+	diffRange := base + "..." + branch
+
+	out, stderr, err := gitReview(repoDir, "log", "--format=%H%x00%s", logRange, "--")
 	if err != nil {
 		// Both a deleted branch and an unreachable base fail here with the same
 		// "unknown revision" shape, and they need opposite answers — probe which
 		// one is actually gone rather than guessing from the message.
 		switch {
-		case !gitRevExists(tgt.ProjectPath, tgt.Branch):
-			writeClientErr(w, http.StatusNotFound,
-				"run branch "+tgt.Branch+" no longer exists: "+gitReason(stderr, err))
-		case !gitRevExists(tgt.ProjectPath, tgt.StartPoint):
-			writeConflict(w, codeBaseUnreachable,
-				"the start point "+tgt.StartPoint+" is no longer reachable in this repo, "+
-					"so the branch cannot be measured against it: "+gitReason(stderr, err))
+		case !gitRevExists(repoDir, branch):
+			return taskDiffDTO{}, &branchGoneError{Branch: branch, Reason: gitReason(stderr, err)}
+		case !gitRevExists(repoDir, base):
+			return taskDiffDTO{}, &baseUnreachableError{Base: base, Reason: gitReason(stderr, err)}
 		default:
-			writeErr(w, fmt.Errorf("git log %s: %w: %s", logRange, err, gitReason(stderr, err)))
+			return taskDiffDTO{}, fmt.Errorf("git log %s: %w: %s", logRange, err, gitReason(stderr, err))
 		}
-		return
 	}
 	commits := parseReviewCommits(out)
 
-	numstat, nsErr, err := gitReview(tgt.ProjectPath, "diff", "--numstat", diffRange, "--")
+	numstat, nsErr, err := gitReview(repoDir, "diff", "--numstat", diffRange, "--")
 	if err != nil {
-		writeErr(w, fmt.Errorf("git diff --numstat %s: %w: %s", diffRange, err, gitReason(nsErr, err)))
-		return
+		return taskDiffDTO{}, fmt.Errorf("git diff --numstat %s: %w: %s", diffRange, err, gitReason(nsErr, err))
 	}
 	files := parseNumstat(numstat)
 
 	// The whole patch is buffered before it is capped. Acceptable for a
-	// single-user local daemon reviewing one card's branch; the cap is about what
-	// a browser can usefully render, not about bounding this process's memory.
-	raw, pErr, err := gitReview(tgt.ProjectPath, "diff", diffRange, "--")
+	// single-user local daemon reviewing one branch; the cap is about what a
+	// browser can usefully render, not about bounding this process's memory.
+	raw, pErr, err := gitReview(repoDir, "diff", diffRange, "--")
 	if err != nil {
-		writeErr(w, fmt.Errorf("git diff %s: %w: %s", diffRange, err, gitReason(pErr, err)))
-		return
+		return taskDiffDTO{}, fmt.Errorf("git diff %s: %w: %s", diffRange, err, gitReason(pErr, err))
 	}
 	patch, truncated := truncatePatch(raw, reviewMaxPatchBytes)
 
-	writeJSON(w, taskDiffDTO{
-		Base:           tgt.StartPoint,
-		Branch:         tgt.Branch,
+	return taskDiffDTO{
+		Base:           base,
+		Branch:         branch,
 		Commits:        commits,
 		Files:          files,
 		Patch:          patch,
 		PatchTruncated: truncated,
-	}, nil)
+	}, nil
+}
+
+// writeBranchDiffErr answers a collectBranchDiff failure: 404 when the branch is
+// gone, 409 base-unreachable when the base is, 500 otherwise.
+func writeBranchDiffErr(w http.ResponseWriter, err error) {
+	var gone *branchGoneError
+	var unreachable *baseUnreachableError
+	switch {
+	case errors.As(err, &gone):
+		writeClientErr(w, http.StatusNotFound, gone.Error())
+	case errors.As(err, &unreachable):
+		writeConflict(w, codeBaseUnreachable, unreachable.Error())
+	default:
+		writeErr(w, err)
+	}
 }
 
 // gitReason picks the most informative text available for a failed git call:
