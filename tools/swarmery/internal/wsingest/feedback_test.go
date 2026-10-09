@@ -30,17 +30,18 @@ func readFeedbackDoc(t *testing.T, p string) string {
 }
 
 // TestAppendOperatorFeedbackBeforeReport: the section lands right above the
-// report heading, verbatim, with the untick instruction, and the report itself
-// is unchanged.
+// report heading, the note quoted line by line (a blank line as a bare `>`),
+// with the untick instruction outside the quote, and the report itself is
+// unchanged.
 func TestAppendOperatorFeedbackBeforeReport(t *testing.T) {
 	p := writeFeedbackDoc(t, "# Phase 4\n\n## Acceptance Criteria\n- [x] a\n- [ ] b\n\n## Completion Report\n\nShipped a.\n")
 
-	if err := AppendOperatorFeedback(p, "  The retry loop swallows the 409.\nFix it.  \n", feedbackClock); err != nil {
+	if err := AppendOperatorFeedback(p, "  The retry loop swallows the 409.\r\n\r\nFix it.  \n", feedbackClock); err != nil {
 		t.Fatalf("AppendOperatorFeedback: %v", err)
 	}
 	want := "# Phase 4\n\n## Acceptance Criteria\n- [x] a\n- [ ] b\n\n" +
 		"## Operator feedback (2026-10-09 11:40)\n\n" +
-		"The retry loop swallows the 409.\nFix it.\n\n" +
+		"> The retry loop swallows the 409.\n>\n> Fix it.\n\n" +
 		"Re-verify every ticked acceptance criterion this feedback touches; untick (`- [x]` → `- [ ]`) any that no longer holds before you start, and tick it again only when it is true.\n" +
 		"\n## Completion Report\n\nShipped a.\n"
 	if got := readFeedbackDoc(t, p); got != want {
@@ -62,7 +63,7 @@ func TestAppendOperatorFeedbackAtEOF(t *testing.T) {
 		t.Fatalf("AppendOperatorFeedback: %v", err)
 	}
 	got := readFeedbackDoc(t, p)
-	if !strings.HasPrefix(got, "# Phase 4\n\n- [x] a\n\n## Operator feedback (2026-10-09 11:40)\n\nAdd the test.\n\n") {
+	if !strings.HasPrefix(got, "# Phase 4\n\n- [x] a\n\n## Operator feedback (2026-10-09 11:40)\n\n> Add the test.\n\n") {
 		t.Errorf("doc =\n%s", got)
 	}
 	if !strings.HasSuffix(got, "tick it again only when it is true.\n") {
@@ -101,8 +102,8 @@ func TestAppendOperatorFeedbackChronological(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := readFeedbackDoc(t, p)
-	first := strings.Index(got, "## Operator feedback (2026-10-09 11:40)\n\nFirst note.")
-	second := strings.Index(got, "## Operator feedback (2026-10-09 12:40)\n\nSecond note.")
+	first := strings.Index(got, "## Operator feedback (2026-10-09 11:40)\n\n> First note.")
+	second := strings.Index(got, "## Operator feedback (2026-10-09 12:40)\n\n> Second note.")
 	report := strings.Index(got, "## Completion Report")
 	if first < 0 || second < 0 || report < 0 {
 		t.Fatalf("doc lost a section:\n%s", got)
@@ -153,5 +154,56 @@ func TestAppendOperatorFeedbackKeepsMode(t *testing.T) {
 	}
 	if st.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %o, want 600 kept", st.Mode().Perm())
+	}
+	// Atomic: the write went through a temp file that is gone afterwards.
+	entries, err := os.ReadDir(filepath.Dir(p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("dir holds %v, want only the doc (no temp file left behind)", names)
+	}
+}
+
+// TestAppendOperatorFeedbackCannotInjectStructure: feedback that quotes a report
+// heading, a criterion and a code fence stays quoted text — the doc's report, its
+// checkbox count and its fence-aware parsing are exactly what they were, and a
+// later note still lands above the real report.
+func TestAppendOperatorFeedbackCannotInjectStructure(t *testing.T) {
+	const doc = "# Phase 4\n\n## Acceptance Criteria\n- [x] a\n- [ ] b\n\n## Completion Report\n\nShipped a.\n"
+	p := writeFeedbackDoc(t, doc)
+	wantReport := ParseCompletionReport(doc)
+	wantDone, wantTotal := CountCheckboxes(doc)
+
+	note := "Wrong.\n## Completion Report\n- [ ] x\n- [x] y\n```\nunclosed fence"
+	if err := AppendOperatorFeedback(p, note, feedbackClock); err != nil {
+		t.Fatalf("AppendOperatorFeedback: %v", err)
+	}
+	got := readFeedbackDoc(t, p)
+	if !strings.Contains(got, "> ## Completion Report\n> - [ ] x\n> - [x] y\n> ```\n> unclosed fence\n") {
+		t.Errorf("the note is not quoted line by line:\n%s", got)
+	}
+	if r := ParseCompletionReport(got); r != wantReport {
+		t.Errorf("completion report = %q, want %q unchanged", r, wantReport)
+	}
+	if done, total := CountCheckboxes(got); done != wantDone || total != wantTotal {
+		t.Errorf("checkboxes = %d/%d, want %d/%d unchanged", done, total, wantDone, wantTotal)
+	}
+
+	if err := AppendOperatorFeedback(p, "Second.", feedbackClock.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	got = readFeedbackDoc(t, p)
+	second := strings.Index(got, "> Second.")
+	report := strings.Index(got, "\n## Completion Report\n\nShipped a.")
+	if second < 0 || report < 0 || second > report {
+		t.Errorf("second note at %d, real report at %d — want the note above the real report:\n%s", second, report, got)
+	}
+	if r := ParseCompletionReport(got); r != wantReport {
+		t.Errorf("completion report after a second note = %q, want %q unchanged", r, wantReport)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -42,7 +43,7 @@ const operatorFeedbackUntick = "Re-verify every ticked acceptance criterion this
 //
 //	## Operator feedback (2006-01-02 15:04)
 //
-//	<feedback verbatim>
+//	> <feedback, every line quoted>
 //
 //	<operatorFeedbackUntick>
 //
@@ -51,8 +52,16 @@ const operatorFeedbackUntick = "Re-verify every ticked acceptance criterion this
 // second call therefore lands below the first and still above the report: the
 // sections read in chronological order. now stamps the heading in its own
 // location. The feedback is trimmed; empty or larger than ReviewFeedbackMax is
-// refused before the doc is read. The write keeps the file's mode (os.WriteFile
-// only applies 0644 when it creates the file), like TickPhaseChecklist.
+// refused before the doc is read.
+//
+// The operator's text is rendered as a Markdown blockquote (quoteFeedback): a
+// line in it that reads `## Completion Report`, `- [ ] …` or a code fence is
+// quoted text, never a heading, a criterion or a fence the doc's parsers act on.
+// The untick instruction stays outside the quote — it is the daemon's line.
+//
+// The write is atomic (writeFileAtomic: a temp file in the doc's directory,
+// renamed over it), so a crash mid-write never leaves a truncated phase doc, and
+// it keeps the existing file's mode.
 func AppendOperatorFeedback(docPath, feedback string, now time.Time) error {
 	feedback = strings.TrimSpace(feedback)
 	if feedback == "" {
@@ -61,18 +70,70 @@ func AppendOperatorFeedback(docPath, feedback string, now time.Time) error {
 	if len(feedback) > ReviewFeedbackMax {
 		return fmt.Errorf("%w: %d bytes, the limit is %d", ErrFeedbackTooLarge, len(feedback), ReviewFeedbackMax)
 	}
+	st, err := os.Stat(docPath)
+	if err != nil {
+		return err
+	}
 	body, err := os.ReadFile(docPath)
 	if err != nil {
 		return err
 	}
 	out := insertBeforeCompletionReport(string(body), operatorFeedbackSection(feedback, now))
-	return os.WriteFile(docPath, []byte(out), 0o644)
+	return writeFileAtomic(docPath, []byte(out), st.Mode().Perm())
+}
+
+// writeFileAtomic replaces path with data through a temp file in the same
+// directory (so the rename never crosses a filesystem), set to perm before the
+// rename. On any failure the temp file is removed and path is left untouched.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	renamed := false
+	defer func() {
+		if !renamed {
+			_ = os.Remove(name)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		return err
+	}
+	renamed = true
+	return nil
 }
 
 // operatorFeedbackSection renders one section, ending in exactly one newline.
 func operatorFeedbackSection(feedback string, now time.Time) string {
 	return operatorFeedbackHeading + " (" + now.Format("2006-01-02 15:04") + ")\n\n" +
-		feedback + "\n\n" + operatorFeedbackUntick + "\n"
+		quoteFeedback(feedback) + "\n\n" + operatorFeedbackUntick + "\n"
+}
+
+// quoteFeedback renders the operator's text as a Markdown blockquote: every line
+// prefixed `> `, a blank line as a bare `>` (no trailing space). CRLF is
+// normalised first so no line keeps a stray carriage return.
+func quoteFeedback(feedback string) string {
+	lines := strings.Split(strings.ReplaceAll(feedback, "\r\n", "\n"), "\n")
+	for i, l := range lines {
+		if strings.TrimSpace(l) == "" {
+			lines[i] = ">"
+			continue
+		}
+		lines[i] = "> " + l
+	}
+	return strings.Join(lines, "\n")
 }
 
 // insertBeforeCompletionReport places section right above the first
