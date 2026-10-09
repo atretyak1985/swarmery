@@ -7,6 +7,11 @@
 #   README.uk.md      <!-- BEGIN generated:packs -->                the same table, Ukrainian labels
 #   site/index.html   <!-- BEGIN generated:stats-hero -->           the hero counters
 #   site/index.html   <!-- BEGIN generated:stats-control-plane -->  the daemon counters
+#   site/uk/index.html  the same two regions, Ukrainian labels
+#
+# The tile labels must equal the stats.* strings in scripts/site/locales/<lang>.py:
+# build.py seeds a fresh index.html from those and then keeps whatever region
+# this script last wrote, so a disagreement shows up as --check drift.
 #
 # The markers are the contract. Prose stays hand-written and reviewable; only
 # the rows and tiles between a BEGIN/END pair are regenerated, and a missing or
@@ -175,6 +180,32 @@ const LABELS = {
   },
 };
 
+// Stat-tile labels for the landing page, one set per language, beside the README
+// labels above. A label is a string, or a function of the tile's number where
+// the noun form depends on it (Ukrainian). They mirror the stats.hero.* /
+// stats.cp.* strings of scripts/site/locales/<lang>.py, which only seed a page
+// that has no region yet — this script owns the region from then on.
+Object.assign(LABELS.en, {
+  packs: 'plugin packs',
+  agents: 'agents',
+  skills: 'skills',
+  cp: 'local control plane',
+  go: 'Go packages',
+  routes: 'REST routes',
+  port: 'dashboard port',
+  iface: 'the only interface it binds',
+});
+Object.assign(LABELS.uk, {
+  packs: (n) => ukPlural(n, 'пакет плагінів', 'пакети плагінів', 'пакетів плагінів'),
+  agents: (n) => ukPlural(n, 'агент', 'агенти', 'агентів'),
+  skills: (n) => ukPlural(n, 'навичка', 'навички', 'навичок'),
+  cp: 'локальний центр керування',
+  go: (n) => ukPlural(n, 'Go-пакет', 'Go-пакети', 'Go-пакетів'),
+  routes: (n) => ukPlural(n, 'REST-маршрут', 'REST-маршрути', 'REST-маршрутів'),
+  port: 'порт дашборду',
+  iface: 'єдиний інтерфейс, який він слухає',
+});
+
 function packsTable(L) {
   const rows = [L.header, '|---|---|'];
   for (const p of counts.plugins || []) {
@@ -204,47 +235,60 @@ function tile(n, label, opts) {
   );
 }
 
-function heroStats() {
+// L[key] is a string or a function of the tile's number (see LABELS)
+const label = (L, key, n) => (typeof L[key] === 'function' ? L[key](n) : L[key]);
+
+function heroStats(L) {
   return [
-    tile(counts.packs, 'plugin packs'),
-    tile(counts.agents, 'agents'),
-    tile(counts.skills, 'skills'),
-    tile(':7777', 'local control plane', { hot: true }),
+    tile(counts.packs, label(L, 'packs', counts.packs)),
+    tile(counts.agents, label(L, 'agents', counts.agents)),
+    tile(counts.skills, label(L, 'skills', counts.skills)),
+    tile(':7777', label(L, 'cp'), { hot: true }),
   ];
 }
 
-function controlPlaneStats() {
+function controlPlaneStats(L) {
   const out = [];
   if (counts.go_packages !== null && counts.go_packages !== undefined) {
-    out.push(tile(counts.go_packages, 'Go packages'));
+    out.push(tile(counts.go_packages, label(L, 'go', counts.go_packages)));
   }
   if (counts.api_routes !== null && counts.api_routes !== undefined) {
-    out.push(tile(counts.api_routes, 'REST routes'));
+    out.push(tile(counts.api_routes, label(L, 'routes', counts.api_routes)));
   }
-  out.push(tile(':7777', 'dashboard port', { hot: true }));
-  out.push(tile('127.0.0.1', 'the only interface it binds', { small: true }));
+  out.push(tile(':7777', label(L, 'port'), { hot: true }));
+  out.push(tile('127.0.0.1', label(L, 'iface'), { small: true }));
   return out;
 }
+
+const siteStats = (L) => [
+  ['generated:stats-hero', heroStats(L)],
+  ['generated:stats-control-plane', controlPlaneStats(L)],
+];
 
 const targets = [
   { rel: 'README.md', regions: [['generated:packs', packsTable(LABELS.en)]] },
   { rel: 'README.uk.md', regions: [['generated:packs', packsTable(LABELS.uk)]] },
-  {
-    rel: 'site/index.html',
-    regions: [
-      ['generated:stats-hero', heroStats()],
-      ['generated:stats-control-plane', controlPlaneStats()],
-    ],
-  },
+  { rel: 'site/index.html', regions: siteStats(LABELS.en) },
+  { rel: 'site/uk/index.html', regions: siteStats(LABELS.uk) },
 ];
 
 let drift = 0;
 const tmp = mode === 'check' ? fs.mkdtempSync(path.join(os.tmpdir(), 'docgen-counts-')) : null;
 
+// Every target must exist before any is written: a half-applied run would leave
+// one language's numbers behind the other's.
+for (const t of targets) {
+  if (fs.existsSync(path.join(root, t.rel))) continue;
+  die(
+    'missing target: ' +
+      t.rel +
+      (t.rel.startsWith('site/') ? ' (generated: run `python3 scripts/site/build.py` first)' : '')
+  );
+}
+
 try {
   for (const t of targets) {
     const abs = path.join(root, t.rel);
-    if (!fs.existsSync(abs)) die('missing target: ' + t.rel);
     const before = fs.readFileSync(abs, 'utf8');
     let after = before;
     for (const region of t.regions) after = splice(after, region[0], region[1], t.rel);

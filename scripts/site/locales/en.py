@@ -10,7 +10,8 @@
 # some stops the build). They reach the page three ways:
 #   - TE(key), the escaping T(): every *_aria label, js.copied / js.chapters
 #     (data-i18n-* attributes), dialog.close, ep.label (data-title) and
-#     home.reel.<stage> (the reel tab text). TE() refuses any key not listed.
+#     home.reel.<stage> (the reel tab text), videos.voice_note (after the
+#     videos lede). TE() refuses any key not listed.
 #   - head(title, desc): *.meta.title, *.meta.desc and the nav.<page> names
 #     that page titles are built from (escaped as part of the composed string).
 #   - clip(..., url): home.market.clip and feature.silent (the clip aria-label).
@@ -179,6 +180,8 @@ UI = {
     "videos.eyebrow": "videos",
     "videos.title": "Watch it <em>work</em>.",
     "videos.lede": "A 75-second tour, then one episode per feature. Each is under two minutes, voiced, in 1080p, with chapters. New episodes land here first.",
+    # plain text after videos.lede, only when non-empty (uk: the episodes are voiced in English)
+    "videos.voice_note": "",
     "videos.ch.eyebrow": "chapters",
     "videos.ch.title": "Jump straight to the part you need.",
     "videos.ch.text": "Every chapter opens the episode at that moment.",
@@ -285,6 +288,7 @@ ESCAPED_KEYS = (
     "home.reel.plan", "home.reel.run", "home.reel.decide",
     "home.reel.measure", "home.reel.learn", "home.reel.remember",
     "home.loop.aria", "home.loop.clip_aria", "plugins.filter_aria",
+    "videos.voice_note",
     # head(title, desc)
     "home.meta.title", "home.meta.desc", "404.meta.title", "404.meta.desc",
     "features.meta.desc", "videos.meta.desc", "blog.meta.desc", "plugins.meta.desc", "install.meta.desc",

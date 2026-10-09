@@ -614,6 +614,8 @@ def page_features():
 def page_videos():
     rel = rel_for(1)
     p = CTX.promo
+    voice = TE("videos.voice_note")
+    voice = " " + voice if voice else ""  # "" in English: the en lede is unchanged
     feat = f'''<button class="ep feature rv" type="button" {promo_attrs(rel)}><div class="th"><img src="{rel}assets/posters/promo.jpg" alt="" loading="lazy"><div class="play"><span>{PLAY}</span></div><span class="dur">{p["dur"]}</span></div>
 <div class="meta"><div class="k">{T('videos.start')}</div><h3>{p["title"]}</h3><p>{E(p["text"])}</p></div></button>'''
     eps = "".join(ep_card(rel, f) for f in CTX.features)
@@ -625,7 +627,7 @@ def page_videos():
 <section class="fhero"><div class="hexbg"></div><div class="wrap">
   <p class="eyebrow">{T('videos.eyebrow')}</p>
   <h1>{T('videos.title')}</h1>
-  <p class="lede">{T('videos.lede')}</p>
+  <p class="lede">{T('videos.lede')}{voice}</p>
 </div></section>
 <section class="sec-tight"><div class="wrap"><div class="eps">{feat}{eps}</div></div></section>
 <section class="sec divider"><div class="wrap">
@@ -742,9 +744,11 @@ def page_install():
     return head(f"{T('nav.install')} · Swarmery", T("install.meta.desc"), rel, "install/") + nav(rel, "install", "install/") + body + footer(rel)
 
 def page_404():
-    # English only (GitHub Pages serves one root 404.html); its language switch leads to uk/
+    # English only (GitHub Pages serves one root 404.html); its language switch and the
+    # "Українська версія" line lead to uk/. Links are absolute: Pages serves this page at
+    # whatever depth the missing URL had, so a relative "uk/" would 404 again.
     rel = "/swarmery/"
-    body = f'''<section class="fhero" style="min-height:60vh"><div class="hexbg"></div><div class="wrap"><p class="eyebrow">404</p><h1>{T('404.title')}</h1><p class="lede">{T('404.lede')}</p><div class="row"><a class="btn btn-primary" href="{rel}">{T('404.home')} {ARROW}</a><a class="btn" href="{rel}features/">{T('nav.features')}</a></div></div></section>'''
+    body = f'''<section class="fhero" style="min-height:60vh"><div class="hexbg"></div><div class="wrap"><p class="eyebrow">404</p><h1>{T('404.title')}</h1><p class="lede">{T('404.lede')}</p><div class="row"><a class="btn btn-primary" href="{rel}">{T('404.home')} {ARROW}</a><a class="btn" href="{rel}features/">{T('nav.features')}</a></div><p class="muted"><a href="{rel}uk/" hreflang="uk" lang="uk">Українська версія</a></p></div></section>'''
     return head(f"{T('404.meta.title')} · Swarmery", T("404.meta.desc"), rel, "404.html", alternates=False) + nav(rel, "", "") + body + footer(rel)
 
 def write(path, s):
