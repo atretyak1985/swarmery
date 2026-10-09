@@ -59,6 +59,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/config/{key}/probe", requireLocalOrigin(h.probeProjectConfig))
 	// canvas v2 parity: project editorial aggregate (rightNow + thisWeek + attention).
 	mux.HandleFunc("GET /api/projects/{id}/overview", h.projectOverview)
+	// phase landing: the project's code host, its vocabulary and the daemon's
+	// sign-in state (vcs.go; cached 60s per project).
+	mux.HandleFunc("GET /api/projects/{id}/vcs", h.projectVcs)
 	// onboarding: bootstrap a new consumer project from the dashboard. Fenced
 	// by requireLocalOrigin + an explicit root allow-list (disabled when unset).
 	// The GET exposes defaults (workspace root, enabled state) to the modal.
