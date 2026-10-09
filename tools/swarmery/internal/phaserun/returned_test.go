@@ -320,6 +320,88 @@ func TestReturnedPhaseBypassesBlockedGuardOnPlainStart(t *testing.T) {
 	}
 }
 
+// cutOnlyWt is a real worktree.Manager seen through the interfaces a manager
+// WITHOUT AcquireExisting offers (the embedded interface promotes only its own
+// methods), so continueOwnBranch takes its release-and-re-cut fallback.
+// failAcquire makes the re-cut's AcquireAt fail after the branch was released.
+type cutOnlyWt struct {
+	runcore.WorktreeManager
+	m           *worktree.Manager
+	failAcquire bool
+}
+
+func (w *cutOnlyWt) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (worktree.Acquired, error) {
+	if w.failAcquire {
+		return worktree.Acquired{}, errors.New("acquire refused by the test")
+	}
+	return w.m.AcquireAt(repoRoot, projectSlug, taskID, startRef)
+}
+
+func (w *cutOnlyWt) ReclaimEmptyBranchAt(repoRoot, branch, baseRef string) (int, error) {
+	return w.m.ReclaimEmptyBranchAt(repoRoot, branch, baseRef)
+}
+
+// TestReturnedFallbackRestoresBranchOnFailedAcquire — real git. A manager that
+// cannot check an existing branch out makes continueOwnBranch release the branch
+// and re-cut it at its tip. When that re-cut fails, the branch is restored at the
+// same tip — the returned work is never left unnamed — and the start is refused
+// with the phase still `returned`. Once the manager can acquire again, the same
+// fallback continues the branch.
+func TestReturnedFallbackRestoresBranchOnFailedAcquire(t *testing.T) {
+	repo := newTempRepo(t)
+	db, _, p1, _ := fixture(t)
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, repo.dir)
+
+	r := &stubRunner{}
+	s := newTestService(db, r, &stubWt{})
+	mgr := &worktree.Manager{Git: repo.git, Root: filepath.Join(t.TempDir(), "wts")}
+	s.Wt = mgr
+	s.Git = repo.git
+	doc := phaseDocPath(t, db, p1)
+	branch := runcore.PhaseBranch(p1)
+
+	var headAtSpawn, firstCommit, secondCommit string
+	work := func(msg string, out *string) func(spec RunSpec) (*Run, error) {
+		return func(spec RunSpec) (*Run, error) {
+			headAtSpawn = strings.TrimSpace(repo.runIn(spec.Cwd, "rev-parse", "HEAD"))
+			*out = repo.commitIn(spec.Cwd, msg)
+			mustWriteDoc(t, filepath.Join(spec.Cwd, worktree.LentPlanDocRel(doc)), "# Phase 1 — Schema\n\n- [x] a\n- [x] b\n")
+			return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+		}
+	}
+	r.runFn = work("phase 1 first pass", &firstCommit)
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	mustExec(t, db, `UPDATE epic_phases SET landing_state='returned' WHERE id=?`, p1)
+	cut := &cutOnlyWt{WorktreeManager: mgr, m: mgr, failAcquire: true}
+	s.Wt = cut
+	if _, err := s.StartWith(p1, StartOptions{Returned: true}); err == nil {
+		t.Fatal("returned start with a failing acquire: err = nil, want the acquire failure")
+	}
+	if got := repo.tip("refs/heads/" + branch); got != firstCommit {
+		t.Fatalf("branch tip after the failed re-cut = %q, want %s restored", got, firstCommit)
+	}
+	if got := landingState(t, db, p1); got != "returned" {
+		t.Errorf("landing_state = %q after the refused start, want returned kept", got)
+	}
+
+	cut.failAcquire = false
+	r.mu.Lock()
+	r.runFn = work("phase 1 after feedback", &secondCommit)
+	r.mu.Unlock()
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Fatalf("retry through the fallback: %v", err)
+	}
+	if headAtSpawn != firstCommit {
+		t.Errorf("worktree HEAD at spawn = %s, want the returned work's tip %s", headAtSpawn, firstCommit)
+	}
+	if got := repo.tip("refs/heads/" + branch); got != secondCommit {
+		t.Errorf("branch tip = %s, want the returned run's commit %s", got, secondCommit)
+	}
+}
+
 // TestReturnedRunRestoresOpenPR: a phase returned while its change request was
 // open goes back to pr_open when the returned run ends — not to none, which would
 // read `ready` and make the next `land pr` try to open a second change request.

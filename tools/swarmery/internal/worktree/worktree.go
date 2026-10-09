@@ -221,6 +221,26 @@ func (m *Manager) Acquire(repoRoot, projectSlug, taskID string) (Acquired, error
 // on its own: it never destroys a leftover worktree, and whether an older fork
 // point is acceptable is the caller's contract, not this package's.
 func (m *Manager) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (Acquired, error) {
+	return m.acquireAt(repoRoot, projectSlug, taskID, startRef, false)
+}
+
+// AcquireExisting is Acquire for a swarm/<taskID> branch that ALREADY EXISTS and
+// is to be continued as it stands: the worktree checks that branch out (`git
+// worktree add <path> <branch>`, no -b) instead of cutting a new one, so no ref is
+// ever deleted or re-created on the way — the branch and every commit on it stay
+// named throughout, whatever happens to this call. StartPoint is the branch's tip.
+//
+// Every invariant of AcquireAt holds: the repo-root guard, the stale-lock sweep, a
+// branch held by another worktree is ErrBranchBusy, a branch-matched worktree at
+// the path is warm-reused, and a foreign one is reclaimed in place. A branch that
+// does not exist is refused (ErrStartRefUnresolved) — nothing is created for it.
+func (m *Manager) AcquireExisting(repoRoot, projectSlug, taskID string) (Acquired, error) {
+	return m.acquireAt(repoRoot, projectSlug, taskID, "", true)
+}
+
+// acquireAt is AcquireAt's body; existing selects AcquireExisting's mode (the
+// branch must exist, is checked out as it stands, and its tip is the start point).
+func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, existing bool) (Acquired, error) {
 	path, err := m.Path(projectSlug, taskID)
 	if err != nil {
 		return Acquired{}, err
@@ -241,7 +261,15 @@ func (m *Manager) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (Acq
 	}
 	// An explicit start ref replaces the default tip — after the probe above, so a
 	// non-repo still fails as ErrNotARepo rather than as an unresolvable ref.
-	if startRef != "" {
+	switch {
+	case existing:
+		// The branch's own tip — and a branch that does not resolve is refused here,
+		// before anything is touched.
+		startSHA, err = m.resolveCommit(repoRoot, "refs/heads/"+branch)
+		if err != nil {
+			return Acquired{}, err
+		}
+	case startRef != "":
 		startSHA, err = m.resolveCommit(repoRoot, startRef)
 		if err != nil {
 			return Acquired{}, err
@@ -283,7 +311,9 @@ func (m *Manager) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (Acq
 			// a run that reinstalled.
 			lendDependencies(repoRoot, path)
 			reused := startSHA
-			if startRef != "" {
+			// An existing branch checked out at our path IS the branch at its tip
+			// (startSHA), so there is no fork point to report.
+			if startRef != "" && !existing {
 				// The branch predates this call, so it was not cut from startSHA as
 				// resolved NOW. Report where it actually forks from (see AcquireAt).
 				reused, err = m.mergeBase(repoRoot, branch, startSHA)
@@ -323,9 +353,15 @@ func (m *Manager) AcquireAt(repoRoot, projectSlug, taskID, startRef string) (Acq
 	// path, so a failure below can leave behind a branch nothing holds — one more
 	// per retry, each of them then reported as the blocker. Whether the ref is ours
 	// to roll back is only knowable BEFORE the add.
-	branchExisted, branchProbeErr := m.branchExists(repoRoot, branch)
+	// An existing-branch add mints nothing: there is never a ref to roll back.
+	branchExisted, branchProbeErr := true, error(nil)
+	addArgs := []string{"worktree", "add", path, branch}
+	if !existing {
+		branchExisted, branchProbeErr = m.branchExists(repoRoot, branch)
+		addArgs = []string{"worktree", "add", "-b", branch, path, startSHA}
+	}
 
-	if out, err := m.Git.Run(repoRoot, "worktree", "add", "-b", branch, path, startSHA); err != nil {
+	if out, err := m.Git.Run(repoRoot, addArgs...); err != nil {
 		// Roll back a ref this failed add just minted — never one that predates it
 		// (that branch may hold the only copy of a crashed run's commits).
 		if !branchExisted && branchProbeErr == nil {

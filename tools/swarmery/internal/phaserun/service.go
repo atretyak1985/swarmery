@@ -1471,15 +1471,23 @@ func (s *Service) branchTip(repoRoot, branch string) string {
 // continueOwnBranch gives a RETURNED run a worktree on its own run branch, which
 // still holds the previous run's commits — the work the operator sent back.
 //
-// The worktree manager only ever cuts a branch fresh (`worktree add -b`), and a
-// branch with commits is exactly what its reclaim refuses to free, so the run
-// would otherwise die as branch-dirty on the very work it is meant to continue.
-// Instead the ref is released and re-cut AT ITS OWN TIP (tip, read before the
-// release): the branch ends up naming the same commit, every earlier commit stays
-// on it, and the run builds on top. The commits never depend on the ref in
-// between — they stay reachable by tip, and a failed acquire restores the ref at
-// tip (logged loudly with the recovery command if even that fails).
+// A manager that can check an existing branch out (ExistingBranchWorktrees —
+// *worktree.Manager can) does exactly that: no ref is deleted or re-created, so
+// there is no moment at which the returned work is unnamed.
+//
+// A manager that only ever cuts a branch fresh (`worktree add -b`) gets the
+// fallback: the ref is released and re-cut AT ITS OWN TIP (tip, read before the
+// release), so the branch ends up naming the same commit and the run builds on
+// top. Branch and tip are logged BEFORE the release — the daemon log then always
+// holds the recovery command, even if the process dies between the delete and
+// the re-cut — and a failed acquire restores the ref at tip (logged loudly with
+// the recovery command if even that fails).
 func (s *Service) continueOwnBranch(repoRoot, projectSlug, taskName, branch, tip string) (worktree.Acquired, error) {
+	if ex, ok := s.Wt.(ExistingBranchWorktrees); ok {
+		return ex.AcquireExisting(repoRoot, projectSlug, taskName)
+	}
+	log.Printf("warning: phaserun: releasing %s (tip %s) to re-cut it at the same commit for a returned run — "+
+		"if it is missing afterwards, recover it with `git branch %s %s`", branch, tip, branch, tip)
 	if _, err := s.Wt.DeleteBranch(repoRoot, branch); err != nil {
 		return worktree.Acquired{}, fmt.Errorf("release %s to continue on it: %w", branch, err)
 	}
