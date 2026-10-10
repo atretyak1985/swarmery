@@ -173,6 +173,8 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 	var noSlot *runcore.NoSlotError
 	var docModelErr *phaserun.DocModelError
 	var docEffortErr *phaserun.DocEffortError
+	var manualOnlyErr *phaserun.ManualOnlyError
+	var earliestErr *phaserun.NotYetEarliestError
 	// Start wraps the reclaim/acquire failures (fmt.Errorf("reclaim run branch:
 	// %w", …)), so errors.Is still matches through the wrap. Resolved BEFORE the
 	// switch and placed above the generic arm — an arm below `default` is
@@ -201,6 +203,18 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 		writeConflictFields(w, codeDocEffortUnknown, docEffortErr.Error(), map[string]any{
 			"doc":      docEffortErr.Doc,
 			"declared": docEffortErr.Declared,
+		})
+	// The phase doc's own gates (phase-run outcomes plan, phase 3): a date that
+	// has not come, and criteria only a human can close. Nothing was started.
+	case errors.As(err, &earliestErr):
+		writeConflictFields(w, codeNotYetEarliest, earliestErr.Error(), map[string]any{
+			"earliest": earliestErr.Earliest,
+			"hint":     hintNotYetEarliest,
+		})
+	case errors.As(err, &manualOnlyErr):
+		writeConflictFields(w, codeManualOnly, manualOnlyErr.Error(), map[string]any{
+			"manualOpen": manualOnlyErr.ManualOpen,
+			"hint":       hintManualOnly,
 		})
 	case errors.Is(err, planning.ErrUnknownEffort):
 		writeClientErr(w, http.StatusBadRequest,

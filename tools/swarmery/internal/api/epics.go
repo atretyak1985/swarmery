@@ -56,6 +56,13 @@ type epicPhaseDTO struct {
 	DependsOn       []int  `json:"dependsOn"`
 	CheckboxesDone  int    `json:"checkboxesDone"`
 	CheckboxesTotal int    `json:"checkboxesTotal"`
+	// LandOpen / ManualOpen: how many of the UNTICKED criteria carry a `[LAND]` /
+	// `[MANUAL]` class marker (migration 0105, wsingest/classes.go). Both are
+	// still inside CheckboxesTotal — the completion gate counts every criterion —
+	// and neither is the phase run's to close: [LAND] closes on merge, [MANUAL]
+	// when the operator ticks it.
+	LandOpen   int `json:"landOpen"`
+	ManualOpen int `json:"manualOpen"`
 	// Normalized `Status:` header marker from the phase doc itself
 	// (pending|in_progress|done); null when the doc carries none. Lets an
 	// executor flag "working on this now" before the first checkbox tick.
@@ -708,6 +715,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	rows, err := h.DB.Query(`
 		SELECT e.id, e.seq, e.name, e.doc_path, e.depends_on, e.covers,
 		       e.checkboxes_total, e.checkboxes_done, e.doc_status, e.doc_updated_at,
+		       e.criteria_land_open, e.criteria_manual_open,
 		       e.completion_report, e.activated_at, e.activated_board_task_id,
 		       bt.external_id, bt.board_column,
 		       e.run_state, e.run_session_uuid, e.run_started_at, e.run_error,
@@ -768,6 +776,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		)
 		dest := []any{&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
+			&p.LandOpen, &p.ManualOpen,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,

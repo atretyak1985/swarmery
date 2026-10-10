@@ -67,6 +67,41 @@ var (
 	ErrNoRunBranch = errors.New("phase has no recorded run branch")
 )
 
+// ErrManualOnly: every criterion of the phase that is still open is a
+// `[MANUAL]` one (decision D3) — only a human can close what is left, so a run
+// would spend a full spawn reaching PHASE BLOCKED (409 manual-only). Returned as
+// a *ManualOnlyError, which errors.Is-matches this sentinel.
+var ErrManualOnly = errors.New("only [MANUAL] criteria are open")
+
+// ManualOnlyError names how many [MANUAL] criteria are open.
+type ManualOnlyError struct {
+	ManualOpen int
+}
+
+func (e *ManualOnlyError) Error() string {
+	return fmt.Sprintf("every open criterion of this phase is [MANUAL] (%d left) — only a human can close them: "+
+		"do the check and tick them in the phase doc", e.ManualOpen)
+}
+
+func (e *ManualOnlyError) Is(target error) bool { return target == ErrManualOnly }
+
+// ErrNotYetEarliest: the phase doc declares an `Earliest:` date that has not
+// come yet (409 not-yet-earliest). Returned as a *NotYetEarliestError, which
+// errors.Is-matches this sentinel.
+var ErrNotYetEarliest = errors.New("the phase's Earliest date has not come yet")
+
+// NotYetEarliestError carries the declared date (YYYY-MM-DD, verbatim).
+type NotYetEarliestError struct {
+	Earliest string
+}
+
+func (e *NotYetEarliestError) Error() string {
+	return fmt.Sprintf("this phase may not start before %s (its doc's Earliest: line) — "+
+		"run it on or after that date, or edit the line if the gate no longer applies", e.Earliest)
+}
+
+func (e *NotYetEarliestError) Is(target error) bool { return target == ErrNotYetEarliest }
+
 // ErrNoRepoRoot: the project has a path, but neither it nor the repo this phase
 // declares is a git repository (409). Distinct from ErrNoPath ("no path at all"):
 // the fix here is a `Repo` header in the phase doc or project.json's mainApp, and
@@ -616,6 +651,17 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	if err != nil {
 		return "", err
 	}
+	// The two doc-declared gates a run cannot get past by working (phase-run
+	// outcomes plan, phase 3): a date that has not come, and criteria only a human
+	// can close. Together they were 16 of the 24 repeated no-progress runs the
+	// review counted — each one a full spawn ending PHASE BLOCKED. Admission
+	// verdicts like the model/effort ones: read from the doc already in hand,
+	// before the slot, the worktree and any stamp. Force does NOT lift them (it
+	// overrides the blocked re-run guard and nothing else); the operator edits the
+	// doc instead — the gate is IN the doc.
+	if err := admitDocGates(string(doc), opts.Returned, s.clock); err != nil {
+		return "", err
+	}
 	// Resolve the repository BEFORE anything hands a path to git: projects.path is
 	// the project ROOT, which for a multi-repo project is not a checkout at all, and
 	// handing it to the branch probe is what made every run in such a project die
@@ -1142,13 +1188,31 @@ func tickedInDoc(docPath string) (int, bool) {
 }
 
 // criteria is what the phase doc says about its own completion at one instant:
-// how many acceptance checkboxes are ticked, how many there are, and the LABELS
-// of the ones that are not. ok=false when the doc cannot be read, and then the
-// completion loop refuses to conclude anything from it.
+// how many acceptance checkboxes are ticked, how many there are, how many of the
+// open ones are `[LAND]` / `[MANUAL]` (wsingest.CriteriaCounts, decision D3), and
+// the LABELS of the open ones the executor can still close. ok=false when the doc
+// cannot be read, and then the completion loop refuses to conclude anything from it.
 type criteria struct {
-	Done     int
-	Total    int
+	wsingest.CriteriaCounts
+	// Unticked is wsingest.UntickedExecutable: the [LAND] / [MANUAL] criteria are
+	// never in it, so a continuation never asks the executor to push a branch or
+	// check a production console.
 	Unticked []string
+}
+
+// classDetail is the run_error a `done` run carries when classed criteria are
+// still open: they are what is left, and they are not the executor's. "" when
+// none are open. The [LAND] half is what makes the card read "ready to land"
+// (landing_state 'ready' is derived from run_state='done', decision D2).
+func (c criteria) classDetail() string {
+	var parts []string
+	if c.LandOpen > 0 {
+		parts = append(parts, fmt.Sprintf("%d [LAND] criteria left for landing", c.LandOpen))
+	}
+	if c.ManualOpen > 0 {
+		parts = append(parts, fmt.Sprintf("%d [MANUAL] criteria left for the operator", c.ManualOpen))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // criteriaInDoc reads the phase doc as it stands on disk right now. Same parser
@@ -1166,8 +1230,33 @@ func criteriaInDoc(docPath string) (criteria, bool) {
 	if err != nil {
 		return criteria{}, false
 	}
-	done, total := wsingest.CountCheckboxes(string(body))
-	return criteria{Done: done, Total: total, Unticked: wsingest.UntickedCheckboxes(string(body))}, true
+	return criteria{
+		CriteriaCounts: wsingest.CountCriteria(string(body)),
+		Unticked:       wsingest.UntickedExecutable(string(body)),
+	}, true
+}
+
+// admitDocGates refuses a start the phase doc itself says cannot succeed now:
+// *NotYetEarliestError while the doc's `Earliest:` date is in the future, and
+// *ManualOnlyError when no open criterion is the executor's and at least one is
+// [MANUAL]. A RETURNED run skips the manual-only gate: the operator's feedback is
+// the work that run is for, whatever the checkboxes say.
+//
+// now is read only when the doc declares a date, so an ungated doc costs no
+// clock read (the service clock is also the run's stamp source).
+func admitDocGates(doc string, returned bool, now func() time.Time) error {
+	if wsingest.ParseEarliest(doc) != "" {
+		if date, gated := wsingest.EarliestNotReached(doc, now()); gated {
+			return &NotYetEarliestError{Earliest: date}
+		}
+	}
+	if returned {
+		return nil
+	}
+	if c := wsingest.CountCriteria(doc); c.ManualOpen > 0 && len(wsingest.UntickedExecutable(doc)) == 0 {
+		return &ManualOnlyError{ManualOpen: c.ManualOpen}
+	}
+	return nil
 }
 
 // blockedSentinel is the ending this engine's prompt asks for, echoed back in
@@ -1241,7 +1330,9 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 			return "partial", detail
 		}
 
-		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total)
+		// The EFFECTIVE total: open [LAND] / [MANUAL] criteria are not the run's to
+		// close (decision D3), so a run that ticked everything else is done.
+		end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Executable())
 		d1.Observe(string(end), c.Done)
 		switch end {
 		case runcore.EndBlocked:
@@ -1256,7 +1347,7 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 			if attempt > 0 {
 				s.event(phaseID, spec.SessionUUID, runcore.EventDone, attempt, fmt.Sprintf("%d/%d criteria ticked after %d continuations", c.Done, c.Total, attempt))
 			}
-			return "done", ""
+			return "done", c.classDetail()
 		}
 
 		// Measured BEFORE the classifier: its latency (up to the local backend's
@@ -1269,7 +1360,7 @@ func (s *Service) settle(ctx context.Context, phaseID int64, info phaseInfo, spe
 		// blocked; any other answer (and every shadow/unconfigured call) lets the
 		// rules' continuation stand.
 		switch o := d1.Decide(ctx, decide.D1Input{Engine: Engine, SubjectID: phaseID, SessionUUID: spec.SessionUUID,
-			LastText: text, StopReason: stop, Done: c.Done, Total: c.Total, Attempt: attempt}); o.Action {
+			LastText: text, StopReason: stop, Done: c.Done, Total: c.Executable(), Attempt: attempt}); o.Action {
 		case decide.StampBlocked:
 			s.event(phaseID, spec.SessionUUID, runcore.EventBlocked, 0, o.Detail)
 			log.Printf("phaserun: phase=%d uuid=%s blocked by classifier: %s", phaseID, spec.SessionUUID, o.Detail)

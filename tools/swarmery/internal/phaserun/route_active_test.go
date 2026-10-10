@@ -275,7 +275,9 @@ func TestRouteHaiku(t *testing.T) {
 // argv — prompt included — hashed, plus the flag tail spelled out.
 func TestRouteOffGolden(t *testing.T) {
 	quietKnobs(t)
-	const golden = "ed9dcefdefcbf2ff09a46594153f04bd1ac99768e7449777e792e096eb84f65b"
+	// Re-pinned when the prompt gained the [LAND]/[MANUAL] bullet (phase-run
+	// outcomes plan, phase 3): the hash covers the prompt, the flag tail is unchanged.
+	const golden = "acd14a3e5a13fb4a0c56fc4f4019efed0d5be0b7c845accbc31ba058192dadc9"
 	wantTail := []string{"--session-id", "uuid-1", "--model", "claude-opus-5-5", "--effort", "high"}
 	specs, db, _ := startOnce(t, "off", "", "")
 	if len(specs) != 1 {

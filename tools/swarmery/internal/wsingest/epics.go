@@ -64,8 +64,13 @@ type epicPhase struct {
 	dependsOn       []int  // seq numbers this phase depends on
 	checkboxesDone  int
 	checkboxesTotal int
-	docStatus       string // normalized `Status:` header marker; "" when absent
-	docUpdatedAt    string // RFC3339 mtime of the doc file; "" when unresolved
+	// landOpen / manualOpen are the UNTICKED criteria carrying a `[LAND]` /
+	// `[MANUAL]` class marker (classes.go, migration 0105). checkboxesTotal still
+	// counts them: the completion gate is unchanged.
+	landOpen     int
+	manualOpen   int
+	docStatus    string // normalized `Status:` header marker; "" when absent
+	docUpdatedAt string // RFC3339 mtime of the doc file; "" when unresolved
 	// repo is the RAW declared Repo cell ("`sk-next` (`/abs/sk-next`)", "sk-next
 	// (+ helm)"), never a resolved path: turning it into a run root depends on the
 	// filesystem and on project.json, which is the run surface's decision at Start
@@ -760,6 +765,8 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 			}
 		}
 		phases[i].checkboxesDone, phases[i].checkboxesTotal = CountCheckboxes(string(body))
+		cc := CountCriteria(string(body))
+		phases[i].landOpen, phases[i].manualOpen = cc.LandOpen, cc.ManualOpen
 		phases[i].docStatus = parseDocStatus(string(body))
 		phases[i].completionReport = ParseCompletionReport(string(body))
 		// The doc's own header outranks the README table cell: it is the more
@@ -995,7 +1002,8 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 // PhaseUpsertSQL is the one statement applyEpics folds a parsed phase doc into
 // epic_phases with. Parameters, in order: workspace_task_id, seq, name, doc_path,
 // depends_on, checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-// completion_report, repo, covers, verify_mode, doc_model.
+// completion_report, repo, covers, verify_mode, doc_model, criteria_land_open,
+// criteria_manual_open.
 //
 // Exported so the store's migration tests can re-run the EXACT upsert and prove a
 // daemon-owned column survives it — the run_* family, run_branch (0043) and the
@@ -1005,8 +1013,9 @@ const PhaseUpsertSQL = `
 			INSERT INTO epic_phases
 				(workspace_task_id, seq, name, doc_path, depends_on,
 				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-				 completion_report, repo, covers, verify_mode, doc_model)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 completion_report, repo, covers, verify_mode, doc_model,
+				 criteria_land_open, criteria_manual_open)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
 				seq               = excluded.seq,
 				name              = excluded.name,
@@ -1022,7 +1031,10 @@ const PhaseUpsertSQL = `
 				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
 				-- from a doc must actually retract the declaration, the same way
 				-- deleting a **Covers:** line does.
-				doc_model         = excluded.doc_model`
+				doc_model         = excluded.doc_model,
+				-- Doc-owned (0105): re-derived from the class markers on every scan.
+				criteria_land_open   = excluded.criteria_land_open,
+				criteria_manual_open = excluded.criteria_manual_open`
 
 // applyEpics folds the parsed plan into the task's epic_phases rows by UPSERTING
 // on the natural key UNIQUE(workspace_task_id, doc_path).
@@ -1109,7 +1121,8 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if _, err := tx.Exec(PhaseUpsertSQL,
 			taskID, p.seq, p.name, p.docPath, string(depJSON),
 			p.checkboxesTotal, p.checkboxesDone, docStatus, docUpdatedAt,
-			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
+			completionReport, repo, string(coversJSON), verifyMode, docModel,
+			p.landOpen, p.manualOpen); err != nil {
 			return err
 		}
 		// After the upsert, so the row (and therefore its id) exists whether this
