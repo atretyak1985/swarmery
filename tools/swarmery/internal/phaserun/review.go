@@ -356,6 +356,18 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) r
 		}
 		return inconclusive(o, ClassReviewerMutatedTree, detail)
 	}
+	return concludeReview(o, run, rerr)
+}
+
+// concludeReview turns what the runner returned into the outcome's verdict and
+// detail. Shared by the phase review and the plan branch review (plan_review.go)
+// so the two can never read one reviewer output differently. Callers run the
+// mutated-tree check first: a mutated tree voids any verdict.
+func concludeReview(o reviewOutcome, run *verify.Run, rerr error) reviewOutcome {
+	inconclusive := func(o reviewOutcome, class, detail string) reviewOutcome {
+		o.verdict, o.detail = string(verify.VerdictInconclusive), class+": "+detail
+		return o
+	}
 	switch {
 	case rerr != nil:
 		return inconclusive(o, classReviewerNotStarted, rerr.Error())
