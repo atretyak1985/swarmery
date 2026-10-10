@@ -3544,6 +3544,14 @@ msgstr "swarmery home"
 msgid "switch project"
 msgstr "switch project"
 
+#: src/components/LanguageToggle.tsx
+msgid "switch the interface to English"
+msgstr "switch the interface to English"
+
+#: src/components/LanguageToggle.tsx
+msgid "switch the interface to Ukrainian"
+msgstr "switch the interface to Ukrainian"
+
 #: src/components/ThemeToggle.tsx
 msgid "switch to dark theme"
 msgstr "switch to dark theme"

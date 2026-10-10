@@ -175,7 +175,7 @@ msgstr "{title} — деталі плану"
 
 #: src/pages/Plans.tsx
 msgid "{title} · Plans · {tail}"
-msgstr "{title} · Plans · {tail}"
+msgstr "{title} · Плани · {tail}"
 
 #: src/pages/Board.tsx
 msgid "{title} lane"
@@ -1360,7 +1360,7 @@ msgstr "відкрити деталі плану"
 
 #: src/pages/PlanningMode.tsx
 msgid "open Plans →"
-msgstr "відкрити Plans →"
+msgstr "відкрити Плани →"
 
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/PlanningMode.tsx
@@ -1591,11 +1591,11 @@ msgstr "планування…"
 #: src/pages/plans/PlansPlace.tsx
 #: src/pages/plans/PlansPlace.tsx
 msgid "Plans"
-msgstr "Plans"
+msgstr "Плани"
 
 #: src/pages/Plans.tsx
 msgid "Plans · {tail}"
-msgstr "Plans · {tail}"
+msgstr "Плани · {tail}"
 
 #: src/pages/Playbooks.tsx
 msgid "playbooks"
@@ -1832,7 +1832,7 @@ msgstr "Переглянути зміни →"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
-msgstr "Перегляньте його на <0>сторінці Plans</0> — фази запускаються звідти."
+msgstr "Перегляньте його на <0>сторінці Плани</0> — фази запускаються звідти."
 
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "review of the fix re-run"

@@ -752,12 +752,12 @@ msgstr "висить {hangs}"
 
 #: src/pages/Projects.tsx
 msgid "Health · last 7 days vs previous"
-msgstr "Health · останні 7 днів проти попередніх"
+msgstr "Здоров’я · останні 7 днів проти попередніх"
 
 #: src/pages/today/loopModel.ts
 #: src/pages/today/loopModel.ts
 msgid "Health →"
-msgstr "Health →"
+msgstr "Здоров’я →"
 
 #: src/pages/detail/ContextHogsCard.tsx
 #: src/pages/detail/HandoffCard.tsx
@@ -791,11 +791,11 @@ msgstr "на рев’ю"
 
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Inbox · {count} →"
-msgstr "Inbox · {count} →"
+msgstr "Вхідні · {count} →"
 
 #: src/pages/today/loopModel.ts
 msgid "Inbox →"
-msgstr "Inbox →"
+msgstr "Вхідні →"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Insights"
@@ -879,7 +879,7 @@ msgstr "локально для цього проєкту"
 
 #: src/pages/ProjectOverview.tsx
 msgid "manage plugins + detach in <0>Settings →</0>"
-msgstr "керування плагінами й від’єднання — у <0>Settings →</0>"
+msgstr "керування плагінами й від’єднання — у <0>Налаштування →</0>"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectSettings.tsx
@@ -917,7 +917,7 @@ msgstr "Потребує сортування"
 
 #: src/pages/NeedsYou.tsx
 msgid "Needs you"
-msgstr "Needs you"
+msgstr "Потребує вас"
 
 #: src/pages/NeedsYou.tsx
 msgid "needs you…"
@@ -1122,11 +1122,11 @@ msgstr "відкрити {laneName}"
 
 #: src/pages/detail/SummaryChips.tsx
 msgid "open {name} in System"
-msgstr "відкрити {name} у System"
+msgstr "відкрити {name} у Системі"
 
 #: src/pages/detail/SummaryChips.tsx
 msgid "open {type} in System"
-msgstr "відкрити {type} у System"
+msgstr "відкрити {type} у Системі"
 
 #: src/pages/ProjectOverview.tsx
 msgid "open board →"
@@ -1138,7 +1138,7 @@ msgstr "відкрити критерії →"
 
 #: src/pages/detail/CallTree.tsx
 msgid "open in System"
-msgstr "відкрити в System"
+msgstr "відкрити у Системі"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
@@ -1205,7 +1205,7 @@ msgstr "сесія планування"
 
 #: src/pages/today/loopModel.ts
 msgid "Plans →"
-msgstr "Plans →"
+msgstr "Плани →"
 
 #: src/pages/ProjectSettings.tsx
 msgid "plugins"
@@ -1304,11 +1304,11 @@ msgstr "рев’ю →"
 
 #: src/pages/NeedsYou.tsx
 msgid "review in Inbox →"
-msgstr "переглянути в Inbox →"
+msgstr "переглянути у Вхідних →"
 
 #: src/pages/today/loopModel.ts
 msgid "Review in Inbox →"
-msgstr "Переглянути в Inbox →"
+msgstr "Переглянути у Вхідних →"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Right now"
@@ -1404,11 +1404,11 @@ msgstr "сесії"
 
 #: src/pages/Sessions.tsx
 msgid "Sessions"
-msgstr "Sessions"
+msgstr "Сесії"
 
 #: src/pages/today/loopModel.ts
 msgid "Sessions →"
-msgstr "Sessions →"
+msgstr "Сесії →"
 
 #: src/pages/NeedsYou.tsx
 msgid "sessions blocked on you, oldest first"
@@ -1551,7 +1551,7 @@ msgstr "Синтезує"
 
 #: src/pages/Projects.tsx
 msgid "System"
-msgstr "System"
+msgstr "Система"
 
 #: src/pages/today/LiveNow.tsx
 msgid "Task {done}/{total}"
@@ -1627,7 +1627,7 @@ msgstr "до роботи"
 
 #: src/pages/today/Today.tsx
 msgid "Today in detail"
-msgstr "Today докладно"
+msgstr "Сьогодні докладно"
 
 #: src/pages/detail/CallTree.tsx
 #: src/pages/ProjectDetail.tsx

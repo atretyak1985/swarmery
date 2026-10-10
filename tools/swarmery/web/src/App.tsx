@@ -16,6 +16,7 @@ import { MOCK } from './api';
 import { AccountReadyBanner } from './components/AccountReadyBanner';
 import { NewProjectButton } from './components/NewProjectButton';
 import { MobileNav, Sidebar, useSidebarSignals } from './components/Sidebar';
+import { LanguageToggle } from './components/LanguageToggle';
 import { ThemeToggle } from './components/ThemeToggle';
 import { UsageChip } from './components/usage/UsageChip';
 import { useFillRoute } from './lib/fillRoute';
@@ -77,6 +78,7 @@ function AppShell(): JSX.Element {
             lives in each searchable page's body (PageSearchInput); ⌘K is owned
             by the Sidebar; theme + notifications live on /settings. */}
         <span className="ml-auto flex items-center gap-3">
+        <LanguageToggle />
         <ThemeToggle />
         <UsageChip />
         {!MOCK && <NewProjectButton />}

@@ -170,11 +170,11 @@ msgstr "{days} д"
 
 #: src/components/AccountSelector.tsx
 msgid "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
-msgstr "{draftKey} не готовий — {draftReason}; запуск, відправлений під ним, впаде на старті, доки акаунт не під’єднано (Settings → акаунти)"
+msgstr "{draftKey} не готовий — {draftReason}; запуск, відправлений під ним, впаде на старті, доки акаунт не під’єднано (Налаштування → акаунти)"
 
 #: src/components/PluginDriftBadge.tsx
 msgid "{error} error / {warn} warn plugin findings — see System → Insights"
-msgstr "знахідки плагінів: {error} помилок / {warn} попереджень — див. System → Insights"
+msgstr "знахідки плагінів: {error} помилок / {warn} попереджень — див. Система → Insights"
 
 #: src/components/PluginConfigModal.tsx
 msgid "{errorCount, plural, one {# field need attention} few {# fields need attention} many {# fields need attention} other {# fields need attention}}"
@@ -332,7 +332,7 @@ msgstr "↑↓ далі"
 #: src/lib/docFigures.tsx
 #: src/workspace/TaskCard.tsx
 msgid "↩ Inbox"
-msgstr "↩ Inbox"
+msgstr "↩ Вхідні"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "↩ Restore"
@@ -726,7 +726,7 @@ msgstr "Архівувати"
 
 #: src/workspace/TaskCard.tsx
 msgid "archive — it stays findable, it stops being an inbox item"
-msgstr "в архів — картку й далі можна знайти, але вона зникає з Inbox"
+msgstr "в архів — картку й далі можна знайти, але вона зникає з Вхідні"
 
 #: src/api.ts
 msgid "archive failed: {status}"
@@ -807,7 +807,7 @@ msgstr "Автопогодження записів у файли, безпеч�
 
 #: src/pages/Settings.tsx
 msgid "auto-approve presets are configured per project — open a project's Settings to set them"
-msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Settings проєкту, щоб їх налаштувати"
+msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Налаштування проєкту, щоб їх налаштувати"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
@@ -1820,7 +1820,7 @@ msgstr "триває фоновий запуск"
 
 #: src/lib/nav.ts
 msgid "Health"
-msgstr "Health"
+msgstr "Здоров’я"
 
 #: src/main.tsx
 msgid "health…"
@@ -1924,7 +1924,7 @@ msgstr "На рев’ю"
 #: src/lib/nav.ts
 #: src/workspace/boardModel.ts
 msgid "Inbox"
-msgstr "Inbox"
+msgstr "Вхідні"
 
 #: src/components/SessionCard.tsx
 msgid "ingested from the {label} Claude Code account"
@@ -1981,7 +1981,7 @@ msgstr "вбиваємо…"
 
 #: src/lib/nav.ts
 msgid "Knowledge"
-msgstr "Knowledge"
+msgstr "Знання"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -2032,7 +2032,7 @@ msgstr "пізніше"
 
 #: src/lib/nav.ts
 msgid "Learning"
-msgstr "Learning"
+msgstr "Навчання"
 
 #: src/main.tsx
 msgid "learning…"
@@ -2202,7 +2202,7 @@ msgstr "чекає мене"
 
 #: src/lib/nav.ts
 msgid "Needs you"
-msgstr "Needs you"
+msgstr "Потребує вас"
 
 #: src/components/PermissionPresets.tsx
 msgid "Network (web fetch/search)"
@@ -2419,7 +2419,7 @@ msgstr "підключення вимкнено — перезапустіть �
 
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
-msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є в Needs you."
+msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є у «Потребує вас»."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
@@ -2666,7 +2666,7 @@ msgstr "здогад планувальника"
 
 #: src/lib/nav.ts
 msgid "Plans"
-msgstr "Plans"
+msgstr "Плани"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -2800,7 +2800,7 @@ msgstr "Пушить <0>{taskBranch}</0> в <1>origin</1>, відкриває п
 
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
-msgstr "повернути картку в Inbox"
+msgstr "повернути картку у Вхідних"
 
 #: src/lib/needsYou.ts
 msgid "Question"
@@ -3310,7 +3310,7 @@ msgstr "результат сесії"
 #: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Sessions"
-msgstr "Sessions"
+msgstr "Сесії"
 
 #: src/workspace/TaskCard.tsx
 msgid "sessions for {branch}"
@@ -3336,7 +3336,7 @@ msgstr "зміна пресета не вдалася: {status}"
 #: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
 msgid "Settings"
-msgstr "Settings"
+msgstr "Налаштування"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "setup needed"
@@ -3544,6 +3544,14 @@ msgstr "головна swarmery"
 msgid "switch project"
 msgstr "перемкнути проєкт"
 
+#: src/components/LanguageToggle.tsx
+msgid "switch the interface to English"
+msgstr "перемкнути інтерфейс на англійську"
+
+#: src/components/LanguageToggle.tsx
+msgid "switch the interface to Ukrainian"
+msgstr "перемкнути інтерфейс на українську"
+
 #: src/components/ThemeToggle.tsx
 msgid "switch to dark theme"
 msgstr "перемкнути на темну тему"
@@ -3556,7 +3564,7 @@ msgstr "перемкнути на світлу тему"
 #: src/lib/nav.ts
 #: src/theme/ThemePicker.tsx
 msgid "System"
-msgstr "System"
+msgstr "Система"
 
 #: src/main.tsx
 #: src/main.tsx
@@ -3666,7 +3674,7 @@ msgstr "покращувач читає звіт · {runningFor}"
 
 #: src/workspace/TaskCard.tsx
 msgid "the inbox sweeper retires captured cards left untriaged"
-msgstr "прибиральник Inbox списує захоплені картки, які так і не розібрали"
+msgstr "прибиральник Вхідні списує захоплені картки, які так і не розібрали"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "the janitor has not swept yet"
@@ -3846,7 +3854,7 @@ msgstr "сьогодні"
 
 #: src/lib/nav.ts
 msgid "Today"
-msgstr "Today"
+msgstr "Сьогодні"
 
 #: src/lib/sessionsView.ts
 msgid "today · {name}"

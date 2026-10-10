@@ -55,7 +55,7 @@ msgstr ""
 
 #: src/pages/learning/classifierModel.ts
 msgid ", so we can't say how often it's right. Check ~{target} in the Inbox and this line becomes a percentage."
-msgstr ", тож ми не можемо сказати, як часто він має рацію. Перевірте ~{target} в Inbox — і цей рядок стане відсотком."
+msgstr ", тож ми не можемо сказати, як часто він має рацію. Перевірте ~{target} у Вхідних — і цей рядок стане відсотком."
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "· agent says"
@@ -453,7 +453,7 @@ msgstr "← попередній"
 
 #: src/pages/health/Health.tsx
 msgid "→ Inbox"
-msgstr "→ Inbox"
+msgstr "→ Вхідні"
 
 #: src/pages/health/Health.tsx
 msgid "→ Proof"
@@ -698,7 +698,7 @@ msgstr "сповіщення"
 
 #: src/pages/health/Health.tsx
 msgid "alerting → Inbox"
-msgstr "сповіщає → Inbox"
+msgstr "сповіщає → Вхідні"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "alerts"
@@ -735,7 +735,7 @@ msgstr "уже актуальна"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
-msgstr "Агент готує чернетку зміни своїх інструкцій. Нічого не застосовується: чернетка повертається в цей Inbox на ваше погодження."
+msgstr "Агент готує чернетку зміни своїх інструкцій. Нічого не застосовується: чернетка повертається в цей Вхідні на ваше погодження."
 
 #: src/pages/Retro.tsx
 msgid "an enabled auto-approve rule covers this tool"
@@ -857,7 +857,7 @@ msgstr "збіг зон {areaHit} · діапазони {bands} · резуль�
 
 #: src/pages/learning/Classifier.tsx
 msgid "Asked and logged; answers go to your Inbox for checking. <0>Nothing acts on them.</0>"
-msgstr "Питання ставляться й записуються; відповіді йдуть у ваш Inbox на перевірку. <0>Ніщо на них не діє.</0>"
+msgstr "Питання ставляться й записуються; відповіді йдуть у ваш Вхідні на перевірку. <0>Ніщо на них не діє.</0>"
 
 #: src/pages/health/Health.tsx
 #: src/pages/health/Health.tsx
@@ -1045,7 +1045,7 @@ msgstr "Перевірте ще ~{count}, перш ніж довіряти чи�
 
 #: src/pages/learning/Classifier.tsx
 msgid "check in Inbox →"
-msgstr "перевірити в Inbox →"
+msgstr "перевірити у Вхідних →"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "check the classifier"
@@ -1244,7 +1244,7 @@ msgstr "Мертві компоненти"
 
 #: src/pages/learning/Proof.tsx
 msgid "decide something in the Inbox →"
-msgstr "вирішіть щось в Inbox →"
+msgstr "вирішіть щось у Вхідних →"
 
 #: src/pages/inbox/Inbox.tsx
 msgid "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
@@ -1433,7 +1433,7 @@ msgstr "Редагування — сирий markdown"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
-msgstr "редагуйте / вмикайте / вимикайте цей хук зі сторінки System → вкладка «Хуки» (наявна поверхня для запису)"
+msgstr "редагуйте / вмикайте / вимикайте цей хук зі сторінки «Система» → вкладка «Хуки» (наявна поверхня для запису)"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "edit wording"
@@ -1731,7 +1731,7 @@ msgstr "Візуалізація Graphify"
 
 #: src/pages/Graphify.tsx
 msgid "graphify-pack is not enabled for this project — enable it in Settings"
-msgstr "graphify-pack не увімкнено для цього проєкту — увімкніть його в Settings"
+msgstr "graphify-pack не увімкнено для цього проєкту — увімкніть його у Налаштуваннях"
 
 #: src/pages/Graphify.tsx
 msgid "graphify…"
@@ -1776,7 +1776,7 @@ msgstr "оболонка {harness}"
 #: src/pages/health/Health.tsx
 #: src/pages/health/Health.tsx
 msgid "Health"
-msgstr "Health"
+msgstr "Здоров’я"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "health…"
@@ -1932,7 +1932,7 @@ msgstr "На рев’ю"
 
 #: src/pages/inbox/Inbox.tsx
 msgid "Inbox"
-msgstr "Inbox"
+msgstr "Вхідні"
 
 #: src/pages/inbox/Inbox.tsx
 msgid "inbox kinds"
@@ -2046,7 +2046,7 @@ msgstr "залишити"
 #: src/pages/knowledge/Knowledge.tsx
 #: src/pages/knowledge/Knowledge.tsx
 msgid "Knowledge"
-msgstr "Knowledge"
+msgstr "Знання"
 
 #: src/pages/Lessons.tsx
 msgid "L-{lessonId} promoted to CLAUDE.md on branch <0>{branch}</0>. Review it there."
@@ -2083,7 +2083,7 @@ msgstr "останній прогін оцінки, завершено {evalFini
 #: src/pages/learning/Learning.tsx
 #: src/pages/learning/Learning.tsx
 msgid "Learning"
-msgstr "Learning"
+msgstr "Навчання"
 
 #: src/pages/Lessons.tsx
 msgid "lesson #{lessonId}"
@@ -2181,7 +2181,7 @@ msgstr "цикли"
 
 #: src/pages/Serena.tsx
 msgid "lsp-pack is not enabled for this project — enable it in Settings"
-msgstr "lsp-pack не ввімкнено для цього проєкту — увімкніть його в Settings"
+msgstr "lsp-pack не ввімкнено для цього проєкту — увімкніть його у Налаштуваннях"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "machine-wide"
@@ -2357,7 +2357,7 @@ msgstr "на цій машині немає {noun}"
 
 #: src/pages/SystemHub.tsx
 msgid "No {noun} resolve for this project — enable a pack in Settings, or add one under .claude/."
-msgstr "Для цього проєкту не знайдено {noun} — увімкніть пакет у Settings або додайте свій у .claude/."
+msgstr "Для цього проєкту не знайдено {noun} — увімкніть пакет у Налаштуваннях або додайте свій у .claude/."
 
 #: src/pages/SystemHub.tsx
 msgid "no {originScope}-scope {noun} here"
@@ -2377,11 +2377,11 @@ msgstr "на цій машині немає агентів"
 
 #: src/pages/AgentHub.tsx
 msgid "No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/."
-msgstr "Для цього проєкту не знайдено агентів — увімкніть пакет у Settings або додайте свого в .claude/agents/."
+msgstr "Для цього проєкту не знайдено агентів — увімкніть пакет у Налаштуваннях або додайте свого в .claude/agents/."
 
 #: src/pages/Architecture.tsx
 msgid "no architecture map for this project — enable architecture-pack in Settings to generate it"
-msgstr "у цього проєкту немає карти архітектури — увімкніть architecture-pack у Settings, щоб її згенерувати"
+msgstr "у цього проєкту немає карти архітектури — увімкніть architecture-pack у Налаштуваннях, щоб її згенерувати"
 
 #: src/pages/Architecture.tsx
 msgid "no architecture map for this project yet"
@@ -2692,7 +2692,7 @@ msgstr "відкрити задачу на виправлення"
 
 #: src/pages/Retro.tsx
 msgid "open in Inbox →"
-msgstr "відкрити в Inbox →"
+msgstr "відкрити у Вхідних →"
 
 #: src/pages/agent-hub/Tabs.tsx
 msgid "open insights"
@@ -3513,16 +3513,16 @@ msgstr "хук інсталятора swarmery — керуйте ним чер�
 
 #: src/pages/SystemShell.tsx
 msgid "System"
-msgstr "System"
+msgstr "Система"
 
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "System Hub"
-msgstr "System Hub"
+msgstr "Система Hub"
 
 #: src/pages/SystemHub.tsx
 msgid "System Hub sections"
-msgstr "Розділи System Hub"
+msgstr "Розділи Система Hub"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "system is in readonly mode — copy is disabled"
@@ -3530,7 +3530,7 @@ msgstr "система в режимі лише читання — копіюв�
 
 #: src/pages/SystemShell.tsx
 msgid "System sections"
-msgstr "Розділи System"
+msgstr "Розділи Система"
 
 #: src/pages/Retro.tsx
 msgid "task"
@@ -3687,7 +3687,7 @@ msgstr "Рекомендацію закрито. Вона відкриється
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The review leaves the Inbox. It stays on record; nothing else changes."
-msgstr "Рев’ю зникає з Inbox. Воно лишається в записах; більше нічого не змінюється."
+msgstr "Рев’ю зникає з Вхідні. Воно лишається в записах; більше нічого не змінюється."
 
 #: src/pages/inbox/ReviewItem.tsx
 msgid "The reviewer left no findings text."

@@ -13,6 +13,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import { MOCK } from '../api';
 import { AccountReadyBanner } from '../components/AccountReadyBanner';
+import { LanguageToggle } from '../components/LanguageToggle';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { UsageChip } from '../components/usage/UsageChip';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
@@ -43,6 +44,7 @@ export function WorkspaceShell(): JSX.Element {
           <Wordmark />
         </Link>
         <span className="ml-auto flex items-center gap-3">
+          <LanguageToggle />
           <ThemeToggle />
           <UsageChip />
           <span className="flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim">
