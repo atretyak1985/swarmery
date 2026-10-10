@@ -14,7 +14,7 @@
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/pages/inbox`.
 
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '../../test/render';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';

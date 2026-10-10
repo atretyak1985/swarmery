@@ -10,7 +10,7 @@
 // Runs with the rest of the web suite: `npm test`. On its own:
 // `npx vitest run src/pages/Plans.depsUnmerged.test.tsx`.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, VcsInfo } from '../api/types';

@@ -5,7 +5,7 @@
 // group is aria-busy and both buttons disabled while saving; a failure shows
 // its text and keeps the question up. The API is mocked at putProjectVcsProvider.
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VcsProviderAsk } from './VcsProviderAsk';
 

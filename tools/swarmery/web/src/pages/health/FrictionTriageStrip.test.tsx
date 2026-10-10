@@ -4,7 +4,7 @@
 // Friction's trigger, the controls each one offers, and that nothing but the
 // progress shows while a run is active.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../../test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FrictionTriageStrip, type FrictionTriageStripProps } from './FrictionTriageStrip';
 

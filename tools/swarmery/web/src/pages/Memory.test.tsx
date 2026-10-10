@@ -6,7 +6,7 @@
 //      the lint error stays inside its own panel.
 //   2. Clicking a stale-fact row opens that file in the editor.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
 import type { MemoryFile, MemoryFileContent, MemoryLintReport } from '../api/types';

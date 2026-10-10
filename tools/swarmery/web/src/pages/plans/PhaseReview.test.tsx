@@ -5,7 +5,7 @@
 // except LandError, which is the real class (the component tells a 409 from a
 // 422 by `instanceof`).
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, PhaseLanding, PhaseReview as PhaseReviewData, ProviderTerms } from '../../api/types';
 import { PhaseReview } from './PhaseReview';

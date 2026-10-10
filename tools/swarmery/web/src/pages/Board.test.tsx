@@ -17,7 +17,7 @@
 // web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '../test/render';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardTask } from '../api/types';

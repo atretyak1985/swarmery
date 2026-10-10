@@ -6,14 +6,14 @@
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/lib/markdown.test.tsx`.
 //
-// Rendering goes through react-dom/server's renderToStaticMarkup, so no DOM
+// Rendering goes through react-dom/server (test/render's renderStatic), so no DOM
 // environment is needed. Consequence: effects never run, so MermaidBlock's
 // dynamic import is out of reach here — its two states are asserted through
 // the pure MermaidView instead, and the theme decision through mermaidTheme.
 // What only a browser can prove (mermaid actually emitting an SVG) is called
 // out in the phase's Completion Report rather than faked here.
 
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderStatic } from '../test/render';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { CODE_PRE_CLASS, CodeBlock, MermaidView, calloutType, mermaidTheme, parseStats } from './docBlocks';
@@ -23,7 +23,7 @@ import { Markdown } from './markdown';
 /** Render markdown the way the app does — inside a router, since links become
  * react-router <Link>s that throw outside one. */
 function render(md: string): string {
-  return renderToStaticMarkup(
+  return renderStatic(
     <MemoryRouter>
       <Markdown text={md} />
     </MemoryRouter>,
@@ -117,13 +117,13 @@ describe('```mermaid fences', () => {
 
   it('degrades a failed diagram to markup identical to a plain code fence', () => {
     const code = 'flowchart LR\n  A --> B';
-    const failed = renderToStaticMarkup(<MermaidView code={code} error="boom" />);
-    const plain = renderToStaticMarkup(<CodeBlock code={code} />);
+    const failed = renderStatic(<MermaidView code={code} error="boom" />);
+    const plain = renderStatic(<CodeBlock code={code} />);
     expect(failed).toBe(plain);
   });
 
   it('renders a host container, not the source, while healthy', () => {
-    const html = renderToStaticMarkup(<MermaidView code={'flowchart LR\n  A --> B'} error={null} />);
+    const html = renderStatic(<MermaidView code={'flowchart LR\n  A --> B'} error={null} />);
     expect(html).toContain('role="img"');
     expect(html).not.toContain('flowchart');
   });

@@ -6,6 +6,7 @@
 // (used inline on the Planning page — Approvals keeps its own richer card chrome
 // and reuses only QuestionBlock).
 
+import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import {
   buildAnswers,
@@ -32,6 +33,7 @@ export function QuestionBlock({
   onToggle: (label: string) => void;
   onFreeText: (text: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <fieldset className="rounded-[10px] border border-line px-3 py-2.5">
       <legend className="px-1 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
@@ -67,8 +69,8 @@ export function QuestionBlock({
         onChange={(e) => onFreeText(e.target.value)}
         placeholder={
           question.multiSelect
-            ? 'own answer — added to the selection'
-            : 'own answer — overrides the selection'
+            ? t`own answer — added to the selection`
+            : t`own answer — overrides the selection`
         }
         aria-label={`own answer for "${question.question}"`}
         className="mt-1.5 w-full rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-green/40"

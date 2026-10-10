@@ -17,7 +17,7 @@
 // `npx vitest run src/pages/NeedsYou.test.tsx`.
 // web/tsconfig.json EXCLUDES *.test.tsx — treat the casts as documentation.
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../test/render';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';

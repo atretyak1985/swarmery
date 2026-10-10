@@ -13,6 +13,7 @@
 //
 // Project settings stay at /p/:slug/settings (pages/ProjectSettings.tsx).
 
+import { Trans } from '@lingui/react/macro';
 import { AccountsSection } from '../components/AccountsSection';
 import { ConnectorsSection } from '../components/ConnectorsSection';
 import { ExplainPair } from '../components/Explain';
@@ -57,7 +58,9 @@ function AppearanceTab(): JSX.Element {
       </div>
 
       {/* Daemon — health + version from the shared poll. */}
-      <SectionTitle>daemon</SectionTitle>
+      <SectionTitle>
+        <Trans>daemon</Trans>
+      </SectionTitle>
       <div className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
         <span
           aria-hidden="true"

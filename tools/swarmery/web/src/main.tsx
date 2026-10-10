@@ -1,3 +1,4 @@
+import { I18nProvider } from '@lingui/react';
 import { lazy, StrictMode, Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -13,6 +14,7 @@ import {
 } from 'react-router-dom';
 import { App } from './App';
 import { TooltipLayer } from './components/Tooltip';
+import { activate, i18n, storedLocale } from './i18n';
 import { PageSearchProvider } from './lib/pageSearch';
 import { ProjectColorProvider } from './lib/projectColors';
 import { ScopeProvider, useScope } from './lib/scope';
@@ -360,12 +362,28 @@ if (!rootEl) {
   throw new Error('missing #root element');
 }
 
-createRoot(rootEl).render(
-  <StrictMode>
-    <ThemeProvider>
-      <ProjectColorProvider>
-        <RouterProvider router={router} />
-      </ProjectColorProvider>
-    </ThemeProvider>
-  </StrictMode>,
-);
+function renderApp(el: HTMLElement): void {
+  createRoot(el).render(
+    <StrictMode>
+      <I18nProvider i18n={i18n}>
+        <ThemeProvider>
+          <ProjectColorProvider>
+            <RouterProvider router={router} />
+          </ProjectColorProvider>
+        </ThemeProvider>
+      </I18nProvider>
+    </StrictMode>,
+  );
+}
+
+// The production bundle carries message ids only, so the active locale's
+// catalogs must be loaded before the first render. A failed chunk load falls
+// back to English rather than leaving the dashboard blank.
+const initialLocale = storedLocale();
+activate(initialLocale)
+  .catch((err: unknown) => {
+    console.warn(`i18n: failed to load the "${initialLocale}" catalogs, falling back to English`, err);
+    return activate('en');
+  })
+  .catch((err: unknown) => console.error('i18n: failed to load the English catalogs', err))
+  .finally(() => renderApp(rootEl));

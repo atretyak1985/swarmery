@@ -9,7 +9,7 @@
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/components/CreateAccountModal.test.tsx`.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreateAccountModal } from './CreateAccountModal';

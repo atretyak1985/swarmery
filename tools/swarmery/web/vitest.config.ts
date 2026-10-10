@@ -11,6 +11,8 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       include: ['src/**/*.test.{ts,tsx}'],
+      // Activates the i18n source locale for every test (src/test/setup.ts).
+      setupFiles: ['src/test/setup.ts'],
     },
   }),
 );

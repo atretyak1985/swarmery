@@ -12,7 +12,7 @@
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/workspace/task/RunLog.test.tsx`.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../../test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BoardTask } from '../../api/types';
 import { hasRunLog, RunLog } from './RunLog';

@@ -10,6 +10,7 @@
 // teaches what will appear there (artboard-1 principle 6) — never "0 · n/a".
 // Surprise bands come from lib/offPlan.ts only.
 
+import { plural as pluralMessage } from '@lingui/core/macro';
 import type { Epic } from '../../api/types';
 import { offPlanBand } from '../../lib/offPlan';
 import { PLACES, resolvePlaceHref, type PlaceId } from '../../lib/nav';
@@ -117,7 +118,15 @@ function runStage(i: LoopInputs, href: string): Stage {
   if (i.stoppedPhases > 0) {
     parts.push(`${plural(i.stoppedPhases, 'phase')} stopped with nothing done.`);
   }
-  const alert = i.pendingApprovals > 0 ? `${plural(i.pendingApprovals, 'approval')} waiting.` : '';
+  const alert =
+    i.pendingApprovals > 0
+      ? pluralMessage(i.pendingApprovals, {
+          one: '# approval waiting.',
+          few: '# approvals waiting.',
+          many: '# approvals waiting.',
+          other: '# approvals waiting.',
+        })
+      : '';
   let sentence = parts.join(' ');
   if (sentence === '' && alert === '') {
     sentence =

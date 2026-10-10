@@ -8,7 +8,7 @@
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/components/NewProjectButton.test.tsx`.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewProjectButton } from './NewProjectButton';
 

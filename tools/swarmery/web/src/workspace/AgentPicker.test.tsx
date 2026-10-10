@@ -15,7 +15,7 @@
 // web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../test/render';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentRole, AgentRosterRow } from '../api/types';
 import { AgentHint, AgentSelect, NO_AGENT_LABEL, type PickerAgent, selectableAgents } from './AgentPicker';
