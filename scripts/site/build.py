@@ -27,6 +27,9 @@ E = html.escape
 
 LANGS = ("en", "uk")
 OG_LOCALE = {"en": "en_US", "uk": "uk_UA"}
+# Voiced cuts per language: docs/video/<lang>/ (light twins in <lang>/light/);
+# an episode a language has no cut for plays the English one.
+VIDEO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "docs", "video")
 LOCALES_DIR = os.environ.get("SITE_LOCALES_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "locales")
 MISSING = {}  # "<lang>:<key>" -> None, in first-seen order
 
@@ -133,8 +136,21 @@ def merged_promo():
     for fld in ("title", "text"):
         if fld in o: p[fld] = o[fld]
         else: miss("content.promo." + fld)
-    p["chapters"] = merge_list("content.promo.chapters", p["chapters"], o.get("chapters"), put_chapter)
+    if "dur" in o:  # the language ships its own cut: its own length and (time, title) chapters
+        if not has_cut(p["file"]): die(f"{CTX.lang}: content.promo.dur is set but docs/video/{CTX.lang}/{p['file']} is missing")
+        if any(not isinstance(c, (list, tuple)) or len(c) != 2 for c in o.get("chapters") or [None]):
+            die(f"{CTX.lang}: content.promo with its own dur needs (time, title) chapters")
+        p["dur"], p["chapters"] = o["dur"], [tuple(c) for c in o["chapters"]]
+    else:
+        p["chapters"] = merge_list("content.promo.chapters", p["chapters"], o.get("chapters"), put_chapter)
     return p
+
+def has_cut(name):
+    return CTX.lang != "en" and os.path.isfile(os.path.join(VIDEO_DIR, CTX.lang, name))
+
+def vid(rel, name):
+    """URL of a full video: the current language's voiced cut when there is one, else the English one."""
+    return f"{rel}video/{CTX.lang}/{name}" if has_cut(name) else f"{rel}video/{name}"
 
 def merged_principles():
     if CTX.lang == "en": return PRINCIPLES
@@ -357,12 +373,12 @@ def clip(rel, name, url, cls="", live=True):
 
 def ep_attrs(rel, f):
     ch = json.dumps(f["chapters"])
-    return f'data-play="{rel}video/swarmery-{f["ep"]}.mp4" data-poster="{rel}assets/posters/{f["ep"]}.jpg" data-title="{TE("ep.label", f["n"])} · {E(f["name"])} · {f["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
+    return f'data-play="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" data-poster="{rel}assets/posters/{f["ep"]}.jpg" data-title="{TE("ep.label", f["n"])} · {E(f["name"])} · {f["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
 
 def promo_attrs(rel):
     p = CTX.promo
     ch = json.dumps(p["chapters"])
-    return f'data-play="{rel}video/{p["file"]}" data-poster="{rel}assets/posters/promo.jpg" data-title="{E(p["title"])} · {p["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
+    return f'data-play="{vid(rel, p["file"])}" data-poster="{rel}assets/posters/promo.jpg" data-title="{E(p["title"])} · {p["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
 
 def ep_card(rel, f, k=None):
     if f.get("soon"):
@@ -556,8 +572,8 @@ def page_feature(i):
     if f.get("soon"):
         player = f'''<div class="player rv">{clip(rel, "knowledge-arch", f"{ep} · {f['name']} · {T('feature.silent')}", live=False)}<div class="player-meta"><span>{ep} · {f["name"]} · {T('feature.soon_meta')}</span><a href="../../videos/">{T('all_episodes')} &rarr;</a></div></div>'''
     else:
-        player = f'''<div class="player rv"><div class="window"><div class="bar"><i></i><i></i><i></i><span class="url">{ep} · {f["name"]}</span></div><video controls playsinline preload="none" poster="{rel}assets/posters/{f["ep"]}.jpg"><source src="{rel}video/swarmery-{f["ep"]}.mp4" type="video/mp4"></video></div>
-<div class="player-meta"><span>{ep} · {f["name"]} · {f["dur"]} · {T('feature.quality')}</span><a href="{rel}video/swarmery-{f["ep"]}.mp4" download>{T('dialog.download')}</a></div></div>'''
+        player = f'''<div class="player rv"><div class="window"><div class="bar"><i></i><i></i><i></i><span class="url">{ep} · {f["name"]}</span></div><video controls playsinline preload="none" poster="{rel}assets/posters/{f["ep"]}.jpg"><source src="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" type="video/mp4"></video></div>
+<div class="player-meta"><span>{ep} · {f["name"]} · {f["dur"]} · {T('feature.quality')}</span><a href="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" download>{T('dialog.download')}</a></div></div>'''
     pager = '<div class="pager">'
     pager += f'<a href="../{prev["slug"]}/"><span class="d">&larr; {T("pager.prev")} · 0{prev["n"]}</span><b>{prev["name"]}</b></a>' if prev else f'<a href="../"><span class="d">&larr; {T("pager.overview")}</span><b>{T("pager.all")}</b></a>'
     pager += f'<a class="next" href="../{nxt["slug"]}/"><span class="d">{T("pager.next")} · 0{nxt["n"]} &rarr;</span><b>{nxt["name"]}</b></a>' if nxt else f'<a class="next" href="../../install/"><span class="d">{T("pager.next")} &rarr;</span><b>{T("nav.install")}</b></a>'
