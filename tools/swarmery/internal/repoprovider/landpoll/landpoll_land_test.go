@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -145,5 +146,88 @@ func TestRunOnceMergedTickFailureIsLoggedNotFatal(t *testing.T) {
 	}
 	if len(h.logs) != 1 || !strings.Contains(h.logs[0], "ticking its [LAND] criteria failed") {
 		t.Fatalf("logs = %q", h.logs)
+	}
+}
+
+// fakePlanReview records the phases the poller hands to the plan review.
+type fakePlanReview struct {
+	mu    sync.Mutex
+	calls []string // "<phaseID> <docPath>"
+}
+
+func (f *fakePlanReview) MaybePlanReview(phaseID int64, docPath string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, fmt.Sprintf("%d %s", phaseID, docPath))
+}
+
+func (f *fakePlanReview) seen() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.calls...)
+}
+
+// A merge whose [LAND] tick closes the doc's last open criterion starts the
+// plan branch review (phase-run follow-ups, phase 1, SC-2); a tick that leaves
+// anything open, or ticks nothing, does not.
+func TestRunOnceMergedLandTickStartsPlanReview(t *testing.T) {
+	const criteria = "# Phase 1\n\n## Acceptance Criteria\n\n"
+	cases := []struct {
+		name      string
+		doc       string
+		noHook    bool
+		wantCalls int
+	}{
+		{
+			name:      "the LAND tick closes the last criterion",
+			doc:       criteria + "- [x] the endpoint exists\n- [ ] [LAND] push the branch\n- [ ] [LAND] merge the PR\n",
+			wantCalls: 1,
+		},
+		{
+			name: "an executable criterion stays open",
+			doc:  landDoc,
+		},
+		{
+			name: "a MANUAL criterion stays open",
+			doc:  criteria + "- [x] the endpoint exists\n- [ ] [LAND] merge the PR\n- [ ] [MANUAL] check the console\n",
+		},
+		{
+			// Nothing to tick ⇒ the merge closed nothing; the stamp or the hand
+			// tick that closed the doc was the trigger.
+			name: "no LAND criterion to tick",
+			doc:  criteria + "- [x] the endpoint exists\n",
+		},
+		{
+			name:   "no hook wired",
+			doc:    criteria + "- [x] the endpoint exists\n- [ ] [LAND] merge the PR\n",
+			noHook: true,
+		},
+	}
+	for i, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			hook := &fakePlanReview{}
+			if !c.noHook {
+				h.poller.PlanReview = hook
+			}
+			n := 20 + i
+			id, path := h.docPhase(1, StatePROpen, n, c.doc)
+			h.reply(n, reply{out: prJSON("MERGED", "2026-10-09T12:00:30Z", "APPROVED", runOK)})
+			h.runOnce()
+			if l := h.landing(id); l.state != StateMerged {
+				t.Fatalf("landing_state = %q, want merged", l.state)
+			}
+			// A merged phase re-read later never ticks, so never triggers, again.
+			if _, _, err := h.poller.RefreshOne(context.Background(), id); err != nil {
+				t.Fatal(err)
+			}
+			calls := hook.seen()
+			if len(calls) != c.wantCalls {
+				t.Fatalf("plan review calls = %q, want %d", calls, c.wantCalls)
+			}
+			if c.wantCalls > 0 && calls[0] != fmt.Sprintf("%d %s", id, path) {
+				t.Errorf("plan review call = %q, want phase %d at %s", calls[0], id, path)
+			}
+		})
 	}
 }

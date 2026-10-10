@@ -64,8 +64,9 @@ func landpollBootLine(every time.Duration, on bool) string {
 
 // newLandPoller is the production poller: providers over the real process
 // boundary and the daemon's credential env, the phase's repo from runRoot (the
-// live phase-run service's RunRoot), and the api-side hooks.
-func newLandPoller(db *sql.DB, runRoot func(phaseID int64) (string, error)) *landpoll.Poller {
+// live phase-run service's RunRoot), the plan review a closing [LAND] tick
+// starts (the same service), and the api-side hooks.
+func newLandPoller(db *sql.DB, runRoot func(phaseID int64) (string, error), review landpoll.PlanReviewHook) *landpoll.Poller {
 	return &landpoll.Poller{
 		DB: db,
 		Factory: func(k repoprovider.Kind) (repoprovider.Provider, error) {
@@ -75,6 +76,7 @@ func newLandPoller(db *sql.DB, runRoot func(phaseID int64) (string, error)) *lan
 		Publish:       api.PublishPlanUpdated,
 		OnAuthExpired: api.MarkVcsAuthExpired,
 		Logf:          log.Printf,
+		PlanReview:    review,
 	}
 }
 

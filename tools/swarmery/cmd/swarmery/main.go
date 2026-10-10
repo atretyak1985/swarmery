@@ -2659,7 +2659,7 @@ func cmdServe(args []string) error {
 		log.Printf("warning: %v", landpollWarn)
 	}
 	log.Print(landpollBootLine(landpollEvery, landpollOn))
-	landPoller := newLandPoller(db, phaserunSvc.RunRoot)
+	landPoller := newLandPoller(db, phaserunSvc.RunRoot, phaserunSvc)
 
 	buildStart := time.Now()
 	// The board derives each captured card's expiry from the same TTL the

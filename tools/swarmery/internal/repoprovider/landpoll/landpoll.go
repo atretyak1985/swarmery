@@ -24,13 +24,16 @@
 // atomic); the plan-dir watcher sees the atomic rename and its rescan folds the
 // new count in (the merge's own plan_updated event only refreshes the page —
 // the scanner publishes a second one once the counts are in). Executable and `[MANUAL]` criteria are
-// never touched — done and landed stay separate facts (D2).
+// never touched — done and landed stay separate facts (D2). When that tick
+// leaves the doc with no open criterion, the phase is handed to PlanReview, so
+// the plan branch review starts on a merge as it does on a run's `done` stamp.
 //
 // Imports: repoprovider, credstore, wsingest and database/sql only. The api-side effects
 // (the plan_updated WS event, the project's auth-expired mark) arrive as funcs,
-// and the repo a phase ran in arrives through RepoDir (production:
-// phaserun.Service.RunRoot), so this package imports neither internal/api nor
-// internal/phaserun.
+// the repo a phase ran in arrives through RepoDir (production:
+// phaserun.Service.RunRoot) and the plan review through the PlanReviewHook
+// interface (production: *phaserun.Service), so this package imports neither
+// internal/api nor internal/phaserun.
 package landpoll
 
 import (
@@ -40,6 +43,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"strings"
 	"time"
 
@@ -79,6 +83,13 @@ var (
 	ErrNoChangeRequest = errors.New("phase has no change request")
 )
 
+// PlanReviewHook starts the plan branch review of a phase's plan when the plan
+// is complete (production: *phaserun.Service, whose own check decides). The
+// api package declares its own twin for the Criteria-tab tick.
+type PlanReviewHook interface {
+	MaybePlanReview(phaseID int64, docPath string)
+}
+
 // Poller reads change-request status for landed phases. DB and Factory are
 // required; every other field has a default.
 type Poller struct {
@@ -103,6 +114,9 @@ type Poller struct {
 	OnAuthExpired func(projectID int64)
 	// Logf logs per-PR failures; every argument is already redacted. nil ⇒ none.
 	Logf func(format string, args ...any)
+	// PlanReview is told when a merge's [LAND] tick closed the last open
+	// criterion of the phase's doc. nil ⇒ none.
+	PlanReview PlanReviewHook
 	// Max caps the change requests one RunOnce reads. ≤0 ⇒ DefaultMax.
 	Max int
 }
@@ -335,7 +349,8 @@ func (p *Poller) store(r phaseRow, st repoprovider.ChangeStatus, now time.Time) 
 // tickLand ticks the [LAND] criteria of a phase that just merged. Best effort:
 // the merge is already stored, so a doc that cannot be written is logged and
 // left for the operator (the Criteria tab ticks by hand), never retried here. A
-// doc that is gone (an archived or renamed plan) has nothing to tick.
+// doc that is gone (an archived or renamed plan) has nothing to tick. A tick
+// that leaves the doc with no open criterion hands the phase to PlanReview.
 func (p *Poller) tickLand(r phaseRow) {
 	if r.docPath == "" {
 		return
@@ -347,7 +362,25 @@ func (p *Poller) tickLand(r phaseRow) {
 		p.logf("landpoll: phase %d (task %d) merged, but ticking its [LAND] criteria failed: %v", r.phaseID, r.taskID, err)
 	case n > 0:
 		p.logf("landpoll: phase %d (task %d) merged: ticked %d [LAND] criteria", r.phaseID, r.taskID, n)
+		p.planReviewIfClosed(r)
 	}
+}
+
+// planReviewIfClosed hands r's phase to PlanReview when its doc, re-read after
+// the [LAND] tick, has no open criterion left — an open executable or [MANUAL]
+// one keeps the plan unfinished. An unreadable doc triggers nothing.
+func (p *Poller) planReviewIfClosed(r phaseRow) {
+	if p.PlanReview == nil {
+		return
+	}
+	body, err := os.ReadFile(r.docPath)
+	if err != nil {
+		return
+	}
+	if done, total := wsingest.CountCheckboxes(string(body)); total == 0 || done < total {
+		return
+	}
+	p.PlanReview.MaybePlanReview(r.phaseID, r.docPath)
 }
 
 // statusChanged reports whether st differs from the stored status in anything
