@@ -19,6 +19,10 @@
 // the session-blocker queue: approvals, questions, local-only prod deploys,
 // sessions awaiting a typed reply, recent failures (GET /api/needs-you).
 
+import type { I18n, MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { i18n } from '../i18n';
+
 export type PlaceId =
   | 'today'
   | 'inbox'
@@ -37,7 +41,12 @@ export type PlaceSection = 'main' | 'improve' | 'bottom';
 export interface Place {
   id: PlaceId;
   glyph: string;
-  label: string;
+  /** The sidebar label in the active locale (read through i18n on every access,
+   * so a locale switch shows up on the next render). */
+  readonly label: string;
+  /** The untranslated label message, for callers that translate with their own
+   * i18n instance (see navLabel). */
+  labelMessage: MessageDescriptor;
   section: PlaceSection;
   /** Only meaningful inside one project (Plans, Knowledge): under All projects
    * the row renders dimmed and resolves through the last-visited project. */
@@ -58,7 +67,7 @@ export function placeSegment(pathname: string): string {
 interface PlaceDef {
   id: PlaceId;
   glyph: string;
-  label: string;
+  label: MessageDescriptor;
   section: PlaceSection;
   projectOnly: boolean;
   /** Sub-path of the place's landing page ("" = the scope's index). */
@@ -70,26 +79,26 @@ interface PlaceDef {
 }
 
 const DEFS: readonly PlaceDef[] = [
-  { id: 'today', glyph: '◉', label: 'Today', section: 'main', projectOnly: false, path: '', segments: [''] },
+  { id: 'today', glyph: '◉', label: msg`Today`, section: 'main', projectOnly: false, path: '', segments: [''] },
   // Inbox owns /approvals too: it redirects here, and approvals/manage keeps
   // the rules + history page (phase 3).
-  { id: 'inbox', glyph: '☐', label: 'Inbox', section: 'main', projectOnly: false, path: 'inbox', segments: ['inbox', 'approvals'] },
-  { id: 'needs-you', glyph: '⚑', label: 'Needs you', section: 'main', projectOnly: false, path: 'needs-you', segments: ['needs-you'] },
-  { id: 'sessions', glyph: '❯', label: 'Sessions', section: 'main', projectOnly: false, path: 'sessions', segments: ['sessions'] },
+  { id: 'inbox', glyph: '☐', label: msg`Inbox`, section: 'main', projectOnly: false, path: 'inbox', segments: ['inbox', 'approvals'] },
+  { id: 'needs-you', glyph: '⚑', label: msg`Needs you`, section: 'main', projectOnly: false, path: 'needs-you', segments: ['needs-you'] },
+  { id: 'sessions', glyph: '❯', label: msg`Sessions`, section: 'main', projectOnly: false, path: 'sessions', segments: ['sessions'] },
   {
     id: 'plans',
     glyph: '❐',
-    label: 'Plans',
+    label: msg`Plans`,
     section: 'main',
     projectOnly: true,
     path: 'plans',
     segments: ['planning', 'plans', 'board', 'playbooks'],
   },
-  { id: 'health', glyph: '♡', label: 'Health', section: 'improve', projectOnly: false, path: 'health', segments: ['health', 'analytics', 'retro'] },
+  { id: 'health', glyph: '♡', label: msg`Health`, section: 'improve', projectOnly: false, path: 'health', segments: ['health', 'analytics', 'retro'] },
   {
     id: 'learning',
     glyph: '✎',
-    label: 'Learning',
+    label: msg`Learning`,
     section: 'improve',
     projectOnly: false,
     path: 'learning',
@@ -98,7 +107,7 @@ const DEFS: readonly PlaceDef[] = [
   {
     id: 'knowledge',
     glyph: '❖',
-    label: 'Knowledge',
+    label: msg`Knowledge`,
     section: 'improve',
     projectOnly: true,
     path: 'knowledge',
@@ -109,24 +118,27 @@ const DEFS: readonly PlaceDef[] = [
   },
   // Fleet-wide docs about swarmery itself: /docs and /docs/:slug (glossary deep
   // links) exist only in the fleet shell, so the row ignores the project scope.
-  { id: 'docs', glyph: '§', label: 'Docs', section: 'bottom', projectOnly: false, path: 'docs', fleetOnly: true, segments: ['docs'] },
+  { id: 'docs', glyph: '§', label: msg`Docs`, section: 'bottom', projectOnly: false, path: 'docs', fleetOnly: true, segments: ['docs'] },
   {
     id: 'system',
     glyph: '☷',
-    label: 'System',
+    label: msg`System`,
     section: 'bottom',
     projectOnly: false,
     path: 'system',
     segments: ['system', 'system-hub', 'agents', 'routines'],
   },
-  { id: 'settings', glyph: '⚙', label: 'Settings', section: 'bottom', projectOnly: false, path: 'settings', segments: ['settings', 'projects'] },
+  { id: 'settings', glyph: '⚙', label: msg`Settings`, section: 'bottom', projectOnly: false, path: 'settings', segments: ['settings', 'projects'] },
 ];
 
 function toPlace(def: PlaceDef): Place {
   return {
     id: def.id,
     glyph: def.glyph,
-    label: def.label,
+    get label() {
+      return i18n._(def.label);
+    },
+    labelMessage: def.label,
     section: def.section,
     projectOnly: def.projectOnly,
     href: (slug) => {
@@ -141,6 +153,11 @@ function toPlace(def: PlaceDef): Place {
 }
 
 export const PLACES: readonly Place[] = DEFS.map(toPlace);
+
+/** A place's label translated with the caller's i18n (useLingui().i18n). */
+export function navLabel(i18nInstance: I18n, place: Place): string {
+  return i18nInstance._(place.labelMessage);
+}
 
 /** Places of one sidebar section, in table order. */
 export function placesIn(section: PlaceSection): readonly Place[] {

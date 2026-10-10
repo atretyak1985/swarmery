@@ -5,6 +5,7 @@
 // been going and what it has cost. Each row opens the session detail in the
 // current mount (lib/sessionHref.ts).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import type { Epic, EpicPhase, Session } from '../../api/types';
 import { fmtCost, projectLabel } from '../../lib/format';
@@ -25,22 +26,29 @@ export function runningPhases(epics: readonly Epic[]): Map<string, EpicPhase> {
   return byUuid;
 }
 
-function shortModel(model: string | null): string {
-  return model === null || model === '' ? 'model unknown' : model.replace(/^claude-/, '');
+/** The model id without its `claude-` prefix; null when the session has none. */
+function shortModel(model: string | null): string | null {
+  return model === null || model === '' ? null : model.replace(/^claude-/, '');
 }
 
 function Row({ s, phase, now }: { s: Session; phase: EpicPhase | undefined; now: number }): JSX.Element {
+  const { t } = useLingui();
   const sessionHref = useSessionHref();
   const project = projectLabel(s.projectName, s.projectSlug);
   const title = s.title ?? s.why ?? s.sessionUuid.slice(0, 8);
-  const right =
-    phase !== undefined
-      ? `Task ${String(phase.checkboxesDone)}/${String(phase.checkboxesTotal)}`
-      : ageLabel(s.startedAt, now);
-  const sub =
-    phase !== undefined
-      ? `${project} · ${shortModel(phase.runModel ?? s.modelLast ?? s.model)} · plan run`
-      : `${project} · ${s.status === 'waiting_approval' ? 'waiting on you' : 'working'} · ${fmtCost(s.costUsd ?? null)}`;
+  let right: string;
+  let sub: string;
+  if (phase !== undefined) {
+    const done = String(phase.checkboxesDone);
+    const total = String(phase.checkboxesTotal);
+    const model = shortModel(phase.runModel ?? s.modelLast ?? s.model) ?? t`model unknown`;
+    right = t`Task ${done}/${total}`;
+    sub = t`${project} · ${model} · plan run`;
+  } else {
+    const state = s.status === 'waiting_approval' ? t`waiting on you` : t`working`;
+    right = ageLabel(s.startedAt, now);
+    sub = `${project} · ${state} · ${fmtCost(s.costUsd ?? null)}`;
+  }
   return (
     <li>
       <Link
@@ -70,18 +78,22 @@ export function LiveNow({
   loading: boolean;
   now: number;
 }): JSX.Element {
+  const { t } = useLingui();
   const phases = runningPhases(epics);
   const top = sessions.slice(0, LIVE_ROWS);
+  const extra = sessions.length - LIVE_ROWS;
   return (
     <section data-testid="live-now" className="min-w-0">
-      <SectionHead label="Live now">
-        {sessions.length > LIVE_ROWS && (
-          <span className="font-mono text-[10.5px] text-ink-faint">+{sessions.length - LIVE_ROWS} more</span>
+      <SectionHead label={t`Live now`}>
+        {extra > 0 && (
+          <span className="font-mono text-[10.5px] text-ink-faint">
+            <Trans>+{extra} more</Trans>
+          </span>
         )}
       </SectionHead>
       {top.length === 0 ? (
         <p className="mt-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 text-[12.5px] text-ink-dim">
-          {loading ? 'Loading…' : 'Nothing running. A session shows up here the moment it starts.'}
+          {loading ? t`Loading…` : t`Nothing running. A session shows up here the moment it starts.`}
         </p>
       ) : (
         <ul className="m-0 mt-2.5 flex list-none flex-col gap-1.5 p-0">

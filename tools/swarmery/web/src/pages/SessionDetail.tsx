@@ -6,6 +6,8 @@
 // merges header state; event_appended is attributed via its sessionId and
 // appended (or, for refined durations, replaced in place) on the open detail.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { PendingSession, SessionDetail, SessionOutcome, SessionStatus, WSMessage } from '../api/types';
@@ -42,40 +44,43 @@ import { PendingRunNotice } from './detail/PendingRunNotice';
  * quiet past the stuck window). Inside the detail page the list's dot was
  * missing, so an open detail view couldn't tell "working" from "silent". */
 function LiveStateChip({ session }: { session: SessionDetail }): JSX.Element | null {
+  const { t } = useLingui();
   const now = useNowMs(15_000);
   const state = sessionState(session, now);
   if (state === 'done') return null;
+  const quietFor = fmtSpan(session.endedAt ?? session.startedAt, null);
   // awaiting_reply is `running` in the tri-state, but nothing is working: the
   // turn ended and the session waits for the operator's typed reply.
   if (session.status === 'awaiting_reply') {
     return (
       <span
         className="inline-flex items-center gap-1.5 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[10px] text-amber"
-        data-tip="the session ended its turn and waits for your typed reply"
+        data-tip={t`the session ended its turn and waits for your typed reply`}
       >
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber" aria-hidden="true" />
-        awaiting reply · {fmtSpan(session.endedAt ?? session.startedAt, null)}
+        <Trans>awaiting reply · {quietFor}</Trans>
       </span>
     );
   }
   if (state === 'running') {
+    const lastActive = fmtAgo(session.endedAt ?? session.startedAt);
     return (
       <span
         className="inline-flex items-center gap-1.5 rounded border border-green/40 bg-green/10 px-1.5 py-px font-mono text-[10px] text-green"
-        data-tip="transcript activity within the stuck window — the session is working"
+        data-tip={t`transcript activity within the stuck window — the session is working`}
       >
         <span className="inline-block h-1.5 w-1.5 animate-pulse-dot rounded-full bg-green" />
-        working · {fmtAgo(session.endedAt ?? session.startedAt)}
+        <Trans>working · {lastActive}</Trans>
       </span>
     );
   }
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[10px] text-amber"
-      data-tip="no transcript activity past the stuck window — the session may have died silently"
+      data-tip={t`no transcript activity past the stuck window — the session may have died silently`}
     >
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber" />
-      quiet · {fmtSpan(session.endedAt ?? session.startedAt, null)}
+      <Trans>quiet · {quietFor}</Trans>
     </span>
   );
 }
@@ -117,6 +122,7 @@ function TitleEditor({
   title: string | null;
   onRename: (raw: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -151,8 +157,8 @@ function TitleEditor({
             setEditing(false);
           }
         }}
-        placeholder="session title…"
-        aria-label="session title"
+        placeholder={t`session title…`}
+        aria-label={t`session title`}
         maxLength={120}
         className={`w-full rounded-[8px] border border-line-strong bg-field px-2 py-1 text-ink outline-none focus:border-ink-dim ${TITLE_CLASS}`}
       />
@@ -170,16 +176,16 @@ function TitleEditor({
             begin();
           }
         }}
-        data-tip="click to rename"
+        data-tip={t`click to rename`}
         className={`cursor-text rounded-[6px] transition-colors hover:text-ink ${TITLE_CLASS} ${title === null ? 'text-ink-faint italic' : ''}`}
       >
-        {title ?? '(untitled session)'}
+        {title ?? t`(untitled session)`}
       </h1>
       <button
         type="button"
         onClick={begin}
-        aria-label="rename session"
-        data-tip="rename session"
+        aria-label={t`rename session`}
+        data-tip={t`rename session`}
         className="mt-[7px] shrink-0 rounded-md border border-line px-1.5 py-0.5 font-mono text-[16px] leading-none text-ink-dim opacity-60 transition-all hover:border-line-strong hover:text-ink hover:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
       >
         ✎
@@ -201,7 +207,9 @@ const PENDING_RUN_POLL_MS = 2_000;
 function mockPending(): PendingSend[] {
   const now = Date.now();
   return [
+    // i18n-ignore — demo fixture (VITE_MOCK): a sample operator message, not UI copy
     { key: 'mock-pending', text: 'Also add a --dry-run flag to the backfill command.', state: 'pending', sentAt: now },
+    // i18n-ignore — demo fixture (VITE_MOCK): a sample operator message, not UI copy
     { key: 'mock-failed', text: 'Re-run the migration against the staging snapshot.', state: 'failed', sentAt: now },
   ];
 }
@@ -210,6 +218,7 @@ export function SessionDetailPage(): JSX.Element {
   // `slug` is present only on the project mount (/p/:slug/sessions/:id) — the
   // back link has to return to the list in the SAME mode, otherwise the header
   // and sidebar flip out of the project workspace.
+  const { t } = useLingui();
   const { id, slug } = useParams<{ id: string; slug?: string }>();
   const sessionsHref = slug != null ? `/p/${slug}/sessions` : '/sessions';
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -248,8 +257,8 @@ export function SessionDetailPage(): JSX.Element {
   // Stops on its own once the run ends without a transcript (`running` false).
   useEffect(() => {
     if (detail !== null || pendingRun === null || !pendingRun.running) return;
-    const t = setTimeout(load, PENDING_RUN_POLL_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(load, PENDING_RUN_POLL_MS);
+    return () => clearTimeout(timer);
   }, [detail, pendingRun, load]);
 
   // New turns (chat bubbles) are NOT carried on the WS bus — only session_updated
@@ -322,7 +331,7 @@ export function SessionDetailPage(): JSX.Element {
   // could cross the window. Cheap: only runs while something is pending.
   useEffect(() => {
     if (!pending.some((p) => p.state === 'pending')) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const now = Date.now();
       setPending((prev) =>
         prev.map((p) =>
@@ -332,7 +341,7 @@ export function SessionDetailPage(): JSX.Element {
         ),
       );
     }, PENDING_STALE_MS + 500);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [pending]);
 
   // The newest activity lives at the bottom — on tab switch (and first data
@@ -498,8 +507,13 @@ export function SessionDetailPage(): JSX.Element {
           tone: 'ok',
           text:
             inserted === 0
-              ? 'No new tasks — this session had nothing left to suggest.'
-              : `${String(inserted)} task${inserted === 1 ? '' : 's'} suggested on the board.`,
+              ? t`No new tasks — this session had nothing left to suggest.`
+              : plural(inserted, {
+                  one: '# task suggested on the board.',
+                  few: '# tasks suggested on the board.',
+                  many: '# tasks suggested on the board.',
+                  other: '# tasks suggested on the board.',
+                }),
         });
       })
       .catch((e: unknown) => {
@@ -568,7 +582,7 @@ export function SessionDetailPage(): JSX.Element {
     return (
       <>
         <BackLink to={sessionsHref} />
-        <Loading label="session…" />
+        <Loading label={t`session…`} />
       </>
     );
   }
@@ -581,7 +595,7 @@ export function SessionDetailPage(): JSX.Element {
       <div className="shrink-0 border-b border-line px-4 pt-4 pb-4 desk:px-10 desk:pt-6">
         <div className="flex items-center gap-2 font-mono text-[11px] text-ink-faint">
           <Link to={sessionsHref} className="shrink-0 transition-colors hover:text-ink">
-            ← sessions
+            <Trans>← sessions</Trans>
           </Link>
           <span aria-hidden="true">/</span>
           <span className="truncate">
@@ -594,21 +608,21 @@ export function SessionDetailPage(): JSX.Element {
             <TitleEditor title={detail.title} onRename={rename} />
             <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-[5px] font-mono text-[11px] text-ink-dim">
               <LiveStateChip session={detail} />
-              <Kv label="status" value={detail.status} tone={STATUS_TONES[detail.status]} />
-              {detail.model !== null && <Kv label="model" value={detail.model} />}
+              <Kv label={t`status`} value={detail.status} tone={STATUS_TONES[detail.status]} />
+              {detail.model !== null && <Kv label={t`model`} value={detail.model} />}
               {/* Subscription this session ran under (migration 0047) — shown
                   only when it is NOT the default one, the same rule the list's
                   account badge follows: on a one-account machine the row would
                   read "account default" on every single session. */}
               {accountLabel(detail) !== null && (
-                <Kv label="account" value={accountLabel(detail) ?? ''} />
+                <Kv label={t`account`} value={accountLabel(detail) ?? ''} />
               )}
               <Kv
-                label={detail.endedAt !== null ? 'duration' : 'running'}
+                label={detail.endedAt !== null ? t`duration` : t`running`}
                 value={fmtSpan(detail.startedAt, detail.endedAt)}
               />
               {lastEvent !== undefined && detail.endedAt === null && (
-                <Kv label="last event" value={fmtAgo(lastEvent.ts)} />
+                <Kv label={t`last event`} value={fmtAgo(lastEvent.ts)} />
               )}
               {detail.taskExternalId != null && (
                 /* phase 3.5: workspaces — which task card this session worked on. */
@@ -626,10 +640,10 @@ export function SessionDetailPage(): JSX.Element {
                 type="button"
                 onClick={runExtract}
                 disabled={extracting}
-                data-tip="run a model pass over this session and suggest board tasks from what it left behind"
+                data-tip={t`run a model pass over this session and suggest board tasks from what it left behind`}
                 className="inline-flex items-center gap-1.5 rounded border border-line px-1.5 py-px font-mono text-[10px] text-ink-dim transition-colors hover:border-brand/50 hover:text-brand disabled:cursor-progress disabled:opacity-60"
               >
-                {extracting ? 'extracting…' : 'extract tasks'}
+                {extracting ? t`extracting…` : t`extract tasks`}
               </button>
             </div>
             {extractNote !== null && (
@@ -645,7 +659,7 @@ export function SessionDetailPage(): JSX.Element {
                 <button
                   type="button"
                   onClick={() => setExtractNote(null)}
-                  aria-label="dismiss"
+                  aria-label={t`dismiss`}
                   className="shrink-0 opacity-70 transition-opacity hover:opacity-100"
                 >
                   ×
@@ -654,16 +668,16 @@ export function SessionDetailPage(): JSX.Element {
             )}
           </div>
           <div className="flex shrink-0 flex-wrap gap-[22px]">
-            <HeadStat value={fmtTokens(facts.tokens)} label="tokens" />
-            <HeadStat value={fmtCost(facts.cost)} label="cost" tone="text-brand" />
+            <HeadStat value={fmtTokens(facts.tokens)} label={t`tokens`} />
+            <HeadStat value={fmtCost(facts.cost)} label={t`cost`} tone="text-brand" />
             <HeadStat
               value={String(facts.errors)}
-              label="errors"
+              label={t`errors`}
               tone={facts.errors > 0 ? 'text-red' : 'text-ink-dim'}
             />
             {detail.recovered > 0 && (
               /* errors a later same-tool success cleared (backend heuristic). */
-              <HeadStat value={String(detail.recovered)} label="recovered" tone="text-green" />
+              <HeadStat value={String(detail.recovered)} label={t`recovered`} tone="text-green" />
             )}
           </div>
         </div>
@@ -675,13 +689,13 @@ export function SessionDetailPage(): JSX.Element {
 
         <div className="mt-4 flex gap-1">
           <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
-            Chat
+            {t`Chat`}
           </TabButton>
           <TabButton active={tab === 'timeline'} onClick={() => setTab('timeline')}>
-            Timeline
+            {t`Timeline`}
           </TabButton>
           <TabButton active={tab === 'diffs'} onClick={() => setTab('diffs')}>
-            {`Diffs${diffCount > 0 ? ` · ${diffCount}` : ''}`}
+            {diffCount > 0 ? t`Diffs · ${diffCount}` : t`Diffs`}
           </TabButton>
         </div>
       </div>
@@ -708,11 +722,11 @@ export function SessionDetailPage(): JSX.Element {
             <button
               type="button"
               onClick={scrollToLatest}
-              aria-label="Jump to latest"
+              aria-label={t`Jump to latest`}
               className="absolute inset-x-0 bottom-3 mx-auto flex w-max items-center gap-1.5 rounded-full border border-line-strong bg-surface2/95 px-3.5 py-1.5 font-mono text-[11px] text-ink shadow-lg backdrop-blur transition-colors hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               <span aria-hidden="true">↓</span>
-              Latest
+              <Trans>Latest</Trans>
             </button>
           )}
           {tab === 'chat' && (
@@ -766,7 +780,7 @@ function BackLink({ to }: { to: string }): JSX.Element {
       to={to}
       className="mb-2 block pt-0.5 font-mono text-[11px] text-ink-faint hover:text-ink"
     >
-      ← sessions
+      <Trans>← sessions</Trans>
     </Link>
   );
 }

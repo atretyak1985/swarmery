@@ -7,6 +7,8 @@
 // project uses (SC-11). Shown only once a change request exists — an open or a
 // merged one; before that there is nothing to read.
 
+import { t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LandError, refreshPhaseLanding } from '../../api';
 import type { PhaseChangeStatus, PhaseLanding, PhaseLandingRefreshErrorCode } from '../../api/types';
@@ -22,20 +24,20 @@ type Chip = { glyph?: string; text: string; tone: string };
 
 /** The state chip: an open change request marked draft reads "draft". */
 export function stateChip(s: PhaseChangeStatus): Chip {
-  if (s.state === 'merged') return { glyph: '✓', text: 'merged', tone: GOOD };
-  if (s.state === 'closed') return { text: 'closed', tone: BAD };
-  return s.draft ? { text: 'draft', tone: QUIET } : { text: 'open', tone: GOOD };
+  if (s.state === 'merged') return { glyph: '✓', text: t`merged`, tone: GOOD };
+  if (s.state === 'closed') return { text: t`closed`, tone: BAD };
+  return s.draft ? { text: t`draft`, tone: QUIET } : { text: t`open`, tone: GOOD };
 }
 
 /** The CI chip, or null when the change request has no checks. */
 export function ciChip(ci: PhaseChangeStatus['ci']): Chip | null {
   switch (ci) {
     case 'success':
-      return { glyph: '✓', text: 'CI passed', tone: GOOD };
+      return { glyph: '✓', text: t`CI passed`, tone: GOOD };
     case 'failure':
-      return { glyph: '✗', text: 'CI failed', tone: BAD };
+      return { glyph: '✗', text: t`CI failed`, tone: BAD };
     case 'pending':
-      return { glyph: '◌', text: 'CI running', tone: WAIT };
+      return { glyph: '◌', text: t`CI running`, tone: WAIT };
     case 'none':
       return null;
   }
@@ -45,11 +47,11 @@ export function ciChip(ci: PhaseChangeStatus['ci']): Chip | null {
 export function reviewChip(review: PhaseChangeStatus['review']): Chip | null {
   switch (review) {
     case 'approved':
-      return { glyph: '✓', text: 'approved', tone: GOOD };
+      return { glyph: '✓', text: t`approved`, tone: GOOD };
     case 'changes_requested':
-      return { glyph: '✗', text: 'changes requested', tone: BAD };
+      return { glyph: '✗', text: t`changes requested`, tone: BAD };
     case 'review_required':
-      return { text: 'review required', tone: WAIT };
+      return { text: t`review required`, tone: WAIT };
     case 'none':
       return null;
   }
@@ -69,7 +71,7 @@ function ChipView({ chip, testId }: { chip: Chip; testId: string }): JSX.Element
 function refreshFailureText(err: unknown): string {
   if (err instanceof LandError) {
     const code = err.code as PhaseLandingRefreshErrorCode | undefined;
-    if (code === 'no-change-request') return 'Nothing to refresh: this phase has no open change request.';
+    if (code === 'no-change-request') return t`Nothing to refresh: this phase has no open change request.`;
     return [err.message, err.hint].filter((s) => s !== '').join('\n');
   }
   return err instanceof Error ? err.message : String(err);
@@ -84,6 +86,9 @@ export interface LandingStatusProps {
 }
 
 export function LandingStatus({ taskId, phaseId, landing, onRefreshed }: LandingStatusProps): JSX.Element | null {
+  // The React-bound `t` (re-renders on a locale switch); the chip helpers above
+  // are plain functions on the core macro, called from this render.
+  const { t } = useLingui();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -117,6 +122,7 @@ export function LandingStatus({ taskId, phaseId, landing, onRefreshed }: Landing
       });
   };
 
+  const checkedAgo = status === null ? '' : fmtAgo(status.checkedAt);
   const ci = status === null ? null : ciChip(status.ci);
   const review = status === null ? null : reviewChip(status.review);
 
@@ -127,17 +133,17 @@ export function LandingStatus({ taskId, phaseId, landing, onRefreshed }: Landing
         {ci !== null && <ChipView chip={ci} testId="landing-status-ci" />}
         {review !== null && <ChipView chip={review} testId="landing-status-review" />}
         <span data-testid="landing-status-checked">
-          {status === null ? 'status not read yet' : `checked ${fmtAgo(status.checkedAt)}`}
+          {status === null ? <Trans>status not read yet</Trans> : <Trans>checked {checkedAgo}</Trans>}
         </span>
         <button
           type="button"
           onClick={refresh}
           disabled={busy}
           aria-busy={busy}
-          title="read the change request's status from the code host now"
+          title={t`read the change request's status from the code host now`}
           className="rounded border border-line px-1.5 py-px text-[10px] text-ink-2 transition-colors hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? 'Refreshing…' : 'Refresh'}
+          {busy ? <Trans>Refreshing…</Trans> : <Trans>Refresh</Trans>}
         </button>
       </div>
       {error !== null && (

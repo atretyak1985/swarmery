@@ -1,3 +1,7 @@
+import type { MessageDescriptor } from '@lingui/core';
+// `tr` is the module-level macro (helpers outside components); components use useLingui's `t`.
+import { msg, t as tr } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import {
   acceptLesson,
@@ -22,27 +26,32 @@ const BTN = 'rounded border border-line px-2 py-px font-mono text-[11px] text-in
 const BTN_PRIMARY = 'rounded border border-brand px-2 py-px font-mono text-[11px] text-brand';
 
 function effectivenessLabel(e: LessonEffectiveness): string {
+  const beforeN = String(e.beforeN);
+  const afterN = String(e.afterN);
+  const minRuns = String(e.minRuns);
+  const before = (e.medianBefore ?? 0).toFixed(2);
+  const after = (e.medianAfter ?? 0).toFixed(2);
   const drop =
     e.medianDrop === null
-      ? `not enough data (${String(e.beforeN)}/${String(e.afterN)} of ${String(e.minRuns)} runs)`
-      : `surprise ${(e.medianBefore ?? 0).toFixed(2)} → ${(e.medianAfter ?? 0).toFixed(2)}`;
-  const relied =
-    e.reliedRate === null
-      ? 'never injected'
-      : `relied on ${String(Math.round(e.reliedRate * 100))}% of ${String(e.uses)}`;
+      ? tr`not enough data (${beforeN}/${afterN} of ${minRuns} runs)`
+      : tr`surprise ${before} → ${after}`;
+  const reliedPct = e.reliedRate === null ? '' : String(Math.round(e.reliedRate * 100));
+  const uses = String(e.uses);
+  const relied = e.reliedRate === null ? tr`never injected` : tr`relied on ${reliedPct}% of ${uses}`;
   return `${drop} · ${relied}`;
 }
 
-const REASON_LABEL: Record<RetirementProposal['reason'], string> = {
-  ineffective: 'ineffective',
-  stale: 'stale',
-  unused_60d: 'unused 60 days',
-  superseded: 'superseded',
+const REASON_LABEL: Record<RetirementProposal['reason'], MessageDescriptor> = {
+  ineffective: msg`ineffective`,
+  stale: msg`stale`,
+  unused_60d: msg`unused 60 days`,
+  superseded: msg`superseded`,
 };
 
 /** The retirement queue (phase 16.2): proposals wait for the operator; an
  *  unanswered one is retired by the daemon on its auto-retire date. */
 function RetirementQueue(): JSX.Element | null {
+  const { i18n } = useLingui();
   const [items, setItems] = useState<RetirementProposal[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,7 +81,7 @@ function RetirementQueue(): JSX.Element | null {
   return (
     <section className="mt-4 max-w-3xl" aria-labelledby="retirement-heading">
       <h2 id="retirement-heading" className="text-sm text-ink">
-        Proposed retirements
+        <Trans>Proposed retirements</Trans>
       </h2>
       {err !== null && (
         <div role="alert" className="mt-2 text-[12px] text-red">
@@ -80,51 +89,56 @@ function RetirementQueue(): JSX.Element | null {
         </div>
       )}
       <ul className="mt-2 grid gap-2">
-        {(items ?? []).map((p) => (
-          <li key={p.id} className="rounded border border-line p-2 text-[12px]">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-ink">
-                L-{String(p.lessonId)} {p.title}
-              </span>
-              <span className="shrink-0 font-mono text-[10px] text-ink-dim">
-                {REASON_LABEL[p.reason]}
-                {p.autoRetireAt !== null && ` · auto-retires ${p.autoRetireAt.slice(0, 10)}`}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-ink-dim">{p.detail}</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                className={BTN_PRIMARY}
-                onClick={() => decide(() => confirmRetirement(p.id))}
-              >
-                retire
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                className={BTN}
-                onClick={() => decide(() => keepLesson(p.id))}
-              >
-                keep
-              </button>
-            </div>
-          </li>
-        ))}
+        {(items ?? []).map((p) => {
+          const autoRetires = p.autoRetireAt?.slice(0, 10) ?? null;
+          return (
+            <li key={p.id} className="rounded border border-line p-2 text-[12px]">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-ink">
+                  L-{String(p.lessonId)} {p.title}
+                </span>
+                <span className="shrink-0 font-mono text-[10px] text-ink-dim">
+                  {i18n._(REASON_LABEL[p.reason])}
+                  {autoRetires !== null && <Trans> · auto-retires {autoRetires}</Trans>}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-ink-dim">{p.detail}</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={BTN_PRIMARY}
+                  onClick={() => decide(() => confirmRetirement(p.id))}
+                >
+                  <Trans>retire</Trans>
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={BTN}
+                  onClick={() => decide(() => keepLesson(p.id))}
+                >
+                  <Trans>keep</Trans>
+                </button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
 }
 
-const FILTERS: { value: LessonStatus | undefined; label: string }[] = [
-  { value: 'candidate', label: 'candidates' },
-  { value: 'active', label: 'active' },
-  { value: undefined, label: 'all' },
+const FILTERS: { value: LessonStatus | undefined; label: MessageDescriptor }[] = [
+  { value: 'candidate', label: msg`candidates` },
+  { value: 'active', label: msg`active` },
+  { value: undefined, label: msg`all` },
 ];
 
 function matchLabel(m: LessonMatch): string {
-  const where = m.kind === 'retro' ? `retro ×${String(m.count)}` : `lesson #${String(m.lessonId ?? 0)}`;
+  const count = String(m.count);
+  const lessonId = String(m.lessonId ?? 0);
+  const where = m.kind === 'retro' ? tr`retro ×${count}` : tr`lesson #${lessonId}`;
   return `${m.exact ? '= ' : '≈ '}${m.title} (${where})`;
 }
 
@@ -158,7 +172,9 @@ function EditForm({
       }}
     >
       <label className="grid gap-0.5">
-        <span className="text-ink-dim">title</span>
+        <span className="text-ink-dim">
+          <Trans>title</Trans>
+        </span>
         <input
           className="rounded border border-line bg-transparent px-2 py-1 text-ink"
           value={title}
@@ -166,7 +182,9 @@ function EditForm({
         />
       </label>
       <label className="grid gap-0.5">
-        <span className="text-ink-dim">guidance (one sentence)</span>
+        <span className="text-ink-dim">
+          <Trans>guidance (one sentence)</Trans>
+        </span>
         <input
           className="rounded border border-line bg-transparent px-2 py-1 text-ink"
           value={guidance}
@@ -174,7 +192,9 @@ function EditForm({
         />
       </label>
       <label className="grid gap-0.5">
-        <span className="text-ink-dim">area globs (comma-separated)</span>
+        <span className="text-ink-dim">
+          <Trans>area globs (comma-separated)</Trans>
+        </span>
         <input
           className="rounded border border-line bg-transparent px-2 py-1 font-mono text-ink"
           value={areas}
@@ -183,10 +203,10 @@ function EditForm({
       </label>
       <div className="flex gap-2">
         <button type="submit" disabled={busy} className={BTN_PRIMARY}>
-          save
+          <Trans>save</Trans>
         </button>
         <button type="button" onClick={onCancel} className={BTN}>
-          cancel
+          <Trans>cancel</Trans>
         </button>
       </div>
     </form>
@@ -202,16 +222,22 @@ function LessonCard({
   busy: boolean;
   act: (run: () => Promise<Lesson>) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [editing, setEditing] = useState(false);
   const isCandidate = lesson.status === 'candidate';
+  const surprise = lesson.surpriseIndex?.toFixed(2) ?? null;
+  const recurrences = String(lesson.recurrences);
+  const linkedTitle = lesson.linkedNormTitle;
+  const lessonId = String(lesson.id);
+  const branch = lesson.promotedBranch;
   return (
     <li className="rounded border border-line p-3">
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-ink">{lesson.title}</div>
         <div className="shrink-0 font-mono text-[10px] text-ink-dim">
           {lesson.status}
-          {lesson.surpriseIndex !== null && ` · surprise ${lesson.surpriseIndex.toFixed(2)}`}
-          {lesson.recurrences > 1 && ` · seen ${String(lesson.recurrences)}×`}
+          {surprise !== null && t` · surprise ${surprise}`}
+          {lesson.recurrences > 1 && t` · seen ${recurrences}×`}
         </div>
       </div>
       <p className="mt-1 text-[12px] text-ink">{lesson.guidance}</p>
@@ -224,32 +250,39 @@ function LessonCard({
       </div>
       {lesson.cause !== '' && (
         <p className="mt-1 text-[11px] text-ink-dim">
-          <span className="text-ink">cause:</span> {lesson.cause}
+          <span className="text-ink">
+            <Trans>cause:</Trans>
+          </span>{' '}
+          {lesson.cause}
         </p>
       )}
       <div className="mt-1 font-mono text-[10px] text-ink-dim">
-        evidence: {lesson.evidence.join(' · ')}
+        <Trans>evidence:</Trans> {lesson.evidence.join(' · ')}
       </div>
       <div className="mt-1 font-mono text-[10px] text-ink-dim">
         {lesson.planId} · {lesson.phaseName}
-        {lesson.linkedNormTitle !== '' && ` · linked to "${lesson.linkedNormTitle}"`}
+        {linkedTitle !== '' && t` · linked to "${linkedTitle}"`}
       </div>
       {lesson.status === 'active' &&
         lesson.effectiveness !== undefined &&
         lesson.effectiveness !== null && (
           <div className="mt-1 font-mono text-[10px] text-ink-dim">
-            effectiveness: {effectivenessLabel(lesson.effectiveness)}
+            <Trans>effectiveness:</Trans> {effectivenessLabel(lesson.effectiveness)}
           </div>
         )}
       {lesson.promotedBranch !== '' && (
         <div className="mt-1 font-mono text-[10px] text-ink-dim">
-          L-{String(lesson.id)} promoted to CLAUDE.md on branch{' '}
-          <span className="text-ink">{lesson.promotedBranch}</span>. Review it there.
+          <Trans>
+            L-{lessonId} promoted to CLAUDE.md on branch <span className="text-ink">{branch}</span>. Review it
+            there.
+          </Trans>
         </div>
       )}
       {lesson.sourceParagraph !== '' && (
         <details className="mt-1 text-[11px] text-ink-dim">
-          <summary className="cursor-pointer">where reality diverged</summary>
+          <summary className="cursor-pointer">
+            <Trans>where reality diverged</Trans>
+          </summary>
           <p className="mt-1 whitespace-pre-wrap">{lesson.sourceParagraph}</p>
         </details>
       )}
@@ -272,42 +305,46 @@ function LessonCard({
               className={BTN_PRIMARY}
               onClick={() => act(() => acceptLesson(lesson.id))}
             >
-              accept
+              <Trans>accept</Trans>
             </button>
           )}
           {(isCandidate || lesson.status === 'active') && (
             <button type="button" disabled={busy} className={BTN} onClick={() => setEditing(true)}>
-              edit
+              <Trans>edit</Trans>
             </button>
           )}
           {isCandidate &&
-            lesson.matches.map((m) => (
-              <button
-                key={`${m.kind}:${m.normTitle}:${String(m.lessonId ?? 0)}`}
-                type="button"
-                disabled={busy}
-                className={BTN}
-                title="merge this candidate into the existing lesson"
-                onClick={() =>
-                  act(() =>
-                    mergeLesson(
-                      lesson.id,
-                      m.kind === 'retro' ? { normTitle: m.normTitle } : { lessonId: m.lessonId ?? 0 },
-                    ),
-                  )
-                }
-              >
-                merge into {matchLabel(m)}
-              </button>
-            ))}
+            lesson.matches.map((m) => {
+              const match = matchLabel(m);
+              return (
+                <button
+                  key={`${m.kind}:${m.normTitle}:${String(m.lessonId ?? 0)}`}
+                  type="button"
+                  disabled={busy}
+                  className={BTN}
+                  title={t`merge this candidate into the existing lesson`}
+                  onClick={() =>
+                    act(() =>
+                      mergeLesson(
+                        lesson.id,
+                        m.kind === 'retro' ? { normTitle: m.normTitle } : { lessonId: m.lessonId ?? 0 },
+                      ),
+                    )
+                  }
+                >
+                  <Trans>merge into {match}</Trans>
+                </button>
+              );
+            })}
           {isCandidate && (
             <button
               type="button"
               disabled={busy}
               className={BTN}
+              // i18n-ignore — the reason is stored server-side, not shown here
               onClick={() => act(() => dismissLesson(lesson.id, 'dismissed by operator'))}
             >
-              dismiss
+              <Trans>dismiss</Trans>
             </button>
           )}
           {lesson.status === 'active' && (
@@ -315,9 +352,10 @@ function LessonCard({
               type="button"
               disabled={busy}
               className={BTN}
+              // i18n-ignore — the reason is stored server-side, not shown here
               onClick={() => act(() => retireLesson(lesson.id, 'retired by operator'))}
             >
-              retire
+              <Trans>retire</Trans>
             </button>
           )}
           {lesson.status === 'active' && lesson.promotedBranch === '' && (
@@ -325,10 +363,10 @@ function LessonCard({
               type="button"
               disabled={busy}
               className={BTN}
-              title="Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
+              title={t`Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review`}
               onClick={() => act(() => promoteLesson(lesson.id))}
             >
-              promote to CLAUDE.md
+              <Trans>promote to CLAUDE.md</Trans>
             </button>
           )}
         </div>
@@ -342,6 +380,7 @@ function LessonCard({
  *  `embedded` renders it as Learning's Lessons tab: no page heading or padding,
  *  and no calibration panel (that is its own "Forecast honesty" tab). */
 export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+  const { i18n, t } = useLingui();
   const [filter, setFilter] = useState<LessonStatus | undefined>('candidate');
   const [items, setItems] = useState<Lesson[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -373,20 +412,26 @@ export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.
 
   return (
     <div className={embedded ? '' : 'p-6'}>
-      {!embedded && <h1 className="text-lg text-ink">Lessons</h1>}
+      {!embedded && (
+        <h1 className="text-lg text-ink">
+          <Trans>Lessons</Trans>
+        </h1>
+      )}
       <p className={`${embedded ? '' : 'mt-1 '}max-w-2xl text-[12px] text-ink-dim`}>
-        When a phase run lands far from its forecast and its report explains why, a cheap model
-        proposes up to two lessons, each citing evidence from that run. A candidate reaches future
-        runs only after you accept it here. Merge it into an existing lesson when it repeats one.
-        Active lessons are re-measured against their area&apos;s surprise; one that stops earning
-        its place is proposed for retirement below, and retired on its own after 14 days without
-        an answer.
+        <Trans>
+          When a phase run lands far from its forecast and its report explains why, a cheap model
+          proposes up to two lessons, each citing evidence from that run. A candidate reaches future
+          runs only after you accept it here. Merge it into an existing lesson when it repeats one.
+          Active lessons are re-measured against their area&apos;s surprise; one that stops earning
+          its place is proposed for retirement below, and retired on its own after 14 days without
+          an answer.
+        </Trans>
       </p>
       <RetirementQueue />
-      <fieldset className="mt-3 inline-flex gap-1" aria-label="filter lessons by status">
+      <fieldset className="mt-3 inline-flex gap-1" aria-label={t`filter lessons by status`}>
         {FILTERS.map((f) => (
           <button
-            key={f.label}
+            key={f.value ?? 'all'}
             type="button"
             aria-pressed={filter === f.value}
             onClick={() => setFilter(f.value)}
@@ -394,7 +439,7 @@ export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.
               filter === f.value ? 'border-brand text-brand' : 'border-line text-ink-dim hover:text-ink'
             }`}
           >
-            {f.label}
+            {i18n._(f.label)}
           </button>
         ))}
       </fieldset>
@@ -403,9 +448,15 @@ export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.
           {err}
         </div>
       )}
-      {items === null && err === null && <div className="mt-4 text-ink-dim">loading…</div>}
+      {items === null && err === null && (
+        <div className="mt-4 text-ink-dim">
+          <Trans>loading…</Trans>
+        </div>
+      )}
       {items !== null && items.length === 0 && (
-        <div className="mt-4 text-[12px] text-ink-dim">No lessons here.</div>
+        <div className="mt-4 text-[12px] text-ink-dim">
+          <Trans>No lessons here.</Trans>
+        </div>
       )}
       {items !== null && items.length > 0 && (
         <ul className="mt-4 grid max-w-3xl gap-3">

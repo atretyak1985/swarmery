@@ -5,6 +5,7 @@
 // s skip. The old Approvals page stays reachable at approvals/manage for
 // rules and history.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SplitPane, type SplitPaneKey } from '../../components/SplitPane';
@@ -31,7 +32,7 @@ import {
 } from './inboxModel';
 import { FLEET_WIDE_KINDS, useInboxItems } from './useInboxItems';
 
-const TAB_IDS: readonly InboxTabId[] = INBOX_TABS.map((t) => t.id);
+const TAB_IDS: readonly InboxTabId[] = INBOX_TABS.map((tabDef) => tabDef.id);
 
 /** Wall clock for the expiry countdowns. */
 function useNow(periodMs: number): number {
@@ -48,12 +49,13 @@ function GroupLabel({ urgent }: { urgent: boolean }): JSX.Element {
     <div
       className={`px-3.5 pt-2 pb-[3px] font-mono text-[9.5px] tracking-[0.12em] uppercase ${urgent ? 'text-amber' : 'text-ink-faint'}`}
     >
-      {urgent ? 'expires soon' : 'when you have a minute'}
+      {urgent ? <Trans>expires soon</Trans> : <Trans>when you have a minute</Trans>}
     </div>
   );
 }
 
 export function Inbox(): JSX.Element {
+  const { t } = useLingui();
   const { slug } = useParams<{ slug?: string }>();
   const scope = slug ?? null;
   const { items, loading, errors, reload, triage } = useInboxItems(scope, true);
@@ -116,7 +118,9 @@ export function Inbox(): JSX.Element {
       let failed = 0;
       let stale = 0;
       for (const [i, v] of todo.entries()) {
-        setAcceptResult(`accepting ${String(i + 1)} of ${String(todo.length)}…`);
+        const current = String(i + 1);
+        const total = String(todo.length);
+        setAcceptResult(t`accepting ${current} of ${total}…`);
         try {
           await acceptTriageVerdict(v.id);
           accepted += 1;
@@ -125,9 +129,9 @@ export function Inbox(): JSX.Element {
           else failed += 1;
         }
       }
-      const parts = [`accepted ${String(accepted)}`];
-      if (failed > 0) parts.push(`${String(failed)} failed`);
-      if (stale > 0) parts.push(`${String(stale)} changed meanwhile`);
+      const parts = [t`accepted ${accepted}`];
+      if (failed > 0) parts.push(t`${failed} failed`);
+      if (stale > 0) parts.push(t`${stale} changed meanwhile`);
       setAcceptResult(parts.join(' · '));
       reload();
       triage.reload();
@@ -139,7 +143,7 @@ export function Inbox(): JSX.Element {
   // dismissing it hides exactly that error and a later one shows again.
   const lastRun = triage.lastRun;
   const runFailed = lastRun?.status === 'failed';
-  const runError = triage.startError ?? (runFailed ? lastRun.error || 'The triage run failed.' : null);
+  const runError = triage.startError ?? (runFailed ? lastRun.error || t`The triage run failed.` : null);
   const errorKey =
     triage.startError !== null ? `start:${triage.startError}` : runFailed ? `run:${String(lastRun.id)}` : null;
   const bannerError = errorKey !== null && dismissedError === errorKey ? null : runError;
@@ -150,8 +154,8 @@ export function Inbox(): JSX.Element {
     selected?.suggestion !== undefined && !selected.suggestion.sample
       ? suggestionActionLabel(selected.suggestion.value)
       : selected?.kind === 'review'
-        ? 'ack'
-        : 'approve';
+        ? t`ack`
+        : t`approve`;
 
   const keymap: SplitPaneKey<InboxItem>[] = [
     {
@@ -164,13 +168,13 @@ export function Inbox(): JSX.Element {
     },
     {
       key: 'x',
-      label: 'deny',
+      label: t`deny`,
       run: (item) => {
         const a = denyAction(item);
         if (a !== null) run(item, a);
       },
     },
-    { key: 's', label: 'skip', run: (item) => setSelectedId(neighbour(item) ?? item.key) },
+    { key: 's', label: t`skip`, run: (item) => setSelectedId(neighbour(item) ?? item.key) },
   ];
 
   return (
@@ -178,25 +182,27 @@ export function Inbox(): JSX.Element {
       <header className="px-9 pt-[30px] pb-0">
         <div className="flex items-baseline gap-2.5">
           <h1 className="m-0 font-display text-[30px] leading-[1.15] font-medium tracking-[-0.01em] text-ink">
-            Inbox
+            <Trans>Inbox</Trans>
           </h1>
           <span className="font-mono text-[11px] text-ink-faint">
-            {loading ? 'loading…' : waitingLine(items, now)}
+            {loading ? t`loading…` : waitingLine(items, now)}
           </span>
           {tab === 'approvals' && (
             <Link to="../approvals/manage" relative="path" className="ml-auto font-mono text-[10.5px] text-ink-faint hover:text-ink-dim">
-              rules &amp; history →
+              <Trans>rules &amp; history →</Trans>
             </Link>
           )}
         </div>
         <p className="mt-1.5 max-w-[66ch] text-[13px] text-ink-dim">
-          Decisions that wait on you. An agent can label the classifier's guesses and close what is only
-          informational; approvals, agent changes and alerts always wait for you.
+          <Trans>
+            Decisions that wait on you. An agent can label the classifier's guesses and close what is only
+            informational; approvals, agent changes and alerts always wait for you.
+          </Trans>
         </p>
         <div className="mt-4">
           <Tabs
-            ariaLabel="inbox kinds"
-            tabs={INBOX_TABS.map((t) => ({ id: t.id, label: t.label, count: counts[t.id] }))}
+            ariaLabel={t`inbox kinds`}
+            tabs={INBOX_TABS.map((tabDef) => ({ id: tabDef.id, label: tabDef.label, count: counts[tabDef.id] }))}
             value={tab}
             onChange={(id) => {
               setTab(id);
@@ -241,11 +247,14 @@ export function Inbox(): JSX.Element {
 
       {errors.length > 0 && (
         <div className="flex flex-wrap gap-3 border-b border-line px-9 py-2 font-mono text-[11px] text-red">
-          {errors.map((k) => (
-            <span key={k} role="alert">
-              couldn't load {INBOX_TABS.find((t) => t.kind === k)?.label ?? k}
-            </span>
-          ))}
+          {errors.map((k) => {
+            const source = INBOX_TABS.find((tabDef) => tabDef.kind === k)?.label ?? k;
+            return (
+              <span key={k} role="alert">
+                <Trans>couldn't load {source}</Trans>
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -260,10 +269,12 @@ export function Inbox(): JSX.Element {
             now={now}
           />
         ) : !loading && visible.length === 0 ? (
-          <div className="py-10 text-[13px] text-ink-dim">Nothing is waiting on you.</div>
+          <div className="py-10 text-[13px] text-ink-dim">
+            <Trans>Nothing is waiting on you.</Trans>
+          </div>
         ) : (
           <SplitPane
-            ariaLabel="waiting decisions"
+            ariaLabel={t`waiting decisions`}
             items={visible}
             getId={(i) => i.key}
             selectedId={selected?.key ?? null}
@@ -272,29 +283,33 @@ export function Inbox(): JSX.Element {
               setActionError(null);
             }}
             keymap={keymap}
-            renderRow={(item, isSelected) => (
-              <>
-                {item.key === firstUrgent && <GroupLabel urgent />}
-                {item.key === firstCalm && firstUrgent !== undefined && <GroupLabel urgent={false} />}
-                {item.kind === 'review' ? (
-                  <ReviewRow review={item.raw} selected={isSelected} now={now} />
-                ) : (
-                <div className="flex gap-2.5 px-3.5 py-2.5">
-                  <span className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${KIND_META[item.kind].dot}`} />
-                  <div className="min-w-0">
-                    <div className={`truncate text-[12.5px] ${isSelected ? 'font-medium text-ink' : 'text-ink-2'}`}>
-                      {item.title}
-                    </div>
-                    <div className="mt-0.5 truncate font-mono text-[10.5px] text-ink-faint">
-                      {item.context} · {ageLabel(item.ageIso, now)}
-                      {item.urgent && item.expiresIso !== undefined && ` · expires ${expiresInLabel(item.expiresIso, now)}`}
-                      {scope !== null && FLEET_WIDE_KINDS.has(item.kind) && ' · fleet-wide'}
+            renderRow={(item, isSelected) => {
+              const expires =
+                item.urgent && item.expiresIso !== undefined ? expiresInLabel(item.expiresIso, now) : null;
+              return (
+                <>
+                  {item.key === firstUrgent && <GroupLabel urgent />}
+                  {item.key === firstCalm && firstUrgent !== undefined && <GroupLabel urgent={false} />}
+                  {item.kind === 'review' ? (
+                    <ReviewRow review={item.raw} selected={isSelected} now={now} />
+                  ) : (
+                  <div className="flex gap-2.5 px-3.5 py-2.5">
+                    <span className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${KIND_META[item.kind].dot}`} />
+                    <div className="min-w-0">
+                      <div className={`truncate text-[12.5px] ${isSelected ? 'font-medium text-ink' : 'text-ink-2'}`}>
+                        {item.title}
+                      </div>
+                      <div className="mt-0.5 truncate font-mono text-[10.5px] text-ink-faint">
+                        {item.context} · {ageLabel(item.ageIso, now)}
+                        {expires !== null && t` · expires ${expires}`}
+                        {scope !== null && FLEET_WIDE_KINDS.has(item.kind) && t` · fleet-wide`}
+                      </div>
                     </div>
                   </div>
-                </div>
-                )}
-              </>
-            )}
+                  )}
+                </>
+              );
+            }}
             renderDetail={(item) => (
               <InboxDetail
                 key={item.key}

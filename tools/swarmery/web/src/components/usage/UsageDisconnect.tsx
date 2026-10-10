@@ -25,6 +25,7 @@
 // header itself: the armed confirm strip and the error line are `w-full`,
 // which wraps each onto its own full-width line right under the title.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { disconnectUsageAccount } from '../../api';
 import { useUsage } from '../../lib/usageData';
@@ -35,6 +36,7 @@ const btn =
   'rounded-[6px] border border-line px-1.5 py-0.5 font-mono text-[9.5px] whitespace-nowrap text-ink-dim transition-colors hover:bg-surface2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand disabled:opacity-50';
 
 export function UsageDisconnect({ account }: { account: string }): JSX.Element {
+  const { t } = useLingui();
   const { refresh } = useUsage();
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -61,15 +63,17 @@ export function UsageDisconnect({ account }: { account: string }): JSX.Element {
       {phase === 'confirming' ? (
         <div className="flex w-full flex-wrap items-center gap-2">
           <span className="font-mono text-[9.5px] text-ink-dim">
-            Disconnect {account}? Removes swarmery&apos;s stored credential only — your
-            <code className="px-1">claude</code> login is untouched, and nothing is revoked at
-            Anthropic.
+            <Trans>
+              Disconnect {account}? Removes swarmery&apos;s stored credential only — your
+              <code className="px-1">claude</code> login is untouched, and nothing is revoked at
+              Anthropic.
+            </Trans>
           </span>
           <button type="button" onClick={() => void run()} className={btn}>
-            yes, disconnect
+            <Trans>yes, disconnect</Trans>
           </button>
           <button type="button" onClick={() => setPhase('idle')} className={btn}>
-            cancel
+            <Trans>cancel</Trans>
           </button>
         </div>
       ) : (
@@ -82,7 +86,7 @@ export function UsageDisconnect({ account }: { account: string }): JSX.Element {
           disabled={phase === 'working'}
           className={btn}
         >
-          {phase === 'working' ? 'disconnecting…' : 'disconnect'}
+          {phase === 'working' ? t`disconnecting…` : t`disconnect`}
         </button>
       )}
 

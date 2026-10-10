@@ -20,6 +20,7 @@
 // `usage/UsageSetupHint.tsx` already uses: the id stays put, only a trailing
 // glyph and a separate, normally-empty live region change.
 
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 
 // navigator.clipboard does not exist at all on a non-secure origin (plain
@@ -77,6 +78,8 @@ export function CopyIdBadge({
    * don't need this and should leave it off. */
   truncate?: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
+  const what = label ?? t`id`;
   // idle → ok | failed → idle. A failed copy must be as visible as a
   // successful one: a silent no-op is the dead button this chip replaced.
   const [state, setState] = useState<'idle' | 'ok' | 'failed'>('idle');
@@ -103,8 +106,8 @@ export function CopyIdBadge({
           resetTimer.current = setTimeout(() => setState('idle'), ok ? 1500 : 2500);
         });
       }}
-      aria-label={`copy id: ${id}`}
-      data-tip={`copy ${label ?? 'id'}: ${id}`}
+      aria-label={t`copy id: ${id}`}
+      data-tip={t`copy ${what}: ${id}`}
       className={`inline-flex max-w-full items-center gap-1 rounded border px-1 py-[1px] font-mono text-[10px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
         truncate ? 'min-w-0' : ''
       } ${
@@ -125,7 +128,7 @@ export function CopyIdBadge({
       {/* Empty at rest; announced once on copy, then cleared — never holds the
        * id itself, so it can never re-announce it out of context. */}
       <span aria-live="polite" className="sr-only">
-        {state === 'ok' ? 'copied' : state === 'failed' ? 'copy failed' : ''}
+        {state === 'ok' ? t`copied` : state === 'failed' ? t`copy failed` : ''}
       </span>
     </button>
   );

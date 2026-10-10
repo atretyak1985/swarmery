@@ -2,6 +2,7 @@
 // from GET /api/health, polled every 60s; red + "daemon unreachable" when the
 // fetch fails.
 
+import { Trans } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { HealthResponse } from '../api/types';
 import { fetchHealth } from '../api';
@@ -44,10 +45,10 @@ export function HealthFooter(): JSX.Element | null {
         aria-hidden="true"
       />
       {unreachable ? (
-        'daemon unreachable'
+        <Trans>daemon unreachable</Trans>
       ) : (
         <>
-          daemon healthy
+          <Trans>daemon healthy</Trans>
           {health !== null && <span title={versionTitle(health)}> · {versionLabel(health)}</span>}
         </>
       )}

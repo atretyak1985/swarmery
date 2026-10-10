@@ -34,11 +34,13 @@ export function QuestionBlock({
   onFreeText: (text: string) => void;
 }): JSX.Element {
   const { t } = useLingui();
+  const number = index + 1;
+  const questionText = question.question;
   return (
     <fieldset className="rounded-[10px] border border-line px-3 py-2.5">
       <legend className="px-1 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-        {question.header !== '' ? question.header : `question ${String(index + 1)}`}
-        {question.multiSelect ? ' · multi' : ''}
+        {question.header !== '' ? question.header : t`question ${number}`}
+        {question.multiSelect ? t` · multi` : ''}
       </legend>
       <div className="mt-[5px] text-[13px] leading-snug text-ink">{question.question}</div>
       <div className="mt-2 flex flex-col gap-[3px]">
@@ -72,7 +74,7 @@ export function QuestionBlock({
             ? t`own answer — added to the selection`
             : t`own answer — overrides the selection`
         }
-        aria-label={`own answer for "${question.question}"`}
+        aria-label={t`own answer for "${questionText}"`}
         className="mt-1.5 w-full rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-green/40"
       />
     </fieldset>
@@ -90,7 +92,7 @@ export function QuestionForm({
   questions,
   idNamespace,
   busy = false,
-  submitLabel = 'submit answers',
+  submitLabel,
   onSubmit,
 }: {
   questions: readonly ParsedQuestion[];
@@ -99,6 +101,7 @@ export function QuestionForm({
   submitLabel?: string;
   onSubmit: (answers: AnswerMap) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [drafts, setDrafts] = useState<readonly AnswerDraft[]>(() => questions.map(() => EMPTY_DRAFT));
   const answers = buildAnswers(questions, drafts);
 
@@ -139,7 +142,7 @@ export function QuestionForm({
         }}
         className="self-start rounded-lg border border-green/45 bg-green/12 px-4 py-[7px] font-mono text-[11.5px] font-bold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
       >
-        {submitLabel}
+        {submitLabel ?? t`submit answers`}
       </button>
     </div>
   );

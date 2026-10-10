@@ -118,6 +118,7 @@ import type {
   ToolsResp,
   ToolsResponse,
 } from './api/types';
+import { t } from '@lingui/core/macro';
 import { mockApi } from './mock/data';
 
 /** Offline mock mode — fixture data + fake WS (VITE_MOCK=1). */
@@ -166,7 +167,7 @@ export async function archiveProject(id: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `archive failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`archive failed: ${{ status: res.status }}`);
   }
 }
 
@@ -176,7 +177,7 @@ export async function restoreProject(id: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(id)}/restore`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `restore failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`restore failed: ${{ status: res.status }}`);
   }
 }
 
@@ -188,7 +189,7 @@ export async function rebuildArchitectureMap(id: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(id)}/architecture/rebuild`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `rebuild failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`rebuild failed: ${{ status: res.status }}`);
   }
 }
 
@@ -208,7 +209,7 @@ export async function patchProject(id: number, patch: ProjectMetaPatch): Promise
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `update failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`update failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as ProjectMeta;
 }
@@ -243,7 +244,7 @@ export async function detachProject(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `detach failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`detach failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as DetachResponse;
 }
@@ -260,6 +261,7 @@ export async function attachProject(id: number, dryRun: boolean): Promise<Attach
     return {
       attached: true,
       dryRun,
+      // i18n-ignore — mock-only fixture steps
       steps: ['+ enabledPlugins.core@swarmery', '+ .claude/project.json restored from project.json.bak'],
       ...(dryRun ? {} : { backup: '.claude/settings.json.bak' }),
     };
@@ -270,7 +272,7 @@ export async function attachProject(id: number, dryRun: boolean): Promise<Attach
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `attach failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`attach failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as AttachResponse;
 }
@@ -300,7 +302,7 @@ export async function toggleProjectPlugin(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `toggle failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`toggle failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as ProjectPluginToggleResponse;
 }
@@ -336,7 +338,7 @@ export async function repairProjectPlugin(
   );
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string; output?: string };
-    throw new Error(data.error ?? data.output ?? `repair failed: ${String(res.status)}`);
+    throw new Error(data.error ?? data.output ?? t`repair failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as PluginRepairResponse;
 }
@@ -386,11 +388,11 @@ export async function putProjectConfig(
     const data = (await res.json().catch(() => ({}))) as Partial<ProjectConfigInvalid>;
     if (res.status === 422 && data.problems !== undefined) {
       throw new ConfigValidationError({
-        error: data.error ?? 'invalid config',
+        error: data.error ?? t`invalid config`,
         problems: data.problems,
       });
     }
-    throw new Error(data.error ?? `config write failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`config write failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as ProjectConfigWriteResponse;
 }
@@ -417,6 +419,7 @@ export async function probeProjectConfig(
   value: unknown,
   signal?: AbortSignal,
 ): Promise<ProjectConfigProbeResponse> {
+  // i18n-ignore — mock-only path
   if (MOCK) return { suggestions: {}, reason: 'probe is unavailable in mock mode' };
   const res = await fetch(
     `/api/projects/${String(id)}/config/${encodeURIComponent(key)}/probe`,
@@ -433,11 +436,11 @@ export async function probeProjectConfig(
     const data = (await res.json().catch(() => ({}))) as Partial<ProjectConfigInvalid>;
     if (res.status === 400 && data.problems !== undefined) {
       throw new ConfigValidationError({
-        error: data.error ?? 'the probe needs more fields filled in first',
+        error: data.error ?? t`the probe needs more fields filled in first`,
         problems: data.problems,
       });
     }
-    throw new Error(data.error ?? `probe failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`probe failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as ProjectConfigProbeResponse;
 }
@@ -469,7 +472,7 @@ export async function onboardProject(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `onboard failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`onboard failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as OnboardResponse;
 }
@@ -647,11 +650,11 @@ export function fetchUsage(fresh = false): Promise<UsageResp> {
  * the PKCE verifier and CSRF state stay in the daemon.
  */
 export async function startUsageLogin(account: string): Promise<UsageLoginStart> {
-  if (MOCK) throw new Error('connecting an account is not available in mock mode');
+  if (MOCK) throw new Error('connecting an account is not available in mock mode'); // i18n-ignore — mock-only path
   const res = await fetch(`/api/usage/accounts/${encodeURIComponent(account)}/login/start`, {
     method: 'POST',
   });
-  if (!res.ok) throw new Error(await errBody(res, 'could not start the connection'));
+  if (!res.ok) throw new Error(await errBody(res, t`could not start the connection`));
   return (await res.json()) as UsageLoginStart;
 }
 
@@ -663,13 +666,13 @@ export async function startUsageLogin(account: string): Promise<UsageLoginStart>
  * ever crosses back).
  */
 export async function completeUsageLogin(account: string, code: string): Promise<UsageLoginComplete> {
-  if (MOCK) throw new Error('connecting an account is not available in mock mode');
+  if (MOCK) throw new Error('connecting an account is not available in mock mode'); // i18n-ignore — mock-only path
   const res = await fetch(`/api/usage/accounts/${encodeURIComponent(account)}/login/complete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
   });
-  if (!res.ok) throw new Error(await errBody(res, 'could not complete the connection'));
+  if (!res.ok) throw new Error(await errBody(res, t`could not complete the connection`));
   return (await res.json()) as UsageLoginComplete;
 }
 
@@ -679,12 +682,12 @@ export async function completeUsageLogin(account: string, code: string): Promise
  * interactive terminal login, keeping the stored verdict's provenance legible.
  */
 export async function probeAccount(key: string, source?: 'pty-login'): Promise<AccountProbeResponse> {
-  if (MOCK) throw new Error('probing an account is not available in mock mode');
+  if (MOCK) throw new Error('probing an account is not available in mock mode'); // i18n-ignore — mock-only path
   const qs = source !== undefined ? `?source=${source}` : '';
   const res = await fetch(`/api/accounts/${encodeURIComponent(key)}/probe${qs}`, {
     method: 'POST',
   });
-  if (!res.ok) throw new Error(await errBody(res, 'could not re-check the account'));
+  if (!res.ok) throw new Error(await errBody(res, t`could not re-check the account`));
   return (await res.json()) as AccountProbeResponse;
 }
 
@@ -697,11 +700,11 @@ export async function probeAccount(key: string, source?: 'pty-login'): Promise<A
  * already disconnected answers 200 too.
  */
 export async function disconnectUsageAccount(account: string): Promise<void> {
-  if (MOCK) throw new Error('disconnecting an account is not available in mock mode');
+  if (MOCK) throw new Error('disconnecting an account is not available in mock mode'); // i18n-ignore — mock-only path
   const res = await fetch(`/api/usage/accounts/${encodeURIComponent(account)}/login`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error(await errBody(res, 'could not disconnect the account'));
+  if (!res.ok) throw new Error(await errBody(res, t`could not disconnect the account`));
 }
 
 // --- retro loop (per-agent scorecards + friction board) -----------------------
@@ -730,7 +733,7 @@ export async function unmuteFrictionGroup(key: string): Promise<void> {
   });
   if (!res.ok && res.status !== 404) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `unmute failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`unmute failed: ${{ status: res.status }}`);
   }
 }
 
@@ -774,7 +777,7 @@ export function fetchRetroReport(range: AnalyticsRange = {}): Promise<RetroRepor
  */
 async function errText(res: Response): Promise<string> {
   const data = (await res.json().catch(() => ({}))) as { error?: string };
-  return data.error ?? `request failed: ${String(res.status)}`;
+  return data.error ?? t`request failed: ${{ status: res.status }}`;
 }
 
 /**
@@ -829,7 +832,7 @@ export async function planFromRetroAnalysis(
   if (res.status === 409) {
     const body = (await res.json().catch(() => ({}))) as Partial<RetroPlanConflict>;
     throw new RetroPlanConflictError(
-      body.error ?? 'a planning run is already active for this project',
+      body.error ?? t`a planning run is already active for this project`,
       body.sessionUuid ?? '',
       body.projectSlug ?? '',
     );
@@ -876,7 +879,7 @@ export async function patchRecommendation(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `patch recommendation failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`patch recommendation failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as Recommendation;
 }
@@ -885,7 +888,7 @@ export async function patchRecommendation(
 export async function runAdvise(): Promise<AdviseStats> {
   if (MOCK) return mockApi.advise();
   const res = await fetch('/api/retro/advise', { method: 'POST' });
-  if (!res.ok) throw new Error(`advise failed: ${String(res.status)}`);
+  if (!res.ok) throw new Error(t`advise failed: ${{ status: res.status }}`);
   return (await res.json()) as AdviseStats;
 }
 
@@ -914,7 +917,7 @@ export async function runProjectAdvise(project: string | number): Promise<Advise
   if (MOCK) return mockApi.advise();
   const qs = new URLSearchParams({ projectId: String(project) });
   const res = await fetch(`/api/retro/advise?${qs.toString()}`, { method: 'POST' });
-  if (!res.ok) throw new Error(`advise failed: ${String(res.status)}`);
+  if (!res.ok) throw new Error(t`advise failed: ${{ status: res.status }}`);
   return (await res.json()) as AdviseStats;
 }
 
@@ -957,7 +960,7 @@ export async function putMemoryFile(
   );
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `save failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`save failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as MemoryFileContent;
 }
@@ -978,7 +981,7 @@ export async function consolidateMemory(
   const res = await fetch(`/api/memory/consolidate?${qs.toString()}`, { method: 'POST' });
   const data = (await res.json().catch(() => ({}))) as Partial<MemoryConsolidateResp>;
   if (!res.ok) {
-    const error = data.error ?? `consolidate failed: ${String(res.status)}`;
+    const error = data.error ?? t`consolidate failed: ${{ status: res.status }}`;
     // A failed APPLY is answered with the plan and the partial result — the
     // backup id and the files already moved are the operator's only recovery
     // handles — so that body is handed back with its error set, not thrown
@@ -1033,7 +1036,7 @@ export async function improveAgent(agent: string): Promise<void> {
   const res = await fetch(`/api/retro/agents/${encodeURIComponent(agent)}/improve`, {
     method: 'POST',
   });
-  if (!res.ok) throw new Error(await errBody(res, 'improve agent failed'));
+  if (!res.ok) throw new Error(await errBody(res, t`improve agent failed`));
 }
 
 /**
@@ -1049,19 +1052,19 @@ export async function patchProposal(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
   });
-  if (!res.ok) throw new Error(await errBody(res, 'decide proposal failed'));
+  if (!res.ok) throw new Error(await errBody(res, t`decide proposal failed`));
 }
 
 /** POST /api/retro/proposals/{id}/retry — re-run generation for a failed row. */
 export async function retryProposal(id: number): Promise<void> {
   const res = await fetch(`/api/retro/proposals/${String(id)}/retry`, { method: 'POST' });
-  if (!res.ok) throw new Error(await errBody(res, 'retry proposal failed'));
+  if (!res.ok) throw new Error(await errBody(res, t`retry proposal failed`));
 }
 
 /** POST /api/retro/proposals/{id}/apply — manual re-run of a stuck approved row. */
 export async function applyProposal(id: number): Promise<void> {
   const res = await fetch(`/api/retro/proposals/${String(id)}/apply`, { method: 'POST' });
-  if (!res.ok) throw new Error(await errBody(res, 'apply proposal failed'));
+  if (!res.ok) throw new Error(await errBody(res, t`apply proposal failed`));
 }
 
 export function fetchDocs(): Promise<DocMeta[]> {
@@ -1135,7 +1138,7 @@ export async function createBoardTask(input: CreateBoardTaskInput): Promise<Boar
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `create task failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`create task failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as BoardTask;
 }
@@ -1171,7 +1174,7 @@ export async function patchBoardTask(id: number, patch: PatchBoardTaskInput): Pr
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `patch task failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`patch task failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as BoardTask;
 }
@@ -1186,7 +1189,7 @@ export async function deleteBoardTask(id: number): Promise<void> {
   const res = await fetch(`/api/board/tasks/${String(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `delete task failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`delete task failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1220,7 +1223,7 @@ async function reviewActionError(res: Response, fallback: string): Promise<Error
  */
 export async function getBoardTaskDiff(id: number): Promise<TaskDiff> {
   const res = await fetch(`/api/board/tasks/${String(id)}/diff`);
-  if (!res.ok) throw await reviewActionError(res, 'diff failed');
+  if (!res.ok) throw await reviewActionError(res, t`diff failed`);
   return (await res.json()) as TaskDiff;
 }
 
@@ -1234,7 +1237,7 @@ export async function getBoardTaskDiff(id: number): Promise<TaskDiff> {
  */
 export async function verifyBoardTask(id: number): Promise<void> {
   const res = await fetch(`/api/tasks/${String(id)}/verify`, { method: 'POST' });
-  if (!res.ok) throw await reviewActionError(res, 'verify failed');
+  if (!res.ok) throw await reviewActionError(res, t`verify failed`);
 }
 
 /**
@@ -1247,7 +1250,7 @@ export async function rerunBoardTask(id: number, feedback: string): Promise<Boar
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ feedback }),
   });
-  if (!res.ok) throw await reviewActionError(res, 'rerun failed');
+  if (!res.ok) throw await reviewActionError(res, t`rerun failed`);
   return (await res.json()) as BoardTask;
 }
 
@@ -1258,7 +1261,7 @@ export async function rerunBoardTask(id: number, feedback: string): Promise<Boar
  */
 export async function discardBoardTask(id: number): Promise<DiscardTaskResponse> {
   const res = await fetch(`/api/board/tasks/${String(id)}/discard`, { method: 'POST' });
-  if (!res.ok) throw await reviewActionError(res, 'discard failed');
+  if (!res.ok) throw await reviewActionError(res, t`discard failed`);
   return (await res.json()) as DiscardTaskResponse;
 }
 
@@ -1273,7 +1276,7 @@ export async function landBoardTask(id: number, draft = false): Promise<LandTask
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ draft }),
   });
-  if (!res.ok) throw await reviewActionError(res, 'land failed');
+  if (!res.ok) throw await reviewActionError(res, t`land failed`);
   return (await res.json()) as LandTaskResponse;
 }
 
@@ -1328,7 +1331,7 @@ async function landError(res: Response, fallback: string): Promise<LandError> {
 export async function getPhaseReview(taskId: number, phaseId: number): Promise<PhaseReview> {
   if (MOCK) return mockApi.phaseReview(taskId, phaseId);
   const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/review`);
-  if (!res.ok) throw await landError(res, 'review failed');
+  if (!res.ok) throw await landError(res, t`review failed`);
   return (await res.json()) as PhaseReview;
 }
 
@@ -1346,7 +1349,7 @@ export async function landPhase(taskId: number, phaseId: number, body: PhaseLand
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw await landError(res, 'land failed');
+  if (!res.ok) throw await landError(res, t`land failed`);
   return (await res.json()) as PhaseLandResponse;
 }
 
@@ -1421,7 +1424,7 @@ export async function bulkArchiveBoardTasks(input: BulkArchiveInput): Promise<Bu
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `bulk archive failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`bulk archive failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as BulkArchiveResult;
 }
@@ -1462,7 +1465,7 @@ export async function duplicatePlaybook(
   );
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `duplicate playbook failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`duplicate playbook failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as DuplicatePlaybookResponse;
 }
@@ -1510,7 +1513,7 @@ export async function startPlanning(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `start planning failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`start planning failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as PlanningStart;
 }
@@ -1521,7 +1524,7 @@ export async function cancelPlanning(projectId: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(projectId)}/planning/cancel`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `cancel planning failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`cancel planning failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1545,7 +1548,7 @@ export async function answerPlanning(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `answer planning failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`answer planning failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as { status: string };
 }
@@ -1567,7 +1570,7 @@ export async function refinePlanning(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `refine planning failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`refine planning failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as { status: string };
 }
@@ -1583,7 +1586,7 @@ export async function proceedPlanning(projectId: number): Promise<{ status: stri
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `proceed planning failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`proceed planning failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as { status: string };
 }
@@ -1622,7 +1625,7 @@ export async function startRevision(
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string; revisionId?: number };
     const err: RevisionStartError = new Error(
-      data.error ?? `start revision failed: ${String(res.status)}`,
+      data.error ?? t`start revision failed: ${{ status: res.status }}`,
     );
     if (typeof data.revisionId === 'number') err.revisionId = data.revisionId;
     throw err;
@@ -1669,8 +1672,8 @@ export async function applyRevision(
     const docs = (data.conflicts ?? []).map((c) => c.docPath);
     const err: RevisionApplyError = new Error(
       docs.length > 0
-        ? `${data.error ?? 'apply conflicts'}: ${docs.join(', ')}`
-        : (data.error ?? `apply revision failed: ${String(res.status)}`),
+        ? `${data.error ?? t`apply conflicts`}: ${docs.join(', ')}`
+        : (data.error ?? t`apply revision failed: ${{ status: res.status }}`),
     );
     if (data.conflicts !== undefined) err.conflicts = data.conflicts;
     throw err;
@@ -1689,7 +1692,7 @@ export async function rejectRevision(revisionId: number, note?: string): Promise
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `reject revision failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`reject revision failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1709,7 +1712,7 @@ export async function pauseDispatch(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `pause failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`pause failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1829,7 +1832,7 @@ export async function createApprovalRule(input: ApprovalRuleInput): Promise<Appr
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `create rule failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`create rule failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as ApprovalRule;
 }
@@ -1840,13 +1843,13 @@ export async function toggleApprovalRule(id: number, enabled: boolean): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
   });
-  if (!res.ok) throw new Error(`toggle rule failed: ${String(res.status)}`);
+  if (!res.ok) throw new Error(t`toggle rule failed: ${{ status: res.status }}`);
   return (await res.json()) as ApprovalRule;
 }
 
 export async function deleteApprovalRule(id: number): Promise<void> {
   const res = await fetch(`/api/approval-rules/${String(id)}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`delete rule failed: ${String(res.status)}`);
+  if (!res.ok) throw new Error(t`delete rule failed: ${{ status: res.status }}`);
 }
 
 // --- fusion phase 11 — permission presets ------------------------------------
@@ -1887,7 +1890,7 @@ export async function putPermissionPreset(
   });
   if (res.status === 428) {
     const payload = (await res.json().catch(() => ({
-      error: 'confirmation required',
+      error: t`confirmation required`,
       reason: '',
       escalations: [],
     }))) as PermissionEscalation;
@@ -1895,7 +1898,7 @@ export async function putPermissionPreset(
   }
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `set preset failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`set preset failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as PermissionPresetView;
 }
@@ -1919,7 +1922,7 @@ export async function extractSessionTasks(id: number): Promise<number> {
   const res = await fetch(`/api/sessions/${String(id)}/extract-tasks`, { method: 'POST' });
   const data = (await res.json().catch(() => ({}))) as { error?: string; inserted?: number };
   if (!res.ok) {
-    throw new Error(data.error ?? `extract failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`extract failed: ${{ status: res.status }}`);
   }
   return data.inserted ?? 0;
 }
@@ -1934,7 +1937,7 @@ export async function killSession(id: number, force = false): Promise<void> {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `kill failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`kill failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1945,7 +1948,7 @@ export async function stopSession(id: number): Promise<void> {
   const res = await fetch(`/api/sessions/${String(id)}/stop`, { method: 'POST' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `stop failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`stop failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1967,7 +1970,7 @@ export async function sendSessionMessage(id: number, text: string): Promise<void
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `send failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`send failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1980,7 +1983,7 @@ export async function cancelSessionMessage(id: number): Promise<void> {
   const res = await fetch(`/api/sessions/${String(id)}/message/cancel`, { method: 'POST' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error ?? `cancel failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`cancel failed: ${{ status: res.status }}`);
   }
 }
 
@@ -1999,7 +2002,7 @@ export async function patchSessionOutcome(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `outcome failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`outcome failed: ${{ status: res.status }}`);
   }
 }
 
@@ -2016,7 +2019,7 @@ export async function renameSession(id: number, title: string | null): Promise<v
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `rename failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`rename failed: ${{ status: res.status }}`);
   }
 }
 
@@ -2060,7 +2063,7 @@ export async function serenaStart(id: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(id)}/serena/start`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `serena start failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`serena start failed: ${{ status: res.status }}`);
   }
 }
 
@@ -2070,7 +2073,7 @@ export async function serenaStop(id: number): Promise<void> {
   const res = await fetch(`/api/projects/${String(id)}/serena/stop`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `serena stop failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`serena stop failed: ${{ status: res.status }}`);
   }
 }
 
@@ -2103,7 +2106,7 @@ export async function fetchConnectors(): Promise<ConnectorsResponse> {
   const res = await fetch('/api/connectors');
   if (res.status === 503) {
     const data = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
-    throw new ConnectorsUnavailableError(data.error ?? 'connectors unavailable', data.hint ?? null);
+    throw new ConnectorsUnavailableError(data.error ?? t`connectors unavailable`, data.hint ?? null);
   }
   if (!res.ok) {
     throw new Error(`GET /api/connectors: ${String(res.status)}`);
@@ -2121,7 +2124,7 @@ export async function addConnector(input: AddConnectorInput): Promise<Connector[
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `add connector failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`add connector failed: ${{ status: res.status }}`);
   }
   const body = (await res.json()) as ConnectorsResponse;
   return body.connectors;
@@ -2134,7 +2137,7 @@ export async function removeConnector(name: string, scope?: string): Promise<Con
   const res = await fetch(`/api/connectors/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `remove connector failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`remove connector failed: ${{ status: res.status }}`);
   }
   const body = (await res.json()) as ConnectorsResponse;
   return body.connectors;
@@ -2156,7 +2159,7 @@ export async function createAccount(key: string): Promise<ProvisionResponse> {
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `create account failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`create account failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as ProvisionResponse;
 }
@@ -2166,7 +2169,7 @@ export async function deleteAccount(key: string): Promise<RemoveAccountResponse>
   const res = await fetch(`/api/accounts/${encodeURIComponent(key)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `delete account failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`delete account failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as RemoveAccountResponse;
 }
@@ -2188,7 +2191,7 @@ export async function putProjectAccount(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `set account failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`set account failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as AccountBinding;
 }
@@ -2257,7 +2260,7 @@ export async function createRoutine(input: RoutineInput): Promise<Routine> {
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `create routine failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`create routine failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as Routine;
 }
@@ -2272,7 +2275,7 @@ export async function patchRoutine(id: string, input: Partial<RoutineInput>): Pr
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `update routine failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`update routine failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as Routine;
 }
@@ -2283,7 +2286,7 @@ export async function deleteRoutine(id: string): Promise<void> {
   const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `delete routine failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`delete routine failed: ${{ status: res.status }}`);
   }
 }
 
@@ -2294,7 +2297,7 @@ export async function runRoutine(id: string): Promise<{ status: string }> {
   const res = await fetch(`/api/routines/${encodeURIComponent(id)}/run`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `run routine failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`run routine failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as { status: string };
 }
@@ -2335,7 +2338,7 @@ export async function epicLifecycle(
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `lifecycle ${action} failed (${String(res.status)})`);
+    throw new Error(body.error ?? t`lifecycle ${action} failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { status: Epic['status'] };
 }
@@ -2501,7 +2504,7 @@ export async function runEpicPhase(
       base?: string;
       branches?: string[];
     };
-    throw runConflictError(body, `phase run failed (${String(res.status)})`);
+    throw runConflictError(body, t`phase run failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { status: string; sessionUuid: string };
 }
@@ -2538,7 +2541,7 @@ export async function deletePhaseRunBranch(
       error?: string;
       code?: RunConflictCode;
     };
-    throw runConflictError(body, `branch delete failed (${String(res.status)})`);
+    throw runConflictError(body, t`branch delete failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { deleted: boolean; branch: string };
 }
@@ -2567,7 +2570,7 @@ export async function deleteOrphanBranch(
       error?: string;
       code?: RunConflictCode;
     };
-    throw runConflictError(body, `orphan branch delete failed (${String(res.status)})`);
+    throw runConflictError(body, t`orphan branch delete failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { deleted: boolean; branch: string };
 }
@@ -2583,7 +2586,7 @@ export async function cancelEpicPhaseRun(
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `phase run cancel failed (${String(res.status)})`);
+    throw new Error(body.error ?? t`phase run cancel failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { status: string };
 }
@@ -2624,7 +2627,7 @@ export async function runEpicPlan(
       commitsAhead?: number;
       base?: string;
     };
-    throw runConflictError(body, `plan run failed (${String(res.status)})`);
+    throw runConflictError(body, t`plan run failed (${{ status: res.status }})`);
   }
   return (await res.json()) as {
     status: string;
@@ -2655,7 +2658,7 @@ export async function deletePlanRunBranch(
       error?: string;
       code?: RunConflictCode;
     };
-    throw runConflictError(body, `branch delete failed (${String(res.status)})`);
+    throw runConflictError(body, t`branch delete failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { deleted: boolean; branch: string };
 }
@@ -2666,7 +2669,7 @@ export async function cancelEpicPlanRun(taskId: number): Promise<{ status: strin
   const res = await fetch(`/api/epics/${String(taskId)}/run/cancel`, { method: 'POST' });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `plan run cancel failed (${String(res.status)})`);
+    throw new Error(body.error ?? t`plan run cancel failed (${{ status: res.status }})`);
   }
   return (await res.json()) as { status: string };
 }
@@ -2687,7 +2690,7 @@ export async function savePlanDoc(taskId: number, path: string, content: string)
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `save doc failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`save doc failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as PlanDoc;
 }
@@ -2710,7 +2713,7 @@ export async function togglePlanCheckbox(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `toggle checkbox failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`toggle checkbox failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as PlanDoc;
 }
@@ -2834,7 +2837,7 @@ export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ method: 'device' }),
   });
-  if (!res.ok) throw await vcsLoginError(res, 'sign-in failed');
+  if (!res.ok) throw await vcsLoginError(res, t`sign-in failed`);
   return (await res.json()) as VcsLoginStart;
 }
 
@@ -2847,7 +2850,7 @@ export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
 export async function pollVcsLogin(projectId: number, loginId: string): Promise<VcsLoginPoll> {
   if (MOCK) return mockApi.pollVcsLogin();
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/login/${encodeURIComponent(loginId)}`);
-  if (!res.ok) throw await vcsLoginError(res, 'sign-in poll failed');
+  if (!res.ok) throw await vcsLoginError(res, t`sign-in poll failed`);
   return (await res.json()) as VcsLoginPoll;
 }
 
@@ -2864,7 +2867,7 @@ export async function submitVcsToken(projectId: number, token: string): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ method: 'token', token }),
   });
-  if (!res.ok) throw await vcsLoginError(res, 'token sign-in failed');
+  if (!res.ok) throw await vcsLoginError(res, t`token sign-in failed`);
   return (await res.json()) as VcsTokenResult;
 }
 
@@ -2875,7 +2878,7 @@ export async function submitVcsToken(projectId: number, token: string): Promise<
 export async function deleteVcsToken(projectId: number): Promise<void> {
   if (MOCK) return;
   const res = await fetch(`/api/projects/${String(projectId)}/vcs/token`, { method: 'DELETE' });
-  if (!res.ok) throw await vcsLoginError(res, 'sign-out failed');
+  if (!res.ok) throw await vcsLoginError(res, t`sign-out failed`);
 }
 
 // --- landing status (phase 7) ---
@@ -2894,6 +2897,6 @@ export async function refreshPhaseLanding(taskId: number, phaseId: number): Prom
   const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/landing/refresh`, {
     method: 'POST',
   });
-  if (!res.ok) throw await landError(res, 'refresh failed');
+  if (!res.ok) throw await landError(res, t`refresh failed`);
   return (await res.json()) as PhaseLandResponse['landing'];
 }

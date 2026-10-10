@@ -5,6 +5,8 @@
 // panel answers exactly that and offers no controls — see internal/api/
 // worktrees.go for why the endpoint has no write path.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { WorktreeRow, WorktreeSweep, WorktreesResponse } from '../../api/types';
 import { fetchWorktrees } from '../../api/worktrees';
@@ -41,7 +43,7 @@ function LiveRow({ wt }: { wt: WorktreeRow }): JSX.Element {
       <span className="font-mono text-[11px] break-all text-ink">{wt.path}</span>
       {wt.isMain && (
         <span className="rounded-full border border-line px-2 py-px font-mono text-[10px] text-ink-faint">
-          main
+          <Trans>main</Trans>
         </span>
       )}
       {wt.branch !== null && (
@@ -49,7 +51,9 @@ function LiveRow({ wt }: { wt: WorktreeRow }): JSX.Element {
       )}
       <span className="ml-auto flex items-center gap-2">
         {wt.dirtyFiles > 0 && (
-          <span className="font-mono text-[10px] text-ink-faint">{wt.dirtyFiles} dirty</span>
+          <span className="font-mono text-[10px] text-ink-faint">
+            {plural(wt.dirtyFiles, { one: '# dirty', few: '# dirty', many: '# dirty', other: '# dirty' })}
+          </span>
         )}
         {wt.lastVerdict !== null && <VerdictChip verdict={wt.lastVerdict} />}
         {wt.lastSweptAt !== null && (
@@ -61,6 +65,7 @@ function LiveRow({ wt }: { wt: WorktreeRow }): JSX.Element {
 }
 
 function SweepRow({ s }: { s: WorktreeSweep }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-3 py-2 last:border-b-0">
       <span className="w-[52px] shrink-0 font-mono text-[10px] text-ink-faint">
@@ -76,7 +81,7 @@ function SweepRow({ s }: { s: WorktreeSweep }): JSX.Element {
             <span className="text-brand">{s.salvageBranch}</span>
           </>
         )}
-        {s.removed && ' · removed'}
+        {s.removed && t` · removed`}
         {s.error !== null && <span className="text-red"> · {s.error}</span>}
       </span>
     </div>
@@ -108,7 +113,7 @@ export function WorktreesPanel(): JSX.Element {
   if (data === null) {
     return (
       <div className="rounded-xl border border-line bg-surface px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
-        loading worktrees…
+        <Trans>loading worktrees…</Trans>
       </div>
     );
   }
@@ -117,18 +122,19 @@ export function WorktreesPanel(): JSX.Element {
     <div className="flex flex-col gap-3">
       {!data.enabled && (
         <div className="rounded-xl border border-dashed border-amber/45 px-3.5 py-3 font-mono text-[11px] text-amber">
-          the janitor is disabled by SWARMERY_WTJANITOR — the history below is historical, not
-          current
+          <Trans>the janitor is disabled by SWARMERY_WTJANITOR — the history below is historical, not current</Trans>
         </div>
       )}
 
       <div className="overflow-hidden rounded-xl border border-line bg-surface">
         <div className="border-b border-line px-3 py-2 font-mono text-[10px] tracking-wide text-ink-faint uppercase">
-          live worktrees
+          <Trans>live worktrees</Trans>
         </div>
         {data.live.length === 0 ? (
           <div className="px-3 py-4">
-            <Empty>no worktrees on this machine</Empty>
+            <Empty>
+              <Trans>no worktrees on this machine</Trans>
+            </Empty>
           </div>
         ) : (
           data.live.map((wt) => <LiveRow key={wt.path} wt={wt} />)
@@ -137,11 +143,13 @@ export function WorktreesPanel(): JSX.Element {
 
       <div className="overflow-hidden rounded-xl border border-line bg-surface">
         <div className="border-b border-line px-3 py-2 font-mono text-[10px] tracking-wide text-ink-faint uppercase">
-          recent decisions
+          <Trans>recent decisions</Trans>
         </div>
         {data.sweeps.length === 0 ? (
           <div className="px-3 py-4">
-            <Empty>the janitor has not swept yet</Empty>
+            <Empty>
+              <Trans>the janitor has not swept yet</Trans>
+            </Empty>
           </div>
         ) : (
           data.sweeps.map((s) => <SweepRow key={`${s.ts}-${s.path}`} s={s} />)

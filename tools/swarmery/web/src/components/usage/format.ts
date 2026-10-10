@@ -2,6 +2,8 @@
 // Fusion's UsageIndicator (`formatResetAt`), kept as free functions so the
 // window row stays presentational.
 
+import { t } from '@lingui/core/macro';
+
 /**
  * An ISO reset instant → the absolute wall-clock label shown in the reset chip.
  *
@@ -61,16 +63,17 @@ export function fmtResetAt(iso: string, now: number): string {
 export function fmtResetsIn(iso: string, now: number): string {
   const ms = new Date(iso).getTime() - now;
   if (!Number.isFinite(ms)) return '';
-  if (ms <= 0) return 'resets now';
+  if (ms <= 0) return t`resets now`;
   const totalMin = Math.floor(ms / 60_000);
   const hours = Math.floor(totalMin / 60);
   const days = Math.floor(hours / 24);
   if (days > 0) {
     const remHours = hours % 24;
-    return remHours > 0 ? `resets in ${String(days)}d ${String(remHours)}h` : `resets in ${String(days)}d`;
+    return remHours > 0 ? t`resets in ${days}d ${remHours}h` : t`resets in ${days}d`;
   }
-  if (hours > 0) return `resets in ${String(hours)}h ${String(totalMin % 60)}m`;
-  return `resets in ${String(totalMin)}m`;
+  const minutes = totalMin % 60;
+  if (hours > 0) return t`resets in ${hours}h ${minutes}m`;
+  return t`resets in ${totalMin}m`;
 }
 
 /** Epoch ms → the footer's "Last updated" clock. */

@@ -13,6 +13,8 @@
 // a burst of edits costs a single request — and capped by a max wait so a
 // steady stream of updates still refetches at least every 10 s.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getFileContention } from '../api';
@@ -27,6 +29,7 @@ const REFETCH_DEBOUNCE_MS = 2000;
 const REFETCH_MAX_WAIT_MS = 10_000;
 
 export function FileContentionBanner({ project }: { project: string | null }): JSX.Element | null {
+  const { t } = useLingui();
   const [paths, setPaths] = useState<ContentionPath[]>([]);
   const [open, setOpen] = useState(false);
   const sessionHref = useSessionHref();
@@ -100,10 +103,12 @@ export function FileContentionBanner({ project }: { project: string | null }): J
   if (paths.length === 0) return null;
 
   const n = paths.length;
-  const headline =
-    n === 1
-      ? '1 file is being edited by more than one live session'
-      : `${String(n)} files are being edited by more than one live session`;
+  const headline = plural(n, {
+    one: '# file is being edited by more than one live session',
+    few: '# files are being edited by more than one live session',
+    many: '# files are being edited by more than one live session',
+    other: '# files are being edited by more than one live session',
+  });
 
   return (
     <div
@@ -120,7 +125,9 @@ export function FileContentionBanner({ project }: { project: string | null }): J
         <span aria-hidden="true" className="text-amber">
           {open ? '▾' : '▸'}
         </span>
-        <span className="font-semibold text-amber">shared files</span>
+        <span className="font-semibold text-amber">
+          <Trans>shared files</Trans>
+        </span>
         {/* The live region is the headline alone — the button and the list
             are controls, not announcements. */}
         <span aria-live="polite" className="text-ink-2">
@@ -133,24 +140,31 @@ export function FileContentionBanner({ project }: { project: string | null }): J
             <li key={p.path} className="border-t border-amber/25 pt-2">
               <div className="font-mono text-[11px] break-all text-ink">{p.path}</div>
               <ul className="mt-1 space-y-0.5">
-                {p.sessions.map((s) => (
-                  <li
-                    key={s.sessionId}
-                    className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]"
-                  >
-                    <Link
-                      to={sessionHref(s.sessionId)}
-                      className="rounded-[4px] text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
+                {p.sessions.map((s) => {
+                  const sessionId = String(s.sessionId);
+                  const changes = plural(s.changes, {
+                    one: '# change',
+                    few: '# changes',
+                    many: '# changes',
+                    other: '# changes',
+                  });
+                  const ago = fmtAgo(s.lastTouched);
+                  return (
+                    <li
+                      key={s.sessionId}
+                      className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]"
                     >
-                      {s.title ?? `session ${String(s.sessionId)}`}
-                    </Link>
-                    <span className="text-ink-dim">{s.status}</span>
-                    <span className="text-ink-faint">
-                      {s.changes === 1 ? '1 change' : `${String(s.changes)} changes`} · touched{' '}
-                      {fmtAgo(s.lastTouched)}
-                    </span>
-                  </li>
-                ))}
+                      <Link
+                        to={sessionHref(s.sessionId)}
+                        className="rounded-[4px] text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
+                      >
+                        {s.title ?? t`session ${sessionId}`}
+                      </Link>
+                      <span className="text-ink-dim">{s.status}</span>
+                      <span className="text-ink-faint">{t`${changes} · touched ${ago}`}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </li>
           ))}

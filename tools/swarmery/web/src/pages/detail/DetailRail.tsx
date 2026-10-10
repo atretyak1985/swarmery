@@ -7,6 +7,7 @@
 // sorted by churn). Everything is derived client-side from the already-loaded
 // detail — no extra API calls. Mobile keeps the SummaryChips strip instead.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import type { Event, FileChange, Turn } from '../../api/types';
 import { fmtDurationMs, fmtTokens } from '../../lib/format';
@@ -190,6 +191,7 @@ export function DetailRail({
   fileChanges: FileChange[];
   onShowDiffs: (path?: string) => void;
 }): JSX.Element | null {
+  const { t } = useLingui();
   const models = useMemo(() => deriveModels(turns), [turns]);
   const agents = useMemo(() => deriveAgents(events), [events]);
   const skills = useMemo(() => deriveSkillUsage(events), [events]);
@@ -212,13 +214,13 @@ export function DetailRail({
       {handoff != null && <HandoffCard sessionId={sessionId} handoffPath={handoff.path} />}
       <ContextHogsCard sessionId={sessionId} />
       {models.length > 0 && (
-        <UsageBlock label="models" labelTone="text-purple/70" barTone="bg-purple/60" rows={models} />
+        <UsageBlock label={t`models`} labelTone="text-purple/70" barTone="bg-purple/60" rows={models} />
       )}
       {agents.length > 0 && (
-        <UsageBlock label="agents" labelTone="text-blue/70" barTone="bg-blue/60" rows={agents} />
+        <UsageBlock label={t`agents`} labelTone="text-blue/70" barTone="bg-blue/60" rows={agents} />
       )}
       {skills.length > 0 && (
-        <UsageBlock label="skills" labelTone="text-amber/70" barTone="bg-amber/60" rows={skills} />
+        <UsageBlock label={t`skills`} labelTone="text-amber/70" barTone="bg-amber/60" rows={skills} />
       )}
 
       {tree.length > 0 && <CallTreeCard nodes={tree} />}
@@ -227,7 +229,7 @@ export function DetailRail({
         <div className="rounded-xl border border-line bg-surface px-4 py-3.5">
           <div className="mb-1 flex items-baseline justify-between">
             <span className="font-mono text-[10.5px] tracking-[0.08em] text-ink-dim uppercase">
-              files changed
+              <Trans>files changed</Trans>
             </span>
             <span className="font-mono text-[12px] font-bold text-ink">{files.length}</span>
           </div>

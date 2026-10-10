@@ -10,6 +10,9 @@
 // neighbouring style) so swapping the label for a percentage cannot shift the
 // header's height or horizontal rhythm.
 
+import type { I18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { UsageAccount, UsageProvider, UsageWindow } from '../../api/types';
 import { useActiveUsageAccount } from '../../lib/activeAccount';
@@ -18,7 +21,7 @@ import { useUsage } from '../../lib/usageData';
 import { fmtResetsIn } from './format';
 import { UsageModal } from './UsageModal';
 
-const NO_AUTH_TIP = 'Claude usage unavailable — run `claude` to log in';
+const NO_AUTH_TIP = msg`Claude usage unavailable — run \`claude\` to log in`;
 
 /**
  * Tip for a payload with nothing but not-connected providers. The daemon's own
@@ -26,11 +29,14 @@ const NO_AUTH_TIP = 'Claude usage unavailable — run `claude` to log in';
  * fact the operator needs, and it differs per cause (expired, rejected, missing
  * scope, switched off) where the generic line does not.
  */
-function noAuthTip(providers: readonly UsageProvider[]): string {
+function noAuthTip(providers: readonly UsageProvider[], i18n: I18n): string {
   const hint = providers.find((p) => p.hint !== undefined)?.hint;
-  if (hint === undefined) return NO_AUTH_TIP;
+  if (hint === undefined) return i18n._(NO_AUTH_TIP);
+  const command = hint.command;
   const fix =
-    hint.command !== undefined && hint.command !== '' ? `run \`${hint.command}\`` : 'open usage';
+    command !== undefined && command !== ''
+      ? i18n._(msg`run \`${command}\``)
+      : i18n._(msg`open usage`);
   return `${hint.title} — ${fix}`;
 }
 
@@ -91,16 +97,18 @@ function buildView(
   error: string | null,
   lastUpdated: number | null,
   notReady: string | null,
+  i18n: I18n,
 ): ChipView {
+  const usageLabel = i18n._(msg`usage`);
   // Nothing has ever loaded and the fetch failed — the only genuinely blind
   // state, so the chip greys out. A failure AFTER a success keeps the last known
   // percentages instead (stale but informative) and says so in the tip, matching
   // how the modal keeps stale cards behind a "refresh failed" footer.
   if (lastUpdated === null && error !== null) {
-    return single('usage', 'text-ink-dim', `Claude usage unavailable — ${error}`);
+    return single(usageLabel, 'text-ink-dim', i18n._(msg`Claude usage unavailable — ${error}`));
   }
   if (lastUpdated === null) {
-    return single('usage', 'text-ink-2', 'Subscription usage — loading…');
+    return single(usageLabel, 'text-ink-2', i18n._(msg`Subscription usage — loading…`));
   }
 
   // One segment per account that has a healthy window, in the daemon's account
@@ -117,14 +125,16 @@ function buildView(
     const w = pickWindow(row.providers);
     if (w === null) {
       if (row.providers.some((p) => p.status === 'no-auth')) {
-        tipParts.push(`${row.account} — not connected`);
+        const account = row.account;
+        tipParts.push(i18n._(msg`${account} — not connected`));
       }
       continue;
     }
     const reset =
       w.resetText ?? (w.resetAt !== undefined ? fmtResetsIn(w.resetAt, Date.now()) : '');
     const pct = String(Math.round(w.percentUsed));
-    const detail = [`${w.label} ${pct}% used`];
+    const windowLabel = w.label;
+    const detail = [i18n._(msg`${windowLabel} ${pct}% used`)];
     if (reset !== '') detail.push(reset);
     if (w.pace !== undefined) detail.push(w.pace.message);
     tipParts.push(`${row.account} — ${detail.join(', ')}`);
@@ -149,19 +159,20 @@ function buildView(
     const tone = notReady !== null ? 'text-amber' : 'text-ink-2';
     const all = rows.flatMap((a) => a.providers);
     if (all.length > 0 && all.every((p) => p.status === 'no-auth')) {
-      return single('usage', tone, noAuthTip(all));
+      return single(usageLabel, tone, noAuthTip(all, i18n));
     }
-    return single('usage', tone, 'Subscription usage');
+    return single(usageLabel, tone, i18n._(msg`Subscription usage`));
   }
   if (notReady !== null && !segments.some((s) => s.label === segmentLabel(notReady))) {
     segments.push({ label: segmentLabel(notReady), text: '!', tone: 'text-amber' });
   }
 
-  if (error !== null) tipParts.push('refresh failed');
+  if (error !== null) tipParts.push(i18n._(msg`refresh failed`));
   return { segments, tip: tipParts.join(' · ') };
 }
 
 export function UsageChip(): JSX.Element {
+  const { t, i18n } = useLingui();
   const { accounts, providers, error, lastUpdated, setModalOpen } = useUsage();
   const [open, setOpen] = useState(false);
   // The scoped project's effective account, threaded into the modal so it can
@@ -187,7 +198,7 @@ export function UsageChip(): JSX.Element {
     return () => setModalOpen(false);
   }, [open, setModalOpen]);
 
-  const view = buildView(providers, accounts, error, lastUpdated, notReady);
+  const view = buildView(providers, accounts, error, lastUpdated, notReady, i18n);
 
   return (
     <span className="relative">
@@ -196,7 +207,7 @@ export function UsageChip(): JSX.Element {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label="Subscription usage"
+        aria-label={t`Subscription usage`}
         // `data-tip`, never `title`: native tooltips were removed app-wide in
         // favour of the themed TooltipLayer (components/Tooltip.tsx), which also
         // wires aria-describedby — the accessible NAME still comes from

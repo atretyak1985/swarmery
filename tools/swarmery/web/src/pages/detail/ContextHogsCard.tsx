@@ -4,6 +4,8 @@
 // Token figures are ESTIMATES (~4 bytes/token from tool-result sizes) — the
 // caveat is rendered, not implied.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useMemo, useState } from 'react';
 import { fetchSessionContextHogs } from '../../api';
 import type { ContextHogsReport } from '../../api/types';
@@ -16,6 +18,7 @@ function fmtTokens(n: number): string {
 }
 
 export function ContextHogsCard({ sessionId }: { sessionId: number }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [data, setData] = useState<ContextHogsReport | null>(null);
@@ -31,11 +34,11 @@ export function ContextHogsCard({ sessionId }: { sessionId: number }): JSX.Eleme
       fetchSessionContextHogs(sessionId)
         .then((d) => setData(d))
         .catch((e: unknown) =>
-          setError(e instanceof Error ? e.message : 'failed to analyze transcript'),
+          setError(e instanceof Error ? e.message : t`failed to analyze transcript`),
         )
         .finally(() => setLoading(false));
     }
-  }, [open, data, loading, sessionId]);
+  }, [open, data, loading, sessionId, t]);
 
   const rows = useMemo(() => {
     if (data === null) return [];
@@ -43,9 +46,12 @@ export function ContextHogsCard({ sessionId }: { sessionId: number }): JSX.Eleme
   }, [data, showAll]);
 
   const maxWrite = useMemo(
-    () => (data === null ? 0 : Math.max(1, ...data.turns.map((t) => t.cacheWrite))),
+    () => (data === null ? 0 : Math.max(1, ...data.turns.map((turn) => turn.cacheWrite))),
     [data],
   );
+
+  const toolCount = data?.tools.length ?? 0;
+  const totalEst = data !== null ? fmtTokens(data.totalEst) : '';
 
   return (
     <div className="rounded-xl border border-edge bg-surface px-4 py-3.5">
@@ -55,14 +61,18 @@ export function ContextHogsCard({ sessionId }: { sessionId: number }): JSX.Eleme
         className="flex w-full items-baseline justify-between text-left"
       >
         <span className="font-mono text-[10.5px] tracking-[0.08em] text-amber/70 uppercase">
-          context hogs
+          <Trans>context hogs</Trans>
         </span>
-        <span className="font-mono text-[11px] text-ink-dim">{open ? 'hide' : 'show'}</span>
+        <span className="font-mono text-[11px] text-ink-dim">{open ? t`hide` : t`show`}</span>
       </button>
 
       {open && (
         <div className="mt-3">
-          {loading && <p className="font-mono text-[11px] text-ink-dim">analyzing transcript…</p>}
+          {loading && (
+            <p className="font-mono text-[11px] text-ink-dim">
+              <Trans>analyzing transcript…</Trans>
+            </p>
+          )}
           {error !== null && <p className="font-mono text-[11px] text-red">{error}</p>}
 
           {data !== null && (
@@ -70,19 +80,25 @@ export function ContextHogsCard({ sessionId }: { sessionId: number }): JSX.Eleme
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="text-left font-mono text-[10px] text-ink-dim uppercase">
-                    <th className="pb-1 font-normal">tool</th>
-                    <th className="pb-1 text-right font-normal">calls</th>
-                    <th className="pb-1 text-right font-normal">~tokens</th>
+                    <th className="pb-1 font-normal">
+                      <Trans>tool</Trans>
+                    </th>
+                    <th className="pb-1 text-right font-normal">
+                      <Trans>calls</Trans>
+                    </th>
+                    <th className="pb-1 text-right font-normal">
+                      <Trans>~tokens</Trans>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((t) => (
-                    <tr key={t.name} className="font-mono text-[11px] text-ink-2">
-                      <td className="max-w-[160px] truncate py-0.5 pr-2" data-tip-mono data-tip={t.name}>
-                        {t.name}
+                  {rows.map((tool) => (
+                    <tr key={tool.name} className="font-mono text-[11px] text-ink-2">
+                      <td className="max-w-[160px] truncate py-0.5 pr-2" data-tip-mono data-tip={tool.name}>
+                        {tool.name}
                       </td>
-                      <td className="py-0.5 text-right tabular-nums">{t.calls}</td>
-                      <td className="py-0.5 text-right tabular-nums">{fmtTokens(t.estTokens)}</td>
+                      <td className="py-0.5 text-right tabular-nums">{tool.calls}</td>
+                      <td className="py-0.5 text-right tabular-nums">{fmtTokens(tool.estTokens)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -94,33 +110,56 @@ export function ContextHogsCard({ sessionId }: { sessionId: number }): JSX.Eleme
                   onClick={() => setShowAll((v) => !v)}
                   className="mt-1.5 font-mono text-[10.5px] text-ink-dim hover:text-ink-2"
                 >
-                  {showAll ? 'show top 10' : `show all ${data.tools.length}`}
+                  {showAll ? t`show top 10` : t`show all ${toolCount}`}
                 </button>
               )}
 
               {data.turns.length > 1 && (
                 <div className="mt-3">
                   <div className="mb-1 font-mono text-[10px] text-ink-dim uppercase">
-                    cache-write per turn
+                    <Trans>cache-write per turn</Trans>
                   </div>
                   <div className="flex h-8 items-end gap-px">
-                    {data.turns.map((t) => (
-                      <div
-                        key={t.seq}
-                        data-tip={`turn ${t.seq}: ${fmtTokens(t.cacheWrite)}`}
-                        className="min-w-[2px] flex-1 rounded-t-[1px] bg-amber/50"
-                        style={{ height: `${Math.max(6, (t.cacheWrite / maxWrite) * 100)}%` }}
-                      />
-                    ))}
+                    {data.turns.map((turn) => {
+                      const seq = turn.seq;
+                      const written = fmtTokens(turn.cacheWrite);
+                      return (
+                        <div
+                          key={seq}
+                          data-tip={t`turn ${seq}: ${written}`}
+                          className="min-w-[2px] flex-1 rounded-t-[1px] bg-amber/50"
+                          style={{ height: `${Math.max(6, (turn.cacheWrite / maxWrite) * 100)}%` }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               <p className="mt-2.5 font-mono text-[10px] leading-snug text-ink-dim">
-                ~{fmtTokens(data.totalEst)} total, estimated at ~4 bytes/token from tool-result
-                sizes
-                {data.uninspected > 0 && ` · ${data.uninspected} unattributed result(s)`}
-                {data.malformed > 0 && ` · ${data.malformed} malformed line(s) skipped`}
+                <Trans>~{totalEst} total, estimated at ~4 bytes/token from tool-result sizes</Trans>
+                {data.uninspected > 0 && (
+                  <>
+                    {' · '}
+                    {plural(data.uninspected, {
+                      one: '# unattributed result',
+                      few: '# unattributed results',
+                      many: '# unattributed results',
+                      other: '# unattributed results',
+                    })}
+                  </>
+                )}
+                {data.malformed > 0 && (
+                  <>
+                    {' · '}
+                    {plural(data.malformed, {
+                      one: '# malformed line skipped',
+                      few: '# malformed lines skipped',
+                      many: '# malformed lines skipped',
+                      other: '# malformed lines skipped',
+                    })}
+                  </>
+                )}
               </p>
             </>
           )}

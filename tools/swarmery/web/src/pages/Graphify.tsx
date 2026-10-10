@@ -7,6 +7,7 @@
 // The route exists only while the sidebar item does (graphify.projects > 0),
 // but the page still renders an honest empty state on direct navigation.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ToolsResponse } from '../api/types';
 import { fetchTools } from '../api';
@@ -23,6 +24,7 @@ import { fmtAgo } from '../lib/format';
 import { findProject } from '../lib/projectSlug';
 
 export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Element {
+  const { t } = useLingui();
   const [data, setData] = useState<ToolsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Selection is kept by project id so it survives reloads; null → default
@@ -66,6 +68,7 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
   const project = scoped
     ? (findProject(projects, scopedSlug ?? null) ?? undefined)
     : (projects.find((p) => p.id === selectedId) ?? projects.find((p) => p.hasViz) ?? projects[0]);
+  const builtAgo = project?.builtAt != null ? fmtAgo(project.builtAt) : '';
 
   return (
     // Fill route (`handle: { fill: true }`, src/main.tsx): the shell has stopped
@@ -76,7 +79,9 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
       {/* SectionTitle owns its margins and takes no className, so the shrink-0
           flex item is a wrapper around it. */}
       <div className="shrink-0">
-        <SectionTitle>graphify</SectionTitle>
+        <SectionTitle>
+          <Trans>graphify</Trans>
+        </SectionTitle>
       </div>
       {error !== null && (
         <div className="mb-2 shrink-0">
@@ -84,13 +89,13 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
         </div>
       )}
       {data === null && error === null ? (
-        <Loading label="graphify…" />
+        <Loading label={t`graphify…`} />
       ) : data !== null ? (
         project === undefined ? (
           <Empty>
             {scoped
-              ? 'graphify-pack is not enabled for this project — enable it in Settings'
-              : 'no projects with graphify-pack enabled — enable it in a project’s plugins card'}
+              ? t`graphify-pack is not enabled for this project — enable it in Settings`
+              : t`no projects with graphify-pack enabled — enable it in a project’s plugins card`}
           </Empty>
         ) : (
           <>
@@ -102,7 +107,7 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
                   <select
                     value={String(project.id)}
                     onChange={(e) => setSelectedId(Number(e.target.value))}
-                    aria-label="graphify project"
+                    aria-label={t`graphify project`}
                     className="rounded-[9px] border border-line-strong bg-field px-2.5 py-[6px] font-mono text-[12px] text-ink transition-colors outline-none focus:border-ink-dim"
                   >
                     {projects.map((p) => (
@@ -114,7 +119,7 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
                 )}
                 {project.builtAt !== null && (
                   <span className="font-mono text-[10.5px] text-ink-faint">
-                    graph built {fmtAgo(project.builtAt)}
+                    <Trans>graph built {builtAgo}</Trans>
                   </span>
                 )}
                 {project.hasViz && (
@@ -135,13 +140,13 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
               <ExpandableSection
                 expanded={expanded}
                 onToggle={setExpanded}
-                label="graphify visualization"
+                label={t`graphify visualization`}
                 className="mt-3"
               >
                 <iframe
                   key={project.id}
                   src={project.vizPath}
-                  title="Graphify visualization"
+                  title={t`Graphify visualization`}
                   // One class list for both states — the height comes from the flex
                   // parent, never from the viewport. The previous height was viewport
                   // math minus a hardcoded 180px for the chrome above it; every guess
@@ -156,8 +161,8 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
               <div className="mt-3 shrink-0">
                 <Empty>
                   {project.hasGraph
-                    ? 'graph.json exists but no visualization — run /graphify <repo> (without --no-viz) to generate graph.html'
-                    : 'no graph yet — run /graphify in this repo'}
+                    ? t`graph.json exists but no visualization — run /graphify <repo> (without --no-viz) to generate graph.html`
+                    : t`no graph yet — run /graphify in this repo`}
                 </Empty>
               </div>
             )}

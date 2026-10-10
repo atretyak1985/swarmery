@@ -22,6 +22,8 @@
 // wrapper); below that it becomes a centred modal over a dimmed backdrop,
 // following AttachModal's overlay pattern.
 
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActiveAccount } from '../../lib/activeAccount';
 import { useUsage } from '../../lib/usageData';
@@ -43,8 +45,8 @@ const TICK_MS = 30_000;
 const DESKTOP_QUERY = '(min-width: 768px)';
 
 const SEGMENTS = [
-  { value: 'used', label: 'Used' },
-  { value: 'remaining', label: 'Remaining' },
+  { value: 'used', label: msg`Used` },
+  { value: 'remaining', label: msg`Remaining` },
 ] as const;
 
 export function UsageModal({
@@ -61,6 +63,7 @@ export function UsageModal({
    */
   active?: ActiveAccount | null;
 }): JSX.Element | null {
+  const { t, i18n } = useLingui();
   const { accounts, error, loading, lastUpdated, refresh } = useUsage();
   const [prefs, setPrefs] = useState<UsagePrefs>(readUsagePrefs);
   const [now, setNow] = useState(() => Date.now());
@@ -199,6 +202,8 @@ export function UsageModal({
    *  "nothing reported" empty state and swallow its own error. */
   const hasContent = cards.length > 0 || accounts.some((a) => (a.error ?? '') !== '');
   const mode = prefs.mode;
+  const activeProject = active?.project ?? '';
+  const updatedAt = lastUpdated !== null ? fmtClock(lastUpdated) : '';
   const segClass = (active: boolean): string =>
     `rounded-[6px] px-2 py-0.5 font-mono text-[10.5px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
       active ? 'bg-surface2 text-ink' : 'text-ink-dim hover:text-ink'
@@ -211,7 +216,7 @@ export function UsageModal({
       ref={dialogRef}
       tabIndex={-1}
       role="dialog"
-      aria-label="Subscription usage"
+      aria-label={t`Subscription usage`}
       aria-modal={desktop ? undefined : true}
       onClick={desktop ? undefined : (e) => e.stopPropagation()}
       className={
@@ -225,12 +230,12 @@ export function UsageModal({
           <span aria-hidden="true" className="text-brand">
             ◔
           </span>
-          usage
+          <Trans>usage</Trans>
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           <span
             role="group"
-            aria-label="usage display mode"
+            aria-label={t`usage display mode`}
             className="flex gap-0.5 rounded-lg border border-line-strong bg-field p-0.5"
           >
             {SEGMENTS.map((s) => (
@@ -241,15 +246,15 @@ export function UsageModal({
                 onClick={() => setMode(s.value)}
                 className={segClass(mode === s.value)}
               >
-                {s.label}
+                {i18n._(s.label)}
               </button>
             ))}
           </span>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close usage"
-            data-tip="close"
+            aria-label={t`Close usage`}
+            data-tip={t`close`}
             className={btnClass}
           >
             <span aria-hidden="true">✕</span>
@@ -272,13 +277,20 @@ export function UsageModal({
             ▸
           </span>
           <span className="min-w-0 truncate">
-            {active.project} runs as <span className="font-semibold text-ink">{activeKey}</span>
-            {active.source === 'default' && <span className="text-ink-faint"> (no binding)</span>}
+            <Trans>
+              {activeProject} runs as <span className="font-semibold text-ink">{activeKey}</span>
+            </Trans>
+            {active.source === 'default' && (
+              <span className="text-ink-faint">
+                {' '}
+                <Trans>(no binding)</Trans>
+              </span>
+            )}
             {/* An active account the daemon has no usage row for — bound but not
                 ingested. Said out loud, or the banner would name an account the
                 cards below never show. */}
             {!accounts.some((a) => a.account === activeKey) && (
-              <span className="text-ink-faint"> · no usage data for this account</span>
+              <span className="text-ink-faint">{t` · no usage data for this account`}</span>
             )}
           </span>
         </div>
@@ -291,7 +303,7 @@ export function UsageModal({
       {multiAccount && (
         <div
           role="group"
-          aria-label="usage accounts"
+          aria-label={t`usage accounts`}
           className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-line px-3 py-1.5"
         >
           {accounts.map((a) => {
@@ -302,7 +314,7 @@ export function UsageModal({
                 type="button"
                 aria-pressed={tab === a.account}
                 onClick={() => setTab(a.account)}
-                data-tip={isActive ? "the account this project's sessions run under" : undefined}
+                data-tip={isActive ? t`the account this project's sessions run under` : undefined}
                 className={segClass(tab === a.account)}
               >
                 {a.account}
@@ -322,7 +334,7 @@ export function UsageModal({
         {/* `lastUpdated === null` IS "nothing has ever loaded" — the shared
             poller reports no separate payload object. */}
         {lastUpdated === null && error === null && (
-          <div className="flex flex-col gap-2" role="status" aria-label="loading usage">
+          <div className="flex flex-col gap-2" role="status" aria-label={t`loading usage`}>
             {['a', 'b', 'c'].map((k) => (
               <div
                 key={k}
@@ -338,7 +350,11 @@ export function UsageModal({
           <ErrorBox message={error} onRetry={() => void refresh(true)} />
         )}
 
-        {lastUpdated !== null && !hasContent && <Empty>no usage providers reported</Empty>}
+        {lastUpdated !== null && !hasContent && (
+          <Empty>
+            <Trans>no usage providers reported</Trans>
+          </Empty>
+        )}
 
         {hasContent && (
           <div className="flex flex-col gap-2">
@@ -381,9 +397,9 @@ export function UsageModal({
 
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2">
         <span className="min-w-0 truncate font-mono text-[9.5px] text-ink-faint">
-          {lastUpdated !== null ? `Last updated: ${fmtClock(lastUpdated)}` : 'not yet loaded'}
+          {lastUpdated !== null ? t`Last updated: ${updatedAt}` : t`not yet loaded`}
           {lastUpdated !== null && error !== null && (
-            <span className="text-red"> · refresh failed</span>
+            <span className="text-red">{t` · refresh failed`}</span>
           )}
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
@@ -393,10 +409,10 @@ export function UsageModal({
             disabled={loading}
             className={btnClass}
           >
-            {loading ? '…' : 'refresh'}
+            {loading ? '…' : t`refresh`}
           </button>
           <button type="button" onClick={onClose} className={btnClass}>
-            close
+            <Trans>close</Trans>
           </button>
         </span>
       </div>

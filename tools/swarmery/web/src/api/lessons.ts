@@ -3,6 +3,7 @@
 // active ONLY through acceptLesson — the operator's action. MOCK mode serves a
 // fixture queue so the page renders offline.
 
+import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
 
 export type LessonStatus = 'candidate' | 'active' | 'retired' | 'dismissed' | 'merged';
@@ -119,7 +120,7 @@ export async function fetchRetirements(): Promise<RetirementProposal[]> {
 async function decideRetirement(id: number, action: 'confirm' | 'keep'): Promise<RetirementProposal> {
   if (MOCK) {
     const cur = MOCK_PROPOSALS.find((p) => p.id === id);
-    if (cur === undefined) throw new Error(`no such proposal ${String(id)}`);
+    if (cur === undefined) throw new Error(t`no such proposal ${id}`);
     cur.state = action === 'confirm' ? 'confirmed' : 'kept';
     return cur;
   }
@@ -248,7 +249,7 @@ export async function fetchLessons(status?: LessonStatus): Promise<Lesson[]> {
 
 function mockUpdate(id: number, patch: Partial<Lesson>): Lesson {
   const cur = MOCK_LESSONS.find((l) => l.id === id);
-  if (cur === undefined) throw new Error(`no such lesson ${String(id)}`);
+  if (cur === undefined) throw new Error(t`no such lesson ${id}`);
   const next = { ...cur, ...patch };
   MOCK_LESSONS.splice(MOCK_LESSONS.indexOf(cur), 1, next);
   return next;

@@ -25,6 +25,8 @@
 // Frozen WS bus: session_updated/task_updated → refetch, plus a 4s reconcile
 // poll while the wizard is open and a settle-poll for the workspace task row.
 
+import { msg } from '@lingui/core/macro';
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { PlanRevision, PlanningStatus, TaskSummary, WSMessage } from '../api/types';
@@ -61,9 +63,9 @@ const STATUS_POLL_MS = 4_000;
 /** The models an operator may plan with — the same closed set the daemon
  * accepts (planning.Models); the value is the short name the API resolves. */
 const PLANNING_MODELS = [
-  { value: 'opus', label: 'opus 5.5 — default', id: 'claude-opus-5-5' },
-  { value: 'sonnet', label: 'sonnet 5 — faster, cheaper', id: 'claude-sonnet-5' },
-  { value: 'fable', label: 'fable 5.1 — most capable, ~2.5× cost', id: 'claude-fable-5-1' },
+  { value: 'opus', label: msg`opus 5.5 — default`, id: 'claude-opus-5-5' },
+  { value: 'sonnet', label: msg`sonnet 5 — faster, cheaper`, id: 'claude-sonnet-5' },
+  { value: 'fable', label: msg`fable 5.1 — most capable, ~2.5× cost`, id: 'claude-fable-5-1' },
 ] as const;
 type PlanningModel = (typeof PLANNING_MODELS)[number]['value'];
 const DEFAULT_PLANNING_MODEL: PlanningModel = 'opus';
@@ -107,12 +109,12 @@ function modelShortName(id: string): string {
 // as "the run is unpinned", which is the one thing it is not.
 const PLANNING_DEFAULT_EFFORT_LABEL = 'high';
 const PLANNING_EFFORTS = [
-  { value: 'default', label: `planner default — ${PLANNING_DEFAULT_EFFORT_LABEL} (no effort key sent)` },
-  { value: 'low', label: 'low — mechanical work' },
-  { value: 'medium', label: 'medium — scoped work' },
-  { value: 'high', label: 'high — planning' },
-  { value: 'xhigh', label: 'xhigh — deepest, slowest' },
-  { value: 'max', label: 'max — no ceiling' },
+  { value: 'default', label: msg`planner default — ${PLANNING_DEFAULT_EFFORT_LABEL} (no effort key sent)` },
+  { value: 'low', label: msg`low — mechanical work` },
+  { value: 'medium', label: msg`medium — scoped work` },
+  { value: 'high', label: msg`high — planning` },
+  { value: 'xhigh', label: msg`xhigh — deepest, slowest` },
+  { value: 'max', label: msg`max — no ceiling` },
 ] as const;
 type PlanningEffort = (typeof PLANNING_EFFORTS)[number]['value'];
 const DEFAULT_PLANNING_EFFORT: PlanningEffort = 'default';
@@ -142,6 +144,7 @@ function fmtElapsed(startedAt: string, nowMs: number): string {
 }
 
 export function PlanningMode(): JSX.Element {
+  const { i18n, t } = useLingui();
   const { projectId, project, slug, loading } = useProjectWorkspace();
   const sessionHref = useSessionHref();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -332,17 +335,17 @@ export function PlanningMode(): JSX.Element {
           // Newest first: a failed newest row means THIS run's staging died.
           const newest = revs[0];
           if (newest !== undefined && newest.status === 'failed')
-            setStagingError(newest.error ?? 'staging the revision failed');
+            setStagingError(newest.error ?? t`staging the revision failed`);
         })
         .catch(() => {
           /* revisions unavailable — retry next tick */
         });
     };
     poll();
-    const t = window.setInterval(poll, STATUS_POLL_MS);
+    const timer = window.setInterval(poll, STATUS_POLL_MS);
     return () => {
       disposed = true;
-      window.clearInterval(t);
+      window.clearInterval(timer);
     };
   }, [isRevise, reviseTaskId, wstatus]);
 
@@ -511,17 +514,24 @@ export function PlanningMode(): JSX.Element {
   if (loading && status === null) {
     return (
       <div className="px-4 pt-6 pb-10 desk:px-8">
-        <Loading label="planning…" />
+        <Loading label={t`planning…`} />
       </div>
     );
   }
   if (projectId === null) {
     return (
       <div className="px-4 pt-6 pb-10 desk:px-8">
-        <Empty>unknown project — pick one from the switcher</Empty>
+        <Empty>
+          <Trans>unknown project — pick one from the switcher</Trans>
+        </Empty>
       </div>
     );
   }
+  const startedAgo = status?.startedAt != null ? fmtAgo(status.startedAt) : '';
+  const lastError = status?.lastError ?? '';
+  const stagedDocCount = stagedRevision?.files.length ?? 0;
+  const planDir = status?.planDir ?? '';
+  const planId = plan?.externalId ?? '';
 
   // Idle, cancelled AND failed all land here — failed shows the error card
   // above an intake prefilled with the same idea. A revise wizard never shows
@@ -569,14 +579,16 @@ export function PlanningMode(): JSX.Element {
         </span>
       )}
       {status?.startedAt != null && (
-        <span className="font-mono text-[10.5px] text-ink-faint">started {fmtAgo(status.startedAt)}</span>
+        <span className="font-mono text-[10.5px] text-ink-faint">
+          <Trans>started {startedAgo}</Trans>
+        </span>
       )}
       {sessionUuid !== '' && (
         <Link
           to={sessionHref(sessionUuid)}
           className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
         >
-          open session →
+          <Trans>open session →</Trans>
         </Link>
       )}
       <div className="ml-auto flex items-center gap-2">
@@ -587,7 +599,7 @@ export function PlanningMode(): JSX.Element {
             onClick={() => setHistoryOpen(true)}
             className="rounded-lg border border-line px-3 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
           >
-            History
+            <Trans>History</Trans>
           </button>
         )}
         <button
@@ -596,7 +608,7 @@ export function PlanningMode(): JSX.Element {
           onClick={cancel}
           className="rounded-lg border border-red/40 px-3 py-1 font-mono text-[11px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
         >
-          cancel
+          <Trans>cancel</Trans>
         </button>
       </div>
     </div>
@@ -611,13 +623,15 @@ export function PlanningMode(): JSX.Element {
           vertical middle of the right margin, touching neither line. Flowing in
           the sentence, it wraps with the prose instead. */}
       <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
-        Transform your idea into a plan
+        <Trans>Transform your idea into a plan</Trans>
       </h1>
       <p className="mt-1.5 max-w-[70ch] text-[13px] text-ink-dim">
-        Describe what you want to build for{' '}
-        <span className="font-mono text-ink">{projectLabel}</span>. A planner session interviews you
-        with structured questions, keeps a running plan, and writes the full plan when you tell it to
-        proceed. <Explain id="planning-mode" />
+        <Trans>
+          Describe what you want to build for <span className="font-mono text-ink">{projectLabel}</span>. A
+          planner session interviews you with structured questions, keeps a running plan, and writes the full
+          plan when you tell it to proceed.
+        </Trans>{' '}
+        <Explain id="planning-mode" />
       </p>
 
       {error !== null && (
@@ -636,11 +650,13 @@ export function PlanningMode(): JSX.Element {
           role="alert"
         >
           <span className="rounded border border-red/40 bg-red/10 px-1.5 py-px font-mono text-[9.5px] text-red">
-            not delivered
+            <Trans>not delivered</Trans>
           </span>
           <span className="min-w-0 text-[12.5px] leading-relaxed text-ink-2">
-            Your last reply did not reach the planner: {status.lastError}. The question below is the
-            same one — answering it again is the retry.
+            <Trans>
+              Your last reply did not reach the planner: {lastError}. The question below is the same one —
+              answering it again is the retry.
+            </Trans>
           </span>
         </div>
       )}
@@ -650,10 +666,10 @@ export function PlanningMode(): JSX.Element {
       {isRevise && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber/40 bg-amber/5 px-3 py-2">
           <span className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber">
-            revising
+            <Trans>revising</Trans>
           </span>
           <span className="text-[12.5px] leading-relaxed text-ink-2">
-            Revising{' '}
+            <Trans>Revising</Trans>{' '}
             {reviseTaskId !== null ? (
               <Link
                 to={
@@ -663,12 +679,12 @@ export function PlanningMode(): JSX.Element {
                 }
                 className="text-brand hover:underline"
               >
-                {reviseTask?.title ?? 'the plan'}
+                {reviseTask?.title ?? t`the plan`}
               </Link>
             ) : (
-              'the plan'
+              t`the plan`
             )}{' '}
-            — nothing is written until you approve the diff.
+            <Trans>— nothing is written until you approve the diff.</Trans>
           </span>
         </div>
       )}
@@ -678,19 +694,23 @@ export function PlanningMode(): JSX.Element {
         <Card>
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="inline-block h-[7px] w-[7px] shrink-0 rounded-full bg-red" aria-hidden="true" />
-            <span className="text-[13px] font-semibold text-ink">Planning run failed</span>
+            <span className="text-[13px] font-semibold text-ink">
+              <Trans>Planning run failed</Trans>
+            </span>
             {sessionUuid !== '' && (
               <Link
                 to={sessionHref(sessionUuid)}
                 className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
               >
-                open session →
+                <Trans>open session →</Trans>
               </Link>
             )}
           </div>
           <div className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
-            The planner run ended without a reply. Adjust the idea below (it is prefilled) and start
-            again — a new run supersedes this one.
+            <Trans>
+              The planner run ended without a reply. Adjust the idea below (it is prefilled) and start again — a
+              new run supersedes this one.
+            </Trans>
           </div>
         </Card>
       )}
@@ -712,18 +732,20 @@ export function PlanningMode(): JSX.Element {
               aria-hidden="true"
             />
             <span className="text-[13px] font-semibold text-ink">
-              {stagingError !== null
-                ? 'Staging the revision failed'
-                : stagedRevision !== null
-                  ? 'Revision staged'
-                  : 'Interview done — staging the revision'}
+              {stagingError !== null ? (
+                <Trans>Staging the revision failed</Trans>
+              ) : stagedRevision !== null ? (
+                <Trans>Revision staged</Trans>
+              ) : (
+                <Trans>Interview done — staging the revision</Trans>
+              )}
             </span>
             {sessionUuid !== '' && (
               <Link
                 to={sessionHref(sessionUuid)}
                 className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
               >
-                open session →
+                <Trans>open session →</Trans>
               </Link>
             )}
             {stagedRevision !== null && reviseTaskId !== null && (
@@ -735,7 +757,7 @@ export function PlanningMode(): JSX.Element {
                 }
                 className="ml-auto rounded-lg border border-green/45 bg-green/12 px-3 py-1 font-mono text-[11px] font-semibold text-green transition-colors hover:bg-green/20"
               >
-                Review changes →
+                <Trans>Review changes →</Trans>
               </Link>
             )}
           </div>
@@ -743,13 +765,15 @@ export function PlanningMode(): JSX.Element {
             {stagingError !== null ? (
               <span className="font-mono text-[11px] text-red">{stagingError}</span>
             ) : stagedRevision !== null ? (
-              <>
-                {stagedRevision.files.length} plan doc
-                {stagedRevision.files.length === 1 ? '' : 's'} staged as a diff — review it per
-                file, then Apply or Reject. Nothing has been written yet.
-              </>
+              <Plural
+                value={stagedDocCount}
+                one="# plan doc staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet."
+                few="# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet."
+                many="# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet."
+                other="# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet."
+              />
             ) : (
-              'the wizard finished; its staged diff is being picked up by the daemon…'
+              <Trans>the wizard finished; its staged diff is being picked up by the daemon…</Trans>
             )}
           </div>
         </Card>
@@ -759,7 +783,9 @@ export function PlanningMode(): JSX.Element {
         <Card>
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="inline-block h-[7px] w-[7px] shrink-0 rounded-full bg-green" aria-hidden="true" />
-            <span className="text-[13px] font-semibold text-ink">Plan ready</span>
+            <span className="text-[13px] font-semibold text-ink">
+              <Trans>Plan ready</Trans>
+            </span>
             {plan !== null ? (
               <Link
                 to={plansPath(slug, { plan: plan.externalId })}
@@ -772,7 +798,7 @@ export function PlanningMode(): JSX.Element {
                 to={plansPath(slug, { plan: null })}
                 className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand"
               >
-                open Plans →
+                <Trans>open Plans →</Trans>
               </Link>
             )}
             <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -782,7 +808,7 @@ export function PlanningMode(): JSX.Element {
                   onClick={() => setHistoryOpen(true)}
                   className="rounded-lg border border-line px-3 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
                 >
-                  History
+                  <Trans>History</Trans>
                 </button>
               )}
               <button
@@ -796,34 +822,38 @@ export function PlanningMode(): JSX.Element {
                 }}
                 className="rounded-lg border border-brand/45 bg-brand/12 px-3 py-1 font-mono text-[11px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
               >
-                Start another plan
+                <Trans>Start another plan</Trans>
               </button>
             </div>
           </div>
           <div className="mt-2 font-mono text-[11px] text-ink-dim">
-            {status?.planDir != null && status.planDir !== '' ? (
-              <>
-                plan saved at <span className="text-ink">{status.planDir}</span>
-              </>
+            {planDir !== '' ? (
+              <Trans>
+                plan saved at <span className="text-ink">{planDir}</span>
+              </Trans>
             ) : (
-              'the plan directory is being picked up by the workspace scan…'
+              <Trans>the plan directory is being picked up by the workspace scan…</Trans>
             )}
             {plan !== null && (
               <>
                 {' '}
-                — tracked as <span className="text-ink">{plan.externalId}</span>
+                <Trans>
+                  — tracked as <span className="text-ink">{planId}</span>
+                </Trans>
               </>
             )}
           </div>
           <div className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
-            Review it on the{' '}
-            <Link
-              to={plansPath(slug, { plan: plan !== null ? plan.externalId : null })}
-              className="text-brand hover:underline"
-            >
-              Plans page
-            </Link>{' '}
-            — phases run from there.
+            <Trans>
+              Review it on the{' '}
+              <Link
+                to={plansPath(slug, { plan: plan !== null ? plan.externalId : null })}
+                className="text-brand hover:underline"
+              >
+                Plans page
+              </Link>{' '}
+              — phases run from there.
+            </Trans>
           </div>
         </Card>
       )}
@@ -833,7 +863,7 @@ export function PlanningMode(): JSX.Element {
         <div className="mt-5 max-w-[80ch]">
           {newPlanMode && (
             <div className="mb-1.5 font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
-              next idea
+              <Trans>next idea</Trans>
             </div>
           )}
           <textarea
@@ -841,8 +871,8 @@ export function PlanningMode(): JSX.Element {
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
             rows={5}
-            placeholder="e.g. Add a bulk-export button to the reports page that streams a CSV…"
-            aria-label="describe what you want to build"
+            placeholder={t`e.g. Add a bulk-export button to the reports page that streams a CSV…`}
+            aria-label={t`describe what you want to build`}
             className="w-full resize-y rounded-xl border border-line bg-field px-3.5 py-3 text-[13.5px] leading-relaxed text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-brand/50"
           />
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -852,7 +882,13 @@ export function PlanningMode(): JSX.Element {
               onClick={start}
               className="rounded-lg border border-brand/50 bg-brand/12 px-4 py-2 text-[13px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
             >
-              {busy ? 'starting…' : wstatus === 'failed' ? 'Start again' : 'Start planning'}
+              {busy ? (
+                <Trans>starting…</Trans>
+              ) : wstatus === 'failed' ? (
+                <Trans>Start again</Trans>
+              ) : (
+                <Trans>Start planning</Trans>
+              )}
             </button>
             <select
               value={plannerModel}
@@ -860,13 +896,13 @@ export function PlanningMode(): JSX.Element {
               onChange={(e) => {
                 if (isPlanningModel(e.target.value)) setPlannerModel(e.target.value);
               }}
-              aria-label="planner model"
-              title="the model that runs the planning interview and writes the plan"
+              aria-label={t`planner model`}
+              title={t`the model that runs the planning interview and writes the plan`}
               className="rounded-lg border border-line bg-field px-2 py-2 font-mono text-[11px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
             >
               {PLANNING_MODELS.map((m) => (
                 <option key={m.value} value={m.value}>
-                  {m.label}
+                  {i18n._(m.label)}
                 </option>
               ))}
             </select>
@@ -876,13 +912,13 @@ export function PlanningMode(): JSX.Element {
               onChange={(e) => {
                 if (isPlanningEffort(e.target.value)) setPlannerEffort(e.target.value);
               }}
-              aria-label="planner effort"
-              title="how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
+              aria-label={t`planner effort`}
+              title={t`how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting.`}
               className="rounded-lg border border-line bg-field px-2 py-2 font-mono text-[11px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
             >
               {PLANNING_EFFORTS.map((e) => (
                 <option key={e.value} value={e.value}>
-                  {e.label}
+                  {i18n._(e.label)}
                 </option>
               ))}
             </select>
@@ -893,7 +929,7 @@ export function PlanningMode(): JSX.Element {
                 onClick={() => setNewPlanMode(false)}
                 className="rounded-lg border border-line px-3 py-2 font-mono text-[11px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink disabled:opacity-50"
               >
-                keep the plan card
+                <Trans>keep the plan card</Trans>
               </button>
             )}
           </div>
@@ -908,21 +944,23 @@ export function PlanningMode(): JSX.Element {
         <div className="mt-3 grid items-start gap-3 desk:grid-cols-3">
           <div className="min-w-0 desk:col-span-2">
             <Card>
-              {runHeader(wstatus === 'proceeding' ? 'Writing the plan' : 'Planner thinking', true)}
+              {runHeader(wstatus === 'proceeding' ? t`Writing the plan` : t`Planner thinking`, true)}
               <div className="mt-3 flex items-center gap-2 font-mono text-[11.5px] text-ink-dim">
                 <span
                   className="inline-block h-3 w-3 animate-spin rounded-full border border-line border-t-brand"
                   aria-hidden="true"
                 />
-                {wstatus === 'proceeding'
-                  ? 'interview closed — writing the full plan into the workspace…'
-                  : 'reading the repo and preparing the next question…'}
+                {wstatus === 'proceeding' ? (
+                  <Trans>interview closed — writing the full plan into the workspace…</Trans>
+                ) : (
+                  <Trans>reading the repo and preparing the next question…</Trans>
+                )}
                 {status?.startedAt != null && <span>· {fmtElapsed(status.startedAt, nowMs)}</span>}
               </div>
               {lastReasoning !== '' && (
                 <div className="mt-3">
                   <div className="mb-1 font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
-                    latest reasoning
+                    <Trans>latest reasoning</Trans>
                   </div>
                   <pre className="max-h-40 overflow-y-auto rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
                     {lastReasoning}
@@ -950,7 +988,7 @@ export function PlanningMode(): JSX.Element {
         <>
           <Card>
             {runHeader(
-              'Planner is asking',
+              t`Planner is asking`,
               false,
               expandTrigger(() => setInterviewExpanded(true), interviewExpanded),
             )}
@@ -963,7 +1001,7 @@ export function PlanningMode(): JSX.Element {
           <ExpandableSection
             expanded={interviewExpanded}
             onToggle={setInterviewExpanded}
-            label="planner interview"
+            label={t`planner interview`}
             className="mt-3"
           >
             <div
@@ -1020,7 +1058,7 @@ export function PlanningMode(): JSX.Element {
       {wstatus === 'awaiting_answer' && status?.currentQuestion == null && (
         <Card>
           {runHeader(
-            'Planner replied',
+            t`Planner replied`,
             false,
             expandTrigger(() => setReplyExpanded(true), replyExpanded),
           )}
@@ -1030,11 +1068,11 @@ export function PlanningMode(): JSX.Element {
           <ExpandableSection
             expanded={replyExpanded}
             onToggle={setReplyExpanded}
-            label="planner reply"
+            label={t`planner reply`}
             className="mt-3"
           >
             <div className="mb-1.5 font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
-              planner
+              <Trans>planner</Trans>
             </div>
             {/* Collapsed the reply is one card in a scrolling page, so it is
                 capped and scrolls inside that cap. Expanded the cap is the
@@ -1045,7 +1083,7 @@ export function PlanningMode(): JSX.Element {
                 replyExpanded ? 'min-h-0 flex-1' : 'max-h-72'
               }`}
             >
-              {status?.rawReply ?? '(no reply text)'}
+              {status?.rawReply ?? t`(no reply text)`}
             </div>
             <form
               className="mt-2 flex shrink-0 flex-wrap gap-2"
@@ -1058,8 +1096,8 @@ export function PlanningMode(): JSX.Element {
                 type="text"
                 value={rawAnswer}
                 onChange={(e) => setRawAnswer(e.target.value)}
-                placeholder="answer the planner…"
-                aria-label="answer the planner"
+                placeholder={t`answer the planner…`}
+                aria-label={t`answer the planner`}
                 className="min-w-0 flex-1 basis-[240px] rounded-lg border border-line bg-field px-2.5 py-[7px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-brand/50"
               />
               <button
@@ -1067,7 +1105,7 @@ export function PlanningMode(): JSX.Element {
                 disabled={busy || rawAnswer.trim() === ''}
                 className="rounded-lg border border-brand/45 bg-brand/12 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
               >
-                reply
+                <Trans>reply</Trans>
               </button>
             </form>
           </ExpandableSection>

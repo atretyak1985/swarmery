@@ -14,6 +14,8 @@
 // change. On days with no approval signal the wait sections degrade to a
 // neutral "nothing waited on you" line.
 
+import { defineMessage, plural } from '@lingui/core/macro';
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type {
@@ -130,7 +132,10 @@ function WaitHero({ waitedMs, tools }: { waitedMs: number; tools: ToolWait[] }):
   if (waitedMs < 1000 || tools.length === 0) {
     return (
       <h1 className="mt-3.5 max-w-[22ch] text-balance font-display text-[28px] leading-[1.16] font-medium tracking-[-0.015em] desk:text-[38px]">
-        Nothing waited on you today. <span className="text-ink-dim">Agents ran clean.</span>
+        <Trans>Nothing waited on you today.</Trans>{' '}
+        <span className="text-ink-dim">
+          <Trans>Agents ran clean.</Trans>
+        </span>
       </h1>
     );
   }
@@ -139,17 +144,26 @@ function WaitHero({ waitedMs, tools }: { waitedMs: number; tools: ToolWait[] }):
   const sorted = [...tools].sort((a, b) => b.waitedMs - a.waitedMs);
   let acc = 0;
   let topCount = 0;
-  for (const t of sorted) {
-    acc += t.waitedMs;
+  for (const tool of sorted) {
+    acc += tool.waitedMs;
     topCount += 1;
     if (acc >= waitedMs * 0.6) break;
   }
   const topShare = Math.round((acc / waitedMs) * 100);
+  const waited = fmtWait(waitedMs);
   return (
     <h1 className="mt-3.5 max-w-[22ch] text-balance font-display text-[28px] leading-[1.16] font-medium tracking-[-0.015em] desk:text-[38px]">
-      Agents waited <em className="not-italic text-red">{fmtWait(waitedMs)}</em> on you today.{' '}
+      <Trans>
+        Agents waited <em className="not-italic text-red">{waited}</em> on you today.
+      </Trans>{' '}
       <span className="text-ink-dim">
-        {topCount} tool{topCount === 1 ? '' : 's'} caused {topShare}% of it.
+        <Plural
+          value={topCount}
+          one={`# tool caused ${topShare}% of it.`}
+          few={`# tools caused ${topShare}% of it.`}
+          many={`# tools caused ${topShare}% of it.`}
+          other={`# tools caused ${topShare}% of it.`}
+        />
       </span>
     </h1>
   );
@@ -289,26 +303,29 @@ function DayTimeline({
   startMs: number;
   endMs: number;
 }): JSX.Element {
+  const { t } = useLingui();
   const navigate = useNavigate();
-  const ticks = [startMs, startMs + (endMs - startMs) / 2, endMs].map((t) =>
-    fmtTime(new Date(t).toISOString()),
+  const ticks = [startMs, startMs + (endMs - startMs) / 2, endMs].map((ms) =>
+    fmtTime(new Date(ms).toISOString()),
   );
   const legend: { label: string; tone: DaySeg['tone'] }[] = [
-    { label: 'working', tone: 'work' },
-    { label: 'waiting', tone: 'wait' },
-    { label: 'idle', tone: 'idle' },
+    { label: t`working`, tone: 'work' },
+    { label: t`waiting`, tone: 'wait' },
+    { label: t`idle`, tone: 'idle' },
   ];
   return (
     <>
       <div className="mt-9 flex flex-wrap items-center gap-3">
-        <h2 className="font-mono text-[11px] tracking-[0.16em] text-ink-dim uppercase">The day</h2>
+        <h2 className="font-mono text-[11px] tracking-[0.16em] text-ink-dim uppercase">
+          <Trans>The day</Trans>
+        </h2>
         <span className="font-mono text-[10px] text-ink-faint">
           {fmtTime(new Date(startMs).toISOString())} → {fmtTime(new Date(endMs).toISOString())}
         </span>
         <span className="h-px flex-1 bg-line" aria-hidden="true" />
         <span className="flex flex-wrap gap-[11px] font-mono text-[10px] text-ink-faint">
           {legend.map((g) => (
-            <span key={g.label} className="inline-flex items-center gap-[5px]">
+            <span key={g.tone} className="inline-flex items-center gap-[5px]">
               <span
                 className="h-[8px] w-[8px] rounded-[2px]"
                 style={{ background: SEG_BG[g.tone] }}
@@ -320,57 +337,67 @@ function DayTimeline({
         </span>
       </div>
       <div className="mt-3">
-        {lanes.map((ln) => (
-          <div
-            key={ln.slug}
-            className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3.5 border-b border-line-soft py-[9px]"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="h-[6px] w-[6px] shrink-0 rounded-full"
-                  style={{ background: ln.color }}
-                  aria-hidden="true"
-                />
-                <span className="min-w-0 truncate font-mono text-[10.5px] text-ink-2">{ln.name}</span>
-              </div>
-              <div className="mt-0.5 truncate font-mono text-[9.5px] text-ink-faint">{ln.task}</div>
-            </div>
-            <div className="min-w-0">
-              <button
-                type="button"
-                onClick={() =>
-                  ln.latestSessionId > 0
-                    ? void navigate(`/sessions/${String(ln.latestSessionId)}`)
-                    : void navigate('/sessions')
-                }
-                className="flex h-[19px] w-full overflow-hidden rounded focus-visible:outline-2 focus-visible:outline-brand"
-                data-tip={`open ${ln.name}`}
-              >
-                {ln.segs.map((sg, i) => (
+        {lanes.map((ln) => {
+          const laneName = ln.name;
+          const laneWaited = fmtWait(ln.waitedMs);
+          const laneApprovals = ln.approvals;
+          return (
+            <div
+              key={ln.slug}
+              className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3.5 border-b border-line-soft py-[9px]"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
                   <span
-                    key={i}
-                    style={{ flexGrow: sg.weight, flexBasis: 0, background: SEG_BG[sg.tone] }}
+                    className="h-[6px] w-[6px] shrink-0 rounded-full"
+                    style={{ background: ln.color }}
                     aria-hidden="true"
                   />
-                ))}
-              </button>
-              <div
-                className={`mt-1 font-mono text-[9.5px] ${ln.waitedMs > 0 ? 'text-amber' : 'text-ink-faint'}`}
-              >
-                {ln.waitedMs > 0
-                  ? `waited ${fmtWait(ln.waitedMs)} · ${ln.approvals} approval${ln.approvals === 1 ? '' : 's'}`
-                  : 'no waiting'}
+                  <span className="min-w-0 truncate font-mono text-[10.5px] text-ink-2">{ln.name}</span>
+                </div>
+                <div className="mt-0.5 truncate font-mono text-[9.5px] text-ink-faint">{ln.task}</div>
+              </div>
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    ln.latestSessionId > 0
+                      ? void navigate(`/sessions/${String(ln.latestSessionId)}`)
+                      : void navigate('/sessions')
+                  }
+                  className="flex h-[19px] w-full overflow-hidden rounded focus-visible:outline-2 focus-visible:outline-brand"
+                  data-tip={t`open ${laneName}`}
+                >
+                  {ln.segs.map((sg, i) => (
+                    <span
+                      key={i}
+                      style={{ flexGrow: sg.weight, flexBasis: 0, background: SEG_BG[sg.tone] }}
+                      aria-hidden="true"
+                    />
+                  ))}
+                </button>
+                <div
+                  className={`mt-1 font-mono text-[9.5px] ${ln.waitedMs > 0 ? 'text-amber' : 'text-ink-faint'}`}
+                >
+                  {ln.waitedMs > 0
+                    ? plural(laneApprovals, {
+                        one: `waited ${laneWaited} · # approval`,
+                        few: `waited ${laneWaited} · # approvals`,
+                        many: `waited ${laneWaited} · # approvals`,
+                        other: `waited ${laneWaited} · # approvals`,
+                      })
+                    : t`no waiting`}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="mt-[7px] grid grid-cols-[132px_minmax(0,1fr)] gap-3.5">
           <span />
           <div className="flex justify-between font-mono text-[9.5px] text-ink-faint">
-            {ticks.map((t, i) => (
+            {ticks.map((tick, i) => (
               <span key={i} className="whitespace-nowrap">
-                {t}
+                {tick}
               </span>
             ))}
           </div>
@@ -391,59 +418,63 @@ function Interrupts({
   maxWait: number;
   onStopAsking: (key: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [pending, setPending] = useState<Set<string>>(new Set());
   return (
     <>
       <div className="mt-[38px] flex items-center gap-3">
         <h2 className="font-mono text-[11px] tracking-[0.16em] text-ink-dim uppercase">
-          Where your time went
+          <Trans>Where your time went</Trans>
         </h2>
         <span className="h-px flex-1 bg-line" aria-hidden="true" />
         <Link to="/approvals" className="font-mono text-[10.5px] text-ink-faint hover:text-brand">
-          all approvals →
+          <Trans>all approvals →</Trans>
         </Link>
       </div>
       <div className="mt-1.5">
-        {tools.map((t) => {
-          const busy = pending.has(t.key);
-          const covered = t.covered || busy;
+        {tools.map((tool) => {
+          const busy = pending.has(tool.key);
+          const covered = tool.covered || busy;
+          const stops = tool.count;
           return (
             // The four trailing columns are fixed-width and already sum past a
             // 390px viewport, so below desk the tool key takes its own line
             // instead of pushing the row into horizontal overflow.
             <div
-              key={t.key}
+              key={tool.key}
               className="flex flex-wrap items-center gap-3 border-b border-line-soft py-[11px] desk:flex-nowrap"
             >
               <span className="w-full min-w-0 truncate font-mono text-[12px] text-ink desk:w-[148px] desk:shrink-0">
-                {t.key}
+                {tool.key}
               </span>
               <span className="w-[92px] shrink-0 font-mono text-[11px] whitespace-nowrap text-ink-dim">
-                {t.count} stop{t.count === 1 ? '' : 's'}
+                <Plural value={stops} one="# stop" few="# stops" many="# stops" other="# stops" />
               </span>
               <span className="h-[5px] min-w-[24px] flex-1 overflow-hidden rounded-full bg-line-soft">
                 <span
                   className="block h-full rounded-full bg-red/70"
-                  style={{ width: `${String(maxWait > 0 ? Math.round((t.waitedMs / maxWait) * 100) : 0)}%` }}
+                  style={{ width: `${String(maxWait > 0 ? Math.round((tool.waitedMs / maxWait) * 100) : 0)}%` }}
                 />
               </span>
               <span className="w-[58px] shrink-0 text-right font-display text-[15px] font-semibold text-red">
-                {fmtWait(t.waitedMs)}
+                {fmtWait(tool.waitedMs)}
               </span>
               <span className="w-[108px] shrink-0 text-right">
                 {covered ? (
-                  <span className="font-mono text-[10px] text-green">✓ auto-approved</span>
+                  <span className="font-mono text-[10px] text-green">
+                    <Trans>✓ auto-approved</Trans>
+                  </span>
                 ) : (
                   <button
                     type="button"
-                    data-tip="auto-approve this tool from now on"
+                    data-tip={t`auto-approve this tool from now on`}
                     onClick={() => {
-                      setPending((p) => new Set(p).add(t.key));
-                      onStopAsking(t.key);
+                      setPending((p) => new Set(p).add(tool.key));
+                      onStopAsking(tool.key);
                     }}
                     className="rounded-[7px] border border-line-strong px-2.5 py-[3px] font-mono text-[10px] text-ink-dim transition-colors hover:border-green/50 hover:text-green focus-visible:outline-2 focus-visible:outline-brand"
                   >
-                    stop asking
+                    <Trans>stop asking</Trans>
                   </button>
                 )}
               </span>
@@ -452,8 +483,10 @@ function Interrupts({
         })}
       </div>
       <p className="mt-3 max-w-[70ch] font-mono text-[10.5px] leading-[1.6] text-ink-faint">
-        Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project —
-        narrow or revoke them in Approvals.
+        <Trans>
+          Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project —
+          narrow or revoke them in Approvals.
+        </Trans>
       </p>
     </>
   );
@@ -507,7 +540,16 @@ function NodeDot({ kind }: { kind: SpineKind }): JSX.Element {
   );
 }
 
-function statusLabel(s: Session, nowMs: number): string {
+/** The spine chip's word per state; rendered through i18n._ in SpineRow. */
+const SPINE_STATUS = {
+  waiting: defineMessage`waiting`,
+  error: defineMessage`error`,
+  working: defineMessage`working`,
+  stuck: defineMessage`stuck`,
+  done: defineMessage`done`,
+} as const;
+
+function statusLabel(s: Session, nowMs: number): keyof typeof SPINE_STATUS {
   if (s.status === 'waiting_approval') return 'waiting';
   if (s.status === 'killed') return 'error';
   const st = sessionState(s, nowMs);
@@ -525,6 +567,7 @@ function SpineRow({
   open: boolean;
   onToggle: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const navigate = useNavigate();
   const [trace, setTrace] = useState<SpineTraceRow[] | null>(null);
   const [traceError, setTraceError] = useState(false);
@@ -547,12 +590,13 @@ function SpineRow({
   const time = fmtTime(anchor);
   const rel = fmtAgo(anchor);
   const startedDay = sessionDay(session);
+  const startedShort = fmtDayShort(startedDay);
   const startedLabel =
     startedDay === isoDay()
       ? null
       : startedDay === addDays(isoDay(), -1)
-        ? 'started yesterday'
-        : `started ${fmtDayShort(startedDay)}`;
+        ? t`started yesterday`
+        : t`started ${startedShort}`;
   const costTokens = [
     session.costUsd != null ? fmtCost(session.costUsd) : null,
     session.tokens != null ? fmtTokens(session.tokens) : null,
@@ -592,7 +636,7 @@ function SpineRow({
             <span
               className={`rounded-full border px-[9px] py-px font-mono text-[10px] whitespace-nowrap ${chipTone}`}
             >
-              {statusLabel(session, nowMs)}
+              {i18n._(SPINE_STATUS[statusLabel(session, nowMs)])}
             </span>
             {startedLabel !== null && (
               <span className="rounded-full border border-line-strong px-[9px] py-px font-mono text-[10px] whitespace-nowrap text-ink-faint">
@@ -610,7 +654,7 @@ function SpineRow({
               session.title === null ? 'font-normal text-ink-faint italic' : ''
             }`}
           >
-            {session.title ?? '(untitled session)'}
+            {session.title ?? t`(untitled session)`}
           </div>
           {session.why != null && session.why !== '' ? (
             <div className="mt-[3px] max-w-[64ch] text-[13px] leading-[1.5] text-ink-3 [text-wrap:pretty]">
@@ -630,21 +674,27 @@ function SpineRow({
         {open && (
           <div className="mt-2.5 flex flex-col gap-[9px] border-l border-line-strong pl-4">
             {trace === null && !traceError && (
-              <div className="font-mono text-[11px] text-ink-dim">loading trace…</div>
+              <div className="font-mono text-[11px] text-ink-dim">
+                <Trans>loading trace…</Trans>
+              </div>
             )}
             {traceError && (
-              <div className="font-mono text-[11px] text-ink-dim">trace unavailable</div>
+              <div className="font-mono text-[11px] text-ink-dim">
+                <Trans>trace unavailable</Trans>
+              </div>
             )}
             {trace !== null && trace.length === 0 && (
-              <div className="font-mono text-[11px] text-ink-dim">no tool activity recorded</div>
+              <div className="font-mono text-[11px] text-ink-dim">
+                <Trans>no tool activity recorded</Trans>
+              </div>
             )}
-            {trace?.map((t, i) => (
+            {trace?.map((row, i) => (
               <div key={i} className="flex items-baseline gap-2.5">
-                <span className="min-w-[38px] font-mono text-[10px] text-ink-faint">{t.time}</span>
-                <span className={`min-w-[64px] font-mono text-[11px] font-medium ${t.tone}`}>
-                  {t.tool}
+                <span className="min-w-[38px] font-mono text-[10px] text-ink-faint">{row.time}</span>
+                <span className={`min-w-[64px] font-mono text-[11px] font-medium ${row.tone}`}>
+                  {row.tool}
                 </span>
-                <span className="min-w-0 text-[12.5px] leading-[1.45] text-ink-3">{t.detail}</span>
+                <span className="min-w-0 text-[12.5px] leading-[1.45] text-ink-3">{row.detail}</span>
               </div>
             ))}
             <button
@@ -652,7 +702,7 @@ function SpineRow({
               onClick={() => void navigate(`/sessions/${String(session.id)}`)}
               className="w-fit font-mono text-[10.5px] text-brand hover:underline focus-visible:outline-2 focus-visible:outline-brand"
             >
-              open session →
+              <Trans>open session →</Trans>
             </button>
           </div>
         )}
@@ -670,6 +720,7 @@ function Spine({
   nowMs: number;
   query: string;
 }): JSX.Element {
+  const { t } = useLingui();
   const [openId, setOpenId] = useState<number | null>(null);
   const today = isoDay();
   const matchesQuery = (s: Session): boolean =>
@@ -693,15 +744,15 @@ function Spine({
     <>
       <div className="mt-[34px] mb-2.5 flex items-center gap-3">
         <h2 className="font-mono text-[11px] tracking-[0.16em] text-ink-dim uppercase">
-          The spine · today
+          <Trans>The spine · today</Trans>
         </h2>
         <span className="h-px flex-1 bg-line" aria-hidden="true" />
         <Link to="/sessions" className="font-mono text-[10.5px] text-ink-faint hover:text-brand">
-          all sessions →
+          <Trans>all sessions →</Trans>
         </Link>
       </div>
       {rows.length === 0 ? (
-        <Empty>{query !== '' ? 'no sessions match the filter' : 'nothing notable yet today'}</Empty>
+        <Empty>{query !== '' ? t`no sessions match the filter` : t`nothing notable yet today`}</Empty>
       ) : (
         <div className="relative">
           <div
@@ -732,31 +783,46 @@ function Spine({
  * the normal request summary. The card clamps this to two lines, so every card
  * in the rail is the same height regardless of tool.
  */
-function blockedContext(request: PermissionRequest): string {
+function blockedContext(
+  request: PermissionRequest,
+  labels: { answerRequired: string; more: (first: string, extra: string) => string },
+): string {
   if (request.toolName === 'AskUserQuestion') {
     const qs = questionsOf(request);
     if (qs !== null && qs.length > 0) {
-      const first = qs[0]?.question ?? 'answer required';
-      return qs.length > 1 ? `${first} · +${String(qs.length - 1)} more` : first;
+      const first = qs[0]?.question ?? labels.answerRequired;
+      return qs.length > 1 ? labels.more(first, String(qs.length - 1)) : first;
     }
   }
   return requestSummary(request);
 }
 
 function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: number }): JSX.Element {
+  const { t } = useLingui();
   // A production deploy has no remote approve: it is confirmed in the
   // session's own terminal, so the card says so instead of offering one.
   const localOnly = request.riskClass === 'prod-deploy';
-  const okLabel = localOnly ? 'confirm locally' : request.toolName === 'AskUserQuestion' ? 'answer' : 'approve';
+  const okLabel = localOnly
+    ? t`confirm locally`
+    : request.toolName === 'AskUserQuestion'
+      ? t`answer`
+      : t`approve`;
   const age = fmtWait(waitMs(request, nowMs));
+  const sessionId = request.sessionId;
+  const context = blockedContext(request, {
+    answerRequired: t`answer required`,
+    more: (first, extra) => t`${first} · +${extra} more`,
+  });
   return (
     <div className="mt-3.5 rounded-xl border border-amber/28 bg-amber/5 px-3.5 py-3">
       <div className="flex items-center gap-2">
         <span className="font-mono text-[12px] font-bold text-ink">{request.toolName}</span>
-        <span className="ml-auto font-mono text-[10px] text-amber">idle {age}</span>
+        <span className="ml-auto font-mono text-[10px] text-amber">
+          <Trans>idle {age}</Trans>
+        </span>
       </div>
       <div className="mt-1.5 line-clamp-2 text-[12.5px] leading-[1.45] break-words text-ink-3 [text-wrap:pretty]">
-        {blockedContext(request)}
+        {context}
       </div>
       <div className="mt-2 flex items-center gap-[7px]">
         <span
@@ -765,7 +831,7 @@ function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: nu
           aria-hidden="true"
         />
         <span className="truncate font-mono text-[10px] text-ink-faint">
-          session #{request.sessionId}
+          <Trans>session #{sessionId}</Trans>
         </span>
       </div>
       <div className="mt-2.5 flex gap-1.5">
@@ -788,7 +854,7 @@ function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: nu
           to="/approvals"
           className="flex-1 rounded-lg border border-line-strong py-1.5 text-center font-mono text-[11px] text-ink-3 transition-colors hover:bg-surface2 focus-visible:outline-2 focus-visible:outline-brand"
         >
-          review →
+          <Trans>review →</Trans>
         </Link>
       </div>
     </div>
@@ -798,6 +864,7 @@ function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: nu
 function BlockedRail({ pending, nowMs }: { pending: PermissionRequest[]; nowMs: number }): JSX.Element | null {
   if (pending.length === 0) return null;
   const top = [...pending].sort((a, b) => a.requestedAt.localeCompare(b.requestedAt)).slice(0, 3);
+  const count = pending.length;
   return (
     <div>
       <div className="flex items-center gap-2">
@@ -806,12 +873,17 @@ function BlockedRail({ pending, nowMs }: { pending: PermissionRequest[]; nowMs: 
           aria-hidden="true"
         />
         <h2 className="font-mono text-[11px] tracking-[0.14em] text-amber uppercase">
-          Blocked on you · {pending.length}
+          <Trans>Blocked on you · {count}</Trans>
         </h2>
       </div>
       <div className="mt-[7px] font-mono text-[10.5px] text-ink-faint">
-        {pending.length === 1 ? 'one agent is' : `${String(pending.length)} agents are`} idle until
-        you answer
+        <Plural
+          value={count}
+          one="one agent is idle until you answer"
+          few="# agents are idle until you answer"
+          many="# agents are idle until you answer"
+          other="# agents are idle until you answer"
+        />
       </div>
       {top.map((r) => (
         <BlockedCard key={r.id} request={r} nowMs={nowMs} />
@@ -847,6 +919,7 @@ function ErrorDrilldown({
   projectName: string | null;
   onClose: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [groups, setGroups] = useState<ErrorGroup[] | null>(null);
   const [approx, setApprox] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -864,12 +937,13 @@ function ErrorDrilldown({
       .catch(() => setFailed(true));
   }, [day, project]);
 
+  const scopeName = projectName ?? project ?? t`all projects`;
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="error drill-down"
+      aria-label={t`error drill-down`}
       onClick={onClose}
     >
       <div
@@ -878,24 +952,36 @@ function ErrorDrilldown({
       >
         <div className="flex items-center gap-3">
           <h2 className="min-w-0 flex-1 truncate font-mono text-[11px] tracking-[0.14em] text-red uppercase">
-            Errors · {projectName ?? project ?? 'all projects'} · {day}
+            <Trans>Errors · {scopeName} · {day}</Trans>
           </h2>
           <button
             type="button"
             onClick={onClose}
             className="rounded-md border border-line px-2 py-1 font-mono text-[10.5px] text-ink-dim hover:text-ink"
           >
-            close
+            <Trans>close</Trans>
           </button>
         </div>
 
-        {failed && <div className="mt-3 font-mono text-[11px] text-red">failed to load error groups</div>}
-        {groups === null && !failed && <div className="mt-3 font-mono text-[11px] text-ink-dim">loading…</div>}
+        {failed && (
+          <div className="mt-3 font-mono text-[11px] text-red">
+            <Trans>failed to load error groups</Trans>
+          </div>
+        )}
+        {groups === null && !failed && (
+          <div className="mt-3 font-mono text-[11px] text-ink-dim">
+            <Trans>loading…</Trans>
+          </div>
+        )}
         {groups !== null && groups.length === 0 && (
-          <div className="mt-3 font-mono text-[11px] text-ink-dim">no errors for this day</div>
+          <div className="mt-3 font-mono text-[11px] text-ink-dim">
+            <Trans>no errors for this day</Trans>
+          </div>
         )}
         {approx && (
-          <div className="mt-3 font-mono text-[10.5px] text-ink-faint">approximate — sampled</div>
+          <div className="mt-3 font-mono text-[10.5px] text-ink-faint">
+            <Trans>approximate — sampled</Trans>
+          </div>
         )}
 
         {groups !== null &&
@@ -923,7 +1009,7 @@ function ErrorDrilldown({
                       to={`/sessions/${String(s.session_id)}`}
                       className="truncate font-mono text-[11px] text-blue hover:underline"
                     >
-                      #{s.session_id} · {s.title ?? 'untitled session'}
+                      #{s.session_id} · {s.title ?? t`untitled session`}
                     </Link>
                   ))}
                 </div>
@@ -942,46 +1028,61 @@ function TriageRail({
   stats: StatsOverview;
   onSelect: (slug: string | null, name: string | null) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const rows = stats.errors_by_project;
   const total = rows.reduce((a, r) => a + r.errors, 0);
+  const projectCount = rows.length;
   return (
     <div className="mt-[30px]">
       <div className="flex items-center gap-2">
         <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-red" aria-hidden="true" />
-        <h2 className="font-mono text-[11px] tracking-[0.14em] text-red uppercase">Needs triage</h2>
+        <h2 className="font-mono text-[11px] tracking-[0.14em] text-red uppercase">
+          <Trans>Needs triage</Trans>
+        </h2>
       </div>
       <div className="mt-3.5 rounded-xl border border-line bg-surface px-[15px] py-[13px]">
         <button
           type="button"
           onClick={() => onSelect(null, null)}
           className="flex w-full items-baseline justify-between text-left"
-          data-tip="show all error groups"
+          data-tip={t`show all error groups`}
         >
           <span className="font-mono text-[11px] text-ink-dim">
-            errors across {rows.length} {rows.length === 1 ? 'project' : 'projects'}
+            <Plural
+              value={projectCount}
+              one="errors across # project"
+              few="errors across # projects"
+              many="errors across # projects"
+              other="errors across # projects"
+            />
           </span>
           <span className="font-display text-[20px] leading-none font-semibold text-red">
             {stats.errors}
           </span>
         </button>
         {rows.length === 0 ? (
-          <div className="mt-2 font-mono text-[11px] text-ink-dim">no errors — clean day</div>
+          <div className="mt-2 font-mono text-[11px] text-ink-dim">
+            <Trans>no errors — clean day</Trans>
+          </div>
         ) : (
-          rows.map((row) => (
-            <button
-              key={row.slug}
-              type="button"
-              onClick={() => onSelect(row.slug, row.name)}
-              className="mt-[11px] block w-full text-left"
-              data-tip={`show ${row.slug} error groups`}
-            >
-              <div className="flex justify-between font-mono text-[11px]">
-                <ProjectName name={row.name} slug={row.slug} className="truncate" />
-                <span className="text-red">{row.errors}</span>
-              </div>
-              <TriageBar pct={total > 0 ? row.errors / total : 0} />
-            </button>
-          ))
+          rows.map((row) => {
+            const rowSlug = row.slug;
+            return (
+              <button
+                key={row.slug}
+                type="button"
+                onClick={() => onSelect(row.slug, row.name)}
+                className="mt-[11px] block w-full text-left"
+                data-tip={t`show ${rowSlug} error groups`}
+              >
+                <div className="flex justify-between font-mono text-[11px]">
+                  <ProjectName name={row.name} slug={row.slug} className="truncate" />
+                  <span className="text-red">{row.errors}</span>
+                </div>
+                <TriageBar pct={total > 0 ? row.errors / total : 0} />
+              </button>
+            );
+          })
         )}
       </div>
     </div>
@@ -999,6 +1100,7 @@ function nineAmMs(): number {
 }
 
 export function Overview(): JSX.Element {
+  const { t } = useLingui();
   const day = isoDay();
   const { scope, scopeProject } = useScope();
   const query = usePageSearch();
@@ -1111,40 +1213,42 @@ export function Overview(): JSX.Element {
       cur.waitedMs += w;
       map.set(key, cur);
     }
-    return [...map.values()].filter((t) => t.count > 0).sort((a, b) => b.waitedMs - a.waitedMs);
+    return [...map.values()].filter((tool) => tool.count > 0).sort((a, b) => b.waitedMs - a.waitedMs);
   }, [pending, resolved, nowMs, coveredPatterns]);
 
-  const waitedTotal = useMemo(() => toolWaits.reduce((a, t) => a + t.waitedMs, 0), [toolWaits]);
+  const waitedTotal = useMemo(() => toolWaits.reduce((a, tool) => a + tool.waitedMs, 0), [toolWaits]);
   const autoApprovedCount = useMemo(
     () => resolved.filter(wasAutoApproved).length,
     [resolved],
   );
   const requestTotal = pending.length + resolved.length;
+  const stopTotal = toolWaits.reduce((a, tool) => a + tool.count, 0);
+  const autoPct = String(requestTotal > 0 ? Math.round((autoApprovedCount / requestTotal) * 100) : 0);
 
   const ledger: LedgerCell[] = [
     {
-      label: 'waited today',
+      label: t`waited today`,
       value: waitedTotal > 0 ? fmtWait(waitedTotal) : '0m',
-      sub: `across ${String(toolWaits.reduce((a, t) => a + t.count, 0))} stop${
-        toolWaits.reduce((a, t) => a + t.count, 0) === 1 ? '' : 's'
-      }`,
+      sub: plural(stopTotal, {
+        one: 'across # stop',
+        few: 'across # stops',
+        many: 'across # stops',
+        other: 'across # stops',
+      }),
       tone: waitedTotal > 0 ? 'text-red' : 'text-ink-dim',
       big: true,
     },
     {
-      label: 'auto-approved',
+      label: t`auto-approved`,
       value: String(autoApprovedCount),
-      sub:
-        requestTotal > 0
-          ? `${String(Math.round((autoApprovedCount / requestTotal) * 100))}% of requests · no stop`
-          : 'no requests yet',
+      sub: requestTotal > 0 ? t`${autoPct}% of requests · no stop` : t`no requests yet`,
       tone: 'text-green',
       big: false,
     },
     {
-      label: 'still blocked',
+      label: t`still blocked`,
       value: String(pending.length),
-      sub: pending.length === 0 ? 'nothing idle' : 'agents idle now',
+      sub: pending.length === 0 ? t`nothing idle` : t`agents idle now`,
       tone: pending.length > 0 ? 'text-amber' : 'text-ink-dim',
       big: false,
     },
@@ -1190,12 +1294,14 @@ export function Overview(): JSX.Element {
           toolPattern,
           action: 'approve',
           enabled: true,
+          // i18n-ignore — rule note stored on the server (approval_rules.note), not rendered copy
           note: 'stop asking (command deck)',
           createdAt: new Date().toISOString(),
           source: 'manual',
         },
       ]);
       if (MOCK) return;
+      // i18n-ignore — rule note stored on the server (approval_rules.note), not rendered copy
       createApprovalRule({ projectId: null, toolPattern, note: 'stop asking (command deck)' })
         .then(() => loadRules())
         .catch(() => loadRules()); // reconcile on failure — drops the optimistic row
@@ -1211,7 +1317,7 @@ export function Overview(): JSX.Element {
           <WaitHero waitedMs={waitedTotal} tools={toolWaits} />
         ) : (
           <h1 className="mt-3.5 max-w-[22ch] font-display text-[28px] leading-[1.16] font-medium tracking-[-0.015em] text-ink-dim desk:text-[38px]">
-            Reading today's activity…
+            <Trans>Reading today's activity…</Trans>
           </h1>
         )}
 
@@ -1239,7 +1345,7 @@ export function Overview(): JSX.Element {
         </div>
         {error !== null && <ErrorBox message={error} onRetry={loadSessions} />}
         {sessions === null && error === null ? (
-          <Loading label="sessions…" />
+          <Loading label={t`sessions…`} />
         ) : (
           <Spine sessions={sessions ?? []} nowMs={nowMs} query={query} />
         )}
@@ -1270,7 +1376,9 @@ export function Overview(): JSX.Element {
           />
         )}
         {stats === null && statsError && (
-          <div className="mt-4 font-mono text-[11px] text-ink-dim">triage unavailable</div>
+          <div className="mt-4 font-mono text-[11px] text-ink-dim">
+            <Trans>triage unavailable</Trans>
+          </div>
         )}
       </aside>
 

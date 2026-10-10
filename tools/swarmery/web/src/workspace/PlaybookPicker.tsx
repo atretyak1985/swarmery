@@ -7,6 +7,7 @@
 // recipe that actually ran. Fully keyboard-native (a plain <select>), labelled
 // for WCAG.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { Playbook } from '../api/types';
 import { fetchPlaybooks } from '../api';
@@ -68,6 +69,7 @@ export function PlaybookSelect({
   // "No choice" is offered as the empty option; every other playbook is a named
   // option. If the current value is a name not in the list (e.g. a stored
   // project playbook the fetch has not returned yet) it still renders selected.
+  const { t } = useLingui();
   const known = playbooks.some((p) => p.name === value);
   const base =
     'w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink';
@@ -76,12 +78,12 @@ export function PlaybookSelect({
       id={id}
       value={value}
       disabled={disabled}
-      aria-label="playbook"
+      aria-label={t`playbook`}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => onChange(e.target.value)}
       className={`${base} outline-none transition-colors hover:border-line-strong focus:border-ink-dim disabled:opacity-50`}
     >
-      <option value="">Auto (chosen at dispatch)</option>
+      <option value="">{t`Auto (chosen at dispatch)`}</option>
       {value !== '' && !known && <option value={value}>{value}</option>}
       {playbooks.map((p) => (
         <option key={p.name} value={p.name}>
@@ -135,13 +137,14 @@ const VERIFY_CHIP: Record<string, string> = {
 
 /** Small chip showing a playbook's verify strictness. */
 export function VerifyChip({ verify }: { verify: string }): JSX.Element {
+  const { t } = useLingui();
   const style = VERIFY_CHIP[verify] ?? 'border-line text-ink-faint';
   return (
     <span
       className={`shrink-0 rounded-full border px-1.5 py-[1px] font-mono text-[9px] uppercase ${style}`}
-      data-tip={`verification: ${verify}`}
+      data-tip={t`verification: ${verify}`}
     >
-      verify {verify}
+      <Trans>verify {verify}</Trans>
     </span>
   );
 }

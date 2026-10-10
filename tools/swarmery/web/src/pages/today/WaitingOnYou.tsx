@@ -4,6 +4,7 @@
 // place; everything else — and an approval that asks questions — opens its
 // Inbox tab.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { resolveApproval } from '../../api';
@@ -25,7 +26,7 @@ export function SectionHead({ label, children }: { label: string; children?: Rea
 }
 
 function tabFor(item: InboxItem): string {
-  return INBOX_TABS.find((t) => t.kind === item.kind)?.id ?? 'all';
+  return INBOX_TABS.find((tab) => tab.kind === item.kind)?.id ?? 'all';
 }
 
 function Row({
@@ -71,14 +72,14 @@ function Row({
           onClick={approve}
           className={`${ACTION_CLS} border-green/45 font-bold text-green hover:bg-green/10 disabled:opacity-50`}
         >
-          approve
+          <Trans>approve</Trans>
         </button>
       ) : (
         <Link
           to={`${inboxHref}?tab=${tabFor(item)}`}
           className={`${ACTION_CLS} border-line-strong text-ink-3 hover:text-ink`}
         >
-          review
+          <Trans>review</Trans>
         </Link>
       )}
     </li>
@@ -98,21 +99,22 @@ export function WaitingOnYou({
   slug: string | null;
   onResolved: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const inboxHref = slug === null ? '/inbox' : `/p/${slug}/inbox`;
   const top = items.slice(0, WAITING_ROWS);
   return (
     <section data-testid="waiting-on-you" className="min-w-0">
-      <SectionHead label="Waiting on you">
+      <SectionHead label={t`Waiting on you`}>
         <Link
           to={inboxHref}
           className={`font-mono text-[10.5px] hover:underline ${count > 0 ? 'text-amber' : 'text-ink-faint'}`}
         >
-          Inbox · {count} →
+          <Trans>Inbox · {count} →</Trans>
         </Link>
       </SectionHead>
       {top.length === 0 ? (
         <p className="mt-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 text-[12.5px] text-ink-dim">
-          {loading ? 'Loading…' : 'Nothing waiting on you. Approvals, lessons and Advisor findings land here.'}
+          {loading ? t`Loading…` : t`Nothing waiting on you. Approvals, lessons and Advisor findings land here.`}
         </p>
       ) : (
         <ul className="m-0 mt-2.5 flex list-none flex-col gap-1.5 p-0">

@@ -7,6 +7,8 @@
 // its prompts become editable (the graduation rule) — after which a hint points
 // at the on-disk path. Visual AUTHORING (editing the graph) is a follow-up.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useState } from 'react';
 import type { Playbook } from '../api/types';
 import { duplicatePlaybook, fetchPlaybooks } from '../api';
@@ -17,6 +19,7 @@ import { Explain, ExplainPair } from '../components/Explain';
 import { HowItWorks } from '../components/HowItWorks';
 
 export function Playbooks(): JSX.Element {
+  const { t } = useLingui();
   const { project, projectId, loading: projLoading } = useProjectWorkspace();
   const [playbooks, setPlaybooks] = useState<Playbook[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +49,13 @@ export function Playbooks(): JSX.Element {
     [playbooks, selected],
   );
 
-  if (projLoading) return <Loading label="workspace…" />;
+  if (projLoading) return <Loading label={t`workspace…`} />;
   if (project === null) {
     return (
       <div className="px-4 py-8 desk:px-8">
-        <Empty>unknown project — pick one from the switcher</Empty>
+        <Empty>
+          <Trans>unknown project — pick one from the switcher</Trans>
+        </Empty>
       </div>
     );
   }
@@ -59,12 +64,16 @@ export function Playbooks(): JSX.Element {
     <div className="flex min-h-0 flex-1 flex-col px-4 py-5 desk:px-6">
       <header className="mb-4">
         <h1 className="text-[15px] font-semibold text-ink">
-          <ExplainPair id="playbook-stages">Playbooks</ExplainPair>
+          <ExplainPair id="playbook-stages">
+            <Trans>Playbooks</Trans>
+          </ExplainPair>
         </h1>
         <p className="mt-0.5 text-[12px] text-ink-dim">
-          Selectable execution recipes. A task picks one on the board; the dispatcher runs its stages
-          sequentially in one worktree. <Explain id="worktree" /> Built-ins are read-only — duplicate
-          one to edit its prompts.
+          <Trans>
+            Selectable execution recipes. A task picks one on the board; the dispatcher runs its stages
+            sequentially in one worktree. <Explain id="worktree" /> Built-ins are read-only — duplicate
+            one to edit its prompts.
+          </Trans>
         </p>
       </header>
 
@@ -75,9 +84,11 @@ export function Playbooks(): JSX.Element {
       )}
 
       {playbooks === null ? (
-        <Loading label="playbooks…" />
+        <Loading label={t`playbooks…`} />
       ) : playbooks.length === 0 ? (
-        <Empty>no playbooks</Empty>
+        <Empty>
+          <Trans>no playbooks</Trans>
+        </Empty>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-4 desk:flex-row">
           <PlaybookList playbooks={playbooks} selected={selected} onSelect={setSelected} />
@@ -85,7 +96,9 @@ export function Playbooks(): JSX.Element {
             {active !== null && projectId !== null ? (
               <PlaybookDetail playbook={active} projectId={projectId} onDuplicated={load} />
             ) : (
-              <Empty>select a playbook</Empty>
+              <Empty>
+                <Trans>select a playbook</Trans>
+              </Empty>
             )}
           </div>
         </div>
@@ -109,6 +122,11 @@ function SourceBadge({ source }: { source: string }): JSX.Element {
   );
 }
 
+/** "3 stages" under a playbook in the list. */
+function stageCountLabel(count: number): string {
+  return plural(count, { one: '# stage', few: '# stages', many: '# stages', other: '# stages' });
+}
+
 function PlaybookList({
   playbooks,
   selected,
@@ -118,8 +136,9 @@ function PlaybookList({
   selected: string | null;
   onSelect: (name: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
-    <nav aria-label="playbooks" className="flex shrink-0 flex-col gap-1 desk:w-[228px]">
+    <nav aria-label={t`playbooks`} className="flex shrink-0 flex-col gap-1 desk:w-[228px]">
       {playbooks.map((p) => {
         const active = p.name === selected;
         return (
@@ -141,7 +160,7 @@ function PlaybookList({
             <div className="flex items-center gap-1.5">
               <VerifyChip verify={p.verify} />
               <span className="font-mono text-[9px] text-ink-faint">
-                {p.stages.length} stage{p.stages.length === 1 ? '' : 's'}
+                {stageCountLabel(p.stages.length)}
               </span>
             </div>
           </button>
@@ -160,6 +179,7 @@ function PlaybookDetail({
   projectId: number;
   onDuplicated: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [busy, setBusy] = useState(false);
   const [dupError, setDupError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -183,6 +203,9 @@ function PlaybookDetail({
   };
 
   const isBuiltin = playbook.source === 'builtin';
+  const model = playbook.model;
+  const permissionMode = playbook.permissionMode;
+  const path = playbook.path;
 
   return (
     <section className="flex min-h-0 flex-col rounded-xl border border-line bg-surface/40 p-4">
@@ -190,20 +213,20 @@ function PlaybookDetail({
         <h2 className="font-mono text-[14px] text-ink">{playbook.name}</h2>
         <SourceBadge source={playbook.source} />
         <VerifyChip verify={playbook.verify} />
-        {playbook.model !== '' && (
+        {model !== '' && (
           <span className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-dim">
-            model {playbook.model}
+            <Trans>model {model}</Trans>
           </span>
         )}
         {/* Only shown when the recipe PINS a mode: the neutral default ('')
             inherits the daemon's global knob, and a chip reading "inherit"
             beside every built-in would be noise, not information. */}
-        {playbook.permissionMode !== '' && (
+        {permissionMode !== '' && (
           <span
             className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-dim"
-            data-tip={`spawns run with --permission-mode ${playbook.permissionMode}`}
+            data-tip={t`spawns run with --permission-mode ${permissionMode}`}
           >
-            perm {playbook.permissionMode}
+            <Trans>perm {permissionMode}</Trans>
           </span>
         )}
       </div>
@@ -211,9 +234,11 @@ function PlaybookDetail({
 
       <StageChain playbook={playbook} />
 
-      {playbook.path !== '' && (
+      {path !== '' && (
         <p className="mt-3 font-mono text-[10px] text-ink-faint">
-          project file: <span className="text-ink-dim">{playbook.path}</span>
+          <Trans>
+            project file: <span className="text-ink-dim">{path}</span>
+          </Trans>
         </p>
       )}
 
@@ -226,15 +251,17 @@ function PlaybookDetail({
               onClick={duplicate}
               className="rounded-lg border border-brand/50 bg-brand/10 px-3 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? 'Duplicating…' : 'Duplicate to project'}
+              {busy ? t`Duplicating…` : t`Duplicate to project`}
             </button>
             <span className="font-mono text-[10px] text-ink-faint">
-              copies the markdown into the project so its prompts become editable
+              <Trans>copies the markdown into the project so its prompts become editable</Trans>
             </span>
           </div>
         ) : (
           <p className="font-mono text-[10px] text-ink-faint">
-            this is a project playbook — edit its file directly; it overrides the built-in of the same name
+            <Trans>
+              this is a project playbook — edit its file directly; it overrides the built-in of the same name
+            </Trans>
           </p>
         )}
         {hint !== null && (
@@ -256,9 +283,10 @@ function PlaybookDetail({
  * Plain flex + inline arrow glyphs (no graph lib, per the phase spec).
  */
 function StageChain({ playbook }: { playbook: Playbook }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div className="overflow-x-auto">
-      <ol className="flex items-stretch gap-0" aria-label="stage chain">
+      <ol className="flex items-stretch gap-0" aria-label={t`stage chain`}>
         {playbook.stages.map((stage, i) => (
           <li key={i} className="flex items-stretch">
             <div className="flex w-[280px] shrink-0 flex-col rounded-lg border border-line bg-field p-2.5">

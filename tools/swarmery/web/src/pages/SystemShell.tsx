@@ -16,6 +16,9 @@
 // Canvas v3 2a lists no Hooks tab; it is kept on purpose (dropping it would
 // remove a working view) — a recorded deviation, not an oversight.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { SystemHubSummary, SystemSummary } from '../api/types';
@@ -39,13 +42,13 @@ type OriginScope = 'global' | 'project' | null;
 
 type SystemTab = 'agents' | 'skills' | 'plugins' | 'hooks' | 'routines' | 'insights';
 const TABS: SystemTab[] = ['agents', 'skills', 'plugins', 'hooks', 'routines', 'insights'];
-const TAB_LABELS: Record<SystemTab, string> = {
-  agents: 'Agents',
-  skills: 'Skills',
-  plugins: 'Plugins',
-  hooks: 'Hooks',
-  routines: 'Routines',
-  insights: 'Insights',
+const TAB_LABELS: Record<SystemTab, MessageDescriptor> = {
+  agents: msg`Agents`,
+  skills: msg`Skills`,
+  plugins: msg`Plugins`,
+  hooks: msg`Hooks`,
+  routines: msg`Routines`,
+  insights: msg`Insights`,
 };
 
 /** Retired tab slugs → their new home (phase 8 renamed Toolkit to Skills). */
@@ -60,6 +63,7 @@ function parseTab(value: string | undefined): SystemTab | null {
 }
 
 export function SystemShell(): JSX.Element {
+  const { i18n, t } = useLingui();
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -197,7 +201,7 @@ export function SystemShell(): JSX.Element {
   return (
     <div className="flex h-full min-h-0 flex-col px-4 pt-6 desk:px-10 desk:pt-[34px]">
       <h1 className="mb-3 font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
-        System
+        <Trans>System</Trans>
       </h1>
       {/* Own row, NOT inside the tablist below: a non-tab child would break
           that element's role contract. This shell resolves scopeSlug for every
@@ -210,39 +214,39 @@ export function SystemShell(): JSX.Element {
         {docs !== null && docs.total > 0 && (
           <span
             className="font-mono text-[11px] text-ink-dim"
-            data-tip="usage-guide coverage: every agent, skill and command the marketplace ships must carry a '# How to use' block"
+            data-tip={t`usage-guide coverage: every agent, skill and command the marketplace ships must carry a '# How to use' block`}
           >
             <span className={docs.documented === docs.total ? 'text-green' : 'text-amber'}>
               {docs.documented}/{docs.total}
             </span>
-            <span className="text-ink-faint"> documented · </span>
+            <span className="text-ink-faint"> <Trans>documented ·</Trans> </span>
             <span className={docs.reviewed === docs.total ? 'text-green' : 'text-amber'}>
               {docs.reviewed}/{docs.total}
             </span>
-            <span className="text-ink-faint"> reviewed</span>
+            <span className="text-ink-faint"> <Trans>reviewed</Trans></span>
           </span>
         )}
       </div>
       <div
         className="mb-4 flex gap-1 overflow-x-auto border-b border-line [-webkit-overflow-scrolling:touch]"
         role="tablist"
-        aria-label="System sections"
+        aria-label={t`System sections`}
       >
-        {TABS.map((t) => {
-          const active = t === tab;
-          const badge = badges[t];
+        {TABS.map((tabId) => {
+          const active = tabId === tab;
+          const badge = badges[tabId];
           return (
             <button
-              key={t}
+              key={tabId}
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => goTab(t)}
+              onClick={() => goTab(tabId)}
               className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-[8px] text-[13px] font-medium whitespace-nowrap transition-colors ${
                 active ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
               }`}
             >
-              {TAB_LABELS[t]}
+              {i18n._(TAB_LABELS[tabId])}
               {badge !== undefined && badge > 0 && (
                 <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-line-strong px-1 font-mono text-[9.5px] font-bold text-ink-dim">
                   {badge}
@@ -297,6 +301,7 @@ function SystemTabPanel({
    * slices its roster by it instead of rendering chips of its own. */
   originScope: OriginScope;
 }): JSX.Element {
+  const { t } = useLingui();
   if (tab === 'agents') {
     return (
       <AgentHub
@@ -318,12 +323,16 @@ function SystemTabPanel({
   if (tab === 'plugins') {
     // Plugins are enabled per project: the fleet has no single list to show.
     if (!projectScoped) {
-      return <Empty>Plugins are enabled per project — pick one in the switcher.</Empty>;
+      return (
+        <Empty>
+          <Trans>Plugins are enabled per project — pick one in the switcher.</Trans>
+        </Empty>
+      );
     }
     return (
       <div className="h-full overflow-y-auto">
         {projectId === null ? (
-          <Loading label="plugins…" />
+          <Loading label={t`plugins…`} />
         ) : (
           <ProjectPlugins projectId={Number(projectId)} />
         )}

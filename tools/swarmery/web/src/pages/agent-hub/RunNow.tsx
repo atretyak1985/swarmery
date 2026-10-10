@@ -7,6 +7,7 @@
 // picker first (the spec's "ask to pick a project" step), reusing the shared
 // projects list from the scope store.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { displaySlug } from '../../lib/projectSlug';
@@ -26,6 +27,7 @@ export function RunNowButton({
   /** Active project scope (workspace slug or fleet scope); null = fleet, unscoped. */
   scopeSlug: string | null;
 }): JSX.Element {
+  const { t } = useLingui();
   const navigate = useNavigate();
   const { projects } = useScope();
   const [picking, setPicking] = useState(false);
@@ -72,17 +74,19 @@ export function RunNowButton({
         type="button"
         onClick={onClick}
         className="rounded-lg border border-brand/40 bg-brand/10 px-3 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/20"
-        data-tip={`prefill a new board task with @${agentName}:`}
+        data-tip={t`prefill a new board task with @${agentName}:`}
       >
-        ▸ Run now
+        <Trans>▸ Run now</Trans>
       </button>
       {picking && (
         <div className="absolute right-0 z-30 mt-1 max-h-[280px] w-[220px] overflow-y-auto rounded-lg border border-line-strong bg-surface py-1 shadow-lg">
           <div className="px-3 py-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-            pick a project
+            <Trans>pick a project</Trans>
           </div>
           {projects.length === 0 && (
-            <div className="px-3 py-2 font-mono text-[11px] text-ink-dim">no projects</div>
+            <div className="px-3 py-2 font-mono text-[11px] text-ink-dim">
+              <Trans>no projects</Trans>
+            </div>
           )}
           {projects.map((p) => (
             <button

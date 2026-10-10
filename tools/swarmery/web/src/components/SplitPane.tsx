@@ -13,6 +13,7 @@
 // The listener is window-level on purpose: a triage page is keyboard-driven
 // whether or not focus happens to sit inside the list.
 
+import { Trans } from '@lingui/react/macro';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 export interface SplitPaneKey<T> {
@@ -122,7 +123,9 @@ export function SplitPane<T>({
           })}
         </div>
         <div className="flex flex-wrap gap-3 border-t border-line px-3.5 py-2 font-mono text-[10px] text-ink-faint">
-          <span>j/k move</span>
+          <span>
+            <Trans>j/k move</Trans>
+          </span>
           {keymap.map((b) => (
             <span key={b.key}>
               {b.key} {b.label}

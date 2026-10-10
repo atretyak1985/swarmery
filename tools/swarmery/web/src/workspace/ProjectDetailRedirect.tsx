@@ -5,6 +5,7 @@
 // old ProjectDetail so the link is never broken and never bounces to
 // /p/undefined; an id that matches no known project also falls back to it.
 
+import { useLingui } from '@lingui/react/macro';
 import { Navigate, useParams } from 'react-router-dom';
 import { displaySlug } from '../lib/projectSlug';
 import { useScope } from '../lib/scope';
@@ -12,6 +13,7 @@ import { ProjectDetail } from '../pages/ProjectDetail';
 import { Loading } from '../components/ui';
 
 export function ProjectDetailRedirect(): JSX.Element {
+  const { t } = useLingui();
   const { id } = useParams<{ id: string }>();
   const { projects } = useScope();
 
@@ -22,5 +24,5 @@ export function ProjectDetailRedirect(): JSX.Element {
     return <Navigate to={`/p/${displaySlug(match, projects)}`} replace />;
   }
   // Not resolved yet (empty store) OR unknown id → keep the old detail view.
-  return projects.length === 0 ? <Loading label="project…" /> : <ProjectDetail />;
+  return projects.length === 0 ? <Loading label={t`project…`} /> : <ProjectDetail />;
 }

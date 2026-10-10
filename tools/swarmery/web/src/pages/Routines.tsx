@@ -6,6 +6,8 @@
 // /api/routines{,/{id}/runs}; the global project scope (useScope) filters the
 // list the same way Retro/Analytics do.
 
+import { t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Routine, RoutineInput, RoutineRun, RoutineStep, RoutineStepType } from '../api/types';
 import {
@@ -31,19 +33,22 @@ import { ProjectName } from '../components/ProjectName';
  * This is a display aid only — the daemon owns real parsing/validation. */
 function describeCron(expr: string): string {
   const e = expr.trim();
-  if (e === '') return 'manual / webhook only';
+  if (e === '') return t`manual / webhook only`;
   const parts = e.split(/\s+/);
   if (parts.length !== 5) return e;
   const [min, hour, dom, mon, dow] = parts as [string, string, string, string, string];
-  if (e === '* * * * *') return 'every minute';
+  if (e === '* * * * *') return t`every minute`;
+  const time = `${pad(hour)}:${pad(min)}`;
   if (min !== '*' && hour !== '*' && dom === '*' && mon === '*' && dow === '*') {
-    return `daily at ${pad(hour)}:${pad(min)}`;
+    return t`daily at ${time}`;
   }
   if (min !== '*' && hour !== '*' && dow !== '*' && dom === '*' && mon === '*') {
-    return `${weekday(dow)} at ${pad(hour)}:${pad(min)}`;
+    const day = weekday(dow);
+    return t`${day} at ${time}`;
   }
   if (hour === '*' && min !== '*' && dom === '*' && mon === '*' && dow === '*') {
-    return `hourly at :${pad(min)}`;
+    const minute = pad(min);
+    return t`hourly at :${minute}`;
   }
   return e;
 }
@@ -70,6 +75,7 @@ function cronLooksValid(expr: string): boolean {
 /* --------------------------------------------------------------- status dot */
 
 function StatusDot({ status }: { status: RoutineRun['status'] | null }): JSX.Element {
+  const { t } = useLingui();
   const tone =
     status === 'ok'
       ? 'bg-emerald-500'
@@ -80,7 +86,7 @@ function StatusDot({ status }: { status: RoutineRun['status'] | null }): JSX.Ele
           : status === 'running'
             ? 'bg-sky-500 animate-pulse'
             : 'bg-line-strong';
-  const label = status ?? 'never run';
+  const label = status ?? t`never run`;
   return (
     <span className="inline-flex items-center gap-1.5" data-tip={label}>
       <span className={`h-2 w-2 rounded-full ${tone}`} aria-hidden="true" />
@@ -92,6 +98,7 @@ function StatusDot({ status }: { status: RoutineRun['status'] | null }): JSX.Ele
 /* ----------------------------------------------------------------- run list */
 
 function RunHistory({ id }: { id: string }): JSX.Element {
+  const { t } = useLingui();
   const [runs, setRuns] = useState<RoutineRun[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -104,8 +111,13 @@ function RunHistory({ id }: { id: string }): JSX.Element {
     };
   }, [id]);
   if (err) return <ErrorBox message={err} />;
-  if (runs === null) return <Loading label="runs…" />;
-  if (runs.length === 0) return <Empty>No runs yet.</Empty>;
+  if (runs === null) return <Loading label={t`runs…`} />;
+  if (runs.length === 0)
+    return (
+      <Empty>
+        <Trans>No runs yet.</Trans>
+      </Empty>
+    );
   return (
     <ul className="flex flex-col gap-1.5">
       {runs.map((r) => (
@@ -147,12 +159,15 @@ function RoutineRow({
   onEdit: (r: Routine) => void;
   onChanged: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const { projects } = useScope();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
   const project = routine.projectId !== null ? projects.find((p) => p.id === routine.projectId) : null;
+  const lastRun = routine.lastRunAt ? fmtAgo(routine.lastRunAt) : null;
+  const nextRun = routine.nextRunAt ? fmtAgo(routine.nextRunAt) : null;
 
   const toggle = async (): Promise<void> => {
     setBusy(true);
@@ -171,7 +186,7 @@ function RoutineRow({
     setFlash(null);
     try {
       const res = await runRoutine(routine.id);
-      setFlash(res.status === 'started' ? 'run started' : 'busy — already running');
+      setFlash(res.status === 'started' ? t`run started` : t`busy — already running`);
       if (expanded) onChanged();
     } catch (e) {
       setFlash(e instanceof Error ? e.message : String(e));
@@ -198,14 +213,18 @@ function RoutineRow({
               {project ? (
                 <ProjectName name={project.name} slug={project.slug} />
               ) : (
-                <span className="text-ink-faint">global</span>
+                <span className="text-ink-faint">
+                  <Trans>global</Trans>
+                </span>
               )}
               <span>·</span>
-              <span data-tip-mono data-tip={routine.cronExpr || 'no schedule'}>{describeCron(routine.cronExpr)}</span>
+              <span data-tip-mono data-tip={routine.cronExpr || t`no schedule`}>{describeCron(routine.cronExpr)}</span>
               {routine.hasWebhook && (
                 <>
                   <span>·</span>
-                  <span data-tip="webhook trigger enabled">⚓ webhook</span>
+                  <span data-tip={t`webhook trigger enabled`}>
+                    ⚓ <Trans>webhook</Trans>
+                  </span>
                 </>
               )}
             </span>
@@ -213,13 +232,13 @@ function RoutineRow({
         </button>
 
         <span className="hidden font-mono text-[10.5px] text-ink-faint sm:block">
-          {routine.lastRunAt ? `last ${fmtAgo(routine.lastRunAt)}` : 'never run'}
+          {lastRun !== null ? <Trans>last {lastRun}</Trans> : <Trans>never run</Trans>}
         </span>
         <span className="hidden font-mono text-[10.5px] text-ink-faint sm:block">
-          {routine.nextRunAt ? `next ${fmtAgo(routine.nextRunAt)}` : 'no next run'}
+          {nextRun !== null ? <Trans>next {nextRun}</Trans> : <Trans>no next run</Trans>}
         </span>
 
-        <label className="flex cursor-pointer items-center gap-1.5" data-tip="enable / disable">
+        <label className="flex cursor-pointer items-center gap-1.5" data-tip={t`enable / disable`}>
           <input
             type="checkbox"
             checked={routine.enabled}
@@ -227,7 +246,9 @@ function RoutineRow({
             disabled={busy}
             className="h-3.5 w-3.5 accent-brand"
           />
-          <span className="font-mono text-[10.5px] text-ink-dim">{routine.enabled ? 'on' : 'off'}</span>
+          <span className="font-mono text-[10.5px] text-ink-dim">
+            {routine.enabled ? <Trans>on</Trans> : <Trans>off</Trans>}
+          </span>
         </label>
 
         <div className="flex items-center gap-1.5">
@@ -237,14 +258,14 @@ function RoutineRow({
             disabled={busy}
             className="rounded-lg border border-line-strong px-2.5 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
           >
-            Run now
+            <Trans>Run now</Trans>
           </button>
           <button
             type="button"
             onClick={() => onEdit(routine)}
             className="rounded-lg border border-line-strong px-2.5 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:text-ink"
           >
-            Edit
+            <Trans>Edit</Trans>
           </button>
         </div>
       </div>
@@ -255,7 +276,9 @@ function RoutineRow({
 
       {expanded && (
         <div className="border-t border-line px-3.5 py-3">
-          <SectionTitle>Run history</SectionTitle>
+          <SectionTitle>
+            <Trans>Run history</Trans>
+          </SectionTitle>
           <div className="mt-2">
             <RunHistory id={routine.id} />
           </div>
@@ -282,6 +305,7 @@ function StepEditor({
   onChange: (s: RoutineStep) => void;
   onRemove: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const set = (patch: Partial<RoutineStep>): void => onChange({ ...step, ...patch });
   return (
     <div className="rounded-lg border border-line bg-field px-2.5 py-2.5">
@@ -291,9 +315,9 @@ function StepEditor({
           onChange={(e) => onChange({ ...blankStep(e.target.value as RoutineStepType), name: step.name })}
           className="rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
         >
-          {STEP_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
+          {STEP_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type}
             </option>
           ))}
         </select>
@@ -301,13 +325,13 @@ function StepEditor({
           type="text"
           value={step.name}
           onChange={(e) => set({ name: e.target.value })}
-          placeholder="step name"
+          placeholder={t`step name`}
           className="min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
         />
         <button
           type="button"
           onClick={onRemove}
-          aria-label="remove step"
+          aria-label={t`remove step`}
           className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-ink-dim hover:text-red-400"
         >
           ×
@@ -319,7 +343,7 @@ function StepEditor({
           type="text"
           value={step.command ?? ''}
           onChange={(e) => set({ command: e.target.value })}
-          placeholder="shell command (e.g. curl -fsS -X POST …)"
+          placeholder={t`shell command (e.g. curl -fsS -X POST …)`}
           className="mt-2 w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
         />
       )}
@@ -328,7 +352,7 @@ function StepEditor({
           <textarea
             value={step.prompt ?? ''}
             onChange={(e) => set({ prompt: e.target.value })}
-            placeholder="prompt for the headless claude run"
+            placeholder={t`prompt for the headless claude run`}
             rows={2}
             className="w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
           />
@@ -336,7 +360,7 @@ function StepEditor({
             type="text"
             value={step.model ?? ''}
             onChange={(e) => set({ model: e.target.value })}
-            placeholder="model override (optional, e.g. sonnet)"
+            placeholder={t`model override (optional, e.g. sonnet)`}
             className="w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
           />
         </div>
@@ -347,13 +371,13 @@ function StepEditor({
             type="text"
             value={step.taskTitle ?? ''}
             onChange={(e) => set({ taskTitle: e.target.value })}
-            placeholder="task title"
+            placeholder={t`task title`}
             className="w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
           />
           <textarea
             value={step.taskPrompt ?? ''}
             onChange={(e) => set({ taskPrompt: e.target.value })}
-            placeholder="task prompt (board card body)"
+            placeholder={t`task prompt (board card body)`}
             rows={2}
             className="w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
           />
@@ -361,7 +385,7 @@ function StepEditor({
             type="text"
             value={step.boardColumn ?? ''}
             onChange={(e) => set({ boardColumn: e.target.value })}
-            placeholder="board column (default: triage)"
+            placeholder={t`board column (default: triage)`}
             className="w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
           />
         </div>
@@ -375,7 +399,7 @@ function StepEditor({
             onChange={(e) => set({ continueOnFailure: e.target.checked })}
             className="h-3 w-3 accent-brand"
           />
-          continue on failure
+          <Trans>continue on failure</Trans>
         </label>
       )}
     </div>
@@ -393,6 +417,7 @@ function RoutineEditor({
   onClose: () => void;
   onSaved: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const { projects } = useScope();
   const isNew = routine === 'new';
   const seed: Routine | null = isNew ? null : routine;
@@ -414,6 +439,7 @@ function RoutineEditor({
   const [initialSnapshot] = useState(snapshot);
 
   const cronOk = cronLooksValid(cronExpr);
+  const webhookRoute = 'POST /api/hooks/routine/{id}/{token}'; // i18n-ignore — an API route, not copy
   const canSave = name.trim() !== '' && steps.length > 0 && cronOk && !saving;
 
   // Dirty = the form differs from how it opened. The post-save "copy the
@@ -464,7 +490,7 @@ function RoutineEditor({
       className="fixed inset-0 z-50 flex justify-end bg-bg/60"
       role="dialog"
       aria-modal="true"
-      aria-label={isNew ? 'new routine' : 'edit routine'}
+      aria-label={isNew ? t`new routine` : t`edit routine`}
       onClick={requestClose}
     >
       <div
@@ -473,12 +499,12 @@ function RoutineEditor({
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="font-display text-[14px] font-bold text-ink">
-            {isNew ? 'New routine' : 'Edit routine'}
+            {isNew ? <Trans>New routine</Trans> : <Trans>Edit routine</Trans>}
           </span>
           <button
             type="button"
             onClick={requestClose}
-            aria-label="close"
+            aria-label={t`close`}
             className="rounded-lg border border-line px-2.5 py-1 font-mono text-[12px] text-ink-dim hover:text-ink"
           >
             ×
@@ -489,7 +515,7 @@ function RoutineEditor({
           {token !== null && (
             <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5">
               <div className="font-mono text-[11px] font-semibold text-emerald-300">
-                Webhook token (shown once — copy it now)
+                <Trans>Webhook token (shown once — copy it now)</Trans>
               </div>
               <code className="mt-1 block break-all font-mono text-[11px] text-ink">{token}</code>
               <button
@@ -500,28 +526,28 @@ function RoutineEditor({
                 }}
                 className="mt-2 rounded-lg border border-line-strong px-3 py-1 font-mono text-[11px] text-ink-dim hover:text-ink"
               >
-                Done
+                <Trans>Done</Trans>
               </button>
             </div>
           )}
 
-          <Field label="Name">
+          <Field label={t`Name`}>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="nightly advisor re-run"
+              placeholder={t`nightly advisor re-run`}
               className="w-full rounded-lg border border-line-strong bg-field px-2.5 py-1.5 font-mono text-[12px] text-ink"
             />
           </Field>
 
-          <Field label="Scope">
+          <Field label={t`Scope`}>
             <select
               value={projectId ?? ''}
               onChange={(e) => setProjectId(e.target.value === '' ? null : Number.parseInt(e.target.value, 10))}
               className="w-full rounded-lg border border-line-strong bg-field px-2.5 py-1.5 font-mono text-[12px] text-ink"
             >
-              <option value="">Global (daemon cwd)</option>
+              <option value="">{t`Global (daemon cwd)`}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name ?? p.slug}
@@ -530,7 +556,7 @@ function RoutineEditor({
             </select>
           </Field>
 
-          <Field label="Cron (5-field, blank = manual/webhook only)">
+          <Field label={t`Cron (5-field, blank = manual/webhook only)`}>
             <input
               type="text"
               value={cronExpr}
@@ -541,22 +567,22 @@ function RoutineEditor({
               }`}
             />
             <div className="mt-1 font-mono text-[10.5px] text-ink-faint">
-              {cronOk ? describeCron(cronExpr) : 'invalid cron — need 5 fields'}
+              {cronOk ? describeCron(cronExpr) : t`invalid cron — need 5 fields`}
             </div>
           </Field>
 
           <div className="flex gap-3">
-            <Field label="Catch-up">
+            <Field label={t`Catch-up`}>
               <select
                 value={catchUp}
                 onChange={(e) => setCatchUp(e.target.value as 'skip' | 'run_one')}
                 className="w-full rounded-lg border border-line-strong bg-field px-2.5 py-1.5 font-mono text-[12px] text-ink"
               >
-                <option value="skip">skip (drop missed)</option>
-                <option value="run_one">run_one (one catch-up)</option>
+                <option value="skip">{t`skip (drop missed)`}</option>
+                <option value="run_one">{t`run_one (one catch-up)`}</option>
               </select>
             </Field>
-            <Field label="Timeout (s)">
+            <Field label={t`Timeout (s)`}>
               <input
                 type="number"
                 min={1}
@@ -574,18 +600,20 @@ function RoutineEditor({
               onChange={(e) => setWebhook(e.target.checked)}
               className="h-3.5 w-3.5 accent-brand"
             />
-            enable webhook trigger (POST /api/hooks/routine/{'{id}'}/{'{token}'})
+            <Trans>enable webhook trigger ({webhookRoute})</Trans>
           </label>
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <SectionTitle>Steps</SectionTitle>
+              <SectionTitle>
+                <Trans>Steps</Trans>
+              </SectionTitle>
               <button
                 type="button"
                 onClick={() => setSteps((s) => [...s, blankStep('command')])}
                 className="rounded-lg border border-line-strong px-2.5 py-1 font-mono text-[11px] text-ink-dim hover:text-ink"
               >
-                + add step
+                + <Trans>add step</Trans>
               </button>
             </div>
             <div className="flex flex-col gap-2">
@@ -597,7 +625,11 @@ function RoutineEditor({
                   onRemove={() => setSteps((arr) => arr.filter((_, j) => j !== i))}
                 />
               ))}
-              {steps.length === 0 && <Empty>Add at least one step.</Empty>}
+              {steps.length === 0 && (
+                <Empty>
+                  <Trans>Add at least one step.</Trans>
+                </Empty>
+              )}
             </div>
           </div>
 
@@ -610,7 +642,7 @@ function RoutineEditor({
             onClick={requestClose}
             className="rounded-lg border border-line px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 hover:bg-surface2"
           >
-            Cancel
+            <Trans>Cancel</Trans>
           </button>
           <button
             type="button"
@@ -618,18 +650,18 @@ function RoutineEditor({
             disabled={!canSave}
             className="rounded-lg border border-brand/40 bg-brand/10 px-3.5 py-1.5 font-mono text-[11.5px] text-brand transition-colors hover:bg-brand/20 disabled:opacity-40"
           >
-            {saving ? 'Saving…' : isNew ? 'Create' : 'Save'}
+            {saving ? <Trans>Saving…</Trans> : isNew ? <Trans>Create</Trans> : <Trans>Save</Trans>}
           </button>
         </div>
       </div>
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title={isNew ? 'Discard new routine?' : 'Discard changes?'}
-        confirmLabel="discard"
+        title={isNew ? t`Discard new routine?` : t`Discard changes?`}
+        confirmLabel={t`discard`}
         danger
       >
-        The name, schedule, and steps you've entered will be lost.
+        <Trans>The name, schedule, and steps you've entered will be lost.</Trans>
       </ConfirmDialog>
     </div>
   );
@@ -649,6 +681,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /** `embedded` (System → Routines tab): the shell owns the page heading and the
  * scope chip, so only the description line and the create action render. */
 export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+  const { t } = useLingui();
   const { scope, projects } = useScope();
   const scopeProjectId = useMemo(() => {
     if (scope === null) return undefined;
@@ -669,6 +702,7 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
   }, [scopeProjectId]);
 
   useEffect(load, [load]);
+  const routineName = confirmDel?.name ?? '';
 
   const doDelete = async (): Promise<void> => {
     if (!confirmDel) return;
@@ -688,9 +722,13 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
     <div className={embedded ? 'max-w-4xl pb-6' : 'mx-auto max-w-4xl px-4 py-6'}>
       <div className="flex items-center justify-between">
         <div>
-          {!embedded && <h1 className="font-display text-[18px] font-bold text-ink">Routines</h1>}
+          {!embedded && (
+            <h1 className="font-display text-[18px] font-bold text-ink">
+              <Trans>Routines</Trans>
+            </h1>
+          )}
           <p className="mt-0.5 font-mono text-[11px] text-ink-faint">
-            Scheduled automation — cron / webhook / manual, with typed steps and run history.
+            <Trans>Scheduled automation — cron / webhook / manual, with typed steps and run history.</Trans>
           </p>
         </div>
         <button
@@ -698,7 +736,7 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
           onClick={() => setEditing('new')}
           className="rounded-lg border border-brand/40 bg-brand/10 px-3 py-1.5 font-mono text-[11.5px] text-brand transition-colors hover:bg-brand/20"
         >
-          + New routine
+          + <Trans>New routine</Trans>
         </button>
       </div>
 
@@ -713,9 +751,11 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
 
       <div className="mt-5">
         {err !== null && <ErrorBox message={err} />}
-        {routines === null && err === null && <Loading label="routines…" />}
+        {routines === null && err === null && <Loading label={t`routines…`} />}
         {routines !== null && routines.length === 0 && (
-          <Empty>No routines yet. Create one to schedule recurring work.</Empty>
+          <Empty>
+            <Trans>No routines yet. Create one to schedule recurring work.</Trans>
+          </Empty>
         )}
         {routines !== null && routines.length > 0 && (
           <ul className="flex flex-col gap-2.5">
@@ -744,25 +784,25 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
             }}
             className="font-mono text-[11px] text-red-400 hover:text-red-300"
           >
-            Delete this routine
+            <Trans>Delete this routine</Trans>
           </button>
         </div>
       )}
 
       <ConfirmDialog
         open={confirmDel !== null}
-        title="Delete routine?"
-        confirmLabel="Delete"
+        title={t`Delete routine?`}
+        confirmLabel={t`Delete`}
         danger
         busy={delBusy}
         onConfirm={doDelete}
         onCancel={() => setConfirmDel(null)}
       >
         {confirmDel && (
-          <>
-            Permanently delete <span className="font-semibold text-ink">{confirmDel.name}</span> and its run
+          <Trans>
+            Permanently delete <span className="font-semibold text-ink">{routineName}</span> and its run
             history? This cannot be undone.
-          </>
+          </Trans>
         )}
       </ConfirmDialog>
     </div>

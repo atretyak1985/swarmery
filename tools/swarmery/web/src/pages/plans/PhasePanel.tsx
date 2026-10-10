@@ -8,6 +8,9 @@
 // writes and the run handlers. The way out — "← all phases" and Escape — lives
 // above the panel in the plan's action row, like the plan-level panel's does.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import type { Epic, EpicPhase } from '../../api/types';
 import { type TabItem, Tabs } from '../../components/Tabs';
@@ -16,23 +19,28 @@ import { hasReviewTab } from './landingModel';
 
 export type PhaseTab = 'story' | 'criteria' | 'runs' | 'review' | 'report' | 'edit';
 
-export const PHASE_TABS: readonly TabItem<PhaseTab>[] = [
-  { id: 'story', label: 'Story' },
-  { id: 'criteria', label: 'Criteria' },
-  { id: 'runs', label: 'Runs' },
-  { id: 'review', label: 'Review' },
-  { id: 'report', label: 'Report' },
-  { id: 'edit', label: 'Edit' },
+/** The phase panel's tabs; labels are message descriptors, resolved with
+ * `i18n._()` where they render. */
+export const PHASE_TABS: readonly { id: PhaseTab; label: MessageDescriptor }[] = [
+  { id: 'story', label: msg`Story` },
+  { id: 'criteria', label: msg`Criteria` },
+  { id: 'runs', label: msg`Runs` },
+  { id: 'review', label: msg`Review` },
+  { id: 'report', label: msg`Report` },
+  { id: 'edit', label: msg`Edit` },
 ];
 
 /** "Phase 3 of 4 · 6/8 criteria · opus" — the panel's mono meta line. */
 export function phasePanelSubtitle(epic: Epic, phase: EpicPhase): string {
   const at = epic.phases.findIndex((p) => p.seq === phase.seq);
+  const position = String(at + 1);
+  const count = String(epic.phases.length);
+  const seq = String(phase.seq);
+  const done = String(phase.checkboxesDone);
+  const total = String(phase.checkboxesTotal);
   const parts = [
-    at >= 0
-      ? `Phase ${String(at + 1)} of ${String(epic.phases.length)}`
-      : `Phase ${String(phase.seq)}`,
-    `${String(phase.checkboxesDone)}/${String(phase.checkboxesTotal)} criteria`,
+    at >= 0 ? t`Phase ${position} of ${count}` : t`Phase ${seq}`,
+    t`${done}/${total} criteria`,
   ];
   const model = phase.runModel ?? phase.docModel;
   if (model !== null) parts.push(modelShortName(model));
@@ -72,6 +80,7 @@ export function PhasePanel({
   hrefFor,
   children,
 }: PhasePanelProps): JSX.Element {
+  const { t, i18n } = useLingui();
   const panelRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   // Latest handlers without re-running the listener effect (callers pass arrows).
@@ -110,15 +119,16 @@ export function PhasePanel({
   // A phase that never ran has no branch to review, so no Review tab.
   const reviewable = hasReviewTab(phase);
   const tabs = PHASE_TABS.filter(
-    (t) => (editable || t.id !== 'edit') && (reviewable || t.id !== 'review'),
-  ).map((t): TabItem<PhaseTab> => ({
-    ...t,
-    ...(t.id === 'criteria' && phase.checkboxesTotal > 0
+    (def) => (editable || def.id !== 'edit') && (reviewable || def.id !== 'review'),
+  ).map((def): TabItem<PhaseTab> => ({
+    id: def.id,
+    label: i18n._(def.label),
+    ...(def.id === 'criteria' && phase.checkboxesTotal > 0
       ? { count: `${String(phase.checkboxesDone)}/${String(phase.checkboxesTotal)}` }
       : {}),
-    ...(hrefFor !== undefined ? { href: hrefFor(t.id) } : {}),
+    ...(hrefFor !== undefined ? { href: hrefFor(def.id) } : {}),
   }));
-  const label = tabs.find((t) => t.id === tab)?.label ?? tab;
+  const label = tabs.find((item) => item.id === tab)?.label ?? tab;
   const stepping = onPrev !== undefined || onNext !== undefined;
 
   return (
@@ -131,14 +141,18 @@ export function PhasePanel({
       <div className="border-b border-line px-4 pt-3 pb-3">
         <div className="flex items-center gap-2 font-mono text-[10px] text-ink-faint">
           <span className="min-w-0 truncate">{phasePanelSubtitle(epic, phase)}</span>
-          {stepping && <span className="ml-auto shrink-0">↑↓ next phase</span>}
+          {stepping && (
+            <span className="ml-auto shrink-0">
+              <Trans>↑↓ next phase</Trans>
+            </span>
+          )}
         </div>
         <h2 id={titleId} className="mt-1 text-[14px] leading-[1.3] font-semibold text-ink">
           {phase.name}
         </h2>
       </div>
       <div className="px-2">
-        <Tabs tabs={tabs} value={tab} onChange={onTab} ariaLabel="phase details tabs" />
+        <Tabs tabs={tabs} value={tab} onChange={onTab} ariaLabel={t`phase details tabs`} />
       </div>
       <div role="tabpanel" aria-label={label} className="px-4 py-3 text-[13px] leading-relaxed">
         {children}

@@ -16,9 +16,12 @@
 // Active plan. The title names the tab while a non-Plans body is showing;
 // Plans titles itself.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { type TabItem, Tabs, tabParamHref, useTabParam } from '../../components/Tabs';
+import { Tabs, tabParamHref, useTabParam } from '../../components/Tabs';
 import { Loading } from '../../components/ui';
 import { useDocumentTitle } from '../../lib/useDocumentTitle';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
@@ -32,16 +35,18 @@ const Playbooks = lazy(() => import('../Playbooks').then((m) => ({ default: m.Pl
 
 export type PlansPlaceTab = 'new' | 'plans' | 'board' | 'playbooks';
 
-export const PLANS_PLACE_TABS: readonly TabItem<PlansPlaceTab>[] = [
-  { id: 'new', label: 'New plan' },
-  { id: 'plans', label: 'Plans' },
-  { id: 'board', label: 'Board' },
-  { id: 'playbooks', label: 'Playbooks' },
+/** The top tabs; each label is a message, rendered with i18n._ at render time. */
+export const PLANS_PLACE_TABS: readonly { id: PlansPlaceTab; label: MessageDescriptor }[] = [
+  { id: 'new', label: msg`New plan` },
+  { id: 'plans', label: msg`Plans` },
+  { id: 'board', label: msg`Board` },
+  { id: 'playbooks', label: msg`Playbooks` },
 ];
 
 const IDS = PLANS_PLACE_TABS.map((t) => t.id);
 
 export function PlansPlace(): JSX.Element {
+  const { i18n, t } = useLingui();
   const [paramTab, setParamTab] = useTabParam<PlansPlaceTab>('tab', IDS, 'plans', { history: 'push' });
   const { slug = '', plan } = useParams<{ slug: string; plan?: string }>();
   const { project } = useProjectWorkspace();
@@ -82,17 +87,19 @@ export function PlansPlace(): JSX.Element {
   };
   // A parked tab stays out of the strip unless a direct link has opened it,
   // so the strip never hides the tab you're on.
-  const tabs = PLANS_PLACE_TABS.filter((t) => !PARKED_PLANS_TABS.has(t.id) || t.id === tab).map((t) => ({
-    ...t,
-    href: hrefOf(t.id),
+  const tabs = PLANS_PLACE_TABS.filter((item) => !PARKED_PLANS_TABS.has(item.id) || item.id === tab).map((item) => ({
+    id: item.id,
+    label: i18n._(item.label),
+    href: hrefOf(item.id),
   }));
 
-  const label = PLANS_PLACE_TABS.find((t) => t.id === tab)?.label ?? tab;
+  const current = PLANS_PLACE_TABS.find((item) => item.id === tab);
+  const label = current === undefined ? tab : i18n._(current.label);
   useDocumentTitle(tab === 'plans' ? null : `${label} · ${project?.name ?? slug} — Swarmery`);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-3 pt-3 desk:px-6">
-        <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Plans" />
+        <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Plans`} />
       </div>
       <div role="tabpanel" aria-label={label} className="flex min-h-0 flex-1 flex-col">
         <Suspense fallback={<Loading label={`${label.toLowerCase()}…`} />}>

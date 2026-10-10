@@ -11,6 +11,8 @@
 // acceptLesson, patchRecommendation, …) — primaryAction / denyAction are
 // exported so the page binds the SAME calls to the e / x keys.
 
+import { plural, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { patchProposal, patchRecommendation, resolveApproval } from '../../api';
@@ -86,6 +88,7 @@ export function denyAction(item: InboxItem): Action | null {
     case 'approval':
       return () => resolveApproval(item.raw.id, 'deny');
     case 'lesson':
+      // i18n-ignore: dismissal reason stored server-side, not UI copy
       return () => dismissLesson(item.raw.id, 'not useful');
     case 'advisor':
       return () => patchRecommendation(item.raw.id, 'dismissed');
@@ -142,6 +145,16 @@ function Code({ children }: { children: ReactNode }): JSX.Element {
   );
 }
 
+function agreeLine(agree: number, answered: number): string {
+  const matched = String(agree);
+  const total = String(answered);
+  return t`agent matched you on ${matched} of ${total}`;
+}
+
+function resumesLine(resetsIn: string): string {
+  return t`resumes on its own in ${resetsIn}, when the limit resets`;
+}
+
 function questionLabel(q: QueueItem): string {
   const tail = q.questionId.split('.').pop() ?? q.questionId;
   return tail.replace(/_/g, ' ');
@@ -167,6 +180,7 @@ export function InboxDetail({
   /** How often the agent's audit-sample labels matched the operator's. */
   audit?: TriageAudit | null;
 }): JSX.Element {
+  const { t } = useLingui();
   const meta = KIND_META[item.kind];
   const primary = manualPrimaryAction(item);
   const suggestion = item.suggestion;
@@ -189,7 +203,7 @@ export function InboxDetail({
     suggestedBox === null ? (
       <Consequences yes={yes} {...(no === undefined ? {} : { no })} />
     ) : (
-      <Consequences yes={['if you press e', suggestedBox]} />
+      <Consequences yes={[t`if you press e`, suggestedBox]} />
     );
 
   let title: ReactNode = item.title;
@@ -202,24 +216,30 @@ export function InboxDetail({
       const questions = questionsOf(r);
       if (r.riskClass === 'prod-deploy') {
         // The daemon refuses a remote approve/answer with 403: no allow here.
-        title = `Production deploy via ${r.toolName} — confirm locally`;
+        const toolName = r.toolName;
+        title = t`Production deploy via ${toolName} — confirm locally`;
         body = (
           <>
             <Code>{requestSummary(r)}</Code>
-            <Body>Production deploy — confirm in the session's terminal. Nothing runs until you do.</Body>
+            <Body>
+              <Trans>Production deploy — confirm in the session's terminal. Nothing runs until you do.</Trans>
+            </Body>
           </>
         );
         buttons = (
           <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
-            deny
+            <Trans>deny</Trans>
             <KeyHint k="x" />
           </button>
         );
       } else if (questions !== null) {
-        title = `Claude is asking you ${String(questions.length)} question${questions.length === 1 ? '' : 's'}`;
+        const count = questions.length;
+        title = t`Claude is asking you ${plural(count, { one: '# question', few: '# questions', many: '# questions', other: '# questions' })}`;
         body = (
           <>
-            <Body>The session waits for your answers; they go back to Claude as the tool's result.</Body>
+            <Body>
+              <Trans>The session waits for your answers; they go back to Claude as the tool's result.</Trans>
+            </Body>
             <div className="mt-3.5">
               <QuestionForm
                 questions={questions}
@@ -232,33 +252,38 @@ export function InboxDetail({
         );
         buttons = (
           <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
-            deny
+            <Trans>deny</Trans>
             <KeyHint k="x" />
           </button>
         );
       } else {
-        title = `Claude wants to use ${r.toolName}`;
+        const toolName = r.toolName;
+        const sessionId = r.sessionId;
+        const askedAgo = ageLabel(r.requestedAt, now);
+        title = t`Claude wants to use ${toolName}`;
         body = (
           <>
             <Code>{requestSummary(r)}</Code>
             <Body>
-              Session {r.sessionId} asked {ageLabel(r.requestedAt, now)} ago and is waiting on you. Nothing
-              runs until you answer.
+              <Trans>
+                Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you
+                answer.
+              </Trans>
             </Body>
             <Consequences
-              yes={['if you approve', 'The call runs now and the session continues. Nothing else changes.']}
-              no={['if you deny', 'Claude is told no and looks for another way, or stops.']}
+              yes={[t`if you approve`, t`The call runs now and the session continues. Nothing else changes.`]}
+              no={[t`if you deny`, t`Claude is told no and looks for another way, or stops.`]}
             />
           </>
         );
         buttons = (
           <>
             <button type="button" {...manualPrimary} className={primaryGreen} disabled={busy} onClick={act(primary)}>
-              approve
+              <Trans>approve</Trans>
               <KeyHint k={manualKey} />
             </button>
             <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
-              deny
+              <Trans>deny</Trans>
               <KeyHint k="x" />
             </button>
           </>
@@ -270,21 +295,26 @@ export function InboxDetail({
       const l = item.raw;
       title = `“${l.title}”`;
       const offPlan = l.surpriseIndex === null ? null : l.surpriseIndex.toFixed(2);
+      const recurrences = l.recurrences;
+      const areas = l.areaGlobs.length > 0 ? l.areaGlobs.join(', ') : t`these areas`;
       body = (
         <>
           <Body>
-            <b className="font-medium text-ink-2">What happened:</b>{' '}
+            <b className="font-medium text-ink-2">
+              <Trans>What happened:</Trans>
+            </b>{' '}
             {l.cause !== '' ? l.cause : l.sourceParagraph}
           </Body>
           {l.guidance !== '' && <Code>{l.guidance}</Code>}
           <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-            seen {l.recurrences}×{offPlan !== null && ` · ${UI_TERMS.surprise.ui} ${offPlan}`}
+            <Trans>seen {recurrences}×</Trans>
+            {offPlan !== null && ` · ${UI_TERMS.surprise.ui} ${offPlan}`}
             {l.phaseName !== '' && ` · ${l.phaseName}`}
           </div>
           <Conseq
             yes={[
-              'if you accept',
-              `Every future run touching ${l.areaGlobs.length > 0 ? l.areaGlobs.join(', ') : 'these areas'} gets this sentence in its brief. We then watch whether those runs land closer to plan.`,
+              t`if you accept`,
+              t`Every future run touching ${areas} gets this sentence in its brief. We then watch whether those runs land closer to plan.`,
             ]}
           />
         </>
@@ -292,14 +322,14 @@ export function InboxDetail({
       buttons = (
         <>
           <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
-            accept
+            <Trans>accept</Trans>
             <KeyHint k={manualKey} />
           </button>
           <Link to="/lessons" className={SECONDARY}>
-            edit wording
+            <Trans>edit wording</Trans>
           </Link>
           <button type="button" className={SECONDARY} disabled={busy} onClick={act(deny)}>
-            not useful
+            <Trans>not useful</Trans>
             <KeyHint k="x" />
           </button>
         </>
@@ -314,8 +344,8 @@ export function InboxDetail({
           <Body>{r.detail}</Body>
           <Conseq
             yes={[
-              'if you accept',
-              "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved.",
+              t`if you accept`,
+              t`We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved.`,
             ]}
           />
         </>
@@ -323,11 +353,11 @@ export function InboxDetail({
       buttons = (
         <>
           <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
-            I'll fix it — track this
+            <Trans>I'll fix it — track this</Trans>
             <KeyHint k={manualKey} />
           </button>
           <button type="button" className={SECONDARY} disabled={busy} onClick={act(deny)}>
-            dismiss
+            <Trans>dismiss</Trans>
             <KeyHint k="x" />
           </button>
         </>
@@ -336,7 +366,8 @@ export function InboxDetail({
     }
     case 'proposal': {
       const p = item.raw;
-      title = `A change to ${p.agent}, drafted from its evidence`;
+      const agent = p.agent;
+      title = t`A change to ${agent}, drafted from its evidence`;
       body = (
         <>
           <Body>{p.rationale}</Body>
@@ -344,19 +375,19 @@ export function InboxDetail({
             {p.diff}
           </div>
           <Consequences
-            yes={['if you approve', 'The proposal is marked approved; applying it opens a pull request you review.']}
-            no={['if you reject', 'The draft is closed. Nothing in the agent changes.']}
+            yes={[t`if you approve`, t`The proposal is marked approved; applying it opens a pull request you review.`]}
+            no={[t`if you reject`, t`The draft is closed. Nothing in the agent changes.`]}
           />
         </>
       );
       buttons = (
         <>
           <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
-            approve
+            <Trans>approve</Trans>
             <KeyHint k={manualKey} />
           </button>
           <button type="button" className={DENY} disabled={busy} onClick={act(deny)}>
-            reject
+            <Trans>reject</Trans>
             <KeyHint k="x" />
           </button>
         </>
@@ -365,24 +396,28 @@ export function InboxDetail({
     }
     case 'classifier': {
       const group = item.raw;
-      title = (
+      const and = t`and`;
+      const answers = (
         <>
-          Was this{' '}
           {group.map((q, i) => (
             <span key={q.id}>
-              {i > 0 && (i === group.length - 1 ? ' and ' : ', ')}
+              {i > 0 && (i === group.length - 1 ? ` ${and} ` : ', ')}
               <span className="text-brand">{q.answer}</span>
             </span>
           ))}
-          ?
         </>
       );
+      const sessionTitle = group[0]?.sessionTitle ?? '';
+      const groupSize = group.length;
+      title = <Trans>Was this {answers}?</Trans>;
       body = (
         <>
           <Body>
-            The local model's guess about “{group[0]?.sessionTitle ?? ''}”. Your answer is the only thing that
-            tells us whether to trust it. If you don't remember the session, skip — a wrong answer is worse
-            than none.
+            <Trans>
+              The local model's guess about “{sessionTitle}”. Your answer is the only thing that tells us
+              whether to trust it. If you don't remember the session, skip — a wrong answer is worse than
+              none.
+            </Trans>
           </Body>
           <div className="mt-3.5 flex flex-col gap-2.5">
             {group.map((q) => (
@@ -401,7 +436,9 @@ export function InboxDetail({
                     >
                       {opt}
                       {suggestion?.answers?.[q.id] === opt && (
-                        <span className="ml-1.5 font-normal text-ink-faint">· agent says</span>
+                        <span className="ml-1.5 font-normal text-ink-faint">
+                          <Trans>· agent says</Trans>
+                        </span>
                       )}
                     </button>
                   ))}
@@ -410,7 +447,7 @@ export function InboxDetail({
             ))}
             {audit !== null && audit.answered > 0 && (
               <div className="font-mono text-[10.5px] text-ink-faint">
-                agent matched you on {audit.agree} of {audit.answered}
+                {agreeLine(audit.agree, audit.answered)}
               </div>
             )}
           </div>
@@ -418,7 +455,7 @@ export function InboxDetail({
       );
       buttons = (
         <button type="button" {...manualPrimary} className={primaryGreen} disabled={busy} onClick={act(primary)}>
-          {group.length === 1 ? 'yes' : `yes, all ${String(group.length)}`}
+          {group.length === 1 ? t`yes` : t`yes, all ${groupSize}`}
           <KeyHint k={manualKey} />
         </button>
       );
@@ -426,19 +463,23 @@ export function InboxDetail({
     }
     case 'retire': {
       const p = item.raw;
+      const retiresIn = p.autoRetireAt !== null ? expiresInLabel(p.autoRetireAt, now) : '';
       body = (
         <>
           <Body>
-            <b className="font-medium text-ink-2">What happened:</b> {p.detail}
+            <b className="font-medium text-ink-2">
+              <Trans>What happened:</Trans>
+            </b>{' '}
+            {p.detail}
           </Body>
           <Code>{p.guidance}</Code>
           <Conseq
-            yes={['if you confirm', 'The lesson stops appearing in briefs. Its history stays.']}
-            no={['if you keep it', 'The proposal closes and this reason is held off for 30 days.']}
+            yes={[t`if you confirm`, t`The lesson stops appearing in briefs. Its history stays.`]}
+            no={[t`if you keep it`, t`The proposal closes and this reason is held off for 30 days.`]}
           />
           {p.autoRetireAt !== null && (
             <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-              retires on its own in {expiresInLabel(p.autoRetireAt, now)} if nobody answers
+              <Trans>retires on its own in {retiresIn} if nobody answers</Trans>
             </div>
           )}
         </>
@@ -446,11 +487,11 @@ export function InboxDetail({
       buttons = (
         <>
           <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
-            stop using it
+            <Trans>stop using it</Trans>
             <KeyHint k={manualKey} />
           </button>
           <button type="button" className={SECONDARY} disabled={busy} onClick={act(deny)}>
-            keep it
+            <Trans>keep it</Trans>
             <KeyHint k="x" />
           </button>
         </>
@@ -464,12 +505,17 @@ export function InboxDetail({
         body = (
           <>
             <Body>
-              <b className="font-medium text-ink-2">What happened:</b> {a.message}
+              <b className="font-medium text-ink-2">
+                <Trans>What happened:</Trans>
+              </b>{' '}
+              {a.message}
             </Body>
             {a.rule === AUTO_MODE_NO_VERDICT_RULE && (
               <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-                nothing to decide here — the check runs on Claude's side, and this alert closes on its own after
-                30 minutes without a failed check
+                <Trans>
+                  nothing to decide here — the check runs on Claude's side, and this alert closes on its own
+                  after 30 minutes without a failed check
+                </Trans>
               </div>
             )}
           </>
@@ -477,34 +523,40 @@ export function InboxDetail({
         break;
       }
       const quota = a.kind === 'quota';
-      title = `Account ${a.account} is paused`;
+      const account = a.account;
+      const stoppedAgo = ageLabel(item.ageIso, now);
+      title = t`Account ${account} is paused`;
       body = (
         <>
           <Body>
-            <b className="font-medium text-ink-2">What happened:</b>{' '}
+            <b className="font-medium text-ink-2">
+              <Trans>What happened:</Trans>
+            </b>{' '}
             {quota
-              ? 'This account hit a Claude usage limit.'
-              : 'Claude refused this account: its sign-in expired, or its access was switched off.'}{' '}
-            The daemon stopped starting cards, phases and plans on it {ageLabel(item.ageIso, now)} ago, so no
-            more runs are spent finding that out.
+              ? t`This account hit a Claude usage limit.`
+              : t`Claude refused this account: its sign-in expired, or its access was switched off.`}{' '}
+            <Trans>
+              The daemon stopped starting cards, phases and plans on it {stoppedAgo} ago, so no more runs
+              are spent finding that out.
+            </Trans>
           </Body>
           {a.reason !== undefined && a.reason !== '' && <Code>{a.reason}</Code>}
           <Consequences
             yes={[
-              'if you probe & resume',
-              'The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why.',
+              t`if you probe & resume`,
+              t`The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why.`,
             ]}
           />
           <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
             {quota && a.resetsAt !== undefined && a.resetsAt !== ''
-              ? `resumes on its own in ${expiresInLabel(a.resetsAt, now)}, when the limit resets`
-              : 'stays paused until a check succeeds — sign in to the account again first if it needs it'}
+              ? resumesLine(expiresInLabel(a.resetsAt, now))
+              : t`stays paused until a check succeeds — sign in to the account again first if it needs it`}
           </div>
         </>
       );
       buttons = (
         <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
-          probe &amp; resume
+          <Trans>probe &amp; resume</Trans>
           <KeyHint k={manualKey} />
         </button>
       );
@@ -529,36 +581,47 @@ export function InboxDetail({
     }
   }
 
+  const expiresIn = item.expiresIso !== undefined ? expiresInLabel(item.expiresIso, now) : '';
+  const suggestedValue = suggestion !== undefined ? valueWording(suggestion.value) : '';
+
   return (
     <article aria-label={item.title} className="flex min-h-full flex-col px-[26px] py-[22px]">
       <div className="flex items-center gap-2 font-mono text-[10px] tracking-[0.12em] uppercase">
         <span className={meta.text}>● {meta.label}</span>
         <span className="truncate text-ink-faint">· {item.context}</span>
-        {fleetWide && <span className="text-ink-faint">· fleet-wide</span>}
+        {fleetWide && (
+          <span className="text-ink-faint">
+            <Trans>· fleet-wide</Trans>
+          </span>
+        )}
         {item.expiresIso !== undefined && item.urgent && (
           <span className="ml-auto tracking-normal text-amber normal-case">
-            expires in {expiresInLabel(item.expiresIso, now)}
+            <Trans>expires in {expiresIn}</Trans>
           </span>
         )}
       </div>
       <h2 className="mt-3 font-display text-[19px] leading-[1.3] font-medium text-ink">{title}</h2>
       {body}
       {hasSuggestion && suggestion !== undefined && (
-        <section aria-label="agent suggestion" className="mt-3.5 rounded-[10px] border border-brand/30 bg-brand/5 px-3 py-2.5">
-          <div className="text-[12.5px] font-medium text-ink-2">agent suggests: {valueWording(suggestion.value)}</div>
+        <section aria-label={t`agent suggestion`} className="mt-3.5 rounded-[10px] border border-brand/30 bg-brand/5 px-3 py-2.5">
+          <div className="text-[12.5px] font-medium text-ink-2">
+            <Trans>agent suggests: {suggestedValue}</Trans>
+          </div>
           {suggestion.reason !== '' && (
             <div className="mt-1 text-[12px] leading-[1.5] text-ink-3">{suggestion.reason}</div>
           )}
           {suggestion.card !== undefined && (
             <>
-              <div className="mt-2 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">the task</div>
+              <div className="mt-2 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
+                <Trans>the task</Trans>
+              </div>
               <Code>
                 {suggestion.card.title}
                 {'\n\n'}
                 {suggestion.card.prompt}
               </Code>
               <div className="mt-1.5 text-[11.5px] text-ink-faint">
-                Accepting creates a task on the project's board; an agent picks it up.
+                <Trans>Accepting creates a task on the project's board; an agent picks it up.</Trans>
               </div>
             </>
           )}
@@ -572,7 +635,7 @@ export function InboxDetail({
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-[18px]">
         {hasSuggestion && (
           <button type="button" data-primary="" className={PRIMARY_GREEN} disabled={busy} onClick={act(accept)}>
-            {suggestion === undefined ? 'accept' : suggestionButtonLabel(suggestion.value)}
+            {suggestion === undefined ? t`accept` : suggestionButtonLabel(suggestion.value)}
             <KeyHint k="e" />
           </button>
         )}
@@ -582,7 +645,7 @@ export function InboxDetail({
             to={`/sessions/${item.kind === 'approval' ? String(item.raw.sessionId) : (item.raw[0]?.sessionUuid ?? '')}`}
             className={LINK}
           >
-            open session →
+            <Trans>open session →</Trans>
           </Link>
         )}
       </div>

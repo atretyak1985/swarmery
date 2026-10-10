@@ -6,6 +6,7 @@
 // Each row also carries the daemon's drift verdict: a plugin can be enabled
 // here and still not be loadable, which is invisible from settings.json alone.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PluginDriftStatus, ProjectPluginRow, ProjectPluginsResponse } from '../api/types';
 import { fetchProjectPlugins, repairProjectPlugin, toggleProjectPlugin } from '../api';
@@ -25,6 +26,7 @@ const STATUS_STYLES: Record<Exclude<PluginDriftStatus, 'ok' | 'unknown'>, string
 // sets it when drift is already 'ok' (repair outranks config), so a row shows
 // at most one of the two chips, never both.
 function StatusChip({ row }: { row: ProjectPluginRow }): JSX.Element | null {
+  const { t } = useLingui();
   if (row.status !== 'ok' && row.status !== 'unknown') {
     return (
       <span
@@ -36,12 +38,13 @@ function StatusChip({ row }: { row: ProjectPluginRow }): JSX.Element | null {
     );
   }
   if (row.configStatus === 'needs-config') {
-    const missing = row.configMissing ?? [];
+    const missing = (row.configMissing ?? []).join(', ');
     return (
       <span
-        data-tip={missing.length > 0 ? `missing: ${missing.join(', ')}` : undefined}
+        data-tip={missing !== '' ? t`missing: ${missing}` : undefined}
         className="shrink-0 rounded-full border border-amber/40 bg-amber/10 px-2 py-0.5 font-mono text-[10px] text-amber"
       >
+        {/* i18n-ignore: the daemon's config-status code, shown as-is like the drift statuses */}
         needs-config
       </span>
     );
@@ -62,6 +65,7 @@ function ConfigureButton({
   disabled: boolean;
   onOpen: () => void;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (row.configStatus === undefined) return null;
   const needsConfig = row.configStatus === 'needs-config';
   return (
@@ -69,12 +73,12 @@ function ConfigureButton({
       type="button"
       disabled={disabled}
       onClick={onOpen}
-      data-tip={disabled ? 'read-only — daemon started without SWARMERY_ONBOARD_ROOTS' : undefined}
+      data-tip={disabled ? t`read-only — daemon started without SWARMERY_ONBOARD_ROOTS` : undefined}
       className={`shrink-0 rounded-full border border-line px-2 py-0.5 font-mono text-[10px] transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${
         needsConfig ? 'text-amber' : 'text-ink-dim'
       }`}
     >
-      {needsConfig ? 'configure' : 'edit'}
+      {needsConfig ? t`configure` : t`edit`}
     </button>
   );
 }
@@ -92,6 +96,7 @@ function RepairButton({
   disabled: boolean;
   onDone: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // A repair can succeed and still need the operator's attention — the
@@ -113,7 +118,7 @@ function RepairButton({
         setBusy(false);
       });
   };
-  const label = busy ? '…' : err !== null ? 'failed' : warning !== null ? 'check' : 'repair';
+  const label = busy ? '…' : err !== null ? t`failed` : warning !== null ? t`check` : t`repair`;
   return (
     <button
       type="button"
@@ -123,8 +128,8 @@ function RepairButton({
         err ??
         warning ??
         (disabled
-          ? 'read-only — daemon started without SWARMERY_ONBOARD_ROOTS'
-          : 'run claude plugin install/update for this project')
+          ? t`read-only — daemon started without SWARMERY_ONBOARD_ROOTS`
+          : t`run claude plugin install/update for this project`)
       }
       className={`shrink-0 rounded-full border border-line px-2 py-0.5 font-mono text-[10px] transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${
         warning !== null ? 'text-amber' : 'text-ink-dim'
@@ -146,36 +151,39 @@ function ToggleButton({
   busy: boolean;
   onToggle: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   if (row.locked) {
     return (
       <span
         className="font-mono text-[10px] text-ink-faint"
-        data-tip="core is managed via attach/detach"
+        data-tip={t`core is managed via attach/detach`}
       >
-        via attach/detach
+        <Trans>via attach/detach</Trans>
       </span>
     );
   }
+  const name = row.name;
   return (
     <button
       type="button"
       disabled={disabled || busy}
       onClick={onToggle}
       aria-pressed={row.enabled}
-      aria-label={`${row.name}: ${row.enabled ? 'enabled' : 'disabled'}`}
-      data-tip={disabled ? 'read-only — daemon started without SWARMERY_ONBOARD_ROOTS' : undefined}
+      aria-label={row.enabled ? t`${name}: enabled` : t`${name}: disabled`}
+      data-tip={disabled ? t`read-only — daemon started without SWARMERY_ONBOARD_ROOTS` : undefined}
       className={`rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         row.enabled
           ? 'border-brand/40 bg-brand/10 text-brand hover:bg-brand/20'
           : 'border-line text-ink-faint hover:text-ink'
       }`}
     >
-      {busy ? '…' : row.enabled ? 'on' : 'off'}
+      {busy ? '…' : row.enabled ? t`on` : t`off`}
     </button>
   );
 }
 
 export function ProjectPlugins({ projectId }: { projectId: number }): JSX.Element {
+  const { t } = useLingui();
   const [data, setData] = useState<ProjectPluginsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -252,9 +260,14 @@ export function ProjectPlugins({ projectId }: { projectId: number }): JSX.Elemen
       });
   };
 
+  const overlaySources = data?.overlaySources?.join(', ') ?? '';
+  const marketplaceVersion = data?.marketplaceVersion ?? '';
+
   return (
     <>
-      <SectionTitle>plugins</SectionTitle>
+      <SectionTitle>
+        <Trans>plugins</Trans>
+      </SectionTitle>
       {error !== null && (
         <div className="mb-2">
           <ErrorBox message={error} onRetry={load} />
@@ -266,12 +279,12 @@ export function ProjectPlugins({ projectId }: { projectId: number }): JSX.Elemen
         </div>
       )}
       {data === null && error === null ? (
-        <Loading label="plugins…" />
+        <Loading label={t`plugins…`} />
       ) : data !== null ? (
         <Card>
           {data.plugins.length === 0 ? (
             <div className="rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
-              no plugins in the marketplace clone
+              <Trans>no plugins in the marketplace clone</Trans>
             </div>
           ) : (
             <div className="divide-y divide-line-soft">
@@ -316,11 +329,11 @@ export function ProjectPlugins({ projectId }: { projectId: number }): JSX.Elemen
             </div>
           )}
           <div className="mt-2 font-mono text-[10px] text-ink-faint">
-            marketplace v{data.marketplaceVersion} · repairs and toggles take effect in the next
-            Claude Code session
-            {data.overlaySources !== undefined && data.overlaySources.length > 0
-              ? ` · enabled state also reads: ${data.overlaySources.join(', ')}`
-              : null}
+            <Trans>
+              marketplace v{marketplaceVersion} · repairs and toggles take effect in the next Claude Code
+              session
+            </Trans>
+            {overlaySources !== '' ? t` · enabled state also reads: ${overlaySources}` : null}
           </div>
         </Card>
       ) : null}

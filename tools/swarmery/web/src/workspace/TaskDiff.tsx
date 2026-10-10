@@ -9,6 +9,8 @@
 // counts, the per-file patch) is components/DiffView.tsx, shared with a plan
 // phase's Review tab.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { getBoardTaskDiff } from '../api';
 import type { TaskDiff as TaskDiffData } from '../api/types';
@@ -17,6 +19,7 @@ import { DiffView } from '../components/DiffView';
 export { splitPatch } from '../components/DiffView';
 
 export function TaskDiff({ taskId }: { taskId: number }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [diff, setDiff] = useState<TaskDiffData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +49,9 @@ export function TaskDiff({ taskId }: { taskId: number }): JSX.Element {
     setError(null);
   }, [taskId]);
 
+  const commitCount = diff?.commits.length ?? 0;
+  const fileCount = diff?.files.length ?? 0;
+
   return (
     <div className="rounded-lg border border-line bg-surface/40">
       <button
@@ -57,18 +63,26 @@ export function TaskDiff({ taskId }: { taskId: number }): JSX.Element {
         <span aria-hidden="true" className="w-2 shrink-0">
           {open ? '▾' : '▸'}
         </span>
-        diff
+        <Trans>diff</Trans>
         {diff !== null && (
           <span className="ml-auto normal-case tracking-normal text-ink-faint">
-            {diff.commits.length} commit{diff.commits.length === 1 ? '' : 's'} ·{' '}
-            {diff.files.length} file{diff.files.length === 1 ? '' : 's'}
+            {t`${plural(commitCount, {
+              one: '# commit',
+              few: '# commits',
+              many: '# commits',
+              other: '# commits',
+            })} · ${plural(fileCount, { one: '# file', few: '# files', many: '# files', other: '# files' })}`}
           </span>
         )}
       </button>
 
       {open && (
         <div className="border-t border-line px-2.5 py-2">
-          {loading && <div className="font-mono text-[10.5px] text-ink-faint">loading diff…</div>}
+          {loading && (
+            <div className="font-mono text-[10.5px] text-ink-faint">
+              <Trans>loading diff…</Trans>
+            </div>
+          )}
 
           {error !== null && (
             <div className="rounded-md border border-red/30 bg-red/5 px-2 py-1.5 font-mono text-[10.5px] whitespace-pre-wrap text-red">

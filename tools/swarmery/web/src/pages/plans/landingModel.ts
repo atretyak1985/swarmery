@@ -3,6 +3,7 @@
 // provider's `terms` the daemon sends — nothing here, and nothing that calls
 // it, branches on which provider a project uses (SC-11).
 
+import { t } from '@lingui/core/macro';
 import type { EpicPhase, PhaseLanding, PhaseLandingState, ProviderTerms } from '../../api/types';
 
 /** The landing fields these rules read. `landing` is optional because a phase
@@ -15,9 +16,11 @@ export type LandingPhase = Pick<EpicPhase, 'runState' | 'runSessionUuid'> & {
 /** The vocabulary for a host the daemon could not name — the API's own terms
  * for an unknown provider (repoprovider.TermsFor). The fallback when the
  * project's GET /vcs failed and a landing control has no other terms to read. */
+// i18n-ignore — the daemon's own provider vocabulary (repoprovider.TermsFor),
+// which every other landing label receives untranslated from GET /vcs (plan D7).
 export const NEUTRAL_TERMS: Readonly<ProviderTerms> = Object.freeze({
   provider: 'Repository',
-  change: 'Change request',
+  change: 'Change request', // i18n-ignore — see above
   changeShort: 'CR',
 });
 
@@ -29,17 +32,19 @@ function stateOf(phase: LandingPhase): PhaseLandingState {
 export function landingLabel(state: PhaseLandingState, terms: ProviderTerms): string {
   switch (state) {
     case 'none':
-      return 'not landed';
+      return t`not landed`;
     case 'ready':
-      return 'ready to land';
+      return t`ready to land`;
     case 'pushed':
-      return 'pushed';
-    case 'pr_open':
-      return `${terms.changeShort} open`;
+      return t`pushed`;
+    case 'pr_open': {
+      const changeShort = terms.changeShort;
+      return t`${changeShort} open`;
+    }
     case 'merged':
-      return 'merged';
+      return t`merged`;
     case 'returned':
-      return 'returned to agent';
+      return t`returned to agent`;
   }
 }
 

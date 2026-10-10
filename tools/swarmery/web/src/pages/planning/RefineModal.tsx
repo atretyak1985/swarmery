@@ -3,6 +3,7 @@
 // follow the operator's direction. Same overlay pattern as ImproveModal /
 // ConfirmDialog.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 
 export function RefineModal({
@@ -37,6 +38,7 @@ function RefineModalInner({
   onClose: () => void;
   onApply: (instructions: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // Remember the element that had focus before this modal opened so we can
   // return focus to it on close (WCAG 2.2 §2.4.3 Focus Order).
@@ -106,7 +108,7 @@ function RefineModalInner({
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Refine the plan and next questions"
+      aria-label={t`Refine the plan and next questions`}
       onClick={busy ? undefined : onClose}
     >
       <div
@@ -115,17 +117,19 @@ function RefineModalInner({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="font-display text-[14px] font-bold text-ink">
-          Refine the plan and next questions
+          <Trans>Refine the plan and next questions</Trans>
         </div>
         <p className="mt-1 text-[12.5px] leading-relaxed text-ink-dim">
-          Describe what should change. The plan will update, and the next questions will follow your direction.
+          <Trans>
+            Describe what should change. The plan will update, and the next questions will follow your direction.
+          </Trans>
         </p>
 
         <label
           className="mt-3 mb-1 block font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase"
           htmlFor="planning-refine-instructions"
         >
-          refinement instructions
+          <Trans>refinement instructions</Trans>
         </label>
         <textarea
           ref={textareaRef}
@@ -134,7 +138,7 @@ function RefineModalInner({
           onChange={(e) => setText(e.target.value)}
           rows={4}
           disabled={busy}
-          placeholder="For example: add a phased rollout, cover disaster recovery, and ask about migration risks."
+          placeholder={t`For example: add a phased rollout, cover disaster recovery, and ask about migration risks.`}
           className="w-full resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[12.5px] leading-relaxed text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-brand/50 disabled:opacity-50"
         />
 
@@ -145,7 +149,7 @@ function RefineModalInner({
             disabled={busy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
-            Cancel
+            <Trans>Cancel</Trans>
           </button>
           <button
             type="button"
@@ -153,7 +157,7 @@ function RefineModalInner({
             disabled={busy || text.trim() === ''}
             className="rounded-lg border border-green/45 bg-green/12 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
           >
-            {busy ? '…' : 'Apply refinement'}
+            {busy ? '…' : <Trans>Apply refinement</Trans>}
           </button>
         </div>
       </div>

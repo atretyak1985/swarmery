@@ -12,3 +12,2459 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#: src/pages/Plans.tsx
+msgid " — agent {agent}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid " · live"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "— {posterior} it added {count} more {areas} ({names})"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "— nothing is written until you approve the diff."
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "— tracked as <0>{planId}</0>"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "({before} before)"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "({offCount} not in the plan)"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "(no kind)"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "(no reply text)"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "(post hoc — excluded from calibration)"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "(question could not be parsed)"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "{archivedCount} archived"
+msgstr ""
+
+#: src/pages/plans/landingModel.ts
+msgid "{changeShort} open"
+msgstr ""
+
+#: src/pages/plans/DepsUnmergedActions.tsx
+msgid "{changeShort} opened"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{count, plural, one {# phase} few {# phases} many {# phases} other {# phases}}"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "{count, plural, one {# stage} few {# stages} many {# stages} other {# stages}}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "{day} at {time}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{docCount, plural, one {# doc} few {# docs} many {# docs} other {# docs}}"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "{docCount, plural, one {# plan doc will change on disk: {docs}. This is the one irreversible step.} few {# plan docs will change on disk: {docs}. This is the one irreversible step.} many {# plan docs will change on disk: {docs}. This is the one irreversible step.} other {# plan docs will change on disk: {docs}. This is the one irreversible step.}}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{done} of {total} checkboxes done"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "{done} of {total} criteria"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "{done}/{total} criteria"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "{doneCount} done"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{first} → fell back to {last}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{from} → {docPath} (rename)"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{hours} h"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{hours} h {minutes} min"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "{label} (no cards)"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "{prior} vs {posterior}"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{s, plural, one {# second} few {# seconds} many {# seconds} other {# seconds}}"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{size} phase"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "{stagedDocCount, plural, one {# plan doc staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} few {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} many {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} other {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.}}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "{summary} — click for forecast vs actual"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "{surpriseTerm} {index} · nothing gates on this"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{tab} · Phase {seq} — {title} · {tail}"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{ticked} of the {total} criteria ticked"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{title} — plan details"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{title} · Plans · {tail}"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "{title} lane"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "↑↓ next phase"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "<0>{amnestyEligible}</0> {amnestyEligible, plural, one {captured card in Triage has} few {captured cards in Triage have} many {captured cards in Triage have} other {captured cards in Triage have}} passed the auto-archive date."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "▶ Retry plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "▶ Run"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "▶ Run plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "✓ summary"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "❐ open plan README"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "30 to 90 min"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "90 min to 4 h"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "a file changed since staging — reload before applying"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "a file is stale — reload the review first"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "a large"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "A lesson can be drawn from the report’s Where reality diverged paragraph."
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "a medium"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "a phase run is active — cancel it before running the whole plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "a phase run is already starting"
+msgstr ""
+
+#: src/pages/plans/VerifyVerdictChip.tsx
+msgid "a read-only verifier confirmed this phase’s acceptance criteria"
+msgstr ""
+
+#: src/pages/plans/VerifyVerdictChip.tsx
+msgid "a read-only verifier could NOT confirm the ticked criteria — open the run diagnosis"
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+msgid "A revise wizard interviews you against <0>{planTitle}</0> and stages its changes as a diff — nothing is written until you approve it."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "a run owns the plan docs — revise once it finishes"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "a small"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "a whole-plan run is executing this plan"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+#: src/pages/Plans.tsx
+msgid "acceptance criteria"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "activated"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "active"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "active · {ago} ago"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Add at least one step."
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "add step"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "advisory, never a gate"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "agent"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "agent's full report"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "all ({totalCount})"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "all phases"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "An agent is working on this phase now."
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "an extra-large"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "an extra-small"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "an unmeasured time"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "answer the planner"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "answer the planner…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "applied"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Apply"
+msgstr ""
+
+#: src/pages/planning/RefineModal.tsx
+msgid "Apply refinement"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Apply revision"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Apply this revision?"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "applying…"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "approved"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "Archive"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "Archive <0>{amnestyMatched}</0> {amnestyMatched, plural, one {captured card} few {captured cards} many {captured cards} other {captured cards}}? They stay findable in Archived."
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "Archive them"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Archive this plan? The task folder moves to the archive/ zone."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "archived"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "Archived"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "archiving…"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "areas"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "areas added: {areasAdded}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "areas dropped: {areasDropped}"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "as {outcome}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "as forecast"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "auto"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "Back"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "back to the phase list (Esc)"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "bands & outcome"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "blocked"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/plans/PlansPlace.tsx
+msgid "Board"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "board card {cardId}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "board column (default: triage)"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "board view"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "board…"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "busy — already running"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "by {decidedBy}"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "cancel"
+msgstr ""
+
+#: src/pages/planning/RefineModal.tsx
+#: src/pages/planning/ReviseModal.tsx
+#: src/pages/planning/RevisionReview.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Routines.tsx
+msgid "Cancel"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "card"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Catch-up"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "change request"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "changes requested"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "checked {checkedAgo}"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "CI failed"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "CI passed"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "CI running"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Board.tsx
+msgid "clear label filter"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+#: src/pages/Routines.tsx
+msgid "close"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "closed"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "confidence"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "content changed on disk since staging — apply refused, nothing was written"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "continue on failure"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "Continue with the plan"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "copies the markdown into the project so its prompts become editable"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "counting…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "coverage"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "covered by phase {phase} — {name}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Create"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "created {created}"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "Criteria"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "criteria…"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Cron (5-field, blank = manual/webhook only)"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "daily at {time}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "decided {decided}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "decided {decided} by {by}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Delete"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Delete routine?"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Delete this routine"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "dependency pending"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "dependency resolved"
+msgstr ""
+
+#: src/pages/planning/RefineModal.tsx
+msgid "Describe what should change. The plan will update, and the next questions will follow your direction."
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "describe what you want to build"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Describe what you want to build for <0>{projectLabel}</0>. A planner session interviews you with structured questions, keeps a running plan, and writes the full plan when you tell it to proceed."
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "describe your own direction"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "describe your own direction…"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+#: src/pages/Routines.tsx
+msgid "discard"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Discard changes?"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Discard new routine?"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Discard note?"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Discard unsaved changes to {path}?"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Board.tsx
+#: src/pages/Plans.tsx
+msgid "dismiss"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "dismiss notice"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "dispatch an implementer + a fresh reviewer per phase"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "doc"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "doc: {shortName}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "doc…"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "doing nothing"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "done"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Routines.tsx
+msgid "Done"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "draft"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Draft"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "Duplicate to project"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "Duplicating…"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "duration"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "e.g. Add a bulk-export button to the reports page that streams a CSV…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/plans/PhasePanel.tsx
+#: src/pages/Routines.tsx
+msgid "Edit"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "edit doc"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "edit routine"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Edit routine"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "edited {ago} ago"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "edited {edited}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "effort"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Board.tsx
+msgid "empty"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "enable / disable"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "enable webhook trigger ({webhookRoute})"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "End the interview? The planner will write the full plan to the workspace."
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "ending blocked"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "epics…"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "every minute"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "execution mode"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "execution record"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "expected"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "fable 5.1 — most capable, ~2.5× cost"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "failed"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "failed to load {path}: {reason}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "far off plan"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "feedback for the agent"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "files"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "filter by label"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "filter by state"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "finishing part of the work"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "finishing the work"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "finishing with some concerns"
+msgstr ""
+
+#: src/pages/planning/RefineModal.tsx
+msgid "For example: add a phased rollout, cover disaster recovery, and ask about migration risks."
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+msgid "For example: phase 3's library choice failed the a11y gate — replace it and add an audit phase."
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "forecast"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "forecast vs actual"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "From phase diagnosis"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "global"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Global (daemon cwd)"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "Graph"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "happened"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "headless run in progress"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "held"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "high — implementation"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "high — planning"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Plans.tsx
+msgid "history"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/planning/HistoryDrawer.tsx
+#: src/pages/PlanningMode.tsx
+#: src/pages/PlanningMode.tsx
+msgid "History"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "hourly at :{minute}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected."
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "in a failure"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "inferred"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "inferred from files this session edited under plan/"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "inline"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "interview against this plan and stage the changes as a reviewable diff"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "interview closed — writing the full plan into the workspace…"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Interview done — staging the revision"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "invalid cron — need 5 fields"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "keep the plan card"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "label: any"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "last {lastRun}"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "last landing failure: {landingError}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "last run: done"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "latest reasoning"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "let the run-plan skill triage the route from the phase DAG"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "linked"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "linked to this plan by the daemon"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Plans.tsx
+msgid "loading…"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "low — mechanical work"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "major miss"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "manual / webhook only"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "max — no ceiling"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "medium — scoped work"
+msgstr ""
+
+#: src/pages/plans/landingModel.ts
+#: src/pages/plans/LandingStatus.tsx
+msgid "merged"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "merged {mergedAgo}"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "merged {mergedAt}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "missed"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "mode"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "model {model}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "model override (optional, e.g. sonnet)"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "n/a"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Name"
+msgstr ""
+
+#: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
+msgid "never run"
+msgstr ""
+
+#: src/pages/plans/PlansPlace.tsx
+msgid "New plan"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "new routine"
+msgstr ""
+
+#: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
+msgid "New routine"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "New task"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "next {nextRun}"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "next idea"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "nightly advisor re-run"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no {filterLabel} plans"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no activity · {ago}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "no areas to compare"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no checkboxes in this doc"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "no code touched"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "no content change"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no epics yet — a plan under this project's workspace (a <0>plan/</0> dir with a phase table) becomes an epic here"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "no forecast"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "no forecast — this phase declares no ## Forecast, so there is nothing to score its run against"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "No lesson was proposed: the report has no Where reality diverged paragraph."
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "no next run"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no phase declares it covers this criterion"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no phase-doc edits for a while — the executor may be stuck"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "No plan file changes. The note (optional) is recorded on the revision."
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "no playbooks"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no revisions — \"Revise plan\" in the action row starts one"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "No routines yet. Create one to schedule recurring work."
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "No runs yet."
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "no schedule"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no sessions for this phase"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no sessions ran this plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no summary of the work written — the executor left neither a <0>## Completion Report</0> nor an <1>## Execution record</1> section in this phase doc"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "no summary written for this phase"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "no turns yet"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "none of the {total} criteria ticked"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "not delivered"
+msgstr ""
+
+#: src/pages/plans/landingModel.ts
+msgid "not landed"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "not run yet — a score appears once a run of this phase has finished and been measured"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "Not run yet."
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "note (optional)"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "Nothing follows: the run landed on plan."
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "nothing to land in this state"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "Nothing to refresh: this phase has no open change request."
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "off"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "off plan"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "off-plan {score} · {band}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "on"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "on plan"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "open"
+msgstr ""
+
+#: src/pages/plans/DepsUnmergedActions.tsx
+msgid "Open {changeShort}"
+msgstr ""
+
+#: src/pages/plans/DepsUnmergedActions.tsx
+msgid "Open {changeShort} for {branch}"
+msgstr ""
+
+#: src/pages/plans/DepsUnmergedActions.tsx
+msgid "Open a {change} for each unmerged branch"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "open Phase {seq} — {name} details"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "open plan details"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "open Plans →"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+#: src/pages/PlanningMode.tsx
+#: src/pages/PlanningMode.tsx
+#: src/pages/PlanningMode.tsx
+msgid "open session →"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Opening…"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Operator"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "opus 5.5"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "opus 5.5 — default"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "outcome"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "outcome {priorOutcome} → {posteriorOutcome}"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "over 4 h"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Pause"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "paused"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "pending"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "per-doc, else {PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "per-doc, else high (no effort sent)"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "perm {permissionMode}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "phase {phase} covers {cid}, which the spec never declares"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "Phase {position} of {count}"
+msgstr ""
+
+#: src/pages/plans/DepsUnmergedActions.tsx
+msgid "phase {seq}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/PhasePanel.tsx
+msgid "Phase {seq}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Phase {seq} not found in {planTitle}"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "phase details tabs"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "phase run effort"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "phase run model"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "pick any that apply"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "pick one"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Plan {externalId} not found — showing the plan list"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Plan #{id} not found"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "plan details tabs"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "plan doc source"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "plan is not active"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Plan ready"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "plan run failed"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "plan saved at <0>{planDir}</0>"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "plan sessions"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "plan status filter"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "plan summary"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "Planned as {size} phase, it ended in {took}{tail}."
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "Planned without a size, it ended in {took}{tail}."
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planner"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planner default — {PLANNING_DEFAULT_EFFORT_LABEL} (no effort key sent)"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planner effort"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planner interview"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Planner is asking"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planner model"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Planner replied"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planner reply"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Planner thinking"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "planning history"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Planning run failed"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "planning…"
+msgstr ""
+
+#: src/pages/plans/PlansPlace.tsx
+#: src/pages/plans/PlansPlace.tsx
+msgid "Plans"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Plans · {tail}"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "playbooks"
+msgstr ""
+
+#: src/pages/plans/PlansPlace.tsx
+#: src/pages/Playbooks.tsx
+msgid "Playbooks"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "playbooks…"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "post hoc"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "prior → posterior"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "project file: <0>{path}</0>"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "prompt for the headless claude run"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "proposed changes"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "Pros / Cons"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Push"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Push + open {change}"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "push the run branch and open a {change}"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "push the run branch to origin"
+msgstr ""
+
+#: src/pages/plans/landingModel.ts
+msgid "pushed"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Pushing…"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "Questions, answers, and AI reasoning for each plan update."
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "Queued — waiting for a dispatch slot"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "ran · {done}/{total}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "ran · no progress"
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "ran {span}"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "read the change request's status from the code host now"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "reading the repo and preparing the next question…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "readme…"
+msgstr ""
+
+#: src/pages/plans/landingModel.ts
+msgid "ready to land"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "recommended"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "Refine"
+msgstr ""
+
+#: src/pages/planning/RefineModal.tsx
+#: src/pages/planning/RefineModal.tsx
+msgid "Refine the plan and next questions"
+msgstr ""
+
+#: src/pages/planning/RefineModal.tsx
+msgid "refinement instructions"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "Refresh"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "Refreshing…"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Refused: the run branch {branch} is the base branch{base}, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it."
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+#: src/pages/planning/RevisionReview.tsx
+msgid "Reject"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Reject this revision?"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "rejected"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "rejecting…"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Reload"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Reload review"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "remove step"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "reply"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "Report"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Restore"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Resume"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "Retry run"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "return"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Return to agent?"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Return to agent…"
+msgstr ""
+
+#: src/pages/plans/landingModel.ts
+msgid "returned to agent"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "revert"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "Review"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Review changes →"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Review it on the <0>Plans page</0> — phases run from there."
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "review required"
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+msgid "review the open revision →"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "review…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Revise plan"
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+#: src/pages/planning/ReviseModal.tsx
+msgid "Revise this plan"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "revising"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Revising"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "revision {revisionIndex} — how much reading the code changed the expectation"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Revision #{id} not found"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Revision staged"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "revision…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Revisions"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Revisions ({staged})"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "revisions…"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "risks"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Routines"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "routines…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Run anyway"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "run failed"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Run failed"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Run history"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Run now"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "Run phase"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "run started"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "run this phase again even though nothing has changed since it blocked"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "run this phase headlessly in an isolated worktree"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "run_one (one catch-up)"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "running"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "Running"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "running plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Running plan"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "Runs"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "runs…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Routines.tsx
+msgid "Save"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "saved"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "saved · backup written"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "saving…"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Saving…"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Scheduled automation — cron / webhook / manual, with typed steps and run history."
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Scope"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "scored against the {forecastKind}"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "select a playbook"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "select an epic"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "Selectable execution recipes. A task picks one on the board; the dispatcher runs its stages sequentially in one worktree. <0/> Built-ins are read-only — duplicate one to edit its prompts."
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "send the phase back to its agent with your feedback"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "sending…"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "session"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "session →"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "session scope: all {totalCount} sessions of the plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "session scope: phase {seqLabel} only, {phaseCount} of {totalCount} sessions"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "sessions"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "shell command (e.g. curl -fsS -X POST …)"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "Show AI Reasoning"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "show the score breakdown"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "showing every session of the plan — click to narrow to this phase"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "showing this phase only — click for every session of the plan"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "size"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "skip (drop missed)"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "sonnet 5 — faster, cheaper"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "spawns run with --permission-mode {permissionMode}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Spec"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "spec {specCovered}/{specTotal}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "spec coverage — criteria covered by at least one phase"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "spec…"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "stage chain"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "staged"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "staged — awaiting your decision"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "staged {stagedAt}"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "staging the revision failed"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Staging the revision failed"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "stale"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Start again"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Start another plan"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Start planning"
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+msgid "Start revision"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "started"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "started {startedAgo}"
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+#: src/pages/PlanningMode.tsx
+msgid "starting…"
+msgstr ""
+
+#: src/pages/plans/LandingStatus.tsx
+msgid "status not read yet"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "step name"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Steps"
+msgstr ""
+
+#: src/pages/plans/PhasePanel.tsx
+msgid "Story"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "subagent-driven"
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "Submit answer"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "Summary"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "summary…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "superseded"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "surprise {index} · {top}"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "surprise vector"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "task prompt (board card body)"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "task title"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "tech-lead (default)"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "the Completion Report carries no “Where reality diverged” paragraph"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the controller implements the phases itself, no dispatch"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "The diff was not measured, so we can't say which areas it touched."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the executor is actively editing this phase doc"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "The forecast named no size, duration or outcome."
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "The last run failed."
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "The last run finished the work."
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "The last run finished without ticking a single criterion."
+msgstr ""
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "The last run ticked some criteria but did not finish the phase."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the last run used {runModel} (from its session)"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "the live file changed since this revision was staged — reload before applying"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected."
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "the model that runs the planning interview and writes the plan"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "The name, schedule, and steps you've entered will be lost."
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "The note you typed will be lost."
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "the option the planner would pick itself"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the phase doc asks for {docModel} — this run will use it"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the phase doc asks for {docModel}, but the picker above is set to {picked} and overrides it for this run"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "The phase is still running — land it once the run has finished."
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/PlanningMode.tsx
+msgid "the plan"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "the plan directory is being picked up by the workspace scan…"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "The plan takes shape here as you answer — each reply rebuilds it."
+msgstr ""
+
+#: src/pages/planning/QuestionCard.tsx
+msgid "the planner is asking"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "The planner run ended without a reply. Adjust the idea below (it is prefilled) and start again — a new run supersedes this one."
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "The planner was {percent} % sure"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run executes core's <0>run-plan</0> skill headlessly in an isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a human."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run failed — click for why"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run finished but ticked no acceptance criteria — click for why"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "the run is still live"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "the run is still live — land it once it finishes"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run ticked every acceptance criterion"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run ticked every criterion ({total}/{total}); the doc has since changed to {done}/{total}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the run ticked some criteria but did not finish the phase — click for why"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "the run’s diff was not measured"
+msgstr ""
+
+#: src/pages/plans/VerifyVerdictChip.tsx
+msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "the whole plan is running{agentPart} (mode: {mode})"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "the wizard finished; its staged diff is being picked up by the daemon…"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
+msgstr ""
+
+#: src/pages/Playbooks.tsx
+msgid "this is a project playbook — edit its file directly; it overrides the built-in of the same name"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "this phase declares no ## Forecast, so its run has nothing to be scored against"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "This phase has no run branch yet — run it first; there is nothing to push."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the {change} by hand."
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "this run changed model mid-flight: {trail}"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "tick this criterion in the doc"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Timeout (s)"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "touched {count} {areas}{offNote}"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Transform your idea into a plan"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "un-tick this criterion in the doc"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "uncovered"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "under 30 min"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "unexpected"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Playbooks.tsx
+msgid "unknown project — pick one from the switcher"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "unreported"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "unverified"
+msgstr ""
+
+#: src/pages/plans/VerifyVerdictChip.tsx
+msgid "verified"
+msgstr ""
+
+#: src/pages/plans/VerifyVerdictChip.tsx
+msgid "verify failed"
+msgstr ""
+
+#: src/pages/plans/VerifyVerdictChip.tsx
+msgid "verify inconclusive"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "waiting on phase {waitingOn}"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "webhook"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "Webhook token (shown once — copy it now)"
+msgstr ""
+
+#: src/pages/Routines.tsx
+msgid "webhook trigger enabled"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "what follows"
+msgstr ""
+
+#: src/pages/planning/ReviseModal.tsx
+msgid "what should change, and why"
+msgstr ""
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "what to fix on the next pass"
+msgstr ""
+
+#: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "what was done"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "what was done — the executor's Completion Report and execution record"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "what was shipped — per-phase executed work"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "when this phase doc was last edited — no run is attached to it"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "where reality diverged"
+msgstr ""
+
+#: src/pages/plans/ForecastStory.tsx
+msgid "why"
+msgstr ""
+
+#: src/pages/Plans.tsx
+msgid "why it did not move"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "Why this proposal does not fit…"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "with only part of the work done"
+msgstr ""
+
+#: src/pages/plans/forecastStoryModel.ts
+msgid "with the work done"
+msgstr ""
+
+#: src/pages/Board.tsx
+#: src/pages/Plans.tsx
+#: src/pages/Playbooks.tsx
+msgid "workspace…"
+msgstr ""
+
+#: src/pages/planning/RevisionReview.tsx
+msgid "write the staged changes into the plan docs"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Writing the plan"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "written"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "written into a doc that already reported the work done — not a prediction, so calibration skips it"
+msgstr ""
+
+#: src/pages/plans/ForecastVsActual.tsx
+msgid "written to the doc after the run had already changed another file — not a prediction, so calibration skips it"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+#: src/pages/Plans.tsx
+msgid "xhigh — deepest, slowest"
+msgstr ""
+
+#: src/pages/Board.tsx
+msgid "Yes, archive {amnestyMatched}"
+msgstr ""
+
+#: src/pages/planning/RunningPlanPanel.tsx
+msgid "Yes, write the plan"
+msgstr ""
+
+#: src/pages/PlanningMode.tsx
+msgid "Your last reply did not reach the planner: {lastError}. The question below is the same one — answering it again is the retry."
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "Your refinement"
+msgstr ""
+
+#: src/pages/planning/HistoryDrawer.tsx
+msgid "Your response"
+msgstr ""

@@ -17,6 +17,7 @@
 // never unpins it, this chip is also the only way back to "all projects" — which
 // is exactly why it belongs on every scope-filtered page, not just one.
 
+import { useLingui } from '@lingui/react/macro';
 import { useParams } from 'react-router-dom';
 import { useScope } from '../lib/scope';
 import { ProjectDropdown } from './ProjectDropdown';
@@ -24,13 +25,14 @@ import { ProjectDropdown } from './ProjectDropdown';
 export function ScopeChip(): JSX.Element | null {
   const { slug } = useParams<{ slug?: string }>();
   const { scope, setScope, projects } = useScope();
+  const { t } = useLingui();
   if (slug !== undefined) return null;
   return (
     <ProjectDropdown
       projects={projects}
       value={scope}
       onChange={setScope}
-      allLabel="All projects"
+      allLabel={t`All projects`}
       groupByTag
     />
   );

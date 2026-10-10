@@ -1,4 +1,7 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { I18nProvider } from '@lingui/react';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { lazy, StrictMode, Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -107,9 +110,17 @@ function RootProviders(): JSX.Element {
   );
 }
 
+/** A lazy route's Suspense fallback. The router table is built at module load,
+ * before the locale's catalogs arrive, so it carries a message descriptor and
+ * this component translates it at render time. */
+function RouteLoading({ what }: { what: MessageDescriptor }): JSX.Element {
+  const { i18n } = useLingui();
+  return <Loading label={i18n._(what)} />;
+}
+
 /** Suspense boundary for a lazy workspace route element. */
 function ws(node: JSX.Element): JSX.Element {
-  return <Suspense fallback={<Loading label="workspace…" />}>{node}</Suspense>;
+  return <Suspense fallback={<RouteLoading what={msg`workspace…`} />}>{node}</Suspense>;
 }
 
 /** /p/:slug/approvals → the project Inbox's approvals tab. Waits for the global
@@ -162,15 +173,17 @@ function RouteError(): JSX.Element {
   return (
     <div className="px-6 py-16 text-center">
       <div className="font-mono text-[11px] tracking-[0.14em] text-ink-faint uppercase">
-        {status === 404 ? 'not found' : 'something broke'}
+        {status === 404 ? <Trans>not found</Trans> : <Trans>something broke</Trans>}
       </div>
       <p className="mt-2 text-[13px] text-ink-dim">
-        {status === 404
-          ? 'That link does not point anywhere in this dashboard.'
-          : 'This view failed to render.'}
+        {status === 404 ? (
+          <Trans>That link does not point anywhere in this dashboard.</Trans>
+        ) : (
+          <Trans>This view failed to render.</Trans>
+        )}
       </p>
       <Link to="/" className="mt-4 inline-block font-mono text-[11px] text-brand hover:underline">
-        ← back to the overview
+        <Trans>← back to the overview</Trans>
       </Link>
     </div>
   );
@@ -205,7 +218,7 @@ const router = createBrowserRouter([
           {
             path: 'health',
             element: (
-              <Suspense fallback={<Loading label="health…" />}>
+              <Suspense fallback={<RouteLoading what={msg`health…`} />}>
                 <Health />
               </Suspense>
             ),
@@ -216,7 +229,7 @@ const router = createBrowserRouter([
           {
             path: 'learning',
             element: (
-              <Suspense fallback={<Loading label="learning…" />}>
+              <Suspense fallback={<RouteLoading what={msg`learning…`} />}>
                 <Learning />
               </Suspense>
             ),
@@ -228,7 +241,7 @@ const router = createBrowserRouter([
           {
             path: 'agents',
             element: (
-              <Suspense fallback={<Loading label="agents…" />}>
+              <Suspense fallback={<RouteLoading what={msg`agents…`} />}>
                 <AgentHub />
               </Suspense>
             ),
@@ -236,7 +249,7 @@ const router = createBrowserRouter([
           {
             path: 'agents/:id',
             element: (
-              <Suspense fallback={<Loading label="agents…" />}>
+              <Suspense fallback={<RouteLoading what={msg`agents…`} />}>
                 <AgentHub />
               </Suspense>
             ),
@@ -247,7 +260,7 @@ const router = createBrowserRouter([
           {
             path: 'system-hub',
             element: (
-              <Suspense fallback={<Loading label="system…" />}>
+              <Suspense fallback={<RouteLoading what={msg`system…`} />}>
                 <SystemHub />
               </Suspense>
             ),
@@ -255,7 +268,7 @@ const router = createBrowserRouter([
           {
             path: 'system-hub/:category',
             element: (
-              <Suspense fallback={<Loading label="system…" />}>
+              <Suspense fallback={<RouteLoading what={msg`system…`} />}>
                 <SystemHub />
               </Suspense>
             ),
@@ -263,7 +276,7 @@ const router = createBrowserRouter([
           {
             path: 'system-hub/:category/:id',
             element: (
-              <Suspense fallback={<Loading label="system…" />}>
+              <Suspense fallback={<RouteLoading what={msg`system…`} />}>
                 <SystemHub />
               </Suspense>
             ),
@@ -274,7 +287,7 @@ const router = createBrowserRouter([
           {
             path: 'system/*',
             element: (
-              <Suspense fallback={<Loading label="system…" />}>
+              <Suspense fallback={<RouteLoading what={msg`system…`} />}>
                 <SystemShell />
               </Suspense>
             ),
@@ -282,7 +295,7 @@ const router = createBrowserRouter([
           {
             path: 'system',
             element: (
-              <Suspense fallback={<Loading label="system…" />}>
+              <Suspense fallback={<RouteLoading what={msg`system…`} />}>
                 <SystemShell />
               </Suspense>
             ),

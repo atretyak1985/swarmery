@@ -26,6 +26,7 @@
 // only editor) and cannot catch a write that lands between the check and the
 // PATCH — a race two orders of magnitude narrower than the one it closes.
 
+import { t } from '@lingui/core/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BoardTask, TaskPriority } from '../../api/types';
 import type { PatchBoardTaskInput } from '../../api';
@@ -128,7 +129,8 @@ export function draftPatch(draft: TaskDraft, keys: ReadonlyArray<keyof TaskDraft
 
 /** How a refused save reads. Exported so the test names the same sentence. */
 export function conflictMessage(keys: ReadonlyArray<keyof TaskDraft>): string {
-  return `not saved — ${keys.join(', ')} changed on the server while you were editing. Close and reopen the card to pick up the new version.`;
+  const fields = keys.join(', ');
+  return t`not saved — ${fields} changed on the server while you were editing. Close and reopen the card to pick up the new version.`;
 }
 
 export interface TaskDraftState {
@@ -207,7 +209,7 @@ export function useTaskDraft(
       return true;
     }
     if (cur.title.trim() === '' || cur.prompt.trim() === '') {
-      setSaveError('title and prompt cannot be empty');
+      setSaveError(t`title and prompt cannot be empty`);
       return false;
     }
     // The baseline is what the draft was seeded from; `seedDraft(task)` is what

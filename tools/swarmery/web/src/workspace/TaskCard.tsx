@@ -25,6 +25,7 @@
 // to →" ColumnMenu stays as the escape hatch covering every remaining legal
 // transition.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CopyIdBadge } from '../components/CopyIdBadge';
@@ -88,6 +89,7 @@ function VerdictBadge({ verdict }: { verdict: string }): JSX.Element {
  * origin nobody has handled yet changes the words, not the render.
  */
 function SourceRow({ task, now }: { task: BoardTask; now: number }): JSX.Element {
+  const { t } = useLingui();
   const sessionHref = useSessionHref();
   const line: SourceLine = sourceLine(task);
   const age = ageLabel(task, now);
@@ -117,7 +119,10 @@ function SourceRow({ task, now }: { task: BoardTask; now: number }): JSX.Element
       )}
       {age !== null && <span className="shrink-0">· {age}</span>}
       {stale !== null && (
-        <span data-tip="the inbox sweeper retires captured cards left untriaged" className="ml-auto shrink-0 text-amber">
+        <span
+          data-tip={t`the inbox sweeper retires captured cards left untriaged`}
+          className="ml-auto shrink-0 text-amber"
+        >
           {stale}
         </span>
       )}
@@ -246,31 +251,32 @@ function TriageActions({
   onPlan: () => void;
   onDismiss: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <ActionRow>
       <button
         type="button"
         onClick={onRun}
-        data-tip="accept into the Working queue — the dispatcher picks it up"
+        data-tip={t`accept into the Working queue — the dispatcher picks it up`}
         className={ACTION_PRIMARY}
       >
-        ▶ Run
+        <Trans>▶ Run</Trans>
       </button>
       <button
         type="button"
         onClick={onPlan}
-        data-tip="open Planning Mode prefilled with this card"
+        data-tip={t`open Planning Mode prefilled with this card`}
         className={ACTION_PLAIN}
       >
-        ◇ Plan
+        <Trans>◇ Plan</Trans>
       </button>
       <button
         type="button"
         onClick={onDismiss}
-        data-tip="archive — it stays findable, it stops being an inbox item"
+        data-tip={t`archive — it stays findable, it stops being an inbox item`}
         className={`${ACTION_QUIET} ml-auto`}
       >
-        Dismiss
+        <Trans>Dismiss</Trans>
       </button>
     </ActionRow>
   );
@@ -293,15 +299,16 @@ function QueuedActions({
   paused: boolean;
   onEdit: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <ActionRow>
       <button
         type="button"
         onClick={onBackToInbox}
-        data-tip="take it back out of the queue — nothing has run yet"
+        data-tip={t`take it back out of the queue — nothing has run yet`}
         className={ACTION_PLAIN}
       >
-        ↩ Inbox
+        <Trans>↩ Inbox</Trans>
       </button>
       {onTogglePause !== undefined && (
         <button
@@ -309,16 +316,21 @@ function QueuedActions({
           onClick={onTogglePause}
           data-tip={
             paused
-              ? 'let the dispatcher consider this card again'
-              : 'hold this card in the queue without losing its place'
+              ? t`let the dispatcher consider this card again`
+              : t`hold this card in the queue without losing its place`
           }
           className={ACTION_PLAIN}
         >
-          {paused ? '▶ Resume' : '❙❙ Pause'}
+          {paused ? t`▶ Resume` : t`❙❙ Pause`}
         </button>
       )}
-      <button type="button" onClick={onEdit} data-tip="open the full card" className={`${ACTION_QUIET} ml-auto`}>
-        Edit
+      <button
+        type="button"
+        onClick={onEdit}
+        data-tip={t`open the full card`}
+        className={`${ACTION_QUIET} ml-auto`}
+      >
+        <Trans>Edit</Trans>
       </button>
     </ActionRow>
   );
@@ -338,6 +350,7 @@ function RunningActions({
   paused: boolean;
   onOpenTerminal: (() => void) | undefined;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (onTogglePause === undefined && onOpenTerminal === undefined) return null;
   return (
     <ActionRow>
@@ -345,20 +358,20 @@ function RunningActions({
         <button
           type="button"
           onClick={onTogglePause}
-          data-tip={paused ? 'unpause this card' : 'pause — the run finishes, nothing new starts'}
+          data-tip={paused ? t`unpause this card` : t`pause — the run finishes, nothing new starts`}
           className={ACTION_PLAIN}
         >
-          {paused ? '▶ Resume' : '❙❙ Pause'}
+          {paused ? t`▶ Resume` : t`❙❙ Pause`}
         </button>
       )}
       {onOpenTerminal !== undefined && (
         <button
           type="button"
           onClick={onOpenTerminal}
-          data-tip="open a terminal in this card's worktree"
+          data-tip={t`open a terminal in this card's worktree`}
           className={`${ACTION_PLAIN} ml-auto`}
         >
-          ❯_ Terminal
+          <Trans>❯_ Terminal</Trans>
         </button>
       )}
     </ActionRow>
@@ -374,23 +387,24 @@ function RunningActions({
  * that clicking the card is where the decisions are.
  */
 function ReviewActions({ onMarkDone, onReview }: { onMarkDone: () => void; onReview: () => void }): JSX.Element {
+  const { t } = useLingui();
   return (
     <ActionRow>
       <button
         type="button"
         onClick={onReview}
-        data-tip="Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
+        data-tip={t`Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict`}
         className={ACTION_PRIMARY}
       >
-        ◇ Review…
+        <Trans>◇ Review…</Trans>
       </button>
       <button
         type="button"
         onClick={onMarkDone}
-        data-tip="mark done without landing a branch — the manual override"
+        data-tip={t`mark done without landing a branch — the manual override`}
         className={`${ACTION_QUIET} ml-auto`}
       >
-        ✓ Mark done
+        <Trans>✓ Mark done</Trans>
       </button>
     </ActionRow>
   );
@@ -419,10 +433,11 @@ function ColumnMenu({
   column: BoardColumn;
   onMove: (to: BoardColumn) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <select
       value={column}
-      aria-label="move task to column"
+      aria-label={t`move task to column`}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => {
         const to = e.target.value as BoardColumn;
@@ -439,7 +454,7 @@ function ColumnMenu({
           ))}
         </optgroup>
       ))}
-      <optgroup label="History">
+      <optgroup label={t`History`}>
         {HISTORY_COLUMNS.map((c) => (
           <option key={c} value={c}>
             {COLUMN_LABELS[c]}
@@ -474,6 +489,7 @@ export function TaskCard({
    * to open, or outside a workspace layout that owns a dock. */
   onOpenTerminal?: (() => void) | undefined;
 }): JSX.Element {
+  const { t } = useLingui();
   const blocked = task.paused || task.userPaused;
   // Triage is the only column where a card is still a question. Elsewhere it is
   // committed work, and the "why is this still here" hint would be noise.
@@ -505,7 +521,7 @@ export function TaskCard({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`task ${task.externalId}: ${task.title}`}
+      aria-label={t`task ${{ id: task.externalId }}: ${{ title: task.title }}`}
       onClick={onOpen}
       onKeyDown={(e) => {
         // Only the card itself opens on Enter/Space. Without this guard the
@@ -525,7 +541,7 @@ export function TaskCard({
         {priorityDot !== undefined && (
           <span
             aria-hidden="true"
-            data-tip={`${task.priority} priority`}
+            data-tip={t`${{ priority: task.priority }} priority`}
             className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${priorityDot}`}
           />
         )}
@@ -537,7 +553,7 @@ export function TaskCard({
       {signal !== null && <SignalRow signal={signal} />}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <CopyIdBadge id={task.externalId} label="task" />
+        <CopyIdBadge id={task.externalId} label={t`task`} />
         {task.model !== null && (
           <span className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-dim">
             {task.model}
@@ -545,7 +561,7 @@ export function TaskCard({
         )}
         {playbook !== null && (
           <span
-            data-tip={`playbook: ${playbook}`}
+            data-tip={t`playbook: ${playbook}`}
             className="rounded border border-brand/40 bg-brand/5 px-1 py-[1px] font-mono text-[9px] text-brand"
           >
             ▤ {playbook}
@@ -553,7 +569,7 @@ export function TaskCard({
         )}
         {task.agent !== null && (
           <span
-            data-tip={`dispatches as @${task.agent}`}
+            data-tip={t`dispatches as @${{ agent: task.agent }}`}
             className="rounded border border-line px-1 py-[1px] font-mono text-[9px] text-ink-dim"
           >
             @{task.agent}
@@ -563,18 +579,18 @@ export function TaskCard({
         <LabelBadges labels={task.labels} />
         {blocked && (
           <span className="rounded-full border border-amber/40 bg-amber/10 px-1.5 py-[1px] font-mono text-[9px] text-amber">
-            paused
+            <Trans>paused</Trans>
           </span>
         )}
         {task.branch !== null && (
           <a
             href={`/sessions?scope=${task.projectSlug ?? ''}`}
             onClick={(e) => e.stopPropagation()}
-            data-tip={`branch ${task.branch}`}
-            aria-label={`sessions for ${task.branch}`}
+            data-tip={t`branch ${{ branch: task.branch }}`}
+            aria-label={t`sessions for ${{ branch: task.branch }}`}
             className="font-mono text-[9px] text-ink-faint transition-colors hover:text-ink"
           >
-            ❯ session
+            <Trans>❯ session</Trans>
           </a>
         )}
         <span className="ml-auto opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

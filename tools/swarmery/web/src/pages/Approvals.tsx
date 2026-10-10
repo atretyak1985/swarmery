@@ -14,6 +14,9 @@
 // no-decision handoff — NOT a plain approve, which would resolve the questions
 // unanswered (E12d). Unparseable questions fall back to the generic card.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ApprovalRule, PermissionRequest, PermissionRequestStatus, Project, Session, WSMessage } from '../api/types';
@@ -64,12 +67,12 @@ const APPROVAL_CHIP: Record<PermissionRequestStatus, string> = {
   resolved_elsewhere: 'border-line-strong text-ink-dim',
 };
 
-const APPROVAL_LABEL: Record<PermissionRequestStatus, string> = {
-  pending: 'pending',
-  approved: 'approved',
-  denied: 'denied',
-  expired: 'expired',
-  resolved_elsewhere: 'elsewhere',
+const APPROVAL_LABEL: Record<PermissionRequestStatus, MessageDescriptor> = {
+  pending: msg`pending`,
+  approved: msg`approved`,
+  denied: msg`denied`,
+  expired: msg`expired`,
+  resolved_elsewhere: msg`elsewhere`,
 };
 
 /* ----- session attribution (project + title when resolvable) ----- */
@@ -81,7 +84,8 @@ function SessionLabel({
   sessionId: number;
   session: Session | null;
 }): JSX.Element {
-  if (session === null) return <>session #{String(sessionId)}</>;
+  const sessionNumber = String(sessionId);
+  if (session === null) return <Trans>session #{sessionNumber}</Trans>;
   return (
     <>
       <ProjectName name={session.projectName} slug={session.projectSlug} />
@@ -111,6 +115,8 @@ function RuleRow({
   onToggle: () => void;
   onDelete: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
+  const pattern = rule.toolPattern;
   return (
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-[15px] py-[9px]">
       <code
@@ -121,7 +127,7 @@ function RuleRow({
         {rule.toolPattern}
       </code>
       <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-dim">
-        {rule.projectSlug ?? 'all projects'}
+        {rule.projectSlug ?? t`all projects`}
       </span>
       {rule.note !== null && rule.note !== '' && (
         <span className="min-w-0 flex-1 basis-[140px] truncate text-[11.5px] text-ink-dim">
@@ -142,16 +148,16 @@ function RuleRow({
             : 'border-line-strong text-ink-dim hover:bg-surface2'
         }`}
       >
-        {rule.enabled ? 'on' : 'off'}
+        {rule.enabled ? t`on` : t`off`}
       </button>
       <button
         type="button"
         disabled={busy}
         onClick={onDelete}
-        aria-label={`delete rule ${rule.toolPattern}`}
+        aria-label={t`delete rule ${pattern}`}
         className="rounded-lg border border-red/40 px-2.5 py-0.5 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
       >
-        delete
+        <Trans>delete</Trans>
       </button>
     </div>
   );
@@ -174,6 +180,7 @@ function AddRuleForm({
   onSubmit: () => void;
   onCancel: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <form
       className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2.5"
@@ -187,10 +194,10 @@ function AddRuleForm({
         onChange={(e) =>
           onChange({ ...draft, projectId: e.target.value === '' ? null : Number(e.target.value) })
         }
-        aria-label="rule project scope"
+        aria-label={t`rule project scope`}
         className="rounded-lg border border-line bg-field px-2 py-[5px] font-mono text-[11.5px] text-ink outline-none focus:border-green/40"
       >
-        <option value="">all projects</option>
+        <option value="">{t`all projects`}</option>
         {projects.map((p) => (
           <option key={p.id} value={String(p.id)}>
             {p.name ?? p.slug}
@@ -201,16 +208,16 @@ function AddRuleForm({
         type="text"
         value={draft.toolPattern}
         onChange={(e) => onChange({ ...draft, toolPattern: e.target.value })}
-        placeholder="Tool or Tool(arg glob) — e.g. Read, Bash(git *)"
-        aria-label="tool pattern"
+        placeholder={t`Tool or Tool(arg glob) — e.g. Read, Bash(git *)`}
+        aria-label={t`tool pattern`}
         className="min-w-0 flex-1 basis-[180px] rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-green/40"
       />
       <input
         type="text"
         value={draft.note}
         onChange={(e) => onChange({ ...draft, note: e.target.value })}
-        placeholder="note (optional)"
-        aria-label="rule note"
+        placeholder={t`note (optional)`}
+        aria-label={t`rule note`}
         className="min-w-0 flex-1 basis-[120px] rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-green/40"
       />
       <button
@@ -218,18 +225,20 @@ function AddRuleForm({
         disabled={busy || draft.toolPattern.trim() === ''}
         className="rounded-lg border border-green/45 bg-green/12 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
       >
-        add rule
+        <Trans>add rule</Trans>
       </button>
       <button
         type="button"
         onClick={onCancel}
         className="rounded-lg border border-line-strong px-3 py-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:bg-surface2"
       >
-        cancel
+        <Trans>cancel</Trans>
       </button>
       <div className="basis-full font-mono text-[10px] leading-snug text-ink-faint">
-        Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status &amp;&amp;
-        rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule).
+        <Trans>
+          Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status &amp;&amp;
+          rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule).
+        </Trans>
       </div>
       {error !== null && <div className="basis-full text-[11.5px] text-red">{error}</div>}
     </form>
@@ -258,6 +267,7 @@ export function PendingCard({
   /** Omitted → no "always allow…" button (a caller with no rules form). */
   onAlwaysAllow?: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState('');
@@ -293,6 +303,8 @@ export function PendingCard({
   const hangSec = (nowMs - new Date(request.requestedAt).getTime()) / 1000;
   const expireSec = (new Date(request.expiresAt).getTime() - nowMs) / 1000;
   const sessionTo = `/sessions/${String(request.sessionId)}`;
+  const hangs = fmtClock(hangSec);
+  const expires = fmtClock(expireSec);
 
   const submitDeny = (): void => {
     const trimmed = reason.trim();
@@ -308,7 +320,7 @@ export function PendingCard({
         />
         <span className="font-mono text-[13px] font-bold text-ink">{request.toolName}</span>
         <span className="ml-auto font-mono text-[10.5px] whitespace-nowrap text-ink-dim">
-          hangs {fmtClock(hangSec)} · {expireSec > 0 ? `expires ${fmtClock(expireSec)}` : 'expiring…'}
+          <Trans>hangs {hangs}</Trans> · {expireSec > 0 ? t`expires ${expires}` : t`expiring…`}
         </span>
       </div>
 
@@ -333,11 +345,11 @@ export function PendingCard({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        aria-label={expanded ? 'collapse raw request JSON' : 'expand raw request JSON'}
+        aria-label={expanded ? t`collapse raw request JSON` : t`expand raw request JSON`}
         className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-ink-faint transition-colors hover:text-ink-dim"
       >
         <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-        raw
+        <Trans>raw</Trans>
       </button>
       {expanded && (
         <pre className="mt-1.5 max-h-72 overflow-y-auto rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[10.5px] leading-relaxed break-all whitespace-pre-wrap text-ink-3">
@@ -363,7 +375,7 @@ export function PendingCard({
 
       {localOnly && (
         <div className="mt-3 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 font-mono text-[11px] text-amber">
-          Production deploy — confirm in the session's terminal
+          <Trans>Production deploy — confirm in the session's terminal</Trans>
         </div>
       )}
 
@@ -377,7 +389,7 @@ export function PendingCard({
             }}
             className={`${ACTION_BTN} border-green/45 bg-green/12 font-bold text-green hover:bg-green/20`}
           >
-            submit answers
+            <Trans>submit answers</Trans>
           </button>
         ) : (
           <button
@@ -386,7 +398,7 @@ export function PendingCard({
             onClick={() => onResolve('approve')}
             className={`${ACTION_BTN} border-green/45 bg-green/12 font-bold text-green hover:bg-green/20`}
           >
-            approve
+            <Trans>approve</Trans>
           </button>
         )}
         <button
@@ -396,17 +408,18 @@ export function PendingCard({
           onClick={() => setDenying((v) => !v)}
           className={`${ACTION_BTN} border-red/40 text-red hover:bg-red/10`}
         >
-          deny{denying ? ' ▴' : ''}
+          <Trans>deny</Trans>
+          {denying ? ' ▴' : ''}
         </button>
         {questions === null && !localOnly && onAlwaysAllow !== undefined && (
           <button
             type="button"
             disabled={busy}
             onClick={onAlwaysAllow}
-            data-tip="pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
+            data-tip={t`pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)`}
             className={`${ACTION_BTN} border-line-strong font-normal text-ink-3 hover:bg-surface2`}
           >
-            always allow…
+            <Trans>always allow…</Trans>
           </button>
         )}
         {questions !== null && !localOnly && (
@@ -414,17 +427,17 @@ export function PendingCard({
             type="button"
             disabled={busy}
             onClick={() => onResolve('terminal')}
-            data-tip="release with no decision — the native selector renders in the terminal (E12d/E12e)"
+            data-tip={t`release with no decision — the native selector renders in the terminal (E12d/E12e)`}
             className={`${ACTION_BTN} border-line-strong font-normal text-ink-3 hover:bg-surface2`}
           >
-            answer in terminal →
+            <Trans>answer in terminal →</Trans>
           </button>
         )}
         <Link
           to={sessionTo}
           className={`${ACTION_BTN} border-line-strong font-normal text-ink-3 hover:bg-surface2`}
         >
-          open session →
+          <Trans>open session →</Trans>
         </Link>
       </div>
 
@@ -441,8 +454,8 @@ export function PendingCard({
             autoFocus
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="reason (optional) — delivered to Claude verbatim"
-            aria-label="deny reason"
+            placeholder={t`reason (optional) — delivered to Claude verbatim`}
+            aria-label={t`deny reason`}
             className="min-w-0 flex-1 basis-[200px] rounded-lg border border-line bg-field px-2.5 py-[5px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-red/40"
           />
           <button
@@ -450,7 +463,7 @@ export function PendingCard({
             disabled={busy}
             className="rounded-lg border border-red/40 bg-red/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-red transition-colors hover:bg-red/20 disabled:opacity-50"
           >
-            confirm deny
+            <Trans>confirm deny</Trans>
           </button>
         </form>
       )}
@@ -467,6 +480,9 @@ function HistoryRow({
   request: PermissionRequest;
   session: Session | null;
 }): JSX.Element {
+  const { i18n } = useLingui();
+  const via = request.resolvedVia;
+  const reason = request.reason;
   return (
     <Link
       to={`/sessions/${String(request.sessionId)}`}
@@ -476,7 +492,7 @@ function HistoryRow({
         <span
           className={`rounded-full border px-[9px] py-0.5 font-mono text-[10.5px] whitespace-nowrap ${APPROVAL_CHIP[request.status]}`}
         >
-          {APPROVAL_LABEL[request.status]}
+          {i18n._(APPROVAL_LABEL[request.status])}
         </span>
         <span className="font-mono text-[12px] font-semibold text-ink-2">{request.toolName}</span>
         <code className="min-w-0 flex-1 basis-[160px] truncate font-mono text-[11px] text-ink-faint">
@@ -484,7 +500,7 @@ function HistoryRow({
         </code>
         {request.resolvedVia !== null && (
           <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-dim">
-            via {request.resolvedVia}
+            <Trans>via {via}</Trans>
           </span>
         )}
         <span className="font-mono text-[10px] whitespace-nowrap text-ink-faint">
@@ -494,7 +510,9 @@ function HistoryRow({
       <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-ink-dim">
         <span className="truncate font-mono text-[10.5px]"><SessionLabel sessionId={request.sessionId} session={session} /></span>
         {request.reason !== null && (
-          <span className="min-w-0 [text-wrap:pretty]">reason: “{request.reason}”</span>
+          <span className="min-w-0 [text-wrap:pretty]">
+            <Trans>reason: “{reason}”</Trans>
+          </span>
         )}
       </div>
     </Link>
@@ -504,6 +522,7 @@ function HistoryRow({
 /* ----- screen ----- */
 
 export function Approvals(): JSX.Element {
+  const { t } = useLingui();
   const [requests, setRequests] = useState<PermissionRequest[] | null>(null);
   const { bySessionId } = useSessionProjectIndex(requests !== null && requests.length > 0);
   const [error, setError] = useState<string | null>(null);
@@ -598,9 +617,9 @@ export function Approvals(): JSX.Element {
 
   useEffect(load, [load]);
 
-  const onMessage = useCallback((msg: WSMessage): void => {
-    if (msg.type !== 'permission_requested' && msg.type !== 'permission_resolved') return;
-    setRequests((prev) => (prev === null ? prev : applyPermissionMessage(prev, msg)));
+  const onMessage = useCallback((message: WSMessage): void => {
+    if (message.type !== 'permission_requested' && message.type !== 'permission_resolved') return;
+    setRequests((prev) => (prev === null ? prev : applyPermissionMessage(prev, message)));
   }, []);
   useLiveUpdates(onMessage, load);
 
@@ -630,17 +649,18 @@ export function Approvals(): JSX.Element {
   const hasPending = pending.length > 0;
   useEffect(() => {
     if (!hasPending) return undefined;
-    const t = setInterval(() => setNowMs(Date.now()), 1_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => clearInterval(timer);
   }, [hasPending]);
 
   const sessionOf = (id: number): Session | null => bySessionId.get(id) ?? null;
 
   const alwaysAllow = (request: PermissionRequest): void => {
+    const requestNumber = String(request.id);
     setRuleDraft({
       projectId: sessionOf(request.sessionId)?.projectId ?? null,
       toolPattern: suggestRulePattern(request),
-      note: `always allow — from request #${String(request.id)}`,
+      note: t`always allow — from request #${requestNumber}`,
     });
     setRuleError(null);
     setRuleFormOpen(true);
@@ -652,6 +672,8 @@ export function Approvals(): JSX.Element {
   const resolvedToday = history.filter(
     (r) => new Date(r.resolvedAt ?? r.requestedAt).toDateString() === todayKey,
   ).length;
+  const pendingCount = String(pending.length);
+  const resolvedTodayCount = String(resolvedToday);
 
   const resolve = (
     request: PermissionRequest,
@@ -693,12 +715,12 @@ export function Approvals(): JSX.Element {
       {/* Header stays pinned; only the pending/history context below scrolls. */}
       <div className="sticky top-0 z-10 -mx-4 border-b border-line bg-bg px-4 pt-6 pb-3.5 desk:-mx-10 desk:px-10 desk:pt-[34px]">
         <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
-          Waiting on you
+          <Trans>Waiting on you</Trans>
         </h1>
         <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
           {requests !== null
-            ? `${String(pending.length)} pending · ${String(resolvedToday)} resolved today · a pause is a feature, not a failure`
-            : 'a pause is a feature, not a failure'}
+            ? t`${pendingCount} pending · ${resolvedTodayCount} resolved today · a pause is a feature, not a failure`
+            : t`a pause is a feature, not a failure`}
         </div>
         {/* search · project scope — same order as the Sessions filter row. */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -708,15 +730,17 @@ export function Approvals(): JSX.Element {
       </div>
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
-      {requests === null && error === null && <Loading label="approvals…" />}
+      {requests === null && error === null && <Loading label={t`approvals…`} />}
 
       {requests !== null && (
         <>
           {pending.length === 0 && (
             <Empty>
-              no pending approvals — agents are running unattended.{' '}
-              <span className="font-mono text-ink">permission_requested</span> pushes new ones here
-              live
+              <Trans>
+                no pending approvals — agents are running unattended.{' '}
+                <span className="font-mono text-ink">permission_requested</span> pushes new ones here
+                live
+              </Trans>
             </Empty>
           )}
           {pending.map((r) => (
@@ -733,7 +757,7 @@ export function Approvals(): JSX.Element {
 
           <div className="mt-[30px] flex items-center gap-3">
             <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
-              Auto-approve rules
+              <Trans>Auto-approve rules</Trans>
             </span>
             <span className="h-px flex-1 bg-line" aria-hidden="true" />
             <button
@@ -744,7 +768,7 @@ export function Approvals(): JSX.Element {
               }}
               className="rounded-lg border border-line px-2.5 py-0.5 font-mono text-[10.5px] text-ink-3 transition-colors hover:bg-surface2"
             >
-              {ruleFormOpen ? 'close' : '+ add rule'}
+              {ruleFormOpen ? t`close` : t`+ add rule`}
             </button>
           </div>
           {ruleFormOpen && (
@@ -773,19 +797,23 @@ export function Approvals(): JSX.Element {
           )}
           {rules !== null && rules.length === 0 && !ruleFormOpen && (
             <Empty>
-              no rules — matching requests auto-approve with{' '}
-              <span className="font-mono text-ink">via rule</span> and stay in History for audit
+              <Trans>
+                no rules — matching requests auto-approve with{' '}
+                <span className="font-mono text-ink">via rule</span> and stay in History for audit
+              </Trans>
             </Empty>
           )}
 
           <div className="mt-[30px] flex items-center gap-3">
             <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
-              History
+              <Trans>History</Trans>
             </span>
             <span className="h-px flex-1 bg-line" aria-hidden="true" />
           </div>
           {history.length === 0 ? (
-            <Empty>no decisions yet — resolved requests land here with their audit trail</Empty>
+            <Empty>
+              <Trans>no decisions yet — resolved requests land here with their audit trail</Trans>
+            </Empty>
           ) : (
             <div className="mt-2 divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
               {history.map((r) => (

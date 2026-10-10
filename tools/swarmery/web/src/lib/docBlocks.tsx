@@ -17,6 +17,9 @@
 // Nothing else in this file, or in markdown.tsx, may use innerHTML or
 // dangerouslySetInnerHTML.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 /* ----- shared code-fence presentation ----- */
@@ -69,12 +72,13 @@ export function MermaidView({
   error: string | null;
   hostRef?: React.RefObject<HTMLDivElement | null>;
 }): JSX.Element {
+  const { t } = useLingui();
   if (error !== null) return <CodeBlock code={code} />;
   return (
     <div
       ref={hostRef}
       role="img"
-      aria-label="diagram"
+      aria-label={t`diagram`}
       className="my-3 overflow-x-auto rounded-lg border border-line bg-surface p-3 first:mt-0 last:mb-0 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
     />
   );
@@ -221,11 +225,11 @@ export function StatsStrip({ source }: { source: string }): JSX.Element {
  *
  * Token names are the ones index.css actually declares (green/amber/red/blue
  * + brand) — there is no --color-ok/--color-warn in this theme. */
-const CALLOUT: Record<string, { label: string; border: string; text: string }> = {
-  note: { label: 'Note', border: 'border-blue bg-blue/8', text: 'text-blue' },
-  tip: { label: 'Tip', border: 'border-green bg-green/8', text: 'text-green' },
-  warning: { label: 'Warning', border: 'border-amber bg-amber/8', text: 'text-amber' },
-  important: { label: 'Important', border: 'border-brand bg-brand/8', text: 'text-brand' },
+const CALLOUT: Record<string, { label: MessageDescriptor; border: string; text: string }> = {
+  note: { label: msg`Note`, border: 'border-blue bg-blue/8', text: 'text-blue' },
+  tip: { label: msg`Tip`, border: 'border-green bg-green/8', text: 'text-green' },
+  warning: { label: msg`Warning`, border: 'border-amber bg-amber/8', text: 'text-amber' },
+  important: { label: msg`Important`, border: 'border-brand bg-brand/8', text: 'text-brand' },
 };
 
 /** The admonition kind a blockquote's first line declares, or null for a
@@ -239,6 +243,7 @@ export function calloutType(firstLine: string): string | null {
 /** A styled callout. Body arrives as already-rendered inline nodes so this
  * file never imports markdown.tsx — which imports this one. */
 export function Callout({ type, children }: { type: string; children: ReactNode }): JSX.Element {
+  const { t, i18n } = useLingui();
   const spec = CALLOUT[type] ?? CALLOUT.note;
   return (
     <div
@@ -247,7 +252,7 @@ export function Callout({ type, children }: { type: string; children: ReactNode 
       <div
         className={`mb-1 font-mono text-[10.5px] font-medium tracking-[0.06em] uppercase ${spec?.text ?? 'text-blue'}`}
       >
-        {spec?.label ?? 'Note'}
+        {spec !== undefined ? i18n._(spec.label) : t`Note`}
       </div>
       <div className="text-[13px] leading-relaxed whitespace-pre-line text-ink-2">{children}</div>
     </div>

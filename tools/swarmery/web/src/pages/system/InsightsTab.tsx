@@ -9,6 +9,8 @@
 // diff (DiffBlock, shared with the detail panel) + a copyable next-step
 // hint. Display-only by design — promotion itself stays a manual flow.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
@@ -45,13 +47,14 @@ function SimilarityChip({
   if (identical) {
     return (
       <span className="shrink-0 rounded-full border border-green/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-green">
-        identical
+        <Trans>identical</Trans>
       </span>
     );
   }
   return (
     <span className="shrink-0 rounded-full border border-amber/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-amber">
-      diverged{stat !== null ? ` +${String(stat.added)}/−${String(stat.removed)}` : ''}
+      <Trans>diverged</Trans>
+      {stat !== null ? ` +${String(stat.added)}/−${String(stat.removed)}` : ''}
     </span>
   );
 }
@@ -65,7 +68,11 @@ function ProjectChip({ slug }: { slug: string | null }): JSX.Element {
   const colorFor = useProjectColor();
   const names = useContext(NamesCtx);
   if (slug === null) {
-    return <span className="font-mono text-[10.5px] text-ink-dim">global</span>;
+    return (
+      <span className="font-mono text-[10.5px] text-ink-dim">
+        <Trans>global</Trans>
+      </span>
+    );
   }
   return (
     <span className="font-mono text-[10.5px]" style={{ color: colorFor(slug) }}>
@@ -76,6 +83,7 @@ function ProjectChip({ slug }: { slug: string | null }): JSX.Element {
 
 /** Copyable next-step hint — display-only, no write actions (YAGNI). */
 function HintLine({ hint }: { hint: string }): JSX.Element {
+  const { t } = useLingui();
   const [copied, setCopied] = useState(false);
   return (
     <div className="mt-2 flex items-start gap-2 rounded-lg border border-line bg-bg px-3 py-2">
@@ -84,7 +92,7 @@ function HintLine({ hint }: { hint: string }): JSX.Element {
       </code>
       <button
         type="button"
-        aria-label="copy next-step hint"
+        aria-label={t`copy next-step hint`}
         onClick={() => {
           // navigator.clipboard is undefined on non-secure origins (plain-HTTP
           // LAN) — optional-chain to a no-op instead of throwing; the hint
@@ -99,7 +107,7 @@ function HintLine({ hint }: { hint: string }): JSX.Element {
         }}
         className="shrink-0 rounded border border-line-strong px-2 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:text-ink"
       >
-        {copied ? 'copied' : 'copy'}
+        {copied ? t`copied` : t`copy`}
       </button>
     </div>
   );
@@ -187,7 +195,7 @@ function PromotionRow({ c }: { c: SystemPromotionCandidate }): JSX.Element {
       {c.diff !== '' && <DiffBlock diff={c.diff} />}
       {c.similarity === 'identical' && (
         <div className="mt-1 font-mono text-[11px] text-green">
-          all copies share one content hash — a clean promotion, no reconciliation needed
+          <Trans>all copies share one content hash — a clean promotion, no reconciliation needed</Trans>
         </div>
       )}
       <HintLine hint={c.hint} />
@@ -196,6 +204,7 @@ function PromotionRow({ c }: { c: SystemPromotionCandidate }): JSX.Element {
 }
 
 function OverrideRow({ o }: { o: SystemStaleOverride }): JSX.Element {
+  const pluginName = o.pluginName;
   return (
     <ExpandableRow
       header={
@@ -203,7 +212,7 @@ function OverrideRow({ o }: { o: SystemStaleOverride }): JSX.Element {
           <KindBadge kind={o.kind} />
           <span className="min-w-0 truncate text-[13.5px] font-semibold text-ink">{o.name}</span>
           <span className="shrink-0 rounded-full border border-brand/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-brand">
-            plugin · {o.pluginName}
+            <Trans>plugin · {pluginName}</Trans>
           </span>
           <ProjectChip slug={o.local.projectSlug} />
           <span className="ml-auto">
@@ -214,11 +223,15 @@ function OverrideRow({ o }: { o: SystemStaleOverride }): JSX.Element {
     >
       <div className="space-y-0.5 font-mono text-[10.5px] text-ink-faint">
         <div className="flex items-center gap-2">
-          <span className="w-[42px] shrink-0 text-ink-dim">local</span>
+          <span className="w-[42px] shrink-0 text-ink-dim">
+            <Trans>local</Trans>
+          </span>
           <span className="min-w-0 truncate">{o.local.path}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-[42px] shrink-0 text-ink-dim">plugin</span>
+          <span className="w-[42px] shrink-0 text-ink-dim">
+            <Trans>plugin</Trans>
+          </span>
           <span className="min-w-0 truncate">{o.plugin.path}</span>
         </div>
       </div>
@@ -252,7 +265,10 @@ function DeadRow({ d }: { d: SystemDeadComponent }): JSX.Element {
 // rule chip distinguishes "no guide at all" from "guide with holes" — the two
 // need different amounts of work and the linter keeps them apart.
 function UndocumentedRow({ u }: { u: SystemUndocumentedItem }): JSX.Element {
+  const { t } = useLingui();
   const noGuide = u.rule === 'docs_missing';
+  const missingCount = u.missing.length;
+  const missingList = u.missing.join(', ');
   return (
     <ExpandableRow
       header={
@@ -264,7 +280,9 @@ function UndocumentedRow({ u }: { u: SystemUndocumentedItem }): JSX.Element {
               noGuide ? 'border-red/40 text-red' : 'border-amber/40 text-amber'
             }`}
           >
-            {noGuide ? 'no guide' : `${String(u.missing.length)} missing`}
+            {noGuide
+              ? t`no guide`
+              : plural(missingCount, { one: '# missing', few: '# missing', many: '# missing', other: '# missing' })}
           </span>
           <span className="ml-auto">
             <ScopeBadge scope={u.scope} projectSlug={u.projectSlug} />
@@ -275,7 +293,7 @@ function UndocumentedRow({ u }: { u: SystemUndocumentedItem }): JSX.Element {
       <div className="font-mono text-[10.5px] text-ink-faint">{u.path}</div>
       {u.missing.length > 0 && (
         <div className="mt-1 font-mono text-[11px] text-ink-dim">
-          missing: {u.missing.join(', ')}
+          <Trans>missing: {missingList}</Trans>
         </div>
       )}
       <HintLine hint={u.hint} />
@@ -317,7 +335,7 @@ function PluginDriftRow({ d }: { d: SystemPluginDrift }): JSX.Element {
             </Link>
           ) : (
             <span className="font-mono text-[10px] whitespace-nowrap text-ink-faint">
-              machine-wide
+              <Trans>machine-wide</Trans>
             </span>
           )}
         </span>
@@ -341,6 +359,7 @@ export function InsightsTab({
    * the insights that project participates in. Omitted = fleet-wide. */
   projectId?: string | null;
 }): JSX.Element {
+  const { t } = useLingui();
   const [insights, setInsights] = useState<SystemInsights | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -362,30 +381,34 @@ export function InsightsTab({
   }, [refreshKey, attempt, projectId]);
 
   if (error !== null) return <ErrorBox message={error} onRetry={() => setAttempt((a) => a + 1)} />;
-  if (insights === null) return <Loading label="insights…" />;
+  if (insights === null) return <Loading label={t`insights…`} />;
 
   return (
     <NamesCtx.Provider value={projectNames}>
     <div className="space-y-4">
       <InsightSection
-        title="Promotion candidates"
+        title={t`Promotion candidates`}
         count={insights.promotionCandidates.length}
-        subtitle="same-named local component in ≥2 projects — graduation rule (EXTENDING.md)"
+        subtitle={t`same-named local component in ≥2 projects — graduation rule (EXTENDING.md)`}
       >
         {insights.promotionCandidates.length === 0 ? (
-          <Empty>no component is duplicated across projects — nothing to promote</Empty>
+          <Empty>
+            <Trans>no component is duplicated across projects — nothing to promote</Trans>
+          </Empty>
         ) : (
           insights.promotionCandidates.map((c) => <PromotionRow key={`${c.kind}:${c.name}`} c={c} />)
         )}
       </InsightSection>
 
       <InsightSection
-        title="Stale local overrides"
+        title={t`Stale local overrides`}
         count={insights.staleOverrides.length}
-        subtitle="local name colliding with a plugin item — identical copies are safe to delete"
+        subtitle={t`local name colliding with a plugin item — identical copies are safe to delete`}
       >
         {insights.staleOverrides.length === 0 ? (
-          <Empty>no local copy shadows a plugin component</Empty>
+          <Empty>
+            <Trans>no local copy shadows a plugin component</Trans>
+          </Empty>
         ) : (
           insights.staleOverrides.map((o) => (
             <OverrideRow key={`${o.kind}:${o.local.itemId}:${o.plugin.itemId}`} o={o} />
@@ -394,36 +417,42 @@ export function InsightsTab({
       </InsightSection>
 
       <InsightSection
-        title="Dead components"
+        title={t`Dead components`}
         count={insights.dead.length}
-        subtitle="0 telemetry mentions in 30 days (advisory)"
+        subtitle={t`0 telemetry mentions in 30 days (advisory)`}
       >
         {insights.dead.length === 0 ? (
-          <Empty>every agent has recent telemetry mentions</Empty>
+          <Empty>
+            <Trans>every agent has recent telemetry mentions</Trans>
+          </Empty>
         ) : (
           insights.dead.map((d) => <DeadRow key={d.id} d={d} />)
         )}
       </InsightSection>
 
       <InsightSection
-        title="Undocumented components"
+        title={t`Undocumented components`}
         count={insights.undocumented.length}
-        subtitle="no usable `# How to use` guide (system-docs-format.md)"
+        subtitle={t`no usable \`# How to use\` guide (system-docs-format.md)`}
       >
         {insights.undocumented.length === 0 ? (
-          <Empty>every component carries a complete usage guide</Empty>
+          <Empty>
+            <Trans>every component carries a complete usage guide</Trans>
+          </Empty>
         ) : (
           insights.undocumented.map((u) => <UndocumentedRow key={`${u.kind}:${u.id}`} u={u} />)
         )}
       </InsightSection>
 
       <InsightSection
-        title="Plugin drift"
+        title={t`Plugin drift`}
         count={insights.pluginDrift?.length ?? 0}
-        subtitle="enabled in a project's settings, but not actually loadable there"
+        subtitle={t`enabled in a project's settings, but not actually loadable there`}
       >
         {insights.pluginDrift === undefined || insights.pluginDrift.length === 0 ? (
-          <Empty>every enabled plugin resolves for its project</Empty>
+          <Empty>
+            <Trans>every enabled plugin resolves for its project</Trans>
+          </Empty>
         ) : (
           insights.pluginDrift.map((d) => (
             <PluginDriftRow key={`${d.rule}:${d.pluginId}:${d.projectPath}`} d={d} />

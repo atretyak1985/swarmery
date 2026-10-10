@@ -4,6 +4,9 @@
 // which the click provides. Same hairline visual language as the other
 // header controls.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import {
   notificationsSupported,
@@ -13,10 +16,10 @@ import {
   type NotifyPrefs,
 } from '../lib/notifications';
 
-const TOGGLES: { key: keyof NotifyPrefs; label: string; hint: string }[] = [
-  { key: 'approvalRequested', label: 'approval requested', hint: 'a request needs a decision' },
-  { key: 'sessionFinished', label: 'session finished', hint: 'an active session ended' },
-  { key: 'sessionError', label: 'session error', hint: 'an error event appeared' },
+const TOGGLES: { key: keyof NotifyPrefs; label: MessageDescriptor; hint: MessageDescriptor }[] = [
+  { key: 'approvalRequested', label: msg`approval requested`, hint: msg`a request needs a decision` },
+  { key: 'sessionFinished', label: msg`session finished`, hint: msg`an active session ended` },
+  { key: 'sessionError', label: msg`session error`, hint: msg`an error event appeared` },
 ];
 
 export function NotifySettings({
@@ -26,6 +29,7 @@ export function NotifySettings({
   prefs: NotifyPrefs;
   onChange: (next: NotifyPrefs) => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const [denied, setDenied] = useState(permissionState() === 'denied');
   const ref = useRef<HTMLDivElement>(null);
@@ -64,25 +68,26 @@ export function NotifySettings({
         aria-haspopup="dialog"
         className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[11px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
       >
-        alerts{anyOn ? ' ·' : ''}
+        <Trans>alerts</Trans>
+        {anyOn ? ' ·' : ''}
       </button>
       {open && (
         <div
           role="dialog"
-          aria-label="notification preferences"
+          aria-label={t`notification preferences`}
           className="absolute right-0 z-30 mt-2 w-[290px] rounded-xl border border-line bg-surface p-3"
         >
           <div className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-            browser notifications
+            <Trans>browser notifications</Trans>
           </div>
           {!notificationsSupported() && (
             <div className="mt-2 text-[11.5px] text-ink-dim">
-              this browser does not support the Notifications API
+              <Trans>this browser does not support the Notifications API</Trans>
             </div>
           )}
           {denied && (
             <div className="mt-2 text-[11.5px] text-red">
-              notifications are blocked — allow them in the browser site settings, then re-toggle
+              <Trans>notifications are blocked — allow them in the browser site settings, then re-toggle</Trans>
             </div>
           )}
           <div className="mt-2 flex flex-col gap-1">
@@ -99,17 +104,19 @@ export function NotifySettings({
                   className="translate-y-px accent-green focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 />
                 <span className="font-mono text-[11.5px] whitespace-nowrap text-ink">
-                  {tgl.label}
+                  {i18n._(tgl.label)}
                 </span>
                 <span className="min-w-0 flex-1 text-right text-[10.5px] text-ink-faint">
-                  {tgl.hint}
+                  {i18n._(tgl.hint)}
                 </span>
               </label>
             ))}
           </div>
           <div className="mt-2 text-[10.5px] leading-snug text-ink-faint">
-            fires only while this tab is in the background; click a notification to jump to the
-            approval or session
+            <Trans>
+              fires only while this tab is in the background; click a notification to jump to the approval or
+              session
+            </Trans>
           </div>
         </div>
       )}

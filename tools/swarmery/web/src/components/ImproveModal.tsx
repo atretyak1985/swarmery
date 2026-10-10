@@ -9,6 +9,7 @@
 // the modal then only offers Close (the Improve button is normally hidden for
 // them upstream, so this is a defensive path).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { AgentEvidence, RetroAgentRow } from '../api/types';
 import { fetchAgentEvidence, improveAgent } from '../api';
@@ -41,6 +42,7 @@ export function ImproveModal({
   onClose: () => void;
   onGenerated: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const agent = row.agent;
 
@@ -82,14 +84,14 @@ export function ImproveModal({
 
   const evidence = phase.kind === 'ready' || phase.kind === 'generating' ? phase.evidence : null;
   const inRegistry = evidence?.in_registry ?? false;
-  const split = errSplit(row.errors_by_class);
+  const { behavior, harness, infra } = errSplit(row.errors_by_class);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={`Improve ${agent}`}
+      aria-label={t`Improve ${agent}`}
       onClick={busy ? undefined : onClose}
     >
       <div
@@ -97,11 +99,15 @@ export function ImproveModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="font-display text-[14px] font-bold text-ink">
-          Improve <span className="font-mono">{agent}</span>
+          <Trans>
+            Improve <span className="font-mono">{agent}</span>
+          </Trans>
         </div>
 
         {phase.kind === 'loading' && (
-          <div className="mt-3 font-mono text-[11.5px] text-ink-dim">loading evidence…</div>
+          <div className="mt-3 font-mono text-[11.5px] text-ink-dim">
+            <Trans>loading evidence…</Trans>
+          </div>
         )}
 
         {phase.kind === 'error' && (
@@ -112,7 +118,7 @@ export function ImproveModal({
 
         {evidence !== null && !inRegistry && (
           <div className="mt-3 font-mono text-[11.5px] text-ink-dim">
-            Built-in agent — no editable definition file to improve.
+            <Trans>Built-in agent — no editable definition file to improve.</Trans>
           </div>
         )}
 
@@ -120,24 +126,34 @@ export function ImproveModal({
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
             {/* Summary block — no extra call, derived from the scorecard row + path. */}
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-[11.5px]">
-              <dt className="text-ink-faint">file</dt>
+              <dt className="text-ink-faint">
+                <Trans>file</Trans>
+              </dt>
               <dd className="truncate text-ink-2" data-tip-mono data-tip={evidence.agent_path}>
                 {evidence.agent_path ?? '—'}
               </dd>
-              <dt className="text-ink-faint">runs</dt>
+              <dt className="text-ink-faint">
+                <Trans>runs</Trans>
+              </dt>
               <dd className="text-ink-2">{row.runs}</dd>
-              <dt className="text-ink-faint">error rate</dt>
+              <dt className="text-ink-faint">
+                <Trans>error rate</Trans>
+              </dt>
               <dd className="text-ink-2">{(row.error_rate * 100).toFixed(1)}%</dd>
-              <dt className="text-ink-faint">errors</dt>
+              <dt className="text-ink-faint">
+                <Trans>errors</Trans>
+              </dt>
               <dd className="text-ink-2">
-                behavior {split.behavior} · harness {split.harness} · infra {split.infra}
+                <Trans>
+                  behavior {behavior} · harness {harness} · infra {infra}
+                </Trans>
               </dd>
             </dl>
 
             {/* Collapsible raw evidence sent to the model. */}
             <details className="mt-3">
               <summary className="cursor-pointer font-mono text-[11px] text-ink-dim select-none hover:text-ink-2">
-                Show full evidence sent to the model
+                <Trans>Show full evidence sent to the model</Trans>
               </summary>
               <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-line bg-bg/40 px-2.5 py-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
                 {evidence.bundle ?? ''}
@@ -145,8 +161,10 @@ export function ImproveModal({
             </details>
 
             <p className="mt-3 font-mono text-[10.5px] leading-relaxed text-ink-faint">
-              This runs the model on the evidence above and creates a diff proposal you approve
-              before any PR.
+              <Trans>
+                This runs the model on the evidence above and creates a diff proposal you approve
+                before any PR.
+              </Trans>
             </p>
           </div>
         )}
@@ -160,7 +178,7 @@ export function ImproveModal({
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
-                cancel
+                <Trans>cancel</Trans>
               </button>
               <button
                 type="button"
@@ -170,7 +188,7 @@ export function ImproveModal({
                 disabled={evidence === null || busy}
                 className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
               >
-                {busy ? 'generating…' : 'Generate proposal'}
+                {busy ? t`generating…` : t`Generate proposal`}
               </button>
             </>
           ) : (
@@ -179,7 +197,7 @@ export function ImproveModal({
               onClick={onClose}
               className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
             >
-              close
+              <Trans>close</Trans>
             </button>
           )}
         </div>

@@ -13,7 +13,9 @@
 //
 // Project settings stay at /p/:slug/settings (pages/ProjectSettings.tsx).
 
-import { Trans } from '@lingui/react/macro';
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { AccountsSection } from '../components/AccountsSection';
 import { ConnectorsSection } from '../components/ConnectorsSection';
 import { ExplainPair } from '../components/Explain';
@@ -30,11 +32,11 @@ type SettingsTab = 'appearance' | 'accounts' | 'notifications' | 'projects';
 
 const SETTINGS_TABS: readonly SettingsTab[] = ['appearance', 'accounts', 'notifications', 'projects'];
 
-const TAB_ITEMS: readonly TabItem<SettingsTab>[] = [
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'notifications', label: 'Notifications' },
-  { id: 'projects', label: 'Projects' },
+const TAB_ITEMS: readonly { id: SettingsTab; label: MessageDescriptor }[] = [
+  { id: 'appearance', label: msg`Appearance` },
+  { id: 'accounts', label: msg`Accounts` },
+  { id: 'notifications', label: msg`Notifications` },
+  { id: 'projects', label: msg`Projects` },
 ];
 
 /** Appearance plus the host-level footer (auto-approve note, daemon, worktrees,
@@ -52,9 +54,11 @@ function AppearanceTab(): JSX.Element {
       {/* Auto-approve — permission presets are dispatch/approval settings scoped
           to a single project (PermissionPresets needs a projectId), so they are
           configured per project, not globally. */}
-      <SectionTitle>auto-approve</SectionTitle>
+      <SectionTitle>
+        <Trans>auto-approve</Trans>
+      </SectionTitle>
       <div className="rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
-        auto-approve presets are configured per project — open a project's Settings to set them
+        <Trans>auto-approve presets are configured per project — open a project's Settings to set them</Trans>
       </div>
 
       {/* Daemon — health + version from the shared poll. */}
@@ -66,7 +70,7 @@ function AppearanceTab(): JSX.Element {
           aria-hidden="true"
           className={`inline-block h-[7px] w-[7px] rounded-full ${daemonOk ? 'bg-green' : 'bg-red'}`}
         />
-        {daemonOk ? 'daemon healthy' : 'daemon unreachable'}
+        {daemonOk ? <Trans>daemon healthy</Trans> : <Trans>daemon unreachable</Trans>}
         {health !== null && (
           <span title={versionTitle(health)}>
             {' '}
@@ -78,13 +82,17 @@ function AppearanceTab(): JSX.Element {
       {/* Worktrees — the janitor's inventory + what it decided. Host-level: it
           sweeps every project on this machine without being asked, so this is
           the account of what it did. */}
-      <SectionTitle>worktrees</SectionTitle>
+      <SectionTitle>
+        <Trans>worktrees</Trans>
+      </SectionTitle>
       <WorktreesPanel />
 
       {/* Connectors — the MCP servers Claude Code has configured on THIS host
           (`claude mcp list` reports user/claudeai/plugin scopes, which belong to
           the machine, not to any one project). */}
-      <SectionTitle>connectors</SectionTitle>
+      <SectionTitle>
+        <Trans>connectors</Trans>
+      </SectionTitle>
       <ConnectorsSection />
     </>
   );
@@ -94,20 +102,26 @@ function NotificationsTab(): JSX.Element {
   const { prefs, setPrefs } = useNotifyPrefs();
   return (
     <>
-      <SectionTitle>notifications</SectionTitle>
+      <SectionTitle>
+        <Trans>notifications</Trans>
+      </SectionTitle>
       <NotifySettings prefs={prefs} onChange={setPrefs} />
     </>
   );
 }
 
 export function Settings(): JSX.Element {
+  const { t, i18n } = useLingui();
   const [tab, setTab] = useTabParam<SettingsTab>('tab', SETTINGS_TABS, 'appearance');
-  const label = TAB_ITEMS.find((t) => t.id === tab)?.label ?? 'Appearance';
+  const tabs: TabItem<SettingsTab>[] = TAB_ITEMS.map((item) => ({ id: item.id, label: i18n._(item.label) }));
+  const label = tabs.find((item) => item.id === tab)?.label ?? t`Appearance`;
 
   return (
     <div className="px-4 pt-5 pb-10 desk:px-8 desk:pt-7">
-      <h1 className="mb-3 font-display text-[20px] font-medium tracking-[-0.01em] text-ink">Settings</h1>
-      <Tabs tabs={TAB_ITEMS} value={tab} onChange={setTab} ariaLabel="Settings" />
+      <h1 className="mb-3 font-display text-[20px] font-medium tracking-[-0.01em] text-ink">
+        <Trans>Settings</Trans>
+      </h1>
+      <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Settings`} />
       <div role="tabpanel" aria-label={label}>
         {tab === 'appearance' && <AppearanceTab />}
         {tab === 'accounts' && (
@@ -115,7 +129,9 @@ export function Settings(): JSX.Element {
             {/* The Claude accounts swarmery knows about on THIS host
                 (multi-account, phase 7); AccountsSection self-fetches. */}
             <SectionTitle>
-              <ExplainPair id="claude-account">accounts</ExplainPair>
+              <ExplainPair id="claude-account">
+                <Trans>accounts</Trans>
+              </ExplainPair>
             </SectionTitle>
             <AccountsSection />
           </>

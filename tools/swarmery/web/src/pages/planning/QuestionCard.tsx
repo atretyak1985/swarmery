@@ -5,6 +5,7 @@
 // selection state only — the parent owns submission. Render with
 // key={question.id} so a new question resets the selection.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { PlanningQuestion } from '../../api/types';
 
@@ -17,6 +18,7 @@ export function QuestionCard({
   busy: boolean;
   onSubmit: (selected: string[], otherText?: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [selected, setSelected] = useState<string[]>([]);
   const [otherText, setOtherText] = useState('');
 
@@ -43,7 +45,7 @@ export function QuestionCard({
       }}
     >
       <div className="mb-1 font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
-        the planner is asking
+        <Trans>the planner is asking</Trans>
       </div>
       <div
         id={`planning-q-label-${question.id}`}
@@ -95,9 +97,9 @@ export function QuestionCard({
                     {recommended && (
                       <span
                         className="rounded border border-brand/40 bg-brand/12 px-1.5 py-px font-mono text-[10px] font-medium tracking-[0.06em] text-brand uppercase"
-                        title="the option the planner would pick itself"
+                        title={t`the option the planner would pick itself`}
                       >
-                        recommended
+                        <Trans>recommended</Trans>
                       </span>
                     )}
                   </span>
@@ -112,7 +114,7 @@ export function QuestionCard({
               {hasProsCons && (
                 <details className="mt-1.5 ml-6">
                   <summary className="cursor-pointer font-mono text-[10.5px] text-ink-faint select-none hover:text-ink-2">
-                    Pros / Cons
+                    <Trans>Pros / Cons</Trans>
                   </summary>
                   <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
                     {opt.pros !== undefined && opt.pros.length > 0 && (
@@ -148,8 +150,8 @@ export function QuestionCard({
                   value={otherText}
                   onChange={(e) => setOtherText(e.target.value)}
                   rows={3}
-                  placeholder="describe your own direction…"
-                  aria-label="describe your own direction"
+                  placeholder={t`describe your own direction…`}
+                  aria-label={t`describe your own direction`}
                   disabled={busy}
                   className="mt-2 ml-6 w-[calc(100%-1.5rem)] resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[12.5px] leading-relaxed text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-brand/50 disabled:opacity-50"
                 />
@@ -165,10 +167,10 @@ export function QuestionCard({
           disabled={busy || !valid}
           className="rounded-lg border border-brand/50 bg-brand/12 px-4 py-2 text-[13px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
         >
-          {busy ? 'sending…' : 'Submit answer'}
+          {busy ? t`sending…` : t`Submit answer`}
         </button>
         <span className="font-mono text-[10.5px] text-ink-faint">
-          {single ? 'pick one' : 'pick any that apply'}
+          {single ? t`pick one` : t`pick any that apply`}
         </span>
       </div>
     </form>

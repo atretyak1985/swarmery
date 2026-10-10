@@ -24,6 +24,7 @@
 // (`runnableReason` from the probe), falling back to the usage payload's
 // Hint.title (e.g. "Claude login required") when the provider carried one.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { probeAccount } from '../api';
 import type { Account } from '../api/types';
@@ -38,6 +39,7 @@ const btn =
   'rounded-[6px] border border-amber/40 px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-amber transition-colors hover:bg-amber/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber disabled:opacity-50';
 
 export function AccountReadyBanner(): JSX.Element | null {
+  const { t } = useLingui();
   const active = useActiveUsageAccount(false);
   const accounts = useAccountReadiness();
   const { accounts: usageAccounts, refresh } = useUsage();
@@ -84,6 +86,7 @@ export function AccountReadyBanner(): JSX.Element | null {
 
   if (!showAlert) {
     if (!showResolved || active === null) return null;
+    const { project, account } = active;
     return (
       <div
         role="status"
@@ -91,10 +94,14 @@ export function AccountReadyBanner(): JSX.Element | null {
         data-account-ready-banner="resolved"
       >
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px]">
-          <span className="font-semibold text-green">account ready</span>
+          <span className="font-semibold text-green">
+            <Trans>account ready</Trans>
+          </span>
           <span className="text-ink-2">
-            <span className="text-ink">{active.project}</span> runs as{' '}
-            <span className="text-ink">{active.account}</span> — connected and CLI-ready.
+            <Trans>
+              <span className="text-ink">{project}</span> runs as{' '}
+              <span className="text-ink">{account}</span> — connected and CLI-ready.
+            </Trans>
           </span>
           <button
             type="button"
@@ -104,7 +111,7 @@ export function AccountReadyBanner(): JSX.Element | null {
             }}
             className="ml-auto rounded-[6px] border border-line px-2 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:bg-surface2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
           >
-            dismiss
+            <Trans>dismiss</Trans>
           </button>
         </div>
         <TerminalPathNote />
@@ -118,6 +125,9 @@ export function AccountReadyBanner(): JSX.Element | null {
     .find((row) => row.account === acct.key)
     ?.providers.find((p) => p.hint !== undefined)?.hint?.title;
   const reason = acct.runnableReason ?? hintTitle;
+  const project = active.project;
+  const accountKey = acct.key;
+  const checkedAgo = acct.runnableCheckedAt === undefined ? '' : fmtAgo(acct.runnableCheckedAt);
 
   return (
     <div
@@ -126,10 +136,14 @@ export function AccountReadyBanner(): JSX.Element | null {
       data-account-ready-banner="alert"
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px]">
-        <span className="font-semibold text-amber">account not ready</span>
+        <span className="font-semibold text-amber">
+          <Trans>account not ready</Trans>
+        </span>
         <span className="text-ink-2">
-          <span className="text-ink">{active.project}</span> runs as{' '}
-          <span className="text-ink">{acct.key}</span>
+          <Trans>
+            <span className="text-ink">{project}</span> runs as{' '}
+            <span className="text-ink">{accountKey}</span>
+          </Trans>
           {reason !== undefined && reason !== '' && (
             <>
               {' — '}
@@ -138,7 +152,9 @@ export function AccountReadyBanner(): JSX.Element | null {
           )}
         </span>
         {acct.runnableCheckedAt !== undefined && (
-          <span className="text-ink-faint">checked {fmtAgo(acct.runnableCheckedAt)}</span>
+          <span className="text-ink-faint">
+            <Trans>checked {checkedAgo}</Trans>
+          </span>
         )}
         <button
           type="button"
@@ -146,7 +162,7 @@ export function AccountReadyBanner(): JSX.Element | null {
           disabled={checking}
           className={`ml-auto ${btn}`}
         >
-          {checking ? 'checking…' : 'check now'}
+          {checking ? t`checking…` : t`check now`}
         </button>
       </div>
       {checkError !== null && (

@@ -7,4 +7,4 @@
 // props visible, macros recognised by import, .ts view models counted).
 
 /** Unwrapped literals allowed today; the extraction phase takes it to 0. */
-export const I18N_LITERALS_BUDGET = 3357;
+export const I18N_LITERALS_BUDGET = 0;

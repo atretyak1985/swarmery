@@ -4,6 +4,7 @@
 // the Web Notifications permission from the header popover. Clicking a
 // notification focuses the tab and navigates to the approval / session.
 
+import { t } from '@lingui/core/macro';
 import { useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { SessionStatus, WSMessage } from '../api/types';
@@ -101,9 +102,10 @@ export function useBrowserNotifications(prefs: NotifyPrefs): void {
         // nothing is waiting on the user, so no notification.
         if (p.approvalRequested && msg.payload.status === 'pending') {
           const tag = `approval-${String(msg.payload.id)}`;
+          const { toolName, id } = msg.payload;
           const n = fire(
-            `Approval needed: ${msg.payload.toolName}`,
-            `request #${String(msg.payload.id)} is waiting on you`,
+            t`Approval needed: ${toolName}`,
+            t`request #${id} is waiting on you`,
             tag,
             () => navigate('/approvals'),
           );
@@ -133,7 +135,7 @@ export function useBrowserNotifications(prefs: NotifyPrefs): void {
         const finished = s.status === 'completed' || s.status === 'killed';
         if (msg.type === 'session_updated' && prev === 'active' && finished && p.sessionFinished) {
           fire(
-            s.status === 'killed' ? 'Session killed' : 'Session finished',
+            s.status === 'killed' ? t`Session killed` : t`Session finished`,
             `${s.projectName ?? s.projectSlug}${s.title !== null ? ` — ${s.title}` : ''}`,
             `session-${String(s.id)}`,
             () => navigate(`/sessions/${String(s.id)}`),
@@ -142,9 +144,10 @@ export function useBrowserNotifications(prefs: NotifyPrefs): void {
         return;
       }
       if (msg.type === 'event_appended' && msg.payload.event.status === 'error' && p.sessionError) {
+        const sessionId = msg.payload.sessionId;
         fire(
-          'Session error',
-          `an error event in session #${String(msg.payload.sessionId)}`,
+          t`Session error`,
+          t`an error event in session #${sessionId}`,
           `session-error-${String(msg.payload.sessionId)}`,
           () => navigate(`/sessions/${String(msg.payload.sessionId)}`),
         );

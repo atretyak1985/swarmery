@@ -15,6 +15,7 @@
 // ./docsSection and are unit-tested there; they are re-exported here because
 // this panel is their documented home.
 
+import { Trans } from '@lingui/react/macro';
 import type { SystemDocs } from '../../api/types';
 import { Empty } from '../../components/ui';
 import { Markdown } from '../../lib/markdown';
@@ -41,20 +42,24 @@ export function DocsPanel({
       <div className="mt-1">
         <Empty>
           <div>
-            no usage guide yet — <b className="font-semibold text-ink-2">{name}</b> has no{' '}
-            <code className="font-mono text-[11.5px] text-ink-2">{'# How to use'}</code> section in
-            its source file
+            <Trans>
+              no usage guide yet — <b className="font-semibold text-ink-2">{name}</b> has no{' '}
+              <code className="font-mono text-[11.5px] text-ink-2">{'# How to use'}</code> section
+              in its source file
+            </Trans>
           </div>
           <div className="mt-2 font-mono text-[10px] break-all text-ink-faint">{path}</div>
           <div className="mt-2 text-[11.5px] text-ink-dim">
-            add an H1 <code className="font-mono text-[11px]">{'# How to use'}</code> block at the
-            end of that file — four subsections are required:{' '}
-            <span className="font-mono text-[11px]">
-              What it does · When to use it · How to invoke · Worked example
-            </span>
+            <Trans>
+              add an H1 <code className="font-mono text-[11px]">{'# How to use'}</code> block at the
+              end of that file — four subsections are required:{' '}
+              <span className="font-mono text-[11px]">
+                What it does · When to use it · How to invoke · Worked example
+              </span>
+            </Trans>
           </div>
           <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
-            contract: {GUIDE_CONTRACT}
+            <Trans>contract: {GUIDE_CONTRACT}</Trans>
           </div>
         </Empty>
       </div>

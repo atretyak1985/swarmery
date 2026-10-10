@@ -3,6 +3,9 @@
 // the global header scope switcher), and the list-fetch hook every tab uses. Visual language mirrors components/ui.tsx (hairline
 // pill chips, mono micro-type); tooltips are native `title` attributes.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { LintSeverity } from '../../api/types';
@@ -29,7 +32,7 @@ export function ScopeBadge({
         className="rounded-full border border-blue/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-blue"
         data-tip-mono data-tip={projectSlug ?? undefined}
       >
-        project
+        <Trans>project</Trans>
         {label !== null ? (
           <>
             {' · '}
@@ -43,7 +46,7 @@ export function ScopeBadge({
   }
   return (
     <span className="rounded-full border border-line-strong px-2 py-px font-mono text-[10px] whitespace-nowrap text-ink-dim">
-      global
+      <Trans>global</Trans>
     </span>
   );
 }
@@ -58,13 +61,14 @@ export function OriginBadge({
   if (origin === 'plugin') {
     return (
       <span className="rounded-full border border-brand/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-brand">
-        plugin{pluginName !== null ? ` · ${pluginName}` : ''}
+        <Trans>plugin</Trans>
+        {pluginName !== null ? ` · ${pluginName}` : ''}
       </span>
     );
   }
   return (
     <span className="rounded-full border border-line-strong px-2 py-px font-mono text-[10px] whitespace-nowrap text-ink-dim">
-      local
+      <Trans>local</Trans>
     </span>
   );
 }
@@ -83,12 +87,13 @@ export function LintDot({
   severity: LintSeverity | null;
   message?: string;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (severity === null) return null;
   return (
     <span
       className={`shrink-0 font-mono text-[11px] leading-none ${LINT_TONES[severity]}`}
-      data-tip={message ?? `worst active lint finding: ${severity}`}
-      aria-label={`lint ${severity}`}
+      data-tip={message ?? t`worst active lint finding: ${severity}`}
+      aria-label={t`lint ${severity}`}
     >
       {severity === 'info' ? '●' : '▲'}
     </span>
@@ -251,11 +256,11 @@ function focusOption(menuRef: RefObject<HTMLDivElement | null>, delta: 1 | -1): 
 /** List sort keys (URL ?sort=). 'name' is the default and stays out of the URL. */
 export type SystemSort = 'name' | 'used' | 'recent' | 'lint';
 
-export const SORT_LABELS: Record<SystemSort, string> = {
-  name: 'name (A→Z)',
-  used: 'most used',
-  recent: 'recently used',
-  lint: 'lint severity',
+export const SORT_LABELS: Record<SystemSort, MessageDescriptor> = {
+  name: msg`name (A→Z)`,
+  used: msg`most used`,
+  recent: msg`recently used`,
+  lint: msg`lint severity`,
 };
 
 const SORT_KEYS: SystemSort[] = ['name', 'used', 'recent', 'lint'];
@@ -312,6 +317,7 @@ export function SortDropdown({
   value: SystemSort;
   onChange: (sort: SystemSort) => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -332,20 +338,20 @@ export function SortDropdown({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="sort list"
+        aria-label={t`sort list`}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => { if (e.key === 'ArrowDown' && open) { e.preventDefault(); focusOption(menuRef, 1); } }}
         className="flex items-center gap-1.5 rounded-full border border-line px-2.5 py-[3px] font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-ink aria-expanded:border-ink-dim aria-expanded:bg-surface2 aria-expanded:text-ink"
       >
         <span aria-hidden="true" className="text-[11px] leading-none text-ink-dim/70">⇅</span>
-        <span className="truncate">{SORT_LABELS[value]}</span>
+        <span className="truncate">{i18n._(SORT_LABELS[value])}</span>
         <span aria-hidden="true" className="text-[8px]">▾</span>
       </button>
       {open && (
         <div
           ref={menuRef}
           role="listbox"
-          aria-label="sort by"
+          aria-label={t`sort by`}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); focusOption(menuRef, e.key === 'ArrowDown' ? 1 : -1); }
           }}
@@ -355,7 +361,7 @@ export function SortDropdown({
             <DropdownOption
               key={key}
               selected={value === key}
-              label={SORT_LABELS[key]}
+              label={i18n._(SORT_LABELS[key])}
               onSelect={() => select(key)}
             />
           ))}
@@ -385,11 +391,18 @@ export function FiltersRow({
    * as the standalone bar under a heading — drops the leading top margin. */
   inline?: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div className={`${inline ? '' : 'mt-4 '}flex flex-wrap items-center gap-2`}>
-      <FilterChip selected={scope === null} onClick={() => onScope(null)}>all scopes</FilterChip>
-      <FilterChip selected={scope === 'global'} onClick={() => onScope('global')}>global</FilterChip>
-      <FilterChip selected={scope === 'project'} onClick={() => onScope('project')}>project</FilterChip>
+      <FilterChip selected={scope === null} onClick={() => onScope(null)}>
+        {t`all scopes`}
+      </FilterChip>
+      <FilterChip selected={scope === 'global'} onClick={() => onScope('global')}>
+        {t`global`}
+      </FilterChip>
+      <FilterChip selected={scope === 'project'} onClick={() => onScope('project')}>
+        {t`project`}
+      </FilterChip>
       {sort !== undefined && onSort !== undefined && (
         <span className="ml-auto">
           <SortDropdown value={sort} onChange={onSort} />

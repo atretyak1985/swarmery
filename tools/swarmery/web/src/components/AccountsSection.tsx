@@ -16,6 +16,9 @@
 // and that banner is dismiss-only — it must never disappear on its own while
 // the operator hasn't acknowledged it.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { deleteAccount, fetchAccounts, probeAccount } from '../api';
 import type { Account, AccountProbeResponse, IgnoredBinding } from '../api/types';
@@ -37,10 +40,10 @@ const CONNECTED_DOT: Record<ConnectedState, string> = {
   unknown: 'bg-line',
 };
 
-const CONNECTED_LABEL: Record<ConnectedState, string> = {
-  yes: 'connected',
-  no: 'not connected',
-  unknown: 'connection status unknown',
+const CONNECTED_LABEL: Record<ConnectedState, MessageDescriptor> = {
+  yes: msg`connected`,
+  no: msg`not connected`,
+  unknown: msg`connection status unknown`,
 };
 
 function connectedState(connected: boolean | null): ConnectedState {
@@ -59,6 +62,7 @@ function Pill({ children }: { children: string }): JSX.Element {
 }
 
 function ConnectedBadge({ connected }: { connected: boolean | null }): JSX.Element {
+  const { i18n } = useLingui();
   const state = connectedState(connected);
   return (
     <span className="flex shrink-0 items-center gap-1">
@@ -66,7 +70,7 @@ function ConnectedBadge({ connected }: { connected: boolean | null }): JSX.Eleme
         aria-hidden="true"
         className={`inline-block h-[7px] w-[7px] rounded-full ${CONNECTED_DOT[state]}`}
       />
-      <span className="font-mono text-[9.5px] text-ink-dim">{CONNECTED_LABEL[state]}</span>
+      <span className="font-mono text-[9.5px] text-ink-dim">{i18n._(CONNECTED_LABEL[state])}</span>
     </span>
   );
 }
@@ -79,9 +83,10 @@ function ConnectedBadge({ connected }: { connected: boolean | null }): JSX.Eleme
  * question was not answered, and an unknown is not a failure.
  */
 function ReadyBadge({ a }: { a: Account }): JSX.Element | null {
+  const { t } = useLingui();
   if (a.runnable === null) return null;
-  const tip =
-    a.runnableCheckedAt !== undefined ? `checked ${fmtAgo(a.runnableCheckedAt)}` : undefined;
+  const ago = a.runnableCheckedAt !== undefined ? fmtAgo(a.runnableCheckedAt) : '';
+  const tip = a.runnableCheckedAt !== undefined ? t`checked ${ago}` : undefined;
   return (
     <span className="flex shrink-0 items-center gap-1" data-tip={tip}>
       <span
@@ -89,7 +94,7 @@ function ReadyBadge({ a }: { a: Account }): JSX.Element | null {
         className={`inline-block h-[7px] w-[7px] rounded-full ${a.runnable ? 'bg-green' : 'bg-amber'}`}
       />
       <span className={`font-mono text-[9.5px] ${a.runnable ? 'text-ink-dim' : 'text-amber'}`}>
-        {a.runnable ? 'ready' : (a.runnableReason ?? 'CLI login required')}
+        {a.runnable ? t`ready` : (a.runnableReason ?? t`CLI login required`)}
       </span>
     </span>
   );
@@ -106,6 +111,7 @@ function AccountRow({
   onProbe: (key: string) => void;
   onRequestDelete: (key: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3.5 py-2.5">
       <ConnectedBadge connected={a.connected} />
@@ -115,7 +121,7 @@ function AccountRow({
         {a.key}
       </span>
 
-      {a.isDefault && <Pill>default</Pill>}
+      {a.isDefault && <Pill>{t`default`}</Pill>}
       {a.plan !== '' && <Pill>{a.plan}</Pill>}
 
       <span
@@ -134,7 +140,7 @@ function AccountRow({
         disabled={probing}
         className="ml-auto shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:bg-surface2 disabled:opacity-50"
       >
-        {probing ? 'checking…' : 'check now'}
+        {probing ? t`checking…` : t`check now`}
       </button>
 
       {!a.isDefault && (
@@ -143,7 +149,7 @@ function AccountRow({
           onClick={() => onRequestDelete(a.key)}
           className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:border-red/40 hover:text-red"
         >
-          remove
+          <Trans>remove</Trans>
         </button>
       )}
 
@@ -156,16 +162,19 @@ function AccountRow({
 // projects row) and, as a separate labelled group, bound paths with NO live
 // row — visible, never presented as indexed (SC-10).
 function BoundProjects({ a }: { a: Account }): JSX.Element | null {
+  const { t } = useLingui();
   const unindexed = a.projectsUnindexed ?? [];
   if (a.projects.length === 0 && unindexed.length === 0) return null;
+  const boundCount = a.projects.length;
+  const unindexedCount = unindexed.length;
   return (
     <div className="order-last basis-full space-y-1 pt-1">
       {a.projects.length > 0 && (
-        <PathGroup label={`bound projects (${String(a.projects.length)})`} paths={a.projects} />
+        <PathGroup label={t`bound projects (${boundCount})`} paths={a.projects} />
       )}
       {unindexed.length > 0 && (
         <PathGroup
-          label={`bound, not indexed (${String(unindexed.length)}) — no live project row`}
+          label={t`bound, not indexed (${unindexedCount}) — no live project row`}
           paths={unindexed}
         />
       )}
@@ -193,27 +202,37 @@ function PathGroup({ label, paths }: { label: string; paths: string[] }): JSX.El
 // ignored instead of silently dropped, and counted under no account.
 function IgnoredBindings({ items }: { items: IgnoredBinding[] }): JSX.Element | null {
   if (items.length === 0) return null;
+  const count = items.length;
   return (
     <div className="mt-2.5 rounded-xl border border-amber/25 bg-amber/5 px-3.5 py-3">
       <div className="font-mono text-[11.5px] text-amber">
-        ignored bindings ({String(items.length)}) — counted under no account
+        <Trans>ignored bindings ({count}) — counted under no account</Trans>
       </div>
       <ul className="mt-1.5 space-y-1.5">
-        {items.map((b) => (
-          <li key={b.path} className="font-mono text-[10.5px]">
-            <div className="truncate text-ink-2" title={b.path}>
-              {b.path}
-              {b.declares !== '' && <span className="text-ink-dim"> — declares {b.declares}</span>}
-            </div>
-            <div className="break-words text-ink-dim">{b.reason}</div>
-          </li>
-        ))}
+        {items.map((b) => {
+          const declares = b.declares;
+          return (
+            <li key={b.path} className="font-mono text-[10.5px]">
+              <div className="truncate text-ink-2" title={b.path}>
+                {b.path}
+                {declares !== '' && (
+                  <span className="text-ink-dim">
+                    {' '}
+                    <Trans>— declares {declares}</Trans>
+                  </span>
+                )}
+              </div>
+              <div className="break-words text-ink-dim">{b.reason}</div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
 }
 
 export function AccountsSection(): JSX.Element {
+  const { t } = useLingui();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [retry, setRetry] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
@@ -240,7 +259,7 @@ export function AccountsSection(): JSX.Element {
         if (cancelled) return;
         setState({
           kind: 'error',
-          message: err instanceof Error ? err.message : 'could not read accounts',
+          message: err instanceof Error ? err.message : t`could not read accounts`,
         });
       });
 
@@ -295,6 +314,8 @@ export function AccountsSection(): JSX.Element {
     }
   }
 
+  const danglingCount = dangling?.length ?? 0;
+
   return (
     <>
       {dangling !== null && dangling.length > 0 && (
@@ -304,15 +325,20 @@ export function AccountsSection(): JSX.Element {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="font-mono text-[11.5px] text-amber">
-              removed account still bound in{' '}
-              {dangling.length === 1 ? '1 project' : `${String(dangling.length)} projects`}
+              <Plural
+                value={danglingCount}
+                one="removed account still bound in # project"
+                few="removed account still bound in # projects"
+                many="removed account still bound in # projects"
+                other="removed account still bound in # projects"
+              />
             </div>
             <button
               type="button"
               onClick={() => setDangling(null)}
               className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:bg-surface2"
             >
-              dismiss
+              <Trans>dismiss</Trans>
             </button>
           </div>
           <ul className="mt-1.5 space-y-0.5">
@@ -329,7 +355,7 @@ export function AccountsSection(): JSX.Element {
         </div>
       )}
 
-      {state.kind === 'loading' && <Loading label="reading accounts…" />}
+      {state.kind === 'loading' && <Loading label={t`reading accounts…`} />}
 
       {state.kind === 'error' && (
         <ErrorBox
@@ -341,12 +367,14 @@ export function AccountsSection(): JSX.Element {
       )}
 
       {state.kind === 'ready' && state.accounts.length === 0 && (
-        <Empty>no accounts configured</Empty>
+        <Empty>
+          <Trans>no accounts configured</Trans>
+        </Empty>
       )}
 
       {state.kind === 'ready' && probeError !== null && (
         <div className="mb-2 font-mono text-[11px] break-words text-red" role="alert">
-          readiness check failed: {probeError}
+          <Trans>readiness check failed: {probeError}</Trans>
         </div>
       )}
 
@@ -372,7 +400,7 @@ export function AccountsSection(): JSX.Element {
           onClick={() => setModalOpen(true)}
           className="rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11px] text-ink-2 transition-colors hover:bg-surface2"
         >
-          + add account
+          <Trans>+ add account</Trans>
         </button>
       </div>
 
@@ -387,8 +415,8 @@ export function AccountsSection(): JSX.Element {
 
       <ConfirmDialog
         open={confirmKey !== null}
-        title="Remove account"
-        confirmLabel="remove"
+        title={t`Remove account`}
+        confirmLabel={t`remove`}
         danger
         busy={deleting}
         onConfirm={() => void confirmDelete()}
@@ -397,10 +425,10 @@ export function AccountsSection(): JSX.Element {
         }}
       >
         {confirmKey !== null && (
-          <>
+          <Trans>
             Remove account <span className="font-mono text-ink">{confirmKey}</span>? Projects
             explicitly bound to it will fall back to the default account.
-          </>
+          </Trans>
         )}
         {deleteError !== null && (
           <div className="mt-2 font-mono text-[11px] text-red">{deleteError}</div>

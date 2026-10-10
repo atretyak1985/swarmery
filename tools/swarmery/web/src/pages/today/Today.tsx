@@ -12,6 +12,7 @@
 // sessions, decisions, recommendations, plus the Inbox's own aggregation
 // (useInboxItems), which feeds both the loop's counts and the waiting rows.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchEpics, fetchProjectRecommendations, fetchRecommendations, fetchSessions } from '../../api';
@@ -63,6 +64,7 @@ function countStatus(recs: readonly Recommendation[], statuses: readonly string[
 }
 
 export function Today({ detail }: { detail: ReactNode }): JSX.Element {
+  const { t } = useLingui();
   const { slug: routeSlug } = useParams<{ slug?: string }>();
   const slug = routeSlug ?? null;
   const { project, projectId } = useProjectWorkspace();
@@ -160,17 +162,19 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
     );
   }, [epics, now, running.length, inbox.items, classifier, recs, slug]);
 
-  const scopeLabel = slug === null ? 'all projects' : (project?.name ?? slug);
+  const scopeLabel = slug === null ? t`all projects` : (project?.name ?? slug);
 
   return (
     <div data-testid="today">
       <div className="px-4 pt-6 desk:px-9 desk:pt-[30px]">
         <EyebrowClock scope={scopeLabel} />
         <h1 className="m-0 mt-1.5 font-display text-[30px] leading-[1.15] font-medium tracking-[-0.01em] text-ink">
-          The loop, this week
+          <Trans>The loop, this week</Trans>
         </h1>
         <p className="m-0 mt-1.5 text-[13px] text-ink-dim">
-          Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you.
+          <Trans>
+            Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you.
+          </Trans>
         </p>
         <LoopMap stages={stages} />
         <div className="mt-7 grid grid-cols-1 gap-5 desk:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
@@ -184,7 +188,7 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
           <LiveNow sessions={running} epics={epics} loading={sessionsLoading} now={now} />
         </div>
         <div className="mt-10">
-          <SectionHead label="Today in detail" />
+          <SectionHead label={t`Today in detail`} />
         </div>
       </div>
       <div data-testid="today-detail">{detail}</div>

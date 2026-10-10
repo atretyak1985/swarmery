@@ -45,6 +45,9 @@
 // (column moves on legacy-linked board tasks) AND on `plan_updated` (checkbox
 // flips, lifecycle transitions, plan rescans) so progress ticks without a reload.
 
+import { i18n, type MessageDescriptor } from '@lingui/core';
+import { msg, plural, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type BlockerFunction,
@@ -231,16 +234,18 @@ function PhaseActivity({
   docUpdatedAt: string | null;
   running: boolean;
 }): JSX.Element | null {
+  const { t } = useLingui();
   const now = useNow(30_000);
   if (docUpdatedAt === null) return null;
   const elapsed = now - Date.parse(docUpdatedAt);
+  const ago = formatAgo(elapsed);
   if (!running)
     return (
       <span
         className="inline-flex shrink-0 items-center gap-1 font-mono text-[9.5px] text-ink-faint"
-        data-tip="when this phase doc was last edited — no run is attached to it"
+        data-tip={t`when this phase doc was last edited — no run is attached to it`}
       >
-        edited {formatAgo(elapsed)} ago
+        <Trans>edited {ago} ago</Trans>
       </span>
     );
   const stalled = elapsed > STALL_AFTER_MS;
@@ -251,12 +256,12 @@ function PhaseActivity({
       }`}
       data-tip={
         stalled
-          ? 'no phase-doc edits for a while — the executor may be stuck'
-          : 'the executor is actively editing this phase doc'
+          ? t`no phase-doc edits for a while — the executor may be stuck`
+          : t`the executor is actively editing this phase doc`
       }
     >
       <span className={`h-1.5 w-1.5 rounded-full ${stalled ? 'bg-amber' : 'animate-pulse bg-brand'}`} />
-      {stalled ? `no activity · ${formatAgo(elapsed)}` : `active · ${formatAgo(elapsed)} ago`}
+      {stalled ? t`no activity · ${ago}` : t`active · ${ago} ago`}
     </span>
   );
 }
@@ -264,27 +269,27 @@ function PhaseActivity({
 /** Status chips. `in_progress` says `started` because that is all the DOCUMENT
  * can support — checkboxes ticked, or a `Status: In progress` marker. `running`
  * is reserved for a live process and is resolved by `phaseChip` below. */
-const PHASE_CHIP: Record<PhaseStatus, { label: string; cls: string }> = {
-  done: { label: 'done', cls: 'border-green/40 text-green' },
+const PHASE_CHIP: Record<PhaseStatus, { label: MessageDescriptor; cls: string }> = {
+  done: { label: msg`done`, cls: 'border-green/40 text-green' },
   // Every criterion ticked and the grade the doc asked for never arrived. Amber,
   // the app's needs-a-human colour — NOT green, because nobody confirmed this, and
   // NOT red, because nothing says the work is wrong.
-  unverified: { label: 'unverified', cls: 'border-amber/40 bg-amber/10 text-amber' },
+  unverified: { label: msg`unverified`, cls: 'border-amber/40 bg-amber/10 text-amber' },
   // Work that landed and was never written down. Amber like `unverified` — both
   // need a human — but its own label, because the fix is different: write the
   // Completion Report and record the lesson, not re-run a grader.
-  unreported: { label: 'unreported', cls: 'border-amber/40 bg-amber/10 text-amber' },
-  in_progress: { label: 'started', cls: 'border-brand/40 text-brand' },
-  blocked: { label: 'blocked', cls: 'border-red/40 text-red' },
-  pending: { label: 'pending', cls: 'border-line text-ink-faint' },
+  unreported: { label: msg`unreported`, cls: 'border-amber/40 bg-amber/10 text-amber' },
+  in_progress: { label: msg`started`, cls: 'border-brand/40 text-brand' },
+  blocked: { label: msg`blocked`, cls: 'border-red/40 text-red' },
+  pending: { label: msg`pending`, cls: 'border-line text-ink-faint' },
 };
 
 /** The chip a phase row actually renders. The `running` variant lives HERE and
  * not in `PhaseStatus`, so the union — and every dependency/completion decision
  * derived from it — stays a pure function of the plan documents. */
-function phaseChip(status: PhaseStatus, running: boolean): { label: string; cls: string } {
+function phaseChip(status: PhaseStatus, running: boolean): { label: MessageDescriptor; cls: string } {
   if (running && status === 'in_progress')
-    return { label: 'running', cls: PHASE_CHIP.in_progress.cls };
+    return { label: msg`running`, cls: PHASE_CHIP.in_progress.cls };
   return PHASE_CHIP[status];
 }
 
@@ -300,18 +305,18 @@ function isUnresolvedOutcome(o: PhaseRunOutcome): o is UnresolvedOutcome {
 
 /** Chip copy + styling per unresolved outcome. `amber` is the app's semantic
  * needs-a-human color (same token as workspace/TaskCard.tsx's inconclusive). */
-const OUTCOME_CHIP: Record<UnresolvedOutcome, { cls: string; title: string }> = {
+const OUTCOME_CHIP: Record<UnresolvedOutcome, { cls: string; title: MessageDescriptor }> = {
   noop: {
     cls: 'border-amber/40 bg-amber/10 text-amber',
-    title: 'the run finished but ticked no acceptance criteria — click for why',
+    title: msg`the run finished but ticked no acceptance criteria — click for why`,
   },
   partial: {
     cls: 'border-amber/40 bg-amber/10 text-amber',
-    title: 'the run ticked some criteria but did not finish the phase — click for why',
+    title: msg`the run ticked some criteria but did not finish the phase — click for why`,
   },
   failed: {
     cls: 'border-red/40 bg-red/10 text-red',
-    title: 'the run failed — click for why',
+    title: msg`the run failed — click for why`,
   },
 };
 
@@ -325,9 +330,13 @@ function runButtonCls(outcome: PhaseRunOutcome): string {
 }
 
 function outcomeChipLabel(p: EpicPhase, outcome: UnresolvedOutcome): string {
-  if (outcome === 'failed') return 'failed';
-  if (outcome === 'partial') return `ran · ${String(p.checkboxesDone)}/${String(p.checkboxesTotal)}`;
-  return 'ran · no progress';
+  if (outcome === 'failed') return t`failed`;
+  if (outcome === 'partial') {
+    const done = String(p.checkboxesDone);
+    const total = String(p.checkboxesTotal);
+    return t`ran · ${done}/${total}`;
+  }
+  return t`ran · no progress`;
 }
 
 /** The clickable outcome chip. READ-ONLY — it stays enabled while a plan run
@@ -341,11 +350,12 @@ function RunOutcomeChip({
   outcome: UnresolvedOutcome;
   onOpen: () => void;
 }): JSX.Element {
+  const { i18n } = useLingui();
   const { cls, title } = OUTCOME_CHIP[outcome];
   return (
     <button
       type="button"
-      data-tip={title}
+      data-tip={i18n._(title)}
       onClick={(e) => {
         e.stopPropagation();
         onOpen();
@@ -371,18 +381,20 @@ function RunOutcomeChip({
  * run ended. The measured count is rendered as `total/total`: `after >= total`
  * is exactly what the daemon asserted. */
 function RunCompletedChip({ phase }: { phase: EpicPhase }): JSX.Element {
-  const total = phase.checkboxesTotal;
-  const drifted = total > 0 && phase.checkboxesDone < total;
+  const { t } = useLingui();
+  const total = String(phase.checkboxesTotal);
+  const done = String(phase.checkboxesDone);
+  const drifted = phase.checkboxesTotal > 0 && phase.checkboxesDone < phase.checkboxesTotal;
   return (
     <span
       className="rounded border border-green/40 bg-green/10 px-1.5 py-px font-mono text-[9.5px] text-green"
       data-tip={
         drifted
-          ? `the run ticked every criterion (${String(total)}/${String(total)}); the doc has since changed to ${String(phase.checkboxesDone)}/${String(total)}`
-          : 'the run ticked every acceptance criterion'
+          ? t`the run ticked every criterion (${total}/${total}); the doc has since changed to ${done}/${total}`
+          : t`the run ticked every acceptance criterion`
       }
     >
-      last run: done
+      <Trans>last run: done</Trans>
     </span>
   );
 }
@@ -416,22 +428,22 @@ function RunCompletedChip({ phase }: { phase: EpicPhase }): JSX.Element {
  * ACCOUNT default (Fable, ~2× the Opus price). The rung nobody picked was the
  * most expensive one, and the picker said nothing about it. The daemon now pins
  * this rung, and the label says which model that is. */
-const PHASE_RUN_DEFAULT_MODEL_LABEL = 'opus 5.5';
+const PHASE_RUN_DEFAULT_MODEL_LABEL = 'opus 5.5'; // i18n-ignore — a model name, interpolated into the message below
 
 const PHASE_RUN_MODELS = [
-  { value: 'default', label: `per-doc, else ${PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)` },
+  { value: 'default', label: msg`per-doc, else ${PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)` },
   // Labels name the GENERATION each alias resolves to today and what choosing
   // it costs relative to opus 5.5, which is the rung `default` lands on. No
   // entry says "default" any more: two of them did, the picker's own default is
   // the first row, and a second thing calling itself the default is how an
   // operator ends up overriding every doc on the plan by picking what they read
   // as "leave it alone".
-  { value: 'opus', label: 'opus 5.5' },
-  { value: 'sonnet', label: 'sonnet 5 — faster, cheaper' },
+  { value: 'opus', label: msg`opus 5.5` },
+  { value: 'sonnet', label: msg`sonnet 5 — faster, cheaper` },
   // ~2.5x, not ~2x: fable 5 is $10/$50 per MTok against opus 5.5's $4/$20
   // (tools/swarmery/config/pricing.json). The old figure was measured against
   // opus 5, which cost $5/$25 — opus 5.5 got cheaper and the comparison moved.
-  { value: 'fable', label: 'fable 5.1 — most capable, ~2.5× cost' },
+  { value: 'fable', label: msg`fable 5.1 — most capable, ~2.5× cost` },
 ] as const;
 type PhaseRunModel = (typeof PHASE_RUN_MODELS)[number]['value'];
 const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
@@ -453,12 +465,12 @@ const PHASE_RUN_MODEL_KEY = 'swarmery.phaserun.model';
 // this rung, every un-picked phase run paid maximum reasoning tokens for up to
 // four hours. The labels below say which end is which for that reason.
 const PHASE_RUN_EFFORTS = [
-  { value: 'default', label: 'per-doc, else high (no effort sent)' },
-  { value: 'low', label: 'low — mechanical work' },
-  { value: 'medium', label: 'medium — scoped work' },
-  { value: 'high', label: 'high — implementation' },
-  { value: 'xhigh', label: 'xhigh — deepest, slowest' },
-  { value: 'max', label: 'max — no ceiling' },
+  { value: 'default', label: msg`per-doc, else high (no effort sent)` },
+  { value: 'low', label: msg`low — mechanical work` },
+  { value: 'medium', label: msg`medium — scoped work` },
+  { value: 'high', label: msg`high — implementation` },
+  { value: 'xhigh', label: msg`xhigh — deepest, slowest` },
+  { value: 'max', label: msg`max — no ceiling` },
 ] as const;
 type PhaseRunEffort = (typeof PHASE_RUN_EFFORTS)[number]['value'];
 const DEFAULT_PHASE_RUN_EFFORT: PhaseRunEffort = 'default';
@@ -519,6 +531,7 @@ const MODEL_SHORT_NAMES: Record<string, string> = {
  * choice. Renders nothing while the run is live: a label about a process still
  * in flight would be a claim, not a record. */
 function RunModelChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
+  const { t } = useLingui();
   if (phase.runModel === null || phase.runState === 'running') return null;
   // A run that FELL BACK gets its own chip instead of the plain one. `runModel`
   // is the session's first model, which for these runs is a true statement about
@@ -528,22 +541,35 @@ function RunModelChip({ phase }: { phase: EpicPhase }): JSX.Element | null {
   // 5.5, 3 on opus 4.1" says how much of the run the fallback actually touched.
   const lastUse = phase.runModels[phase.runModels.length - 1];
   if (phase.runModelFellBack && phase.runModels.length > 1 && lastUse !== undefined) {
-    const last = lastUse.model;
+    const first = phaseModelShortName(phase.runModel);
+    const last = phaseModelShortName(lastUse.model);
+    const trail = phase.runModels
+      .map((use) => {
+        const { model, turns } = use;
+        return plural(turns, {
+          one: `${model} (# turn)`,
+          few: `${model} (# turns)`,
+          many: `${model} (# turns)`,
+          other: `${model} (# turns)`,
+        });
+      })
+      .join(' → ');
     return (
       <span
         className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
-        data-tip={`this run changed model mid-flight: ${phase.runModels
-          .map((m) => `${m.model} (${m.turns} turn${m.turns === 1 ? '' : 's'})`)
-          .join(' → ')}`}
+        data-tip={t`this run changed model mid-flight: ${trail}`}
       >
-        {phaseModelShortName(phase.runModel)} → fell back to {phaseModelShortName(last)}
+        <Trans>
+          {first} → fell back to {last}
+        </Trans>
       </span>
     );
   }
+  const runModel = phase.runModel;
   return (
     <span
       className="rounded border border-line px-1.5 py-px font-mono text-[9.5px] text-ink-dim"
-      data-tip={`the last run used ${phase.runModel} (from its session)`}
+      data-tip={t`the last run used ${runModel} (from its session)`}
     >
       {phaseModelShortName(phase.runModel)}
     </span>
@@ -579,14 +605,17 @@ function DocModelChip({
   phase: EpicPhase;
   picked: PhaseRunModel;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (phase.docModel === null) return null;
-  const known = KNOWN_PHASE_MODELS.has(phase.docModel);
+  const docModel = phase.docModel;
+  const shortName = phaseModelShortName(docModel);
+  const known = KNOWN_PHASE_MODELS.has(docModel);
   const overridden = picked !== 'default';
   const tip = !known
-    ? `the phase doc declares **Model:** ${phase.docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed`
+    ? t`the phase doc declares **Model:** ${docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed`
     : overridden
-      ? `the phase doc asks for ${phase.docModel}, but the picker above is set to ${picked} and overrides it for this run`
-      : `the phase doc asks for ${phase.docModel} — this run will use it`;
+      ? t`the phase doc asks for ${docModel}, but the picker above is set to ${picked} and overrides it for this run`
+      : t`the phase doc asks for ${docModel} — this run will use it`;
   const cls = !known
     ? 'border-red/40 text-red'
     : overridden
@@ -597,7 +626,7 @@ function DocModelChip({
       className={`rounded border px-1.5 py-px font-mono text-[9.5px] ${cls}`}
       data-tip={tip}
     >
-      doc: {phaseModelShortName(phase.docModel)}
+      <Trans>doc: {shortName}</Trans>
     </span>
   );
 }
@@ -613,22 +642,23 @@ function PhaseRunModelPicker({
   onChange: (m: PhaseRunModel) => void;
   disabled: boolean;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   return (
     <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
-      phase run model
+      <Trans>phase run model</Trans>
       <select
         value={value}
         disabled={disabled}
         onChange={(e) => {
           if (isPhaseRunModel(e.target.value)) onChange(e.target.value);
         }}
-        aria-label="phase run model"
-        title="the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected."
+        aria-label={t`phase run model`}
+        title={t`the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected.`}
         className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
       >
         {PHASE_RUN_MODELS.map((m) => (
           <option key={m.value} value={m.value}>
-            {m.label}
+            {i18n._(m.label)}
           </option>
         ))}
       </select>
@@ -648,22 +678,23 @@ function PhaseRunEffortPicker({
   onChange: (e: PhaseRunEffort) => void;
   disabled: boolean;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   return (
     <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
-      effort
+      <Trans>effort</Trans>
       <select
         value={value}
         disabled={disabled}
         onChange={(e) => {
           if (isPhaseRunEffort(e.target.value)) onChange(e.target.value);
         }}
-        aria-label="phase run effort"
-        title="how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected."
+        aria-label={t`phase run effort`}
+        title={t`how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected.`}
         className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
       >
         {PHASE_RUN_EFFORTS.map((e) => (
           <option key={e.value} value={e.value}>
-            {e.label}
+            {i18n._(e.label)}
           </option>
         ))}
       </select>
@@ -681,22 +712,50 @@ const STATUS_BADGE: Record<Epic['status'], string> = {
 };
 
 /** Which lifecycle buttons a plan in a given status offers. */
-const LIFECYCLE_ACTIONS: Record<Epic['status'], { action: EpicLifecycleAction; label: string }[]> = {
+const LIFECYCLE_ACTIONS: Record<
+  Epic['status'],
+  { action: EpicLifecycleAction; label: MessageDescriptor }[]
+> = {
   active: [
-    { action: 'pause', label: 'Pause' },
-    { action: 'archive', label: 'Archive' },
+    { action: 'pause', label: msg`Pause` },
+    { action: 'archive', label: msg`Archive` },
   ],
   paused: [
-    { action: 'resume', label: 'Resume' },
-    { action: 'archive', label: 'Archive' },
+    { action: 'resume', label: msg`Resume` },
+    { action: 'archive', label: msg`Archive` },
   ],
-  done: [{ action: 'archive', label: 'Archive' }],
-  archived: [{ action: 'restore', label: 'Restore' }],
+  done: [{ action: 'archive', label: msg`Archive` }],
+  archived: [{ action: 'restore', label: msg`Restore` }],
 };
 
 /** The Active/Done/Archived filter — the URL's `?status=` (plansUrl.ts). */
 type EpicFilter = PlansStatus;
 const FILTERS: EpicFilter[] = ['active', 'done', 'archived'];
+/** What a plan status reads as — the status badge, and the filter tabs (the CSS
+ * capitalizes those). The keys are the daemon's status codes. */
+const EPIC_STATUS_LABEL: Record<Epic['status'], MessageDescriptor> = {
+  active: msg`active`,
+  paused: msg`paused`,
+  done: msg`done`,
+  archived: msg`archived`,
+};
+const FILTER_LABEL: Record<EpicFilter, MessageDescriptor> = EPIC_STATUS_LABEL;
+
+/** The plan-list row's tooltip on its board-card chip. */
+function boardCardTip(cardId: string): string {
+  return t`board card ${cardId}`;
+}
+
+/** The stale-link notice for a revision id the plan does not have (SC-8). */
+function revisionNotFound(revId: number): string {
+  const id = String(revId);
+  return t`Revision #${id} not found`;
+}
+
+/** "3 phases" under a plan in the list. */
+function phaseCountLabel(count: number): string {
+  return plural(count, { one: '# phase', few: '# phases', many: '# phases', other: '# phases' });
+}
 
 /** Which filter tab an epic belongs to (paused plans live under Active). */
 function epicFilterOf(status: Epic['status']): EpicFilter {
@@ -741,15 +800,20 @@ type PlansMissing =
 function staleNotice(missing: PlansMissing, search: string): string | null {
   if (missing === null) return null;
   switch (missing.kind) {
-    case 'plan':
-      return `Plan ${missing.externalId} not found — showing the plan list`;
+    case 'plan': {
+      const externalId = missing.externalId;
+      return t`Plan ${externalId} not found — showing the plan list`;
+    }
     case 'task': {
       const q = new URLSearchParams(search);
       const id = Number.isNaN(missing.taskId) ? (q.get('task') ?? q.get('plan') ?? '') : String(missing.taskId);
-      return `Plan #${id} not found`;
+      return t`Plan #${id} not found`;
     }
-    case 'phase':
-      return `Phase ${String(missing.seq)} not found in ${missing.planTitle}`;
+    case 'phase': {
+      const seq = String(missing.seq);
+      const planTitle = missing.planTitle;
+      return t`Phase ${seq} not found in ${planTitle}`;
+    }
   }
 }
 
@@ -760,12 +824,12 @@ function isPlainClick(e: { button: number; metaKey: boolean; ctrlKey: boolean; s
 }
 
 /** Plan-details tab labels, as PlanDetailPanel shows them (Revisions without its count). */
-const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, string> = {
-  plan: 'Plan',
-  spec: 'Spec',
-  summary: 'Summary',
-  revisions: 'Revisions',
-  edit: 'Edit',
+const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, MessageDescriptor> = {
+  plan: msg`Plan`,
+  spec: msg`Spec`,
+  summary: msg`Summary`,
+  revisions: msg`Revisions`,
+  edit: msg`Edit`,
 };
 
 /**
@@ -779,13 +843,19 @@ const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, string> = {
  */
 function plansTitle(epic: Epic | null, detail: DetailTarget | null, project: string): string {
   const tail = `${project} — Swarmery`;
-  if (epic === null) return `Plans · ${tail}`;
+  if (epic === null) return t`Plans · ${tail}`;
+  const title = epic.title;
   if (detail?.kind === 'phase' && epic.phases.some((p) => p.seq === detail.seq)) {
-    const tab = PHASE_TABS.find((t) => t.id === detail.tab)?.label ?? detail.tab;
-    return `${tab} · Phase ${String(detail.seq)} — ${epic.title} · ${tail}`;
+    const def = PHASE_TABS.find((d) => d.id === detail.tab);
+    const tab = def !== undefined ? i18n._(def.label) : detail.tab;
+    const seq = String(detail.seq);
+    return t`${tab} · Phase ${seq} — ${title} · ${tail}`;
   }
-  if (detail?.kind === 'plan') return `${PLAN_DETAIL_TAB_LABEL[detail.tab]} — ${epic.title} · ${tail}`;
-  return `${epic.title} · Plans · ${tail}`;
+  if (detail?.kind === 'plan') {
+    const tab = i18n._(PLAN_DETAIL_TAB_LABEL[detail.tab]);
+    return `${tab} — ${title} · ${tail}`;
+  }
+  return t`${title} · Plans · ${tail}`;
 }
 
 /**
@@ -852,6 +922,7 @@ function canonicalPlansTarget(
 }
 
 export function Plans(): JSX.Element {
+  const { t, i18n } = useLingui();
   const { slug, project, projectId, loading: projLoading } = useProjectWorkspace();
   // The project's code host, fetched once per plan page (cached 60s by the
   // daemon): its `terms` label every landing control in the Review tab.
@@ -1035,7 +1106,7 @@ export function Plans(): JSX.Element {
   const lifecycle = (epic: Epic, action: EpicLifecycleAction): void => {
     if (
       action === 'archive' &&
-      !window.confirm('Archive this plan? The task folder moves to the archive/ zone.')
+      !window.confirm(t`Archive this plan? The task folder moves to the archive/ zone.`)
     )
       return;
     setBusyLifecycle(true);
@@ -1207,11 +1278,13 @@ export function Plans(): JSX.Element {
     [reload, failRunMsg],
   );
 
-  if (projLoading) return <Loading label="workspace…" />;
+  if (projLoading) return <Loading label={t`workspace…`} />;
   if (project === null) {
     return (
       <div className="px-4 py-8 desk:px-8">
-        <Empty>unknown project — pick one from the switcher</Empty>
+        <Empty>
+          <Trans>unknown project — pick one from the switcher</Trans>
+        </Empty>
       </div>
     );
   }
@@ -1222,13 +1295,15 @@ export function Plans(): JSX.Element {
       </div>
     );
   }
-  if (epics === null) return <Loading label="epics…" />;
+  if (epics === null) return <Loading label={t`epics…`} />;
   if (epics.length === 0) {
     return (
       <div className="px-4 py-8 desk:px-8">
         <Empty>
-          no epics yet — a plan under this project&apos;s workspace (a{' '}
-          <code className="font-mono text-[11px]">plan/</code> dir with a phase table) becomes an epic here
+          <Trans>
+            no epics yet — a plan under this project&apos;s workspace (a{' '}
+            <code className="font-mono text-[11px]">plan/</code> dir with a phase table) becomes an epic here
+          </Trans>
         </Empty>
       </div>
     );
@@ -1237,6 +1312,7 @@ export function Plans(): JSX.Element {
   // Resolve the selection against the CURRENT epic — a refetch can drop the
   // referenced phase (plan rescan), in which case the panel closes itself and
   // the phase list comes back.
+  const filterLabel = i18n._(FILTER_LABEL[filter]);
   let detail: DetailSel | null = null;
   if (activeEpic !== null && detailTarget !== null) {
     if (detailTarget.kind === 'plan') {
@@ -1255,7 +1331,7 @@ export function Plans(): JSX.Element {
           className="mb-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
         >
           <span className="min-w-0 flex-1">{actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} aria-label="dismiss" className="text-red/70">
+          <button type="button" onClick={() => setActionError(null)} aria-label={t`dismiss`} className="text-red/70">
             ×
           </button>
         </div>
@@ -1268,7 +1344,7 @@ export function Plans(): JSX.Element {
           className="mb-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
         >
           <span className="min-w-0 flex-1">{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="dismiss notice" className="text-amber/70">
+          <button type="button" onClick={() => setNotice(null)} aria-label={t`dismiss notice`} className="text-amber/70">
             ×
           </button>
         </div>
@@ -1277,7 +1353,7 @@ export function Plans(): JSX.Element {
       <div className="flex min-h-0 flex-1 gap-5">
         {/* Epic list behind status filter tabs. */}
         <div className="flex w-[280px] shrink-0 flex-col">
-          <div className="mb-2 flex items-center gap-1" role="tablist" aria-label="plan status filter">
+          <div className="mb-2 flex items-center gap-1" role="tablist" aria-label={t`plan status filter`}>
             {FILTERS.map((f) => (
               <Link
                 key={f}
@@ -1298,13 +1374,15 @@ export function Plans(): JSX.Element {
                     : 'border-transparent text-ink-dim hover:text-ink'
                 }`}
               >
-                {f} ({counts[f]})
+                {i18n._(FILTER_LABEL[f])} ({counts[f]})
               </Link>
             ))}
           </div>
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {filtered.length === 0 ? (
-              <Empty>no {filter} plans</Empty>
+              <Empty>
+                <Trans>no {filterLabel} plans</Trans>
+              </Empty>
             ) : (
               filtered.map((e) => (
                 // The row is a real link to the plan (Cmd-click opens it in a new tab)
@@ -1339,10 +1417,10 @@ export function Plans(): JSX.Element {
                         The chip is what makes the two views of one unit of work navigable. */}
                     {e.cardExternalId !== null && (
                       <span
-                        data-tip={`board card ${e.cardExternalId}`}
+                        data-tip={boardCardTip(e.cardExternalId)}
                         className="relative z-10 shrink-0 rounded border border-line px-1 py-px font-mono text-[9px] text-ink-dim"
                       >
-                        card
+                        <Trans>card</Trans>
                       </span>
                     )}
                   </div>
@@ -1351,11 +1429,9 @@ export function Plans(): JSX.Element {
                         `yyyy-mm-dd-slug` plan id can run past this column's width,
                         and copying still copies the FULL id regardless of how much
                         of it is visually truncated. */}
-                    <CopyIdBadge id={e.externalId} label="plan" truncate className="relative z-10 min-w-0 flex-1" />
+                    <CopyIdBadge id={e.externalId} label={t`plan`} truncate className="relative z-10 min-w-0 flex-1" />
                     {e.startedAt !== null && <span className="shrink-0">{e.startedAt.slice(0, 10)}</span>}
-                    <span className="shrink-0">
-                      {e.phases.length} phase{e.phases.length === 1 ? '' : 's'}
-                    </span>
+                    <span className="shrink-0">{phaseCountLabel(e.phases.length)}</span>
                   </div>
                   <ProgressBar done={e.rollup.done} total={e.rollup.total} className="mt-2" />
                 </div>
@@ -1371,9 +1447,11 @@ export function Plans(): JSX.Element {
               {/* Invisible spacer — same height as the tablist above the list column so the
                   empty states in both columns share the same vertical baseline. */}
               <div className="mb-2 flex items-center gap-1 opacity-0 pointer-events-none" aria-hidden="true">
-                <span className="rounded-md border px-2 py-1 font-mono text-[10.5px]">&nbsp;</span>
+                <span className="rounded-md border px-2 py-1 font-mono text-[10.5px]">{'\u00a0'}</span>
               </div>
-              <Empty>select an epic</Empty>
+              <Empty>
+                <Trans>select an epic</Trans>
+              </Empty>
             </>
           ) : (
             <EpicDetail
@@ -1399,7 +1477,7 @@ export function Plans(): JSX.Element {
                 // The revision the link named is not this plan's (SC-8).
                 correct(
                   { plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } },
-                  urlRevId !== null ? `Revision #${String(urlRevId)} not found` : null,
+                  urlRevId !== null ? revisionNotFound(urlRevId) : null,
                 );
               }}
               runBusy={runBusy}
@@ -1436,10 +1514,10 @@ export function Plans(): JSX.Element {
           }
           writesDisabledReason={
             activeEpic.planRun?.runState === 'running'
-              ? 'a whole-plan run is executing this plan'
+              ? t`a whole-plan run is executing this plan`
               : activeEpic.status !== 'active'
-                ? 'plan is not active'
-                : 'a phase run is already starting'
+                ? t`plan is not active`
+                : t`a phase run is already starting`
           }
           onClose={() => setOutcomeFor(null)}
           onRetry={() => startRun(activeEpic.taskId, outcomeFor)}
@@ -1540,6 +1618,7 @@ function EpicDetail({
    * until it loads — the Review tab then uses the terms its own response carries. */
   terms: ProviderTerms | null;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const complete = planComplete(epic, resolvedSeqs);
   const now = useNow(1000);
@@ -1640,6 +1719,9 @@ function EpicDetail({
     };
   }, [open, onCloseDetail]);
 
+  const specCovered = epic.spec?.covered ?? 0;
+  const specTotal = epic.spec?.total ?? 0;
+
   return (
     <div className="pr-1">
       <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -1649,7 +1731,7 @@ function EpicDetail({
           <button
             type="button"
             onClick={() => onOpenPlan('plan')}
-            data-tip="open plan details"
+            data-tip={t`open plan details`}
             className="min-w-0 truncate text-left text-[15px] font-semibold text-ink transition-colors hover:text-brand"
           >
             {epic.title}
@@ -1657,9 +1739,9 @@ function EpicDetail({
           <span
             className={`shrink-0 rounded border px-1.5 py-px font-mono text-[9.5px] ${STATUS_BADGE[epic.status]}`}
           >
-            {epic.status}
+            {i18n._(EPIC_STATUS_LABEL[epic.status])}
           </span>
-          <CopyIdBadge id={epic.externalId} label="plan" className="shrink-0" />
+          <CopyIdBadge id={epic.externalId} label={t`plan`} className="shrink-0" />
         </div>
         <span className="shrink-0 font-mono text-[11px] text-ink-dim">
           {epic.rollup.done}/{epic.rollup.total} ({Math.round(epic.rollup.pct)}%)
@@ -1674,7 +1756,7 @@ function EpicDetail({
           onClick={() => onOpenPlan('plan')}
           className="rounded-md border border-line px-2 py-1 font-mono text-[10.5px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
         >
-          ❐ open plan README
+          <Trans>❐ open plan README</Trans>
         </button>
         {LIFECYCLE_ACTIONS[epic.status].map(({ action, label }) => (
           <button
@@ -1684,7 +1766,7 @@ function EpicDetail({
             onClick={() => onLifecycle(epic, action)}
             className="rounded-md border border-line-strong bg-surface2 px-2 py-1 font-mono text-[10.5px] text-ink-dim transition-colors hover:bg-surface2/70 hover:text-ink disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint"
           >
-            {busyLifecycle ? '…' : label}
+            {busyLifecycle ? '…' : i18n._(label)}
           </button>
         ))}
         <button
@@ -1692,8 +1774,8 @@ function EpicDetail({
           disabled={reviseBusy || planRunning || phaseRunActive}
           data-tip={
             planRunning || phaseRunActive
-              ? 'a run owns the plan docs — revise once it finishes'
-              : 'interview against this plan and stage the changes as a reviewable diff'
+              ? t`a run owns the plan docs — revise once it finishes`
+              : t`interview against this plan and stage the changes as a reviewable diff`
           }
           onClick={() => {
             setReviseErr(null);
@@ -1702,28 +1784,30 @@ function EpicDetail({
           }}
           className="rounded-md border border-brand/40 px-2 py-1 font-mono text-[10.5px] text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint"
         >
-          Revise plan
+          <Trans>Revise plan</Trans>
         </button>
         {complete && (
           <button
             type="button"
             onClick={() => onOpenPlan('summary')}
-            data-tip="what was shipped — per-phase executed work"
+            data-tip={t`what was shipped — per-phase executed work`}
             className="rounded-md border border-green/40 px-2 py-1 font-mono text-[10.5px] text-green transition-colors hover:bg-green/10"
           >
-            ✓ summary
+            <Trans>✓ summary</Trans>
           </button>
         )}
         {epic.hasSpec && epic.spec !== null && (
           <span
-            data-tip="spec coverage — criteria covered by at least one phase"
+            data-tip={t`spec coverage — criteria covered by at least one phase`}
             className={`rounded-md border px-2 py-1 font-mono text-[10.5px] ${
               epic.spec.covered < epic.spec.total
                 ? 'border-amber/40 text-amber'
                 : 'border-green/40 text-green'
             }`}
           >
-            spec {epic.spec.covered}/{epic.spec.total}
+            <Trans>
+              spec {specCovered}/{specTotal}
+            </Trans>
           </span>
         )}
         <PlanRunControls
@@ -1757,10 +1841,10 @@ function EpicDetail({
               type="button"
               disabled={runBusy !== null}
               onClick={onForceRun}
-              data-tip="run this phase again even though nothing has changed since it blocked"
+              data-tip={t`run this phase again even though nothing has changed since it blocked`}
               className="shrink-0 rounded-md border border-red/40 px-2 py-0.5 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Run anyway
+              <Trans>Run anyway</Trans>
             </button>
           )}
         </div>
@@ -1895,6 +1979,7 @@ function PlanSessions({
   /** The phase whose details are open, so its sessions read as selected. */
   activePhaseId: number | null;
 }): JSX.Element {
+  const { t } = useLingui();
   const sessionHref = useSessionHref();
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -1946,11 +2031,16 @@ function PlanSessions({
   // The human label for the open phase — `phaseId` is a database id, `seq` is
   // what the timeline next to this column calls it.
   const activePhaseSeq = epic.phases.find((p) => p.id === activePhaseId)?.seq ?? null;
+  const seqLabel = String(activePhaseSeq ?? '?');
+  const phaseCount = String(view.phaseCount);
+  const totalCount = String(view.totalCount);
 
   return (
-    <aside className="hidden w-[264px] shrink-0 flex-col lg:flex" aria-label="plan sessions">
+    <aside className="hidden w-[264px] shrink-0 flex-col lg:flex" aria-label={t`plan sessions`}>
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink-dim">sessions</span>
+        <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink-dim">
+          <Trans>sessions</Trans>
+        </span>
         {sessions !== null &&
           // A plan with no sessions at all has nothing to switch between, so it
           // keeps the bare count rather than a toggle that cannot do anything.
@@ -1970,15 +2060,15 @@ function PlanSessions({
               aria-pressed={view.scope === 'phase'}
               aria-label={
                 view.scope === 'phase'
-                  ? `session scope: phase ${String(activePhaseSeq ?? '?')} only, ${String(view.phaseCount)} of ${String(view.totalCount)} sessions`
-                  : `session scope: all ${String(view.totalCount)} sessions of the plan`
+                  ? t`session scope: phase ${seqLabel} only, ${phaseCount} of ${totalCount} sessions`
+                  : t`session scope: all ${totalCount} sessions of the plan`
               }
               data-tip={
                 view.scope === 'phase'
-                  ? 'showing this phase only — click for every session of the plan'
+                  ? t`showing this phase only — click for every session of the plan`
                   : view.fellBack
-                    ? 'this phase has no sessions of its own — showing the whole plan; click to narrow anyway'
-                    : 'showing every session of the plan — click to narrow to this phase'
+                    ? t`this phase has no sessions of its own — showing the whole plan; click to narrow anyway`
+                    : t`showing every session of the plan — click to narrow to this phase`
               }
               onClick={() =>
                 setPicked({
@@ -2003,7 +2093,7 @@ function PlanSessions({
                   view.scope === 'all' ? 'text-ink underline decoration-dotted underline-offset-2' : undefined
                 }
               >
-                all ({view.totalCount})
+                <Trans>all ({totalCount})</Trans>
               </span>
             </button>
           ))}
@@ -2013,16 +2103,20 @@ function PlanSessions({
       ) : sessions === null ? (
         <Loading />
       ) : view.totalCount === 0 ? (
-        <Empty>no sessions ran this plan</Empty>
+        <Empty>
+          <Trans>no sessions ran this plan</Trans>
+        </Empty>
       ) : view.sessions.length === 0 && view.linked.length === 0 ? (
         // Only reachable through a deliberate pick: the automatic rule hands back
         // 'all' when the phase slice would be empty.
-        <Empty>no sessions for this phase</Empty>
+        <Empty>
+          <Trans>no sessions for this phase</Trans>
+        </Empty>
       ) : (
         <ol className="space-y-1">
           {view.sessions.map((s) => {
             const g = s.planGroup ?? null;
-            const label = g?.role === 'phase' ? `#${String(g.phaseSeq ?? '?')}` : 'plan';
+            const label = g?.role === 'phase' ? `#${String(g.phaseSeq ?? '?')}` : t`plan`;
             const selected = g?.role === 'phase' && g.phaseId === activePhaseId;
             return (
               <li key={s.id}>
@@ -2066,8 +2160,8 @@ function PlanSessions({
                 to={sessionHref(l.sessionUuid)}
                 data-tip={
                   l.linkSource === 'heuristic'
-                    ? 'inferred from files this session edited under plan/'
-                    : 'linked to this plan by the daemon'
+                    ? t`inferred from files this session edited under plan/`
+                    : t`linked to this plan by the daemon`
                 }
                 className="block rounded-lg border border-line border-dashed bg-surface/40 px-2 py-1.5 transition-colors hover:border-line-strong"
               >
@@ -2080,13 +2174,13 @@ function PlanSessions({
                         : 'border-line text-ink-dim'
                     }`}
                   >
-                    {l.linkSource === 'heuristic' ? 'inferred' : 'linked'}
+                    {l.linkSource === 'heuristic' ? t`inferred` : t`linked`}
                   </span>
                   <span className="truncate text-[11.5px] text-ink">{l.sessionUuid.slice(0, 8)}</span>
                 </div>
                 <div className="mt-0.5 truncate font-mono text-[9.5px] text-ink-faint">
                   {fmtDateTime(l.startedAt)}
-                  {l.endedAt === null ? ' · live' : ''}
+                  {l.endedAt === null ? t` · live` : ''}
                   {l.costUsd != null ? ` · ${fmtCost(l.costUsd)}` : ''}
                 </div>
               </Link>
@@ -2131,6 +2225,7 @@ function PhaseList({
   onCancelRun: (phaseId: number) => void;
   onOpenOutcome: (phaseId: number) => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const sessionHref = useSessionHref();
   return (
     <ol className="space-y-2">
@@ -2144,22 +2239,25 @@ function PhaseList({
         const depsUnmet = p.dependsOn.filter((seq) => !resolvedSeqs.has(seq));
         const runDisabled =
           runBusy !== null || planRunning || epic.status !== 'active' || depsUnmet.length > 0;
+        const waitingOn = depsUnmet.join(', ');
         const runTitle = planRunning
-          ? 'a whole-plan run is executing this plan'
+          ? t`a whole-plan run is executing this plan`
           : epic.status !== 'active'
-            ? 'plan is not active'
+            ? t`plan is not active`
             : depsUnmet.length > 0
-              ? `waiting on phase ${depsUnmet.join(', ')}`
-              : 'run this phase headlessly in an isolated worktree';
+              ? t`waiting on phase ${waitingOn}`
+              : t`run this phase headlessly in an isolated worktree`;
         const openPhase = (): void => {
           onOpenPhase(p.seq, 'story');
         };
+        const seq = String(p.seq);
+        const name = p.name;
         return (
           <li
             key={p.id}
             role="button"
             tabIndex={0}
-            aria-label={`open Phase ${String(p.seq)} — ${p.name} details`}
+            aria-label={t`open Phase ${seq} — ${name} details`}
             onClick={openPhase}
             onKeyDown={(e) => {
               if (e.target !== e.currentTarget) return; // inner buttons handle their own keys
@@ -2174,7 +2272,7 @@ function PhaseList({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="shrink-0 font-mono text-[10px] text-ink-faint">
-                    Phase {p.seq}
+                    <Trans>Phase {seq}</Trans>
                   </span>
                   {/* The row holds buttons, so the anchor is the NAME, not the row
                       (no <a> around inner buttons). Its click is the Link's push;
@@ -2189,7 +2287,7 @@ function PhaseList({
                   <span
                     className={`shrink-0 rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}
                   >
-                    {chip.label}
+                    {i18n._(chip.label)}
                   </span>
                   {status === 'in_progress' && (
                     <PhaseActivity docUpdatedAt={p.docUpdatedAt} running={running} />
@@ -2204,7 +2302,7 @@ function PhaseList({
                           ? 'border-green/40 text-green'
                           : 'border-line text-ink-faint'
                       }`}
-                      data-tip={resolvedSeqs.has(seq) ? 'dependency resolved' : 'dependency pending'}
+                      data-tip={resolvedSeqs.has(seq) ? t`dependency resolved` : t`dependency pending`}
                     >
                       ← #{seq}
                     </span>
@@ -2224,7 +2322,8 @@ function PhaseList({
                     className="rounded border border-brand/40 bg-brand/10 px-1.5 py-px font-mono text-[9.5px] text-brand"
                     data-tip={p.boardTaskExternalId ?? undefined}
                   >
-                    activated{p.boardColumn !== null ? ` · ${p.boardColumn}` : ''}
+                    <Trans>activated</Trans>
+                    {p.boardColumn !== null ? ` · ${p.boardColumn}` : ''}
                   </span>
                 )}
 
@@ -2239,10 +2338,10 @@ function PhaseList({
                   <span className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <span
                       className="inline-flex items-center gap-1 rounded border border-brand/40 bg-brand/10 px-1.5 py-px font-mono text-[9.5px] text-brand"
-                      data-tip="headless run in progress"
+                      data-tip={t`headless run in progress`}
                     >
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-                      Running
+                      <Trans>Running</Trans>
                       {p.runStartedAt !== null ? ` · ${fmtElapsed(p.runStartedAt, now)}` : ''}
                     </span>
                     {p.runSessionUuid !== null && (
@@ -2251,7 +2350,7 @@ function PhaseList({
                         onClick={(e) => e.stopPropagation()}
                         className="font-mono text-[9.5px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
                       >
-                        session
+                        <Trans>session</Trans>
                       </Link>
                     )}
                     <button
@@ -2263,7 +2362,7 @@ function PhaseList({
                       }}
                       className="rounded-md border border-red/40 px-1.5 py-px font-mono text-[9.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Cancel
+                      <Trans>Cancel</Trans>
                     </button>
                   </span>
                 ) : status === 'done' ? (
@@ -2283,10 +2382,10 @@ function PhaseList({
                       onClick={() => {
                         onOpenPhase(p.seq, 'report');
                       }}
-                      data-tip="what was done — the executor's Completion Report and execution record"
+                      data-tip={t`what was done — the executor's Completion Report and execution record`}
                       className="font-mono text-[9.5px] text-green underline-offset-2 transition-colors hover:underline"
                     >
-                      ✓ summary
+                      <Trans>✓ summary</Trans>
                     </button>
                   </span>
                 ) : (
@@ -2314,8 +2413,8 @@ function PhaseList({
                       {runBusy === p.id
                         ? '…'
                         : isUnresolvedOutcome(p.runOutcome)
-                          ? 'Retry run'
-                          : 'Run phase'}
+                          ? t`Retry run`
+                          : t`Run phase`}
                     </button>
                   </span>
                 )}
@@ -2332,7 +2431,7 @@ function PhaseList({
                     }}
                     className="font-mono text-[9.5px] text-ink-dim underline-offset-2 transition-colors hover:text-ink hover:underline"
                   >
-                    edit doc
+                    <Trans>edit doc</Trans>
                   </button>
                 )}
               </div>
@@ -2399,8 +2498,10 @@ function usePlanDoc(
         if (alive) setText(d.content);
       })
       .catch((e: unknown) => {
-        if (alive)
-          setText(`failed to load ${path}: ${e instanceof Error ? e.message : String(e)}`);
+        if (alive) {
+          const reason = e instanceof Error ? e.message : String(e);
+          setText(t`failed to load ${path}: ${reason}`);
+        }
       });
     return () => {
       alive = false;
@@ -2415,14 +2516,15 @@ function usePlanDoc(
  * siblings, weighted like the lifecycle buttons so it still reads as the
  * primary way out. */
 function BackToPhases({ onBack }: { onBack: () => void }): JSX.Element {
+  const { t } = useLingui();
   return (
     <button
       type="button"
       onClick={onBack}
-      data-tip="back to the phase list (Esc)"
+      data-tip={t`back to the phase list (Esc)`}
       className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-surface2 px-2 py-1 font-mono text-[10.5px] text-ink transition-colors hover:bg-surface2/70 hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
     >
-      <span aria-hidden="true">←</span> all phases
+      <span aria-hidden="true">←</span> <Trans>all phases</Trans>
     </button>
   );
 }
@@ -2432,10 +2534,14 @@ function BackToPhases({ onBack }: { onBack: () => void }): JSX.Element {
  * phase DAG — the UI must not duplicate that, since it needs the graph to be
  * meaningful. What the skill cannot derive is the call an interactive session
  * always asks about: dispatch per-phase executors, or do the work inline. */
-const PLAN_RUN_MODES: { id: PlanRunMode; label: string; hint: string }[] = [
-  { id: 'auto', label: 'auto', hint: 'let the run-plan skill triage the route from the phase DAG' },
-  { id: 'subagents', label: 'subagent-driven', hint: 'dispatch an implementer + a fresh reviewer per phase' },
-  { id: 'inline', label: 'inline', hint: 'the controller implements the phases itself, no dispatch' },
+const PLAN_RUN_MODES: { id: PlanRunMode; label: MessageDescriptor; hint: MessageDescriptor }[] = [
+  { id: 'auto', label: msg`auto`, hint: msg`let the run-plan skill triage the route from the phase DAG` },
+  {
+    id: 'subagents',
+    label: msg`subagent-driven`,
+    hint: msg`dispatch an implementer + a fresh reviewer per phase`,
+  },
+  { id: 'inline', label: msg`inline`, hint: msg`the controller implements the phases itself, no dispatch` },
 ];
 
 /** Whole-plan run controls in the plan action row: a Run plan button that opens
@@ -2458,19 +2564,23 @@ function PlanRunControls({
   onRun: (agent: string, mode: PlanRunMode) => void;
   onCancel: () => void;
 }): JSX.Element | null {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const sessionHref = useSessionHref();
   const run = epic.planRun;
 
   if (run?.runState === 'running') {
+    const agent = run.agent;
+    const mode = run.mode;
+    const agentPart = agent !== null ? t` — agent ${agent}` : '';
     return (
       <span className="flex items-center gap-1.5">
         <span
           className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand/10 px-2 py-1 font-mono text-[10.5px] text-brand"
-          data-tip={`the whole plan is running${run.agent !== null ? ` — agent ${run.agent}` : ''} (mode: ${run.mode})`}
+          data-tip={t`the whole plan is running${agentPart} (mode: ${mode})`}
         >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-          Running plan
+          <Trans>Running plan</Trans>
           {run.runStartedAt !== null ? ` · ${fmtElapsed(run.runStartedAt, now)}` : ''}
         </span>
         {run.runSessionUuid !== null && (
@@ -2478,7 +2588,7 @@ function PlanRunControls({
             to={sessionHref(run.runSessionUuid)}
             className="font-mono text-[10.5px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
           >
-            session
+            <Trans>session</Trans>
           </Link>
         )}
         <button
@@ -2487,7 +2597,7 @@ function PlanRunControls({
           onClick={onCancel}
           className="rounded-md border border-red/40 px-2 py-1 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Cancel
+          <Trans>Cancel</Trans>
         </button>
       </span>
     );
@@ -2500,10 +2610,10 @@ function PlanRunControls({
   const failed = run?.runState === 'failed';
   const disabled = busy || phaseRunActive || epic.status !== 'active';
   const title = phaseRunActive
-    ? 'a phase run is active — cancel it before running the whole plan'
+    ? t`a phase run is active — cancel it before running the whole plan`
     : epic.status !== 'active'
-      ? 'plan is not active'
-      : 'hand the whole plan to one agent, headlessly, in an isolated worktree';
+      ? t`plan is not active`
+      : t`hand the whole plan to one agent, headlessly, in an isolated worktree`;
 
   return (
     <>
@@ -2511,9 +2621,9 @@ function PlanRunControls({
         {failed && (
           <span
             className="rounded-md border border-red/40 bg-red/10 px-2 py-1 font-mono text-[10.5px] text-red"
-            data-tip={run?.runError ?? 'plan run failed'}
+            data-tip={run?.runError ?? t`plan run failed`}
           >
-            Run failed
+            <Trans>Run failed</Trans>
           </span>
         )}
         <button
@@ -2526,7 +2636,7 @@ function PlanRunControls({
             failed ? 'border-red/40 text-red hover:bg-red/10' : 'border-brand/40 text-brand hover:bg-brand/10'
           }`}
         >
-          {busy ? '…' : failed ? '▶ Retry plan' : '▶ Run plan'}
+          {busy ? '…' : failed ? t`▶ Retry plan` : t`▶ Run plan`}
         </button>
       </span>
       {open && (
@@ -2558,6 +2668,7 @@ function PlanRunDialog({
   onRun: (agent: string, mode: PlanRunMode) => void;
   onCancel: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [agent, setAgent] = useState(initialAgent);
   const [mode, setMode] = useState<PlanRunMode>(initialMode);
   const [agents, setAgents] = useState<string[] | null>(null);
@@ -2580,16 +2691,21 @@ function PlanRunDialog({
     };
   }, []);
 
+  const modeDef = PLAN_RUN_MODES.find((m) => m.id === mode);
+  const modeHint = modeDef !== undefined ? i18n._(modeDef.hint) : '';
+
   return (
     <div className="mt-1 w-full rounded-lg border border-line bg-surface/60 px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label className="flex items-center gap-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">agent</span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+            <Trans>agent</Trans>
+          </span>
           <input
             list="plan-run-agents"
             value={agent}
             onChange={(e) => setAgent(e.target.value)}
-            placeholder={agents === null ? 'loading…' : 'tech-lead (default)'}
+            placeholder={agents === null ? t`loading…` : t`tech-lead (default)`}
             className="w-[190px] rounded-md border border-line bg-field px-2 py-1 font-mono text-[11px] text-ink outline-none focus:border-ink-dim"
           />
           <datalist id="plan-run-agents">
@@ -2599,15 +2715,17 @@ function PlanRunDialog({
           </datalist>
         </label>
 
-        <div className="flex items-center gap-1.5" role="radiogroup" aria-label="execution mode">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">mode</span>
+        <div className="flex items-center gap-1.5" role="radiogroup" aria-label={t`execution mode`}>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+            <Trans>mode</Trans>
+          </span>
           {PLAN_RUN_MODES.map((m) => (
             <button
               key={m.id}
               type="button"
               role="radio"
               aria-checked={mode === m.id}
-              data-tip={m.hint}
+              data-tip={i18n._(m.hint)}
               onClick={() => setMode(m.id)}
               className={`rounded-md border px-2 py-1 font-mono text-[10.5px] transition-colors ${
                 mode === m.id
@@ -2615,7 +2733,7 @@ function PlanRunDialog({
                   : 'border-line text-ink-dim hover:border-line-strong hover:text-ink'
               }`}
             >
-              {m.label}
+              {i18n._(m.label)}
             </button>
           ))}
         </div>
@@ -2626,21 +2744,24 @@ function PlanRunDialog({
             onClick={onCancel}
             className="rounded-md border border-line px-2 py-1 font-mono text-[10.5px] text-ink-dim transition-colors hover:text-ink"
           >
-            cancel
+            <Trans>cancel</Trans>
           </button>
           <button
             type="button"
             onClick={() => onRun(agent.trim(), mode)}
             className="rounded-md border border-brand/50 bg-brand/10 px-2.5 py-1 font-mono text-[10.5px] text-brand transition-colors hover:bg-brand/20"
           >
-            ▶ Run
+            <Trans>▶ Run</Trans>
           </button>
         </div>
       </div>
       <p className="mt-2 font-mono text-[10px] leading-relaxed text-ink-faint">
-        {PLAN_RUN_MODES.find((m) => m.id === mode)?.hint} · the run executes core&apos;s{' '}
-        <code className="text-ink-dim">run-plan</code> skill headlessly in an isolated worktree:
-        it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a human.
+        {modeHint} ·{' '}
+        <Trans>
+          the run executes core&apos;s <code className="text-ink-dim">run-plan</code> skill headlessly in an
+          isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a
+          human.
+        </Trans>
       </p>
     </div>
   );
@@ -2694,24 +2815,24 @@ function DetailTabs<T extends string>({
       role="tablist"
       aria-label={label}
     >
-      {tabs.map((t) => {
+      {tabs.map((tab) => {
         const className = `-mb-px shrink-0 border-b-2 px-3 py-[8px] text-[12.5px] font-medium whitespace-nowrap transition-colors ${
-          active === t.id ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
+          active === tab.id ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
         }`;
         return hrefFor !== undefined ? (
-          <Link key={t.id} to={hrefFor(t.id)} role="tab" aria-selected={active === t.id} className={className}>
-            {t.label}
+          <Link key={tab.id} to={hrefFor(tab.id)} role="tab" aria-selected={active === tab.id} className={className}>
+            {tab.label}
           </Link>
         ) : (
           <button
-            key={t.id}
+            key={tab.id}
             type="button"
             role="tab"
-            aria-selected={active === t.id}
-            onClick={() => onTab(t.id)}
+            aria-selected={active === tab.id}
+            onClick={() => onTab(tab.id)}
             className={className}
           >
-            {t.label}
+            {tab.label}
           </button>
         );
       })}
@@ -2734,6 +2855,7 @@ function ChecksList({
   busyLine?: number | null;
   lint?: (c: Check) => ReactNode;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <ul className="space-y-1.5">
       {checks.map((c) => {
@@ -2762,7 +2884,7 @@ function ChecksList({
               disabled={busyLine === c.line}
               aria-pressed={c.done}
               onClick={() => onToggle(c)}
-              data-tip={c.done ? 'un-tick this criterion in the doc' : 'tick this criterion in the doc'}
+              data-tip={c.done ? t`un-tick this criterion in the doc` : t`tick this criterion in the doc`}
               className="flex w-full items-start gap-2 rounded px-1 py-0.5 text-left transition-colors hover:bg-surface2/50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
             >
               {mark}
@@ -2791,6 +2913,7 @@ function DocEditor({
   version: string | null;
   onSaved: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [content, setContent] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -2823,7 +2946,7 @@ function DocEditor({
       .then((doc) => {
         setContent(doc.content);
         setDraft(doc.content);
-        setNote(doc.backup !== undefined ? 'saved · backup written' : 'saved');
+        setNote(doc.backup !== undefined ? t`saved · backup written` : t`saved`);
         onSaved();
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -2844,9 +2967,9 @@ function DocEditor({
   const blocker = useBlocker(shouldBlock);
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    if (window.confirm(`Discard unsaved changes to ${path}?`)) blocker.proceed();
+    if (window.confirm(t`Discard unsaved changes to ${path}?`)) blocker.proceed();
     else blocker.reset();
-  }, [blocker, path]);
+  }, [blocker, path, t]);
   const unsavedRef = useRef(unsaved);
   unsavedRef.current = unsaved;
   useEffect(() => {
@@ -2860,7 +2983,7 @@ function DocEditor({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
-  if (content === null && error === null) return <Loading label="doc…" />;
+  if (content === null && error === null) return <Loading label={t`doc…`} />;
   const dirty = draft !== content;
 
   return (
@@ -2883,7 +3006,7 @@ function DocEditor({
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         spellCheck={false}
-        aria-label="plan doc source"
+        aria-label={t`plan doc source`}
         className="min-h-[460px] w-full resize-y rounded-lg border border-line bg-field px-3.5 py-3 font-mono text-[12.5px] leading-relaxed text-ink outline-none focus:border-ink-dim"
       />
       <div className="flex items-center justify-end gap-2">
@@ -2893,7 +3016,7 @@ function DocEditor({
           onClick={() => setDraft(content ?? '')}
           className="rounded-md border border-line px-3 py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:text-ink disabled:cursor-not-allowed disabled:text-ink-faint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
         >
-          revert
+          <Trans>revert</Trans>
         </button>
         <button
           type="button"
@@ -2901,7 +3024,7 @@ function DocEditor({
           onClick={save}
           className="rounded-md border border-line-strong bg-surface2 px-3 py-1.5 font-mono text-[11px] text-brand transition-colors hover:bg-surface2/70 disabled:cursor-not-allowed disabled:text-ink-faint focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
         >
-          {saving ? 'saving…' : 'Save'}
+          {saving ? t`saving…` : t`Save`}
         </button>
       </div>
     </div>
@@ -2919,14 +3042,15 @@ function RunStateChip({
   phase: EpicPhase;
   onOpenOutcome: () => void;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (phase.runOutcome === 'running')
     return (
       <span
         className="inline-flex items-center gap-1 rounded border border-brand/40 bg-brand/10 px-1.5 py-px font-mono text-[9.5px] text-brand"
-        data-tip="headless run in progress"
+        data-tip={t`headless run in progress`}
       >
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-        Running
+        <Trans>Running</Trans>
       </span>
     );
   if (phase.runOutcome === 'completed') return <RunCompletedChip phase={phase} />;
@@ -2982,6 +3106,7 @@ function PhaseDetailPanel({
   /** The project's code-host vocabulary for the Review tab (null until loaded). */
   terms: ProviderTerms | null;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const sessionHref = useSessionHref();
   const status = phaseStatus(phase, resolvedSeqs);
@@ -3031,25 +3156,28 @@ function PhaseDetailPanel({
   const depsUnmet = phase.dependsOn.filter((seq) => !resolvedSeqs.has(seq));
   const runDisabled =
     runBusy !== null || planRunning || epic.status !== 'active' || depsUnmet.length > 0;
+  const waitingOn = depsUnmet.join(', ');
   const runTitle = planRunning
-    ? 'a whole-plan run is executing this plan'
+    ? t`a whole-plan run is executing this plan`
     : epic.status !== 'active'
-      ? 'plan is not active'
+      ? t`plan is not active`
       : depsUnmet.length > 0
-        ? `waiting on phase ${depsUnmet.join(', ')}`
-        : 'run this phase headlessly in an isolated worktree';
+        ? t`waiting on phase ${waitingOn}`
+        : t`run this phase headlessly in an isolated worktree`;
   // The card's ONE primary action (1d): Cancel while live, Run/Retry until done.
   const primary = running
-    ? { label: 'Cancel', onClick: onCancelRun, disabled: runBusy !== null }
+    ? { label: t`Cancel`, onClick: onCancelRun, disabled: runBusy !== null }
     : status !== 'done'
       ? {
           label:
-            runBusy === phase.id ? '…' : isUnresolvedOutcome(phase.runOutcome) ? 'Retry run' : 'Run phase',
+            runBusy === phase.id ? '…' : isUnresolvedOutcome(phase.runOutcome) ? t`Retry run` : t`Run phase`,
           onClick: onRetry,
           disabled: runDisabled,
           tip: runTitle,
         }
       : null;
+  const revisedAgo =
+    appliedRevision !== undefined ? fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt) : '';
 
   return (
     <PhasePanel
@@ -3077,7 +3205,7 @@ function PhaseDetailPanel({
             phase={phase}
             {...(primary !== null ? { primary } : {})}
             secondaries={
-              isUnresolvedOutcome(phase.runOutcome) ? [{ label: 'why it did not move', onClick: onOpenOutcome }] : []
+              isUnresolvedOutcome(phase.runOutcome) ? [{ label: t`why it did not move`, onClick: onOpenOutcome }] : []
             }
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
@@ -3092,7 +3220,7 @@ function PhaseDetailPanel({
       ) : activeTab === 'runs' ? (
         <>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}>{chip.label}</span>
+            <span className={`rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}>{i18n._(chip.label)}</span>
             {/* Only the idle half: while live, RunStateChip already pulses. */}
             {status === 'in_progress' && !running && (
               <PhaseActivity docUpdatedAt={phase.docUpdatedAt} running={false} />
@@ -3108,7 +3236,7 @@ function PhaseDetailPanel({
                 className={`rounded border px-1 py-px font-mono text-[9px] ${
                   resolvedSeqs.has(seq) ? 'border-green/40 text-green' : 'border-line text-ink-faint'
                 }`}
-                data-tip={resolvedSeqs.has(seq) ? 'dependency resolved' : 'dependency pending'}
+                data-tip={resolvedSeqs.has(seq) ? t`dependency resolved` : t`dependency pending`}
               >
                 ← #{seq}
               </span>
@@ -3127,21 +3255,22 @@ function PhaseDetailPanel({
           </div>
           {running && phase.runSessionUuid !== null && (
             <Link to={sessionHref(phase.runSessionUuid)} className="mt-2 inline-block font-mono text-[10px] text-ink-dim hover:text-brand hover:underline">
-              session →
+              <Trans>session →</Trans>
             </Link>
           )}
           {appliedRevision !== undefined && (
             <div className="mt-2 font-mono text-[10px] text-ink-faint">
-              this doc was changed by an applied revision{' '}
-              {fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt)} —{' '}
-              <button type="button" onClick={onOpenRevisions} className="text-brand hover:underline">
-                see Revisions
-              </button>
+              <Trans>
+                this doc was changed by an applied revision {revisedAgo} —{' '}
+                <button type="button" onClick={onOpenRevisions} className="text-brand hover:underline">
+                  see Revisions
+                </button>
+              </Trans>
             </div>
           )}
           {phase.runState === 'failed' && (
             <div className="mt-3 rounded-md border border-red/40 bg-red/10 px-2.5 py-2 font-mono text-[10.5px] break-words text-red">
-              {phase.runError ?? 'run failed'}
+              {phase.runError ?? t`run failed`}
             </div>
           )}
           <PhaseReopens
@@ -3170,11 +3299,13 @@ function PhaseDetailPanel({
               {toggleErr}
             </div>
           )}
-          <RailSection label="acceptance criteria">
+          <RailSection label={t`acceptance criteria`}>
             {checks === null ? (
-              <Loading label="criteria…" />
+              <Loading label={t`criteria…`} />
             ) : checks.length === 0 ? (
-              <div className="font-mono text-[11.5px] text-ink-faint">no checkboxes in this doc</div>
+              <div className="font-mono text-[11.5px] text-ink-faint">
+                <Trans>no checkboxes in this doc</Trans>
+              </div>
             ) : (
               <ChecksList
                 checks={checks}
@@ -3196,7 +3327,7 @@ function PhaseDetailPanel({
               />
             )}
           </RailSection>
-          <RailSection label="doc">{doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}</RailSection>
+          <RailSection label={t`doc`}>{doc === null ? <Loading label={t`doc…`} /> : <Markdown text={doc} />}</RailSection>
         </>
       )}
     </PhasePanel>
@@ -3212,15 +3343,23 @@ function PhaseDetailPanel({
  * for the narrative. A phase whose executor wrote no report says so plainly
  * instead of padding the tab with a re-run of the checklist. */
 function PhaseSummary({ phase, doc }: { phase: EpicPhase; doc: string | null }): JSX.Element {
+  const { t } = useLingui();
   const checks = useMemo(() => (doc !== null ? extractChecks(doc) : []), [doc]);
-  const execRecord = useMemo(() => (doc !== null ? extractSection(doc, 'Execution record') : null), [doc]);
+  const execRecord = useMemo(
+    // i18n-ignore — the doc's own `## Execution record` heading, matched in the markdown
+    () => (doc !== null ? extractSection(doc, 'Execution record') : null),
+    [doc],
+  );
 
-  if (doc === null) return <Loading label="summary…" />;
+  if (doc === null) return <Loading label={t`summary…`} />;
 
   const done = checks.filter((c) => c.done).length;
+  const total = checks.length;
   const score = (
     <div className="mb-3 font-mono text-[10.5px] text-ink-faint">
-      {done}/{checks.length} acceptance criteria met · full list on the Criteria tab
+      <Trans>
+        {done}/{total} acceptance criteria met · full list on the Criteria tab
+      </Trans>
     </div>
   );
 
@@ -3229,9 +3368,11 @@ function PhaseSummary({ phase, doc }: { phase: EpicPhase; doc: string | null }):
       <>
         {checks.length > 0 && score}
         <div className="font-mono text-[11.5px] text-ink-faint">
-          no summary of the work written — the executor left neither a{' '}
-          <span className="text-ink-dim">## Completion Report</span> nor an{' '}
-          <span className="text-ink-dim">## Execution record</span> section in this phase doc
+          <Trans>
+            no summary of the work written — the executor left neither a{' '}
+            <span className="text-ink-dim">## Completion Report</span> nor an{' '}
+            <span className="text-ink-dim">## Execution record</span> section in this phase doc
+          </Trans>
         </div>
       </>
     );
@@ -3241,12 +3382,12 @@ function PhaseSummary({ phase, doc }: { phase: EpicPhase; doc: string | null }):
     <>
       {checks.length > 0 && score}
       {phase.completionReport !== null && (
-        <RailSection label="what was done">
+        <RailSection label={t`what was done`}>
           <Markdown text={phase.completionReport} />
         </RailSection>
       )}
       {execRecord !== null && (
-        <RailSection label="execution record">
+        <RailSection label={t`execution record`}>
           <Markdown text={execRecord} />
         </RailSection>
       )}
@@ -3287,6 +3428,7 @@ function PlanDetailPanel({
   /** A revision was decided — refetch the list (and the docs, on apply). */
   onRevisionsChanged: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const complete = planComplete(epic, resolvedSeqs);
   // The Summary tab exists only on complete plans, the Spec tab only on plans
@@ -3294,17 +3436,19 @@ function PlanDetailPanel({
   // removed the spec) degrades to the Plan tab instead of a dead panel.
   const activeTab: PlanDetailTab =
     (tab === 'summary' && !complete) || (tab === 'spec' && !epic.hasSpec) ? 'plan' : tab;
+  const staged = String(stagedCount);
   const tabs: { id: PlanDetailTab; label: string }[] = [
-    { id: 'plan', label: 'Plan' },
-    ...(epic.hasSpec ? [{ id: 'spec' as const, label: 'Spec' }] : []),
-    ...(complete ? [{ id: 'summary' as const, label: 'Summary' }] : []),
-    { id: 'revisions', label: stagedCount > 0 ? `Revisions (${String(stagedCount)})` : 'Revisions' },
-    { id: 'edit', label: 'Edit' },
+    { id: 'plan', label: i18n._(PLAN_DETAIL_TAB_LABEL.plan) },
+    ...(epic.hasSpec ? [{ id: 'spec' as const, label: i18n._(PLAN_DETAIL_TAB_LABEL.spec) }] : []),
+    ...(complete ? [{ id: 'summary' as const, label: i18n._(PLAN_DETAIL_TAB_LABEL.summary) }] : []),
+    { id: 'revisions', label: stagedCount > 0 ? t`Revisions (${staged})` : i18n._(PLAN_DETAIL_TAB_LABEL.revisions) },
+    { id: 'edit', label: i18n._(PLAN_DETAIL_TAB_LABEL.edit) },
   ];
+  const title = epic.title;
 
   return (
     <DetailShell
-      ariaLabel={`${epic.title} — plan details`}
+      ariaLabel={t`${title} — plan details`}
       header={
         <div className="min-w-0">
           <div className="text-[14px] font-semibold text-ink">{epic.title}</div>
@@ -3312,9 +3456,9 @@ function PlanDetailPanel({
             <span
               className={`rounded border px-1.5 py-px font-mono text-[9.5px] ${STATUS_BADGE[epic.status]}`}
             >
-              {epic.status}
+              {i18n._(EPIC_STATUS_LABEL[epic.status])}
             </span>
-            <CopyIdBadge id={epic.externalId} label="plan" />
+            <CopyIdBadge id={epic.externalId} label={t`plan`} />
             <span className="font-mono text-[10px] text-ink-faint">
               {epic.rollup.done}/{epic.rollup.total} ({Math.round(epic.rollup.pct)}%)
             </span>
@@ -3322,7 +3466,7 @@ function PlanDetailPanel({
         </div>
       }
       tabBar={
-        <DetailTabs label="plan details tabs" tabs={tabs} active={activeTab} onTab={onTab} hrefFor={tabHref} />
+        <DetailTabs label={t`plan details tabs`} tabs={tabs} active={activeTab} onTab={onTab} hrefFor={tabHref} />
       }
     >
       {activeTab === 'edit' ? (
@@ -3354,6 +3498,46 @@ const REVISION_STATUS_CHIP: Record<PlanRevision['status'], string> = {
   failed: 'border-red/40 bg-red/10 text-red',
 };
 
+/** What a revision status reads as; the keys are the daemon's status codes. */
+const REVISION_STATUS_LABEL: Record<PlanRevision['status'], MessageDescriptor> = {
+  staged: msg`staged`,
+  applied: msg`applied`,
+  rejected: msg`rejected`,
+  superseded: msg`superseded`,
+  failed: msg`failed`,
+};
+
+/** One decided revision's timestamp line: who decided it and when, else when it
+ * was created. */
+function revisionWhen(r: PlanRevision): string {
+  if (r.decidedAt === undefined) {
+    const created = fmtDateTime(r.createdAt);
+    return t`created ${created}`;
+  }
+  const decided = fmtDateTime(r.decidedAt);
+  const by = r.decidedBy;
+  return by !== undefined ? t`decided ${decided} by ${by}` : t`decided ${decided}`;
+}
+
+/** "3 docs: a.md (edit), b.md → c.md (rename)" under a decided revision. */
+function revisionFilesLabel(r: PlanRevision): string {
+  const docCount = r.files.length;
+  const count = plural(docCount, { one: '# doc', few: '# docs', many: '# docs', other: '# docs' });
+  if (r.files.length === 0) return count;
+  const list = r.files
+    .map((f) => {
+      const action = f.action;
+      const docPath = f.docPath;
+      if (action === 'rename' && f.renameFrom !== undefined) {
+        const from = f.renameFrom;
+        return t`${from} → ${docPath} (rename)`;
+      }
+      return `${docPath} (${action})`;
+    })
+    .join(', ');
+  return `${count}: ${list}`;
+}
+
 /** Revisions tab body: the open (staged) revision as a full diff review, and
  * below it the decided history — every row answers "was it manual or
  * automated?" with its `origin` and `decidedBy`, never only the open one. */
@@ -3371,14 +3555,15 @@ function PlanRevisionsTab({
   focusRevId: number | null;
   onChanged: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   if (revisionsErr !== null) return <ErrorBox message={revisionsErr} onRetry={onChanged} />;
-  if (revisions === null) return <Loading label="revisions…" />;
+  if (revisions === null) return <Loading label={t`revisions…`} />;
   const staged = revisions.find((r) => r.status === 'staged');
   const decided = revisions.filter((r) => r.status !== 'staged');
   if (staged === undefined && decided.length === 0) {
     return (
       <div className="font-mono text-[11.5px] text-ink-faint">
-        no revisions — &quot;Revise plan&quot; in the action row starts one
+        <Trans>no revisions — &quot;Revise plan&quot; in the action row starts one</Trans>
       </div>
     );
   }
@@ -3389,13 +3574,13 @@ function PlanRevisionsTab({
           data-revision-id={staged.id}
           {...(staged.id === focusRevId ? { 'aria-current': 'true' as const } : {})}
         >
-          <RailSection label="staged — awaiting your decision">
+          <RailSection label={t`staged — awaiting your decision`}>
             <RevisionReview revisionId={staged.id} onDecided={onChanged} />
           </RailSection>
         </div>
       )}
       {decided.length > 0 && (
-        <RailSection label="history">
+        <RailSection label={t`history`}>
           <ul className="space-y-2">
             {decided.map((r) => (
               <li
@@ -3410,16 +3595,12 @@ function PlanRevisionsTab({
                   <span
                     className={`rounded border px-1.5 py-px font-mono text-[9.5px] ${REVISION_STATUS_CHIP[r.status]}`}
                   >
-                    {r.status}
+                    {i18n._(REVISION_STATUS_LABEL[r.status])}
                   </span>
                   <span className="rounded border border-line-strong bg-surface2 px-1.5 py-px font-mono text-[9.5px] text-ink-dim">
                     {ORIGIN_LABEL[r.origin]}
                   </span>
-                  <span className="font-mono text-[10px] text-ink-faint">
-                    {r.decidedAt !== undefined
-                      ? `decided ${fmtDateTime(r.decidedAt)}${r.decidedBy !== undefined ? ` by ${r.decidedBy}` : ''}`
-                      : `created ${fmtDateTime(r.createdAt)}`}
-                  </span>
+                  <span className="font-mono text-[10px] text-ink-faint">{revisionWhen(r)}</span>
                 </div>
                 <div
                   className={`mt-1.5 text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2 ${
@@ -3431,21 +3612,7 @@ function PlanRevisionsTab({
                 {r.error !== undefined && r.error !== '' && (
                   <div className="mt-1 font-mono text-[10.5px] break-words text-red">{r.error}</div>
                 )}
-                <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
-                  {r.files.length} doc{r.files.length === 1 ? '' : 's'}
-                  {r.files.length > 0 && (
-                    <>
-                      {': '}
-                      {r.files
-                        .map((f) =>
-                          f.action === 'rename' && f.renameFrom !== undefined
-                            ? `${f.renameFrom} → ${f.docPath} (rename)`
-                            : `${f.docPath} (${f.action})`,
-                        )
-                        .join(', ')}
-                    </>
-                  )}
-                </div>
+                <div className="mt-1.5 font-mono text-[10px] text-ink-faint">{revisionFilesLabel(r)}</div>
               </li>
             ))}
           </ul>
@@ -3455,10 +3622,23 @@ function PlanRevisionsTab({
   );
 }
 
+/** A spec criterion's chip tooltip: which phase claims it. */
+function coveredByTip(seq: number, name: string): string {
+  const phase = String(seq);
+  return t`covered by phase ${phase} — ${name}`;
+}
+
+/** A phase `**Covers:**` reference to a criterion id the spec never declared. */
+function unknownRefLabel(seq: number, cid: string): string {
+  const phase = String(seq);
+  return t`phase ${phase} covers ${cid}, which the spec never declares`;
+}
+
 /** Plan tab body — the plan README markdown. */
 function PlanReadme({ epic }: { epic: Epic }): JSX.Element {
+  const { t } = useLingui();
   const [readme] = usePlanDoc(epic.taskId, 'README.md', null);
-  if (readme === null) return <Loading label="readme…" />;
+  if (readme === null) return <Loading label={t`readme…`} />;
   return <Markdown text={readme} />;
 }
 
@@ -3469,6 +3649,7 @@ function PlanReadme({ epic }: { epic: Epic }): JSX.Element {
  * (speculation signal). The rail exists only when the scanner parsed criteria
  * rows (`epic.spec`); a spec.md without SC lines still renders as markdown. */
 function PlanSpec({ epic }: { epic: Epic }): JSX.Element {
+  const { t } = useLingui();
   const [doc] = usePlanDoc(epic.taskId, 'spec.md', null);
   const spec = epic.spec;
   // Tone the P{seq} chips like the phase rows do — the covering phase's own
@@ -3481,7 +3662,7 @@ function PlanSpec({ epic }: { epic: Epic }): JSX.Element {
   return (
     <>
       {spec !== null && (
-        <RailSection label="coverage">
+        <RailSection label={t`coverage`}>
           <ProgressBar done={spec.covered} total={spec.total} className="mb-2.5 max-w-[220px]" />
           <ul className="space-y-1.5">
             {spec.criteria.map((c) => (
@@ -3510,7 +3691,7 @@ function PlanSpec({ epic }: { epic: Epic }): JSX.Element {
                     return (
                       <span
                         key={seq}
-                        data-tip={p !== undefined ? `covered by phase ${String(seq)} — ${p.name}` : undefined}
+                        data-tip={p !== undefined ? coveredByTip(seq, p.name) : undefined}
                         className={`shrink-0 rounded border px-1.5 py-px font-mono text-[9.5px] ${cls}`}
                       >
                         P{seq}
@@ -3519,10 +3700,10 @@ function PlanSpec({ epic }: { epic: Epic }): JSX.Element {
                   })
                 ) : (
                   <span
-                    data-tip="no phase declares it covers this criterion"
+                    data-tip={t`no phase declares it covers this criterion`}
                     className="shrink-0 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
                   >
-                    uncovered
+                    <Trans>uncovered</Trans>
                   </span>
                 )}
               </li>
@@ -3535,7 +3716,7 @@ function PlanSpec({ epic }: { epic: Epic }): JSX.Element {
                   key={`${String(r.seq)}-${r.cid}`}
                   className="font-mono text-[10.5px] text-amber"
                 >
-                  phase {r.seq} covers {r.cid}, which the spec never declares
+                  {unknownRefLabel(r.seq, r.cid)}
                 </div>
               ))}
             </div>
@@ -3543,9 +3724,9 @@ function PlanSpec({ epic }: { epic: Epic }): JSX.Element {
         </RailSection>
       )}
       {doc === null ? (
-        <Loading label="spec…" />
+        <Loading label={t`spec…`} />
       ) : spec !== null ? (
-        <RailSection label="doc">
+        <RailSection label={t`doc`}>
           <Markdown text={doc} />
         </RailSection>
       ) : (
@@ -3569,6 +3750,7 @@ function PlanSummary({
   epic: Epic;
   resolvedSeqs: Set<number>;
 }): JSX.Element {
+  const { t } = useLingui();
   const [docs, setDocs] = useState<Record<string, string> | null>(null);
   const [summaryMd, setSummaryMd] = useState<string | null>(null);
 
@@ -3600,23 +3782,26 @@ function PlanSummary({
     };
   }, [epic.taskId, epic.hasSummary, epic.phases]);
 
-  if (docs === null) return <Loading label="summary…" />;
+  if (docs === null) return <Loading label={t`summary…`} />;
 
   return (
     <div className="space-y-4">
       {summaryMd !== null && (
-        <RailSection label="plan summary">
+        <RailSection label={t`plan summary`}>
           <Markdown text={summaryMd} />
         </RailSection>
       )}
       {epic.phases.map((p) => {
         const doc = docs[p.docRelPath] ?? '';
-        const execRecord = extractSection(doc, 'Execution record');
+        const execRecord = extractSection(doc, 'Execution record'); // i18n-ignore — the doc's own heading, matched in the markdown
         const status = phaseStatus(p, resolvedSeqs);
+        const seq = p.seq;
         return (
           <section key={p.id} className="rounded-lg border border-line bg-surface/40 px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <span className="shrink-0 font-mono text-[10px] text-ink-faint">Phase {p.seq}</span>
+              <span className="shrink-0 font-mono text-[10px] text-ink-faint">
+                <Trans>Phase {seq}</Trans>
+              </span>
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
                 {p.name}
               </span>
@@ -3631,7 +3816,7 @@ function PlanSummary({
             {p.completionReport !== null && (
               <div className="mt-2 border-t border-line pt-2">
                 <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-                  what was done
+                  <Trans>what was done</Trans>
                 </div>
                 <Markdown text={p.completionReport} />
               </div>
@@ -3639,14 +3824,14 @@ function PlanSummary({
             {execRecord !== null && (
               <div className="mt-2 border-t border-line pt-2">
                 <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-                  execution record
+                  <Trans>execution record</Trans>
                 </div>
                 <Markdown text={execRecord} />
               </div>
             )}
             {p.completionReport === null && execRecord === null && (
               <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-                no summary written for this phase
+                <Trans>no summary written for this phase</Trans>
               </div>
             )}
           </section>
@@ -3666,6 +3851,7 @@ function ProgressBar({
   total: number;
   className?: string;
 }): JSX.Element {
+  const { t } = useLingui();
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
     <div
@@ -3677,7 +3863,7 @@ function ProgressBar({
       aria-valuenow={pct}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={`${done} of ${total} checkboxes done`}
+      aria-label={t`${done} of ${total} checkboxes done`}
     >
       <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${String(pct)}%` }} />
     </div>
@@ -3697,16 +3883,18 @@ function ProgressBar({
  * The tooltip carries each continuation's message, so the operator can see what
  * the run was actually told rather than inferring it. */
 function ContinuationChip({ events }: { events: RunEvent[] | null }): JSX.Element | null {
+  const { t } = useLingui();
   // A daemon older than the [] guard sends null for an empty timeline.
   const continuations = (events ?? []).filter((e) => e.kind === 'continuation');
   if (continuations.length === 0) return null;
   const tip = continuations
     .map((e) => `#${e.attempt}: ${e.detail.split('\n')[0]}`)
     .join(' — ');
+  const resumed = String(continuations.length);
   return (
     <span
       className="inline-flex items-center gap-1 rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
-      data-tip={`the run ended its turn with criteria unticked and was resumed ${continuations.length}× — ${tip}`}
+      data-tip={t`the run ended its turn with criteria unticked and was resumed ${resumed}× — ${tip}`}
       onClick={(e) => e.stopPropagation()}
     >
       ↻ {continuations.length}

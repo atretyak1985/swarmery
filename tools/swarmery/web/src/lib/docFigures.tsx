@@ -12,6 +12,10 @@
 // it as ```figure <key>. An unregistered name renders an inline notice rather
 // than crashing the doc — a typo in a guide must not take the page down.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
+
 /* ----- shared primitives ----- */
 
 /** A boxed node used by the flow figures. */
@@ -161,55 +165,60 @@ function GroupHead({ text }: { text: string }): JSX.Element {
 }
 
 function BoardLanesFigure(): JSX.Element {
+  const { t } = useLingui();
   return (
-    <Figure caption="The board's three lanes" label="Mockup of the board's three lanes">
+    <Figure caption={t`The board's three lanes`} label={t`Mockup of the board's three lanes`}>
       <div className="flex flex-wrap gap-2">
-        <Lane title="Inbox" sub="triage">
+        <Lane title={t`Inbox`} sub="triage">
           <MiniCard
             id="T-9k2f1a · session"
-            title="Remove the dead flag in settings"
+            title={t`Remove the dead flag in settings`}
             chips={[
-              { text: '▶ Run', tone: 'act' },
-              { text: '✎ Plan', tone: 'act' },
-              { text: '✕ Dismiss' },
+              { text: t`▶ Run`, tone: 'act' },
+              { text: t`✎ Plan`, tone: 'act' },
+              { text: t`✕ Dismiss` },
             ]}
           />
           <MiniCard
             id="T-4mq88x · llm"
-            title="Add an index on sessions.cwd"
-            chips={[{ text: 'idle 9d · TTL 14d' }]}
+            title={t`Add an index on sessions.cwd`}
+            chips={[{ text: t`idle 9d · TTL 14d` }]}
           />
         </Lane>
-        <Lane title="Working" sub="todo + in_progress">
-          <GroupHead text="Queued — waiting for a slot" />
+        <Lane title={t`Working`} sub="todo + in_progress">
+          <GroupHead text={t`Queued — waiting for a slot`} />
           <MiniCard
             id="T-7pp3vd · plan-first"
-            title="Migrate routine config to v2"
-            chips={[{ text: 'prio high' }, { text: '↩ Inbox' }, { text: '❙❙ Pause' }]}
+            title={t`Migrate routine config to v2`}
+            chips={[{ text: t`prio high` }, { text: t`↩ Inbox` }, { text: t`❙❙ Pause` }]}
           />
-          <GroupHead text="Running" />
+          <GroupHead text={t`Running`} />
           <MiniCard
             id="T-3mg7xy · standard"
-            title="Fix the flaky worker test"
-            chips={[{ text: 'swarm/T-3mg7xy', tone: 'act' }, { text: '⌸ Terminal' }]}
+            title={t`Fix the flaky worker test`}
+            chips={[{ text: 'swarm/T-3mg7xy', tone: 'act' }, { text: t`⌸ Terminal` }]}
           />
         </Lane>
-        <Lane title="Review" sub="in_review">
+        <Lane title={t`Review`} sub="in_review">
           <MiniCard
             id="T-5rr0bn · review-heavy"
-            title="Retries for the BLE handshake"
+            title={t`Retries for the BLE handshake`}
             chips={[
-              { text: 'verify: pass', tone: 'good' },
-              { text: '⇧ Land', tone: 'act' },
-              { text: '↻ Re-run', tone: 'act' },
-              { text: '🗑 Discard', tone: 'bad' },
+              { text: t`verify: pass`, tone: 'good' },
+              { text: t`⇧ Land`, tone: 'act' },
+              { text: t`↻ Re-run`, tone: 'act' },
+              { text: t`🗑 Discard`, tone: 'bad' },
             ]}
           />
         </Lane>
       </div>
       <div className="mt-2 flex items-center justify-between rounded-lg border border-line-soft bg-surface2/40 px-2.5 py-1.5 font-mono text-[10px] text-ink-faint">
-        <span>▸ History</span>
-        <span>2 done · 237 archived</span>
+        <span>
+          <Trans>▸ History</Trans>
+        </span>
+        <span>
+          <Trans>2 done · 237 archived</Trans>
+        </span>
       </div>
     </Figure>
   );
@@ -218,34 +227,39 @@ function BoardLanesFigure(): JSX.Element {
 /* ----- card-lifecycle ----- */
 
 function CardLifecycleFigure(): JSX.Element {
+  const { t } = useLingui();
   return (
     <Figure
-      caption="A card's life: capture → queue → run → review → land"
-      label="Flow of a board card from capture to landing"
+      caption={t`A card's life: capture → queue → run → review → land`}
+      label={t`Flow of a board card from capture to landing`}
       note={
         <>
           <div>
-            <span className="font-mono text-[10px] text-ink-faint">branch ·</span> Dismiss, or a
-            14-day TTL in triage, archives a captured card instead.
+            <Trans>
+              <span className="font-mono text-[10px] text-ink-faint">branch ·</span> Dismiss, or a 14-day TTL in
+              triage, archives a captured card instead.
+            </Trans>
           </div>
           <div>
-            <span className="font-mono text-[10px] text-ink-faint">branch ·</span> From Review,
-            Re-run and a failed verify both send the card back to Queued; Discard archives it and
-            deletes the branch.
+            <Trans>
+              <span className="font-mono text-[10px] text-ink-faint">branch ·</span> From Review, Re-run and a
+              failed verify both send the card back to Queued; Discard archives it and deletes the branch.
+            </Trans>
           </div>
         </>
       }
     >
       <div className="flex min-w-max flex-wrap items-center gap-1">
-        <Node label="Captured" sub="session · llm · manual" />
-        <Arrow label="Run" />
-        <Node label="Queued" sub="todo" />
-        <Arrow label="9 gates" />
-        <Node label="Running" sub="swarm/T-id" tone="brand" />
-        <Arrow label="playbook end" />
-        <Node label="Review" sub="in_review" tone="amber" />
-        <Arrow label="Land" />
-        <Node label="Done" sub="push + PR" tone="green" />
+        {/* i18n-ignore: the sub line lists origin codes (session, llm, manual) */}
+        <Node label={t`Captured`} sub="session · llm · manual" />
+        <Arrow label={t`Run`} />
+        <Node label={t`Queued`} sub="todo" />
+        <Arrow label={t`9 gates`} />
+        <Node label={t`Running`} sub="swarm/T-id" tone="brand" />
+        <Arrow label={t`playbook end`} />
+        <Node label={t`Review`} sub="in_review" tone="amber" />
+        <Arrow label={t`Land`} />
+        <Node label={t`Done`} sub="push + PR" tone="green" />
       </div>
     </Figure>
   );
@@ -259,29 +273,32 @@ function CardLifecycleFigure(): JSX.Element {
  * is a hand-written English restatement of that sequence — nothing enforces the
  * match, so reordering, adding or removing a gate there means editing this list
  * (and docs/guides/guide-plans.md, which narrates the same nine). */
-const GATES: string[] = [
-  'The global dispatch switch, and the dispatcher pause',
-  'Projects on the locked-down preset — refused, stamped into dispatchError',
-  'A pause on this specific project',
-  'The concurrent-run limit (default 2)',
-  'Single-flight: the same card never starts twice',
-  'Single-flight per worktree: a fix card shares its root card’s tree',
-  'The worktree limit (default 4)',
-  'Dependencies: each must be done or archived, and none may carry a fail verdict',
-  'File-scope overlap with the project’s other live cards (an empty scope conflicts with everything)',
+const GATES: MessageDescriptor[] = [
+  msg`The global dispatch switch, and the dispatcher pause`,
+  msg`Projects on the locked-down preset — refused, stamped into dispatchError`,
+  msg`A pause on this specific project`,
+  msg`The concurrent-run limit (default 2)`,
+  msg`Single-flight: the same card never starts twice`,
+  msg`Single-flight per worktree: a fix card shares its root card’s tree`,
+  msg`The worktree limit (default 4)`,
+  msg`Dependencies: each must be done or archived, and none may carry a fail verdict`,
+  msg`File-scope overlap with the project’s other live cards (an empty scope conflicts with everything)`,
 ];
 
 function DispatchGatesFigure(): JSX.Element {
+  const { t, i18n } = useLingui();
   return (
     <Figure
-      caption="Admission gates, in the order the dispatcher applies them"
-      label="The nine dispatcher admission gates in order"
+      caption={t`Admission gates, in the order the dispatcher applies them`}
+      label={t`The nine dispatcher admission gates in order`}
       note={
         <div>
-          Clear all nine and the card gets an isolated worktree on{' '}
-          <span className="font-mono text-[10.5px] text-ink-3">swarm/&lt;T-id&gt;</span>, cut from
-          the tip of whatever branch the main checkout is on — that SHA is persisted, so
-          verification and the review diff both stand on it.
+          <Trans>
+            Clear all nine and the card gets an isolated worktree on{' '}
+            <span className="font-mono text-[10.5px] text-ink-3">swarm/&lt;T-id&gt;</span>, cut from the tip of
+            whatever branch the main checkout is on — that SHA is persisted, so verification and the review
+            diff both stand on it.
+          </Trans>
         </div>
       }
     >
@@ -291,7 +308,7 @@ function DispatchGatesFigure(): JSX.Element {
             <span className="mt-px shrink-0 rounded border border-line-strong bg-surface2 px-1.5 py-px font-mono text-[10px] tabular-nums text-brand">
               {String(i + 1).padStart(2, '0')}
             </span>
-            <span className="text-[12px] leading-snug text-ink-2">{gate}</span>
+            <span className="text-[12px] leading-snug text-ink-2">{i18n._(gate)}</span>
           </li>
         ))}
       </ol>
@@ -312,40 +329,48 @@ function PhaseBox({
 }): JSX.Element {
   return (
     <div className="min-w-[150px] flex-1 rounded-lg border border-line-strong bg-surface2 px-2.5 py-2">
-      <div className="font-mono text-[9.5px] text-brand">phase {n}</div>
+      <div className="font-mono text-[9.5px] text-brand">
+        <Trans>phase {n}</Trans>
+      </div>
       <div className="mt-0.5 text-[12px] leading-snug text-ink">{title}</div>
-      <div className="mt-1 font-mono text-[9.5px] text-ink-faint">depends on: {dep}</div>
+      <div className="mt-1 font-mono text-[9.5px] text-ink-faint">
+        <Trans>depends on: {dep}</Trans>
+      </div>
     </div>
   );
 }
 
 function PlanDagFigure(): JSX.Element {
+  const { t } = useLingui();
   return (
     <Figure
-      caption="A plan is a README plus a phase DAG"
-      label="Plan structure: README over a graph of phase documents"
+      caption={t`A plan is a README plus a phase DAG`}
+      label={t`Plan structure: README over a graph of phase documents`}
       note={
         <div>
-          Phases with no edge between them run in parallel; each phase document carries its own
-          copy-paste agent prompt and acceptance criteria, so it is executable standalone.
+          <Trans>
+            Phases with no edge between them run in parallel; each phase document carries its own copy-paste
+            agent prompt and acceptance criteria, so it is executable standalone.
+          </Trans>
         </div>
       }
     >
       <div className="rounded-lg border border-brand/40 bg-brand/8 px-2.5 py-2">
+        {/* i18n-ignore: a file name */}
         <div className="text-[12px] font-medium text-ink">README.md</div>
         <div className="mt-0.5 font-mono text-[9.5px] text-ink-faint">
-          objective · sequencing table · risks · definition of done
+          <Trans>objective · sequencing table · risks · definition of done</Trans>
         </div>
       </div>
       <div className="py-1 text-center text-[13px] leading-none text-ink-faint">↓</div>
       <div className="flex flex-wrap gap-2">
-        <PhaseBox n="1" title="Schema + migration" dep="—" />
-        <PhaseBox n="2" title="API endpoints" dep="—" />
+        <PhaseBox n="1" title={t`Schema + migration`} dep="—" />
+        <PhaseBox n="2" title={t`API endpoints`} dep="—" />
       </div>
       <div className="py-1 text-center text-[13px] leading-none text-ink-faint">↓</div>
       <div className="flex flex-wrap gap-2">
-        <PhaseBox n="3" title="UI screen" dep="1, 2" />
-        <PhaseBox n="4" title="Docs + rollout" dep="1, 2" />
+        <PhaseBox n="3" title={t`UI screen`} dep="1, 2" />
+        <PhaseBox n="4" title={t`Docs + rollout`} dep="1, 2" />
       </div>
     </Figure>
   );
@@ -374,7 +399,7 @@ export function DocFigure({ name }: { name: string }): JSX.Element {
   if (F === undefined) {
     return (
       <div className="my-2 rounded border border-amber/40 bg-amber/8 px-3 py-2 font-mono text-[11px] text-ink-dim">
-        unknown figure: {name}
+        <Trans>unknown figure: {name}</Trans>
       </div>
     );
   }

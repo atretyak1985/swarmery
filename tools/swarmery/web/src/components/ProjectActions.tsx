@@ -3,6 +3,9 @@
 // detail header so the two surfaces behave identically. Also exports the plugin
 // state badge and the detach-availability rule.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { Project } from '../api/types';
 import { archiveProject, patchProject, restoreProject } from '../api';
@@ -11,12 +14,13 @@ import { ExplainPair } from './Explain';
 import { DetachModal } from './DetachModal';
 import { AttachModal } from './AttachModal';
 
-/** Why the Detach action is unavailable for a project, or null when allowed. */
-export function detachBlockReason(project: Project): string | null {
+/** Why the Detach action is unavailable for a project, or null when allowed.
+ * A message descriptor: the caller translates it where it renders. */
+export function detachBlockReason(project: Project): MessageDescriptor | null {
   const p = project.plugin;
-  if (p === null || !p.managed) return 'plugin is not enabled for this project';
+  if (p === null || !p.managed) return msg`plugin is not enabled for this project`;
   if (!p.underOnboardRoot) {
-    return 'project is outside SWARMERY_ONBOARD_ROOTS — detach is fenced to the allow-list';
+    return msg`project is outside SWARMERY_ONBOARD_ROOTS — detach is fenced to the allow-list`;
   }
   return null;
 }
@@ -37,20 +41,20 @@ export function PluginBadge({ project }: { project: Project }): JSX.Element {
   if (p === null) {
     return (
       <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-faint">
-        telemetry-only
+        <Trans>telemetry-only</Trans>
       </span>
     );
   }
   if (!p.managed) {
     return (
       <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-dim">
-        not enabled
+        <Trans>not enabled</Trans>
       </span>
     );
   }
   return (
     <span className="rounded-full border border-green/40 bg-green/10 px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-green">
-      managed
+      <Trans>managed</Trans>
     </span>
   );
 }
@@ -65,6 +69,7 @@ function TagEditor({
   onChanged: () => void;
   onClose: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [value, setValue] = useState(project.tags.join(', '));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,8 +77,8 @@ function TagEditor({
   const save = (): void => {
     const tags = value
       .split(',')
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t !== '');
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag !== '');
     setBusy(true);
     setError(null);
     patchProject(project.id, { tags })
@@ -85,10 +90,12 @@ function TagEditor({
       .finally(() => setBusy(false));
   };
 
+  const projectName = project.name ?? project.slug;
+
   return (
     <div className="absolute top-full right-0 z-20 mt-1.5 w-[260px] rounded-[11px] border border-line-strong bg-field p-3 shadow-[0_16px_34px_rgba(0,0,0,0.5)]">
       <div className="font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-        tags · comma-separated
+        <Trans>tags · comma-separated</Trans>
       </div>
       <input
         type="text"
@@ -98,8 +105,8 @@ function TagEditor({
           if (e.key === 'Enter') save();
           if (e.key === 'Escape') onClose();
         }}
-        placeholder="billing, infra"
-        aria-label={`tags for ${project.name ?? project.slug}`}
+        placeholder={t`billing, infra`}
+        aria-label={t`tags for ${projectName}`}
         autoFocus
         className="mt-2 w-full rounded-[9px] border border-line-strong bg-surface px-2.5 py-[6px] font-mono text-[11.5px] text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-ink-dim"
       />
@@ -110,7 +117,7 @@ function TagEditor({
           onClick={onClose}
           className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2"
         >
-          cancel
+          <Trans>cancel</Trans>
         </button>
         <button
           type="button"
@@ -118,7 +125,7 @@ function TagEditor({
           disabled={busy}
           className="rounded-lg border border-brand/40 bg-brand/10 px-2.5 py-1 font-mono text-[10.5px] text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
         >
-          save
+          <Trans>save</Trans>
         </button>
       </div>
     </div>
@@ -133,6 +140,7 @@ export function ProjectActions({
   /** Called after a successful archive / restore / detach so the caller reloads. */
   onChanged: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [confirm, setConfirm] = useState<'archive' | 'restore' | null>(null);
   const [showDetach, setShowDetach] = useState(false);
   const [showTags, setShowTags] = useState(false);
@@ -140,6 +148,7 @@ export function ProjectActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const blocked = detachBlockReason(project);
+  const projectName = project.name ?? project.slug;
 
   async function run(fn: () => Promise<void>): Promise<void> {
     setBusy(true);
@@ -165,7 +174,7 @@ export function ProjectActions({
           onClick={() => setConfirm('restore')}
           className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2"
         >
-          restore
+          <Trans>restore</Trans>
         </button>
       ) : (
         <>
@@ -173,10 +182,10 @@ export function ProjectActions({
             type="button"
             onClick={() => setShowTags((v) => !v)}
             aria-expanded={showTags}
-            data-tip="edit project tags"
+            data-tip={t`edit project tags`}
             className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2"
           >
-            tags
+            <Trans>tags</Trans>
           </button>
           {/* Attach and detach are one concept and one slot — exactly one of the
               two buttons renders — so the explainer is grouped with the pair
@@ -187,30 +196,30 @@ export function ProjectActions({
               <button
                 type="button"
                 onClick={() => setShowAttach(true)}
-                data-tip="re-enable swarmery in .claude/settings.json"
+                data-tip={t`re-enable swarmery in .claude/settings.json`}
                 className="rounded-lg border border-green/40 bg-green/10 px-2.5 py-1 font-mono text-[10.5px] text-green transition-colors hover:bg-green/20"
               >
-                attach
+                <Trans>attach</Trans>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowDetach(true)}
                 disabled={blocked !== null}
-                data-tip={blocked ?? 'remove swarmery from .claude/settings.json'}
+                data-tip={blocked !== null ? i18n._(blocked) : t`remove swarmery from .claude/settings.json`}
                 className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                detach
+                <Trans>detach</Trans>
               </button>
             )}
           </ExplainPair>
           <button
             type="button"
             onClick={() => setConfirm('archive')}
-            data-tip="hide from the projects list (reversible)"
+            data-tip={t`hide from the projects list (reversible)`}
             className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2"
           >
-            archive
+            <Trans>archive</Trans>
           </button>
         </>
       )}
@@ -225,27 +234,31 @@ export function ProjectActions({
 
       <ConfirmDialog
         open={confirm === 'archive'}
-        title="Archive project"
-        confirmLabel="archive"
+        title={t`Archive project`}
+        confirmLabel={t`archive`}
         busy={busy}
         onCancel={() => setConfirm(null)}
         onConfirm={() => void run(() => archiveProject(project.id))}
       >
-        Hide <span className="font-mono text-ink">{project.name ?? project.slug}</span> from the projects list.
-        Nothing is deleted — its sessions and transcripts are kept, and you can restore it from
-        “show archived”.
+        <Trans>
+          Hide <span className="font-mono text-ink">{projectName}</span> from the projects list.
+          Nothing is deleted — its sessions and transcripts are kept, and you can restore it from
+          “show archived”.
+        </Trans>
       </ConfirmDialog>
 
       <ConfirmDialog
         open={confirm === 'restore'}
-        title="Restore project"
-        confirmLabel="restore"
+        title={t`Restore project`}
+        confirmLabel={t`restore`}
         busy={busy}
         onCancel={() => setConfirm(null)}
         onConfirm={() => void run(() => restoreProject(project.id))}
       >
-        Bring <span className="font-mono text-ink">{project.name ?? project.slug}</span> back into the default
-        projects list.
+        <Trans>
+          Bring <span className="font-mono text-ink">{projectName}</span> back into the default
+          projects list.
+        </Trans>
       </ConfirmDialog>
 
       {showDetach && (

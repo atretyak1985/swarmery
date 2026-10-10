@@ -10,6 +10,8 @@
 //   • an Apply 409 renders the server's conflict rows (doc + drift diff) with
 //     a Reload action instead of a bare error string.
 
+import { plural, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { PlanRevision, RevisionAction, RevisionConflict } from '../../api/types';
@@ -27,9 +29,15 @@ const ACTION_CHIP: Record<RevisionAction, string> = {
   delete: 'border-red/40 bg-red/10 text-red',
 };
 
-export const ORIGIN_LABEL: Record<PlanRevision['origin'], string> = {
-  operator_revise: 'Operator',
-  phase_diagnosis: 'From phase diagnosis',
+/** The origin chip's text. Getters, so every read is in the active locale
+ * (Plans.tsx reads this map too). */
+export const ORIGIN_LABEL: Readonly<Record<PlanRevision['origin'], string>> = {
+  get operator_revise(): string {
+    return t`Operator`;
+  },
+  get phase_diagnosis(): string {
+    return t`From phase diagnosis`;
+  },
 };
 
 export function RevisionReview({
@@ -40,6 +48,7 @@ export function RevisionReview({
   /** A decision landed (applied or rejected) — the caller refetches its list. */
   onDecided: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const sessionHref = useSessionHref();
   const [rev, setRev] = useState<PlanRevision | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +74,14 @@ export function RevisionReview({
   }, [load]);
 
   if (error !== null) return <ErrorBox message={error} onRetry={load} />;
-  if (rev === null) return <Loading label="revision…" />;
+  if (rev === null) return <Loading label={t`revision…`} />;
 
   const anyStale = rev.files.some((f) => f.stale === true);
   const decided = rev.status !== 'staged';
+  const stagedAt = fmtDateTime(rev.createdAt);
+  const decidedBy = rev.decidedBy;
+  const docCount = rev.files.length;
+  const docs = rev.files.map((f) => f.docPath).join(', ');
 
   const apply = (): void => {
     setBusy(true);
@@ -120,14 +133,14 @@ export function RevisionReview({
             {ORIGIN_LABEL[rev.origin]}
           </span>
           <span className="font-mono text-[10px] text-ink-faint">
-            staged {fmtDateTime(rev.createdAt)}
+            <Trans>staged {stagedAt}</Trans>
           </span>
           {rev.sessionUuid !== undefined && rev.sessionUuid !== '' && (
             <Link
               to={sessionHref(rev.sessionUuid)}
               className="font-mono text-[10px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
             >
-              open session →
+              <Trans>open session →</Trans>
             </Link>
           )}
         </div>
@@ -150,7 +163,7 @@ export function RevisionReview({
       {conflicts !== null && (
         <div className="rounded-lg border border-amber/40 bg-amber/5 px-3 py-2.5">
           <div className="font-mono text-[11px] font-semibold text-amber">
-            content changed on disk since staging — apply refused, nothing was written
+            <Trans>content changed on disk since staging — apply refused, nothing was written</Trans>
           </div>
           <ul className="mt-2 space-y-2">
             {conflicts.map((c) => (
@@ -165,7 +178,7 @@ export function RevisionReview({
             onClick={load}
             className="mt-1 rounded-md border border-line-strong bg-surface2 px-2.5 py-1 font-mono text-[10.5px] text-ink transition-colors hover:bg-surface2/70"
           >
-            Reload review
+            <Trans>Reload review</Trans>
           </button>
         </div>
       )}
@@ -190,9 +203,9 @@ export function RevisionReview({
               {f.stale === true && (
                 <span
                   className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber"
-                  data-tip="the live file changed since this revision was staged — reload before applying"
+                  data-tip={t`the live file changed since this revision was staged — reload before applying`}
                 >
-                  stale
+                  <Trans>stale</Trans>
                 </span>
               )}
             </summary>
@@ -200,7 +213,9 @@ export function RevisionReview({
               {f.diff !== undefined && f.diff !== '' ? (
                 <DiffBlock diff={f.diff} />
               ) : (
-                <div className="py-1 font-mono text-[10.5px] text-ink-faint">no content change</div>
+                <div className="py-1 font-mono text-[10.5px] text-ink-faint">
+                  <Trans>no content change</Trans>
+                </div>
               )}
             </div>
           </details>
@@ -212,7 +227,7 @@ export function RevisionReview({
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
           {anyStale && (
             <span className="mr-auto font-mono text-[10.5px] text-amber">
-              a file changed since staging — reload before applying
+              <Trans>a file changed since staging — reload before applying</Trans>
             </span>
           )}
           <button
@@ -221,7 +236,7 @@ export function RevisionReview({
             disabled={busy}
             className="rounded-lg border border-line px-3 py-1.5 font-mono text-[11px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink disabled:opacity-50"
           >
-            Reload
+            <Trans>Reload</Trans>
           </button>
           <button
             type="button"
@@ -229,7 +244,7 @@ export function RevisionReview({
             disabled={busy}
             className="rounded-lg border border-red/40 bg-red/5 px-3.5 py-1.5 font-mono text-[11.5px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
           >
-            Reject
+            <Trans>Reject</Trans>
           </button>
           <button
             type="button"
@@ -237,29 +252,32 @@ export function RevisionReview({
             disabled={busy || anyStale}
             data-tip={
               anyStale
-                ? 'a file is stale — reload the review first'
-                : 'write the staged changes into the plan docs'
+                ? t`a file is stale — reload the review first`
+                : t`write the staged changes into the plan docs`
             }
             className="rounded-lg border border-green/45 bg-green/12 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Apply revision
+            <Trans>Apply revision</Trans>
           </button>
         </div>
       )}
       {decided && (
         <div className="border-t border-line pt-3 font-mono text-[11px] text-ink-dim">
           {rev.status} {rev.decidedAt !== undefined ? `· ${fmtDateTime(rev.decidedAt)}` : ''}
-          {rev.decidedBy !== undefined ? ` · by ${rev.decidedBy}` : ''}
+          {decidedBy !== undefined ? ` · ${t`by ${decidedBy}`}` : ''}
         </div>
       )}
 
       {confirmOpen && (
         <DecisionDialog
-          title="Apply this revision?"
-          body={`${String(rev.files.length)} plan doc${rev.files.length === 1 ? '' : 's'} will change on disk: ${rev.files
-            .map((f) => f.docPath)
-            .join(', ')}. This is the one irreversible step.`}
-          confirmLabel={busy ? 'applying…' : 'Apply'}
+          title={t`Apply this revision?`}
+          body={plural(docCount, {
+            one: `# plan doc will change on disk: ${docs}. This is the one irreversible step.`,
+            few: `# plan docs will change on disk: ${docs}. This is the one irreversible step.`,
+            many: `# plan docs will change on disk: ${docs}. This is the one irreversible step.`,
+            other: `# plan docs will change on disk: ${docs}. This is the one irreversible step.`,
+          })}
+          confirmLabel={busy ? t`applying…` : t`Apply`}
           confirmCls="border-green/45 bg-green/12 text-green hover:bg-green/20"
           busy={busy}
           onClose={() => setConfirmOpen(false)}
@@ -268,9 +286,9 @@ export function RevisionReview({
       )}
       {rejectOpen && (
         <DecisionDialog
-          title="Reject this revision?"
-          body="No plan file changes. The note (optional) is recorded on the revision."
-          confirmLabel={busy ? 'rejecting…' : 'Reject'}
+          title={t`Reject this revision?`}
+          body={t`No plan file changes. The note (optional) is recorded on the revision.`}
+          confirmLabel={busy ? t`rejecting…` : t`Reject`}
           confirmCls="border-red/40 bg-red/10 text-red hover:bg-red/20"
           busy={busy}
           withNote
@@ -305,6 +323,7 @@ function DecisionDialog({
   onClose: () => void;
   onConfirm: (note: string) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [note, setNote] = useState('');
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const primaryRef = useRef<HTMLButtonElement | null>(null);
@@ -385,7 +404,7 @@ function DecisionDialog({
               className="mt-3 mb-1 block font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase"
               htmlFor="revision-reject-note"
             >
-              note (optional)
+              <Trans>note (optional)</Trans>
             </label>
             <textarea
               ref={noteRef}
@@ -394,7 +413,7 @@ function DecisionDialog({
               onChange={(e) => setNote(e.target.value)}
               rows={3}
               disabled={busy}
-              placeholder="Why this proposal does not fit…"
+              placeholder={t`Why this proposal does not fit…`}
               className="w-full resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[12.5px] leading-relaxed text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-brand/50 disabled:opacity-50"
             />
           </>
@@ -406,7 +425,7 @@ function DecisionDialog({
             disabled={busy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
-            Cancel
+            <Trans>Cancel</Trans>
           </button>
           <button
             ref={primaryRef}
@@ -422,11 +441,11 @@ function DecisionDialog({
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title="Discard note?"
-        confirmLabel="discard"
+        title={t`Discard note?`}
+        confirmLabel={t`discard`}
         danger
       >
-        The note you typed will be lost.
+        <Trans>The note you typed will be lost.</Trans>
       </ConfirmDialog>
     </div>
   );

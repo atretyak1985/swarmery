@@ -8,6 +8,7 @@
 // nothing here branches on which provider was picked (SC-11; enforced by
 // web/scripts/check-no-provider-branching.sh).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useId, useState } from 'react';
 import { putProjectVcsProvider } from '../api';
 import type { VcsProviderAnswer } from '../api/types';
@@ -21,7 +22,9 @@ export interface VcsProviderAskProps {
 }
 
 const CHOICES: ReadonlyArray<{ readonly value: VcsProviderAnswer; readonly label: string }> = [
+  // i18n-ignore — product names, never translated
   { value: 'github', label: 'GitHub' },
+  // i18n-ignore — product names, never translated
   { value: 'gitlab', label: 'GitLab' },
 ];
 
@@ -29,6 +32,7 @@ const BTN =
   'rounded-md border border-line px-2 py-0.5 font-mono text-[10.5px] text-ink-2 transition-colors hover:bg-surface2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink-dim disabled:cursor-not-allowed disabled:opacity-50';
 
 export function VcsProviderAsk({ projectId, host, onSaved }: VcsProviderAskProps): JSX.Element {
+  const { t } = useLingui();
   const [saving, setSaving] = useState<VcsProviderAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const questionId = useId();
@@ -49,7 +53,7 @@ export function VcsProviderAsk({ projectId, host, onSaved }: VcsProviderAskProps
 
   return (
     <section
-      aria-label="Code host"
+      aria-label={t`Code host`}
       data-testid="vcs-provider-ask"
       className="border-b border-line bg-surface px-4 py-2 font-mono text-[11px] text-ink-2 desk:px-6"
     >
@@ -61,7 +65,13 @@ export function VcsProviderAsk({ projectId, host, onSaved }: VcsProviderAskProps
         className="flex flex-wrap items-center gap-x-3 gap-y-1.5"
       >
         <span id={questionId} className="font-semibold">
-          Which service hosts {host === '' ? 'this repository' : <code>{host}</code>}?
+          {host === '' ? (
+            <Trans>Which service hosts this repository?</Trans>
+          ) : (
+            <Trans>
+              Which service hosts <code>{host}</code>?
+            </Trans>
+          )}
         </span>
         <span className="ml-auto flex items-center gap-2">
           {CHOICES.map((c) => (
@@ -82,7 +92,7 @@ export function VcsProviderAsk({ projectId, host, onSaved }: VcsProviderAskProps
       </div>
       {error !== null && (
         <p id={errorId} role="alert" className="mt-1.5 text-red">
-          Could not save the answer: {error}
+          <Trans>Could not save the answer: {error}</Trans>
         </p>
       )}
     </section>

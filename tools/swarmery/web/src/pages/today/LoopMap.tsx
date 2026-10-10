@@ -3,6 +3,7 @@
 // on the operator turns amber (border, label, number, link). Five columns from
 // `desk` up; one column below it.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import { fmtCount, type Stage } from './loopModel';
 
@@ -50,17 +51,22 @@ function StageCard({ stage }: { stage: Stage }): JSX.Element {
 }
 
 export function LoopMap({ stages }: { stages: readonly Stage[] }): JSX.Element {
+  const { t } = useLingui();
   return (
-    <section aria-label="The loop, this week" data-testid="loop-map">
+    <section aria-label={t`The loop, this week`} data-testid="loop-map">
       <div className="mt-[26px] grid grid-cols-1 gap-2 desk:grid-cols-5 desk:gap-0">
         {stages.map((s) => (
           <StageCard key={s.id} stage={s} />
         ))}
       </div>
       <div className="mt-3 flex items-center gap-2.5 font-mono text-[10.5px] text-ink-faint">
-        <span>data flows →</span>
+        <span>
+          <Trans>data flows →</Trans>
+        </span>
         <span aria-hidden className="h-px flex-1 bg-linear-to-r from-line via-amber via-70% to-line" />
-        <span className="hidden desk:inline">and the loop closes when Change lowers next week's Measure</span>
+        <span className="hidden desk:inline">
+          <Trans>and the loop closes when Change lowers next week's Measure</Trans>
+        </span>
       </div>
     </section>
   );

@@ -16,6 +16,7 @@
 // A planning conflict is a state too, not an exception: the 409 carries the
 // active session, so the card links to it rather than printing a status code.
 
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -49,6 +50,7 @@ function elapsed(fromISO: string, nowMs: number): string {
 }
 
 export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Element {
+  const { t } = useLingui();
   const { scope, projects, scopeProject } = useScope();
   const [analysis, setAnalysis] = useState<RetroAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
@@ -142,18 +144,19 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
   );
 
   const status = analysis?.status ?? 'idle';
+  const runningFor = analysis !== null ? elapsed(analysis.createdAt, nowMs) : '';
 
   return (
     <section className="mt-[18px] rounded-[14px] border border-line bg-surface px-4 py-3.5">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-          Improve the system
+          <Trans>Improve the system</Trans>
         </span>
         <Explain id="retro-improve" />
         {analysis !== null && (
           <span className="font-mono text-[10px] text-ink-faint">
             {analysis.windowFrom} → {analysis.windowTo}
-            {analysis.scope === '' ? ' · whole fleet' : ` · ${analysis.scope}`}
+            {analysis.scope === '' ? t` · whole fleet` : ` · ${analysis.scope}`}
           </span>
         )}
       </div>
@@ -166,12 +169,14 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             onClick={onStart}
             className="rounded-[7px] border border-line-strong px-2.5 py-[4px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
           >
-            {busy ? 'starting…' : 'Improve'}
+            {busy ? t`starting…` : t`Improve`}
           </button>
           <p className="text-[11.5px] leading-relaxed text-ink-dim">
-            Reads this whole window, has an agent write what hurts and what to change — every
-            claim citing the evidence it came from. Nothing is written anywhere until you accept
-            it; only then can it become a plan.
+            <Trans>
+              Reads this whole window, has an agent write what hurts and what to change — every
+              claim citing the evidence it came from. Nothing is written anywhere until you accept
+              it; only then can it become a plan.
+            </Trans>
           </p>
         </div>
       ) : null}
@@ -183,10 +188,10 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             disabled
             className="rounded-[7px] border border-line px-2.5 py-[4px] font-mono text-[10.5px] text-ink-faint opacity-50"
           >
-            analysing…
+            <Trans>analysing…</Trans>
           </button>
           <span className="font-mono text-[11px] text-ink-dim">
-            the improver is reading the report · {elapsed(analysis.createdAt, nowMs)}
+            <Trans>the improver is reading the report · {runningFor}</Trans>
           </span>
         </div>
       )}
@@ -196,7 +201,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
           {/* The row's own error, verbatim. Never "something went wrong": the
               reason is usually actionable (a refused citation, a stderr tail). */}
           <pre className="overflow-x-auto rounded-[8px] border border-red/30 bg-red/5 px-2.5 py-2 font-mono text-[11px] whitespace-pre-wrap text-red">
-            {analysis.error === '' ? 'the analysis failed without a recorded reason' : analysis.error}
+            {analysis.error === '' ? t`the analysis failed without a recorded reason` : analysis.error}
           </pre>
           <div>
             <button
@@ -205,7 +210,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
               onClick={onStart}
               className="rounded-[7px] border border-line-strong px-2.5 py-[4px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
             >
-              {busy ? 'starting…' : 'Try again'}
+              {busy ? t`starting…` : t`Try again`}
             </button>
           </div>
         </div>
@@ -215,7 +220,13 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
         analysis !== null && (
           <>
             <div className="mt-2 font-mono text-[10px] text-ink-faint">
-              {analysis.citations} evidence citation{analysis.citations === 1 ? '' : 's'}
+              <Plural
+                value={analysis.citations}
+                one="# evidence citation"
+                few="# evidence citations"
+                many="# evidence citations"
+                other="# evidence citations"
+              />
             </div>
             <div className="mt-2 max-w-[90ch] text-[12.5px] leading-relaxed">
               <Markdown text={analysis.markdown} />
@@ -235,7 +246,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             }}
             className="rounded-[7px] border border-line-strong px-2.5 py-[4px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-green/40 hover:text-green disabled:opacity-50"
           >
-            Accept
+            <Trans>Accept</Trans>
           </button>
           <button
             type="button"
@@ -245,7 +256,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             }}
             className="rounded-[7px] border border-line px-2.5 py-[4px] font-mono text-[10.5px] text-ink-faint transition-colors hover:border-red/40 hover:text-red disabled:opacity-50"
           >
-            Dismiss
+            <Trans>Dismiss</Trans>
           </button>
         </div>
       )}
@@ -253,7 +264,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
       {status === 'accepted' && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <label className="font-mono text-[10.5px] text-ink-faint" htmlFor="retro-plan-project">
-            plan in
+            <Trans>plan in</Trans>
           </label>
           <select
             id="retro-plan-project"
@@ -264,7 +275,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             }}
             className="rounded-[7px] border border-line bg-surface px-2 py-[3px] font-mono text-[10.5px] text-ink-dim"
           >
-            <option value="">choose a project…</option>
+            <option value="">{t`choose a project…`}</option>
             {projects.map((p) => (
               <option key={p.id} value={String(p.id)}>
                 {p.name ?? p.slug}
@@ -275,15 +286,17 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             type="button"
             disabled={busy || target === null}
             onClick={onPlan}
-            title={target === null ? 'choose a project to plan in' : undefined}
+            title={target === null ? t`choose a project to plan in` : undefined}
             className="rounded-[7px] border border-line-strong px-2.5 py-[4px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
           >
-            {busy ? 'starting…' : 'Create a plan'}
+            {busy ? t`starting…` : t`Create a plan`}
           </button>
           {target === null && (
             <span className="font-mono text-[10.5px] text-ink-faint">
-              choose a project — the changes land in the agent system’s repository, not
-              necessarily the one that produced the evidence
+              <Trans>
+                choose a project — the changes land in the agent system’s repository, not
+                necessarily the one that produced the evidence
+              </Trans>
             </span>
           )}
         </div>
@@ -295,7 +308,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
             to={`/p/${plannedSlug}/planning`}
             className="font-mono text-[11px] text-brand hover:underline"
           >
-            open the planning session →
+            <Trans>open the planning session →</Trans>
           </Link>
         </div>
       )}
@@ -309,7 +322,7 @@ export function RetroImproveCard({ range }: { range: AnalyticsRange }): JSX.Elem
               to={`/p/${conflict.projectSlug}/planning`}
               className="font-mono text-[11px] text-brand hover:underline"
             >
-              open the active session →
+              <Trans>open the active session →</Trans>
             </Link>
           )}
         </div>

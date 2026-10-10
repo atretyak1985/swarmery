@@ -19,6 +19,9 @@
 // the remainder becomes the title; an unknown name is left in the text so
 // nothing is silently dropped.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRosterRow, BoardColumn, BoardTask, TaskPriority } from '../api/types';
 import { createBoardTask } from '../api';
@@ -32,9 +35,9 @@ import { ChipEditor, FieldLabel } from './TaskFields';
 /** Columns a fresh card may land in: park it, or hand it to the dispatcher. */
 const TARGET_COLUMNS: BoardColumn[] = ['triage', 'todo'];
 
-const COLUMN_HINT: Record<string, string> = {
-  triage: 'parked — dispatch it later from the board',
-  todo: 'start immediately — the dispatcher picks it up',
+const COLUMN_HINT: Record<string, MessageDescriptor> = {
+  triage: msg`parked — dispatch it later from the board`,
+  todo: msg`start immediately — the dispatcher picks it up`,
 };
 
 /**
@@ -73,6 +76,7 @@ export function NewTaskModal({
   onCreated: (task: BoardTask) => void;
   onClose: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [title, setTitle] = useState(initialText.trim());
   const [prompt, setPrompt] = useState('');
   const [agent, setAgent] = useState('');
@@ -118,16 +122,21 @@ export function NewTaskModal({
   // Which advanced values are no longer at their default. Named, not counted:
   // the disclosure is the only trace a collapsed override leaves, and "3 set"
   // would tell the operator that something is off without saying what.
+  const agentOverride = agent !== '';
   const overrides: string[] = [
-    ...(agent !== '' ? ['agent'] : []),
-    ...(priority !== 'normal' ? ['priority'] : []),
-    ...(model !== 'default' ? ['model'] : []),
-    ...(playbook !== '' ? ['playbook'] : []),
-    ...(fileScope.length > 0 ? ['file scope'] : []),
-    ...(dependencies.length > 0 ? ['dependencies'] : []),
-    ...(labels.length > 0 ? ['labels'] : []),
-    ...(column !== 'triage' ? ['column'] : []),
+    ...(agentOverride ? [t`agent`] : []),
+    ...(priority !== 'normal' ? [t`priority`] : []),
+    ...(model !== 'default' ? [t`model`] : []),
+    ...(playbook !== '' ? [t`playbook`] : []),
+    ...(fileScope.length > 0 ? [t`file scope`] : []),
+    ...(dependencies.length > 0 ? [t`dependencies`] : []),
+    ...(labels.length > 0 ? [t`labels`] : []),
+    ...(column !== 'triage' ? [t`column`] : []),
   ];
+
+  const overrideList = overrides.join(', ');
+  // The lane the card will land in, as the board names it (boardModel labels).
+  const lane = i18n._(LANE_TITLES[laneOf(column) ?? 'inbox']);
 
   // Anything the operator would have to retype: a title, a prompt, or an
   // advanced override that differs from what the form opened with (a deep-link
@@ -138,7 +147,9 @@ export function NewTaskModal({
     title.trim() !== seed.title ||
     prompt.trim() !== '' ||
     agent !== seed.agent ||
-    overrides.some((o) => o !== 'agent');
+    // Any override besides the agent (the entries are display labels now, so
+    // count them instead of comparing against the word).
+    overrides.length > (agentOverride ? 1 : 0);
   const discard = useDiscardGuard(dirty, onClose, { disabled: busy });
   const { requestClose } = discard;
 
@@ -158,9 +169,9 @@ export function NewTaskModal({
   };
 
   const submit = (): void => {
-    const t = title.trim();
-    if (t === '' || busy) {
-      if (t === '') setError('title is required');
+    const trimmed = title.trim();
+    if (trimmed === '' || busy) {
+      if (trimmed === '') setError(t`title is required`);
       return;
     }
     const p = prompt.trim();
@@ -168,10 +179,10 @@ export function NewTaskModal({
     setError(null);
     createBoardTask({
       projectId,
-      title: t,
+      title: trimmed,
       // An empty prompt means "the title is the request" — the intake contract
       // the board has always had.
-      prompt: p === '' ? t : p,
+      prompt: p === '' ? trimmed : p,
       priority,
       boardColumn: column,
       fileScope,
@@ -194,7 +205,7 @@ export function NewTaskModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="New task"
+      aria-label={t`New task`}
       onClick={requestClose}
     >
       <div
@@ -204,12 +215,14 @@ export function NewTaskModal({
         className="max-h-full w-full max-w-3xl overflow-y-auto rounded-xl border border-line bg-surface px-4 py-4"
       >
         <div className="flex items-center gap-2">
-          <span className="font-display text-[14px] font-bold text-ink">New task</span>
+          <span className="font-display text-[14px] font-bold text-ink">
+            <Trans>New task</Trans>
+          </span>
           <button
             type="button"
             onClick={requestClose}
             disabled={busy}
-            aria-label="close"
+            aria-label={t`close`}
             className="ml-auto text-[15px] leading-none text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
           >
             ×
@@ -218,7 +231,7 @@ export function NewTaskModal({
 
         <div className="mt-3 flex flex-col gap-3.5">
           <div>
-            <FieldLabel>title</FieldLabel>
+            <FieldLabel>{t`title`}</FieldLabel>
             <input
               ref={titleRef}
               type="text"
@@ -231,21 +244,21 @@ export function NewTaskModal({
                   submit();
                 }
               }}
-              placeholder="what should happen"
-              aria-label="title"
+              placeholder={t`what should happen`}
+              aria-label={t`title`}
               className="w-full rounded-[8px] border border-line bg-field px-2.5 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-dim disabled:opacity-50"
             />
           </div>
 
           <div>
-            <FieldLabel>what needs doing</FieldLabel>
+            <FieldLabel>{t`what needs doing`}</FieldLabel>
             <textarea
               value={prompt}
               disabled={busy}
               onChange={(e) => setPrompt(e.target.value)}
               rows={12}
-              placeholder="the full request (empty = use the title)"
-              aria-label="what needs doing"
+              placeholder={t`the full request (empty = use the title)`}
+              aria-label={t`what needs doing`}
               className="w-full resize-y rounded-[8px] border border-line bg-field px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-ink outline-none placeholder:text-ink-faint focus:border-ink-dim disabled:opacity-50"
             />
           </div>
@@ -264,28 +277,26 @@ export function NewTaskModal({
                 renders it. */}
             <span aria-hidden="true">{advanced ? '−' : '+'}</span>
             <span>
-              {advanced || overrides.length === 0
-                ? 'advanced'
-                : `advanced · ${overrides.join(', ')}`}
+              {advanced || overrides.length === 0 ? t`advanced` : t`advanced · ${overrideList}`}
             </span>
           </button>
 
           {advanced && (
             <>
               <div>
-                <FieldLabel>agent</FieldLabel>
+                <FieldLabel>{t`agent`}</FieldLabel>
                 <AgentSelect agents={agents} value={agent} onChange={setAgent} disabled={busy} />
                 <AgentHint agents={agents} value={agent} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <FieldLabel>priority</FieldLabel>
+                  <FieldLabel>{t`priority`}</FieldLabel>
                   <select
                     value={priority}
                     disabled={busy}
                     onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    aria-label="priority"
+                    aria-label={t`priority`}
                     className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
                   >
                     {TASK_PRIORITIES.map((p) => (
@@ -296,12 +307,12 @@ export function NewTaskModal({
                   </select>
                 </div>
                 <div>
-                  <FieldLabel>model</FieldLabel>
+                  <FieldLabel>{t`model`}</FieldLabel>
                   <select
                     value={model}
                     disabled={busy}
                     onChange={(e) => setModel(e.target.value)}
-                    aria-label="model"
+                    aria-label={t`model`}
                     className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
                   >
                     {TASK_MODELS.map((m) => (
@@ -314,7 +325,7 @@ export function NewTaskModal({
               </div>
 
               <div>
-                <FieldLabel>playbook</FieldLabel>
+                <FieldLabel>{t`playbook`}</FieldLabel>
                 <PlaybookSelect
                   playbooks={playbooks}
                   value={playbook}
@@ -325,44 +336,44 @@ export function NewTaskModal({
               </div>
 
               <ChipEditor
-                label="file scope"
+                label={t`file scope`}
                 values={fileScope}
-                placeholder="add a path glob + Enter"
+                placeholder={t`add a path glob + Enter`}
                 disabled={busy}
                 onChange={setFileScope}
               />
               <ChipEditor
-                label="dependencies"
+                label={t`dependencies`}
                 values={dependencies}
-                placeholder="add a T-id + Enter"
+                placeholder={t`add a T-id + Enter`}
                 disabled={busy}
                 onChange={setDependencies}
               />
               <ChipEditor
-                label="labels"
+                label={t`labels`}
                 values={labels}
-                placeholder="add a label + Enter"
+                placeholder={t`add a label + Enter`}
                 disabled={busy}
                 onChange={setLabels}
               />
 
               <div>
-                <FieldLabel>column</FieldLabel>
+                <FieldLabel>{t`column`}</FieldLabel>
                 <select
                   value={column}
                   disabled={busy}
                   onChange={(e) => setColumn(e.target.value as BoardColumn)}
-                  aria-label="column"
+                  aria-label={t`column`}
                   className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim disabled:opacity-50"
                 >
                   {TARGET_COLUMNS.map((c) => (
                     <option key={c} value={c}>
-                      {COLUMN_LABELS[c]}
+                      {i18n._(COLUMN_LABELS[c])}
                     </option>
                   ))}
                 </select>
                 <div className="mt-1 font-mono text-[10px] text-ink-faint">
-                  {COLUMN_HINT[column] ?? ''}
+                  {COLUMN_HINT[column] !== undefined ? i18n._(COLUMN_HINT[column]) : ''}
                 </div>
               </div>
             </>
@@ -393,18 +404,18 @@ export function NewTaskModal({
             disabled={busy || title.trim() === ''}
             className="rounded-lg border border-brand/50 bg-brand/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? '…' : `create in ${LANE_TITLES[laneOf(column) ?? 'inbox']}`}
+            {busy ? '…' : t`create in ${lane}`}
           </button>
         </div>
       </div>
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title="Discard new task?"
-        confirmLabel="discard"
+        title={t`Discard new task?`}
+        confirmLabel={t`discard`}
         danger
       >
-        The title, prompt, and any advanced settings you've entered will be lost.
+        <Trans>The title, prompt, and any advanced settings you've entered will be lost.</Trans>
       </ConfirmDialog>
     </div>
   );

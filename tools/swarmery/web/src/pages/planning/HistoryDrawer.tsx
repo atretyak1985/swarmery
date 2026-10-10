@@ -4,6 +4,7 @@
 // collapsible "Show AI Reasoning" block with the planner's pre-JSON analysis
 // prose. Same overlay pattern as the Routines editor drawer.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef } from 'react';
 import type { PlanningTurn } from '../../api/types';
 
@@ -41,6 +42,7 @@ function HistoryDrawerInner({
   turns: PlanningTurn[];
   onClose: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   // Remember the element that had focus before this overlay opened so we can
   // return focus to it on close (WCAG 2.2 §2.4.3 Focus Order).
@@ -71,7 +73,7 @@ function HistoryDrawerInner({
       className="fixed inset-0 z-50 flex justify-end bg-bg/60"
       role="dialog"
       aria-modal="true"
-      aria-label="planning history"
+      aria-label={t`planning history`}
       onClick={onClose}
     >
       <div
@@ -80,25 +82,29 @@ function HistoryDrawerInner({
       >
         <div className="border-b border-line px-4 py-3">
           <div className="flex items-center justify-between">
-            <span className="font-display text-[14px] font-bold text-ink">History</span>
+            <span className="font-display text-[14px] font-bold text-ink">
+              <Trans>History</Trans>
+            </span>
             <button
               ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              aria-label="close"
+              aria-label={t`close`}
               className="rounded-lg border border-line px-2.5 py-1 font-mono text-[12px] text-ink-dim hover:text-ink"
             >
               ×
             </button>
           </div>
           <p className="mt-0.5 text-[11.5px] text-ink-dim">
-            Questions, answers, and AI reasoning for each plan update.
+            <Trans>Questions, answers, and AI reasoning for each plan update.</Trans>
           </p>
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {turns.length === 0 && (
-            <div className="font-mono text-[11.5px] text-ink-dim">no turns yet</div>
+            <div className="font-mono text-[11.5px] text-ink-dim">
+              <Trans>no turns yet</Trans>
+            </div>
           )}
           {turns.map((turn) => {
             const response = responseText(turn);
@@ -112,14 +118,14 @@ function HistoryDrawerInner({
                     Q{turn.seq}
                   </span>
                   <div className="min-w-0 text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink">
-                    {turn.question?.question ?? '(question could not be parsed)'}
+                    {turn.question?.question ?? t`(question could not be parsed)`}
                   </div>
                 </div>
 
                 {hasResponse && (
                   <div className="mt-2 rounded-lg border border-line bg-surface px-2.5 py-2">
                     <div className="mb-0.5 font-mono text-[10px] tracking-[0.08em] text-ink-faint uppercase">
-                      {turn.answer?.kind === 'refine' ? 'Your refinement' : 'Your response'}
+                      {turn.answer?.kind === 'refine' ? <Trans>Your refinement</Trans> : <Trans>Your response</Trans>}
                     </div>
                     <div className="text-[12px] leading-relaxed whitespace-pre-wrap text-ink-2">
                       {response}
@@ -130,7 +136,7 @@ function HistoryDrawerInner({
                 {turn.reasoning !== '' && (
                   <details className="mt-2">
                     <summary className="cursor-pointer font-mono text-[10.5px] text-ink-faint select-none hover:text-ink-2">
-                      Show AI Reasoning
+                      <Trans>Show AI Reasoning</Trans>
                     </summary>
                     <pre className="mt-1.5 max-h-64 overflow-y-auto rounded-lg border border-line bg-surface px-2.5 py-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
                       {turn.reasoning}

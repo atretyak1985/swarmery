@@ -9,6 +9,8 @@
 // force mode exists) — plus per-version rollback with an on-disk diff
 // preview, soft delete/restore (agents), and plugin/readonly guards.
 
+import { plural, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -43,7 +45,6 @@ import { defaultSection, guidePath, type DocsSection } from './docsSection';
 
 /** The panel's section tablist: the usage guide, or the item's source. */
 const SECTION_TABS = ['docs', 'definition'] as const;
-const SECTION_LABELS: Record<string, string> = { docs: 'Docs', definition: 'Definition' };
 
 /** Raw file content of the open detail — what the editor edits. */
 function composeContent(detail: SystemItemDetail): string {
@@ -117,6 +118,7 @@ function Versions({
   onMutated: () => void;
   onReadonly: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [picked, setPicked] = useState<number[]>([]);
   const [diff, setDiff] = useState<SystemDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
@@ -173,7 +175,7 @@ function Versions({
             setRbDiff(null);
             onMutated();
             setRbError(
-              'the file changed on disk since this preview — the detail was refreshed, open the preview again',
+              t`the file changed on disk since this preview — the detail was refreshed, open the preview again`,
             );
           } else {
             setRbError(e.message);
@@ -214,14 +216,22 @@ function Versions({
       });
   };
 
+  const rbWhen = rbTarget !== null ? fmtDateTime(rbTarget.createdAt) : '';
+
   if (versions.length === 0) {
-    return <div className="text-[12px] text-ink-dim">no versions captured yet</div>;
+    return (
+      <div className="text-[12px] text-ink-dim">
+        <Trans>no versions captured yet</Trans>
+      </div>
+    );
   }
 
   return (
     <div>
       <div className="overflow-hidden rounded-lg border border-line">
-        {versions.map((v) => (
+        {versions.map((v) => {
+          const versionId = String(v.id);
+          return (
           <label
             key={v.id}
             className="flex cursor-pointer items-baseline gap-2.5 border-b border-line-soft px-3 py-2 transition-colors last:border-b-0 hover:bg-surface2/50"
@@ -231,7 +241,7 @@ function Versions({
               checked={picked.includes(v.id)}
               onChange={() => toggle(v.id)}
               className="relative top-[1px] shrink-0 accent-brand"
-              aria-label={`select version ${String(v.id)} for compare`}
+              aria-label={t`select version ${versionId} for compare`}
             />
             <span className="font-mono text-[11px] whitespace-nowrap text-ink-dim">
               {fmtDateTime(v.createdAt)}
@@ -241,7 +251,7 @@ function Versions({
             </span>
             {v.id === currentVersionId && (
               <span className="rounded-full border border-green/40 px-2 py-px font-mono text-[10px] text-green">
-                current
+                <Trans>current</Trans>
               </span>
             )}
             <span className="font-mono text-[10px] text-ink-dim" data-tip-mono data-tip={v.contentHash}>
@@ -258,23 +268,24 @@ function Versions({
                 }}
                 className="rounded-lg border border-line px-2 py-px font-mono text-[10px] text-ink-dim transition-colors hover:border-amber/50 hover:text-amber"
               >
-                rollback
+                <Trans>rollback</Trans>
               </button>
             )}
           </label>
-        ))}
+          );
+        })}
       </div>
 
       {rbTarget !== null && (
         <div className="mt-2 rounded-lg border border-amber/35 bg-surface px-3 py-2.5">
           <div className="font-mono text-[11px] text-amber">
-            rollback to {fmtDateTime(rbTarget.createdAt)} — what will change on disk:
+            <Trans>rollback to {rbWhen} — what will change on disk:</Trans>
           </div>
-          {rbDiff === null && rbError === null && <Loading label="diff…" />}
+          {rbDiff === null && rbError === null && <Loading label={t`diff…`} />}
           {rbDiff !== null &&
             (rbDiff === '' ? (
               <div className="mt-1.5 font-mono text-[11.5px] text-ink-dim">
-                identical to the current content — nothing changes on disk
+                <Trans>identical to the current content — nothing changes on disk</Trans>
               </div>
             ) : (
               <DiffBlock diff={rbDiff} />
@@ -287,7 +298,7 @@ function Versions({
               onClick={() => setRbConfirm(true)}
               className="rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11.5px] font-semibold text-red transition-colors enabled:hover:bg-red/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              rollback on disk…
+              <Trans>rollback on disk…</Trans>
             </button>
             <button
               type="button"
@@ -298,7 +309,7 @@ function Versions({
               }}
               className="rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
             >
-              cancel
+              <Trans>cancel</Trans>
             </button>
           </div>
         </div>
@@ -306,16 +317,17 @@ function Versions({
 
       <ConfirmDialog
         open={rbConfirm}
-        title="Rollback on disk"
-        confirmLabel="rollback"
+        title={t`Rollback on disk`}
+        confirmLabel={t`rollback`}
         danger
         busy={rbBusy}
         onConfirm={doRollback}
         onCancel={() => setRbConfirm(false)}
       >
-        The file on disk will be replaced with the snapshot from{' '}
-        <b>{rbTarget !== null ? fmtDateTime(rbTarget.createdAt) : ''}</b>. A timestamped backup is
-        written to config-backups first, and version history is never rewritten.
+        <Trans>
+          The file on disk will be replaced with the snapshot from <b>{rbWhen}</b>. A timestamped
+          backup is written to config-backups first, and version history is never rewritten.
+        </Trans>
       </ConfirmDialog>
 
       <div className="mt-2 flex items-center gap-2.5">
@@ -325,10 +337,10 @@ function Versions({
           disabled={picked.length !== 2 || comparing}
           className="rounded-lg border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors enabled:hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {comparing ? 'comparing…' : 'Compare'}
+          {comparing ? t`comparing…` : t`Compare`}
         </button>
         <span className="font-mono text-[10.5px] text-ink-dim">
-          {picked.length === 2 ? 'two versions selected' : 'pick two versions to diff'}
+          {picked.length === 2 ? t`two versions selected` : t`pick two versions to diff`}
         </span>
       </div>
 
@@ -336,7 +348,7 @@ function Versions({
       {diff !== null &&
         (diff.diff === '' ? (
           <div className="mt-2 font-mono text-[11.5px] text-ink-dim">
-            versions are identical — no content change between the snapshots
+            <Trans>versions are identical — no content change between the snapshots</Trans>
           </div>
         ) : (
           <DiffBlock diff={diff.diff} />
@@ -360,6 +372,10 @@ function StatCard({ label, value }: { label: string; value: string }): JSX.Eleme
   );
 }
 
+function dayTip(day: string, runs: number): string {
+  return t`${day}: ${plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' })}`;
+}
+
 /** Dependency-free activity bars — one column per day that had ≥1 run. */
 function DaySparkline({ days }: { days: AgentHistory['byDay'] }): JSX.Element | null {
   if (days.length === 0) return null;
@@ -369,7 +385,7 @@ function DaySparkline({ days }: { days: AgentHistory['byDay'] }): JSX.Element | 
       {days.map((d) => (
         <div
           key={d.day}
-          data-tip={`${d.day}: ${String(d.runs)} run${d.runs === 1 ? '' : 's'}`}
+          data-tip={dayTip(d.day, d.runs)}
           className="min-w-[3px] flex-1 rounded-sm bg-brand/60"
           style={{ height: `${String(Math.max(6, (d.runs / max) * 40))}px` }}
         />
@@ -380,7 +396,12 @@ function DaySparkline({ days }: { days: AgentHistory['byDay'] }): JSX.Element | 
 
 const RECENT_RUNS_COLLAPSED = 10;
 
+function errRate(percent: string): string {
+  return t`${percent}% err`;
+}
+
 function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
+  const { t } = useLingui();
   const [hist, setHist] = useState<AgentHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState<number>(90);
@@ -429,27 +450,33 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
     body = <Loading />;
   } else if (hist.totals.runs === 0) {
     body = (
-      <div className="text-[12px] text-ink-dim">no runs recorded in the last {String(days)} days</div>
+      <div className="text-[12px] text-ink-dim">
+        {t`no runs recorded in the last ${plural(days, { one: '# days', few: '# days', many: '# days', other: '# days' })}`}
+      </div>
     );
   } else {
     const { totals, duration } = hist;
+    const okRuns = totals.okRuns;
+    const errorRuns = totals.errorRuns;
+    const sessions = totals.sessions;
+    const projects = totals.projects;
+    const moreRuns = hist.recentRuns.length - RECENT_RUNS_COLLAPSED;
     body = (
       <>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatCard label="runs" value={String(totals.runs)} />
-          <StatCard label="error rate" value={`${(totals.errorRate * 100).toFixed(0)}%`} />
-          <StatCard label="avg" value={fmtDurationMs(duration.avgMs)} />
+          <StatCard label={t`runs`} value={String(totals.runs)} />
+          <StatCard label={t`error rate`} value={`${(totals.errorRate * 100).toFixed(0)}%`} />
+          <StatCard label={t`avg`} value={fmtDurationMs(duration.avgMs)} />
           <StatCard label="p95" value={fmtDurationMs(duration.p95Ms)} />
         </div>
         <div className="mt-1 font-mono text-[10.5px] text-ink-dim">
-          {totals.okRuns} ok · {totals.errorRuns} error · {totals.sessions} sessions ·{' '}
-          {totals.projects} project{totals.projects === 1 ? '' : 's'}
+          {t`${okRuns} ok · ${errorRuns} error · ${plural(sessions, { one: '# sessions', few: '# sessions', many: '# sessions', other: '# sessions' })} · ${plural(projects, { one: '# project', few: '# projects', many: '# projects', other: '# projects' })}`}
         </div>
 
         <DaySparkline days={hist.byDay} />
 
         <div className="mt-4 font-mono text-[10px] uppercase tracking-wide text-ink-dim">
-          by project
+          <Trans>by project</Trans>
         </div>
         <div className="mt-1 overflow-hidden rounded-lg border border-line">
           <table className="w-full text-[12px]">
@@ -465,7 +492,7 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
                   </td>
                   <td className="px-3 py-1.5 text-right font-mono text-ink-dim">
                     {p.errorRate > 0 ? (
-                      <span className="text-red">{(p.errorRate * 100).toFixed(0)}% err</span>
+                      <span className="text-red">{errRate((p.errorRate * 100).toFixed(0))}</span>
                     ) : (
                       '—'
                     )}
@@ -477,7 +504,7 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
         </div>
 
         <div className="mt-4 font-mono text-[10px] uppercase tracking-wide text-ink-dim">
-          recent runs
+          <Trans>recent runs</Trans>
         </div>
         <ul className="mt-1 space-y-1">
           {(showAllRuns ? hist.recentRuns : hist.recentRuns.slice(0, RECENT_RUNS_COLLAPSED)).map((run, i) => (
@@ -512,9 +539,7 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
             aria-expanded={showAllRuns}
             className="mt-1.5 rounded-md px-2 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
           >
-            {showAllRuns
-              ? 'show less'
-              : `show more (${String(hist.recentRuns.length - RECENT_RUNS_COLLAPSED)})`}
+            {showAllRuns ? t`show less` : t`show more (${moreRuns})`}
           </button>
         )}
       </>
@@ -524,7 +549,9 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
   return (
     <>
       <div className="mt-4 flex items-center justify-between">
-        <SectionTitle>History</SectionTitle>
+        <SectionTitle>
+          <Trans>History</Trans>
+        </SectionTitle>
         {windowPicker}
       </div>
       {body}
@@ -533,6 +560,10 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
 }
 
 /* ----- the panel ----- */
+
+function conflictLine(base: string, disk: string): string {
+  return t`your base ${base} → on disk ${disk} — what changed under you:`;
+}
 
 /** Wrapper of the Definition section: a real tabpanel in the tabbed ('full')
  * variant, a bare fragment in 'editor', where there is no tablist to label it
@@ -591,6 +622,7 @@ export function SystemItemPanel({
   /** Section changed — the page mirrors it into the URL. */
   onSection?: (section: DocsSection) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [detail, setDetail] = useState<SystemItemDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Uncontrolled section fallback: null means "nobody has picked yet", so the
@@ -660,13 +692,19 @@ export function SystemItemPanel({
   }, [detail, pendingReload]);
 
   if (error !== null) return <ErrorBox message={error} />;
-  if (detail === null) return <Loading label="detail…" />;
+  if (detail === null) return <Loading label={t`detail…`} />;
 
   const writable = detail.origin === 'local' && !detail.deleted;
   const diskHash = currentContentHash(detail);
   // The file that carries the guide — a skill is registered by DIRECTORY, so
   // the empty state must name its SKILL.md rather than the folder.
   const docsPath = guidePath(detail.path, kind);
+  const tasks30d = String(detail.tasks30d);
+  const lastUsed = detail.lastUsed !== null ? fmtAgo(detail.lastUsed) : t`never`;
+  const versionCount = String(detail.versions.length);
+  const itemName = detail.name;
+  const sectionLabels: Record<string, string> = { docs: t`Docs`, definition: t`Definition` };
+  const savedVersionId = String(savedVersion ?? '');
 
   // The section tablist is OPT-IN, via onSection. 'editor'/'meta'/'docs' have
   // their own fixed section sets, and the remaining variant='full' mounts are
@@ -778,7 +816,9 @@ export function SystemItemPanel({
     return (
       <div>
         {kind === 'agents' && <AgentHistoryPanel agentId={detail.id} />}
-        <SectionTitle>Versions</SectionTitle>
+        <SectionTitle>
+          <Trans>Versions</Trans>
+        </SectionTitle>
         <Versions
           kind={kind}
           itemId={detail.id}
@@ -816,14 +856,14 @@ export function SystemItemPanel({
           <OriginBadge origin={detail.origin} pluginName={detail.pluginName} />
           {detail.deleted && (
             <span className="rounded-full border border-red/40 px-2 py-px font-mono text-[10px] text-red">
-              deleted
+              <Trans>deleted</Trans>
             </span>
           )}
           {variant === 'full' && (
             <button
               type="button"
               onClick={onClose}
-              aria-label="close detail"
+              aria-label={t`close detail`}
               className="ml-1 rounded-[7px] border border-line-strong px-2 py-px text-[12px] text-ink-faint transition-colors hover:text-ink"
             >
               ✕
@@ -836,16 +876,19 @@ export function SystemItemPanel({
       {/* usage metrics (30-day window, per the registry aggregates) */}
       <div className="mt-3 flex gap-[22px] border-b border-line pb-3 font-mono text-[11px] text-ink-dim">
         <span>
-          tasks 30d <b className="font-medium text-ink">{String(detail.tasks30d)}</b>
+          <Trans>
+            tasks 30d <b className="font-medium text-ink">{tasks30d}</b>
+          </Trans>
         </span>
         <span>
-          last used{' '}
-          <b className="font-medium text-ink">
-            {detail.lastUsed !== null ? fmtAgo(detail.lastUsed) : 'never'}
-          </b>
+          <Trans>
+            last used <b className="font-medium text-ink">{lastUsed}</b>
+          </Trans>
         </span>
         <span>
-          versions <b className="font-medium text-ink">{String(detail.versions.length)}</b>
+          <Trans>
+            versions <b className="font-medium text-ink">{versionCount}</b>
+          </Trans>
         </span>
       </div>
 
@@ -854,11 +897,11 @@ export function SystemItemPanel({
       {tabbed && (
         <SectionTabs
           tabs={SECTION_TABS}
-          labels={SECTION_LABELS}
+          labels={sectionLabels}
           active={activeSection}
           onSelect={selectSection}
           idPrefix={panelPrefix}
-          ariaLabel={`${detail.name} sections`}
+          ariaLabel={t`${itemName} sections`}
         />
       )}
 
@@ -879,7 +922,7 @@ export function SystemItemPanel({
               onClick={openEdit}
               className="rounded-lg border border-line-strong bg-field px-3.5 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
             >
-              Edit
+              <Trans>Edit</Trans>
             </button>
           )}
           {kind === 'agents' && writable && (
@@ -889,7 +932,7 @@ export function SystemItemPanel({
               disabled={actionBusy}
               className="rounded-lg border border-red/40 px-3 py-1.5 font-mono text-[11px] text-red transition-colors hover:bg-red/10 disabled:opacity-50"
             >
-              delete…
+              <Trans>delete…</Trans>
             </button>
           )}
           {kind === 'agents' && detail.deleted && (
@@ -899,15 +942,15 @@ export function SystemItemPanel({
               disabled={actionBusy}
               className="rounded-lg border border-green/40 bg-green/10 px-3 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
             >
-              {actionBusy ? '…' : 'restore'}
+              {actionBusy ? '…' : t`restore`}
             </button>
           )}
           {detail.origin === 'plugin' && (
             <span
               className="rounded-lg border border-brand/35 bg-brand/5 px-3 py-1.5 font-mono text-[11px] text-brand"
-              data-tip="plugin items are read-only — edit them in the plugin's marketplace repo and adopt via /plugin update"
+              data-tip={t`plugin items are read-only — edit them in the plugin's marketplace repo and adopt via /plugin update`}
             >
-              managed by the plugin marketplace — read-only
+              <Trans>managed by the plugin marketplace — read-only</Trans>
             </span>
           )}
         </div>
@@ -918,7 +961,7 @@ export function SystemItemPanel({
       {!editing && savedVersion !== null && (
         <div className="mt-3 rounded-lg border border-green/35 bg-green/5 px-3 py-2.5" role="status">
           <div className="font-mono text-[11px] text-green">
-            saved — version #{String(savedVersion)}
+            <Trans>saved — version #{savedVersionId}</Trans>
           </div>
           <LintList lint={lint ?? []} />
         </div>
@@ -926,20 +969,22 @@ export function SystemItemPanel({
 
       {editing ? (
         <>
-          <SectionTitle>Edit — raw markdown</SectionTitle>
+          <SectionTitle>
+            <Trans>Edit — raw markdown</Trans>
+          </SectionTitle>
           <div className="flex gap-0.5 border-b border-line" role="tablist">
-            {(['edit', 'preview'] as const).map((t) => (
+            {(['edit', 'preview'] as const).map((tab) => (
               <button
-                key={t}
+                key={tab}
                 type="button"
                 role="tab"
-                aria-selected={view === t}
-                onClick={() => setView(t)}
+                aria-selected={view === tab}
+                onClick={() => setView(tab)}
                 className={`-mb-px border-b-2 px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                  view === t ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
+                  view === tab ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
                 }`}
               >
-                {t === 'edit' ? 'Edit' : 'Preview'}
+                {tab === 'edit' ? t`Edit` : t`Preview`}
               </button>
             ))}
           </div>
@@ -949,7 +994,7 @@ export function SystemItemPanel({
               onChange={(e) => setDraft(e.target.value)}
               spellCheck={false}
               rows={Math.min(32, Math.max(14, draft.split('\n').length + 2))}
-              aria-label="raw markdown content"
+              aria-label={t`raw markdown content`}
               className="mt-2 w-full resize-y rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-ink-2 focus:border-brand focus:outline-none"
             />
           ) : (
@@ -961,11 +1006,10 @@ export function SystemItemPanel({
           {conflict !== null && (
             <div className="mt-2 rounded-lg border border-red/35 bg-red/5 px-3 py-2.5" role="alert">
               <div className="font-mono text-[11.5px] font-semibold text-red">
-                the file changed outside the editor — your edit is based on a stale version
+                <Trans>the file changed outside the editor — your edit is based on a stale version</Trans>
               </div>
               <div className="mt-1 font-mono text-[10.5px] text-ink-dim">
-                your base {conflict.base_hash.slice(0, 8)} → on disk {conflict.disk_hash.slice(0, 8)}{' '}
-                — what changed under you:
+                {conflictLine(conflict.base_hash.slice(0, 8), conflict.disk_hash.slice(0, 8))}
               </div>
               <DiffBlock diff={conflict.diff} />
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -974,18 +1018,20 @@ export function SystemItemPanel({
                   onClick={() => setConfirmReload(true)}
                   className="rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11.5px] font-semibold text-red transition-colors hover:bg-red/20"
                 >
-                  reload from disk…
+                  <Trans>reload from disk…</Trans>
                 </button>
                 <button
                   type="button"
                   onClick={copyDraft}
                   className="rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
                 >
-                  {copied ? 'copied ✓' : 'copy my text'}
+                  {copied ? t`copied ✓` : t`copy my text`}
                 </button>
                 <span className="font-mono text-[10.5px] text-ink-dim">
-                  no force-overwrite exists — reload picks up the disk version, then re-apply your
-                  edit
+                  <Trans>
+                    no force-overwrite exists — reload picks up the disk version, then re-apply your
+                    edit
+                  </Trans>
                 </span>
               </div>
             </div>
@@ -997,8 +1043,8 @@ export function SystemItemPanel({
             <input
               value={changeNote}
               onChange={(e) => setChangeNote(e.target.value)}
-              placeholder="change note (optional)"
-              aria-label="change note"
+              placeholder={t`change note (optional)`}
+              aria-label={t`change note`}
               spellCheck={false}
               className="min-w-[220px] flex-1 rounded-lg border border-line bg-bg px-3 py-1.5 font-mono text-[11.5px] text-ink-2 focus:border-brand focus:outline-none"
             />
@@ -1008,7 +1054,7 @@ export function SystemItemPanel({
               disabled={saving || conflict !== null}
               className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors enabled:hover:bg-green/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? 'saving…' : 'Save'}
+              {saving ? t`saving…` : t`Save`}
             </button>
             <button
               type="button"
@@ -1019,14 +1065,14 @@ export function SystemItemPanel({
               }}
               className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
             >
-              cancel
+              <Trans>cancel</Trans>
             </button>
           </div>
 
           <ConfirmDialog
             open={confirmReload}
-            title="Reload from disk"
-            confirmLabel="discard my changes"
+            title={t`Reload from disk`}
+            confirmLabel={t`discard my changes`}
             danger
             busy={pendingReload}
             onConfirm={() => {
@@ -1040,16 +1086,22 @@ export function SystemItemPanel({
             }}
             onCancel={() => setConfirmReload(false)}
           >
-            The editor is re-seeded with the current on-disk content and a fresh base_hash. Your
-            draft is <b>discarded</b> — use “copy my text” first if you want to keep it.
+            <Trans>
+              The editor is re-seeded with the current on-disk content and a fresh base_hash. Your
+              draft is <b>discarded</b> — use “copy my text” first if you want to keep it.
+            </Trans>
           </ConfirmDialog>
         </>
       ) : (
         <>
-          <SectionTitle>Frontmatter</SectionTitle>
+          <SectionTitle>
+            <Trans>Frontmatter</Trans>
+          </SectionTitle>
           <FrontmatterTable frontmatter={detail.frontmatter} />
 
-          <SectionTitle>Body</SectionTitle>
+          <SectionTitle>
+            <Trans>Body</Trans>
+          </SectionTitle>
           <div className="text-[13px] leading-[1.6] text-ink-2">
             <Markdown text={detail.body} />
           </div>
@@ -1062,7 +1114,9 @@ export function SystemItemPanel({
 
       {variant !== 'editor' && (
         <>
-          <SectionTitle>Versions</SectionTitle>
+          <SectionTitle>
+            <Trans>Versions</Trans>
+          </SectionTitle>
           <Versions
             kind={kind}
             itemId={detail.id}
@@ -1078,15 +1132,17 @@ export function SystemItemPanel({
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete agent"
-        confirmLabel="delete"
+        title={t`Delete agent`}
+        confirmLabel={t`delete`}
         danger
         busy={actionBusy}
         onConfirm={doDelete}
         onCancel={() => setConfirmDelete(false)}
       >
-        <b>{detail.name}</b> is soft-deleted: the file is <b>moved into backups, not destroyed</b>,
-        and version history stays. The agent disappears from the lists and can be restored later.
+        <Trans>
+          <b>{itemName}</b> is soft-deleted: the file is <b>moved into backups, not destroyed</b>,
+          and version history stays. The agent disappears from the lists and can be restored later.
+        </Trans>
       </ConfirmDialog>
     </div>
   );

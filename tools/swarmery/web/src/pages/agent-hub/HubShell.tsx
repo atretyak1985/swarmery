@@ -24,6 +24,9 @@
 // and its own tab set — no fork, no copy. Keep this component free of any
 // agent-specific import.
 
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Empty, ErrorBox, Loading } from '../../components/ui';
 
@@ -91,8 +94,8 @@ export function HubShell<T>({
   onSelect,
   filters,
   topBar,
-  searchPlaceholder = 'filter…',
-  rosterEmptyLabel = 'nothing here yet',
+  searchPlaceholder: searchPlaceholderProp,
+  rosterEmptyLabel: rosterEmptyLabelProp,
   tabs,
   activeTab,
   onTab,
@@ -100,6 +103,9 @@ export function HubShell<T>({
   detailPlaceholder,
   children,
 }: HubShellProps<T>): JSX.Element {
+  const { t } = useLingui();
+  const searchPlaceholder = searchPlaceholderProp ?? t`filter…`;
+  const rosterEmptyLabel = rosterEmptyLabelProp ?? t`nothing here yet`;
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -115,9 +121,9 @@ export function HubShell<T>({
 
   const rosterList = (
     <>
-      {filtered === null && <Loading label="roster…" />}
+      {filtered === null && <Loading label={t`roster…`} />}
       {filtered !== null && filtered.length === 0 && (
-        <Empty>{roster !== null && roster.length > 0 ? 'no matches' : rosterEmptyLabel}</Empty>
+        <Empty>{roster !== null && roster.length > 0 ? t`no matches` : rosterEmptyLabel}</Empty>
       )}
       {filtered !== null &&
         filtered.map((item) => {
@@ -182,7 +188,7 @@ export function HubShell<T>({
                   <button
                     type="button"
                     onClick={() => setQuery('')}
-                    aria-label="clear filter"
+                    aria-label={t`clear filter`}
                     className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[13px] leading-none text-ink-dim transition-colors hover:text-ink"
                   >
                     ×
@@ -203,7 +209,11 @@ export function HubShell<T>({
           <div className="mt-6 flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-surface wide:mt-0">
             {!selected ? (
               <div className="flex flex-1 items-center justify-center p-8">
-                {detailPlaceholder ?? <Empty>select a row</Empty>}
+                {detailPlaceholder ?? (
+                  <Empty>
+                    <Trans>select a row</Trans>
+                  </Empty>
+                )}
               </div>
             ) : (
               <>
@@ -214,23 +224,23 @@ export function HubShell<T>({
                   className="shrink-0 flex gap-1 overflow-x-auto border-b border-line px-[18px] [-webkit-overflow-scrolling:touch]"
                   role="tablist"
                 >
-                  {tabs.map((t) => (
+                  {tabs.map((tab) => (
                     <button
-                      key={t.id}
+                      key={tab.id}
                       type="button"
                       role="tab"
-                      aria-selected={activeTab === t.id}
-                      onClick={() => onTab(t.id)}
+                      aria-selected={activeTab === tab.id}
+                      onClick={() => onTab(tab.id)}
                       className={`-mb-px shrink-0 border-b-2 px-3 py-[8px] text-[12.5px] font-medium whitespace-nowrap transition-colors ${
-                        activeTab === t.id
+                        activeTab === tab.id
                           ? 'border-brand text-brand'
                           : 'border-transparent text-ink-dim hover:text-ink'
                       }`}
                     >
-                      {t.label}
-                      {t.badge !== undefined && t.badge > 0 && (
+                      {tab.label}
+                      {tab.badge !== undefined && tab.badge > 0 && (
                         <span className="ml-1.5 inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-line-strong px-1 align-middle font-mono text-[9.5px] font-bold text-ink-dim">
-                          {t.badge}
+                          {tab.badge}
                         </span>
                       )}
                     </button>
@@ -255,7 +265,7 @@ export function HubShell<T>({
 /** Health dot thresholds shared by the roster + profile header:
  * <30% failed-run share = green, <60% = amber, else red. */
 export function healthTone(failedShare: number): { dot: string; label: string } {
-  if (failedShare < 0.3) return { dot: 'bg-green', label: 'healthy' };
-  if (failedShare < 0.6) return { dot: 'bg-amber', label: 'degraded' };
-  return { dot: 'bg-red', label: 'unhealthy' };
+  if (failedShare < 0.3) return { dot: 'bg-green', label: i18n._(msg`healthy`) };
+  if (failedShare < 0.6) return { dot: 'bg-amber', label: i18n._(msg`degraded`) };
+  return { dot: 'bg-red', label: i18n._(msg`unhealthy`) };
 }

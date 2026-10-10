@@ -4,6 +4,7 @@
 // so it updates without a refresh), the dispatcher state chip (paused/active
 // from GET /api/dispatch), a per-project pause toggle, and the daemon version.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DispatchStatus } from '../api/types';
 import { fetchDispatchStatus, pauseDispatch } from '../api';
@@ -31,7 +32,9 @@ export function StatusBar({
    * project path resolves. */
   onToggleTerminal?: (() => void) | undefined;
 }): JSX.Element {
+  const { t } = useLingui();
   const { health } = useHealth();
+  const { waiting, running, blocked } = counts;
   const [dispatch, setDispatch] = useState<DispatchStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const aliveRef = useRef(true);
@@ -79,15 +82,15 @@ export function StatusBar({
     <div className="flex h-9 shrink-0 items-center gap-4 border-t border-line bg-bg px-4 font-mono text-[10.5px] text-ink-dim">
       <span className="flex items-center gap-1.5">
         <Dot className="bg-ink-faint" />
-        Waiting {counts.waiting}
+        <Trans>Waiting {waiting}</Trans>
       </span>
       <span className="flex items-center gap-1.5">
-        <Dot className={counts.running > 0 ? 'animate-pulse-dot bg-green' : 'bg-ink-faint'} />
-        Running {counts.running}
+        <Dot className={running > 0 ? 'animate-pulse-dot bg-green' : 'bg-ink-faint'} />
+        <Trans>Running {running}</Trans>
       </span>
       <span className="flex items-center gap-1.5">
-        <Dot className={counts.blocked > 0 ? 'bg-amber' : 'bg-ink-faint'} />
-        Blocked {counts.blocked}
+        <Dot className={blocked > 0 ? 'bg-amber' : 'bg-ink-faint'} />
+        <Trans>Blocked {blocked}</Trans>
       </span>
 
       <span className="ml-auto flex items-center gap-3">
@@ -95,7 +98,7 @@ export function StatusBar({
           <button
             type="button"
             onClick={onToggleTerminal}
-            aria-label={terminalOpen ? 'hide terminal' : 'show terminal'}
+            aria-label={terminalOpen ? t`hide terminal` : t`show terminal`}
             aria-pressed={terminalOpen}
             className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] transition-colors ${
               terminalOpen
@@ -104,7 +107,7 @@ export function StatusBar({
             }`}
           >
             <span aria-hidden="true">❯_</span>
-            Terminal
+            <Trans>Terminal</Trans>
             <span aria-hidden="true">{terminalOpen ? '▾' : '▸'}</span>
           </button>
         )}
@@ -114,22 +117,26 @@ export function StatusBar({
               className="flex items-center gap-1.5"
               data-tip={
                 globalPaused
-                  ? 'dispatcher globally paused'
-                  : `${dispatch.freeSlots} of ${dispatch.maxConcurrent} slots free`
+                  ? t`dispatcher globally paused`
+                  : t`${{ free: dispatch.freeSlots }} of ${{ max: dispatch.maxConcurrent }} slots free`
               }
             >
               <Dot className={globalPaused || projectPaused ? 'bg-amber' : 'bg-green'} />
-              {globalPaused ? 'dispatcher paused' : projectPaused ? 'project paused' : 'dispatcher active'}
+              {globalPaused
+                ? t`dispatcher paused`
+                : projectPaused
+                  ? t`project paused`
+                  : t`dispatcher active`}
             </span>
             {projectId !== null && !globalPaused && (
               <button
                 type="button"
                 disabled={busy}
                 onClick={togglePause}
-                aria-label={projectPaused ? 'resume this project' : 'pause this project'}
+                aria-label={projectPaused ? t`resume this project` : t`pause this project`}
                 className="rounded-md border border-line px-2 py-0.5 text-[10px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
               >
-                {projectPaused ? 'resume' : 'pause'}
+                {projectPaused ? t`resume` : t`pause`}
               </button>
             )}
           </>

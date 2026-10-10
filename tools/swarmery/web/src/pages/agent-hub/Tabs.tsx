@@ -4,6 +4,7 @@
 // insight cards). The Definition tab is NOT here: it embeds the existing System
 // editor (SystemItemPanel) directly from AgentHub.tsx.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import type {
   AgentActivity,
@@ -24,11 +25,16 @@ import { Empty } from '../../components/ui';
 // profile, rendered by SystemItemPanel variant="meta" from AgentHub). This tab
 // itself renders only the open-insights preview beneath it.
 export function OverviewTab({ topInsights }: { topInsights: Recommendation[] }): JSX.Element {
-  if (topInsights.length === 0) return <Empty>no open insights</Empty>;
+  if (topInsights.length === 0)
+    return (
+      <Empty>
+        <Trans>no open insights</Trans>
+      </Empty>
+    );
   return (
     <div>
       <div className="mb-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-        open insights
+        <Trans>open insights</Trans>
       </div>
       <div className="space-y-1.5">
         {topInsights.slice(0, 3).map((rec) => (
@@ -60,7 +66,12 @@ function statusTone(status: string): string {
 
 export function RunsTab({ runs }: { runs: AgentRun[] }): JSX.Element {
   const { projects } = useScope();
-  if (runs.length === 0) return <Empty>no runs in the last 30 days</Empty>;
+  if (runs.length === 0)
+    return (
+      <Empty>
+        <Trans>no runs in the last 30 days</Trans>
+      </Empty>
+    );
   return (
     <div className="overflow-hidden rounded-xl border border-line">
       {runs.map((r, i) => (
@@ -95,7 +106,12 @@ export function RunsTab({ runs }: { runs: AgentRun[] }): JSX.Element {
 /* ----- Activity ----- */
 
 export function ActivityTab({ activity }: { activity: AgentActivity[] }): JSX.Element {
-  if (activity.length === 0) return <Empty>no recent events</Empty>;
+  if (activity.length === 0)
+    return (
+      <Empty>
+        <Trans>no recent events</Trans>
+      </Empty>
+    );
   return (
     <div className="overflow-hidden rounded-xl border border-line">
       {activity.map((a, i) => (
@@ -130,31 +146,38 @@ function verdictTone(verdict: string | null): string {
 
 export function TasksTab({ tasks, projectSlug }: { tasks: AgentTask[]; projectSlug?: string | null }): JSX.Element {
   const { projects } = useScope();
-  if (tasks.length === 0) return <Empty>no tasks this agent executed</Empty>;
+  const { t } = useLingui();
+  if (tasks.length === 0)
+    return (
+      <Empty>
+        <Trans>no tasks this agent executed</Trans>
+      </Empty>
+    );
   // The prop may carry the DB path slug — link with the pretty slug when the
   // project resolves.
   const boardProject = findProject(projects, projectSlug ?? null);
   const boardSlug = boardProject !== null ? displaySlug(boardProject, projects) : projectSlug;
   return (
     <div className="overflow-hidden rounded-xl border border-line">
-      {tasks.map((t, i) => {
+      {tasks.map((task, i) => {
+        const phase = task.phase;
         const inner = (
           <>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12.5px] text-ink">{t.title}</div>
+              <div className="truncate text-[12.5px] text-ink">{task.title}</div>
               <div className="font-mono text-[10px] text-ink-faint">
-                {t.externalId}
-                {t.phase !== null ? ` · phase ${t.phase}` : ''}
-                {t.startedAt !== null ? ` · ${fmtDayShort(t.startedAt.slice(0, 10))}` : ''}
+                {task.externalId}
+                {phase !== null ? ` · ${t`phase ${phase}`}` : ''}
+                {task.startedAt !== null ? ` · ${fmtDayShort(task.startedAt.slice(0, 10))}` : ''}
               </div>
             </div>
-            {t.verdict !== null && (
-              <span className={`shrink-0 font-mono text-[10.5px] ${verdictTone(t.verdict)}`}>
-                {t.verdict}
+            {task.verdict !== null && (
+              <span className={`shrink-0 font-mono text-[10.5px] ${verdictTone(task.verdict)}`}>
+                {task.verdict}
               </span>
             )}
             <span className="shrink-0 rounded-[6px] border border-line-strong px-1.5 py-[1px] font-mono text-[9.5px] text-ink-dim">
-              {t.status}
+              {task.status}
             </span>
           </>
         );
@@ -163,14 +186,14 @@ export function TasksTab({ tasks, projectSlug }: { tasks: AgentTask[]; projectSl
         // Link to the project board when we know the project; else a plain row.
         return boardSlug !== undefined && boardSlug !== null ? (
           <Link
-            key={`${t.externalId}-${String(i)}`}
+            key={`${task.externalId}-${String(i)}`}
             to={`/p/${encodeURIComponent(boardSlug)}/board`}
             className={`${cls} transition-colors hover:bg-surface`}
           >
             {inner}
           </Link>
         ) : (
-          <div key={`${t.externalId}-${String(i)}`} className={cls}>
+          <div key={`${task.externalId}-${String(i)}`} className={cls}>
             {inner}
           </div>
         );
@@ -213,13 +236,18 @@ export function InsightsTab({ insights }: { insights: AgentInsights }): JSX.Elem
     insights.recommendations.length === 0 &&
     insights.proposals.length === 0 &&
     insights.lessons.length === 0;
-  if (empty) return <Empty>no lessons, recommendations, or proposals for this agent</Empty>;
+  if (empty)
+    return (
+      <Empty>
+        <Trans>no lessons, recommendations, or proposals for this agent</Trans>
+      </Empty>
+    );
   return (
     <div className="space-y-4">
       {insights.recommendations.length > 0 && (
         <section>
           <div className="mb-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-            recommendations
+            <Trans>recommendations</Trans>
           </div>
           <div className="space-y-1.5">
             {insights.recommendations.map((rec) => (
@@ -243,13 +271,15 @@ export function InsightsTab({ insights }: { insights: AgentInsights }): JSX.Elem
       {insights.proposals.length > 0 && (
         <section>
           <div className="mb-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-            change proposals
+            <Trans>change proposals</Trans>
           </div>
           <div className="space-y-1.5">
             {insights.proposals.map((p) => (
               <div key={p.id} className="rounded-lg border border-line bg-bg px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-[12.5px] text-ink">Rewrite proposal</span>
+                  <span className="text-[12.5px] text-ink">
+                    <Trans>Rewrite proposal</Trans>
+                  </span>
                   <span className="ml-auto font-mono text-[9.5px] text-ink-faint">{p.status}</span>
                 </div>
                 <div className="mt-1 line-clamp-2 text-[11.5px] text-ink-dim">{p.rationale}</div>
@@ -260,7 +290,7 @@ export function InsightsTab({ insights }: { insights: AgentInsights }): JSX.Elem
                     rel="noreferrer"
                     className="mt-1 inline-block font-mono text-[10.5px] text-brand hover:underline"
                   >
-                    view PR →
+                    <Trans>view PR →</Trans>
                   </a>
                 )}
               </div>
@@ -272,7 +302,7 @@ export function InsightsTab({ insights }: { insights: AgentInsights }): JSX.Elem
       {insights.lessons.length > 0 && (
         <section>
           <div className="mb-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-            lessons
+            <Trans>lessons</Trans>
           </div>
           <div className="space-y-1.5">
             {insights.lessons.map((l) => (

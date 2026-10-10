@@ -18,6 +18,7 @@ import type {
   SystemTemplateContent,
   SystemTemplateCopyResponse,
 } from './types';
+import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
 import { mockSystemHubApi } from '../mock/systemHub';
 
@@ -111,7 +112,7 @@ export async function copyTemplateToProject(
     { method: 'POST', headers: { 'Content-Type': 'application/json' } },
   );
   if (res.ok) return (await res.json()) as SystemTemplateCopyResponse;
-  let msg = `copy failed: ${String(res.status)}`;
+  let msg = t`copy failed: ${{ status: res.status }}`;
   try {
     const body = (await res.json()) as { error?: unknown };
     if (typeof body.error === 'string') msg = body.error;

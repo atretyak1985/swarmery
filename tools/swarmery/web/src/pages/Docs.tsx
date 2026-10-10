@@ -23,6 +23,7 @@
 // heading scroll-margin) live in the scoped `.docs-article` block in index.css,
 // so the shared <Markdown> renderer stays untouched.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import type { DocDetail, DocMeta } from '../api/types';
@@ -83,6 +84,7 @@ function tocOf(markdown: string): TocEntry[] {
 }
 
 export function Docs(): JSX.Element {
+  const { t } = useLingui();
   const { slug } = useParams<{ slug: string }>();
   const [docs, setDocs] = useState<DocMeta[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -182,8 +184,14 @@ export function Docs(): JSX.Element {
   const next = activeIdx >= 0 ? (docs?.[activeIdx + 1] ?? null) : null;
 
   if (listError !== null) return <ErrorBox message={listError} />;
-  if (docs === null) return <Loading label="docs…" />;
-  if (docs.length === 0) return <Empty>no docs published by the daemon</Empty>;
+  if (docs === null) return <Loading label={t`docs…`} />;
+  if (docs.length === 0) {
+    return (
+      <Empty>
+        <Trans>no docs published by the daemon</Trans>
+      </Empty>
+    );
+  }
 
   return (
     // `leading-[normal]` undoes the app-wide body leading of 1.5 for this screen:
@@ -208,23 +216,27 @@ export function Docs(): JSX.Element {
             only double-space the two blocks. A long list therefore ends flush
             against the clip, which also reads as "there is more above". */}
         <nav
-          aria-label="Documentation"
+          aria-label={t`Documentation`}
           className="max-h-[40%] min-h-0 min-w-0 overflow-y-auto pt-6 desk:h-full desk:max-h-none desk:pt-[26px] desk:pb-[60px]"
         >
           {/* The label row lines the rail up with the article's group eyebrow
               and the TOC's "On this page" — all three columns open with the
               same mono small-caps line, so their tops read as one line. */}
           <div className="mb-2 font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-            Documentation
+            <Trans>Documentation</Trans>
           </div>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="filter docs…"
-            aria-label="Filter docs"
+            placeholder={t`filter docs…`}
+            aria-label={t`Filter docs`}
             className="w-full rounded-lg border border-line-strong bg-field px-[11px] py-1.5 font-mono text-[11px] text-ink outline-none focus:border-brand"
           />
-          {noMatches && <div className="mt-3 text-[12px] text-ink-faint">no docs match</div>}
+          {noMatches && (
+            <div className="mt-3 text-[12px] text-ink-faint">
+              <Trans>no docs match</Trans>
+            </div>
+          )}
           {groups.map((g) => (
             <div key={g.name} className="mt-5">
               <div className="mb-2 font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
@@ -270,7 +282,7 @@ export function Docs(): JSX.Element {
           className="min-h-0 min-w-0 max-w-[720px] flex-1 overflow-y-auto pb-10 [-webkit-overflow-scrolling:touch] desk:h-full desk:pt-[26px] desk:pb-[60px]"
         >
           {docError !== null && <ErrorBox message={docError} />}
-          {doc === null && docError === null && <Loading label="doc…" />}
+          {doc === null && docError === null && <Loading label={t`doc…`} />}
           {doc !== null && rendered !== null && (
             <>
               <div className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
@@ -280,6 +292,7 @@ export function Docs(): JSX.Element {
                 {rendered.title ?? doc.title}
               </h1>
               <div className="mt-[5px] font-mono text-[10.5px] text-ink-faint">
+                {/* i18n-ignore — a repository path */}
                 swarmery/docs/{doc.file}
               </div>
               {/* The one surface that renders a single body per page, so it
@@ -293,7 +306,7 @@ export function Docs(): JSX.Element {
                   {prev !== null && (
                     <Link to={`/docs/${prev.slug}`} className="min-w-0 transition-opacity hover:opacity-80">
                       <div className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
-                        ← previous
+                        <Trans>← previous</Trans>
                       </div>
                       <div className="mt-[3px] text-[13.5px] font-semibold text-brand">
                         {prev.title}
@@ -306,7 +319,7 @@ export function Docs(): JSX.Element {
                       className="ml-auto min-w-0 text-right transition-opacity hover:opacity-80"
                     >
                       <div className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
-                        next →
+                        <Trans>next →</Trans>
                       </div>
                       <div className="mt-[3px] text-[13.5px] font-semibold text-brand">
                         {next.title}
@@ -321,27 +334,27 @@ export function Docs(): JSX.Element {
 
         {toc.length > 0 && (
           <nav
-            aria-label="On this page"
+            aria-label={t`On this page`}
             className="hidden desk:block desk:h-full desk:min-h-0 desk:overflow-y-auto desk:pt-[26px] desk:pb-[60px]"
           >
             <div className="mb-2 font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-              On this page
+              <Trans>On this page</Trans>
             </div>
             <div className="flex flex-col gap-0.5 border-l border-line">
               {/* The `§ NN` prefixes mirror the CSS counters `.docs-article h3`
                   puts on the section headings (index.css) — same numbers, so
                   the rail doubles as a section index. */}
-              {toc.map((t, n) => (
+              {toc.map((entry, n) => (
                 <button
-                  key={t.id}
+                  key={entry.id}
                   type="button"
-                  onClick={() => document.getElementById(t.id)?.scrollIntoView({ block: 'start' })}
+                  onClick={() => document.getElementById(entry.id)?.scrollIntoView({ block: 'start' })}
                   className="flex items-baseline gap-2 py-1 pl-3 text-left text-[12px] text-ink-dim transition-colors hover:text-ink"
                 >
                   <span aria-hidden="true" className="font-mono text-[9.5px] text-ink-faint">
                     {String(n + 1).padStart(2, '0')}
                   </span>
-                  <span className="min-w-0">{t.label}</span>
+                  <span className="min-w-0">{entry.label}</span>
                 </button>
               ))}
             </div>

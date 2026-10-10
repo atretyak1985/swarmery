@@ -19,6 +19,8 @@
 // sign-in re-asks the daemon past its 60s cache, as "Re-check" does. A caller
 // may pass `onSignIn` to open a sign-in surface of its own instead.
 
+import { t } from '@lingui/core/macro';
+import { Trans } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { VcsInfo } from '../api/types';
 import { useProjectVcs } from '../lib/useProjectVcs';
@@ -49,11 +51,11 @@ const SECTION_SOFT = 'border-line bg-surface text-ink-2';
 function headlineFor(status: VcsInfo['auth']['status'], provider: string): string {
   switch (status) {
     case 'expired':
-      return `${provider} repository · sign-in expired`;
+      return t`${provider} repository · sign-in expired`;
     case 'unknown':
-      return `${provider} repository · sign-in status unknown`;
+      return t`${provider} repository · sign-in status unknown`;
     default:
-      return `${provider} repository · not signed in`;
+      return t`${provider} repository · not signed in`;
   }
 }
 
@@ -76,12 +78,13 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
   if (!needsSignIn(vcs)) return null;
 
   const { terms } = vcs;
+  const { provider, change } = terms;
   const unknown = vcs.auth.status === 'unknown';
   const headline = headlineFor(vcs.auth.status, terms.provider);
   const btn = unknown ? BTN_SOFT : BTN_WARN;
   const sshNote =
     vcs.remote.protocol === 'ssh' && vcs.auth.status === 'missing'
-      ? `Push works over SSH; opening a ${terms.change} needs a ${terms.provider} token.`
+      ? t`Push works over SSH; opening a ${change} needs a ${provider} token.`
       : null;
 
   const recheck = (): void => {
@@ -92,7 +95,7 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
   return (
     <>
       <section
-        aria-label={`${terms.provider} sign-in`}
+        aria-label={t`${provider} sign-in`}
         data-testid="vcs-auth-banner"
         data-status={vcs.auth.status}
         className={`border-b px-4 py-2 font-mono text-[11px] desk:px-6 ${unknown ? SECTION_SOFT : SECTION_WARN}`}
@@ -107,10 +110,10 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
               onClick={onSignIn ?? (() => setDialogOpen(true))}
               {...(onSignIn === undefined ? { 'aria-haspopup': 'dialog' as const } : {})}
             >
-              Sign in
+              <Trans>Sign in</Trans>
             </button>
             <button type="button" className={btn} onClick={recheck} disabled={checking} aria-busy={checking}>
-              Re-check
+              <Trans>Re-check</Trans>
             </button>
           </span>
         </div>

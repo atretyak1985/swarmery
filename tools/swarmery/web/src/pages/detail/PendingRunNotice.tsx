@@ -1,3 +1,4 @@
+import { t } from '@lingui/core/macro';
 import type { JSX } from 'react';
 import type { PendingSession } from '../../api/types';
 import { ErrorBox, Loading } from '../../components/ui';
@@ -7,19 +8,19 @@ import { fmtAgo } from '../../lib/format';
 export function pendingSourceLabel(source: PendingSession['source']): string {
   switch (source) {
     case 'phase':
-      return 'phase run';
+      return t`phase run`;
     case 'plan':
-      return 'plan run';
+      return t`plan run`;
     case 'dispatch':
-      return 'dispatched task';
+      return t`dispatched task`;
     case 'verify':
-      return 'verification run';
+      return t`verification run`;
     case 'planning':
-      return 'planning session';
+      return t`planning session`;
     case 'revision':
-      return 'plan revision';
+      return t`plan revision`;
     default:
-      return 'run';
+      return t`run`;
   }
 }
 
@@ -39,11 +40,13 @@ export function PendingRunNotice({
   onRetry: () => void;
 }): JSX.Element {
   const kind = pendingSourceLabel(run.source);
-  const started = run.startedAt !== null ? `started ${fmtAgo(run.startedAt)}` : null;
+  const ago = run.startedAt !== null ? fmtAgo(run.startedAt) : null;
+  const started = ago !== null ? t`started ${ago}` : null;
+  const label = run.label;
   if (run.running) {
     return (
       <div data-testid="pending-run" className="py-6">
-        <Loading label={`${kind} is starting — waiting for its transcript…`} />
+        <Loading label={t`${kind} is starting — waiting for its transcript…`} />
         <p className="text-center text-[12px] text-ink-dim">
           <span className="text-ink">{run.label}</span>
           {started !== null && <span className="ml-2 font-mono text-[11px] text-ink-faint">{started}</span>}
@@ -53,9 +56,11 @@ export function PendingRunNotice({
   }
   return (
     <ErrorBox
-      message={`the ${kind} “${run.label}” ended without writing a transcript${
-        started !== null ? ` (${started})` : ''
-      } — the session never started or its transcript is gone`}
+      message={
+        started !== null
+          ? t`the ${kind} “${label}” ended without writing a transcript (${started}) — the session never started or its transcript is gone`
+          : t`the ${kind} “${label}” ended without writing a transcript — the session never started or its transcript is gone`
+      }
       onRetry={onRetry}
     />
   );
