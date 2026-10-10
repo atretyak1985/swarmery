@@ -541,6 +541,10 @@ msgstr "accounts"
 msgid "Accounts"
 msgstr "Accounts"
 
+#: src/lib/glossary.ts
+msgid "acting"
+msgstr "acting"
+
 #: src/components/usage/UsageProviderCard.tsx
 #: src/lib/sessionsView.ts
 msgid "active"
@@ -598,6 +602,10 @@ msgstr "advanced · {overrideList}"
 #: src/api.ts
 msgid "advise failed: {status}"
 msgstr "advise failed: {status}"
+
+#: src/lib/glossary.ts
+msgid "after reading the code"
+msgstr "after reading the code"
 
 #: src/workspace/AgentPicker.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -1847,6 +1855,10 @@ msgstr "History"
 msgid "hold this card in the queue without losing its place"
 msgstr "hold this card in the queue without losing its place"
 
+#: src/lib/glossary.ts
+msgid "how honest forecasts are"
+msgstr "how honest forecasts are"
+
 #: src/components/usage/UsageSetupHint.tsx
 msgid "how it's used"
 msgstr "how it's used"
@@ -2110,6 +2122,10 @@ msgstr "mark done without landing a branch — the manual override"
 msgid "marketplace v{marketplaceVersion} · repairs and toggles take effect in the next Claude Code session"
 msgstr "marketplace v{marketplaceVersion} · repairs and toggles take effect in the next Claude Code session"
 
+#: src/lib/glossary.ts
+msgid "matches you"
+msgstr "matches you"
+
 #: src/components/AttachModal.tsx
 msgid "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
 msgstr "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
@@ -2352,6 +2368,10 @@ msgstr "Ocean"
 #: src/components/ProjectPlugins.tsx
 msgid "off"
 msgstr "off"
+
+#: src/lib/glossary.ts
+msgid "off-plan"
+msgstr "off-plan"
 
 #: src/components/ProjectPlugins.tsx
 msgid "on"
@@ -2619,6 +2639,10 @@ msgstr "Plan structure: README over a graph of phase documents"
 #: src/components/AccountSelector.tsx
 msgid "plan unknown"
 msgstr "plan unknown"
+
+#: src/lib/glossary.ts
+msgid "planner's guess"
+msgstr "planner's guess"
 
 #: src/lib/nav.ts
 msgid "Plans"
@@ -3442,6 +3466,10 @@ msgstr "Stop {label} and mark done?"
 msgid "stop failed: {status}"
 msgstr "stop failed: {status}"
 
+#: src/lib/glossary.ts
+msgid "stop using this lesson?"
+msgstr "stop using this lesson?"
+
 #: src/components/StopButton.tsx
 msgid "stopping…"
 msgstr "stopping…"
@@ -3575,6 +3603,10 @@ msgstr "The account key you typed will be lost."
 #: src/components/usage/UsageProviderCard.tsx
 msgid "the account this project's sessions run under"
 msgstr "the account this project's sessions run under"
+
+#: src/lib/glossary.ts
+msgid "the Advisor noticed…"
+msgstr "the Advisor noticed…"
 
 #: src/components/RetroImproveCard.tsx
 msgid "the analysis failed without a recorded reason"
@@ -3965,6 +3997,14 @@ msgstr "warm coral & magenta"
 #: src/lib/docBlocks.tsx
 msgid "Warning"
 msgstr "Warning"
+
+#: src/lib/glossary.ts
+msgid "watching"
+msgstr "watching"
+
+#: src/lib/glossary.ts
+msgid "what actually happened"
+msgstr "what actually happened"
 
 #: src/components/Explain.tsx
 msgid "What is {term}?"

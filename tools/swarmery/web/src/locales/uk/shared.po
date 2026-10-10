@@ -15,893 +15,901 @@ msgstr ""
 
 #: src/components/KillButton.tsx
 msgid " · {cost} so far"
-msgstr ""
+msgstr " · поки що {cost}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid " · {criteriaBefore} before this run"
-msgstr ""
+msgstr " · {criteriaBefore} до цього запуску"
 
 #: src/components/RunOutcomeModal.tsx
 msgid " · baseline not measured"
-msgstr ""
+msgstr " · базовий рівень не виміряно"
 
 #: src/components/ProjectPlugins.tsx
 msgid " · enabled state also reads: {overlaySources}"
-msgstr ""
+msgstr " · стан увімкнення також читається з: {overlaySources}"
 
 #: src/components/QuestionForm.tsx
 msgid " · multi"
-msgstr ""
+msgstr " · кілька варіантів"
 
 #: src/components/usage/UsageModal.tsx
 msgid " · no usage data for this account"
-msgstr ""
+msgstr " · немає даних про використання для цього акаунта"
 
 #: src/components/usage/UsageModal.tsx
 msgid " · refresh failed"
-msgstr ""
+msgstr " · оновлення не вдалося"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid " · removed"
-msgstr ""
+msgstr " · видалено"
 
 #: src/components/RetroImproveCard.tsx
 msgid " · whole fleet"
-msgstr ""
+msgstr " · увесь флот"
 
 #: src/workspace/AgentPicker.tsx
 msgid " (project override)"
-msgstr ""
+msgstr " (перевизначено проєктом)"
 
 #: src/components/AccountsSection.tsx
 msgid "— declares {declares}"
-msgstr ""
+msgstr "— оголошує {declares}"
 
 #: src/workspace/TaskModal.tsx
 msgid "· created {created}"
-msgstr ""
+msgstr "· створено {created}"
 
 #: src/components/PluginDriftBadge.tsx
 msgid "· plugins {warn}"
-msgstr ""
+msgstr "· плагіни {warn}"
 
 #: src/components/PluginDriftBadge.tsx
 msgid "· plugins ⚠ {error}"
-msgstr ""
+msgstr "· плагіни ⚠ {error}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "(no binding)"
-msgstr ""
+msgstr "(без прив’язки)"
 
 #: src/components/DiffView.tsx
 msgid "(patch)"
-msgstr ""
+msgstr "(патч)"
 
 #: src/components/SessionCard.tsx
 msgid "(untitled session)"
-msgstr ""
+msgstr "(сесія без назви)"
 
 #. placeholder {0}: s.changes
 #: src/components/FileContentionBanner.tsx
 msgid "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
-msgstr ""
+msgstr "{0, plural, one {# зміна} few {# зміни} many {# змін} other {# зміни}}"
 
 #. placeholder {0}: wt.dirtyFiles
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "{0, plural, one {# dirty} few {# dirty} many {# dirty} other {# dirty}}"
-msgstr ""
+msgstr "{0, plural, one {# незакомічений} few {# незакомічені} many {# незакомічених} other {# незакомічених}}"
 
 #. placeholder {0}: analysis.citations
 #: src/components/RetroImproveCard.tsx
 msgid "{0, plural, one {# evidence citation} few {# evidence citations} many {# evidence citations} other {# evidence citations}}"
-msgstr ""
+msgstr "{0, plural, one {# посилання на докази} few {# посилання на докази} many {# посилань на докази} other {# посилання на докази}}"
 
 #: src/components/usage/UsageChip.tsx
 msgid "{account} — not connected"
-msgstr ""
+msgstr "{account} — не під’єднано"
 
 #: src/components/usage/UsageModal.tsx
 msgid "{activeProject} runs as <0>{activeKey}</0>"
-msgstr ""
+msgstr "{activeProject} працює під <0>{activeKey}</0>"
 
 #: src/components/Sidebar.tsx
 msgid "{badge, plural, one {# waiting} few {# waiting} many {# waiting} other {# waiting}}"
-msgstr ""
+msgstr "{badge, plural, one {# чекає} few {# чекають} many {# чекають} other {# чекає}}"
 
 #: src/workspace/boardModel.ts
 msgid "{base} · paused by the dispatcher"
-msgstr ""
+msgstr "{base} · призупинено диспетчером"
 
 #: src/workspace/boardModel.ts
 msgid "{base} · paused by you"
-msgstr ""
+msgstr "{base} · призупинено вами"
 
 #: src/components/DiffView.tsx
 msgid "{branch} · base {base}"
-msgstr ""
+msgstr "{branch} · база {base}"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "{branch} deleted — Run plan again to start a fresh run."
-msgstr ""
+msgstr "{branch} видалено — натисніть «Запустити план» ще раз, щоб почати запуск з нуля."
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{cardModel} (card override)"
-msgstr ""
+msgstr "{cardModel} (задано на картці)"
 
 #: src/components/CommandPalette.tsx
 msgid "{changes, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
-msgstr ""
+msgstr "{changes, plural, one {# зміна} few {# зміни} many {# змін} other {# зміни}}"
 
 #: src/components/FileContentionBanner.tsx
 msgid "{changes} · touched {ago}"
-msgstr ""
+msgstr "{changes} · змінено {ago}"
 
 #: src/workspace/TaskDiff.tsx
 msgid "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
-msgstr ""
+msgstr "{commitCount, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміта}} · {fileCount, plural, one {# файл} few {# файли} many {# файлів} other {# файла}}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "{commits, plural, one {# commit will be lost.} few {# commits will be lost.} many {# commits will be lost.} other {# commits will be lost.}}"
-msgstr ""
+msgstr "{commits, plural, one {# коміт буде втрачено.} few {# коміти буде втрачено.} many {# комітів буде втрачено.} other {# коміта буде втрачено.}}"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
-msgstr ""
+msgstr "{commits, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміта}}"
 
 #: src/components/PlanRunCard.tsx
 msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
-msgstr ""
+msgstr "{count, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "{criteriaAfter} of {criteriaTotal} criteria ticked"
-msgstr ""
+msgstr "відмічено {criteriaAfter} з {criteriaTotal} критеріїв"
 
 #: src/lib/format.ts
 msgid "{d} d ago"
-msgstr ""
+msgstr "{d} д тому"
 
 #: src/components/AccountsSection.tsx
 msgid "{danglingCount, plural, one {removed account still bound in # project} few {removed account still bound in # projects} many {removed account still bound in # projects} other {removed account still bound in # projects}}"
-msgstr ""
+msgstr "{danglingCount, plural, one {видалений акаунт ще прив’язаний у # проєкті} few {видалений акаунт ще прив’язаний у # проєктах} many {видалений акаунт ще прив’язаний у # проєктах} other {видалений акаунт ще прив’язаний у # проєкту}}"
 
 #: src/workspace/boardModel.ts
 msgid "{days}d"
-msgstr ""
+msgstr "{days} д"
 
 #: src/components/AccountSelector.tsx
 msgid "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
-msgstr ""
+msgstr "{draftKey} не готовий — {draftReason}; запуск, відправлений під ним, впаде на старті, доки акаунт не під’єднано (Settings → акаунти)"
 
 #: src/components/PluginDriftBadge.tsx
 msgid "{error} error / {warn} warn plugin findings — see System → Insights"
-msgstr ""
+msgstr "знахідки плагінів: {error} помилок / {warn} попереджень — див. System → Insights"
 
 #: src/components/PluginConfigModal.tsx
 msgid "{errorCount, plural, one {# field need attention} few {# fields need attention} many {# fields need attention} other {# fields need attention}}"
-msgstr ""
+msgstr "{errorCount, plural, one {# поле потребує уваги} few {# поля потребують уваги} many {# полів потребують уваги} other {# поля потребує уваги}}"
 
 #: src/components/PluginConfigModal.tsx
 msgid "{filled, plural, one {filled # field from this project — review, then save} few {filled # fields from this project — review, then save} many {filled # fields from this project — review, then save} other {filled # fields from this project — review, then save}}"
-msgstr ""
+msgstr "{filled, plural, one {заповнено # поле з цього проєкту — перегляньте й збережіть} few {заповнено # поля з цього проєкту — перегляньте й збережіть} many {заповнено # полів з цього проєкту — перегляньте й збережіть} other {заповнено # поля з цього проєкту — перегляньте й збережіть}}"
 
 #: src/components/PluginConfigModal.tsx
 msgid "{filledCount}/{leafCount} fields"
-msgstr ""
+msgstr "{filledCount}/{leafCount} полів"
 
 #: src/components/PluginConfigModal.tsx
 msgid "{found, plural, one {suggested values for # field} few {suggested values for # fields} many {suggested values for # fields} other {suggested values for # fields}}"
-msgstr ""
+msgstr "{found, plural, one {запропоновано значення для # поля} few {запропоновано значення для # полів} many {запропоновано значення для # полів} other {запропоновано значення для # поля}}"
 
 #: src/workspace/StatusBar.tsx
 msgid "{free} of {max} slots free"
-msgstr ""
+msgstr "вільно {free} з {max} слотів"
 
 #: src/lib/format.ts
 msgid "{h} h ago"
-msgstr ""
+msgstr "{h} год тому"
 
 #: src/components/SessionCard.tsx
 msgid "{k}k ctx"
-msgstr ""
+msgstr "{k}k ctx"
 
 #: src/components/Sidebar.tsx
 msgid "{label} — opens in a project"
-msgstr ""
+msgstr "{label} — відкривається в проєкті"
 
 #: src/theme/ThemePicker.tsx
 msgid "{label} palette — {hint}"
-msgstr ""
+msgstr "палітра {label} — {hint}"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{left}% left"
-msgstr ""
+msgstr "{left}% лишилось"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{left}% remaining"
-msgstr ""
+msgstr "залишок {left}%"
 
 #: src/lib/format.ts
 msgid "{min} min ago"
-msgstr ""
+msgstr "{min} хв тому"
 
 #: src/components/FileContentionBanner.tsx
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
-msgstr ""
+msgstr "{n, plural, one {# файл редагує більше однієї живої сесії} few {# файли редагує більше однієї живої сесії} many {# файлів редагує більше однієї живої сесії} other {# файла редагує більше однієї живої сесії}}"
 
 #: src/components/ProjectPlugins.tsx
 msgid "{name}: disabled"
-msgstr ""
+msgstr "{name}: вимкнено"
 
 #: src/components/ProjectPlugins.tsx
 msgid "{name}: enabled"
-msgstr ""
+msgstr "{name}: увімкнено"
 
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
-msgstr ""
+msgstr "{nth} спроба — {tail}"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{playbookModel} (from playbook)"
-msgstr ""
+msgstr "{playbookModel} (з плейбуку)"
 
 #: src/workspace/TaskCard.tsx
 msgid "{priority} priority"
-msgstr ""
+msgstr "пріоритет {priority}"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "{provider} repository · not signed in"
-msgstr ""
+msgstr "репозиторій {provider} · вхід не виконано"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "{provider} repository · sign-in expired"
-msgstr ""
+msgstr "репозиторій {provider} · вхід прострочено"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "{provider} repository · sign-in status unknown"
-msgstr ""
+msgstr "репозиторій {provider} · стан входу невідомий"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "{provider} sign-in"
-msgstr ""
+msgstr "Вхід у {provider}"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{rung} model won"
-msgstr ""
+msgstr "перемогла модель {rung}"
 
 #: src/lib/format.ts
 msgid "{sec} s ago"
-msgstr ""
+msgstr "{sec} с тому"
 
 #: src/components/CommandPalette.tsx
 msgid "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
-msgstr ""
+msgstr "{sessions, plural, one {# сесія ❯} few {# сесії ❯} many {# сесій ❯} other {# сесії ❯}}"
 
 #: src/components/PluginConfigModal.tsx
 msgid "{suggestionCount} suggested by probe"
-msgstr ""
+msgstr "{suggestionCount} запропонував зонд"
 
 #: src/workspace/TaskGraph.tsx
 msgid "{title} — column {column}, depends on {deps}"
-msgstr ""
+msgstr "{title} — колонка {column}, залежить від {deps}"
 
 #: src/workspace/TaskGraph.tsx
 msgid "{title} — column {column}, no dependencies"
-msgstr ""
+msgstr "{title} — колонка {column}, без залежностей"
 
 #: src/components/usage/UsageWindowRow.tsx
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{used}% used"
-msgstr ""
+msgstr "використано {used}%"
 
 #: src/components/usage/UsageChip.tsx
 msgid "{windowLabel} {pct}% used"
-msgstr ""
+msgstr "{windowLabel} використано {pct}%"
 
 #: src/workspace/task/RunLog.tsx
 msgid "❯ linked sessions →"
-msgstr ""
+msgstr "❯ пов’язані сесії →"
 
 #: src/workspace/TaskCard.tsx
 msgid "❯ session"
-msgstr ""
+msgstr "❯ сесія"
 
 #: src/workspace/TaskCard.tsx
 msgid "❯_ Terminal"
-msgstr ""
+msgstr "❯_ Термінал"
 
 #: src/workspace/AgentPicker.tsx
 msgid "@{value} (unknown)"
-msgstr ""
+msgstr "@{value} (невідомий)"
 
 #: src/main.tsx
 msgid "← back to the overview"
-msgstr ""
+msgstr "← до огляду"
 
 #: src/components/SessionCard.tsx
 msgid "→ changed to"
-msgstr ""
+msgstr "→ змінено на"
 
 #: src/components/SessionCard.tsx
 msgid "→ fell back to"
-msgstr ""
+msgstr "→ відкат на"
 
 #: src/components/Drawer.tsx
 msgid "↑↓ next"
-msgstr ""
+msgstr "↑↓ далі"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/TaskCard.tsx
 msgid "↩ Inbox"
-msgstr ""
+msgstr "↩ Inbox"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "↩ Restore"
-msgstr ""
+msgstr "↩ Відновити"
 
 #: src/lib/docFigures.tsx
 msgid "↻ Re-run"
-msgstr ""
+msgstr "↻ Перезапуск"
 
 #: src/lib/docFigures.tsx
 msgid "⇧ Land"
-msgstr ""
+msgstr "⇧ Влити"
 
 #: src/components/AccountsSection.tsx
 msgid "+ add account"
-msgstr ""
+msgstr "+ додати акаунт"
 
 #: src/components/NewProjectButton.tsx
 msgid "+ new project"
-msgstr ""
+msgstr "+ новий проєкт"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "<0>{branch}</0> has <1>{commitsText}</1> that <2>{base}</2> does not have. Starting a new run would reuse that branch name, so the daemon refused rather than destroy them."
-msgstr ""
+msgstr "У <0>{branch}</0> є <1>{commitsText}</1>, яких немає в <2>{base}</2>. Новий запуск узяв би ту саму назву гілки, тому демон відмовився, щоб їх не знищити."
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "<0>{branch}</0> has <1>{commitsText}</1> that could not be measured against a base branch. Starting a new run would reuse that branch name, so the daemon refused rather than destroy them."
-msgstr ""
+msgstr "У <0>{branch}</0> є <1>{commitsText}</1>, які не вдалося порівняти з базовою гілкою. Новий запуск узяв би ту саму назву гілки, тому демон відмовився, щоб їх не знищити."
 
 #: src/components/AccountReadyBanner.tsx
 msgid "<0>{project}</0> runs as <1>{account}</1> — connected and CLI-ready."
-msgstr ""
+msgstr "<0>{project}</0> працює під <1>{account}</1> — під’єднано, CLI готовий."
 
 #: src/components/AccountReadyBanner.tsx
 msgid "<0>{project}</0> runs as <1>{accountKey}</1>"
-msgstr ""
+msgstr "<0>{project}</0> працює під <1>{accountKey}</1>"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "<0>{taskTitle}</0> is removed permanently — this cannot be undone. To keep it out of the way without losing it, use <1>Archive</1> instead."
-msgstr ""
+msgstr "<0>{taskTitle}</0> буде видалено назавжди — цього не скасувати. Щоб прибрати картку з очей, не втрачаючи її, натомість скористайтеся <1>В архів</1>."
 
 #: src/lib/docFigures.tsx
 msgid "<0>branch ·</0> Dismiss, or a 14-day TTL in triage, archives a captured card instead."
-msgstr ""
+msgstr "<0>гілка ·</0> «Відхилити» або 14-денний TTL у сортуванні натомість архівують зафіксовану картку."
 
 #: src/lib/docFigures.tsx
 msgid "<0>branch ·</0> From Review, Re-run and a failed verify both send the card back to Queued; Discard archives it and deletes the branch."
-msgstr ""
+msgstr "<0>гілка ·</0> З рев’ю і «Перезапуск», і невдала перевірка повертають картку в чергу; «Відкинути» архівує її й видаляє гілку."
 
 #: src/components/ui.tsx
 msgid "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
-msgstr ""
+msgstr "≈ приблизно — діапазон захоплює вже згорнуті дні (денні зведення), тож старіших деталей немає"
 
 #: src/components/Sidebar.tsx
 msgid "⌘K search & actions"
-msgstr ""
+msgstr "⌘K пошук і дії"
 
 #: src/lib/docFigures.tsx
 msgid "⌸ Terminal"
-msgstr ""
+msgstr "⌸ Термінал"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 #: src/workspace/TaskCard.tsx
 msgid "▶ Resume"
-msgstr ""
+msgstr "▶ Продовжити"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 msgid "▶ Run"
-msgstr ""
+msgstr "▶ Запуск"
 
 #: src/lib/docFigures.tsx
 msgid "▸ History"
-msgstr ""
+msgstr "▸ Історія"
 
 #: src/workspace/TaskCard.tsx
 msgid "◇ Plan"
-msgstr ""
+msgstr "◇ План"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 msgid "◇ Review…"
-msgstr ""
+msgstr "◇ Рев’ю…"
 
 #: src/lib/docFigures.tsx
 msgid "✎ Plan"
-msgstr ""
+msgstr "✎ План"
 
 #: src/workspace/TaskCard.tsx
 msgid "✓ Mark done"
-msgstr ""
+msgstr "✓ Готово"
 
 #: src/components/ui.tsx
 msgid "✕ close"
-msgstr ""
+msgstr "✕ закрити"
 
 #: src/lib/docFigures.tsx
 msgid "✕ Dismiss"
-msgstr ""
+msgstr "✕ Відхилити"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 #: src/workspace/TaskCard.tsx
 msgid "❙❙ Pause"
-msgstr ""
+msgstr "❙❙ Пауза"
 
 #: src/lib/docFigures.tsx
 msgid "🗑 Discard"
-msgstr ""
+msgstr "🗑 Відкинути"
 
 #: src/lib/docFigures.tsx
 msgid "2 done · 237 archived"
-msgstr ""
+msgstr "2 готово · 237 в архіві"
 
 #: src/lib/docFigures.tsx
 msgid "9 gates"
-msgstr ""
+msgstr "9 гейтів"
 
 #: src/lib/docFigures.tsx
 msgid "A card's life: capture → queue → run → review → land"
-msgstr ""
+msgstr "Життя картки: фіксація → черга → запуск → рев’ю → влиття"
 
 #: src/lib/docFigures.tsx
 msgid "A pause on this specific project"
-msgstr ""
+msgstr "Пауза саме для цього проєкту"
 
 #: src/lib/docFigures.tsx
 msgid "A plan is a README plus a phase DAG"
-msgstr ""
+msgstr "План — це README плюс DAG фаз"
 
 #: src/api.ts
 msgid "a planning run is already active for this project"
-msgstr ""
+msgstr "для цього проєкту вже триває запуск планування"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "a read-only verifier confirmed this phase’s acceptance criteria"
-msgstr ""
+msgstr "перевіряльник (лише читання) підтвердив критерії приймання цієї фази"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "a read-only verifier could NOT confirm the ticked criteria — see the verify-failed blocker"
-msgstr ""
+msgstr "перевіряльник (лише читання) НЕ зміг підтвердити відмічені критерії — див. блокер verify-failed"
 
 #: src/components/NotifySettings.tsx
 msgid "a request needs a decision"
-msgstr ""
+msgstr "запит потребує рішення"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "A revise wizard interviews you against this plan and stages its changes as a diff — nothing is written until you approve it. The reason below is prefilled from this diagnosis; edit it before starting."
-msgstr ""
+msgstr "Майстер перегляду проведе інтерв’ю щодо цього плану й підготує зміни як дифф — нічого не записується, доки ви не схвалите. Причину нижче заповнено з цього діагнозу; відредагуйте її перед початком."
 
 #: src/components/OutcomePicker.tsx
 msgid "abandoned"
-msgstr ""
+msgstr "покинуто"
 
 #: src/components/NewProjectButton.tsx
 msgid "absolute path"
-msgstr ""
+msgstr "абсолютний шлях"
 
 #: src/components/RetroImproveCard.tsx
 msgid "Accept"
-msgstr ""
+msgstr "Прийняти"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 msgid "accept into the Working queue — the dispatcher picks it up"
-msgstr ""
+msgstr "прийняти в чергу «У роботі» — диспетчер її підхопить"
 
 #: src/components/AccountSelector.tsx
 #: src/components/AccountSelector.tsx
 msgid "account"
-msgstr ""
+msgstr "акаунт"
 
 #: src/components/CreateAccountModal.tsx
 msgid "Account <0>{accountKey}</0> is connected and CLI-ready."
-msgstr ""
+msgstr "Акаунт <0>{accountKey}</0> під’єднано, CLI готовий."
 
 #: src/components/CreateAccountModal.tsx
 msgid "Account <0>{accountKey}</0> reserved. Connect it here — one authorization covers the quota read, the CLI credential, and the readiness check:"
-msgstr ""
+msgstr "Акаунт <0>{accountKey}</0> зарезервовано. Під’єднайте його тут — одна авторизація покриває читання квоти, облікові дані CLI й перевірку готовності:"
 
 #: src/components/CreateAccountModal.tsx
 msgid "account key"
-msgstr ""
+msgstr "ключ акаунта"
 
 #: src/components/AccountReadyBanner.tsx
 msgid "account not ready"
-msgstr ""
+msgstr "акаунт не готовий"
 
 #: src/workspace/boardModel.ts
 msgid "account paused: {why}"
-msgstr ""
+msgstr "акаунт призупинено: {why}"
 
 #: src/components/AccountReadyBanner.tsx
 msgid "account ready"
-msgstr ""
+msgstr "акаунт готовий"
 
 #: src/pages/Settings.tsx
 msgid "accounts"
-msgstr ""
+msgstr "акаунти"
 
 #: src/pages/Settings.tsx
 msgid "Accounts"
-msgstr ""
+msgstr "Акаунти"
+
+#: src/lib/glossary.ts
+msgid "acting"
+msgstr "діє"
 
 #: src/components/usage/UsageProviderCard.tsx
 #: src/lib/sessionsView.ts
 msgid "active"
-msgstr ""
+msgstr "активно"
 
 #: src/components/ui.tsx
 msgid "active · {span}"
-msgstr ""
+msgstr "активно · {span}"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "add a label + Enter"
-msgstr ""
+msgstr "мітка + Enter"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "add a path glob + Enter"
-msgstr ""
+msgstr "glob шляху + Enter"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "add a T-id + Enter"
-msgstr ""
+msgstr "T-id + Enter"
 
 #: src/lib/docFigures.tsx
 msgid "Add an index on sessions.cwd"
-msgstr ""
+msgstr "Додати індекс на sessions.cwd"
 
 #: src/components/CreateAccountModal.tsx
 msgid "Add Claude account"
-msgstr ""
+msgstr "Додати акаунт Claude"
 
 #: src/api.ts
 msgid "add connector failed: {status}"
-msgstr ""
+msgstr "додати конектор не вдалося: {status}"
 
 #: src/workspace/boardModel.ts
 msgid "added by hand"
-msgstr ""
+msgstr "додано вручну"
 
 #: src/lib/docFigures.tsx
 msgid "Admission gates, in the order the dispatcher applies them"
-msgstr ""
+msgstr "Гейти допуску в порядку, у якому їх застосовує диспетчер"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "advanced"
-msgstr ""
+msgstr "додатково"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "advanced · {overrideList}"
-msgstr ""
+msgstr "додатково · {overrideList}"
 
 #: src/api.ts
 #: src/api.ts
 msgid "advise failed: {status}"
-msgstr ""
+msgstr "запит до радника не вдався: {status}"
+
+#: src/lib/glossary.ts
+msgid "after reading the code"
+msgstr "після читання коду"
 
 #: src/workspace/AgentPicker.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "agent"
-msgstr ""
+msgstr "агент"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "agent said"
-msgstr ""
+msgstr "агент сказав"
 
 #: src/main.tsx
 #: src/main.tsx
 msgid "agents…"
-msgstr ""
+msgstr "агенти…"
 
 #: src/components/NotifySettings.tsx
 msgid "alerts"
-msgstr ""
+msgstr "оповіщення"
 
 #: src/components/ProjectDropdown.tsx
 msgid "all projects"
-msgstr ""
+msgstr "усі проєкти"
 
 #: src/components/ScopeChip.tsx
 #: src/workspace/ProjectSwitcher.tsx
 msgid "All projects"
-msgstr ""
+msgstr "Усі проєкти"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "All projects →"
-msgstr ""
+msgstr "Усі проєкти →"
 
 #: src/components/NotifySettings.tsx
 msgid "an active session ended"
-msgstr ""
+msgstr "активна сесія завершилась"
 
 #: src/components/NotifySettings.tsx
 msgid "an error event appeared"
-msgstr ""
+msgstr "з’явилася подія помилки"
 
 #: src/lib/notifications.ts
 msgid "an error event in session #{sessionId}"
-msgstr ""
+msgstr "подія помилки в сесії #{sessionId}"
 
 #: src/components/RetroImproveCard.tsx
 msgid "analysing…"
-msgstr ""
+msgstr "аналізуємо…"
 
 #: src/components/CommandPalette.tsx
 msgid "Analytics"
-msgstr ""
+msgstr "Аналітика"
 
 #: src/api.ts
 msgid "answer planning failed: {status}"
-msgstr ""
+msgstr "відповідь плануванню не вдалася: {status}"
 
 #: src/lib/docFigures.tsx
 msgid "API endpoints"
-msgstr ""
+msgstr "Ендпоінти API"
 
 #: src/theme/ThemePicker.tsx
 #: src/theme/ThemePicker.tsx
 msgid "appearance"
-msgstr ""
+msgstr "вигляд"
 
 #: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
 msgid "Appearance"
-msgstr ""
+msgstr "Вигляд"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "append the feedback to the prompt and send the card back to todo"
-msgstr ""
+msgstr "додати відгук до промпту й повернути картку в чергу"
 
 #: src/api.ts
 msgid "apply conflicts"
-msgstr ""
+msgstr "конфлікти застосування"
 
 #: src/api.ts
 msgid "apply proposal failed"
-msgstr ""
+msgstr "застосувати пропозицію не вдалося"
 
 #: src/api.ts
 msgid "apply revision failed: {status}"
-msgstr ""
+msgstr "застосувати ревізію не вдалося: {status}"
 
 #: src/lib/needsYou.ts
 msgid "Approval"
-msgstr ""
+msgstr "Погодження"
 
 #: src/lib/notifications.ts
 msgid "Approval needed: {toolName}"
-msgstr ""
+msgstr "Потрібне погодження: {toolName}"
 
 #: src/components/NotifySettings.tsx
 msgid "approval requested"
-msgstr ""
+msgstr "запитано погодження"
 
 #: src/components/PermissionPresets.tsx
 msgid "Approval required"
-msgstr ""
+msgstr "Потрібне погодження"
 
 #: src/components/CommandPalette.tsx
 msgid "Approvals"
-msgstr ""
+msgstr "Погодження"
 
 #: src/components/ProjectActions.tsx
 #: src/components/ProjectActions.tsx
 msgid "archive"
-msgstr ""
+msgstr "архівувати"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/task/TaskActions.tsx
 msgid "Archive"
-msgstr ""
+msgstr "В архів"
 
 #: src/workspace/TaskCard.tsx
 msgid "archive — it stays findable, it stops being an inbox item"
-msgstr ""
+msgstr "в архів — картку й далі можна знайти, але вона зникає з Inbox"
 
 #: src/api.ts
 msgid "archive failed: {status}"
-msgstr ""
+msgstr "архівація не вдалася: {status}"
 
 #: src/components/ProjectActions.tsx
 msgid "Archive project"
-msgstr ""
+msgstr "Архівувати проєкт"
 
 #: src/workspace/boardModel.ts
 msgid "Archived"
-msgstr ""
+msgstr "В архіві"
 
 #: src/workspace/boardModel.ts
 msgid "archived at the next sweep"
-msgstr ""
+msgstr "в архів при наступному обході"
 
 #: src/workspace/boardModel.ts
 msgid "archived in {days}d"
-msgstr ""
+msgstr "в архів через {days} д"
 
 #: src/components/PermissionPresets.tsx
 msgid "ask"
-msgstr ""
+msgstr "питати"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Asking for a code…"
-msgstr ""
+msgstr "Запитуємо код…"
 
 #: src/components/ProjectActions.tsx
 msgid "attach"
-msgstr ""
+msgstr "підключити"
 
 #: src/components/AttachModal.tsx
 msgid "Attach <0>{projectName}</0>"
-msgstr ""
+msgstr "Підключити <0>{projectName}</0>"
 
 #: src/api.ts
 msgid "attach failed: {status}"
-msgstr ""
+msgstr "підключення не вдалося: {status}"
 
 #: src/components/AttachModal.tsx
 msgid "Attach project"
-msgstr ""
+msgstr "Підключити проєкт"
 
 #: src/lib/sessionsView.ts
 msgid "attempt {count}"
-msgstr ""
+msgstr "спроба {count}"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "authorization code for {account}"
-msgstr ""
+msgstr "код авторизації для {account}"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Authorize swarmery again — this replaces the stored credential for this account."
-msgstr ""
+msgstr "Авторизуйте swarmery ще раз — це замінить збережені облікові дані цього акаунта."
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Authorize swarmery to read this account's quota — no CLI login needed."
-msgstr ""
+msgstr "Дозвольте swarmery читати квоту цього акаунта — вхід через CLI не потрібен."
 
 #: src/workspace/PlaybookPicker.tsx
 msgid "Auto (chosen at dispatch)"
-msgstr ""
+msgstr "Авто (вибір під час відправки)"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "auto playbook"
-msgstr ""
+msgstr "авто-плейбук"
 
 #: src/components/PermissionPresets.tsx
 #: src/pages/Settings.tsx
 msgid "auto-approve"
-msgstr ""
+msgstr "автопогодження"
 
 #: src/components/PermissionPresets.tsx
 msgid "Auto-approve file writes, safe git, and shell by default (never pushing). Fast, but hands-off."
-msgstr ""
+msgstr "Автопогодження записів у файли, безпечного git і shell за замовчуванням (push — ніколи). Швидко, але без нагляду."
 
 #: src/pages/Settings.tsx
 msgid "auto-approve presets are configured per project — open a project's Settings to set them"
-msgstr ""
+msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Settings проєкту, щоб їх налаштувати"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
-msgstr ""
+msgstr "чекає відповіді"
 
 #: src/components/SessionCard.tsx
 msgid "awaiting reply · {owed}"
-msgstr ""
+msgstr "чекає відповіді · {owed}"
 
 #: src/lib/needsYou.ts
 msgid "Awaiting your reply"
-msgstr ""
+msgstr "Чекає вашої відповіді"
 
 #: src/workspace/WorkspaceShell.tsx
 msgid "back to all projects"
-msgstr ""
+msgstr "до всіх проєктів"
 
 #: src/components/AttachModal.tsx
 #: src/components/DetachModal.tsx
 msgid "backup: {backupPath}"
-msgstr ""
+msgstr "резервна копія: {backupPath}"
 
 #: src/components/ImproveModal.tsx
 msgid "behavior {behavior} · harness {harness} · infra {infra}"
-msgstr ""
+msgstr "поведінка {behavior} · обв’язка {harness} · інфра {infra}"
 
 #: src/components/ProjectActions.tsx
 msgid "billing, infra"
-msgstr ""
+msgstr "білінг, інфра"
 
 #: src/components/AccountSelector.tsx
 msgid "binding ignored: {ignoredReason}"
-msgstr ""
+msgstr "прив’язку проігноровано: {ignoredReason}"
 
 #: src/components/NewProjectButton.tsx
 msgid "blank → the daemon's default workspace root"
-msgstr ""
+msgstr "порожньо → типовий корінь робочого простору демона"
 
 #: src/workspace/StatusBar.tsx
 msgid "Blocked {blocked}"
-msgstr ""
+msgstr "Блок {blocked}"
 
 #: src/workspace/boardModel.ts
 msgid "blocked by {dep}"
-msgstr ""
+msgstr "заблоковано: {dep}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Blocker: {summary}"
-msgstr ""
+msgstr "Блокер: {summary}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "blockers"
-msgstr ""
+msgstr "блокери"
 
 #: src/components/AccountsSection.tsx
 msgid "bound projects ({boundCount})"
-msgstr ""
+msgstr "прив’язані проєкти ({boundCount})"
 
 #: src/components/AccountsSection.tsx
 msgid "bound, not indexed ({unindexedCount}) — no live project row"
-msgstr ""
+msgstr "прив’язані, не індексовані ({unindexedCount}) — немає живого рядка проєкту"
 
 #: src/workspace/task/RunLog.tsx
 msgid "branch"
-msgstr ""
+msgstr "гілка"
 
 #: src/workspace/TaskCard.tsx
 msgid "branch {branch}"
-msgstr ""
+msgstr "гілка {branch}"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "branch {branch} deleted — card archived"
-msgstr ""
+msgstr "гілку {branch} видалено — картку архівовано"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "branch {branch} was already gone — card archived"
-msgstr ""
+msgstr "гілки {branch} вже не було — картку архівовано"
 
 #: src/api.ts
 #: src/api.ts
 msgid "branch delete failed ({status})"
-msgstr ""
+msgstr "видалення гілки не вдалося ({status})"
 
 #: src/workspace/TaskModal.tsx
 msgid "brief"
-msgstr ""
+msgstr "бриф"
 
 #: src/components/ProjectActions.tsx
 msgid "Bring <0>{projectName}</0> back into the default projects list."
-msgstr ""
+msgstr "Повернути <0>{projectName}</0> до основного списку проєктів."
 
 #: src/components/NotifySettings.tsx
 msgid "browser notifications"
-msgstr ""
+msgstr "сповіщення браузера"
 
 #: src/components/ImproveModal.tsx
 msgid "Built-in agent — no editable definition file to improve."
-msgstr ""
+msgstr "Вбудований агент — немає файлу визначення, який можна покращити."
 
 #: src/api.ts
 msgid "bulk archive failed: {status}"
-msgstr ""
+msgstr "масова архівація не вдалася: {status}"
 
 #: src/components/AttachModal.tsx
 #: src/components/CreateAccountModal.tsx
@@ -914,7 +922,7 @@ msgstr ""
 #: src/components/usage/UsageConnect.tsx
 #: src/components/usage/UsageDisconnect.tsx
 msgid "cancel"
-msgstr ""
+msgstr "скасувати"
 
 #: src/components/KillButton.tsx
 #: src/components/PlanBranchDirtyModal.tsx
@@ -922,116 +930,116 @@ msgstr ""
 #: src/components/RunOutcomeModal.tsx
 #: src/components/StopButton.tsx
 msgid "Cancel"
-msgstr ""
+msgstr "Скасувати"
 
 #: src/api.ts
 msgid "cancel failed: {status}"
-msgstr ""
+msgstr "скасування не вдалося: {status}"
 
 #: src/api.ts
 msgid "cancel planning failed: {status}"
-msgstr ""
+msgstr "скасування планування не вдалося: {status}"
 
 #: src/lib/docFigures.tsx
 msgid "Captured"
-msgstr ""
+msgstr "Зафіксовано"
 
 #: src/workspace/boardModel.ts
 msgid "captured from session #{id}"
-msgstr ""
+msgstr "зафіксовано з сесії #{id}"
 
 #: src/workspace/boardModel.ts
 msgid "cards at or near their automatic-archive date"
-msgstr ""
+msgstr "картки, яким настає дата автоархівації"
 
 #: src/workspace/boardModel.ts
 msgid "Cards that have run and carry a verdict wait here — Land, Re-run or Discard."
-msgstr ""
+msgstr "Тут чекають картки, що вже виконались і мають вердикт — влити, перезапустити або відкинути."
 
 #: src/workspace/boardModel.ts
 msgid "cards the dispatcher has in flight right now"
-msgstr ""
+msgstr "картки, які диспетчер виконує зараз"
 
 #: src/components/PermissionPresets.tsx
 msgid "Categories"
-msgstr ""
+msgstr "Категорії"
 
 #: src/components/SessionLabelChips.tsx
 msgid "cause"
-msgstr ""
+msgstr "причина"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "change the plan — interview + staged diff, applied only on your approval"
-msgstr ""
+msgstr "змінити план — інтерв’ю + підготований дифф, застосовується лише після вашого схвалення"
 
 #: src/components/ProjectPlugins.tsx
 msgid "check"
-msgstr ""
+msgstr "перевірити"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 msgid "check now"
-msgstr ""
+msgstr "перевірити зараз"
 
 #: src/components/AccountsSection.tsx
 msgid "checked {ago}"
-msgstr ""
+msgstr "перевірено {ago}"
 
 #: src/components/AccountReadyBanner.tsx
 msgid "checked {checkedAgo}"
-msgstr ""
+msgstr "перевірено {checkedAgo}"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Checking the token…"
-msgstr ""
+msgstr "Перевіряємо токен…"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 #: src/components/usage/UsageConnect.tsx
 msgid "checking…"
-msgstr ""
+msgstr "перевіряємо…"
 
 #: src/components/RetroImproveCard.tsx
 msgid "choose a project — the changes land in the agent system’s repository, not necessarily the one that produced the evidence"
-msgstr ""
+msgstr "виберіть проєкт — зміни лягають у репозиторій системи агентів, не обов’язково той, що дав докази"
 
 #: src/components/RetroImproveCard.tsx
 msgid "choose a project to plan in"
-msgstr ""
+msgstr "виберіть проєкт для планування"
 
 #: src/components/RetroImproveCard.tsx
 msgid "choose a project…"
-msgstr ""
+msgstr "виберіть проєкт…"
 
 #: src/components/usage/UsageConnect.tsx
 #: src/components/usage/UsageConnect.tsx
 msgid "Claude login required for this account"
-msgstr ""
+msgstr "Для цього акаунта потрібен вхід у Claude"
 
 #: src/components/usage/UsageChip.tsx
 msgid "Claude usage unavailable — {error}"
-msgstr ""
+msgstr "Використання Claude недоступне — {error}"
 
 #: src/components/usage/UsageChip.tsx
 msgid "Claude usage unavailable — run `claude` to log in"
-msgstr ""
+msgstr "Використання Claude недоступне — виконайте `claude`, щоб увійти"
 
 #: src/components/OutcomePicker.tsx
 msgid "clear {label}"
-msgstr ""
+msgstr "очистити {label}"
 
 #: src/lib/docFigures.tsx
 msgid "Clear all nine and the card gets an isolated worktree on <0>swarm/<T-id></0>, cut from the tip of whatever branch the main checkout is on — that SHA is persisted, so verification and the review diff both stand on it."
-msgstr ""
+msgstr "Пройдіть усі дев’ять — і картка отримає ізольований worktree на <0>swarm/<T-id></0>, відгалужений від вершини гілки, на якій стоїть основний checkout; той SHA зберігається, тож і перевірка, і дифф для рев’ю стоять на ньому."
 
 #: src/components/PageSearchInput.tsx
 msgid "clear filter"
-msgstr ""
+msgstr "скинути фільтр"
 
 #: src/components/AccountSelector.tsx
 #: src/components/AccountsSection.tsx
 msgid "CLI login required"
-msgstr ""
+msgstr "потрібен вхід у CLI"
 
 #: src/components/AttachModal.tsx
 #: src/components/DetachModal.tsx
@@ -1043,224 +1051,224 @@ msgstr ""
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/TaskModal.tsx
 msgid "close"
-msgstr ""
+msgstr "закрити"
 
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/VcsSignInDialog.tsx
 msgid "Close"
-msgstr ""
+msgstr "Закрити"
 
 #: src/components/usage/UsageModal.tsx
 msgid "Close usage"
-msgstr ""
+msgstr "Закрити використання"
 
 #: src/components/VcsProviderAsk.tsx
 msgid "Code host"
-msgstr ""
+msgstr "Хостинг коду"
 
 #: src/components/ui.tsx
 msgid "collapse {label}"
-msgstr ""
+msgstr "згорнути {label}"
 
 #: src/theme/ThemePicker.tsx
 msgid "color mode"
-msgstr ""
+msgstr "режим кольору"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 msgid "column"
-msgstr ""
+msgstr "колонка"
 
 #: src/components/PermissionPresets.tsx
 msgid "compiled into managed auto-approve rules · manual rules on the Approvals page are untouched"
-msgstr ""
+msgstr "скомпільовано в керовані правила автопогодження · ручні правила на сторінці погоджень не зачеплено"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "completed"
-msgstr ""
+msgstr "завершено"
 
 #: src/components/AttachModal.tsx
 #: src/components/DetachModal.tsx
 msgid "computing plan…"
-msgstr ""
+msgstr "обчислюємо план…"
 
 #: src/api.ts
 msgid "config write failed: {status}"
-msgstr ""
+msgstr "запис конфігу не вдався: {status}"
 
 #: src/components/ProjectPlugins.tsx
 msgid "configure"
-msgstr ""
+msgstr "налаштувати"
 
 #: src/components/KillButton.tsx
 #: src/components/StopButton.tsx
 msgid "Confirm"
-msgstr ""
+msgstr "Підтвердити"
 
 #: src/components/AttachModal.tsx
 msgid "confirm attach"
-msgstr ""
+msgstr "підтвердити підключення"
 
 #: src/components/PermissionPresets.tsx
 msgid "Confirm broader permissions"
-msgstr ""
+msgstr "Підтвердьте ширші дозволи"
 
 #: src/components/DetachModal.tsx
 msgid "confirm detach"
-msgstr ""
+msgstr "підтвердити відключення"
 
 #: src/lib/needsYou.ts
 msgid "Confirm locally"
-msgstr ""
+msgstr "Підтвердити локально"
 
 #: src/api.ts
 msgid "confirmation required"
-msgstr ""
+msgstr "потрібне підтвердження"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "connect"
-msgstr ""
+msgstr "під’єднати"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Connect account"
-msgstr ""
+msgstr "Під’єднати акаунт"
 
 #: src/components/AccountSelector.tsx
 #: src/components/AccountsSection.tsx
 msgid "connected"
-msgstr ""
+msgstr "під’єднано"
 
 #: src/components/AccountsSection.tsx
 msgid "connection status unknown"
-msgstr ""
+msgstr "стан під’єднання невідомий"
 
 #: src/components/AccountSelector.tsx
 msgid "connection unknown"
-msgstr ""
+msgstr "під’єднання невідоме"
 
 #: src/pages/Settings.tsx
 msgid "connectors"
-msgstr ""
+msgstr "конектори"
 
 #: src/api.ts
 msgid "connectors unavailable"
-msgstr ""
+msgstr "конектори недоступні"
 
 #: src/api.ts
 msgid "consolidate failed: {status}"
-msgstr ""
+msgstr "консолідація не вдалася: {status}"
 
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
-msgstr ""
+msgstr "холодний синій, морська глибина"
 
 #: src/components/CopyIdBadge.tsx
 #: src/components/CreateAccountModal.tsx
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copied"
-msgstr ""
+msgstr "скопійовано"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Copied"
-msgstr ""
+msgstr "Скопійовано"
 
 #: src/components/CreateAccountModal.tsx
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copy"
-msgstr ""
+msgstr "копіювати"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Copy"
-msgstr ""
+msgstr "Копіювати"
 
 #: src/components/CopyIdBadge.tsx
 msgid "copy {what}: {id}"
-msgstr ""
+msgstr "копіювати {what}: {id}"
 
 #: src/components/CopyIdBadge.tsx
 msgid "copy failed"
-msgstr ""
+msgstr "копіювання не вдалося"
 
 #: src/api/systemHub.ts
 msgid "copy failed: {status}"
-msgstr ""
+msgstr "копіювання не вдалося: {status}"
 
 #: src/components/CopyIdBadge.tsx
 msgid "copy id: {id}"
-msgstr ""
+msgstr "копіювати id: {id}"
 
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copy: {cmd}"
-msgstr ""
+msgstr "копіювати: {cmd}"
 
 #: src/components/ProjectPlugins.tsx
 msgid "core is managed via attach/detach"
-msgstr ""
+msgstr "core керується через attach/detach"
 
 #: src/api.ts
 msgid "could not complete the connection"
-msgstr ""
+msgstr "не вдалося завершити під’єднання"
 
 #: src/api.ts
 msgid "could not disconnect the account"
-msgstr ""
+msgstr "не вдалося від’єднати акаунт"
 
 #: src/api.ts
 msgid "could not re-check the account"
-msgstr ""
+msgstr "не вдалося перевірити акаунт ще раз"
 
 #: src/components/AccountsSection.tsx
 msgid "could not read accounts"
-msgstr ""
+msgstr "не вдалося прочитати акаунти"
 
 #: src/components/ConnectorsSection.tsx
 msgid "could not read mcp config"
-msgstr ""
+msgstr "не вдалося прочитати конфіг mcp"
 
 #: src/components/VcsProviderAsk.tsx
 msgid "Could not save the answer: {error}"
-msgstr ""
+msgstr "Не вдалося зберегти відповідь: {error}"
 
 #: src/api.ts
 msgid "could not start the connection"
-msgstr ""
+msgstr "не вдалося почати під’єднання"
 
 #: src/components/CreateAccountModal.tsx
 msgid "create"
-msgstr ""
+msgstr "створити"
 
 #: src/components/RetroImproveCard.tsx
 msgid "Create a plan"
-msgstr ""
+msgstr "Створити план"
 
 #: src/api.ts
 msgid "create account failed: {status}"
-msgstr ""
+msgstr "створити акаунт не вдалося: {status}"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "create in {lane}"
-msgstr ""
+msgstr "створити в {lane}"
 
 #: src/api.ts
 msgid "create routine failed: {status}"
-msgstr ""
+msgstr "створити рутину не вдалося: {status}"
 
 #: src/api.ts
 msgid "create rule failed: {status}"
-msgstr ""
+msgstr "створити правило не вдалося: {status}"
 
 #: src/api.ts
 msgid "create task failed: {status}"
-msgstr ""
+msgstr "створити задачу не вдалося: {status}"
 
 #: src/components/ApprovalContext.tsx
 msgid "cwd <0>{cwd}</0>"
-msgstr ""
+msgstr "cwd <0>{cwd}</0>"
 
 #: src/pages/Settings.tsx
 msgid "daemon"
@@ -1271,168 +1279,168 @@ msgstr "демон"
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon healthy"
-msgstr ""
+msgstr "демон здоровий"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon unreachable"
-msgstr ""
+msgstr "демон недоступний"
 
 #: src/theme/ThemePicker.tsx
 msgid "Dark"
-msgstr ""
+msgstr "Темна"
 
 #: src/api.ts
 msgid "decide proposal failed"
-msgstr ""
+msgstr "рішення щодо пропозиції не вдалося"
 
 #: src/theme/palettes.ts
 msgid "deep forge orange"
-msgstr ""
+msgstr "темний помаранч горна"
 
 #: src/components/AccountSelector.tsx
 #: src/components/AccountsSection.tsx
 msgid "default"
-msgstr ""
+msgstr "типовий"
 
 #: src/components/AccountSelector.tsx
 msgid "Default ({defaultLabel})"
-msgstr ""
+msgstr "Типовий ({defaultLabel})"
 
 #: src/components/AccountSelector.tsx
 msgid "default account"
-msgstr ""
+msgstr "типовий акаунт"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "default model"
-msgstr ""
+msgstr "типова модель"
 
 #: src/components/NewProjectButton.tsx
 msgid "defaults to <0>{effectiveSlug}</0> (from path)"
-msgstr ""
+msgstr "типово <0>{effectiveSlug}</0> (зі шляху)"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "delete"
-msgstr ""
+msgstr "видалити"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Delete"
-msgstr ""
+msgstr "Видалити"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Delete {branch}?"
-msgstr ""
+msgstr "Видалити {branch}?"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "Delete {branch}? {commitsText} will be lost."
-msgstr ""
+msgstr "Видалити {branch}? {commitsText} буде втрачено."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Delete {externalId}?"
-msgstr ""
+msgstr "Видалити {externalId}?"
 
 #: src/api.ts
 msgid "delete account failed: {status}"
-msgstr ""
+msgstr "видалити акаунт не вдалося: {status}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Delete branch"
-msgstr ""
+msgstr "Видалити гілку"
 
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 msgid "Delete permanently"
-msgstr ""
+msgstr "Видалити назавжди"
 
 #: src/api.ts
 msgid "delete routine failed: {status}"
-msgstr ""
+msgstr "видалити рутину не вдалося: {status}"
 
 #: src/api.ts
 msgid "delete rule failed: {status}"
-msgstr ""
+msgstr "видалити правило не вдалося: {status}"
 
 #: src/api.ts
 msgid "delete task failed: {status}"
-msgstr ""
+msgstr "видалити задачу не вдалося: {status}"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "delete the run branch and the commits on it"
-msgstr ""
+msgstr "видалити гілку запуску й коміти на ній"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "delete the run branch so a retry can recreate it"
-msgstr ""
+msgstr "видалити гілку запуску, щоб повтор створив її знову"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Deletes the branch <0>{taskBranch}</0> and every commit on it, reclaims the worktree, and archives the card. The work is not recoverable."
-msgstr ""
+msgstr "Видаляє гілку <0>{taskBranch}</0> з усіма комітами на ній, звільняє worktree й архівує картку. Роботу не повернути."
 
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/RunOutcomeModal.tsx
 msgid "deleting…"
-msgstr ""
+msgstr "видаляємо…"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "dependencies"
-msgstr ""
+msgstr "залежності"
 
 #: src/lib/docFigures.tsx
 msgid "Dependencies: each must be done or archived, and none may carry a fail verdict"
-msgstr ""
+msgstr "Залежності: кожна має бути готова або в архіві, і жодна — з вердиктом fail"
 
 #: src/lib/docFigures.tsx
 msgid "depends on: {dep}"
-msgstr ""
+msgstr "залежить від: {dep}"
 
 #: src/components/ProjectActions.tsx
 msgid "detach"
-msgstr ""
+msgstr "відключити"
 
 #: src/components/DetachModal.tsx
 msgid "Detach <0>{projectName}</0>"
-msgstr ""
+msgstr "Відключити <0>{projectName}</0>"
 
 #: src/api.ts
 msgid "detach failed: {status}"
-msgstr ""
+msgstr "відключення не вдалося: {status}"
 
 #: src/components/DetachModal.tsx
 msgid "Detach project"
-msgstr ""
+msgstr "Відключити проєкт"
 
 #: src/workspace/task/RunLog.tsx
 msgid "detail"
-msgstr ""
+msgstr "деталі"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Device code"
-msgstr ""
+msgstr "Код пристрою"
 
 #: src/lib/docBlocks.tsx
 msgid "diagram"
-msgstr ""
+msgstr "діаграма"
 
 #: src/workspace/TaskDiff.tsx
 msgid "diff"
-msgstr ""
+msgstr "дифф"
 
 #: src/api.ts
 msgid "diff failed"
-msgstr ""
+msgstr "дифф не вдався"
 
 #: src/components/DiffView.tsx
 msgid "diff truncated at 200 KB — open a terminal in the worktree to read the rest"
-msgstr ""
+msgstr "дифф обрізано на 200 КБ — відкрийте термінал у worktree, щоб прочитати решту"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "disabled"
-msgstr ""
+msgstr "вимкнено"
 
 #: src/components/CreateAccountModal.tsx
 #: src/components/NewProjectButton.tsx
@@ -1442,123 +1450,123 @@ msgstr ""
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskModal.tsx
 msgid "discard"
-msgstr ""
+msgstr "відкинути"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Discard"
-msgstr ""
+msgstr "Відкинути"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Discard {externalId}?"
-msgstr ""
+msgstr "Відкинути {externalId}?"
 
 #: src/components/CreateAccountModal.tsx
 msgid "Discard account key?"
-msgstr ""
+msgstr "Відкинути ключ акаунта?"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "Discard branch"
-msgstr ""
+msgstr "Відкинути гілку"
 
 #: src/components/PluginConfigModal.tsx
 msgid "Discard changes?"
-msgstr ""
+msgstr "Відкинути зміни?"
 
 #: src/api.ts
 msgid "discard failed"
-msgstr ""
+msgstr "відкинути не вдалося"
 
 #: src/components/NewProjectButton.tsx
 msgid "Discard new project?"
-msgstr ""
+msgstr "Відкинути новий проєкт?"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "Discard new task?"
-msgstr ""
+msgstr "Відкинути нову задачу?"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Discard revise reason?"
-msgstr ""
+msgstr "Відкинути причину перегляду?"
 
 #: src/workspace/TaskModal.tsx
 msgid "Discard unsaved edit?"
-msgstr ""
+msgstr "Відкинути незбережені зміни?"
 
 #: src/components/usage/UsageDisconnect.tsx
 msgid "disconnect"
-msgstr ""
+msgstr "від’єднати"
 
 #: src/components/usage/UsageDisconnect.tsx
 msgid "Disconnect {account}? Removes swarmery's stored credential only — your<0>claude</0> login is untouched, and nothing is revoked at Anthropic."
-msgstr ""
+msgstr "Від’єднати {account}? Видаляються лише облікові дані, збережені swarmery — ваш вхід у<0>claude</0> не зачеплено, і в Anthropic нічого не відкликається."
 
 #: src/components/usage/UsageDisconnect.tsx
 msgid "disconnecting…"
-msgstr ""
+msgstr "від’єднуємо…"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 msgid "dismiss"
-msgstr ""
+msgstr "приховати"
 
 #: src/components/RetroImproveCard.tsx
 #: src/workspace/TaskCard.tsx
 msgid "Dismiss"
-msgstr ""
+msgstr "Відхилити"
 
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"
-msgstr ""
+msgstr "помилка відправки: {why}"
 
 #: src/workspace/task/RunLog.tsx
 msgid "dispatch retries"
-msgstr ""
+msgstr "повтори відправки"
 
 #: src/workspace/task/RunLog.tsx
 #: src/workspace/task/RunLog.tsx
 msgid "dispatched prompt"
-msgstr ""
+msgstr "відправлений промпт"
 
 #: src/components/TerminalPathNote.tsx
 msgid "Dispatched runs and the dashboard terminal now use this account. A terminal you open yourself still runs the machine default — from the project root:"
-msgstr ""
+msgstr "Відправлені запуски й термінал дашборду тепер використовують цей акаунт. Термінал, який ви відкриваєте самі, і далі працює з типовим акаунтом машини — з кореня проєкту:"
 
 #: src/workspace/StatusBar.tsx
 msgid "dispatcher active"
-msgstr ""
+msgstr "диспетчер активний"
 
 #: src/components/PermissionPresets.tsx
 msgid "dispatcher blocked"
-msgstr ""
+msgstr "диспетчер заблоковано"
 
 #: src/workspace/StatusBar.tsx
 msgid "dispatcher globally paused"
-msgstr ""
+msgstr "диспетчер призупинено глобально"
 
 #: src/workspace/StatusBar.tsx
 msgid "dispatcher paused"
-msgstr ""
+msgstr "диспетчер призупинено"
 
 #: src/workspace/TaskCard.tsx
 msgid "dispatches as @{agent}"
-msgstr ""
+msgstr "відправляється як @{agent}"
 
 #: src/lib/sessionsView.ts
 msgid "dispatches phases in dependency order, merges results back"
-msgstr ""
+msgstr "відправляє фази в порядку залежностей і зливає результати назад"
 
 #: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Docs"
-msgstr ""
+msgstr "Docs"
 
 #: src/lib/docFigures.tsx
 msgid "Docs + rollout"
-msgstr ""
+msgstr "Документація + розкатка"
 
 #: src/components/PluginConfigModal.tsx
 msgid "docs: {configDocs}"
-msgstr ""
+msgstr "документація: {configDocs}"
 
 #: src/components/AttachModal.tsx
 #: src/components/CreateAccountModal.tsx
@@ -1567,573 +1575,581 @@ msgstr ""
 #: src/components/PlanRunCard.tsx
 #: src/lib/sessionsView.ts
 msgid "done"
-msgstr ""
+msgstr "готово"
 
 #: src/components/VcsSignInDialog.tsx
 #: src/lib/docFigures.tsx
 #: src/workspace/boardModel.ts
 msgid "Done"
-msgstr ""
+msgstr "Готово"
 
 #: src/api.ts
 msgid "duplicate playbook failed: {status}"
-msgstr ""
+msgstr "дублювати плейбук не вдалося: {status}"
 
 #: src/components/ProjectPlugins.tsx
 msgid "edit"
-msgstr ""
+msgstr "редагувати"
 
 #: src/workspace/TaskCard.tsx
 msgid "Edit"
-msgstr ""
+msgstr "Редагувати"
 
 #: src/components/ProjectActions.tsx
 msgid "edit project tags"
-msgstr ""
+msgstr "редагувати теги проєкту"
 
 #: src/theme/palettes.ts
 msgid "Ember"
-msgstr ""
+msgstr "Жарина"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "error"
-msgstr ""
+msgstr "помилка"
 
 #: src/components/ImproveModal.tsx
 msgid "error rate"
-msgstr ""
+msgstr "частка помилок"
 
 #: src/components/ImproveModal.tsx
 msgid "errors"
-msgstr ""
+msgstr "помилки"
 
 #: src/components/PermissionPresets.tsx
 msgid "Every tool call waits for you. The safe default — nothing runs unattended."
-msgstr ""
+msgstr "Кожен виклик інструмента чекає на вас. Безпечний типовий режим — нічого не виконується без нагляду."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Executor said: {said}"
-msgstr ""
+msgstr "Виконавець сказав: {said}"
 
 #: src/components/KillButton.tsx
 msgid "exited"
-msgstr ""
+msgstr "завершився"
 
 #: src/components/AccountSelector.tsx
 msgid "explicit binding"
-msgstr ""
+msgstr "явна прив’язка"
 
 #: src/api.ts
 msgid "extract failed: {status}"
-msgstr ""
+msgstr "видобування не вдалося: {status}"
 
 #: src/components/OutcomePicker.tsx
 msgid "fail"
-msgstr ""
+msgstr "провал"
 
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 msgid "failed"
-msgstr ""
+msgstr "не вдалося"
 
 #: src/lib/needsYou.ts
 msgid "Failed"
-msgstr ""
+msgstr "Невдача"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "feedback is required — a re-run with no notes would repeat the same work"
-msgstr ""
+msgstr "відгук обов’язковий — перезапуск без нотаток повторить ту саму роботу"
 
 #: src/lib/sessionsView.ts
 msgid "fifth"
-msgstr ""
+msgstr "п’ята"
 
 #: src/components/ImproveModal.tsx
 msgid "file"
-msgstr ""
+msgstr "файл"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "file scope"
-msgstr ""
+msgstr "область файлів"
 
 #: src/components/PermissionPresets.tsx
 msgid "File writes (edit, write, notebooks)"
-msgstr ""
+msgstr "Запис файлів (edit, write, notebooks)"
 
 #: src/lib/docFigures.tsx
 msgid "File-scope overlap with the project’s other live cards (an empty scope conflicts with everything)"
-msgstr ""
+msgstr "Перетин області файлів з іншими живими картками проєкту (порожня область конфліктує з усім)"
 
 #: src/components/CommandPalette.tsx
 msgid "Files"
-msgstr ""
+msgstr "Файли"
 
 #: src/components/PluginConfigModal.tsx
 msgid "fill in {needs} first"
-msgstr ""
+msgstr "спершу заповніть {needs}"
 
 #: src/components/PluginConfigModal.tsx
 msgid "filled by probe"
-msgstr ""
+msgstr "заповнено зондом"
 
 #: src/components/PluginConfigModal.tsx
 msgid "filled by probe · {moreCount} more suggested"
-msgstr ""
+msgstr "заповнено зондом · ще {moreCount} запропоновано"
 
 #: src/workspace/AgentPicker.tsx
 msgid "filter agents"
-msgstr ""
+msgstr "фільтр агентів"
 
 #: src/workspace/AgentPicker.tsx
 msgid "filter agents…"
-msgstr ""
+msgstr "фільтр агентів…"
 
 #: src/lib/pageSearch.tsx
 msgid "filter approvals…"
-msgstr ""
+msgstr "фільтр погоджень…"
 
 #: src/components/ProjectDropdown.tsx
 msgid "filter by project"
-msgstr ""
+msgstr "фільтр за проєктом"
 
 #: src/lib/pageSearch.tsx
 msgid "filter by title or plan…"
-msgstr ""
+msgstr "фільтр за назвою чи планом…"
 
 #: src/theme/ThemePicker.tsx
 msgid "filter palettes"
-msgstr ""
+msgstr "фільтр палітр"
 
 #: src/theme/ThemePicker.tsx
 msgid "filter palettes…"
-msgstr ""
+msgstr "фільтр палітр…"
 
 #: src/lib/pageSearch.tsx
 msgid "filter projects by name…"
-msgstr ""
+msgstr "фільтр проєктів за назвою…"
 
 #: src/lib/pageSearch.tsx
 msgid "filter sessions by title…"
-msgstr ""
+msgstr "фільтр сесій за назвою…"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
-msgstr ""
+msgstr "Завершіть тут: відкрийте термінал, уже прив’язаний до цього акаунта, і ввійдіть у CLI."
 
 #: src/components/NotifySettings.tsx
 msgid "fires only while this tab is in the background; click a notification to jump to the approval or session"
-msgstr ""
+msgstr "спрацьовує лише коли ця вкладка у фоні; клік по сповіщенню веде до погодження чи сесії"
 
 #: src/lib/sessionsView.ts
 msgid "first"
-msgstr ""
+msgstr "перша"
 
 #: src/workspace/boardModel.ts
 msgid "fix for {externalId}"
-msgstr ""
+msgstr "виправлення для {externalId}"
 
 #: src/lib/docFigures.tsx
 msgid "Fix the flaky worker test"
-msgstr ""
+msgstr "Полагодити нестабільний тест воркера"
 
 #: src/lib/docFigures.tsx
 msgid "Flow of a board card from capture to landing"
-msgstr ""
+msgstr "Шлях картки дошки від фіксації до влиття"
 
 #: src/components/AccountSelector.tsx
 msgid "follow whichever account is marked default on this machine"
-msgstr ""
+msgstr "використовувати акаунт, позначений типовим на цій машині"
 
 #: src/components/KillButton.tsx
 msgid "Force kill"
-msgstr ""
+msgstr "Вбити примусово"
 
 #: src/theme/palettes.ts
 msgid "Forest"
-msgstr ""
+msgstr "Ліс"
 
 #: src/lib/sessionsView.ts
 msgid "fourth"
-msgstr ""
+msgstr "четверта"
 
 #: src/workspace/boardModel.ts
 msgid "from a session"
-msgstr ""
+msgstr "із сесії"
 
 #: src/workspace/boardModel.ts
 msgid "from session #{id}"
-msgstr ""
+msgstr "із сесії #{id}"
 
 #: src/components/DetachModal.tsx
 msgid "full offboard — also remove <0>project.json</0> and the statusline scripts (local agents/skills are never touched)"
-msgstr ""
+msgstr "повне відключення — також видалити <0>project.json</0> і скрипти statusline (локальні агенти й скіли не чіпаються)"
 
 #: src/components/ImproveModal.tsx
 msgid "Generate proposal"
-msgstr ""
+msgstr "Згенерувати пропозицію"
 
 #: src/components/ImproveModal.tsx
 msgid "generating…"
-msgstr ""
+msgstr "генеруємо…"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Get a code"
-msgstr ""
+msgstr "Отримати код"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Get a new code"
-msgstr ""
+msgstr "Новий код"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Get a one-time code, then enter it on {host}."
-msgstr ""
+msgstr "Отримайте одноразовий код і введіть його на {host}."
 
 #: src/components/PermissionPresets.tsx
 msgid "Git push & gh"
-msgstr ""
+msgstr "Git push і gh"
 
 #: src/components/PermissionPresets.tsx
 msgid "Git push is never auto-approved unless you enable it explicitly."
-msgstr ""
+msgstr "Git push ніколи не погоджується автоматично, якщо ви не ввімкнете це явно."
 
 #: src/components/PermissionPresets.tsx
 msgid "Git writes (add, commit, checkout, worktree)"
-msgstr ""
+msgstr "Записи git (add, commit, checkout, worktree)"
 
 #: src/components/SessionCard.tsx
 msgid "Handoff"
-msgstr ""
+msgstr "Передача"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "headless run in progress"
-msgstr ""
+msgstr "фоновий запуск триває"
 
 #: src/lib/nav.ts
 msgid "Health"
-msgstr ""
+msgstr "Health"
 
 #: src/main.tsx
 msgid "health…"
-msgstr ""
+msgstr "health…"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "Hide {label}"
-msgstr ""
+msgstr "Сховати {label}"
 
 #: src/components/ProjectActions.tsx
 msgid "Hide <0>{projectName}</0> from the projects list. Nothing is deleted — its sessions and transcripts are kept, and you can restore it from “show archived”."
-msgstr ""
+msgstr "Сховати <0>{projectName}</0> зі списку проєктів. Нічого не видаляється — сесії й транскрипти лишаються, а повернути проєкт можна через «показати архівні»."
 
 #: src/components/ProjectActions.tsx
 msgid "hide from the projects list (reversible)"
-msgstr ""
+msgstr "сховати зі списку проєктів (можна повернути)"
 
 #: src/workspace/StatusBar.tsx
 msgid "hide terminal"
-msgstr ""
+msgstr "сховати термінал"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "hide this window"
-msgstr ""
+msgstr "сховати це вікно"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 msgid "History"
-msgstr ""
+msgstr "Історія"
 
 #: src/workspace/TaskCard.tsx
 msgid "hold this card in the queue without losing its place"
-msgstr ""
+msgstr "затримати картку в черзі, не втрачаючи її місця"
+
+#: src/lib/glossary.ts
+msgid "how honest forecasts are"
+msgstr "наскільки чесні прогнози"
 
 #: src/components/usage/UsageSetupHint.tsx
 msgid "how it's used"
-msgstr ""
+msgstr "як це використовується"
 
 #: src/components/PermissionPresets.tsx
 msgid "I understand — apply"
-msgstr ""
+msgstr "Розумію — застосувати"
 
 #: src/components/CopyIdBadge.tsx
 msgid "id"
-msgstr ""
+msgstr "id"
 
 #: src/lib/sessionsView.ts
 msgid "idle"
-msgstr ""
+msgstr "простій"
 
 #: src/lib/docFigures.tsx
 msgid "idle 9d · TTL 14d"
-msgstr ""
+msgstr "простій 9 д · TTL 14 д"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "If the run produced nothing worth keeping, delete the branch. This runs <0>git branch -D</0>: the {commitsText} go, and nothing else holds them."
-msgstr ""
+msgstr "Якщо запуск не дав нічого вартого збереження, видаліть гілку. Виконується <0>git branch -D</0>: {commitsText} зникнуть, і більше ніде їх немає."
 
 #: src/components/AccountsSection.tsx
 msgid "ignored bindings ({count}) — counted under no account"
-msgstr ""
+msgstr "проігноровані прив’язки ({count}) — не зараховано жодному акаунту"
 
 #: src/lib/docBlocks.tsx
 msgid "Important"
-msgstr ""
+msgstr "Важливо"
 
 #: src/components/RetroImproveCard.tsx
 #: src/components/Sidebar.tsx
 msgid "Improve"
-msgstr ""
+msgstr "Покращити"
 
 #: src/components/ImproveModal.tsx
 msgid "Improve {agent}"
-msgstr ""
+msgstr "Покращити {agent}"
 
 #: src/components/ImproveModal.tsx
 msgid "Improve <0>{agent}</0>"
-msgstr ""
+msgstr "Покращити <0>{agent}</0>"
 
 #: src/api.ts
 msgid "improve agent failed"
-msgstr ""
+msgstr "покращити агента не вдалося"
 
 #: src/components/RetroImproveCard.tsx
 msgid "Improve the system"
-msgstr ""
+msgstr "Покращити систему"
 
 #: src/workspace/boardModel.ts
 msgid "In Progress"
-msgstr ""
+msgstr "У роботі"
 
 #: src/workspace/boardModel.ts
 msgid "In Review"
-msgstr ""
+msgstr "На рев’ю"
 
 #: src/lib/docFigures.tsx
 #: src/lib/nav.ts
 #: src/workspace/boardModel.ts
 msgid "Inbox"
-msgstr ""
+msgstr "Inbox"
 
 #: src/components/SessionCard.tsx
 msgid "ingested from the {label} Claude Code account"
-msgstr ""
+msgstr "проіндексовано з акаунта Claude Code «{label}»"
 
 #: src/components/LanguagePicker.tsx
 msgid "interface language"
-msgstr ""
+msgstr "мова інтерфейсу"
 
 #: src/api.ts
 msgid "invalid config"
-msgstr ""
+msgstr "недійсний конфіг"
 
 #: src/components/AccountSelector.tsx
 msgid "its CLI login is missing"
-msgstr ""
+msgstr "немає його входу в CLI"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Its commits will be lost."
-msgstr ""
+msgstr "Її коміти буде втрачено."
 
 #: src/components/SplitPane.tsx
 msgid "j/k move"
-msgstr ""
+msgstr "j/k рух"
 
 #: src/components/NewProjectButton.tsx
 msgid "kebab-case only ([a-z0-9-])"
-msgstr ""
+msgstr "лише kebab-case ([a-z0-9-])"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "keep the work"
-msgstr ""
+msgstr "залишити роботу"
 
 #: src/components/KillButton.tsx
 msgid "Kill"
-msgstr ""
+msgstr "Вбити"
 
 #: src/components/KillButton.tsx
 msgid "Kill {label}{costLine}?"
-msgstr ""
+msgstr "Вбити {label}{costLine}?"
 
 #: src/api.ts
 msgid "kill failed: {status}"
-msgstr ""
+msgstr "вбити не вдалося: {status}"
 
 #: src/lib/sessionsView.ts
 msgid "killed"
-msgstr ""
+msgstr "вбито"
 
 #: src/components/KillButton.tsx
 #: src/components/KillButton.tsx
 msgid "killing…"
-msgstr ""
+msgstr "вбиваємо…"
 
 #: src/lib/nav.ts
 msgid "Knowledge"
-msgstr ""
+msgstr "Knowledge"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 msgid "labels"
-msgstr ""
+msgstr "мітки"
 
 #: src/components/SessionLabelChips.tsx
 msgid "labels from the local classifier (advisory)"
-msgstr ""
+msgstr "мітки від локального класифікатора (довідково)"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "ladder"
-msgstr ""
+msgstr "драбини"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "land"
-msgstr ""
+msgstr "влити"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/task/TaskActions.tsx
 msgid "Land"
-msgstr ""
+msgstr "Влити"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Land {externalId}?"
-msgstr ""
+msgstr "Влити {externalId}?"
 
 #: src/api.ts
 #: src/api.ts
 msgid "land failed"
-msgstr ""
+msgstr "влити не вдалося"
 
 #: src/workspace/TaskCard.tsx
 msgid "Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
-msgstr ""
+msgstr "Влити, перезапустити з відгуком, відкинути, перевірити знову — з диффом і вердиктом"
 
 #: src/pages/Settings.tsx
 msgid "language"
-msgstr ""
+msgstr "мова"
 
 #: src/components/usage/UsageModal.tsx
 msgid "Last updated: {updatedAt}"
-msgstr ""
+msgstr "Оновлено: {updatedAt}"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "later"
-msgstr ""
+msgstr "пізніше"
 
 #: src/lib/nav.ts
 msgid "Learning"
-msgstr ""
+msgstr "Learning"
 
 #: src/main.tsx
 msgid "learning…"
-msgstr ""
+msgstr "learning…"
 
 #: src/workspace/TaskCard.tsx
 msgid "let the dispatcher consider this card again"
-msgstr ""
+msgstr "дозволити диспетчеру знову розглянути цю картку"
 
 #: src/components/CreateAccountModal.tsx
 msgid "letters, digits, '-' or '_' (it becomes a directory name)"
-msgstr ""
+msgstr "літери, цифри, «-» або «_» (стане назвою теки)"
 
 #: src/api.ts
 msgid "lifecycle {action} failed ({status})"
-msgstr ""
+msgstr "дія {action} не вдалася ({status})"
 
 #: src/theme/ThemePicker.tsx
 msgid "Light"
-msgstr ""
+msgstr "Світла"
 
 #: src/components/TaskChip.tsx
 msgid "linked heuristically"
-msgstr ""
+msgstr "пов’язано евристично"
 
 #: src/components/TaskChip.tsx
 msgid "linked heuristically · {overlap}% overlap"
-msgstr ""
+msgstr "пов’язано евристично · перетин {overlap}%"
 
 #: src/components/TaskChip.tsx
 msgid "linked via the task card (logs/sessions.md)"
-msgstr ""
+msgstr "пов’язано через картку задачі (logs/sessions.md)"
 
 #: src/components/Sidebar.tsx
 msgid "live sessions"
-msgstr ""
+msgstr "живі сесії"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "live worktrees"
-msgstr ""
+msgstr "живі worktree"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "loading diagnosis…"
-msgstr ""
+msgstr "завантаження діагнозу…"
 
 #: src/workspace/TaskDiff.tsx
 msgid "loading diff…"
-msgstr ""
+msgstr "завантаження диффа…"
 
 #: src/components/ImproveModal.tsx
 msgid "loading evidence…"
-msgstr ""
+msgstr "завантаження доказів…"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "loading terminal…"
-msgstr ""
+msgstr "завантаження термінала…"
 
 #: src/components/usage/UsageModal.tsx
 msgid "loading usage"
-msgstr ""
+msgstr "завантаження використання"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "loading worktrees…"
-msgstr ""
+msgstr "завантаження worktree…"
 
 #: src/components/PermissionPresets.tsx
 msgid "Locked down"
-msgstr ""
+msgstr "Заблоковано"
 
 #: src/components/usage/UsageSetupHint.tsx
 msgid "looked in ({sourceCount})"
-msgstr ""
+msgstr "де шукали ({sourceCount})"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "main"
-msgstr ""
+msgstr "основне"
 
 #: src/components/ProjectActions.tsx
 msgid "managed"
-msgstr ""
+msgstr "керований"
 
 #: src/workspace/TaskCard.tsx
 msgid "mark done without landing a branch — the manual override"
-msgstr ""
+msgstr "позначити готовим, не відправляючи гілку — ручне перевизначення"
 
 #: src/components/ProjectPlugins.tsx
 msgid "marketplace v{marketplaceVersion} · repairs and toggles take effect in the next Claude Code session"
-msgstr ""
+msgstr "маркетплейс v{marketplaceVersion} · ремонти й перемикачі діють з наступної сесії Claude Code"
+
+#: src/lib/glossary.ts
+msgid "matches you"
+msgstr "збігається з вами"
 
 #: src/components/AttachModal.tsx
 msgid "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
-msgstr ""
+msgstr "Повертає записи swarmery в <0>.claude/settings.json</0> (інші ваші налаштування ніколи не перезаписуються), відновлює <1>project.json</1> з резервної копії та перевстановлює хуки. Плагіни встановляться в наступній свіжій сесії Claude Code у проєкті."
 
 #: src/components/CommandPalette.tsx
 msgid "Messages"
-msgstr ""
+msgstr "Повідомлення"
 
 #: src/lib/docFigures.tsx
 msgid "Migrate routine config to v2"
-msgstr ""
+msgstr "Перенести конфіг рутин на v2"
 
 #: src/components/ProjectPlugins.tsx
 msgid "missing: {missing}"
-msgstr ""
+msgstr "відсутні: {missing}"
 
 #: src/App.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "mock data"
-msgstr ""
+msgstr "тестові дані"
 
 #: src/lib/docFigures.tsx
 msgid "Mockup of the board's three lanes"
-msgstr ""
+msgstr "Макет трьох доріжок дошки"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -2141,531 +2157,539 @@ msgstr ""
 #: src/workspace/task/RunConfig.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "model"
-msgstr ""
+msgstr "модель"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "model chosen at dispatch"
-msgstr ""
+msgstr "модель обирається при відправленні"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "more actions"
-msgstr ""
+msgstr "більше дій"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 msgid "move task to column"
-msgstr ""
+msgstr "перемістити задачу в колонку"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "move to"
-msgstr ""
+msgstr "перемістити в"
 
 #: src/theme/palettes.ts
 msgid "muted green canopy"
-msgstr ""
+msgstr "приглушена зелень крон"
 
 #: src/components/CommandPalette.tsx
 msgid "Navigation"
-msgstr ""
+msgstr "Навігація"
 
 #: src/components/PluginConfigModal.tsx
 msgid "needs {needs}"
-msgstr ""
+msgstr "потребує {needs}"
 
 #: src/workspace/boardModel.ts
 msgid "needs me"
-msgstr ""
+msgstr "чекає мене"
 
 #: src/lib/nav.ts
 msgid "Needs you"
-msgstr ""
+msgstr "Needs you"
 
 #: src/components/PermissionPresets.tsx
 msgid "Network (web fetch/search)"
-msgstr ""
+msgstr "Мережа (web fetch/search)"
 
 #: src/theme/palettes.ts
 msgid "neutral cool gray"
-msgstr ""
+msgstr "нейтральний холодний сірий"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "never run"
-msgstr ""
+msgstr "не запускали"
 
 #: src/components/NewProjectButton.tsx
 msgid "New project"
-msgstr ""
+msgstr "Новий проєкт"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 msgid "New task"
-msgstr ""
+msgstr "Нова задача"
 
 #. placeholder {0}: done.path
 #: src/components/NewProjectButton.tsx
 msgid "Next: open a fresh Claude Code session in <0>{0}</0> and accept the <1>swarmery</1> trust prompt. It appears here once its first session runs."
-msgstr ""
+msgstr "Далі: відкрийте свіжу сесію Claude Code у <0>{0}</0> і прийміть запит довіри <1>swarmery</1>. Проєкт з’явиться тут після першої сесії."
 
 #: src/components/AccountsSection.tsx
 msgid "no accounts configured"
-msgstr ""
+msgstr "акаунти не налаштовано"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "no agent"
-msgstr ""
+msgstr "без агента"
 
 #: src/workspace/AgentPicker.tsx
 msgid "No agent — playbook stages only"
-msgstr ""
+msgstr "Без агента — лише етапи плейбука"
 
 #: src/components/PermissionPresets.tsx
 msgid "No auto-approval AND the dispatcher refuses to run this project’s queued tasks."
-msgstr ""
+msgstr "Без автопогодження, І диспетчер відмовляється запускати задачі з черги цього проєкту."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "No blockers detected — the executor exited without ticking criteria; open the session to see why."
-msgstr ""
+msgstr "Блокерів не виявлено — виконавець вийшов, не відмітивши критеріїв; відкрийте сесію, щоб побачити чому."
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "no match"
-msgstr ""
+msgstr "збігів немає"
 
 #: src/components/CommandPalette.tsx
 msgid "no matches"
-msgstr ""
+msgstr "збігів немає"
 
 #: src/components/ConnectorsSection.tsx
 msgid "no mcp servers configured"
-msgstr ""
+msgstr "mcp-сервери не налаштовано"
 
 #: src/theme/ThemePicker.tsx
 msgid "no palette matches"
-msgstr ""
+msgstr "палітр не знайдено"
 
 #: src/components/ProjectPlugins.tsx
 msgid "no plugins in the marketplace clone"
-msgstr ""
+msgstr "у клоні маркетплейсу немає плагінів"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "no progress"
-msgstr ""
+msgstr "без прогресу"
 
 #: src/components/CommandPalette.tsx
 msgid "no sessions touched this file"
-msgstr ""
+msgstr "жодна сесія не торкалася цього файлу"
 
 #: src/api/lessons.ts
 msgid "no such lesson {id}"
-msgstr ""
+msgstr "немає уроку {id}"
 
 #: src/api/lessons.ts
 msgid "no such proposal {id}"
-msgstr ""
+msgstr "немає пропозиції {id}"
 
 #: src/workspace/TaskGraph.tsx
 msgid "no tasks to graph"
-msgstr ""
+msgstr "немає задач для графа"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "No usage data available"
-msgstr ""
+msgstr "Даних про використання немає"
 
 #: src/components/usage/UsageModal.tsx
 msgid "no usage providers reported"
-msgstr ""
+msgstr "жоден провайдер використання не відповів"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "no worktrees on this machine"
-msgstr ""
+msgstr "на цій машині немає worktree"
 
 #: src/components/AccountSelector.tsx
 #: src/components/AccountsSection.tsx
 #: src/components/usage/UsageProviderCard.tsx
 msgid "not connected"
-msgstr ""
+msgstr "не під’єднано"
 
 #: src/components/ProjectActions.tsx
 msgid "not enabled"
-msgstr ""
+msgstr "не ввімкнено"
 
 #: src/main.tsx
 msgid "not found"
-msgstr ""
+msgstr "не знайдено"
 
 #: src/workspace/task/useTaskDraft.ts
 msgid "not saved — {fields} changed on the server while you were editing. Close and reopen the card to pick up the new version."
-msgstr ""
+msgstr "не збережено — {fields} змінилися на сервері, поки ви редагували. Закрийте й відкрийте картку знову, щоб підтягнути нову версію."
 
 #: src/components/usage/UsageModal.tsx
 msgid "not yet loaded"
-msgstr ""
+msgstr "ще не завантажено"
 
 #: src/lib/docBlocks.tsx
 #: src/lib/docBlocks.tsx
 msgid "Note"
-msgstr ""
+msgstr "Примітка"
 
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
-msgstr ""
+msgstr "У доріжці {laneTitle} нічого не відповідає «{filterLabel}»."
 
 #: src/components/DetachModal.tsx
 msgid "nothing to remove"
-msgstr ""
+msgstr "нічого видаляти"
 
 #: src/components/AttachModal.tsx
 msgid "nothing to restore"
-msgstr ""
+msgstr "нічого відновлювати"
 
 #: src/components/NotifySettings.tsx
 msgid "notification preferences"
-msgstr ""
+msgstr "налаштування сповіщень"
 
 #: src/pages/Settings.tsx
 msgid "notifications"
-msgstr ""
+msgstr "сповіщення"
 
 #: src/pages/Settings.tsx
 msgid "Notifications"
-msgstr ""
+msgstr "Сповіщення"
 
 #: src/components/NotifySettings.tsx
 msgid "notifications are blocked — allow them in the browser site settings, then re-toggle"
-msgstr ""
+msgstr "сповіщення заблоковано — дозвольте їх у налаштуваннях сайту в браузері й перемкніть ще раз"
 
 #: src/components/SessionCard.tsx
 msgid "now: {now}"
-msgstr ""
+msgstr "зараз: {now}"
 
 #: src/components/SessionCard.tsx
 msgid "now: {nowText}"
-msgstr ""
+msgstr "зараз: {nowText}"
 
 #: src/lib/docFigures.tsx
 msgid "objective · sequencing table · risks · definition of done"
-msgstr ""
+msgstr "мета · таблиця послідовності · ризики · визначення готовності"
 
 #: src/theme/palettes.ts
 msgid "Ocean"
-msgstr ""
+msgstr "Океан"
 
 #: src/components/ProjectPlugins.tsx
 msgid "off"
-msgstr ""
+msgstr "вимк"
+
+#: src/lib/glossary.ts
+msgid "off-plan"
+msgstr "поза планом"
 
 #: src/components/ProjectPlugins.tsx
 msgid "on"
-msgstr ""
+msgstr "увімк"
 
 #: src/components/CreateAccountModal.tsx
 msgid "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
-msgstr ""
+msgstr "на macOS CLI зберігає вхід недефолтного акаунта в Keychain входу (без файлу облікових даних) — дашборд читає його звідти, тож після входу натисніть «перевірити зараз» на акаунті"
 
 #: src/components/NewProjectButton.tsx
 msgid "onboard"
-msgstr ""
+msgstr "підключити"
 
 #: src/components/NewProjectButton.tsx
 msgid "Onboard a project"
-msgstr ""
+msgstr "Підключити проєкт"
 
 #: src/api.ts
 msgid "onboard failed: {status}"
-msgstr ""
+msgstr "підключення не вдалося: {status}"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "onboarded only"
-msgstr ""
+msgstr "лише підключений"
 
 #: src/components/NewProjectButton.tsx
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
-msgstr ""
+msgstr "підключення вимкнено — перезапустіть демон зі списком дозволених:"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
-msgstr ""
+msgstr "Відкрити {verificationUri}"
 
 #: src/workspace/TaskCard.tsx
 msgid "open a terminal in this card's worktree"
-msgstr ""
+msgstr "відкрити термінал у worktree цієї картки"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "open login terminal"
-msgstr ""
+msgstr "відкрити термінал входу"
 
 #: src/components/PlanRunCard.tsx
 msgid "open plan →"
-msgstr ""
+msgstr "відкрити план →"
 
 #: src/workspace/TaskCard.tsx
 msgid "open Planning Mode prefilled with this card"
-msgstr ""
+msgstr "відкрити режим планування, заповнений цією карткою"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "open session"
-msgstr ""
+msgstr "відкрити сесію"
 
 #: src/workspace/task/RunLog.tsx
 msgid "Open terminal in worktree"
-msgstr ""
+msgstr "Відкрити термінал"
 
 #: src/components/RetroImproveCard.tsx
 msgid "open the active session →"
-msgstr ""
+msgstr "відкрити активну сесію →"
 
 #: src/workspace/TaskCard.tsx
 msgid "open the full card"
-msgstr ""
+msgstr "відкрити повну картку"
 
 #: src/components/RetroImproveCard.tsx
 msgid "open the planning session →"
-msgstr ""
+msgstr "відкрити сесію планування →"
 
 #: src/components/usage/UsageChip.tsx
 msgid "open usage"
-msgstr ""
+msgstr "відкрити використання"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "or discard it"
-msgstr ""
+msgstr "або відкинути"
 
 #: src/components/TerminalPathNote.tsx
 msgid "or export it into the current shell"
-msgstr ""
+msgstr "або експортувати в поточну оболонку"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "or run in a terminal: <0>{cliLogin}</0>"
-msgstr ""
+msgstr "або виконайте в терміналі: <0>{cliLogin}</0>"
 
 #: src/api.ts
 msgid "orphan branch delete failed ({status})"
-msgstr ""
+msgstr "видалення осиротілої гілки не вдалося ({status})"
 
 #: src/components/ProjectDropdown.tsx
 msgid "other"
-msgstr ""
+msgstr "інші"
 
 #: src/components/SessionLabelChips.tsx
 msgid "outcome"
-msgstr ""
+msgstr "результат"
 
 #: src/api.ts
 msgid "outcome failed: {status}"
-msgstr ""
+msgstr "збереження результату не вдалося: {status}"
 
 #: src/components/CommandPalette.tsx
 msgid "Overview"
-msgstr ""
+msgstr "Огляд"
 
 #: src/components/QuestionForm.tsx
 msgid "own answer — added to the selection"
-msgstr "своя відповідь — додається до вибраного"
+msgstr "власна відповідь — додається до вибраного"
 
 #: src/components/QuestionForm.tsx
 msgid "own answer — overrides the selection"
-msgstr "своя відповідь — замінює вибране"
+msgstr "власна відповідь — замінює вибране"
 
 #: src/components/QuestionForm.tsx
 msgid "own answer for \"{questionText}\""
-msgstr ""
+msgstr "власна відповідь на «{questionText}»"
 
 #: src/components/NewProjectButton.tsx
 msgid "packs (core is always on)"
-msgstr ""
+msgstr "пакети (core завжди ввімкнено)"
 
 #: src/theme/ThemePicker.tsx
 msgid "palette"
-msgstr ""
+msgstr "палітра"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "parked — dispatch it later from the board"
-msgstr ""
+msgstr "відкладено — відправте пізніше з дошки"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "partial"
-msgstr ""
+msgstr "частково"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Paste a {provider} personal access token. It is checked with {host} before it is stored."
-msgstr ""
+msgstr "Вставте персональний токен доступу {provider}. Перед збереженням його перевірять на {host}."
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Paste the whole code the page shows, including the part after the <0>#</0>."
-msgstr ""
+msgstr "Вставте весь код зі сторінки, разом із частиною після <0>#</0>."
 
 #: src/api.ts
 msgid "patch recommendation failed: {status}"
-msgstr ""
+msgstr "оновлення рекомендації не вдалося: {status}"
 
 #: src/api.ts
 msgid "patch task failed: {status}"
-msgstr ""
+msgstr "оновлення задачі не вдалося: {status}"
 
 #: src/workspace/StatusBar.tsx
 msgid "pause"
-msgstr ""
+msgstr "пауза"
 
 #: src/workspace/TaskCard.tsx
 msgid "pause — the run finishes, nothing new starts"
-msgstr ""
+msgstr "пауза — запуск завершиться, нове не стартує"
 
 #: src/api.ts
 msgid "pause failed: {status}"
-msgstr ""
+msgstr "пауза не вдалася: {status}"
 
 #: src/workspace/StatusBar.tsx
 msgid "pause this project"
-msgstr ""
+msgstr "поставити проєкт на паузу"
 
 #: src/workspace/TaskCard.tsx
 msgid "paused"
-msgstr ""
+msgstr "на паузі"
 
 #: src/components/PermissionPresets.tsx
 msgid "per-category overrides apply only under the unrestricted preset"
-msgstr ""
+msgstr "перевизначення за категоріями діють лише в пресеті «без обмежень»"
 
 #: src/components/PermissionPresets.tsx
 #: src/components/PermissionPresets.tsx
 #: src/components/PermissionPresets.tsx
 msgid "permissions"
-msgstr ""
+msgstr "дозволи"
 
 #: src/components/PermissionPresets.tsx
 msgid "permissions…"
-msgstr ""
+msgstr "дозволи…"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Personal access token"
-msgstr ""
+msgstr "Персональний токен доступу"
 
 #: src/lib/sessionsView.ts
 msgid "phase"
-msgstr ""
+msgstr "фаза"
 
 #: src/lib/docFigures.tsx
 msgid "phase {n}"
-msgstr ""
+msgstr "фаза {n}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Phase {seq} \"{name}\" run ended {outcome}: {after}/{total} acceptance criteria ticked."
-msgstr ""
+msgstr "Запуск фази {seq} «{name}» завершився з результатом {outcome}: відмічено {after}/{total} критеріїв приймання."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Phase {seqLabel}"
-msgstr ""
+msgstr "Фаза {seqLabel}"
 
 #: src/api.ts
 msgid "phase run cancel failed ({status})"
-msgstr ""
+msgstr "скасування запуску фази не вдалося ({status})"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Phase run diagnosis"
-msgstr ""
+msgstr "Діагноз запуску фази"
 
 #: src/api.ts
 msgid "phase run failed ({status})"
-msgstr ""
+msgstr "запуск фази не вдався ({status})"
 
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
-msgstr ""
+msgstr "Фази без ребра між ними виконуються паралельно; кожен документ фази містить власний готовий промпт для агента й критерії приймання, тож його можна виконати окремо."
 
 #: src/components/ProjectDropdown.tsx
 msgid "pinned"
-msgstr ""
+msgstr "закріплені"
 
 #: src/workspace/TaskModal.tsx
 msgid "plan"
-msgstr ""
+msgstr "план"
 
 #: src/workspace/boardModel.ts
 msgid "plan {planId}"
-msgstr ""
+msgstr "план {planId}"
 
 #: src/workspace/boardModel.ts
 #: src/workspace/TaskModal.tsx
 msgid "plan {planId} — acceptance criteria and completion report"
-msgstr ""
+msgstr "план {planId} — критерії приймання і звіт про завершення"
 
 #: src/lib/sessionsView.ts
 msgid "plan controller"
-msgstr ""
+msgstr "контролер плану"
 
 #: src/components/RetroImproveCard.tsx
 msgid "plan in"
-msgstr ""
+msgstr "план у проєкті"
 
 #: src/components/PlanRunCard.tsx
 msgid "plan run"
-msgstr ""
+msgstr "запуск плану"
 
 #: src/components/PlanRunCard.tsx
 msgid "plan run {runTitle}"
-msgstr ""
+msgstr "запуск плану {runTitle}"
 
 #: src/api.ts
 msgid "plan run cancel failed ({status})"
-msgstr ""
+msgstr "скасування запуску плану не вдалося ({status})"
 
 #: src/api.ts
 msgid "plan run failed ({status})"
-msgstr ""
+msgstr "запуск плану не вдався ({status})"
 
 #: src/lib/docFigures.tsx
 msgid "Plan structure: README over a graph of phase documents"
-msgstr ""
+msgstr "Структура плану: README над графом документів фаз"
 
 #: src/components/AccountSelector.tsx
 msgid "plan unknown"
-msgstr ""
+msgstr "план невідомий"
+
+#: src/lib/glossary.ts
+msgid "planner's guess"
+msgstr "здогад планувальника"
 
 #: src/lib/nav.ts
 msgid "Plans"
-msgstr ""
+msgstr "Plans"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/PlaybookPicker.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "playbook"
-msgstr ""
+msgstr "плейбук"
 
 #: src/lib/docFigures.tsx
 msgid "playbook end"
-msgstr ""
+msgstr "кінець плейбука"
 
 #: src/workspace/TaskCard.tsx
 msgid "playbook: {playbook}"
-msgstr ""
+msgstr "плейбук: {playbook}"
 
 #: src/components/ProjectActions.tsx
 msgid "plugin is not enabled for this project"
-msgstr ""
+msgstr "плагін не ввімкнено для цього проєкту"
 
 #: src/components/ProjectPlugins.tsx
 msgid "plugins"
-msgstr ""
+msgstr "плагіни"
 
 #: src/components/ProjectPlugins.tsx
 msgid "plugins…"
-msgstr ""
+msgstr "плагіни…"
 
 #: src/components/CreateAccountModal.tsx
 msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
-msgstr ""
+msgstr "Зручніше в терміналі? Виконайте це самі — swarmery ніколи не запускає це за вас:"
 
 #: src/components/Sidebar.tsx
 msgid "primary"
-msgstr ""
+msgstr "основна навігація"
 
 #: src/components/Sidebar.tsx
 msgid "primary (mobile)"
-msgstr ""
+msgstr "основна навігація (мобільна)"
 
 #: src/lib/docFigures.tsx
 msgid "prio high"
-msgstr ""
+msgstr "пріо високий"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -2673,750 +2697,750 @@ msgstr ""
 #: src/workspace/task/RunConfig.tsx
 #: src/workspace/task/RunConfig.tsx
 msgid "priority"
-msgstr ""
+msgstr "пріоритет"
 
 #: src/components/PluginConfigModal.tsx
 msgid "probe"
-msgstr ""
+msgstr "перевірити"
 
 #: src/api.ts
 msgid "probe failed: {status}"
-msgstr ""
+msgstr "перевірка не вдалася: {status}"
 
 #: src/components/PluginConfigModal.tsx
 msgid "probe: {reason}"
-msgstr ""
+msgstr "перевірка: {reason}"
 
 #: src/components/PluginConfigModal.tsx
 msgid "probing for live values…"
-msgstr ""
+msgstr "зчитування живих значень…"
 
 #: src/api.ts
 msgid "proceed planning failed: {status}"
-msgstr ""
+msgstr "продовження планування не вдалося: {status}"
 
 #: src/components/KillButton.tsx
 msgid "Process already exited — nothing to kill"
-msgstr ""
+msgstr "Процес уже завершився — нічого зупиняти"
 
 #: src/components/CommandPalette.tsx
 #: src/components/ProjectDropdown.tsx
 msgid "project"
-msgstr ""
+msgstr "проєкт"
 
 #: src/components/ProjectActions.tsx
 msgid "project is outside SWARMERY_ONBOARD_ROOTS — detach is fenced to the allow-list"
-msgstr ""
+msgstr "проєкт поза SWARMERY_ONBOARD_ROOTS — від’єднання обмежене списком дозволених"
 
 #: src/workspace/AgentPicker.tsx
 msgid "project override"
-msgstr ""
+msgstr "перевизначення проєкту"
 
 #: src/workspace/StatusBar.tsx
 msgid "project paused"
-msgstr ""
+msgstr "проєкт на паузі"
 
 #: src/workspace/ProjectDetailRedirect.tsx
 msgid "project…"
-msgstr ""
+msgstr "проєкт…"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "projects"
-msgstr ""
+msgstr "проєкти"
 
 #: src/components/CommandPalette.tsx
 #: src/components/CommandPalette.tsx
 #: src/pages/Settings.tsx
 msgid "Projects"
-msgstr ""
+msgstr "Проєкти"
 
 #: src/lib/docFigures.tsx
 msgid "Projects on the locked-down preset — refused, stamped into dispatchError"
-msgstr ""
+msgstr "Проєкти на пресеті «заблоковано» — відмова, записана в dispatchError"
 
 #: src/workspace/task/TaskBrief.tsx
 msgid "prompt"
-msgstr ""
+msgstr "промпт"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "pull request opened: {prUrl}"
-msgstr ""
+msgstr "пул-реквест відкрито: {prUrl}"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "push the branch and open a pull request"
-msgstr ""
+msgstr "запушити гілку й відкрити пул-реквест"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "Push works over SSH; opening a {change} needs a {provider} token."
-msgstr ""
+msgstr "Push працює через SSH; щоб відкрити {change}, потрібен токен {provider}."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
-msgstr ""
+msgstr "Пушить <0>{taskBranch}</0> в <1>origin</1>, відкриває пул-реквест через <2>gh</2> і переносить картку в «Готово». Гілка зберігається."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
-msgstr ""
+msgstr "повернути картку в Inbox"
 
 #: src/lib/needsYou.ts
 msgid "Question"
-msgstr ""
+msgstr "Питання"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
-msgstr ""
+msgstr "питання {number}"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/boardModel.ts
 msgid "Queued"
-msgstr ""
+msgstr "У черзі"
 
 #: src/lib/docFigures.tsx
 msgid "Queued — waiting for a slot"
-msgstr ""
+msgstr "У черзі — чекає на слот"
 
 #: src/components/SessionCard.tsx
 msgid "quiet {quiet}"
-msgstr ""
+msgstr "мовчить {quiet}"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Quota connected, but the CLI still needs a login: <0>{reason}</0>"
-msgstr ""
+msgstr "Квоту під’єднано, але CLI ще потребує входу: <0>{reason}</0>"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "ran {duration}"
-msgstr ""
+msgstr "тривав {duration}"
 
 #: src/components/StatusStrip.tsx
 msgid "range"
-msgstr ""
+msgstr "діапазон"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "Re-check"
-msgstr ""
+msgstr "Перевірити"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "re-check now"
-msgstr ""
+msgstr "перевірити ще раз"
 
 #: src/components/ProjectActions.tsx
 msgid "re-enable swarmery in .claude/settings.json"
-msgstr ""
+msgstr "знову ввімкнути swarmery в .claude/settings.json"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Re-run with feedback"
-msgstr ""
+msgstr "Повторити з відгуком"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "re-verification started — the verdict will appear here when it finishes"
-msgstr ""
+msgstr "повторну перевірку запущено — вердикт з’явиться тут після завершення"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Re-verify"
-msgstr ""
+msgstr "Перевірити знову"
 
 #: src/components/Explain.tsx
 msgid "Read more →"
-msgstr ""
+msgstr "Докладніше →"
 
 #: src/components/ProjectPlugins.tsx
 #: src/components/ProjectPlugins.tsx
 #: src/components/ProjectPlugins.tsx
 msgid "read-only — daemon started without SWARMERY_ONBOARD_ROOTS"
-msgstr ""
+msgstr "лише читання — демон запущено без SWARMERY_ONBOARD_ROOTS"
 
 #: src/components/ConnectorsSection.tsx
 msgid "read-only · from <0>claude mcp list</0> on the default Claude account · project- and local-scope servers configured in your repos are not listed (the daemon reads from its own working directory)"
-msgstr ""
+msgstr "лише читання · з <0>claude mcp list</0> на акаунті Claude за умовчанням · сервери project- і local-рівня з ваших репозиторіїв не показано (демон читає зі своєї робочої теки)"
 
 #: src/components/PermissionPresets.tsx
 msgid "Read-only (read, grep, git status/log/diff)"
-msgstr ""
+msgstr "Лише читання (read, grep, git status/log/diff)"
 
 #: src/components/AccountsSection.tsx
 msgid "readiness check failed: {probeError}"
-msgstr ""
+msgstr "перевірка готовності не вдалася: {probeError}"
 
 #: src/components/AccountsSection.tsx
 msgid "reading accounts…"
-msgstr ""
+msgstr "читання акаунтів…"
 
 #: src/components/ConnectorsSection.tsx
 msgid "reading mcp config…"
-msgstr ""
+msgstr "читання конфігурації mcp…"
 
 #: src/components/RetroImproveCard.tsx
 msgid "Reads this whole window, has an agent write what hurts and what to change — every claim citing the evidence it came from. Nothing is written anywhere until you accept it; only then can it become a plan."
-msgstr ""
+msgstr "Читає все це вікно й доручає агенту написати, що болить і що змінити — кожне твердження з посиланням на докази, з яких воно випливає. Нічого нікуди не записується, доки ви це не приймете; лише тоді воно може стати планом."
 
 #: src/components/AccountSelector.tsx
 #: src/components/AccountsSection.tsx
 msgid "ready"
-msgstr ""
+msgstr "готовий"
 
 #: src/api.ts
 msgid "rebuild failed: {status}"
-msgstr ""
+msgstr "перебудова не вдалася: {status}"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "recent decisions"
-msgstr ""
+msgstr "останні рішення"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Reconnect"
-msgstr ""
+msgstr "Під’єднати знову"
 
 #: src/api.ts
 msgid "refine planning failed: {status}"
-msgstr ""
+msgstr "уточнення плану не вдалося: {status}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "refresh"
-msgstr ""
+msgstr "оновити"
 
 #: src/api.ts
 #: src/components/usage/UsageChip.tsx
 msgid "refresh failed"
-msgstr ""
+msgstr "оновлення не вдалося"
 
 #: src/api.ts
 msgid "reject revision failed: {status}"
-msgstr ""
+msgstr "відхилення ревізії не вдалося: {status}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "Remaining"
-msgstr ""
+msgstr "Залишок"
 
 #: src/components/AccountsSection.tsx
 #: src/components/AccountsSection.tsx
 msgid "remove"
-msgstr ""
+msgstr "видалити"
 
 #: src/workspace/TaskFields.tsx
 msgid "remove {v}"
-msgstr ""
+msgstr "видалити {v}"
 
 #: src/components/AccountsSection.tsx
 msgid "Remove account"
-msgstr ""
+msgstr "Видалити акаунт"
 
 #: src/components/AccountsSection.tsx
 msgid "Remove account <0>{confirmKey}</0>? Projects explicitly bound to it will fall back to the default account."
-msgstr ""
+msgstr "Видалити акаунт <0>{confirmKey}</0>? Проєкти, явно прив’язані до нього, перейдуть на акаунт за умовчанням."
 
 #: src/api.ts
 msgid "remove connector failed: {status}"
-msgstr ""
+msgstr "видалення конектора не вдалося: {status}"
 
 #: src/components/ProjectActions.tsx
 msgid "remove swarmery from .claude/settings.json"
-msgstr ""
+msgstr "прибрати swarmery з .claude/settings.json"
 
 #: src/lib/docFigures.tsx
 msgid "Remove the dead flag in settings"
-msgstr ""
+msgstr "Прибрати мертвий прапорець у налаштуваннях"
 
 #: src/components/DetachModal.tsx
 msgid "removed"
-msgstr ""
+msgstr "видалено"
 
 #: src/components/DetachModal.tsx
 msgid "Removes the swarmery-owned entries from <0>.claude/settings.json</0>. Your other settings are left untouched and the original is backed up to <1>settings.json.bak</1>."
-msgstr ""
+msgstr "Видаляє записи swarmery з <0>.claude/settings.json</0>. Інші ваші налаштування не чіпаються, а оригінал зберігається в <1>settings.json.bak</1>."
 
 #: src/api.ts
 msgid "rename failed: {status}"
-msgstr ""
+msgstr "перейменування не вдалося: {status}"
 
 #: src/components/ProjectPlugins.tsx
 msgid "repair"
-msgstr ""
+msgstr "полагодити"
 
 #: src/api.ts
 msgid "repair failed: {status}"
-msgstr ""
+msgstr "ремонт не вдався: {status}"
 
 #: src/lib/notifications.ts
 msgid "request #{id} is waiting on you"
-msgstr ""
+msgstr "запит #{id} чекає на вас"
 
 #: src/api.ts
 msgid "request failed: {status}"
-msgstr ""
+msgstr "запит не вдався: {status}"
 
 #: src/api.ts
 msgid "rerun failed"
-msgstr ""
+msgstr "перезапуск не вдався"
 
 #: src/components/AccountSelector.tsx
 #: src/components/PermissionPresets.tsx
 msgid "reset"
-msgstr ""
+msgstr "скинути"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
-msgstr ""
+msgstr "скидання через {days} дн."
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d {remHours}h"
-msgstr ""
+msgstr "скидання через {days} дн. {remHours} год"
 
 #: src/components/usage/format.ts
 msgid "resets in {hours}h {minutes}m"
-msgstr ""
+msgstr "скидання через {hours} год {minutes} хв"
 
 #: src/components/usage/format.ts
 msgid "resets in {totalMin}m"
-msgstr ""
+msgstr "скидання через {totalMin} хв"
 
 #: src/components/usage/format.ts
 msgid "resets now"
-msgstr ""
+msgstr "скидається зараз"
 
 #: src/components/ProjectActions.tsx
 #: src/components/ProjectActions.tsx
 msgid "restore"
-msgstr ""
+msgstr "відновити"
 
 #: src/api.ts
 msgid "restore failed: {status}"
-msgstr ""
+msgstr "відновлення не вдалося: {status}"
 
 #: src/components/ProjectActions.tsx
 msgid "Restore project"
-msgstr ""
+msgstr "Відновити проєкт"
 
 #: src/components/AttachModal.tsx
 msgid "restored"
-msgstr ""
+msgstr "відновлено"
 
 #: src/components/CommandPalette.tsx
 msgid "results scoped to {scopeLabel}"
-msgstr ""
+msgstr "результати в межах {scopeLabel}"
 
 #: src/workspace/StatusBar.tsx
 msgid "resume"
-msgstr ""
+msgstr "продовжити"
 
 #: src/workspace/StatusBar.tsx
 msgid "resume this project"
-msgstr ""
+msgstr "зняти проєкт з паузи"
 
 #: src/lib/docFigures.tsx
 msgid "Retries for the BLE handshake"
-msgstr ""
+msgstr "Повтори для BLE-handshake"
 
 #: src/components/ui.tsx
 msgid "retry"
-msgstr ""
+msgstr "повторити"
 
 #: src/api.ts
 msgid "retry proposal failed"
-msgstr ""
+msgstr "повтор пропозиції не вдався"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Retry run"
-msgstr ""
+msgstr "Повторити запуск"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "review"
-msgstr ""
+msgstr "рев’ю"
 
 #: src/lib/docFigures.tsx
 #: src/lib/docFigures.tsx
 #: src/workspace/boardModel.ts
 msgid "Review"
-msgstr ""
+msgstr "Рев’ю"
 
 #: src/api.ts
 msgid "review failed"
-msgstr ""
+msgstr "рев’ю не вдалося"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "Review the commits, then merge them in your own checkout. Once merged, the branch is empty and the next run reclaims and deletes it automatically — nothing else to clean up."
-msgstr ""
+msgstr "Перегляньте коміти, а потім злийте їх у своїй робочій копії. Після злиття гілка порожня, і наступний запуск сам забере й видалить її — більше нічого прибирати не треба."
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "Review the commits, then merge them into {base} in your own checkout. Once merged, the branch is empty and the next run reclaims and deletes it automatically — nothing else to clean up."
-msgstr ""
+msgstr "Перегляньте коміти, а потім злийте їх у {base} у своїй робочій копії. Після злиття гілка порожня, і наступний запуск сам забере й видалить її — більше нічого прибирати не треба."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "review the open revision →"
-msgstr ""
+msgstr "переглянути відкриту ревізію →"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/task/TaskActions.tsx
 msgid "reviewer feedback"
-msgstr ""
+msgstr "відгук рев’юера"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Revise plan"
-msgstr ""
+msgstr "Ревізія плану"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "revise the plan"
-msgstr ""
+msgstr "зробити ревізію плану"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Revise the plan so this phase (and its dependents) can succeed."
-msgstr ""
+msgstr "Перегляньте план, щоб ця фаза (і залежні від неї) могли завершитись успішно."
 
 #: src/workspace/task/RunConfig.tsx
 msgid "route applied"
-msgstr ""
+msgstr "маршрут застосовано"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "Route: {pick} ({mode} — {why})"
-msgstr ""
+msgstr "Маршрут: {pick} ({mode} — {why})"
 
 #: src/workspace/task/RunConfig.tsx
 #: src/workspace/task/RunLog.tsx
 msgid "run"
-msgstr ""
+msgstr "запуск"
 
 #: src/lib/docFigures.tsx
 msgid "Run"
-msgstr ""
+msgstr "Запуск"
 
 #: src/components/usage/UsageChip.tsx
 msgid "run `{command}`"
-msgstr ""
+msgstr "виконайте `{command}`"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "Run branch holds unmerged commits"
-msgstr ""
+msgstr "Гілка запуску містить незлиті коміти"
 
 #: src/components/ProjectPlugins.tsx
 msgid "run claude plugin install/update for this project"
-msgstr ""
+msgstr "виконати claude plugin install/update для цього проєкту"
 
 #: src/components/TerminalPathNote.tsx
 msgid "run claude under it, one-off"
-msgstr ""
+msgstr "запустити claude під ним один раз"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "run config"
-msgstr ""
+msgstr "конфігурація запуску"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "run diagnosis"
-msgstr ""
+msgstr "діагноз запуску"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "run duration"
-msgstr ""
+msgstr "тривалість запуску"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Run error: {runError}"
-msgstr ""
+msgstr "Помилка запуску: {runError}"
 
 #: src/workspace/TaskModal.tsx
 msgid "run log"
-msgstr ""
+msgstr "журнал запуску"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "run not started"
-msgstr ""
+msgstr "запуск не почато"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "Run plan again"
-msgstr ""
+msgstr "Повторний запуск"
 
 #: src/api.ts
 msgid "run routine failed: {status}"
-msgstr ""
+msgstr "запуск рутини не вдався: {status}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "run this phase again"
-msgstr ""
+msgstr "запустити цю фазу знову"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "run verification again against the worktree"
-msgstr ""
+msgstr "запустити перевірку worktree ще раз"
 
 #: src/components/PlanRunCard.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/workspace/boardModel.ts
 msgid "running"
-msgstr ""
+msgstr "виконується"
 
 #: src/lib/docFigures.tsx
 #: src/lib/docFigures.tsx
 msgid "Running"
-msgstr ""
+msgstr "Виконується"
 
 #: src/workspace/StatusBar.tsx
 msgid "Running {running}"
-msgstr ""
+msgstr "Виконуються {running}"
 
 #: src/components/AccountSelector.tsx
 msgid "running as"
-msgstr ""
+msgstr "працює як"
 
 #: src/components/ImproveModal.tsx
 msgid "runs"
-msgstr ""
+msgstr "запуски"
 
 #: src/components/AccountSelector.tsx
 #: src/components/PermissionPresets.tsx
 #: src/components/PluginConfigModal.tsx
 #: src/components/ProjectActions.tsx
 msgid "save"
-msgstr ""
+msgstr "зберегти"
 
 #: src/api.ts
 msgid "save doc failed: {status}"
-msgstr ""
+msgstr "збереження документа не вдалося: {status}"
 
 #: src/api.ts
 msgid "save failed: {status}"
-msgstr ""
+msgstr "збереження не вдалося: {status}"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Save token"
-msgstr ""
+msgstr "Зберегти токен"
 
 #: src/components/AccountSelector.tsx
 #: src/components/PermissionPresets.tsx
 msgid "saving…"
-msgstr ""
+msgstr "збереження…"
 
 #: src/lib/docFigures.tsx
 msgid "Schema + migration"
-msgstr ""
+msgstr "Схема + міграція"
 
 #: src/components/CommandPalette.tsx
 msgid "Search"
-msgstr ""
+msgstr "Пошук"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects"
-msgstr ""
+msgstr "шукати проєкти"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects…"
-msgstr ""
+msgstr "шукати проєкти…"
 
 #: src/components/CommandPalette.tsx
 msgid "search sessions, messages, files…"
-msgstr ""
+msgstr "шукати сесії, повідомлення, файли…"
 
 #: src/lib/sessionsView.ts
 msgid "second"
-msgstr ""
+msgstr "друга"
 
 #: src/api.ts
 msgid "send failed: {status}"
-msgstr ""
+msgstr "надсилання не вдалося: {status}"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "sent back to todo with your feedback appended to the prompt"
-msgstr ""
+msgstr "повернуто в чергу, ваш відгук додано до промпта"
 
 #: src/api.ts
 msgid "serena start failed: {status}"
-msgstr ""
+msgstr "запуск serena не вдався: {status}"
 
 #: src/api.ts
 msgid "serena stop failed: {status}"
-msgstr ""
+msgstr "зупинка serena не вдалася: {status}"
 
 #: src/lib/sessionsView.ts
 msgid "session"
-msgstr ""
+msgstr "сесія"
 
 #: src/components/FileContentionBanner.tsx
 msgid "session {sessionId}"
-msgstr ""
+msgstr "сесія {sessionId}"
 
 #: src/components/CommandPalette.tsx
 #: src/components/CommandPalette.tsx
 msgid "session #{sessionId}"
-msgstr ""
+msgstr "сесія #{sessionId}"
 
 #: src/components/NotifySettings.tsx
 msgid "session error"
-msgstr ""
+msgstr "помилка сесії"
 
 #: src/lib/notifications.ts
 msgid "Session error"
-msgstr ""
+msgstr "Помилка сесії"
 
 #: src/components/NotifySettings.tsx
 msgid "session finished"
-msgstr ""
+msgstr "сесія завершилась"
 
 #: src/lib/notifications.ts
 msgid "Session finished"
-msgstr ""
+msgstr "Сесія завершилась"
 
 #: src/lib/notifications.ts
 msgid "Session killed"
-msgstr ""
+msgstr "Сесію зупинено"
 
 #: src/components/OutcomePicker.tsx
 msgid "session outcome"
-msgstr ""
+msgstr "результат сесії"
 
 #: src/components/CommandPalette.tsx
 #: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Sessions"
-msgstr ""
+msgstr "Sessions"
 
 #: src/workspace/TaskCard.tsx
 msgid "sessions for {branch}"
-msgstr ""
+msgstr "сесії гілки {branch}"
 
 #: src/components/CommandPalette.tsx
 msgid "Sessions touching file"
-msgstr ""
+msgstr "Сесії, що торкалися файлу"
 
 #: src/components/CommandPalette.tsx
 msgid "sessions touching this file…"
-msgstr ""
+msgstr "сесії, що торкалися цього файлу…"
 
 #: src/api.ts
 msgid "set account failed: {status}"
-msgstr ""
+msgstr "зміна акаунта не вдалася: {status}"
 
 #: src/api.ts
 msgid "set preset failed: {status}"
-msgstr ""
+msgstr "зміна пресета не вдалася: {status}"
 
 #: src/lib/nav.ts
 #: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
 msgid "Settings"
-msgstr ""
+msgstr "Settings"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "setup needed"
-msgstr ""
+msgstr "потрібне налаштування"
 
 #: src/components/FileContentionBanner.tsx
 msgid "shared files"
-msgstr ""
+msgstr "спільні файли"
 
 #: src/components/PermissionPresets.tsx
 msgid "Shell commands (any Bash)"
-msgstr ""
+msgstr "Команди оболонки (будь-який Bash)"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "Show {label}"
-msgstr ""
+msgstr "Показати {label}"
 
 #: src/components/ImproveModal.tsx
 msgid "Show full evidence sent to the model"
-msgstr ""
+msgstr "Показати всі докази, надіслані моделі"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "show hidden ({hiddenCount})"
-msgstr ""
+msgstr "показати приховані ({hiddenCount})"
 
 #: src/workspace/StatusBar.tsx
 msgid "show terminal"
-msgstr ""
+msgstr "показати термінал"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "show this window"
-msgstr ""
+msgstr "показати це вікно"
 
 #: src/components/VcsAuthBanner.tsx
 msgid "Sign in"
-msgstr ""
+msgstr "Увійти"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Sign in <0>as {account}</0>. The browser tab that just opened must be logged into THAT account's claude.ai subscription — if it is signed in as someone else, sign out there first or use a private window."
-msgstr ""
+msgstr "Увійдіть <0>як {account}</0>. Вкладка браузера, що щойно відкрилася, має бути залогінена в підписку claude.ai САМЕ ЦЬОГО акаунта — якщо там інший користувач, спершу вийдіть або скористайтеся приватним вікном."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Sign in to {provider}"
-msgstr ""
+msgstr "Увійти в {provider}"
 
 #: src/api.ts
 msgid "sign-in failed"
-msgstr ""
+msgstr "вхід не вдався"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Sign-in method"
-msgstr ""
+msgstr "Спосіб входу"
 
 #: src/api.ts
 msgid "sign-in poll failed"
-msgstr ""
+msgstr "опитування входу не вдалося"
 
 #: src/api.ts
 msgid "sign-out failed"
-msgstr ""
+msgstr "вихід не вдався"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Signed in as {login}."
-msgstr ""
+msgstr "Ви ввійшли як {login}."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Signed in."
-msgstr ""
+msgstr "Вхід виконано."
 
 #: src/lib/docFigures.tsx
 msgid "Single-flight per worktree: a fix card shares its root card’s tree"
-msgstr ""
+msgstr "Один запуск на worktree: картка виправлення ділить дерево з кореневою карткою"
 
 #: src/lib/docFigures.tsx
 msgid "Single-flight: the same card never starts twice"
-msgstr ""
+msgstr "Один запуск за раз: та сама картка ніколи не стартує двічі"
 
 #: src/lib/sessionsView.ts
 msgid "sixth"
-msgstr ""
+msgstr "шоста"
 
 #: src/components/PluginConfigModal.tsx
 msgid "skip"
-msgstr ""
+msgstr "пропустити"
 
 #: src/components/NewProjectButton.tsx
 msgid "slug"
-msgstr ""
+msgstr "slug"
 
 #: src/main.tsx
 msgid "something broke"
-msgstr ""
+msgstr "щось зламалось"
 
 #: src/workspace/task/TaskBrief.tsx
 msgid "source"
-msgstr ""
+msgstr "джерело"
 
 #: src/workspace/boardModel.ts
 msgid "spawned by verification to repair {externalId}"
-msgstr ""
+msgstr "створено перевіркою для виправлення {externalId}"
 
 #: src/workspace/boardModel.ts
 msgid "stale"
-msgstr ""
+msgstr "застарілі"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
-msgstr ""
+msgstr "запустити одразу — диспетчер підхопить"
 
 #: src/api.ts
 msgid "start planning failed: {status}"
-msgstr ""
+msgstr "початок планування не вдався: {status}"
 
 #: src/workspace/task/RunLog.tsx
 msgid "start point"
-msgstr ""
+msgstr "точка старту"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Start revision"
-msgstr ""
+msgstr "Почати ревізію"
 
 #: src/api.ts
 msgid "start revision failed: {status}"
-msgstr ""
+msgstr "початок ревізії не вдався: {status}"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "start the plan run again"
-msgstr ""
+msgstr "запустити план ще раз"
 
 #: src/components/RetroImproveCard.tsx
 #: src/components/RetroImproveCard.tsx
@@ -3424,87 +3448,91 @@ msgstr ""
 #: src/components/RunOutcomeModal.tsx
 #: src/components/usage/UsageConnect.tsx
 msgid "starting…"
-msgstr ""
+msgstr "запуск…"
 
 #: src/workspace/task/RunLog.tsx
 msgid "state"
-msgstr ""
+msgstr "стан"
 
 #: src/components/StopButton.tsx
 msgid "Stop"
-msgstr ""
+msgstr "Зупинити"
 
 #: src/components/StopButton.tsx
 msgid "Stop {label} and mark done?"
-msgstr ""
+msgstr "Зупинити {label} і позначити готовим?"
 
 #: src/api.ts
 msgid "stop failed: {status}"
-msgstr ""
+msgstr "зупинка не вдалася: {status}"
+
+#: src/lib/glossary.ts
+msgid "stop using this lesson?"
+msgstr "списати цей урок?"
 
 #: src/components/StopButton.tsx
 msgid "stopping…"
-msgstr ""
+msgstr "зупинка…"
 
 #: src/components/QuestionForm.tsx
 msgid "submit answers"
-msgstr ""
+msgstr "надіслати відповіді"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "subscription account"
-msgstr ""
+msgstr "акаунт підписки"
 
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "Subscription usage"
-msgstr ""
+msgstr "Використання підписки"
 
 #: src/components/usage/UsageChip.tsx
 msgid "Subscription usage — loading…"
-msgstr ""
+msgstr "Використання підписки — завантаження…"
 
 #: src/components/OutcomePicker.tsx
 msgid "success"
-msgstr ""
+msgstr "успіх"
 
 #: src/workspace/boardModel.ts
 msgid "suggested"
-msgstr ""
+msgstr "пропозиція"
 
 #: src/workspace/boardModel.ts
 msgid "suggested from session #{id}"
-msgstr ""
+msgstr "запропоновано із сесії #{id}"
 
 #: src/theme/palettes.ts
 msgid "Sunset"
-msgstr ""
+msgstr "Захід сонця"
 
 #: src/theme/palettes.ts
 msgid "Swarm"
-msgstr ""
+msgstr "Swarm"
 
 #: src/App.tsx
 msgid "swarmery home"
-msgstr ""
+msgstr "головна swarmery"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "switch project"
-msgstr ""
+msgstr "перемкнути проєкт"
 
 #: src/components/ThemeToggle.tsx
 msgid "switch to dark theme"
-msgstr ""
+msgstr "перемкнути на темну тему"
 
 #: src/components/ThemeToggle.tsx
 msgid "switch to light theme"
-msgstr ""
+msgstr "перемкнути на світлу тему"
 
 #: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 #: src/theme/ThemePicker.tsx
 msgid "System"
-msgstr ""
+msgstr "System"
 
 #: src/main.tsx
 #: src/main.tsx
@@ -3512,547 +3540,559 @@ msgstr ""
 #: src/main.tsx
 #: src/main.tsx
 msgid "system…"
-msgstr ""
+msgstr "система…"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
-msgstr ""
+msgstr "вкладка не відкрилась? авторизуйтесь тут"
 
 #: src/components/ProjectActions.tsx
 msgid "tags"
-msgstr ""
+msgstr "теги"
 
 #: src/components/ProjectActions.tsx
 msgid "tags · comma-separated"
-msgstr ""
+msgstr "теги · через кому"
 
 #: src/components/ProjectActions.tsx
 msgid "tags for {projectName}"
-msgstr ""
+msgstr "теги для {projectName}"
 
 #: src/workspace/TaskCard.tsx
 msgid "take it back out of the queue — nothing has run yet"
-msgstr ""
+msgstr "забрати з черги — ще нічого не запускалося"
 
 #: src/workspace/TaskCard.tsx
 #: src/workspace/TaskModal.tsx
 msgid "task"
-msgstr ""
+msgstr "задача"
 
 #: src/workspace/TaskCard.tsx
 msgid "task {id}: {title}"
-msgstr ""
+msgstr "задача {id}: {title}"
 
 #: src/workspace/TaskModal.tsx
 msgid "task detail"
-msgstr ""
+msgstr "деталі задачі"
 
 #: src/workspace/boardModel.ts
 msgid "Tasks captured from sessions and routines land here — Run, Plan or Dismiss each one."
-msgstr ""
+msgstr "Сюди потрапляють задачі, захоплені із сесій і рутин — кожну запустіть, сплануйте або відхиліть."
 
 #: src/components/ProjectActions.tsx
 msgid "telemetry-only"
-msgstr ""
+msgstr "лише телеметрія"
 
 #: src/workspace/StatusBar.tsx
 msgid "Terminal"
-msgstr ""
+msgstr "Термінал"
 
 #: src/main.tsx
 msgid "That link does not point anywhere in this dashboard."
-msgstr ""
+msgstr "Це посилання не веде нікуди в цьому дашборді."
 
 #: src/components/AccountSelector.tsx
 msgid "the account binds when a dispatcher process spawns — a run already in flight keeps its old account until it finishes; switching here only affects the next run"
-msgstr ""
+msgstr "акаунт прив’язується, коли диспетчер породжує процес — запуск, що вже триває, зберігає старий акаунт до завершення; перемикання тут впливає лише на наступний запуск"
 
 #: src/components/CreateAccountModal.tsx
 msgid "The account key you typed will be lost."
-msgstr ""
+msgstr "Введений ключ акаунта буде втрачено."
 
 #: src/components/usage/UsageModal.tsx
 #: src/components/usage/UsageProviderCard.tsx
 msgid "the account this project's sessions run under"
-msgstr ""
+msgstr "акаунт, під яким працюють сесії цього проєкту"
+
+#: src/lib/glossary.ts
+msgid "the Advisor noticed…"
+msgstr "Радник помітив…"
 
 #: src/components/RetroImproveCard.tsx
 msgid "the analysis failed without a recorded reason"
-msgstr ""
+msgstr "аналіз впав без записаної причини"
 
 #: src/lib/docFigures.tsx
 msgid "The board's three lanes"
-msgstr ""
+msgstr "Три доріжки дошки"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "The code expired before it was entered. Get a new one."
-msgstr ""
+msgstr "Код сплив, перш ніж його ввели. Отримайте новий."
 
 #: src/lib/docFigures.tsx
 msgid "The concurrent-run limit (default 2)"
-msgstr ""
+msgstr "Ліміт паралельних запусків (за умовчанням 2)"
 
 #: src/workspace/boardModel.ts
 msgid "The dispatcher picks cards up from here in priority order."
-msgstr ""
+msgstr "Звідси диспетчер бере картки за пріоритетом."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "the full request (empty = use the title)"
-msgstr ""
+msgstr "повний запит (порожньо = взяти назву)"
 
 #: src/lib/docFigures.tsx
 msgid "The global dispatch switch, and the dispatcher pause"
-msgstr ""
+msgstr "Глобальний перемикач відправлення й пауза диспетчера"
 
 #: src/components/RetroImproveCard.tsx
 msgid "the improver is reading the report · {runningFor}"
-msgstr ""
+msgstr "покращувач читає звіт · {runningFor}"
 
 #: src/workspace/TaskCard.tsx
 msgid "the inbox sweeper retires captured cards left untriaged"
-msgstr ""
+msgstr "прибиральник Inbox списує захоплені картки, які так і не розібрали"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "the janitor has not swept yet"
-msgstr ""
+msgstr "прибиральник ще не проходив"
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "the janitor is disabled by SWARMERY_WTJANITOR — the history below is historical, not current"
-msgstr ""
+msgstr "прибиральник вимкнено через SWARMERY_WTJANITOR — історія нижче минула, а не поточна"
 
 #: src/lib/docFigures.tsx
 msgid "The nine dispatcher admission gates in order"
-msgstr ""
+msgstr "Дев’ять вхідних гейтів диспетчера по порядку"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "The playbook sets the stages and the permission mode the run spawns under. <0>model</0> overrides the model the playbook would use. <1>agent</1> is orthogonal to both: it prefixes every stage's prompt with that persona, it does not replace the stages."
-msgstr ""
+msgstr "Плейбук задає етапи й режим дозволів, з яким стартує запуск. <0>model</0> перевизначає модель, яку взяв би плейбук. <1>agent</1> незалежний від обох: він додає цю персону на початок промпта кожного етапу, а не замінює етапи."
 
 #: src/lib/sessionsView.ts
 msgid "the previous run ended {prevStatus}"
-msgstr ""
+msgstr "попередній запуск завершився: {prevStatus}"
 
 #: src/lib/sessionsView.ts
 msgid "the previous run exited with an error"
-msgstr ""
+msgstr "попередній запуск завершився з помилкою"
 
 #: src/api.ts
 msgid "the probe needs more fields filled in first"
-msgstr ""
+msgstr "спершу заповніть більше полів для перевірки"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "The reason you wrote for revising this plan will be lost."
-msgstr ""
+msgstr "Причина ревізії плану, яку ви написали, буде втрачена."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run branch"
-msgstr ""
+msgstr "гілка запуску"
 
 #: src/components/DiffView.tsx
 msgid "the run branch carries no commits ahead of its start point — the agent changed nothing"
-msgstr ""
+msgstr "гілка запуску не має комітів після точки старту — агент нічого не змінив"
 
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "The run branch still holds work"
-msgstr ""
+msgstr "У гілці запуску ще є робота"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run failed"
-msgstr ""
+msgstr "запуск впав"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run finished but ticked no acceptance criteria"
-msgstr ""
+msgstr "запуск завершився, але не відмітив жодного критерію приймання"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run ticked every acceptance criterion"
-msgstr ""
+msgstr "запуск відмітив усі критерії приймання"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run ticked some criteria but did not finish the phase"
-msgstr ""
+msgstr "запуск відмітив частину критеріїв, але не завершив фазу"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "The sign-in was declined."
-msgstr ""
+msgstr "Вхід відхилено."
 
 #: src/components/NewProjectButton.tsx
 msgid "The slug, path, workspace root, and pack selections you've entered will be lost."
-msgstr ""
+msgstr "Введені slug, шлях, корінь робочого простору й вибір пакетів буде втрачено."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "The title, prompt, and any advanced settings you've entered will be lost."
-msgstr ""
+msgstr "Назву, промпт і розширені налаштування, які ви ввели, буде втрачено."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
-msgstr ""
+msgstr "перевіряльник не зміг зробити висновок (середовище або тайм-аут) — це не провальна оцінка"
 
 #: src/lib/docFigures.tsx
 msgid "The worktree limit (default 4)"
-msgstr ""
+msgstr "Ліміт worktree (за умовчанням 4)"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
-msgstr ""
+msgstr "worktree вже забрано, тож оцінювати нічого — натомість перезапустіть картку"
 
 #: src/theme/ThemePicker.tsx
 msgid "theme"
-msgstr ""
+msgstr "тема"
 
 #: src/theme/ThemePicker.tsx
 #: src/theme/ThemePicker.tsx
 msgid "theme settings"
-msgstr ""
+msgstr "налаштування теми"
 
 #: src/lib/sessionsView.ts
 msgid "third"
-msgstr ""
+msgstr "третя"
 
 #: src/components/NotifySettings.tsx
 msgid "this browser does not support the Notifications API"
-msgstr ""
+msgstr "цей браузер не підтримує Notifications API"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "this card has no run branch — there is nothing to push"
-msgstr ""
+msgstr "у цієї картки немає гілки запуску — нічого пушити"
 
 #: src/workspace/TaskModal.tsx
 msgid "This edit was not saved: {saveError}"
-msgstr ""
+msgstr "Цю зміну не збережено: {saveError}"
 
 #: src/components/PermissionPresets.tsx
 msgid "This grants agents more autonomy for this project:"
-msgstr ""
+msgstr "Це дає агентам більше автономії в цьому проєкті:"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "this host"
-msgstr ""
+msgstr "цей хост"
 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"
-msgstr ""
+msgstr "схема конфігурації цього пакета відсутня або пошкоджена"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "this phase has not been run"
-msgstr ""
+msgstr "цю фазу ще не запускали"
 
 #: src/workspace/AgentPicker.tsx
 msgid "this project's .claude/agents/ definition replaces the inherited one"
-msgstr ""
+msgstr "визначення з .claude/agents/ цього проєкту замінює успадковане"
 
 #: src/components/ImproveModal.tsx
 msgid "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
-msgstr ""
+msgstr "Це запускає модель на доказах вище і створює пропозицію-дифф, яку ви погоджуєте перед будь-яким PR."
 
 #: src/components/SessionCard.tsx
 msgid "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
-msgstr ""
+msgstr "ця сесія змінила модель по ходу: почалась на {from}, останній хід працював на {to}"
 
 #: src/workspace/task/TaskBrief.tsx
 msgid "this session had touched the file when the card was captured"
-msgstr ""
+msgstr "ця сесія торкалася файлу на момент захоплення картки"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1> and complete the login — when you exit the shell, the account is re-checked automatically."
-msgstr ""
+msgstr "Цей термінал працює з config-текою акаунта <0>{account}</0>. Запустіть <1>claude</1> і завершіть вхід — коли ви вийдете з оболонки, акаунт перевіриться автоматично."
 
 #: src/main.tsx
 msgid "This view failed to render."
-msgstr ""
+msgstr "Не вдалося відобразити цей екран."
 
 #: src/lib/docBlocks.tsx
 msgid "Tip"
-msgstr ""
+msgstr "Порада"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/TaskBrief.tsx
 #: src/workspace/task/TaskBrief.tsx
 msgid "title"
-msgstr ""
+msgstr "назва"
 
 #: src/workspace/task/useTaskDraft.ts
 msgid "title and prompt cannot be empty"
-msgstr ""
+msgstr "назва і промпт не можуть бути порожніми"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "title is required"
-msgstr ""
+msgstr "назва обов’язкова"
 
 #: src/workspace/boardModel.ts
 msgid "today"
-msgstr ""
+msgstr "сьогодні"
 
 #: src/lib/nav.ts
 msgid "Today"
-msgstr ""
+msgstr "Today"
 
 #: src/lib/sessionsView.ts
 msgid "today · {name}"
-msgstr ""
+msgstr "сьогодні · {name}"
 
 #: src/api.ts
 msgid "toggle checkbox failed: {status}"
-msgstr ""
+msgstr "перемикання чекбокса не вдалося: {status}"
 
 #: src/api.ts
 msgid "toggle failed: {status}"
-msgstr ""
+msgstr "перемикання не вдалося: {status}"
 
 #: src/api.ts
 msgid "toggle rule failed: {status}"
-msgstr ""
+msgstr "перемикання правила не вдалося: {status}"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Token"
-msgstr ""
+msgstr "Токен"
 
 #: src/api.ts
 msgid "token sign-in failed"
-msgstr ""
+msgstr "вхід за токеном не вдався"
 
 #: src/pages/Settings.tsx
 msgid "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
-msgstr ""
+msgstr "перекладає сам дашборд; текст, який пишуть агенти (плани, звіти, уроки, рекомендації радника), і повідомлення від демона лишаються англійською"
 
 #: src/workspace/boardModel.ts
 msgid "Triage"
-msgstr ""
+msgstr "Сортування"
 
 #: src/components/RetroImproveCard.tsx
 msgid "Try again"
-msgstr ""
+msgstr "Спробувати ще"
 
 #: src/components/SessionLabelChips.tsx
 msgid "type"
-msgstr ""
+msgstr "тип"
 
 #: src/lib/docFigures.tsx
 msgid "UI screen"
-msgstr ""
+msgstr "UI-екран"
 
 #: src/lib/sessionsView.ts
 msgid "unknown day"
-msgstr ""
+msgstr "невідомий день"
 
 #: src/lib/docFigures.tsx
 msgid "unknown figure: {name}"
-msgstr ""
+msgstr "невідома фігура: {name}"
 
 #: src/api.ts
 msgid "unmute failed: {status}"
-msgstr ""
+msgstr "зняття приглушення не вдалося: {status}"
 
 #: src/workspace/TaskCard.tsx
 msgid "unpause this card"
-msgstr ""
+msgstr "зняти картку з паузи"
 
 #: src/components/PermissionPresets.tsx
 msgid "Unrestricted"
-msgstr ""
+msgstr "Без обмежень"
 
 #: src/components/AccountSelector.tsx
 msgid "unset"
-msgstr ""
+msgstr "не задано"
 
 #: src/api.ts
 msgid "update failed: {status}"
-msgstr ""
+msgstr "оновлення не вдалося: {status}"
 
 #: src/api.ts
 msgid "update routine failed: {status}"
-msgstr ""
+msgstr "оновлення рутини не вдалося: {status}"
 
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "usage"
-msgstr ""
+msgstr "використання"
 
 #: src/components/usage/UsageModal.tsx
 msgid "usage accounts"
-msgstr ""
+msgstr "акаунти використання"
 
 #: src/components/usage/UsageModal.tsx
 msgid "usage display mode"
-msgstr ""
+msgstr "режим показу використання"
 
 #: src/components/usage/UsageModal.tsx
 msgid "Used"
-msgstr ""
+msgstr "Використано"
 
 #: src/workspace/task/RunLog.tsx
 msgid "verdict"
-msgstr ""
+msgstr "вердикт"
 
 #: src/workspace/boardModel.ts
 msgid "verdict FAIL"
-msgstr ""
+msgstr "вердикт FAIL"
 
 #: src/workspace/boardModel.ts
 msgid "verdict FAIL: {clipped}"
-msgstr ""
+msgstr "вердикт FAIL: {clipped}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Verification verdict: {verdict}{detail}"
-msgstr ""
+msgstr "Вердикт перевірки: {verdict}{detail}"
 
 #: src/workspace/PlaybookPicker.tsx
 msgid "verification: {verify}"
-msgstr ""
+msgstr "перевірка: {verify}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "verified"
-msgstr ""
+msgstr "перевірено"
 
 #: src/workspace/PlaybookPicker.tsx
 msgid "verify {verify}"
-msgstr ""
+msgstr "перевірка {verify}"
 
 #: src/api.ts
 #: src/components/RunOutcomeModal.tsx
 msgid "verify failed"
-msgstr ""
+msgstr "не пройдено"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "verify inconclusive"
-msgstr ""
+msgstr "без висновку"
 
 #: src/workspace/task/RunLog.tsx
 msgid "verify retries"
-msgstr ""
+msgstr "повтори перевірки"
 
 #: src/lib/docFigures.tsx
 msgid "verify: pass"
-msgstr ""
+msgstr "перевірка: pass"
 
 #: src/components/ProjectPlugins.tsx
 msgid "via attach/detach"
-msgstr ""
+msgstr "через attach/detach"
 
 #: src/lib/sessionsView.ts
 msgid "waiting"
-msgstr ""
+msgstr "очікує"
 
 #: src/workspace/StatusBar.tsx
 msgid "Waiting {waiting}"
-msgstr ""
+msgstr "Очікують {waiting}"
 
 #: src/workspace/boardModel.ts
 msgid "waiting for review"
-msgstr ""
+msgstr "чекає на рев’ю"
 
 #: src/workspace/boardModel.ts
 msgid "waiting for review, a failed verdict, a dispatch error, or an unanswered permission request"
-msgstr ""
+msgstr "чекає на рев’ю, вердикт FAIL, помилка диспетчера або запит дозволу без відповіді"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Waiting for you to enter the code on {host}…"
-msgstr ""
+msgstr "Чекаємо, доки ви введете код на {host}…"
 
 #: src/workspace/boardModel.ts
 msgid "waiting on quota: {why}"
-msgstr ""
+msgstr "очікує квоти: {why}"
 
 #: src/theme/palettes.ts
 msgid "warm amber — the original"
-msgstr ""
+msgstr "теплий бурштин — оригінал"
 
 #: src/theme/palettes.ts
 msgid "warm coral & magenta"
-msgstr ""
+msgstr "теплий корал і маджента"
 
 #: src/lib/docBlocks.tsx
 msgid "Warning"
-msgstr ""
+msgstr "Увага"
+
+#: src/lib/glossary.ts
+msgid "watching"
+msgstr "спостерігає"
+
+#: src/lib/glossary.ts
+msgid "what actually happened"
+msgstr "що сталося насправді"
 
 #: src/components/Explain.tsx
 msgid "What is {term}?"
-msgstr ""
+msgstr "Що таке {term}?"
 
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/TaskBrief.tsx
 msgid "what needs doing"
-msgstr ""
+msgstr "що треба зробити"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "what should happen"
-msgstr ""
+msgstr "що має статися"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "what to fix on the next pass — appended to the prompt"
-msgstr ""
+msgstr "що виправити наступним проходом — додається до промпта"
 
 #: src/components/TerminalPathNote.tsx
 msgid "which account this project runs under, and why"
-msgstr ""
+msgstr "під яким акаунтом працює цей проєкт і чому"
 
 #: src/components/VcsProviderAsk.tsx
 msgid "Which service hosts <0>{host}</0>?"
-msgstr ""
+msgstr "Який сервіс хостить <0>{host}</0>?"
 
 #: src/components/VcsProviderAsk.tsx
 msgid "Which service hosts this repository?"
-msgstr ""
+msgstr "Який сервіс хостить цей репозиторій?"
 
 #: src/components/usage/UsageSetupHint.tsx
 msgid "why it's needed"
-msgstr ""
+msgstr "навіщо це потрібно"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "why the plan must change"
-msgstr ""
+msgstr "чому план має змінитися"
 
 #: src/components/DetachModal.tsx
 msgid "will remove"
-msgstr ""
+msgstr "буде видалено"
 
 #: src/components/AttachModal.tsx
 msgid "will restore"
-msgstr ""
+msgstr "буде відновлено"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/boardModel.ts
 msgid "Working"
-msgstr ""
+msgstr "У роботі"
 
 #: src/components/NewProjectButton.tsx
 msgid "workspace root"
-msgstr ""
+msgstr "корінь робочого простору"
 
 #: src/main.tsx
 msgid "workspace…"
-msgstr ""
+msgstr "робочий простір…"
 
 #: src/workspace/task/RunLog.tsx
 msgid "worktree"
-msgstr ""
+msgstr "worktree"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
-msgstr ""
+msgstr "worktree забрано — нічого переоцінювати"
 
 #: src/pages/Settings.tsx
 msgid "worktrees"
-msgstr ""
+msgstr "worktree"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the feedback first — a re-run with no notes repeats the same work"
-msgstr ""
+msgstr "спершу напишіть відгук — перезапуск без нотаток повторить ту саму роботу"
 
 #: src/components/NewProjectButton.tsx
 msgid "Writes <0>.claude/</0> config and carves the workspace namespace. Idempotent — existing config is never overwritten."
-msgstr ""
+msgstr "Записує конфігурацію <0>.claude/</0> і виділяє простір імен у робочому просторі. Ідемпотентно — наявна конфігурація ніколи не перезаписується."
 
 #: src/components/usage/UsageDisconnect.tsx
 msgid "yes, disconnect"
-msgstr ""
+msgstr "так, від’єднати"
 
 #: src/components/PluginConfigModal.tsx
 msgid "Your edits to this plugin's configuration will be lost."
-msgstr ""
+msgstr "Ваші зміни в конфігурації цього плагіна буде втрачено."
 
 #: src/theme/palettes.ts
 msgid "Zen"
-msgstr ""
+msgstr "Дзен"

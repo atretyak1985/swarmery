@@ -74,8 +74,10 @@ export default defineConfig({
   catalogs: CATALOGS.map((name) => ({
     path: `<rootDir>/src/locales/{locale}/${name}`,
     include: INCLUDE[name],
-    // lib/glossary.ts is tied to docs/concepts.md by the Go drift test (D8).
-    exclude: ['**/*.test.*', '<rootDir>/src/lib/glossary.ts'],
+    // lib/glossary.ts: the explainer copy (term/short/steps) stays English (D8, tied
+    // to docs/concepts.md by the Go drift test), but its UI_TERMS.ui words are t
+    // macros and must be extracted like any other message.
+    exclude: ['**/*.test.*'],
   })),
   format: 'po',
   // No line numbers in origins: a code edit above a message would otherwise

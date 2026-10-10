@@ -2631,6 +2631,10 @@ msgid "occupancy / reached-in-range · snapshot (board keeps last move only, not
 msgstr "occupancy / reached-in-range · snapshot (board keeps last move only, not full history)"
 
 #: src/pages/learning/classifierModel.ts
+msgid "off"
+msgstr "off"
+
+#: src/pages/learning/classifierModel.ts
 msgid "off-plan phase run"
 msgstr "off-plan phase run"
 
