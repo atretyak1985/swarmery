@@ -164,6 +164,10 @@ msgstr "{d} d ago"
 msgid "{danglingCount, plural, one {removed account still bound in # project} few {removed account still bound in # projects} many {removed account still bound in # projects} other {removed account still bound in # projects}}"
 msgstr "{danglingCount, plural, one {removed account still bound in # project} few {removed account still bound in # projects} many {removed account still bound in # projects} other {removed account still bound in # projects}}"
 
+#: src/workspace/boardModel.ts
+msgid "{days}d"
+msgstr "{days}d"
+
 #: src/components/AccountSelector.tsx
 msgid "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
 msgstr "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
@@ -813,11 +817,7 @@ msgstr "Awaiting your reply"
 msgid "back to all projects"
 msgstr "back to all projects"
 
-#. placeholder {0}: phase.result.backup
 #: src/components/AttachModal.tsx
-msgid "backup: {0}"
-msgstr "backup: {0}"
-
 #: src/components/DetachModal.tsx
 msgid "backup: {backupPath}"
 msgstr "backup: {backupPath}"
@@ -830,10 +830,9 @@ msgstr "behavior {behavior} · harness {harness} · infra {infra}"
 msgid "billing, infra"
 msgstr "billing, infra"
 
-#. placeholder {0}: binding.ignoredReason
 #: src/components/AccountSelector.tsx
-msgid "binding ignored: {0}"
-msgstr "binding ignored: {0}"
+msgid "binding ignored: {ignoredReason}"
+msgstr "binding ignored: {ignoredReason}"
 
 #: src/components/NewProjectButton.tsx
 msgid "blank → the daemon's default workspace root"
@@ -1919,6 +1918,10 @@ msgstr "Inbox"
 msgid "ingested from the {label} Claude Code account"
 msgstr "ingested from the {label} Claude Code account"
 
+#: src/components/LanguagePicker.tsx
+msgid "interface language"
+msgstr "interface language"
+
 #: src/api.ts
 msgid "invalid config"
 msgstr "invalid config"
@@ -2002,6 +2005,10 @@ msgstr "land failed"
 #: src/workspace/TaskCard.tsx
 msgid "Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
 msgstr "Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
+
+#: src/pages/Settings.tsx
+msgid "language"
+msgstr "language"
 
 #: src/components/usage/UsageModal.tsx
 msgid "Last updated: {updatedAt}"
@@ -3804,6 +3811,10 @@ msgstr "Token"
 #: src/api.ts
 msgid "token sign-in failed"
 msgstr "token sign-in failed"
+
+#: src/pages/Settings.tsx
+msgid "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
+msgstr "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
 
 #: src/workspace/boardModel.ts
 msgid "Triage"

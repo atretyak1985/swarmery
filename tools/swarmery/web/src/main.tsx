@@ -17,7 +17,8 @@ import {
 } from 'react-router-dom';
 import { App } from './App';
 import { TooltipLayer } from './components/Tooltip';
-import { activate, i18n, storedLocale } from './i18n';
+import { activate, i18n } from './i18n';
+import { readLocale } from './i18n/locale';
 import { PageSearchProvider } from './lib/pageSearch';
 import { ProjectColorProvider } from './lib/projectColors';
 import { ScopeProvider, useScope } from './lib/scope';
@@ -392,7 +393,7 @@ function renderApp(el: HTMLElement): void {
 // The production bundle carries message ids only, so the active locale's
 // catalogs must be loaded before the first render. A failed chunk load falls
 // back to English rather than leaving the dashboard blank.
-const initialLocale = storedLocale();
+const initialLocale = readLocale();
 activate(initialLocale)
   .catch((err: unknown) => {
     console.warn(`i18n: failed to load the "${initialLocale}" catalogs, falling back to English`, err);

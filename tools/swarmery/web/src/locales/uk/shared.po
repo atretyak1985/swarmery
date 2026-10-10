@@ -164,6 +164,10 @@ msgstr ""
 msgid "{danglingCount, plural, one {removed account still bound in # project} few {removed account still bound in # projects} many {removed account still bound in # projects} other {removed account still bound in # projects}}"
 msgstr ""
 
+#: src/workspace/boardModel.ts
+msgid "{days}d"
+msgstr ""
+
 #: src/components/AccountSelector.tsx
 msgid "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
 msgstr ""
@@ -813,11 +817,7 @@ msgstr ""
 msgid "back to all projects"
 msgstr ""
 
-#. placeholder {0}: phase.result.backup
 #: src/components/AttachModal.tsx
-msgid "backup: {0}"
-msgstr ""
-
 #: src/components/DetachModal.tsx
 msgid "backup: {backupPath}"
 msgstr ""
@@ -830,9 +830,8 @@ msgstr ""
 msgid "billing, infra"
 msgstr ""
 
-#. placeholder {0}: binding.ignoredReason
 #: src/components/AccountSelector.tsx
-msgid "binding ignored: {0}"
+msgid "binding ignored: {ignoredReason}"
 msgstr ""
 
 #: src/components/NewProjectButton.tsx
@@ -1919,6 +1918,10 @@ msgstr ""
 msgid "ingested from the {label} Claude Code account"
 msgstr ""
 
+#: src/components/LanguagePicker.tsx
+msgid "interface language"
+msgstr ""
+
 #: src/api.ts
 msgid "invalid config"
 msgstr ""
@@ -2001,6 +2004,10 @@ msgstr ""
 
 #: src/workspace/TaskCard.tsx
 msgid "Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
+msgstr ""
+
+#: src/pages/Settings.tsx
+msgid "language"
 msgstr ""
 
 #: src/components/usage/UsageModal.tsx
@@ -3803,6 +3810,10 @@ msgstr ""
 
 #: src/api.ts
 msgid "token sign-in failed"
+msgstr ""
+
+#: src/pages/Settings.tsx
+msgid "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
 msgstr ""
 
 #: src/workspace/boardModel.ts

@@ -17,6 +17,7 @@
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg, t } from '@lingui/core/macro';
 import type { Session, SessionStatus } from '../api/types';
+import { fmtDate } from './format';
 
 export const STATUSES: SessionStatus[] = [
   'active',
@@ -216,9 +217,7 @@ export interface DayBucket {
 export function dayLabel(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return t`unknown day`;
-  const name = d
-    .toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
-    .toLowerCase();
+  const name = fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase();
   return d.toDateString() === new Date().toDateString() ? t`today · ${name}` : name;
 }
 

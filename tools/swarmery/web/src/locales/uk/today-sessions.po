@@ -147,7 +147,7 @@ msgid "{n, plural, one {proposal} few {proposals} many {proposals} other {propos
 msgstr ""
 
 #: src/pages/today/loopModel.ts
-msgid "{pendingApprovals, plural, one {# approval waiting.} few {# approvals waiting.} many {# approvals waiting.} other {# approvals waiting.}}"
+msgid "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
 msgstr ""
 
 #: src/pages/Approvals.tsx
@@ -323,10 +323,6 @@ msgstr ""
 
 #: src/pages/Overview.tsx
 msgid "all sessions →"
-msgstr ""
-
-#: src/pages/Approvals.tsx
-msgid "always allow — from request #{requestNumber}"
 msgstr ""
 
 #: src/pages/Approvals.tsx

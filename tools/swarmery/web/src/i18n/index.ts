@@ -9,12 +9,11 @@
 // before the first render.
 
 import { i18n, type Messages } from '@lingui/core';
-import { CATALOGS, type CatalogName, isLocale, type Locale, SOURCE_LOCALE } from './catalogs';
+import { CATALOGS, type CatalogName, type Locale, SOURCE_LOCALE } from './catalogs';
 
 export { i18n };
 
-/** localStorage key holding the operator's chosen locale (plan D5). */
-export const LOCALE_STORAGE_KEY = 'swarmery.locale';
+// Reading and persisting the operator's choice lives in ./locale (plan D5).
 
 i18n.load(SOURCE_LOCALE, {});
 i18n.activate(SOURCE_LOCALE);
@@ -40,14 +39,4 @@ export async function activate(locale: Locale): Promise<void> {
   i18n.load(locale, Object.assign({}, ...parts) as Messages);
   i18n.activate(locale);
   document.documentElement.lang = locale;
-}
-
-/** The persisted locale, or the source locale when none (or storage is blocked). */
-export function storedLocale(): Locale {
-  try {
-    const value = localStorage.getItem(LOCALE_STORAGE_KEY);
-    return isLocale(value) ? value : SOURCE_LOCALE;
-  } catch {
-    return SOURCE_LOCALE;
-  }
 }

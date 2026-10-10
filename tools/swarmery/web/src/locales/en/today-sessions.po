@@ -147,8 +147,8 @@ msgid "{n, plural, one {proposal} few {proposals} many {proposals} other {propos
 msgstr "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
 
 #: src/pages/today/loopModel.ts
-msgid "{pendingApprovals, plural, one {# approval waiting.} few {# approvals waiting.} many {# approvals waiting.} other {# approvals waiting.}}"
-msgstr "{pendingApprovals, plural, one {# approval waiting.} few {# approvals waiting.} many {# approvals waiting.} other {# approvals waiting.}}"
+msgid "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
+msgstr "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
 
 #: src/pages/Approvals.tsx
 msgid "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
@@ -324,10 +324,6 @@ msgstr "all recommendations in Retro →"
 #: src/pages/Overview.tsx
 msgid "all sessions →"
 msgstr "all sessions →"
-
-#: src/pages/Approvals.tsx
-msgid "always allow — from request #{requestNumber}"
-msgstr "always allow — from request #{requestNumber}"
 
 #: src/pages/Approvals.tsx
 msgid "always allow…"

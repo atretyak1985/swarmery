@@ -18,6 +18,7 @@ import { useParams } from 'react-router-dom';
 import { fetchEpics, fetchProjectRecommendations, fetchRecommendations, fetchSessions } from '../../api';
 import { fetchDecisions } from '../../api/decisions';
 import type { Epic, Recommendation, Session, WSMessage } from '../../api/types';
+import { fmtEyebrowClock } from '../../lib/format';
 import { loadLastProject } from '../../lib/lastProject';
 import { sessionState, useNowMs } from '../../lib/sessionState';
 import { applySessionMessage, useLiveUpdates } from '../../lib/ws';
@@ -38,16 +39,7 @@ function EyebrowClock({ scope }: { scope: string }): JSX.Element {
     const id = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-  const text = now
-    .toLocaleString([], {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-    .replace(/,/g, ' ·');
+  const text = fmtEyebrowClock(now);
   return (
     <div className="font-mono text-[11px] tracking-[0.16em] text-ink-faint uppercase">
       {text} · {scope}

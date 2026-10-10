@@ -46,6 +46,7 @@ import {
   fmtAgo,
   fmtCost,
   fmtDayShort,
+  fmtEyebrowClock,
   fmtTime,
   fmtTokens,
   isoDay,
@@ -103,16 +104,7 @@ function EyebrowClock(): JSX.Element {
     const id = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-  const text = now
-    .toLocaleString([], {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-    .replace(/,/g, ' ·');
+  const text = fmtEyebrowClock(now);
   return (
     <div className="font-mono text-[11px] tracking-[0.18em] text-ink-faint uppercase">{text}</div>
   );

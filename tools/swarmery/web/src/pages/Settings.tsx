@@ -3,8 +3,9 @@
 // retired /projects list redirects onto ?tab=projects.
 //
 //   Appearance    — ThemePickerPanel (mode segments + palette list; it renders
-//                    its own "appearance" eyebrow), then the host footer: the
-//                    auto-approve note, daemon health, worktrees, connectors.
+//                    its own "appearance" eyebrow), the UI language picker,
+//                    then the host footer: the auto-approve note, daemon
+//                    health, worktrees, connectors.
 //   Accounts      — the Claude accounts on this host (AccountsSection).
 //   Notifications — NotifySettings, wired to the shared NotifyPrefsContext (the
 //                    state the mounted useBrowserNotifications hook in AppShell
@@ -19,6 +20,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { AccountsSection } from '../components/AccountsSection';
 import { ConnectorsSection } from '../components/ConnectorsSection';
 import { ExplainPair } from '../components/Explain';
+import { LanguagePicker } from '../components/LanguagePicker';
 import { NotifySettings } from '../components/NotifySettings';
 import { type TabItem, Tabs, useTabParam } from '../components/Tabs';
 import { SectionTitle } from '../components/ui';
@@ -49,6 +51,22 @@ function AppearanceTab(): JSX.Element {
     <>
       <div className="mt-5">
         <ThemePickerPanel />
+      </div>
+
+      {/* Language — the UI locale (plan D5). Only the dashboard's own chrome is
+          translated: text from agents and the daemon passes through verbatim
+          (plan D7), and the note says so. */}
+      <SectionTitle>
+        <Trans>language</Trans>
+      </SectionTitle>
+      <div className="rounded-xl border border-line bg-surface p-3">
+        <LanguagePicker />
+        <p className="mt-2.5 text-[10.5px] leading-snug text-ink-faint">
+          <Trans>
+            translates the dashboard itself; text written by agents (plans, reports, lessons, advisor
+            recommendations) and messages from the daemon stay in English
+          </Trans>
+        </p>
       </div>
 
       {/* Auto-approve — permission presets are dispatch/approval settings scoped

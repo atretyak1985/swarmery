@@ -3,6 +3,7 @@
 // window row stays presentational.
 
 import { t } from '@lingui/core/macro';
+import { fmtDate, fmtTime } from '../../lib/format';
 
 /**
  * An ISO reset instant → the absolute wall-clock label shown in the reset chip.
@@ -25,11 +26,7 @@ export function fmtResetAt(iso: string, now: number): string {
   if (!Number.isFinite(ms)) return '';
   const ref = new Date(now);
 
-  const timeStr = date.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const timeStr = fmtTime(date, { hour: 'numeric', minute: '2-digit', hour12: true });
 
   if (date.toDateString() === ref.toDateString()) return timeStr;
 
@@ -44,11 +41,11 @@ export function fmtResetAt(iso: string, now: number): string {
   );
 
   if (calendarDaysUntil >= 1 && calendarDaysUntil <= 7) {
-    const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+    const weekday = fmtDate(date, { weekday: 'short' });
     return `${weekday} ${timeStr}`;
   }
 
-  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const dateStr = fmtDate(date, { month: 'short', day: 'numeric' });
   return `${dateStr}, ${timeStr}`;
 }
 
@@ -78,5 +75,5 @@ export function fmtResetsIn(iso: string, now: number): string {
 
 /** Epoch ms → the footer's "Last updated" clock. */
 export function fmtClock(ms: number): string {
-  return new Date(ms).toLocaleTimeString();
+  return fmtTime(ms, {});
 }
