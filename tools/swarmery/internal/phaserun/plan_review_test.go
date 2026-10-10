@@ -476,6 +476,13 @@ func TestPlanReviewWaitsForARunningSibling(t *testing.T) {
 func TestPlanReviewWaitsForASiblingHoldingItsSlot(t *testing.T) {
 	s, db, _, p1, p2, doc2, _, rv, _ := planReviewFixture(t)
 	mustExec(t, db, `UPDATE epic_phases SET run_state='done' WHERE id=?`, p1)
+	var doc1 string
+	if err := db.QueryRow(`SELECT doc_path FROM epic_phases WHERE id=?`, p1).Scan(&doc1); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(doc1, []byte("# Phase 1 — API\n\n- [x] a\n- [x] b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	release, err := s.Slots.TryAcquire(s.slotKey(p1), "uuid-p1", func() {})
 	if err != nil {
 		t.Fatal(err)
@@ -484,10 +491,14 @@ func TestPlanReviewWaitsForASiblingHoldingItsSlot(t *testing.T) {
 	if n := len(rv.calls()); n != 0 {
 		t.Fatalf("plan reviews while phase 1 still holds its slot = %d, want 0", n)
 	}
+	// Phase 1's own hook fires after its slot is released (runAndHandle's defer),
+	// so the plan review is not lost: the last phase to let go of its slot fires it.
 	release()
-	s.stamp(p2, doc2, "done", "")
+	// Phase 2's completion is read from its row when phase 1 is the trigger.
+	mustExec(t, db, `UPDATE epic_phases SET checkboxes_done = checkboxes_total WHERE id=?`, p2)
+	s.maybePlanReview(p1, doc1)
 	if n := len(rv.calls()); n != 1 {
-		t.Fatalf("plan reviews once phase 1 released its slot = %d, want 1", n)
+		t.Fatalf("plan reviews once phase 1 released its slot and fired its hook = %d, want 1", n)
 	}
 }
 

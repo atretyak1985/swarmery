@@ -1027,18 +1027,18 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		returnDocNow()
 	}
 	// The plan branch review (plan_review.go) must read the tips this phase hands
-	// over, so for a `**Review:** on` phase it waits for the phase's own review —
-	// and, on a FAIL, for the fix re-run, whose completion triggers it instead.
-	// stamp's hook would fire before either, review a tip the phase reviewer may
-	// reject, and then fire a second opus review on the re-run's `done`. Phases
-	// without the review stage keep the hook in stamp.
-	holdPlanReview := info.ReviewMode == wsingest.ReviewOn
+	// over, so a run never fires it from the stamp: it fires from the tail of the
+	// defer, after the review stage, the verifier and releaseSlot. Two reasons.
+	// A `**Review:** on` phase waits for its own review — and, on a FAIL, for the
+	// fix re-run, whose completion triggers it instead — or the plan review would
+	// read a tip the phase reviewer may reject and fire again on the re-run. And
+	// planComplete treats a sibling whose slot is still held as in flight, so a
+	// phase that fired while holding its own slot through a minutes-long verify
+	// could leave two siblings each seeing the other busy and nobody firing: the
+	// last one to release its slot fires instead. Stamps outside a run (an adopted
+	// orphan, an operator's own stamp) keep the hook in stamp.
 	planReviewDue := false
 	stampRun := func(state, runError string) {
-		if !holdPlanReview {
-			s.stamp(phaseID, info.DocPath, state, runError)
-			return
-		}
 		planReviewDue = s.stampRow(phaseID, info.DocPath, state, runError) && state == "done"
 	}
 	defer func() {
@@ -1557,8 +1557,9 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 	// plan. Here rather than in runAndHandle so every path that settles a phase
 	// run — the operator's own Start, a plan's next phase, an adopted orphan —
 	// reaches it. It only spawns; it never runs inside the caller's slot. The one
-	// exception is a run of a `**Review:** on` phase: runAndHandle writes its stamp
-	// with stampRow and holds the hook until the phase's own review has settled.
+	// exception is a run through runAndHandle: it writes its stamp with stampRow and
+	// holds the hook until its review stage has settled and its slot is released
+	// (see the comment at stampRun).
 	if s.stampRow(phaseID, docPath, state, runError) && state == "done" {
 		s.maybePlanReview(phaseID, docPath)
 	}
