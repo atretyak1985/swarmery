@@ -1,25 +1,6 @@
 {
-  "enabledPlugins": {
-    "accounts-pack@swarmery": true,
-    "architecture-pack@swarmery": true,
-    "claude-eng-pack@swarmery": true,
-    "core@swarmery": true,
-    "design-pack@swarmery": true,
-    "graft-pack@swarmery": true,
-    "graphify-pack@swarmery": true,
-    "lsp-pack@swarmery": true,
-    "web-pack@swarmery": true
-  },
   "env": {
     "AGENT_PROJECT": "swarmery"
-  },
-  "extraKnownMarketplaces": {
-    "swarmery": {
-      "source": {
-        "repo": "atretyak1985/swarmery",
-        "source": "github"
-      }
-    }
   },
   "permissions": {
     "deny": [
@@ -31,7 +12,27 @@
     ]
   },
   "statusLine": {
-    "command": "bash $CLAUDE_PROJECT_DIR/plugins/core/statusline/statusline.sh",
-    "type": "command"
+    "type": "command",
+    "command": "bash $CLAUDE_PROJECT_DIR/plugins/core/statusline/statusline.sh"
+  },
+  "enabledPlugins": {
+    "accounts-pack@swarmery": true,
+    "architecture-pack@swarmery": true,
+    "claude-eng-pack@swarmery": true,
+    "core@swarmery": true,
+    "design-pack@swarmery": true,
+    "graft-pack@swarmery": true,
+    "graphify-pack@swarmery": true,
+    "lsp-pack@swarmery": true,
+    "review-pack@swarmery": true,
+    "web-pack@swarmery": true
+  },
+  "extraKnownMarketplaces": {
+    "swarmery": {
+      "source": {
+        "source": "github",
+        "repo": "atretyak1985/swarmery"
+      }
+    }
   }
 }
