@@ -30,6 +30,7 @@ import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
+import { scrollToDiffGroup } from './detail/diffJump';
 import { Chat, type PendingSend } from './detail/Chat';
 import { CommandInput } from './detail/CommandInput';
 import { SummaryChips } from './detail/SummaryChips';
@@ -346,11 +347,7 @@ export function SessionDetailPage(): JSX.Element {
     const target = diffTargetRef.current;
     if (tab === 'diffs' && target !== null) {
       diffTargetRef.current = null;
-      const group = panel.querySelector(`[data-diff-path="${CSS.escape(target)}"]`);
-      if (group !== null) {
-        (group as HTMLElement).scrollIntoView({ block: 'start' });
-        return;
-      }
+      if (scrollToDiffGroup(panel, target)) return;
     }
     panel.scrollTop = panel.scrollHeight;
   }, [tab, loaded]);
@@ -384,6 +381,14 @@ export function SessionDetailPage(): JSX.Element {
   }, [tab, turnCount, eventCount, pendingCount]);
 
   const showDiffs = (path?: string): void => {
+    // Already on the Diffs tab: setTab is a no-op and the effect above never
+    // re-runs, so jump straight away. Any other tab: park the target for the
+    // effect that fires once the Diffs panel is rendered.
+    const panel = panelRef.current;
+    if (tab === 'diffs' && path !== undefined && panel !== null) {
+      scrollToDiffGroup(panel, path);
+      return;
+    }
     diffTargetRef.current = path ?? null;
     setTab('diffs');
   };
