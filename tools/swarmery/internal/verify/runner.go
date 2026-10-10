@@ -161,8 +161,8 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		// A mode that never asks: a prompt in a headless run waits for nobody
 		// until the timeout kills the run (see permEnv).
 		PermissionMode: claudeflags.Mode(permEnv),
-		// Last on the argv: --disallowedTools takes a variadic list, so anything
-		// after it would be read as another tool name.
+		// Last on the argv: --disallowedTools takes a variadic list, so a bare
+		// positional argument after it would be read as another tool name.
 		ExtraArgs: readOnlyToolArgs,
 		// --setting-sources project,local: skip user-level settings (global plugin
 		// stack) — headless runs don't need them; project plugins and OAuth are
