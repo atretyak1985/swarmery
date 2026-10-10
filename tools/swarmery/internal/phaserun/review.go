@@ -340,9 +340,19 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) r
 	}
 	if o.treeAfter != o.treeBefore {
 		detail := o.treeBefore + "→" + o.treeAfter
-		if err := s.restoreTree(acq.Path); err != nil {
-			detail += " (restoring the worktree failed: " + err.Error() + ")"
-			log.Printf("error: phaserun: phase=%d reviewer mutated the worktree and it could not be restored: %v", phaseID, err)
+		switch {
+		case strings.Contains(o.treeBefore, "+dirty:"):
+			// The executor left uncommitted work in the tree; `checkout -- . &&
+			// clean -fd` would wipe that too, and the verifier would grade HEAD
+			// instead of what the run produced. Leave the tree as it is and let
+			// the verdict carry the breach.
+			detail += " (not restored: the worktree was already dirty before the review)"
+			log.Printf("warn: phaserun: phase=%d reviewer mutated an already-dirty worktree; left as is", phaseID)
+		default:
+			if err := s.restoreTree(acq.Path); err != nil {
+				detail += " (restoring the worktree failed: " + err.Error() + ")"
+				log.Printf("error: phaserun: phase=%d reviewer mutated the worktree and it could not be restored: %v", phaseID, err)
+			}
 		}
 		return inconclusive(o, ClassReviewerMutatedTree, detail)
 	}
