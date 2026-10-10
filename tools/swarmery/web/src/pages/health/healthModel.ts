@@ -7,6 +7,7 @@
 // runs with at least one behavior-fixable error, so failed runs of an agent are
 // `error_rate × runs`, and the fleet rate is their sum over the summed runs.
 
+import { plural, t } from '@lingui/core/macro';
 import type {
   AgentChangeProposal,
   FrictionTriageState,
@@ -40,7 +41,14 @@ export const DEFAULT_DAYS: HealthPreset = 14;
 /** Below this many runs the one sentence refuses to generalise. */
 export const MIN_RUNS_FOR_SENTENCE = 10;
 
+/** The fallback's source text, for comparisons; oneSentence returns it in the
+ * active locale. A module-level t`` would run before activate(). */
+// i18n-ignore — source-locale constant, never rendered (oneSentence uses t`` below)
 export const FALLBACK_SENTENCE = 'Not enough runs in this window to say how the fleet is doing.';
+
+function fallbackSentence(): string {
+  return t`Not enough runs in this window to say how the fleet is doing.`;
+}
 
 /** `?days=` → a preset; anything else reads as the default. */
 export function daysFromParam(raw: string | null): HealthPreset {
@@ -110,17 +118,20 @@ function windowDays(a: RetroAgentsResp): number | null {
 }
 
 function trendClause(now: number, prev: number | null, days: number | null): string {
-  const window = days !== null ? `the ${String(days)} days before` : 'the window before';
-  if (prev === null) return `The fleet failed ${fmtPct(now)} of its runs in this window`;
-  if (Math.abs(now - prev) < 2) return `The fleet is failing about as often as ${window}`;
+  const dayCount = String(days ?? 0);
+  const window = days !== null ? t`the ${dayCount} days before` : t`the window before`;
+  const nowPct = fmtPct(now);
+  if (prev === null) return t`The fleet failed ${nowPct} of its runs in this window`;
+  if (Math.abs(now - prev) < 2) return t`The fleet is failing about as often as ${window}`;
+  const prevPct = fmtPct(prev);
   if (now < prev) {
     return now <= prev * 0.55
-      ? `The fleet is failing half as often as ${window}`
-      : `The fleet is failing less often than ${window} (${fmtPct(prev)} → ${fmtPct(now)})`;
+      ? t`The fleet is failing half as often as ${window}`
+      : t`The fleet is failing less often than ${window} (${prevPct} → ${nowPct})`;
   }
   return now >= prev * 1.8
-    ? `The fleet is failing twice as often as ${window}`
-    : `The fleet is failing more often than ${window} (${fmtPct(prev)} → ${fmtPct(now)})`;
+    ? t`The fleet is failing twice as often as ${window}`
+    : t`The fleet is failing more often than ${window} (${prevPct} → ${nowPct})`;
 }
 
 /**
@@ -129,7 +140,7 @@ function trendClause(now: number, prev: number | null, days: number | null): str
  */
 export function oneSentence(a: RetroAgentsResp): string {
   const cell = windowCell(a);
-  if (cell.runs < MIN_RUNS_FOR_SENTENCE) return FALLBACK_SENTENCE;
+  if (cell.runs < MIN_RUNS_FOR_SENTENCE) return fallbackSentence();
   const head = trendClause(cell.failedPct, cell.prevFailedPct, windowDays(a));
 
   // Whose failed-run count changed the most, and how much of the total change.
@@ -141,13 +152,15 @@ export function oneSentence(a: RetroAgentsResp): string {
   const lead = [...deltas].sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))[0];
   if (cell.prevFailedPct !== null && lead !== undefined && total > 0) {
     const share = Math.abs(lead.delta) / total;
-    if (share >= 0.6) return `${head}; almost all of the change is ${lead.agent}.`;
-    if (share >= 0.35) return `${head}; the biggest part of the change is ${lead.agent}.`;
-    return `${head}; the change is spread across several agents.`;
+    const agent = lead.agent;
+    if (share >= 0.6) return t`${head}; almost all of the change is ${agent}.`;
+    if (share >= 0.35) return t`${head}; the biggest part of the change is ${agent}.`;
+    return t`${head}; the change is spread across several agents.`;
   }
   const worst = topAgents(a, 1)[0];
   if (worst !== undefined && failedRuns(worst.error_rate, worst.runs) > 0) {
-    return `${head}; most failures come from ${worst.agent}.`;
+    const agent = worst.agent;
+    return t`${head}; most failures come from ${agent}.`;
   }
   return `${head}.`;
 }
@@ -159,12 +172,21 @@ export function fmtPct(v: number): string {
 
 /** "142 runs · 11 % failed" + the delta vs the previous window, split for tone. */
 export function windowCellText(c: WindowCell): { value: string; delta: string | null; better: boolean } {
-  const value = `${String(c.runs)} runs · ${fmtPct(c.failedPct)} failed`;
+  const failed = fmtPct(c.failedPct);
+  const runs = c.runs;
+  const value = plural(runs, {
+    one: `# run · ${failed} failed`,
+    few: `# runs · ${failed} failed`,
+    many: `# runs · ${failed} failed`,
+    other: `# runs · ${failed} failed`,
+  });
   if (c.prevFailedPct === null || Math.round(c.prevFailedPct) === Math.round(c.failedPct)) {
     return { value, delta: null, better: false };
   }
   const better = c.failedPct < c.prevFailedPct;
-  return { value, delta: `${better ? '↓' : '↑'} from ${fmtPct(c.prevFailedPct)}`, better };
+  const arrow = better ? '↓' : '↑';
+  const prevPct = fmtPct(c.prevFailedPct);
+  return { value, delta: t`${arrow} from ${prevPct}`, better };
 }
 
 /* ----- friction ----- */
@@ -231,20 +253,31 @@ export function countProposals(ps: readonly AgentChangeProposal[], statuses: rea
   return ps.filter((p) => statuses.includes(p.status)).length;
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${String(n)} ${n === 1 ? one : many}`;
-}
-
 export function waitingText(findings: number, rewrites: number): string {
-  return `${plural(findings, 'Advisor finding', 'Advisor findings')} · ${plural(
-    rewrites,
-    'agent rewrite',
-    'agent rewrites',
-  )} to approve`;
+  const findingsText = plural(findings, {
+    one: '# Advisor finding',
+    few: '# Advisor findings',
+    many: '# Advisor findings',
+    other: '# Advisor findings',
+  });
+  const rewritesText = plural(rewrites, {
+    one: '# agent rewrite',
+    few: '# agent rewrites',
+    many: '# agent rewrites',
+    other: '# agent rewrites',
+  });
+  return t`${findingsText} · ${rewritesText} to approve`;
 }
 
 export function becauseText(verified: number, gathering: number): string {
-  return `${plural(verified, 'change', 'changes')} verified · ${String(gathering)} gathering proof`;
+  const changesText = plural(verified, {
+    one: '# change',
+    few: '# changes',
+    many: '# changes',
+    other: '# changes',
+  });
+  const gatheringCount = String(gathering);
+  return t`${changesText} verified · ${gatheringCount} gathering proof`;
 }
 
 /* ----- the auto mode permission check row ----- */
@@ -266,9 +299,22 @@ export interface AutoModeRowText {
 export function autoModeRow(m: HealthAutoMode, lastSeen: string | null): AutoModeRowText {
   const tone: AutoModeTone = m.alerting ? 'alerting' : m.noVerdictLastHour > 0 ? 'seen' : 'quiet';
   if (m.noVerdictLastHour === 0) {
-    return { tone, text: 'answering — no check went without a verdict in the last hour' };
+    return { tone, text: t`answering — no check went without a verdict in the last hour` };
   }
-  const head = `${plural(m.noVerdictLastHour, 'check', 'checks')} got no verdict in the last hour`;
-  const sessions = `in ${plural(m.sessionsLastHour, 'session', 'sessions')}`;
-  return { tone, text: `${head} · ${sessions}${lastSeen !== null ? ` · last ${lastSeen}` : ''}` };
+  const checks = m.noVerdictLastHour;
+  const sessionCount = m.sessionsLastHour;
+  const head = plural(checks, {
+    one: '# check got no verdict in the last hour',
+    few: '# checks got no verdict in the last hour',
+    many: '# checks got no verdict in the last hour',
+    other: '# checks got no verdict in the last hour',
+  });
+  const sessions = plural(sessionCount, {
+    one: 'in # session',
+    few: 'in # sessions',
+    many: 'in # sessions',
+    other: 'in # sessions',
+  });
+  const last = lastSeen !== null ? ` · ${t`last ${lastSeen}`}` : '';
+  return { tone, text: `${head} · ${sessions}${last}` };
 }

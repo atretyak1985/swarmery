@@ -7,6 +7,7 @@
 // that can be asserted without a renderer, and docsSection.test.ts asserts all
 // of it (`npx vitest run src/pages/system/docsSection.test.ts`).
 
+import { t } from '@lingui/core/macro';
 import type { SystemDocs } from '../../api/types';
 
 /** The two sections a System detail panel can show. */
@@ -42,42 +43,43 @@ export function docsStatusTone(docs: SystemDocs): DocsBadge[] {
   const out: DocsBadge[] = [];
   if (docs.status === 'reviewed') {
     out.push({
-      label: 'reviewed',
+      label: t`reviewed`,
       tone: TONE_GREEN,
       // Deliberately does not claim a *human* read it. The 2026-08-06 wave was
       // reviewed by agents under operator direction, so a "a human has reviewed
       // this" tooltip would be false on all 134 items. The flag records that a
       // review happened and the guide was checked against the item it documents;
       // it does not record who performed it.
-      tip: 'checked against the item it documents',
+      tip: t`checked against the item it documents`,
     });
   } else if (docs.status === 'generated') {
     out.push({
-      label: 'generated',
+      label: t`generated`,
       tone: TONE_AMBER,
-      tip: 'written by the docs generator and not reviewed yet',
+      tip: t`written by the docs generator and not reviewed yet`,
     });
   } else if (docs.status !== '') {
     // §3 keeps an unknown docs.status verbatim so the UI can surface it rather
     // than silently normalising an author's typo into "generated".
+    const status = docs.status;
     out.push({
-      label: `status: ${docs.status}`,
+      label: t`status: ${status}`,
       tone: TONE_AMBER,
-      tip: 'unrecognised docs.status — the contract defines only generated and reviewed',
+      tip: t`unrecognised docs.status — the contract defines only generated and reviewed`,
     });
   }
   if (docs.stale) {
     out.push({
-      label: 'stale',
+      label: t`stale`,
       tone: TONE_AMBER,
-      tip: 'the item changed after this guide was written — docs.source_sha no longer matches the body',
+      tip: t`the item changed after this guide was written — docs.source_sha no longer matches the body`,
     });
   }
   if (docs.duplicate) {
     out.push({
-      label: 'two How-to-use blocks',
+      label: t`two How-to-use blocks`,
       tone: TONE_RED,
-      tip: 'this file has two `# How to use` headings — the parser keeps the first and ignores the second',
+      tip: t`this file has two \`# How to use\` headings — the parser keeps the first and ignores the second`,
     });
   }
   return out;
@@ -99,7 +101,8 @@ export function defaultSection(docs: SystemDocs): DocsSection {
  */
 export function missingLabel(missing: readonly string[]): string | null {
   if (missing.length === 0) return null;
-  return `this guide is missing: ${missing.join(', ')}`;
+  const list = missing.join(', ');
+  return t`this guide is missing: ${list}`;
 }
 
 /**

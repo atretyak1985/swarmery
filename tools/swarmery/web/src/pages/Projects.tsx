@@ -7,6 +7,8 @@
 // links to the project detail (/projects/:id); row actions (archive / restore
 // / detach / tags) live in the shared ProjectActions control.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Project, ProjectHealth } from '../api/types';
@@ -32,14 +34,16 @@ function Metric({ label, value }: { label: string; value: string }): JSX.Element
 /* ----- pin toggle (PATCH /api/projects/{id} {pinned}) ----- */
 
 function PinToggle({ project, onChanged }: { project: Project; onChanged: () => void }): JSX.Element {
+  const { t } = useLingui();
   const [busy, setBusy] = useState(false);
+  const name = project.name ?? project.slug;
   return (
     <button
       type="button"
       disabled={busy}
       aria-pressed={project.pinned}
-      aria-label={project.pinned ? `unpin ${project.name ?? project.slug}` : `pin ${project.name ?? project.slug}`}
-      data-tip={project.pinned ? 'unpin' : 'pin to top'}
+      aria-label={project.pinned ? t`unpin ${name}` : t`pin ${name}`}
+      data-tip={project.pinned ? t`unpin` : t`pin to top`}
       onClick={() => {
         setBusy(true);
         patchProject(project.id, { pinned: !project.pinned })
@@ -68,6 +72,7 @@ function ProjectRow({
   projects: Project[];
   onChanged: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const packs = project.plugin?.packs ?? [];
   return (
     <Card>
@@ -99,7 +104,7 @@ function ProjectRow({
         ))}
         {project.archived && (
           <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-faint">
-            archived
+            <Trans>archived</Trans>
           </span>
         )}
 
@@ -109,8 +114,8 @@ function ProjectRow({
       </div>
 
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-ink-dim">
-        <Metric label="sessions" value={String(project.sessions)} />
-        <Metric label="tokens" value={project.tokens !== null ? fmtTokens(project.tokens) : '—'} />
+        <Metric label={t`sessions`} value={String(project.sessions)} />
+        <Metric label={t`tokens`} value={project.tokens !== null ? fmtTokens(project.tokens) : '—'} />
         <span className="whitespace-nowrap text-ink-2">{fmtCost(project.costUsd)}</span>
         {project.lastActivity !== null && (
           <span className="whitespace-nowrap text-ink-faint">{fmtAgo(project.lastActivity)}</span>
@@ -141,6 +146,8 @@ function SystemSection({
   const [open, setOpen] = useState(false);
   const sessions = projects.reduce((n, p) => n + p.sessions, 0);
   const cost = projects.reduce((n, p) => n + (p.costUsd ?? 0), 0);
+  const sessionCount = String(sessions);
+  const costLabel = fmtCost(cost);
   return (
     <div className="mt-4 border-t border-line-soft pt-3">
       <button
@@ -150,12 +157,16 @@ function SystemSection({
         className="flex items-center gap-2 font-mono text-[11px] text-ink-faint transition-colors hover:text-ink"
       >
         <span aria-hidden>{open ? '▾' : '▸'}</span>
-        <span>System</span>
+        <span>
+          <Trans>System</Trans>
+        </span>
         <span className="rounded-full border border-line px-2 py-0.5 text-[10px] whitespace-nowrap">
-          daemon telemetry
+          <Trans>daemon telemetry</Trans>
         </span>
         <span className="text-ink-faint">
-          {String(sessions)} sessions · {fmtCost(cost)}
+          <Trans>
+            {sessionCount} sessions · {costLabel}
+          </Trans>
         </span>
       </button>
       {open && (
@@ -172,19 +183,20 @@ function SystemSection({
 /* ----- health comparison table ----- */
 
 function TrendArrow({ curr, prev }: { curr: number | null; prev: number | null }): JSX.Element {
+  const { t } = useLingui();
   if (curr === null || prev === null || curr === prev) {
     return (
-      <span className="text-ink-faint" data-tip="no week-over-week comparison">
+      <span className="text-ink-faint" data-tip={t`no week-over-week comparison`}>
         →
       </span>
     );
   }
   return curr > prev ? (
-    <span className="text-brand" data-tip="up vs previous week">
+    <span className="text-brand" data-tip={t`up vs previous week`}>
       ↑
     </span>
   ) : (
-    <span className="text-green" data-tip="down vs previous week">
+    <span className="text-green" data-tip={t`down vs previous week`}>
       ↓
     </span>
   );
@@ -204,18 +216,36 @@ function fmtRate(rate: number | null): string {
 }
 
 function HealthTable({ rows }: { rows: ProjectHealth[] }): JSX.Element {
-  if (rows.length === 0) return <Empty>no health data yet</Empty>;
+  const { t } = useLingui();
+  if (rows.length === 0)
+    return (
+      <Empty>
+        <Trans>no health data yet</Trans>
+      </Empty>
+    );
   return (
     <div className="overflow-x-auto rounded-[14px] border border-line">
       <table className="w-full border-collapse font-mono text-[11px]">
         <thead>
           <tr className="border-b border-line text-left text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-            <th className="px-3 py-2 font-normal">project</th>
-            <th className="px-3 py-2 text-right font-normal">cost 7d</th>
-            <th className="px-3 py-2 text-right font-normal">prev 7d</th>
-            <th className="px-3 py-2 text-right font-normal">error rate 7d</th>
-            <th className="px-3 py-2 text-right font-normal">avg session 7d</th>
-            <th className="px-3 py-2 text-right font-normal">last activity</th>
+            <th className="px-3 py-2 font-normal">
+              <Trans>project</Trans>
+            </th>
+            <th className="px-3 py-2 text-right font-normal">
+              <Trans>cost 7d</Trans>
+            </th>
+            <th className="px-3 py-2 text-right font-normal">
+              <Trans>prev 7d</Trans>
+            </th>
+            <th className="px-3 py-2 text-right font-normal">
+              <Trans>error rate 7d</Trans>
+            </th>
+            <th className="px-3 py-2 text-right font-normal">
+              <Trans>avg session 7d</Trans>
+            </th>
+            <th className="px-3 py-2 text-right font-normal">
+              <Trans>last activity</Trans>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line-soft">
@@ -226,7 +256,7 @@ function HealthTable({ rows }: { rows: ProjectHealth[] }): JSX.Element {
                   <ProjectName name={r.name} slug={r.slug} />
                 </Link>
                 {r.pinned && (
-                  <span className="ml-1.5 text-brand" data-tip="pinned" aria-label="pinned">
+                  <span className="ml-1.5 text-brand" data-tip={t`pinned`} aria-label={t`pinned`}>
                     ◆
                   </span>
                 )}
@@ -287,9 +317,14 @@ function TagFilter({
 
 /* ----- screen ----- */
 
+/** A CLI command shown verbatim in the empty state — code, not copy. */
+// i18n-ignore
+const INGEST_COMMAND = 'swarmery ingest <file.jsonl>';
+
 /** `embedded` (Settings → Projects tab, phase 8): the Settings page owns the
  * heading and the page padding; the filters and the list render unchanged. */
 export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+  const { t } = useLingui();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [health, setHealth] = useState<ProjectHealth[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -350,7 +385,7 @@ export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         {!embedded && (
           <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
-            Projects
+            <Trans>Projects</Trans>
           </h1>
         )}
         <div className="flex items-center gap-3">
@@ -361,7 +396,7 @@ export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX
               onChange={(e) => toggleOnboardedOnly(e.target.checked)}
               className="accent-brand"
             />
-            onboarded only
+            <Trans>onboarded only</Trans>
           </label>
           <label className="flex cursor-pointer items-center gap-1.5 font-mono text-[11px] text-ink-dim">
             <input
@@ -370,13 +405,18 @@ export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX
               onChange={(e) => setShowArchived(e.target.checked)}
               className="accent-brand"
             />
-            show archived
+            <Trans>show archived</Trans>
           </label>
         </div>
       </div>
       <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
         {projects !== null
-          ? `${String(regular.length)} project${regular.length === 1 ? '' : 's'} · ${String(onboardedCount)} onboarded`
+          ? plural(regular.length, {
+              one: `# project · ${onboardedCount} onboarded`,
+              few: `# projects · ${onboardedCount} onboarded`,
+              many: `# projects · ${onboardedCount} onboarded`,
+              other: `# projects · ${onboardedCount} onboarded`,
+            })
           : ' '}
       </div>
 
@@ -386,34 +426,41 @@ export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX
       </div>
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
-      {projects === null && error === null && <Loading label="projects…" />}
+      {projects === null && error === null && <Loading label={t`projects…`} />}
       {projects !== null && regular.length === 0 && (
         <Empty>
           {hiddenByOnboarded > 0 ? (
             <>
-              {String(hiddenByOnboarded)} project{hiddenByOnboarded === 1 ? '' : 's'} hidden as not
-              onboarded —{' '}
-              <button
-                type="button"
-                onClick={() => toggleOnboardedOnly(false)}
-                className="font-mono text-ink underline underline-offset-2 hover:text-brand"
-              >
-                untick onboarded only
-              </button>{' '}
-              to see them
+              {plural(hiddenByOnboarded, {
+                one: '# project hidden as not onboarded',
+                few: '# projects hidden as not onboarded',
+                many: '# projects hidden as not onboarded',
+                other: '# projects hidden as not onboarded',
+              })}{' '}
+              <Trans>
+                —{' '}
+                <button
+                  type="button"
+                  onClick={() => toggleOnboardedOnly(false)}
+                  className="font-mono text-ink underline underline-offset-2 hover:text-brand"
+                >
+                  untick onboarded only
+                </button>{' '}
+                to see them
+              </Trans>
             </>
           ) : query !== '' ? (
-            <>no projects match the current filter — try a different search or clear it</>
+            <Trans>no projects match the current filter — try a different search or clear it</Trans>
           ) : tag !== null ? (
-            <>
+            <Trans>
               no projects tagged <span className="font-mono text-ink">#{tag}</span>
-            </>
+            </Trans>
           ) : (
-            <>
+            <Trans>
               no projects yet — run{' '}
-              <span className="font-mono text-ink">swarmery ingest &lt;file.jsonl&gt;</span> or
+              <span className="font-mono text-ink">{INGEST_COMMAND}</span> or
               onboard one from the command deck
-            </>
+            </Trans>
           )}
         </Empty>
       )}
@@ -428,7 +475,9 @@ export function Projects({ embedded = false }: { embedded?: boolean } = {}): JSX
 
       {health !== null && (
         <section className="mt-8">
-          <SectionTitle>Health · last 7 days vs previous</SectionTitle>
+          <SectionTitle>
+            <Trans>Health · last 7 days vs previous</Trans>
+          </SectionTitle>
           <HealthTable rows={visibleHealth} />
         </section>
       )}

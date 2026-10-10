@@ -5,10 +5,12 @@
 // the command deck. The query resets on navigation (PageSearchProvider), so a
 // filter never leaks between sections.
 
+import { useLingui } from '@lingui/react/macro';
 import { useLocation } from 'react-router-dom';
 import { pageSearchPlaceholder, usePageSearchControl } from '../lib/pageSearch';
 
 export function PageSearchInput({ className = '' }: { className?: string }): JSX.Element | null {
+  const { t } = useLingui();
   const { pathname } = useLocation();
   const { query, setQuery } = usePageSearchControl();
   const placeholder = pageSearchPlaceholder(pathname);
@@ -33,7 +35,7 @@ export function PageSearchInput({ className = '' }: { className?: string }): JSX
         <button
           type="button"
           onClick={() => setQuery('')}
-          aria-label="clear filter"
+          aria-label={t`clear filter`}
           className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[13px] leading-none text-ink-dim transition-colors hover:text-ink"
         >
           ×

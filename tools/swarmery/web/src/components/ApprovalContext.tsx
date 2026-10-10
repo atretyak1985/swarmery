@@ -4,6 +4,7 @@
 // without importing the Approvals page. Every read is best-effort — a malformed
 // request_json degrades to the raw string, never crashes a card.
 
+import { Trans } from '@lingui/react/macro';
 import type { PermissionRequest } from '../api/types';
 import { parsedRequest, requestToolInput } from '../lib/approvals';
 import { pickString } from '../lib/payload';
@@ -80,7 +81,9 @@ export function ApprovalContext({
         </span>
         {cwd !== null && (
           <span className="min-w-0 font-mono text-[10px] text-ink-faint" data-tip-mono data-tip={cwd}>
-            cwd <span className="text-ink-dim">{cwd}</span>
+            <Trans>
+              cwd <span className="text-ink-dim">{cwd}</span>
+            </Trans>
           </span>
         )}
       </div>

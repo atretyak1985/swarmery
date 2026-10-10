@@ -3,7 +3,7 @@
 // useTriage: polls the active run every 2 s while one runs, stops when it ends,
 // fires onRunEnd once, and leaves no timer behind on unmount.
 
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api/triage';
 import type { TriageRun, TriageVerdict } from '../../api/triage';

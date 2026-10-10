@@ -3,6 +3,7 @@
 // from the already-loaded events — no extra API calls. Renders nothing when
 // the session has neither.
 
+import { useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Event } from '../../api/types';
@@ -87,6 +88,7 @@ function ChipGroup({
 }
 
 export function SummaryChips({ events }: { events: Event[] }): JSX.Element | null {
+  const { t } = useLingui();
   const agents = useMemo(() => deriveAgents(events), [events]);
   const skills = useMemo(() => deriveSkills(events), [events]);
 
@@ -95,12 +97,12 @@ export function SummaryChips({ events }: { events: Event[] }): JSX.Element | nul
   return (
     <div className="mt-2.5 flex flex-col gap-1.5">
       {agents.length > 0 && (
-        <ChipGroup label="agents" tone="text-blue/70">
+        <ChipGroup label={t`agents`} tone="text-blue/70">
           {agents.map(({ name, type, count, title }, i) => (
             <Link
               key={`${name}-${String(i)}`}
               to={`/system?tab=agents&find=${encodeURIComponent(type)}`}
-              data-tip={title ?? `open ${type} in System`}
+              data-tip={title ?? t`open ${type} in System`}
               className="max-w-[360px] truncate rounded-full border border-blue/30 bg-blue/10 px-[9px] py-0.5 font-mono text-[11px] text-blue transition-colors hover:border-blue/60 hover:bg-blue/15"
             >
               <span aria-hidden="true">⬡ </span>
@@ -111,12 +113,12 @@ export function SummaryChips({ events }: { events: Event[] }): JSX.Element | nul
         </ChipGroup>
       )}
       {skills.length > 0 && (
-        <ChipGroup label="skills" tone="text-amber/70">
+        <ChipGroup label={t`skills`} tone="text-amber/70">
           {skills.map((name) => (
             <Link
               key={name}
               to={`/system?tab=skills&find=${encodeURIComponent(name)}`}
-              data-tip={`open ${name} in System`}
+              data-tip={t`open ${name} in System`}
               className="rounded-full border border-amber/30 bg-amber/10 px-[9px] py-0.5 font-mono text-[11px] text-amber transition-colors hover:border-amber/60 hover:bg-amber/15"
             >
               <span aria-hidden="true">◈ </span>

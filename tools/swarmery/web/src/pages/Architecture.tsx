@@ -17,6 +17,9 @@
 // module chip highlights that module inside the iframe — see highlightModules
 // for why that goes over both postMessage and a same-origin class toggle.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg, plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ArchitectureProject,
@@ -82,19 +85,20 @@ const MAP_VARS: ReadonlyArray<readonly [string, string]> = [
 // not real progress — the daemon only reports the stage, so the bar shows how
 // deep in the pipeline the job is and pulses to signal liveness. `generating`
 // (the headless analysis) dominates wall-clock, hence the wide gap before 100.
-const STAGE_PROGRESS: Record<ProvisionState['state'], { pct: number; label: string }> = {
-  pending: { pct: 8, label: 'queued' },
-  installing: { pct: 30, label: 'installing pack' },
-  generating: { pct: 70, label: 'analyzing repo & building map' },
-  installed: { pct: 100, label: 'installed' },
-  done: { pct: 100, label: 'done' },
-  skipped: { pct: 100, label: 'already current' },
-  failed: { pct: 100, label: 'failed' },
+const STAGE_PROGRESS: Record<ProvisionState['state'], { pct: number; label: MessageDescriptor }> = {
+  pending: { pct: 8, label: msg`queued` },
+  installing: { pct: 30, label: msg`installing pack` },
+  generating: { pct: 70, label: msg`analyzing repo & building map` },
+  installed: { pct: 100, label: msg`installed` },
+  done: { pct: 100, label: msg`done` },
+  skipped: { pct: 100, label: msg`already current` },
+  failed: { pct: 100, label: msg`failed` },
 };
 
 /** Indeterminate-ish progress panel for an in-flight provision job — replaces
  * the bare status chip so the wait doesn't look like a dead white area. */
 function ProvisionProgress({ provision }: { provision: ProvisionState }): JSX.Element {
+  const { t, i18n } = useLingui();
   const stage = STAGE_PROGRESS[provision.state];
   return (
     <div className="mt-3 shrink-0 rounded-xl border border-line bg-surface p-4">
@@ -104,14 +108,14 @@ function ProvisionProgress({ provision }: { provision: ProvisionState }): JSX.El
           {provision.state}
           {provision.lastLine !== '' ? ` — ${provision.lastLine}` : ''}
         </span>
-        <span className="text-ink-faint">{stage.label}</span>
+        <span className="text-ink-faint">{i18n._(stage.label)}</span>
       </div>
       <div
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={stage.pct}
-        aria-label="architecture map generation progress"
+        aria-label={t`architecture map generation progress`}
         className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-field"
       >
         <div
@@ -273,6 +277,7 @@ function highlightModules(frame: HTMLIFrameElement, moduleIds: readonly string[]
  * breakdown.
  */
 function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.Element | null {
+  const { t } = useLingui();
   const repos = project.repos ?? [];
   if (repos.length === 0) return null;
 
@@ -289,26 +294,30 @@ function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.
 
   const tooltip = repos
     .map((r) => {
-      if (!r.ok) return `${r.name} — not a readable checkout`;
+      const name = r.name;
+      if (!r.ok) return t`${name} — not a readable checkout`;
       const head = r.headCommit === null ? '?' : r.headCommit.slice(0, 7);
       if (r.commitsBehind === null) {
         // Two very different causes, two very different remedies: re-run
         // /architecture-map, or go look at the repo.
         return r.analyzedAtCommit === null
-          ? `${r.name} @ ${head} — the map records no commit for it`
-          : `${r.name} @ ${head} — could not be measured against the map`;
+          ? t`${name} @ ${head} — the map records no commit for it`
+          : t`${name} @ ${head} — could not be measured against the map`;
       }
-      if (r.commitsBehind === 0) return `${r.name} @ ${head} — current`;
-      return `${r.name} @ ${head} — ${String(r.commitsBehind)} ahead of the map`;
+      if (r.commitsBehind === 0) return t`${name} @ ${head} — current`;
+      const ahead = String(r.commitsBehind);
+      return t`${name} @ ${head} — ${ahead} ahead of the map`;
     })
     .join('\n');
 
   // Nothing measurable: say so. Silence here is what this whole component
   // exists to remove.
+  const repoCount = String(repos.length);
   if (measured.length === 0) {
     return (
       <span className="ml-1 text-ink-faint" title={tooltip}>
-        {` · ${String(repos.length)} repos · freshness unknown`}
+        {' · '}
+        {t`${repoCount} repos · freshness unknown`}
       </span>
     );
   }
@@ -319,17 +328,28 @@ function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.
   // component is that unknown must not render as fine.
   const proven = ahead.length === 0 && unreadable.length === 0 && unmeasured.length === 0;
   const tone = proven ? 'text-green' : 'text-amber';
+  const aheadCount = String(ahead.length);
+  const touched = String(touchedModules ?? 0);
+  const modules = String(moduleCount ?? 0);
+  const unmeasuredCount = String(unmeasured.length);
+  const unreadableCount = String(unreadable.length);
   return (
     <span className={`ml-1 ${tone}`} title={tooltip}>
-      {` · ${String(ahead.length)} of ${String(repos.length)} repos ahead of the map`}
+      {' · '}
+      {t`${aheadCount} of ${repoCount} repos ahead of the map`}
       {commitsBehind !== null && commitsBehind > 0
-        ? ` · ${String(commitsBehind)} commit${commitsBehind === 1 ? '' : 's'} behind`
+        ? ` · ${plural(commitsBehind, {
+              one: '# commit behind',
+              few: '# commits behind',
+              many: '# commits behind',
+              other: '# commits behind',
+            })}`
         : ''}
       {touchedModules !== null && moduleCount !== null
-        ? ` · ${String(touchedModules)} of ${String(moduleCount)} modules touched`
+        ? ` · ${t`${touched} of ${modules} modules touched`}`
         : ''}
-      {unmeasured.length > 0 ? ` · ${String(unmeasured.length)} unmeasured` : ''}
-      {unreadable.length > 0 ? ` · ${String(unreadable.length)} unreadable` : ''}
+      {unmeasured.length > 0 ? ` · ${t`${unmeasuredCount} unmeasured`}` : ''}
+      {unreadable.length > 0 ? ` · ${t`${unreadableCount} unreadable`}` : ''}
     </span>
   );
 }
@@ -349,6 +369,7 @@ function MultiRepoFreshness({ project }: { project: ArchitectureProject }): JSX.
  * rendering nothing for the biggest projects on the page.
  */
 function Freshness({ project }: { project: ArchitectureProject }): JSX.Element | null {
+  const { t } = useLingui();
   const { analyzedAtCommit, headCommit, commitsBehind, touchedModules, moduleCount } = project;
   if (project.repos !== undefined && project.repos.length > 0) {
     return (
@@ -361,20 +382,31 @@ function Freshness({ project }: { project: ArchitectureProject }): JSX.Element |
   if (analyzedAtCommit === null) return null;
 
   const current = headCommit !== null && headCommit === analyzedAtCommit;
+  const headShort = headCommit?.slice(0, 7) ?? '';
+  const touched = String(touchedModules ?? 0);
+  const modules = String(moduleCount ?? 0);
   return (
     <>
       {' · @ '}
       {analyzedAtCommit.slice(0, 7)}
       {current ? (
-        <span className="ml-1 text-green"> · current</span>
+        <span className="ml-1 text-green">
+          {' · '}
+          <Trans>current</Trans>
+        </span>
       ) : (
         headCommit !== null && (
           <span className="ml-1 text-amber">
             {commitsBehind !== null
-              ? ` · ${String(commitsBehind)} commit${commitsBehind === 1 ? '' : 's'} behind`
-              : ` · stale (HEAD ${headCommit.slice(0, 7)})`}
+              ? ` · ${plural(commitsBehind, {
+              one: '# commit behind',
+              few: '# commits behind',
+              many: '# commits behind',
+              other: '# commits behind',
+            })}`
+              : ` · ${t`stale (HEAD ${headShort})`}`}
             {touchedModules !== null && moduleCount !== null
-              ? ` · ${String(touchedModules)} of ${String(moduleCount)} modules touched`
+              ? ` · ${t`${touched} of ${modules} modules touched`}`
               : ''}
           </span>
         )
@@ -403,12 +435,23 @@ function BlastStrip({
 }): JSX.Element | null {
   const { modules, flows, unmatched } = blast.touched;
   if (modules.length === 0 && flows.length === 0) return null;
+  const base = blast.base;
+  const files = blast.files;
+  const fileCount = plural(files, {
+    one: '# file',
+    few: '# files',
+    many: '# files',
+    other: '# files',
+  });
+  const unmappedCount = unmatched.length;
 
   return (
     <div className="mt-3 shrink-0 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
         <span className="font-mono text-[10.5px] text-ink-faint">
-          vs {blast.base} · {blast.files} file{blast.files === 1 ? '' : 's'}
+          <Trans>
+            vs {base} · {fileCount}
+          </Trans>
         </span>
         {modules.map((m) => {
           const on = m.id === activeId;
@@ -435,7 +478,7 @@ function BlastStrip({
             className="font-mono text-[10.5px] text-ink-faint"
             title={unmatched.join('\n')}
           >
-            +{unmatched.length} unmapped
+            <Trans>+{unmappedCount} unmapped</Trans>
           </span>
         )}
       </div>
@@ -457,7 +500,12 @@ export function Architecture({
   scopedSlug,
   scopedId,
 }: { scopedSlug?: string; scopedId?: number | null } = {}): JSX.Element {
+  const { t } = useLingui();
   const [data, setData] = useState<ToolsResponse | null>(null);
+  const failureMessage = (error: string): string => {
+    const reason = error !== '' ? error : t`provision failed`;
+    return t`${reason} — press rebuild to retry, or run /architecture-map manually`;
+  };
   // Exploration share for the selected project (14 local days). Its own state
   // and its own failure mode: the metric is a header ornament, so a failed
   // fetch leaves it null and the page renders exactly as it did before.
@@ -620,9 +668,12 @@ export function Architecture({
   useEffect(() => {
     const active = projects.some((p) => p.provision !== null && ACTIVE_STATES.has(p.provision.state));
     if (!active) return;
-    const t = window.setInterval(load, POLL_MS);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(load, POLL_MS);
+    return () => window.clearInterval(timer);
   }, [projects, load]);
+
+  const builtAgo = project?.builtAt != null ? fmtAgo(project.builtAt) : '';
+  const exploreShare = exploration !== null ? (exploration.totals.share * 100).toFixed(0) : '';
 
   return (
     // Fill route (`handle: { fill: true }`, src/main.tsx): the shell has stopped
@@ -634,7 +685,9 @@ export function Architecture({
       {/* SectionTitle owns its margins and takes no className, so the shrink-0
           flex item is a wrapper around it. */}
       <div className="shrink-0">
-        <SectionTitle>architecture</SectionTitle>
+        <SectionTitle>
+          <Trans>architecture</Trans>
+        </SectionTitle>
       </div>
       {error !== null && (
         <div className="mb-2 shrink-0">
@@ -642,7 +695,7 @@ export function Architecture({
         </div>
       )}
       {data === null && error === null ? (
-        <Loading label="architecture…" />
+        <Loading label={t`architecture…`} />
       ) : data !== null ? (
         project === undefined ? (
           scoped && scopedId !== null && scopedId !== undefined ? (
@@ -651,7 +704,9 @@ export function Architecture({
             // auto-provisions (install → generate); the feed then picks the
             // project up and the settle-poll shows progress.
             <Empty>
-              <span className="mr-3">no architecture map for this project yet</span>
+              <span className="mr-3">
+                <Trans>no architecture map for this project yet</Trans>
+              </span>
               <button
                 type="button"
                 disabled={acting}
@@ -660,14 +715,14 @@ export function Architecture({
                 }}
                 className="rounded-[9px] border border-line-strong bg-field px-2.5 py-[6px] font-mono text-[12px] text-ink transition-colors hover:border-ink-dim disabled:opacity-50"
               >
-                {acting ? 'starting…' : '⚒ enable architecture-pack & build map'}
+                {acting ? t`starting…` : `⚒ ${t`enable architecture-pack & build map`}`}
               </button>
             </Empty>
           ) : (
             <Empty>
               {scoped
-                ? 'no architecture map for this project — enable architecture-pack in Settings to generate it'
-                : 'no architecture maps yet — run /architecture-map in a project repo'}
+                ? t`no architecture map for this project — enable architecture-pack in Settings to generate it`
+                : t`no architecture maps yet — run /architecture-map in a project repo`}
             </Empty>
           )
         ) : (
@@ -680,7 +735,7 @@ export function Architecture({
                   <select
                     value={String(project.id)}
                     onChange={(e) => setSelectedId(Number(e.target.value))}
-                    aria-label="architecture project"
+                    aria-label={t`architecture project`}
                     className="rounded-[9px] border border-line-strong bg-field px-2.5 py-[6px] font-mono text-[12px] text-ink transition-colors outline-none focus:border-ink-dim"
                   >
                     {projects.map((p) => (
@@ -692,7 +747,7 @@ export function Architecture({
                 )}
                 {project.builtAt !== null && (
                   <span className="font-mono text-[10.5px] text-ink-faint">
-                    map built {fmtAgo(project.builtAt)}
+                    <Trans>map built {builtAgo}</Trans>
                     <Freshness project={project} />
                   </span>
                 )}
@@ -703,9 +758,9 @@ export function Architecture({
                   // component's tile-stack top margin so it sits on this row.
                   <span
                     className="flex items-center gap-2 font-mono text-[10.5px] text-ink-faint"
-                    title="share of tool calls spent exploring the repo (reads, greps, finds) over the last 14 days"
+                    title={t`share of tool calls spent exploring the repo (reads, greps, finds) over the last 14 days`}
                   >
-                    explore {(exploration.totals.share * 100).toFixed(0)}%
+                    <Trans>explore {exploreShare}%</Trans>
                     <span className="block w-16 [&>svg]:mt-0">
                       <Sparkline
                         values={exploration.days.map((d) => d.share)}
@@ -729,12 +784,12 @@ export function Architecture({
                           rather than re-analysed from scratch — the label says
                           which of the two the button is about to buy. */}
                       {acting
-                        ? 'starting…'
+                        ? t`starting…`
                         : !project.hasMap
-                          ? '⚒ build map'
+                          ? `⚒ ${t`build map`}`
                           : project.analyzedAtCommit !== null
-                            ? '↻ incremental rebuild'
-                            : '↻ rebuild'}
+                            ? `↻ ${t`incremental rebuild`}`
+                            : `↻ ${t`rebuild`}`}
                     </button>
                   )}
                   {project.hasMap && (
@@ -754,7 +809,7 @@ export function Architecture({
             {project.provision?.state === 'failed' && (
               <div className="mt-3 shrink-0">
                 <ErrorBox
-                  message={`${project.provision.error !== '' ? project.provision.error : 'provision failed'} — press rebuild to retry, or run /architecture-map manually`}
+                  message={failureMessage(project.provision.error)}
                   onRetry={load}
                 />
               </div>
@@ -773,7 +828,7 @@ export function Architecture({
               <ExpandableSection
                 expanded={expanded}
                 onToggle={setExpanded}
-                label="architecture map"
+                label={t`architecture map`}
                 className="mt-3"
               >
                 <iframe
@@ -788,7 +843,7 @@ export function Architecture({
                       ? `${project.mapPath}?v=${encodeURIComponent(project.builtAt)}`
                       : project.mapPath
                   }
-                  title="Architecture map"
+                  title={t`Architecture map`}
                   // Theme, highlight AND expanded state are re-pushed on load: a
                   // fresh document has none of them, and all three may predate
                   // the frame.
@@ -807,7 +862,9 @@ export function Architecture({
               </ExpandableSection>
             ) : project.provision === null || !ACTIVE_STATES.has(project.provision.state) ? (
               <div className="mt-3 shrink-0">
-                <Empty>no map yet — press build map to generate it</Empty>
+                <Empty>
+                  <Trans>no map yet — press build map to generate it</Trans>
+                </Empty>
               </div>
             ) : null}
           </>

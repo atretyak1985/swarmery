@@ -3,7 +3,10 @@
 // and each card one status sentence built from its stats. The component only
 // lays these out, so every wording rule is unit-tested here.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg, plural, t } from '@lingui/core/macro';
 import type { DecideMode, QuestionStats } from '../../api/decisions';
+import { i18n } from '../../i18n';
 import { UI_TERMS } from '../../lib/glossary';
 
 /** Checked answers before "matches you" is a number worth trusting. */
@@ -18,38 +21,46 @@ const SUSPICIOUS_AGREEMENT = 0.5;
 /** The mode switch's order, left to right. */
 export const MODES: readonly DecideMode[] = ['off', 'shadow', 'active'];
 
+/** Mode words in the active locale; getters so a locale switch shows on the next render. */
 export const MODE_WORD: Record<DecideMode, string> = {
-  off: 'off',
-  shadow: UI_TERMS.shadow.ui,
-  active: UI_TERMS.active.ui,
+  get off() {
+    return t`off`;
+  },
+  get shadow() {
+    return UI_TERMS.shadow.ui;
+  },
+  get active() {
+    return UI_TERMS.active.ui;
+  },
 };
 
-export const QUESTION_SENTENCE: Record<string, string> = {
-  'd2.task_type': 'What kind of task was it?',
-  'd2.outcome': 'How did it end?',
-  'd2.failure_cause': 'Why did it fail?',
-  'd1.run_end': 'How did the phase run end?',
-  'd3.divergence_cause': 'Why did the run leave the plan?',
+export const QUESTION_SENTENCE: Record<string, MessageDescriptor> = {
+  'd2.task_type': msg`What kind of task was it?`,
+  'd2.outcome': msg`How did it end?`,
+  'd2.failure_cause': msg`Why did it fail?`,
+  'd1.run_end': msg`How did the phase run end?`,
+  'd3.divergence_cause': msg`Why did the run leave the plan?`,
 };
 
 /** When a question is asked, and what its first answer will come from. */
-const ASKED_WHEN: Record<string, { when: string; first: string }> = {
+const ASKED_WHEN: Record<string, { when: MessageDescriptor; first: MessageDescriptor }> = {
   'd1.run_end': {
-    when: "a plan phase run ends and the rules can't tell",
-    first: 'scored phase run',
+    when: msg`a plan phase run ends and the rules can't tell`,
+    first: msg`scored phase run`,
   },
-  'd2.task_type': { when: 'a session finishes', first: 'finished session' },
-  'd2.outcome': { when: 'a session finishes', first: 'finished session' },
-  'd2.failure_cause': { when: 'a finished session did not ship', first: 'failed session' },
+  'd2.task_type': { when: msg`a session finishes`, first: msg`finished session` },
+  'd2.outcome': { when: msg`a session finishes`, first: msg`finished session` },
+  'd2.failure_cause': { when: msg`a finished session did not ship`, first: msg`failed session` },
   'd3.divergence_cause': {
-    when: 'a phase run lands off its plan',
-    first: 'off-plan phase run',
+    when: msg`a phase run lands off its plan`,
+    first: msg`off-plan phase run`,
   },
 };
 
 /** The sentence for a question id; an unknown id reads as itself. */
 export function questionSentence(id: string): string {
-  return QUESTION_SENTENCE[id] ?? id;
+  const sentence = QUESTION_SENTENCE[id];
+  return sentence !== undefined ? i18n._(sentence) : id;
 }
 
 export interface StatusSegment {
@@ -71,16 +82,35 @@ function pct(v: number): string {
 }
 
 function guessed(q: QuestionStats): string {
-  const times = q.calls === 1 ? 'once' : `${String(q.calls)} times`;
-  if (q.errors === 0) return `Guessed ${times}.`;
-  const errs = q.errors === 1 ? 'once' : `${String(q.errors)} times`;
-  return `Guessed ${times}, ${errs} it couldn't answer.`;
+  const calls = q.calls;
+  const times = plural(calls, {
+    1: 'once',
+    one: '# times',
+    few: '# times',
+    many: '# times',
+    other: '# times',
+  });
+  if (q.errors === 0) return t`Guessed ${times}.`;
+  const errors = q.errors;
+  const errs = plural(errors, {
+    1: 'once',
+    one: '# times',
+    few: '# times',
+    many: '# times',
+    other: '# times',
+  });
+  return t`Guessed ${times}, ${errs} it couldn't answer.`;
 }
 
 /**
  * Over-confident and wrong: at least 80 % of answers sit in the top confidence
  * bucket (≥ 0.9) while it matches the operator in under half of the checks.
  */
+function moreChecks(more: number): string {
+  const count = String(more);
+  return t`Check ~${count} more before trusting the number.`;
+}
+
 export function isSuspicious(q: QuestionStats): boolean {
   if (q.calls === 0 || q.agreement === null) return false;
   const total = q.histogram.reduce((a, b) => a + b, 0);
@@ -96,11 +126,13 @@ function build(segments: StatusSegment[], tone: StatusSentence['tone'], empty = 
 /** The one status sentence a classifier card carries. */
 export function statusSentence(q: QuestionStats): StatusSentence {
   if (q.calls === 0) {
-    const asked = ASKED_WHEN[q.questionId] ?? { when: 'its trigger fires', first: 'answer' };
+    const asked = ASKED_WHEN[q.questionId] ?? { when: msg`its trigger fires`, first: msg`answer` };
+    const when = i18n._(asked.when);
+    const first = i18n._(asked.first);
     return build(
       [
         {
-          text: `No data yet — this question is asked when ${asked.when}. Your first ${asked.first} will populate it.`,
+          text: t`No data yet — this question is asked when ${when}. Your first ${first} will populate it.`,
         },
       ],
       'neutral',
@@ -108,12 +140,13 @@ export function statusSentence(q: QuestionStats): StatusSentence {
     );
   }
   if (q.withTruth === 0) {
+    const target = String(CHECKS_FOR_TRUST);
     return build(
       [
         { text: `${guessed(q)} ` },
-        { text: "You haven't checked any yet", mark: 'amber' },
+        { text: t`You haven't checked any yet`, mark: 'amber' },
         {
-          text: `, so we can't say how often it's right. Check ~${String(CHECKS_FOR_TRUST)} in the Inbox and this line becomes a percentage.`,
+          text: t`, so we can't say how often it's right. Check ~${target} in the Inbox and this line becomes a percentage.`,
         },
       ],
       'neutral',
@@ -121,14 +154,17 @@ export function statusSentence(q: QuestionStats): StatusSentence {
   }
   const agreement = q.agreement ?? q.agreed / q.withTruth;
   const matches = `${UI_TERMS.agreement.ui[0]?.toUpperCase() ?? ''}${UI_TERMS.agreement.ui.slice(1)}`;
-  const checked = `${matches} in ${pct(agreement)} of ${String(q.withTruth)} checked.`;
+  const percent = pct(agreement);
+  const total = String(q.withTruth);
+  const checked = t`${matches} in ${percent} of ${total} checked.`;
   if (isSuspicious(q)) {
+    const lowered = `${checked.charAt(0).toLowerCase()}${checked.slice(1, -1)}`;
     return build(
       [
         { text: `${guessed(q)} ` },
-        { text: 'Suspicious:', mark: 'red' },
+        { text: t`Suspicious:`, mark: 'red' },
         {
-          text: ` it is almost always sure of itself, yet ${checked.charAt(0).toLowerCase()}${checked.slice(1, -1)}. Start checking here.`,
+          text: ` ${t`it is almost always sure of itself, yet ${lowered}. Start checking here.`}`,
         },
       ],
       'amber',
@@ -138,7 +174,7 @@ export function statusSentence(q: QuestionStats): StatusSentence {
   return build(
     [
       { text: `${guessed(q)} ${checked}` },
-      ...(more > 0 ? [{ text: ` Check ~${String(more)} more before trusting the number.` }] : []),
+      ...(more > 0 ? [{ text: ` ${moreChecks(more)}` }] : []),
     ],
     'neutral',
   );

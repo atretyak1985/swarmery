@@ -5,7 +5,7 @@
 // refusal shows afterwards — the link, or the land failure with its hint.
 // The wire path through the Plans page is Plans.depsUnmerged.test.tsx.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PhaseLanding, PhaseLandResponse, ProviderTerms } from '../../api/types';
 import { DepsUnmergedActions } from './DepsUnmergedActions';

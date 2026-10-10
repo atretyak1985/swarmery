@@ -645,10 +645,12 @@ workspace.
 `;
 
 export const mockDocs: DocDetail[] = [
-  { slug: 'onboarding', title: 'Onboarding', file: 'ONBOARDING.md', markdown: onboardingMd },
-  { slug: 'concepts', title: 'Concepts', file: 'concepts.md', markdown: conceptsMd },
-  { slug: 'extending', title: 'Extending', file: 'EXTENDING.md', markdown: extendingMd },
-  { slug: 'neutrality', title: 'Neutrality', file: 'NEUTRALITY.md', markdown: neutralityMd },
+  // Mock mode serves no translations, so every doc is the English original —
+  // which also demos the "not translated yet" note under a Ukrainian UI.
+  { slug: 'onboarding', title: 'Onboarding', file: 'ONBOARDING.md', lang: 'en', markdown: onboardingMd },
+  { slug: 'concepts', title: 'Concepts', file: 'concepts.md', lang: 'en', markdown: conceptsMd },
+  { slug: 'extending', title: 'Extending', file: 'EXTENDING.md', lang: 'en', markdown: extendingMd },
+  { slug: 'neutrality', title: 'Neutrality', file: 'NEUTRALITY.md', lang: 'en', markdown: neutralityMd },
 ];
 
 // --- Session 1 detail: the subagent showcase (mirrors subagent-session.jsonl)
@@ -2819,7 +2821,7 @@ export const mockApi = {
 
   async docs(): Promise<DocMeta[]> {
     await delay(90);
-    return mockDocs.map(({ slug, title, file }) => ({ slug, title, file }));
+    return mockDocs.map(({ slug, title, file, lang }) => ({ slug, title, file, lang }));
   },
 
   async doc(slug: string): Promise<DocDetail> {

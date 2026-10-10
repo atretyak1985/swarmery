@@ -10,10 +10,12 @@
 // Amber, not red: the app's semantic set reads amber as "waiting on you".
 // All copy comes from the daemon so the wording lives in one place.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { UsageHint } from '../../api/types';
 
 function CommandRow({ cmd }: { cmd: string }): JSX.Element {
+  const { t } = useLingui();
   const [copied, setCopied] = useState(false);
   return (
     <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-line bg-bg/40 px-2 py-1.5">
@@ -23,7 +25,7 @@ function CommandRow({ cmd }: { cmd: string }): JSX.Element {
       <code className="min-w-0 flex-1 font-mono text-[10.5px] break-all text-ink-2">{cmd}</code>
       <button
         type="button"
-        aria-label={`copy: ${cmd}`}
+        aria-label={t`copy: ${cmd}`}
         onClick={() => {
           // navigator.clipboard is undefined on non-secure origins (plain-HTTP
           // LAN) — optional-chain to a no-op instead of throwing; the command
@@ -38,7 +40,7 @@ function CommandRow({ cmd }: { cmd: string }): JSX.Element {
         }}
         className="shrink-0 rounded border border-line-strong px-1.5 py-0.5 font-mono text-[9.5px] text-ink-dim transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
       >
-        {copied ? 'copied' : 'copy'}
+        {copied ? t`copied` : t`copy`}
       </button>
     </div>
   );
@@ -55,7 +57,9 @@ function Note({ label, children }: { label: string; children: string }): JSX.Ele
 }
 
 export function UsageSetupHint({ hint }: { hint: UsageHint }): JSX.Element {
+  const { t } = useLingui();
   const sources = hint.sources ?? [];
+  const sourceCount = sources.length;
   return (
     <div
       className="mt-2 border-l-2 border-amber bg-amber/8 px-2 py-2"
@@ -69,15 +73,15 @@ export function UsageSetupHint({ hint }: { hint: UsageHint }): JSX.Element {
 
       {hint.command !== undefined && hint.command !== '' && <CommandRow cmd={hint.command} />}
 
-      <Note label="why it's needed">{hint.why}</Note>
-      <Note label="how it's used">{hint.handling}</Note>
+      <Note label={t`why it's needed`}>{hint.why}</Note>
+      <Note label={t`how it's used`}>{hint.handling}</Note>
 
       {sources.length > 0 && (
         // Collapsed by default: the paths matter when the login exists but is not
         // being found, and are noise otherwise.
         <details className="mt-1.5">
           <summary className="cursor-pointer font-mono text-[10px] text-ink-faint transition-colors hover:text-ink-dim">
-            looked in ({sources.length})
+            <Trans>looked in ({sourceCount})</Trans>
           </summary>
           <ul className="mt-1 flex flex-col gap-0.5">
             {sources.map((s) => (

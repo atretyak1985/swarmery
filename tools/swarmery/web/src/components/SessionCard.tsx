@@ -1,3 +1,6 @@
+import type { I18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useNavigate } from 'react-router-dom';
 import type { Session } from '../api/types';
 import { fmtSpan, fmtTime } from '../lib/format';
@@ -43,7 +46,7 @@ function ContextBadge({ session }: { session: Session }): JSX.Element | null {
           danger ? 'border-red/40 bg-red/10 text-red' : 'border-amber/40 bg-amber/10 text-amber'
         }`}
       >
-        {k}k ctx
+        <Trans>{k}k ctx</Trans>
       </span>
     </ExplainPair>
   );
@@ -65,7 +68,7 @@ function HandoffChip({ session }: { session: Session }): JSX.Element | null {
   return (
     <ExplainPair id="handoff">
       <span className="shrink-0 rounded-full border border-purple/40 bg-purple/15 px-[7px] py-0.5 font-mono text-[10px] whitespace-nowrap text-purple">
-        Handoff
+        <Trans>Handoff</Trans>
       </span>
     </ExplainPair>
   );
@@ -79,11 +82,12 @@ function HandoffChip({ session }: { session: Session }): JSX.Element | null {
  * warning, so it must not compete with the amber/red context chip or the
  * purple handoff chip it sits beside. */
 function AccountBadge({ session }: { session: Session }): JSX.Element | null {
+  const { t } = useLingui();
   const label = accountLabel(session);
   if (label === null) return null;
   return (
     <span
-      data-tip={`ingested from the ${label} Claude Code account`}
+      data-tip={t`ingested from the ${label} Claude Code account`}
       className="shrink-0 rounded-full border border-line-strong bg-surface2 px-[7px] py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-dim"
     >
       {label}
@@ -103,6 +107,7 @@ function AccountBadge({ session }: { session: Session }): JSX.Element | null {
  * purpose: a reader who has learnt "amber → fell back to" on a phase run should
  * not have to learn it again on the session that produced it. */
 function SessionModelCell({ session }: { session: Session }): JSX.Element {
+  const { t } = useLingui();
   const moved = sessionModelFallback(session);
   if (moved !== null) {
     // Amber and "fell back to" are reserved for a move DOWN — the thing that
@@ -112,12 +117,13 @@ function SessionModelCell({ session }: { session: Session }): JSX.Element {
     const cls = moved.fellBack
       ? 'border-amber/40 bg-amber/10 text-amber'
       : 'border-ink-faint/40 bg-ink-faint/10 text-ink-faint';
+    const { from, to } = moved;
     return (
       <span
         className={`truncate rounded border px-1.5 py-px font-mono text-[9.5px] ${cls}`}
-        data-tip={`this session changed model mid-flight: started on ${moved.from}, its newest turn ran on ${moved.to}`}
+        data-tip={t`this session changed model mid-flight: started on ${from}, its newest turn ran on ${to}`}
       >
-        {modelShortName(moved.from)} {moved.fellBack ? '→ fell back to' : '→ changed to'}{' '}
+        {modelShortName(moved.from)} {moved.fellBack ? t`→ fell back to` : t`→ changed to`}{' '}
         {modelShortName(moved.to)}
       </span>
     );
@@ -184,12 +190,14 @@ const CANVAS_CHIP_STYLE: Record<CanvasTone, string> = {
  * replaces. awaiting_reply names itself with how long the operator's reply
  * has been owed (since the session's last activity). Everything else keeps
  * the session span. */
-function chipSuffix(session: Session, tone: CanvasTone): string {
+function chipSuffix(session: Session, tone: CanvasTone, i18n: I18n): string {
   if (tone === 'stuck') {
-    return `quiet ${fmtSpan(session.endedAt ?? session.startedAt, null)}`;
+    const quiet = fmtSpan(session.endedAt ?? session.startedAt, null);
+    return i18n._(msg`quiet ${quiet}`);
   }
   if (session.status === 'awaiting_reply') {
-    return `awaiting reply · ${fmtSpan(session.endedAt ?? session.startedAt, null)}`;
+    const owed = fmtSpan(session.endedAt ?? session.startedAt, null);
+    return i18n._(msg`awaiting reply · ${owed}`);
   }
   return fmtSpan(session.startedAt, session.endedAt);
 }
@@ -269,6 +277,7 @@ export function SessionCard({
   subline?: string | null;
 }): JSX.Element {
   const navigate = useNavigate();
+  const { t, i18n } = useLingui();
   // Preserve the mode when opening a session: in project mode (/p/:slug/…) stay
   // under the project subtree so the header/sidebar don't flip to session mode.
   const sessionHref = useSessionHref();
@@ -288,7 +297,8 @@ export function SessionCard({
    * Precedence: the caller's note (controller explainer / retry attempt) →
    * the live action line → nothing at all. */
   const planRow = roleTag !== null;
-  const liveLine = liveNow ? `now: ${now ?? ''}` : null;
+  const nowText = now ?? '';
+  const liveLine = liveNow ? t`now: ${nowText}` : null;
   const rowSubline: string | null = planRow
     ? (subline ?? liveLine)
     : (liveLine ?? subline ?? session.why ?? meta(session));
@@ -333,7 +343,7 @@ export function SessionCard({
             {OUTCOME_GLYPH[session.outcome].glyph}
           </span>
         )}
-        <RowChip tone={tone} suffix={chipSuffix(session, tone)} />
+        <RowChip tone={tone} suffix={chipSuffix(session, tone, i18n)} />
       </div>
       <div className="mt-px mb-[3px] flex min-w-0 items-baseline gap-1.5">
         {roleTag !== null && (
@@ -356,7 +366,9 @@ export function SessionCard({
         </div>
       )}
       {liveNow && (
-        <div className="mt-[3px] truncate font-mono text-[10.5px] text-green">now: {now}</div>
+        <div className="mt-[3px] truncate font-mono text-[10.5px] text-green">
+          <Trans>now: {now}</Trans>
+        </div>
       )}
       {action !== null && (
         <div className="mt-[3px] flex" onClick={(e) => e.stopPropagation()}>
@@ -425,7 +437,7 @@ export function SessionCard({
                 headline == null ? 'font-normal text-ink-faint italic' : 'text-ink'
               }`}
             >
-              {headline ?? '(untitled session)'}
+              {headline ?? <Trans>(untitled session)</Trans>}
             </span>
             {session.outcome != null && (
               <span
@@ -463,7 +475,7 @@ export function SessionCard({
           )}
         </span>
         <SessionModelCell session={session} />
-        <RowChip tone={tone} suffix={chipSuffix(session, tone)} />
+        <RowChip tone={tone} suffix={chipSuffix(session, tone, i18n)} />
       </div>
     </div>
   );

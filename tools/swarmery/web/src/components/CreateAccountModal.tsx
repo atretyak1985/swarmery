@@ -7,6 +7,8 @@
 // operator's own `claude` login flow. Pretending success here would be a lie
 // about whether the account is actually usable.
 
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useId, useState } from 'react';
 import { createAccount } from '../api';
 import { refreshReadiness } from '../lib/accountReadiness';
@@ -21,7 +23,7 @@ type Stage =
   | { kind: 'saving' }
   | { kind: 'done'; loginCommand: string; hint: string | undefined };
 
-const KEY_HINT = "letters, digits, '-' or '_' (it becomes a directory name)";
+const KEY_HINT = msg`letters, digits, '-' or '_' (it becomes a directory name)`;
 
 export function CreateAccountModal({
   open,
@@ -33,6 +35,7 @@ export function CreateAccountModal({
   onCreated: () => void;
 }): JSX.Element | null {
   const titleId = useId();
+  const { t, i18n } = useLingui();
   const [key, setKey] = useState('');
   const [stage, setStage] = useState<Stage>({ kind: 'form' });
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +94,8 @@ export function CreateAccountModal({
     onCreated();
   }
 
+  const accountKey = key.trim();
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
@@ -105,7 +110,9 @@ export function CreateAccountModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div id={titleId} className="font-display text-[14px] font-bold text-ink">
-          <ExplainPair id="claude-account">Add Claude account</ExplainPair>
+          <ExplainPair id="claude-account">
+            <Trans>Add Claude account</Trans>
+          </ExplainPair>
         </div>
 
         {stage.kind !== 'done' ? (
@@ -120,7 +127,7 @@ export function CreateAccountModal({
               htmlFor="account-key"
               className="block font-mono text-[10.5px] tracking-[0.12em] text-ink-dim uppercase"
             >
-              account key
+              <Trans>account key</Trans>
             </label>
             <input
               id="account-key"
@@ -133,7 +140,7 @@ export function CreateAccountModal({
               className="mt-1 w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 font-mono text-[12.5px] text-ink outline-none focus:border-line-strong"
             />
             <p id="account-key-hint" className="mt-1 text-[10.5px] text-ink-faint">
-              {KEY_HINT}
+              {i18n._(KEY_HINT)}
             </p>
 
             {error !== null && <ErrorBox message={error} />}
@@ -145,14 +152,14 @@ export function CreateAccountModal({
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
-                cancel
+                <Trans>cancel</Trans>
               </button>
               <button
                 type="submit"
                 disabled={busy || key.trim() === ''}
                 className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
               >
-                {busy ? '…' : 'create'}
+                {busy ? '…' : t`create`}
               </button>
             </div>
           </form>
@@ -161,17 +168,21 @@ export function CreateAccountModal({
             {resolved ? (
               <div>
                 <p className="text-[12px] leading-relaxed text-ink-2">
-                  Account <span className="font-mono text-ink">{key.trim()}</span> is connected
-                  and CLI-ready.
+                  <Trans>
+                    Account <span className="font-mono text-ink">{accountKey}</span> is connected
+                    and CLI-ready.
+                  </Trans>
                 </p>
                 <TerminalPathNote />
               </div>
             ) : (
               <>
                 <p className="text-[12px] leading-relaxed text-ink-2">
-                  Account <span className="font-mono text-ink">{key.trim()}</span> reserved.
-                  Connect it here — one authorization covers the quota read, the CLI
-                  credential, and the readiness check:
+                  <Trans>
+                    Account <span className="font-mono text-ink">{accountKey}</span> reserved.
+                    Connect it here — one authorization covers the quota read, the CLI
+                    credential, and the readiness check:
+                  </Trans>
                 </p>
                 {/* The one-click flow, including its pty-login fallback step. */}
                 <UsageConnect
@@ -182,7 +193,7 @@ export function CreateAccountModal({
                   }}
                 />
                 <p className="mt-3 text-[11px] leading-relaxed text-ink-dim">
-                  Prefer the terminal? Run this yourself — swarmery never runs it for you:
+                  <Trans>Prefer the terminal? Run this yourself — swarmery never runs it for you:</Trans>
                 </p>
                 <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-line bg-bg px-2.5 py-1.5">
                   <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink">
@@ -193,13 +204,15 @@ export function CreateAccountModal({
                     onClick={() => copy(stage.loginCommand)}
                     className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-dim transition-colors hover:bg-surface2"
                   >
-                    {copied ? 'copied' : 'copy'}
+                    {copied ? t`copied` : t`copy`}
                   </button>
                 </div>
                 <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-ink-faint">
-                  on macOS the CLI stores a non-default account&apos;s login in the login
-                  Keychain (no credentials file) — the dashboard reads it from there, so press
-                  &ldquo;check now&rdquo; on the account after logging in
+                  <Trans>
+                    on macOS the CLI stores a non-default account&apos;s login in the login
+                    Keychain (no credentials file) — the dashboard reads it from there, so press
+                    &ldquo;check now&rdquo; on the account after logging in
+                  </Trans>
                 </p>
               </>
             )}
@@ -212,7 +225,7 @@ export function CreateAccountModal({
                 onClick={done}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
               >
-                done
+                <Trans>done</Trans>
               </button>
             </div>
           </div>
@@ -221,11 +234,11 @@ export function CreateAccountModal({
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title="Discard account key?"
-        confirmLabel="discard"
+        title={t`Discard account key?`}
+        confirmLabel={t`discard`}
         danger
       >
-        The account key you typed will be lost.
+        <Trans>The account key you typed will be lost.</Trans>
       </ConfirmDialog>
     </div>
   );

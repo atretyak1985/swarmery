@@ -5,6 +5,7 @@
 // "Confirm detach" button then performs the real write; on success it shows the
 // applied steps and the backup path.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { DetachResponse, Project } from '../api/types';
 import { detachProject } from '../api';
@@ -25,6 +26,7 @@ export function DetachModal({
   onClose: () => void;
   onDetached: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [full, setFull] = useState(true);
 
@@ -55,13 +57,15 @@ export function DetachModal({
   const nothingToDo =
     (phase.kind === 'plan' || phase.kind === 'applying') && !phase.plan.detached;
   const busy = phase.kind === 'applying';
+  const projectName = project.name ?? project.slug;
+  const backupPath = phase.kind === 'done' ? phase.result.backup : undefined;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Detach project"
+      aria-label={t`Detach project`}
       onClick={busy ? undefined : onClose}
     >
       <div
@@ -69,13 +73,17 @@ export function DetachModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="font-display text-[14px] font-bold text-ink">
-          Detach <span className="font-mono">{project.name ?? project.slug}</span>
+          <Trans>
+            Detach <span className="font-mono">{projectName}</span>
+          </Trans>
         </div>
         <div className="mt-1 text-[12px] leading-relaxed text-ink-dim">
-          Removes the swarmery-owned entries from{' '}
-          <span className="font-mono">.claude/settings.json</span>. Your other settings are left
-          untouched and the original is backed up to{' '}
-          <span className="font-mono">settings.json.bak</span>.
+          <Trans>
+            Removes the swarmery-owned entries from{' '}
+            <span className="font-mono">.claude/settings.json</span>. Your other settings are left
+            untouched and the original is backed up to{' '}
+            <span className="font-mono">settings.json.bak</span>.
+          </Trans>
         </div>
 
         <label className="mt-2.5 flex cursor-pointer items-start gap-2 text-[12px] text-ink-2">
@@ -87,28 +95,32 @@ export function DetachModal({
             className="mt-0.5 accent-brand"
           />
           <span>
-            full offboard — also remove <span className="font-mono">project.json</span> and the
-            statusline scripts (local agents/skills are never touched)
+            <Trans>
+              full offboard — also remove <span className="font-mono">project.json</span> and the
+              statusline scripts (local agents/skills are never touched)
+            </Trans>
           </span>
         </label>
 
         {phase.kind === 'loading' && (
-          <div className="mt-3 font-mono text-[11.5px] text-ink-dim">computing plan…</div>
+          <div className="mt-3 font-mono text-[11.5px] text-ink-dim">
+            <Trans>computing plan…</Trans>
+          </div>
         )}
 
         {(phase.kind === 'plan' || phase.kind === 'applying') && (
           <StepList
-            title={nothingToDo ? 'nothing to remove' : 'will remove'}
+            title={nothingToDo ? t`nothing to remove` : t`will remove`}
             steps={phase.plan.steps}
           />
         )}
 
         {phase.kind === 'done' && (
           <>
-            <StepList title="removed" steps={phase.result.steps} />
-            {phase.result.backup !== undefined && (
+            <StepList title={t`removed`} steps={phase.result.steps} />
+            {backupPath !== undefined && (
               <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-                backup: {phase.result.backup}
+                <Trans>backup: {backupPath}</Trans>
               </div>
             )}
           </>
@@ -127,7 +139,7 @@ export function DetachModal({
               onClick={phase.kind === 'done' ? onDetached : onClose}
               className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
             >
-              {phase.kind === 'done' ? 'done' : 'close'}
+              {phase.kind === 'done' ? t`done` : t`close`}
             </button>
           ) : (
             <>
@@ -137,7 +149,7 @@ export function DetachModal({
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
-                cancel
+                <Trans>cancel</Trans>
               </button>
               <button
                 type="button"
@@ -147,7 +159,7 @@ export function DetachModal({
                 disabled={phase.kind !== 'plan' || nothingToDo}
                 className="rounded-lg border border-red/40 bg-red/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-red transition-colors hover:bg-red/20 disabled:opacity-50"
               >
-                {busy ? '…' : 'confirm detach'}
+                {busy ? '…' : t`confirm detach`}
               </button>
             </>
           )}

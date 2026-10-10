@@ -14,6 +14,7 @@
 // Labels are read-only here, as they already were: they are edited in
 // NewTaskModal, and phase 2 is not the place to move that.
 
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { BoardTask } from '../../api/types';
@@ -68,6 +69,7 @@ function useAutosize(ref: React.RefObject<HTMLTextAreaElement | null>, value: st
  * link, so a manual card's origin was a blank where a fact should be.
  */
 function SourceBlock({ task }: { task: BoardTask }): JSX.Element {
+  const { t } = useLingui();
   const sessionHref = useSessionHref();
   const line = sourceLine(task);
   const href =
@@ -80,7 +82,7 @@ function SourceBlock({ task }: { task: BoardTask }): JSX.Element {
   const files = task.source?.files ?? [];
   return (
     <div>
-      <FieldLabel>source</FieldLabel>
+      <FieldLabel>{t`source`}</FieldLabel>
       <div className="font-mono text-[11px] text-ink-2">
         {href === null ? (
           <span data-tip={line.tip}>{line.text}</span>
@@ -104,7 +106,7 @@ function SourceBlock({ task }: { task: BoardTask }): JSX.Element {
           {files.map((f) => (
             <span
               key={f}
-              data-tip="this session had touched the file when the card was captured"
+              data-tip={t`this session had touched the file when the card was captured`}
               className="rounded border border-line px-1 py-px font-mono text-[9.5px] text-ink-faint"
             >
               {f}
@@ -153,32 +155,33 @@ export function TaskBrief({
   /** Autosave trigger — the modal saves on blur, there is no Save button. */
   commit: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const { title, prompt } = draft;
   const promptRef = useRef<HTMLTextAreaElement>(null);
   useAutosize(promptRef, prompt);
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <FieldLabel>title</FieldLabel>
+        <FieldLabel>{t`title`}</FieldLabel>
         <input
           type="text"
           value={title}
           onChange={(e) => setField('title', e.target.value)}
           onBlur={commit}
-          aria-label="title"
+          aria-label={t`title`}
           className="w-full rounded-[8px] border border-line bg-field px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-ink-dim"
         />
       </div>
 
       <div>
-        <FieldLabel>what needs doing</FieldLabel>
+        <FieldLabel>{t`what needs doing`}</FieldLabel>
         <textarea
           ref={promptRef}
           value={prompt}
           onChange={(e) => setField('prompt', e.target.value)}
           onBlur={commit}
           rows={2}
-          aria-label="prompt"
+          aria-label={t`prompt`}
           className="w-full resize-y rounded-[8px] border border-line bg-field px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-ink outline-none focus:border-ink-dim"
         />
       </div>

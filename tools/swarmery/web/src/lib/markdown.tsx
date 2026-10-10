@@ -13,7 +13,8 @@
 // ships no React renderer. See that file's header for why it is safe and why
 // nothing else here may follow it.
 //
-// Supported: paragraphs, headings (#–####), fenced code blocks,
+// Supported: paragraphs, headings (#–####, with an optional trailing
+// ` {#explicit-id}` under `anchors`), fenced code blocks,
 // unordered/ordered lists, pipe tables, **bold**, *italic*, `inline code`,
 // [links](href).
 //
@@ -36,6 +37,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Callout, CodeBlock, MermaidBlock, StatsStrip, calloutType } from './docBlocks';
+import { headingId, splitHeadingId } from './headingId';
 import { DocFigure } from './docFigures';
 
 /* ----- inline: `code` | [link](href) | **bold** | *italic* ----- */
@@ -206,16 +208,6 @@ const HEADING_SIZES: Record<number, string> = {
   4: 'text-[13px]',
 };
 
-/** Heading id for in-page anchors: lowercase, non-alphanumeric runs collapsed
- * to a single dash, ends trimmed. Kept in sync with the glossary's doc.anchor
- * values by internal/docsfs/glossary_drift_test.go. */
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 /* ----- pipe tables — `| a | b |` header + `|---|---|` separator ----- */
 
 function isTableRow(s: string): boolean {
@@ -282,7 +274,9 @@ function flushParagraph(lines: string[], key: string, out: ReactNode[]): void {
 
 /** Renders markdown source as React elements (block-level walk).
  *
- * `anchors` opts into `id={slugify(heading)}` and is off by default because an
+ * `anchors` opts into `id={headingId(heading)}` — the heading's explicit
+ * ` {#id}` suffix when it has one (stripped from the visible text), its slug
+ * otherwise (lib/headingId.ts) — and is off by default because an
  * id must be unique in the document. Most surfaces mount SEVERAL independent
  * <Markdown> blocks on one page — Plans.tsx renders a completion report, a
  * plan summary and a doc body side by side, Chat.tsx one per message — where
@@ -413,12 +407,15 @@ export function Markdown({
     if (h !== null) {
       flushParagraph(para, `${key}-p`, out);
       const level = (h[1] ?? '#').length;
-      const text = h[2] ?? '';
+      const raw = h[2] ?? '';
+      // The `{#id}` suffix is attribute syntax, never prose: stripped on every
+      // surface, honoured as the id only where this renderer owns the ids.
+      const { text } = splitHeadingId(raw);
       const Tag = (['h2', 'h3', 'h4', 'h5'] as const)[level - 1] ?? 'h5';
       out.push(
         <Tag
           key={key}
-          id={anchors ? slugify(text) : undefined}
+          id={anchors ? headingId(raw) : undefined}
           className={`mt-3 mb-1.5 font-semibold text-ink first:mt-0 ${HEADING_SIZES[level] ?? 'text-[13px]'}`}
         >
           {renderInline(text, key)}

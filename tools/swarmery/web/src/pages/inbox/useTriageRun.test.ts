@@ -5,7 +5,7 @@
 // reports once; a failed "active" request lets the run's own status decide; the
 // poll stops and onRunEnd fires once; enabled = false makes no requests.
 
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api/triage';
 import type { TriageRun } from '../../api/triage';

@@ -19,6 +19,7 @@
 // breaks the review loop" as the high-impact risk of this phase; the tests next
 // to this file are the mitigation.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { BoardColumn, BoardTask } from '../../api/types';
 import type { PatchBoardTaskInput } from '../../api';
@@ -70,6 +71,7 @@ export function TaskActions({
    */
   onConfirming?: ((open: boolean) => void) | undefined;
 }): JSX.Element {
+  const { t } = useLingui();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
@@ -137,40 +139,45 @@ export function TaskActions({
     runReview(async () => {
       await verifyBoardTask(task.id);
       // 202: the verdict lands later, on a task_updated frame.
-      return 're-verification started — the verdict will appear here when it finishes';
+      return t`re-verification started — the verdict will appear here when it finishes`;
     });
   };
 
   const rerun = (): void => {
     const text = feedback.trim();
     if (text === '') {
-      setReviewError('feedback is required — a re-run with no notes would repeat the same work');
+      setReviewError(t`feedback is required — a re-run with no notes would repeat the same work`);
       return;
     }
     runReview(async () => {
       await rerunBoardTask(task.id, text);
       setFeedback('');
-      return 'sent back to todo with your feedback appended to the prompt';
+      return t`sent back to todo with your feedback appended to the prompt`;
     });
   };
 
   const land = (): void => {
     runReview(async () => {
       const res = await landBoardTask(task.id);
-      return `pull request opened: ${res.prUrl}`;
+      const prUrl = res.prUrl;
+      return t`pull request opened: ${prUrl}`;
     });
   };
 
   const discard = (): void => {
     runReview(async () => {
       const res = await discardBoardTask(task.id);
+      const branch = res.branch;
       return res.deleted
-        ? `branch ${res.branch} deleted — card archived`
-        : `branch ${res.branch} was already gone — card archived`;
+        ? t`branch ${branch} deleted — card archived`
+        : t`branch ${branch} was already gone — card archived`;
     });
   };
 
-  const pauseLabel = task.userPaused ? '▶ Resume' : '❙❙ Pause';
+  const pauseLabel = task.userPaused ? t`▶ Resume` : t`❙❙ Pause`;
+  const externalId = task.externalId;
+  const taskBranch = task.branch ?? '—';
+  const taskTitle = task.title;
   const togglePause = (): void => run({ userPaused: !task.userPaused });
 
   return (
@@ -191,12 +198,12 @@ export function TaskActions({
           * making it the thing the lane is for. */}
         {task.boardColumn === 'done' && (
           <button type="button" onClick={() => setReviewOpen((v) => !v)} className={PLAIN}>
-            ◇ Review…
+            <Trans>◇ Review…</Trans>
           </button>
         )}
         <button
           type="button"
-          aria-label="more actions"
+          aria-label={t`more actions`}
           aria-expanded={menu}
           onClick={() => setMenu((v) => !v)}
           className={`${PLAIN} ml-auto`}
@@ -208,10 +215,10 @@ export function TaskActions({
       {menu && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-2">
           <label className="flex items-center gap-1.5 font-mono text-[10.5px] text-ink-faint">
-            move to
+            <Trans>move to</Trans>
             <select
               value={task.boardColumn}
-              aria-label="move task to column"
+              aria-label={t`move task to column`}
               onChange={(e) => {
                 const to = e.target.value as BoardColumn;
                 if (to !== task.boardColumn) run({ boardColumn: to });
@@ -227,7 +234,7 @@ export function TaskActions({
                   ))}
                 </optgroup>
               ))}
-              <optgroup label="History">
+              <optgroup label={t`History`}>
                 {HISTORY_COLUMNS.map((c) => (
                   <option key={c} value={c}>
                     {COLUMN_LABELS[c]}
@@ -243,7 +250,7 @@ export function TaskActions({
               onClick={() => run({ boardColumn: 'archived' })}
               className={PLAIN}
             >
-              Archive
+              <Trans>Archive</Trans>
             </button>
           )}
           <button type="button" disabled={busy} onClick={togglePause} className={PLAIN}>
@@ -260,7 +267,7 @@ export function TaskActions({
             }}
             className={`${DANGER} ml-auto`}
           >
-            Delete
+            <Trans>Delete</Trans>
           </button>
         </div>
       )}
@@ -269,7 +276,7 @@ export function TaskActions({
 
       {reviewOpen && reviewable(task) && (
         <div className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-          <FieldLabel>review</FieldLabel>
+          <FieldLabel>{t`review`}</FieldLabel>
 
           {/* A card whose worktree was reclaimed cannot be re-graded — the
             * verifier has nothing to run against. Disabled WITH the reason,
@@ -281,16 +288,16 @@ export function TaskActions({
               onClick={reverify}
               title={
                 task.worktreePath === null
-                  ? 'the worktree was reclaimed, so there is nothing left to grade — re-run the card instead'
-                  : 'run verification again against the worktree'
+                  ? t`the worktree was reclaimed, so there is nothing left to grade — re-run the card instead`
+                  : t`run verification again against the worktree`
               }
               className={PLAIN}
             >
-              Re-verify
+              <Trans>Re-verify</Trans>
             </button>
             {task.worktreePath === null && (
               <span className="font-mono text-[10px] text-ink-faint">
-                worktree reclaimed — nothing to re-grade
+                <Trans>worktree reclaimed — nothing to re-grade</Trans>
               </span>
             )}
           </div>
@@ -298,13 +305,13 @@ export function TaskActions({
           {/* Re-run needs its notes before it can do anything, so the textarea
             * sits with the button rather than behind a dialog. */}
           <div>
-            <FieldLabel>reviewer feedback</FieldLabel>
+            <FieldLabel>{t`reviewer feedback`}</FieldLabel>
             <textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               rows={3}
-              aria-label="reviewer feedback"
-              placeholder="what to fix on the next pass — appended to the prompt"
+              aria-label={t`reviewer feedback`}
+              placeholder={t`what to fix on the next pass — appended to the prompt`}
               className="w-full resize-y rounded-[8px] border border-line bg-field px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-ink outline-none focus:border-ink-dim"
             />
           </div>
@@ -327,12 +334,12 @@ export function TaskActions({
               onClick={() => setConfirmLand(true)}
               title={
                 task.branch === null
-                  ? 'this card has no run branch — there is nothing to push'
-                  : 'push the branch and open a pull request'
+                  ? t`this card has no run branch — there is nothing to push`
+                  : t`push the branch and open a pull request`
               }
               className={PRIMARY}
             >
-              Land
+              <Trans>Land</Trans>
             </button>
             <button
               type="button"
@@ -340,12 +347,12 @@ export function TaskActions({
               onClick={rerun}
               title={
                 feedback.trim() === ''
-                  ? 'write the feedback first — a re-run with no notes repeats the same work'
-                  : 'append the feedback to the prompt and send the card back to todo'
+                  ? t`write the feedback first — a re-run with no notes repeats the same work`
+                  : t`append the feedback to the prompt and send the card back to todo`
               }
               className={PLAIN}
             >
-              Re-run with feedback
+              <Trans>Re-run with feedback</Trans>
             </button>
             <button
               type="button"
@@ -353,7 +360,7 @@ export function TaskActions({
               onClick={() => setConfirmDiscard(true)}
               className={`${DANGER} ml-auto`}
             >
-              Discard
+              <Trans>Discard</Trans>
             </button>
           </div>
 
@@ -378,16 +385,17 @@ export function TaskActions({
 
           <ConfirmDialog
             open={confirmLand}
-            title={`Land ${task.externalId}?`}
-            confirmLabel="land"
+            title={t`Land ${externalId}?`}
+            confirmLabel={t`land`}
             busy={reviewBusy}
             onConfirm={land}
             onCancel={() => setConfirmLand(false)}
           >
-            Pushes <span className="font-mono text-[12px] text-ink">{task.branch ?? '—'}</span> to{' '}
-            <span className="font-mono text-[12px] text-ink">origin</span> and opens a pull request
-            with <span className="font-mono">gh</span>, then moves the card to done. The branch is
-            kept.
+            <Trans>
+              Pushes <span className="font-mono text-[12px] text-ink">{taskBranch}</span> to{' '}
+              <span className="font-mono text-[12px] text-ink">origin</span> and opens a pull request with{' '}
+              <span className="font-mono">gh</span>, then moves the card to done. The branch is kept.
+            </Trans>
             {reviewError !== null && (
               <div className="mt-2.5 rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[11px] whitespace-pre-wrap text-red">
                 {reviewError}
@@ -397,16 +405,17 @@ export function TaskActions({
 
           <ConfirmDialog
             open={confirmDiscard}
-            title={`Discard ${task.externalId}?`}
-            confirmLabel="discard"
+            title={t`Discard ${externalId}?`}
+            confirmLabel={t`discard`}
             danger
             busy={reviewBusy}
             onConfirm={discard}
             onCancel={() => setConfirmDiscard(false)}
           >
-            Deletes the branch{' '}
-            <span className="font-mono text-[12px] text-ink">{task.branch ?? '—'}</span> and every
-            commit on it, reclaims the worktree, and archives the card. The work is not recoverable.
+            <Trans>
+              Deletes the branch <span className="font-mono text-[12px] text-ink">{taskBranch}</span> and every
+              commit on it, reclaims the worktree, and archives the card. The work is not recoverable.
+            </Trans>
             {reviewError !== null && (
               <div className="mt-2.5 rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[11px] whitespace-pre-wrap text-red">
                 {reviewError}
@@ -418,8 +427,8 @@ export function TaskActions({
 
       <ConfirmDialog
         open={confirmDelete}
-        title={`Delete ${task.externalId}?`}
-        confirmLabel="delete"
+        title={t`Delete ${externalId}?`}
+        confirmLabel={t`delete`}
         danger
         busy={deleting}
         onConfirm={remove}
@@ -428,9 +437,11 @@ export function TaskActions({
           setDeleteError(null);
         }}
       >
-        <span className="font-mono text-[12px] text-ink">{task.title}</span> is removed permanently
-        — this cannot be undone. To keep it out of the way without losing it, use{' '}
-        <span className="font-mono">Archive</span> instead.
+        <Trans>
+          <span className="font-mono text-[12px] text-ink">{taskTitle}</span> is removed permanently — this
+          cannot be undone. To keep it out of the way without losing it, use{' '}
+          <span className="font-mono">Archive</span> instead.
+        </Trans>
         {deleteError !== null && (
           <div className="mt-2.5 rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[11px] text-red">
             {deleteError}
@@ -468,6 +479,7 @@ function PrimaryAction({
   onReview: () => void;
   reviewOpen: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   switch (task.boardColumn) {
     case 'triage':
       return (
@@ -475,10 +487,10 @@ function PrimaryAction({
           type="button"
           disabled={busy}
           onClick={onRun}
-          title="accept into the Working queue — the dispatcher picks it up"
+          title={t`accept into the Working queue — the dispatcher picks it up`}
           className={PRIMARY}
         >
-          ▶ Run
+          <Trans>▶ Run</Trans>
         </button>
       );
     case 'todo':
@@ -494,13 +506,13 @@ function PrimaryAction({
     case 'in_review':
       return (
         <button type="button" aria-expanded={reviewOpen} onClick={onReview} className={PRIMARY}>
-          ◇ Review…
+          <Trans>◇ Review…</Trans>
         </button>
       );
     case 'done':
       return (
         <button type="button" disabled={busy} onClick={onArchive} className={PRIMARY}>
-          Archive
+          <Trans>Archive</Trans>
         </button>
       );
     case 'archived':
@@ -509,10 +521,10 @@ function PrimaryAction({
           type="button"
           disabled={busy}
           onClick={onRestore}
-          title="put the card back in the Inbox"
+          title={t`put the card back in the Inbox`}
           className={PRIMARY}
         >
-          ↩ Restore
+          <Trans>↩ Restore</Trans>
         </button>
       );
   }

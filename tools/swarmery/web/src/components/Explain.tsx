@@ -6,6 +6,7 @@
 // is a real <button> with keyboard access and Escape-to-close. Hover-on-dense-
 // data-rows stays HoverTip's job.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
@@ -41,7 +42,11 @@ const TRIGGER_CLASS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60';
 
 export function Explain({ id }: { id: ConceptId }): JSX.Element {
+  const { t } = useLingui();
   const concept = CONCEPTS[id];
+  // The term itself is glossary content (lib/glossary.ts, out of i18n scope);
+  // only the question around it is this component's own chrome.
+  const term = concept.term;
   const tone = TONE[concept.tone];
   const panelId = useId();
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -202,7 +207,7 @@ export function Explain({ id }: { id: ConceptId }): JSX.Element {
               onClick={close}
               className="mt-2.5 inline-block font-mono text-[10.5px] text-brand hover:underline"
             >
-              Read more →
+              <Trans>Read more →</Trans>
             </Link>
           )}
         </div>,
@@ -224,7 +229,7 @@ export function Explain({ id }: { id: ConceptId }): JSX.Element {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-controls={open ? panelId : undefined}
-        aria-label={`What is ${concept.term}?`}
+        aria-label={t`What is ${term}?`}
         className={`${TRIGGER_CLASS} ${tone.button}`}
       >
         {tone.glyph}

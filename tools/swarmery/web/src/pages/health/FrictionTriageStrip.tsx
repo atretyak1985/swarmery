@@ -5,6 +5,9 @@
 // saw end (dismissable); the offer to run triage (not while one runs); an error
 // (dismissable, never shown while a run is active). Driven entirely by props.
 
+import { i18n } from '@lingui/core';
+import { msg, plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { TriageProgress, TriageSummary } from '../inbox/TriageBanner';
 
 const BTN =
@@ -30,37 +33,58 @@ export interface FrictionTriageStripProps {
   onDismissError: () => void;
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${String(n)} ${n === 1 ? one : many}`;
-}
-
 /** The idle line's text; a failing agent can exist with no friction, so 0 still offers a run. */
 export function frictionOfferText(untriaged: number): string {
-  const groups = untriaged > 0 ? plural(untriaged, 'untriaged group', 'untriaged groups') : 'no untriaged groups';
-  return `${groups} · agents are checked by rule`;
+  const groups =
+    untriaged > 0
+      ? plural(untriaged, {
+          one: '# untriaged group',
+          few: '# untriaged groups',
+          many: '# untriaged groups',
+          other: '# untriaged groups',
+        })
+      : i18n._(msg`no untriaged groups`);
+  return i18n._(msg`${groups} · agents are checked by rule`);
 }
 
 export function FrictionTriageStrip(p: FrictionTriageStripProps): JSX.Element {
   const running = p.running !== null;
   const showResult = p.summary !== null && !p.dismissed;
   const showError = p.error !== null && !running;
+  const { t } = useLingui();
+  const done = p.running?.done ?? 0;
+  const total = p.running?.total ?? 0;
+  const applied = p.summary?.applied ?? 0;
+  const suggested = p.summary?.suggested ?? 0;
+  const leftText = plural(suggested, {
+    one: '# suggestion',
+    few: '# suggestions',
+    many: '# suggestions',
+    other: '# suggestions',
+  });
+  const failedCount = p.summary?.failed ?? 0;
+  const failed = String(failedCount);
 
   return (
     <div className="mx-4 mt-3 flex flex-col gap-2 desk:mx-7">
       {p.running !== null && (
         <div role="status" aria-live="polite" className={`${LINE} border-brand/30 bg-brand/5 text-ink-2`}>
-          triage running · {p.running.done} of {p.running.total}
+          <Trans>
+            triage running · {done} of {total}
+          </Trans>
         </div>
       )}
 
       {showResult && p.summary !== null && (
         <div className={`${LINE} border-green/30 bg-green/5 text-ink-2`}>
           <span role="status">
-            agent closed {p.summary.applied} · left {plural(p.summary.suggested, 'suggestion', 'suggestions')}
-            {p.summary.failed > 0 && ` · ${String(p.summary.failed)} failed`}
+            <Trans>
+              agent closed {applied} · left {leftText}
+            </Trans>
+            {failedCount > 0 && ` · ${t`${failed} failed`}`}
           </span>
           <button type="button" className={`${BTN} ml-auto`} onClick={p.onDismiss}>
-            dismiss
+            <Trans>dismiss</Trans>
           </button>
         </div>
       )}
@@ -69,7 +93,7 @@ export function FrictionTriageStrip(p: FrictionTriageStripProps): JSX.Element {
         <div className={`${LINE} border-line bg-bg text-ink-2`}>
           <span>{frictionOfferText(p.untriaged)}</span>
           <button type="button" className={`${BTN_PRIMARY} ml-auto`} disabled={p.busy} onClick={p.onStart}>
-            run triage
+            <Trans>run triage</Trans>
           </button>
         </div>
       )}
@@ -79,10 +103,10 @@ export function FrictionTriageStrip(p: FrictionTriageStripProps): JSX.Element {
           <span role="alert">{p.error}</span>
           <span className="ml-auto flex flex-wrap items-center gap-2">
             <button type="button" className={BTN} disabled={p.busy} onClick={p.onStart}>
-              retry
+              <Trans>retry</Trans>
             </button>
-            <button type="button" className={BTN} aria-label="dismiss error" onClick={p.onDismissError}>
-              dismiss
+            <button type="button" className={BTN} aria-label={t`dismiss error`} onClick={p.onDismissError}>
+              <Trans>dismiss</Trans>
             </button>
           </span>
         </div>

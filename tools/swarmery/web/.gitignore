@@ -1,0 +1,3 @@
+# Compiled Lingui catalogs — `npm run i18n:compile` regenerates them from the
+# committed .po files (build, test and dev run it first).
+src/locales/**/*.mjs

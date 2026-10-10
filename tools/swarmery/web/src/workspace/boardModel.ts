@@ -3,6 +3,7 @@
 // the board redesign), and the client-side derivation of the status-bar counts.
 // Kept pure so it is trivially unit-testable and shared by Board + StatusBar.
 
+import { t } from '@lingui/core/macro';
 import type { BoardColumn, BoardTask, TaskPriority } from '../api/types';
 
 /** Left-to-right column order on the board. */
@@ -22,14 +23,29 @@ export const BOARD_COLUMNS: BoardColumn[] = [
  * a third (the raw `queued` status). Everything user-visible now derives from
  * this map; the `todo` VALUE on the wire is untouched, it is what the dispatcher
  * triggers on.
+ *
+ * Getters, not values: each read resolves the label in the active locale, so a
+ * locale switch never leaves a stale English word behind a module-level const.
  */
-export const COLUMN_LABELS: Record<BoardColumn, string> = {
-  triage: 'Triage',
-  todo: 'Queued',
-  in_progress: 'In Progress',
-  in_review: 'In Review',
-  done: 'Done',
-  archived: 'Archived',
+export const COLUMN_LABELS: Readonly<Record<BoardColumn, string>> = {
+  get triage() {
+    return t`Triage`;
+  },
+  get todo() {
+    return t`Queued`;
+  },
+  get in_progress() {
+    return t`In Progress`;
+  },
+  get in_review() {
+    return t`In Review`;
+  },
+  get done() {
+    return t`Done`;
+  },
+  get archived() {
+    return t`Archived`;
+  },
 };
 
 /**
@@ -49,8 +65,8 @@ export const COLUMN_LABELS: Record<BoardColumn, string> = {
  */
 export function stateLabel(task: BoardTask): string {
   const base = COLUMN_LABELS[task.boardColumn];
-  if (task.userPaused) return `${base} · paused by you`;
-  if (task.paused) return `${base} · paused by the dispatcher`;
+  if (task.userPaused) return t`${base} · paused by you`;
+  if (task.paused) return t`${base} · paused by the dispatcher`;
   return base;
 }
 
@@ -81,10 +97,17 @@ export const LANE_OF: Record<Exclude<BoardColumn, 'done' | 'archived'>, BoardLan
   in_review: 'review',
 };
 
-export const LANE_TITLES: Record<BoardLane, string> = {
-  inbox: 'Inbox',
-  working: 'Working',
-  review: 'Review',
+/** Lane titles — getters, so each read is in the active locale. */
+export const LANE_TITLES: Readonly<Record<BoardLane, string>> = {
+  get inbox() {
+    return t`Inbox`;
+  },
+  get working() {
+    return t`Working`;
+  },
+  get review() {
+    return t`Review`;
+  },
 };
 
 /** The lane a column renders in, or null for the two history columns. */
@@ -303,8 +326,9 @@ export function staleLabel(task: BoardTask, nowMs: number): string | null {
   const at = staleAfterMs(task);
   if (at === null || !isStale(task, nowMs)) return null;
   const remaining = at - nowMs;
-  if (remaining <= 0) return 'archived at the next sweep';
-  return `archived in ${String(Math.ceil(remaining / DAY_MS))}d`;
+  if (remaining <= 0) return t`archived at the next sweep`;
+  const days = String(Math.ceil(remaining / DAY_MS));
+  return t`archived in ${days}d`;
 }
 
 /**
@@ -316,7 +340,7 @@ export function ageLabel(task: BoardTask, nowMs: number): string | null {
   const at = Date.parse(task.createdAt);
   if (Number.isNaN(at)) return null;
   const days = Math.max(0, Math.floor((nowMs - at) / DAY_MS));
-  return days === 0 ? 'today' : `${String(days)}d`;
+  return days === 0 ? t`today` : t`${days}d`;
 }
 
 /**
@@ -354,25 +378,27 @@ export function sourceLine(task: BoardTask): SourceLine {
   // writes `external_id=<root external id>` so a fix's failure charges the root
   // (verify/service.go createFixTask). That is what makes "fix for T-…"
   // derivable from the flat DTO with no extra field.
+  const externalId = task.externalId;
   if (task.origin === 'verify-fix') {
     return {
-      text: `fix for ${task.externalId}`,
+      text: t`fix for ${externalId}`,
       target: null,
-      tip: `spawned by verification to repair ${task.externalId}`,
+      tip: t`spawned by verification to repair ${externalId}`,
     };
   }
   const sessionId = task.source?.sessionId ?? task.originSessionId;
   if (sessionId !== null) {
     const id = String(sessionId);
     return {
-      text: `${task.origin === 'llm' ? 'suggested from session' : 'from session'} #${id}`,
+      text: task.origin === 'llm' ? t`suggested from session #${id}` : t`from session #${id}`,
       target: { kind: 'session', sessionId },
-      tip: task.source?.quote ?? `captured from session #${id}`,
+      tip: task.source?.quote ?? t`captured from session #${id}`,
     };
   }
-  if (task.planExternalId !== null) {
+  const planId = task.planExternalId;
+  if (planId !== null) {
     return {
-      text: `plan ${task.planExternalId}`,
+      text: t`plan ${planId}`,
       // The Plans page is project-scoped only (main.tsx: /p/:slug/plans), so a
       // card with no slug gets the prose without a link that would 404. With a
       // slug the target is this one plan, addressed by its external id — the
@@ -380,15 +406,15 @@ export function sourceLine(task: BoardTask): SourceLine {
       target:
         task.projectSlug === null
           ? null
-          : { kind: 'plans', slug: task.projectSlug, externalId: task.planExternalId },
-      tip: `plan ${task.planExternalId} — acceptance criteria and completion report`,
+          : { kind: 'plans', slug: task.projectSlug, externalId: planId },
+      tip: t`plan ${planId} — acceptance criteria and completion report`,
     };
   }
-  if (task.origin === 'manual') return { text: 'added by hand', target: null, tip: null };
+  if (task.origin === 'manual') return { text: t`added by hand`, target: null, tip: null };
   // A captured card with no session id: rows that predate 0048, and rows whose
   // origin session was pruned. It still says where it came from, without a link
   // that would 404.
-  return { text: task.origin === 'llm' ? 'suggested' : 'from a session', target: null, tip: null };
+  return { text: task.origin === 'llm' ? t`suggested` : t`from a session`, target: null, tip: null };
 }
 
 /**
@@ -398,6 +424,7 @@ export function sourceLine(task: BoardTask): SourceLine {
  * column, so this prefix is the only thing separating "waiting on T-14" from
  * "the run broke", and the two must not read alike on a card.
  */
+// i18n-ignore: matched against the dispatcher's dispatch_error text, never shown alone
 export const DEP_BLOCK_PREFIX = 'blocked by dependency ';
 
 /**
@@ -408,6 +435,7 @@ export const DEP_BLOCK_PREFIX = 'blocked by dependency ';
  * it until the window resets, and the stamp is cleared the moment it is
  * admitted. Keep this string identical to the Go constant.
  */
+// i18n-ignore: identical to the Go constant; matched against dispatch_error
 export const QUOTA_WAIT_PREFIX = 'waiting on quota: ';
 
 /** Whether the dispatcher is holding this card back on its account's quota
@@ -425,6 +453,7 @@ export function isQuotaWait(task: BoardTask): boolean {
  * breaker closes, and the stamp is cleared the moment it is admitted. Keep this
  * string identical to the Go constant.
  */
+// i18n-ignore: identical to the Go constant; matched against dispatch_error
 export const ACCOUNT_PAUSE_PREFIX = 'account paused: ';
 
 /** Why an account's breaker is open (store.BreakerKindAuth | BreakerKindQuota). */
@@ -508,30 +537,32 @@ export function dispatchErrorText(task: BoardTask): string {
 export function attentionSignal(task: BoardTask): AttentionSignal | null {
   if (hasFailedVerdict(task)) {
     const detail = (task.verifyDetail ?? '').trim();
+    const clipped = clip(detail, SIGNAL_CLIP);
     return {
-      text: detail === '' ? 'verdict FAIL' : `verdict FAIL: ${clip(detail, SIGNAL_CLIP)}`,
+      text: detail === '' ? t`verdict FAIL` : t`verdict FAIL: ${clipped}`,
       tone: 'bad',
       tip: detail === '' ? null : detail,
     };
   }
   const err = dispatchErrorText(task);
   if (err.startsWith(DEP_BLOCK_PREFIX)) {
-    const dep = err.slice(DEP_BLOCK_PREFIX.length);
-    return { text: `blocked by ${clip(dep, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
+    const dep = clip(err.slice(DEP_BLOCK_PREFIX.length), SIGNAL_CLIP);
+    return { text: t`blocked by ${dep}`, tone: 'warn', tip: err };
   }
   if (err.startsWith(QUOTA_WAIT_PREFIX)) {
-    const why = err.slice(QUOTA_WAIT_PREFIX.length);
-    return { text: `waiting on quota: ${clip(why, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
+    const why = clip(err.slice(QUOTA_WAIT_PREFIX.length), SIGNAL_CLIP);
+    return { text: t`waiting on quota: ${why}`, tone: 'warn', tip: err };
   }
   if (err.startsWith(ACCOUNT_PAUSE_PREFIX)) {
-    const why = err.slice(ACCOUNT_PAUSE_PREFIX.length);
-    return { text: `account paused: ${clip(why, SIGNAL_CLIP)}`, tone: 'warn', tip: err };
+    const why = clip(err.slice(ACCOUNT_PAUSE_PREFIX.length), SIGNAL_CLIP);
+    return { text: t`account paused: ${why}`, tone: 'warn', tip: err };
   }
   if (err !== '') {
-    return { text: `dispatch error: ${clip(err, SIGNAL_CLIP)}`, tone: 'bad', tip: err };
+    const why = clip(err, SIGNAL_CLIP);
+    return { text: t`dispatch error: ${why}`, tone: 'bad', tip: err };
   }
   if (task.boardColumn === 'in_review') {
-    return { text: 'waiting for review', tone: 'info', tip: null };
+    return { text: t`waiting for review`, tone: 'info', tip: null };
   }
   return null;
 }
@@ -558,18 +589,30 @@ export const BOARD_FILTERS: BoardFilter[] = ['needsMe', 'running', 'stale'];
 
 /** The words on the chips. `needsMe` is a camelCase token on the wire and a
  * sentence fragment on screen; the two are not the same string. */
-export const BOARD_FILTER_LABELS: Record<BoardFilter, string> = {
-  needsMe: 'needs me',
-  running: 'running',
-  stale: 'stale',
+export const BOARD_FILTER_LABELS: Readonly<Record<BoardFilter, string>> = {
+  get needsMe() {
+    return t`needs me`;
+  },
+  get running() {
+    return t`running`;
+  },
+  get stale() {
+    return t`stale`;
+  },
 };
 
 /** What each chip promises, on hover — the chip's own name is three words at
  * most, and `needs me` in particular covers four different situations. */
-export const BOARD_FILTER_TIPS: Record<BoardFilter, string> = {
-  needsMe: 'waiting for review, a failed verdict, a dispatch error, or an unanswered permission request',
-  running: 'cards the dispatcher has in flight right now',
-  stale: 'cards at or near their automatic-archive date',
+export const BOARD_FILTER_TIPS: Readonly<Record<BoardFilter, string>> = {
+  get needsMe() {
+    return t`waiting for review, a failed verdict, a dispatch error, or an unanswered permission request`;
+  },
+  get running() {
+    return t`cards the dispatcher has in flight right now`;
+  },
+  get stale() {
+    return t`cards at or near their automatic-archive date`;
+  },
 };
 
 /**
@@ -672,10 +715,16 @@ export function parseBoardView(raw: string | null): BoardView {
  * are the only place the board explains its own shape, so each one names what
  * arrives here and what leaves.
  */
-export const LANE_EMPTY: Record<BoardLane, string> = {
-  inbox: 'Tasks captured from sessions and routines land here — Run, Plan or Dismiss each one.',
-  working: 'The dispatcher picks cards up from here in priority order.',
-  review: 'Cards that have run and carry a verdict wait here — Land, Re-run or Discard.',
+export const LANE_EMPTY: Readonly<Record<BoardLane, string>> = {
+  get inbox() {
+    return t`Tasks captured from sessions and routines land here — Run, Plan or Dismiss each one.`;
+  },
+  get working() {
+    return t`The dispatcher picks cards up from here in priority order.`;
+  },
+  get review() {
+    return t`Cards that have run and carry a verdict wait here — Land, Re-run or Discard.`;
+  },
 };
 
 /**
@@ -685,7 +734,9 @@ export const LANE_EMPTY: Record<BoardLane, string> = {
  */
 export function laneEmptyNote(lane: BoardLane, filter: BoardFilter | null): string {
   if (filter === null) return LANE_EMPTY[lane];
-  return `Nothing in ${LANE_TITLES[lane]} matches “${BOARD_FILTER_LABELS[filter]}”.`;
+  const laneTitle = LANE_TITLES[lane];
+  const filterLabel = BOARD_FILTER_LABELS[filter];
+  return t`Nothing in ${laneTitle} matches “${filterLabel}”.`;
 }
 
 // --- inbox amnesty (board inbox lifecycle) ------------------------------------

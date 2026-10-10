@@ -14,6 +14,7 @@
 // the prompt and the captured quote. It is collapsed, because it is long and it
 // is only interesting when the run did something unexpected.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { BoardTask } from '../../api/types';
 import { displaySlug, findProject } from '../../lib/projectSlug';
@@ -60,17 +61,18 @@ function LogRow({ label, value }: { label: string; value: string }): JSX.Element
 
 /** The prompt the runner actually received, behind a disclosure. */
 function DispatchedPrompt({ prompt }: { prompt: string }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   return (
     <div className="mt-1.5">
       <button
         type="button"
         aria-expanded={open}
-        aria-label="dispatched prompt"
+        aria-label={t`dispatched prompt`}
         onClick={() => setOpen((v) => !v)}
         className="font-mono text-[10px] tracking-[0.08em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
       >
-        {open ? '▾' : '▸'} dispatched prompt
+        {open ? '▾' : '▸'} <Trans>dispatched prompt</Trans>
       </button>
       {open && (
         <pre className="mt-1.5 max-h-64 overflow-auto rounded-md border border-line bg-field px-2.5 py-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-dim">
@@ -89,6 +91,7 @@ export function RunLog({
   /** Open a terminal in this card's worktree; omitted when there is none. */
   onOpenTerminal?: (() => void) | undefined;
 }): JSX.Element {
+  const { t } = useLingui();
   // The linked-sessions link: the row carries the DB path slug, so use the
   // pretty one when the project resolves.
   const { projects } = useScope();
@@ -96,21 +99,23 @@ export function RunLog({
   const scopeSlug = scopeProject !== null ? displaySlug(scopeProject, projects) : task.projectSlug;
   return (
     <div className="flex flex-col gap-1">
-      <FieldLabel>run</FieldLabel>
+      <FieldLabel>{t`run`}</FieldLabel>
       <div>
-        <LogRow label="state" value={stateLabel(task)} />
-        {task.branch !== null && <LogRow label="branch" value={task.branch} />}
-        {task.worktreePath !== null && <LogRow label="worktree" value={task.worktreePath} />}
-        {task.startPoint !== null && <LogRow label="start point" value={task.startPoint} />}
+        <LogRow label={t`state`} value={stateLabel(task)} />
+        {task.branch !== null && <LogRow label={t`branch`} value={task.branch} />}
+        {task.worktreePath !== null && <LogRow label={t`worktree`} value={task.worktreePath} />}
+        {task.startPoint !== null && <LogRow label={t`start point`} value={task.startPoint} />}
         {/* Two budgets, two labels. A bare "retries: 3" could not say whether the
          * dispatcher healed a dead process three times or verification spawned
          * three fix cards — opposite situations needing opposite responses. */}
-        {task.retryCount > 0 && <LogRow label="dispatch retries" value={String(task.retryCount)} />}
-        {task.verifyRetryCount > 0 && (
-          <LogRow label="verify retries" value={String(task.verifyRetryCount)} />
+        {task.retryCount > 0 && (
+          <LogRow label={t`dispatch retries`} value={String(task.retryCount)} />
         )}
-        {task.verifyVerdict !== null && <LogRow label="verdict" value={task.verifyVerdict} />}
-        {task.verifyDetail !== null && <LogRow label="detail" value={task.verifyDetail} />}
+        {task.verifyRetryCount > 0 && (
+          <LogRow label={t`verify retries`} value={String(task.verifyRetryCount)} />
+        )}
+        {task.verifyVerdict !== null && <LogRow label={t`verdict`} value={task.verifyVerdict} />}
+        {task.verifyDetail !== null && <LogRow label={t`detail`} value={task.verifyDetail} />}
       </div>
 
       {onOpenTerminal !== undefined && (
@@ -120,7 +125,7 @@ export function RunLog({
           className="mt-1 flex w-fit items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1 font-mono text-[10.5px] text-ink-2 transition-colors hover:border-line-strong hover:bg-surface2 hover:text-ink"
         >
           <span aria-hidden="true">❯_</span>
-          Open terminal in worktree
+          <Trans>Open terminal in worktree</Trans>
         </button>
       )}
 
@@ -148,7 +153,7 @@ export function RunLog({
           href={`/sessions?scope=${scopeSlug}`}
           className="mt-1.5 inline-block w-fit font-mono text-[10.5px] text-ink-dim underline transition-colors hover:text-ink"
         >
-          ❯ linked sessions →
+          <Trans>❯ linked sessions →</Trans>
         </a>
       )}
 

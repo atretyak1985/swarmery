@@ -1,5 +1,35 @@
 // Display formatting helpers (JetBrains Mono numeric style from the mockup).
 
+import { t } from '@lingui/core/macro';
+import { currentLocale } from '../i18n/locale';
+
+// Every Intl / toLocale* call of the SPA goes through the helpers below, so
+// dates and numbers follow the UI language picked in Settings (plan D5).
+export { currentLocale };
+
+/** A Date, an ISO string, or epoch milliseconds. */
+type DateInput = Date | string | number;
+
+const TIME_24: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+const DATE_TIME_24: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', ...TIME_24 };
+const DATE_MEDIUM: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+
+function toValidDate(value: DateInput): Date | null {
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Date part in the UI locale → "Oct 7, 2026" / "7 жовт. 2026 р."; "—" when invalid. */
+export function fmtDate(value: DateInput, opts: Intl.DateTimeFormatOptions = DATE_MEDIUM): string {
+  const d = toValidDate(value);
+  return d === null ? '—' : d.toLocaleDateString(currentLocale(), opts);
+}
+
+/** Number in the UI locale → "1,234.5" / "1 234,5". */
+export function fmtNum(n: number, opts?: Intl.NumberFormatOptions): string {
+  return n.toLocaleString(currentLocale(), opts);
+}
+
 /** 1234567 → "1.2M", 412300 → "412K", 950 → "950". */
 export function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -37,24 +67,21 @@ export function fmtDurationMs(ms: number | null): string {
   return `${m}m ${s.toString().padStart(2, '0')}s`;
 }
 
-/** ISO timestamp → "14:52" (local time). */
-export function fmtTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+/** Time of day in the UI locale (local time) → "14:52" by default; "—" when invalid. */
+export function fmtTime(value: DateInput, opts: Intl.DateTimeFormatOptions = TIME_24): string {
+  const d = toValidDate(value);
+  return d === null ? '—' : d.toLocaleTimeString(currentLocale(), opts);
 }
 
-/** ISO timestamp → "Jul 10, 14:52". */
-export function fmtDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+/** Date and time in the UI locale → "Jul 10, 14:52" by default; "—" when invalid. */
+export function fmtDateTime(value: DateInput, opts: Intl.DateTimeFormatOptions = DATE_TIME_24): string {
+  const d = toValidDate(value);
+  return d === null ? '—' : d.toLocaleString(currentLocale(), opts);
+}
+
+/** The page eyebrow clock → "Sunday · Jul 12 · 14:52" (Today and Overview). */
+export function fmtEyebrowClock(now: Date): string {
+  return fmtDateTime(now, { weekday: 'long', month: 'short', day: 'numeric', ...TIME_24 }).replace(/,/g, ' ·');
 }
 
 /** Wall-clock span from start to end (or now) → "18 min" / "2 h 05 min" / "41 s". */
@@ -85,20 +112,21 @@ export function fmtElapsed(fromIso: string, now: number): string {
 
 /** ISO timestamp → "9 s ago" / "4 min ago" / "3 h ago". */
 export function fmtAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '—';
-  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (sec < 60) return `${sec} s ago`;
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return '—';
+  const sec = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (sec < 60) return t`${sec} s ago`;
   const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} min ago`;
+  if (min < 60) return t`${min} min ago`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} h ago`;
-  return `${Math.floor(h / 24)} d ago`;
+  if (h < 24) return t`${h} h ago`;
+  const d = Math.floor(h / 24);
+  return t`${d} d ago`;
 }
 
 /** Today's header, e.g. "Sat, Jul 12". */
 export function fmtTodayHeader(): string {
-  return new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  return fmtDate(new Date(), { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 /* ----- day-key helpers (local YYYY-MM-DD, for /api/stats/overview?day=) ----- */
@@ -126,7 +154,7 @@ export function addDays(day: string, delta: number): string {
 
 /** "2026-07-12" → "Sunday, Jul 12" (day-title header of the Overview). */
 export function fmtDayTitle(day: string): string {
-  return parseDay(day).toLocaleDateString([], {
+  return fmtDate(parseDay(day), {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
@@ -135,7 +163,7 @@ export function fmtDayTitle(day: string): string {
 
 /** "2026-07-12" → "Sun, Jul 12". */
 export function fmtDayShort(day: string): string {
-  return parseDay(day).toLocaleDateString([], {
+  return fmtDate(parseDay(day), {
     weekday: 'short',
     month: 'short',
     day: 'numeric',

@@ -17,6 +17,8 @@
 // OUTSIDE the <nav>: the rail is display:none below `desk`, and a fixed overlay
 // inside a hidden parent would never paint.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { fetchSessions } from '../api';
@@ -137,6 +139,7 @@ export function Sidebar({
   /** Shell-specific extras rendered above the bottom cluster. */
   children?: ReactNode;
 }): JSX.Element {
+  const { t } = useLingui();
   const { projects } = useScope();
   const { pathname } = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -159,7 +162,7 @@ export function Sidebar({
       {/* Geometry is artboard 2b's rail: 212px wide, 12px/10px padding, 2px
           row gap, 34px rows. */}
       <nav
-        aria-label="primary"
+        aria-label={t`primary`}
         className="hidden w-[212px] shrink-0 flex-col gap-[2px] border-r border-line px-[10px] py-3 desk:flex"
       >
         <div className="mb-[10px]">
@@ -168,7 +171,7 @@ export function Sidebar({
         {placesIn('main').map(row)}
         {/* Section eyebrow — the mono micro-label idiom, rail-sized. */}
         <div className="mt-3 mb-[3px] px-[10px] font-mono text-[10px] leading-[normal] font-medium tracking-[0.14em] text-ink-faint uppercase">
-          Improve
+          <Trans>Improve</Trans>
         </div>
         {placesIn('improve').map(row)}
         {children}
@@ -180,7 +183,7 @@ export function Sidebar({
             aria-haspopup="dialog"
             className="mt-1.5 border-t border-line px-[10px] py-2 text-left font-mono text-[10px] leading-[normal] text-ink-faint transition-colors hover:text-ink-dim"
           >
-            ⌘K search &amp; actions
+            <Trans>⌘K search &amp; actions</Trans>
           </button>
         </div>
       </nav>
@@ -209,12 +212,14 @@ function SidebarRow({
   badge: number | null;
   live: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   const dimmed = slug === null && place.projectOnly;
+  const label = place.label;
   return (
     <Link
       to={resolvePlaceHref(place, slug, dimmed ? loadLastProject() : null)}
       aria-current={active ? 'page' : undefined}
-      title={dimmed ? `${place.label} — opens in a project` : undefined}
+      title={dimmed ? t`${label} — opens in a project` : undefined}
       // Artboard 2b: an idle row is a borderless 34px line; the active row adds
       // a 1px hairline AROUND that box (36px outer), so its text sits 1px in.
       className={`flex shrink-0 items-center gap-[10px] rounded-[10px] px-[10px] text-[13px] font-medium transition-colors ${
@@ -226,10 +231,10 @@ function SidebarRow({
       <span className="w-[16px] shrink-0 text-center" aria-hidden="true">
         {place.glyph}
       </span>
-      <span className="truncate">{place.label}</span>
+      <span className="truncate">{label}</span>
       {badge !== null && (
         <span
-          aria-label={`${badge} waiting`}
+          aria-label={plural(badge, { one: '# waiting', few: '# waiting', many: '# waiting', other: '# waiting' })}
           className="ml-auto h-[17px] min-w-[18px] rounded-full bg-amber px-[6px] text-center font-mono text-[10px] leading-[17px] font-bold text-bg"
         >
           {badge}
@@ -238,7 +243,7 @@ function SidebarRow({
       {live && (
         <span
           role="img"
-          aria-label="live sessions"
+          aria-label={t`live sessions`}
           className="ml-auto h-[6px] w-[6px] shrink-0 animate-pulse-dot rounded-full bg-green"
         />
       )}
@@ -262,6 +267,7 @@ export function MobileNav({
   inboxCount?: number;
   needsYouCount?: number;
 }): JSX.Element {
+  const { t } = useLingui();
   const { pathname } = useLocation();
   const last = slug === null ? loadLastProject() : null;
   if (variant === 'strip') {
@@ -288,7 +294,7 @@ export function MobileNav({
   }
   return (
     <nav
-      aria-label="primary (mobile)"
+      aria-label={t`primary (mobile)`}
       className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-bg/95 px-1 pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] backdrop-blur-md desk:hidden"
     >
       {PLACES.map((place) => {

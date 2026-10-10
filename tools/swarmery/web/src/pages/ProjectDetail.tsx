@@ -5,6 +5,7 @@
 // linking back to /sessions/:id. Telemetry-only projects (no readable
 // .claude/settings.json) hide the component sections.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { ProjectComponent, ProjectDetail as ProjectDetailData } from '../api/types';
@@ -21,7 +22,7 @@ function BackLink(): JSX.Element {
       to="/projects"
       className="font-mono text-[11px] text-ink-dim transition-colors hover:text-ink"
     >
-      ← projects
+      <Trans>← projects</Trans>
     </Link>
   );
 }
@@ -36,24 +37,30 @@ function StatTile({ label, value }: { label: string; value: string }): JSX.Eleme
 }
 
 function ComponentList({ title, items }: { title: string; items: ProjectComponent[] }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div>
       <div className="font-mono text-[10.5px] tracking-[0.1em] text-ink-dim uppercase">
         {title} · {items.length}
       </div>
       {items.length === 0 ? (
-        <div className="mt-1.5 font-mono text-[11px] text-ink-faint">none</div>
+        <div className="mt-1.5 font-mono text-[11px] text-ink-faint">
+          <Trans>none</Trans>
+        </div>
       ) : (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {items.map((c) => (
-            <span
-              key={c.name}
-              data-tip={`source: ${c.source}`}
-              className="rounded-full border border-line px-2 py-0.5 font-mono text-[10.5px] text-ink-2"
-            >
-              {c.name}
-            </span>
-          ))}
+          {items.map((c) => {
+            const source = c.source;
+            return (
+              <span
+                key={c.name}
+                data-tip={t`source: ${source}`}
+                className="rounded-full border border-line px-2 py-0.5 font-mono text-[10.5px] text-ink-2"
+              >
+                {c.name}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>
@@ -61,6 +68,7 @@ function ComponentList({ title, items }: { title: string; items: ProjectComponen
 }
 
 export function ProjectDetail(): JSX.Element {
+  const { t } = useLingui();
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<ProjectDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,13 +102,14 @@ export function ProjectDetail(): JSX.Element {
     return (
       <div className="px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px]">
         <BackLink />
-        <Loading label="project…" />
+        <Loading label={t`project…`} />
       </div>
     );
   }
 
   const { project, components, stats } = data;
   const managed = project.plugin?.managed ?? false;
+  const marketplace = project.plugin?.marketplace ?? '';
 
   return (
     <div className="px-4 pt-6 pb-20 desk:px-10 desk:pt-[34px] desk:pb-28">
@@ -124,7 +133,7 @@ export function ProjectDetail(): JSX.Element {
         ))}
         {project.archived && (
           <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-faint">
-            archived
+            <Trans>archived</Trans>
           </span>
         )}
         <div className="ml-auto">
@@ -136,18 +145,20 @@ export function ProjectDetail(): JSX.Element {
       </div>
       {project.plugin?.marketplace !== undefined && project.plugin.marketplace !== '' && (
         <div className="mt-0.5 font-mono text-[10.5px] text-ink-faint">
-          marketplace: {project.plugin.marketplace}
+          <Trans>marketplace: {marketplace}</Trans>
         </div>
       )}
 
       {/* Stats */}
-      <SectionTitle>stats</SectionTitle>
+      <SectionTitle>
+        <Trans>stats</Trans>
+      </SectionTitle>
       <div className="grid grid-cols-2 gap-2 desk:grid-cols-4">
-        <StatTile label="sessions" value={String(stats.sessions)} />
-        <StatTile label="tokens" value={stats.tokens !== null ? fmtTokens(stats.tokens) : '—'} />
-        <StatTile label="cost" value={fmtCost(stats.costUsd)} />
+        <StatTile label={t`sessions`} value={String(stats.sessions)} />
+        <StatTile label={t`tokens`} value={stats.tokens !== null ? fmtTokens(stats.tokens) : '—'} />
+        <StatTile label={t`cost`} value={fmtCost(stats.costUsd)} />
         <StatTile
-          label="last activity"
+          label={t`last activity`}
           value={stats.lastActivity !== null ? fmtAgo(stats.lastActivity) : '—'}
         />
       </div>
@@ -155,30 +166,38 @@ export function ProjectDetail(): JSX.Element {
       {/* Components — only meaningful for a managed project. */}
       {managed ? (
         <>
-          <SectionTitle>components (local)</SectionTitle>
+          <SectionTitle>
+            <Trans>components (local)</Trans>
+          </SectionTitle>
           <div className="space-y-3.5">
-            <ComponentList title="agents" items={components.agents} />
-            <ComponentList title="skills" items={components.skills} />
-            <ComponentList title="commands" items={components.commands} />
-            <ComponentList title="hooks" items={components.hooks} />
+            <ComponentList title={t`agents`} items={components.agents} />
+            <ComponentList title={t`skills`} items={components.skills} />
+            <ComponentList title={t`commands`} items={components.commands} />
+            <ComponentList title={t`hooks`} items={components.hooks} />
           </div>
           <ProjectPlugins projectId={project.id} />
         </>
       ) : (
         <>
-          <SectionTitle>components</SectionTitle>
+          <SectionTitle>
+            <Trans>components</Trans>
+          </SectionTitle>
           <div className="rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
             {project.plugin === null
-              ? 'telemetry-only — no .claude/settings.json, the swarmery plugin is not installed here'
-              : 'the swarmery plugin is not enabled for this project'}
+              ? t`telemetry-only — no .claude/settings.json, the swarmery plugin is not installed here`
+              : t`the swarmery plugin is not enabled for this project`}
           </div>
         </>
       )}
 
       {/* Recent sessions */}
-      <SectionTitle>recent sessions</SectionTitle>
+      <SectionTitle>
+        <Trans>recent sessions</Trans>
+      </SectionTitle>
       {stats.recentSessions.length === 0 ? (
-        <div className="font-mono text-[11.5px] text-ink-faint">no sessions yet</div>
+        <div className="font-mono text-[11.5px] text-ink-faint">
+          <Trans>no sessions yet</Trans>
+        </div>
       ) : (
         <Card>
           <div className="divide-y divide-line-soft">

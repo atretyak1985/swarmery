@@ -11,22 +11,31 @@
 // Renders nothing when the session has no live process — that absence IS the
 // "session is not doing anything" signal the operator reads.
 
+import type { I18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { SessionDetail } from '../../api/types';
 import { fmtAgo } from '../../lib/format';
 
 const GERUNDS = [
-  'Thinking',
-  'Reasoning',
-  'Ionizing',
-  'Computing',
-  'Percolating',
-  'Synthesizing',
-  'Crunching',
-  'Cogitating',
-  'Working',
-  'Noodling',
+  msg`Thinking`,
+  msg`Reasoning`,
+  msg`Ionizing`,
+  msg`Computing`,
+  msg`Percolating`,
+  msg`Synthesizing`,
+  msg`Crunching`,
+  msg`Cogitating`,
+  msg`Working`,
+  msg`Noodling`,
 ];
+
+/** The gerund for a 4-second slot, rotating through GERUNDS. */
+function gerundAt(i18n: I18n, ms: number): string {
+  const message = GERUNDS[Math.floor(ms / 4000) % GERUNDS.length];
+  return message !== undefined ? i18n._(message) : '';
+}
 
 function elapsedLabel(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -45,6 +54,7 @@ function hasLiveProcess(detail: SessionDetail): boolean {
 }
 
 export function LiveActivity({ detail }: { detail: SessionDetail }): JSX.Element | null {
+  const { t, i18n } = useLingui();
   const resuming = detail.resumeInFlight === true;
   const live = hasLiveProcess(detail);
   const active = resuming || live;
@@ -53,15 +63,15 @@ export function LiveActivity({ detail }: { detail: SessionDetail }): JSX.Element
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [active]);
 
   if (resuming) {
     const startedMs =
       detail.resumeStartedAt != null ? new Date(detail.resumeStartedAt).getTime() : now;
     const elapsed = Number.isNaN(startedMs) ? 0 : now - startedMs;
-    const gerund = GERUNDS[Math.floor(elapsed / 4000) % GERUNDS.length];
+    const gerund = gerundAt(i18n, elapsed);
     return (
       <div className="my-2 flex items-center gap-2.5 font-mono text-[11.5px] text-brand">
         <span
@@ -87,7 +97,8 @@ export function LiveActivity({ detail }: { detail: SessionDetail }): JSX.Element
     // spinner. Quiet stretch → the process is alive but inside a silent tool
     // call (build, test suite, long think): keep the indicator up, say so.
     if (sinceOutput < 2 * 60_000) {
-      const gerund = GERUNDS[Math.floor(now / 4000) % GERUNDS.length];
+      const gerund = gerundAt(i18n, now);
+      const lastAgo = lastEvent !== undefined ? fmtAgo(lastEvent.ts) : '';
       return (
         <div className="my-2 flex items-center gap-2.5 font-mono text-[11.5px] text-brand">
           <span
@@ -98,24 +109,28 @@ export function LiveActivity({ detail }: { detail: SessionDetail }): JSX.Element
             {gerund}
             <span className="animate-pulse">…</span>
             {lastEvent !== undefined && (
-              <span className="text-ink-faint"> · last output {fmtAgo(lastEvent.ts)}</span>
+              <span className="text-ink-faint">
+                {' · '}
+                <Trans>last output {lastAgo}</Trans>
+              </span>
             )}
           </span>
         </div>
       );
     }
+    const quietFor = lastEvent !== undefined ? fmtAgo(lastEvent.ts) : '';
     return (
       <div
         className="my-2 flex items-center gap-2 font-mono text-[11px] text-ink-faint"
-        data-tip="the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
+        data-tip={t`the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests`}
       >
         <span
           className="h-[7px] w-[7px] shrink-0 animate-blink-dot rounded-full bg-green"
           aria-hidden="true"
         />
         <span>
-          live · working quietly
-          {lastEvent !== undefined ? ` · no output for ${fmtAgo(lastEvent.ts)}` : ''}
+          <Trans>live · working quietly</Trans>
+          {lastEvent !== undefined ? ` · ${t`no output for ${quietFor}`}` : ''}
         </span>
       </div>
     );

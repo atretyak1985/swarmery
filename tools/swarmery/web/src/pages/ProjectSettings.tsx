@@ -3,6 +3,7 @@
 // existing ProjectPlugins card (per-pack toggle) and ProjectActions (archive /
 // detach / restore). Scoped by the workspace project id.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import type { ProjectDetail as ProjectDetailData } from '../api/types';
 import { fetchProject } from '../api';
@@ -14,6 +15,7 @@ import { AccountSelector } from '../components/AccountSelector';
 import { Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 
 export function ProjectSettings(): JSX.Element {
+  const { t } = useLingui();
   const { projectId, loading: projLoading } = useProjectWorkspace();
   const [data, setData] = useState<ProjectDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,18 +39,26 @@ export function ProjectSettings(): JSX.Element {
     <div className="px-4 pt-5 pb-10 desk:px-8 desk:pt-7">{inner}</div>
   );
 
-  if (projLoading && projectId === null) return wrap(<Loading label="workspace…" />);
-  if (projectId === null) return wrap(<Empty>unknown project</Empty>);
+  if (projLoading && projectId === null) return wrap(<Loading label={t`workspace…`} />);
+  if (projectId === null)
+    return wrap(
+      <Empty>
+        <Trans>unknown project</Trans>
+      </Empty>,
+    );
   if (error !== null) return wrap(<ErrorBox message={error} onRetry={load} />);
-  if (data === null) return wrap(<Loading label="settings…" />);
+  if (data === null) return wrap(<Loading label={t`settings…`} />);
 
   const { project } = data;
   const managed = project.plugin?.managed ?? false;
+  const marketplace = project.plugin?.marketplace ?? '';
 
   return wrap(
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-display text-[20px] font-medium tracking-[-0.01em] text-ink">settings</span>
+        <span className="font-display text-[20px] font-medium tracking-[-0.01em] text-ink">
+          <Trans>settings</Trans>
+        </span>
         <div className="ml-auto">
           <ProjectActions project={project} onChanged={load} />
         </div>
@@ -56,9 +66,9 @@ export function ProjectSettings(): JSX.Element {
       <div className="mt-1.5 font-mono text-[11px] text-ink-faint" data-tip-mono data-tip={project.path}>
         {project.path}
       </div>
-      {project.plugin?.marketplace !== undefined && project.plugin.marketplace !== '' && (
+      {marketplace !== '' && (
         <div className="mt-0.5 font-mono text-[10.5px] text-ink-faint">
-          marketplace: {project.plugin.marketplace}
+          <Trans>marketplace: {marketplace}</Trans>
         </div>
       )}
 
@@ -71,11 +81,13 @@ export function ProjectSettings(): JSX.Element {
         </div>
       ) : (
         <>
-          <SectionTitle>plugins</SectionTitle>
+          <SectionTitle>
+            <Trans>plugins</Trans>
+          </SectionTitle>
           <div className="rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
             {project.plugin === null
-              ? 'telemetry-only — no .claude/settings.json to manage plugins for'
-              : 'the swarmery plugin is not enabled for this project'}
+              ? t`telemetry-only — no .claude/settings.json to manage plugins for`
+              : t`the swarmery plugin is not enabled for this project`}
           </div>
         </>
       )}

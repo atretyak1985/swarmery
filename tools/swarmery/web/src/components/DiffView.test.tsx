@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../test/render';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { TaskDiff } from '../api/types';
 import { DiffView, splitPatch } from './DiffView';

@@ -9,7 +9,7 @@
 // web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../test/render';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SplitPane, type SplitPaneKey } from './SplitPane';

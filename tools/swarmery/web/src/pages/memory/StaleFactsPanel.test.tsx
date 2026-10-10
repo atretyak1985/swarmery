@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../../test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MemoryLintFinding, MemoryLintReport } from '../../api/types';
+import { i18n } from '../../i18n';
 import { STALE_FACTS_EMPTY, StaleFactsPanel } from './StaleFactsPanel';
 
 function finding(over: Partial<MemoryLintFinding>): MemoryLintFinding {
@@ -58,7 +59,8 @@ describe('StaleFactsPanel', () => {
 
   it('renders the empty state when the report has no findings', () => {
     render(<StaleFactsPanel report={report([])} onOpen={vi.fn()} />);
-    expect(screen.getByText(STALE_FACTS_EMPTY)).toBeTruthy();
+    expect(i18n._(STALE_FACTS_EMPTY)).toBe('No stale facts found');
+    expect(screen.getByText('No stale facts found')).toBeTruthy();
     expect(screen.getByText('No stale facts found')).toBeTruthy();
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });

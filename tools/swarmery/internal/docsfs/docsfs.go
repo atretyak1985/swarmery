@@ -5,6 +5,10 @@
 // (the `copy-docs` target); the copies are gitignored, and the committed
 // .gitkeep keeps the `all:content` embed pattern valid when they are absent
 // (e.g. a fresh clone or CI) — in that case /api/docs serves an empty list.
+//
+// content/uk/ holds the Ukrainian twins of those docs under the same file
+// names (also copied by `copy-docs`, also gitignored, its own .gitkeep);
+// /api/docs?lang=uk serves them in place of the English text when present.
 package docsfs
 
 import (

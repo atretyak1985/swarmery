@@ -3,6 +3,7 @@
 // uppercase field label and of the list-of-strings chip editor (file scope,
 // dependencies), so the create form and the edit drawer stay identical.
 
+import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 
 /** The uppercase mono caption every task field sits under. */
@@ -26,6 +27,7 @@ export function ChipEditor({
   disabled?: boolean;
   onChange: (next: string[]) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [draft, setDraft] = useState('');
   const add = (): void => {
     const v = draft.trim();
@@ -48,7 +50,7 @@ export function ChipEditor({
             {v}
             <button
               type="button"
-              aria-label={`remove ${v}`}
+              aria-label={t`remove ${v}`}
               disabled={disabled}
               onClick={() => onChange(values.filter((x) => x !== v))}
               className="text-ink-faint transition-colors hover:text-red disabled:opacity-50"

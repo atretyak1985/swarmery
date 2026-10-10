@@ -19,6 +19,8 @@
 // The status line is aria-live, so a screen reader hears "Waiting…", "Signed
 // in as …" and the failure states as they happen.
 
+import { t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { pollVcsLogin, startVcsLogin, submitVcsToken, VcsLoginError } from '../api';
 import type { VcsInfo, VcsLoginStart } from '../api/types';
@@ -56,7 +58,7 @@ function errorState(e: unknown): { kind: 'error'; message: string; hint: string 
 }
 
 function signedInLine(login: string): string {
-  return login === '' ? 'Signed in.' : `Signed in as ${login}.`;
+  return login === '' ? t`Signed in.` : t`Signed in as ${login}.`;
 }
 
 const BTN =
@@ -67,6 +69,7 @@ const TAB =
   'rounded-md px-2.5 py-1 font-mono text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-ink-dim';
 
 export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProps): JSX.Element {
+  const { t } = useLingui();
   const [tab, setTab] = useState<Tab>('device');
   const [device, setDevice] = useState<DeviceState>({ kind: 'idle' });
   const [tokenState, setTokenState] = useState<TokenState>({ kind: 'idle' });
@@ -181,29 +184,31 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
     }
   };
 
-  const host = vcs.host === '' ? 'this host' : vcs.host;
+  const host = vcs.host === '' ? t`this host` : vcs.host;
   const provider = vcs.terms.provider;
+  const verificationUri = device.kind === 'waiting' ? device.start.verificationUri : '';
+  const cliLogin = vcs.cliLogin;
 
   let status: string;
   if (tab === 'device') {
     switch (device.kind) {
       case 'idle':
-        status = `Get a one-time code, then enter it on ${host}.`;
+        status = t`Get a one-time code, then enter it on ${host}.`;
         break;
       case 'starting':
-        status = 'Asking for a code…';
+        status = t`Asking for a code…`;
         break;
       case 'waiting':
-        status = `Waiting for you to enter the code on ${host}…`;
+        status = t`Waiting for you to enter the code on ${host}…`;
         break;
       case 'ok':
         status = signedInLine(device.login);
         break;
       case 'expired':
-        status = 'The code expired before it was entered. Get a new one.';
+        status = t`The code expired before it was entered. Get a new one.`;
         break;
       case 'denied':
-        status = 'The sign-in was declined.';
+        status = t`The sign-in was declined.`;
         break;
       case 'error':
         status = device.message;
@@ -212,10 +217,10 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
   } else {
     switch (tokenState.kind) {
       case 'idle':
-        status = `Paste a ${provider} personal access token. It is checked with ${host} before it is stored.`;
+        status = t`Paste a ${provider} personal access token. It is checked with ${host} before it is stored.`;
         break;
       case 'submitting':
-        status = 'Checking the token…';
+        status = t`Checking the token…`;
         break;
       case 'ok':
         status = signedInLine(tokenState.login);
@@ -251,15 +256,15 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
       >
         <div className="flex items-start justify-between gap-3">
           <h2 id={titleId} className="font-display text-[14px] font-bold text-ink">
-            Sign in to {provider}
+            <Trans>Sign in to {provider}</Trans>
             <span className="ml-1.5 font-mono text-[11px] font-normal text-ink-3">{vcs.host}</span>
           </h2>
-          <button type="button" className={BTN_PLAIN} onClick={() => onClose(signedIn)} aria-label="Close">
+          <button type="button" className={BTN_PLAIN} onClick={() => onClose(signedIn)} aria-label={t`Close`}>
             ×
           </button>
         </div>
 
-        <div role="tablist" aria-label="Sign-in method" className="mt-3 flex gap-1.5">
+        <div role="tablist" aria-label={t`Sign-in method`} className="mt-3 flex gap-1.5">
           <button
             ref={firstRef}
             type="button"
@@ -270,7 +275,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
             className={`${TAB} ${tab === 'device' ? 'bg-surface2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
             onClick={() => setTab('device')}
           >
-            Device code
+            <Trans>Device code</Trans>
           </button>
           <button
             type="button"
@@ -281,7 +286,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
             className={`${TAB} ${tab === 'token' ? 'bg-surface2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
             onClick={() => setTab('token')}
           >
-            Token
+            <Trans>Token</Trans>
           </button>
         </div>
 
@@ -297,7 +302,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
                     {device.start.userCode}
                   </output>
                   <button type="button" className={BTN_PLAIN} onClick={() => copyCode(device.start.userCode)}>
-                    {copied ? 'Copied' : 'Copy'}
+                    {copied ? t`Copied` : t`Copy`}
                   </button>
                 </div>
                 <a
@@ -306,7 +311,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
                   rel="noopener noreferrer"
                   className="mt-2.5 inline-block text-ink underline underline-offset-2 hover:text-green"
                 >
-                  Open {device.start.verificationUri}
+                  <Trans>Open {verificationUri}</Trans>
                 </a>
               </>
             ) : device.kind === 'ok' ? null : (
@@ -319,7 +324,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
                   void startDevice();
                 }}
               >
-                {device.kind === 'idle' || device.kind === 'starting' ? 'Get a code' : 'Get a new code'}
+                {device.kind === 'idle' || device.kind === 'starting' ? t`Get a code` : t`Get a new code`}
               </button>
             )}
           </div>
@@ -333,7 +338,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
                 }}
               >
                 <label htmlFor={tokenInputId} className="text-ink-3">
-                  Personal access token
+                  <Trans>Personal access token</Trans>
                 </label>
                 <input
                   id={tokenInputId}
@@ -351,7 +356,7 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
                     disabled={tokenState.kind === 'submitting' || token.trim() === ''}
                     aria-busy={tokenState.kind === 'submitting'}
                   >
-                    Save token
+                    <Trans>Save token</Trans>
                   </button>
                 </div>
               </form>
@@ -371,13 +376,15 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
 
         {vcs.cliLogin !== '' && (
           <p className="mt-3 border-t border-line pt-2.5 text-ink-3">
-            or run in a terminal: <code className="text-ink">{vcs.cliLogin}</code>
+            <Trans>
+              or run in a terminal: <code className="text-ink">{cliLogin}</code>
+            </Trans>
           </p>
         )}
         {signedIn && (
           <div className="mt-3 flex justify-end">
             <button type="button" className={BTN_PRIMARY} onClick={() => onClose(true)}>
-              Done
+              <Trans>Done</Trans>
             </button>
           </div>
         )}

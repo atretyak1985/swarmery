@@ -3,6 +3,8 @@
 // window starts as Health's own range (`?days=`) and can be narrowed with the two
 // date inputs; it is bookkeeping, so every row is shown however small.
 
+import { t } from '@lingui/core/macro';
+import { Plural, Trans } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { type PhaseRunsReport, type PhaseRunsRow, fetchPhaseRunsReport } from '../../api/phasereport';
 
@@ -13,7 +15,8 @@ export function isReopenRow(row: PhaseRunsRow): boolean {
 
 /** "noop · waiting on push/PR (est.)" — the label as the table shows it. */
 export function rowLabel(row: PhaseRunsRow): string {
-  return row.estimated ? `${row.label} (est.)` : row.label;
+  const label = row.label;
+  return row.estimated ? t`${label} (est.)` : label;
 }
 
 function usd(v: number): string {
@@ -26,22 +29,27 @@ export function PhaseRunsTable({ rep }: { rep: PhaseRunsReport }): JSX.Element {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, n]) => `${k} ${String(n)}`)
     .join(', ');
+  const from = rep.from;
+  const to = rep.to;
+  const fallbackN = rep.fallbackRows.n;
   return (
     <>
       <table className="mt-3 w-full max-w-2xl border-collapse font-mono text-[11px]">
         <caption className="sr-only">
-          Phase runs from {rep.from} to {rep.to}
+          <Trans>
+            Phase runs from {from} to {to}
+          </Trans>
         </caption>
         <thead>
           <tr className="border-b border-line text-left text-[10px] text-ink-faint">
             <th scope="col" className="py-1 pr-2 font-normal">
-              row
+              <Trans>row</Trans>
             </th>
             <th scope="col" className="py-1 pr-2 text-right font-normal">
               n
             </th>
             <th scope="col" className="py-1 text-right font-normal">
-              cost
+              <Trans>cost</Trans>
             </th>
           </tr>
         </thead>
@@ -65,8 +73,13 @@ export function PhaseRunsTable({ rep }: { rep: PhaseRunsReport }): JSX.Element {
       </table>
       {rep.fallbackRows.n > 0 && (
         <p className="mt-2 font-mono text-[10.5px] text-ink-dim">
-          {String(rep.fallbackRows.n)} more run(s) ended in the window with no actuals row ({fallback}) — counted
-          here only.
+          <Plural
+            value={fallbackN}
+            one={`# more run(s) ended in the window with no actuals row (${fallback}) — counted here only.`}
+            few={`# more run(s) ended in the window with no actuals row (${fallback}) — counted here only.`}
+            many={`# more run(s) ended in the window with no actuals row (${fallback}) — counted here only.`}
+            other={`# more run(s) ended in the window with no actuals row (${fallback}) — counted here only.`}
+          />
         </p>
       )}
       {rep.notes.length > 0 && (
@@ -119,15 +132,18 @@ export function PhaseRunsTab({ from: initialFrom, to: initialTo }: PhaseRunsTabP
   return (
     <section className="px-4 py-4 desk:px-7" aria-labelledby="phase-runs-heading">
       <h2 id="phase-runs-heading" className="text-sm text-ink">
-        Phase runs
+        <Trans>Phase runs</Trans>
       </h2>
       <p className="mt-1 max-w-2xl text-[12px] text-ink-dim">
-        How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how many
-        finished phases came back. Rows marked (est.) are read from the runs&apos; own words, not a recorded fact.
+        <Trans>
+          How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how
+          many finished phases came back. Rows marked (est.) are read from the runs&apos; own words, not a recorded
+          fact.
+        </Trans>
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[11px] text-ink-dim">
         <label className="flex items-center gap-1.5">
-          from
+          <Trans>from</Trans>
           <input
             type="date"
             value={from}
@@ -137,7 +153,7 @@ export function PhaseRunsTab({ from: initialFrom, to: initialTo }: PhaseRunsTabP
           />
         </label>
         <label className="flex items-center gap-1.5">
-          to
+          <Trans>to</Trans>
           <input
             type="date"
             value={to}
@@ -152,7 +168,9 @@ export function PhaseRunsTab({ from: initialFrom, to: initialTo }: PhaseRunsTabP
           {err}
         </div>
       )}
-      {rep === null && err === null && <div className="mt-3 text-[12px] text-ink-faint">loading…</div>}
+      {rep === null && err === null && <div className="mt-3 text-[12px] text-ink-faint">
+          <Trans>loading…</Trans>
+        </div>}
       {rep !== null && <PhaseRunsTable rep={rep} />}
     </section>
   );

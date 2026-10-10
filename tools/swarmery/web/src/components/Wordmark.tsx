@@ -21,9 +21,12 @@ export function BrandMark({ className = '' }: { className?: string }): JSX.Eleme
  * the surrounding link's aria-label; the mark itself is decorative. */
 export function Wordmark(): JSX.Element {
   return (
+    // i18n-ignore: the product name, split around the mark; never translated
     <>
+      {/* i18n-ignore: brand name */}
       SW
       <BrandMark className="mx-[0.12em] h-[1.05em] w-[1.05em] shrink-0 text-brand" />
+      {/* i18n-ignore: brand name */}
       RMERY
     </>
   );

@@ -3,6 +3,8 @@
 // remove right now — one denied tool no rule covers (with "+ always allow")
 // and the most repeated error. Everything past that lives one tab over.
 
+import { plural, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useState } from 'react';
 import { createApprovalRule } from '../../api';
 import type { RetroAgentRow, RetroAgentsResp, RetroFrictionResp } from '../../api/types';
@@ -31,8 +33,22 @@ function agentTone(row: RetroAgentRow): { text: string; bar: string } {
 function agentFigure(row: RetroAgentRow): string {
   const now = row.error_rate * 100;
   const prev = row.prev.runs > 0 ? row.prev.error_rate * 100 : null;
-  if (prev !== null && Math.abs(prev - now) >= 2) return `${fmtPct(prev)} → ${fmtPct(now)} failed`;
-  return `${fmtPct(now)} failed · ${String(row.runs)} runs`;
+  const nowPct = fmtPct(now);
+  if (prev !== null && Math.abs(prev - now) >= 2) {
+    const prevPct = fmtPct(prev);
+    return t`${prevPct} → ${nowPct} failed`;
+  }
+  const runs = row.runs;
+  return t`${nowPct} failed · ${plural(runs, { one: '# runs', few: '# runs', many: '# runs', other: '# runs' })}`;
+}
+
+function sameErrorLine(count: number): string {
+  return t`Same error ${plural(count, { one: '# times', few: '# times', many: '# times', other: '# times' })} in this window`;
+}
+
+function lastSeenLine(ago: string, sessions: number): string {
+  if (sessions === 0) return t`Last seen ${ago}.`;
+  return t`Last seen ${ago} · in ${plural(sessions, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' })}.`;
 }
 
 function AgentRow({ row }: { row: RetroAgentRow }): JSX.Element {
@@ -60,12 +76,14 @@ function DeniedCard({
   calls: number;
   onDetails: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [failed, setFailed] = useState<string | null>(null);
   const allow = useCallback((): void => {
     if (state !== 'idle') return;
     setState('busy');
     setFailed(null);
+    // i18n-ignore: persisted rule note sent to the API, not UI copy
     createApprovalRule({ projectId: null, toolPattern: tool, note: 'created from Health overview' })
       .then(() => setState('done'))
       .catch((e: unknown) => {
@@ -73,28 +91,32 @@ function DeniedCard({
         setState('idle');
       });
   }, [state, tool]);
+  const deniedCount = String(denied);
+  const callCount = String(calls);
   return (
     <div className="rounded-[10px] border border-line px-3 py-2.5">
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-[12px] text-ink">{tool}</span>
         <span className="font-mono text-[10.5px] text-ink-faint">
-          denied {String(denied)}× · of {String(calls)} calls
+          <Trans>
+            denied {deniedCount}× · of {callCount} calls
+          </Trans>
         </span>
       </div>
       <div className="mt-1.5 flex gap-1.5">
         {state === 'done' ? (
           <span className="rounded-md border border-green/40 px-2.5 py-[3px] font-mono text-[10.5px] text-green">
-            ✓ always allowed
+            <Trans>✓ always allowed</Trans>
           </span>
         ) : (
           <button
             type="button"
             onClick={allow}
             disabled={state === 'busy'}
-            data-tip={`auto-approve every ${tool} request, in every project`}
+            data-tip={t`auto-approve every ${tool} request, in every project`}
             className="rounded-md border border-amber/50 px-2.5 py-[3px] font-mono text-[10.5px] font-semibold text-amber transition-colors hover:bg-amber/10 disabled:opacity-50"
           >
-            {state === 'busy' ? '…' : '+ always allow'}
+            {state === 'busy' ? '…' : t`+ always allow`}
           </button>
         )}
         <button
@@ -102,7 +124,7 @@ function DeniedCard({
           onClick={onDetails}
           className="rounded-md border border-line-strong px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3 transition-colors hover:text-ink"
         >
-          see friction
+          <Trans>see friction</Trans>
         </button>
       </div>
       {failed !== null && <div className="mt-1.5 font-mono text-[10.5px] text-red">{failed}</div>}
@@ -123,6 +145,7 @@ export function HealthOverview({
   onRetry: () => void;
   onTab: (tab: HealthTab) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   if (error !== null) {
     return (
       <div className="px-7 py-5">
@@ -130,16 +153,19 @@ export function HealthOverview({
       </div>
     );
   }
-  if (agents === null) return <Loading label="health…" />;
+  if (agents === null) return <Loading label={t`health…`} />;
 
   const rows = topAgents(agents, 3);
   const denied = friction !== null ? uncoveredDenied(friction)[0] : undefined;
   const repeated = friction !== null ? untriagedErrors(friction)[0] : undefined;
+  const agentCount = String(agents.agents.length);
 
   return (
     <div className="grid gap-[22px] px-4 pt-[22px] pb-[26px] desk:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] desk:px-7">
       <section>
-        <div className={LABEL}>The one sentence</div>
+        <div className={LABEL}>
+          <Trans>The one sentence</Trans>
+        </div>
         <p className="mt-2 font-display text-[19px] leading-[1.35] font-medium text-balance text-ink">
           {oneSentence(agents)}
         </p>
@@ -155,12 +181,14 @@ export function HealthOverview({
           onClick={() => onTab('agents')}
           className="mt-2 font-mono text-[10.5px] text-ink-faint transition-colors hover:text-ink"
         >
-          all {String(agents.agents.length)} agents → Agents tab
+          <Trans>all {agentCount} agents → Agents tab</Trans>
         </button>
       </section>
 
       <section>
-        <div className={LABEL}>Friction you can remove today</div>
+        <div className={LABEL}>
+          <Trans>Friction you can remove today</Trans>
+        </div>
         <div className="mt-2 flex flex-col gap-2">
           {denied !== undefined && (
             <DeniedCard
@@ -174,25 +202,26 @@ export function HealthOverview({
             <div className="rounded-[10px] border border-line px-3 py-2.5">
               <div className="flex min-w-0 items-baseline gap-2">
                 <span className="shrink-0 text-[12px] text-ink">
-                  Same error {String(repeated.count)} times in this window
+                  {sameErrorLine(repeated.count)}
                 </span>
                 <span className="min-w-0 truncate font-mono text-[10.5px] text-ink-faint">
                   {repeated.example}
                 </span>
               </div>
               <div className="mt-1 text-[11.5px] text-ink-3">
-                Last seen {fmtAgo(repeated.last_ts)}
-                {repeated.sessions.length > 0 &&
-                  ` · in ${String(repeated.sessions.length)} session${repeated.sessions.length === 1 ? '' : 's'}`}
-                .
+                {lastSeenLine(fmtAgo(repeated.last_ts), repeated.sessions.length)}
               </div>
             </div>
           )}
           {friction === null ? (
-            <p className="text-[12px] text-ink-dim">The friction board is unavailable right now.</p>
+            <p className="text-[12px] text-ink-dim">
+              <Trans>The friction board is unavailable right now.</Trans>
+            </p>
           ) : denied === undefined && repeated === undefined ? (
             <p className="text-[12px] text-ink-dim">
-              Nothing to remove: no tool was denied without a rule and no error repeated in this window.
+              <Trans>
+                Nothing to remove: no tool was denied without a rule and no error repeated in this window.
+              </Trans>
             </p>
           ) : null}
         </div>

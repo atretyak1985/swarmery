@@ -9,6 +9,7 @@
 // PATCH /api/epics/{taskId}/docs {line, class}; the daemon writes the marker
 // (`- [ ] push` → `- [ ] [LAND] push`) and answers with the fresh doc.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { type CriterionClass, markPlanCriterion } from '../../api';
 import type { PlanDoc } from '../../api/types';
@@ -55,6 +56,7 @@ const BTN =
 /** The hint and its two buttons; renders nothing for a ticked, already marked
  * or ordinary criterion. */
 export function CriterionLint({ taskId, path, line, text, done, onMarked }: CriterionLintProps): JSX.Element | null {
+  const { t } = useLingui();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (done || !looksLikeLandOrManual(text)) return null;
@@ -73,24 +75,26 @@ export function CriterionLint({ taskId, path, line, text, done, onMarked }: Crit
       data-testid="criterion-lint"
       className="mt-0.5 ml-6 flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-ink-faint"
     >
-      <span>looks like a landing/manual criterion — a run cannot close it</span>
+      <span>
+        <Trans>looks like a landing/manual criterion — a run cannot close it</Trans>
+      </span>
       <button
         type="button"
         disabled={busy}
         onClick={() => mark('LAND')}
-        data-tip="closed by push / PR / merge — ticked when the change request merges"
+        data-tip={t`closed by push / PR / merge — ticked when the change request merges`}
         className={`${BTN} border-brand/40 text-brand hover:bg-brand/10`}
       >
-        Mark [LAND]
+        <Trans>Mark [LAND]</Trans>
       </button>
       <button
         type="button"
         disabled={busy}
         onClick={() => mark('MANUAL')}
-        data-tip="only a human can close it — you tick it after checking by hand"
+        data-tip={t`only a human can close it — you tick it after checking by hand`}
         className={`${BTN} border-amber/40 text-amber hover:bg-amber/10`}
       >
-        Mark [MANUAL]
+        <Trans>Mark [MANUAL]</Trans>
       </button>
       {err !== null && (
         <span role="alert" className="text-red">

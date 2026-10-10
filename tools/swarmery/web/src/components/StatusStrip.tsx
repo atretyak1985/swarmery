@@ -10,6 +10,7 @@
 // mode segments. An optional `tabs` slot docks a <Tabs/> bar to the strip's
 // bottom edge, where its underline doubles as the strip's own border.
 
+import { useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -30,9 +31,9 @@ export interface StatusRange<V extends string> {
 }
 
 const CELL_TONE: Record<StatusTone, { box: string; label: string }> = {
-  neutral: { box: 'border-line bg-surface', label: 'text-ink-faint' },
-  green: { box: 'border-line bg-surface', label: 'text-green' },
-  amber: { box: 'border-amber/40 bg-amber/5', label: 'text-amber' },
+  neutral: { box: 'border-line bg-surface', label: 'text-ink-faint' }, // i18n-ignore — Tailwind classes
+  green: { box: 'border-line bg-surface', label: 'text-green' }, // i18n-ignore — Tailwind classes
+  amber: { box: 'border-amber/40 bg-amber/5', label: 'text-amber' }, // i18n-ignore — Tailwind classes
 };
 
 export function StatusStrip<V extends string = string>({
@@ -96,10 +97,11 @@ function Cell({ cell }: { cell: StatusCell }): JSX.Element {
 }
 
 function RangeControl<V extends string>({ range }: { range: StatusRange<V> }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div
       role="radiogroup"
-      aria-label="range"
+      aria-label={t`range`}
       className="ml-auto inline-flex gap-[2px] rounded-lg border border-line-strong bg-bg p-[2px] font-mono text-[10.5px]"
     >
       {range.options.map((opt) => {

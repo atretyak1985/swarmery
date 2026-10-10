@@ -4,14 +4,19 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "npm run i18n:compile && vite",
+    "build": "npm run i18n:compile && tsc --noEmit && vite build",
     "lint": "biome lint src",
-    "test": "vitest run",
+    "test": "npm run i18n:compile && vitest run",
+    "i18n:extract": "lingui extract --clean",
+    "i18n:compile": "lingui compile",
+    "i18n:check": "lingui extract --clean && lingui compile --strict",
     "preview": "vite preview",
     "screenshots": "node scripts/screenshot.mjs"
   },
   "dependencies": {
+    "@lingui/core": "5.9.5",
+    "@lingui/react": "5.9.5",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.12.0",
@@ -22,7 +27,13 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
     "@biomejs/biome": "^2.5.15",
+    "@lingui/babel-plugin-lingui-macro": "5.9.5",
+    "@lingui/cli": "5.9.5",
+    "@lingui/conf": "5.9.5",
+    "@lingui/vite-plugin": "5.9.5",
+    "@rolldown/plugin-babel": "0.2.4",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.4",

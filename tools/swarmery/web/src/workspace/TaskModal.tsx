@@ -8,6 +8,8 @@
 // select's change and on ⌘S — the Save button is gone, which is what lets
 // TaskActions have a single primary.
 
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CopyIdBadge } from '../components/CopyIdBadge';
@@ -28,8 +30,8 @@ import { TaskBrief } from './task/TaskBrief';
 import { useTaskDraft } from './task/useTaskDraft';
 
 const TABS = [
-  ['brief', 'brief'],
-  ['log', 'run log'],
+  ['brief', msg`brief`],
+  ['log', msg`run log`],
 ] as const;
 const TAB = 'border-b px-2.5 py-1 font-mono text-[10.5px] tracking-[0.08em] uppercase transition-colors';
 const TAB_ON = 'border-brand text-brand';
@@ -49,6 +51,7 @@ export function TaskModal({
    * task) so the confirm dialog can stay open and show it. */
   onDelete: () => Promise<void>;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [tab, setTab] = useState<'brief' | 'log'>('brief');
   const [confirming, setConfirming] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -62,6 +65,8 @@ export function TaskModal({
   const active = logged ? tab : 'brief';
   const wt = task.worktreePath;
   const terminal = openTerminal !== null && wt !== null ? () => openTerminal(task.externalId, wt) : undefined;
+  const created = fmtAgo(task.createdAt);
+  const planId = task.planExternalId;
 
   // Initial focus is MOUNT-ONLY, deliberately split from the key listener below:
   // the two used to share one effect keyed on [onClose], and Board.tsx passes an
@@ -109,16 +114,18 @@ export function TaskModal({
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-bg/70 p-4"
-      role="dialog" aria-modal="true" aria-label="task detail" onClick={requestClose}
+      role="dialog" aria-modal="true" aria-label={t`task detail`} onClick={requestClose}
     >
       <div
         className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-line bg-bg shadow-[0_0_40px_rgba(0,0,0,0.5)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-          <CopyIdBadge id={task.externalId} label="task" />
+          <CopyIdBadge id={task.externalId} label={t`task`} />
           <span className="font-mono text-[10.5px] text-ink-2">· {stateLabel(task)}</span>
-          <span className="font-mono text-[10px] text-ink-faint">· created {fmtAgo(task.createdAt)}</span>
+          <span className="font-mono text-[10px] text-ink-faint">
+            <Trans>· created {created}</Trans>
+          </span>
           {/* The card's micro-plan: the same unit of work under the plans-flow
               honesty contract (ticked criteria + a Completion Report). Plans is
               project-scoped, so a card with no slug gets no chip rather than a
@@ -126,14 +133,14 @@ export function TaskModal({
           {task.planExternalId !== null && task.projectSlug !== null && (
             <Link
               to={plansPath(task.projectSlug, { plan: task.planExternalId })}
-              data-tip={`plan ${task.planExternalId} — acceptance criteria and completion report`}
+              data-tip={t`plan ${planId} — acceptance criteria and completion report`}
               className="rounded border border-line px-1 py-px font-mono text-[9px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
             >
-              plan
+              <Trans>plan</Trans>
             </Link>
           )}
           <button
-            ref={closeRef} type="button" onClick={requestClose} aria-label="close"
+            ref={closeRef} type="button" onClick={requestClose} aria-label={t`close`}
             className="ml-auto text-[15px] leading-none text-ink-dim transition-colors hover:text-ink"
           >
             ×
@@ -147,7 +154,7 @@ export function TaskModal({
                 key={id} type="button" aria-selected={active === id} onClick={() => setTab(id)}
                 className={`${TAB} ${active === id ? TAB_ON : TAB_OFF}`}
               >
-                {label}
+                {i18n._(label)}
               </button>
             ))}
           </div>
@@ -175,11 +182,11 @@ export function TaskModal({
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title="Discard unsaved edit?"
-        confirmLabel="discard"
+        title={t`Discard unsaved edit?`}
+        confirmLabel={t`discard`}
         danger
       >
-        This edit was not saved: {saveError}
+        <Trans>This edit was not saved: {saveError}</Trans>
       </ConfirmDialog>
     </div>
   );

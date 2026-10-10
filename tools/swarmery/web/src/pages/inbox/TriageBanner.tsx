@@ -7,6 +7,8 @@
 // suggestions). Driven entirely by props — the page owns the data and the
 // actions; `error` alone decides whether the error line shows.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { AgentOffer } from './inboxModel';
 
 const BTN =
@@ -59,11 +61,8 @@ export interface TriageBannerProps {
   onDismissError: () => void;
 }
 
-function plural(n: number, one: string, many: string): string {
-  return `${String(n)} ${n === 1 ? one : many}`;
-}
-
 export function TriageBanner(p: TriageBannerProps): JSX.Element | null {
+  const { t } = useLingui();
   const running = p.running !== null;
   const showResult = p.summary !== null && !p.dismissed;
   const showError = p.error !== null && !running;
@@ -74,27 +73,65 @@ export function TriageBanner(p: TriageBannerProps): JSX.Element | null {
     return null;
   }
   const nAccept = s.acceptable;
+  const done = p.running?.done ?? 0;
+  const total = p.running?.total ?? 0;
+  const applied = p.summary?.applied ?? 0;
+  const suggested = p.summary?.suggested ?? 0;
+  const leftText = plural(suggested, {
+    one: '# suggestion',
+    few: '# suggestions',
+    many: '# suggestions',
+    other: '# suggestions',
+  });
+  const failedCount = p.summary?.failed ?? 0;
+  const failed = String(failedCount);
+  const suggestionTotal = s.total;
+  const totalText = plural(suggestionTotal, {
+    one: '# suggestion',
+    few: '# suggestions',
+    many: '# suggestions',
+    other: '# suggestions',
+  });
+  const fixTasks = s.fixTasks;
+  const fixTasksText = plural(fixTasks, {
+    one: '# fix task',
+    few: '# fix tasks',
+    many: '# fix tasks',
+    other: '# fix tasks',
+  });
+  const acceptText = plural(nAccept, {
+    one: '# suggestion',
+    few: '# suggestions',
+    many: '# suggestions',
+    other: '# suggestions',
+  });
+  const offerAgent = p.offer.agent;
+  const offerYou = p.offer.you;
 
   return (
     <div className="mx-9 my-3 flex flex-col gap-2">
       {p.running !== null && (
         <div role="status" aria-live="polite" className={`${LINE} border-brand/30 bg-brand/5 text-ink-2`}>
-          triage running · {p.running.done} of {p.running.total}
+          <Trans>
+            triage running · {done} of {total}
+          </Trans>
         </div>
       )}
 
       {showResult && p.summary !== null && (
         <div className={`${LINE} border-green/30 bg-green/5 text-ink-2`}>
           <span role="status">
-            agent closed {p.summary.applied} · left {plural(p.summary.suggested, 'suggestion', 'suggestions')}
-            {p.summary.failed > 0 && ` · ${String(p.summary.failed)} failed`}
+            <Trans>
+              agent closed {applied} · left {leftText}
+            </Trans>
+            {failedCount > 0 && ` · ${t`${failed} failed`}`}
           </span>
           <span className="ml-auto flex flex-wrap items-center gap-2">
             <button type="button" className={BTN} onClick={p.onOpenHandled}>
-              see what it closed
+              <Trans>see what it closed</Trans>
             </button>
             <button type="button" className={BTN} onClick={p.onDismiss}>
-              dismiss
+              <Trans>dismiss</Trans>
             </button>
           </span>
         </div>
@@ -109,18 +146,18 @@ export function TriageBanner(p: TriageBannerProps): JSX.Element | null {
       {showSuggestions && (
         <div className={`${LINE} border-brand/30 bg-brand/5 text-ink-2`}>
           <span>
-            {plural(s.total, 'suggestion', 'suggestions')} from the agent
+            <Trans>{totalText} from the agent</Trans>
             {nAccept > 0 && <span className="text-ink-3"> · {s.parts.join(' · ')}</span>}
             {s.fixTasks > 0 && (
               <span className="text-ink-3">
                 {' '}
-                · {plural(s.fixTasks, 'fix task', 'fix tasks')} to read first
+                · <Trans>{fixTasksText} to read first</Trans>
               </span>
             )}
           </span>
           {nAccept > 0 && (
             <button type="button" className={`${BTN_PRIMARY} ml-auto`} disabled={p.busy} onClick={p.onAcceptAll}>
-              {p.busy ? 'accepting…' : `accept ${plural(nAccept, 'suggestion', 'suggestions')}`}
+              {p.busy ? t`accepting…` : t`accept ${acceptText}`}
             </button>
           )}
         </div>
@@ -129,10 +166,12 @@ export function TriageBanner(p: TriageBannerProps): JSX.Element | null {
       {showOffer && (
         <div className={`${LINE} border-line bg-bg text-ink-2`}>
           <span>
-            {p.offer.agent} can be handled by an agent · {p.offer.you} need you
+            <Trans>
+              {offerAgent} can be handled by an agent · {offerYou} need you
+            </Trans>
           </span>
           <button type="button" className={`${BTN_PRIMARY} ml-auto`} disabled={p.busy} onClick={p.onStart}>
-            run triage
+            <Trans>run triage</Trans>
           </button>
         </div>
       )}
@@ -142,10 +181,10 @@ export function TriageBanner(p: TriageBannerProps): JSX.Element | null {
           <span role="alert">{p.error}</span>
           <span className="ml-auto flex flex-wrap items-center gap-2">
             <button type="button" className={BTN} disabled={p.busy} onClick={p.onStart}>
-              retry
+              <Trans>retry</Trans>
             </button>
-            <button type="button" className={BTN} aria-label="dismiss error" onClick={p.onDismissError}>
-              dismiss
+            <button type="button" className={BTN} aria-label={t`dismiss error`} onClick={p.onDismissError}>
+              <Trans>dismiss</Trans>
             </button>
           </span>
         </div>

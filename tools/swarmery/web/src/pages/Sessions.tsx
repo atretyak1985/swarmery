@@ -29,6 +29,7 @@
 // and lives in lib/sessionsView.ts (incl. merge-by-taskId, which is what keeps a
 // fan-out split across a page boundary from becoming two cards).
 
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { Session, SessionStatus, WSMessage } from '../api/types';
@@ -96,10 +97,11 @@ function StatusChips({
   onStatus: (s: SessionStatus | null) => void;
   counts: Record<SessionStatus, number>;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <>
       <FilterChip selected={status === null} onClick={() => onStatus(null)}>
-        all
+        {t`all`}
       </FilterChip>
       {STATUSES.map((s) => (
         <FilterChip key={s} selected={status === s} onClick={() => onStatus(status === s ? null : s)}>
@@ -153,6 +155,7 @@ function ViewSegment({
   view: View;
   onView: (v: View) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const seg = (v: View, text: string): JSX.Element => (
     <button
       type="button"
@@ -168,16 +171,17 @@ function ViewSegment({
   return (
     <div
       role="group"
-      aria-label="list arrangement"
+      aria-label={t`list arrangement`}
       className="flex shrink-0 items-center gap-0.5 rounded-full border border-line-strong p-0.5"
     >
-      {seg('timeline', 'timeline')}
-      {seg('runs', 'plan runs')}
+      {seg('timeline', t`timeline`)}
+      {seg('runs', t`plan runs`)}
     </div>
   );
 }
 
 export function Sessions(): JSX.Element {
+  const { t } = useLingui();
   // Project filtering comes from the in-page scope chip (global useScope
   // context); the title/plan filter comes from the in-page search input.
   const { scope, scopeProject } = useScope();
@@ -343,6 +347,7 @@ export function Sessions(): JSX.Element {
   const days: DayBucket[] = activeView === 'runs' ? runsOnly(timelineDays) : timelineDays;
   const shownSessions = countSessions(days);
   const shownRuns = countRuns(days);
+  const statusLabel = status !== null ? STATUS_LABELS[status] : '';
 
   const toggleRun = (taskId: number): void => {
     setExpanded((prev) => {
@@ -363,11 +368,20 @@ export function Sessions(): JSX.Element {
           heading shrink-wraps, and a heading that wraps then parks its trigger
           in the vertical middle of the right margin, touching neither line. */}
       <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
-        <ExplainPair id="kill-vs-stop">Sessions</ExplainPair>
+        <ExplainPair id="kill-vs-stop">
+          <Trans>Sessions</Trans>
+        </ExplainPair>
       </h1>
       <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
-        {shownSessions} sessions
-        {shownRuns > 0 && ` · ${String(shownRuns)} plan runs`} · newest first
+        <Plural value={shownSessions} one="# sessions" few="# sessions" many="# sessions" other="# sessions" />
+        {shownRuns > 0 && (
+          <>
+            {' · '}
+            <Plural value={shownRuns} one="# plan runs" few="# plan runs" many="# plan runs" other="# plan runs" />
+          </>
+        )}
+        {' · '}
+        <Trans>newest first</Trans>
       </div>
 
       {/* Files two or more live sessions touched recently — null when none. */}
@@ -390,20 +404,20 @@ export function Sessions(): JSX.Element {
       </div>
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
-      {sessions === null && error === null && <Loading label="sessions…" />}
+      {sessions === null && error === null && <Loading label={t`sessions…`} />}
       {sessions !== null && days.length === 0 && (
         <Empty>
           {query !== '' ? (
-            <>no sessions match the current filter — try a different search or clear it</>
+            <Trans>no sessions match the current filter — try a different search or clear it</Trans>
           ) : status !== null ? (
-            <>no {STATUS_LABELS[status]} sessions — clear the status filter to see the rest</>
+            <Trans>no {statusLabel} sessions — clear the status filter to see the rest</Trans>
           ) : account !== null ? (
-            <>no sessions from the {account} account — clear the account filter to see the rest</>
+            <Trans>no sessions from the {account} account — clear the account filter to see the rest</Trans>
           ) : (
-            <>
+            <Trans>
               no sessions yet — run{' '}
               <span className="font-mono text-ink">swarmery ingest &lt;file.jsonl&gt;</span>
-            </>
+            </Trans>
           )}
         </Empty>
       )}
@@ -444,7 +458,7 @@ export function Sessions(): JSX.Element {
       ))}
       {nextCursor !== null && (
         <div ref={sentinelRef} className="py-6 text-center font-mono text-[11px] text-ink-faint">
-          loading more…
+          <Trans>loading more…</Trans>
         </div>
       )}
     </div>

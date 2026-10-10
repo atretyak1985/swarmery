@@ -9,12 +9,14 @@
 // (pages/inbox/useInboxItems.ts, via useSidebarSignals; the shell fetches no
 // badge of its own) — and Sessions a green dot while any session is live.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { MOCK } from './api';
 import { AccountReadyBanner } from './components/AccountReadyBanner';
 import { NewProjectButton } from './components/NewProjectButton';
 import { MobileNav, Sidebar, useSidebarSignals } from './components/Sidebar';
+import { LanguageToggle } from './components/LanguageToggle';
 import { ThemeToggle } from './components/ThemeToggle';
 import { UsageChip } from './components/usage/UsageChip';
 import { useFillRoute } from './lib/fillRoute';
@@ -49,6 +51,7 @@ function AppShell(): JSX.Element {
   // (main.tsx `handle: { fill: true }`), never matched on the pathname here.
   const fill = useFillRoute();
   const { inboxCount, needsYouCount, liveSessions } = useSidebarSignals();
+  const { t } = useLingui();
 
   const daemonOk = !unreachable;
 
@@ -65,7 +68,7 @@ function AppShell(): JSX.Element {
             to the project shell's header, so nothing shifts between shells. */}
         <Link
           to="/"
-          aria-label="swarmery home"
+          aria-label={t`swarmery home`}
           className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80 desk:w-[172px] desk:shrink-0"
         >
           <Wordmark />
@@ -75,6 +78,7 @@ function AppShell(): JSX.Element {
             lives in each searchable page's body (PageSearchInput); ⌘K is owned
             by the Sidebar; theme + notifications live on /settings. */}
         <span className="ml-auto flex items-center gap-3">
+        <LanguageToggle />
         <ThemeToggle />
         <UsageChip />
         {!MOCK && <NewProjectButton />}
@@ -84,14 +88,14 @@ function AppShell(): JSX.Element {
           {MOCK ? (
             <>
               <span className="inline-block h-[7px] w-[7px] rounded-full bg-amber" />
-              mock data
+              <Trans>mock data</Trans>
             </>
           ) : (
             <>
               <span
                 className={`inline-block h-[7px] w-[7px] rounded-full ${daemonOk ? 'animate-pulse-dot bg-green' : 'bg-red'}`}
               />
-              {daemonOk ? 'daemon healthy' : 'daemon unreachable'}
+              {daemonOk ? t`daemon healthy` : t`daemon unreachable`}
               {health !== null && <span title={versionTitle(health)}>· {versionLabel(health)}</span>}
               <PluginDriftBadge health={health} />
             </>

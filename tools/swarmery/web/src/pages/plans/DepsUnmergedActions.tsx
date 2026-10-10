@@ -9,6 +9,7 @@
 //
 // Every label comes from `terms` (SC-11).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { landPhase } from '../../api';
 import type { EpicPhase, ProviderTerms } from '../../api/types';
@@ -41,6 +42,7 @@ export function DepsUnmergedActions({
   terms,
   onLanded,
 }: DepsUnmergedActionsProps): JSX.Element | null {
+  const { t } = useLingui();
   const [results, setResults] = useState<Readonly<Record<string, BranchResult>>>({});
 
   const rows = branches.flatMap((branch) => {
@@ -54,7 +56,8 @@ export function DepsUnmergedActions({
     setResults((r) => ({ ...r, [branch]: { kind: 'busy' } }));
     landPhase(taskId, phaseId, { action: 'pr' })
       .then((res) => {
-        const text = prLinkText(res.landing, terms) ?? `${terms.changeShort} opened`;
+        const changeShort = terms.changeShort;
+        const text = prLinkText(res.landing, terms) ?? t`${changeShort} opened`;
         setResults((r) => ({ ...r, [branch]: { kind: 'opened', url: res.landing.prUrl, text } }));
         onLanded?.();
       })
@@ -63,16 +66,21 @@ export function DepsUnmergedActions({
       });
   };
 
+  const change = terms.change;
+  const changeShort = terms.changeShort;
   return (
-    <ul aria-label={`Open a ${terms.change} for each unmerged branch`} className="mt-1.5 space-y-1.5">
+    <ul aria-label={t`Open a ${change} for each unmerged branch`} className="mt-1.5 space-y-1.5">
       {rows.map(({ branch, phase }) => {
         const result = results[branch];
         const busy = result?.kind === 'busy';
+        const seq = phase.seq;
         return (
           <li key={branch} className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <code className="text-ink-2">{branch}</code>
-              <span className="text-ink-faint">phase {phase.seq}</span>
+              <span className="text-ink-faint">
+                <Trans>phase {seq}</Trans>
+              </span>
               {result?.kind === 'opened' ? (
                 result.url !== null && result.url !== '' ? (
                   <a href={result.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
@@ -87,10 +95,10 @@ export function DepsUnmergedActions({
                   className={BTN}
                   disabled={busy}
                   aria-busy={busy}
-                  aria-label={`Open ${terms.changeShort} for ${branch}`}
+                  aria-label={t`Open ${changeShort} for ${branch}`}
                   onClick={() => open(branch, phase.id)}
                 >
-                  Open {terms.changeShort}
+                  <Trans>Open {changeShort}</Trans>
                 </button>
               )}
             </div>

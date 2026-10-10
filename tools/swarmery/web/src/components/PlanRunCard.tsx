@@ -11,6 +11,8 @@
 // The card is the filter unit: Sessions keeps it whole when any row matches the
 // status chip (lib/sessionsView), so a filter never shows half a run.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import { projectLabel } from '../lib/format';
 import { plansTaskHref } from '../pages/plans/plansUrl';
@@ -43,6 +45,7 @@ export function PlanRunCard({
   /** Live "now: <last action>" lines by session id (event_appended WS). */
   nowById?: Record<number, string>;
 }): JSX.Element {
+  const { t } = useLingui();
   const colorFor = useProjectColor();
   // A run knows its plan's task id, not its externalId: hand off through the
   // permanent ?task= resolver, which replaces to the canonical plan path.
@@ -50,7 +53,10 @@ export function PlanRunCard({
   const running = runIsRunning(run.rows);
   const notes = planRowNotes(run.rows);
   const count = run.rows.length;
-  const meta = `${String(count)} session${count === 1 ? '' : 's'} · ${statusSummary(run.rows)}`;
+  const sessions = plural(count, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' });
+  const summary = statusSummary(run.rows);
+  const meta = `${sessions} · ${summary}`;
+  const runTitle = run.title;
 
   return (
     <div className="mb-2.5 overflow-hidden rounded-xl border border-line bg-surface">
@@ -62,7 +68,7 @@ export function PlanRunCard({
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        aria-label={`plan run ${run.title}`}
+        aria-label={t`plan run ${runTitle}`}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -79,7 +85,7 @@ export function PlanRunCard({
             read as another state beside the running/done chip. --color-purple is
             re-tuned per palette, so it clears AA in light mode too. */}
         <span className="shrink-0 rounded-full border border-purple/40 bg-purple/15 px-[7px] py-0.5 font-mono text-[9.5px] tracking-[0.1em] whitespace-nowrap text-purple uppercase">
-          plan run
+          <Trans>plan run</Trans>
         </span>
         {!hideProject && (
           <span className="flex shrink-0 items-center gap-1.5">
@@ -111,14 +117,14 @@ export function PlanRunCard({
             running ? 'border-green/40 text-green' : 'border-line-strong text-ink-dim'
           }`}
         >
-          {running ? 'running' : 'done'}
+          {running ? t`running` : t`done`}
         </span>
         <Link
           to={plansHref}
           onClick={(e) => e.stopPropagation()}
           className="shrink-0 rounded px-1 py-1.5 font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-brand"
         >
-          open plan →
+          <Trans>open plan →</Trans>
         </Link>
       </div>
       {expanded && (

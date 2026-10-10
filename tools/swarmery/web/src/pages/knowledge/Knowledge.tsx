@@ -13,6 +13,9 @@
 // Knowledge needs a project. Docs is not a tab: it documents swarmery itself,
 // not the project, so it is its own sidebar place (lib/nav.ts).
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Suspense, lazy } from 'react';
 import { type TabItem, Tabs, useTabParam } from '../../components/Tabs';
 import { Loading } from '../../components/ui';
@@ -37,11 +40,11 @@ export const KNOWLEDGE_TABS: readonly KnowledgeTab[] = [
   'graphify',
 ];
 
-const TAB_ITEMS: readonly TabItem<KnowledgeTab>[] = [
-  { id: 'memory', label: 'Memory' },
-  { id: 'architecture', label: 'Architecture' },
-  { id: 'serena', label: 'Serena' },
-  { id: 'graphify', label: 'Graphify' },
+const TAB_ITEMS: readonly { id: KnowledgeTab; label: MessageDescriptor }[] = [
+  { id: 'memory', label: msg`Memory` },
+  { id: 'architecture', label: msg`Architecture` },
+  { id: 'serena', label: msg`Serena` },
+  { id: 'graphify', label: msg`Graphify` },
 ];
 
 function KnowledgeBody({ tab }: { tab: KnowledgeTab }): JSX.Element {
@@ -62,15 +65,20 @@ function KnowledgeBody({ tab }: { tab: KnowledgeTab }): JSX.Element {
 }
 
 export function Knowledge(): JSX.Element {
+  const { t, i18n } = useLingui();
   const [tab, setTab] = useTabParam<KnowledgeTab>('tab', KNOWLEDGE_TABS, 'memory');
-  const label = TAB_ITEMS.find((t) => t.id === tab)?.label ?? 'Memory';
+  const tabs: TabItem<KnowledgeTab>[] = TAB_ITEMS.map((item) => ({
+    id: item.id,
+    label: i18n._(item.label),
+  }));
+  const label = tabs.find((item) => item.id === tab)?.label ?? t`Memory`;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 px-4 pt-6 desk:px-10 desk:pt-[34px]">
         <h1 className="mb-3 font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
-          Knowledge
+          <Trans>Knowledge</Trans>
         </h1>
-        <Tabs tabs={TAB_ITEMS} value={tab} onChange={setTab} ariaLabel="Knowledge" />
+        <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Knowledge`} />
       </div>
       <div role="tabpanel" aria-label={label} className="min-h-0 flex-1">
         <Suspense fallback={<Loading label={`${label.toLowerCase()}…`} />}>

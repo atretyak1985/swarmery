@@ -7,6 +7,7 @@
 // The route exists only while the sidebar item does (serena.projects > 0),
 // but the page still renders honest empty states on direct navigation.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ToolsResponse, ToolsSerenaProject } from '../api/types';
 import { fetchTools, serenaStart, serenaStop } from '../api';
@@ -43,6 +44,7 @@ function StatePill({ state }: { state: ToolsSerenaProject['state'] }): JSX.Eleme
 }
 
 export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Element {
+  const { t } = useLingui();
   const [data, setData] = useState<ToolsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -146,6 +148,10 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
       });
   };
 
+  const startedAgo =
+    project !== undefined && project.startedAt !== null ? fmtAgo(project.startedAt) : '';
+  const logLines = project?.logTail.length ?? 0;
+
   return (
     // Fill route (`handle: { fill: true }`, src/main.tsx): the shell has stopped
     // scrolling, so the page is the flex column that spends the leftover height —
@@ -155,7 +161,9 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
       {/* SectionTitle owns its margins and takes no className, so the shrink-0
           flex item is a wrapper around it. */}
       <div className="shrink-0">
-        <SectionTitle>serena</SectionTitle>
+        <SectionTitle>
+          <Trans>serena</Trans>
+        </SectionTitle>
       </div>
       {error !== null && (
         <div className="mb-2 shrink-0">
@@ -163,15 +171,17 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
         </div>
       )}
       {data === null && error === null ? (
-        <Loading label="serena…" />
+        <Loading label={t`serena…`} />
       ) : data !== null ? (
         !data.serena.available ? (
-          <Empty>serena binary not found on this machine</Empty>
+          <Empty>
+            <Trans>serena binary not found on this machine</Trans>
+          </Empty>
         ) : project === undefined ? (
           <Empty>
             {scoped
-              ? 'lsp-pack is not enabled for this project — enable it in Settings'
-              : 'no projects with lsp-pack enabled — enable it in a project’s plugins card'}
+              ? t`lsp-pack is not enabled for this project — enable it in Settings`
+              : t`no projects with lsp-pack enabled — enable it in a project’s plugins card`}
           </Empty>
         ) : (
           <>
@@ -183,7 +193,7 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
                   <select
                     value={String(project.id)}
                     onChange={(e) => setSelectedId(Number(e.target.value))}
-                    aria-label="serena project"
+                    aria-label={t`serena project`}
                     className="rounded-[9px] border border-line-strong bg-field px-2.5 py-[6px] font-mono text-[12px] text-ink transition-colors outline-none focus:border-ink-dim"
                   >
                     {projects.map((p) => (
@@ -196,7 +206,7 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
                 <StatePill state={project.state} />
                 {project.startedAt !== null && (
                   <span className="font-mono text-[10.5px] text-ink-faint">
-                    started {fmtAgo(project.startedAt)}
+                    <Trans>started {startedAgo}</Trans>
                   </span>
                 )}
                 <span className="ml-auto flex items-center gap-2">
@@ -205,10 +215,10 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
                     disabled={busy}
                     aria-label={
                       busy
-                        ? 'busy'
+                        ? t`busy`
                         : project.state === 'running' || project.state === 'starting'
-                          ? 'stop serena'
-                          : 'start serena'
+                          ? t`stop serena`
+                          : t`start serena`
                     }
                     onClick={() => toggle(project)}
                     className="rounded-lg border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -216,8 +226,8 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
                     {busy
                       ? '…'
                       : project.state === 'starting' || project.state === 'running'
-                        ? 'stop'
-                        : 'start'}
+                        ? t`stop`
+                        : t`start`}
                   </button>
                   {/* Only meaningful while there is a pane to expand. */}
                   {project.state === 'running' && project.dashboardUrl !== '' && (
@@ -236,7 +246,7 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
               {project.state !== 'running' && project.logTail.length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer font-mono text-[10.5px] text-ink-faint transition-colors hover:text-ink">
-                    log tail ({project.logTail.length})
+                    <Trans>log tail ({logLines})</Trans>
                   </summary>
                   {/* The tail is unbounded (it grows with the log) and the card
                       above is `shrink-0`, so an open <details> would push the page
@@ -276,13 +286,13 @@ export function Serena({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elemen
               <ExpandableSection
                 expanded={expanded}
                 onToggle={setExpanded}
-                label="serena dashboard"
+                label={t`serena dashboard`}
                 className="mt-3"
               >
                 <iframe
                   key={project.id}
                   src={project.dashboardUrl}
-                  title="Serena dashboard"
+                  title={t`Serena dashboard`}
                   // One class list for both states — the height comes from the flex
                   // parent, never from the viewport. The previous height was viewport
                   // math minus a hardcoded 220px for the chrome above it; every guess

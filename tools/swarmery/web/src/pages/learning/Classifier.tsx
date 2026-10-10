@@ -3,6 +3,7 @@
 // off · watching · acting, and each card carries one status sentence. The label
 // queue is NOT here — checking answers happens in the Inbox's classifier tab.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -38,9 +39,10 @@ function ModeSwitch({
   busy: boolean;
   onChange: (mode: DecideMode) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <fieldset
-      aria-label={`mode for ${question}`}
+      aria-label={t`mode for ${question}`}
       disabled={busy}
       className="ml-auto inline-flex shrink-0 gap-[2px] rounded-lg border border-line-strong bg-bg p-[2px] font-mono text-[10.5px]"
     >
@@ -103,7 +105,7 @@ function QuestionCard({
       </p>
       {!s.empty && (
         <Link to={inboxHref} className="mt-1 inline-block font-mono text-[10.5px] text-brand hover:underline">
-          check in Inbox →
+          <Trans>check in Inbox →</Trans>
         </Link>
       )}
     </li>
@@ -111,28 +113,35 @@ function QuestionCard({
 }
 
 function ModesHelp(): JSX.Element {
+  const activeWord = MODE_WORD.active;
+  const agreement = UI_TERMS.agreement.ui;
+  const checks = String(CHECKS_FOR_TRUST);
   return (
     <aside aria-labelledby="modes-heading">
       <h2
         id="modes-heading"
         className="font-mono text-[10px] font-normal tracking-[0.14em] text-ink-faint uppercase"
       >
-        How the modes work
+        <Trans>How the modes work</Trans>
       </h2>
       <dl className="mt-[10px] flex flex-col gap-2 text-[12px] leading-normal text-ink-3">
         <div className="flex gap-[10px]">
           <dt className="w-14 shrink-0 pt-[2px] font-mono text-[10.5px] font-semibold text-ink-faint">
             {MODE_WORD.off}
           </dt>
-          <dd>Not asked. Nothing logged.</dd>
+          <dd>
+            <Trans>Not asked. Nothing logged.</Trans>
+          </dd>
         </div>
         <div className="flex gap-[10px]">
           <dt className="w-14 shrink-0 pt-[2px] font-mono text-[10.5px] font-semibold text-ink">
             {MODE_WORD.shadow}
           </dt>
           <dd>
-            Asked and logged; answers go to your Inbox for checking.{' '}
-            <b className="font-medium text-ink-2">Nothing acts on them.</b>
+            <Trans>
+              Asked and logged; answers go to your Inbox for checking.{' '}
+              <b className="font-medium text-ink-2">Nothing acts on them.</b>
+            </Trans>
           </dd>
         </div>
         <div className="flex gap-[10px]">
@@ -140,14 +149,18 @@ function ModesHelp(): JSX.Element {
             {MODE_WORD.active}
           </dt>
           <dd>
-            Answers above the question&apos;s confidence bar (60 % unless set otherwise) are used — as
-            labels on sessions, and in D1 to decide what happens after a run.
+            <Trans>
+              Answers above the question&apos;s confidence bar (60 % unless set otherwise) are used —
+              as labels on sessions, and in D1 to decide what happens after a run.
+            </Trans>
           </dd>
         </div>
       </dl>
       <p className="mt-[14px] rounded-[10px] border border-amber/30 bg-amber/5 px-3 py-[10px] text-[11.5px] leading-normal text-ink-3">
-        <b className="font-medium text-amber">Rule of thumb:</b> switch to {MODE_WORD.active} only when
-        “{UI_TERMS.agreement.ui}” is above the bar for {String(CHECKS_FOR_TRUST)}+ checked sessions.
+        <Trans>
+          <b className="font-medium text-amber">Rule of thumb:</b> switch to {activeWord} only when “
+          {agreement}” is above the bar for {checks}+ checked sessions.
+        </Trans>
       </p>
     </aside>
   );
@@ -158,6 +171,8 @@ export function Classifier({ inboxHref }: { inboxHref: string }): JSX.Element {
   const [data, setData] = useState<DecisionsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const shadowWord = MODE_WORD.shadow;
+  const activeWord = MODE_WORD.active;
 
   useEffect(() => {
     fetchDecisions()
@@ -180,10 +195,12 @@ export function Classifier({ inboxHref }: { inboxHref: string }): JSX.Element {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
       <div>
         <p className="max-w-[60ch] text-[13px] leading-relaxed text-ink-dim">
-          A small local model reads each finished session and answers a few fixed questions. It is{' '}
-          <b className="font-medium text-ink-2">{MODE_WORD.shadow}</b> until you have checked enough of
-          its answers to trust it; only then does <b className="font-medium text-ink-2">{MODE_WORD.active}</b>{' '}
-          make sense.
+          <Trans>
+            A small local model reads each finished session and answers a few fixed questions. It is{' '}
+            <b className="font-medium text-ink-2">{shadowWord}</b> until you have checked enough of its
+            answers to trust it; only then does <b className="font-medium text-ink-2">{activeWord}</b>{' '}
+            make sense.
+          </Trans>
         </p>
         {data !== null && !data.configured && (
           <section
@@ -191,28 +208,37 @@ export function Classifier({ inboxHref }: { inboxHref: string }): JSX.Element {
             className="mt-3 max-w-[60ch] rounded border border-line p-4 text-[12px]"
           >
             <h2 id="classifier-setup-title" className="text-ink">
-              No local model configured — this is optional
+              <Trans>No local model configured — this is optional</Trans>
             </h2>
             <p className="mt-1 text-ink-dim">
-              Everything else in swarmery works without it. Until a model is set up, no question is
-              asked and runs settle by the deterministic rules alone.
+              <Trans>
+                Everything else in swarmery works without it. Until a model is set up, no question is
+                asked and runs settle by the deterministic rules alone.
+              </Trans>
             </p>
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-ink-dim">
               <li>
-                Run an OpenAI-compatible model server: LM Studio (<code>localhost:1234</code>), Ollama (
-                <code>localhost:11434/v1</code>), llama.cpp or vLLM. A 7–14B instruct model is enough.
+                <Trans>
+                  Run an OpenAI-compatible model server: LM Studio (<code>localhost:1234</code>), Ollama
+                  (<code>localhost:11434/v1</code>), llama.cpp or vLLM. A 7–14B instruct model is
+                  enough.
+                </Trans>
               </li>
               <li>
-                Set <code>SWARMERY_DECIDE_URL</code> and <code>SWARMERY_DECIDE_MODEL</code> in the
-                daemon&apos;s environment.
+                <Trans>
+                  Set <code>SWARMERY_DECIDE_URL</code> and <code>SWARMERY_DECIDE_MODEL</code> in the
+                  daemon&apos;s environment.
+                </Trans>
               </li>
-              <li>Restart the daemon. Every question starts in shadow: logged, never acted on.</li>
+              <li>
+                <Trans>Restart the daemon. Every question starts in shadow: logged, never acted on.</Trans>
+              </li>
             </ol>
             <Link
               to="/docs/guide-decisions"
               className="mt-3 inline-block text-brand transition-opacity hover:opacity-80"
             >
-              Setup guide →
+              <Trans>Setup guide →</Trans>
             </Link>
           </section>
         )}
@@ -221,7 +247,9 @@ export function Classifier({ inboxHref }: { inboxHref: string }): JSX.Element {
             {err}
           </div>
         )}
-        {data === null && err === null && <div className="mt-4 text-[12px] text-ink-dim">loading…</div>}
+        {data === null && err === null && <div className="mt-4 text-[12px] text-ink-dim">
+            <Trans>loading…</Trans>
+          </div>}
         {data !== null && (
           <ul className="mt-4 flex flex-col gap-2">
             {data.questions.map((q) => (

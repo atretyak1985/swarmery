@@ -6,6 +6,8 @@
 // inline, rendered with the Timeline tab's own rows (nested subagent blocks
 // included). Long assistant texts clamp to ~20 lines with a show-more expander.
 
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Event, SessionDetail, Turn } from '../../api/types';
@@ -64,22 +66,67 @@ function countTools(events: readonly Event[]): ToolCounts {
   return c;
 }
 
-function plural(n: number, word: string): string {
-  return `${String(n)} ${word}${n === 1 ? '' : 's'}`;
+function hasActivity(c: ToolCounts): boolean {
+  return c.agents + c.commands + c.tools + c.skills > 0;
 }
 
-function toolSummary(c: ToolCounts): string | null {
+/** "Ran 2 agents, ran 4 commands, used 1 tool". Called at render (ToolGroup),
+ * so the line follows the active locale. Counts go in as `${count}` to keep
+ * them ungrouped, as before. */
+function toolSummary(c: ToolCounts): string {
+  const { agents, commands, tools, skills } = c;
   const parts: string[] = [];
-  if (c.agents > 0) parts.push(`ran ${plural(c.agents, 'agent')}`);
-  if (c.commands > 0) parts.push(`ran ${plural(c.commands, 'command')}`);
-  if (c.tools > 0) parts.push(`used ${plural(c.tools, 'tool')}`);
-  if (c.skills > 0) parts.push(`used ${plural(c.skills, 'skill')}`);
-  if (parts.length === 0) return null;
+  if (agents > 0) {
+    const count = String(agents);
+    parts.push(
+      plural(agents, {
+        one: `ran ${count} agent`,
+        few: `ran ${count} agents`,
+        many: `ran ${count} agents`,
+        other: `ran ${count} agents`,
+      }),
+    );
+  }
+  if (commands > 0) {
+    const count = String(commands);
+    parts.push(
+      plural(commands, {
+        one: `ran ${count} command`,
+        few: `ran ${count} commands`,
+        many: `ran ${count} commands`,
+        other: `ran ${count} commands`,
+      }),
+    );
+  }
+  if (tools > 0) {
+    const count = String(tools);
+    parts.push(
+      plural(tools, {
+        one: `used ${count} tool`,
+        few: `used ${count} tools`,
+        many: `used ${count} tools`,
+        other: `used ${count} tools`,
+      }),
+    );
+  }
+  if (skills > 0) {
+    const count = String(skills);
+    parts.push(
+      plural(skills, {
+        one: `used ${count} skill`,
+        few: `used ${count} skills`,
+        many: `used ${count} skills`,
+        other: `used ${count} skills`,
+      }),
+    );
+  }
   const s = parts.join(', ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function ToolGroup({ summary, events }: { summary: string; events: readonly Event[] }): JSX.Element {
+function ToolGroup({ counts, events }: { counts: ToolCounts; events: readonly Event[] }): JSX.Element {
+  const { t } = useLingui();
+  const summary = toolSummary(counts);
   const [open, setOpen] = useState(false);
   const nodes = useMemo(() => buildSubtree(events), [events]);
   return (
@@ -88,7 +135,7 @@ function ToolGroup({ summary, events }: { summary: string; events: readonly Even
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        data-tip={open ? 'Collapse activity' : 'Expand activity'}
+        data-tip={open ? t`Collapse activity` : t`Expand activity`}
         className={`flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[11px] transition-colors hover:text-brand ${open ? 'text-ink-2' : 'text-ink-faint'}`}
       >
         <span aria-hidden="true">⚙</span>
@@ -117,6 +164,7 @@ const CLAMP_CHARS = 1800; // long single-paragraph texts wrap into many lines to
 const CLAMP_MAX_H = 'max-h-[440px]';
 
 function ClampedProse({ text }: { text: string }): JSX.Element {
+  const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const long = text.split('\n').length > CLAMP_LINES || text.length > CLAMP_CHARS;
   return (
@@ -137,7 +185,7 @@ function ClampedProse({ text }: { text: string }): JSX.Element {
           aria-expanded={expanded}
           className="mt-1 font-mono text-[11px] font-medium text-brand hover:text-ink"
         >
-          {expanded ? 'show less' : 'show more'}
+          {expanded ? t`show less` : t`show more`}
         </button>
       )}
     </div>
@@ -162,7 +210,7 @@ function turnText(turn: Turn, events: readonly Event[]): string | null {
 type ChatItem =
   | { key: string; kind: 'user'; turn: Turn; text: string | null }
   | { key: string; kind: 'assistant'; text: string }
-  | { key: string; kind: 'tools'; summary: string; events: Event[] };
+  | { key: string; kind: 'tools'; counts: ToolCounts; events: Event[] };
 
 /** Flatten sorted turns into renderable items. Tool activity accumulates across
  * consecutive assistant turns and flushes as ONE summary line right before the
@@ -176,9 +224,9 @@ function buildItems(turns: readonly Turn[], eventsByTurn: ReadonlyMap<number, Ev
   let accKey: number | null = null;
 
   const flush = (): void => {
-    const summary = toolSummary(countTools(accEvents));
-    if (summary !== null && accKey !== null) {
-      items.push({ key: `tools-${String(accKey)}`, kind: 'tools', summary, events: accEvents });
+    const counts = countTools(accEvents);
+    if (hasActivity(counts) && accKey !== null) {
+      items.push({ key: `tools-${String(accKey)}`, kind: 'tools', counts, events: accEvents });
     }
     accEvents = [];
     accKey = null;
@@ -209,7 +257,7 @@ function UserBubble({ turn, text }: { turn: Turn; text: string | null }): JSX.El
   return (
     <div className="my-[7px] flex flex-col items-end">
       <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink">
-        {text ?? '(empty prompt)'}
+        {text ?? <Trans>(empty prompt)</Trans>}
       </div>
       <span className="mt-1 pr-1 font-mono text-[10px] text-ink-faint">
         {fmtTime(turn.startedAt)}
@@ -232,8 +280,11 @@ function AwaitingApprovalPill({ since }: { since: string | null }): JSX.Element 
     >
       <span className="h-[7px] w-[7px] shrink-0 animate-blink-dot rounded-full bg-amber" aria-hidden="true" />
       <span>
-        awaiting approval{since !== null ? ` · ${since}` : ''} — respond in the terminal or
-        Approvals
+        {since !== null ? (
+          <Trans>awaiting approval · {since} — respond in the terminal or Approvals</Trans>
+        ) : (
+          <Trans>awaiting approval — respond in the terminal or Approvals</Trans>
+        )}
       </span>
     </Link>
   );
@@ -275,13 +326,13 @@ function PendingTurn({
             className="mt-1 flex items-center gap-1.5 rounded-md px-1 pr-1 font-mono text-[10px] text-red transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red"
           >
             <span aria-hidden="true">⚠</span>
-            failed — retry
+            <Trans>failed — retry</Trans>
           </button>
         </div>
       ) : (
         <span className="mt-1 flex items-center gap-1.5 pr-1 font-mono text-[10px] text-ink-faint">
           <span className="h-[6px] w-[6px] animate-blink-dot rounded-full bg-brand" aria-hidden="true" />
-          sending…
+          <Trans>sending…</Trans>
         </span>
       )}
     </div>
@@ -311,7 +362,11 @@ export function Chat({
   const items = useMemo(() => buildItems(turns, eventsByTurn), [turns, eventsByTurn]);
 
   if (turns.length === 0 && pending.length === 0) {
-    return <Empty>no conversation in this session yet</Empty>;
+    return (
+      <Empty>
+        <Trans>no conversation in this session yet</Trans>
+      </Empty>
+    );
   }
   const assistantTurns = turns.filter((t) => t.role === 'assistant');
   // Suppress the backfill hint for active/idle sessions: text === null is normal
@@ -349,7 +404,7 @@ export function Chat({
     <div className="mt-[26px]">
       {items.map((item) =>
         item.kind === 'tools' ? (
-          <ToolGroup key={item.key} summary={item.summary} events={item.events} />
+          <ToolGroup key={item.key} counts={item.counts} events={item.events} />
         ) : item.kind === 'user' ? (
           <UserBubble key={item.key} turn={item.turn} text={item.text} />
         ) : (
@@ -367,13 +422,15 @@ export function Chat({
       )}
       {noFinalMessage !== null && (
         <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
-          no final message (stop_reason={noFinalMessage})
+          <Trans>no final message (stop_reason={noFinalMessage})</Trans>
         </div>
       )}
       {needsBackfill && (
         <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
-          some assistant prose is not ingested yet — run{' '}
-          <code className="text-brand">swarmery backfill --rebuild-text</code>
+          <Trans>
+            some assistant prose is not ingested yet — run{' '}
+            <code className="text-brand">swarmery backfill --rebuild-text</code>
+          </Trans>
         </div>
       )}
     </div>

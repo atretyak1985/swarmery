@@ -4,6 +4,7 @@
 // one group per tag (a project appears under each of its tags), then the
 // untagged rest — the layout the global switcher uses.
 
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import type { Project } from '../api/types';
 import { useProjectColor } from '../lib/projectColors';
@@ -16,19 +17,24 @@ interface ProjectGroup {
   projects: Project[];
 }
 
-/** Pinned first, then per-tag groups (alphabetical), then the untagged rest. */
-function groupProjects(projects: Project[]): ProjectGroup[] {
+/** Pinned first, then per-tag groups (alphabetical), then the untagged rest.
+ * The two fixed eyebrows arrive translated from the caller. */
+function groupProjects(
+  projects: Project[],
+  pinnedLabel: string,
+  otherLabel: string,
+): ProjectGroup[] {
   const pinned = projects.filter((p) => p.pinned);
   const rest = projects.filter((p) => !p.pinned);
   const tags = [...new Set(rest.flatMap((p) => p.tags))].sort();
   const groups: ProjectGroup[] = [];
-  if (pinned.length > 0) groups.push({ label: 'pinned', projects: pinned });
+  if (pinned.length > 0) groups.push({ label: pinnedLabel, projects: pinned });
   for (const tag of tags) {
     groups.push({ label: tag, projects: rest.filter((p) => p.tags.includes(tag)) });
   }
   const untagged = rest.filter((p) => p.tags.length === 0);
   if (untagged.length > 0) {
-    groups.push({ label: groups.length > 0 ? 'other' : null, projects: untagged });
+    groups.push({ label: groups.length > 0 ? otherLabel : null, projects: untagged });
   }
   return groups;
 }
@@ -37,7 +43,7 @@ export function ProjectDropdown({
   projects,
   value,
   onChange,
-  allLabel = 'all projects',
+  allLabel,
   groupByTag = false,
   block = false,
 }: {
@@ -53,6 +59,8 @@ export function ProjectDropdown({
    * header pill — used by the session-mode sidebar scope switcher. */
   block?: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
+  const allText = allLabel ?? t`all projects`;
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -101,8 +109,14 @@ export function ProjectDropdown({
   const selected = findProject(projects, value);
   // Deep-linked slug not in /api/projects yet — show the raw slug, keep the filter.
   const label =
-    value === null ? allLabel : selected !== null ? projectLabel(selected.name, selected.slug) : value;
-  const groups = groupByTag ? groupProjects(projects) : [{ label: null, projects }];
+    value === null
+      ? allText
+      : selected !== null
+        ? projectLabel(selected.name, selected.slug)
+        : value;
+  const groups = groupByTag
+    ? groupProjects(projects, t`pinned`, t`other`)
+    : [{ label: null, projects }];
 
   return (
     <div ref={rootRef} className={block ? 'relative w-full' : 'relative shrink-0'}>
@@ -111,7 +125,7 @@ export function ProjectDropdown({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="filter by project"
+        aria-label={t`filter by project`}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' && open) {
@@ -148,7 +162,7 @@ export function ProjectDropdown({
         <div
           ref={menuRef}
           role="listbox"
-          aria-label="project"
+          aria-label={t`project`}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault();
@@ -161,7 +175,7 @@ export function ProjectDropdown({
         >
           <DropdownOption
             selected={value === null}
-            label={allLabel}
+            label={allText}
             onSelect={() => select(null)}
           />
           {groups.map((g, gi) => (

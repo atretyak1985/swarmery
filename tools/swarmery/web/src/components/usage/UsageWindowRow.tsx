@@ -5,6 +5,7 @@
 // Presentational only — every number arrives computed from the daemon
 // (internal/usage); nothing here re-derives pace or percentages.
 
+import { useLingui } from '@lingui/react/macro';
 import type { UsagePace, UsageWindow } from '../../api/types';
 import { fmtResetAt, fmtResetsIn } from './format';
 
@@ -49,13 +50,18 @@ export function UsageWindowRow({
   onToggleHidden: () => void;
   now: number;
 }): JSX.Element {
+  const { t } = useLingui();
   const remainingMode = mode === 'remaining';
-  const used = Math.round(w.percentUsed);
-  const left = Math.round(w.percentLeft);
+  const used = String(Math.round(w.percentUsed));
+  const left = String(Math.round(w.percentLeft));
+  const label = w.label;
 
-  const headerText = remainingMode ? `${String(left)}% remaining` : `${String(used)}% used`;
-  const footerText = remainingMode ? `${String(used)}% used` : `${String(left)}% left`;
-  const barPercent = Math.min(100, Math.max(0, remainingMode ? left : used));
+  const headerText = remainingMode ? t`${left}% remaining` : t`${used}% used`;
+  const footerText = remainingMode ? t`${used}% used` : t`${left}% left`;
+  const barPercent = Math.min(
+    100,
+    Math.max(0, remainingMode ? Math.round(w.percentLeft) : Math.round(w.percentUsed)),
+  );
 
   // Server text wins; recompute only when the window carries an instant but no
   // text, so the countdown stays live between the modal's 30s polls.
@@ -83,9 +89,9 @@ export function UsageWindowRow({
           <button
             type="button"
             onClick={onToggleHidden}
-            aria-label={hidden ? `Show ${w.label}` : `Hide ${w.label}`}
+            aria-label={hidden ? t`Show ${label}` : t`Hide ${label}`}
             aria-pressed={hidden}
-            data-tip={hidden ? 'show this window' : 'hide this window'}
+            data-tip={hidden ? t`show this window` : t`hide this window`}
             className={`rounded-[5px] px-1 leading-none transition-colors hover:bg-surface2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
               hidden ? 'text-ink-faint' : 'text-ink-dim hover:text-ink'
             }`}

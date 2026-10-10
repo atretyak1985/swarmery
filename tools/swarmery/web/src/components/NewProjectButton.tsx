@@ -7,6 +7,7 @@
 // endpoint is fenced to an allow-list server-side; when disabled the form shows
 // how to enable it instead of failing on submit.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { fetchOnboardConfig, onboardProject } from '../api';
 import type { OnboardConfig, OnboardResponse } from '../api/types';
@@ -36,7 +37,7 @@ export function NewProjectButton(): JSX.Element {
         onClick={() => setOpen(true)}
         className="rounded-lg border border-line bg-surface px-2.5 py-1 font-mono text-[11px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
       >
-        + new project
+        <Trans>+ new project</Trans>
       </button>
       {open && <NewProjectModal onClose={() => setOpen(false)} />}
     </>
@@ -44,6 +45,7 @@ export function NewProjectButton(): JSX.Element {
 }
 
 function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
+  const { t } = useLingui();
   const [cfg, setCfg] = useState<OnboardConfig | null>(null);
   const [slug, setSlug] = useState('');
   const [path, setPath] = useState('');
@@ -107,74 +109,90 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="New project"
+      aria-label={t`New project`}
       onClick={requestClose}
     >
       <div
         className="w-full max-w-md rounded-xl border border-line bg-surface px-4 py-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="font-display text-[14px] font-bold text-ink">Onboard a project</div>
+        <div className="font-display text-[14px] font-bold text-ink">
+          <Trans>Onboard a project</Trans>
+        </div>
 
         {done === null ? (
           <>
             <div className="mt-1 text-[12px] leading-relaxed text-ink-dim">
-              Writes <span className="font-mono">.claude/</span> config and carves the workspace
-              namespace. Idempotent — existing config is never overwritten.
+              <Trans>
+                Writes <span className="font-mono">.claude/</span> config and carves the workspace namespace.
+                Idempotent — existing config is never overwritten.
+              </Trans>
             </div>
 
             {cfg !== null && !enabled && (
               <div className="mt-3 rounded-lg border border-amber/30 bg-amber/5 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-amber">
-                onboarding is disabled — restart the daemon with an allow-list:
+                <Trans>onboarding is disabled — restart the daemon with an allow-list:</Trans>
                 <br />
+                {/* i18n-ignore: an env assignment to paste into a shell */}
                 <span className="text-ink-2">SWARMERY_ONBOARD_ROOTS=&quot;$HOME/projects&quot;</span>
               </div>
             )}
 
             <label className="mt-3.5 block font-mono text-[10.5px] tracking-[0.12em] text-ink-dim uppercase">
-              slug <span className="text-ink-faint normal-case">→ AGENT_PROJECT</span>
+              <Trans>slug</Trans>{' '}
+              {/* i18n-ignore: env variable name */}
+              <span className="text-ink-faint normal-case">→ AGENT_PROJECT</span>
             </label>
             <input
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
+              // i18n-ignore: an example slug, a code token
               placeholder={deriveSlug(path) !== '' ? deriveSlug(path) : 'my-project'}
               autoFocus
               className="mt-1 w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 font-mono text-[12.5px] text-ink outline-none focus:border-line-strong"
             />
             {slug.trim() === '' && effectiveSlug !== '' && (
               <div className="mt-1 font-mono text-[10.5px] text-ink-faint">
-                defaults to <span className="text-ink-dim">{effectiveSlug}</span> (from path)
+                <Trans>
+                  defaults to <span className="text-ink-dim">{effectiveSlug}</span> (from path)
+                </Trans>
               </div>
             )}
             {effectiveSlug !== '' && !slugValid && (
-              <div className="mt-1 font-mono text-[10.5px] text-red">kebab-case only ([a-z0-9-])</div>
+              <div className="mt-1 font-mono text-[10.5px] text-red">
+                <Trans>kebab-case only ([a-z0-9-])</Trans>
+              </div>
             )}
 
             <label className="mt-3 block font-mono text-[10.5px] tracking-[0.12em] text-ink-dim uppercase">
-              absolute path
+              <Trans>absolute path</Trans>
             </label>
             <input
               value={path}
               onChange={(e) => setPath(e.target.value)}
+              // i18n-ignore: a path pattern
               placeholder="/absolute/path/to/project"
               className="mt-1 w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 font-mono text-[12.5px] text-ink outline-none focus:border-line-strong"
             />
 
             <label className="mt-3 block font-mono text-[10.5px] tracking-[0.12em] text-ink-dim uppercase">
-              workspace root <span className="text-ink-faint normal-case">→ AGENT_WORKSPACE_ROOT</span>
+              <Trans>workspace root</Trans>{' '}
+              {/* i18n-ignore: env variable name */}
+              <span className="text-ink-faint normal-case">→ AGENT_WORKSPACE_ROOT</span>
             </label>
             <input
               value={workspaceRoot}
               onChange={(e) => setWorkspaceRoot(e.target.value)}
+              // i18n-ignore: a path pattern
               placeholder="/absolute/path/to/workspace"
               className="mt-1 w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 font-mono text-[12.5px] text-ink outline-none focus:border-line-strong"
             />
             <div className="mt-1 font-mono text-[10.5px] text-ink-faint">
-              blank → the daemon&apos;s default workspace root
+              <Trans>blank → the daemon&apos;s default workspace root</Trans>
             </div>
 
             <label className="mt-3 block font-mono text-[10.5px] tracking-[0.12em] text-ink-dim uppercase">
-              packs (core is always on)
+              <Trans>packs (core is always on)</Trans>
             </label>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {PACKS.map((p) => {
@@ -209,7 +227,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
-                cancel
+                <Trans>cancel</Trans>
               </button>
               <button
                 type="button"
@@ -217,7 +235,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
                 disabled={!canSubmit}
                 className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
               >
-                {busy ? '…' : 'onboard'}
+                {busy ? '…' : t`onboard`}
               </button>
             </div>
           </>
@@ -231,10 +249,11 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
               ))}
             </div>
             <div className="mt-3 text-[12px] leading-relaxed text-ink-dim">
-              Next: open a fresh Claude Code session in{' '}
-              <span className="font-mono text-ink-2">{done.path}</span> and accept the{' '}
-              <span className="font-mono">swarmery</span> trust prompt. It appears here once its
-              first session runs.
+              <Trans>
+                Next: open a fresh Claude Code session in <span className="font-mono text-ink-2">{done.path}</span>{' '}
+                and accept the <span className="font-mono">swarmery</span> trust prompt. It appears here once its
+                first session runs.
+              </Trans>
             </div>
             <div className="mt-4 flex justify-end">
               <button
@@ -242,7 +261,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
                 onClick={onClose}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
               >
-                done
+                <Trans>done</Trans>
               </button>
             </div>
           </>
@@ -251,11 +270,11 @@ function NewProjectModal({ onClose }: { onClose: () => void }): JSX.Element {
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title="Discard new project?"
-        confirmLabel="discard"
+        title={t`Discard new project?`}
+        confirmLabel={t`discard`}
         danger
       >
-        The slug, path, workspace root, and pack selections you&apos;ve entered will be lost.
+        <Trans>The slug, path, workspace root, and pack selections you&apos;ve entered will be lost.</Trans>
       </ConfirmDialog>
     </div>
   );

@@ -30,6 +30,7 @@
 // the status bar, and the detail modal all reflect one source of truth. Demo
 // mode (VITE_MOCK) renders a full board from fixtures.
 
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { BoardTask } from '../api/types';
@@ -100,6 +101,7 @@ type AmnestyState =
   | { phase: 'running' };
 
 export function Board(): JSX.Element {
+  const { t } = useLingui();
   const { project, projectId, slug, loading: projLoading } = useProjectWorkspace();
   const board = useWorkspaceBoard();
   const openTerminal = useWorkspaceTerminal();
@@ -301,19 +303,19 @@ export function Board(): JSX.Element {
    * which of them actually render from the card's own column, so the lane bodies
    * below stay pure layout and there is one place to change what a card can do.
    */
-  const liveCard = (t: BoardTask): JSX.Element => {
-    const worktree = t.worktreePath;
+  const liveCard = (task: BoardTask): JSX.Element => {
+    const worktree = task.worktreePath;
     return (
       <TaskCard
-        key={t.id}
-        task={t}
-        onOpen={() => setOpenId(t.id)}
-        onMove={(to) => board.moveTask(t.id, to)}
-        onPlan={() => planTask(t)}
-        onTogglePause={() => togglePause(t)}
+        key={task.id}
+        task={task}
+        onOpen={() => setOpenId(task.id)}
+        onMove={(to) => board.moveTask(task.id, to)}
+        onPlan={() => planTask(task)}
+        onTogglePause={() => togglePause(task)}
         onOpenTerminal={
           openTerminal !== null && worktree !== null
-            ? () => openTerminal(t.externalId, worktree)
+            ? () => openTerminal(task.externalId, worktree)
             : undefined
         }
       />
@@ -322,18 +324,29 @@ export function Board(): JSX.Element {
 
   /** A card in the history strip: a record, so it opens and it can be moved back
    * out, but it carries none of the lane verbs. */
-  const historyCard = (t: BoardTask): JSX.Element => (
-    <TaskCard key={t.id} task={t} onOpen={() => setOpenId(t.id)} onMove={(to) => board.moveTask(t.id, to)} />
+  const historyCard = (task: BoardTask): JSX.Element => (
+    <TaskCard
+      key={task.id}
+      task={task}
+      onOpen={() => setOpenId(task.id)}
+      onMove={(to) => board.moveTask(task.id, to)}
+    />
   );
 
-  if (projLoading) return <Loading label="workspace…" />;
+  if (projLoading) return <Loading label={t`workspace…`} />;
   if (project === null) {
     return (
       <div className="px-4 py-8 desk:px-8">
-        <Empty>unknown project — pick one from the switcher</Empty>
+        <Empty>
+          <Trans>unknown project — pick one from the switcher</Trans>
+        </Empty>
       </div>
     );
   }
+  const amnestyMatched = amnesty.phase === 'confirm' ? amnesty.matched : 0;
+  const doneCount = lanes.done.length;
+  const archivedCount = archived === null ? '—' : archived.length;
+  const laneLabel = (title: string): string => t`${title} lane`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 py-4 desk:px-5">
@@ -351,7 +364,7 @@ export function Board(): JSX.Element {
           <button
             type="button"
             onClick={board.clearActionError}
-            aria-label="dismiss"
+            aria-label={t`dismiss`}
             className="text-red/70 transition-colors hover:text-red"
           >
             ×
@@ -368,7 +381,7 @@ export function Board(): JSX.Element {
           <button
             type="button"
             onClick={() => setAmnestyError(null)}
-            aria-label="dismiss"
+            aria-label={t`dismiss`}
             className="text-red/70 transition-colors hover:text-red"
           >
             ×
@@ -385,30 +398,47 @@ export function Board(): JSX.Element {
           {amnesty.phase === 'confirm' ? (
             <>
               <span className="min-w-0 flex-1">
-                Archive <span className="font-mono font-semibold">{amnesty.matched}</span> captured
-                card{amnesty.matched === 1 ? '' : 's'}? They stay findable in Archived.
+                <Trans>
+                  Archive <span className="font-mono font-semibold">{amnestyMatched}</span>{' '}
+                  <Plural
+                    value={amnestyMatched}
+                    one="captured card"
+                    few="captured cards"
+                    many="captured cards"
+                    other="captured cards"
+                  />
+                  ? They stay findable in Archived.
+                </Trans>
               </span>
               <button
                 type="button"
                 onClick={runAmnesty}
                 className="rounded-lg border border-amber/60 bg-amber/20 px-2.5 py-1 font-mono text-[11px] font-semibold transition-colors hover:bg-amber/30"
               >
-                Yes, archive {amnesty.matched}
+                <Trans>Yes, archive {amnestyMatched}</Trans>
               </button>
               <button
                 type="button"
                 onClick={() => setAmnesty({ phase: 'idle' })}
                 className="rounded-lg border border-transparent px-2 py-1 font-mono text-[11px] text-amber/80 transition-colors hover:border-amber/40"
               >
-                cancel
+                <Trans>cancel</Trans>
               </button>
             </>
           ) : (
             <>
               <span className="min-w-0 flex-1">
-                <span className="font-mono font-semibold">{amnestyEligible}</span> captured card
-                {amnestyEligible === 1 ? '' : 's'} in Triage {amnestyEligible === 1 ? 'has' : 'have'}{' '}
-                passed the auto-archive date.
+                <Trans>
+                  <span className="font-mono font-semibold">{amnestyEligible}</span>{' '}
+                  <Plural
+                    value={amnestyEligible}
+                    one="captured card in Triage has"
+                    few="captured cards in Triage have"
+                    many="captured cards in Triage have"
+                    other="captured cards in Triage have"
+                  />{' '}
+                  passed the auto-archive date.
+                </Trans>
               </span>
               <button
                 type="button"
@@ -416,11 +446,13 @@ export function Board(): JSX.Element {
                 onClick={countAmnesty}
                 className="rounded-lg border border-amber/50 px-2.5 py-1 font-mono text-[11px] transition-colors hover:bg-amber/20 disabled:opacity-50"
               >
-                {amnesty.phase === 'counting'
-                  ? 'counting…'
-                  : amnesty.phase === 'running'
-                    ? 'archiving…'
-                    : 'Archive them'}
+                {amnesty.phase === 'counting' ? (
+                  <Trans>counting…</Trans>
+                ) : amnesty.phase === 'running' ? (
+                  <Trans>archiving…</Trans>
+                ) : (
+                  <Trans>Archive them</Trans>
+                )}
               </button>
             </>
           )}
@@ -431,7 +463,7 @@ export function Board(): JSX.Element {
           whole of "how am I looking at this board", left to right, all three
           reading and writing the URL. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1" role="group" aria-label="board view">
+        <div className="flex items-center gap-1" role="group" aria-label={t`board view`}>
           {(['board', 'graph'] as const).map((v) => (
             <button
               key={v}
@@ -444,7 +476,15 @@ export function Board(): JSX.Element {
                   : 'border-transparent text-ink-dim hover:bg-surface2/50 hover:text-ink'
               }`}
             >
-              {v === 'board' ? '▤ Board' : '⋈ Graph'}
+              {v === 'board' ? (
+                <>
+                  ▤ <Trans>Board</Trans>
+                </>
+              ) : (
+                <>
+                  ⋈ <Trans>Graph</Trans>
+                </>
+              )}
             </button>
           ))}
         </div>
@@ -454,7 +494,7 @@ export function Board(): JSX.Element {
             promises what a click actually produces rather than a number from a
             board the reader is not looking at. A chip whose count is 0 stays
             clickable and says so: "nothing needs me" is an answer. */}
-        <div className="flex items-center gap-1" role="group" aria-label="filter by state">
+        <div className="flex items-center gap-1" role="group" aria-label={t`filter by state`}>
           {BOARD_FILTERS.map((f) => {
             const on = filter === f;
             return (
@@ -482,17 +522,17 @@ export function Board(): JSX.Element {
             <select
               value={labelFilter ?? ''}
               onChange={(e) => setLabelFilter(e.target.value === '' ? null : e.target.value)}
-              aria-label="filter by label"
+              aria-label={t`filter by label`}
               className={`rounded-lg border px-2 py-1 font-mono text-[11px] outline-none transition-colors ${
                 labelFilter !== null
                   ? 'border-brand/50 bg-brand/10 text-brand'
                   : 'border-line bg-surface text-ink-dim hover:bg-surface2/50'
               }`}
             >
-              <option value="">label: any</option>
+              <option value="">{t`label: any`}</option>
               {labelOptions.map(({ label, count }) => (
                 <option key={label} value={label}>
-                  {count === 0 ? `${label} (no cards)` : label}
+                  {count === 0 ? t`${label} (no cards)` : label}
                 </option>
               ))}
             </select>
@@ -500,8 +540,8 @@ export function Board(): JSX.Element {
               <button
                 type="button"
                 onClick={() => setLabelFilter(null)}
-                aria-label="clear label filter"
-                data-tip="clear label filter"
+                aria-label={t`clear label filter`}
+                data-tip={t`clear label filter`}
                 className="text-[13px] leading-none text-ink-faint transition-colors hover:text-ink"
               >
                 ×
@@ -512,7 +552,7 @@ export function Board(): JSX.Element {
       </div>
 
       {board.loading ? (
-        <Loading label="board…" />
+        <Loading label={t`board…`} />
       ) : view === 'graph' ? (
         // The graph gets the filtered list too: a chip that changed the lanes but
         // left the graph showing every card would make the toggle a way to lose
@@ -524,7 +564,7 @@ export function Board(): JSX.Element {
             {BOARD_LANES.map((lane) => (
               <section
                 key={lane}
-                aria-label={`${LANE_TITLES[lane]} lane`}
+                aria-label={laneLabel(LANE_TITLES[lane])}
                 className="flex min-w-[232px] flex-1 basis-0 flex-col rounded-xl border border-line bg-surface/40"
               >
                 <div className="flex items-center gap-2 px-3 pt-3 pb-2">
@@ -548,7 +588,7 @@ export function Board(): JSX.Element {
                           onClick={() => setComposing(true)}
                           className="w-full rounded-lg border border-dashed border-line bg-transparent px-2.5 py-2 text-left text-[12px] text-ink-faint transition-colors hover:border-ink-dim hover:bg-field hover:text-ink"
                         >
-                          + New task
+                          + <Trans>New task</Trans>
                         </button>
                       )}
                       {lanes.inbox.map(liveCard)}
@@ -569,13 +609,17 @@ export function Board(): JSX.Element {
                     <>
                       {lanes.queued.length > 0 && (
                         <>
-                          <GroupLabel>Queued — waiting for a dispatch slot</GroupLabel>
+                          <GroupLabel>
+                            <Trans>Queued — waiting for a dispatch slot</Trans>
+                          </GroupLabel>
                           {lanes.queued.map(liveCard)}
                         </>
                       )}
                       {lanes.running.length > 0 && (
                         <>
-                          <GroupLabel>Running</GroupLabel>
+                          <GroupLabel>
+                            <Trans>Running</Trans>
+                          </GroupLabel>
                           {lanes.running.map(liveCard)}
                         </>
                       )}
@@ -599,7 +643,7 @@ export function Board(): JSX.Element {
           {/* History: done + archived, collapsed. They are not a lane — nothing
               is waiting on them — but they must stay reachable, and the counts
               are the cheapest honest signal that the board is being worked. */}
-          <section aria-label="history" className="mt-1 shrink-0 rounded-xl border border-line bg-surface/20">
+          <section aria-label={t`history`} className="mt-1 shrink-0 rounded-xl border border-line bg-surface/20">
             <button
               type="button"
               onClick={toggleHistory}
@@ -607,18 +651,18 @@ export function Board(): JSX.Element {
               className="flex w-full items-center gap-2 px-3 py-2 text-left"
             >
               <span className="font-mono text-[10.5px] tracking-[0.1em] text-ink-dim uppercase">
-                History
+                <Trans>History</Trans>
               </span>
               <span aria-hidden="true" className="font-mono text-[9px] text-ink-faint">
                 {historyOpen ? '▾' : '▸'}
               </span>
               <span className="font-mono text-[10px] text-ink-faint">
-                {lanes.done.length} done
+                <Trans>{doneCount} done</Trans>
                 {/* An em-dash rather than 0 until the lazy fetch has run: the
                     board genuinely does not know the archived count yet, and
                     printing 0 would be a claim it cannot make. */}
                 {' · '}
-                {archived === null ? '—' : archived.length} archived
+                <Trans>{archivedCount} archived</Trans>
               </span>
             </button>
             {historyOpen && (
@@ -628,17 +672,31 @@ export function Board(): JSX.Element {
               // for either half to stay narrow while the other has room to spare.
               <div className="grid max-h-[38vh] grid-cols-2 gap-3 border-t border-line px-2 py-2">
                 <div className="flex min-w-0 flex-col gap-2 overflow-y-auto">
-                  <GroupLabel>Done</GroupLabel>
-                  {lanes.done.length > 0 ? lanes.done.map(historyCard) : <Note>empty</Note>}
+                  <GroupLabel>
+                    <Trans>Done</Trans>
+                  </GroupLabel>
+                  {lanes.done.length > 0 ? (
+                    lanes.done.map(historyCard)
+                  ) : (
+                    <Note>
+                      <Trans>empty</Trans>
+                    </Note>
+                  )}
                 </div>
                 <div className="flex min-w-0 flex-col gap-2 overflow-y-auto">
-                  <GroupLabel>Archived</GroupLabel>
+                  <GroupLabel>
+                    <Trans>Archived</Trans>
+                  </GroupLabel>
                   {archiveLoading ? (
-                    <Note>loading…</Note>
+                    <Note>
+                      <Trans>loading…</Trans>
+                    </Note>
                   ) : archived !== null && archived.length > 0 ? (
                     archived.map(historyCard)
                   ) : (
-                    <Note>empty</Note>
+                    <Note>
+                      <Trans>empty</Trans>
+                    </Note>
                   )}
                 </div>
               </div>

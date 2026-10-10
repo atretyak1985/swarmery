@@ -12,7 +12,7 @@
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { createElement } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectPluginRow } from '../api/types';
 import { buildSubmitValue, fillEmptyFrom, PluginConfigModal } from './PluginConfigModal';

@@ -12,7 +12,7 @@
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/pages/system/SystemShell.tabs.test.tsx`.
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '../../test/render';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SystemShell } from '../SystemShell';

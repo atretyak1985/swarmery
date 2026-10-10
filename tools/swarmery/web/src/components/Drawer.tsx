@@ -11,6 +11,7 @@
 //   - with onPrev/onNext, ArrowUp/ArrowDown step to the neighbouring item
 //     ("↑↓ next phase"), except while typing in a field.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { containTab } from './ui';
 
@@ -50,6 +51,7 @@ function DrawerBody({
   onPrev,
   onNext,
 }: DrawerProps): JSX.Element {
+  const { t } = useLingui();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   // Latest handlers without re-running the listener effect (callers pass arrows).
@@ -110,9 +112,10 @@ function DrawerBody({
             <button
               type="button"
               onClick={onClose}
-              aria-label="close"
+              aria-label={t`close`}
               className="ml-auto rounded px-1 transition-colors hover:text-ink"
             >
+              {/* i18n-ignore: the Escape key's name, printed on the keycap */}
               esc
             </button>
           </div>
@@ -125,7 +128,9 @@ function DrawerBody({
           <div className="flex flex-wrap items-center gap-2 border-t border-line px-[22px] py-3.5">
             {footer}
             {stepping && (
-              <span className="ml-auto font-mono text-[10.5px] text-ink-faint">↑↓ next</span>
+              <span className="ml-auto font-mono text-[10.5px] text-ink-faint">
+                <Trans>↑↓ next</Trans>
+              </span>
             )}
           </div>
         )}

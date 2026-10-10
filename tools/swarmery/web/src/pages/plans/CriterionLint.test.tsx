@@ -5,7 +5,7 @@
 // with "Mark [LAND]" / "Mark [MANUAL]" calling PATCH …/docs {line, class}.
 // web/tsconfig.json EXCLUDES *.test.tsx — treat the casts as documentation.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
 import { CriterionLint, criterionClassOf, looksLikeLandOrManual } from './CriterionLint';

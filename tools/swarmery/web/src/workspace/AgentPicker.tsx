@@ -18,6 +18,8 @@
 // "" is not "no agent picked yet": the dispatcher never chooses an agent, so ""
 // runs the playbook's stages with no persona — the first option says so.
 
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useState } from 'react';
 import type { AgentRole, AgentRosterRow } from '../api/types';
 import { fetchAgentRoster } from '../api/agentHub';
@@ -39,7 +41,8 @@ export const ROLE_ORDER: readonly AgentRole[] = [
 ];
 
 /** Label of the "" option. */
-export const NO_AGENT_LABEL = 'Без агента — лише стейджі playbook';
+/** Source text is English like every other message; the Ukrainian catalog carries «Без агента — лише стейджі playbook». */
+export const NO_AGENT_LABEL = msg`No agent — playbook stages only`;
 
 /** Past this many agents the picker grows a filter box. */
 export const SEARCH_THRESHOLD = 12;
@@ -137,6 +140,7 @@ export function AgentSelect({
   disabled?: boolean;
   id?: string;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const [query, setQuery] = useState('');
   const known = agents.some((a) => a.name === value);
   const searchable = agents.length > SEARCH_THRESHOLD;
@@ -154,8 +158,8 @@ export function AgentSelect({
           type="search"
           value={query}
           disabled={disabled}
-          aria-label="filter agents"
-          placeholder="filter agents…"
+          aria-label={t`filter agents`}
+          placeholder={t`filter agents…`}
           onChange={(e) => setQuery(e.target.value)}
           className={fieldClass}
         />
@@ -164,18 +168,18 @@ export function AgentSelect({
         id={id}
         value={value}
         disabled={disabled}
-        aria-label="agent"
+        aria-label={t`agent`}
         onChange={(e) => onChange(e.target.value)}
         className={fieldClass}
       >
-        <option value="">{NO_AGENT_LABEL}</option>
-        {value !== '' && !known && <option value={value}>@{value} (unknown)</option>}
+        <option value="">{i18n._(NO_AGENT_LABEL)}</option>
+        {value !== '' && !known && <option value={value}>{t`@${value} (unknown)`}</option>}
         {groups.map((g) => (
           <optgroup key={g.role} label={g.role}>
             {g.agents.map((a) => (
               <option key={`${a.name}:${String(a.id)}`} value={a.name}>
                 @{a.name}
-                {a.projectOverride ? ' (project override)' : ''}
+                {a.projectOverride ? t` (project override)` : ''}
               </option>
             ))}
           </optgroup>
@@ -197,6 +201,7 @@ export function AgentHint({
   agents: PickerAgent[];
   value: string;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (value === '') return null;
   const agent = agents.find((a) => a.name === value);
   if (agent === undefined) return null;
@@ -206,9 +211,9 @@ export function AgentHint({
       {agent.projectOverride && (
         <span
           className="shrink-0 rounded-full border border-line px-1.5 py-[1px] font-mono text-[9px] text-ink-dim uppercase"
-          data-tip="this project's .claude/agents/ definition replaces the inherited one"
+          data-tip={t`this project's .claude/agents/ definition replaces the inherited one`}
         >
-          project override
+          <Trans>project override</Trans>
         </span>
       )}
       {agent.description !== null && (

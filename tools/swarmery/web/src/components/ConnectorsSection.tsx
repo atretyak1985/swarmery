@@ -14,6 +14,7 @@
 // project-/local-scope servers configured in the operator's repos never appear.
 // Silently omitting them would read as a bug.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { ConnectorsUnavailableError, fetchConnectors } from '../api';
 import type { Connector, ConnectorStatus } from '../api/types';
@@ -94,6 +95,7 @@ function ConnectorRow({ c }: { c: Connector }): JSX.Element {
 }
 
 export function ConnectorsSection(): JSX.Element {
+  const { t } = useLingui();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [retry, setRetry] = useState(0);
 
@@ -113,7 +115,7 @@ export function ConnectorsSection(): JSX.Element {
         }
         setState({
           kind: 'error',
-          message: err instanceof Error ? err.message : 'could not read mcp config',
+          message: err instanceof Error ? err.message : t`could not read mcp config`,
         });
       });
 
@@ -124,7 +126,7 @@ export function ConnectorsSection(): JSX.Element {
 
   return (
     <>
-      {state.kind === 'loading' && <Loading label="reading mcp config…" />}
+      {state.kind === 'loading' && <Loading label={t`reading mcp config…`} />}
 
       {/* Unavailable — the host cannot serve connectors. Muted and dashed, the
           same shape as the auto-approve note above: informational, not broken. */}
@@ -145,7 +147,9 @@ export function ConnectorsSection(): JSX.Element {
       )}
 
       {state.kind === 'ready' && state.connectors.length === 0 && (
-        <Empty>no mcp servers configured</Empty>
+        <Empty>
+          <Trans>no mcp servers configured</Trans>
+        </Empty>
       )}
 
       {state.kind === 'ready' && state.connectors.length > 0 && (
@@ -158,9 +162,11 @@ export function ConnectorsSection(): JSX.Element {
 
       {state.kind !== 'loading' && (
         <p className="mt-2 font-mono text-[10px] text-ink-dim">
-          read-only · from <code className="text-ink-2">claude mcp list</code> on the default Claude
-          account · project- and local-scope servers configured in your repos are not listed (the
-          daemon reads from its own working directory)
+          <Trans>
+            read-only · from <code className="text-ink-2">claude mcp list</code> on the default Claude
+            account · project- and local-scope servers configured in your repos are not listed (the
+            daemon reads from its own working directory)
+          </Trans>
         </p>
       )}
     </>

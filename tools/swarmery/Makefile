@@ -107,9 +107,24 @@ endif
 # the literal pattern, cp would fail, and `make build` / `make dev` would break
 # with it. find matching nothing is simply a no-op — and adding a guide still
 # needs no Makefile edit.
+#
+# Ukrainian translations live next to their English sources, in a `uk/` subdir
+# with the same file name, and are snapshotted into $(DOCS_DST)/uk/ — the one
+# subdir readDocs never lists: /api/docs?lang=uk only swaps an English doc's
+# text for its uk twin, so the English file stays the source of truth for slugs,
+# order and existence. Every translation is optional: a missing file (or a
+# missing uk dir) is skipped, never an error, and the old uk snapshot is pruned
+# first so DELETING a stale translation really takes it off the dashboard — the
+# page then falls back to English with a note.
+DOCS_UK_DST := $(DOCS_DST)/uk
+DOCS_UK_SRC := $(DOCS_SRC)/uk/ONBOARDING.md $(DOCS_SRC)/uk/WORKFLOW.md $(DOCS_SRC)/uk/EXTENDING.md $(DOCS_SRC)/uk/NEUTRALITY.md $(DOCS_SRC)/uk/PLUGINS.md docs/uk/concepts.md docs/uk/retro.md docs/uk/usage.md docs/uk/api-project-config.md
 copy-docs:
 	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_SRC)/PLUGINS.md docs/concepts.md docs/retro.md docs/usage.md docs/api-project-config.md $(DOCS_DST)/
 	find docs/guides -maxdepth 1 -name 'guide-*.md' -exec cp {} $(DOCS_DST)/ \;
+	mkdir -p $(DOCS_UK_DST)
+	find $(DOCS_UK_DST) -maxdepth 1 -name '*.md' -delete
+	for f in $(DOCS_UK_SRC); do if [ -f "$$f" ]; then cp "$$f" $(DOCS_UK_DST)/; fi; done
+	if [ -d docs/guides/uk ]; then find docs/guides/uk -maxdepth 1 -name 'guide-*.md' -exec cp {} $(DOCS_UK_DST)/ \; ; fi
 
 # copy-probe: snapshot the channel-probe harness (script + fixture plugin) into
 # internal/channelprobe/script/ for go:embed, so `swarmery account doctor
@@ -138,8 +153,10 @@ test:
 	go vet ./...
 	go test ./...
 
+# clean: the docs prune is `-type f` because content/uk/ keeps its own .gitkeep,
+# and find cannot -delete a directory that is not empty.
 clean:
 	rm -f swarmery
 	find web/dist -mindepth 1 ! -name .gitkeep -delete
-	find $(DOCS_DST) -mindepth 1 ! -name .gitkeep -delete
+	find $(DOCS_DST) -type f ! -name .gitkeep -delete
 	rm -rf $(PROBE_DST)/cc-channel-probe.sh $(PROBE_DST)/fixtures

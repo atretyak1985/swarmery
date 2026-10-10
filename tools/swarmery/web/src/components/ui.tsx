@@ -2,6 +2,7 @@
 // language: JetBrains Mono uppercase eyebrows, hairline pill status chips,
 // warm near-black hairline cards).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { SessionStatus } from '../api/types';
 import { fmtSpan } from '../lib/format';
@@ -78,7 +79,7 @@ export function DurationPill({
   if (status === 'active') {
     return (
       <span className="rounded-full border border-green/40 bg-green/10 px-2 py-0.5 font-mono text-[10.5px] whitespace-nowrap text-green">
-        active · {span}
+        <Trans>active · {span}</Trans>
       </span>
     );
   }
@@ -132,7 +133,7 @@ export function ErrorBox({
           onClick={onRetry}
           className="mt-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-ink-2 transition-colors hover:bg-surface2"
         >
-          retry
+          <Trans>retry</Trans>
         </button>
       )}
     </div>
@@ -147,7 +148,9 @@ export function ErrorBox({
 export function ApproxHint(): JSX.Element {
   return (
     <p className="mt-2 font-mono text-[10px] text-amber/80">
-      ≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing
+      <Trans>
+        ≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing
+      </Trans>
     </p>
   );
 }
@@ -295,7 +298,7 @@ function ConfirmDialogBody({
             disabled={busy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
-            cancel
+            <Trans>cancel</Trans>
           </button>
           <button
             type="button"
@@ -576,6 +579,7 @@ export function ExpandableSection({
   // this possible — its cleanup runs on unmount ONLY, the one case the
   // [expanded] effect above cannot tell apart from an ordinary collapse (both
   // run the same cleanup).
+  const { t } = useLingui();
   const expandedRef = useRef(expanded);
   useEffect(() => {
     expandedRef.current = expanded;
@@ -606,10 +610,10 @@ export function ExpandableSection({
           type="button"
           ref={closeRef}
           onClick={() => onToggle(false)}
-          aria-label={`collapse ${label}`}
+          aria-label={t`collapse ${label}`}
           className="absolute top-5 right-6 rounded-[9px] border border-line-strong bg-surface px-2.5 py-[6px] font-mono text-[12px] text-ink shadow-lg transition-colors hover:border-ink-dim desk:top-6 desk:right-7"
         >
-          ✕ close
+          <Trans>✕ close</Trans>
         </button>
       )}
     </div>

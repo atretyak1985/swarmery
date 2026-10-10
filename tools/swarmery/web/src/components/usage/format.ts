@@ -2,6 +2,9 @@
 // Fusion's UsageIndicator (`formatResetAt`), kept as free functions so the
 // window row stays presentational.
 
+import { t } from '@lingui/core/macro';
+import { currentLocale, fmtDate, fmtTime } from '../../lib/format';
+
 /**
  * An ISO reset instant → the absolute wall-clock label shown in the reset chip.
  *
@@ -23,11 +26,7 @@ export function fmtResetAt(iso: string, now: number): string {
   if (!Number.isFinite(ms)) return '';
   const ref = new Date(now);
 
-  const timeStr = date.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  const timeStr = fmtTime(date, { hour: 'numeric', minute: '2-digit', hour12: currentLocale() === 'en-US' });
 
   if (date.toDateString() === ref.toDateString()) return timeStr;
 
@@ -42,11 +41,11 @@ export function fmtResetAt(iso: string, now: number): string {
   );
 
   if (calendarDaysUntil >= 1 && calendarDaysUntil <= 7) {
-    const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+    const weekday = fmtDate(date, { weekday: 'short' });
     return `${weekday} ${timeStr}`;
   }
 
-  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const dateStr = fmtDate(date, { month: 'short', day: 'numeric' });
   return `${dateStr}, ${timeStr}`;
 }
 
@@ -61,19 +60,20 @@ export function fmtResetAt(iso: string, now: number): string {
 export function fmtResetsIn(iso: string, now: number): string {
   const ms = new Date(iso).getTime() - now;
   if (!Number.isFinite(ms)) return '';
-  if (ms <= 0) return 'resets now';
+  if (ms <= 0) return t`resets now`;
   const totalMin = Math.floor(ms / 60_000);
   const hours = Math.floor(totalMin / 60);
   const days = Math.floor(hours / 24);
   if (days > 0) {
     const remHours = hours % 24;
-    return remHours > 0 ? `resets in ${String(days)}d ${String(remHours)}h` : `resets in ${String(days)}d`;
+    return remHours > 0 ? t`resets in ${days}d ${remHours}h` : t`resets in ${days}d`;
   }
-  if (hours > 0) return `resets in ${String(hours)}h ${String(totalMin % 60)}m`;
-  return `resets in ${String(totalMin)}m`;
+  const minutes = totalMin % 60;
+  if (hours > 0) return t`resets in ${hours}h ${minutes}m`;
+  return t`resets in ${totalMin}m`;
 }
 
 /** Epoch ms → the footer's "Last updated" clock. */
 export function fmtClock(ms: number): string {
-  return new Date(ms).toLocaleTimeString();
+  return fmtTime(ms, {});
 }

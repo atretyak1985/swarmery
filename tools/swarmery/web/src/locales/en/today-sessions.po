@@ -1,0 +1,1773 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-10 08:32+0300\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/pages/Projects.tsx
+msgid "— <0>untick onboarded only</0> to see them"
+msgstr "— <0>untick onboarded only</0> to see them"
+
+#: src/pages/NeedsYou.tsx
+msgid "· suggested"
+msgstr "· suggested"
+
+#: src/pages/detail/Chat.tsx
+#: src/pages/detail/Timeline.tsx
+msgid "(empty prompt)"
+msgstr "(empty prompt)"
+
+#: src/pages/Overview.tsx
+#: src/pages/SessionDetail.tsx
+msgid "(untitled session)"
+msgstr "(untitled session)"
+
+#. placeholder {0}: data.malformed
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "{0, plural, one {# malformed line skipped} few {# malformed lines skipped} many {# malformed lines skipped} other {# malformed lines skipped}}"
+msgstr "{0, plural, one {# malformed line skipped} few {# malformed lines skipped} many {# malformed lines skipped} other {# malformed lines skipped}}"
+
+#. placeholder {0}: regular.length
+#: src/pages/Projects.tsx
+msgid "{0, plural, one {# project · {onboardedCount} onboarded} few {# projects · {onboardedCount} onboarded} many {# projects · {onboardedCount} onboarded} other {# projects · {onboardedCount} onboarded}}"
+msgstr "{0, plural, one {# project · {onboardedCount} onboarded} few {# projects · {onboardedCount} onboarded} many {# projects · {onboardedCount} onboarded} other {# projects · {onboardedCount} onboarded}}"
+
+#. placeholder {0}: data.uninspected
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "{0, plural, one {# unattributed result} few {# unattributed results} many {# unattributed results} other {# unattributed results}}"
+msgstr "{0, plural, one {# unattributed result} few {# unattributed results} many {# unattributed results} other {# unattributed results}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{advisorFindings, plural, one {{count} Advisor finding} few {{count} Advisor findings} many {{count} Advisor findings} other {{count} Advisor findings}}"
+msgstr "{advisorFindings, plural, one {{count} Advisor finding} few {{count} Advisor findings} many {{count} Advisor findings} other {{count} Advisor findings}}"
+
+#: src/pages/detail/Chat.tsx
+msgid "{agents, plural, one {ran {count} agent} few {ran {count} agents} many {ran {count} agents} other {ran {count} agents}}"
+msgstr "{agents, plural, one {ran {count} agent} few {ran {count} agents} many {ran {count} agents} other {ran {count} agents}}"
+
+#: src/pages/Overview.tsx
+msgid "{autoPct}% of requests · no stop"
+msgstr "{autoPct}% of requests · no stop"
+
+#: src/pages/detail/Timeline.tsx
+msgid "{base} · denied"
+msgstr "{base} · denied"
+
+#: src/pages/detail/Timeline.tsx
+msgid "{base} · error"
+msgstr "{base} · error"
+
+#: src/pages/detail/Timeline.tsx
+msgid "{base} · timeout"
+msgstr "{base} · timeout"
+
+#: src/pages/NeedsYou.tsx
+msgid "{blockedCount} blocked on you · oldest first"
+msgstr "{blockedCount} blocked on you · oldest first"
+
+#: src/pages/today/loopModel.ts
+msgid "{classifierCalls, plural, one {The classifier labelled {count} session —} few {The classifier labelled {count} sessions —} many {The classifier labelled {count} sessions —} other {The classifier labelled {count} sessions —}}"
+msgstr "{classifierCalls, plural, one {The classifier labelled {count} session —} few {The classifier labelled {count} sessions —} many {The classifier labelled {count} sessions —} other {The classifier labelled {count} sessions —}}"
+
+#: src/pages/detail/Chat.tsx
+msgid "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
+msgstr "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
+
+#: src/pages/Overview.tsx
+msgid "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
+msgstr "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
+
+#: src/pages/detail/CallTree.tsx
+msgid "{errorCount} err"
+msgstr "{errorCount} err"
+
+#: src/pages/detail/Timeline.tsx
+msgid "{events} events"
+msgstr "{events} events"
+
+#: src/pages/today/loopModel.ts
+msgid "{farOff} landed far from the plan."
+msgstr "{farOff} landed far from the plan."
+
+#: src/pages/Overview.tsx
+msgid "{first} · +{extra} more"
+msgstr "{first} · +{extra} more"
+
+#: src/pages/today/loopModel.ts
+msgid "{forecasted, plural, one {{count} phase carries a forecast — what the planner expects before anything runs.} few {{count} phases carry a forecast — what the planner expects before anything runs.} many {{count} phases carry a forecast — what the planner expects before anything runs.} other {{count} phases carry a forecast — what the planner expects before anything runs.}}"
+msgstr "{forecasted, plural, one {{count} phase carries a forecast — what the planner expects before anything runs.} few {{count} phases carry a forecast — what the planner expects before anything runs.} many {{count} phases carry a forecast — what the planner expects before anything runs.} other {{count} phases carry a forecast — what the planner expects before anything runs.}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{gatheringProof, plural, one {{count} change still gathering proof.} few {{count} changes still gathering proof.} many {{count} changes still gathering proof.} other {{count} changes still gathering proof.}}"
+msgstr "{gatheringProof, plural, one {{count} change still gathering proof.} few {{count} changes still gathering proof.} many {{count} changes still gathering proof.} other {{count} changes still gathering proof.}}"
+
+#: src/pages/Projects.tsx
+msgid "{hiddenByOnboarded, plural, one {# project hidden as not onboarded} few {# projects hidden as not onboarded} many {# projects hidden as not onboarded} other {# projects hidden as not onboarded}}"
+msgstr "{hiddenByOnboarded, plural, one {# project hidden as not onboarded} few {# projects hidden as not onboarded} many {# projects hidden as not onboarded} other {# projects hidden as not onboarded}}"
+
+#: src/pages/SessionDetail.tsx
+msgid "{inserted, plural, one {# task suggested on the board.} few {# tasks suggested on the board.} many {# tasks suggested on the board.} other {# tasks suggested on the board.}}"
+msgstr "{inserted, plural, one {# task suggested on the board.} few {# tasks suggested on the board.} many {# tasks suggested on the board.} other {# tasks suggested on the board.}}"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "{kind} is starting — waiting for its transcript…"
+msgstr "{kind} is starting — waiting for its transcript…"
+
+#: src/pages/detail/CallTree.tsx
+msgid "{label} — running"
+msgstr "{label} — running"
+
+#: src/pages/today/loopModel.ts
+msgid "{labelled} {checked} checked by you."
+msgstr "{labelled} {checked} checked by you."
+
+#: src/pages/Overview.tsx
+msgid "{laneApprovals, plural, one {waited {laneWaited} · # approval} few {waited {laneWaited} · # approvals} many {waited {laneWaited} · # approvals} other {waited {laneWaited} · # approvals}}"
+msgstr "{laneApprovals, plural, one {waited {laneWaited} · # approval} few {waited {laneWaited} · # approvals} many {waited {laneWaited} · # approvals} other {waited {laneWaited} · # approvals}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{lessonCandidates, plural, one {{count} lesson candidate} few {{count} lesson candidates} many {{count} lesson candidates} other {{count} lesson candidates}}"
+msgstr "{lessonCandidates, plural, one {{count} lesson candidate} few {{count} lesson candidates} many {{count} lesson candidates} other {{count} lesson candidates}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{list}. Nothing changes until you say so."
+msgstr "{list}. Nothing changes until you say so."
+
+#: src/pages/today/loopModel.ts
+msgid "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
+msgstr "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
+msgstr "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
+
+#: src/pages/Approvals.tsx
+msgid "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
+msgstr "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
+
+#: src/pages/today/loopModel.ts
+msgid "{plans, plural, one {plan} few {plans} many {plans} other {plans}}"
+msgstr "{plans, plural, one {plan} few {plans} many {plans} other {plans}}"
+
+#: src/pages/today/LiveNow.tsx
+msgid "{project} · {model} · plan run"
+msgstr "{project} · {model} · plan run"
+
+#: src/pages/Overview.tsx
+msgid "{projectCount, plural, one {errors across # project} few {errors across # projects} many {errors across # projects} other {errors across # projects}}"
+msgstr "{projectCount, plural, one {errors across # project} few {errors across # projects} many {errors across # projects} other {errors across # projects}}"
+
+#: src/pages/ProjectOverview.tsx
+msgid "{rate}% completion rate — some tasks may be stalled."
+msgstr "{rate}% completion rate — some tasks may be stalled."
+
+#: src/pages/today/loopModel.ts
+msgid "{retirements, plural, one {{count} lesson that may have stopped helping} few {{count} lessons that may have stopped helping} many {{count} lessons that may have stopped helping} other {{count} lessons that may have stopped helping}}"
+msgstr "{retirements, plural, one {{count} lesson that may have stopped helping} few {{count} lessons that may have stopped helping} many {{count} lessons that may have stopped helping} other {{count} lessons that may have stopped helping}}"
+
+#: src/pages/detail/CallTree.tsx
+msgid "{runningCount} running"
+msgstr "{runningCount} running"
+
+#: src/pages/today/loopModel.ts
+msgid "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
+msgstr "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
+
+#: src/pages/Projects.tsx
+msgid "{sessionCount} sessions · {costLabel}"
+msgstr "{sessionCount} sessions · {costLabel}"
+
+#: src/pages/Sessions.tsx
+msgid "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
+msgstr "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
+
+#: src/pages/Sessions.tsx
+msgid "{shownSessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{shownSessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}}"
+
+#: src/pages/detail/Chat.tsx
+msgid "{skills, plural, one {used {count} skill} few {used {count} skills} many {used {count} skills} other {used {count} skills}}"
+msgstr "{skills, plural, one {used {count} skill} few {used {count} skills} many {used {count} skills} other {used {count} skills}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{stoppedPhases, plural, one {{count} phase stopped with nothing done.} few {{count} phases stopped with nothing done.} many {{count} phases stopped with nothing done.} other {{count} phases stopped with nothing done.}}"
+msgstr "{stoppedPhases, plural, one {{count} phase stopped with nothing done.} few {{count} phases stopped with nothing done.} many {{count} phases stopped with nothing done.} other {{count} phases stopped with nothing done.}}"
+
+#: src/pages/Overview.tsx
+msgid "{stops, plural, one {# stop} few {# stops} many {# stops} other {# stops}}"
+msgstr "{stops, plural, one {# stop} few {# stops} many {# stops} other {# stops}}"
+
+#: src/pages/Overview.tsx
+msgid "{stopTotal, plural, one {across # stop} few {across # stops} many {across # stops} other {across # stops}}"
+msgstr "{stopTotal, plural, one {across # stop} few {across # stops} many {across # stops} other {across # stops}}"
+
+#: src/pages/detail/Timeline.tsx
+msgid "{tool} · awaiting approval"
+msgstr "{tool} · awaiting approval"
+
+#: src/pages/detail/Chat.tsx
+msgid "{tools, plural, one {used {count} tool} few {used {count} tools} many {used {count} tools} other {used {count} tools}}"
+msgstr "{tools, plural, one {used {count} tool} few {used {count} tools} many {used {count} tools} other {used {count} tools}}"
+
+#: src/pages/Overview.tsx
+msgid "{topCount, plural, one {# tool caused {topShare}% of it.} few {# tools caused {topShare}% of it.} many {# tools caused {topShare}% of it.} other {# tools caused {topShare}% of it.}}"
+msgstr "{topCount, plural, one {# tool caused {topShare}% of it.} few {# tools caused {topShare}% of it.} many {# tools caused {topShare}% of it.} other {# tools caused {topShare}% of it.}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
+msgstr "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
+
+#: src/pages/ProjectDetail.tsx
+msgid "← projects"
+msgstr "← projects"
+
+#: src/pages/SessionDetail.tsx
+#: src/pages/SessionDetail.tsx
+msgid "← sessions"
+msgstr "← sessions"
+
+#: src/pages/Approvals.tsx
+msgid "+ add rule"
+msgstr "+ add rule"
+
+#: src/pages/today/LiveNow.tsx
+msgid "+{extra} more"
+msgstr "+{extra} more"
+
+#: src/pages/detail/CallTree.tsx
+msgid "+{moreCount} more"
+msgstr "+{moreCount} more"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "~{totalEst} total, estimated at ~4 bytes/token from tool-result sizes"
+msgstr "~{totalEst} total, estimated at ~4 bytes/token from tool-result sizes"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "~tokens"
+msgstr "~tokens"
+
+#: src/pages/Overview.tsx
+msgid "✓ auto-approved"
+msgstr "✓ auto-approved"
+
+#: src/pages/Approvals.tsx
+msgid "a pause is a feature, not a failure"
+msgstr "a pause is a feature, not a failure"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "a reply is being generated — Stop to cancel it."
+msgstr "a reply is being generated — Stop to cancel it."
+
+#: src/pages/SessionDetail.tsx
+msgid "account"
+msgstr "account"
+
+#: src/pages/Approvals.tsx
+msgid "add rule"
+msgstr "add rule"
+
+#: src/pages/detail/CallTree.tsx
+msgid "agent"
+msgstr "agent"
+
+#: src/pages/detail/DetailRail.tsx
+#: src/pages/detail/SummaryChips.tsx
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "agents"
+msgstr "agents"
+
+#: src/pages/Overview.tsx
+msgid "agents idle now"
+msgstr "agents idle now"
+
+#: src/pages/Overview.tsx
+msgid "Agents ran clean."
+msgstr "Agents ran clean."
+
+#: src/pages/Overview.tsx
+msgid "Agents waited <0>{waited}</0> on you today."
+msgstr "Agents waited <0>{waited}</0> on you today."
+
+#: src/pages/Sessions.tsx
+msgid "all"
+msgstr "all"
+
+#: src/pages/Overview.tsx
+msgid "all approvals →"
+msgstr "all approvals →"
+
+#: src/pages/today/loopModel.ts
+msgid "All landed close to the plan."
+msgstr "All landed close to the plan."
+
+#: src/pages/Approvals.tsx
+#: src/pages/Approvals.tsx
+#: src/pages/Overview.tsx
+#: src/pages/today/Today.tsx
+msgid "all projects"
+msgstr "all projects"
+
+#: src/pages/ProjectOverview.tsx
+msgid "all recommendations in Retro →"
+msgstr "all recommendations in Retro →"
+
+#: src/pages/Overview.tsx
+msgid "all sessions →"
+msgstr "all sessions →"
+
+#: src/pages/Approvals.tsx
+msgid "always allow…"
+msgstr "always allow…"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "analyzing transcript…"
+msgstr "analyzing transcript…"
+
+#: src/pages/ProjectOverview.tsx
+msgid "analyzing…"
+msgstr "analyzing…"
+
+#: src/pages/today/LoopMap.tsx
+msgid "and the loop closes when Change lowers next week's Measure"
+msgstr "and the loop closes when Change lowers next week's Measure"
+
+#: src/pages/Overview.tsx
+msgctxt "verb: the button that opens the question"
+msgid "answer"
+msgstr "answer"
+
+#: src/pages/Approvals.tsx
+msgid "answer in terminal →"
+msgstr "answer in terminal →"
+
+#: src/pages/Overview.tsx
+msgid "answer required"
+msgstr "answer required"
+
+#: src/pages/today/loopModel.ts
+msgid "Appears after the first finished phase run."
+msgstr "Appears after the first finished phase run."
+
+#: src/pages/today/loopModel.ts
+msgid "Appears after the first plan is written — phases and what each one expects."
+msgstr "Appears after the first plan is written — phases and what each one expects."
+
+#: src/pages/today/loopModel.ts
+msgid "Appears after you accept a change and it has run long enough to prove itself."
+msgstr "Appears after you accept a change and it has run long enough to prove itself."
+
+#: src/pages/Approvals.tsx
+msgid "approvals…"
+msgstr "approvals…"
+
+#: src/pages/Approvals.tsx
+#: src/pages/detail/Timeline.tsx
+#: src/pages/Overview.tsx
+#: src/pages/today/WaitingOnYou.tsx
+msgid "approve"
+msgstr "approve"
+
+#: src/pages/Approvals.tsx
+msgid "approved"
+msgstr "approved"
+
+#: src/pages/Overview.tsx
+msgid "approximate — sampled"
+msgstr "approximate — sampled"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+#: src/pages/ProjectOverview.tsx
+#: src/pages/Projects.tsx
+msgid "archived"
+msgstr "archived"
+
+#: src/pages/Approvals.tsx
+msgid "Auto-approve rules"
+msgstr "Auto-approve rules"
+
+#: src/pages/Overview.tsx
+msgid "auto-approve this tool from now on"
+msgstr "auto-approve this tool from now on"
+
+#: src/pages/Overview.tsx
+msgid "auto-approved"
+msgstr "auto-approved"
+
+#: src/pages/detail/CallTree.tsx
+msgid "avg"
+msgstr "avg"
+
+#: src/pages/Projects.tsx
+msgid "avg session 7d"
+msgstr "avg session 7d"
+
+#: src/pages/detail/Chat.tsx
+msgid "awaiting approval — respond in the terminal or Approvals"
+msgstr "awaiting approval — respond in the terminal or Approvals"
+
+#: src/pages/detail/Chat.tsx
+msgid "awaiting approval · {since} — respond in the terminal or Approvals"
+msgstr "awaiting approval · {since} — respond in the terminal or Approvals"
+
+#: src/pages/SessionDetail.tsx
+msgid "awaiting reply · {quietFor}"
+msgstr "awaiting reply · {quietFor}"
+
+#: src/pages/Approvals.tsx
+msgid "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
+msgstr "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
+
+#: src/pages/NeedsYou.tsx
+msgid "blocked {age}"
+msgstr "blocked {age}"
+
+#: src/pages/Overview.tsx
+msgid "Blocked on you · {count}"
+msgstr "Blocked on you · {count}"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "cache-write per turn"
+msgstr "cache-write per turn"
+
+#: src/pages/detail/CallTree.tsx
+msgid "call tree"
+msgstr "call tree"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "calls"
+msgstr "calls"
+
+#: src/pages/Approvals.tsx
+msgid "cancel"
+msgstr "cancel"
+
+#: src/pages/ProjectOverview.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "Capability"
+msgstr "Capability"
+
+#: src/pages/today/loopModel.ts
+msgid "Change"
+msgstr "Change"
+
+#: src/pages/SessionDetail.tsx
+msgid "Chat"
+msgstr "Chat"
+
+#: src/pages/SessionDetail.tsx
+msgid "click to rename"
+msgstr "click to rename"
+
+#: src/pages/Approvals.tsx
+#: src/pages/Overview.tsx
+msgid "close"
+msgstr "close"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Cogitating"
+msgstr "Cogitating"
+
+#: src/pages/detail/Chat.tsx
+msgid "Collapse activity"
+msgstr "Collapse activity"
+
+#: src/pages/Approvals.tsx
+msgid "collapse raw request JSON"
+msgstr "collapse raw request JSON"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "commands"
+msgstr "commands"
+
+#: src/pages/detail/Timeline.tsx
+msgid "Commit"
+msgstr "Commit"
+
+#: src/pages/ProjectDetail.tsx
+msgid "components"
+msgstr "components"
+
+#: src/pages/ProjectDetail.tsx
+msgid "components (local)"
+msgstr "components (local)"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Computing"
+msgstr "Computing"
+
+#: src/pages/Approvals.tsx
+msgid "confirm deny"
+msgstr "confirm deny"
+
+#: src/pages/Overview.tsx
+msgid "confirm locally"
+msgstr "confirm locally"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "context hogs"
+msgstr "context hogs"
+
+#: src/pages/NeedsYou.tsx
+msgid "Copied — paste it into the session"
+msgstr "Copied — paste it into the session"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "copied ✓"
+msgstr "copied ✓"
+
+#: src/pages/NeedsYou.tsx
+msgid "Copy failed"
+msgstr "Copy failed"
+
+#: src/pages/NeedsYou.tsx
+msgid "Copy reply"
+msgstr "Copy reply"
+
+#: src/pages/NeedsYou.tsx
+msgid "Copy reply to {sessionName}"
+msgstr "Copy reply to {sessionName}"
+
+#: src/pages/NeedsYou.tsx
+msgid "Copy reply with option: {opt}"
+msgstr "Copy reply with option: {opt}"
+
+#: src/pages/NeedsYou.tsx
+msgid "Copy reply with option: {opt} (suggested)"
+msgstr "Copy reply with option: {opt} (suggested)"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "copy resume command"
+msgstr "copy resume command"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "Copy the command that starts a fresh session from this handoff"
+msgstr "Copy the command that starts a fresh session from this handoff"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/SessionDetail.tsx
+msgid "cost"
+msgstr "cost"
+
+#: src/pages/Projects.tsx
+msgid "cost 7d"
+msgstr "cost 7d"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Crunching"
+msgstr "Crunching"
+
+#: src/pages/Projects.tsx
+msgid "daemon telemetry"
+msgstr "daemon telemetry"
+
+#: src/pages/today/LoopMap.tsx
+msgid "data flows →"
+msgstr "data flows →"
+
+#: src/pages/Approvals.tsx
+msgid "delete"
+msgstr "delete"
+
+#: src/pages/Approvals.tsx
+msgid "delete rule {pattern}"
+msgstr "delete rule {pattern}"
+
+#: src/pages/Approvals.tsx
+msgid "denied"
+msgstr "denied"
+
+#: src/pages/Approvals.tsx
+#: src/pages/detail/Timeline.tsx
+msgid "deny"
+msgstr "deny"
+
+#: src/pages/Approvals.tsx
+msgid "deny reason"
+msgstr "deny reason"
+
+#: src/pages/SessionDetail.tsx
+msgid "Diffs"
+msgstr "Diffs"
+
+#: src/pages/SessionDetail.tsx
+msgid "Diffs · {diffCount}"
+msgstr "Diffs · {diffCount}"
+
+#: src/pages/SessionDetail.tsx
+msgid "dismiss"
+msgstr "dismiss"
+
+#: src/pages/NeedsYou.tsx
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#: src/pages/NeedsYou.tsx
+msgid "Dismiss {sessionName}"
+msgstr "Dismiss {sessionName}"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "dispatched task"
+msgstr "dispatched task"
+
+#: src/pages/Overview.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "done"
+msgstr "done"
+
+#: src/pages/Projects.tsx
+msgid "down vs previous week"
+msgstr "down vs previous week"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/SessionDetail.tsx
+msgid "duration"
+msgstr "duration"
+
+#: src/pages/Approvals.tsx
+msgid "elsewhere"
+msgstr "elsewhere"
+
+#: src/pages/Overview.tsx
+msgid "error"
+msgstr "error"
+
+#: src/pages/detail/Timeline.tsx
+msgid "Error"
+msgstr "Error"
+
+#: src/pages/Overview.tsx
+msgid "error drill-down"
+msgstr "error drill-down"
+
+#: src/pages/Projects.tsx
+msgid "error rate 7d"
+msgstr "error rate 7d"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/SessionDetail.tsx
+msgid "errors"
+msgstr "errors"
+
+#: src/pages/Overview.tsx
+msgid "Errors · {scopeName} · {day}"
+msgstr "Errors · {scopeName} · {day}"
+
+#: src/pages/Overview.tsx
+msgid "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
+msgstr "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
+
+#: src/pages/today/Today.tsx
+msgid "Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you."
+msgstr "Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you."
+
+#: src/pages/detail/Chat.tsx
+msgid "Expand activity"
+msgstr "Expand activity"
+
+#: src/pages/Approvals.tsx
+msgid "expand raw request JSON"
+msgstr "expand raw request JSON"
+
+#: src/pages/Approvals.tsx
+msgid "expired"
+msgstr "expired"
+
+#: src/pages/Approvals.tsx
+msgid "expires {expires}"
+msgstr "expires {expires}"
+
+#: src/pages/Approvals.tsx
+msgid "expiring…"
+msgstr "expiring…"
+
+#: src/pages/SessionDetail.tsx
+msgid "extract tasks"
+msgstr "extract tasks"
+
+#: src/pages/SessionDetail.tsx
+msgid "extracting…"
+msgstr "extracting…"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/detail/CallTree.tsx
+msgid "failed"
+msgstr "failed"
+
+#: src/pages/detail/Chat.tsx
+msgid "failed — retry"
+msgstr "failed — retry"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "failed to analyze transcript"
+msgstr "failed to analyze transcript"
+
+#: src/pages/Overview.tsx
+msgid "failed to load error groups"
+msgstr "failed to load error groups"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "failed to load handoff"
+msgstr "failed to load handoff"
+
+#: src/pages/detail/Timeline.tsx
+msgid "File change"
+msgstr "File change"
+
+#: src/pages/detail/DetailRail.tsx
+msgid "files changed"
+msgstr "files changed"
+
+#: src/pages/NeedsYou.tsx
+msgid "Focus terminal"
+msgstr "Focus terminal"
+
+#: src/pages/NeedsYou.tsx
+msgid "Focus the terminal of {sessionName}"
+msgstr "Focus the terminal of {sessionName}"
+
+#: src/pages/ProjectOverview.tsx
+msgid "generate insights"
+msgstr "generate insights"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "handoff"
+msgstr "handoff"
+
+#: src/pages/Approvals.tsx
+msgid "hangs {hangs}"
+msgstr "hangs {hangs}"
+
+#: src/pages/Projects.tsx
+msgid "Health · last 7 days vs previous"
+msgstr "Health · last 7 days vs previous"
+
+#: src/pages/today/loopModel.ts
+#: src/pages/today/loopModel.ts
+msgid "Health →"
+msgstr "Health →"
+
+#: src/pages/detail/ContextHogsCard.tsx
+#: src/pages/detail/HandoffCard.tsx
+msgid "hide"
+msgstr "hide"
+
+#: src/pages/Approvals.tsx
+msgid "History"
+msgstr "History"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "hooks"
+msgstr "hooks"
+
+#: src/pages/Overview.tsx
+msgid "idle"
+msgstr "idle"
+
+#: src/pages/Overview.tsx
+msgid "idle {age}"
+msgstr "idle {age}"
+
+#: src/pages/ProjectOverview.tsx
+msgid "in progress"
+msgstr "in progress"
+
+#: src/pages/ProjectOverview.tsx
+msgid "in review"
+msgstr "in review"
+
+#: src/pages/today/WaitingOnYou.tsx
+msgid "Inbox · {count} →"
+msgstr "Inbox · {count} →"
+
+#: src/pages/today/loopModel.ts
+msgid "Inbox →"
+msgstr "Inbox →"
+
+#: src/pages/ProjectOverview.tsx
+msgid "Insights"
+msgstr "Insights"
+
+#: src/pages/ProjectOverview.tsx
+msgid "insights…"
+msgstr "insights…"
+
+#: src/pages/detail/CallTree.tsx
+msgid "invocations"
+msgstr "invocations"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Ionizing"
+msgstr "Ionizing"
+
+#: src/pages/SessionDetail.tsx
+msgid "Jump to latest"
+msgstr "Jump to latest"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/Projects.tsx
+msgid "last activity"
+msgstr "last activity"
+
+#: src/pages/SessionDetail.tsx
+msgid "last event"
+msgstr "last event"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "last output {lastAgo}"
+msgstr "last output {lastAgo}"
+
+#: src/pages/SessionDetail.tsx
+msgid "Latest"
+msgstr "Latest"
+
+#: src/pages/today/loopModel.ts
+msgid "Learn"
+msgstr "Learn"
+
+#: src/pages/Sessions.tsx
+msgid "list arrangement"
+msgstr "list arrangement"
+
+#: src/pages/today/loopModel.ts
+msgid "live"
+msgstr "live"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "live · working quietly"
+msgstr "live · working quietly"
+
+#: src/pages/today/LiveNow.tsx
+msgid "Live now"
+msgstr "Live now"
+
+#: src/pages/Sessions.tsx
+msgid "loading more…"
+msgstr "loading more…"
+
+#: src/pages/Overview.tsx
+msgid "loading trace…"
+msgstr "loading trace…"
+
+#: src/pages/detail/HandoffCard.tsx
+#: src/pages/Overview.tsx
+msgid "loading…"
+msgstr "loading…"
+
+#: src/pages/today/LiveNow.tsx
+#: src/pages/today/WaitingOnYou.tsx
+msgid "Loading…"
+msgstr "Loading…"
+
+#: src/pages/ProjectOverview.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "local to this project"
+msgstr "local to this project"
+
+#: src/pages/ProjectOverview.tsx
+msgid "manage plugins + detach in <0>Settings →</0>"
+msgstr "manage plugins + detach in <0>Settings →</0>"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "marketplace: {marketplace}"
+msgstr "marketplace: {marketplace}"
+
+#: src/pages/today/loopModel.ts
+#: src/pages/today/loopModel.ts
+msgid "Measure"
+msgstr "Measure"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Message this session"
+msgstr "Message this session"
+
+#: src/pages/SessionDetail.tsx
+msgid "model"
+msgstr "model"
+
+#: src/pages/today/LiveNow.tsx
+msgid "model unknown"
+msgstr "model unknown"
+
+#: src/pages/detail/DetailRail.tsx
+msgid "models"
+msgstr "models"
+
+#: src/pages/ProjectOverview.tsx
+msgid "Needs attention"
+msgstr "Needs attention"
+
+#: src/pages/Overview.tsx
+msgid "Needs triage"
+msgstr "Needs triage"
+
+#: src/pages/NeedsYou.tsx
+msgid "Needs you"
+msgstr "Needs you"
+
+#: src/pages/NeedsYou.tsx
+msgid "needs you…"
+msgstr "needs you…"
+
+#: src/pages/detail/CallTree.tsx
+msgid "nested agents"
+msgstr "nested agents"
+
+#: src/pages/Sessions.tsx
+msgid "newest first"
+msgstr "newest first"
+
+#: src/pages/Sessions.tsx
+msgid "no {statusLabel} sessions — clear the status filter to see the rest"
+msgstr "no {statusLabel} sessions — clear the status filter to see the rest"
+
+#: src/pages/detail/Chat.tsx
+msgid "no conversation in this session yet"
+msgstr "no conversation in this session yet"
+
+#: src/pages/Approvals.tsx
+msgid "no decisions yet — resolved requests land here with their audit trail"
+msgstr "no decisions yet — resolved requests land here with their audit trail"
+
+#: src/pages/detail/Diffs.tsx
+msgid "no diff captured for this change"
+msgstr "no diff captured for this change"
+
+#: src/pages/Overview.tsx
+msgid "no errors — clean day"
+msgstr "no errors — clean day"
+
+#: src/pages/Overview.tsx
+msgid "no errors for this day"
+msgstr "no errors for this day"
+
+#: src/pages/detail/Timeline.tsx
+msgid "no events in this session yet"
+msgstr "no events in this session yet"
+
+#: src/pages/detail/Diffs.tsx
+msgid "no file changes in this session"
+msgstr "no file changes in this session"
+
+#: src/pages/detail/Chat.tsx
+msgid "no final message (stop_reason={noFinalMessage})"
+msgstr "no final message (stop_reason={noFinalMessage})"
+
+#: src/pages/Projects.tsx
+msgid "no health data yet"
+msgstr "no health data yet"
+
+#: src/pages/SessionDetail.tsx
+msgid "No new tasks — this session had nothing left to suggest."
+msgstr "No new tasks — this session had nothing left to suggest."
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "no output for {quietFor}"
+msgstr "no output for {quietFor}"
+
+#: src/pages/Approvals.tsx
+msgid "no pending approvals — agents are running unattended. <0>permission_requested</0> pushes new ones here live"
+msgstr "no pending approvals — agents are running unattended. <0>permission_requested</0> pushes new ones here live"
+
+#: src/pages/today/loopModel.ts
+msgid "No phase carries a forecast yet — add one so a run has something to be measured against."
+msgstr "No phase carries a forecast yet — add one so a run has something to be measured against."
+
+#: src/pages/Projects.tsx
+msgid "no projects match the current filter — try a different search or clear it"
+msgstr "no projects match the current filter — try a different search or clear it"
+
+#: src/pages/Projects.tsx
+msgid "no projects tagged <0>#{tag}</0>"
+msgstr "no projects tagged <0>#{tag}</0>"
+
+#: src/pages/Projects.tsx
+msgid "no projects yet — run <0>{INGEST_COMMAND}</0> or onboard one from the command deck"
+msgstr "no projects yet — run <0>{INGEST_COMMAND}</0> or onboard one from the command deck"
+
+#: src/pages/ProjectOverview.tsx
+msgid "no recommendations yet — Generate insights runs the advisor now"
+msgstr "no recommendations yet — Generate insights runs the advisor now"
+
+#: src/pages/Overview.tsx
+msgid "no requests yet"
+msgstr "no requests yet"
+
+#: src/pages/Approvals.tsx
+msgid "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
+msgstr "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
+
+#: src/pages/Sessions.tsx
+msgid "no sessions from the {account} account — clear the account filter to see the rest"
+msgstr "no sessions from the {account} account — clear the account filter to see the rest"
+
+#: src/pages/Sessions.tsx
+msgid "no sessions match the current filter — try a different search or clear it"
+msgstr "no sessions match the current filter — try a different search or clear it"
+
+#: src/pages/Overview.tsx
+msgid "no sessions match the filter"
+msgstr "no sessions match the filter"
+
+#: src/pages/ProjectDetail.tsx
+msgid "no sessions yet"
+msgstr "no sessions yet"
+
+#: src/pages/Sessions.tsx
+msgid "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
+msgstr "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
+
+#: src/pages/Overview.tsx
+msgid "no tool activity recorded"
+msgstr "no tool activity recorded"
+
+#: src/pages/SessionDetail.tsx
+msgid "no transcript activity past the stuck window — the session may have died silently"
+msgstr "no transcript activity past the stuck window — the session may have died silently"
+
+#: src/pages/Overview.tsx
+msgid "no waiting"
+msgstr "no waiting"
+
+#: src/pages/Projects.tsx
+msgid "no week-over-week comparison"
+msgstr "no week-over-week comparison"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "none"
+msgstr "none"
+
+#: src/pages/today/loopModel.ts
+msgid "none checked by you yet."
+msgstr "none checked by you yet."
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Noodling"
+msgstr "Noodling"
+
+#: src/pages/Approvals.tsx
+msgid "note (optional)"
+msgstr "note (optional)"
+
+#: src/pages/ProjectOverview.tsx
+msgid "nothing flagged"
+msgstr "nothing flagged"
+
+#: src/pages/Overview.tsx
+msgid "nothing idle"
+msgstr "nothing idle"
+
+#: src/pages/NeedsYou.tsx
+msgid "nothing needs you — approvals, questions and sessions awaiting your reply land here live"
+msgstr "nothing needs you — approvals, questions and sessions awaiting your reply land here live"
+
+#: src/pages/Overview.tsx
+msgid "nothing notable yet today"
+msgstr "nothing notable yet today"
+
+#: src/pages/today/loopModel.ts
+msgid "Nothing running right now. Sessions show up here the moment one starts."
+msgstr "Nothing running right now. Sessions show up here the moment one starts."
+
+#: src/pages/today/LiveNow.tsx
+msgid "Nothing running. A session shows up here the moment it starts."
+msgstr "Nothing running. A session shows up here the moment it starts."
+
+#: src/pages/today/loopModel.ts
+msgid "Nothing to review. Lessons and Advisor findings land here after runs are measured."
+msgstr "Nothing to review. Lessons and Advisor findings land here after runs are measured."
+
+#: src/pages/Overview.tsx
+msgid "Nothing waited on you today."
+msgstr "Nothing waited on you today."
+
+#: src/pages/today/WaitingOnYou.tsx
+msgid "Nothing waiting on you. Approvals, lessons and Advisor findings land here."
+msgstr "Nothing waiting on you. Approvals, lessons and Advisor findings land here."
+
+#: src/pages/Approvals.tsx
+msgid "off"
+msgstr "off"
+
+#: src/pages/detail/CallTree.tsx
+msgid "ok"
+msgstr "ok"
+
+#: src/pages/Approvals.tsx
+msgid "on"
+msgstr "on"
+
+#: src/pages/Projects.tsx
+msgid "onboarded only"
+msgstr "onboarded only"
+
+#: src/pages/Overview.tsx
+msgid "open {laneName}"
+msgstr "open {laneName}"
+
+#: src/pages/detail/SummaryChips.tsx
+msgid "open {name} in System"
+msgstr "open {name} in System"
+
+#: src/pages/detail/SummaryChips.tsx
+msgid "open {type} in System"
+msgstr "open {type} in System"
+
+#: src/pages/ProjectOverview.tsx
+msgid "open board →"
+msgstr "open board →"
+
+#: src/pages/NeedsYou.tsx
+msgid "open criteria →"
+msgstr "open criteria →"
+
+#: src/pages/detail/CallTree.tsx
+msgid "open in System"
+msgstr "open in System"
+
+#: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/Overview.tsx
+msgid "open session →"
+msgstr "open session →"
+
+#: src/pages/detail/Diffs.tsx
+msgid "out of scope"
+msgstr "out of scope"
+
+#: src/pages/Approvals.tsx
+msgid "pending"
+msgstr "pending"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Percolating"
+msgstr "Percolating"
+
+#: src/pages/detail/Timeline.tsx
+#: src/pages/detail/Timeline.tsx
+#: src/pages/detail/Timeline.tsx
+msgid "Permission"
+msgstr "Permission"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "phase run"
+msgstr "phase run"
+
+#: src/pages/Projects.tsx
+msgid "pin {name}"
+msgstr "pin {name}"
+
+#: src/pages/Projects.tsx
+msgid "pin to top"
+msgstr "pin to top"
+
+#: src/pages/Projects.tsx
+#: src/pages/Projects.tsx
+msgid "pinned"
+msgstr "pinned"
+
+#: src/pages/today/loopModel.ts
+msgid "Plan"
+msgstr "Plan"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "plan revision"
+msgstr "plan revision"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "plan run"
+msgstr "plan run"
+
+#: src/pages/Sessions.tsx
+msgid "plan runs"
+msgstr "plan runs"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "planning session"
+msgstr "planning session"
+
+#: src/pages/today/loopModel.ts
+msgid "Plans →"
+msgstr "Plans →"
+
+#: src/pages/ProjectSettings.tsx
+msgid "plugins"
+msgstr "plugins"
+
+#: src/pages/Approvals.tsx
+msgid "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
+msgstr "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
+
+#: src/pages/Projects.tsx
+msgid "prev 7d"
+msgstr "prev 7d"
+
+#: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
+msgid "Production deploy — confirm in the session's terminal"
+msgstr "Production deploy — confirm in the session's terminal"
+
+#: src/pages/Projects.tsx
+msgid "project"
+msgstr "project"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "project…"
+msgstr "project…"
+
+#: src/pages/Projects.tsx
+msgid "Projects"
+msgstr "Projects"
+
+#: src/pages/Projects.tsx
+msgid "projects…"
+msgstr "projects…"
+
+#: src/pages/today/loopModel.ts
+msgid "Proof →"
+msgstr "Proof →"
+
+#: src/pages/SessionDetail.tsx
+msgid "quiet · {quietFor}"
+msgstr "quiet · {quietFor}"
+
+#: src/pages/Approvals.tsx
+msgid "raw"
+msgstr "raw"
+
+#: src/pages/Overview.tsx
+msgid "Reading today's activity…"
+msgstr "Reading today's activity…"
+
+#: src/pages/Approvals.tsx
+msgid "reason (optional) — delivered to Claude verbatim"
+msgstr "reason (optional) — delivered to Claude verbatim"
+
+#: src/pages/Approvals.tsx
+msgid "reason: “{reason}”"
+msgstr "reason: “{reason}”"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Reasoning"
+msgstr "Reasoning"
+
+#: src/pages/ProjectDetail.tsx
+msgid "recent sessions"
+msgstr "recent sessions"
+
+#: src/pages/SessionDetail.tsx
+msgid "recovered"
+msgstr "recovered"
+
+#: src/pages/Approvals.tsx
+msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
+msgstr "release with no decision — the native selector renders in the terminal (E12d/E12e)"
+
+#: src/pages/SessionDetail.tsx
+#: src/pages/SessionDetail.tsx
+msgid "rename session"
+msgstr "rename session"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Reply to this session…  (⌘/Ctrl+Enter to send)"
+msgstr "Reply to this session…  (⌘/Ctrl+Enter to send)"
+
+#: src/pages/detail/Timeline.tsx
+msgid "respond in the terminal, or approve/deny from the Approvals screen."
+msgstr "respond in the terminal, or approve/deny from the Approvals screen."
+
+#: src/pages/today/WaitingOnYou.tsx
+msgid "review"
+msgstr "review"
+
+#: src/pages/Overview.tsx
+msgid "review →"
+msgstr "review →"
+
+#: src/pages/NeedsYou.tsx
+msgid "review in Inbox →"
+msgstr "review in Inbox →"
+
+#: src/pages/today/loopModel.ts
+msgid "Review in Inbox →"
+msgstr "Review in Inbox →"
+
+#: src/pages/ProjectOverview.tsx
+msgid "Right now"
+msgstr "Right now"
+
+#: src/pages/Approvals.tsx
+msgid "rule note"
+msgstr "rule note"
+
+#: src/pages/Approvals.tsx
+msgid "rule project scope"
+msgstr "rule project scope"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "run"
+msgstr "run"
+
+#: src/pages/today/loopModel.ts
+msgid "Run"
+msgstr "Run"
+
+#: src/pages/SessionDetail.tsx
+msgid "run a model pass over this session and suggest board tasks from what it left behind"
+msgstr "run a model pass over this session and suggest board tasks from what it left behind"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/detail/CallTree.tsx
+#: src/pages/detail/CallTree.tsx
+#: src/pages/SessionDetail.tsx
+msgid "running"
+msgstr "running"
+
+#: src/pages/today/loopModel.ts
+msgid "Running clean — nothing stopped, nothing waiting on you."
+msgstr "Running clean — nothing stopped, nothing waiting on you."
+
+#: src/pages/detail/Timeline.tsx
+msgid "running…"
+msgstr "running…"
+
+#: src/pages/today/loopModel.ts
+msgid "runs scored"
+msgstr "runs scored"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Send"
+msgstr "Send"
+
+#: src/pages/detail/Chat.tsx
+msgid "sending…"
+msgstr "sending…"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Sending…"
+msgstr "Sending…"
+
+#: src/pages/Overview.tsx
+msgid "session #{sessionId}"
+msgstr "session #{sessionId}"
+
+#: src/pages/Approvals.tsx
+msgid "session #{sessionNumber}"
+msgstr "session #{sessionNumber}"
+
+#: src/pages/detail/Timeline.tsx
+msgid "Session end"
+msgstr "Session end"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "session in progress…"
+msgstr "session in progress…"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "session is running in a terminal — Stop it to take over and continue the conversation here."
+msgstr "session is running in a terminal — Stop it to take over and continue the conversation here."
+
+#: src/pages/SessionDetail.tsx
+msgid "session title"
+msgstr "session title"
+
+#: src/pages/SessionDetail.tsx
+msgid "session title…"
+msgstr "session title…"
+
+#: src/pages/SessionDetail.tsx
+msgid "session…"
+msgstr "session…"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/Projects.tsx
+msgid "sessions"
+msgstr "sessions"
+
+#: src/pages/Sessions.tsx
+msgid "Sessions"
+msgstr "Sessions"
+
+#: src/pages/today/loopModel.ts
+msgid "Sessions →"
+msgstr "Sessions →"
+
+#: src/pages/NeedsYou.tsx
+msgid "sessions blocked on you, oldest first"
+msgstr "sessions blocked on you, oldest first"
+
+#: src/pages/Overview.tsx
+#: src/pages/Sessions.tsx
+msgid "sessions…"
+msgstr "sessions…"
+
+#: src/pages/ProjectSettings.tsx
+msgid "settings"
+msgstr "settings"
+
+#: src/pages/ProjectSettings.tsx
+msgid "settings…"
+msgstr "settings…"
+
+#: src/pages/ProjectOverview.tsx
+msgid "Shipped <0>{tasks} tasks</0> this week — and asked you <1>{approvals} times</1> to do it."
+msgstr "Shipped <0>{tasks} tasks</0> this week — and asked you <1>{approvals} times</1> to do it."
+
+#: src/pages/detail/ContextHogsCard.tsx
+#: src/pages/detail/HandoffCard.tsx
+msgid "show"
+msgstr "show"
+
+#: src/pages/Overview.tsx
+msgid "show {rowSlug} error groups"
+msgstr "show {rowSlug} error groups"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "show all {toolCount}"
+msgstr "show all {toolCount}"
+
+#: src/pages/Overview.tsx
+msgid "show all error groups"
+msgstr "show all error groups"
+
+#: src/pages/Projects.tsx
+msgid "show archived"
+msgstr "show archived"
+
+#: src/pages/detail/Chat.tsx
+msgid "show less"
+msgstr "show less"
+
+#: src/pages/detail/Chat.tsx
+msgid "show more"
+msgstr "show more"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "show top 10"
+msgstr "show top 10"
+
+#: src/pages/detail/Timeline.tsx
+msgid "Skill"
+msgstr "Skill"
+
+#: src/pages/detail/DetailRail.tsx
+#: src/pages/detail/SummaryChips.tsx
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "skills"
+msgstr "skills"
+
+#: src/pages/detail/Chat.tsx
+msgid "some assistant prose is not ingested yet — run <0>swarmery backfill --rebuild-text</0>"
+msgstr "some assistant prose is not ingested yet — run <0>swarmery backfill --rebuild-text</0>"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "source: {source}"
+msgstr "source: {source}"
+
+#: src/pages/detail/CallTree.tsx
+msgid "started"
+msgstr "started"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "started {ago}"
+msgstr "started {ago}"
+
+#: src/pages/Overview.tsx
+msgid "started {startedShort}"
+msgstr "started {startedShort}"
+
+#: src/pages/Overview.tsx
+msgid "started yesterday"
+msgstr "started yesterday"
+
+#: src/pages/ProjectDetail.tsx
+msgid "stats"
+msgstr "stats"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/SessionDetail.tsx
+msgid "status"
+msgstr "status"
+
+#: src/pages/Overview.tsx
+msgid "still blocked"
+msgstr "still blocked"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Stop"
+msgstr "Stop"
+
+#: src/pages/Overview.tsx
+msgid "stop asking"
+msgstr "stop asking"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Stopping…"
+msgstr "Stopping…"
+
+#: src/pages/Overview.tsx
+msgid "stuck"
+msgstr "stuck"
+
+#: src/pages/detail/Timeline.tsx
+msgid "subagent"
+msgstr "subagent"
+
+#: src/pages/detail/CallTree.tsx
+msgid "subagents"
+msgstr "subagents"
+
+#: src/pages/Approvals.tsx
+msgid "submit answers"
+msgstr "submit answers"
+
+#: src/pages/NeedsYou.tsx
+msgid "suggested replies"
+msgstr "suggested replies"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Synthesizing"
+msgstr "Synthesizing"
+
+#: src/pages/Projects.tsx
+msgid "System"
+msgstr "System"
+
+#: src/pages/today/LiveNow.tsx
+msgid "Task {done}/{total}"
+msgstr "Task {done}/{total}"
+
+#: src/pages/ProjectSettings.tsx
+msgid "telemetry-only — no .claude/settings.json to manage plugins for"
+msgstr "telemetry-only — no .claude/settings.json to manage plugins for"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+msgid "telemetry-only — no .claude/settings.json, the swarmery plugin is not installed here"
+msgstr "telemetry-only — no .claude/settings.json, the swarmery plugin is not installed here"
+
+#: src/pages/detail/Timeline.tsx
+msgid "Tests"
+msgstr "Tests"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
+msgstr "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
+msgstr "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
+
+#: src/pages/Overview.tsx
+msgid "The day"
+msgstr "The day"
+
+#: src/pages/today/LoopMap.tsx
+#: src/pages/today/Today.tsx
+msgid "The loop, this week"
+msgstr "The loop, this week"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
+msgstr "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
+
+#: src/pages/SessionDetail.tsx
+msgid "the session ended its turn and waits for your typed reply"
+msgstr "the session ended its turn and waits for your typed reply"
+
+#: src/pages/Overview.tsx
+msgid "The spine · today"
+msgstr "The spine · today"
+
+#: src/pages/ProjectDetail.tsx
+#: src/pages/ProjectOverview.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "the swarmery plugin is not enabled for this project"
+msgstr "the swarmery plugin is not enabled for this project"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Thinking"
+msgstr "Thinking"
+
+#: src/pages/ProjectOverview.tsx
+msgid "This week"
+msgstr "This week"
+
+#: src/pages/Sessions.tsx
+msgid "timeline"
+msgstr "timeline"
+
+#: src/pages/SessionDetail.tsx
+msgid "Timeline"
+msgstr "Timeline"
+
+#: src/pages/ProjectOverview.tsx
+msgid "to do"
+msgstr "to do"
+
+#: src/pages/today/Today.tsx
+msgid "Today in detail"
+msgstr "Today in detail"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/ProjectDetail.tsx
+#: src/pages/Projects.tsx
+#: src/pages/SessionDetail.tsx
+msgid "tokens"
+msgstr "tokens"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "tool"
+msgstr "tool"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/detail/CallTree.tsx
+msgid "tool calls"
+msgstr "tool calls"
+
+#: src/pages/Approvals.tsx
+msgid "Tool or Tool(arg glob) — e.g. Read, Bash(git *)"
+msgstr "Tool or Tool(arg glob) — e.g. Read, Bash(git *)"
+
+#: src/pages/Approvals.tsx
+msgid "tool pattern"
+msgstr "tool pattern"
+
+#: src/pages/detail/CallTree.tsx
+#: src/pages/detail/CallTree.tsx
+msgid "total time"
+msgstr "total time"
+
+#: src/pages/Overview.tsx
+msgid "trace unavailable"
+msgstr "trace unavailable"
+
+#: src/pages/SessionDetail.tsx
+msgid "transcript activity within the stuck window — the session is working"
+msgstr "transcript activity within the stuck window — the session is working"
+
+#: src/pages/ProjectOverview.tsx
+msgid "triage"
+msgstr "triage"
+
+#: src/pages/Overview.tsx
+msgid "triage unavailable"
+msgstr "triage unavailable"
+
+#: src/pages/detail/Timeline.tsx
+msgid "turn {seq} · {startedAt}"
+msgstr "turn {seq} · {startedAt}"
+
+#: src/pages/detail/ContextHogsCard.tsx
+msgid "turn {seq}: {written}"
+msgstr "turn {seq}: {written}"
+
+#: src/pages/detail/Timeline.tsx
+msgid "unassigned events"
+msgstr "unassigned events"
+
+#: src/pages/ProjectOverview.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "unknown project"
+msgstr "unknown project"
+
+#: src/pages/Projects.tsx
+msgid "unpin"
+msgstr "unpin"
+
+#: src/pages/Projects.tsx
+msgid "unpin {name}"
+msgstr "unpin {name}"
+
+#: src/pages/Overview.tsx
+msgid "untitled session"
+msgstr "untitled session"
+
+#: src/pages/Projects.tsx
+msgid "up vs previous week"
+msgstr "up vs previous week"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "verification run"
+msgstr "verification run"
+
+#: src/pages/today/loopModel.ts
+msgid "verified"
+msgstr "verified"
+
+#: src/pages/Approvals.tsx
+msgid "via {via}"
+msgstr "via {via}"
+
+#: src/pages/ProjectOverview.tsx
+msgid "vs previous 7 d"
+msgstr "vs previous 7 d"
+
+#: src/pages/Overview.tsx
+msgid "waited today"
+msgstr "waited today"
+
+#: src/pages/Overview.tsx
+#: src/pages/Overview.tsx
+msgid "waiting"
+msgstr "waiting"
+
+#: src/pages/today/LiveNow.tsx
+msgid "waiting on you"
+msgstr "waiting on you"
+
+#: src/pages/Approvals.tsx
+#: src/pages/today/WaitingOnYou.tsx
+msgid "Waiting on you"
+msgstr "Waiting on you"
+
+#: src/pages/ProjectOverview.tsx
+msgid "Where work sits"
+msgstr "Where work sits"
+
+#: src/pages/Overview.tsx
+msgid "Where your time went"
+msgstr "Where your time went"
+
+#: src/pages/Overview.tsx
+#: src/pages/Overview.tsx
+#: src/pages/today/LiveNow.tsx
+msgid "working"
+msgstr "working"
+
+#: src/pages/detail/LiveActivity.tsx
+msgid "Working"
+msgstr "Working"
+
+#: src/pages/SessionDetail.tsx
+msgid "working · {lastActive}"
+msgstr "working · {lastActive}"
+
+#: src/pages/ProjectOverview.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "workspace…"
+msgstr "workspace…"
+
+#: src/pages/detail/CallTree.tsx
+msgid "Σ tokens"
+msgstr "Σ tokens"

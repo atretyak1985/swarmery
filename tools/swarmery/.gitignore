@@ -7,6 +7,12 @@ web/dist/*
 !web/dist/.gitkeep
 internal/docsfs/content/*
 !internal/docsfs/content/.gitkeep
+# the Ukrainian snapshot subdir: re-include the dir itself so its .gitkeep can be
+# kept, then ignore its copies the same way (git cannot re-include a file inside
+# an excluded directory)
+!internal/docsfs/content/uk/
+internal/docsfs/content/uk/*
+!internal/docsfs/content/uk/.gitkeep
 # the channel-probe harness snapshot (Makefile copy-probe) — .gitkeep keeps go:embed valid
 internal/channelprobe/script/*
 !internal/channelprobe/script/.gitkeep

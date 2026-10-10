@@ -10,6 +10,8 @@
 // touches an already-running dispatcher process — it only takes effect on
 // the NEXT run. The UI hint below is the documented mitigation, not decor.
 
+import { t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Account, AccountBinding } from '../api/types';
 import { fetchAccounts, fetchProjectAccount, putProjectAccount } from '../api';
@@ -29,29 +31,29 @@ interface AccountOption {
  * as a failure: an unasked question is silence, not a state. */
 function statusBits(account: Account): string[] {
   const bits: string[] = [];
-  if (account.connected === true) bits.push('connected');
-  else if (account.connected === false) bits.push('not connected');
-  else bits.push('connection unknown');
-  if (account.runnable === true) bits.push('ready');
+  if (account.connected === true) bits.push(t`connected`);
+  else if (account.connected === false) bits.push(t`not connected`);
+  else bits.push(t`connection unknown`);
+  if (account.runnable === true) bits.push(t`ready`);
   else if (account.runnable === false)
-    bits.push(account.runnableReason ?? 'CLI login required');
+    bits.push(account.runnableReason ?? t`CLI login required`);
   return bits;
 }
 
 function buildOptions(accounts: readonly Account[]): AccountOption[] {
   const defaultAccount = accounts.find((a) => a.isDefault);
-  const defaultLabel = defaultAccount !== undefined ? defaultAccount.key : 'unset';
+  const defaultLabel = defaultAccount !== undefined ? defaultAccount.key : t`unset`;
   const options: AccountOption[] = [
     {
       value: '',
-      label: `Default (${defaultLabel})`,
-      detail: 'follow whichever account is marked default on this machine',
+      label: t`Default (${defaultLabel})`,
+      detail: t`follow whichever account is marked default on this machine`,
     },
   ];
   for (const account of accounts) {
     const bits: string[] = [];
-    if (account.isDefault) bits.push('default');
-    bits.push(account.plan !== '' ? account.plan : 'plan unknown');
+    if (account.isDefault) bits.push(t`default`);
+    bits.push(account.plan !== '' ? account.plan : t`plan unknown`);
     bits.push(...statusBits(account));
     options.push({ value: account.key, label: account.key, detail: bits.join(' · ') });
   }
@@ -59,6 +61,7 @@ function buildOptions(accounts: readonly Account[]): AccountOption[] {
 }
 
 export function AccountSelector({ projectId }: { projectId: number }): JSX.Element | null {
+  const { t } = useLingui();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [binding, setBinding] = useState<AccountBinding | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
@@ -127,7 +130,9 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
     return (
       <>
         <SectionTitle>
-        <ExplainPair id="account-binding">account</ExplainPair>
+        <ExplainPair id="account-binding">
+          <Trans>account</Trans>
+        </ExplainPair>
       </SectionTitle>
         <ErrorBox message={error} onRetry={load} />
       </>
@@ -142,17 +147,22 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
 
   const options = buildOptions(accounts);
   const dirty = draft !== binding.account;
-  const sourceLabel = binding.source === 'binding' ? 'explicit binding' : 'default account';
+  const sourceLabel = binding.source === 'binding' ? t`explicit binding` : t`default account`;
   // The account the CURRENT draft resolves to ('' follows the default), so the
   // warning below fires for "Default" too when the default itself is not
   // ready. Only an answered "no" warns — runnable null is an unasked question.
   const draftAccount = accounts.find((a) => (draft === '' ? a.isDefault : a.key === draft));
   const draftNotReady = draftAccount?.runnable === false;
+  const draftKey = draftAccount?.key ?? '';
+  const draftReason = draftAccount?.runnableReason ?? t`its CLI login is missing`;
 
+  const ignoredReason = binding?.ignoredReason;
   return (
     <>
       <SectionTitle>
-        <ExplainPair id="account-binding">account</ExplainPair>
+        <ExplainPair id="account-binding">
+          <Trans>account</Trans>
+        </ExplainPair>
       </SectionTitle>
       {error !== null && (
         <div className="mb-2">
@@ -161,7 +171,9 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
       )}
       <Card>
         <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px]">
-          <span className="text-ink-dim">running as</span>
+          <span className="text-ink-dim">
+            <Trans>running as</Trans>
+          </span>
           <span
             className="font-semibold text-ink"
             data-tip-mono
@@ -173,9 +185,9 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
             {sourceLabel}
           </span>
         </div>
-        {binding.ignoredReason && (
+        {ignoredReason && (
           <p className="mt-2 text-[11.5px] leading-snug text-ink-dim">
-            binding ignored: {binding.ignoredReason}
+            <Trans>binding ignored: {ignoredReason}</Trans>
           </p>
         )}
 
@@ -212,7 +224,7 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
             onClick={() => save(draft)}
             className="rounded-lg border border-brand/45 bg-brand/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
           >
-            {busy ? 'saving…' : 'save'}
+            {busy ? t`saving…` : t`save`}
           </button>
           {dirty && (
             <button
@@ -221,20 +233,23 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
               onClick={reset}
               className="rounded-lg border border-line-strong px-3 py-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:bg-surface2 disabled:opacity-50"
             >
-              reset
+              <Trans>reset</Trans>
             </button>
           )}
           {draftNotReady && draftAccount !== undefined && (
             <span role="alert" className="font-mono text-[10.5px] leading-snug text-amber">
-              {draftAccount.key} is not ready —{' '}
-              {draftAccount.runnableReason ?? 'its CLI login is missing'}; a run dispatched
-              under it will fail at spawn until it is connected (Settings → accounts)
+              <Trans>
+                {draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it
+                is connected (Settings → accounts)
+              </Trans>
             </span>
           )}
         </div>
         <div className="mt-2 font-mono text-[10px] text-ink-faint">
-          the account binds when a dispatcher process spawns — a run already in flight keeps its old
-          account until it finishes; switching here only affects the next run
+          <Trans>
+            the account binds when a dispatcher process spawns — a run already in flight keeps its old account
+            until it finishes; switching here only affects the next run
+          </Trans>
         </div>
       </Card>
     </>

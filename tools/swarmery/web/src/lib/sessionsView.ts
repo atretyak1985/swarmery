@@ -14,7 +14,10 @@
 //     session opens with the same boilerplate controller/phase prompt, so the
 //     title tells them apart from nothing.
 
+import { i18n, type MessageDescriptor } from '@lingui/core';
+import { msg, t } from '@lingui/core/macro';
 import type { Session, SessionStatus } from '../api/types';
+import { fmtDate } from './format';
 
 export const STATUSES: SessionStatus[] = [
   'active',
@@ -25,13 +28,26 @@ export const STATUSES: SessionStatus[] = [
   'killed',
 ];
 
-export const STATUS_LABELS: Record<SessionStatus, string> = {
-  active: 'active',
-  waiting_approval: 'waiting',
-  awaiting_reply: 'awaiting reply',
-  idle: 'idle',
-  completed: 'done',
-  killed: 'killed',
+/** Status words — getters, so each read is in the active locale. */
+export const STATUS_LABELS: Readonly<Record<SessionStatus, string>> = {
+  get active() {
+    return t`active`;
+  },
+  get waiting_approval() {
+    return t`waiting`;
+  },
+  get awaiting_reply() {
+    return t`awaiting reply`;
+  },
+  get idle() {
+    return t`idle`;
+  },
+  get completed() {
+    return t`done`;
+  },
+  get killed() {
+    return t`killed`;
+  },
 };
 
 /** Case-insensitive substring match over title / project / slug / branch, plus
@@ -109,7 +125,7 @@ export function statusSummary(rows: readonly Session[]): string {
  * Two columns instead of one headline: a mono ROLE TAG (`ctl` / `#5`) and a
  * plain-language title. Never the session's own title — see the header note. */
 
-export const CONTROLLER_NOTE = 'dispatches phases in dependency order, merges results back';
+export const CONTROLLER_NOTE: MessageDescriptor = msg`dispatches phases in dependency order, merges results back`;
 
 export function planRowTag(s: Session): string {
   const g = s.planGroup;
@@ -120,15 +136,25 @@ export function planRowTag(s: Session): string {
 
 export function planRowTitle(s: Session): string {
   const g = s.planGroup;
-  if (g == null) return 'session';
-  if (g.role === 'controller') return 'plan controller';
-  return g.phaseName ?? 'phase';
+  if (g == null) return t`session`;
+  if (g.role === 'controller') return t`plan controller`;
+  return g.phaseName ?? t`phase`;
 }
 
-const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'];
+const ORDINALS: readonly MessageDescriptor[] = [
+  msg`first`,
+  msg`second`,
+  msg`third`,
+  msg`fourth`,
+  msg`fifth`,
+  msg`sixth`,
+];
 
 function ordinal(n: number): string {
-  return ORDINALS[n - 1] ?? `attempt ${String(n)}`;
+  const word = ORDINALS[n - 1];
+  if (word !== undefined) return i18n._(word);
+  const count = String(n);
+  return t`attempt ${count}`;
 }
 
 /** Phase-retry key: the seq is the phase's identity within the run; fall back to
@@ -149,7 +175,7 @@ export function planRowNotes(rows: readonly Session[]): Map<number, string> {
   const attempts = new Map<string, Session[]>();
   for (const s of rows) {
     if (s.planGroup?.role === 'controller') {
-      notes.set(s.id, CONTROLLER_NOTE);
+      notes.set(s.id, i18n._(CONTROLLER_NOTE));
       continue;
     }
     const key = retryKey(s);
@@ -165,11 +191,13 @@ export function planRowNotes(rows: readonly Session[]): Map<number, string> {
     ordered.forEach((s, i) => {
       if (i === 0) return;
       const prev = ordered[i - 1];
+      const prevStatus = STATUS_LABELS[prev?.status ?? 'idle'];
       const tail =
         prev?.status === 'killed'
-          ? 'the previous run exited with an error'
-          : `the previous run ended ${STATUS_LABELS[prev?.status ?? 'idle']}`;
-      notes.set(s.id, `${ordinal(i + 1)} attempt — ${tail}`);
+          ? t`the previous run exited with an error`
+          : t`the previous run ended ${prevStatus}`;
+      const nth = ordinal(i + 1);
+      notes.set(s.id, t`${nth} attempt — ${tail}`);
     });
   }
   return notes;
@@ -188,11 +216,9 @@ export interface DayBucket {
 
 export function dayLabel(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'unknown day';
-  const name = d
-    .toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
-    .toLowerCase();
-  return d.toDateString() === new Date().toDateString() ? `today · ${name}` : name;
+  if (Number.isNaN(d.getTime())) return t`unknown day`;
+  const name = fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase();
+  return d.toDateString() === new Date().toDateString() ? t`today · ${name}` : name;
 }
 
 function itemDate(it: DayItem): string {

@@ -10,6 +10,9 @@
 // rollups + template resolution scoped to :slug). category ∈
 // skills|commands|templates|hooks|insights; :id is the selected item.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type {
@@ -45,6 +48,24 @@ function parseCategory(v: string | undefined): HubCategory {
 /** Toolkit sub-tabs (Skills/Commands/Templates are one ROLE, three kinds). */
 const TOOLKIT: HubCategory[] = ['skills', 'commands', 'templates'];
 
+/** The category as a plural noun in running text ("filter skills…"). */
+const CATEGORY_NOUN: Record<HubCategory, MessageDescriptor> = {
+  skills: msg`skills`,
+  commands: msg`commands`,
+  templates: msg`templates`,
+  hooks: msg`hooks`,
+  insights: msg`insights`,
+};
+
+/** One item of the category ("select a skill…"); insights has no items. */
+const CATEGORY_SINGULAR: Record<HubCategory, MessageDescriptor> = {
+  skills: msg`skill`,
+  commands: msg`command`,
+  templates: msg`template`,
+  hooks: msg`hook`,
+  insights: msg`hook`,
+};
+
 /* A roster row is one of the four catalog item shapes, tagged by kind so the
  * renderer + the profile can discriminate. */
 type RosterRow =
@@ -68,6 +89,9 @@ function rowScope(r: RosterRow): 'global' | 'project' {
 /* ----- roster cards (one per kind) ----- */
 
 function SkillCard({ item }: { item: SystemItem }): JSX.Element {
+  const { t } = useLingui();
+  const used30d = String(item.tasks30d);
+  const lastUsed = item.lastUsed !== null ? fmtAgo(item.lastUsed) : null;
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -82,10 +106,10 @@ function SkillCard({ item }: { item: SystemItem }): JSX.Element {
         <div className="mt-[3px] truncate text-[12.5px] text-ink-dim">{item.description}</div>
       )}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 font-mono text-[10px] text-ink-faint">
-        <span className="whitespace-nowrap">used 30d {String(item.tasks30d)}</span>
         <span className="whitespace-nowrap">
-          {item.lastUsed !== null ? `last ${fmtAgo(item.lastUsed)}` : 'never used'}
+          <Trans>used 30d {used30d}</Trans>
         </span>
+        <span className="whitespace-nowrap">{lastUsed !== null ? t`last ${lastUsed}` : t`never used`}</span>
       </div>
     </>
   );
@@ -115,6 +139,7 @@ function TemplateCard({ item }: { item: SystemTemplate }): JSX.Element {
         <span className="font-mono text-[13px] font-semibold text-ink">{item.name}</span>
         <span
           className={`ml-auto rounded-full border px-2 py-px font-mono text-[10px] whitespace-nowrap ${
+            // i18n-ignore — a resolution value the server sends
             item.resolution === 'project override' ? 'border-brand/40 text-brand' : 'border-line-strong text-ink-dim'
           }`}
         >
@@ -134,7 +159,9 @@ function HookCard({ item }: { item: SystemHook }): JSX.Element {
         <span className="font-mono text-[11px] text-ink-dim">{item.matcher ?? '*'}</span>
         <span className="ml-auto flex items-center gap-1.5">
           {item.timeout === null && (
-            <span className="rounded-full border border-amber/45 px-2 py-px font-mono text-[10px] text-amber">▲ no timeout</span>
+            <span className="rounded-full border border-amber/45 px-2 py-px font-mono text-[10px] text-amber">
+              <Trans>▲ no timeout</Trans>
+            </span>
           )}
           <ScopeBadge scope={item.scope} projectSlug={item.projectSlug} />
         </span>
@@ -221,6 +248,7 @@ export function SystemHub({
    * flag drives only the empty-state copy. Fleet mode is unchanged. */
   projectScoped?: boolean;
 } = {}): JSX.Element {
+  const { i18n, t } = useLingui();
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -366,25 +394,25 @@ export function SystemHub({
     switch (category) {
       case 'skills':
         return [
-          { id: 'overview', label: 'Overview' },
-          { id: 'docs', label: 'Docs' },
-          { id: 'usage', label: 'Usage' },
-          { id: 'definition', label: 'Definition' },
+          { id: 'overview', label: t`Overview` },
+          { id: 'docs', label: t`Docs` },
+          { id: 'usage', label: t`Usage` },
+          { id: 'definition', label: t`Definition` },
         ];
       case 'commands':
         return [
-          { id: 'overview', label: 'Overview' },
-          { id: 'docs', label: 'Docs' },
-          { id: 'content', label: 'Content' },
+          { id: 'overview', label: t`Overview` },
+          { id: 'docs', label: t`Docs` },
+          { id: 'content', label: t`Content` },
         ];
       case 'templates':
-        return [{ id: 'overview', label: 'Content' }];
+        return [{ id: 'overview', label: t`Content` }];
       case 'hooks':
-        return [{ id: 'overview', label: 'Config' }];
+        return [{ id: 'overview', label: t`Config` }];
       case 'insights':
         return [];
     }
-  }, [category]);
+  }, [category, t]);
 
   // The ROLE nav: Toolkit (with three sub-kinds) · Hooks · Insights, each with
   // a count badge from the summary. When embedded the outer shell owns the
@@ -406,7 +434,7 @@ export function SystemHub({
       >
         {!embedded && (
           <h1 className="mb-4 font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
-            System Hub
+            <Trans>System Hub</Trans>
           </h1>
         )}
         {!embedded && roleNav}
@@ -417,7 +445,9 @@ export function SystemHub({
     );
   }
 
-  const activeTab = tabs.some((t) => t.id === tab) ? tab : (tabs[0]?.id ?? 'overview');
+  const activeTab = tabs.some((item) => item.id === tab) ? tab : (tabs[0]?.id ?? 'overview');
+  const noun = i18n._(CATEGORY_NOUN[category]);
+  const singularNoun = i18n._(CATEGORY_SINGULAR[category]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -439,7 +469,7 @@ export function SystemHub({
             position it holds on every other page. Embedded, SystemShell owns the
             chip and hands this hub its scopeSlug. */}
         <HubShell<RosterRow>
-          {...(embedded ? {} : { title: 'System Hub', topBar: <ScopeChip /> })}
+          {...(embedded ? {} : { title: t`System Hub`, topBar: <ScopeChip /> })}
           roster={visibleRoster}
           rosterError={rosterError}
           onRosterRetry={loadRoster}
@@ -448,20 +478,24 @@ export function SystemHub({
           renderRow={(r) => renderRow(r)}
           selectedKey={selectedKey}
           onSelect={onSelect}
-          searchPlaceholder={`filter ${category}…`}
+          searchPlaceholder={t`filter ${noun}…`}
           rosterEmptyLabel={
             // An active origin filter is the likely cause of an empty roster, so
             // name it instead of claiming the machine has none.
             originScope !== null
-              ? `no ${originScope}-scope ${category} here`
+              ? t`no ${originScope}-scope ${noun} here`
               : projectScoped
-                ? `No ${category} resolve for this project — enable a pack in Settings, or add one under .claude/.`
-                : `no ${category} on this machine`
+                ? t`No ${noun} resolve for this project — enable a pack in Settings, or add one under .claude/.`
+                : t`no ${noun} on this machine`
           }
           tabs={tabs}
           activeTab={activeTab}
           onTab={onTab}
-          detailPlaceholder={<Empty>select a {singular(category)} to see its profile</Empty>}
+          detailPlaceholder={
+            <Empty>
+              <Trans>select a {singularNoun} to see its profile</Trans>
+            </Empty>
+          }
         >
           {selectedKey !== null && (
             <ProfileFor
@@ -484,10 +518,6 @@ export function SystemHub({
   );
 }
 
-function singular(c: HubCategory): string {
-  return c === 'skills' ? 'skill' : c === 'commands' ? 'command' : c === 'templates' ? 'template' : 'hook';
-}
-
 /* ----- role nav (Toolkit · Hooks · Insights + Toolkit sub-tabs) ----- */
 
 function RoleNav({
@@ -504,15 +534,16 @@ function RoleNav({
    * not in Toolkit). */
   embedded?: boolean;
 }): JSX.Element | null {
+  const { i18n, t } = useLingui();
   const inToolkit = (TOOLKIT as string[]).includes(category);
   // exactOptionalPropertyTypes: omit `badge` entirely when the summary is absent.
   const badge = (n: number | undefined): { badge?: number } => (n !== undefined ? { badge: n } : {});
   const toolkitBadge =
     summary === null ? undefined : summary.skills + summary.commands + summary.templates;
   const roles: { key: HubCategory; label: string; badge?: number; active: boolean }[] = [
-    { key: 'skills', label: 'Toolkit', ...badge(toolkitBadge), active: inToolkit },
-    { key: 'hooks', label: 'Hooks', ...badge(summary?.hooks), active: category === 'hooks' },
-    { key: 'insights', label: 'Insights', ...badge(summary?.insights), active: category === 'insights' },
+    { key: 'skills', label: t`Toolkit`, ...badge(toolkitBadge), active: inToolkit },
+    { key: 'hooks', label: t`Hooks`, ...badge(summary?.hooks), active: category === 'hooks' },
+    { key: 'insights', label: t`Insights`, ...badge(summary?.insights), active: category === 'insights' },
   ];
   const toolkitPills = inToolkit ? (
     <div className="flex gap-1.5">
@@ -529,7 +560,7 @@ function RoleNav({
               active ? 'border-brand/50 bg-surface2 text-brand' : 'border-line text-ink-dim hover:border-line-strong hover:text-ink'
             }`}
           >
-            {k}
+            {i18n._(CATEGORY_NOUN[k])}
             {b !== undefined ? ` ${String(b)}` : ''}
           </button>
         );
@@ -542,7 +573,7 @@ function RoleNav({
 
   return (
     <div className="space-y-2.5">
-      <div className="flex gap-1 border-b border-line" role="tablist" aria-label="System Hub sections">
+      <div className="flex gap-1 border-b border-line" role="tablist" aria-label={t`System Hub sections`}>
         {roles.map((r) => (
           <button
             key={r.key}
@@ -590,9 +621,20 @@ function ProfileFor({
   onTemplateCopied: () => void;
 }): JSX.Element {
   const id = /^\d+$/.test(selectedKey) ? Number(selectedKey) : NaN;
+  const invalid = (
+    <Empty>
+      {category === 'skills' ? (
+        <Trans>invalid skill</Trans>
+      ) : category === 'commands' ? (
+        <Trans>invalid command</Trans>
+      ) : (
+        <Trans>invalid hook</Trans>
+      )}
+    </Empty>
+  );
   switch (category) {
     case 'skills':
-      if (Number.isNaN(id)) return <Empty>invalid skill</Empty>;
+      if (Number.isNaN(id)) return invalid;
       return (
         <SkillProfile
           id={id}
@@ -604,7 +646,7 @@ function ProfileFor({
         />
       );
     case 'commands':
-      if (Number.isNaN(id)) return <Empty>invalid command</Empty>;
+      if (Number.isNaN(id)) return invalid;
       return (
         <CommandProfile
           id={id}
@@ -613,7 +655,7 @@ function ProfileFor({
         />
       );
     case 'hooks':
-      if (Number.isNaN(id)) return <Empty>invalid hook</Empty>;
+      if (Number.isNaN(id)) return invalid;
       return <HookProfile id={id} />;
     case 'templates':
       return <TemplateProfile name={selectedKey} projectId={scopeSlug} onCopied={onTemplateCopied} />;

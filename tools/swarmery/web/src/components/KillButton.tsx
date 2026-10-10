@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState, type MouseEvent } from 'react';
 import { killSession } from '../api';
 import type { Session } from '../api/types';
@@ -37,6 +38,7 @@ export function killSlotKind(session: Session): KillSlotKind {
  * disappearing outright — see `killSlotKind`.
  */
 export function KillButton({ session }: { session: Session }): JSX.Element | null {
+  const { t } = useLingui();
   const [confirming, setConfirming] = useState(false);
   const [killing, setKilling] = useState(false);
   const [forceReady, setForceReady] = useState(false);
@@ -48,9 +50,9 @@ export function KillButton({ session }: { session: Session }): JSX.Element | nul
     return (
       <span
         className="rounded border border-ink-dim/20 px-2 py-0.5 font-mono text-[10.5px] font-medium text-ink-dim"
-        data-tip="Process already exited — nothing to kill"
+        data-tip={t`Process already exited — nothing to kill`}
       >
-        exited
+        <Trans>exited</Trans>
       </span>
     );
   }
@@ -81,18 +83,22 @@ export function KillButton({ session }: { session: Session }): JSX.Element | nul
         onClick={(e) => { stop(e); void doKill(true); }}
         className="rounded border border-red-500/50 bg-red-500/10 px-2 py-0.5 font-mono text-[10.5px] font-medium text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
       >
-        {killing ? 'killing…' : 'Force kill'}
+        {killing ? t`killing…` : t`Force kill`}
       </button>
     );
   }
 
   if (confirming) {
-    const costLine = session.costUsd != null ? ` · ${fmtCost(session.costUsd)} so far` : '';
+    const cost = session.costUsd != null ? fmtCost(session.costUsd) : null;
+    const costLine = cost != null ? t` · ${cost} so far` : '';
     const label = session.gitBranch ?? session.sessionUuid.slice(0, 8);
     return (
       <span className="flex items-center gap-1.5" onClick={stop}>
         <span className="font-mono text-[10.5px] text-ink-dim">
-          Kill {label}{costLine}?
+          <Trans>
+            Kill {label}
+            {costLine}?
+          </Trans>
         </span>
         <button
           type="button"
@@ -100,14 +106,14 @@ export function KillButton({ session }: { session: Session }): JSX.Element | nul
           onClick={(e) => { stop(e); void doKill(false); }}
           className="rounded border border-red-500/50 bg-red-500/10 px-2 py-0.5 font-mono text-[10.5px] font-medium text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
         >
-          {killing ? 'killing…' : 'Confirm'}
+          {killing ? t`killing…` : t`Confirm`}
         </button>
         <button
           type="button"
           onClick={(e) => { stop(e); setConfirming(false); }}
           className="font-mono text-[10.5px] text-ink-dim hover:text-ink"
         >
-          Cancel
+          <Trans>Cancel</Trans>
         </button>
       </span>
     );
@@ -119,7 +125,7 @@ export function KillButton({ session }: { session: Session }): JSX.Element | nul
       onClick={(e) => { stop(e); setConfirming(true); }}
       className="rounded border border-ink-dim/30 px-2 py-0.5 font-mono text-[10.5px] font-medium text-ink-dim transition-colors hover:border-red-500/40 hover:text-red-500"
     >
-      Kill
+      <Trans>Kill</Trans>
     </button>
   );
 }

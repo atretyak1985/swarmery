@@ -4,6 +4,7 @@
 // RefineModal. On the "revision already open" 409 the caller passes the open
 // revision's id back in and the modal offers the review instead of a dead end.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 
 export function ReviseModal({
@@ -67,6 +68,7 @@ function ReviseModalInner({
   onSubmit: (reason: string) => void;
   onOpenRevision: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // Remember the trigger so focus returns to it on close (WCAG 2.2 §2.4.3).
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -129,7 +131,7 @@ function ReviseModalInner({
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Revise this plan"
+      aria-label={t`Revise this plan`}
       onClick={busy ? undefined : onClose}
     >
       <div
@@ -137,10 +139,14 @@ function ReviseModalInner({
         className="w-full max-w-lg rounded-xl border border-line bg-surface px-4 py-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="font-display text-[14px] font-bold text-ink">Revise this plan</div>
+        <div className="font-display text-[14px] font-bold text-ink">
+          <Trans>Revise this plan</Trans>
+        </div>
         <p className="mt-1 text-[12.5px] leading-relaxed text-ink-dim">
-          A revise wizard interviews you against <span className="text-ink">{planTitle}</span> and
-          stages its changes as a diff — nothing is written until you approve it.
+          <Trans>
+            A revise wizard interviews you against <span className="text-ink">{planTitle}</span> and
+            stages its changes as a diff — nothing is written until you approve it.
+          </Trans>
         </p>
 
         {error !== null && (
@@ -155,7 +161,7 @@ function ReviseModalInner({
                 onClick={onOpenRevision}
                 className="mt-1.5 block font-mono text-[11px] text-brand underline-offset-2 hover:underline"
               >
-                review the open revision →
+                <Trans>review the open revision →</Trans>
               </button>
             )}
           </div>
@@ -165,7 +171,7 @@ function ReviseModalInner({
           className="mt-3 mb-1 block font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase"
           htmlFor="plan-revise-reason"
         >
-          what should change, and why
+          <Trans>what should change, and why</Trans>
         </label>
         <textarea
           ref={textareaRef}
@@ -174,7 +180,7 @@ function ReviseModalInner({
           onChange={(e) => setReason(e.target.value)}
           rows={4}
           disabled={busy}
-          placeholder="For example: phase 3's library choice failed the a11y gate — replace it and add an audit phase."
+          placeholder={t`For example: phase 3's library choice failed the a11y gate — replace it and add an audit phase.`}
           className="w-full resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[12.5px] leading-relaxed text-ink transition-colors outline-none placeholder:text-ink-faint focus:border-brand/50 disabled:opacity-50"
         />
 
@@ -185,7 +191,7 @@ function ReviseModalInner({
             disabled={busy}
             className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
           >
-            Cancel
+            <Trans>Cancel</Trans>
           </button>
           <button
             type="button"
@@ -193,7 +199,7 @@ function ReviseModalInner({
             disabled={busy || reason.trim() === ''}
             className="rounded-lg border border-brand/45 bg-brand/12 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
           >
-            {busy ? 'starting…' : 'Start revision'}
+            {busy ? t`starting…` : t`Start revision`}
           </button>
         </div>
       </div>

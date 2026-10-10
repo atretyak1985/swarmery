@@ -5,6 +5,7 @@
 // soft-deleted twin exists) offers restore instead — creating over it is not
 // possible, by design. 403 readonly bubbles to the page banner via onReadonly.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { Project, SystemCreateAgentRequest } from '../../api/types';
 import { fetchProjects } from '../../api';
@@ -28,6 +29,7 @@ export function CreateAgentForm({
   /** A write hit the global readonly kill-switch — page-level banner. */
   onReadonly: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [name, setName] = useState('');
   const [scope, setScope] = useState<'global' | 'project'>('global');
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -64,8 +66,8 @@ export function CreateAgentForm({
     (scope === 'global' || projectId !== null);
 
   const addTool = (): void => {
-    const t = toolInput.trim().replace(/,+$/, '');
-    if (t !== '' && !tools.includes(t)) setTools((prev) => [...prev, t]);
+    const tool = toolInput.trim().replace(/,+$/, '');
+    if (tool !== '' && !tools.includes(tool)) setTools((prev) => [...prev, tool]);
     setToolInput('');
   };
 
@@ -113,31 +115,34 @@ export function CreateAgentForm({
 
   return (
     <div className="rounded-xl border border-line bg-surface px-4 py-3.5">
-      <div className="font-display text-[14px] font-bold text-ink">New agent</div>
+      <div className="font-display text-[14px] font-bold text-ink">
+        <Trans>New agent</Trans>
+      </div>
 
       <div className="mt-3 grid gap-3 desk:grid-cols-2">
         <div>
           <label className={LABEL} htmlFor="na-name">
-            name
+            <Trans>name</Trans>
           </label>
           <input
             id="na-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            // i18n-ignore — an example kebab-case identifier, not prose
             placeholder="my-agent"
             spellCheck={false}
             className={FIELD}
           />
           {nameInvalid && (
             <div className="mt-1 font-mono text-[10.5px] text-red" role="alert">
-              kebab-case only: lowercase letters, digits, single dashes (my-agent)
+              <Trans>kebab-case only: lowercase letters, digits, single dashes (my-agent)</Trans>
             </div>
           )}
         </div>
         <div className="flex gap-2">
           <div className="min-w-0 flex-1">
             <label className={LABEL} htmlFor="na-scope">
-              scope
+              <Trans>scope</Trans>
             </label>
             <select
               id="na-scope"
@@ -145,14 +150,18 @@ export function CreateAgentForm({
               onChange={(e) => setScope(e.target.value === 'project' ? 'project' : 'global')}
               className={FIELD}
             >
-              <option value="global">global</option>
-              <option value="project">project</option>
+              <option value="global">
+                <Trans>global</Trans>
+              </option>
+              <option value="project">
+                <Trans>project</Trans>
+              </option>
             </select>
           </div>
           {scope === 'project' && (
             <div className="min-w-0 flex-1">
               <label className={LABEL} htmlFor="na-project">
-                project
+                <Trans>project</Trans>
               </label>
               <select
                 id="na-project"
@@ -162,7 +171,7 @@ export function CreateAgentForm({
                 }
                 className={FIELD}
               >
-                <option value="">— pick —</option>
+                <option value="">— {t`pick`} —</option>
                 {projects.map((p) => (
                   <option key={p.id} value={String(p.id)}>
                     {p.name ?? p.slug}
@@ -176,13 +185,13 @@ export function CreateAgentForm({
 
       <div className="mt-3">
         <label className={LABEL} htmlFor="na-desc">
-          description
+          <Trans>description</Trans>
         </label>
         <input
           id="na-desc"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="what this agent owns, in one line"
+          placeholder={t`what this agent owns, in one line`}
           className={FIELD}
         />
       </div>
@@ -190,32 +199,36 @@ export function CreateAgentForm({
       <div className="mt-3 grid gap-3 desk:grid-cols-2">
         <div>
           <label className={LABEL} htmlFor="na-model">
-            model <span className="normal-case">(optional)</span>
+            <Trans>
+              model <span className="normal-case">(optional)</span>
+            </Trans>
           </label>
           <input
             id="na-model"
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder="inherit from session"
+            placeholder={t`inherit from session`}
             spellCheck={false}
             className={FIELD}
           />
         </div>
         <div>
           <label className={LABEL} htmlFor="na-tools">
-            tools <span className="normal-case">(optional)</span>
+            <Trans>
+              tools <span className="normal-case">(optional)</span>
+            </Trans>
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
-            {tools.map((t) => (
+            {tools.map((tool) => (
               <span
-                key={t}
+                key={tool}
                 className="flex items-center gap-1 rounded-full border border-line px-2 py-px font-mono text-[10.5px] text-ink-2"
               >
-                {t}
+                {tool}
                 <button
                   type="button"
-                  onClick={() => setTools((prev) => prev.filter((x) => x !== t))}
-                  aria-label={`remove tool ${t}`}
+                  onClick={() => setTools((prev) => prev.filter((x) => x !== tool))}
+                  aria-label={t`remove tool ${tool}`}
                   className="text-ink-dim transition-colors hover:text-red"
                 >
                   ×
@@ -233,7 +246,7 @@ export function CreateAgentForm({
                 }
               }}
               onBlur={addTool}
-              placeholder="Read, Grep… Enter adds"
+              placeholder={t`Read, Grep… Enter adds`}
               spellCheck={false}
               className="min-w-[130px] flex-1 rounded-lg border border-line bg-bg px-3 py-1.5 font-mono text-[11.5px] text-ink-2 focus:border-brand focus:outline-none"
             />
@@ -243,14 +256,15 @@ export function CreateAgentForm({
 
       <div className="mt-3">
         <label className={LABEL} htmlFor="na-bounds">
-          boundaries
+          <Trans>boundaries</Trans>
         </label>
         <textarea
           id="na-bounds"
           value={boundaries}
           onChange={(e) => setBoundaries(e.target.value)}
           rows={3}
-          placeholder={'- never edits code outside its scope\n- escalates when a plan assumption breaks'}
+          placeholder={t`- never edits code outside its scope
+- escalates when a plan assumption breaks`}
           spellCheck={false}
           className="w-full resize-y rounded-lg border border-line bg-bg px-3 py-2 font-mono text-[11.5px] leading-relaxed text-ink-2 focus:border-brand focus:outline-none"
         />
@@ -266,7 +280,7 @@ export function CreateAgentForm({
               disabled={busy}
               className="mt-2 rounded-lg border border-green/40 bg-green/10 px-3 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
             >
-              restore the soft-deleted agent instead
+              <Trans>restore the soft-deleted agent instead</Trans>
             </button>
           )}
         </div>
@@ -279,7 +293,7 @@ export function CreateAgentForm({
           disabled={busy}
           className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
         >
-          cancel
+          <Trans>cancel</Trans>
         </button>
         <button
           type="button"
@@ -287,7 +301,7 @@ export function CreateAgentForm({
           disabled={!canSubmit}
           className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors enabled:hover:bg-green/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? 'creating…' : 'create agent'}
+          {busy ? t`creating…` : t`create agent`}
         </button>
       </div>
     </div>

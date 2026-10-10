@@ -4,7 +4,7 @@
 // labelled from the provider `terms` only, a link to an open change request,
 // and nothing at all before the landing flow or before the terms load.
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '../../test/render';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { EpicPhase, PhaseLanding, ProviderTerms } from '../../api/types';
 import { PhaseCard } from './PhaseCard';

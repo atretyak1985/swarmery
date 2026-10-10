@@ -9,6 +9,7 @@
 // embedded (their own range rows hidden) and are lazy — Analytics pulls in
 // Recharts, so it loads only when the Cost tab is opened.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -89,20 +90,21 @@ const AUTO_MODE_TONE: Record<AutoModeTone, string> = {
  * carried by the words, the colour only repeats it.
  */
 function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: string }): JSX.Element {
+  const { t } = useLingui();
   const row = autoModeRow(mode, mode.lastAt !== null ? fmtAgo(mode.lastAt) : null);
   return (
     <div
       role="status"
-      aria-label="Auto mode permission check"
+      aria-label={t`Auto mode permission check`}
       className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-4 py-2.5 desk:px-7"
     >
       <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-        Auto mode permission check
+        <Trans>Auto mode permission check</Trans>
       </span>
       <span className={`font-mono text-[11px] ${AUTO_MODE_TONE[row.tone]}`}>{row.text}</span>
       {mode.alerting && (
         <Link to={inboxHref} className="font-mono text-[11px] font-semibold text-red hover:underline">
-          alerting → Inbox
+          <Trans>alerting → Inbox</Trans>
         </Link>
       )}
     </div>
@@ -132,6 +134,7 @@ function useDaysParam(): [HealthPreset, (days: string) => void] {
 }
 
 export function Health(): JSX.Element {
+  const { t } = useLingui();
   const { slug } = useParams<{ slug: string }>();
   const projectSlug = slug ?? null;
   const { scope } = useScope();
@@ -185,7 +188,7 @@ export function Health(): JSX.Element {
   const [dismissedError, setDismissedError] = useState<string | null>(null);
   const lastRun = triage.lastRun;
   const runFailed = lastRun?.status === 'failed';
-  const runError = triage.startError ?? (runFailed ? lastRun.error || 'The triage run failed.' : null);
+  const runError = triage.startError ?? (runFailed ? lastRun.error || t`The triage run failed.` : null);
   // One identity per error (this start attempt, or that failed run), as on the Inbox.
   const errorKey =
     triage.startError !== null ? `start:${triage.startError}` : runFailed ? `run:${String(lastRun.id)}` : null;
@@ -216,40 +219,49 @@ export function Health(): JSX.Element {
     const out: StatusCell[] = [];
     if (agents !== null) {
       const c = windowCell(agents);
-      const t = windowCellText(c);
+      const wc = windowCellText(c);
+      const spent = String(Math.round(c.costUsd));
       out.push({
-        label: 'this window',
-        value: t.value,
+        label: t`this window`,
+        value: wc.value,
         delta: (
           <>
-            {t.delta !== null && <span className={t.better ? 'text-green' : 'text-red'}>{t.delta}</span>}
-            {` · $${String(Math.round(c.costUsd))} spent`}
+            {wc.delta !== null && <span className={wc.better ? 'text-green' : 'text-red'}>{wc.delta}</span>}
+            {t` · $${spent} spent`}
           </>
         ),
       });
     } else {
-      out.push({ label: 'this window', value: '…' });
+      out.push({ label: t`this window`, value: '…' });
     }
     const findings = recs !== null ? countRecs(recs, OPEN_RECS) : 0;
     const rewrites = proposals !== null ? countProposals(proposals, OPEN_PROPOSALS) : 0;
     out.push({
-      label: 'waiting on you',
+      label: t`waiting on you`,
       value: waitingText(findings, rewrites),
-      delta: <span className="text-amber">→ Inbox</span>,
+      delta: (
+        <span className="text-amber">
+          <Trans>→ Inbox</Trans>
+        </span>
+      ),
       href: placeHref('inbox', projectSlug),
       tone: findings + rewrites > 0 ? 'amber' : 'neutral',
     });
     out.push({
-      label: 'because of you',
+      label: t`because of you`,
       value: becauseText(
         recs !== null ? countRecs(recs, VERIFIED_RECS) : 0,
         recs !== null ? countRecs(recs, GATHERING_RECS) : 0,
       ),
-      delta: <span className="text-ink-faint">→ Proof</span>,
+      delta: (
+        <span className="text-ink-faint">
+          <Trans>→ Proof</Trans>
+        </span>
+      ),
       href: `${placeHref('learning', projectSlug)}?tab=proof`,
     });
     return out;
-  }, [agents, recs, proposals, projectSlug]);
+  }, [agents, recs, proposals, projectSlug, t]);
 
   const advisorOpen =
     recs !== null || proposals !== null
@@ -258,40 +270,40 @@ export function Health(): JSX.Element {
       : null;
 
   const tabs: TabItem<HealthTab>[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'agents', label: 'Agents', ...(agents !== null ? { count: agents.agents.length } : {}) },
+    { id: 'overview', label: t`Overview` },
+    { id: 'agents', label: t`Agents`, ...(agents !== null ? { count: agents.agents.length } : {}) },
     {
       id: 'friction',
-      label: 'Friction',
+      label: t`Friction`,
       ...(friction !== null && frictionCount(friction) > 0 ? { count: frictionCount(friction) } : {}),
     },
-    { id: 'estimates', label: 'Estimates' },
-    { id: 'phaseruns', label: 'Phase runs' },
+    { id: 'estimates', label: t`Estimates` },
+    { id: 'phaseruns', label: t`Phase runs` },
     {
       id: 'advisor',
-      label: 'Advisor',
-      ...(advisorOpen !== null && advisorOpen > 0 ? { count: `${String(advisorOpen)} open` } : {}),
+      label: t`Advisor`,
+      ...(advisorOpen !== null && advisorOpen > 0 ? { count: t`${advisorOpen} open` } : {}),
     },
-    { id: 'cost', label: 'Cost & tokens' },
+    { id: 'cost', label: t`Cost & tokens` },
   ];
 
   return (
     <div>
       <StatusStrip
-        title="Health"
+        title={t`Health`}
         subtitle={
           projectSlug === null
-            ? 'how the agent fleet is doing and what to change'
-            : "how this project's agents are doing and what to change"
+            ? t`how the agent fleet is doing and what to change`
+            : t`how this project's agents are doing and what to change`
         }
         range={{ value: String(days), options: RANGE_OPTIONS, onChange: setDays }}
         cells={cells}
-        tabs={<Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel="Health" />}
+        tabs={<Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Health`} />}
       />
       {tab === 'overview' && autoMode !== undefined && (
         <AutoModeRow mode={autoMode} inboxHref={`${placeHref('inbox', projectSlug)}?tab=alerts`} />
       )}
-      <div role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.label}>
+      <div role="tabpanel" aria-label={tabs.find((item) => item.id === tab)?.label}>
         {tab === 'overview' ? (
           <HealthOverview
             agents={agents}
@@ -303,7 +315,7 @@ export function Health(): JSX.Element {
         ) : tab === 'phaseruns' ? (
           <PhaseRunsTab from={range.from} to={range.to} />
         ) : tab === 'cost' ? (
-          <Suspense fallback={<Loading label="cost…" />}>
+          <Suspense fallback={<Loading label={t`cost…`} />}>
             <Analytics range={{ from: range.from, to: range.to }} />
           </Suspense>
         ) : (

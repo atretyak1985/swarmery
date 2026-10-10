@@ -7,7 +7,7 @@
 // and timer cleanup. The API is mocked at the three sign-in calls; the real
 // VcsLoginError class is kept.
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VcsLoginError } from '../api';
 import type { VcsInfo, VcsLoginStart } from '../api/types';

@@ -9,7 +9,7 @@
 // web/tsconfig.json EXCLUDES *.test.ts, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup, renderHook } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useDocumentTitle } from './useDocumentTitle';
 

@@ -6,7 +6,7 @@
 // while it runs, hands the new landing up, and shows a refusal inline. The API
 // module is mocked except LandError, the real class.
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PhaseChangeStatus, PhaseLanding } from '../../api/types';
 import { LandingStatus } from './LandingStatus';

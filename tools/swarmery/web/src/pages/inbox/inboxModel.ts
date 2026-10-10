@@ -13,6 +13,7 @@
 // Wording follows the code → UI dictionary (lib/glossary.ts UI_TERMS): a
 // context line says "off-plan", never the code name `surprise`.
 
+import { plural, t } from '@lingui/core/macro';
 import { ACCOUNT_BREAKER_RULE, AUTO_MODE_NO_VERDICT_RULE, type Alert } from '../../api/alerts';
 import type { QueueItem } from '../../api/decisions';
 import type { TriageVerdict } from '../../api/triage';
@@ -98,39 +99,156 @@ export type InboxTabId =
   | 'reviews'
   | 'handled';
 
-/** Tab order and wording follow 1b/2b; `kind` is what the tab filters to. */
+/** Tab order and wording follow 1b/2b; `kind` is what the tab filters to.
+ * Labels are getters so each read goes through the active locale. */
 export const INBOX_TABS: readonly { id: InboxTabId; label: string; kind?: InboxKind }[] = [
-  { id: 'all', label: 'all' },
-  { id: 'approvals', label: 'approvals', kind: 'approval' },
-  { id: 'lessons', label: 'lessons', kind: 'lesson' },
-  { id: 'advisor', label: 'advisor', kind: 'advisor' },
-  { id: 'proposals', label: 'proposals', kind: 'proposal' },
-  { id: 'classifier', label: 'classifier', kind: 'classifier' },
-  { id: 'retire', label: 'stop using a lesson?', kind: 'retire' },
-  { id: 'alerts', label: 'alerts', kind: 'alert' },
-  { id: 'reviews', label: 'reviews', kind: 'review' },
+  {
+    id: 'all',
+    get label() {
+      return t`all`;
+    },
+  },
+  {
+    id: 'approvals',
+    get label() {
+      return t`approvals`;
+    },
+    kind: 'approval',
+  },
+  {
+    id: 'lessons',
+    get label() {
+      return t`lessons`;
+    },
+    kind: 'lesson',
+  },
+  {
+    id: 'advisor',
+    get label() {
+      return t`advisor`;
+    },
+    kind: 'advisor',
+  },
+  {
+    id: 'proposals',
+    get label() {
+      return t`proposals`;
+    },
+    kind: 'proposal',
+  },
+  {
+    id: 'classifier',
+    get label() {
+      return t`classifier`;
+    },
+    kind: 'classifier',
+  },
+  {
+    id: 'retire',
+    get label() {
+      return t`stop using a lesson?`;
+    },
+    kind: 'retire',
+  },
+  {
+    id: 'alerts',
+    get label() {
+      return t`alerts`;
+    },
+    kind: 'alert',
+  },
+  {
+    id: 'reviews',
+    get label() {
+      return t`reviews`;
+    },
+    kind: 'review',
+  },
   // Rows of this tab are triage verdicts, not items: a component renders them.
-  { id: 'handled', label: 'handled by agent' },
+  {
+    id: 'handled',
+    get label() {
+      return t`handled by agent`;
+    },
+  },
 ];
 
-/** Per-kind presentation: label after the dot, and the dot / label colour token. */
+/** Per-kind presentation: label after the dot, and the dot / label colour token.
+ * Labels are getters so each read goes through the active locale. */
 export const KIND_META: Record<InboxKind, { label: string; dot: string; text: string }> = {
-  approval: { label: 'approval', dot: 'bg-amber', text: 'text-amber' },
-  lesson: { label: 'new lesson', dot: 'bg-purple', text: 'text-purple' },
-  advisor: { label: UI_TERMS.recommendation.ui.replace('…', ''), dot: 'bg-blue', text: 'text-blue' },
-  proposal: { label: 'agent change', dot: 'bg-ink-dim', text: 'text-ink-dim' },
-  classifier: { label: 'check the classifier', dot: 'bg-green', text: 'text-green' },
-  retire: { label: 'stop using a lesson?', dot: 'bg-red', text: 'text-red' },
-  alert: { label: 'alert', dot: 'bg-red', text: 'text-red' },
-  review: { label: 'plan review', dot: 'bg-brand', text: 'text-brand' },
+  approval: {
+    get label() {
+      return t`approval`;
+    },
+    dot: 'bg-amber',
+    text: 'text-amber',
+  },
+  lesson: {
+    get label() {
+      return t`new lesson`;
+    },
+    dot: 'bg-purple',
+    text: 'text-purple',
+  },
+  advisor: {
+    // read per access: UI_TERMS.ui is a locale getter and this module loads before the catalogs
+    get label() {
+      return UI_TERMS.recommendation.ui.replace('…', '');
+    },
+    dot: 'bg-blue',
+    text: 'text-blue',
+  },
+  proposal: {
+    get label() {
+      return t`agent change`;
+    },
+    dot: 'bg-ink-dim',
+    text: 'text-ink-dim',
+  },
+  classifier: {
+    get label() {
+      return t`check the classifier`;
+    },
+    dot: 'bg-green',
+    text: 'text-green',
+  },
+  retire: {
+    get label() {
+      return t`stop using a lesson?`;
+    },
+    dot: 'bg-red',
+    text: 'text-red',
+  },
+  alert: {
+    get label() {
+      return t`alert`;
+    },
+    dot: 'bg-red',
+    text: 'text-red',
+  },
+  review: {
+    get label() {
+      return t`plan review`;
+    },
+    dot: 'bg-brand',
+    text: 'text-brand',
+  },
 };
 
-/** Plain-language retirement reasons (never the enum). */
+/** Plain-language retirement reasons (never the enum), read through the active locale. */
 export const RETIRE_REASON_UI: Record<RetireReason, string> = {
-  ineffective: 'not helping',
-  stale: 'out of date',
-  unused_60d: 'unused for 60 days',
-  superseded: 'replaced by a newer lesson',
+  get ineffective() {
+    return t`not helping`;
+  },
+  get stale() {
+    return t`out of date`;
+  },
+  get unused_60d() {
+    return t`unused for 60 days`;
+  },
+  get superseded() {
+    return t`replaced by a newer lesson`;
+  },
 };
 
 export interface InboxSources {
@@ -148,13 +266,14 @@ function approvalItem(r: PermissionRequest): InboxItem {
   const questions = questionsOf(r);
   const title =
     questions !== null
-      ? `${r.toolName} · ${String(questions.length)} question${questions.length === 1 ? '' : 's'}`
+      ? `${r.toolName} · ${plural(questions.length, { one: '# question', few: '# questions', many: '# questions', other: '# questions' })}`
       : `${r.toolName} · ${requestSummary(r)}`;
+  const sessionId = String(r.sessionId);
   return {
     key: `approval:${String(r.id)}`,
     kind: 'approval',
     title,
-    context: `session ${String(r.sessionId)}`,
+    context: t`session ${sessionId}`,
     ageIso: r.requestedAt,
     urgent: r.status === 'pending',
     expiresIso: r.expiresAt,
@@ -163,11 +282,12 @@ function approvalItem(r: PermissionRequest): InboxItem {
 }
 
 function lessonItem(l: Lesson): InboxItem {
+  const lessonTitle = l.title;
   return {
     key: `lesson:${String(l.id)}`,
     kind: 'lesson',
-    title: `New lesson: ${l.title}`,
-    context: l.phaseName === '' ? 'from a phase run' : l.phaseName,
+    title: t`New lesson: ${lessonTitle}`,
+    context: l.phaseName === '' ? t`from a phase run` : l.phaseName,
     ageIso: l.createdAt,
     urgent: false,
     raw: l,
@@ -175,10 +295,11 @@ function lessonItem(l: Lesson): InboxItem {
 }
 
 function advisorItem(r: Recommendation): InboxItem {
+  const recommendationTitle = r.title;
   return {
     key: `advisor:${String(r.id)}`,
     kind: 'advisor',
-    title: `Advisor: ${r.title}`,
+    title: t`Advisor: ${recommendationTitle}`,
     context: `${r.rule} · ${r.target}`,
     ageIso: r.created_at,
     urgent: false,
@@ -188,10 +309,11 @@ function advisorItem(r: Recommendation): InboxItem {
 
 function proposalItem(p: AgentChangeProposal): InboxItem {
   const path = p.target_path !== '' ? p.target_path : p.agent_path;
+  const agent = p.agent;
   return {
     key: `proposal:${String(p.id)}`,
     kind: 'proposal',
-    title: `Change to ${p.agent}`,
+    title: t`Change to ${agent}`,
     context: path === '' ? p.target_kind : path,
     ageIso: p.created_at,
     urgent: false,
@@ -200,10 +322,11 @@ function proposalItem(p: AgentChangeProposal): InboxItem {
 }
 
 function retireItem(p: RetirementProposal): InboxItem {
+  const lessonTitle = p.title;
   return {
     key: `retire:${String(p.id)}`,
     kind: 'retire',
-    title: `Stop using “${p.title}”?`,
+    title: t`Stop using “${lessonTitle}”?`,
     context: RETIRE_REASON_UI[p.reason] ?? p.reason,
     ageIso: p.proposedAt,
     urgent: false,
@@ -223,8 +346,12 @@ export function isAccountBreaker(a: Alert): a is Alert & { account: string } {
  */
 const ALERT_RULE_UI: Readonly<Record<string, { title: string; context: string } | undefined>> = {
   [AUTO_MODE_NO_VERDICT_RULE]: {
-    title: 'Permission checks are getting no verdict',
-    context: 'Claude Code auto mode',
+    get title() {
+      return t`Permission checks are getting no verdict`;
+    },
+    get context() {
+      return t`Claude Code auto mode`;
+    },
   },
 };
 
@@ -239,9 +366,9 @@ function alertItem(a: Alert): InboxItem {
   const base = {
     key: `alert:${String(a.id)}`,
     kind: 'alert' as const,
-    title: account === null ? (ui?.title ?? a.message) : `Account ${account} is paused`,
+    title: account === null ? (ui?.title ?? a.message) : t`Account ${account} is paused`,
     context:
-      account === null ? (ui?.context ?? a.target) : a.kind === 'quota' ? 'usage limit' : 'sign-in or access',
+      account === null ? (ui?.context ?? a.target) : a.kind === 'quota' ? t`usage limit` : t`sign-in or access`,
     ageIso: a.openedAt ?? a.detectedAt,
     urgent: true,
     raw: a,
@@ -267,11 +394,11 @@ export function findingsLabel(findings: string): string {
  * is never urgent. It is dated by when the reviewer started.
  */
 function reviewItem(r: Review): InboxItem {
-  const plan = r.planTitle === '' ? `plan #${String(r.taskId)}` : r.planTitle;
+  const plan = r.planTitle === '' ? t`plan #${{ id: String(r.taskId) }}` : r.planTitle;
   return {
     key: `review:${String(r.id)}`,
     kind: 'review',
-    title: `Plan review: ${plan}`,
+    title: t`Plan review: ${plan}`,
     context: `${REVIEW_VERDICT_UI[r.verdict] ?? r.verdict} · ${findingsLabel(r.findings)}`,
     ageIso: r.startedAt,
     urgent: false,
@@ -296,8 +423,13 @@ export function groupClassifier(queue: readonly QueueItem[]): InboxItem[] {
     return {
       key: `classifier:${uuid}`,
       kind: 'classifier',
-      title: `Check the classifier · ${name}`,
-      context: `${String(group.length)} question${group.length === 1 ? '' : 's'} · grouped`,
+      title: t`Check the classifier · ${name}`,
+      context: plural(group.length, {
+        one: '# question · grouped',
+        few: '# questions · grouped',
+        many: '# questions · grouped',
+        other: '# questions · grouped',
+      }),
       ageIso,
       urgent: false,
       raw: group,
@@ -422,41 +554,58 @@ export function attachSuggestions(items: readonly InboxItem[], verdicts: readonl
   });
 }
 
-const VALUE_WORDING: Readonly<Record<string, string | undefined>> = {
-  accept: 'accept',
-  'not-useful': 'not useful',
-  stop: 'stop using it',
-  keep: 'keep it',
-  dismiss: 'dismiss',
-  track: 'track this',
-  'fix-card': 'open a fix task',
-  improve: 'draft a change',
-};
-
 /** The agent's verdict value in the operator's words; an unknown value stays raw. */
 export function valueWording(value: string): string {
-  return VALUE_WORDING[value] ?? value;
+  switch (value) {
+    case 'accept':
+      return t`accept`;
+    case 'not-useful':
+      return t`not useful`;
+    case 'stop':
+      return t`stop using it`;
+    case 'keep':
+      return t`keep it`;
+    case 'dismiss':
+      return t`dismiss`;
+    case 'track':
+      return t`track this`;
+    case 'fix-card':
+      return t`open a fix task`;
+    case 'improve':
+      return t`draft a change`;
+    default:
+      return value;
+  }
 }
-
-const SUGGESTION_BUTTON: Readonly<Record<string, string | undefined>> = {
-  accept: 'accept',
-  'not-useful': 'mark not useful',
-  stop: 'stop using it',
-  keep: 'keep it',
-  dismiss: 'dismiss',
-  track: 'track this',
-  improve: 'draft a change',
-  'fix-card': 'open the fix task',
-};
 
 /** The action a suggestion performs, in the button's words ("mark not useful"). */
 export function suggestionActionLabel(value: string): string {
-  return SUGGESTION_BUTTON[value] ?? value;
+  switch (value) {
+    case 'accept':
+      return t`accept`;
+    case 'not-useful':
+      return t`mark not useful`;
+    case 'stop':
+      return t`stop using it`;
+    case 'keep':
+      return t`keep it`;
+    case 'dismiss':
+      return t`dismiss`;
+    case 'track':
+      return t`track this`;
+    case 'improve':
+      return t`draft a change`;
+    case 'fix-card':
+      return t`open the fix task`;
+    default:
+      return value;
+  }
 }
 
 /** The primary button's text for an agent suggestion: the action, then whose idea it is. */
 export function suggestionButtonLabel(value: string): string {
-  return `${suggestionActionLabel(value)} · agent's suggestion`;
+  const action = suggestionActionLabel(value);
+  return t`${action} · agent's suggestion`;
 }
 
 /** What pressing `e` does when the agent left a (non-sample) suggestion. Null for an unknown value. */
@@ -464,23 +613,23 @@ export function suggestionConsequence(item: InboxItem, value: string): string | 
   switch (value) {
     case 'accept': {
       if (item.kind !== 'lesson') return null;
-      const areas = item.raw.areaGlobs.length > 0 ? item.raw.areaGlobs.join(', ') : 'these areas';
-      return `Every future run touching ${areas} gets this sentence in its brief. We then watch whether those runs land closer to plan.`;
+      const areas = item.raw.areaGlobs.length > 0 ? item.raw.areaGlobs.join(', ') : t`these areas`;
+      return t`Every future run touching ${areas} gets this sentence in its brief. We then watch whether those runs land closer to plan.`;
     }
     case 'not-useful':
-      return 'The candidate is closed as not useful. Nothing is added to any brief.';
+      return t`The candidate is closed as not useful. Nothing is added to any brief.`;
     case 'stop':
-      return 'The lesson stops appearing in briefs. Its history stays.';
+      return t`The lesson stops appearing in briefs. Its history stays.`;
     case 'keep':
-      return 'The proposal closes and this reason is held off for 30 days. The lesson stays in use.';
+      return t`The proposal closes and this reason is held off for 30 days. The lesson stays in use.`;
     case 'dismiss':
-      return 'The recommendation is closed. It reopens on its own if the rule keeps firing.';
+      return t`The recommendation is closed. It reopens on its own if the rule keeps firing.`;
     case 'track':
-      return "We snapshot today's number as the baseline and tell you in a week whether it moved.";
+      return t`We snapshot today's number as the baseline and tell you in a week whether it moved.`;
     case 'improve':
-      return 'An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval.';
+      return t`An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval.`;
     case 'fix-card':
-      return 'A task is created on the project\'s board with the text below, and an agent picks it up.';
+      return t`A task is created on the project's board with the text below, and an agent picks it up.`;
     default:
       return null;
   }
@@ -551,7 +700,9 @@ export function expiresInLabel(iso: string, now: number = Date.now()): string {
 
 /** "9 waiting · oldest 1 d" — the header sub-line. */
 export function waitingLine(items: readonly InboxItem[], now: number = Date.now()): string {
-  if (items.length === 0) return 'nothing waiting';
+  if (items.length === 0) return t`nothing waiting`;
   const oldest = items.reduce((min, i) => (i.ageIso < min ? i.ageIso : min), (items[0] as InboxItem).ageIso);
-  return `${String(items.length)} waiting · oldest ${ageLabel(oldest, now)}`;
+  const count = String(items.length);
+  const age = ageLabel(oldest, now);
+  return t`${count} waiting · oldest ${age}`;
 }

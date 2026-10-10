@@ -4,6 +4,8 @@
 // unit-tested. The numeric vector and weights stay in ForecastVsActual, folded
 // behind "show the score breakdown".
 
+import { i18n, type MessageDescriptor } from '@lingui/core';
+import { msg, plural, t } from '@lingui/core/macro';
 import type { EpicPhase } from '../../api/types';
 import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
@@ -18,51 +20,59 @@ export interface ForecastStory {
   next: string;
 }
 
-/** The `next` line when the executor wrote no divergence paragraph — exported so
- * the view and its tests quote one string. */
-export const NO_LESSON =
-  'No lesson was proposed: the report has no Where reality diverged paragraph.';
+const NO_LESSON_MESSAGE = msg`No lesson was proposed: the report has no Where reality diverged paragraph.`;
 
-const SIZE_WORDS: Record<string, string> = {
-  XS: 'an extra-small',
-  S: 'a small',
-  M: 'a medium',
-  L: 'a large',
-  XL: 'an extra-large',
+/** The `next` line when the executor wrote no divergence paragraph, as English
+ * source text — exported so the tests quote one string. The story itself carries
+ * the active locale's rendering of the same message. */
+export const NO_LESSON: string = NO_LESSON_MESSAGE.message ?? '';
+
+const SIZE_WORDS: Record<string, MessageDescriptor> = {
+  XS: msg`an extra-small`,
+  S: msg`a small`,
+  M: msg`a medium`,
+  L: msg`a large`,
+  XL: msg`an extra-large`,
 };
 
-const DURATION_WORDS: Record<string, string> = {
-  '<30m': 'under 30 min',
-  '30-90m': '30 to 90 min',
-  '90m-4h': '90 min to 4 h',
-  '>4h': 'over 4 h',
+const DURATION_WORDS: Record<string, MessageDescriptor> = {
+  '<30m': msg`under 30 min`,
+  '30-90m': msg`30 to 90 min`,
+  '90m-4h': msg`90 min to 4 h`,
+  '>4h': msg`over 4 h`,
 };
 
 /** Forecast outcomes (done | partial | blocked, plus the executor's
  * done_with_concerns) as the end of an "expected" sentence. */
-const FORECAST_OUTCOME_WORDS: Record<string, string> = {
-  done: 'finishing the work',
-  done_with_concerns: 'finishing with some concerns',
-  partial: 'finishing part of the work',
-  blocked: 'ending blocked',
+const FORECAST_OUTCOME_WORDS: Record<string, MessageDescriptor> = {
+  done: msg`finishing the work`,
+  done_with_concerns: msg`finishing with some concerns`,
+  partial: msg`finishing part of the work`,
+  blocked: msg`ending blocked`,
 };
 
 /** phasediag outcomes (completed | partial | noop | failed) as a headline tail. */
-const ACTUAL_OUTCOME_WORDS: Record<string, string> = {
-  noop: 'doing nothing',
-  completed: 'with the work done',
-  partial: 'with only part of the work done',
-  failed: 'in a failure',
+const ACTUAL_OUTCOME_WORDS: Record<string, MessageDescriptor> = {
+  noop: msg`doing nothing`,
+  completed: msg`with the work done`,
+  partial: msg`with only part of the work done`,
+  failed: msg`in a failure`,
 };
 
-const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-
-function numberWord(n: number): string {
-  return NUMBER_WORDS[n] ?? String(n);
+/** The active locale's text for `key` in one of the word maps above. */
+function word(map: Record<string, MessageDescriptor>, key: string): string | undefined {
+  const message = map[key];
+  return message === undefined ? undefined : i18n._(message);
 }
 
-function plural(n: number, one: string, many: string): string {
-  return n === 1 ? one : many;
+/** Counts are digits: a spelled-out English number cannot be translated. */
+function numberWord(n: number): string {
+  return String(n);
+}
+
+/** "area" / "areas" after a digit count. */
+function areaWord(n: number): string {
+  return plural(n, { one: 'area', few: 'areas', many: 'areas', other: 'areas' });
 }
 
 function capitalize(s: string): string {
@@ -72,12 +82,13 @@ function capitalize(s: string): string {
 /** Seconds → "30 seconds" / "12 minutes" / "2 h 5 min". */
 function spokenDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
-  if (s < 90) return `${String(s)} ${plural(s, 'second', 'seconds')}`;
+  if (s < 90) return plural(s, { one: '# second', few: '# seconds', many: '# seconds', other: '# seconds' });
   const m = Math.round(s / 60);
-  if (m < 90) return `${String(m)} minutes`;
-  const h = Math.floor(m / 60);
+  if (m < 90) return plural(m, { one: '# minute', few: '# minutes', many: '# minutes', other: '# minutes' });
+  const hours = String(Math.floor(m / 60));
   const rest = m % 60;
-  return rest === 0 ? `${String(h)} h` : `${String(h)} h ${String(rest)} min`;
+  const minutes = String(rest);
+  return rest === 0 ? t`${hours} h` : t`${hours} h ${minutes} min`;
 }
 
 /** The last path segment — `apps/api/src/modules/bids` → `bids`. */
@@ -100,52 +111,62 @@ export function forecastStory(p: EpicPhase): ForecastStory | null {
   const d = s.detail;
   const band = offPlanBand(s.index);
 
-  const size = SIZE_WORDS[d.forecastSize];
+  const size = word(SIZE_WORDS, d.forecastSize);
+  const unmeasured = t`an unmeasured time`;
   const took =
     d.actualDurationS !== null
       ? spokenDuration(d.actualDurationS)
-      : (DURATION_WORDS[d.actualDuration] ?? (d.actualDuration === '' ? 'an unmeasured time' : d.actualDuration));
-  const ending = ACTUAL_OUTCOME_WORDS[d.actualOutcome] ?? (d.actualOutcome === '' ? '' : `as ${d.actualOutcome}`);
-  const headline = `${size === undefined ? 'Planned without a size' : `Planned as ${size} phase`}, it ended in ${took}${
-    ending === '' ? '' : ` ${ending}`
-  }.`;
+      : (word(DURATION_WORDS, d.actualDuration) ?? (d.actualDuration === '' ? unmeasured : d.actualDuration));
+  const outcome = d.actualOutcome;
+  const ending = word(ACTUAL_OUTCOME_WORDS, outcome) ?? (outcome === '' ? '' : t`as ${outcome}`);
+  const tail = ending === '' ? '' : ` ${ending}`;
+  const headline =
+    size === undefined
+      ? t`Planned without a size, it ended in ${took}${tail}.`
+      : t`Planned as ${size} phase, it ended in ${took}${tail}.`;
 
   const expectedParts: string[] = [];
-  if (size !== undefined) expectedParts.push(capitalize(`${size} phase`));
-  const plannedFor = DURATION_WORDS[d.forecastDuration] ?? d.forecastDuration;
+  if (size !== undefined) expectedParts.push(capitalize(t`${size} phase`));
+  const plannedFor = word(DURATION_WORDS, d.forecastDuration) ?? d.forecastDuration;
   if (plannedFor !== '') expectedParts.push(plannedFor);
-  const plannedEnd = FORECAST_OUTCOME_WORDS[d.forecastOutcome] ?? d.forecastOutcome;
+  const plannedEnd = word(FORECAST_OUTCOME_WORDS, d.forecastOutcome) ?? d.forecastOutcome;
   if (plannedEnd !== '') expectedParts.push(plannedEnd);
-  let expected = expectedParts.length === 0 ? 'The forecast named no size, duration or outcome.' : `${expectedParts.join(', ')}.`;
+  let expected =
+    expectedParts.length === 0 ? t`The forecast named no size, duration or outcome.` : `${expectedParts.join(', ')}.`;
   if (d.confidence !== null) {
-    let sure = `The planner was ${String(Math.round(d.confidence * 100))} % sure`;
+    const percent = String(Math.round(d.confidence * 100));
+    let sure = t`The planner was ${percent} % sure`;
     const added = s.revision?.areasAdded ?? [];
-    if (added.length > 0)
-      sure += ` — ${UI_TERMS.posterior.ui} it added ${numberWord(added.length)} more ${plural(
-        added.length,
-        'area',
-        'areas',
-      )} (${added.map(areaName).join(', ')})`;
+    if (added.length > 0) {
+      const posterior = UI_TERMS.posterior.ui;
+      const count = numberWord(added.length);
+      const areas = areaWord(added.length);
+      const names = added.map(areaName).join(', ');
+      sure += ` ${t`— ${posterior} it added ${count} more ${areas} (${names})`}`;
+    }
     expected += ` ${sure}.`;
   }
 
   const happenedParts: string[] = [capitalize(took)];
   if (d.actualAreas !== null) {
-    if (d.actualAreas.length === 0) happenedParts.push('no code touched');
+    if (d.actualAreas.length === 0) happenedParts.push(t`no code touched`);
     else {
       const off = d.unexpectedAreas.length;
-      happenedParts.push(
-        `touched ${numberWord(d.actualAreas.length)} ${plural(d.actualAreas.length, 'area', 'areas')}${
-          off > 0 ? ` (${numberWord(off)} not in the plan)` : ''
-        }`,
-      );
+      const count = numberWord(d.actualAreas.length);
+      const areas = areaWord(d.actualAreas.length);
+      const offCount = numberWord(off);
+      const offNote = off > 0 ? ` ${t`(${offCount} not in the plan)`}` : '';
+      happenedParts.push(t`touched ${count} ${areas}${offNote}`);
     }
   }
-  const total = p.checkboxesTotal;
-  const ticked = p.runCheckboxesBefore === null ? p.checkboxesDone : p.checkboxesDone - p.runCheckboxesBefore;
-  happenedParts.push(ticked <= 0 ? `none of the ${String(total)} criteria ticked` : `${String(ticked)} of the ${String(total)} criteria ticked`);
+  const total = String(p.checkboxesTotal);
+  const tickedCount = p.runCheckboxesBefore === null ? p.checkboxesDone : p.checkboxesDone - p.runCheckboxesBefore;
+  const ticked = String(tickedCount);
+  happenedParts.push(
+    tickedCount <= 0 ? t`none of the ${total} criteria ticked` : t`${ticked} of the ${total} criteria ticked`,
+  );
   let happened = `${happenedParts.join(', ')}.`;
-  if (d.actualAreas === null) happened += " The diff was not measured, so we can't say which areas it touched.";
+  if (d.actualAreas === null) happened += ` ${t`The diff was not measured, so we can't say which areas it touched.`}`;
 
   const divergence = extractDivergence(p.completionReport);
   const why =
@@ -157,10 +178,10 @@ export function forecastStory(p: EpicPhase): ForecastStory | null {
 
   const next =
     divergence === null
-      ? NO_LESSON
+      ? i18n._(NO_LESSON_MESSAGE)
       : band === 'on plan'
-        ? 'Nothing follows: the run landed on plan.'
-        : 'A lesson can be drawn from the report’s Where reality diverged paragraph.';
+        ? t`Nothing follows: the run landed on plan.`
+        : t`A lesson can be drawn from the report’s Where reality diverged paragraph.`;
 
   return { band, headline, expected, happened, why, next };
 }

@@ -5,7 +5,7 @@
 // wire calls against a mocked fetch — the list URL the Inbox reads and the ack
 // POST that takes an item out of it.
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '../../test/render';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ackReview, countFindings, fetchPhaseReviews, fetchUnackedPlanReviews, type Review } from '../../api/reviews';

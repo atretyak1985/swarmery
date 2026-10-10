@@ -15,9 +15,10 @@
 // web/tsconfig.json EXCLUDES *.test.tsx, and vitest transpiles without type
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '../test/render';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentRole, AgentRosterRow } from '../api/types';
+import { i18n } from '../i18n';
 import { AgentHint, AgentSelect, NO_AGENT_LABEL, type PickerAgent, selectableAgents } from './AgentPicker';
 
 let nextID = 1;
@@ -75,8 +76,8 @@ describe('AgentSelect', () => {
     const select = renderPicker(agents);
     const first = select.options[0];
     expect(first?.value).toBe('');
-    expect(first?.textContent).toBe(NO_AGENT_LABEL);
-    expect(NO_AGENT_LABEL).toBe('Без агента — лише стейджі playbook');
+    expect(first?.textContent).toBe(i18n._(NO_AGENT_LABEL));
+    expect(i18n._(NO_AGENT_LABEL)).toBe('No agent — playbook stages only');
   });
 
   it('groups agents by role in the fixed order', () => {

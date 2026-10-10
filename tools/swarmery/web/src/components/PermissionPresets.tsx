@@ -5,6 +5,9 @@
 // gated behind a confirm dialog (the server returns 428 with the escalation
 // list; we surface it and retry with confirm:true).
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   CategoryPolicy,
@@ -21,35 +24,34 @@ import { Card, ConfirmDialog, ErrorBox, Loading, SectionTitle } from './ui';
 /** Plain-language copy for each preset card. */
 const PRESET_CARDS: readonly {
   value: PermissionPreset;
-  title: string;
-  blurb: string;
+  title: MessageDescriptor;
+  blurb: MessageDescriptor;
 }[] = [
   {
     value: 'approval-required',
-    title: 'Approval required',
-    blurb: 'Every tool call waits for you. The safe default — nothing runs unattended.',
+    title: msg`Approval required`,
+    blurb: msg`Every tool call waits for you. The safe default — nothing runs unattended.`,
   },
   {
     value: 'unrestricted',
-    title: 'Unrestricted',
-    blurb:
-      'Auto-approve file writes, safe git, and shell by default (never pushing). Fast, but hands-off.',
+    title: msg`Unrestricted`,
+    blurb: msg`Auto-approve file writes, safe git, and shell by default (never pushing). Fast, but hands-off.`,
   },
   {
     value: 'locked-down',
-    title: 'Locked down',
-    blurb: 'No auto-approval AND the dispatcher refuses to run this project’s queued tasks.',
+    title: msg`Locked down`,
+    blurb: msg`No auto-approval AND the dispatcher refuses to run this project’s queued tasks.`,
   },
 ];
 
 /** Human labels for the category rows. */
-const CATEGORY_LABEL: Record<string, string> = {
-  read_only: 'Read-only (read, grep, git status/log/diff)',
-  file_write: 'File writes (edit, write, notebooks)',
-  git_write: 'Git writes (add, commit, checkout, worktree)',
-  git_push: 'Git push & gh',
-  command_exec: 'Shell commands (any Bash)',
-  network: 'Network (web fetch/search)',
+const CATEGORY_LABEL: Record<string, MessageDescriptor> = {
+  read_only: msg`Read-only (read, grep, git status/log/diff)`,
+  file_write: msg`File writes (edit, write, notebooks)`,
+  git_write: msg`Git writes (add, commit, checkout, worktree)`,
+  git_push: msg`Git push & gh`,
+  command_exec: msg`Shell commands (any Bash)`,
+  network: msg`Network (web fetch/search)`,
 };
 
 /** A staged edit — the view plus any not-yet-saved override deltas. */
@@ -69,6 +71,7 @@ function PresetCard({
   disabled: boolean;
   onSelect: () => void;
 }): JSX.Element {
+  const { i18n } = useLingui();
   return (
     <label
       className={`flex cursor-pointer gap-2.5 rounded-xl border px-3.5 py-3 transition-colors ${
@@ -84,8 +87,10 @@ function PresetCard({
         className="mt-0.5 accent-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       />
       <span className="min-w-0">
-        <span className="block font-mono text-[12px] font-semibold text-ink">{card.title}</span>
-        <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-dim">{card.blurb}</span>
+        <span className="block font-mono text-[12px] font-semibold text-ink">{i18n._(card.title)}</span>
+        <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-dim">
+          {i18n._(card.blurb)}
+        </span>
       </span>
     </label>
   );
@@ -105,11 +110,14 @@ function CategoryRow({
   editable: boolean;
   onToggle: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const allow = policy === 'allow';
+  const label = CATEGORY_LABEL[category];
+  const policyText = allow ? t`auto-approve` : t`ask`;
   return (
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 py-2 first:pt-0 last:pb-0">
       <span className="min-w-0 basis-[220px] text-[11.5px] text-ink-2">
-        {CATEGORY_LABEL[category] ?? category}
+        {label !== undefined ? i18n._(label) : category}
       </span>
       <code className="min-w-0 flex-1 basis-[160px] truncate font-mono text-[10px] text-ink-faint">
         {patterns.join(' ')}
@@ -119,14 +127,14 @@ function CategoryRow({
           type="button"
           onClick={onToggle}
           aria-pressed={allow}
-          aria-label={`${category}: ${allow ? 'auto-approve' : 'ask'}`}
+          aria-label={`${category}: ${policyText}`}
           className={`ml-auto rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-colors ${
             allow
               ? 'border-green/45 bg-green/10 text-green hover:bg-green/20'
               : 'border-line text-ink-dim hover:bg-surface2'
           }`}
         >
-          {allow ? 'auto-approve' : 'ask'}
+          {policyText}
         </button>
       ) : (
         <span
@@ -134,7 +142,7 @@ function CategoryRow({
             allow ? 'border-green/40 text-green' : 'border-line text-ink-faint'
           }`}
         >
-          {allow ? 'auto-approve' : 'ask'}
+          {policyText}
         </span>
       )}
     </div>
@@ -142,6 +150,7 @@ function CategoryRow({
 }
 
 export function PermissionPresets({ projectId }: { projectId: number }): JSX.Element {
+  const { t } = useLingui();
   const [view, setView] = useState<PermissionPresetView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -246,7 +255,9 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
   if (error !== null && view === null) {
     return (
       <>
-        <SectionTitle>permissions</SectionTitle>
+        <SectionTitle>
+          <Trans>permissions</Trans>
+        </SectionTitle>
         <ErrorBox message={error} onRetry={load} />
       </>
     );
@@ -254,8 +265,10 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
   if (view === null || draft === null) {
     return (
       <>
-        <SectionTitle>permissions</SectionTitle>
-        <Loading label="permissions…" />
+        <SectionTitle>
+          <Trans>permissions</Trans>
+        </SectionTitle>
+        <Loading label={t`permissions…`} />
       </>
     );
   }
@@ -264,7 +277,9 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
 
   return (
     <>
-      <SectionTitle>permissions</SectionTitle>
+      <SectionTitle>
+        <Trans>permissions</Trans>
+      </SectionTitle>
       {error !== null && (
         <div className="mb-2">
           <ErrorBox message={error} onRetry={reset} />
@@ -284,7 +299,7 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
         </div>
 
         <div className="mt-4 mb-1 font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
-          Categories
+          <Trans>Categories</Trans>
         </div>
         <div className="divide-y divide-line-soft">
           {view.categories.map((c) => (
@@ -300,7 +315,7 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
         </div>
         {!editable && (
           <div className="mt-2 font-mono text-[10px] text-ink-faint">
-            per-category overrides apply only under the unrestricted preset
+            <Trans>per-category overrides apply only under the unrestricted preset</Trans>
           </div>
         )}
 
@@ -311,7 +326,7 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
             onClick={() => save(false)}
             className="rounded-lg border border-brand/45 bg-brand/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
           >
-            {busy ? 'saving…' : 'save'}
+            {busy ? t`saving…` : t`save`}
           </button>
           {dirty && (
             <button
@@ -320,24 +335,26 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
               onClick={reset}
               className="rounded-lg border border-line-strong px-3 py-1.5 font-mono text-[11.5px] text-ink-3 transition-colors hover:bg-surface2 disabled:opacity-50"
             >
-              reset
+              <Trans>reset</Trans>
             </button>
           )}
           {view.lockedDown && (
             <span className="ml-auto rounded-full border border-amber/40 px-2.5 py-0.5 font-mono text-[10px] text-amber">
-              dispatcher blocked
+              <Trans>dispatcher blocked</Trans>
             </span>
           )}
         </div>
         <div className="mt-2 font-mono text-[10px] text-ink-faint">
-          compiled into managed auto-approve rules · manual rules on the Approvals page are untouched
+          <Trans>
+            compiled into managed auto-approve rules · manual rules on the Approvals page are untouched
+          </Trans>
         </div>
       </Card>
 
       <ConfirmDialog
         open={escalation !== null}
-        title="Confirm broader permissions"
-        confirmLabel="I understand — apply"
+        title={t`Confirm broader permissions`}
+        confirmLabel={t`I understand — apply`}
         danger
         busy={busy}
         onConfirm={() => {
@@ -345,7 +362,9 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
         }}
         onCancel={() => setEscalation(null)}
       >
-        <p>{'This grants agents more autonomy for this project:'}</p>
+        <p>
+          <Trans>This grants agents more autonomy for this project:</Trans>
+        </p>
         <ul className="mt-2 list-disc pl-5">
           {(escalation?.reasons ?? []).map((reason) => (
             <li key={reason} className="font-mono text-[11.5px] text-ink">
@@ -353,7 +372,9 @@ export function PermissionPresets({ projectId }: { projectId: number }): JSX.Ele
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-ink-dim">Git push is never auto-approved unless you enable it explicitly.</p>
+        <p className="mt-2 text-ink-dim">
+          <Trans>Git push is never auto-approved unless you enable it explicitly.</Trans>
+        </p>
       </ConfirmDialog>
     </>
   );

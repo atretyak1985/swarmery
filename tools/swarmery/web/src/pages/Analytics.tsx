@@ -9,6 +9,9 @@
 // subagent turns, so there is no per-agent $ yet (see the design spec). The UI
 // says so plainly rather than fabricating a number.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg, plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Area,
@@ -64,11 +67,11 @@ import { ApproxHint, Empty, ErrorBox, Loading, SectionTitle } from '../component
 
 /* ----- metric / pivot vocabulary ----- */
 
-const METRICS: { v: AnalyticsMetric; label: string }[] = [
-  { v: 'cost', label: '$ Cost' },
-  { v: 'tokens', label: 'Tokens' },
-  { v: 'runs', label: 'Runs' },
-  { v: 'cache', label: 'Cache %' },
+const METRICS: { v: AnalyticsMetric; label: MessageDescriptor }[] = [
+  { v: 'cost', label: msg`$ Cost` },
+  { v: 'tokens', label: msg`Tokens` },
+  { v: 'runs', label: msg`Runs` },
+  { v: 'cache', label: msg`Cache %` },
 ];
 
 /**
@@ -81,6 +84,14 @@ function pivotsFor(metric: AnalyticsMetric): AnalyticsDimension[] {
   if (metric === 'cache') return ['project', 'model'];
   return ['project', 'model', 'agent'];
 }
+
+/** The pivot dimensions as words (the ids stay the query values). */
+const DIMENSION_LABELS: Record<AnalyticsDimension, MessageDescriptor> = {
+  project: msg`project`,
+  model: msg`model`,
+  agent: msg`agent`,
+  skill: msg`skill`,
+};
 
 const PRESETS = [7, 14, 30, 90] as const;
 
@@ -133,6 +144,7 @@ function HeroInsight({
   series: TimeseriesResp;
   metric: AnalyticsMetric;
 }): JSX.Element {
+  const { t } = useLingui();
   const colorFor = useProjectColor();
   const ramp = useChartPalette();
   const insight = useMemo(() => {
@@ -183,12 +195,18 @@ function HeroInsight({
     return deltaGood ? 'text-ink-dim' : 'text-green';
   };
 
+  const days = String(nDays);
+  const topName = top.name;
+  const share = String(topShare);
+  const spent = fmtValue('cost', rangeTotal);
+  const tokens = fmtValue('tokens', rangeTotal);
+  const runs = fmtValue('runs', rangeTotal);
   const headline =
     metric === 'cost'
-      ? `You've spent ${fmtValue('cost', rangeTotal)} over ${String(nDays)} days — ${top.name} drove ${String(topShare)}% of it.`
+      ? t`You've spent ${spent} over ${days} days — ${topName} drove ${share}% of it.`
       : metric === 'tokens'
-        ? `${fmtValue('tokens', rangeTotal)} tokens over ${String(nDays)} days — ${top.name} led at ${String(topShare)}%.`
-        : `${fmtValue('runs', rangeTotal)} agent runs over ${String(nDays)} days — ${top.name} ran most.`;
+        ? t`${tokens} tokens over ${days} days — ${topName} led at ${share}%.`
+        : t`${runs} agent runs over ${days} days — ${topName} ran most.`;
 
   return (
     <div className="mt-[18px] flex flex-wrap items-center gap-x-7 gap-y-4 rounded-[14px] border border-line bg-surface px-5 py-4">
@@ -198,11 +216,11 @@ function HeroInsight({
         </div>
         <div className="mt-[7px] flex flex-wrap gap-x-4 gap-y-1.5 font-mono text-[10.5px] text-ink-dim">
           <span>
-            top driver <span style={{ color: topColor }}>●</span>{' '}
+            <Trans>top driver</Trans> <span style={{ color: topColor }}>●</span>{' '}
             <b className="font-medium text-ink-2">{top.name}</b>
           </span>
           <span>
-            biggest mover <b className="font-medium text-ink-2">{mover.name}</b>{' '}
+            <Trans>biggest mover</Trans> <b className="font-medium text-ink-2">{mover.name}</b>{' '}
             <span style={{ color: deltaColor(mover.chg >= 0) }}>{mover.chg >= 0 ? '↑' : '↓'}</span>
           </span>
         </div>
@@ -211,7 +229,7 @@ function HeroInsight({
       <div className="flex flex-wrap gap-[22px]">
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            This range
+            <Trans>This range</Trans>
           </div>
           <div className="mt-1 font-display text-[18px] font-semibold text-ink">
             {fmtValue(metric, rangeTotal)}
@@ -219,7 +237,7 @@ function HeroInsight({
         </div>
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            Daily avg
+            <Trans>Daily avg</Trans>
           </div>
           <div className="mt-1 font-display text-[18px] font-semibold text-ink">
             {fmtValue(metric, dailyAvg)}
@@ -227,7 +245,7 @@ function HeroInsight({
         </div>
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            vs prev {String(nDays)}d
+            <Trans>vs prev {days}d</Trans>
           </div>
           <div className={`mt-1 font-display text-[18px] font-semibold ${deltaClass(deltaPct >= 0)}`}>
             {deltaPct >= 0 ? '↑ ' : '↓ '}
@@ -236,7 +254,7 @@ function HeroInsight({
         </div>
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            {metric === 'runs' ? 'Busiest day' : 'Projected /mo'}
+            {metric === 'runs' ? t`Busiest day` : t`Projected /mo`}
           </div>
           <div className="mt-1 font-display text-[18px] font-semibold text-brand">
             {metric === 'runs' ? peakLabel : fmtValue(metric, dailyAvg * 30)}
@@ -253,25 +271,39 @@ function CacheHero({ series }: { series: TimeseriesResp }): JSX.Element | null {
   const c = series.cache;
   if (c === undefined) return null;
   const pct = (c.hit_rate * 100).toFixed(1);
+  const saved = c.saved_usd !== null ? fmtCost(c.saved_usd) : null;
+  const reads = fmtTokens(c.cache_read_tokens);
+  const uncached = fmtTokens(c.input_tokens);
   return (
     <div className="mt-[18px] flex flex-wrap items-center gap-x-7 gap-y-4 rounded-[14px] border border-line bg-surface px-5 py-4">
       <div className="min-w-0 flex-[1_1_300px]">
         <div className="font-display text-[20px] font-medium leading-[1.3] tracking-[-0.01em] text-ink text-balance">
-          Cache served {pct}% of prompt tokens this range
-          {c.saved_usd !== null ? ` — saving ~${fmtCost(c.saved_usd)} net of cache-write premium.` : '.'}
+          {saved !== null ? (
+            <Trans>
+              Cache served {pct}% of prompt tokens this range — saving ~{saved} net of cache-write premium.
+            </Trans>
+          ) : (
+            <Trans>Cache served {pct}% of prompt tokens this range.</Trans>
+          )}
         </div>
         <div className="mt-[7px] font-mono text-[10.5px] text-ink-dim">
-          {fmtTokens(c.cache_read_tokens)} cache reads · {fmtTokens(c.input_tokens)} uncached input
-          {c.saved_usd === null && ' — no cached model has a pricing entry, so no $ estimate'}
+          <Trans>
+            {reads} cache reads · {uncached} uncached input
+          </Trans>
+          {c.saved_usd === null && <Trans> — no cached model has a pricing entry, so no $ estimate</Trans>}
         </div>
       </div>
       <div className="flex flex-wrap gap-[22px]">
         <div>
-          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">Hit rate</div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+            <Trans>Hit rate</Trans>
+          </div>
           <div className="mt-1 font-display text-[18px] font-semibold text-ink">{pct}%</div>
         </div>
         <div>
-          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">Est. saved</div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
+            <Trans>Est. saved</Trans>
+          </div>
           <div className="mt-1 font-display text-[18px] font-semibold text-green">
             {c.saved_usd !== null ? fmtCost(c.saved_usd) : '—'}
           </div>
@@ -339,50 +371,58 @@ function TipStatCard({
   );
 }
 
-const FUNNEL_LABELS: Record<string, string> = {
-  triage: 'Triage',
-  todo: 'To do',
-  in_progress: 'In progress',
-  in_review: 'In review',
-  done: 'Done',
-  archived: 'Archived',
+const FUNNEL_LABELS: Record<string, MessageDescriptor | undefined> = {
+  triage: msg`Triage`,
+  todo: msg`To do`,
+  in_progress: msg`In progress`,
+  in_review: msg`In review`,
+  done: msg`Done`,
+  archived: msg`Archived`,
 };
 
 /** Horizontal SDLC funnel bar: entered→done per column with a completion gauge.
  * Exported for reuse by ProjectOverview (Phase 2). */
 export function FunnelBar({ funnel }: { funnel: FunnelResp }): JSX.Element {
+  const { i18n } = useLingui();
   const maxEntered = Math.max(1, ...funnel.columns.map((c) => c.entered));
+  const completion = (funnel.completionRate * 100).toFixed(0);
+  const perDay = funnel.perDay.toFixed(1);
   return (
     <div className="rounded-[14px] border border-line bg-surface px-5 py-4">
       <div className="flex items-baseline justify-between">
         <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-          SDLC funnel
+          <Trans>SDLC funnel</Trans>
         </div>
         <div className="font-mono text-[10.5px] text-ink-dim">
-          {(funnel.completionRate * 100).toFixed(0)}% completion · {funnel.perDay.toFixed(1)}/day
+          <Trans>
+            {completion}% completion · {perDay}/day
+          </Trans>
         </div>
       </div>
       <div className="mt-3 flex flex-col gap-1.5">
-        {funnel.columns.map((c) => (
-          <div key={c.column} className="flex items-center gap-2">
-            <div className="w-[74px] shrink-0 font-mono text-[10px] text-ink-dim">
-              {FUNNEL_LABELS[c.column] ?? c.column}
+        {funnel.columns.map((c) => {
+          const label = FUNNEL_LABELS[c.column];
+          return (
+            <div key={c.column} className="flex items-center gap-2">
+              <div className="w-[74px] shrink-0 font-mono text-[10px] text-ink-dim">
+                {label !== undefined ? i18n._(label) : c.column}
+              </div>
+              <div className="relative h-[14px] flex-1 overflow-hidden rounded-[5px] bg-field">
+                <div
+                  className="h-full rounded-[5px] bg-brand/70"
+                  style={{ width: `${Math.max(2, (c.entered / maxEntered) * 100).toFixed(1)}%` }}
+                />
+              </div>
+              <div className="w-[52px] shrink-0 text-right font-mono text-[10.5px] tabular-nums text-ink-2">
+                {c.count}
+                <span className="text-ink-faint"> / {c.entered}</span>
+              </div>
             </div>
-            <div className="relative h-[14px] flex-1 overflow-hidden rounded-[5px] bg-field">
-              <div
-                className="h-full rounded-[5px] bg-brand/70"
-                style={{ width: `${Math.max(2, (c.entered / maxEntered) * 100).toFixed(1)}%` }}
-              />
-            </div>
-            <div className="w-[52px] shrink-0 text-right font-mono text-[10.5px] tabular-nums text-ink-2">
-              {c.count}
-              <span className="text-ink-faint"> / {c.entered}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <p className="mt-2.5 font-mono text-[10px] text-ink-faint">
-        occupancy / reached-in-range · snapshot (board keeps last move only, not full history)
+        <Trans>occupancy / reached-in-range · snapshot (board keeps last move only, not full history)</Trans>
       </p>
     </div>
   );
@@ -392,7 +432,13 @@ export function FunnelBar({ funnel }: { funnel: FunnelResp }): JSX.Element {
 function LanguageBars({ languages }: { languages: LanguageStat[] }): JSX.Element {
   const top = languages.slice(0, 8);
   const maxLoc = Math.max(1, ...top.map((l) => l.loc));
-  if (top.length === 0) return <Empty>No file changes in range.</Empty>;
+  if (top.length === 0) {
+    return (
+      <Empty>
+        <Trans>No file changes in range.</Trans>
+      </Empty>
+    );
+  }
   return (
     <div className="flex flex-col gap-1.5">
       {top.map((l) => (
@@ -405,7 +451,7 @@ function LanguageBars({ languages }: { languages: LanguageStat[] }): JSX.Element
             />
           </div>
           <div className="w-[92px] shrink-0 text-right font-mono text-[10px] tabular-nums text-ink-2">
-            {fmtTokens(l.loc)} loc · {l.files}f
+            {fmtTokens(l.loc)} <Trans>loc</Trans> · {l.files}f
           </div>
         </div>
       ))}
@@ -430,6 +476,7 @@ function CommandCenter({
   to: string;
   scope: string | null;
 }): JSX.Element | null {
+  const { t } = useLingui();
   const [autonomy, setAutonomy] = useState<AutonomyResp | null>(null);
   const [productivity, setProductivity] = useState<ProductivityResp | null>(null);
   const [rangeCost, setRangeCost] = useState<number | null>(null);
@@ -463,17 +510,25 @@ function CommandCenter({
 
   const costPerTask =
     rangeCost !== null && rangeCost > 0 ? rangeCost : null;
+  const commits = String(productivity?.commits ?? 0);
+  const filesModified = String(productivity?.filesModified ?? 0);
+  const formula = productivity?.humanHoursSaved.formula ?? '';
+  const completed = String(productivity?.taskDurations.completed ?? 0);
+  const toolCalls = String(autonomy?.toolCalls ?? 0);
+  const interventions = String(autonomy?.interventions.total ?? 0);
 
   return (
-    <section aria-label="Command center" className="mt-3.5">
+    <section aria-label={t`Command center`} className="mt-3.5">
       {productivity !== null && (
         <div className="rounded-[14px] border border-line bg-surface px-5 py-4">
           <div className="flex items-baseline justify-between">
             <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-              Productivity
+              <Trans>Productivity</Trans>
             </div>
             <div className="font-mono text-[10.5px] text-ink-dim">
-              {String(productivity.commits)} commits · {String(productivity.filesModified)} files
+              <Trans>
+                {commits} commits · {filesModified} files
+              </Trans>
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1">
@@ -481,7 +536,9 @@ function CommandCenter({
               <span className="font-display text-[18px] font-semibold text-ink">
                 {fmtTokens(productivity.loc)}
               </span>
-              <span className="ml-1 font-mono text-[10px] text-ink-dim">LOC changed</span>
+              <span className="ml-1 font-mono text-[10px] text-ink-dim">
+                <Trans>LOC changed</Trans>
+              </span>
             </div>
             <div className="flex items-center gap-1">
               <span className="font-display text-[18px] font-semibold text-green">
@@ -489,13 +546,15 @@ function CommandCenter({
               </span>
               <span
                 className="rounded-[4px] bg-amber/15 px-1 py-px font-mono text-[8.5px] uppercase tracking-[0.08em] text-amber cursor-help"
-                data-tip={`Estimate only — ${productivity.humanHoursSaved.formula} (Fusion's constant). Not a measured figure.`}
-                aria-label={`Human-hours saved is an estimate: ${productivity.humanHoursSaved.formula}`}
+                data-tip={t`Estimate only — ${formula} (Fusion's constant). Not a measured figure.`}
+                aria-label={t`Human-hours saved is an estimate: ${formula}`}
                 tabIndex={0}
               >
-                est
+                <Trans>est</Trans>
               </span>
-              <span className="font-mono text-[10px] text-ink-dim">saved</span>
+              <span className="font-mono text-[10px] text-ink-dim">
+                <Trans context="money saved by the prompt cache, not a file">saved</Trans>
+              </span>
             </div>
           </div>
           <div className="mt-3">
@@ -503,19 +562,19 @@ function CommandCenter({
           </div>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-2.5 font-mono text-[10.5px] text-ink-dim">
             <span>
-              avg{' '}
-              <span className="text-ink-2">{fmtSec(productivity.taskDurations.avgSec)}</span>
+              <Trans>avg</Trans> <span className="text-ink-2">{fmtSec(productivity.taskDurations.avgSec)}</span>
             </span>
             <span>
-              median{' '}
+              <Trans>median</Trans>{' '}
               <span className="text-ink-2">{fmtSec(productivity.taskDurations.medianSec)}</span>
             </span>
             <span>
               p90 <span className="text-ink-2">{fmtSec(productivity.taskDurations.p90Sec)}</span>
             </span>
             <span>
-              <span className="text-ink-2">{String(productivity.taskDurations.completed)}</span>{' '}
-              completed
+              <Trans>
+                <span className="text-ink-2">{completed}</span> completed
+              </Trans>
             </span>
           </div>
         </div>
@@ -524,36 +583,37 @@ function CommandCenter({
       <div className="mt-3.5 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         {autonomy !== null && (
           <TipStatCard
-            label="Autonomy"
+            label={t`Autonomy`}
             value={
               autonomy.fullyAutonomous
-                ? `${String(autonomy.toolCalls)} calls`
+                ? t`${toolCalls} calls`
                 : `${autonomy.ratio.toFixed(1)}×`
             }
             sub={
               autonomy.fullyAutonomous
-                ? 'no human interventions'
-                : `${String(autonomy.toolCalls)} calls · ${String(autonomy.interventions.total)} interventions`
+                ? t`no human interventions`
+                : t`${toolCalls} calls · ${interventions} interventions`
             }
-            tip="Tool calls per human intervention (approvals a human resolved + mid-run prompts). Higher = more autonomous."
+            tip={t`Tool calls per human intervention (approvals a human resolved + mid-run prompts). Higher = more autonomous.`}
           />
         )}
         <TipStatCard
-          label="Tasks done"
+          label={t`Tasks done`}
           value="—"
-          tip="Board tasks that reached done/archived in this range."
+          tip={t`Board tasks that reached done/archived in this range.`}
         />
         <TipStatCard
-          label="Cost / task"
+          label={t`Cost / task`}
           value={costPerTask !== null ? fmtCost(costPerTask) : '—'}
-          sub={rangeCost !== null ? fmtCost(rangeCost) : 'no priced tasks'}
-          tip="Range total cost ÷ tasks done. Cost comes from priced turns; unpriced work is excluded."
+          sub={rangeCost !== null ? fmtCost(rangeCost) : t`no priced tasks`}
+          tip={t`Range total cost ÷ tasks done. Cost comes from priced turns; unpriced work is excluded.`}
         />
         <TipStatCard
-          label="Cache hit"
+          label={t`Cache hit`}
           value={cacheHit !== null ? `${(cacheHit * 100).toFixed(1)}%` : '—'}
+          // i18n-ignore — a formula over field names
           sub="cache_read / (cache_read + in)"
-          tip="Prompt-cache read ratio over the range. Higher = cheaper reads served from cache."
+          tip={t`Prompt-cache read ratio over the range. Higher = cheaper reads served from cache.`}
         />
       </div>
     </section>
@@ -615,7 +675,9 @@ function Controls({
   onFrom: (d: string) => void;
   onTo: (d: string) => void;
 }): JSX.Element {
-  const pivotOptions = pivotsFor(metric).map((p) => ({ v: p, label: p }));
+  const { i18n } = useLingui();
+  const metricOptions = METRICS.map((m) => ({ v: m.v, label: i18n._(m.label) }));
+  const pivotOptions = pivotsFor(metric).map((p) => ({ v: p, label: i18n._(DIMENSION_LABELS[p]) }));
   return (
     <div className="flex flex-wrap items-center gap-x-[22px] gap-y-3.5">
       {/* Project scope leads the controls row (this page has no search box).
@@ -623,11 +685,15 @@ function Controls({
           page could be pinned to a project with no way back to "all". */}
       <ScopeChip />
       <label className="flex items-center gap-2">
-        <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">Metric</span>
-        <Segmented options={METRICS} value={metric} onChange={onMetric} />
+        <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
+          <Trans>Metric</Trans>
+        </span>
+        <Segmented options={metricOptions} value={metric} onChange={onMetric} />
       </label>
       <label className="flex items-center gap-2">
-        <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">By</span>
+        <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
+          <Trans>By</Trans>
+        </span>
         <Segmented options={pivotOptions} value={pivot} onChange={onPivot} />
       </label>
       {showRange && (
@@ -707,7 +773,9 @@ function ChartTooltip({
           meaningless (e.g. "175.3%"), so the total row is cost/tokens only. */}
       {metric !== 'cache' && (
         <div className="mt-1.5 flex items-center gap-2 border-t border-line pt-1.5 font-mono text-[11px]">
-          <span className="flex-1 text-ink-dim">total</span>
+          <span className="flex-1 text-ink-dim">
+            <Trans>total</Trans>
+          </span>
           <span className="font-semibold text-ink">{fmtValue(metric, total)}</span>
         </div>
       )}
@@ -770,7 +838,11 @@ function MainChart({
   });
 
   if (visible.length === 0) {
-    return <Empty>every series is hidden — click a legend chip to show one</Empty>;
+    return (
+      <Empty>
+        <Trans>every series is hidden — click a legend chip to show one</Trans>
+      </Empty>
+    );
   }
 
   return (
@@ -878,6 +950,7 @@ function BreakdownPanel({
   pivot: AnalyticsDimension;
   metric: AnalyticsMetric;
 }): JSX.Element {
+  const { i18n } = useLingui();
   const cacheView = metric === 'cache';
   const colorFor = useProjectColor();
   const ramp = useChartPalette();
@@ -890,7 +963,14 @@ function BreakdownPanel({
     cacheView ? (r.cache_hit_rate ?? 0) : hasCost ? (r.cost_usd ?? 0) : (r.runs ?? 0);
   const max = rows.reduce((m, r) => Math.max(m, primary(r)), 0);
 
-  if (rows.length === 0) return <Empty>no {pivot} activity in this range</Empty>;
+  if (rows.length === 0) {
+    const dimension = i18n._(DIMENSION_LABELS[pivot]);
+    return (
+      <Empty>
+        <Trans>no {dimension} activity in this range</Trans>
+      </Empty>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -914,7 +994,9 @@ function BreakdownPanel({
                 <>
                   {hasCost && <span className="text-ink">{fmtCost(r.cost_usd)}</span>}
                   {hasRuns && (
-                    <span className="w-14 text-right text-ink-dim">{r.runs ?? 0} runs</span>
+                    <span className="w-14 text-right text-ink-dim">
+                      {plural(r.runs ?? 0, { one: '# run', few: '# runs', many: '# runs', other: '# runs' })}
+                    </span>
                   )}
                   {hasRate && (
                     <span className="w-10 text-right text-ink-dim">
@@ -939,7 +1021,7 @@ function BreakdownPanel({
       })}
       {pivot === 'skill' && (
         <p className="mt-1 font-mono text-[10px] text-ink-faint">
-          skills run inside a turn, not as their own — no independent $ to attribute.
+          <Trans>skills run inside a turn, not as their own — no independent $ to attribute.</Trans>
         </p>
       )}
     </div>
@@ -961,6 +1043,7 @@ function MatrixPanel({
   data: MatrixResp;
   transposed: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   const chart = useChartTokens();
   const isCost = data.metric === 'cost';
   const cellValue = (c: MatrixResp['cells'][number]): number => (isCost ? (c.cost ?? 0) : c.runs);
@@ -980,7 +1063,11 @@ function MatrixPanel({
   const fmtCell = (n: number): string => (isCost ? fmtCost(n) : String(n));
 
   if (rowMembers.length === 0 || colMembers.length === 0) {
-    return <Empty>no cross-tab activity in this range</Empty>;
+    return (
+      <Empty>
+        <Trans>no cross-tab activity in this range</Trans>
+      </Empty>
+    );
   }
 
   return (
@@ -1009,12 +1096,15 @@ function MatrixPanel({
               </td>
               {colMembers.map((c) => {
                 const n = lookup.get(`${r.key} ${c.key}`) ?? 0;
+                const rowName = r.name;
+                const colName = c.name;
+                const cell = fmtCell(n);
                 return (
                   <td
                     key={c.key}
                     className={`h-7 rounded-[3px] text-center text-ink-2 ${isCost ? 'w-14' : 'w-9'}`}
                     style={{ background: n > 0 ? heatShade(max > 0 ? n / max : 0) : chart.empty }}
-                    data-tip={`${r.name} × ${c.name}: ${fmtCell(n)}${isCost ? '' : ' runs'}`}
+                    data-tip={isCost ? `${rowName} × ${colName}: ${cell}` : t`${rowName} × ${colName}: ${cell} runs`}
                   >
                     {n > 0 ? fmtCell(n) : ''}
                   </td>
@@ -1064,7 +1154,9 @@ function UsagePanel({
   if (rows.length === 0) {
     return (
       <>
-        <Empty>no {noun} in this range</Empty>
+        <Empty>
+          <Trans>no {noun} in this range</Trans>
+        </Empty>
         {approx && <ApproxHint />}
       </>
     );
@@ -1074,10 +1166,18 @@ function UsagePanel({
     <div className="flex flex-col gap-2.5">
       <div className="flex items-baseline gap-2 pr-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
         <span className="min-w-0 flex-1">{label}</span>
-        <span className="w-16 text-right">calls</span>
-        <span className="w-14 text-right">errors</span>
-        <span className="w-14 text-right">denied</span>
-        <span className="w-16 text-right">avg</span>
+        <span className="w-16 text-right">
+          <Trans>calls</Trans>
+        </span>
+        <span className="w-14 text-right">
+          <Trans>errors</Trans>
+        </span>
+        <span className="w-14 text-right">
+          <Trans>denied</Trans>
+        </span>
+        <span className="w-16 text-right">
+          <Trans>avg</Trans>
+        </span>
         <span className="w-16 text-right">p95</span>
       </div>
       {rows.map((r) => {
@@ -1120,18 +1220,23 @@ function UsagePanel({
             )}
             {showAgents && open === r.name && (
               <div className="mt-1.5 mb-1 ml-4 flex flex-col gap-1 border-l border-line pl-3">
-                {r.agents.map((a) => (
-                  <div
-                    key={a.agent}
-                    className="flex items-baseline gap-2 font-mono text-[10.5px] text-ink-dim"
-                  >
-                    <span className="min-w-0 flex-1 truncate">{a.agent}</span>
-                    <span className="w-16 text-right">{a.calls} calls</span>
-                    <span className={`w-14 text-right ${a.errors > 0 ? 'text-red' : ''}`}>
-                      {a.errors} err
-                    </span>
-                  </div>
-                ))}
+                {r.agents.map((a) => {
+                  const errs = a.errors;
+                  return (
+                    <div
+                      key={a.agent}
+                      className="flex items-baseline gap-2 font-mono text-[10.5px] text-ink-dim"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{a.agent}</span>
+                      <span className="w-16 text-right">
+                        {plural(a.calls, { one: '# call', few: '# calls', many: '# calls', other: '# calls' })}
+                      </span>
+                      <span className={`w-14 text-right ${a.errors > 0 ? 'text-red' : ''}`}>
+                        <Trans>{errs} err</Trans>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1153,16 +1258,19 @@ function AgentFilter({
   value: string | null;
   onChange: (agent: string | null) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <label className="flex items-center gap-2 font-mono text-[10.5px] text-ink-dim">
-      <span className="uppercase tracking-[0.1em] text-ink-faint">agent</span>
+      <span className="uppercase tracking-[0.1em] text-ink-faint">
+        <Trans>agent</Trans>
+      </span>
       <select
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
-        aria-label="filter usage by agent"
+        aria-label={t`filter usage by agent`}
         className="max-w-[180px] rounded-[9px] border border-line-strong bg-field px-2.5 py-[5px] font-mono text-[11px] text-ink outline-none focus:border-ink-dim"
       >
-        <option value="">all agents</option>
+        <option value="">{t`all agents`}</option>
         {agents.map((a) => (
           <option key={a} value={a}>
             {a}
@@ -1197,11 +1305,23 @@ function FirstPassTile(): JSX.Element | null {
 
   return (
     <section className="mt-6">
-      <SectionTitle>First-pass success rate</SectionTitle>
+      <SectionTitle>
+        <Trans>First-pass success rate</Trans>
+      </SectionTitle>
       <div className="rounded-[14px] border border-line px-3.5 py-3.5">
         <table className="w-full font-mono text-[11.5px]">
           <thead className="sr-only">
-            <tr><th scope="col">Agent</th><th scope="col">Rate</th><th scope="col">Passes / Total</th></tr>
+            <tr>
+              <th scope="col">
+                <Trans>Agent</Trans>
+              </th>
+              <th scope="col">
+                <Trans>Rate</Trans>
+              </th>
+              <th scope="col">
+                <Trans>Passes / Total</Trans>
+              </th>
+            </tr>
           </thead>
           <tbody>
             {data.map((r) => (
@@ -1233,6 +1353,7 @@ function FirstPassTile(): JSX.Element | null {
 export function Analytics({
   range: outerRange,
 }: { range?: { from: string; to: string } } = {}): JSX.Element {
+  const { i18n, t } = useLingui();
   const today = isoDay();
   const [metric, setMetric] = useState<AnalyticsMetric>('cost');
   const [pivot, setPivot] = useState<AnalyticsDimension>('project');
@@ -1335,9 +1456,14 @@ export function Analytics({
   }, []);
 
   const rangeLabel = `${fmtDayShort(from)} → ${fmtDayShort(to)}`;
+  const pivotWord = i18n._(DIMENSION_LABELS[pivot]);
+  const matrixWord = i18n._(DIMENSION_LABELS[matrixRows]);
 
   // Export links mirror the exact query the page is showing — including the
   // global project scope, so a scoped page exports scoped CSVs.
+  const waitMin = durations?.wait_total_min.toFixed(1) ?? '';
+  const resolved = String(durations?.approvals_resolved ?? 0);
+
   const csvQuery = (extra: Record<string, string>): string =>
     new URLSearchParams({
       from,
@@ -1358,7 +1484,7 @@ export function Analytics({
       {!embedded && (
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <h1 className="font-display text-[26px] leading-none font-medium tracking-[-0.01em] desk:text-[30px]">
-            Analytics
+            <Trans>Analytics</Trans>
           </h1>
           <span className="font-mono text-[11px] text-ink-faint">{rangeLabel}</span>
         </div>
@@ -1404,44 +1530,55 @@ export function Analytics({
 
       {/* Export CSV (ops-hygiene): same range + pivot as the panels above. */}
       <div className="mt-2.5 flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-ink-dim">
-        <span className="text-[10px] tracking-[0.14em] text-ink-faint uppercase">Export CSV</span>
+        <span className="text-[10px] tracking-[0.14em] text-ink-faint uppercase">
+          <Trans>Export CSV</Trans>
+        </span>
         <a
           href={`/api/stats/breakdown?${csvQuery({ by: pivot })}`}
           download
           className="rounded-[7px] border border-line-strong px-[9px] py-[5px] transition-colors hover:text-ink"
         >
-          breakdown · {pivot}
+          <Trans>breakdown · {pivot}</Trans>
         </a>
         <a
           href={`/api/stats/timeseries?${csvQuery({ metric, group: pivot })}`}
           download
           className="rounded-[7px] border border-line-strong px-[9px] py-[5px] transition-colors hover:text-ink"
         >
-          series · {metric}
+          <Trans>series · {metric}</Trans>
         </a>
       </div>
 
       {durations !== null && (
         <div className="mt-3.5 grid gap-3.5 sm:grid-cols-3">
           <StatCard
-            label="Avg session"
+            label={t`Avg session`}
             value={fmtSec(durations.avg_session_sec)}
-            sub={`${String(durations.session_count)} completed sessions`}
+            sub={plural(durations.session_count, {
+              one: '# completed session',
+              few: '# completed sessions',
+              many: '# completed sessions',
+              other: '# completed sessions',
+            })}
           />
-          <StatCard label="Median session" value={fmtSec(durations.median_session_sec)} />
+          <StatCard label={t`Median session`} value={fmtSec(durations.median_session_sec)} />
           <StatCard
-            label="Approval wait"
+            label={t`Approval wait`}
             value={fmtSec(durations.avg_resolve_sec)}
-            sub={`${durations.wait_total_min.toFixed(1)} min total · ${String(durations.approvals_resolved)} resolved`}
+            sub={t`${waitMin} min total · ${resolved} resolved`}
           />
         </div>
       )}
 
       <div className="mt-3.5 rounded-[14px] border border-line bg-surface px-5 py-[18px]">
         {series === null && error === null ? (
-          <Loading label="series…" />
+          <Loading label={t`series…`} />
         ) : series !== null && series.series.length === 0 ? (
-          <Empty>no {metric} data for {pivot} in this range</Empty>
+          <Empty>
+            <Trans>
+              no {metric} data for {pivotWord} in this range
+            </Trans>
+          </Empty>
         ) : series !== null ? (
           <>
             <MainChart data={series} metric={metric} hidden={hidden} />
@@ -1452,10 +1589,12 @@ export function Analytics({
 
       <div className="mt-5 grid gap-[22px] items-start wide:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section>
-          <SectionTitle>Breakdown · {pivot}</SectionTitle>
+          <SectionTitle>
+            <Trans>Breakdown · {pivotWord}</Trans>
+          </SectionTitle>
           <div className="rounded-[14px] border border-line px-3.5 py-3.5">
             {breakdown === null ? (
-              <Loading label="breakdown…" />
+              <Loading label={t`breakdown…`} />
             ) : (
               <BreakdownPanel rows={breakdown} pivot={pivot} metric={metric} />
             )}
@@ -1465,15 +1604,17 @@ export function Analytics({
         <section>
           <div className="mt-[26px] mb-2.5 flex items-center gap-3">
             <h2 className="font-mono text-[11px] font-medium tracking-[0.16em] text-ink-dim uppercase">
-              Cross-tab · {transposed ? 'projects × ' : ''}
-              {matrixRows}
-              {transposed ? '' : ' × projects'}
+              {transposed ? (
+                <Trans>Cross-tab · projects × {matrixWord}</Trans>
+              ) : (
+                <Trans>Cross-tab · {matrixWord} × projects</Trans>
+              )}
             </h2>
             <span className="h-px flex-1 bg-line" aria-hidden="true" />
             {matrixRows === 'agent' && (
               <Segmented
                 options={[
-                  { v: 'runs', label: 'runs' },
+                  { v: 'runs', label: t`runs` },
                   { v: 'cost', label: '$' },
                 ]}
                 value={matrixMetric}
@@ -1482,8 +1623,8 @@ export function Analytics({
             )}
             <Segmented
               options={[
-                { v: 'agent', label: 'agents' },
-                { v: 'skill', label: 'skills' },
+                { v: 'agent', label: t`agents` },
+                { v: 'skill', label: t`skills` },
               ]}
               value={matrixRows}
               onChange={setMatrixRows}
@@ -1492,17 +1633,17 @@ export function Analytics({
               type="button"
               onClick={() => {
                 transposeTouched.current = true;
-                setTransposed((t) => !t);
+                setTransposed((was) => !was);
               }}
               className="rounded-md border border-line px-2 py-1 font-mono text-[10.5px] text-ink-dim hover:text-ink"
-              data-tip="swap rows and columns"
+              data-tip={t`swap rows and columns`}
             >
-              ⇄ transpose
+              <Trans>⇄ transpose</Trans>
             </button>
           </div>
           <div className="rounded-[14px] border border-line px-3.5 py-3.5">
             {matrix === null ? (
-              <Loading label="cross-tab…" />
+              <Loading label={t`cross-tab…`} />
             ) : (
               <MatrixPanel data={matrix} transposed={transposed} />
             )}
@@ -1513,12 +1654,12 @@ export function Analytics({
       <section className="mt-6">
         <div className="mb-2.5 flex flex-wrap items-center gap-3">
           <h2 className="font-mono text-[11px] font-medium tracking-[0.16em] text-ink-dim uppercase">
-            {usageTab === 'tools' ? 'Tools' : 'Skills'}
+            {usageTab === 'tools' ? t`Tools` : t`Skills`}
           </h2>
           <Segmented
             options={[
-              { v: 'tools', label: 'Tools' },
-              { v: 'skills', label: 'Skills' },
+              { v: 'tools', label: t`Tools` },
+              { v: 'skills', label: t`Skills` },
             ]}
             value={usageTab}
             onChange={setUsageTab}
@@ -1534,24 +1675,24 @@ export function Analytics({
         <div className="rounded-[14px] border border-line px-3.5 py-3.5">
           {usageTab === 'tools' ? (
             tools === null ? (
-              <Loading label="tools…" />
+              <Loading label={t`tools…`} />
             ) : (
               <UsagePanel
                 rows={toolRows(tools)}
                 approx={tools.approx}
-                label="tool"
-                noun="tool calls"
+                label={t`tool`}
+                noun={t`tool calls`}
                 showAgents={usageAgent === null}
               />
             )
           ) : skills === null ? (
-            <Loading label="skills…" />
+            <Loading label={t`skills…`} />
           ) : (
             <UsagePanel
               rows={skillRows(skills)}
               approx={skills.approx}
-              label="skill"
-              noun="skill invocations"
+              label={t`skill`}
+              noun={t`skill invocations`}
               showAgents={usageAgent === null}
             />
           )}

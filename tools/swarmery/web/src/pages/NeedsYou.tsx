@@ -17,6 +17,7 @@
 //
 // Nothing here delivers a reply to a session: the operator pastes it.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
@@ -69,6 +70,7 @@ function AwaitingReply({
   sessionTo: string;
   onDismiss: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -87,6 +89,7 @@ function AwaitingReply({
   };
 
   const question = item.suggestion?.question || item.question || item.preview;
+  const sessionName = item.sessionName;
   const options = item.suggestion?.options ?? [];
 
   return (
@@ -97,7 +100,7 @@ function AwaitingReply({
         </blockquote>
       )}
       {options.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="group" aria-label="suggested replies">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="group" aria-label={t`suggested replies`}>
           {options.map((opt) => {
             const recommended = opt === item.suggestion?.recommended;
             return (
@@ -105,11 +108,17 @@ function AwaitingReply({
                 key={opt}
                 type="button"
                 onClick={() => copy(replyWithOption(item, opt))}
-                aria-label={`Copy reply with option: ${opt}${recommended ? ' (suggested)' : ''}`}
+                aria-label={
+                  recommended ? t`Copy reply with option: ${opt} (suggested)` : t`Copy reply with option: ${opt}`
+                }
                 className={`${BTN} ${recommended ? 'border-green/45 text-green hover:bg-green/10' : 'border-line-strong text-ink-3 hover:bg-surface2'}`}
               >
                 {opt}
-                {recommended && <span className="ml-1.5 text-[10px] opacity-80">· suggested</span>}
+                {recommended && (
+                  <span className="ml-1.5 text-[10px] opacity-80">
+                    <Trans>· suggested</Trans>
+                  </span>
+                )}
               </button>
             );
           })}
@@ -119,24 +128,24 @@ function AwaitingReply({
         <button
           type="button"
           onClick={() => copy(replyPrefix(item))}
-          aria-label={`Copy reply to ${item.sessionName}`}
+          aria-label={t`Copy reply to ${sessionName}`}
           className={`${BTN} border-brand/50 bg-brand/10 font-semibold text-brand hover:bg-brand/20`}
         >
-          Copy reply
+          <Trans>Copy reply</Trans>
         </button>
         <button
           type="button"
           onClick={onDismiss}
-          aria-label={`Dismiss ${item.sessionName}`}
+          aria-label={t`Dismiss ${sessionName}`}
           className={`${BTN} border-line-strong text-ink-3 hover:bg-surface2`}
         >
-          Dismiss
+          <Trans>Dismiss</Trans>
         </button>
         <span aria-live="polite" className="font-mono text-[11px] text-ink-dim">
-          {copied === 'ok' ? 'Copied — paste it into the session' : copied === 'failed' ? 'Copy failed' : ''}
+          {copied === 'ok' ? t`Copied — paste it into the session` : copied === 'failed' ? t`Copy failed` : ''}
         </span>
         <Link to={sessionTo} className={`ml-auto ${LINK}`}>
-          open session →
+          <Trans>open session →</Trans>
         </Link>
       </div>
     </>
@@ -146,10 +155,12 @@ function AwaitingReply({
 /* ----- prod_deploy_local: confirm in the terminal, no allow / deny ----- */
 
 function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: string }): JSX.Element {
+  const { t } = useLingui();
+  const sessionName = item.sessionName;
   return (
     <>
       <p className="mt-2 text-[13px] leading-[1.55] text-ink-2">
-        Production deploy — confirm in the session's terminal
+        <Trans>Production deploy — confirm in the session's terminal</Trans>
       </p>
       {item.preview !== '' && (
         <code className="mt-2 block overflow-x-auto rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[11.5px] break-all whitespace-pre-wrap text-ink-3">
@@ -160,14 +171,14 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
         {item.termFocusUrl !== null && item.termFocusUrl !== '' && (
           <a
             href={item.termFocusUrl}
-            aria-label={`Focus the terminal of ${item.sessionName}`}
+            aria-label={t`Focus the terminal of ${sessionName}`}
             className={`${BTN} border-amber/50 text-amber hover:bg-amber/10`}
           >
-            Focus terminal
+            <Trans>Focus terminal</Trans>
           </a>
         )}
         <Link to={sessionTo} className={`ml-auto ${LINK}`}>
-          open session →
+          <Trans>open session →</Trans>
         </Link>
       </div>
     </>
@@ -191,7 +202,7 @@ function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | 
       <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
       {phaseTo !== null && (
         <Link to={phaseTo} className={`ml-auto ${LINK}`}>
-          open criteria →
+          <Trans>open criteria →</Trans>
         </Link>
       )}
     </div>
@@ -241,7 +252,7 @@ function Row({
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-3">{item.preview}</code>
             <Link to={inboxHref} className={LINK}>
-              review in Inbox →
+              <Trans>review in Inbox →</Trans>
             </Link>
           </div>
         );
@@ -257,7 +268,7 @@ function Row({
         <div className="mt-2 flex flex-wrap items-center gap-3">
           {item.preview !== '' && <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>}
           <Link to={sessionTo} className={`ml-auto ${LINK}`}>
-            open session →
+            <Trans>open session →</Trans>
           </Link>
         </div>
       );
@@ -286,7 +297,9 @@ function Row({
           {item.sessionName}
         </Link>
         <ProjectName name={projectName} slug={item.projectSlug} className="truncate font-mono text-[10.5px]" />
-        <span className="ml-auto font-mono text-[10.5px] whitespace-nowrap text-ink-dim">blocked {age}</span>
+        <span className="ml-auto font-mono text-[10.5px] whitespace-nowrap text-ink-dim">
+          <Trans>blocked {age}</Trans>
+        </span>
       </div>
       {body}
     </li>
@@ -296,6 +309,7 @@ function Row({
 /* ----- page ----- */
 
 export function NeedsYou(): JSX.Element {
+  const { t } = useLingui();
   const { slug } = useParams<{ slug?: string }>();
   const scope = slug ?? null;
   const { items, loading, error, reload, dismiss } = useNeedsYou(scope);
@@ -303,6 +317,7 @@ export function NeedsYou(): JSX.Element {
   const sessionHref = useSessionHref();
   const nowMs = useNowMs();
   const inboxHref = slug === undefined ? '/inbox?tab=approvals' : `/p/${slug}/inbox?tab=approvals`;
+  const blockedCount = String(items.length);
 
   // The pending rows behind approval / question items, so their cards are the
   // Approvals page's own controls. Refetched whenever that id set changes.
@@ -336,9 +351,11 @@ export function NeedsYou(): JSX.Element {
   return (
     <div className="px-4 pb-10 desk:px-10 desk:pb-[60px]">
       <div className="pt-6 pb-3.5 desk:pt-[34px]">
-        <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">Needs you</h1>
+        <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
+          <Trans>Needs you</Trans>
+        </h1>
         <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
-          {loading ? 'sessions blocked on you, oldest first' : `${String(items.length)} blocked on you · oldest first`}
+          {loading ? t`sessions blocked on you, oldest first` : t`${blockedCount} blocked on you · oldest first`}
         </div>
       </div>
 
@@ -348,9 +365,11 @@ export function NeedsYou(): JSX.Element {
           {actionError}
         </div>
       )}
-      {loading && error === null && <Loading label="needs you…" />}
+      {loading && error === null && <Loading label={t`needs you…`} />}
       {!loading && error === null && items.length === 0 && (
-        <Empty>nothing needs you — approvals, questions and sessions awaiting your reply land here live</Empty>
+        <Empty>
+          <Trans>nothing needs you — approvals, questions and sessions awaiting your reply land here live</Trans>
+        </Empty>
       )}
 
       {items.length > 0 && (

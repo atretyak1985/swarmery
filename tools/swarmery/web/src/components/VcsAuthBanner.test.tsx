@@ -7,7 +7,7 @@
 // that bypasses the daemon's cache. The API is
 // mocked at getProjectVcs, so the real useProjectVcs hook runs.
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VcsInfo } from '../api/types';
 import { VcsAuthBanner } from './VcsAuthBanner';

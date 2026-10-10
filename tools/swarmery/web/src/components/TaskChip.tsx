@@ -3,6 +3,7 @@
 // with a dashed border (design §7.4: dotted until a human confirms); the
 // chip carries no link target yet (E-lite — no Workspaces screen).
 
+import { useLingui } from '@lingui/react/macro';
 import type { TaskLinkSource } from '../api/types';
 
 export function TaskChip({
@@ -14,10 +15,14 @@ export function TaskChip({
   linkSource?: TaskLinkSource | null | undefined;
   confidence?: number | null | undefined;
 }): JSX.Element {
+  const { t } = useLingui();
   const heuristic = linkSource === 'heuristic';
+  const overlap = confidence != null ? Math.round(confidence * 100) : null;
   const title = heuristic
-    ? `linked heuristically${confidence != null ? ` · ${String(Math.round(confidence * 100))}% overlap` : ''}`
-    : 'linked via the task card (logs/sessions.md)';
+    ? overlap != null
+      ? t`linked heuristically · ${overlap}% overlap`
+      : t`linked heuristically`
+    : t`linked via the task card (logs/sessions.md)`;
   return (
     <span
       data-tip={title}

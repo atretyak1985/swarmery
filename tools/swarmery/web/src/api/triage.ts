@@ -83,6 +83,7 @@ export interface TriageAudit {
 export class TriageBusyError extends Error {
   readonly activeRunId: number | null;
   constructor(activeRunId: number | null) {
+    // i18n-ignore: never shown — callers match the `busy` prefix and hide this error
     super('busy: a triage run is already active');
     this.name = 'TriageBusyError';
     this.activeRunId = activeRunId;

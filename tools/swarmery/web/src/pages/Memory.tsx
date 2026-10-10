@@ -10,6 +10,9 @@
 // Scope comes from the workspace (useProjectWorkspace); the endpoints resolve a
 // slug OR numeric id, so the slug is the natural handle here.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg, plural, t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   MemoryConsolidateResp,
@@ -31,10 +34,10 @@ import { fmtAgo } from '../lib/format';
 import { ConfirmDialog, Empty, ErrorBox, Loading } from '../components/ui';
 import { StaleFactsPanel } from './memory/StaleFactsPanel';
 
-const KIND_LABELS: Record<MemoryKind, string> = {
-  'claude-md': 'Project instructions',
-  'auto-memory': 'Auto-memory',
-  serena: 'Serena',
+const KIND_LABELS: Record<MemoryKind, MessageDescriptor> = {
+  'claude-md': msg`Project instructions`,
+  'auto-memory': msg`Auto-memory`,
+  serena: msg`Serena`,
 };
 
 /** Render order of the three roots (matches the daemon's list sort). */
@@ -45,6 +48,13 @@ function fmtBytes(n: number): string {
   if (n < 1024) return `${String(n)} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function indexSummary(indexBytes: number, closedCount: number, totalLines: number): string {
+  const size = fmtBytes(indexBytes);
+  const closed = String(closedCount);
+  const total = String(totalLines);
+  return t`${size} · ${closed}/${total} lines closed`;
 }
 
 interface FileGroup {
@@ -59,6 +69,7 @@ function groupByKind(files: MemoryFile[]): FileGroup[] {
 }
 
 export function Memory(): JSX.Element {
+  const { t } = useLingui();
   const { slug, projectId, loading: projLoading } = useProjectWorkspace();
 
   const [files, setFiles] = useState<MemoryFile[] | null>(null);
@@ -125,24 +136,32 @@ export function Memory(): JSX.Element {
     <div className="px-4 pt-5 pb-10 desk:px-8 desk:pt-7">{inner}</div>
   );
 
-  if (projLoading && projectId === null) return wrap(<Loading label="workspace…" />);
-  if (projectId === null) return wrap(<Empty>unknown project</Empty>);
+  if (projLoading && projectId === null) return wrap(<Loading label={t`workspace…`} />);
+  if (projectId === null) return wrap(
+      <Empty>
+        <Trans>unknown project</Trans>
+      </Empty>,
+    );
   if (listError !== null) return wrap(<ErrorBox message={listError} onRetry={loadList} />);
-  if (files === null) return wrap(<Loading label="memory…" />);
+  if (files === null) return wrap(<Loading label={t`memory…`} />);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pt-5 pb-10 desk:px-8 desk:pt-7">
       <h1 className="font-display text-[22px] font-medium tracking-[-0.01em] desk:text-[26px]">
-        Memory
+        <Trans>Memory</Trans>
       </h1>
       <p className="mt-1 text-[12.5px] text-ink-dim">
-        Everything this project remembers — its instructions, Claude Code auto-memory, and Serena
-        notes — editable with a versioned backup on every save.
+        <Trans>
+          Everything this project remembers — its instructions, Claude Code auto-memory, and Serena
+          notes — editable with a versioned backup on every save.
+        </Trans>
       </p>
 
       {files.length === 0 ? (
         <Empty>
-          No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes.
+          <Trans>
+            No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes.
+          </Trans>
         </Empty>
       ) : (
         <>
@@ -165,7 +184,9 @@ export function Memory(): JSX.Element {
             {selected !== null ? (
               <MemoryEditor key={selected} project={slug} path={selected} onSaved={onSaved} />
             ) : (
-              <Empty>Select a file to view or edit.</Empty>
+              <Empty>
+                <Trans>Select a file to view or edit.</Trans>
+              </Empty>
             )}
           </div>
         </>
@@ -186,11 +207,13 @@ export function Memory(): JSX.Element {
  * "why is this one still here" is the first question the table has to answer.
  */
 function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => void }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [resp, setResp] = useState<MemoryConsolidateResp | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [applied, setApplied] = useState<string | null>(null);
+  // `partial` drives the tone; the text is already translated.
+  const [applied, setApplied] = useState<{ text: string; partial: boolean } | null>(null);
   const [confirmApply, setConfirmApply] = useState(false);
 
   // A plan is only valid for the directory it was computed against, and only
@@ -212,11 +235,10 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
             // the index may still list them. Keep the backup id and the moved
             // count on screen next to the message — they are how the operator
             // recovers — and spend the plan, since the directory has changed.
-            const moved = r.result?.moved ?? [];
+            const movedCount = String((r.result?.moved ?? []).length);
+            const backup = r.result?.backupId ?? t`none`;
             setError(r.error);
-            setApplied(
-              `partial: moved ${String(moved.length)} · backup ${r.result?.backupId ?? 'none'}`,
-            );
+            setApplied({ text: t`partial: moved ${movedCount} · backup ${backup}`, partial: true });
             setResp(null);
             onApplied();
             return;
@@ -224,11 +246,12 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
           setResp(r);
           if (!dryRun) {
             const moved = r.result?.moved ?? [];
-            setApplied(
-              moved.length === 0
-                ? 'nothing to move'
-                : `moved ${String(moved.length)} · backup ${r.result?.backupId ?? 'none'}`,
-            );
+            const movedCount = String(moved.length);
+            const backup = r.result?.backupId ?? t`none`;
+            setApplied({
+              text: moved.length === 0 ? t`nothing to move` : t`moved ${movedCount} · backup ${backup}`,
+              partial: false,
+            });
             setResp(null); // the plan is spent — a fresh dry run is required
             onApplied();
           }
@@ -236,11 +259,14 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
         .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
         .finally(() => setBusy(false));
     },
-    [dir, onApplied],
+    [dir, onApplied, t],
   );
 
   const plan = resp?.plan ?? null;
   const canApply = plan !== null && plan.move.length > 0 && !busy;
+  const closedDir = plan?.closedDir ?? '';
+  const closedDirOrDefault = plan?.closedDir ?? 'closed/';
+  const moveCount = plan?.move.length ?? 0;
 
   return (
     <section className="mt-4 rounded-xl border border-line bg-surface">
@@ -251,18 +277,18 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
           aria-expanded={open}
           className="font-mono text-[11px] text-ink-dim transition-colors hover:text-ink"
         >
-          {open ? '▾' : '▸'} Consolidate index
+          {open ? '▾' : '▸'} <Trans>Consolidate index</Trans>
         </button>
         <span className="min-w-0 flex-1 truncate text-[12px] text-ink-faint">
           {plan !== null
-            ? `${fmtBytes(plan.indexBytes)} · ${String(plan.closedCount)}/${String(plan.totalLines)} lines closed`
-            : 'move finished entries out of the always-loaded index'}
+            ? indexSummary(plan.indexBytes, plan.closedCount, plan.totalLines)
+            : t`move finished entries out of the always-loaded index`}
         </span>
         {applied !== null && (
           <span
-            className={`font-mono text-[10.5px] ${applied.startsWith('partial:') ? 'text-amber' : 'text-green'}`}
+            className={`font-mono text-[10.5px] ${applied.partial ? 'text-amber' : 'text-green'}`}
           >
-            {applied}
+            {applied.text}
           </span>
         )}
         <button
@@ -274,16 +300,16 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
           disabled={busy}
           className="rounded-lg border border-line px-2.5 py-1 font-mono text-[11px] text-ink-dim transition-colors hover:text-ink disabled:opacity-40"
         >
-          {busy ? 'working…' : 'dry run'}
+          {busy ? t`working…` : t`dry run`}
         </button>
         <button
           type="button"
           onClick={() => setConfirmApply(true)}
           disabled={!canApply}
-          title={plan === null ? 'run a dry run first' : undefined}
+          title={plan === null ? t`run a dry run first` : undefined}
           className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-1 font-mono text-[11px] font-semibold text-amber transition-colors hover:bg-amber/20 disabled:opacity-40"
         >
-          apply
+          <Trans>apply</Trans>
         </button>
       </div>
 
@@ -292,21 +318,23 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
           {error !== null && <ErrorBox message={error} onRetry={() => run(true)} />}
           {plan === null && error === null && (
             <p className="text-[12px] text-ink-faint">
-              Run a dry run to see which closed entries can move to <code>closed/</code>. Nothing is
-              written until you press apply, and every touched file is backed up first.
+              <Trans>
+                Run a dry run to see which closed entries can move to <code>closed/</code>. Nothing is
+                written until you press apply, and every touched file is backed up first.
+              </Trans>
             </p>
           )}
           {plan !== null && (
             <>
               <ActionTable
-                label={`moves to ${plan.closedDir}`}
+                label={t`moves to ${closedDir}`}
                 tone="text-ink"
                 actions={plan.move}
-                empty="nothing to consolidate — the index is all live"
+                empty={t`nothing to consolidate — the index is all live`}
               />
               {plan.keep.length > 0 && (
                 <ActionTable
-                  label="held back"
+                  label={t`held back`}
                   tone="text-ink-faint"
                   actions={plan.keep}
                   empty=""
@@ -319,8 +347,8 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
 
       <ConfirmDialog
         open={confirmApply}
-        title="Consolidate the auto-memory index"
-        confirmLabel={`move ${String(plan?.move.length ?? 0)} files`}
+        title={t`Consolidate the auto-memory index`}
+        confirmLabel={t`move ${plural(moveCount, { one: '# files', few: '# files', many: '# files', other: '# files' })}`}
         danger
         onConfirm={() => {
           setConfirmApply(false);
@@ -328,9 +356,11 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
         }}
         onCancel={() => setConfirmApply(false)}
       >
-        The listed topic files move to <code>{plan?.closedDir ?? 'closed/'}</code> and their index
-        lines move to its <code>INDEX.md</code>. Nothing is deleted, and every touched file is
-        backed up first — but the files stop being loaded into new conversations.
+        <Trans>
+          The listed topic files move to <code>{closedDirOrDefault}</code> and their index lines
+          move to its <code>INDEX.md</code>. Nothing is deleted, and every touched file is backed
+          up first — but the files stop being loaded into new conversations.
+        </Trans>
       </ConfirmDialog>
     </section>
   );
@@ -382,12 +412,13 @@ function FileList({
   selected: string | null;
   onSelect: (path: string) => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   return (
-    <nav className="flex flex-col gap-3" aria-label="Memory files">
+    <nav className="flex flex-col gap-3" aria-label={t`Memory files`}>
       {groups.map((group) => (
         <div key={group.kind}>
           <div className="mb-1 px-1 font-mono text-[10px] font-medium tracking-[0.12em] text-ink-faint uppercase">
-            {KIND_LABELS[group.kind]} · {group.files.length}
+            {i18n._(KIND_LABELS[group.kind])} · {group.files.length}
           </div>
           <div className="flex flex-col gap-0.5">
             {group.files.map((f) => {
@@ -408,7 +439,7 @@ function FileList({
                     <span className="truncate">{f.name}</span>
                     {!f.writable && (
                       <span className="shrink-0 rounded-[5px] border border-line px-1 py-[1px] font-mono text-[9px] text-ink-faint">
-                        read-only
+                        <Trans>read-only</Trans>
                       </span>
                     )}
                   </span>
@@ -436,6 +467,7 @@ function MemoryEditor({
   path: string;
   onSaved: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [detail, setDetail] = useState<MemoryFileContent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<EditorView>('edit');
@@ -494,16 +526,16 @@ function MemoryEditor({
         onSaved(); // refresh the list's size/updated-at
       })
       .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        setSaveError(msg);
+        const message = e instanceof Error ? e.message : String(e);
+        setSaveError(message);
         // A base_hash conflict → offer to reload the on-disk version.
-        if (/base_hash|changed on disk/i.test(msg)) setConfirmReload(true);
+        if (/base_hash|changed on disk/i.test(message)) setConfirmReload(true);
       })
       .finally(() => setSaving(false));
   }, [writable, dirty, project, path, draft, baseHash, onSaved]);
 
   if (error !== null) return <ErrorBox message={error} onRetry={load} />;
-  if (detail === null) return <Loading label="file…" />;
+  if (detail === null) return <Loading label={t`file…`} />;
 
   return (
     <div className="flex min-h-0 flex-col rounded-xl border border-line bg-surface">
@@ -513,7 +545,7 @@ function MemoryEditor({
         </span>
         {!writable && (
           <span className="rounded-[6px] border border-amber/40 bg-amber/10 px-1.5 py-[2px] font-mono text-[10px] text-amber">
-            read-only
+            <Trans>read-only</Trans>
           </span>
         )}
         <div className="flex overflow-hidden rounded-lg border border-line">
@@ -527,7 +559,7 @@ function MemoryEditor({
                 view === v ? 'bg-surface2 text-brand' : 'text-ink-dim hover:text-ink'
               }`}
             >
-              {v}
+              {v === 'edit' ? t`edit` : t`preview`}
             </button>
           ))}
         </div>
@@ -537,7 +569,7 @@ function MemoryEditor({
           disabled={!writable || !dirty || saving}
           className="rounded-lg border border-green/40 bg-green/10 px-3 py-1 font-mono text-[11px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-40"
         >
-          {saving ? 'saving…' : 'save'}
+          {saving ? t`saving…` : t`save`}
         </button>
       </div>
 
@@ -551,7 +583,7 @@ function MemoryEditor({
             }}
             readOnly={!writable}
             spellCheck={false}
-            aria-label="Memory file content"
+            aria-label={t`Memory file content`}
             className="min-h-[360px] w-full resize-y rounded-lg border border-line bg-bg px-3 py-2 font-mono text-[12.5px] leading-relaxed text-ink outline-none focus:border-line-strong read-only:opacity-70"
           />
         ) : (
@@ -565,18 +597,24 @@ function MemoryEditor({
         {saveError !== null ? (
           <span className="text-red">{saveError}</span>
         ) : dirty ? (
-          <span className="text-amber">unsaved changes</span>
+          <span className="text-amber">
+            <Trans>unsaved changes</Trans>
+          </span>
         ) : saved ? (
-          <span className="text-green">saved ✓</span>
+          <span className="text-green">
+            <Trans>saved ✓</Trans>
+          </span>
         ) : (
-          <span className="text-ink-faint">up to date</span>
+          <span className="text-ink-faint">
+            <Trans>up to date</Trans>
+          </span>
         )}
       </div>
 
       <ConfirmDialog
         open={confirmReload}
-        title="File changed on disk"
-        confirmLabel="reload from disk"
+        title={t`File changed on disk`}
+        confirmLabel={t`reload from disk`}
         danger
         onConfirm={() => {
           setConfirmReload(false);
@@ -584,8 +622,10 @@ function MemoryEditor({
         }}
         onCancel={() => setConfirmReload(false)}
       >
-        This file was modified on disk since you opened it, so the save was refused. Reloading
-        replaces your unsaved edits with the current on-disk version.
+        <Trans>
+          This file was modified on disk since you opened it, so the save was refused. Reloading
+          replaces your unsaved edits with the current on-disk version.
+        </Trans>
       </ConfirmDialog>
     </div>
   );

@@ -84,7 +84,7 @@ describe('forecastStory', () => {
     expect(story?.headline).toBe('Planned as a large phase, it ended in 30 seconds doing nothing.');
     expect(story?.band).toBe('far off plan');
     expect(story?.expected).toBe(
-      'A large phase, 90 min to 4 h, finishing with some concerns. The planner was 55 % sure — after reading the code it added four more areas (database, bids, notify-dispatch, contracts).',
+      'A large phase, 90 min to 4 h, finishing with some concerns. The planner was 55 % sure — after reading the code it added 4 more areas (database, bids, notify-dispatch, contracts).',
     );
     expect(story?.happened).toContain('none of the 8 criteria ticked');
   });
@@ -128,6 +128,6 @@ describe('forecastStory', () => {
       }),
     );
     expect(story?.band).toBe('on plan');
-    expect(story?.happened).toBe('30 seconds, touched one area, 4 of the 8 criteria ticked.');
+    expect(story?.happened).toBe('30 seconds, touched 1 area, 4 of the 8 criteria ticked.');
   });
 });

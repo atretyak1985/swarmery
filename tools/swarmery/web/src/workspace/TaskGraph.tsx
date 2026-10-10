@@ -9,6 +9,7 @@
 // and dependencies and is focusable — the graph is never the ONLY way to read
 // the DAG (WCAG AA).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import {
   Background,
@@ -49,6 +50,7 @@ export function TaskGraph({
   tasks: readonly BoardTask[];
   onOpen: (id: number) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   // Index by external_id so dependency links resolve to node ids.
   const byExtId = useMemo(() => {
     const m = new Map<string, BoardTask>();
@@ -106,7 +108,7 @@ export function TaskGraph({
   if (tasks.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center px-1 py-2 font-mono text-[11px] text-ink-faint">
-        no tasks to graph
+        <Trans>no tasks to graph</Trans>
       </div>
     );
   }
@@ -129,18 +131,20 @@ export function TaskGraph({
 
       {/* WCAG: a keyboard/SR-reachable list mirror of the DAG. */}
       <ul className="sr-only">
-        {tasks.map((t) => (
-          <li key={t.id}>
-            <button type="button" onClick={() => onOpen(t.id)}>
-              {t.title} — column {COLUMN_LABELS[t.boardColumn]}
-              {t.dependencies.length > 0
-                ? `, depends on ${t.dependencies
-                    .map((ext) => byExtId.get(ext)?.title ?? ext)
-                    .join(', ')}`
-                : ', no dependencies'}
-            </button>
-          </li>
-        ))}
+        {tasks.map((task) => {
+          const title = task.title;
+          const column = COLUMN_LABELS[task.boardColumn];
+          const deps = task.dependencies.map((ext) => byExtId.get(ext)?.title ?? ext).join(', ');
+          return (
+            <li key={task.id}>
+              <button type="button" onClick={() => onOpen(task.id)}>
+                {task.dependencies.length > 0
+                  ? t`${title} — column ${column}, depends on ${deps}`
+                  : t`${title} — column ${column}, no dependencies`}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

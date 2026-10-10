@@ -7,6 +7,7 @@
 // name plus live status (running / errors); durations, tokens, agent type and
 // the rest live in the hover tooltip (ChartTooltip visual language).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -67,7 +68,9 @@ function TipStat({
 
 /** Dimmed sample/run line under a divider (args, commands, run descriptions). */
 function TipNotes({ lines, more = 0 }: { lines: string[]; more?: number }): JSX.Element | null {
+  const { t } = useLingui();
   if (lines.length === 0) return null;
+  const moreCount = String(more);
   return (
     <div className="mt-1.5 border-t border-line pt-1.5">
       {lines.map((line) => (
@@ -76,20 +79,21 @@ function TipNotes({ lines, more = 0 }: { lines: string[]; more?: number }): JSX.
         </div>
       ))}
       {more > 0 && (
-        <div className="py-px font-mono text-[10px] text-ink-dim">{`+${String(more)} more`}</div>
+        <div className="py-px font-mono text-[10px] text-ink-dim">{t`+${moreCount} more`}</div>
       )}
     </div>
   );
 }
 
 function ToolTip({ node }: { node: ToolNode }): JSX.Element {
+  const { t } = useLingui();
   return (
     <Tip glyph={toolGlyph(node.name)} title={node.name} tone="text-ink">
-      <TipStat label="calls" value={`×${String(node.count)}`} />
-      {node.errors > 0 && <TipStat label="errors" value={String(node.errors)} tone="text-red" />}
-      {node.totalMs > 0 && <TipStat label="total time" value={fmtDurationMs(node.totalMs)} />}
+      <TipStat label={t`calls`} value={`×${String(node.count)}`} />
+      {node.errors > 0 && <TipStat label={t`errors`} value={String(node.errors)} tone="text-red" />}
+      {node.totalMs > 0 && <TipStat label={t`total time`} value={fmtDurationMs(node.totalMs)} />}
       {node.totalMs > 0 && node.count > 1 && (
-        <TipStat label="avg" value={fmtDurationMs(Math.round(node.totalMs / node.count))} />
+        <TipStat label={t`avg`} value={fmtDurationMs(Math.round(node.totalMs / node.count))} />
       )}
       <TipNotes lines={node.samples} />
     </Tip>
@@ -99,11 +103,12 @@ function ToolTip({ node }: { node: ToolNode }): JSX.Element {
 function SkillTip({ node }: { node: SkillNode }): JSX.Element {
   const tools = countToolCalls(node.children);
   const agents = countAgentRuns(node.children);
+  const { t } = useLingui();
   return (
     <Tip glyph="◈" title={node.name} tone="text-amber">
-      <TipStat label="invocations" value={`×${String(node.count)}`} />
-      {tools > 0 && <TipStat label="tool calls" value={String(tools)} />}
-      {agents > 0 && <TipStat label="subagents" value={String(agents)} />}
+      <TipStat label={t`invocations`} value={`×${String(node.count)}`} />
+      {tools > 0 && <TipStat label={t`tool calls`} value={String(tools)} />}
+      {agents > 0 && <TipStat label={t`subagents`} value={String(agents)} />}
       <TipNotes lines={node.args !== null ? [node.args] : []} />
     </Tip>
   );
@@ -112,7 +117,8 @@ function SkillTip({ node }: { node: SkillNode }): JSX.Element {
 function AgentTip({ node }: { node: AgentNode }): JSX.Element {
   const tools = countToolCalls(node.children);
   const agents = countAgentRuns(node.children);
-  const status = node.running ? 'running' : node.failed ? 'failed' : 'ok';
+  const { t } = useLingui();
+  const status = node.running ? t`running` : node.failed ? t`failed` : t`ok`;
   const statusTone = node.running ? 'text-green' : node.failed ? 'text-red' : 'text-ink';
   return (
     <Tip
@@ -120,17 +126,17 @@ function AgentTip({ node }: { node: AgentNode }): JSX.Element {
       title={node.description ?? node.type}
       tone={node.failed ? 'text-red' : 'text-blue'}
     >
-      <TipStat label="agent" value={node.type} />
-      <TipStat label="status" value={status} tone={statusTone} />
-      <TipStat label="started" value={fmtTime(node.startedAt)} />
+      <TipStat label={t`agent`} value={node.type} />
+      <TipStat label={t`status`} value={status} tone={statusTone} />
+      <TipStat label={t`started`} value={fmtTime(node.startedAt)} />
       {node.durationMs !== null && !node.running && (
-        <TipStat label="duration" value={fmtDurationMs(node.durationMs)} />
+        <TipStat label={t`duration`} value={fmtDurationMs(node.durationMs)} />
       )}
       {node.tokens !== null && node.tokens > 0 && (
-        <TipStat label="tokens" value={fmtTokens(node.tokens)} />
+        <TipStat label={t`tokens`} value={fmtTokens(node.tokens)} />
       )}
-      {tools > 0 && <TipStat label="tool calls" value={String(tools)} />}
-      {agents > 0 && <TipStat label="nested agents" value={String(agents)} />}
+      {tools > 0 && <TipStat label={t`tool calls`} value={String(tools)} />}
+      {agents > 0 && <TipStat label={t`nested agents`} value={String(agents)} />}
     </Tip>
   );
 }
@@ -138,20 +144,18 @@ function AgentTip({ node }: { node: AgentNode }): JSX.Element {
 const GROUP_TIP_RUNS = 6;
 
 function AgentGroupTip({ node }: { node: AgentGroupNode }): JSX.Element {
+  const { t } = useLingui();
   const shown = node.runs.slice(0, GROUP_TIP_RUNS);
   return (
     <Tip glyph="⬡" title={`${node.type} ×${String(node.count)}`} tone="text-blue">
-      {node.running > 0 && <TipStat label="running" value={String(node.running)} tone="text-green" />}
-      {node.totalMs > 0 && <TipStat label="total time" value={fmtDurationMs(node.totalMs)} />}
-      {node.tokens > 0 && <TipStat label="Σ tokens" value={fmtTokens(node.tokens)} />}
+      {node.running > 0 && <TipStat label={t`running`} value={String(node.running)} tone="text-green" />}
+      {node.totalMs > 0 && <TipStat label={t`total time`} value={fmtDurationMs(node.totalMs)} />}
+      {node.tokens > 0 && <TipStat label={t`Σ tokens`} value={fmtTokens(node.tokens)} />}
       <TipNotes
         lines={shown.map((run) => {
           const label = run.description ?? run.type;
-          return run.running
-            ? `${label} — running`
-            : run.durationMs !== null
-              ? `${label} — ${fmtDurationMs(run.durationMs)}`
-              : label;
+          if (run.running) return t`${label} — running`;
+          return run.durationMs !== null ? `${label} — ${fmtDurationMs(run.durationMs)}` : label;
         })}
         more={node.runs.length - shown.length}
       />
@@ -179,6 +183,7 @@ function BranchRow({
   nodes: CallNode[];
   tip: JSX.Element;
 }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const { handlers, portal } = useHoverTip(tip);
   const hasKids = nodes.length > 0;
@@ -207,7 +212,7 @@ function BranchRow({
         {systemLink !== null && (
           <Link
             to={systemLink}
-            data-tip="open in System"
+            data-tip={t`open in System`}
             className="shrink-0 font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
           >
             ↗
@@ -226,6 +231,7 @@ function BranchRow({
 
 function ToolRow({ node }: { node: ToolNode }): JSX.Element {
   const { handlers, portal } = useHoverTip(<ToolTip node={node} />);
+  const errorCount = String(node.errors);
   return (
     <>
       <div className="flex items-center gap-1.5 py-[3px] font-mono text-[11px]" {...handlers}>
@@ -240,7 +246,7 @@ function ToolRow({ node }: { node: ToolNode }): JSX.Element {
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {node.errors > 0 && (
             <span className="shrink-0 font-mono text-[10px] text-red">
-              {String(node.errors)} err
+              <Trans>{errorCount} err</Trans>
             </span>
           )}
         </span>
@@ -269,13 +275,13 @@ function AgentRow({ node }: { node: AgentNode }): JSX.Element {
   if (node.running) {
     meta.push(
       <span key="run" className="shrink-0 font-mono text-[10px] text-green">
-        running
+        <Trans>running</Trans>
       </span>,
     );
   } else if (node.failed) {
     meta.push(
       <span key="fail" className="shrink-0 font-mono text-[10px] text-red">
-        failed
+        <Trans>failed</Trans>
       </span>,
     );
   }
@@ -294,10 +300,11 @@ function AgentRow({ node }: { node: AgentNode }): JSX.Element {
 
 function AgentGroupRow({ node }: { node: AgentGroupNode }): JSX.Element {
   const meta: JSX.Element[] = [];
+  const runningCount = String(node.running);
   if (node.running > 0) {
     meta.push(
       <span key="run" className="shrink-0 font-mono text-[10px] text-green">
-        {`${String(node.running)} running`}
+        <Trans>{runningCount} running</Trans>
       </span>,
     );
   }
@@ -346,7 +353,7 @@ export function CallTreeCard({
   return (
     <div className={`rounded-xl border border-line bg-surface px-4 py-3.5 ${className}`}>
       <div className="mb-1 font-mono text-[10.5px] tracking-[0.08em] text-ink-dim uppercase">
-        call tree
+        <Trans>call tree</Trans>
       </div>
       <Nodes nodes={nodes} />
     </div>

@@ -11,6 +11,8 @@
 // (the exact commands to finish by hand) + redacted `detail`, verbatim in a
 // <pre>; a 409 is a refusal with a known code, mapped to one inline sentence.
 
+import { t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getPhaseReview, LandError, landPhase } from '../../api';
 import type {
@@ -48,18 +50,19 @@ export interface PhaseReviewProps {
 
 /** The inline sentence for a 409 refusal, or null for a code without one. */
 export function conflictSentence(err: LandError, terms: ProviderTerms | null): string | null {
-  const change = terms?.change ?? 'change request';
+  const change = terms?.change ?? t`change request`;
   switch (err.code) {
     case 'phase-running':
-      return 'The phase is still running — land it once the run has finished.';
+      return t`The phase is still running — land it once the run has finished.`;
     case 'no-run-branch':
-      return 'This phase has no run branch yet — run it first; there is nothing to push.';
-    case 'push-to-base-refused':
-      return `Refused: the run branch ${err.branch ?? ''} is the base branch${
-        err.base !== undefined && err.base !== '' ? ` (${err.base})` : ''
-      }, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it.`;
+      return t`This phase has no run branch yet — run it first; there is nothing to push.`;
+    case 'push-to-base-refused': {
+      const branch = err.branch ?? '';
+      const base = err.base !== undefined && err.base !== '' ? ` (${err.base})` : '';
+      return t`Refused: the run branch ${branch} is the base branch${base}, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it.`;
+    }
     case 'fork-workflow-unsupported':
-      return `This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the ${change} by hand.`;
+      return t`This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the ${change} by hand.`;
     default:
       return null;
   }
@@ -93,6 +96,7 @@ export function LandFailure({ err, terms }: { err: unknown; terms: ProviderTerms
 /** The mono meta line: state pill · change-request link · when · last error. */
 function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: ProviderTerms }): JSX.Element {
   const link = prLinkText(landing, terms);
+  const mergedAgo = landing.landedAt !== null ? fmtAgo(landing.landedAt) : '';
   const tone =
     landing.state === 'merged' || landing.state === 'pr_open'
       ? 'border-green/40 bg-green/10 text-green'
@@ -110,12 +114,17 @@ function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: Provid
         </a>
       )}
       {/* landedAt is the merge time: shown for a merged phase only. */}
-      {landing.state === 'merged' && landing.landedAt !== null && <span>merged {fmtAgo(landing.landedAt)}</span>}
+      {landing.state === 'merged' && landing.landedAt !== null && (
+        <span>
+          <Trans>merged {mergedAgo}</Trans>
+        </span>
+      )}
     </div>
   );
 }
 
 export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps): JSX.Element {
+  const { t } = useLingui();
   const [review, setReview] = useState<PhaseReviewData | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
@@ -177,7 +186,7 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
     setFeedback('');
   }, [phase.id]);
 
-  const t: ProviderTerms | null = terms ?? review?.terms ?? null;
+  const vocab: ProviderTerms | null = terms ?? review?.terms ?? null;
   const landing: PhaseLanding | null = landed ?? review?.landing ?? phase.landing ?? null;
   const gate = { runState: phase.runState, runSessionUuid: phase.runSessionUuid, landing };
   const running = phase.runState === 'running';
@@ -211,17 +220,19 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   };
 
   const landTitle = running
-    ? 'the run is still live — land it once it finishes'
+    ? t`the run is still live — land it once it finishes`
     : !landable
-      ? 'nothing to land in this state'
+      ? t`nothing to land in this state`
       : undefined;
+  const change = vocab?.change ?? '';
+  const landingError = landing?.error ?? '';
   const verdict = review?.verifyVerdict ?? phase.verifyVerdict;
   const verdictDetail = review?.verifyDetail ?? phase.verifyDetail;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        {landing !== null && t !== null && <LandingStrip landing={landing} terms={t} />}
+        {landing !== null && vocab !== null && <LandingStrip landing={landing} terms={vocab} />}
         <VerifyVerdictChip verdict={verdict} detail={verdictDetail} />
       </div>
       {landing !== null && (
@@ -237,45 +248,47 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
           }}
         />
       )}
-      {(landing?.error ?? '') !== '' && (
-        <div className="font-mono text-[10.5px] break-words text-amber">last landing failure: {landing?.error}</div>
+      {landingError !== '' && (
+        <div className="font-mono text-[10.5px] break-words text-amber">
+          <Trans>last landing failure: {landingError}</Trans>
+        </div>
       )}
 
       <div className="rounded-lg border border-line bg-surface/40 px-2.5 py-2">
         {loading && review === null ? (
-          <Loading label="review…" />
+          <Loading label={t`review…`} />
         ) : review !== null ? (
           <DiffView diff={review} />
         ) : loadError instanceof LandError && loadError.status === 409 ? (
           <div className="font-mono text-[10.5px] text-ink-faint">
-            {conflictSentence(loadError, t) ?? loadError.message}
+            {conflictSentence(loadError, vocab) ?? loadError.message}
           </div>
         ) : loadError !== null ? (
-          <LandFailure err={loadError} terms={t} />
+          <LandFailure err={loadError} terms={vocab} />
         ) : null}
       </div>
 
-      {t !== null && !noBranch && (
+      {vocab !== null && !noBranch && (
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             className={PRIMARY}
             disabled={busy || running || !landable}
             aria-busy={inFlight === 'push'}
-            title={landTitle ?? 'push the run branch to origin'}
+            title={landTitle ?? t`push the run branch to origin`}
             onClick={() => act({ action: 'push' })}
           >
-            {inFlight === 'push' ? 'Pushing…' : 'Push'}
+            {inFlight === 'push' ? t`Pushing…` : t`Push`}
           </button>
           <button
             type="button"
             className={PRIMARY}
             disabled={busy || running || !landable}
             aria-busy={inFlight === 'pr'}
-            title={landTitle ?? `push the run branch and open a ${t.change}`}
+            title={landTitle ?? t`push the run branch and open a ${change}`}
             onClick={() => act({ action: 'pr', draft })}
           >
-            {inFlight === 'pr' ? 'Opening…' : `Push + open ${t.change}`}
+            {inFlight === 'pr' ? t`Opening…` : t`Push + open ${change}`}
           </button>
           <label className="flex items-center gap-1.5 font-mono text-[11px] text-ink-2">
             <input
@@ -284,47 +297,47 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
               disabled={busy || running || !landable}
               onChange={(e) => setDraft(e.target.checked)}
             />
-            Draft
+            <Trans>Draft</Trans>
           </label>
           <button
             type="button"
             className={`${PLAIN} ml-auto`}
             disabled={busy || running || !returnable}
             aria-busy={inFlight === 'return'}
-            title={running ? 'the run is still live' : 'send the phase back to its agent with your feedback'}
+            title={running ? t`the run is still live` : t`send the phase back to its agent with your feedback`}
             onClick={() => {
               setActionError(null);
               setReturnOpen(true);
             }}
           >
-            Return to agent…
+            <Trans>Return to agent…</Trans>
           </button>
         </div>
       )}
 
-      {actionError !== null && !returnOpen && <LandFailure err={actionError} terms={t} />}
+      {actionError !== null && !returnOpen && <LandFailure err={actionError} terms={vocab} />}
 
       <ConfirmDialog
         open={returnOpen}
-        title="Return to agent?"
-        confirmLabel="return"
+        title={t`Return to agent?`}
+        confirmLabel={t`return`}
         busy={inFlight === 'return'}
         confirmDisabled={feedback.trim() === ''}
         onConfirm={() => act({ action: 'return', feedback: feedback.trim() })}
         onCancel={() => setReturnOpen(false)}
       >
-        Sends the phase back to its agent: your feedback is appended to the next run's prompt.
+        <Trans>Sends the phase back to its agent: your feedback is appended to the next run's prompt.</Trans>
         <textarea
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
           rows={4}
-          aria-label="feedback for the agent"
-          placeholder="what to fix on the next pass"
+          aria-label={t`feedback for the agent`}
+          placeholder={t`what to fix on the next pass`}
           className="mt-2 w-full resize-y rounded-[8px] border border-line bg-field px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-ink outline-none focus:border-ink-dim"
         />
         {actionError !== null && (
           <div className="mt-2.5">
-            <LandFailure err={actionError} terms={t} />
+            <LandFailure err={actionError} terms={vocab} />
           </div>
         )}
       </ConfirmDialog>

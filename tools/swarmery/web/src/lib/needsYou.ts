@@ -1,6 +1,8 @@
 // Pure helpers for the "Needs you" queue (GET /api/needs-you; pages/NeedsYou.tsx).
 // No React, no storage, no network — the page and useNeedsYou own those.
 
+import { i18n, type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import type { NeedsYouItem, NeedsYouKind } from '../api/types';
 
 /** The quoted question is clipped so a pasted reply stays readable. */
@@ -21,17 +23,18 @@ export function replyWithOption(item: NeedsYouItem, option: string): string {
   return `${replyPrefix(item)}${option}`;
 }
 
-const KIND_LABELS: Record<NeedsYouKind, string> = {
-  approval: 'Approval',
-  question: 'Question',
-  prod_deploy_local: 'Confirm locally',
-  awaiting_reply: 'Awaiting your reply',
-  failed: 'Failed',
-  manual_phase: 'Manual check',
+const KIND_LABELS: Record<NeedsYouKind, MessageDescriptor> = {
+  approval: msg`Approval`,
+  question: msg`Question`,
+  prod_deploy_local: msg`Confirm locally`,
+  awaiting_reply: msg`Awaiting your reply`,
+  failed: msg`Failed`,
+  manual_phase: msg`Manual check`,
 };
 
+/** The kind's label in the active locale (looked up at call time). */
 export function kindLabel(k: NeedsYouKind): string {
-  return KIND_LABELS[k];
+  return i18n._(KIND_LABELS[k]);
 }
 
 /**

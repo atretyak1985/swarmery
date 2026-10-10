@@ -10,6 +10,9 @@
 // (accepted → adopted → verified), an "Analyze now" trigger, and a lazily
 // fetched Verified history section.
 
+import { i18n, type MessageDescriptor } from '@lingui/core';
+import { msg, plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
@@ -177,20 +180,27 @@ function fmtMetric(v: number): string {
  * recorded one) and the ≥20%-better target the engine checks against. Every
  * rule metric improves downward except R6's cache hit rate. */
 function VerifyProgress({ rec }: { rec: Recommendation }): JSX.Element | null {
+  const { t } = useLingui();
   const b = rec.baseline;
   if (b === null || b.value === 0) return null;
   const { note, postValue } = verifyObservation(rec.evidence);
   const target =
     rec.rule === 'R6' ? b.value * (1 + VERIFY_IMPROVEMENT) : b.value * (1 - VERIFY_IMPROVEMENT);
+  const metric = b.metric;
+  const pct = String(VERIFY_IMPROVEMENT * 100);
+  const cmp = rec.rule === 'R6' ? '≥' : '≤';
+  const targetValue = fmtMetric(target);
+  // i18n-ignore — the server's verify note, compared, never shown
+  const lowTraffic = note === 'insufficient post-adoption traffic';
   return (
     <span
       className="font-mono text-[10px] text-ink-faint"
-      data-tip={`verified when ${b.metric} is ≥${String(VERIFY_IMPROVEMENT * 100)}% better than the baseline snapshot`}
+      data-tip={t`verified when ${metric} is ≥${pct}% better than the baseline snapshot`}
     >
       {b.metric} {fmtMetric(b.value)}
-      {postValue !== null ? ` → ${fmtMetric(postValue)}` : ''}
-      {` (target ${rec.rule === 'R6' ? '≥' : '≤'}${fmtMetric(target)})`}
-      {note === 'insufficient post-adoption traffic' ? ' · insufficient traffic so far' : ''}
+      {postValue !== null ? ` → ${fmtMetric(postValue)}` : ''}{' '}
+      {t`(target ${cmp}${targetValue})`}
+      {lowTraffic ? <> · {t`insufficient traffic so far`}</> : ''}
     </span>
   );
 }
@@ -226,25 +236,29 @@ const ACCEPTED_VERIFY_KINDS: readonly RecommendationTargetKind[] = [
  *
  * Adopted recs count down from the detected change. */
 function RecStatusChip({ rec }: { rec: Recommendation }): JSX.Element | null {
+  const { t } = useLingui();
+  const pct = String(VERIFY_IMPROVEMENT * 100);
   const countdown = (anchor: string): string => {
     const d = daysUntilVerify(anchor);
+    const days = String(d);
     return d > 0
-      ? `verify check in ${String(d)}d`
-      : `awaiting ≥${String(VERIFY_IMPROVEMENT * 100)}% improvement`;
+      ? t`verify check in ${days}d`
+      : t`awaiting ≥${pct}% improvement`;
   };
   if (rec.status === 'accepted') {
     const kind = rec.target_kind;
     const adoptable = ADOPTABLE_KINDS.includes(kind);
     const anchor = rec.baseline?.accepted_at;
     const showCountdown = !adoptable && ACCEPTED_VERIFY_KINDS.includes(kind) && anchor !== undefined;
+    const until = showCountdown ? countdown(anchor) : '';
     return (
       <>
         <span className="rounded-[7px] border border-amber/40 bg-amber/10 px-1.5 py-[2px] font-mono text-[10px] text-amber">
           {adoptable
-            ? 'accepted — waiting for adoption'
+            ? t`accepted — waiting for adoption`
             : showCountdown
-              ? `accepted — ${countdown(anchor)}`
-              : 'accepted'}
+              ? t`accepted — ${until}`
+              : t`accepted`}
         </span>
         {showCountdown && <VerifyProgress rec={rec} />}
       </>
@@ -252,12 +266,13 @@ function RecStatusChip({ rec }: { rec: Recommendation }): JSX.Element | null {
   }
   if (rec.status === 'adopted') {
     const anchor = rec.baseline?.adopted_at;
+    const until = anchor !== undefined ? countdown(anchor) : '';
     return (
       <>
         <span className="rounded-[7px] border border-blue/40 bg-blue/10 px-1.5 py-[2px] font-mono text-[10px] text-blue">
           {anchor !== undefined
-            ? `change detected — ${countdown(anchor)}`
-            : 'change detected — verifying'}
+            ? t`change detected — ${until}`
+            : t`change detected — verifying`}
         </span>
         {anchor !== undefined && <VerifyProgress rec={rec} />}
       </>
@@ -275,6 +290,7 @@ function RecCard({
   busy: boolean;
   onAction: (id: number, status: 'accepted' | 'dismissed') => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-[14px] border border-line bg-surface px-4 py-3.5">
@@ -299,7 +315,7 @@ function RecCard({
             onClick={() => onAction(rec.id, 'accepted')}
             className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-green/40 hover:text-green disabled:opacity-50"
           >
-            {busy ? '…' : 'Accept'}
+            {busy ? '…' : t`Accept`}
           </button>
         )}
         {(rec.status === 'proposed' || rec.status === 'accepted') && (
@@ -309,7 +325,7 @@ function RecCard({
             onClick={() => onAction(rec.id, 'dismissed')}
             className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-red/40 hover:text-red disabled:opacity-50"
           >
-            {busy ? '…' : 'Dismiss'}
+            {busy ? '…' : t`Dismiss`}
           </button>
         )}
         <button
@@ -318,7 +334,7 @@ function RecCard({
           aria-expanded={open}
           className="ml-auto font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
         >
-          {open ? '▾ evidence' : '▸ evidence'}
+          {open ? '▾' : '▸'} {t`evidence`}
         </button>
       </div>
       {open && (
@@ -336,6 +352,7 @@ function RecommendationsRail(): JSX.Element | null {
   const [verifiedOpen, setVerifiedOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const { t } = useLingui();
   // In-flight rec ids: the ref is the synchronous double-submit guard, the
   // state mirror drives rendering (the friction board's +rule Set pattern).
   const inflight = useRef<Set<number>>(new Set());
@@ -405,7 +422,7 @@ function RecommendationsRail(): JSX.Element | null {
     <section className="mt-[18px]">
       <div className="flex items-baseline gap-2">
         <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-          Recommendations
+          <Trans>Recommendations</Trans>
         </div>
         <Explain id="retro-recommendations" />
         <span className="ml-auto flex items-baseline gap-1.5">
@@ -414,16 +431,18 @@ function RecommendationsRail(): JSX.Element | null {
             type="button"
             disabled={analyzing}
             onClick={analyze}
-            data-tip="deterministic: re-runs the local rule engine, calls no model"
+            data-tip={t`deterministic: re-runs the local rule engine, calls no model`}
             className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-brand/40 hover:text-brand disabled:opacity-50"
           >
-            {analyzing ? 'analyzing…' : 'Analyze now'}
+            {analyzing ? t`analyzing…` : t`Analyze now`}
           </button>
         </span>
       </div>
       <div className="mt-2 flex flex-col gap-2.5">
         {recs.length === 0 ? (
-          <Empty>no open recommendations — the advisor found nothing to flag</Empty>
+          <Empty>
+            <Trans>no open recommendations — the advisor found nothing to flag</Trans>
+          </Empty>
         ) : (
           recs.map((rec) => (
             <RecCard key={rec.id} rec={rec} busy={busy.has(rec.id)} onAction={onAction} />
@@ -440,13 +459,15 @@ function RecommendationsRail(): JSX.Element | null {
             }}
             className="font-mono text-[10.5px] text-ink-faint transition-colors hover:text-ink"
           >
-            {verifiedOpen ? '▾' : '▸'} Closed
+            {verifiedOpen ? '▾' : '▸'} <Trans>Closed</Trans>
             {verified !== null ? ` (${String(verified.length)})` : ''}
           </button>
           {verifiedOpen && verified !== null && (
             <div className="mt-2 flex flex-col gap-1.5">
               {verified.length === 0 ? (
-                <Empty>nothing closed yet</Empty>
+                <Empty>
+                  <Trans>nothing closed yet</Trans>
+                </Empty>
               ) : (
                 verified.map((rec) => (
                   <div
@@ -459,7 +480,9 @@ function RecommendationsRail(): JSX.Element | null {
                       {rec.rule}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-ink-3">{rec.title}</span>
-                    <span className="text-green">✓ verified</span>
+                    <span className="text-green">
+                      ✓ <Trans>verified</Trans>
+                    </span>
                     <span className="text-ink-faint">{fmtAgo(rec.updated_at)}</span>
                   </div>
                 ))
@@ -496,10 +519,12 @@ const PROPOSAL_STATUS_HUE: Record<AgentChangeProposal['status'], string> = {
  * transition it has"). Offering "pick a skill" pointed at a control that does
  * not exist.
  */
+const NO_TARGET = msg`no target file — dismissing is the only transition`;
+
 function proposalTarget(p: AgentChangeProposal): string {
   const path = p.target_kind === 'skill' ? p.target_path : p.agent_path;
   if (path !== '') return path;
-  return 'no target file — dismissing is the only transition';
+  return i18n._(NO_TARGET);
 }
 
 function ProposalStatusChip({ status }: { status: AgentChangeProposal['status'] }): JSX.Element {
@@ -534,10 +559,7 @@ function DiffView({ diff }: { diff: string }): JSX.Element {
   );
 }
 
-const GUARDRAIL_TEXT =
-  'Approving applies this diff on a fresh branch behind hard guardrails ' +
-  '(neutrality scan clean, agent frontmatter present, ≤120 changed lines) ' +
-  'and opens a PR via gh. It never auto-merges. Continue?';
+const GUARDRAIL_TEXT = msg`Approving applies this diff on a fresh branch behind hard guardrails (neutrality scan clean, agent frontmatter present, ≤120 changed lines) and opens a PR via gh. It never auto-merges. Continue?`;
 
 function ProposalDetail({
   p,
@@ -552,16 +574,23 @@ function ProposalDetail({
   onRetry: (id: number) => void;
   onReapply: (id: number) => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
+  const recId = p.recommendation_id;
+  const createdAgo = fmtAgo(p.created_at);
   return (
     <div className="mt-2 border-t border-line pt-2.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-ink-faint">
         <span className="truncate" data-tip-mono data-tip={proposalTarget(p)}>
           {proposalTarget(p)}
         </span>
-        {p.recommendation_id !== null && (
-          <span data-tip="source recommendation">from recommendation #{p.recommendation_id}</span>
+        {recId !== null && (
+          <span data-tip={t`source recommendation`}>
+            <Trans>from recommendation #{recId}</Trans>
+          </span>
         )}
-        <span>created {fmtAgo(p.created_at)}</span>
+        <span>
+          <Trans>created {createdAgo}</Trans>
+        </span>
       </div>
 
       {p.rationale !== '' && (
@@ -583,11 +612,11 @@ function ProposalDetail({
               type="button"
               disabled={busy}
               onClick={() => {
-                if (window.confirm(GUARDRAIL_TEXT)) onDecide(p.id, 'approved');
+                if (window.confirm(i18n._(GUARDRAIL_TEXT))) onDecide(p.id, 'approved');
               }}
               className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-green/40 hover:text-green disabled:opacity-50"
             >
-              {busy ? '…' : 'Approve'}
+              {busy ? '…' : t`Approve`}
             </button>
             <button
               type="button"
@@ -595,7 +624,7 @@ function ProposalDetail({
               onClick={() => onDecide(p.id, 'rejected')}
               className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-red/40 hover:text-red disabled:opacity-50"
             >
-              {busy ? '…' : 'Reject'}
+              {busy ? '…' : t`Reject`}
             </button>
           </>
         )}
@@ -604,10 +633,10 @@ function ProposalDetail({
             type="button"
             disabled={busy}
             onClick={() => onDecide(p.id, 'rejected')}
-            data-tip="no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
+            data-tip={t`no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose`}
             className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-red/40 hover:text-red disabled:opacity-50"
           >
-            {busy ? '…' : 'Dismiss'}
+            {busy ? '…' : t`Dismiss`}
           </button>
         )}
         {p.status === 'failed' && (
@@ -617,7 +646,7 @@ function ProposalDetail({
             onClick={() => onRetry(p.id)}
             className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-ink/40 hover:text-ink disabled:opacity-50"
           >
-            {busy ? '…' : 'Retry'}
+            {busy ? '…' : t`Retry`}
           </button>
         )}
         {p.status === 'approved' && (
@@ -625,10 +654,10 @@ function ProposalDetail({
             type="button"
             disabled={busy}
             onClick={() => onReapply(p.id)}
-            data-tip="re-run the apply/PR pipeline (e.g. after a gh outage)"
+            data-tip={t`re-run the apply/PR pipeline (e.g. after a gh outage)`}
             className="rounded-[7px] border border-line-strong px-2 py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:border-amber/40 hover:text-amber disabled:opacity-50"
           >
-            {busy ? '…' : 'Re-run apply'}
+            {busy ? '…' : t`Re-run apply`}
           </button>
         )}
         {p.pr_url !== null && (
@@ -638,7 +667,7 @@ function ProposalDetail({
             rel="noreferrer"
             className="ml-auto font-mono text-[10.5px] text-green transition-colors hover:underline"
           >
-            open PR ↗
+            <Trans>open PR ↗</Trans>
           </a>
         )}
       </div>
@@ -659,6 +688,7 @@ function ProposalCard({
   onRetry: (id: number) => void;
   onReapply: (id: number) => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-[14px] border border-line bg-surface px-4 py-3.5">
@@ -668,10 +698,10 @@ function ProposalCard({
         </span>
         {p.target_kind === 'skill' && (
           <span
-            data-tip="a SKILL.md procedure edit, routed from a recurring retrospective lesson"
+            data-tip={t`a SKILL.md procedure edit, routed from a recurring retrospective lesson`}
             className="rounded-[7px] border border-line-strong px-1.5 py-[2px] font-mono text-[10px] font-medium text-ink-dim"
           >
-            skill
+            <Trans>skill</Trans>
           </span>
         )}
         <ProposalStatusChip status={p.status} />
@@ -682,7 +712,7 @@ function ProposalCard({
           aria-expanded={open}
           className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
         >
-          {open ? '▾ diff' : '▸ diff'}
+          {open ? '▾' : '▸'} <Trans>diff</Trans>
         </button>
       </div>
       {open && (
@@ -746,13 +776,15 @@ function ProposalsRail({ reloadKey }: { reloadKey: number }): JSX.Element | null
     <section className="mt-[18px]">
       <div className="mb-2 flex items-center gap-2">
         <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-          Agent proposals
+          <Trans>Agent proposals</Trans>
         </span>
         <Explain id="retro-proposals" />
         {failed !== null && <span className="font-mono text-[10px] text-red">{failed}</span>}
       </div>
       {proposals === null ? (
-        <Empty>no proposals</Empty>
+        <Empty>
+          <Trans>no proposals</Trans>
+        </Empty>
       ) : (
         <div className="grid gap-3.5 sm:grid-cols-2">
           {proposals.map((p) => (
@@ -789,30 +821,35 @@ function ScoreBar({ value }: { value: number }): JSX.Element {
   );
 }
 
-const JUDGMENT_DIMS: [keyof Pick<TrajectoryJudgment, 'endResult' | 'instructionCompliance' | 'pitfalls' | 'toolCalls'>, string][] = [
-  ['endResult', 'End result'],
-  ['instructionCompliance', 'Instructions'],
-  ['pitfalls', 'Pitfalls'],
-  ['toolCalls', 'Tool use'],
+const JUDGMENT_DIMS: [keyof Pick<TrajectoryJudgment, 'endResult' | 'instructionCompliance' | 'pitfalls' | 'toolCalls'>, MessageDescriptor][] = [
+  ['endResult', msg`End result`],
+  ['instructionCompliance', msg`Instructions`],
+  ['pitfalls', msg`Pitfalls`],
+  ['toolCalls', msg`Tool use`],
 ];
 
 /** Expanded judgment detail: score bars + review text for pre-fetched rows. */
 function JudgmentPanel({ judgments }: { judgments: TrajectoryJudgment[] }): JSX.Element {
+  const { i18n: lingui } = useLingui();
   return (
     <div className="mt-2.5 border-t border-line pt-2.5 flex flex-col gap-2.5">
-      {judgments.map((j) => (
+      {judgments.map((j) => {
+        const model = j.model;
+        return (
         <div key={`${j.agent}:${j.model}`}>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-mono text-[10px] text-ink-faint">
             <span className="font-medium text-ink-3">{j.agent}</span>
             <span>·</span>
-            <span>judge {j.model}</span>
+            <span>
+              <Trans>judge {model}</Trans>
+            </span>
             <span>·</span>
             <span className="text-brand font-medium">{j.overall.toFixed(1)}/5</span>
           </div>
           <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1.5">
             {JUDGMENT_DIMS.map(([key, label]) => (
               <div key={key} className="flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim">
-                <span className="w-[88px] shrink-0">{label}</span>
+                <span className="w-[88px] shrink-0">{lingui._(label)}</span>
                 <ScoreBar value={j[key]} />
                 <span className="text-ink-faint">{j[key]}/5</span>
               </div>
@@ -822,7 +859,8 @@ function JudgmentPanel({ judgments }: { judgments: TrajectoryJudgment[] }): JSX.
             <p className="mt-1.5 font-mono text-[10.5px] leading-relaxed text-ink-3">{j.review}</p>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -837,9 +875,11 @@ function JudgedSessionRow({
   session: Session;
   judgments: TrajectoryJudgment[];
 }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
 
   const overall = judgments.reduce((s, j) => s + j.overall, 0) / judgments.length;
+  const score = overall.toFixed(1);
 
   return (
     <div className="rounded-[14px] border border-line bg-surface px-4 py-3.5">
@@ -848,10 +888,10 @@ function JudgedSessionRow({
           {session.title ?? session.sessionUuid.slice(0, 16)}
         </span>
         <span
-          data-tip="LLM-judge trajectory score"
+          data-tip={t`LLM-judge trajectory score`}
           className="rounded-[7px] border border-brand/40 bg-brand/10 px-1.5 py-[2px] font-mono text-[10px] text-brand"
         >
-          judged · {overall.toFixed(1)}
+          <Trans>judged · {score}</Trans>
         </span>
         <button
           type="button"
@@ -859,7 +899,7 @@ function JudgedSessionRow({
           aria-expanded={open}
           className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
         >
-          {open ? '▾ judgment' : '▸ judgment'}
+          {open ? '▾' : '▸'} <Trans>judgment</Trans>
         </button>
       </div>
       <div className="mt-0.5 font-mono text-[10px] text-ink-faint">
@@ -905,7 +945,9 @@ function JudgmentsSection({ project }: { project?: string }): JSX.Element | null
   return (
     <section className="mt-[18px]">
       <div className="mb-2 flex items-baseline gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-        <span>Trajectory judgments</span>
+        <span>
+          <Trans>Trajectory judgments</Trans>
+        </span>
         <Explain id="retro-judgments" />
       </div>
       <div className="flex flex-col gap-2.5">
@@ -933,11 +975,13 @@ function DeltaArrow({
   goodUp?: boolean;
   fmt?: (n: number) => string;
 }): JSX.Element | null {
+  const { t } = useLingui();
   if (prev === cur) return null;
   const up = cur > prev;
   const cls = up ? (goodUp ? 'text-green' : 'text-red') : goodUp ? 'text-ink-dim' : 'text-green';
+  const prevValue = fmt(prev);
   return (
-    <span className={`font-mono text-[12px] ${cls}`} data-tip={`prev window: ${fmt(prev)}`}>
+    <span className={`font-mono text-[12px] ${cls}`} data-tip={t`prev window: ${prevValue}`}>
       {up ? '↑' : '↓'}
     </span>
   );
@@ -982,6 +1026,7 @@ function computeRetroKpis(data: RetroAgentsResp) {
 function RetroLeadCard({ data }: { data: RetroAgentsResp }): JSX.Element {
   const { totalRuns, totalErrors, prevRuns, prevErrors, prevCost, agentCost } =
     computeRetroKpis(data);
+  const { t } = useLingui();
 
   // Synthesize headline copy from the data.
   //
@@ -993,11 +1038,27 @@ function RetroLeadCard({ data }: { data: RetroAgentsResp }): JSX.Element {
   //
   // "Rescue" was wrong too: an error event is a tool call that failed, which the
   // agent usually retries on its own. Nobody was necessarily rescued.
+  const agentRuns = plural(totalRuns, {
+    one: '# agent run',
+    few: '# agent runs',
+    many: '# agent runs',
+    other: '# agent runs',
+  });
+  const errorEvents = plural(totalErrors, {
+    one: '# error event',
+    few: '# error events',
+    many: '# error events',
+    other: '# error events',
+  });
   const headline =
     totalErrors > 0
-      ? `${String(totalRuns)} agent ${totalRuns === 1 ? 'run' : 'runs'} in this window, and ${String(totalErrors)} error ${totalErrors === 1 ? 'event' : 'events'} across them and the orchestrator.`
-      : `${String(totalRuns)} agent ${totalRuns === 1 ? 'run' : 'runs'} in this window, with no errors logged.`;
-  const sub = `Orchestrator ${fmtCost(data.main.cost_usd)} · ${fmtTokens(data.main.tokens_out)} tokens out · agents ${fmtCost(agentCost)}`;
+      ? t`${agentRuns} in this window, and ${errorEvents} across them and the orchestrator.`
+      : t`${agentRuns} in this window, with no errors logged.`;
+  const mainCost = fmtCost(data.main.cost_usd);
+  const mainTokens = fmtTokens(data.main.tokens_out);
+  const agentCostLabel = fmtCost(agentCost);
+  const prevCostLabel = fmtCost(prevCost);
+  const sub = t`Orchestrator ${mainCost} · ${mainTokens} tokens out · agents ${agentCostLabel}`;
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-4 rounded-[14px] border border-line bg-surface px-5 py-4">
@@ -1014,7 +1075,7 @@ function RetroLeadCard({ data }: { data: RetroAgentsResp }): JSX.Element {
         {/* Cost */}
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            Agent cost
+            <Trans>Agent cost</Trans>
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="font-display text-[18px] font-semibold text-ink">
@@ -1023,14 +1084,14 @@ function RetroLeadCard({ data }: { data: RetroAgentsResp }): JSX.Element {
             <DeltaArrow cur={agentCost} prev={prevCost} fmt={fmtCost} />
           </div>
           <div className="mt-0.5 font-mono text-[9.5px] text-ink-faint">
-            prev {fmtCost(prevCost)}
+            <Trans>prev {prevCostLabel}</Trans>
           </div>
         </div>
 
         {/* Runs */}
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            Agent runs
+            <Trans>Agent runs</Trans>
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="font-display text-[18px] font-semibold text-ink">
@@ -1039,14 +1100,14 @@ function RetroLeadCard({ data }: { data: RetroAgentsResp }): JSX.Element {
             <DeltaArrow cur={totalRuns} prev={prevRuns} goodUp />
           </div>
           <div className="mt-0.5 font-mono text-[9.5px] text-ink-faint">
-            prev {String(prevRuns)}
+            <Trans>prev {prevRuns}</Trans>
           </div>
         </div>
 
         {/* Errors */}
         <div>
           <div className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-            Errors
+            <Trans>Errors</Trans>
           </div>
           <div className="mt-1 flex items-baseline gap-1.5">
             <span className="font-display text-[18px] font-semibold text-ink">
@@ -1055,7 +1116,7 @@ function RetroLeadCard({ data }: { data: RetroAgentsResp }): JSX.Element {
             <DeltaArrow cur={totalErrors} prev={prevErrors} />
           </div>
           <div className="mt-0.5 font-mono text-[9.5px] text-ink-faint">
-            prev {String(prevErrors)}
+            <Trans>prev {prevErrors}</Trans>
           </div>
         </div>
       </div>
@@ -1099,7 +1160,16 @@ function Scorecard({
   trajectoryKinds: string[];
   onImprove: (row: RetroAgentRow) => void;
 }): JSX.Element {
-  const split = errClassSplit(row.errors_by_class);
+  const { t } = useLingui();
+  const { behavior, harness, infra } = errClassSplit(row.errors_by_class);
+  const errors = String(row.errors);
+  const errPct = (row.error_rate * 100).toFixed(1);
+  const prevRunsCount = String(row.prev.runs);
+  const redispatchPct =
+    row.re_dispatch_rate === null ? '' : String(Math.round(row.re_dispatch_rate * 100));
+  const evalFinished = row.eval?.finished_at ?? '';
+  const evalPassed = String(row.eval?.passed ?? 0);
+  const evalTotal = String((row.eval?.passed ?? 0) + (row.eval?.failed ?? 0));
   return (
     <div className="rounded-[14px] border border-line bg-surface px-4 py-3.5">
       <div className="flex items-baseline gap-2">
@@ -1110,83 +1180,95 @@ function Scorecard({
           <button
             type="button"
             onClick={() => onImprove(row)}
-            data-tip="preview the evidence, then generate a minimal diff to THIS agent’s definition file only"
+            data-tip={t`preview the evidence, then generate a minimal diff to THIS agent’s definition file only`}
             className="rounded-[7px] border border-line-strong px-1.5 py-[2px] font-mono text-[10px] text-ink-dim transition-colors hover:border-green/40 hover:text-green"
           >
-            Improve
+            <Trans>Improve</Trans>
           </button>
         )}
         <span
           className={`font-mono text-[11px] ${errRateClass(row.error_rate)}`}
-          data-tip={`share of runs with ≥1 behavior-fixable error (${String(row.errors)} error events total)`}
+          data-tip={t`share of runs with ≥1 behavior-fixable error (${errors} error events total)`}
         >
-          {(row.error_rate * 100).toFixed(1)}% err
+          <Trans>{errPct}% err</Trans>
         </span>
       </div>
       {row.errors > 0 && row.errors_by_class && (
         <div
           className="mt-1 font-mono text-[10px] text-ink-faint"
-          data-tip="error events by class — behavior: prompt-fixable agent behavior · harness: harness rule hit, self-recovered · infra: network/API noise (not the agent's fault)"
+          data-tip={t`error events by class — behavior: prompt-fixable agent behavior · harness: harness rule hit, self-recovered · infra: network/API noise (not the agent's fault)`}
         >
-          <span className={split.behavior > 0 ? 'text-amber' : ''}>behavior {split.behavior}</span>
+          <span className={behavior > 0 ? 'text-amber' : ''}>
+            <Trans>behavior {behavior}</Trans>
+          </span>
           {' · '}
-          <span>harness {split.harness}</span>
+          <span>
+            <Trans>harness {harness}</Trans>
+          </span>
           {' · '}
-          <span>infra {split.infra}</span>
+          <span>
+            <Trans>infra {infra}</Trans>
+          </span>
         </div>
       )}
       <div className="mt-2 flex items-baseline gap-1.5">
         <span className="font-display text-[20px] font-semibold text-ink">{row.runs}</span>
         <span className="font-mono text-[10.5px] text-ink-dim">
-          runs{runsDelta(row)}
+          <Trans>runs</Trans>
+          {runsDelta(row)}
           {row.runs !== row.prev.runs && (
-            <span className="text-ink-faint"> vs prev {String(row.prev.runs)}</span>
+            <span className="text-ink-faint">
+              {' '}
+              <Trans>vs prev {prevRunsCount}</Trans>
+            </span>
           )}
         </span>
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10.5px] text-ink-dim">
         <span>
-          success{' '}
+          <Trans>success</Trans>{' '}
           <b className="font-medium text-ink-2">
             {row.success_rate !== null ? `${String(Math.round(row.success_rate * 100))}%` : '—'}
           </b>
         </span>
         <span>
-          cost <b className="font-medium text-ink-2">{fmtCost(row.cost_usd)}</b>
+          <Trans>cost</Trans> <b className="font-medium text-ink-2">{fmtCost(row.cost_usd)}</b>
         </span>
         <span>
           p95 <b className="font-medium text-ink-2">{row.p95_ms !== null ? fmtDurationMs(row.p95_ms) : '—'}</b>
         </span>
         <span>
-          sessions <b className="font-medium text-ink-2">{row.sessions}</b>
+          <Trans>sessions</Trans> <b className="font-medium text-ink-2">{row.sessions}</b>
         </span>
       </div>
       {(row.re_dispatch_rate !== null || row.eval !== null || trajectoryKinds.length > 0) && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {row.re_dispatch_rate !== null && (
             <span
-              data-tip="redispatch-classified ledger rows / total delegations in range"
+              data-tip={t`redispatch-classified ledger rows / total delegations in range`}
               className={`rounded-[7px] border px-1.5 py-[2px] font-mono text-[10px] ${
                 row.re_dispatch_rate > 0.25
                   ? 'border-red/40 text-red'
                   : 'border-line-strong text-ink-dim'
               }`}
             >
-              re-dispatch {String(Math.round(row.re_dispatch_rate * 100))}%
+              <Trans>re-dispatch {redispatchPct}%</Trans>
             </span>
           )}
           {row.eval !== null && (
             <span
-              data-tip={`latest eval run, finished ${row.eval.finished_at}`}
+              data-tip={t`latest eval run, finished ${evalFinished}`}
               className="rounded-[7px] border border-line-strong px-1.5 py-[2px] font-mono text-[10px] text-ink-dim"
             >
-              evals {String(row.eval.passed)}/{String(row.eval.passed + row.eval.failed)}
+              <Trans>
+                evals {evalPassed}/{evalTotal}
+              </Trans>
             </span>
           )}
           {trajectoryKinds.map((kind) => (
             <span
               key={kind}
-              data-tip={`trajectory anti-pattern detected: ${kind}`}
+              data-tip={t`trajectory anti-pattern detected: ${kind}`}
               className="rounded-[7px] border border-amber/40 px-1.5 py-[2px] font-mono text-[10px] text-amber"
             >
               {kind}
@@ -1199,6 +1281,20 @@ function Scorecard({
 }
 
 /* ----- lessons feed (retro phase 2) ----- */
+
+/** "action: …" chip on a lesson or a lesson group. */
+function ActionChip({ action }: { action: string }): JSX.Element {
+  return (
+    <span className="rounded-[7px] border border-brand/40 bg-brand/10 px-1.5 py-[2px] font-mono text-[10px] text-brand">
+      <Trans>action: {action}</Trans>
+    </span>
+  );
+}
+
+/** "3 tasks" on a lesson group. */
+function taskCount(count: number): string {
+  return plural(count, { one: '# task', few: '# tasks', many: '# tasks', other: '# tasks' });
+}
 
 /** Both feeds are `null` while in flight and `*Failed` when their fetch threw —
  * kept apart because conflating them renders a failure as "nothing here", which
@@ -1214,6 +1310,7 @@ function LessonsFeed({
   lessonsFailed: boolean;
   groupsFailed: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   const [filter, setFilter] = useState('');
   // Grouping is a view of the same window, not a different dataset. It stays off
   // by default: the flat feed is the one that reads chronologically, and the
@@ -1252,10 +1349,10 @@ function LessonsFeed({
         type="checkbox"
         checked={grouped}
         onChange={(e) => setGrouped(e.target.checked)}
-        aria-label="group by lesson"
+        aria-label={t`group by lesson`}
         className="accent-brand"
       />
-      Group by lesson
+      <Trans>Group by lesson</Trans>
     </label>
   );
 
@@ -1265,8 +1362,8 @@ function LessonsFeed({
         type="search"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder={grouped ? 'filter lesson groups…' : 'filter lessons…'}
-        aria-label="filter lessons"
+        placeholder={grouped ? t`filter lesson groups…` : t`filter lessons…`}
+        aria-label={t`filter lessons`}
         className="w-full max-w-xs rounded-md border border-line bg-surface px-2.5 py-1.5 font-mono text-[11px] text-ink placeholder:text-ink-faint"
       />
       {toggle}
@@ -1278,13 +1375,19 @@ function LessonsFeed({
       <div className="flex flex-col gap-2.5">
         {controls}
         {groupsFailed ? (
-          <ErrorBox message="lesson groups failed to load for this range — untick “Group by lesson” for the flat feed" />
+          <ErrorBox
+            message={t`lesson groups failed to load for this range — untick “Group by lesson” for the flat feed`}
+          />
         ) : groups === null ? (
-          <Loading label="lesson groups…" />
+          <Loading label={t`lesson groups…`} />
         ) : groups.length === 0 ? (
-          <Empty>no retrospective lessons in this range</Empty>
+          <Empty>
+            <Trans>no retrospective lessons in this range</Trans>
+          </Empty>
         ) : visibleGroups.length === 0 ? (
-          <Empty>no lessons match “{filter}”</Empty>
+          <Empty>
+            <Trans>no lessons match “{filter}”</Trans>
+          </Empty>
         ) : (
           visibleGroups.map((g) => (
             <div key={g.norm_title} className="rounded-[10px] border border-line px-3.5 py-2.5">
@@ -1298,17 +1401,13 @@ function LessonsFeed({
                   }`}
                   title={
                     g.count >= 3
-                      ? 'recurring: the advisor raises this as an R11 recommendation'
+                      ? t`recurring: the advisor raises this as an R11 recommendation`
                       : undefined
                   }
                 >
-                  {g.count} {g.count === 1 ? 'task' : 'tasks'}
+                  {taskCount(g.count)}
                 </span>
-                {g.latest_action !== null && (
-                  <span className="rounded-[7px] border border-brand/40 bg-brand/10 px-1.5 py-[2px] font-mono text-[10px] text-brand">
-                    action: {g.latest_action}
-                  </span>
-                )}
+                {g.latest_action !== null && <ActionChip action={g.latest_action} />}
               </div>
               <div className="mt-1.5 font-mono text-[10px] text-ink-faint">
                 {g.tasks.join(' · ')}
@@ -1324,13 +1423,17 @@ function LessonsFeed({
     <div className="flex flex-col gap-2.5">
       {controls}
       {lessonsFailed ? (
-        <ErrorBox message="lessons failed to load for this range" />
+        <ErrorBox message={t`lessons failed to load for this range`} />
       ) : lessons === null ? (
-        <Loading label="lessons…" />
+        <Loading label={t`lessons…`} />
       ) : lessons.length === 0 ? (
-        <Empty>no retrospective lessons in this range</Empty>
+        <Empty>
+          <Trans>no retrospective lessons in this range</Trans>
+        </Empty>
       ) : visible.length === 0 ? (
-        <Empty>no lessons match “{filter}”</Empty>
+        <Empty>
+          <Trans>no lessons match “{filter}”</Trans>
+        </Empty>
       ) : (
         visible.map((l) => (
           <div
@@ -1339,11 +1442,7 @@ function LessonsFeed({
           >
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="font-mono text-[12px] font-medium text-ink">{l.title}</span>
-              {l.action !== null && (
-                <span className="rounded-[7px] border border-brand/40 bg-brand/10 px-1.5 py-[2px] font-mono text-[10px] text-brand">
-                  action: {l.action}
-                </span>
-              )}
+              {l.action !== null && <ActionChip action={l.action} />}
             </div>
             {l.body !== null && (
               <p className="mt-1 font-mono text-[10.5px] whitespace-pre-wrap text-ink-dim">{l.body}</p>
@@ -1379,41 +1478,70 @@ function fmtHours(h: number | null): string {
 }
 
 function EstimationTable({ tasks }: { tasks: RetroTaskRow[] }): JSX.Element {
+  const { t } = useLingui();
   if (tasks.length === 0) {
-    return <Empty>no tasks with retro artifacts in this range</Empty>;
+    return (
+      <Empty>
+        <Trans>no tasks with retro artifacts in this range</Trans>
+      </Empty>
+    );
   }
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-        <span className="min-w-0 flex-1">task</span>
-        <span className="w-20 text-right">est / act</span>
-        <span className="w-14 text-right">variance</span>
-        <span className="w-12 text-right">loops</span>
-        <span className="w-24 text-right">verdicts</span>
+        <span className="min-w-0 flex-1">
+          <Trans>task</Trans>
+        </span>
+        <span className="w-20 text-right">
+          <Trans>est / act</Trans>
+        </span>
+        <span className="w-14 text-right">
+          <Trans>variance</Trans>
+        </span>
+        <span className="w-12 text-right">
+          <Trans>loops</Trans>
+        </span>
+        <span className="w-24 text-right">
+          <Trans>verdicts</Trans>
+        </span>
       </div>
-      {tasks.map((t) => (
-        <div key={t.external_id} className="flex items-baseline gap-2 font-mono text-[11.5px]">
-          <span className="min-w-0 flex-1 truncate text-ink-3" data-tip-mono data-tip={t.external_id}>
-            {t.title}
-          </span>
-          <span className="w-20 text-right text-ink-dim">
-            {fmtHours(t.estimated_hours)} / {fmtHours(t.actual_hours)}
-          </span>
-          <span className="w-14 text-right">
-            <VarianceBadge pct={t.variance_pct} />
-          </span>
-          <span className="w-12 text-right text-ink-dim">{t.loops}</span>
-          <span
-            className="w-24 text-right"
-            data-tip={`${String(t.delegations)} delegations: ${String(t.verdicts.ok)} ok, ${String(t.verdicts.redispatch)} re-dispatched`}
-          >
-            <span className="text-green">{t.verdicts.ok} ok</span>
-            {t.verdicts.redispatch > 0 && (
-              <span className="text-red"> · {t.verdicts.redispatch} re</span>
-            )}
-          </span>
-        </div>
-      ))}
+      {tasks.map((row) => {
+        const delegations = String(row.delegations);
+        const ok = String(row.verdicts.ok);
+        const redispatched = String(row.verdicts.redispatch);
+        return (
+          <div key={row.external_id} className="flex items-baseline gap-2 font-mono text-[11.5px]">
+            <span
+              className="min-w-0 flex-1 truncate text-ink-3"
+              data-tip-mono
+              data-tip={row.external_id}
+            >
+              {row.title}
+            </span>
+            <span className="w-20 text-right text-ink-dim">
+              {fmtHours(row.estimated_hours)} / {fmtHours(row.actual_hours)}
+            </span>
+            <span className="w-14 text-right">
+              <VarianceBadge pct={row.variance_pct} />
+            </span>
+            <span className="w-12 text-right text-ink-dim">{row.loops}</span>
+            <span
+              className="w-24 text-right"
+              data-tip={t`${delegations} delegations: ${ok} ok, ${redispatched} re-dispatched`}
+            >
+              <span className="text-green">
+                <Trans>{ok} ok</Trans>
+              </span>
+              {row.verdicts.redispatch > 0 && (
+                <span className="text-red">
+                  {' · '}
+                  <Trans>{redispatched} re</Trans>
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1429,6 +1557,7 @@ function DeniedToolsPanel({ data }: { data: RetroFrictionResp }): JSX.Element {
   const inflight = useRef<Set<string>>(new Set());
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [failed, setFailed] = useState<string | null>(null);
+  const { t } = useLingui();
 
   const addRule = useCallback((tool: string): void => {
     if (inflight.current.has(tool)) return;
@@ -1438,7 +1567,7 @@ function DeniedToolsPanel({ data }: { data: RetroFrictionResp }): JSX.Element {
     createApprovalRule({
       projectId: null,
       toolPattern: tool,
-      note: 'created from Retro friction board',
+      note: 'created from Retro friction board', // i18n-ignore — stored on the server as rule data, like the Health overview note
     })
       .then(() => {
         setAdded((prev) => new Set(prev).add(tool));
@@ -1450,21 +1579,34 @@ function DeniedToolsPanel({ data }: { data: RetroFrictionResp }): JSX.Element {
         inflight.current.delete(tool);
         setBusy(new Set(inflight.current));
       });
-  }, []);
+  }, [t]);
 
   if (data.denied_tools.length === 0) {
-    return <Empty>no denied tool calls in this range</Empty>;
+    return (
+      <Empty>
+        <Trans>no denied tool calls in this range</Trans>
+      </Empty>
+    );
   }
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-faint">
-        <span className="min-w-0 flex-1">tool</span>
-        <span className="w-14 text-right">denied</span>
-        <span className="w-14 text-right">calls</span>
-        <span className="w-20 text-right">rule</span>
+        <span className="min-w-0 flex-1">
+          <Trans>tool</Trans>
+        </span>
+        <span className="w-14 text-right">
+          <Trans>denied</Trans>
+        </span>
+        <span className="w-14 text-right">
+          <Trans>calls</Trans>
+        </span>
+        <span className="w-20 text-right">
+          <Trans>rule</Trans>
+        </span>
       </div>
       {data.denied_tools.map((d) => {
         const covered = d.has_rule || added.has(d.tool);
+        const tool = d.tool;
         return (
           <div key={d.tool} className="flex items-baseline gap-2 font-mono text-[11.5px]">
             <span className="min-w-0 flex-1 truncate text-ink-3">{d.tool}</span>
@@ -1472,18 +1614,27 @@ function DeniedToolsPanel({ data }: { data: RetroFrictionResp }): JSX.Element {
             <span className="w-14 text-right text-ink-dim">{d.calls}</span>
             <span className="w-20 text-right">
               {covered ? (
-                <span className="text-green" data-tip="an enabled auto-approve rule covers this tool">
-                  ✓ rule
+                <span
+                  className="text-green"
+                  data-tip={t`an enabled auto-approve rule covers this tool`}
+                >
+                  ✓ <Trans>rule</Trans>
                 </span>
               ) : (
                 <button
                   type="button"
                   disabled={busy.has(d.tool)}
                   onClick={() => addRule(d.tool)}
-                  data-tip={`auto-approve every ${d.tool} request`}
+                  data-tip={t`auto-approve every ${tool} request`}
                   className="rounded-[7px] border border-line-strong px-2 py-[3px] text-[10.5px] text-ink-dim transition-colors hover:border-green/40 hover:text-green disabled:opacity-50"
                 >
-                  {busy.has(d.tool) ? '…' : '+ rule'}
+                  {busy.has(d.tool) ? (
+                    '…'
+                  ) : (
+                    <>
+                      + <Trans>rule</Trans>
+                    </>
+                  )}
                 </button>
               )}
             </span>
@@ -1492,7 +1643,10 @@ function DeniedToolsPanel({ data }: { data: RetroFrictionResp }): JSX.Element {
       })}
       {failed !== null && <div className="font-mono text-[10.5px] text-red">{failed}</div>}
       <p className="mt-1 font-mono text-[10px] text-ink-faint">
-        + rule creates an all-projects auto-approve rule for the bare tool — narrow it in Approvals if needed.
+        <Trans>
+          + rule creates an all-projects auto-approve rule for the bare tool — narrow it in Approvals if
+          needed.
+        </Trans>
       </p>
     </div>
   );
@@ -1504,8 +1658,9 @@ const TRIAGE_ORDER: readonly FrictionTriageState[] = ['untriaged', 'fix_proposed
 /** "noise · until Mon, Aug 10" — the viewer's local day of the instant the mute ends. */
 function mutedLabel(mutedUntil: string | undefined): string {
   const until = mutedUntil === undefined ? null : new Date(mutedUntil);
-  if (until === null || Number.isNaN(until.getTime())) return 'noise';
-  return `noise · until ${fmtDayShort(isoDay(until))}`;
+  if (until === null || Number.isNaN(until.getTime())) return i18n._(msg`noise`);
+  const day = fmtDayShort(isoDay(until));
+  return i18n._(msg`noise · until ${day}`);
 }
 
 function TriageChip({ group }: { group: RetroErrorGroup }): JSX.Element | null {
@@ -1515,9 +1670,17 @@ function TriageChip({ group }: { group: RetroErrorGroup }): JSX.Element | null {
     case 'muted':
       return <span className="shrink-0 text-ink-faint">{mutedLabel(group.triage?.mutedUntil)}</span>;
     case 'tracked':
-      return <span className="shrink-0 text-blue">tracked</span>;
+      return (
+        <span className="shrink-0 text-blue">
+          <Trans>tracked</Trans>
+        </span>
+      );
     case 'fix_proposed':
-      return <span className="shrink-0 text-green">fix proposed</span>;
+      return (
+        <span className="shrink-0 text-green">
+          <Trans>fix proposed</Trans>
+        </span>
+      );
   }
 }
 
@@ -1533,6 +1696,7 @@ function ErrorGroupsPanel({
   const [open, setOpen] = useState<string | null>(null);
   const [unmuting, setUnmuting] = useState<string | null>(null);
   const [unmuteError, setUnmuteError] = useState<string | null>(null);
+  const { t } = useLingui();
   const sorted = useMemo(
     () =>
       [...groups].sort(
@@ -1553,7 +1717,11 @@ function ErrorGroupsPanel({
       .finally(() => setUnmuting(null));
   };
   if (groups.length === 0) {
-    return <Empty>no errors in this range</Empty>;
+    return (
+      <Empty>
+        <Trans>no errors in this range</Trans>
+      </Empty>
+    );
   }
   return (
     <div className="flex flex-col gap-2">
@@ -1566,7 +1734,7 @@ function ErrorGroupsPanel({
           <button
             type="button"
             onClick={() => setUnmuteError(null)}
-            aria-label="dismiss"
+            aria-label={t`dismiss`}
             className="text-red/70 transition-colors hover:text-red"
           >
             ×
@@ -1575,6 +1743,9 @@ function ErrorGroupsPanel({
       )}
       {sorted.map((g) => {
         const state = triageStateOf(g);
+        const example = g.example;
+        const groupKey = g.key;
+        const reason = g.triage?.reason;
         return (
           <div key={g.key}>
             {/* Only the collapsed line of a muted group is dimmed: its reason and its button stay readable. */}
@@ -1595,10 +1766,12 @@ function ErrorGroupsPanel({
             {open === g.key && (
               <div className="mt-1.5 mb-1 ml-4 flex flex-col gap-1 border-l border-line pl-3 font-mono text-[10.5px] text-ink-dim">
                 <div className="break-all text-ink-2">{g.example}</div>
-                <div className="text-ink-faint">group key: {g.key}</div>
+                <div className="text-ink-faint">
+                  <Trans>group key: {groupKey}</Trans>
+                </div>
                 {g.sessions.length > 0 && (
                   <div>
-                    sessions:{' '}
+                    <Trans>sessions:</Trans>{' '}
                     {g.sessions.map((u) => (
                       <span key={u} className="mr-2 text-ink-2">
                         {u.slice(0, 8)}
@@ -1608,23 +1781,25 @@ function ErrorGroupsPanel({
                 )}
                 {state === 'muted' && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {g.triage?.reason !== undefined && (
-                      <span className="text-ink-2">reason: {g.triage.reason}</span>
+                    {reason !== undefined && (
+                      <span className="text-ink-2">
+                        <Trans>reason: {reason}</Trans>
+                      </span>
                     )}
                     <button
                       type="button"
                       onClick={() => unmute(g.key)}
                       disabled={unmuting !== null}
-                      aria-label={`not noise: ${g.example}`}
+                      aria-label={t`not noise: ${example}`}
                       className="rounded border border-line px-2 py-0.5 text-ink-3 transition-colors hover:text-ink disabled:opacity-50"
                     >
-                      not noise
+                      <Trans>not noise</Trans>
                     </button>
                   </div>
                 )}
                 {(state === 'tracked' || state === 'fix_proposed') && (
                   <Link to={inboxHref} className="text-blue hover:underline">
-                    open in Inbox →
+                    <Trans>open in Inbox →</Trans>
                   </Link>
                 )}
               </div>
@@ -1666,6 +1841,7 @@ export function Retro({
   /** Bumped by the host when friction changed outside this page (a triage run ended): refetch it. */
   frictionReloadKey?: number;
 } = {}): JSX.Element {
+  const { t } = useLingui();
   const today = isoDay();
   const [preset, setPreset] = useState<number | null>(14);
   const [ownFrom, setFrom] = useState<string>(addDays(today, -13));
@@ -1794,7 +1970,7 @@ export function Retro({
         <>
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
             <h1 className="font-display text-[26px] leading-none font-medium tracking-[-0.01em] desk:text-[30px]">
-              Retro
+              <Trans>Retro</Trans>
             </h1>
             <span className="font-mono text-[11px] text-ink-faint">{rangeLabel}</span>
           </div>
@@ -1838,16 +2014,19 @@ export function Retro({
       {error !== null && <ErrorBox message={error} onRetry={load} />}
 
       {!wantAgents ? null : agents === null && error === null ? (
-        <Loading label="retro…" />
+        <Loading label={t`retro…`} />
       ) : agents !== null ? (
         <>
           {agents.approx && <ApproxHint />}
 
           <SectionTitle>
-            Agent scorecards <Explain id="retro-scorecard" /> <Explain id="retro-agent-improve" />
+            <Trans>Agent scorecards</Trans> <Explain id="retro-scorecard" />{' '}
+            <Explain id="retro-agent-improve" />
           </SectionTitle>
           {agents.agents.length === 0 ? (
-            <Empty>no subagent activity in this range</Empty>
+            <Empty>
+              <Trans>no subagent activity in this range</Trans>
+            </Empty>
           ) : (
             <div className="grid gap-3.5 sm:grid-cols-2 wide:grid-cols-3">
               {agents.agents.map((row) => (
@@ -1872,7 +2051,7 @@ export function Retro({
       {wantEstimates && (
         <>
           <SectionTitle>
-            Lessons learned <Explain id="retro-lessons" />
+            <Trans>Lessons learned</Trans> <Explain id="retro-lessons" />
           </SectionTitle>
           <LessonsFeed
             lessons={lessons}
@@ -1886,7 +2065,7 @@ export function Retro({
       {wantEstimates && taskRows !== null && (
         <>
           <SectionTitle>
-            Estimation accuracy <Explain id="retro-estimation" />
+            <Trans>Estimation accuracy</Trans> <Explain id="retro-estimation" />
           </SectionTitle>
           <div className="rounded-[14px] border border-line px-3.5 py-3.5">
             <EstimationTable tasks={taskRows} />
@@ -1897,12 +2076,12 @@ export function Retro({
       {wantFriction && friction !== null && (
         <>
           <SectionTitle>
-            Friction board <Explain id="retro-friction" />
+            <Trans>Friction board</Trans> <Explain id="retro-friction" />
           </SectionTitle>
           <div className="grid items-start gap-[22px] wide:grid-cols-2">
             <section>
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-                Denied tools
+                <Trans>Denied tools</Trans>
               </div>
               <div className="rounded-[14px] border border-line px-3.5 py-3.5">
                 <DeniedToolsPanel data={friction} />
@@ -1910,7 +2089,7 @@ export function Retro({
             </section>
             <section>
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-                Top error groups
+                <Trans>Top error groups</Trans>
               </div>
               <div className="rounded-[14px] border border-line px-3.5 py-3.5">
                 <ErrorGroupsPanel
@@ -1926,13 +2105,13 @@ export function Retro({
           </div>
 
           <div className="mt-3.5 grid gap-3.5 sm:grid-cols-4">
-            <StatCard label="Approvals resolved" value={String(friction.approvals.resolved)} />
-            <StatCard label="Avg resolve" value={fmtSec(friction.approvals.avg_resolve_sec)} />
+            <StatCard label={t`Approvals resolved`} value={String(friction.approvals.resolved)} />
+            <StatCard label={t`Avg resolve`} value={fmtSec(friction.approvals.avg_resolve_sec)} />
             <StatCard
-              label="Total wait"
+              label={t`Total wait`}
               value={`${friction.approvals.wait_total_min.toFixed(1)} min`}
             />
-            <StatCard label="Pending now" value={String(friction.approvals.pending)} />
+            <StatCard label={t`Pending now`} value={String(friction.approvals.pending)} />
           </div>
         </>
       )}

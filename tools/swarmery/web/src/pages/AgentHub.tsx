@@ -10,6 +10,9 @@
 // Definition tab embeds the existing System editor (SystemItemPanel), which owns
 // the versioned write surface (edit / versions / diff / rollback).
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { AgentProfile, AgentRosterRow, WSMessage } from '../api/types';
@@ -37,14 +40,14 @@ const TABS: ProfileTab[] = [
   'insights',
   'definition',
 ];
-const TAB_LABELS: Record<ProfileTab, string> = {
-  overview: 'Overview',
-  docs: 'Docs',
-  runs: 'Runs',
-  tasks: 'Tasks',
-  activity: 'Activity',
-  insights: 'Insights',
-  definition: 'Definition',
+const TAB_LABELS: Record<ProfileTab, MessageDescriptor> = {
+  overview: msg`Overview`,
+  docs: msg`Docs`,
+  runs: msg`Runs`,
+  tasks: msg`Tasks`,
+  activity: msg`Activity`,
+  insights: msg`Insights`,
+  definition: msg`Definition`,
 };
 
 function parseTab(value: string | null): ProfileTab {
@@ -60,7 +63,12 @@ function RosterCard({
   agent: AgentRosterRow;
   projectNames: Record<string, string>;
 }): JSX.Element {
+  const { t } = useLingui();
   const health = healthTone(agent.failedShare);
+  const healthLabel = health.label;
+  const failedPct = Math.round(agent.failedShare * 100);
+  const runs30d = String(agent.runs30d);
+  const ago = agent.lastActiveAt !== null ? fmtAgo(agent.lastActiveAt) : null;
   // Where the row comes FROM, which is the question a project roster raises now
   // that it lists the effective set (own + global + enabled packs):
   //   project row  → the OWNING project (several projects can define an agent
@@ -79,7 +87,7 @@ function RosterCard({
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={`inline-block h-[8px] w-[8px] shrink-0 rounded-full ${health.dot}`}
-          data-tip={`${health.label} · ${Math.round(agent.failedShare * 100)}% failed-run share`}
+          data-tip={t`${healthLabel} · ${failedPct}% failed-run share`}
         />
         <span className="text-[13.5px] font-semibold text-ink">{agent.name}</span>
         {agent.model !== null && (
@@ -93,10 +101,12 @@ function RosterCard({
         </span>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 font-mono text-[10px] text-ink-faint">
-        <span className="whitespace-nowrap">runs 30d {String(agent.runs30d)}</span>
+        <span className="whitespace-nowrap">
+          <Trans>runs 30d {runs30d}</Trans>
+        </span>
         <span className="whitespace-nowrap">{fmtCost(agent.cost30d)}</span>
         <span className="whitespace-nowrap">
-          {agent.lastActiveAt !== null ? `active ${fmtAgo(agent.lastActiveAt)}` : 'idle'}
+          {ago !== null ? t`active ${ago}` : t`idle`}
         </span>
       </div>
     </>
@@ -157,6 +167,7 @@ export function AgentHub({
    * /agents mount) it keeps its own local chips. */
   originScope?: 'global' | 'project' | null;
 } = {}): JSX.Element {
+  const { i18n, t } = useLingui();
   const params = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -272,21 +283,18 @@ export function AgentHub({
     [setSearchParams],
   );
 
-  const tabs: HubTab[] = useMemo(
-    () =>
-      TABS.map((t) => {
-        const badge =
-          t === 'insights' && profile !== null
-            ? profile.insights.recommendations.length +
-              profile.insights.proposals.length +
-              profile.insights.lessons.length
-            : t === 'runs' && profile !== null
-              ? profile.runs.length
-              : undefined;
-        return { id: t, label: TAB_LABELS[t], ...(badge !== undefined ? { badge } : {}) };
-      }),
-    [profile],
-  );
+  // Not memoised: the labels resolve through the active locale on every render.
+  const tabs: HubTab[] = TABS.map((tabId) => {
+    const badge =
+      tabId === 'insights' && profile !== null
+        ? profile.insights.recommendations.length +
+          profile.insights.proposals.length +
+          profile.insights.lessons.length
+        : tabId === 'runs' && profile !== null
+          ? profile.runs.length
+          : undefined;
+    return { id: tabId, label: i18n._(TAB_LABELS[tabId]), ...(badge !== undefined ? { badge } : {}) };
+  });
 
   const rowMatches = useCallback(
     (a: AgentRosterRow, q: string): boolean =>
@@ -322,7 +330,7 @@ export function AgentHub({
 
   return (
     <HubShell<AgentRosterRow>
-      {...(embedded ? {} : { title: 'Agents' })}
+      {...(embedded ? {} : { title: t`Agents` })}
       hideDetailWhenUnselected={false}
       roster={visibleRoster}
       rosterError={rosterError}
@@ -333,21 +341,25 @@ export function AgentHub({
       selectedKey={selectedId === null ? null : String(selectedId)}
       onSelect={onSelect}
       topBar={scopeFilters}
-      searchPlaceholder="filter agents…"
+      searchPlaceholder={t`filter agents…`}
       rosterEmptyLabel={
         // An active origin filter is the likely cause of an empty roster, so
         // name it instead of claiming the machine has none.
         scopeChip !== null
-          ? `no ${scopeChip}-scope agents here`
+          ? t`no ${scopeChip}-scope agents here`
           : projectScoped
-            ? 'No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/.'
-            : 'no agents on this machine'
+            ? t`No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/.`
+            : t`no agents on this machine`
       }
       tabs={tabs}
       activeTab={tab}
       onTab={onTab}
       detailHeader={profile !== null ? <ProfileHeader agent={profile} scopeSlug={scopeSlug} /> : undefined}
-      detailPlaceholder={<Empty>select an agent to see its profile</Empty>}
+      detailPlaceholder={
+        <Empty>
+          <Trans>select an agent to see its profile</Trans>
+        </Empty>
+      }
     >
       {selectedId !== null && (
         <ProfilePanel
@@ -393,6 +405,7 @@ function ProfilePanel({
   defRefresh: number;
   onDefinitionMutated: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   // Docs tab: the agent's `# How to use` guide. Same panel, same registry id,
   // 'docs' variant — the hub's own tab bar is the section switcher here, so
   // the panel renders the guide alone. Deep-link is the native ?tab=docs.
@@ -432,7 +445,7 @@ function ProfilePanel({
   }
 
   if (profileError !== null) return <ErrorBox message={profileError} onRetry={onProfileRetry} />;
-  if (profile === null) return <Loading label="profile…" />;
+  if (profile === null) return <Loading label={t`profile…`} />;
 
   switch (tab) {
     case 'runs':

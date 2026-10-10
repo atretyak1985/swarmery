@@ -1,0 +1,4150 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-10 08:32+0300\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/components/KillButton.tsx
+msgid " · {cost} so far"
+msgstr " · {cost} so far"
+
+#: src/components/RunOutcomeModal.tsx
+msgid " · {criteriaBefore} before this run"
+msgstr " · {criteriaBefore} before this run"
+
+#: src/components/RunOutcomeModal.tsx
+msgid " · baseline not measured"
+msgstr " · baseline not measured"
+
+#: src/components/ProjectPlugins.tsx
+msgid " · enabled state also reads: {overlaySources}"
+msgstr " · enabled state also reads: {overlaySources}"
+
+#: src/components/QuestionForm.tsx
+msgid " · multi"
+msgstr " · multi"
+
+#: src/components/usage/UsageModal.tsx
+msgid " · no usage data for this account"
+msgstr " · no usage data for this account"
+
+#: src/components/usage/UsageModal.tsx
+msgid " · refresh failed"
+msgstr " · refresh failed"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid " · removed"
+msgstr " · removed"
+
+#: src/components/RetroImproveCard.tsx
+msgid " · whole fleet"
+msgstr " · whole fleet"
+
+#: src/workspace/AgentPicker.tsx
+msgid " (project override)"
+msgstr " (project override)"
+
+#: src/components/AccountsSection.tsx
+msgid "— declares {declares}"
+msgstr "— declares {declares}"
+
+#: src/workspace/TaskModal.tsx
+msgid "· created {created}"
+msgstr "· created {created}"
+
+#: src/components/PluginDriftBadge.tsx
+msgid "· plugins {warn}"
+msgstr "· plugins {warn}"
+
+#: src/components/PluginDriftBadge.tsx
+msgid "· plugins ⚠ {error}"
+msgstr "· plugins ⚠ {error}"
+
+#: src/components/usage/UsageModal.tsx
+msgid "(no binding)"
+msgstr "(no binding)"
+
+#: src/components/DiffView.tsx
+msgid "(patch)"
+msgstr "(patch)"
+
+#: src/components/SessionCard.tsx
+msgid "(untitled session)"
+msgstr "(untitled session)"
+
+#. placeholder {0}: s.changes
+#: src/components/FileContentionBanner.tsx
+msgid "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
+msgstr "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
+
+#. placeholder {0}: wt.dirtyFiles
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "{0, plural, one {# dirty} few {# dirty} many {# dirty} other {# dirty}}"
+msgstr "{0, plural, one {# dirty} few {# dirty} many {# dirty} other {# dirty}}"
+
+#. placeholder {0}: analysis.citations
+#: src/components/RetroImproveCard.tsx
+msgid "{0, plural, one {# evidence citation} few {# evidence citations} many {# evidence citations} other {# evidence citations}}"
+msgstr "{0, plural, one {# evidence citation} few {# evidence citations} many {# evidence citations} other {# evidence citations}}"
+
+#: src/components/usage/UsageChip.tsx
+msgid "{account} — not connected"
+msgstr "{account} — not connected"
+
+#: src/components/usage/UsageModal.tsx
+msgid "{activeProject} runs as <0>{activeKey}</0>"
+msgstr "{activeProject} runs as <0>{activeKey}</0>"
+
+#: src/components/Sidebar.tsx
+msgid "{badge, plural, one {# waiting} few {# waiting} many {# waiting} other {# waiting}}"
+msgstr "{badge, plural, one {# waiting} few {# waiting} many {# waiting} other {# waiting}}"
+
+#: src/workspace/boardModel.ts
+msgid "{base} · paused by the dispatcher"
+msgstr "{base} · paused by the dispatcher"
+
+#: src/workspace/boardModel.ts
+msgid "{base} · paused by you"
+msgstr "{base} · paused by you"
+
+#: src/components/DiffView.tsx
+msgid "{branch} · base {base}"
+msgstr "{branch} · base {base}"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "{branch} deleted — Run plan again to start a fresh run."
+msgstr "{branch} deleted — Run plan again to start a fresh run."
+
+#: src/workspace/task/RunConfig.tsx
+msgid "{cardModel} (card override)"
+msgstr "{cardModel} (card override)"
+
+#: src/components/CommandPalette.tsx
+msgid "{changes, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
+msgstr "{changes, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
+
+#: src/components/FileContentionBanner.tsx
+msgid "{changes} · touched {ago}"
+msgstr "{changes} · touched {ago}"
+
+#: src/workspace/TaskDiff.tsx
+msgid "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "{commits, plural, one {# commit will be lost.} few {# commits will be lost.} many {# commits will be lost.} other {# commits will be lost.}}"
+msgstr "{commits, plural, one {# commit will be lost.} few {# commits will be lost.} many {# commits will be lost.} other {# commits will be lost.}}"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
+msgstr "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
+
+#: src/components/PlanRunCard.tsx
+msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "{criteriaAfter} of {criteriaTotal} criteria ticked"
+msgstr "{criteriaAfter} of {criteriaTotal} criteria ticked"
+
+#: src/lib/format.ts
+msgid "{d} d ago"
+msgstr "{d} d ago"
+
+#: src/components/AccountsSection.tsx
+msgid "{danglingCount, plural, one {removed account still bound in # project} few {removed account still bound in # projects} many {removed account still bound in # projects} other {removed account still bound in # projects}}"
+msgstr "{danglingCount, plural, one {removed account still bound in # project} few {removed account still bound in # projects} many {removed account still bound in # projects} other {removed account still bound in # projects}}"
+
+#: src/workspace/boardModel.ts
+msgid "{days}d"
+msgstr "{days}d"
+
+#: src/components/AccountSelector.tsx
+msgid "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
+msgstr "{draftKey} is not ready — {draftReason}; a run dispatched under it will fail at spawn until it is connected (Settings → accounts)"
+
+#: src/components/PluginDriftBadge.tsx
+msgid "{error} error / {warn} warn plugin findings — see System → Insights"
+msgstr "{error} error / {warn} warn plugin findings — see System → Insights"
+
+#: src/components/PluginConfigModal.tsx
+msgid "{errorCount, plural, one {# field need attention} few {# fields need attention} many {# fields need attention} other {# fields need attention}}"
+msgstr "{errorCount, plural, one {# field need attention} few {# fields need attention} many {# fields need attention} other {# fields need attention}}"
+
+#: src/components/PluginConfigModal.tsx
+msgid "{filled, plural, one {filled # field from this project — review, then save} few {filled # fields from this project — review, then save} many {filled # fields from this project — review, then save} other {filled # fields from this project — review, then save}}"
+msgstr "{filled, plural, one {filled # field from this project — review, then save} few {filled # fields from this project — review, then save} many {filled # fields from this project — review, then save} other {filled # fields from this project — review, then save}}"
+
+#: src/components/PluginConfigModal.tsx
+msgid "{filledCount}/{leafCount} fields"
+msgstr "{filledCount}/{leafCount} fields"
+
+#: src/components/PluginConfigModal.tsx
+msgid "{found, plural, one {suggested values for # field} few {suggested values for # fields} many {suggested values for # fields} other {suggested values for # fields}}"
+msgstr "{found, plural, one {suggested values for # field} few {suggested values for # fields} many {suggested values for # fields} other {suggested values for # fields}}"
+
+#: src/workspace/StatusBar.tsx
+msgid "{free} of {max} slots free"
+msgstr "{free} of {max} slots free"
+
+#: src/lib/format.ts
+msgid "{h} h ago"
+msgstr "{h} h ago"
+
+#: src/components/SessionCard.tsx
+msgid "{k}k ctx"
+msgstr "{k}k ctx"
+
+#: src/components/Sidebar.tsx
+msgid "{label} — opens in a project"
+msgstr "{label} — opens in a project"
+
+#: src/theme/ThemePicker.tsx
+msgid "{label} palette — {hint}"
+msgstr "{label} palette — {hint}"
+
+#: src/components/usage/UsageWindowRow.tsx
+msgid "{left}% left"
+msgstr "{left}% left"
+
+#: src/components/usage/UsageWindowRow.tsx
+msgid "{left}% remaining"
+msgstr "{left}% remaining"
+
+#: src/lib/format.ts
+msgid "{min} min ago"
+msgstr "{min} min ago"
+
+#: src/components/FileContentionBanner.tsx
+msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
+msgstr "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
+
+#: src/components/ProjectPlugins.tsx
+msgid "{name}: disabled"
+msgstr "{name}: disabled"
+
+#: src/components/ProjectPlugins.tsx
+msgid "{name}: enabled"
+msgstr "{name}: enabled"
+
+#: src/lib/sessionsView.ts
+msgid "{nth} attempt — {tail}"
+msgstr "{nth} attempt — {tail}"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "{playbookModel} (from playbook)"
+msgstr "{playbookModel} (from playbook)"
+
+#: src/workspace/TaskCard.tsx
+msgid "{priority} priority"
+msgstr "{priority} priority"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "{provider} repository · not signed in"
+msgstr "{provider} repository · not signed in"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "{provider} repository · sign-in expired"
+msgstr "{provider} repository · sign-in expired"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "{provider} repository · sign-in status unknown"
+msgstr "{provider} repository · sign-in status unknown"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "{provider} sign-in"
+msgstr "{provider} sign-in"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "{rung} model won"
+msgstr "{rung} model won"
+
+#: src/lib/format.ts
+msgid "{sec} s ago"
+msgstr "{sec} s ago"
+
+#: src/components/CommandPalette.tsx
+msgid "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
+msgstr "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
+
+#: src/components/PluginConfigModal.tsx
+msgid "{suggestionCount} suggested by probe"
+msgstr "{suggestionCount} suggested by probe"
+
+#: src/workspace/TaskGraph.tsx
+msgid "{title} — column {column}, depends on {deps}"
+msgstr "{title} — column {column}, depends on {deps}"
+
+#: src/workspace/TaskGraph.tsx
+msgid "{title} — column {column}, no dependencies"
+msgstr "{title} — column {column}, no dependencies"
+
+#: src/components/usage/UsageWindowRow.tsx
+#: src/components/usage/UsageWindowRow.tsx
+msgid "{used}% used"
+msgstr "{used}% used"
+
+#: src/components/usage/UsageChip.tsx
+msgid "{windowLabel} {pct}% used"
+msgstr "{windowLabel} {pct}% used"
+
+#: src/workspace/task/RunLog.tsx
+msgid "❯ linked sessions →"
+msgstr "❯ linked sessions →"
+
+#: src/workspace/TaskCard.tsx
+msgid "❯ session"
+msgstr "❯ session"
+
+#: src/workspace/TaskCard.tsx
+msgid "❯_ Terminal"
+msgstr "❯_ Terminal"
+
+#: src/workspace/AgentPicker.tsx
+msgid "@{value} (unknown)"
+msgstr "@{value} (unknown)"
+
+#: src/main.tsx
+msgid "← back to the overview"
+msgstr "← back to the overview"
+
+#: src/components/SessionCard.tsx
+msgid "→ changed to"
+msgstr "→ changed to"
+
+#: src/components/SessionCard.tsx
+msgid "→ fell back to"
+msgstr "→ fell back to"
+
+#: src/components/Drawer.tsx
+msgid "↑↓ next"
+msgstr "↑↓ next"
+
+#: src/lib/docFigures.tsx
+#: src/workspace/TaskCard.tsx
+msgid "↩ Inbox"
+msgstr "↩ Inbox"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "↩ Restore"
+msgstr "↩ Restore"
+
+#: src/lib/docFigures.tsx
+msgid "↻ Re-run"
+msgstr "↻ Re-run"
+
+#: src/lib/docFigures.tsx
+msgid "⇧ Land"
+msgstr "⇧ Land"
+
+#: src/components/AccountsSection.tsx
+msgid "+ add account"
+msgstr "+ add account"
+
+#: src/components/NewProjectButton.tsx
+msgid "+ new project"
+msgstr "+ new project"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "<0>{branch}</0> has <1>{commitsText}</1> that <2>{base}</2> does not have. Starting a new run would reuse that branch name, so the daemon refused rather than destroy them."
+msgstr "<0>{branch}</0> has <1>{commitsText}</1> that <2>{base}</2> does not have. Starting a new run would reuse that branch name, so the daemon refused rather than destroy them."
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "<0>{branch}</0> has <1>{commitsText}</1> that could not be measured against a base branch. Starting a new run would reuse that branch name, so the daemon refused rather than destroy them."
+msgstr "<0>{branch}</0> has <1>{commitsText}</1> that could not be measured against a base branch. Starting a new run would reuse that branch name, so the daemon refused rather than destroy them."
+
+#: src/components/AccountReadyBanner.tsx
+msgid "<0>{project}</0> runs as <1>{account}</1> — connected and CLI-ready."
+msgstr "<0>{project}</0> runs as <1>{account}</1> — connected and CLI-ready."
+
+#: src/components/AccountReadyBanner.tsx
+msgid "<0>{project}</0> runs as <1>{accountKey}</1>"
+msgstr "<0>{project}</0> runs as <1>{accountKey}</1>"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "<0>{taskTitle}</0> is removed permanently — this cannot be undone. To keep it out of the way without losing it, use <1>Archive</1> instead."
+msgstr "<0>{taskTitle}</0> is removed permanently — this cannot be undone. To keep it out of the way without losing it, use <1>Archive</1> instead."
+
+#: src/lib/docFigures.tsx
+msgid "<0>branch ·</0> Dismiss, or a 14-day TTL in triage, archives a captured card instead."
+msgstr "<0>branch ·</0> Dismiss, or a 14-day TTL in triage, archives a captured card instead."
+
+#: src/lib/docFigures.tsx
+msgid "<0>branch ·</0> From Review, Re-run and a failed verify both send the card back to Queued; Discard archives it and deletes the branch."
+msgstr "<0>branch ·</0> From Review, Re-run and a failed verify both send the card back to Queued; Discard archives it and deletes the branch."
+
+#: src/components/ui.tsx
+msgid "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
+msgstr "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
+
+#: src/components/Sidebar.tsx
+msgid "⌘K search & actions"
+msgstr "⌘K search & actions"
+
+#: src/lib/docFigures.tsx
+msgid "⌸ Terminal"
+msgstr "⌸ Terminal"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+#: src/workspace/TaskCard.tsx
+msgid "▶ Resume"
+msgstr "▶ Resume"
+
+#: src/lib/docFigures.tsx
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+msgid "▶ Run"
+msgstr "▶ Run"
+
+#: src/lib/docFigures.tsx
+msgid "▸ History"
+msgstr "▸ History"
+
+#: src/workspace/TaskCard.tsx
+msgid "◇ Plan"
+msgstr "◇ Plan"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+msgid "◇ Review…"
+msgstr "◇ Review…"
+
+#: src/lib/docFigures.tsx
+msgid "✎ Plan"
+msgstr "✎ Plan"
+
+#: src/workspace/TaskCard.tsx
+msgid "✓ Mark done"
+msgstr "✓ Mark done"
+
+#: src/components/ui.tsx
+msgid "✕ close"
+msgstr "✕ close"
+
+#: src/lib/docFigures.tsx
+msgid "✕ Dismiss"
+msgstr "✕ Dismiss"
+
+#: src/lib/docFigures.tsx
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+#: src/workspace/TaskCard.tsx
+msgid "❙❙ Pause"
+msgstr "❙❙ Pause"
+
+#: src/lib/docFigures.tsx
+msgid "🗑 Discard"
+msgstr "🗑 Discard"
+
+#: src/lib/docFigures.tsx
+msgid "2 done · 237 archived"
+msgstr "2 done · 237 archived"
+
+#: src/lib/docFigures.tsx
+msgid "9 gates"
+msgstr "9 gates"
+
+#: src/lib/docFigures.tsx
+msgid "A card's life: capture → queue → run → review → land"
+msgstr "A card's life: capture → queue → run → review → land"
+
+#: src/lib/docFigures.tsx
+msgid "A pause on this specific project"
+msgstr "A pause on this specific project"
+
+#: src/lib/docFigures.tsx
+msgid "A plan is a README plus a phase DAG"
+msgstr "A plan is a README plus a phase DAG"
+
+#: src/api.ts
+msgid "a planning run is already active for this project"
+msgstr "a planning run is already active for this project"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "a read-only verifier confirmed this phase’s acceptance criteria"
+msgstr "a read-only verifier confirmed this phase’s acceptance criteria"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "a read-only verifier could NOT confirm the ticked criteria — see the verify-failed blocker"
+msgstr "a read-only verifier could NOT confirm the ticked criteria — see the verify-failed blocker"
+
+#: src/components/NotifySettings.tsx
+msgid "a request needs a decision"
+msgstr "a request needs a decision"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "A revise wizard interviews you against this plan and stages its changes as a diff — nothing is written until you approve it. The reason below is prefilled from this diagnosis; edit it before starting."
+msgstr "A revise wizard interviews you against this plan and stages its changes as a diff — nothing is written until you approve it. The reason below is prefilled from this diagnosis; edit it before starting."
+
+#: src/components/OutcomePicker.tsx
+msgid "abandoned"
+msgstr "abandoned"
+
+#: src/components/NewProjectButton.tsx
+msgid "absolute path"
+msgstr "absolute path"
+
+#: src/components/RetroImproveCard.tsx
+msgid "Accept"
+msgstr "Accept"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+msgid "accept into the Working queue — the dispatcher picks it up"
+msgstr "accept into the Working queue — the dispatcher picks it up"
+
+#: src/components/AccountSelector.tsx
+#: src/components/AccountSelector.tsx
+msgid "account"
+msgstr "account"
+
+#: src/components/CreateAccountModal.tsx
+msgid "Account <0>{accountKey}</0> is connected and CLI-ready."
+msgstr "Account <0>{accountKey}</0> is connected and CLI-ready."
+
+#: src/components/CreateAccountModal.tsx
+msgid "Account <0>{accountKey}</0> reserved. Connect it here — one authorization covers the quota read, the CLI credential, and the readiness check:"
+msgstr "Account <0>{accountKey}</0> reserved. Connect it here — one authorization covers the quota read, the CLI credential, and the readiness check:"
+
+#: src/components/CreateAccountModal.tsx
+msgid "account key"
+msgstr "account key"
+
+#: src/components/AccountReadyBanner.tsx
+msgid "account not ready"
+msgstr "account not ready"
+
+#: src/workspace/boardModel.ts
+msgid "account paused: {why}"
+msgstr "account paused: {why}"
+
+#: src/components/AccountReadyBanner.tsx
+msgid "account ready"
+msgstr "account ready"
+
+#: src/pages/Settings.tsx
+msgid "accounts"
+msgstr "accounts"
+
+#: src/pages/Settings.tsx
+msgid "Accounts"
+msgstr "Accounts"
+
+#: src/lib/glossary.ts
+msgid "acting"
+msgstr "acting"
+
+#: src/components/usage/UsageProviderCard.tsx
+#: src/lib/sessionsView.ts
+msgid "active"
+msgstr "active"
+
+#: src/components/ui.tsx
+msgid "active · {span}"
+msgstr "active · {span}"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "add a label + Enter"
+msgstr "add a label + Enter"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "add a path glob + Enter"
+msgstr "add a path glob + Enter"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "add a T-id + Enter"
+msgstr "add a T-id + Enter"
+
+#: src/lib/docFigures.tsx
+msgid "Add an index on sessions.cwd"
+msgstr "Add an index on sessions.cwd"
+
+#: src/components/CreateAccountModal.tsx
+msgid "Add Claude account"
+msgstr "Add Claude account"
+
+#: src/api.ts
+msgid "add connector failed: {status}"
+msgstr "add connector failed: {status}"
+
+#: src/workspace/boardModel.ts
+msgid "added by hand"
+msgstr "added by hand"
+
+#: src/lib/docFigures.tsx
+msgid "Admission gates, in the order the dispatcher applies them"
+msgstr "Admission gates, in the order the dispatcher applies them"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "advanced"
+msgstr "advanced"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "advanced · {overrideList}"
+msgstr "advanced · {overrideList}"
+
+#: src/api.ts
+#: src/api.ts
+msgid "advise failed: {status}"
+msgstr "advise failed: {status}"
+
+#: src/lib/glossary.ts
+msgid "after reading the code"
+msgstr "after reading the code"
+
+#: src/workspace/AgentPicker.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "agent"
+msgstr "agent"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "agent said"
+msgstr "agent said"
+
+#: src/main.tsx
+#: src/main.tsx
+msgid "agents…"
+msgstr "agents…"
+
+#: src/components/NotifySettings.tsx
+msgid "alerts"
+msgstr "alerts"
+
+#: src/components/ProjectDropdown.tsx
+msgid "all projects"
+msgstr "all projects"
+
+#: src/components/ScopeChip.tsx
+#: src/workspace/ProjectSwitcher.tsx
+msgid "All projects"
+msgstr "All projects"
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "All projects →"
+msgstr "All projects →"
+
+#: src/components/NotifySettings.tsx
+msgid "an active session ended"
+msgstr "an active session ended"
+
+#: src/components/NotifySettings.tsx
+msgid "an error event appeared"
+msgstr "an error event appeared"
+
+#: src/lib/notifications.ts
+msgid "an error event in session #{sessionId}"
+msgstr "an error event in session #{sessionId}"
+
+#: src/components/RetroImproveCard.tsx
+msgid "analysing…"
+msgstr "analysing…"
+
+#: src/components/CommandPalette.tsx
+msgid "Analytics"
+msgstr "Analytics"
+
+#: src/api.ts
+msgid "answer planning failed: {status}"
+msgstr "answer planning failed: {status}"
+
+#: src/lib/docFigures.tsx
+msgid "API endpoints"
+msgstr "API endpoints"
+
+#: src/theme/ThemePicker.tsx
+#: src/theme/ThemePicker.tsx
+msgid "appearance"
+msgstr "appearance"
+
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "Appearance"
+msgstr "Appearance"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "append the feedback to the prompt and send the card back to todo"
+msgstr "append the feedback to the prompt and send the card back to todo"
+
+#: src/api.ts
+msgid "apply conflicts"
+msgstr "apply conflicts"
+
+#: src/api.ts
+msgid "apply proposal failed"
+msgstr "apply proposal failed"
+
+#: src/api.ts
+msgid "apply revision failed: {status}"
+msgstr "apply revision failed: {status}"
+
+#: src/lib/needsYou.ts
+msgid "Approval"
+msgstr "Approval"
+
+#: src/lib/notifications.ts
+msgid "Approval needed: {toolName}"
+msgstr "Approval needed: {toolName}"
+
+#: src/components/NotifySettings.tsx
+msgid "approval requested"
+msgstr "approval requested"
+
+#: src/components/PermissionPresets.tsx
+msgid "Approval required"
+msgstr "Approval required"
+
+#: src/components/CommandPalette.tsx
+msgid "Approvals"
+msgstr "Approvals"
+
+#: src/components/ProjectActions.tsx
+#: src/components/ProjectActions.tsx
+msgid "archive"
+msgstr "archive"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/task/TaskActions.tsx
+msgid "Archive"
+msgstr "Archive"
+
+#: src/workspace/TaskCard.tsx
+msgid "archive — it stays findable, it stops being an inbox item"
+msgstr "archive — it stays findable, it stops being an inbox item"
+
+#: src/api.ts
+msgid "archive failed: {status}"
+msgstr "archive failed: {status}"
+
+#: src/components/ProjectActions.tsx
+msgid "Archive project"
+msgstr "Archive project"
+
+#: src/workspace/boardModel.ts
+msgid "Archived"
+msgstr "Archived"
+
+#: src/workspace/boardModel.ts
+msgid "archived at the next sweep"
+msgstr "archived at the next sweep"
+
+#: src/workspace/boardModel.ts
+msgid "archived in {days}d"
+msgstr "archived in {days}d"
+
+#: src/components/PermissionPresets.tsx
+msgid "ask"
+msgstr "ask"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Asking for a code…"
+msgstr "Asking for a code…"
+
+#: src/components/ProjectActions.tsx
+msgid "attach"
+msgstr "attach"
+
+#: src/components/AttachModal.tsx
+msgid "Attach <0>{projectName}</0>"
+msgstr "Attach <0>{projectName}</0>"
+
+#: src/api.ts
+msgid "attach failed: {status}"
+msgstr "attach failed: {status}"
+
+#: src/components/AttachModal.tsx
+msgid "Attach project"
+msgstr "Attach project"
+
+#: src/lib/sessionsView.ts
+msgid "attempt {count}"
+msgstr "attempt {count}"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "authorization code for {account}"
+msgstr "authorization code for {account}"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Authorize swarmery again — this replaces the stored credential for this account."
+msgstr "Authorize swarmery again — this replaces the stored credential for this account."
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Authorize swarmery to read this account's quota — no CLI login needed."
+msgstr "Authorize swarmery to read this account's quota — no CLI login needed."
+
+#: src/workspace/PlaybookPicker.tsx
+msgid "Auto (chosen at dispatch)"
+msgstr "Auto (chosen at dispatch)"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "auto playbook"
+msgstr "auto playbook"
+
+#: src/components/PermissionPresets.tsx
+#: src/pages/Settings.tsx
+msgid "auto-approve"
+msgstr "auto-approve"
+
+#: src/components/PermissionPresets.tsx
+msgid "Auto-approve file writes, safe git, and shell by default (never pushing). Fast, but hands-off."
+msgstr "Auto-approve file writes, safe git, and shell by default (never pushing). Fast, but hands-off."
+
+#: src/pages/Settings.tsx
+msgid "auto-approve presets are configured per project — open a project's Settings to set them"
+msgstr "auto-approve presets are configured per project — open a project's Settings to set them"
+
+#: src/lib/sessionsView.ts
+msgid "awaiting reply"
+msgstr "awaiting reply"
+
+#: src/components/SessionCard.tsx
+msgid "awaiting reply · {owed}"
+msgstr "awaiting reply · {owed}"
+
+#: src/lib/needsYou.ts
+msgid "Awaiting your reply"
+msgstr "Awaiting your reply"
+
+#: src/workspace/WorkspaceShell.tsx
+msgid "back to all projects"
+msgstr "back to all projects"
+
+#: src/components/AttachModal.tsx
+#: src/components/DetachModal.tsx
+msgid "backup: {backupPath}"
+msgstr "backup: {backupPath}"
+
+#: src/components/ImproveModal.tsx
+msgid "behavior {behavior} · harness {harness} · infra {infra}"
+msgstr "behavior {behavior} · harness {harness} · infra {infra}"
+
+#: src/components/ProjectActions.tsx
+msgid "billing, infra"
+msgstr "billing, infra"
+
+#: src/components/AccountSelector.tsx
+msgid "binding ignored: {ignoredReason}"
+msgstr "binding ignored: {ignoredReason}"
+
+#: src/components/NewProjectButton.tsx
+msgid "blank → the daemon's default workspace root"
+msgstr "blank → the daemon's default workspace root"
+
+#: src/workspace/StatusBar.tsx
+msgid "Blocked {blocked}"
+msgstr "Blocked {blocked}"
+
+#: src/workspace/boardModel.ts
+msgid "blocked by {dep}"
+msgstr "blocked by {dep}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Blocker: {summary}"
+msgstr "Blocker: {summary}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "blockers"
+msgstr "blockers"
+
+#: src/components/AccountsSection.tsx
+msgid "bound projects ({boundCount})"
+msgstr "bound projects ({boundCount})"
+
+#: src/components/AccountsSection.tsx
+msgid "bound, not indexed ({unindexedCount}) — no live project row"
+msgstr "bound, not indexed ({unindexedCount}) — no live project row"
+
+#: src/workspace/task/RunLog.tsx
+msgid "branch"
+msgstr "branch"
+
+#: src/workspace/TaskCard.tsx
+msgid "branch {branch}"
+msgstr "branch {branch}"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "branch {branch} deleted — card archived"
+msgstr "branch {branch} deleted — card archived"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "branch {branch} was already gone — card archived"
+msgstr "branch {branch} was already gone — card archived"
+
+#: src/api.ts
+#: src/api.ts
+msgid "branch delete failed ({status})"
+msgstr "branch delete failed ({status})"
+
+#: src/workspace/TaskModal.tsx
+msgid "brief"
+msgstr "brief"
+
+#: src/components/ProjectActions.tsx
+msgid "Bring <0>{projectName}</0> back into the default projects list."
+msgstr "Bring <0>{projectName}</0> back into the default projects list."
+
+#: src/components/NotifySettings.tsx
+msgid "browser notifications"
+msgstr "browser notifications"
+
+#: src/components/ImproveModal.tsx
+msgid "Built-in agent — no editable definition file to improve."
+msgstr "Built-in agent — no editable definition file to improve."
+
+#: src/api.ts
+msgid "bulk archive failed: {status}"
+msgstr "bulk archive failed: {status}"
+
+#: src/components/AttachModal.tsx
+#: src/components/CreateAccountModal.tsx
+#: src/components/DetachModal.tsx
+#: src/components/ImproveModal.tsx
+#: src/components/NewProjectButton.tsx
+#: src/components/PluginConfigModal.tsx
+#: src/components/ProjectActions.tsx
+#: src/components/ui.tsx
+#: src/components/usage/UsageConnect.tsx
+#: src/components/usage/UsageDisconnect.tsx
+msgid "cancel"
+msgstr "cancel"
+
+#: src/components/KillButton.tsx
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/components/StopButton.tsx
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/api.ts
+msgid "cancel failed: {status}"
+msgstr "cancel failed: {status}"
+
+#: src/api.ts
+msgid "cancel planning failed: {status}"
+msgstr "cancel planning failed: {status}"
+
+#: src/lib/docFigures.tsx
+msgid "Captured"
+msgstr "Captured"
+
+#: src/workspace/boardModel.ts
+msgid "captured from session #{id}"
+msgstr "captured from session #{id}"
+
+#: src/workspace/boardModel.ts
+msgid "cards at or near their automatic-archive date"
+msgstr "cards at or near their automatic-archive date"
+
+#: src/workspace/boardModel.ts
+msgid "Cards that have run and carry a verdict wait here — Land, Re-run or Discard."
+msgstr "Cards that have run and carry a verdict wait here — Land, Re-run or Discard."
+
+#: src/workspace/boardModel.ts
+msgid "cards the dispatcher has in flight right now"
+msgstr "cards the dispatcher has in flight right now"
+
+#: src/components/PermissionPresets.tsx
+msgid "Categories"
+msgstr "Categories"
+
+#: src/components/SessionLabelChips.tsx
+msgid "cause"
+msgstr "cause"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "change the plan — interview + staged diff, applied only on your approval"
+msgstr "change the plan — interview + staged diff, applied only on your approval"
+
+#: src/components/ProjectPlugins.tsx
+msgid "check"
+msgstr "check"
+
+#: src/components/AccountReadyBanner.tsx
+#: src/components/AccountsSection.tsx
+msgid "check now"
+msgstr "check now"
+
+#: src/components/AccountsSection.tsx
+msgid "checked {ago}"
+msgstr "checked {ago}"
+
+#: src/components/AccountReadyBanner.tsx
+msgid "checked {checkedAgo}"
+msgstr "checked {checkedAgo}"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Checking the token…"
+msgstr "Checking the token…"
+
+#: src/components/AccountReadyBanner.tsx
+#: src/components/AccountsSection.tsx
+#: src/components/usage/UsageConnect.tsx
+msgid "checking…"
+msgstr "checking…"
+
+#: src/components/RetroImproveCard.tsx
+msgid "choose a project — the changes land in the agent system’s repository, not necessarily the one that produced the evidence"
+msgstr "choose a project — the changes land in the agent system’s repository, not necessarily the one that produced the evidence"
+
+#: src/components/RetroImproveCard.tsx
+msgid "choose a project to plan in"
+msgstr "choose a project to plan in"
+
+#: src/components/RetroImproveCard.tsx
+msgid "choose a project…"
+msgstr "choose a project…"
+
+#: src/components/usage/UsageConnect.tsx
+#: src/components/usage/UsageConnect.tsx
+msgid "Claude login required for this account"
+msgstr "Claude login required for this account"
+
+#: src/components/usage/UsageChip.tsx
+msgid "Claude usage unavailable — {error}"
+msgstr "Claude usage unavailable — {error}"
+
+#: src/components/usage/UsageChip.tsx
+msgid "Claude usage unavailable — run `claude` to log in"
+msgstr "Claude usage unavailable — run `claude` to log in"
+
+#: src/components/OutcomePicker.tsx
+msgid "clear {label}"
+msgstr "clear {label}"
+
+#: src/lib/docFigures.tsx
+msgid "Clear all nine and the card gets an isolated worktree on <0>swarm/<T-id></0>, cut from the tip of whatever branch the main checkout is on — that SHA is persisted, so verification and the review diff both stand on it."
+msgstr "Clear all nine and the card gets an isolated worktree on <0>swarm/<T-id></0>, cut from the tip of whatever branch the main checkout is on — that SHA is persisted, so verification and the review diff both stand on it."
+
+#: src/components/PageSearchInput.tsx
+msgid "clear filter"
+msgstr "clear filter"
+
+#: src/components/AccountSelector.tsx
+#: src/components/AccountsSection.tsx
+msgid "CLI login required"
+msgstr "CLI login required"
+
+#: src/components/AttachModal.tsx
+#: src/components/DetachModal.tsx
+#: src/components/Drawer.tsx
+#: src/components/ImproveModal.tsx
+#: src/components/PluginConfigModal.tsx
+#: src/components/usage/UsageModal.tsx
+#: src/components/usage/UsageModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/TaskModal.tsx
+msgid "close"
+msgstr "close"
+
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/components/VcsSignInDialog.tsx
+msgid "Close"
+msgstr "Close"
+
+#: src/components/usage/UsageModal.tsx
+msgid "Close usage"
+msgstr "Close usage"
+
+#: src/components/VcsProviderAsk.tsx
+msgid "Code host"
+msgstr "Code host"
+
+#: src/components/ui.tsx
+msgid "collapse {label}"
+msgstr "collapse {label}"
+
+#: src/theme/ThemePicker.tsx
+msgid "color mode"
+msgstr "color mode"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+msgid "column"
+msgstr "column"
+
+#: src/components/PermissionPresets.tsx
+msgid "compiled into managed auto-approve rules · manual rules on the Approvals page are untouched"
+msgstr "compiled into managed auto-approve rules · manual rules on the Approvals page are untouched"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "completed"
+msgstr "completed"
+
+#: src/components/AttachModal.tsx
+#: src/components/DetachModal.tsx
+msgid "computing plan…"
+msgstr "computing plan…"
+
+#: src/api.ts
+msgid "config write failed: {status}"
+msgstr "config write failed: {status}"
+
+#: src/components/ProjectPlugins.tsx
+msgid "configure"
+msgstr "configure"
+
+#: src/components/KillButton.tsx
+#: src/components/StopButton.tsx
+msgid "Confirm"
+msgstr "Confirm"
+
+#: src/components/AttachModal.tsx
+msgid "confirm attach"
+msgstr "confirm attach"
+
+#: src/components/PermissionPresets.tsx
+msgid "Confirm broader permissions"
+msgstr "Confirm broader permissions"
+
+#: src/components/DetachModal.tsx
+msgid "confirm detach"
+msgstr "confirm detach"
+
+#: src/lib/needsYou.ts
+msgid "Confirm locally"
+msgstr "Confirm locally"
+
+#: src/api.ts
+msgid "confirmation required"
+msgstr "confirmation required"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "connect"
+msgstr "connect"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Connect account"
+msgstr "Connect account"
+
+#: src/components/AccountSelector.tsx
+#: src/components/AccountsSection.tsx
+msgid "connected"
+msgstr "connected"
+
+#: src/components/AccountsSection.tsx
+msgid "connection status unknown"
+msgstr "connection status unknown"
+
+#: src/components/AccountSelector.tsx
+msgid "connection unknown"
+msgstr "connection unknown"
+
+#: src/pages/Settings.tsx
+msgid "connectors"
+msgstr "connectors"
+
+#: src/api.ts
+msgid "connectors unavailable"
+msgstr "connectors unavailable"
+
+#: src/api.ts
+msgid "consolidate failed: {status}"
+msgstr "consolidate failed: {status}"
+
+#: src/theme/palettes.ts
+msgid "cool blue, deep-sea"
+msgstr "cool blue, deep-sea"
+
+#: src/components/CopyIdBadge.tsx
+#: src/components/CreateAccountModal.tsx
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/usage/UsageSetupHint.tsx
+msgid "copied"
+msgstr "copied"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Copied"
+msgstr "Copied"
+
+#: src/components/CreateAccountModal.tsx
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/usage/UsageSetupHint.tsx
+msgid "copy"
+msgstr "copy"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Copy"
+msgstr "Copy"
+
+#: src/components/CopyIdBadge.tsx
+msgid "copy {what}: {id}"
+msgstr "copy {what}: {id}"
+
+#: src/components/CopyIdBadge.tsx
+msgid "copy failed"
+msgstr "copy failed"
+
+#: src/api/systemHub.ts
+msgid "copy failed: {status}"
+msgstr "copy failed: {status}"
+
+#: src/components/CopyIdBadge.tsx
+msgid "copy id: {id}"
+msgstr "copy id: {id}"
+
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/usage/UsageSetupHint.tsx
+msgid "copy: {cmd}"
+msgstr "copy: {cmd}"
+
+#: src/components/ProjectPlugins.tsx
+msgid "core is managed via attach/detach"
+msgstr "core is managed via attach/detach"
+
+#: src/api.ts
+msgid "could not complete the connection"
+msgstr "could not complete the connection"
+
+#: src/api.ts
+msgid "could not disconnect the account"
+msgstr "could not disconnect the account"
+
+#: src/api.ts
+msgid "could not re-check the account"
+msgstr "could not re-check the account"
+
+#: src/components/AccountsSection.tsx
+msgid "could not read accounts"
+msgstr "could not read accounts"
+
+#: src/components/ConnectorsSection.tsx
+msgid "could not read mcp config"
+msgstr "could not read mcp config"
+
+#: src/components/VcsProviderAsk.tsx
+msgid "Could not save the answer: {error}"
+msgstr "Could not save the answer: {error}"
+
+#: src/api.ts
+msgid "could not start the connection"
+msgstr "could not start the connection"
+
+#: src/components/CreateAccountModal.tsx
+msgid "create"
+msgstr "create"
+
+#: src/components/RetroImproveCard.tsx
+msgid "Create a plan"
+msgstr "Create a plan"
+
+#: src/api.ts
+msgid "create account failed: {status}"
+msgstr "create account failed: {status}"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "create in {lane}"
+msgstr "create in {lane}"
+
+#: src/api.ts
+msgid "create routine failed: {status}"
+msgstr "create routine failed: {status}"
+
+#: src/api.ts
+msgid "create rule failed: {status}"
+msgstr "create rule failed: {status}"
+
+#: src/api.ts
+msgid "create task failed: {status}"
+msgstr "create task failed: {status}"
+
+#: src/components/ApprovalContext.tsx
+msgid "cwd <0>{cwd}</0>"
+msgstr "cwd <0>{cwd}</0>"
+
+#: src/pages/Settings.tsx
+msgid "daemon"
+msgstr "daemon"
+
+#: src/App.tsx
+#: src/components/HealthFooter.tsx
+#: src/pages/Settings.tsx
+#: src/workspace/WorkspaceShell.tsx
+msgid "daemon healthy"
+msgstr "daemon healthy"
+
+#: src/App.tsx
+#: src/components/HealthFooter.tsx
+#: src/pages/Settings.tsx
+#: src/workspace/WorkspaceShell.tsx
+msgid "daemon unreachable"
+msgstr "daemon unreachable"
+
+#: src/theme/ThemePicker.tsx
+msgid "Dark"
+msgstr "Dark"
+
+#: src/api.ts
+msgid "decide proposal failed"
+msgstr "decide proposal failed"
+
+#: src/theme/palettes.ts
+msgid "deep forge orange"
+msgstr "deep forge orange"
+
+#: src/components/AccountSelector.tsx
+#: src/components/AccountsSection.tsx
+msgid "default"
+msgstr "default"
+
+#: src/components/AccountSelector.tsx
+msgid "Default ({defaultLabel})"
+msgstr "Default ({defaultLabel})"
+
+#: src/components/AccountSelector.tsx
+msgid "default account"
+msgstr "default account"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "default model"
+msgstr "default model"
+
+#: src/components/NewProjectButton.tsx
+msgid "defaults to <0>{effectiveSlug}</0> (from path)"
+msgstr "defaults to <0>{effectiveSlug}</0> (from path)"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "delete"
+msgstr "delete"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Delete"
+msgstr "Delete"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Delete {branch}?"
+msgstr "Delete {branch}?"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "Delete {branch}? {commitsText} will be lost."
+msgstr "Delete {branch}? {commitsText} will be lost."
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Delete {externalId}?"
+msgstr "Delete {externalId}?"
+
+#: src/api.ts
+msgid "delete account failed: {status}"
+msgstr "delete account failed: {status}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Delete branch"
+msgstr "Delete branch"
+
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
+msgid "Delete permanently"
+msgstr "Delete permanently"
+
+#: src/api.ts
+msgid "delete routine failed: {status}"
+msgstr "delete routine failed: {status}"
+
+#: src/api.ts
+msgid "delete rule failed: {status}"
+msgstr "delete rule failed: {status}"
+
+#: src/api.ts
+msgid "delete task failed: {status}"
+msgstr "delete task failed: {status}"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "delete the run branch and the commits on it"
+msgstr "delete the run branch and the commits on it"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "delete the run branch so a retry can recreate it"
+msgstr "delete the run branch so a retry can recreate it"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Deletes the branch <0>{taskBranch}</0> and every commit on it, reclaims the worktree, and archives the card. The work is not recoverable."
+msgstr "Deletes the branch <0>{taskBranch}</0> and every commit on it, reclaims the worktree, and archives the card. The work is not recoverable."
+
+#: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/components/RunOutcomeModal.tsx
+msgid "deleting…"
+msgstr "deleting…"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "dependencies"
+msgstr "dependencies"
+
+#: src/lib/docFigures.tsx
+msgid "Dependencies: each must be done or archived, and none may carry a fail verdict"
+msgstr "Dependencies: each must be done or archived, and none may carry a fail verdict"
+
+#: src/lib/docFigures.tsx
+msgid "depends on: {dep}"
+msgstr "depends on: {dep}"
+
+#: src/components/ProjectActions.tsx
+msgid "detach"
+msgstr "detach"
+
+#: src/components/DetachModal.tsx
+msgid "Detach <0>{projectName}</0>"
+msgstr "Detach <0>{projectName}</0>"
+
+#: src/api.ts
+msgid "detach failed: {status}"
+msgstr "detach failed: {status}"
+
+#: src/components/DetachModal.tsx
+msgid "Detach project"
+msgstr "Detach project"
+
+#: src/workspace/task/RunLog.tsx
+msgid "detail"
+msgstr "detail"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Device code"
+msgstr "Device code"
+
+#: src/lib/docBlocks.tsx
+msgid "diagram"
+msgstr "diagram"
+
+#: src/workspace/TaskDiff.tsx
+msgid "diff"
+msgstr "diff"
+
+#: src/api.ts
+msgid "diff failed"
+msgstr "diff failed"
+
+#: src/components/DiffView.tsx
+msgid "diff truncated at 200 KB — open a terminal in the worktree to read the rest"
+msgstr "diff truncated at 200 KB — open a terminal in the worktree to read the rest"
+
+#: src/components/usage/UsageProviderCard.tsx
+msgid "disabled"
+msgstr "disabled"
+
+#: src/components/CreateAccountModal.tsx
+#: src/components/NewProjectButton.tsx
+#: src/components/PluginConfigModal.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskModal.tsx
+msgid "discard"
+msgstr "discard"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Discard"
+msgstr "Discard"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Discard {externalId}?"
+msgstr "Discard {externalId}?"
+
+#: src/components/CreateAccountModal.tsx
+msgid "Discard account key?"
+msgstr "Discard account key?"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "Discard branch"
+msgstr "Discard branch"
+
+#: src/components/PluginConfigModal.tsx
+msgid "Discard changes?"
+msgstr "Discard changes?"
+
+#: src/api.ts
+msgid "discard failed"
+msgstr "discard failed"
+
+#: src/components/NewProjectButton.tsx
+msgid "Discard new project?"
+msgstr "Discard new project?"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "Discard new task?"
+msgstr "Discard new task?"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Discard revise reason?"
+msgstr "Discard revise reason?"
+
+#: src/workspace/TaskModal.tsx
+msgid "Discard unsaved edit?"
+msgstr "Discard unsaved edit?"
+
+#: src/components/usage/UsageDisconnect.tsx
+msgid "disconnect"
+msgstr "disconnect"
+
+#: src/components/usage/UsageDisconnect.tsx
+msgid "Disconnect {account}? Removes swarmery's stored credential only — your<0>claude</0> login is untouched, and nothing is revoked at Anthropic."
+msgstr "Disconnect {account}? Removes swarmery's stored credential only — your<0>claude</0> login is untouched, and nothing is revoked at Anthropic."
+
+#: src/components/usage/UsageDisconnect.tsx
+msgid "disconnecting…"
+msgstr "disconnecting…"
+
+#: src/components/AccountReadyBanner.tsx
+#: src/components/AccountsSection.tsx
+msgid "dismiss"
+msgstr "dismiss"
+
+#: src/components/RetroImproveCard.tsx
+#: src/workspace/TaskCard.tsx
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#: src/workspace/boardModel.ts
+msgid "dispatch error: {why}"
+msgstr "dispatch error: {why}"
+
+#: src/workspace/task/RunLog.tsx
+msgid "dispatch retries"
+msgstr "dispatch retries"
+
+#: src/workspace/task/RunLog.tsx
+#: src/workspace/task/RunLog.tsx
+msgid "dispatched prompt"
+msgstr "dispatched prompt"
+
+#: src/components/TerminalPathNote.tsx
+msgid "Dispatched runs and the dashboard terminal now use this account. A terminal you open yourself still runs the machine default — from the project root:"
+msgstr "Dispatched runs and the dashboard terminal now use this account. A terminal you open yourself still runs the machine default — from the project root:"
+
+#: src/workspace/StatusBar.tsx
+msgid "dispatcher active"
+msgstr "dispatcher active"
+
+#: src/components/PermissionPresets.tsx
+msgid "dispatcher blocked"
+msgstr "dispatcher blocked"
+
+#: src/workspace/StatusBar.tsx
+msgid "dispatcher globally paused"
+msgstr "dispatcher globally paused"
+
+#: src/workspace/StatusBar.tsx
+msgid "dispatcher paused"
+msgstr "dispatcher paused"
+
+#: src/workspace/TaskCard.tsx
+msgid "dispatches as @{agent}"
+msgstr "dispatches as @{agent}"
+
+#: src/lib/sessionsView.ts
+msgid "dispatches phases in dependency order, merges results back"
+msgstr "dispatches phases in dependency order, merges results back"
+
+#: src/components/CommandPalette.tsx
+#: src/lib/nav.ts
+msgid "Docs"
+msgstr "Docs"
+
+#: src/lib/docFigures.tsx
+msgid "Docs + rollout"
+msgstr "Docs + rollout"
+
+#: src/components/PluginConfigModal.tsx
+msgid "docs: {configDocs}"
+msgstr "docs: {configDocs}"
+
+#: src/components/AttachModal.tsx
+#: src/components/CreateAccountModal.tsx
+#: src/components/DetachModal.tsx
+#: src/components/NewProjectButton.tsx
+#: src/components/PlanRunCard.tsx
+#: src/lib/sessionsView.ts
+msgid "done"
+msgstr "done"
+
+#: src/components/VcsSignInDialog.tsx
+#: src/lib/docFigures.tsx
+#: src/workspace/boardModel.ts
+msgid "Done"
+msgstr "Done"
+
+#: src/api.ts
+msgid "duplicate playbook failed: {status}"
+msgstr "duplicate playbook failed: {status}"
+
+#: src/components/ProjectPlugins.tsx
+msgid "edit"
+msgstr "edit"
+
+#: src/workspace/TaskCard.tsx
+msgid "Edit"
+msgstr "Edit"
+
+#: src/components/ProjectActions.tsx
+msgid "edit project tags"
+msgstr "edit project tags"
+
+#: src/theme/palettes.ts
+msgid "Ember"
+msgstr "Ember"
+
+#: src/components/usage/UsageProviderCard.tsx
+msgid "error"
+msgstr "error"
+
+#: src/components/ImproveModal.tsx
+msgid "error rate"
+msgstr "error rate"
+
+#: src/components/ImproveModal.tsx
+msgid "errors"
+msgstr "errors"
+
+#: src/components/PermissionPresets.tsx
+msgid "Every tool call waits for you. The safe default — nothing runs unattended."
+msgstr "Every tool call waits for you. The safe default — nothing runs unattended."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Executor said: {said}"
+msgstr "Executor said: {said}"
+
+#: src/components/KillButton.tsx
+msgid "exited"
+msgstr "exited"
+
+#: src/components/AccountSelector.tsx
+msgid "explicit binding"
+msgstr "explicit binding"
+
+#: src/api.ts
+msgid "extract failed: {status}"
+msgstr "extract failed: {status}"
+
+#: src/components/OutcomePicker.tsx
+msgid "fail"
+msgstr "fail"
+
+#: src/components/ProjectPlugins.tsx
+#: src/components/RunOutcomeModal.tsx
+msgid "failed"
+msgstr "failed"
+
+#: src/lib/needsYou.ts
+msgid "Failed"
+msgstr "Failed"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "feedback is required — a re-run with no notes would repeat the same work"
+msgstr "feedback is required — a re-run with no notes would repeat the same work"
+
+#: src/lib/sessionsView.ts
+msgid "fifth"
+msgstr "fifth"
+
+#: src/components/ImproveModal.tsx
+msgid "file"
+msgstr "file"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "file scope"
+msgstr "file scope"
+
+#: src/components/PermissionPresets.tsx
+msgid "File writes (edit, write, notebooks)"
+msgstr "File writes (edit, write, notebooks)"
+
+#: src/lib/docFigures.tsx
+msgid "File-scope overlap with the project’s other live cards (an empty scope conflicts with everything)"
+msgstr "File-scope overlap with the project’s other live cards (an empty scope conflicts with everything)"
+
+#: src/components/CommandPalette.tsx
+msgid "Files"
+msgstr "Files"
+
+#: src/components/PluginConfigModal.tsx
+msgid "fill in {needs} first"
+msgstr "fill in {needs} first"
+
+#: src/components/PluginConfigModal.tsx
+msgid "filled by probe"
+msgstr "filled by probe"
+
+#: src/components/PluginConfigModal.tsx
+msgid "filled by probe · {moreCount} more suggested"
+msgstr "filled by probe · {moreCount} more suggested"
+
+#: src/workspace/AgentPicker.tsx
+msgid "filter agents"
+msgstr "filter agents"
+
+#: src/workspace/AgentPicker.tsx
+msgid "filter agents…"
+msgstr "filter agents…"
+
+#: src/lib/pageSearch.tsx
+msgid "filter approvals…"
+msgstr "filter approvals…"
+
+#: src/components/ProjectDropdown.tsx
+msgid "filter by project"
+msgstr "filter by project"
+
+#: src/lib/pageSearch.tsx
+msgid "filter by title or plan…"
+msgstr "filter by title or plan…"
+
+#: src/theme/ThemePicker.tsx
+msgid "filter palettes"
+msgstr "filter palettes"
+
+#: src/theme/ThemePicker.tsx
+msgid "filter palettes…"
+msgstr "filter palettes…"
+
+#: src/lib/pageSearch.tsx
+msgid "filter projects by name…"
+msgstr "filter projects by name…"
+
+#: src/lib/pageSearch.tsx
+msgid "filter sessions by title…"
+msgstr "filter sessions by title…"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
+msgstr "Finish it here: open a terminal already scoped to this account and log the CLI in."
+
+#: src/components/NotifySettings.tsx
+msgid "fires only while this tab is in the background; click a notification to jump to the approval or session"
+msgstr "fires only while this tab is in the background; click a notification to jump to the approval or session"
+
+#: src/lib/sessionsView.ts
+msgid "first"
+msgstr "first"
+
+#: src/workspace/boardModel.ts
+msgid "fix for {externalId}"
+msgstr "fix for {externalId}"
+
+#: src/lib/docFigures.tsx
+msgid "Fix the flaky worker test"
+msgstr "Fix the flaky worker test"
+
+#: src/lib/docFigures.tsx
+msgid "Flow of a board card from capture to landing"
+msgstr "Flow of a board card from capture to landing"
+
+#: src/components/AccountSelector.tsx
+msgid "follow whichever account is marked default on this machine"
+msgstr "follow whichever account is marked default on this machine"
+
+#: src/components/KillButton.tsx
+msgid "Force kill"
+msgstr "Force kill"
+
+#: src/theme/palettes.ts
+msgid "Forest"
+msgstr "Forest"
+
+#: src/pages/docsRail.ts
+msgid "Formats"
+msgstr "Formats"
+
+#: src/lib/sessionsView.ts
+msgid "fourth"
+msgstr "fourth"
+
+#: src/workspace/boardModel.ts
+msgid "from a session"
+msgstr "from a session"
+
+#: src/workspace/boardModel.ts
+msgid "from session #{id}"
+msgstr "from session #{id}"
+
+#: src/components/DetachModal.tsx
+msgid "full offboard — also remove <0>project.json</0> and the statusline scripts (local agents/skills are never touched)"
+msgstr "full offboard — also remove <0>project.json</0> and the statusline scripts (local agents/skills are never touched)"
+
+#: src/components/ImproveModal.tsx
+msgid "Generate proposal"
+msgstr "Generate proposal"
+
+#: src/components/ImproveModal.tsx
+msgid "generating…"
+msgstr "generating…"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Get a code"
+msgstr "Get a code"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Get a new code"
+msgstr "Get a new code"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Get a one-time code, then enter it on {host}."
+msgstr "Get a one-time code, then enter it on {host}."
+
+#: src/components/PermissionPresets.tsx
+msgid "Git push & gh"
+msgstr "Git push & gh"
+
+#: src/components/PermissionPresets.tsx
+msgid "Git push is never auto-approved unless you enable it explicitly."
+msgstr "Git push is never auto-approved unless you enable it explicitly."
+
+#: src/components/PermissionPresets.tsx
+msgid "Git writes (add, commit, checkout, worktree)"
+msgstr "Git writes (add, commit, checkout, worktree)"
+
+#: src/pages/docsRail.ts
+msgid "Guides"
+msgstr "Guides"
+
+#: src/components/SessionCard.tsx
+msgid "Handoff"
+msgstr "Handoff"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "headless run in progress"
+msgstr "headless run in progress"
+
+#: src/lib/nav.ts
+msgid "Health"
+msgstr "Health"
+
+#: src/main.tsx
+msgid "health…"
+msgstr "health…"
+
+#: src/components/usage/UsageWindowRow.tsx
+msgid "Hide {label}"
+msgstr "Hide {label}"
+
+#: src/components/ProjectActions.tsx
+msgid "Hide <0>{projectName}</0> from the projects list. Nothing is deleted — its sessions and transcripts are kept, and you can restore it from “show archived”."
+msgstr "Hide <0>{projectName}</0> from the projects list. Nothing is deleted — its sessions and transcripts are kept, and you can restore it from “show archived”."
+
+#: src/components/ProjectActions.tsx
+msgid "hide from the projects list (reversible)"
+msgstr "hide from the projects list (reversible)"
+
+#: src/workspace/StatusBar.tsx
+msgid "hide terminal"
+msgstr "hide terminal"
+
+#: src/components/usage/UsageWindowRow.tsx
+msgid "hide this window"
+msgstr "hide this window"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+msgid "History"
+msgstr "History"
+
+#: src/workspace/TaskCard.tsx
+msgid "hold this card in the queue without losing its place"
+msgstr "hold this card in the queue without losing its place"
+
+#: src/lib/glossary.ts
+msgid "how honest forecasts are"
+msgstr "how honest forecasts are"
+
+#: src/components/usage/UsageSetupHint.tsx
+msgid "how it's used"
+msgstr "how it's used"
+
+#: src/components/PermissionPresets.tsx
+msgid "I understand — apply"
+msgstr "I understand — apply"
+
+#: src/components/CopyIdBadge.tsx
+msgid "id"
+msgstr "id"
+
+#: src/lib/sessionsView.ts
+msgid "idle"
+msgstr "idle"
+
+#: src/lib/docFigures.tsx
+msgid "idle 9d · TTL 14d"
+msgstr "idle 9d · TTL 14d"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "If the run produced nothing worth keeping, delete the branch. This runs <0>git branch -D</0>: the {commitsText} go, and nothing else holds them."
+msgstr "If the run produced nothing worth keeping, delete the branch. This runs <0>git branch -D</0>: the {commitsText} go, and nothing else holds them."
+
+#: src/components/AccountsSection.tsx
+msgid "ignored bindings ({count}) — counted under no account"
+msgstr "ignored bindings ({count}) — counted under no account"
+
+#: src/lib/docBlocks.tsx
+msgid "Important"
+msgstr "Important"
+
+#: src/components/RetroImproveCard.tsx
+#: src/components/Sidebar.tsx
+msgid "Improve"
+msgstr "Improve"
+
+#: src/components/ImproveModal.tsx
+msgid "Improve {agent}"
+msgstr "Improve {agent}"
+
+#: src/components/ImproveModal.tsx
+msgid "Improve <0>{agent}</0>"
+msgstr "Improve <0>{agent}</0>"
+
+#: src/api.ts
+msgid "improve agent failed"
+msgstr "improve agent failed"
+
+#: src/components/RetroImproveCard.tsx
+msgid "Improve the system"
+msgstr "Improve the system"
+
+#: src/workspace/boardModel.ts
+msgid "In Progress"
+msgstr "In Progress"
+
+#: src/workspace/boardModel.ts
+msgid "In Review"
+msgstr "In Review"
+
+#: src/lib/docFigures.tsx
+#: src/lib/nav.ts
+#: src/workspace/boardModel.ts
+msgid "Inbox"
+msgstr "Inbox"
+
+#: src/components/SessionCard.tsx
+msgid "ingested from the {label} Claude Code account"
+msgstr "ingested from the {label} Claude Code account"
+
+#: src/components/LanguagePicker.tsx
+msgid "interface language"
+msgstr "interface language"
+
+#: src/api.ts
+msgid "invalid config"
+msgstr "invalid config"
+
+#: src/components/AccountSelector.tsx
+msgid "its CLI login is missing"
+msgstr "its CLI login is missing"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Its commits will be lost."
+msgstr "Its commits will be lost."
+
+#: src/components/SplitPane.tsx
+msgid "j/k move"
+msgstr "j/k move"
+
+#: src/components/NewProjectButton.tsx
+msgid "kebab-case only ([a-z0-9-])"
+msgstr "kebab-case only ([a-z0-9-])"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "keep the work"
+msgstr "keep the work"
+
+#: src/components/KillButton.tsx
+msgid "Kill"
+msgstr "Kill"
+
+#: src/components/KillButton.tsx
+msgid "Kill {label}{costLine}?"
+msgstr "Kill {label}{costLine}?"
+
+#: src/api.ts
+msgid "kill failed: {status}"
+msgstr "kill failed: {status}"
+
+#: src/lib/sessionsView.ts
+msgid "killed"
+msgstr "killed"
+
+#: src/components/KillButton.tsx
+#: src/components/KillButton.tsx
+msgid "killing…"
+msgstr "killing…"
+
+#: src/lib/nav.ts
+msgid "Knowledge"
+msgstr "Knowledge"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+msgid "labels"
+msgstr "labels"
+
+#: src/components/SessionLabelChips.tsx
+msgid "labels from the local classifier (advisory)"
+msgstr "labels from the local classifier (advisory)"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "ladder"
+msgstr "ladder"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "land"
+msgstr "land"
+
+#: src/lib/docFigures.tsx
+#: src/workspace/task/TaskActions.tsx
+msgid "Land"
+msgstr "Land"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Land {externalId}?"
+msgstr "Land {externalId}?"
+
+#: src/api.ts
+#: src/api.ts
+msgid "land failed"
+msgstr "land failed"
+
+#: src/workspace/TaskCard.tsx
+msgid "Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
+msgstr "Land, Re-run with feedback, Discard, Re-verify — with the diff and the verdict"
+
+#: src/pages/Settings.tsx
+msgid "language"
+msgstr "language"
+
+#: src/components/usage/UsageModal.tsx
+msgid "Last updated: {updatedAt}"
+msgstr "Last updated: {updatedAt}"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "later"
+msgstr "later"
+
+#: src/lib/nav.ts
+msgid "Learning"
+msgstr "Learning"
+
+#: src/main.tsx
+msgid "learning…"
+msgstr "learning…"
+
+#: src/workspace/TaskCard.tsx
+msgid "let the dispatcher consider this card again"
+msgstr "let the dispatcher consider this card again"
+
+#: src/components/CreateAccountModal.tsx
+msgid "letters, digits, '-' or '_' (it becomes a directory name)"
+msgstr "letters, digits, '-' or '_' (it becomes a directory name)"
+
+#: src/api.ts
+msgid "lifecycle {action} failed ({status})"
+msgstr "lifecycle {action} failed ({status})"
+
+#: src/theme/ThemePicker.tsx
+msgid "Light"
+msgstr "Light"
+
+#: src/components/TaskChip.tsx
+msgid "linked heuristically"
+msgstr "linked heuristically"
+
+#: src/components/TaskChip.tsx
+msgid "linked heuristically · {overlap}% overlap"
+msgstr "linked heuristically · {overlap}% overlap"
+
+#: src/components/TaskChip.tsx
+msgid "linked via the task card (logs/sessions.md)"
+msgstr "linked via the task card (logs/sessions.md)"
+
+#: src/components/Sidebar.tsx
+msgid "live sessions"
+msgstr "live sessions"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "live worktrees"
+msgstr "live worktrees"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "loading diagnosis…"
+msgstr "loading diagnosis…"
+
+#: src/workspace/TaskDiff.tsx
+msgid "loading diff…"
+msgstr "loading diff…"
+
+#: src/components/ImproveModal.tsx
+msgid "loading evidence…"
+msgstr "loading evidence…"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "loading terminal…"
+msgstr "loading terminal…"
+
+#: src/components/usage/UsageModal.tsx
+msgid "loading usage"
+msgstr "loading usage"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "loading worktrees…"
+msgstr "loading worktrees…"
+
+#: src/components/PermissionPresets.tsx
+msgid "Locked down"
+msgstr "Locked down"
+
+#: src/components/usage/UsageSetupHint.tsx
+msgid "looked in ({sourceCount})"
+msgstr "looked in ({sourceCount})"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "main"
+msgstr "main"
+
+#: src/components/ProjectActions.tsx
+msgid "managed"
+msgstr "managed"
+
+#: src/lib/needsYou.ts
+msgid "Manual check"
+msgstr "Manual check"
+
+#: src/api.ts
+msgid "mark criterion failed: {status}"
+msgstr "mark criterion failed: {status}"
+
+#: src/workspace/TaskCard.tsx
+msgid "mark done without landing a branch — the manual override"
+msgstr "mark done without landing a branch — the manual override"
+
+#: src/components/ProjectPlugins.tsx
+msgid "marketplace v{marketplaceVersion} · repairs and toggles take effect in the next Claude Code session"
+msgstr "marketplace v{marketplaceVersion} · repairs and toggles take effect in the next Claude Code session"
+
+#: src/lib/glossary.ts
+msgid "matches you"
+msgstr "matches you"
+
+#: src/components/AttachModal.tsx
+msgid "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
+msgstr "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
+
+#: src/components/CommandPalette.tsx
+msgid "Messages"
+msgstr "Messages"
+
+#: src/lib/docFigures.tsx
+msgid "Migrate routine config to v2"
+msgstr "Migrate routine config to v2"
+
+#: src/components/ProjectPlugins.tsx
+msgid "missing: {missing}"
+msgstr "missing: {missing}"
+
+#: src/App.tsx
+#: src/workspace/WorkspaceShell.tsx
+msgid "mock data"
+msgstr "mock data"
+
+#: src/lib/docFigures.tsx
+msgid "Mockup of the board's three lanes"
+msgstr "Mockup of the board's three lanes"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "model"
+msgstr "model"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "model chosen at dispatch"
+msgstr "model chosen at dispatch"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "more actions"
+msgstr "more actions"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/TaskCard.tsx
+msgid "move task to column"
+msgstr "move task to column"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "move to"
+msgstr "move to"
+
+#: src/theme/palettes.ts
+msgid "muted green canopy"
+msgstr "muted green canopy"
+
+#: src/components/CommandPalette.tsx
+msgid "Navigation"
+msgstr "Navigation"
+
+#: src/components/PluginConfigModal.tsx
+msgid "needs {needs}"
+msgstr "needs {needs}"
+
+#: src/workspace/boardModel.ts
+msgid "needs me"
+msgstr "needs me"
+
+#: src/lib/nav.ts
+msgid "Needs you"
+msgstr "Needs you"
+
+#: src/components/PermissionPresets.tsx
+msgid "Network (web fetch/search)"
+msgstr "Network (web fetch/search)"
+
+#: src/theme/palettes.ts
+msgid "neutral cool gray"
+msgstr "neutral cool gray"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "never run"
+msgstr "never run"
+
+#: src/components/NewProjectButton.tsx
+msgid "New project"
+msgstr "New project"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+msgid "New task"
+msgstr "New task"
+
+#. placeholder {0}: done.path
+#: src/components/NewProjectButton.tsx
+msgid "Next: open a fresh Claude Code session in <0>{0}</0> and accept the <1>swarmery</1> trust prompt. It appears here once its first session runs."
+msgstr "Next: open a fresh Claude Code session in <0>{0}</0> and accept the <1>swarmery</1> trust prompt. It appears here once its first session runs."
+
+#: src/components/AccountsSection.tsx
+msgid "no accounts configured"
+msgstr "no accounts configured"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "no agent"
+msgstr "no agent"
+
+#: src/workspace/AgentPicker.tsx
+msgid "No agent — playbook stages only"
+msgstr "No agent — playbook stages only"
+
+#: src/components/PermissionPresets.tsx
+msgid "No auto-approval AND the dispatcher refuses to run this project’s queued tasks."
+msgstr "No auto-approval AND the dispatcher refuses to run this project’s queued tasks."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "No blockers detected — the executor exited without ticking criteria; open the session to see why."
+msgstr "No blockers detected — the executor exited without ticking criteria; open the session to see why."
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "no match"
+msgstr "no match"
+
+#: src/components/CommandPalette.tsx
+msgid "no matches"
+msgstr "no matches"
+
+#: src/components/ConnectorsSection.tsx
+msgid "no mcp servers configured"
+msgstr "no mcp servers configured"
+
+#: src/theme/ThemePicker.tsx
+msgid "no palette matches"
+msgstr "no palette matches"
+
+#: src/components/ProjectPlugins.tsx
+msgid "no plugins in the marketplace clone"
+msgstr "no plugins in the marketplace clone"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "no progress"
+msgstr "no progress"
+
+#: src/components/CommandPalette.tsx
+msgid "no sessions touched this file"
+msgstr "no sessions touched this file"
+
+#: src/api/lessons.ts
+msgid "no such lesson {id}"
+msgstr "no such lesson {id}"
+
+#: src/api/lessons.ts
+msgid "no such proposal {id}"
+msgstr "no such proposal {id}"
+
+#: src/workspace/TaskGraph.tsx
+msgid "no tasks to graph"
+msgstr "no tasks to graph"
+
+#: src/components/usage/UsageProviderCard.tsx
+msgid "No usage data available"
+msgstr "No usage data available"
+
+#: src/components/usage/UsageModal.tsx
+msgid "no usage providers reported"
+msgstr "no usage providers reported"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "no worktrees on this machine"
+msgstr "no worktrees on this machine"
+
+#: src/components/AccountSelector.tsx
+#: src/components/AccountsSection.tsx
+#: src/components/usage/UsageProviderCard.tsx
+msgid "not connected"
+msgstr "not connected"
+
+#: src/components/ProjectActions.tsx
+msgid "not enabled"
+msgstr "not enabled"
+
+#: src/main.tsx
+msgid "not found"
+msgstr "not found"
+
+#: src/workspace/task/useTaskDraft.ts
+msgid "not saved — {fields} changed on the server while you were editing. Close and reopen the card to pick up the new version."
+msgstr "not saved — {fields} changed on the server while you were editing. Close and reopen the card to pick up the new version."
+
+#: src/components/usage/UsageModal.tsx
+msgid "not yet loaded"
+msgstr "not yet loaded"
+
+#: src/lib/docBlocks.tsx
+#: src/lib/docBlocks.tsx
+msgid "Note"
+msgstr "Note"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Note: {runError}"
+msgstr "Note: {runError}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Note: {runNote}"
+msgstr "Note: {runNote}"
+
+#: src/workspace/boardModel.ts
+msgid "Nothing in {laneTitle} matches “{filterLabel}”."
+msgstr "Nothing in {laneTitle} matches “{filterLabel}”."
+
+#: src/components/DetachModal.tsx
+msgid "nothing to remove"
+msgstr "nothing to remove"
+
+#: src/components/AttachModal.tsx
+msgid "nothing to restore"
+msgstr "nothing to restore"
+
+#: src/components/NotifySettings.tsx
+msgid "notification preferences"
+msgstr "notification preferences"
+
+#: src/pages/Settings.tsx
+msgid "notifications"
+msgstr "notifications"
+
+#: src/pages/Settings.tsx
+msgid "Notifications"
+msgstr "Notifications"
+
+#: src/components/NotifySettings.tsx
+msgid "notifications are blocked — allow them in the browser site settings, then re-toggle"
+msgstr "notifications are blocked — allow them in the browser site settings, then re-toggle"
+
+#: src/components/SessionCard.tsx
+msgid "now: {now}"
+msgstr "now: {now}"
+
+#: src/components/SessionCard.tsx
+msgid "now: {nowText}"
+msgstr "now: {nowText}"
+
+#: src/lib/docFigures.tsx
+msgid "objective · sequencing table · risks · definition of done"
+msgstr "objective · sequencing table · risks · definition of done"
+
+#: src/theme/palettes.ts
+msgid "Ocean"
+msgstr "Ocean"
+
+#: src/components/ProjectPlugins.tsx
+msgid "off"
+msgstr "off"
+
+#: src/lib/glossary.ts
+msgid "off-plan"
+msgstr "off-plan"
+
+#: src/components/ProjectPlugins.tsx
+msgid "on"
+msgstr "on"
+
+#: src/components/CreateAccountModal.tsx
+msgid "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
+msgstr "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
+
+#: src/components/NewProjectButton.tsx
+msgid "onboard"
+msgstr "onboard"
+
+#: src/components/NewProjectButton.tsx
+msgid "Onboard a project"
+msgstr "Onboard a project"
+
+#: src/api.ts
+msgid "onboard failed: {status}"
+msgstr "onboard failed: {status}"
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "onboarded only"
+msgstr "onboarded only"
+
+#: src/components/NewProjectButton.tsx
+msgid "onboarding is disabled — restart the daemon with an allow-list:"
+msgstr "onboarding is disabled — restart the daemon with an allow-list:"
+
+#: src/api.ts
+msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
+msgstr "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Open {verificationUri}"
+msgstr "Open {verificationUri}"
+
+#: src/workspace/TaskCard.tsx
+msgid "open a terminal in this card's worktree"
+msgstr "open a terminal in this card's worktree"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "open login terminal"
+msgstr "open login terminal"
+
+#: src/components/PlanRunCard.tsx
+msgid "open plan →"
+msgstr "open plan →"
+
+#: src/workspace/TaskCard.tsx
+msgid "open Planning Mode prefilled with this card"
+msgstr "open Planning Mode prefilled with this card"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "open session"
+msgstr "open session"
+
+#: src/workspace/task/RunLog.tsx
+msgid "Open terminal in worktree"
+msgstr "Open terminal in worktree"
+
+#: src/components/RetroImproveCard.tsx
+msgid "open the active session →"
+msgstr "open the active session →"
+
+#: src/workspace/TaskCard.tsx
+msgid "open the full card"
+msgstr "open the full card"
+
+#: src/components/RetroImproveCard.tsx
+msgid "open the planning session →"
+msgstr "open the planning session →"
+
+#: src/components/usage/UsageChip.tsx
+msgid "open usage"
+msgstr "open usage"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "or discard it"
+msgstr "or discard it"
+
+#: src/components/TerminalPathNote.tsx
+msgid "or export it into the current shell"
+msgstr "or export it into the current shell"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "or run in a terminal: <0>{cliLogin}</0>"
+msgstr "or run in a terminal: <0>{cliLogin}</0>"
+
+#: src/api.ts
+msgid "orphan branch delete failed ({status})"
+msgstr "orphan branch delete failed ({status})"
+
+#: src/components/ProjectDropdown.tsx
+msgid "other"
+msgstr "other"
+
+#: src/components/SessionLabelChips.tsx
+msgid "outcome"
+msgstr "outcome"
+
+#: src/api.ts
+msgid "outcome failed: {status}"
+msgstr "outcome failed: {status}"
+
+#: src/components/CommandPalette.tsx
+msgid "Overview"
+msgstr "Overview"
+
+#: src/components/QuestionForm.tsx
+msgid "own answer — added to the selection"
+msgstr "own answer — added to the selection"
+
+#: src/components/QuestionForm.tsx
+msgid "own answer — overrides the selection"
+msgstr "own answer — overrides the selection"
+
+#: src/components/QuestionForm.tsx
+msgid "own answer for \"{questionText}\""
+msgstr "own answer for \"{questionText}\""
+
+#: src/components/NewProjectButton.tsx
+msgid "packs (core is always on)"
+msgstr "packs (core is always on)"
+
+#: src/theme/ThemePicker.tsx
+msgid "palette"
+msgstr "palette"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "parked — dispatch it later from the board"
+msgstr "parked — dispatch it later from the board"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "partial"
+msgstr "partial"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Paste a {provider} personal access token. It is checked with {host} before it is stored."
+msgstr "Paste a {provider} personal access token. It is checked with {host} before it is stored."
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Paste the whole code the page shows, including the part after the <0>#</0>."
+msgstr "Paste the whole code the page shows, including the part after the <0>#</0>."
+
+#: src/api.ts
+msgid "patch recommendation failed: {status}"
+msgstr "patch recommendation failed: {status}"
+
+#: src/api.ts
+msgid "patch task failed: {status}"
+msgstr "patch task failed: {status}"
+
+#: src/workspace/StatusBar.tsx
+msgid "pause"
+msgstr "pause"
+
+#: src/workspace/TaskCard.tsx
+msgid "pause — the run finishes, nothing new starts"
+msgstr "pause — the run finishes, nothing new starts"
+
+#: src/api.ts
+msgid "pause failed: {status}"
+msgstr "pause failed: {status}"
+
+#: src/workspace/StatusBar.tsx
+msgid "pause this project"
+msgstr "pause this project"
+
+#: src/workspace/TaskCard.tsx
+msgid "paused"
+msgstr "paused"
+
+#: src/components/PermissionPresets.tsx
+msgid "per-category overrides apply only under the unrestricted preset"
+msgstr "per-category overrides apply only under the unrestricted preset"
+
+#: src/components/PermissionPresets.tsx
+#: src/components/PermissionPresets.tsx
+#: src/components/PermissionPresets.tsx
+msgid "permissions"
+msgstr "permissions"
+
+#: src/components/PermissionPresets.tsx
+msgid "permissions…"
+msgstr "permissions…"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Personal access token"
+msgstr "Personal access token"
+
+#: src/lib/sessionsView.ts
+msgid "phase"
+msgstr "phase"
+
+#: src/lib/docFigures.tsx
+msgid "phase {n}"
+msgstr "phase {n}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Phase {seq} \"{name}\" run ended {outcome}: {after}/{total} acceptance criteria ticked."
+msgstr "Phase {seq} \"{name}\" run ended {outcome}: {after}/{total} acceptance criteria ticked."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Phase {seqLabel}"
+msgstr "Phase {seqLabel}"
+
+#: src/api.ts
+msgid "phase run cancel failed ({status})"
+msgstr "phase run cancel failed ({status})"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Phase run diagnosis"
+msgstr "Phase run diagnosis"
+
+#: src/api.ts
+msgid "phase run failed ({status})"
+msgstr "phase run failed ({status})"
+
+#: src/lib/docFigures.tsx
+msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
+msgstr "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
+
+#: src/components/ProjectDropdown.tsx
+msgid "pinned"
+msgstr "pinned"
+
+#: src/workspace/TaskModal.tsx
+msgid "plan"
+msgstr "plan"
+
+#: src/workspace/boardModel.ts
+msgid "plan {planId}"
+msgstr "plan {planId}"
+
+#: src/workspace/boardModel.ts
+#: src/workspace/TaskModal.tsx
+msgid "plan {planId} — acceptance criteria and completion report"
+msgstr "plan {planId} — acceptance criteria and completion report"
+
+#: src/lib/sessionsView.ts
+msgid "plan controller"
+msgstr "plan controller"
+
+#: src/components/RetroImproveCard.tsx
+msgid "plan in"
+msgstr "plan in"
+
+#: src/components/PlanRunCard.tsx
+msgid "plan run"
+msgstr "plan run"
+
+#: src/components/PlanRunCard.tsx
+msgid "plan run {runTitle}"
+msgstr "plan run {runTitle}"
+
+#: src/api.ts
+msgid "plan run cancel failed ({status})"
+msgstr "plan run cancel failed ({status})"
+
+#: src/api.ts
+msgid "plan run failed ({status})"
+msgstr "plan run failed ({status})"
+
+#: src/lib/docFigures.tsx
+msgid "Plan structure: README over a graph of phase documents"
+msgstr "Plan structure: README over a graph of phase documents"
+
+#: src/components/AccountSelector.tsx
+msgid "plan unknown"
+msgstr "plan unknown"
+
+#: src/lib/glossary.ts
+msgid "planner's guess"
+msgstr "planner's guess"
+
+#: src/lib/nav.ts
+msgid "Plans"
+msgstr "Plans"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/PlaybookPicker.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "playbook"
+msgstr "playbook"
+
+#: src/lib/docFigures.tsx
+msgid "playbook end"
+msgstr "playbook end"
+
+#: src/workspace/TaskCard.tsx
+msgid "playbook: {playbook}"
+msgstr "playbook: {playbook}"
+
+#: src/components/ProjectActions.tsx
+msgid "plugin is not enabled for this project"
+msgstr "plugin is not enabled for this project"
+
+#: src/components/ProjectPlugins.tsx
+msgid "plugins"
+msgstr "plugins"
+
+#: src/components/ProjectPlugins.tsx
+msgid "plugins…"
+msgstr "plugins…"
+
+#: src/components/CreateAccountModal.tsx
+msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
+msgstr "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
+
+#: src/components/Sidebar.tsx
+msgid "primary"
+msgstr "primary"
+
+#: src/components/Sidebar.tsx
+msgid "primary (mobile)"
+msgstr "primary (mobile)"
+
+#: src/lib/docFigures.tsx
+msgid "prio high"
+msgstr "prio high"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/RunConfig.tsx
+#: src/workspace/task/RunConfig.tsx
+msgid "priority"
+msgstr "priority"
+
+#: src/components/PluginConfigModal.tsx
+msgid "probe"
+msgstr "probe"
+
+#: src/api.ts
+msgid "probe failed: {status}"
+msgstr "probe failed: {status}"
+
+#: src/components/PluginConfigModal.tsx
+msgid "probe: {reason}"
+msgstr "probe: {reason}"
+
+#: src/components/PluginConfigModal.tsx
+msgid "probing for live values…"
+msgstr "probing for live values…"
+
+#: src/api.ts
+msgid "proceed planning failed: {status}"
+msgstr "proceed planning failed: {status}"
+
+#: src/components/KillButton.tsx
+msgid "Process already exited — nothing to kill"
+msgstr "Process already exited — nothing to kill"
+
+#: src/components/CommandPalette.tsx
+#: src/components/ProjectDropdown.tsx
+msgid "project"
+msgstr "project"
+
+#: src/components/ProjectActions.tsx
+msgid "project is outside SWARMERY_ONBOARD_ROOTS — detach is fenced to the allow-list"
+msgstr "project is outside SWARMERY_ONBOARD_ROOTS — detach is fenced to the allow-list"
+
+#: src/workspace/AgentPicker.tsx
+msgid "project override"
+msgstr "project override"
+
+#: src/workspace/StatusBar.tsx
+msgid "project paused"
+msgstr "project paused"
+
+#: src/workspace/ProjectDetailRedirect.tsx
+msgid "project…"
+msgstr "project…"
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "projects"
+msgstr "projects"
+
+#: src/components/CommandPalette.tsx
+#: src/components/CommandPalette.tsx
+#: src/pages/Settings.tsx
+msgid "Projects"
+msgstr "Projects"
+
+#: src/lib/docFigures.tsx
+msgid "Projects on the locked-down preset — refused, stamped into dispatchError"
+msgstr "Projects on the locked-down preset — refused, stamped into dispatchError"
+
+#: src/workspace/task/TaskBrief.tsx
+msgid "prompt"
+msgstr "prompt"
+
+#: src/pages/docsRail.ts
+msgid "Protocols"
+msgstr "Protocols"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "pull request opened: {prUrl}"
+msgstr "pull request opened: {prUrl}"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "push the branch and open a pull request"
+msgstr "push the branch and open a pull request"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "Push works over SSH; opening a {change} needs a {provider} token."
+msgstr "Push works over SSH; opening a {change} needs a {provider} token."
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
+msgstr "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
+
+#: src/workspace/task/TaskActions.tsx
+msgid "put the card back in the Inbox"
+msgstr "put the card back in the Inbox"
+
+#: src/lib/needsYou.ts
+msgid "Question"
+msgstr "Question"
+
+#: src/components/QuestionForm.tsx
+msgid "question {number}"
+msgstr "question {number}"
+
+#: src/lib/docFigures.tsx
+#: src/workspace/boardModel.ts
+msgid "Queued"
+msgstr "Queued"
+
+#: src/lib/docFigures.tsx
+msgid "Queued — waiting for a slot"
+msgstr "Queued — waiting for a slot"
+
+#: src/components/SessionCard.tsx
+msgid "quiet {quiet}"
+msgstr "quiet {quiet}"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Quota connected, but the CLI still needs a login: <0>{reason}</0>"
+msgstr "Quota connected, but the CLI still needs a login: <0>{reason}</0>"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "ran {duration}"
+msgstr "ran {duration}"
+
+#: src/components/StatusStrip.tsx
+msgid "range"
+msgstr "range"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "Re-check"
+msgstr "Re-check"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "re-check now"
+msgstr "re-check now"
+
+#: src/components/ProjectActions.tsx
+msgid "re-enable swarmery in .claude/settings.json"
+msgstr "re-enable swarmery in .claude/settings.json"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Re-run with feedback"
+msgstr "Re-run with feedback"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "re-verification started — the verdict will appear here when it finishes"
+msgstr "re-verification started — the verdict will appear here when it finishes"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Re-verify"
+msgstr "Re-verify"
+
+#: src/components/Explain.tsx
+msgid "Read more →"
+msgstr "Read more →"
+
+#: src/components/ProjectPlugins.tsx
+#: src/components/ProjectPlugins.tsx
+#: src/components/ProjectPlugins.tsx
+msgid "read-only — daemon started without SWARMERY_ONBOARD_ROOTS"
+msgstr "read-only — daemon started without SWARMERY_ONBOARD_ROOTS"
+
+#: src/components/ConnectorsSection.tsx
+msgid "read-only · from <0>claude mcp list</0> on the default Claude account · project- and local-scope servers configured in your repos are not listed (the daemon reads from its own working directory)"
+msgstr "read-only · from <0>claude mcp list</0> on the default Claude account · project- and local-scope servers configured in your repos are not listed (the daemon reads from its own working directory)"
+
+#: src/components/PermissionPresets.tsx
+msgid "Read-only (read, grep, git status/log/diff)"
+msgstr "Read-only (read, grep, git status/log/diff)"
+
+#: src/components/AccountsSection.tsx
+msgid "readiness check failed: {probeError}"
+msgstr "readiness check failed: {probeError}"
+
+#: src/components/AccountsSection.tsx
+msgid "reading accounts…"
+msgstr "reading accounts…"
+
+#: src/components/ConnectorsSection.tsx
+msgid "reading mcp config…"
+msgstr "reading mcp config…"
+
+#: src/components/RetroImproveCard.tsx
+msgid "Reads this whole window, has an agent write what hurts and what to change — every claim citing the evidence it came from. Nothing is written anywhere until you accept it; only then can it become a plan."
+msgstr "Reads this whole window, has an agent write what hurts and what to change — every claim citing the evidence it came from. Nothing is written anywhere until you accept it; only then can it become a plan."
+
+#: src/components/AccountSelector.tsx
+#: src/components/AccountsSection.tsx
+msgid "ready"
+msgstr "ready"
+
+#: src/api.ts
+msgid "rebuild failed: {status}"
+msgstr "rebuild failed: {status}"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "recent decisions"
+msgstr "recent decisions"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Reconnect"
+msgstr "Reconnect"
+
+#: src/pages/docsRail.ts
+msgid "Reference"
+msgstr "Reference"
+
+#: src/api.ts
+msgid "refine planning failed: {status}"
+msgstr "refine planning failed: {status}"
+
+#: src/components/usage/UsageModal.tsx
+msgid "refresh"
+msgstr "refresh"
+
+#: src/api.ts
+#: src/components/usage/UsageChip.tsx
+msgid "refresh failed"
+msgstr "refresh failed"
+
+#: src/api.ts
+msgid "reject revision failed: {status}"
+msgstr "reject revision failed: {status}"
+
+#: src/components/usage/UsageModal.tsx
+msgid "Remaining"
+msgstr "Remaining"
+
+#: src/components/AccountsSection.tsx
+#: src/components/AccountsSection.tsx
+msgid "remove"
+msgstr "remove"
+
+#: src/workspace/TaskFields.tsx
+msgid "remove {v}"
+msgstr "remove {v}"
+
+#: src/components/AccountsSection.tsx
+msgid "Remove account"
+msgstr "Remove account"
+
+#: src/components/AccountsSection.tsx
+msgid "Remove account <0>{confirmKey}</0>? Projects explicitly bound to it will fall back to the default account."
+msgstr "Remove account <0>{confirmKey}</0>? Projects explicitly bound to it will fall back to the default account."
+
+#: src/api.ts
+msgid "remove connector failed: {status}"
+msgstr "remove connector failed: {status}"
+
+#: src/components/ProjectActions.tsx
+msgid "remove swarmery from .claude/settings.json"
+msgstr "remove swarmery from .claude/settings.json"
+
+#: src/lib/docFigures.tsx
+msgid "Remove the dead flag in settings"
+msgstr "Remove the dead flag in settings"
+
+#: src/components/DetachModal.tsx
+msgid "removed"
+msgstr "removed"
+
+#: src/components/DetachModal.tsx
+msgid "Removes the swarmery-owned entries from <0>.claude/settings.json</0>. Your other settings are left untouched and the original is backed up to <1>settings.json.bak</1>."
+msgstr "Removes the swarmery-owned entries from <0>.claude/settings.json</0>. Your other settings are left untouched and the original is backed up to <1>settings.json.bak</1>."
+
+#: src/api.ts
+msgid "rename failed: {status}"
+msgstr "rename failed: {status}"
+
+#: src/api/phasereport.ts
+msgid "reopen failed"
+msgstr "reopen failed"
+
+#: src/components/ProjectPlugins.tsx
+msgid "repair"
+msgstr "repair"
+
+#: src/api.ts
+msgid "repair failed: {status}"
+msgstr "repair failed: {status}"
+
+#: src/lib/notifications.ts
+msgid "request #{id} is waiting on you"
+msgstr "request #{id} is waiting on you"
+
+#: src/api.ts
+msgid "request failed: {status}"
+msgstr "request failed: {status}"
+
+#: src/api.ts
+msgid "rerun failed"
+msgstr "rerun failed"
+
+#: src/components/AccountSelector.tsx
+#: src/components/PermissionPresets.tsx
+msgid "reset"
+msgstr "reset"
+
+#: src/components/usage/format.ts
+msgid "resets in {days}d"
+msgstr "resets in {days}d"
+
+#: src/components/usage/format.ts
+msgid "resets in {days}d {remHours}h"
+msgstr "resets in {days}d {remHours}h"
+
+#: src/components/usage/format.ts
+msgid "resets in {hours}h {minutes}m"
+msgstr "resets in {hours}h {minutes}m"
+
+#: src/components/usage/format.ts
+msgid "resets in {totalMin}m"
+msgstr "resets in {totalMin}m"
+
+#: src/components/usage/format.ts
+msgid "resets now"
+msgstr "resets now"
+
+#: src/components/ProjectActions.tsx
+#: src/components/ProjectActions.tsx
+msgid "restore"
+msgstr "restore"
+
+#: src/api.ts
+msgid "restore failed: {status}"
+msgstr "restore failed: {status}"
+
+#: src/components/ProjectActions.tsx
+msgid "Restore project"
+msgstr "Restore project"
+
+#: src/components/AttachModal.tsx
+msgid "restored"
+msgstr "restored"
+
+#: src/components/CommandPalette.tsx
+msgid "results scoped to {scopeLabel}"
+msgstr "results scoped to {scopeLabel}"
+
+#: src/workspace/StatusBar.tsx
+msgid "resume"
+msgstr "resume"
+
+#: src/workspace/StatusBar.tsx
+msgid "resume this project"
+msgstr "resume this project"
+
+#: src/lib/docFigures.tsx
+msgid "Retries for the BLE handshake"
+msgstr "Retries for the BLE handshake"
+
+#: src/components/ui.tsx
+msgid "retry"
+msgstr "retry"
+
+#: src/api.ts
+msgid "retry proposal failed"
+msgstr "retry proposal failed"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Retry run"
+msgstr "Retry run"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "review"
+msgstr "review"
+
+#: src/lib/docFigures.tsx
+#: src/lib/docFigures.tsx
+#: src/workspace/boardModel.ts
+msgid "Review"
+msgstr "Review"
+
+#: src/api.ts
+msgid "review failed"
+msgstr "review failed"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "Review the commits, then merge them in your own checkout. Once merged, the branch is empty and the next run reclaims and deletes it automatically — nothing else to clean up."
+msgstr "Review the commits, then merge them in your own checkout. Once merged, the branch is empty and the next run reclaims and deletes it automatically — nothing else to clean up."
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "Review the commits, then merge them into {base} in your own checkout. Once merged, the branch is empty and the next run reclaims and deletes it automatically — nothing else to clean up."
+msgstr "Review the commits, then merge them into {base} in your own checkout. Once merged, the branch is empty and the next run reclaims and deletes it automatically — nothing else to clean up."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "review the open revision →"
+msgstr "review the open revision →"
+
+#: src/workspace/task/TaskActions.tsx
+#: src/workspace/task/TaskActions.tsx
+msgid "reviewer feedback"
+msgstr "reviewer feedback"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Revise plan"
+msgstr "Revise plan"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "revise the plan"
+msgstr "revise the plan"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Revise the plan so this phase (and its dependents) can succeed."
+msgstr "Revise the plan so this phase (and its dependents) can succeed."
+
+#: src/workspace/task/RunConfig.tsx
+msgid "route applied"
+msgstr "route applied"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "Route: {pick} ({mode} — {why})"
+msgstr "Route: {pick} ({mode} — {why})"
+
+#: src/workspace/task/RunConfig.tsx
+#: src/workspace/task/RunLog.tsx
+msgid "run"
+msgstr "run"
+
+#: src/lib/docFigures.tsx
+msgid "Run"
+msgstr "Run"
+
+#: src/components/usage/UsageChip.tsx
+msgid "run `{command}`"
+msgstr "run `{command}`"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "Run branch holds unmerged commits"
+msgstr "Run branch holds unmerged commits"
+
+#: src/components/ProjectPlugins.tsx
+msgid "run claude plugin install/update for this project"
+msgstr "run claude plugin install/update for this project"
+
+#: src/components/TerminalPathNote.tsx
+msgid "run claude under it, one-off"
+msgstr "run claude under it, one-off"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "run config"
+msgstr "run config"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "run diagnosis"
+msgstr "run diagnosis"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "run duration"
+msgstr "run duration"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Run error: {runError}"
+msgstr "Run error: {runError}"
+
+#: src/workspace/TaskModal.tsx
+msgid "run log"
+msgstr "run log"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "run not started"
+msgstr "run not started"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "Run plan again"
+msgstr "Run plan again"
+
+#: src/api.ts
+msgid "run routine failed: {status}"
+msgstr "run routine failed: {status}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "run this phase again"
+msgstr "run this phase again"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "run verification again against the worktree"
+msgstr "run verification again against the worktree"
+
+#: src/components/PlanRunCard.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/workspace/boardModel.ts
+msgid "running"
+msgstr "running"
+
+#: src/lib/docFigures.tsx
+#: src/lib/docFigures.tsx
+msgid "Running"
+msgstr "Running"
+
+#: src/workspace/StatusBar.tsx
+msgid "Running {running}"
+msgstr "Running {running}"
+
+#: src/components/AccountSelector.tsx
+msgid "running as"
+msgstr "running as"
+
+#: src/components/ImproveModal.tsx
+msgid "runs"
+msgstr "runs"
+
+#: src/components/AccountSelector.tsx
+#: src/components/PermissionPresets.tsx
+#: src/components/PluginConfigModal.tsx
+#: src/components/ProjectActions.tsx
+msgid "save"
+msgstr "save"
+
+#: src/api.ts
+msgid "save doc failed: {status}"
+msgstr "save doc failed: {status}"
+
+#: src/api.ts
+msgid "save failed: {status}"
+msgstr "save failed: {status}"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Save token"
+msgstr "Save token"
+
+#: src/components/AccountSelector.tsx
+#: src/components/PermissionPresets.tsx
+msgid "saving…"
+msgstr "saving…"
+
+#: src/lib/docFigures.tsx
+msgid "Schema + migration"
+msgstr "Schema + migration"
+
+#: src/components/CommandPalette.tsx
+msgid "Search"
+msgstr "Search"
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "search projects"
+msgstr "search projects"
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "search projects…"
+msgstr "search projects…"
+
+#: src/components/CommandPalette.tsx
+msgid "search sessions, messages, files…"
+msgstr "search sessions, messages, files…"
+
+#: src/lib/sessionsView.ts
+msgid "second"
+msgstr "second"
+
+#: src/api.ts
+msgid "send failed: {status}"
+msgstr "send failed: {status}"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "sent back to todo with your feedback appended to the prompt"
+msgstr "sent back to todo with your feedback appended to the prompt"
+
+#: src/api.ts
+msgid "serena start failed: {status}"
+msgstr "serena start failed: {status}"
+
+#: src/api.ts
+msgid "serena stop failed: {status}"
+msgstr "serena stop failed: {status}"
+
+#: src/lib/sessionsView.ts
+msgid "session"
+msgstr "session"
+
+#: src/components/FileContentionBanner.tsx
+msgid "session {sessionId}"
+msgstr "session {sessionId}"
+
+#: src/components/CommandPalette.tsx
+#: src/components/CommandPalette.tsx
+msgid "session #{sessionId}"
+msgstr "session #{sessionId}"
+
+#: src/components/NotifySettings.tsx
+msgid "session error"
+msgstr "session error"
+
+#: src/lib/notifications.ts
+msgid "Session error"
+msgstr "Session error"
+
+#: src/components/NotifySettings.tsx
+msgid "session finished"
+msgstr "session finished"
+
+#: src/lib/notifications.ts
+msgid "Session finished"
+msgstr "Session finished"
+
+#: src/lib/notifications.ts
+msgid "Session killed"
+msgstr "Session killed"
+
+#: src/components/OutcomePicker.tsx
+msgid "session outcome"
+msgstr "session outcome"
+
+#: src/components/CommandPalette.tsx
+#: src/components/CommandPalette.tsx
+#: src/lib/nav.ts
+msgid "Sessions"
+msgstr "Sessions"
+
+#: src/workspace/TaskCard.tsx
+msgid "sessions for {branch}"
+msgstr "sessions for {branch}"
+
+#: src/components/CommandPalette.tsx
+msgid "Sessions touching file"
+msgstr "Sessions touching file"
+
+#: src/components/CommandPalette.tsx
+msgid "sessions touching this file…"
+msgstr "sessions touching this file…"
+
+#: src/api.ts
+msgid "set account failed: {status}"
+msgstr "set account failed: {status}"
+
+#: src/api.ts
+msgid "set preset failed: {status}"
+msgstr "set preset failed: {status}"
+
+#: src/lib/nav.ts
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "Settings"
+msgstr "Settings"
+
+#: src/components/usage/UsageProviderCard.tsx
+msgid "setup needed"
+msgstr "setup needed"
+
+#: src/components/FileContentionBanner.tsx
+msgid "shared files"
+msgstr "shared files"
+
+#: src/components/PermissionPresets.tsx
+msgid "Shell commands (any Bash)"
+msgstr "Shell commands (any Bash)"
+
+#: src/components/usage/UsageWindowRow.tsx
+msgid "Show {label}"
+msgstr "Show {label}"
+
+#: src/components/ImproveModal.tsx
+msgid "Show full evidence sent to the model"
+msgstr "Show full evidence sent to the model"
+
+#: src/components/usage/UsageProviderCard.tsx
+msgid "show hidden ({hiddenCount})"
+msgstr "show hidden ({hiddenCount})"
+
+#: src/workspace/StatusBar.tsx
+msgid "show terminal"
+msgstr "show terminal"
+
+#: src/components/usage/UsageWindowRow.tsx
+msgid "show this window"
+msgstr "show this window"
+
+#: src/components/VcsAuthBanner.tsx
+msgid "Sign in"
+msgstr "Sign in"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "Sign in <0>as {account}</0>. The browser tab that just opened must be logged into THAT account's claude.ai subscription — if it is signed in as someone else, sign out there first or use a private window."
+msgstr "Sign in <0>as {account}</0>. The browser tab that just opened must be logged into THAT account's claude.ai subscription — if it is signed in as someone else, sign out there first or use a private window."
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Sign in to {provider}"
+msgstr "Sign in to {provider}"
+
+#: src/api.ts
+msgid "sign-in failed"
+msgstr "sign-in failed"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Sign-in method"
+msgstr "Sign-in method"
+
+#: src/api.ts
+msgid "sign-in poll failed"
+msgstr "sign-in poll failed"
+
+#: src/api.ts
+msgid "sign-out failed"
+msgstr "sign-out failed"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Signed in as {login}."
+msgstr "Signed in as {login}."
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Signed in."
+msgstr "Signed in."
+
+#: src/lib/docFigures.tsx
+msgid "Single-flight per worktree: a fix card shares its root card’s tree"
+msgstr "Single-flight per worktree: a fix card shares its root card’s tree"
+
+#: src/lib/docFigures.tsx
+msgid "Single-flight: the same card never starts twice"
+msgstr "Single-flight: the same card never starts twice"
+
+#: src/lib/sessionsView.ts
+msgid "sixth"
+msgstr "sixth"
+
+#: src/components/PluginConfigModal.tsx
+msgid "skip"
+msgstr "skip"
+
+#: src/components/NewProjectButton.tsx
+msgid "slug"
+msgstr "slug"
+
+#: src/main.tsx
+msgid "something broke"
+msgstr "something broke"
+
+#: src/workspace/task/TaskBrief.tsx
+msgid "source"
+msgstr "source"
+
+#: src/workspace/boardModel.ts
+msgid "spawned by verification to repair {externalId}"
+msgstr "spawned by verification to repair {externalId}"
+
+#: src/workspace/boardModel.ts
+msgid "stale"
+msgstr "stale"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "start immediately — the dispatcher picks it up"
+msgstr "start immediately — the dispatcher picks it up"
+
+#: src/api.ts
+msgid "start planning failed: {status}"
+msgstr "start planning failed: {status}"
+
+#: src/workspace/task/RunLog.tsx
+msgid "start point"
+msgstr "start point"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Start revision"
+msgstr "Start revision"
+
+#: src/api.ts
+msgid "start revision failed: {status}"
+msgstr "start revision failed: {status}"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "start the plan run again"
+msgstr "start the plan run again"
+
+#: src/components/RetroImproveCard.tsx
+#: src/components/RetroImproveCard.tsx
+#: src/components/RetroImproveCard.tsx
+#: src/components/RunOutcomeModal.tsx
+#: src/components/usage/UsageConnect.tsx
+msgid "starting…"
+msgstr "starting…"
+
+#: src/workspace/task/RunLog.tsx
+msgid "state"
+msgstr "state"
+
+#: src/components/StopButton.tsx
+msgid "Stop"
+msgstr "Stop"
+
+#: src/components/StopButton.tsx
+msgid "Stop {label} and mark done?"
+msgstr "Stop {label} and mark done?"
+
+#: src/api.ts
+msgid "stop failed: {status}"
+msgstr "stop failed: {status}"
+
+#: src/lib/glossary.ts
+msgid "stop using this lesson?"
+msgstr "stop using this lesson?"
+
+#: src/components/StopButton.tsx
+msgid "stopping…"
+msgstr "stopping…"
+
+#: src/components/QuestionForm.tsx
+msgid "submit answers"
+msgstr "submit answers"
+
+#: src/components/usage/UsageProviderCard.tsx
+msgid "subscription account"
+msgstr "subscription account"
+
+#: src/components/usage/UsageChip.tsx
+#: src/components/usage/UsageChip.tsx
+#: src/components/usage/UsageModal.tsx
+msgid "Subscription usage"
+msgstr "Subscription usage"
+
+#: src/components/usage/UsageChip.tsx
+msgid "Subscription usage — loading…"
+msgstr "Subscription usage — loading…"
+
+#: src/components/OutcomePicker.tsx
+msgid "success"
+msgstr "success"
+
+#: src/workspace/boardModel.ts
+msgid "suggested"
+msgstr "suggested"
+
+#: src/workspace/boardModel.ts
+msgid "suggested from session #{id}"
+msgstr "suggested from session #{id}"
+
+#: src/theme/palettes.ts
+msgid "Sunset"
+msgstr "Sunset"
+
+#: src/theme/palettes.ts
+msgid "Swarm"
+msgstr "Swarm"
+
+#: src/App.tsx
+msgid "swarmery home"
+msgstr "swarmery home"
+
+#: src/workspace/ProjectSwitcher.tsx
+msgid "switch project"
+msgstr "switch project"
+
+#: src/components/LanguageToggle.tsx
+msgid "switch the interface to English"
+msgstr "switch the interface to English"
+
+#: src/components/LanguageToggle.tsx
+msgid "switch the interface to Ukrainian"
+msgstr "switch the interface to Ukrainian"
+
+#: src/components/ThemeToggle.tsx
+msgid "switch to dark theme"
+msgstr "switch to dark theme"
+
+#: src/components/ThemeToggle.tsx
+msgid "switch to light theme"
+msgstr "switch to light theme"
+
+#: src/components/CommandPalette.tsx
+#: src/lib/nav.ts
+#: src/theme/ThemePicker.tsx
+msgid "System"
+msgstr "System"
+
+#: src/main.tsx
+#: src/main.tsx
+#: src/main.tsx
+#: src/main.tsx
+#: src/main.tsx
+msgid "system…"
+msgstr "system…"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "tab didn't open? authorize here"
+msgstr "tab didn't open? authorize here"
+
+#: src/components/ProjectActions.tsx
+msgid "tags"
+msgstr "tags"
+
+#: src/components/ProjectActions.tsx
+msgid "tags · comma-separated"
+msgstr "tags · comma-separated"
+
+#: src/components/ProjectActions.tsx
+msgid "tags for {projectName}"
+msgstr "tags for {projectName}"
+
+#: src/workspace/TaskCard.tsx
+msgid "take it back out of the queue — nothing has run yet"
+msgstr "take it back out of the queue — nothing has run yet"
+
+#: src/workspace/TaskCard.tsx
+#: src/workspace/TaskModal.tsx
+msgid "task"
+msgstr "task"
+
+#: src/workspace/TaskCard.tsx
+msgid "task {id}: {title}"
+msgstr "task {id}: {title}"
+
+#: src/workspace/TaskModal.tsx
+msgid "task detail"
+msgstr "task detail"
+
+#: src/workspace/boardModel.ts
+msgid "Tasks captured from sessions and routines land here — Run, Plan or Dismiss each one."
+msgstr "Tasks captured from sessions and routines land here — Run, Plan or Dismiss each one."
+
+#: src/components/ProjectActions.tsx
+msgid "telemetry-only"
+msgstr "telemetry-only"
+
+#: src/workspace/StatusBar.tsx
+msgid "Terminal"
+msgstr "Terminal"
+
+#: src/main.tsx
+msgid "That link does not point anywhere in this dashboard."
+msgstr "That link does not point anywhere in this dashboard."
+
+#: src/components/AccountSelector.tsx
+msgid "the account binds when a dispatcher process spawns — a run already in flight keeps its old account until it finishes; switching here only affects the next run"
+msgstr "the account binds when a dispatcher process spawns — a run already in flight keeps its old account until it finishes; switching here only affects the next run"
+
+#: src/components/CreateAccountModal.tsx
+msgid "The account key you typed will be lost."
+msgstr "The account key you typed will be lost."
+
+#: src/components/usage/UsageModal.tsx
+#: src/components/usage/UsageProviderCard.tsx
+msgid "the account this project's sessions run under"
+msgstr "the account this project's sessions run under"
+
+#: src/lib/glossary.ts
+msgid "the Advisor noticed…"
+msgstr "the Advisor noticed…"
+
+#: src/components/RetroImproveCard.tsx
+msgid "the analysis failed without a recorded reason"
+msgstr "the analysis failed without a recorded reason"
+
+#: src/lib/docFigures.tsx
+msgid "The board's three lanes"
+msgstr "The board's three lanes"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "The code expired before it was entered. Get a new one."
+msgstr "The code expired before it was entered. Get a new one."
+
+#: src/lib/docFigures.tsx
+msgid "The concurrent-run limit (default 2)"
+msgstr "The concurrent-run limit (default 2)"
+
+#: src/workspace/boardModel.ts
+msgid "The dispatcher picks cards up from here in priority order."
+msgstr "The dispatcher picks cards up from here in priority order."
+
+#: src/workspace/NewTaskModal.tsx
+msgid "the full request (empty = use the title)"
+msgstr "the full request (empty = use the title)"
+
+#: src/lib/docFigures.tsx
+msgid "The global dispatch switch, and the dispatcher pause"
+msgstr "The global dispatch switch, and the dispatcher pause"
+
+#: src/components/RetroImproveCard.tsx
+msgid "the improver is reading the report · {runningFor}"
+msgstr "the improver is reading the report · {runningFor}"
+
+#: src/workspace/TaskCard.tsx
+msgid "the inbox sweeper retires captured cards left untriaged"
+msgstr "the inbox sweeper retires captured cards left untriaged"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "the janitor has not swept yet"
+msgstr "the janitor has not swept yet"
+
+#: src/pages/settings/WorktreesPanel.tsx
+msgid "the janitor is disabled by SWARMERY_WTJANITOR — the history below is historical, not current"
+msgstr "the janitor is disabled by SWARMERY_WTJANITOR — the history below is historical, not current"
+
+#: src/lib/docFigures.tsx
+msgid "The nine dispatcher admission gates in order"
+msgstr "The nine dispatcher admission gates in order"
+
+#: src/workspace/task/RunConfig.tsx
+msgid "The playbook sets the stages and the permission mode the run spawns under. <0>model</0> overrides the model the playbook would use. <1>agent</1> is orthogonal to both: it prefixes every stage's prompt with that persona, it does not replace the stages."
+msgstr "The playbook sets the stages and the permission mode the run spawns under. <0>model</0> overrides the model the playbook would use. <1>agent</1> is orthogonal to both: it prefixes every stage's prompt with that persona, it does not replace the stages."
+
+#: src/lib/sessionsView.ts
+msgid "the previous run ended {prevStatus}"
+msgstr "the previous run ended {prevStatus}"
+
+#: src/lib/sessionsView.ts
+msgid "the previous run exited with an error"
+msgstr "the previous run exited with an error"
+
+#: src/api.ts
+msgid "the probe needs more fields filled in first"
+msgstr "the probe needs more fields filled in first"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "The reason you wrote for revising this plan will be lost."
+msgstr "The reason you wrote for revising this plan will be lost."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the run branch"
+msgstr "the run branch"
+
+#: src/components/DiffView.tsx
+msgid "the run branch carries no commits ahead of its start point — the agent changed nothing"
+msgstr "the run branch carries no commits ahead of its start point — the agent changed nothing"
+
+#: src/components/PlanBranchDirtyModal.tsx
+msgid "The run branch still holds work"
+msgstr "The run branch still holds work"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the run failed"
+msgstr "the run failed"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the run finished but ticked no acceptance criteria"
+msgstr "the run finished but ticked no acceptance criteria"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the run ticked every acceptance criterion"
+msgstr "the run ticked every acceptance criterion"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the run ticked some criteria but did not finish the phase"
+msgstr "the run ticked some criteria but did not finish the phase"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "The sign-in was declined."
+msgstr "The sign-in was declined."
+
+#: src/components/NewProjectButton.tsx
+msgid "The slug, path, workspace root, and pack selections you've entered will be lost."
+msgstr "The slug, path, workspace root, and pack selections you've entered will be lost."
+
+#: src/workspace/NewTaskModal.tsx
+msgid "The title, prompt, and any advanced settings you've entered will be lost."
+msgstr "The title, prompt, and any advanced settings you've entered will be lost."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
+msgstr "the verifier could not conclude (env or timeout) — this is not a failing grade"
+
+#: src/lib/docFigures.tsx
+msgid "The worktree limit (default 4)"
+msgstr "The worktree limit (default 4)"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
+msgstr "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
+
+#: src/theme/ThemePicker.tsx
+msgid "theme"
+msgstr "theme"
+
+#: src/theme/ThemePicker.tsx
+#: src/theme/ThemePicker.tsx
+msgid "theme settings"
+msgstr "theme settings"
+
+#: src/lib/sessionsView.ts
+msgid "third"
+msgstr "third"
+
+#: src/components/NotifySettings.tsx
+msgid "this browser does not support the Notifications API"
+msgstr "this browser does not support the Notifications API"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "this card has no run branch — there is nothing to push"
+msgstr "this card has no run branch — there is nothing to push"
+
+#: src/workspace/TaskModal.tsx
+msgid "This edit was not saved: {saveError}"
+msgstr "This edit was not saved: {saveError}"
+
+#: src/components/PermissionPresets.tsx
+msgid "This grants agents more autonomy for this project:"
+msgstr "This grants agents more autonomy for this project:"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "this host"
+msgstr "this host"
+
+#: src/components/PluginConfigModal.tsx
+msgid "this pack's config schema is missing or malformed"
+msgstr "this pack's config schema is missing or malformed"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "this phase has not been run"
+msgstr "this phase has not been run"
+
+#: src/api.ts
+msgid "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies."
+msgstr "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies."
+
+#: src/workspace/AgentPicker.tsx
+msgid "this project's .claude/agents/ definition replaces the inherited one"
+msgstr "this project's .claude/agents/ definition replaces the inherited one"
+
+#: src/components/ImproveModal.tsx
+msgid "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
+msgstr "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
+
+#: src/components/SessionCard.tsx
+msgid "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
+msgstr "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
+
+#: src/workspace/task/TaskBrief.tsx
+msgid "this session had touched the file when the card was captured"
+msgstr "this session had touched the file when the card was captured"
+
+#: src/components/usage/UsageConnect.tsx
+msgid "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1> and complete the login — when you exit the shell, the account is re-checked automatically."
+msgstr "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1> and complete the login — when you exit the shell, the account is re-checked automatically."
+
+#: src/main.tsx
+msgid "This view failed to render."
+msgstr "This view failed to render."
+
+#: src/lib/docBlocks.tsx
+msgid "Tip"
+msgstr "Tip"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/TaskBrief.tsx
+#: src/workspace/task/TaskBrief.tsx
+msgid "title"
+msgstr "title"
+
+#: src/workspace/task/useTaskDraft.ts
+msgid "title and prompt cannot be empty"
+msgstr "title and prompt cannot be empty"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "title is required"
+msgstr "title is required"
+
+#: src/workspace/boardModel.ts
+msgid "today"
+msgstr "today"
+
+#: src/lib/nav.ts
+msgid "Today"
+msgstr "Today"
+
+#: src/lib/sessionsView.ts
+msgid "today · {name}"
+msgstr "today · {name}"
+
+#: src/api.ts
+msgid "toggle checkbox failed: {status}"
+msgstr "toggle checkbox failed: {status}"
+
+#: src/api.ts
+msgid "toggle failed: {status}"
+msgstr "toggle failed: {status}"
+
+#: src/api.ts
+msgid "toggle rule failed: {status}"
+msgstr "toggle rule failed: {status}"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Token"
+msgstr "Token"
+
+#: src/api.ts
+msgid "token sign-in failed"
+msgstr "token sign-in failed"
+
+#: src/pages/Settings.tsx
+msgid "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
+msgstr "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
+
+#: src/workspace/boardModel.ts
+msgid "Triage"
+msgstr "Triage"
+
+#: src/components/RetroImproveCard.tsx
+msgid "Try again"
+msgstr "Try again"
+
+#: src/components/SessionLabelChips.tsx
+msgid "type"
+msgstr "type"
+
+#: src/lib/docFigures.tsx
+msgid "UI screen"
+msgstr "UI screen"
+
+#: src/lib/sessionsView.ts
+msgid "unknown day"
+msgstr "unknown day"
+
+#: src/lib/docFigures.tsx
+msgid "unknown figure: {name}"
+msgstr "unknown figure: {name}"
+
+#: src/api.ts
+msgid "unmute failed: {status}"
+msgstr "unmute failed: {status}"
+
+#: src/workspace/TaskCard.tsx
+msgid "unpause this card"
+msgstr "unpause this card"
+
+#: src/components/PermissionPresets.tsx
+msgid "Unrestricted"
+msgstr "Unrestricted"
+
+#: src/components/AccountSelector.tsx
+msgid "unset"
+msgstr "unset"
+
+#: src/api.ts
+msgid "update failed: {status}"
+msgstr "update failed: {status}"
+
+#: src/api.ts
+msgid "update routine failed: {status}"
+msgstr "update routine failed: {status}"
+
+#: src/components/usage/UsageChip.tsx
+#: src/components/usage/UsageModal.tsx
+msgid "usage"
+msgstr "usage"
+
+#: src/components/usage/UsageModal.tsx
+msgid "usage accounts"
+msgstr "usage accounts"
+
+#: src/components/usage/UsageModal.tsx
+msgid "usage display mode"
+msgstr "usage display mode"
+
+#: src/components/usage/UsageModal.tsx
+msgid "Used"
+msgstr "Used"
+
+#: src/workspace/task/RunLog.tsx
+msgid "verdict"
+msgstr "verdict"
+
+#: src/workspace/boardModel.ts
+msgid "verdict FAIL"
+msgstr "verdict FAIL"
+
+#: src/workspace/boardModel.ts
+msgid "verdict FAIL: {clipped}"
+msgstr "verdict FAIL: {clipped}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Verification verdict: {verdict}{detail}"
+msgstr "Verification verdict: {verdict}{detail}"
+
+#: src/workspace/PlaybookPicker.tsx
+msgid "verification: {verify}"
+msgstr "verification: {verify}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "verified"
+msgstr "verified"
+
+#: src/workspace/PlaybookPicker.tsx
+msgid "verify {verify}"
+msgstr "verify {verify}"
+
+#: src/api.ts
+#: src/components/RunOutcomeModal.tsx
+msgid "verify failed"
+msgstr "verify failed"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "verify inconclusive"
+msgstr "verify inconclusive"
+
+#: src/workspace/task/RunLog.tsx
+msgid "verify retries"
+msgstr "verify retries"
+
+#: src/lib/docFigures.tsx
+msgid "verify: pass"
+msgstr "verify: pass"
+
+#: src/components/ProjectPlugins.tsx
+msgid "via attach/detach"
+msgstr "via attach/detach"
+
+#: src/lib/sessionsView.ts
+msgid "waiting"
+msgstr "waiting"
+
+#: src/workspace/StatusBar.tsx
+msgid "Waiting {waiting}"
+msgstr "Waiting {waiting}"
+
+#: src/workspace/boardModel.ts
+msgid "waiting for review"
+msgstr "waiting for review"
+
+#: src/workspace/boardModel.ts
+msgid "waiting for review, a failed verdict, a dispatch error, or an unanswered permission request"
+msgstr "waiting for review, a failed verdict, a dispatch error, or an unanswered permission request"
+
+#: src/components/VcsSignInDialog.tsx
+msgid "Waiting for you to enter the code on {host}…"
+msgstr "Waiting for you to enter the code on {host}…"
+
+#: src/workspace/boardModel.ts
+msgid "waiting on quota: {why}"
+msgstr "waiting on quota: {why}"
+
+#: src/theme/palettes.ts
+msgid "warm amber — the original"
+msgstr "warm amber — the original"
+
+#: src/theme/palettes.ts
+msgid "warm coral & magenta"
+msgstr "warm coral & magenta"
+
+#: src/lib/docBlocks.tsx
+msgid "Warning"
+msgstr "Warning"
+
+#: src/lib/glossary.ts
+msgid "watching"
+msgstr "watching"
+
+#: src/lib/glossary.ts
+msgid "what actually happened"
+msgstr "what actually happened"
+
+#: src/components/Explain.tsx
+msgid "What is {term}?"
+msgstr "What is {term}?"
+
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/NewTaskModal.tsx
+#: src/workspace/task/TaskBrief.tsx
+msgid "what needs doing"
+msgstr "what needs doing"
+
+#: src/workspace/NewTaskModal.tsx
+msgid "what should happen"
+msgstr "what should happen"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "what to fix on the next pass — appended to the prompt"
+msgstr "what to fix on the next pass — appended to the prompt"
+
+#: src/components/TerminalPathNote.tsx
+msgid "which account this project runs under, and why"
+msgstr "which account this project runs under, and why"
+
+#: src/components/VcsProviderAsk.tsx
+msgid "Which service hosts <0>{host}</0>?"
+msgstr "Which service hosts <0>{host}</0>?"
+
+#: src/components/VcsProviderAsk.tsx
+msgid "Which service hosts this repository?"
+msgstr "Which service hosts this repository?"
+
+#: src/components/usage/UsageSetupHint.tsx
+msgid "why it's needed"
+msgstr "why it's needed"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "why the plan must change"
+msgstr "why the plan must change"
+
+#: src/components/DetachModal.tsx
+msgid "will remove"
+msgstr "will remove"
+
+#: src/components/AttachModal.tsx
+msgid "will restore"
+msgstr "will restore"
+
+#: src/lib/docFigures.tsx
+#: src/workspace/boardModel.ts
+msgid "Working"
+msgstr "Working"
+
+#: src/components/NewProjectButton.tsx
+msgid "workspace root"
+msgstr "workspace root"
+
+#: src/main.tsx
+msgid "workspace…"
+msgstr "workspace…"
+
+#: src/workspace/task/RunLog.tsx
+msgid "worktree"
+msgstr "worktree"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "worktree reclaimed — nothing to re-grade"
+msgstr "worktree reclaimed — nothing to re-grade"
+
+#: src/pages/Settings.tsx
+msgid "worktrees"
+msgstr "worktrees"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "write the feedback first — a re-run with no notes repeats the same work"
+msgstr "write the feedback first — a re-run with no notes repeats the same work"
+
+#: src/components/NewProjectButton.tsx
+msgid "Writes <0>.claude/</0> config and carves the workspace namespace. Idempotent — existing config is never overwritten."
+msgstr "Writes <0>.claude/</0> config and carves the workspace namespace. Idempotent — existing config is never overwritten."
+
+#: src/components/usage/UsageDisconnect.tsx
+msgid "yes, disconnect"
+msgstr "yes, disconnect"
+
+#: src/components/PluginConfigModal.tsx
+msgid "Your edits to this plugin's configuration will be lost."
+msgstr "Your edits to this plugin's configuration will be lost."
+
+#: src/theme/palettes.ts
+msgid "Zen"
+msgstr "Zen"

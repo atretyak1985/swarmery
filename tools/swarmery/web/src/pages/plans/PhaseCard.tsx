@@ -4,6 +4,9 @@
 // Presentational: the handlers (Retry, cancel, …) come from Plans.tsx as props, so
 // the phase-run lifecycle stays where it lives today.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import type { EpicPhase, PhaseLanding, PhaseRunOutcome, ProviderTerms } from '../../api/types';
 import { fmtAgo, fmtDateTime, fmtSpan } from '../../lib/format';
@@ -11,7 +14,7 @@ import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { forecastStory } from './forecastStoryModel';
-import { ForecastVsActual } from './ForecastVsActual';
+import { ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
 import { landingChip, type LandingChip as LandingChipModel } from './landingModel';
 
 // OffPlanChip lives here so the story and the card share one band→tone mapping
@@ -19,12 +22,13 @@ import { landingChip, type LandingChip as LandingChipModel } from './landingMode
 /** Glyph + tone per band — the one colour mapping the story and the phase card share. */
 export const OFF_PLAN_TONE: Record<OffPlanBand, { glyph: string; cls: string }> = {
   'on plan': { glyph: '●', cls: 'border-green/45 bg-green/10 text-green' },
-  'off plan': { glyph: '▲', cls: 'border-amber/45 bg-amber/10 text-amber' },
-  'far off plan': { glyph: '▲', cls: 'border-red/45 bg-red/10 text-red' },
+  'off plan': { glyph: '▲', cls: 'border-amber/45 bg-amber/10 text-amber' }, // i18n-ignore — band key (copy: OFF_PLAN_LABEL)
+  'far off plan': { glyph: '▲', cls: 'border-red/45 bg-red/10 text-red' }, // i18n-ignore — band key (copy: OFF_PLAN_LABEL)
 };
 
 /** The pill "▲ far off plan". `compact` is the phase card's header variant. */
 export function OffPlanChip({ band, compact = false }: { band: OffPlanBand; compact?: boolean }): JSX.Element {
+  const { i18n } = useLingui();
   const tone = OFF_PLAN_TONE[band];
   return (
     <span
@@ -34,7 +38,7 @@ export function OffPlanChip({ band, compact = false }: { band: OffPlanBand; comp
       data-tip={UI_TERMS.surprise.hint}
     >
       <span aria-hidden="true">{tone.glyph}</span>
-      {band}
+      {i18n._(OFF_PLAN_LABEL[band])}
     </span>
   );
 }
@@ -61,13 +65,13 @@ export interface PhaseCardProps {
   terms?: ProviderTerms | null;
 }
 
-const OUTCOME_SENTENCE: Record<PhaseRunOutcome, string> = {
-  idle: 'Not run yet.',
-  running: 'An agent is working on this phase now.',
-  completed: 'The last run finished the work.',
-  partial: 'The last run ticked some criteria but did not finish the phase.',
-  noop: 'The last run finished without ticking a single criterion.',
-  failed: 'The last run failed.',
+const OUTCOME_SENTENCE: Record<PhaseRunOutcome, MessageDescriptor> = {
+  idle: msg`Not run yet.`,
+  running: msg`An agent is working on this phase now.`,
+  completed: msg`The last run finished the work.`,
+  partial: msg`The last run ticked some criteria but did not finish the phase.`,
+  noop: msg`The last run finished without ticking a single criterion.`,
+  failed: msg`The last run failed.`,
 };
 
 const OUTCOME_DOT: Record<PhaseRunOutcome, string> = {
@@ -81,8 +85,8 @@ const OUTCOME_DOT: Record<PhaseRunOutcome, string> = {
 
 const BAND_DOT: Record<OffPlanBand, string> = {
   'on plan': 'bg-green',
-  'off plan': 'bg-amber',
-  'far off plan': 'bg-red',
+  'off plan': 'bg-amber', // i18n-ignore — band key
+  'far off plan': 'bg-red', // i18n-ignore — band key
 };
 
 const SECONDARY_BTN =
@@ -107,13 +111,15 @@ function LandingChip({
   landing: Pick<PhaseLanding, 'state' | 'prUrl' | 'prNumber'> & Partial<Pick<PhaseLanding, 'landedAt'>>;
   terms: ProviderTerms;
 }): JSX.Element | null {
+  const { t } = useLingui();
   const chip = landingChip(landing, terms);
   if (chip === null) return null;
   const cls = `inline-flex shrink-0 items-center rounded-full border bg-transparent px-2 py-px font-mono text-[10px] normal-case tracking-[0.04em] ${LANDING_TONE[chip.state]}`;
   const landedAt = landing.landedAt ?? null;
   if (chip.state === 'merged' && landedAt !== null) {
+    const mergedAt = fmtDateTime(landedAt);
     return (
-      <span data-testid="phase-landing-chip" className={cls} title={`merged ${fmtDateTime(landedAt)}`}>
+      <span data-testid="phase-landing-chip" className={cls} title={t`merged ${mergedAt}`}>
         {chip.text}
       </span>
     );
@@ -156,28 +162,36 @@ export function PhaseCard({
   report,
   terms = null,
 }: PhaseCardProps): JSX.Element {
+  const { i18n, t } = useLingui();
   const story = forecastStory(phase);
   const band = phase.surprise == null ? null : offPlanBand(phase.surprise.index);
-  const title = state?.title ?? story?.headline ?? OUTCOME_SENTENCE[phase.runOutcome];
+  const title = state?.title ?? story?.headline ?? i18n._(OUTCOME_SENTENCE[phase.runOutcome]);
   const detail = state?.detail ?? story?.why ?? null;
   const dot = band !== null ? BAND_DOT[band] : OUTCOME_DOT[phase.runOutcome];
   const model = phase.runModel ?? phase.docModel;
+  const seq = phase.seq;
 
   const meta: string[] = [];
-  if (phase.runStartedAt !== null && phase.runEndedAt !== null)
-    meta.push(`ran ${fmtSpan(phase.runStartedAt, phase.runEndedAt)}`);
+  if (phase.runStartedAt !== null && phase.runEndedAt !== null) {
+    const span = fmtSpan(phase.runStartedAt, phase.runEndedAt);
+    meta.push(t`ran ${span}`);
+  }
+  const done = String(phase.checkboxesDone);
+  const total = String(phase.checkboxesTotal);
+  const before = String(phase.runCheckboxesBefore);
   meta.push(
-    `${String(phase.checkboxesDone)} of ${String(phase.checkboxesTotal)} criteria${
-      phase.runCheckboxesBefore === null ? '' : ` (${String(phase.runCheckboxesBefore)} before)`
-    }`,
+    `${t`${done} of ${total} criteria`}${phase.runCheckboxesBefore === null ? '' : ` ${t`(${before} before)`}`}`,
   );
-  if (phase.docUpdatedAt !== null) meta.push(`edited ${fmtAgo(phase.docUpdatedAt)}`);
+  if (phase.docUpdatedAt !== null) {
+    const edited = fmtAgo(phase.docUpdatedAt);
+    meta.push(t`edited ${edited}`);
+  }
 
   return (
     <article data-testid="phase-card" className="rounded-xl border border-line bg-surface px-5 py-[18px]">
       <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
         <span>
-          Phase {phase.seq} · {phase.checkboxesDone}/{phase.checkboxesTotal}
+          <Trans>Phase {seq}</Trans> · {phase.checkboxesDone}/{phase.checkboxesTotal}
         </span>
         {model !== null && (
           <>
@@ -235,10 +249,10 @@ export function PhaseCard({
         {meta.map((m) => (
           <span key={m}>{m}</span>
         ))}
-        <Fold label="forecast vs actual">
+        <Fold label={t`forecast vs actual`}>
           <ForecastVsActual phase={phase} />
         </Fold>
-        {report !== undefined && <Fold label="agent's full report">{report}</Fold>}
+        {report !== undefined && <Fold label={t`agent's full report`}>{report}</Fold>}
       </div>
     </article>
   );

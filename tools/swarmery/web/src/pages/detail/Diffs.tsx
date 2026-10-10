@@ -1,6 +1,7 @@
 // Diffs tab: file_changes grouped by file, unified diff with highlighting
 // (lightweight custom renderer — mockup .diff language), +/- counters.
 
+import { Trans } from '@lingui/react/macro';
 import { useMemo } from 'react';
 import type { FileChange, FileChangeType } from '../../api/types';
 import { Empty } from '../../components/ui';
@@ -64,7 +65,11 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
   const groups = useMemo(() => groupByFile(changes), [changes]);
 
   if (groups.length === 0) {
-    return <Empty>no file changes in this session</Empty>;
+    return (
+      <Empty>
+        <Trans>no file changes in this session</Trans>
+      </Empty>
+    );
   }
   return (
     <div className="mt-[26px]">
@@ -88,7 +93,7 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
               )}
               {outOfScope && (
                 <span className="rounded-full border border-amber/45 px-2 py-px text-[10px] text-amber">
-                  out of scope
+                  <Trans>out of scope</Trans>
                 </span>
               )}
               <span className="text-[11px] text-green">+{group.additions}</span>
@@ -99,7 +104,7 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
                 <DiffBlock key={change.id} diff={change.diff} />
               ) : (
                 <div key={change.id} className="my-2 font-mono text-[11px] text-ink-dim">
-                  no diff captured for this change
+                  <Trans>no diff captured for this change</Trans>
                 </div>
               ),
             )}

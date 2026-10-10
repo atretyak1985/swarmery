@@ -12,6 +12,7 @@
 // doesn't match a rendered leaf (e.g. "unknown field: xyz") falls through to
 // the general ErrorBox — same shape as AttachModal/DetachModal.
 
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { PluginConfigProbe, ProjectPluginRow } from '../api/types';
 import { ConfigValidationError, probeProjectConfig, putProjectConfig } from '../api';
@@ -227,6 +228,7 @@ export function PluginConfigModal({
   onClose: () => void;
   onSaved: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const titleId = useId();
   const schema = row.configSchema as SchemaNode | undefined;
   const [value, setValue] = useState<FormValue>(
@@ -244,6 +246,8 @@ export function PluginConfigModal({
   const knownLeaves = useMemo(() => (schema !== undefined ? leafPaths(schema) : []), [schema]);
   const filledCount = knownLeaves.filter((dotted) => !isEmptyValue(valueAt(value, dotted))).length;
   const errorCount = Object.keys(fieldErrors).length;
+  const leafCount = knownLeaves.length;
+  const configDocs = row.configDocs;
   // Compared leaf by leaf with empties normalised, so typing into a field and
   // clearing it again (which leaves `{a: ''}` where the form opened with `{}`)
   // reads as clean.
@@ -402,12 +406,14 @@ export function PluginConfigModal({
             <div className="mt-1 text-[12px] leading-relaxed text-ink-dim">{row.configWhy}</div>
           )}
           {row.configDocs !== undefined && row.configDocs !== '' && (
-            <div className="mt-1.5 font-mono text-[10.5px] text-ink-faint">docs: {row.configDocs}</div>
+            <div className="mt-1.5 font-mono text-[10.5px] text-ink-faint">
+              <Trans>docs: {configDocs}</Trans>
+            </div>
           )}
         </div>
 
         {schema === undefined || !isObjectSchema(schema) || row.configKey === undefined ? (
-          <ErrorBox message="this pack's config schema is missing or malformed" />
+          <ErrorBox message={t`this pack's config schema is missing or malformed`} />
         ) : (
           <form
             className="mt-3 flex min-h-0 flex-1 flex-col"
@@ -462,10 +468,16 @@ export function PluginConfigModal({
                 <span className="font-mono text-[10px] text-ink-faint">
                   {errorCount > 0 ? (
                     <span className="text-red">
-                      {errorCount} field{errorCount === 1 ? '' : 's'} need attention
+                      <Plural
+                        value={errorCount}
+                        one="# field need attention"
+                        few="# fields need attention"
+                        many="# fields need attention"
+                        other="# fields need attention"
+                      />
                     </span>
                   ) : (
-                    `${filledCount}/${knownLeaves.length} fields`
+                    t`${filledCount}/${leafCount} fields`
                   )}
                 </span>
                 <span className="flex gap-2">
@@ -475,14 +487,14 @@ export function PluginConfigModal({
                     disabled={busy}
                     className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
                   >
-                    cancel
+                    <Trans>cancel</Trans>
                   </button>
                   <button
                     type="submit"
                     disabled={busy}
                     className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
                   >
-                    {busy ? '…' : 'save'}
+                    {busy ? '…' : t`save`}
                   </button>
                 </span>
               </div>
@@ -497,7 +509,7 @@ export function PluginConfigModal({
               onClick={onClose}
               className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
             >
-              close
+              <Trans>close</Trans>
             </button>
           </div>
         )}
@@ -505,11 +517,11 @@ export function PluginConfigModal({
 
       <ConfirmDialog
         {...discard.confirmProps}
-        title="Discard changes?"
-        confirmLabel="discard"
+        title={t`Discard changes?`}
+        confirmLabel={t`discard`}
         danger
       >
-        Your edits to this plugin's configuration will be lost.
+        <Trans>Your edits to this plugin's configuration will be lost.</Trans>
       </ConfirmDialog>
     </div>
   );
@@ -543,16 +555,20 @@ function ProbeRow({
   onRun: () => void;
   onSkip: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
+  const needs = blockers.join(', ');
   if (probing) {
     return (
       <div className="mt-3 flex items-center gap-2 font-mono text-[10.5px] text-ink-faint">
-        <span aria-live="polite">probing for live values…</span>
+        <span aria-live="polite">
+          <Trans>probing for live values…</Trans>
+        </span>
         <button
           type="button"
           onClick={onSkip}
           className="rounded border border-line px-1.5 py-0.5 text-ink-dim transition-colors hover:bg-surface2"
         >
-          skip
+          <Trans>skip</Trans>
         </button>
       </div>
     );
@@ -563,20 +579,42 @@ function ProbeRow({
         type="button"
         onClick={onRun}
         disabled={!canProbe}
-        title={canProbe ? undefined : `fill in ${blockers.join(', ')} first`}
+        title={canProbe ? undefined : t`fill in ${needs} first`}
         className="rounded border border-line px-1.5 py-0.5 text-ink-dim transition-colors hover:bg-surface2 disabled:opacity-40"
       >
-        probe
+        <Trans>probe</Trans>
       </button>
-      {!canProbe && <span>needs {blockers.join(', ')}</span>}
-      {canProbe && reason !== undefined && reason !== '' && <span>probe: {reason}</span>}
+      {!canProbe && (
+        <span>
+          <Trans>needs {needs}</Trans>
+        </span>
+      )}
+      {canProbe && reason !== undefined && reason !== '' && (
+        <span>
+          <Trans>probe: {reason}</Trans>
+        </span>
+      )}
       {canProbe && reason === undefined && found > 0 && (
         // Filled, not merely suggested — and the sentence says so, because a
         // form that populated itself must not read as one the operator filled.
         <span>
-          {filled > 0
-            ? `filled ${filled} field${filled === 1 ? '' : 's'} from this project — review, then save`
-            : `suggested values for ${found} field${found === 1 ? '' : 's'}`}
+          {filled > 0 ? (
+            <Plural
+              value={filled}
+              one="filled # field from this project — review, then save"
+              few="filled # fields from this project — review, then save"
+              many="filled # fields from this project — review, then save"
+              other="filled # fields from this project — review, then save"
+            />
+          ) : (
+            <Plural
+              value={found}
+              one="suggested values for # field"
+              few="suggested values for # fields"
+              many="suggested values for # fields"
+              other="suggested values for # fields"
+            />
+          )}
         </span>
       )}
     </div>
@@ -678,6 +716,7 @@ function LeafField({
   /** This field's value came from the probe and has not been edited since. */
   autoFilled: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   const dotted = path.join('.');
   const fieldId = `cfg-${dotted.replace(/\./g, '-')}`;
   const hintId = `${fieldId}-hint`;
@@ -687,6 +726,8 @@ function LeafField({
   const options = enumOptions(schema);
   const hasDescription = schema.description !== undefined && schema.description !== '';
   const hasSuggestions = suggestions !== undefined && suggestions.length > 0;
+  const suggestionCount = suggestions?.length ?? 0;
+  const moreCount = suggestionCount - 1;
   const describedBy = [hasDescription ? hintId : null, error !== undefined ? errorId : null]
     .filter((v): v is string => v !== null)
     .join(' ');
@@ -757,8 +798,10 @@ function LeafField({
       {hasSuggestions && (
         <p className="mt-1 font-mono text-[10px] text-ink-faint">
           {autoFilled
-            ? `filled by probe${suggestions.length > 1 ? ` · ${suggestions.length - 1} more suggested` : ''}`
-            : `${suggestions.length} suggested by probe`}
+            ? suggestionCount > 1
+              ? t`filled by probe · ${moreCount} more suggested`
+              : t`filled by probe`
+            : t`${suggestionCount} suggested by probe`}
         </p>
       )}
       {error !== undefined && (

@@ -4,6 +4,7 @@
 // attach" performs the real write and shows the applied steps. Warning lines
 // ("! …") flag foreign values the merge refused to overwrite.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { AttachResponse, Project } from '../api/types';
 import { attachProject } from '../api';
@@ -24,7 +25,9 @@ export function AttachModal({
   onClose: () => void;
   onAttached: () => void;
 }): JSX.Element {
+  const { t } = useLingui();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const projectName = project.name ?? project.slug;
 
   // Dry run on mount → the restore plan.
   useEffect(() => {
@@ -54,12 +57,13 @@ export function AttachModal({
     (phase.kind === 'plan' || phase.kind === 'applying') && !phase.plan.attached;
   const busy = phase.kind === 'applying';
 
+  const backupPath = phase.kind === 'done' ? phase.result.backup : undefined;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Attach project"
+      aria-label={t`Attach project`}
       onClick={busy ? undefined : onClose}
     >
       <div
@@ -67,33 +71,38 @@ export function AttachModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="font-display text-[14px] font-bold text-ink">
-          Attach <span className="font-mono">{project.name ?? project.slug}</span>
+          <Trans>
+            Attach <span className="font-mono">{projectName}</span>
+          </Trans>
         </div>
         <div className="mt-1 text-[12px] leading-relaxed text-ink-dim">
-          Merges the swarmery entries back into{' '}
-          <span className="font-mono">.claude/settings.json</span> (your other settings are never
-          overwritten), restores <span className="font-mono">project.json</span> from its backup,
-          and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the
-          project.
+          <Trans>
+            Merges the swarmery entries back into <span className="font-mono">.claude/settings.json</span>{' '}
+            (your other settings are never overwritten), restores{' '}
+            <span className="font-mono">project.json</span> from its backup, and reinstalls the hooks.
+            Plugins install on the next fresh Claude Code session in the project.
+          </Trans>
         </div>
 
         {phase.kind === 'loading' && (
-          <div className="mt-3 font-mono text-[11.5px] text-ink-dim">computing plan…</div>
+          <div className="mt-3 font-mono text-[11.5px] text-ink-dim">
+            <Trans>computing plan…</Trans>
+          </div>
         )}
 
         {(phase.kind === 'plan' || phase.kind === 'applying') && (
           <StepList
-            title={nothingToDo ? 'nothing to restore' : 'will restore'}
+            title={nothingToDo ? t`nothing to restore` : t`will restore`}
             steps={phase.plan.steps}
           />
         )}
 
         {phase.kind === 'done' && (
           <>
-            <StepList title="restored" steps={phase.result.steps} />
-            {phase.result.backup !== undefined && (
+            <StepList title={t`restored`} steps={phase.result.steps} />
+            {backupPath !== undefined && (
               <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-                backup: {phase.result.backup}
+                <Trans>backup: {backupPath}</Trans>
               </div>
             )}
           </>
@@ -112,7 +121,7 @@ export function AttachModal({
               onClick={phase.kind === 'done' ? onAttached : onClose}
               className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2"
             >
-              {phase.kind === 'done' ? 'done' : 'close'}
+              {phase.kind === 'done' ? t`done` : t`close`}
             </button>
           ) : (
             <>
@@ -122,7 +131,7 @@ export function AttachModal({
                 disabled={busy}
                 className="rounded-lg border border-line bg-surface px-3.5 py-1.5 font-mono text-[11.5px] text-ink-2 transition-colors hover:bg-surface2 disabled:opacity-50"
               >
-                cancel
+                <Trans>cancel</Trans>
               </button>
               <button
                 type="button"
@@ -132,7 +141,7 @@ export function AttachModal({
                 disabled={phase.kind !== 'plan' || nothingToDo}
                 className="rounded-lg border border-green/40 bg-green/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-green transition-colors hover:bg-green/20 disabled:opacity-50"
               >
-                {busy ? '…' : 'confirm attach'}
+                {busy ? '…' : t`confirm attach`}
               </button>
             </>
           )}

@@ -9,7 +9,13 @@
 // epic-derived ones are counted here by `epicCounts`. A stage with no data
 // teaches what will appear there (artboard-1 principle 6) — never "0 · n/a".
 // Surprise bands come from lib/offPlan.ts only.
+//
+// Copy goes through the Lingui macros at call time (buildLoop runs inside a
+// render), so the stages follow the active locale. Counts are grouped by
+// fmtCount and passed into the plural branches as `${count}` rather than `#`,
+// which would format them with the locale's own separators.
 
+import { plural, t } from '@lingui/core/macro';
 import type { Epic } from '../../api/types';
 import { offPlanBand } from '../../lib/offPlan';
 import { PLACES, resolvePlaceHref, type PlaceId } from '../../lib/nav';
@@ -49,20 +55,15 @@ export interface LoopInputs {
 
 export const LOOP_WINDOW_MS = 7 * 24 * 3600_000;
 
-/** "1 phase" / "12 phases". */
-export function plural(n: number, one: string, many = `${one}s`): string {
-  return `${fmtCount(n)} ${n === 1 ? one : many}`;
-}
-
 /** Thousands grouped with a no-break space, as 1a writes them ("1 434"). */
 export function fmtCount(n: number): string {
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 function within(iso: string | null, now: number): boolean {
   if (iso === null) return false;
-  const t = Date.parse(iso);
-  return !Number.isNaN(t) && now - t <= LOOP_WINDOW_MS;
+  const at = Date.parse(iso);
+  return !Number.isNaN(at) && now - at <= LOOP_WINDOW_MS;
 }
 
 /** The epic-derived numbers of the loop, over the last 7 days. */
@@ -93,146 +94,225 @@ function placeHref(id: PlaceId, slug: string | null, lastProject: string | null)
 function planStage(i: LoopInputs, href: string): Stage {
   const active = i.epics.filter((e) => e.status === 'active');
   const forecasted = active.reduce((n, e) => n + e.phases.filter((p) => p.forecasts.length > 0).length, 0);
+  const plans = active.length;
   let sentence: string;
-  if (active.length === 0) sentence = 'Appears after the first plan is written — phases and what each one expects.';
-  else if (forecasted === 0) sentence = 'No phase carries a forecast yet — add one so a run has something to be measured against.';
-  else
-    sentence = `${plural(forecasted, 'phase')} ${forecasted === 1 ? 'carries' : 'carry'} a forecast — what the planner expects before anything runs.`;
+  if (plans === 0) sentence = t`Appears after the first plan is written — phases and what each one expects.`;
+  else if (forecasted === 0)
+    sentence = t`No phase carries a forecast yet — add one so a run has something to be measured against.`;
+  else {
+    const count = fmtCount(forecasted);
+    sentence = plural(forecasted, {
+      one: `${count} phase carries a forecast — what the planner expects before anything runs.`,
+      few: `${count} phases carry a forecast — what the planner expects before anything runs.`,
+      many: `${count} phases carry a forecast — what the planner expects before anything runs.`,
+      other: `${count} phases carry a forecast — what the planner expects before anything runs.`,
+    });
+  }
   return {
     id: 'plan',
     step: 1,
-    title: 'Plan',
-    n: active.length,
-    unit: active.length === 1 ? 'plan' : 'plans',
+    title: t`Plan`,
+    n: plans,
+    unit: plural(plans, { one: 'plan', few: 'plans', many: 'plans', other: 'plans' }),
     sentence,
     alert: '',
     href,
-    linkLabel: 'Plans →',
+    linkLabel: t`Plans →`,
     waiting: false,
   };
 }
 
 function runStage(i: LoopInputs, href: string): Stage {
   const parts: string[] = [];
-  if (i.stoppedPhases > 0) {
-    parts.push(`${plural(i.stoppedPhases, 'phase')} stopped with nothing done.`);
+  const { stoppedPhases, pendingApprovals } = i;
+  if (stoppedPhases > 0) {
+    const count = fmtCount(stoppedPhases);
+    parts.push(
+      plural(stoppedPhases, {
+        one: `${count} phase stopped with nothing done.`,
+        few: `${count} phases stopped with nothing done.`,
+        many: `${count} phases stopped with nothing done.`,
+        other: `${count} phases stopped with nothing done.`,
+      }),
+    );
   }
-  const alert = i.pendingApprovals > 0 ? `${plural(i.pendingApprovals, 'approval')} waiting.` : '';
+  const count = fmtCount(pendingApprovals);
+  const alert =
+    pendingApprovals > 0
+      ? plural(pendingApprovals, {
+          one: `${count} approval waiting.`,
+          few: `${count} approvals waiting.`,
+          many: `${count} approvals waiting.`,
+          other: `${count} approvals waiting.`,
+        })
+      : '';
   let sentence = parts.join(' ');
   if (sentence === '' && alert === '') {
     sentence =
       i.liveSessions === 0
-        ? 'Nothing running right now. Sessions show up here the moment one starts.'
-        : 'Running clean — nothing stopped, nothing waiting on you.';
+        ? t`Nothing running right now. Sessions show up here the moment one starts.`
+        : t`Running clean — nothing stopped, nothing waiting on you.`;
   }
   return {
     id: 'run',
     step: 2,
-    title: 'Run',
+    title: t`Run`,
     n: i.liveSessions,
-    unit: 'live',
+    unit: t`live`,
     sentence,
     alert,
     href,
-    linkLabel: 'Sessions →',
-    waiting: i.pendingApprovals > 0,
+    linkLabel: t`Sessions →`,
+    waiting: pendingApprovals > 0,
   };
 }
 
 function measureStage(i: LoopInputs, href: string): Stage {
-  if (i.scoredRuns === 0 && i.classifierCalls === 0) {
+  const { scoredRuns, classifierCalls } = i;
+  if (scoredRuns === 0 && classifierCalls === 0) {
     return {
       id: 'measure',
       step: 3,
-      title: 'Measure',
+      title: t`Measure`,
       n: 0,
-      unit: 'runs scored',
-      sentence: 'Appears after the first finished phase run.',
+      unit: t`runs scored`,
+      sentence: t`Appears after the first finished phase run.`,
       alert: '',
       href,
-      linkLabel: 'Health →',
+      linkLabel: t`Health →`,
       waiting: false,
     };
   }
   const parts: string[] = [];
-  if (i.scoredRuns > 0) {
-    parts.push(
-      i.farOffPlan > 0 ? `${fmtCount(i.farOffPlan)} landed far from the plan.` : 'All landed close to the plan.',
-    );
+  if (scoredRuns > 0) {
+    const farOff = fmtCount(i.farOffPlan);
+    parts.push(i.farOffPlan > 0 ? t`${farOff} landed far from the plan.` : t`All landed close to the plan.`);
   }
   let alert = '';
-  if (i.classifierCalls > 0) {
-    const labelled = `The classifier labelled ${plural(i.classifierCalls, 'session')} — `;
+  if (classifierCalls > 0) {
+    const count = fmtCount(classifierCalls);
+    const labelled = plural(classifierCalls, {
+      one: `The classifier labelled ${count} session —`,
+      few: `The classifier labelled ${count} sessions —`,
+      many: `The classifier labelled ${count} sessions —`,
+      other: `The classifier labelled ${count} sessions —`,
+    });
     if (i.classifierChecked === 0) {
-      parts.push(labelled.trimEnd());
-      alert = 'none checked by you yet.';
+      parts.push(labelled);
+      alert = t`none checked by you yet.`;
     } else {
-      parts.push(`${labelled}${fmtCount(i.classifierChecked)} checked by you.`);
+      const checked = fmtCount(i.classifierChecked);
+      parts.push(t`${labelled} ${checked} checked by you.`);
     }
   }
   return {
     id: 'measure',
     step: 3,
-    title: 'Measure',
-    n: i.scoredRuns,
-    unit: i.scoredRuns === 1 ? 'run scored' : 'runs scored',
+    title: t`Measure`,
+    n: scoredRuns,
+    unit: plural(scoredRuns, { one: 'run scored', few: 'runs scored', many: 'runs scored', other: 'runs scored' }),
     sentence: parts.join(' '),
     alert,
     href,
-    linkLabel: 'Health →',
+    linkLabel: t`Health →`,
     waiting: false,
   };
 }
 
 function learnStage(i: LoopInputs, href: string): Stage {
-  const n = i.lessonCandidates + i.advisorFindings + i.retirements;
+  const { lessonCandidates, advisorFindings, retirements } = i;
+  const n = lessonCandidates + advisorFindings + retirements;
   const parts: string[] = [];
-  if (i.lessonCandidates > 0) parts.push(plural(i.lessonCandidates, 'lesson candidate'));
-  if (i.advisorFindings > 0) parts.push(plural(i.advisorFindings, 'Advisor finding'));
-  if (i.retirements > 0) {
+  if (lessonCandidates > 0) {
+    const count = fmtCount(lessonCandidates);
     parts.push(
-      `${plural(i.retirements, 'lesson')} that may have stopped helping`,
+      plural(lessonCandidates, {
+        one: `${count} lesson candidate`,
+        few: `${count} lesson candidates`,
+        many: `${count} lesson candidates`,
+        other: `${count} lesson candidates`,
+      }),
     );
   }
+  if (advisorFindings > 0) {
+    const count = fmtCount(advisorFindings);
+    parts.push(
+      plural(advisorFindings, {
+        one: `${count} Advisor finding`,
+        few: `${count} Advisor findings`,
+        many: `${count} Advisor findings`,
+        other: `${count} Advisor findings`,
+      }),
+    );
+  }
+  if (retirements > 0) {
+    const count = fmtCount(retirements);
+    parts.push(
+      plural(retirements, {
+        one: `${count} lesson that may have stopped helping`,
+        few: `${count} lessons that may have stopped helping`,
+        many: `${count} lessons that may have stopped helping`,
+        other: `${count} lessons that may have stopped helping`,
+      }),
+    );
+  }
+  const list = parts.join(', ');
   const sentence =
     n === 0
-      ? 'Nothing to review. Lessons and Advisor findings land here after runs are measured.'
-      : `${parts.join(', ')}. Nothing changes until you say so.`;
+      ? t`Nothing to review. Lessons and Advisor findings land here after runs are measured.`
+      : t`${list}. Nothing changes until you say so.`;
   return {
     id: 'learn',
     step: 4,
-    title: 'Learn',
+    title: t`Learn`,
     n,
-    unit: n === 1 ? 'proposal' : 'proposals',
+    unit: plural(n, { one: 'proposal', few: 'proposals', many: 'proposals', other: 'proposals' }),
     sentence,
     alert: '',
     href,
-    linkLabel: n > 0 ? 'Review in Inbox →' : 'Inbox →',
+    linkLabel: n > 0 ? t`Review in Inbox →` : t`Inbox →`,
     waiting: n > 0,
   };
 }
 
 function changeStage(i: LoopInputs, href: string): Stage {
   const parts: string[] = [];
-  if (i.verifiedChanges > 0) {
-    parts.push(`${plural(i.verifiedChanges, 'change')} proved ${i.verifiedChanges === 1 ? 'it' : 'they'} helped.`);
+  const { verifiedChanges, gatheringProof } = i;
+  if (verifiedChanges > 0) {
+    const count = fmtCount(verifiedChanges);
+    parts.push(
+      plural(verifiedChanges, {
+        one: `${count} change proved it helped.`,
+        few: `${count} changes proved they helped.`,
+        many: `${count} changes proved they helped.`,
+        other: `${count} changes proved they helped.`,
+      }),
+    );
   }
-  if (i.gatheringProof > 0) {
-    parts.push(`${plural(i.gatheringProof, 'change')} still gathering proof.`);
+  if (gatheringProof > 0) {
+    const count = fmtCount(gatheringProof);
+    parts.push(
+      plural(gatheringProof, {
+        one: `${count} change still gathering proof.`,
+        few: `${count} changes still gathering proof.`,
+        many: `${count} changes still gathering proof.`,
+        other: `${count} changes still gathering proof.`,
+      }),
+    );
   }
   return {
     id: 'change',
     step: 5,
-    title: 'Change',
-    n: i.verifiedChanges,
-    unit: 'verified',
+    title: t`Change`,
+    n: verifiedChanges,
+    unit: t`verified`,
     sentence:
       parts.length === 0
-        ? 'Appears after you accept a change and it has run long enough to prove itself.'
+        ? t`Appears after you accept a change and it has run long enough to prove itself.`
         : parts.join(' '),
     alert: '',
     href,
-    linkLabel: 'Proof →',
+    linkLabel: t`Proof →`,
     waiting: false,
   };
 }

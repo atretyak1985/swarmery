@@ -32,6 +32,9 @@
 // from, and this is the only remedy that replaces it. The steps are identical;
 // only the wording changes, because the operator's situation differs.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useState } from 'react';
 import { completeUsageLogin, probeAccount, startUsageLogin } from '../../api';
 import { useUsage } from '../../lib/usageData';
@@ -45,14 +48,14 @@ type Phase = 'idle' | 'starting' | 'awaiting-code' | 'submitting' | 'pty-login';
 /** `connect` = never connected; `reconnect` = ours, and currently broken. */
 export type ConnectVariant = 'connect' | 'reconnect';
 
-const copy: Record<ConnectVariant, { action: string; blurb: string }> = {
+const copy: Record<ConnectVariant, { action: MessageDescriptor; blurb: MessageDescriptor }> = {
   connect: {
-    action: 'Connect account',
-    blurb: "Authorize swarmery to read this account's quota — no CLI login needed.",
+    action: msg`Connect account`,
+    blurb: msg`Authorize swarmery to read this account's quota — no CLI login needed.`,
   },
   reconnect: {
-    action: 'Reconnect',
-    blurb: 'Authorize swarmery again — this replaces the stored credential for this account.',
+    action: msg`Reconnect`,
+    blurb: msg`Authorize swarmery again — this replaces the stored credential for this account.`,
   },
 };
 
@@ -73,6 +76,7 @@ export function UsageConnect({
    * called on `later`: a deferred pty login is connected, not resolved. */
   onResolved?: () => void;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   const { refresh } = useUsage();
   const [phase, setPhase] = useState<Phase>('idle');
   const [code, setCode] = useState('');
@@ -116,7 +120,7 @@ export function UsageConnect({
         // The quota half succeeded but the CLI is not ready — take over in the
         // same card. Deliberately NO refresh yet: a refresh would flip the
         // card to "connected" and unmount this component mid-step.
-        setReason(outcome.reason ?? 'Claude login required for this account');
+        setReason(outcome.reason ?? t`Claude login required for this account`);
         setPhase('pty-login');
         return;
       }
@@ -148,7 +152,7 @@ export function UsageConnect({
         onResolved?.();
         return;
       }
-      setReason(verdict.runnableReason ?? 'Claude login required for this account');
+      setReason(verdict.runnableReason ?? t`Claude login required for this account`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -179,30 +183,36 @@ export function UsageConnect({
             disabled={busy}
             className={btn}
           >
-            {phase === 'starting' ? 'starting…' : copy[variant].action}
+            {phase === 'starting' ? t`starting…` : i18n._(copy[variant].action)}
           </button>
           <span className="font-mono text-[9.5px] leading-relaxed text-ink-faint">
-            {copy[variant].blurb}
+            {i18n._(copy[variant].blurb)}
           </span>
         </div>
       ) : phase === 'pty-login' ? (
         <div className="flex flex-col gap-1.5">
           <p className="font-mono text-[10px] leading-relaxed text-ink-dim">
             <span className="text-ink-faint">3 — </span>
-            Quota connected, but the CLI still needs a login:{' '}
-            <span className="text-ink-2">{reason}</span>
+            <Trans>
+              Quota connected, but the CLI still needs a login:{' '}
+              <span className="text-ink-2">{reason}</span>
+            </Trans>
           </p>
           {termOpen ? (
             <>
               <p className="font-mono text-[9.5px] leading-relaxed text-ink-faint">
-                This terminal runs under <span className="text-ink-2">{account}</span>&apos;s config
-                dir. Run <code className="px-1 text-ink-2">claude</code> and complete the login —
-                when you exit the shell, the account is re-checked automatically.
+                <Trans>
+                  This terminal runs under <span className="text-ink-2">{account}</span>&apos;s
+                  config dir. Run <code className="px-1 text-ink-2">claude</code> and complete the
+                  login — when you exit the shell, the account is re-checked automatically.
+                </Trans>
               </p>
               <div className="h-64 overflow-hidden rounded-lg border border-line bg-[#0b0d10] p-1.5">
                 <Suspense
                   fallback={
-                    <div className="p-3 font-mono text-[11px] text-ink-faint">loading terminal…</div>
+                    <div className="p-3 font-mono text-[11px] text-ink-faint">
+                      <Trans>loading terminal…</Trans>
+                    </div>
                   }
                 >
                   <XTerm
@@ -217,13 +227,15 @@ export function UsageConnect({
             </>
           ) : (
             <p className="font-mono text-[9.5px] leading-relaxed text-ink-faint">
-              Finish it here: open a terminal already scoped to this account and log the CLI in.
+              <Trans>
+                Finish it here: open a terminal already scoped to this account and log the CLI in.
+              </Trans>
             </p>
           )}
           <div className="flex flex-wrap items-center gap-1.5">
             {!termOpen && (
               <button type="button" onClick={() => setTermOpen(true)} className={btn}>
-                open login terminal
+                <Trans>open login terminal</Trans>
               </button>
             )}
             <button
@@ -232,10 +244,10 @@ export function UsageConnect({
               disabled={checking}
               className={btn}
             >
-              {checking ? 'checking…' : 're-check now'}
+              {checking ? t`checking…` : t`re-check now`}
             </button>
             <button type="button" onClick={() => void dismissPty()} disabled={checking} className={btn}>
-              later
+              <Trans>later</Trans>
             </button>
           </div>
         </div>
@@ -243,9 +255,11 @@ export function UsageConnect({
         <div className="flex flex-col gap-1.5">
           <p className="font-mono text-[10px] leading-relaxed text-ink-dim">
             <span className="text-ink-faint">1 — </span>
-            Sign in <span className="text-ink-2">as {account}</span>. The browser tab that just
-            opened must be logged into THAT account&apos;s claude.ai subscription — if it is signed
-            in as someone else, sign out there first or use a private window.
+            <Trans>
+              Sign in <span className="text-ink-2">as {account}</span>. The browser tab that just
+              opened must be logged into THAT account&apos;s claude.ai subscription — if it is
+              signed in as someone else, sign out there first or use a private window.
+            </Trans>
           </p>
           {authorizeUrl !== null && (
             <a
@@ -254,12 +268,14 @@ export function UsageConnect({
               rel="noopener noreferrer"
               className="font-mono text-[9.5px] break-all text-brand underline-offset-2 hover:underline"
             >
-              tab didn&apos;t open? authorize here
+              <Trans>tab didn&apos;t open? authorize here</Trans>
             </a>
           )}
           <p className="font-mono text-[10px] leading-relaxed text-ink-dim">
             <span className="text-ink-faint">2 — </span>
-            Paste the whole code the page shows, including the part after the <code>#</code>.
+            <Trans>
+              Paste the whole code the page shows, including the part after the <code>#</code>.
+            </Trans>
           </p>
           <div className="flex items-center gap-1.5">
             <input
@@ -267,7 +283,8 @@ export function UsageConnect({
               value={code}
               autoComplete="off"
               spellCheck={false}
-              aria-label={`authorization code for ${account}`}
+              aria-label={t`authorization code for ${account}`}
+              // i18n-ignore — the shape of the pasted value, not prose
               placeholder="code#state"
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={(e) => {
@@ -281,7 +298,7 @@ export function UsageConnect({
               disabled={busy || code.trim() === ''}
               className={btn}
             >
-              {phase === 'submitting' ? '…' : 'connect'}
+              {phase === 'submitting' ? '…' : t`connect`}
             </button>
             <button
               type="button"
@@ -294,7 +311,7 @@ export function UsageConnect({
               disabled={busy}
               className={btn}
             >
-              cancel
+              <Trans>cancel</Trans>
             </button>
           </div>
         </div>

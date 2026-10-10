@@ -4,6 +4,9 @@
 // insights, capability cards, and needs-attention rows.
 // Telemetry-only projects (no plugin) still hide the Capability section.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
@@ -82,18 +85,19 @@ function SectionRule({
 // ── hero sentence ─────────────────────────────────────────────────────────────
 
 function HeroSentence({ thisWeek }: { thisWeek: WeekMetric[] }): JSX.Element {
-  const tasksShipped = thisWeek.find((m) => m.label === 'tasks shipped');
-  const approvalsAsked = thisWeek.find((m) => m.label === 'approvals asked');
+  // The labels are the server's metric keys (GET /api/projects/{id}/overview),
+  // compared verbatim — not UI copy.
+  const tasksShipped = thisWeek.find((m) => m.label === 'tasks shipped'); // i18n-ignore
+  const approvalsAsked = thisWeek.find((m) => m.label === 'approvals asked'); // i18n-ignore
   const tasks = tasksShipped?.value ?? '0';
   const approvals = approvalsAsked?.value ?? '0';
 
   return (
     <p className="mt-[18px] max-w-[34ch] font-display text-[26px] font-medium leading-[1.28] tracking-[-0.01em] text-ink text-wrap-pretty">
-      Shipped{' '}
-      <span className="text-green">{tasks} tasks</span>
-      {' '}this week — and asked you{' '}
-      <span className="text-brand">{approvals} times</span>
-      {' '}to do it.
+      <Trans>
+        Shipped <span className="text-green">{tasks} tasks</span> this week — and asked you{' '}
+        <span className="text-brand">{approvals} times</span> to do it.
+      </Trans>
     </p>
   );
 }
@@ -121,12 +125,13 @@ function RightNowTile({ tile }: { tile: OverviewTile }): JSX.Element {
 }
 
 function RightNowSection({ tiles }: { tiles: OverviewTile[] }): JSX.Element {
+  const { t } = useLingui();
   return (
     <>
-      <SectionRule label="Right now" />
+      <SectionRule label={t`Right now`} />
       <div className="mt-[10px] grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-[10px]">
-        {tiles.map((t) => (
-          <RightNowTile key={t.label} tile={t} />
+        {tiles.map((tile) => (
+          <RightNowTile key={tile.label} tile={tile} />
         ))}
       </div>
     </>
@@ -156,9 +161,10 @@ function WeekTile({ metric }: { metric: WeekMetric }): JSX.Element {
 }
 
 function ThisWeekSection({ metrics }: { metrics: WeekMetric[] }): JSX.Element {
+  const { t } = useLingui();
   return (
     <>
-      <SectionRule label="This week" right="vs previous 7 d" />
+      <SectionRule label={t`This week`} right={t`vs previous 7 d`} />
       <div className="mt-[10px] grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-[10px]">
         {metrics.map((m) => (
           <WeekTile key={m.label} metric={m} />
@@ -170,27 +176,29 @@ function ThisWeekSection({ metrics }: { metrics: WeekMetric[] }): JSX.Element {
 
 // ── where-work-sits (inline funnel) ──────────────────────────────────────────
 
-const FUNNEL_LABELS: Record<string, string> = {
-  triage: 'triage',
-  todo: 'to do',
-  in_progress: 'in progress',
-  in_review: 'in review',
-  done: 'done',
-  archived: 'archived',
+const FUNNEL_LABELS: Record<string, MessageDescriptor> = {
+  triage: msg`triage`,
+  todo: msg`to do`,
+  in_progress: msg`in progress`,
+  in_review: msg`in review`,
+  done: msg`done`,
+  archived: msg`archived`,
 };
 
 function InlineFunnel({ funnel, slug }: { funnel: FunnelResp; slug: string }): JSX.Element {
+  const { t, i18n } = useLingui();
   const maxCount = Math.max(1, ...funnel.columns.map((c) => c.count));
   const BAR_MAX_H = 40; // px for the tallest bar
+  const rate = (funnel.completionRate * 100).toFixed(0);
   const stallNote =
     funnel.completionRate < 0.5 && funnel.columns.some((c) => c.count > 0)
-      ? `${(funnel.completionRate * 100).toFixed(0)}% completion rate — some tasks may be stalled.`
+      ? t`${rate}% completion rate — some tasks may be stalled.`
       : null;
 
   return (
     <>
       <SectionRule
-        label="Where work sits"
+        label={t`Where work sits`}
         {...(boardParked()
           ? {}
           : {
@@ -199,7 +207,7 @@ function InlineFunnel({ funnel, slug }: { funnel: FunnelResp; slug: string }): J
                   to={`/p/${slug}/board`}
                   className="font-mono text-[10.5px] text-ink-dim hover:text-brand transition-colors"
                 >
-                  open board →
+                  <Trans>open board →</Trans>
                 </Link>
               ),
             })}
@@ -208,6 +216,7 @@ function InlineFunnel({ funnel, slug }: { funnel: FunnelResp; slug: string }): J
         <div className="flex items-flex-end gap-2">
           {funnel.columns.map((c) => {
             const barH = Math.max(3, Math.round((c.count / maxCount) * BAR_MAX_H));
+            const columnLabel = FUNNEL_LABELS[c.column];
             return (
               <div key={c.column} className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-[5px]">
@@ -220,7 +229,7 @@ function InlineFunnel({ funnel, slug }: { funnel: FunnelResp; slug: string }): J
                   style={{ height: `${barH}px` }}
                 />
                 <div className="mt-[5px] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[9.5px] uppercase tracking-[0.06em] text-ink-faint">
-                  {FUNNEL_LABELS[c.column] ?? c.column}
+                  {columnLabel !== undefined ? i18n._(columnLabel) : c.column}
                 </div>
               </div>
             );
@@ -260,6 +269,7 @@ function InsightStatusChip({ status }: { status: Recommendation['status'] }): JS
 
 /** Per-project Insights with generate button and settle-poll. */
 function InsightsCard({ slug }: { slug: string }): JSX.Element {
+  const { t } = useLingui();
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -308,7 +318,7 @@ function InsightsCard({ slug }: { slug: string }): JSX.Element {
   return (
     <>
       <SectionRule
-        label="Insights"
+        label={t`Insights`}
         right={
           (
             <button
@@ -317,7 +327,7 @@ function InsightsCard({ slug }: { slug: string }): JSX.Element {
               disabled={generating}
               className="rounded-[7px] border border-line-strong bg-transparent px-[10px] py-[3px] font-mono text-[10.5px] text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
             >
-              {generating ? 'analyzing…' : 'generate insights'}
+              {generating ? t`analyzing…` : t`generate insights`}
             </button>
           ) as unknown as string
         }
@@ -325,10 +335,10 @@ function InsightsCard({ slug }: { slug: string }): JSX.Element {
       {error !== null ? (
         <ErrorBox message={error} onRetry={() => void load()} />
       ) : recs === null ? (
-        <Loading label="insights…" />
+        <Loading label={t`insights…`} />
       ) : top.length === 0 ? (
         <div className="mt-[10px] rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
-          no recommendations yet — Generate insights runs the advisor now
+          <Trans>no recommendations yet — Generate insights runs the advisor now</Trans>
         </div>
       ) : (
         <>
@@ -354,7 +364,7 @@ function InsightsCard({ slug }: { slug: string }): JSX.Element {
             className="mt-[10px] bg-transparent p-0 font-mono text-[10.5px] text-ink-dim hover:text-brand transition-colors"
           >
             <Link to={`/p/${slug}/retro`} className="text-ink-dim hover:text-brand">
-              all recommendations in Retro →
+              <Trans>all recommendations in Retro →</Trans>
             </Link>
           </button>
         </>
@@ -365,11 +375,11 @@ function InsightsCard({ slug }: { slug: string }): JSX.Element {
 
 // ── capability cards ──────────────────────────────────────────────────────────
 
-const CAP_CATEGORIES: { key: keyof { agents: ProjectComponent[]; skills: ProjectComponent[]; commands: ProjectComponent[]; hooks: ProjectComponent[] }; label: string }[] = [
-  { key: 'agents', label: 'agents' },
-  { key: 'skills', label: 'skills' },
-  { key: 'commands', label: 'commands' },
-  { key: 'hooks', label: 'hooks' },
+const CAP_CATEGORIES: { key: keyof { agents: ProjectComponent[]; skills: ProjectComponent[]; commands: ProjectComponent[]; hooks: ProjectComponent[] }; label: MessageDescriptor }[] = [
+  { key: 'agents', label: msg`agents` },
+  { key: 'skills', label: msg`skills` },
+  { key: 'commands', label: msg`commands` },
+  { key: 'hooks', label: msg`hooks` },
 ];
 
 function CapabilityCard({
@@ -379,6 +389,7 @@ function CapabilityCard({
   title: string;
   items: ProjectComponent[];
 }): JSX.Element {
+  const { t } = useLingui();
   return (
     <div className="rounded-[12px] border border-line px-[15px] py-[13px]">
       <div className="flex items-baseline gap-2">
@@ -390,19 +401,24 @@ function CapabilityCard({
       </div>
       <div className="mt-[6px] max-h-[148px] overflow-y-auto overscroll-contain pr-[10px] [scrollbar-color:theme(colors.line-strong)_transparent] [scrollbar-width:thin]">
         {items.length === 0 ? (
-          <div className="py-[6px] font-mono text-[11px] text-ink-faint">none</div>
+          <div className="py-[6px] font-mono text-[11px] text-ink-faint">
+            <Trans>none</Trans>
+          </div>
         ) : (
-          items.map((c) => (
-            <div
-              key={c.name}
-              data-tip={`source: ${c.source}`}
-              className="flex items-baseline gap-2 border-t border-line-soft py-[6px] font-mono text-[11.5px] first:border-t-0"
-            >
-              <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-ink-2">
-                {c.name}
-              </span>
-            </div>
-          ))
+          items.map((c) => {
+            const source = c.source;
+            return (
+              <div
+                key={c.name}
+                data-tip={t`source: ${source}`}
+                className="flex items-baseline gap-2 border-t border-line-soft py-[6px] font-mono text-[11.5px] first:border-t-0"
+              >
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-ink-2">
+                  {c.name}
+                </span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
@@ -416,19 +432,22 @@ function CapabilitySection({
   components: ProjectDetailData['components'];
   slug: string;
 }): JSX.Element {
+  const { t, i18n } = useLingui();
   return (
     <>
-      <SectionRule label="Capability" right="local to this project" />
+      <SectionRule label={t`Capability`} right={t`local to this project`} />
       <div className="mt-[10px] grid grid-cols-[repeat(auto-fit,minmax(290px,1fr))] items-start gap-3">
         {CAP_CATEGORIES.map(({ key, label }) => (
-          <CapabilityCard key={key} title={label} items={components[key]} />
+          <CapabilityCard key={key} title={i18n._(label)} items={components[key]} />
         ))}
       </div>
       <div className="mt-3 font-mono text-[11px] text-ink-faint">
-        manage plugins + detach in{' '}
-        <Link to={`/p/${slug}/settings`} className="text-ink-dim underline hover:text-ink">
-          Settings →
-        </Link>
+        <Trans>
+          manage plugins + detach in{' '}
+          <Link to={`/p/${slug}/settings`} className="text-ink-dim underline hover:text-ink">
+            Settings →
+          </Link>
+        </Trans>
       </div>
     </>
   );
@@ -454,11 +473,14 @@ function AttentionRow({ item }: { item: AttentionItem }): JSX.Element {
 }
 
 function NeedsAttentionSection({ items }: { items: AttentionItem[] }): JSX.Element {
+  const { t } = useLingui();
   return (
     <>
-      <SectionRule label="Needs attention" />
+      <SectionRule label={t`Needs attention`} />
       {items.length === 0 ? (
-        <div className="mt-2 font-mono text-[11.5px] text-ink-faint">nothing flagged</div>
+        <div className="mt-2 font-mono text-[11.5px] text-ink-faint">
+          <Trans>nothing flagged</Trans>
+        </div>
       ) : (
         <div className="mt-2">
           {items.map((item, i) => (
@@ -474,6 +496,7 @@ function NeedsAttentionSection({ items }: { items: AttentionItem[] }): JSX.Eleme
 // ── root page ─────────────────────────────────────────────────────────────────
 
 export function ProjectOverview(): JSX.Element {
+  const { t } = useLingui();
   const { slug, projectId, loading: projLoading } = useProjectWorkspace();
 
   // fetchProject for header + Capability
@@ -533,10 +556,15 @@ export function ProjectOverview(): JSX.Element {
     <div className="px-4 pt-5 pb-10 desk:px-8 desk:pt-7">{inner}</div>
   );
 
-  if (projLoading && projectId === null) return wrap(<Loading label="workspace…" />);
-  if (projectId === null) return wrap(<Empty>unknown project</Empty>);
+  if (projLoading && projectId === null) return wrap(<Loading label={t`workspace…`} />);
+  if (projectId === null)
+    return wrap(
+      <Empty>
+        <Trans>unknown project</Trans>
+      </Empty>,
+    );
   if (dataError !== null) return wrap(<ErrorBox message={dataError} onRetry={loadData} />);
-  if (data === null) return wrap(<Loading label="project…" />);
+  if (data === null) return wrap(<Loading label={t`project…`} />);
 
   const { project, components } = data;
   const managed = project.plugin?.managed ?? false;
@@ -561,7 +589,7 @@ export function ProjectOverview(): JSX.Element {
         ))}
         {project.archived && (
           <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] whitespace-nowrap text-ink-faint">
-            archived
+            <Trans>archived</Trans>
           </span>
         )}
         <div className="ml-auto">
@@ -599,11 +627,11 @@ export function ProjectOverview(): JSX.Element {
         <CapabilitySection components={components} slug={project.slug} />
       ) : (
         <>
-          <SectionRule label="Capability" right="local to this project" />
+          <SectionRule label={t`Capability`} right={t`local to this project`} />
           <div className="mt-[10px] rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
             {project.plugin === null
-              ? 'telemetry-only — no .claude/settings.json, the swarmery plugin is not installed here'
-              : 'the swarmery plugin is not enabled for this project'}
+              ? t`telemetry-only — no .claude/settings.json, the swarmery plugin is not installed here`
+              : t`the swarmery plugin is not enabled for this project`}
           </div>
         </>
       )}

@@ -9,9 +9,11 @@
 // The way back to the fleet is the sidebar's project switcher ("All projects")
 // or the wordmark — the Sessions/Projects mode toggle was retired (Canvas v3).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import { MOCK } from '../api';
 import { AccountReadyBanner } from '../components/AccountReadyBanner';
+import { LanguageToggle } from '../components/LanguageToggle';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { UsageChip } from '../components/usage/UsageChip';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
@@ -21,6 +23,7 @@ import { Wordmark } from '../components/Wordmark';
 
 export function WorkspaceShell(): JSX.Element {
   const { health, unreachable } = useHealth();
+  const { t } = useLingui();
   const daemonOk = !unreachable;
   return (
     // overflow-hidden: a shell that IS the viewport must never scroll the
@@ -35,26 +38,27 @@ export function WorkspaceShell(): JSX.Element {
             shells — no shift when switching scope. */}
         <Link
           to="/"
-          aria-label="back to all projects"
+          aria-label={t`back to all projects`}
           className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80 desk:w-[172px] desk:shrink-0"
         >
           <Wordmark />
         </Link>
         <span className="ml-auto flex items-center gap-3">
+          <LanguageToggle />
           <ThemeToggle />
           <UsageChip />
           <span className="flex items-center gap-1.5 font-mono text-[10.5px] text-ink-dim">
             {MOCK ? (
               <>
                 <span className="inline-block h-[7px] w-[7px] rounded-full bg-amber" />
-                mock data
+                <Trans>mock data</Trans>
               </>
             ) : (
               <>
                 <span
                   className={`inline-block h-[7px] w-[7px] rounded-full ${daemonOk ? 'animate-pulse-dot bg-green' : 'bg-red'}`}
                 />
-                {daemonOk ? 'daemon healthy' : 'daemon unreachable'}
+                {daemonOk ? t`daemon healthy` : t`daemon unreachable`}
                 {health !== null && <span title={versionTitle(health)}>· {versionLabel(health)}</span>}
                 <PluginDriftBadge health={health} />
               </>

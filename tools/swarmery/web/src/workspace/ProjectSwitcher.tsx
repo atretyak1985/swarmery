@@ -6,6 +6,7 @@
 // to /p/{slug} (preserving the current sub-route tab where possible). Distinct
 // from the header ProjectDropdown (that filters fleet scope; this NAVIGATES).
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Project } from '../api/types';
@@ -26,6 +27,7 @@ export function ProjectSwitcher({
   subPath: string;
 }): JSX.Element {
   const navigate = useNavigate();
+  const { t } = useLingui();
   const colorFor = useProjectColor();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -38,7 +40,7 @@ export function ProjectSwitcher({
   const current = findProject(projects, currentSlug);
   const allProjects = currentSlug === null;
   const label =
-    current !== null ? projectLabel(current.name, current.slug) : (currentSlug ?? 'All projects');
+    current !== null ? projectLabel(current.name, current.slug) : (currentSlug ?? t`All projects`);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -100,7 +102,7 @@ export function ProjectSwitcher({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="switch project"
+        aria-label={t`switch project`}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' && open) {
@@ -141,14 +143,14 @@ export function ProjectSwitcher({
                   focusOption(1);
                 }
               }}
-              placeholder="search projects…"
-              aria-label="search projects"
+              placeholder={t`search projects…`}
+              aria-label={t`search projects`}
               className="w-full rounded-[8px] border border-line bg-surface px-2.5 py-1.5 font-mono text-[11px] text-ink outline-none placeholder:text-ink-faint focus:border-ink-dim"
             />
           </div>
           <div
             role="listbox"
-            aria-label="projects"
+            aria-label={t`projects`}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 e.preventDefault();
@@ -158,7 +160,9 @@ export function ProjectSwitcher({
             className="max-h-[46vh] overflow-y-auto py-1"
           >
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 font-mono text-[11px] text-ink-faint">no match</div>
+              <div className="px-3 py-2 font-mono text-[11px] text-ink-faint">
+                <Trans>no match</Trans>
+              </div>
             ) : (
               filtered.map((p) => (
                 <button
@@ -192,7 +196,7 @@ export function ProjectSwitcher({
               }}
               className="accent-brand"
             />
-            onboarded only
+            <Trans>onboarded only</Trans>
           </label>
           <button
             type="button"
@@ -202,7 +206,7 @@ export function ProjectSwitcher({
             }}
             className="flex w-full items-center gap-2 border-t border-line px-3 py-2 text-left font-mono text-[11px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
           >
-            All projects →
+            <Trans>All projects →</Trans>
           </button>
         </div>
       )}

@@ -17,6 +17,7 @@
 // within an account the live card before the estimate — which is already the
 // order that means something.
 
+import { Trans, useLingui } from '@lingui/react/macro';
 import type { UsageProvider } from '../../api/types';
 import type { ConnectVariant } from './UsageConnect';
 import { UsageConnect } from './UsageConnect';
@@ -69,17 +70,18 @@ function connectVariant(p: UsageProvider): ConnectVariant {
  * neutral `disabled`/`not connected` = switched off, or off with no guidance.
  */
 function StatusBadge({ p }: { p: UsageProvider }): JSX.Element | null {
+  const { t } = useLingui();
   if (p.status === 'ok') return null;
 
-  let label = 'not connected';
+  let label = t`not connected`;
   let tone = 'bg-field text-ink-dim';
   if (p.status === 'error') {
-    label = 'error';
+    label = t`error`;
     tone = 'bg-red/10 text-red';
   } else if (p.hint?.kind === 'opted-out') {
-    label = 'disabled';
+    label = t`disabled`;
   } else if (p.hint !== undefined) {
-    label = 'setup needed';
+    label = t`setup needed`;
     tone = 'bg-amber/10 text-amber';
   }
 
@@ -123,7 +125,8 @@ export function UsageProviderCard({
   onShowAllHidden: () => void;
   now: number;
 }): JSX.Element {
-  const hiddenCount = p.windows.filter((w) => hidden.includes(w.key)).length;
+  const { t } = useLingui();
+  const hiddenCount =p.windows.filter((w) => hidden.includes(w.key)).length;
 
   return (
     <div
@@ -146,7 +149,7 @@ export function UsageProviderCard({
           {showAccount && (
             <span
               className="shrink-0 rounded-full bg-field px-1.5 py-0.5 font-mono text-[9.5px] whitespace-nowrap text-ink-dim"
-              data-tip="subscription account"
+              data-tip={t`subscription account`}
             >
               {p.account}
             </span>
@@ -154,9 +157,9 @@ export function UsageProviderCard({
           {active && (
             <span
               className="shrink-0 rounded-full bg-brand/10 px-1.5 py-0.5 font-mono text-[9px] tracking-[0.12em] whitespace-nowrap text-brand uppercase"
-              data-tip="the account this project's sessions run under"
+              data-tip={t`the account this project's sessions run under`}
             >
-              active
+              <Trans>active</Trans>
             </span>
           )}
           {p.plan !== undefined && (
@@ -171,7 +174,7 @@ export function UsageProviderCard({
             onClick={onShowAllHidden}
             className="shrink-0 rounded-[6px] border border-line px-1.5 py-0.5 font-mono text-[9.5px] whitespace-nowrap text-ink-dim transition-colors hover:bg-surface2 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
           >
-            show hidden ({hiddenCount})
+            <Trans>show hidden ({hiddenCount})</Trans>
           </button>
         )}
         <StatusBadge p={p} />
@@ -218,7 +221,9 @@ export function UsageProviderCard({
         </div>
       ) : (
         p.status === 'ok' && (
-          <div className="mt-2 font-mono text-[10.5px] text-ink-dim">No usage data available</div>
+          <div className="mt-2 font-mono text-[10.5px] text-ink-dim">
+            <Trans>No usage data available</Trans>
+          </div>
         )
       )}
     </div>

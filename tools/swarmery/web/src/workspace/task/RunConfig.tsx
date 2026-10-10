@@ -19,6 +19,8 @@
 // `agent` prefixing the persona onto every stage, are both facts you could
 // previously only learn from internal/dispatch/service.go.
 
+import { t } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { fetchRouteDecision, type RouteDecision } from '../../api/route';
 import type { Playbook, TaskPriority } from '../../api/types';
@@ -51,11 +53,13 @@ function unset(v: string): boolean {
  * dispatcher profiles a recipe at admission and the model arrives with it.
  */
 function modelPhrase(choice: RunConfigChoice, playbooks: readonly Playbook[]): string {
-  if (!unset(choice.model)) return `${choice.model} (card override)`;
-  if (unset(choice.playbook)) return 'model chosen at dispatch';
+  const cardModel = choice.model;
+  if (!unset(cardModel)) return t`${cardModel} (card override)`;
+  if (unset(choice.playbook)) return t`model chosen at dispatch`;
   const pb = playbooks.find((p) => p.name === choice.playbook);
-  if (pb === undefined || pb.model === '') return 'default model';
-  return `${pb.model} (from playbook)`;
+  if (pb === undefined || pb.model === '') return t`default model`;
+  const playbookModel = pb.model;
+  return t`${playbookModel} (from playbook)`;
 }
 
 /**
@@ -64,8 +68,8 @@ function modelPhrase(choice: RunConfigChoice, playbooks: readonly Playbook[]): s
  * without rendering a select.
  */
 export function runConfigSummary(choice: RunConfigChoice, playbooks: readonly Playbook[]): string {
-  const playbook = unset(choice.playbook) ? 'auto playbook' : choice.playbook;
-  const agent = unset(choice.agent) ? 'no agent' : `@${choice.agent}`;
+  const playbook = unset(choice.playbook) ? t`auto playbook` : choice.playbook;
+  const agent = unset(choice.agent) ? t`no agent` : `@${choice.agent}`;
   return `${playbook} · ${modelPhrase(choice, playbooks)} · ${agent}`;
 }
 
@@ -80,8 +84,11 @@ export function runConfigSummary(choice: RunConfigChoice, playbooks: readonly Pl
 export function routeLine(d: RouteDecision): string {
   const parts = [d.tier, `${d.pickModel}/${d.pickEffort}`];
   if (d.pickPlaybook !== '') parts.push(d.pickPlaybook);
-  const why = d.applied ? 'route applied' : `${d.wonRung === '' ? 'ladder' : d.wonRung} model won`;
-  return `Route: ${parts.join(' · ')} (${d.mode} — ${why})`;
+  const rung = d.wonRung === '' ? t`ladder` : d.wonRung;
+  const why = d.applied ? t`route applied` : t`${rung} model won`;
+  const pick = parts.join(' · ');
+  const mode = d.mode;
+  return t`Route: ${pick} (${mode} — ${why})`;
 }
 
 /** The card's latest route decision; null until one exists (or without an id). */
@@ -108,10 +115,12 @@ function useRouteDecision(taskId: number | undefined): RouteDecision | null {
 function KnobExplainer(): JSX.Element {
   return (
     <p className="font-mono text-[10px] leading-relaxed text-ink-faint">
-      The playbook sets the stages and the permission mode the run spawns under.{' '}
-      <span className="text-ink-dim">model</span> overrides the model the playbook would use.{' '}
-      <span className="text-ink-dim">agent</span> is orthogonal to both: it prefixes every stage's
-      prompt with that persona, it does not replace the stages.
+      <Trans>
+        The playbook sets the stages and the permission mode the run spawns under.{' '}
+        <span className="text-ink-dim">model</span> overrides the model the playbook would use.{' '}
+        <span className="text-ink-dim">agent</span> is orthogonal to both: it prefixes every stage's prompt
+        with that persona, it does not replace the stages.
+      </Trans>
     </p>
   );
 }
@@ -133,6 +142,7 @@ export function RunConfig({
   /** The card's id — enables the read-only route line once it has a decision. */
   taskId?: number;
 }): JSX.Element {
+  const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const summary = runConfigSummary(draft, playbooks);
@@ -148,12 +158,12 @@ export function RunConfig({
       <button
         type="button"
         aria-expanded={open}
-        aria-label="run config"
+        aria-label={t`run config`}
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left"
       >
         <span className="shrink-0 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
-          run
+          <Trans>run</Trans>
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-2">{summary}</span>
         <span aria-hidden="true" className="shrink-0 font-mono text-[10px] text-ink-faint">
@@ -174,7 +184,7 @@ export function RunConfig({
       {open && (
         <div className="flex flex-col gap-3 border-t border-line px-2.5 py-2.5">
           <div>
-            <FieldLabel>playbook</FieldLabel>
+            <FieldLabel>{t`playbook`}</FieldLabel>
             <PlaybookSelect
               playbooks={playbooks}
               value={draft.playbook}
@@ -184,7 +194,7 @@ export function RunConfig({
           </div>
 
           <div>
-            <FieldLabel>agent</FieldLabel>
+            <FieldLabel>{t`agent`}</FieldLabel>
             <AgentSelect agents={agents} value={draft.agent} onChange={(v) => set('agent', v)} />
             <AgentHint agents={agents} value={draft.agent} />
           </div>
@@ -195,21 +205,21 @@ export function RunConfig({
             <button
               type="button"
               aria-expanded={advanced}
-              aria-label="advanced"
+              aria-label={t`advanced`}
               onClick={() => setAdvanced((v) => !v)}
               className="font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
             >
-              {advanced ? '▾' : '▸'} advanced
+              {advanced ? '▾' : '▸'} <Trans>advanced</Trans>
             </button>
             {advanced && (
               <div className="mt-2 flex flex-col gap-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <FieldLabel>model</FieldLabel>
+                    <FieldLabel>{t`model`}</FieldLabel>
                     <select
                       value={draft.model}
                       onChange={(e) => set('model', e.target.value)}
-                      aria-label="model"
+                      aria-label={t`model`}
                       className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim"
                     >
                       {TASK_MODELS.map((m) => (
@@ -220,11 +230,11 @@ export function RunConfig({
                     </select>
                   </div>
                   <div>
-                    <FieldLabel>priority</FieldLabel>
+                    <FieldLabel>{t`priority`}</FieldLabel>
                     <select
                       value={draft.priority}
                       onChange={(e) => set('priority', e.target.value as TaskPriority)}
-                      aria-label="priority"
+                      aria-label={t`priority`}
                       className="w-full rounded-[8px] border border-line bg-field px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-ink-dim"
                     >
                       {TASK_PRIORITIES.map((p) => (
@@ -236,15 +246,15 @@ export function RunConfig({
                   </div>
                 </div>
                 <ChipEditor
-                  label="file scope"
+                  label={t`file scope`}
                   values={draft.fileScope}
-                  placeholder="add a path glob + Enter"
+                  placeholder={t`add a path glob + Enter`}
                   onChange={(v) => set('fileScope', v)}
                 />
                 <ChipEditor
-                  label="dependencies"
+                  label={t`dependencies`}
                   values={draft.dependencies}
-                  placeholder="add a T-id + Enter"
+                  placeholder={t`add a T-id + Enter`}
                   onChange={(v) => set('dependencies', v)}
                 />
               </div>
