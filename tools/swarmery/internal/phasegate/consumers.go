@@ -52,6 +52,18 @@ var Consumers = []Consumer{
 		Gated:  true,
 	},
 	{
+		Path:   "internal/phaserun/plan_review.go",
+		Symbol: "planComplete",
+		Gated:  false,
+		Why: "Not a completion decision. It only decides WHEN to start the " +
+			"plan-branch review: once every phase is ticked out or marked done " +
+			"and none is still running. The review records nothing about " +
+			"completion and blocks nothing; gating it on the verifier's verdict " +
+			"would hold the seam review behind grades that may never arrive " +
+			"(inconclusive), which is the opposite of what an advisory review " +
+			"is for.",
+	},
+	{
 		Path:   "internal/phaserun/service.go",
 		Symbol: "depSatisfied",
 		Gated:  true,

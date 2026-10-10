@@ -205,6 +205,10 @@ type epicPhaseDTO struct {
 	// oldest first: every time a finished phase was sent back because a defect
 	// slipped past its gates, with the gate that caught it. Never null.
 	Reopens []reopenDTO `json:"reopens"`
+	// Reviews are the phase's code reviews (migration 0106, phase_reviews
+	// scope='phase', reviews.go), newest first, with Findings always "" — the Runs
+	// tab fetches the latest review's findings from …/phases/{id}/reviews. Never null.
+	Reviews []reviewDTO `json:"reviews"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -891,6 +895,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		docs[p.ID] = p.DocPath
 	}
 	reopens := h.phaseReopens(taskID, docs) // and again
+	reviews := h.phaseReviews(taskID)       // and again
 	for i := range phases {
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]
@@ -905,6 +910,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		phases[i].Reopens = reopens[phases[i].ID]
 		if phases[i].Reopens == nil {
 			phases[i].Reopens = []reopenDTO{} // [] not null: the UI maps over it
+		}
+		phases[i].Reviews = reviews[phases[i].ID]
+		if phases[i].Reviews == nil {
+			phases[i].Reviews = []reviewDTO{}
 		}
 	}
 	if rollup.Total > 0 {

@@ -17,6 +17,7 @@ import { patchProposal, patchRecommendation, resolveApproval } from '../../api';
 import { AUTO_MODE_NO_VERDICT_RULE, resumeAccount } from '../../api/alerts';
 import { postGroundTruth, type QueueItem } from '../../api/decisions';
 import { acceptLesson, confirmRetirement, dismissLesson, keepLesson } from '../../api/lessons';
+import { ackReview } from '../../api/reviews';
 import { acceptTriageVerdict, type TriageAudit } from '../../api/triage';
 import { QuestionForm } from '../../components/QuestionForm';
 import { questionsOf, requestSummary } from '../../lib/approvals';
@@ -31,6 +32,7 @@ import {
   valueWording,
   type InboxItem,
 } from './inboxModel';
+import { ReviewDetail } from './ReviewItem';
 
 type Action = () => Promise<unknown>;
 
@@ -72,6 +74,8 @@ function manualPrimaryAction(item: InboxItem): Action | null {
       const alert = item.raw;
       return isAccountBreaker(alert) ? () => resumeAccount(alert.account) : null;
     }
+    case 'review':
+      return () => ackReview(item.raw.id);
   }
 }
 
@@ -93,6 +97,9 @@ export function denyAction(item: InboxItem): Action | null {
       return () => keepLesson(item.raw.id);
     case 'alert':
       // An alert cannot be dismissed: it goes away when what it reports does.
+      return null;
+    case 'review':
+      // Acknowledging is the only decision; there is nothing to refuse.
       return null;
   }
 }
@@ -498,6 +505,23 @@ export function InboxDetail({
       buttons = (
         <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
           probe &amp; resume
+          <KeyHint k={manualKey} />
+        </button>
+      );
+      break;
+    }
+    case 'review': {
+      body = (
+        <>
+          <ReviewDetail review={item.raw} now={now} />
+          <Consequences
+            yes={['if you ack', 'The review leaves the Inbox. It stays on record; nothing else changes.']}
+          />
+        </>
+      );
+      buttons = (
+        <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
+          ack
           <KeyHint k={manualKey} />
         </button>
       );

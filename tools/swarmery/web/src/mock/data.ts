@@ -1593,6 +1593,7 @@ const mockEpicPhase = (
       | 'verifyDetail'
       | 'landing'
       | 'reopens'
+      | 'reviews'
     >
   >,
 ): EpicPhase => ({
@@ -1609,6 +1610,7 @@ const mockEpicPhase = (
   reopens: [],
   landOpen: 0,
   manualOpen: 0,
+  reviews: [],
   id,
   seq,
   name,

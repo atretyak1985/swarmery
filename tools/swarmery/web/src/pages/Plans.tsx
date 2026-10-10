@@ -106,6 +106,7 @@ import { PhaseCard } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
 import { PhaseReview } from './plans/PhaseReview';
+import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
 import { hasReviewTab, NEUTRAL_TERMS } from './plans/landingModel';
 import { useProjectVcs } from '../lib/useProjectVcs';
@@ -3150,6 +3151,13 @@ function PhaseDetailPanel({
             reopens={phase.reopens ?? []}
             canReopen={status === 'done' && !running}
             onReopened={onDocChanged}
+          />
+          <RunsReviewBlock
+            key={phase.id}
+            taskId={epic.taskId}
+            phaseId={phase.id}
+            // A daemon older than migration 0106 sends no `reviews`.
+            reviews={phase.reviews ?? []}
           />
         </>
       ) : (

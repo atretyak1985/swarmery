@@ -21,6 +21,8 @@ import * as api from '../../api';
 import * as alerts from '../../api/alerts';
 import * as decisions from '../../api/decisions';
 import * as lessons from '../../api/lessons';
+import * as reviews from '../../api/reviews';
+import type { Review } from '../../api/reviews';
 import * as triage from '../../api/triage';
 import type { TriageVerdict } from '../../api/triage';
 import { Inbox } from './Inbox';
@@ -133,6 +135,17 @@ vi.mock('../../api/triage', () => ({
   undoTriageVerdict: vi.fn(async () => ({})),
 }));
 
+// The eighth source: unacknowledged plan branch reviews. Empty by default, like
+// alerts; the review test fills it. countFindings stays the real one.
+vi.mock('../../api/reviews', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../api/reviews')>();
+  return {
+    ...real,
+    fetchUnackedPlanReviews: vi.fn(async () => []),
+    ackReview: vi.fn(async () => null),
+  };
+});
+
 vi.mock('../../lib/ws', () => ({ useLiveUpdates: () => undefined }));
 
 function defaultFetchers(): void {
@@ -140,6 +153,7 @@ function defaultFetchers(): void {
   vi.mocked(triage.fetchActiveTriageRun).mockResolvedValue(null);
   vi.mocked(triage.fetchTriageAudit).mockResolvedValue({ answered: 0, agree: 0, byQuestion: [] });
   vi.mocked(alerts.fetchAlerts).mockResolvedValue([]);
+  vi.mocked(reviews.fetchUnackedPlanReviews).mockResolvedValue([]);
   vi.mocked(api.fetchApprovals).mockResolvedValue([
     approvalRow(1, 'Bash', { command: 'rm -rf node_modules && npm ci' }, 78),
     approvalRow(2, 'AskUserQuestion', ASK, 300),
@@ -325,6 +339,53 @@ describe('Inbox', () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
     expect(api.resolveApproval).not.toHaveBeenCalled();
+  });
+
+  it('lists an unacked plan review with its verdict and findings; e acks it and it leaves the list', async () => {
+    const review: Review = {
+      id: 12,
+      scope: 'plan',
+      taskId: 9,
+      planTitle: 'Order line items',
+      projectSlug: 'shop',
+      phaseId: null,
+      phaseName: '',
+      sessionUuid: 'rev-1',
+      runSessionUuid: '',
+      branchSetKey: 'abc',
+      verdict: 'fail',
+      detail: '',
+      findings: '- P0 api/orders.go:40 — phase 2 reads a column phase 1 never added\n- P1 web/x.ts:3 — wrong field\nVERDICT: FAIL',
+      fixRound: 0,
+      costUsd: null,
+      treeBefore: 't',
+      treeAfter: 't',
+      startedAt: iso(-3600),
+      finishedAt: iso(-3000),
+      ackedAt: null,
+    };
+    vi.mocked(reviews.fetchUnackedPlanReviews).mockResolvedValueOnce([review]).mockResolvedValue([]);
+    await renderInbox('/inbox?tab=reviews');
+    expect(rows()).toHaveLength(1);
+    const card = selectedRow().textContent ?? '';
+    expect(card).toContain('Plan review: Order line items');
+    expect(card).toContain('review failed');
+    expect(card).toContain('2 findings');
+    const article = document.querySelector('article');
+    expect(within(article as HTMLElement).getByLabelText('review findings').textContent).toContain(
+      'phase 2 reads a column phase 1 never added',
+    );
+    expect(primaries()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^ack/ })).toBeTruthy();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(reviews.ackReview).toHaveBeenCalledWith(12);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole('listbox', { name: 'waiting decisions' })).toBeNull();
+    expect(screen.getByText('Nothing is waiting on you.')).toBeTruthy();
   });
 
   it('shows an auto mode outage as an alert with nothing to press', async () => {

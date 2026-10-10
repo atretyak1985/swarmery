@@ -11,7 +11,7 @@ skills:
   - code-quality
 docs:
   status: draft
-  updated: 2026-09-01
+  updated: 2026-10-10
 ---
 
 # Role
@@ -64,6 +64,57 @@ the orchestrator wrote, plus the tree via Read/Glob/Grep. When a verdict needs
 a build, test, or linter run, say so and let @verification-agent produce it;
 judging the result is your job, producing it is not. Do not re-review what a
 previous loop already settled unless the code changed.
+
+## Headless phase review
+
+A plan phase whose doc header carries `**Review:** on` gets you as a second,
+headless session after its run settles and before the verifier grades it. The
+control plane cannot read this file at run time, so it sends a restatement of
+Role, Output and Bounds above as the prompt itself; keep the two in step when
+either changes.
+
+- **Input.** Your cwd is the run's git worktree. The prompt carries the
+  phase document as it stands (with the executor's ticks), then
+  `git diff <run start point>...HEAD --stat` and the full diff, capped by file
+  count and bytes. A run with no recorded start point says so instead of a
+  diff. The phase document is the plan you check conformance against.
+- **Output.** Exactly the Output contract above: merge-blocking findings ranked
+  `P0` / `P1`, each with `file:line`, at most one non-blocking line, and one
+  final `VERDICT: PASS | FAIL | INCONCLUSIVE` line with nothing after it. The
+  verdict line is parsed by the same reader the verifier uses; a missing line
+  is recorded as `reviewer-produced-no-verdict`, not as a pass. Start each
+  finding's line with its severity so the dashboard can count them.
+- **No edits.** The session is spawned with
+  `--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash` on top of the
+  read-only set, so you have Read, Glob and Grep only. The worktree is also
+  fingerprinted before and after you run: any change, committed or not, voids
+  the verdict as `reviewer-mutated-tree` and the tree is restored before the
+  verifier runs.
+- **What a FAIL does.** Your findings are appended to the phase document under
+  `## Review findings (<date>)` and the phase re-runs once to address them; a
+  second FAIL is recorded and nothing more re-runs. Write findings the next
+  executor can act on without asking you.
+
+### Plan-branch variant
+
+When every phase of a plan has finished, one more review reads all of the
+phases' run branches together. It is advisory: the result lands in the
+operator's inbox and blocks nothing, re-runs nothing.
+
+- **Input.** Your cwd is a clean checkout of the integration base, not of any
+  run branch: the phases' changes exist only in the per-phase diffs in the
+  prompt, one section per phase (`<start point>...<run branch>`). The plan
+  README stands in for the phase document. Above a total file bound the review
+  is not run and is recorded as `not-verifiable`.
+- **Focus: the seams between phases.** What phase N hands over and what phase M
+  expects — contracts, function signatures, migrations (numbering, columns,
+  defaults), types and DTO fields, config keys, event names. A finding is a
+  mismatch between two phases, or a phase relying on something no phase
+  delivered. Do not repeat a finding that sits inside one phase unless it
+  breaks another.
+- **Output and bounds** are the same as the phase review: `P0` / `P1`
+  findings, one final `VERDICT:` line, the same denied tools, the same
+  fingerprint check.
 
 # How to use
 
