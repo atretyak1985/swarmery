@@ -101,6 +101,7 @@ import { ReviseModal } from './planning/ReviseModal';
 import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsActual';
 import { ForecastStory } from './plans/ForecastStory';
 import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
+import { CriterionLint } from './plans/CriterionLint';
 import { PhaseCard } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
@@ -2719,15 +2720,18 @@ function DetailTabs<T extends string>({
 
 /** Acceptance-criteria list with tick state (✓ done / ○ open). With `onToggle`
  * the rows become buttons that flip the criterion in the doc (the affordance
- * the retired doc modal owned); without it the list is read-only. */
+ * the retired doc modal owned); without it the list is read-only. `lint`
+ * renders under a toggleable row (the Criteria tab's class-marker hint). */
 function ChecksList({
   checks,
   onToggle,
   busyLine,
+  lint,
 }: {
   checks: Check[];
   onToggle?: (c: Check) => void;
   busyLine?: number | null;
+  lint?: (c: Check) => ReactNode;
 }): JSX.Element {
   return (
     <ul className="space-y-1.5">
@@ -2763,6 +2767,7 @@ function ChecksList({
               {mark}
               <span className={c.done ? 'text-ink-dim line-through' : 'text-ink'}>{c.text}</span>
             </button>
+            {lint?.(c)}
           </li>
         );
       })}
@@ -3163,7 +3168,24 @@ function PhaseDetailPanel({
             ) : checks.length === 0 ? (
               <div className="font-mono text-[11.5px] text-ink-faint">no checkboxes in this doc</div>
             ) : (
-              <ChecksList checks={checks} onToggle={toggle} busyLine={busyLine} />
+              <ChecksList
+                checks={checks}
+                onToggle={toggle}
+                busyLine={busyLine}
+                lint={(c) => (
+                  <CriterionLint
+                    taskId={epic.taskId}
+                    path={phase.docRelPath}
+                    line={c.line}
+                    text={c.text}
+                    done={c.done}
+                    onMarked={(d) => {
+                      setDoc(d.content);
+                      onDocChanged();
+                    }}
+                  />
+                )}
+              />
             )}
           </RailSection>
           <RailSection label="doc">{doc === null ? <Loading label="doc…" /> : <Markdown text={doc} />}</RailSection>

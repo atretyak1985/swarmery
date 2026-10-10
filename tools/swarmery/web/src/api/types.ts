@@ -1625,14 +1625,29 @@ export interface PermissionRequest {
 /**
  * What blocks on the operator: a pending approval, a pending AskUserQuestion,
  * a production deploy handed to the session's own terminal, a session that
- * ended its turn waiting for a typed reply, or a recently failed session.
+ * ended its turn waiting for a typed reply, a recently failed session, or a
+ * plan phase whose every open criterion is `[MANUAL]` (only a human closes it).
  */
 export type NeedsYouKind =
   | 'approval'
   | 'question'
   | 'prod_deploy_local'
   | 'awaiting_reply'
-  | 'failed';
+  | 'failed'
+  | 'manual_phase';
+
+/** The plan phase behind a `manual_phase` item (Go needsYouPhase). */
+export interface NeedsYouPhase {
+  taskId: number;
+  /** tasks.external_id — what the Plans deep link addresses. */
+  planExternalId: string;
+  planTitle: string;
+  phaseId: number;
+  seq: number;
+  name: string;
+  /** Unticked [MANUAL] criteria — every open criterion of the phase. */
+  manualOpen: number;
+}
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
 export interface ReplySuggestion {
@@ -1644,9 +1659,11 @@ export interface ReplySuggestion {
 /** One blocker in the needs-you queue. */
 export interface NeedsYouItem {
   kind: NeedsYouKind;
+  /** 0 for a `manual_phase` item (a plan phase blocks, not a session). */
   sessionId: number;
   sessionUuid: string;
-  /** COALESCE(custom_title, title, first 8 chars of the session uuid). */
+  /** COALESCE(custom_title, title, first 8 chars of the session uuid); for a
+   * `manual_phase` item, "<plan> · Phase <seq>: <name>". */
   sessionName: string;
   projectSlug: string;
   /** permission_requests.id — approval, question and prod_deploy_local only. */
@@ -1663,6 +1680,8 @@ export interface NeedsYouItem {
   /** The session's terminal deep link (WARP_FOCUS_URL), when known. */
   termFocusUrl: string | null;
   suggestion: ReplySuggestion | null;
+  /** `manual_phase` only: the phase to open. Absent on every session item. */
+  phase?: NeedsYouPhase;
 }
 
 /** GET /api/needs-you — items sorted oldest blocker first. */
@@ -3527,7 +3546,13 @@ export type RunConflictCode =
   | 'cannot-stack'
   /** phase run only: the dependency commit to start from stopped resolving between
    *  resolution and acquisition; the same request resolves afresh. */
-  | 'start-ref-unresolved';
+  | 'start-ref-unresolved'
+  /** phase run only: every open criterion is `[MANUAL]` — no run can close it; the
+   *  body adds `manualOpen` and a `hint`. The phase is listed in Needs you. */
+  | 'manual-only'
+  /** phase run only: the doc's `Earliest:` date is still in the future; the body
+   *  adds `earliest` (YYYY-MM-DD) and a `hint`. */
+  | 'not-yet-earliest';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';
@@ -3616,6 +3641,13 @@ export interface EpicPhase {
   dependsOn: number[];
   checkboxesDone: number;
   checkboxesTotal: number;
+  /** Unticked `[LAND]` criteria (migration 0105): closed by landing — the daemon
+   *  ticks them when the change request merges. Still inside checkboxesTotal. */
+  landOpen: number;
+  /** Unticked `[MANUAL]` criteria: only a human closes them. A phase whose open
+   *  criteria are ALL manual is refused a run (409 `manual-only`) and listed in
+   *  Needs you. Still inside checkboxesTotal. */
+  manualOpen: number;
   /** The phase doc's own `Status:` header marker (normalized); null when the
    * doc carries none. Lets an executor flag "working on this now" before the
    * first checkbox tick. */

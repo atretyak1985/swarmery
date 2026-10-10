@@ -1249,10 +1249,17 @@ func (h *Handler) putPlanDoc(w http.ResponseWriter, r *http.Request) {
 // checkboxLineRe matches an acceptance checkbox line and captures its state.
 var checkboxLineRe = regexp.MustCompile(`^(\s*[-*]\s+\[)( |x|X)(\]\s.*)$`)
 
-// patchPlanDoc — PATCH /api/epics/{taskId}/docs?path= {line, done}. Flip one
-// checkbox by 0-based line index (the exact `- [ ]`↔`- [x]` line). Takes a
-// backup first; the next wsingest rescan folds the new count into the rollup.
-// requireLocalOrigin.
+// patchPlanDoc — PATCH /api/epics/{taskId}/docs?path= with one of two bodies,
+// both addressing a checkbox by 0-based line index:
+//
+//   - {line, done}  flip it (the exact `- [ ]`↔`- [x]` line);
+//   - {line, class} mark it `[LAND]` or `[MANUAL]` (phase-run outcomes plan,
+//     phase 3, D3 — the Criteria tab's lint button): `- [ ] push` becomes
+//     `- [ ] [LAND] push`. The class is case-insensitive on the wire; 400 for
+//     any other class, 422 when the line is not a criterion outside a fence.
+//
+// Takes a backup first; the next wsingest rescan folds the new counts into the
+// rollup. requireLocalOrigin.
 func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 	taskID, ok := parseTaskIDParam(w, r)
 	if !ok {
@@ -1264,15 +1271,25 @@ func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var reqBody struct {
-		Line *int  `json:"line"`
-		Done *bool `json:"done"`
+		Line  *int    `json:"line"`
+		Done  *bool   `json:"done"`
+		Class *string `json:"class"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&reqBody); err != nil {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if reqBody.Line == nil || reqBody.Done == nil {
-		writeClientErr(w, http.StatusBadRequest, "line and done are required")
+	if reqBody.Line == nil || (reqBody.Done == nil) == (reqBody.Class == nil) {
+		writeClientErr(w, http.StatusBadRequest, "line and exactly one of done or class are required")
+		return
+	}
+	if reqBody.Class != nil {
+		class := strings.ToUpper(strings.TrimSpace(*reqBody.Class))
+		if class != wsingest.ClassLand && class != wsingest.ClassManual {
+			writeClientErr(w, http.StatusBadRequest, `class must be "LAND" or "MANUAL"`)
+			return
+		}
+		h.markPlanDocCriterion(w, taskID, rel, *reqBody.Line, class)
 		return
 	}
 	path, err := h.resolvePlanDoc(taskID, rel)
@@ -1316,6 +1333,53 @@ func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, planDocResponse{Path: rel, Content: strings.Join(lines, "\n"), Backup: backup}, nil)
 }
 
+// markPlanDocCriterion is patchPlanDoc's {line, class} arm: class is already
+// validated and upper-cased. The doc write itself is wsingest.MarkCriterionClass
+// (atomic, fence-aware, idempotent — the same walker that counts the classes);
+// the backup holds the bytes read before it and is written only when the doc
+// actually changed.
+func (h *Handler) markPlanDocCriterion(w http.ResponseWriter, taskID int64, rel string, line int, class string) {
+	path, err := h.resolvePlanDoc(taskID, rel)
+	if err != nil {
+		writePlanDocErr(w, err)
+		return
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeClientErr(w, http.StatusNotFound, "doc not found")
+			return
+		}
+		writeErr(w, err)
+		return
+	}
+	if line < 0 {
+		writeClientErr(w, http.StatusUnprocessableEntity, "line is not an acceptance criterion")
+		return
+	}
+	switch err := wsingest.MarkCriterionClass(path, line+1, class); {
+	case errors.Is(err, wsingest.ErrNoCriterionAtLine):
+		writeClientErr(w, http.StatusUnprocessableEntity, "line is not an acceptance criterion (a checkbox outside a code fence)")
+		return
+	case err != nil:
+		writeErr(w, err)
+		return
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	backup := ""
+	if string(after) != string(before) {
+		if backup, err = backupPlanDoc(path, before); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	writeJSON(w, planDocResponse{Path: rel, Content: string(after), Backup: backup}, nil)
+}
+
 // writePlanDocFile backs up the current file (when it exists) next to it under
 // a `.backups/<ts>/` dir, then writes content. Returns the backup path ("" when
 // the file did not exist yet). The backup dir is inside plan/, so it stays
@@ -1323,17 +1387,26 @@ func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 func writePlanDocFile(path, content string) (string, error) {
 	backup := ""
 	if cur, err := os.ReadFile(path); err == nil {
-		ts := time.Now().UTC().Format("2006-01-02T15-04-05Z")
-		bdir := filepath.Join(filepath.Dir(path), ".backups", ts)
-		if err := os.MkdirAll(bdir, 0o755); err != nil {
-			return "", err
-		}
-		backup = filepath.Join(bdir, filepath.Base(path))
-		if err := os.WriteFile(backup, cur, 0o644); err != nil {
+		if backup, err = backupPlanDoc(path, cur); err != nil {
 			return "", err
 		}
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return "", err
+	}
+	return backup, nil
+}
+
+// backupPlanDoc writes cur — the doc's content before a write — to
+// `.backups/<ts>/<name>` beside the doc and returns that path.
+func backupPlanDoc(path string, cur []byte) (string, error) {
+	ts := time.Now().UTC().Format("2006-01-02T15-04-05Z")
+	bdir := filepath.Join(filepath.Dir(path), ".backups", ts)
+	if err := os.MkdirAll(bdir, 0o755); err != nil {
+		return "", err
+	}
+	backup := filepath.Join(bdir, filepath.Base(path))
+	if err := os.WriteFile(backup, cur, 0o644); err != nil {
 		return "", err
 	}
 	return backup, nil

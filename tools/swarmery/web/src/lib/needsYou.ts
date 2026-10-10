@@ -27,6 +27,7 @@ const KIND_LABELS: Record<NeedsYouKind, string> = {
   prod_deploy_local: 'Confirm locally',
   awaiting_reply: 'Awaiting your reply',
   failed: 'Failed',
+  manual_phase: 'Manual check',
 };
 
 export function kindLabel(k: NeedsYouKind): string {
@@ -35,10 +36,12 @@ export function kindLabel(k: NeedsYouKind): string {
 
 /**
  * Identity of one blocking episode. A dismissed item comes back when the same
- * session blocks again: a new episode carries a new `blockingSince`.
+ * session blocks again: a new episode carries a new `blockingSince`. A
+ * `manual_phase` item is keyed by its phase (its sessionId is always 0).
  */
 export function dismissKey(item: NeedsYouItem): string {
-  return `${item.kind}:${String(item.sessionId)}:${item.blockingSince}`;
+  const who = item.phase !== undefined ? `phase-${String(item.phase.phaseId)}` : String(item.sessionId);
+  return `${item.kind}:${who}:${item.blockingSince}`;
 }
 
 /** Items not dismissed by this browser. */
