@@ -216,3 +216,62 @@ func TestHealStubSessions(t *testing.T) {
 		t.Errorf("placeholder projects = %d, want 0 (orphaned → deleted)", got)
 	}
 }
+
+// TestHealCreateDiffs: file_changes rows written before Write-create diffs
+// were synthesised from `content` sit with diff=” / +0 forever (unchanged
+// transcripts are offset no-ops). The startup pass re-reads the transcript,
+// matches each row's tool_use_id (the dedup_key suffix) against the
+// tool_result records and fills diff + additions. Idempotent.
+func TestHealCreateDiffs(t *testing.T) {
+	const (
+		heavyUUID = "a9b8c7d6-e5f4-4321-9876-fedcba098765"
+		heavyCWD  = "/Users/user/work/example-app"
+	)
+	db := testDB(t)
+	root := t.TempDir()
+	projDir := filepath.Join(root, SlugForPath(heavyCWD))
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(fixtures, "tool-heavy-session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(projDir, heavyUUID+".jsonl")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := File(db, path); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	// Legacy shape: the create row exists but carries no diff.
+	if _, err := db.Exec(
+		`UPDATE file_changes SET diff = '', additions = 0 WHERE change_type = 'create'`); err != nil {
+		t.Fatal(err)
+	}
+
+	healed, err := HealCreateDiffs(db, []string{root})
+	if err != nil {
+		t.Fatalf("heal: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("healed = %d, want 1", healed)
+	}
+	var adds int
+	var diff string
+	if err := db.QueryRow(
+		`SELECT additions, diff FROM file_changes WHERE change_type = 'create'`).Scan(&adds, &diff); err != nil {
+		t.Fatal(err)
+	}
+	if adds != 4 || !strings.HasPrefix(diff, "@@ -0,0 +1,4 @@\n+# Changelog\n") {
+		t.Errorf("after heal: +%d diff=%q, want +4 and the synthesised hunk", adds, diff)
+	}
+
+	healed, err = HealCreateDiffs(db, []string{root})
+	if err != nil {
+		t.Fatalf("heal (2nd pass): %v", err)
+	}
+	if healed != 0 {
+		t.Errorf("second pass healed %d, want 0 (idempotent)", healed)
+	}
+}

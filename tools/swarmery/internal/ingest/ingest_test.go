@@ -172,6 +172,23 @@ func TestIngestToolHeavySession(t *testing.T) {
 	if adds != 1 || dels != 0 {
 		t.Errorf("first edit +%d/-%d, want +1/-0 (from structuredPatch lines)", adds, dels)
 	}
+	// Write-create: Claude Code ships an EMPTY structuredPatch and the whole
+	// new file in `content` (§8). The diff is synthesised from the content —
+	// one hunk, every line an addition — so the Diffs tab shows what the file
+	// holds instead of a bare "create +0 −0".
+	var createDiff string
+	if err := db.QueryRow(
+		`SELECT additions, deletions, diff FROM file_changes WHERE change_type='create'`,
+	).Scan(&adds, &dels, &createDiff); err != nil {
+		t.Fatal(err)
+	}
+	wantDiff := "@@ -0,0 +1,4 @@\n+# Changelog\n+\n+## Unreleased\n+- fix: parseConfig no longer crashes on a missing config file\n"
+	if createDiff != wantDiff {
+		t.Errorf("create diff = %q, want %q", createDiff, wantDiff)
+	}
+	if adds != 4 || dels != 0 {
+		t.Errorf("create +%d/-%d, want +4/-0 (one addition per content line)", adds, dels)
+	}
 }
 
 func TestIngestSubagentSession(t *testing.T) {

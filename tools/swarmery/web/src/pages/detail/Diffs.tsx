@@ -95,7 +95,7 @@ export function Diffs({ changes }: { changes: FileChange[] }): JSX.Element {
               <span className="text-[11px] text-red">−{group.deletions}</span>
             </div>
             {group.changes.map((change) =>
-              change.diff !== null ? (
+              change.diff !== null && change.diff !== '' ? (
                 <DiffBlock key={change.id} diff={change.diff} />
               ) : (
                 <div key={change.id} className="my-2 font-mono text-[11px] text-ink-dim">
