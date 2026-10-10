@@ -1592,6 +1592,7 @@ const mockEpicPhase = (
       | 'verifyVerdict'
       | 'verifyDetail'
       | 'landing'
+      | 'reopens'
     >
   >,
 ): EpicPhase => ({
@@ -1605,6 +1606,7 @@ const mockEpicPhase = (
   // Phase 2's run was scored; every other phase has no score (null, never 0).
   surprise: seq === 2 ? MOCK_SURPRISE : null,
   landing: mockLanding(),
+  reopens: [],
   id,
   seq,
   name,

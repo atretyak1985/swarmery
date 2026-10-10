@@ -20,13 +20,14 @@ import type {
 } from '../../api/types';
 import { addDays } from '../../lib/format';
 
-export type HealthTab = 'overview' | 'agents' | 'friction' | 'estimates' | 'advisor' | 'cost';
+export type HealthTab = 'overview' | 'agents' | 'friction' | 'estimates' | 'phaseruns' | 'advisor' | 'cost';
 
 export const HEALTH_TABS: readonly HealthTab[] = [
   'overview',
   'agents',
   'friction',
   'estimates',
+  'phaseruns',
   'advisor',
   'cost',
 ];

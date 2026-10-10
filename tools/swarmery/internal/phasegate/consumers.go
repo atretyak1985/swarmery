@@ -68,6 +68,17 @@ var Consumers = []Consumer{
 			"which is the opposite of what the immutability is for.",
 	},
 	{
+		Path:   "internal/api/phase_reopen.go",
+		Symbol: "reopenPhase",
+		Gated:  false,
+		Why: "Not a completion decision. It refuses to REOPEN a phase whose " +
+			"criteria are not all ticked (409 phase-not-done): an open phase needs " +
+			"no ledger row to be worked on. The verdict of the gate is irrelevant " +
+			"here — an unverified but fully ticked phase can still have let a " +
+			"defect through and must be reopenable; gating it on a verifier pass " +
+			"would hide exactly the reopens the baseline report exists to count.",
+	},
+	{
 		Path:   "internal/phasediag/outcome.go",
 		Symbol: "Outcome",
 		Gated:  false,

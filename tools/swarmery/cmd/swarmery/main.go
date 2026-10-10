@@ -5,6 +5,7 @@
 //	swarmery serve                 serve the API/SPA + live ingest pipeline
 //	swarmery recost                recompute cost_usd for all turns
 //	swarmery economics             five token-economy metrics (read-only)
+//	swarmery phase-report          phase-run baseline over a date window (read-only)
 //	swarmery stale                 tasks claiming to run with no sign of it (read-only)
 //	swarmery backup                write a VACUUM-INTO snapshot of the DB
 //	swarmery prune                 retention: roll up + delete old sessions' raw rows
@@ -65,6 +66,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/modeleval"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/notify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasereport"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
@@ -133,6 +135,8 @@ func main() {
 		err = cmdActuals(os.Args[2:])
 	case "economics":
 		err = cmdEconomics(os.Args[2:])
+	case "phase-report":
+		err = cmdPhaseReport(os.Args[2:])
 	case "calibration":
 		err = cmdCalibration(os.Args[2:])
 	case "backup":
@@ -232,6 +236,10 @@ func usage() {
                                    (read-only; safe while the daemon is serving).
                                    --current-model prints ONLY the model id with the most
                                    assistant turns in the last 30 days, for scripts.
+  swarmery phase-report [--db <path>] [--from <YYYY-MM-DD>] [--to <YYYY-MM-DD>] [--json]
+                                   phase-run baseline: outcomes, what the noops waited on,
+                                   router, verifier, review runs and reopens over the window
+                                   (default: the last 30 days; read-only, never migrates)
   swarmery calibration [--db <path>] [--by <dims>] [--json]
                                    forecast calibration and mean surprise per group
                                    (dims: agent,model,effort,project; default model,effort —
@@ -831,6 +839,40 @@ func cmdEconomics(args []string) error {
 		return err
 	}
 	return economics.Render(os.Stdout, rep, *asJSON)
+}
+
+// cmdPhaseReport prints the phase-run baseline (internal/phasereport) over a
+// window. Read-only and NOT migrating: it opens the store with OpenNoMigrate, so
+// running it against the daemon's live database can never move the schema
+// behind the daemon's back — phasereport reads every table through a
+// sqlite_master check and reports an absent one as zero rows.
+func cmdPhaseReport(args []string) error {
+	fs := flag.NewFlagSet("phase-report", flag.ExitOnError)
+	dbPath := dbFlag(fs)
+	now := time.Now().UTC()
+	from := fs.String("from", now.AddDate(0, 0, -29).Format(phasereport.DateLayout),
+		"lower edge, YYYY-MM-DD inclusive (or an RFC3339 instant)")
+	to := fs.String("to", now.Format(phasereport.DateLayout),
+		"upper edge, YYYY-MM-DD inclusive (or an RFC3339 instant)")
+	asJSON := fs.Bool("json", false, "emit the report as JSON instead of text")
+	fs.Parse(args)
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: swarmery phase-report [--db <path>] [--from <d>] [--to <d>] [--json]")
+	}
+	lo, hi, err := phasereport.ParseWindow(*from, *to)
+	if err != nil {
+		return err
+	}
+	db, err := store.OpenNoMigrate(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	rep, err := phasereport.Build(db, lo, hi)
+	if err != nil {
+		return err
+	}
+	return phasereport.Render(os.Stdout, rep, *asJSON)
 }
 
 // cmdCalibration prints forecast calibration and mean surprise per group

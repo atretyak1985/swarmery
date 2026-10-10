@@ -3,7 +3,7 @@
 // Health (Canvas v3 phase 5). The claims:
 //
 //   1. `?tab=advisor` selects the Advisor tab and renders the retro advisor
-//      section; the strip carries one range control and six tabs.
+//      section; the strip carries one range control and seven tabs.
 //   2. Changing the range rewrites `?days=` and refetches with the new from/to.
 //   3. The strip's decision cells link to Inbox and to Learning's proof tab,
 //      in the fleet and in a project.
@@ -17,6 +17,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
+import * as phaseReportApi from '../../api/phasereport';
 import * as triageApi from '../../api/triage';
 import type { TriageRun } from '../../api/triage';
 import { addDays, isoDay } from '../../lib/format';
@@ -33,6 +34,11 @@ vi.mock('../../api', async (importOriginal) => {
     fetchHealth: vi.fn(),
     unmuteFrictionGroup: vi.fn(),
   };
+});
+
+vi.mock('../../api/phasereport', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../api/phasereport')>();
+  return { ...real, fetchPhaseRunsReport: vi.fn() };
 });
 
 vi.mock('../../api/triage', async (importOriginal) => {
@@ -149,10 +155,30 @@ afterEach(() => {
 });
 
 describe('Health', () => {
-  it('selects the Advisor tab from ?tab=advisor and renders six tabs under one range', async () => {
+  it('?tab=phaseruns shows the Phase runs tab over the strip’s range, with from/to inputs', async () => {
+    const today = isoDay();
+    vi.mocked(phaseReportApi.fetchPhaseRunsReport).mockResolvedValue({
+      from: '',
+      to: '',
+      rows: [{ key: 'reopens', label: 'reopened phases', n: 1, estimated: false }],
+      fallbackRows: { n: 0, byOutcome: {} },
+      notes: [],
+    });
+    renderAt('/health?tab=phaseruns&days=30');
+    const tablist = screen.getByRole('tablist', { name: 'Health' });
+    expect(within(tablist).getByRole('tab', { name: /Phase runs/ }).getAttribute('aria-selected')).toBe('true');
+    await waitFor(() =>
+      expect(phaseReportApi.fetchPhaseRunsReport).toHaveBeenCalledWith(addDays(today, -29), today),
+    );
+    expect((screen.getByLabelText('from') as HTMLInputElement).value).toBe(addDays(today, -29));
+    expect((screen.getByLabelText('to') as HTMLInputElement).value).toBe(today);
+    expect(await screen.findByRole('rowheader', { name: 'reopened phases' })).toBeTruthy();
+  });
+
+  it('selects the Advisor tab from ?tab=advisor and renders seven tabs under one range', async () => {
     renderAt('/health?tab=advisor');
     const tablist = screen.getByRole('tablist', { name: 'Health' });
-    expect(within(tablist).getAllByRole('tab')).toHaveLength(6);
+    expect(within(tablist).getAllByRole('tab')).toHaveLength(7);
     expect(within(tablist).getByRole('tab', { name: /Advisor/ }).getAttribute('aria-selected')).toBe('true');
     expect(within(tablist).getByRole('tab', { name: /Overview/ }).getAttribute('aria-selected')).toBe('false');
     // The retro advisor section (lazy) renders its recommendations rail.

@@ -103,6 +103,7 @@ import { ForecastStory } from './plans/ForecastStory';
 import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
 import { PhaseCard } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
+import { PhaseReopens } from './plans/PhaseReopens';
 import { PhaseReview } from './plans/PhaseReview';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
 import { hasReviewTab, NEUTRAL_TERMS } from './plans/landingModel';
@@ -3137,6 +3138,14 @@ function PhaseDetailPanel({
               {phase.runError ?? 'run failed'}
             </div>
           )}
+          <PhaseReopens
+            taskId={epic.taskId}
+            phaseId={phase.id}
+            // A daemon older than migration 0104 sends no `reopens`.
+            reopens={phase.reopens ?? []}
+            canReopen={status === 'done' && !running}
+            onReopened={onDocChanged}
+          />
         </>
       ) : (
         <>
