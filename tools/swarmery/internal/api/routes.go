@@ -427,6 +427,11 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// run, and the push / push+PR exit. Land is the only one that mutates.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/review", h.getPhaseReview)
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/land", requireLocalOrigin(h.landPhase))
+	// The review stage's rows (reviews.go): a phase's own reviews, the plan branch
+	// reviews the Inbox lists, and their acknowledgement.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/reviews", h.listPhaseReviews)
+	mux.HandleFunc("GET /api/reviews", h.listReviews)
+	mux.HandleFunc("POST /api/reviews/{id}/ack", requireLocalOrigin(h.ackReview))
 	// Read the phase's change-request status now (phase_landing_refresh.go) — the
 	// manual twin of the daemon's landpoll ticker.
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/landing/refresh", requireLocalOrigin(h.refreshPhaseLanding))

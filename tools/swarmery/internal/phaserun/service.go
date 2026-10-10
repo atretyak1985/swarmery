@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
@@ -172,6 +173,12 @@ type Service struct {
 	// treeFingerprint overrides worktreeFingerprint (review.go) when set — a test
 	// seam for harness worktrees that are not git checkouts.
 	treeFingerprint func(dir string) (string, error)
+	// planReviewMu guards planReviewsInFlight: the branch-set keys of plan branch
+	// reviews (plan_review.go) started and not yet recorded. Two phases of one plan
+	// stamped `done` at the same moment must start ONE review, and the DB row
+	// that dedupes them is written only after the reviewer exits.
+	planReviewMu        sync.Mutex
+	planReviewsInFlight map[string]bool
 	// Actuals records what a finished run actually did — files, lines, cost,
 	// outcome, verdict (internal/actuals, learning-loop phase 12). Called from the
 	// run's exit path AFTER stamp and verifyRun, so the row it reads carries this
@@ -1475,6 +1482,14 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 		log.Printf("error: phaserun: stamp phase=%d state=%s: rows affected unavailable: %v", phaseID, state, err)
 	case n == 0:
 		log.Printf("error: phaserun: stamp phase=%d state=%s: row vanished mid-run", phaseID, state)
+		return
+	}
+	// The plan branch review (plan_review.go): a `done` that may have finished the
+	// plan. Here rather than in runAndHandle so every path that settles a phase
+	// run — the operator's own Start, a plan's next phase, an adopted orphan —
+	// reaches it. It only spawns; it never runs inside the caller's slot.
+	if state == "done" {
+		s.maybePlanReview(phaseID, docPath)
 	}
 }
 
