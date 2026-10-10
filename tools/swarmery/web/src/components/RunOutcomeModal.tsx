@@ -364,6 +364,7 @@ export function RunOutcomeModal({
   const criteriaAfter = diag?.criteriaAfter ?? 0;
   const criteriaTotal = diag?.criteriaTotal ?? 0;
   const criteriaBefore = diag?.criteriaBefore ?? null;
+  const runNote = diag?.runError ?? '';
 
   return (
     <div
@@ -449,7 +450,7 @@ export function RunOutcomeModal({
                   data-testid="run-note"
                   className="rounded-lg border border-line bg-surface2/40 px-2.5 py-2 font-mono text-[10.5px] break-words text-ink-3"
                 >
-                  Note: {diag.runError}
+                  <Trans>Note: {runNote}</Trans>
                 </div>
               ) : (
                 <div className="rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[10.5px] break-words text-red">

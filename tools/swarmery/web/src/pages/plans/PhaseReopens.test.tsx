@@ -4,7 +4,7 @@
 // defect, the Reopen form on a Done phase (ticked criteria from the server, the
 // request it sends, the refetch after it), and the refusal path.
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api/phasereport';
 import type { PhaseReopen } from '../../api/types';

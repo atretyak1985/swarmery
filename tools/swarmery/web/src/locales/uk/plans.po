@@ -287,7 +287,7 @@ msgstr "активовано"
 
 #: src/pages/Plans.tsx
 msgid "active"
-msgstr "активний"
+msgstr "активно"
 
 #: src/pages/Plans.tsx
 msgid "active · {ago} ago"
@@ -371,7 +371,7 @@ msgstr "застосування…"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "approved"
-msgstr "схвалено"
+msgstr "погоджено"
 
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
@@ -397,7 +397,7 @@ msgstr "в архіві"
 
 #: src/pages/Board.tsx
 msgid "Archived"
-msgstr "Архів"
+msgstr "В архіві"
 
 #: src/pages/Board.tsx
 msgid "archiving…"
@@ -477,6 +477,7 @@ msgstr "від {decidedBy}"
 #: src/pages/Board.tsx
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
+#: src/pages/plans/PhaseReopens.tsx
 msgid "cancel"
 msgstr "скасувати"
 
@@ -497,6 +498,18 @@ msgstr "картка"
 #: src/pages/Routines.tsx
 msgid "Catch-up"
 msgstr "Надолуження"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by"
+msgstr "хто впіймав"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by {gate}"
+msgstr "впіймав: {gate}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by nobody"
+msgstr "ніхто не впіймав"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
@@ -536,6 +549,14 @@ msgstr "закрити"
 msgid "closed"
 msgstr "закрито"
 
+#: src/pages/plans/CriterionLint.tsx
+msgid "closed by push / PR / merge — ticked when the change request merges"
+msgstr "закривається push / PR / злиттям — відмічається, коли пул-реквест злито"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "code review"
+msgstr "код-рев’ю"
+
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "confidence"
@@ -556,6 +577,10 @@ msgstr "Продовжити план"
 #: src/pages/Playbooks.tsx
 msgid "copies the markdown into the project so its prompts become editable"
 msgstr "копіює markdown у проєкт, щоб його промпти можна було редагувати"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "couldn't load the findings: {error}"
+msgstr "не вдалося завантажити знахідки: {error}"
 
 #: src/pages/Board.tsx
 msgid "counting…"
@@ -580,6 +605,10 @@ msgstr "створено {created}"
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
 msgstr "Критерії"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "criteria to untick"
+msgstr "критерії, які зняти"
 
 #: src/pages/Plans.tsx
 msgid "criteria…"
@@ -780,7 +809,7 @@ msgstr "Завершити інтерв’ю? Планувальник запи�
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "ending blocked"
-msgstr "блокування"
+msgstr "завершено з блоком"
 
 #: src/pages/Plans.tsx
 msgid "epics…"
@@ -811,7 +840,7 @@ msgstr "fable 5.1 — найсильніша, ~2,5× вартості"
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
 msgid "failed"
-msgstr "невдача"
+msgstr "збій"
 
 #: src/pages/Plans.tsx
 msgid "failed to load {path}: {reason}"
@@ -837,6 +866,14 @@ msgstr "фільтр за міткою"
 msgid "filter by state"
 msgstr "фільтр за станом"
 
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "findings ({count})"
+msgstr "знахідки ({count})"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "findings (none blocking)"
+msgstr "знахідки (жодна не блокує)"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing part of the work"
 msgstr "часткове завершення"
@@ -848,6 +885,22 @@ msgstr "завершення роботи"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing with some concerns"
 msgstr "завершення із застереженнями"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "first review"
+msgstr "перше рев’ю"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "fix →"
+msgstr "виправлення →"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "fix round {roundNo}"
+msgstr "раунд виправлень {roundNo}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "fix URL (optional)"
+msgstr "URL виправлення (необов’язково)"
 
 #: src/pages/planning/RefineModal.tsx
 msgid "For example: add a phased rollout, cover disaster recovery, and ask about migration risks."
@@ -998,10 +1051,18 @@ msgstr "прив’язано"
 msgid "linked to this plan by the daemon"
 msgstr "прив’язано до цього плану демоном"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "loading criteria…"
+msgstr "завантажуємо критерії…"
+
 #: src/pages/Board.tsx
 #: src/pages/Plans.tsx
 msgid "loading…"
 msgstr "завантаження…"
+
+#: src/pages/plans/CriterionLint.tsx
+msgid "looks like a landing/manual criterion — a run cannot close it"
+msgstr "схоже на критерій здачі або ручний — запуск його не закриє"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1015,6 +1076,14 @@ msgstr "великий промах"
 #: src/pages/Routines.tsx
 msgid "manual / webhook only"
 msgstr "лише вручну / вебхук"
+
+#: src/pages/plans/CriterionLint.tsx
+msgid "Mark [LAND]"
+msgstr "Позначити [LAND]"
+
+#: src/pages/plans/CriterionLint.tsx
+msgid "Mark [MANUAL]"
+msgstr "Позначити [MANUAL]"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1066,7 +1135,7 @@ msgstr "Назва"
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "never run"
-msgstr "не запускалась"
+msgstr "не запускали"
 
 #: src/pages/plans/PlansPlace.tsx
 msgid "New plan"
@@ -1189,9 +1258,17 @@ msgstr "підсумок роботи не написано — виконаве
 msgid "no summary written for this phase"
 msgstr "для цієї фази підсумок не написано"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "No ticked criteria in this phase's doc — nothing to reopen."
+msgstr "У документі цієї фази немає відмічених критеріїв — нічого перевідкривати."
+
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "no turns yet"
 msgstr "ходів ще немає"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "nobody (it shipped)"
+msgstr "ніхто (воно вийшло)"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "none of the {total} criteria ticked"
@@ -1253,6 +1330,10 @@ msgstr "увімк."
 msgid "on plan"
 msgstr "за планом"
 
+#: src/pages/plans/CriterionLint.tsx
+msgid "only a human can close it — you tick it after checking by hand"
+msgstr "закрити може лише людина — ви відмічаєте після ручної перевірки"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "open"
 msgstr "відкрито"
@@ -1291,6 +1372,10 @@ msgstr "відкрити сесію →"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
 msgstr "Відкриття…"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "operator"
+msgstr "оператор"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "Operator"
@@ -1667,6 +1752,30 @@ msgstr "Перезавантажити перегляд"
 msgid "remove step"
 msgstr "прибрати крок"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopen and untick"
+msgstr "Перевідкрити і зняти"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "reopen this phase"
+msgstr "перевідкрити цю фазу"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopen…"
+msgstr "Перевідкрити…"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened"
+msgstr "Перевідкрито"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened · {count}"
+msgstr "Перевідкрито · {count}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "reopening…"
+msgstr "перевідкриваємо…"
+
 #: src/pages/PlanningMode.tsx
 msgid "reply"
 msgstr "відповідь"
@@ -1698,7 +1807,7 @@ msgstr "Повернути агенту?"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Return to agent…"
-msgstr "Повернення агенту…"
+msgstr "Повернути агенту…"
 
 #: src/pages/plans/landingModel.ts
 msgid "returned to agent"
@@ -1707,6 +1816,11 @@ msgstr "повернуто агенту"
 #: src/pages/Plans.tsx
 msgid "revert"
 msgstr "відкотити"
+
+#: src/pages/plans/PhaseReopens.tsx
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "review"
+msgstr "рев’ю"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Review"
@@ -1719,6 +1833,10 @@ msgstr "Переглянути зміни →"
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
 msgstr "Перегляньте його на <0>сторінці Plans</0> — фази запускаються звідти."
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "review of the fix re-run"
+msgstr "рев’ю повторного запуску після виправлення"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "review required"
@@ -1908,7 +2026,7 @@ msgstr "повернути фазу її агенту з вашим відгук
 
 #: src/pages/planning/QuestionCard.tsx
 msgid "sending…"
-msgstr "надсилання…"
+msgstr "надсилаємо…"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
@@ -2337,7 +2455,11 @@ msgstr "неперевірено"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
-msgstr "перевірено"
+msgstr "підтверджено"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "verifier"
+msgstr "перевіряльник"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify failed"
@@ -2372,6 +2494,10 @@ msgstr "що далі"
 msgid "what should change, and why"
 msgstr "що має змінитися і чому"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "what slipped through"
+msgstr "що проскочило"
+
 #: src/pages/plans/PhaseReview.tsx
 msgid "what to fix on the next pass"
 msgstr "що виправити наступним проходом"
@@ -2396,7 +2522,7 @@ msgstr "коли цей документ фази редагували оста�
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
-msgstr "де реальність розійшлася"
+msgstr "де реальність розійшлася з планом"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "why"

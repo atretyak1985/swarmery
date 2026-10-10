@@ -4,7 +4,7 @@
 // its estimate suffix and cost, the highlighted reopen rows, the fallback line,
 // and the error path.
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api/phasereport';
 import type { PhaseRunsReport } from '../../api/phasereport';

@@ -65,6 +65,10 @@ msgstr "· агент каже"
 msgid "· fleet-wide"
 msgstr "· для всього флоту"
 
+#: src/pages/inbox/ReviewItem.tsx
+msgid "· started {age} ago"
+msgstr "· почато {age} тому"
+
 #: src/pages/Retro.tsx
 msgid "(target {cmp}{targetValue})"
 msgstr "(ціль {cmp}{targetValue})"
@@ -201,6 +205,10 @@ msgstr "{errs} пом."
 msgid "{failed} failed"
 msgstr "{failed} невдалих"
 
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "{fallbackN, plural, one {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} few {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} many {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} other {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.}}"
+msgstr "{fallbackN, plural, one {ще # запуск завершився у вікні без рядка фактів ({fallback}) — врахований лише тут.} few {ще # запуски завершилися у вікні без рядка фактів ({fallback}) — враховані лише тут.} many {ще # запусків завершилися у вікні без рядка фактів ({fallback}) — враховані лише тут.} other {ще # запуску завершилося у вікні без рядка фактів ({fallback}) — враховано лише тут.}}"
+
 #: src/pages/Architecture.tsx
 msgid "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{files, plural, one {# файл} few {# файли} many {# файлів} other {# файлу}}"
@@ -212,6 +220,10 @@ msgstr "{findings, plural, one {# знахідка радника} few {# зна
 #: src/pages/health/healthModel.ts
 msgid "{findingsText} · {rewritesText} to approve"
 msgstr "{findingsText} · {rewritesText} на погодження"
+
+#: src/pages/inbox/ReviewItem.tsx
+msgid "{findingsText} · started {age} ago"
+msgstr "{findingsText} · почато {age} тому"
 
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{fixTasks, plural, one {# fix task} few {# fix tasks} many {# fix tasks} other {# fix tasks}}"
@@ -256,6 +268,10 @@ msgstr "Приховано груп: {hiddenGroups}, запусків: {hiddenRu
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
 msgstr "Розділи {itemName}"
+
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "{label} (est.)"
+msgstr "{label} (оцінка)"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "{lo}–{hi}: said {said}, held {held}"
@@ -578,13 +594,18 @@ msgstr "приймаємо…"
 msgid "Account {account} is paused"
 msgstr "Акаунт {account} призупинено"
 
+#: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
+msgid "ack"
+msgstr "прийняти"
+
 #: src/pages/Retro.tsx
 msgid "action: {action}"
 msgstr "дія: {action}"
 
 #: src/pages/Lessons.tsx
 msgid "active"
-msgstr "активні"
+msgstr "активно"
 
 #: src/pages/AgentHub.tsx
 msgid "active {ago}"
@@ -1163,6 +1184,7 @@ msgstr "копіювання записує редаговану копію в .
 msgid "copying…"
 msgstr "копіюємо…"
 
+#: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/Retro.tsx
 msgid "cost"
 msgstr "вартість"
@@ -1515,6 +1537,10 @@ msgstr "кожен увімкнений плагін розв’язується
 msgid "Every future run touching {areas} gets this sentence in its brief. We then watch whether those runs land closer to plan."
 msgstr "Кожен наступний запуск, що торкається {areas}, отримає це речення у своєму брифі. Далі ми дивимося, чи ближче до плану лягають такі запуски."
 
+#: src/pages/inbox/ReviewItem.tsx
+msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
+msgstr "Усі фази цього плану завершені. Рев’юер без права на запис прочитав усі їхні гілки запусків разом, дивлячись на шви між фазами — що одна фаза передає, а інша очікує. Нічого не заблоковано і не перезапущено."
+
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
 msgstr "усі серії приховано — клацніть чіп легенди, щоб показати одну"
@@ -1553,11 +1579,11 @@ msgstr "Експорт CSV"
 
 #: src/pages/RoutingReport.tsx
 msgid "fail"
-msgstr "невдачі"
+msgstr "провал"
 
 #: src/pages/Architecture.tsx
 msgid "failed"
-msgstr "невдало"
+msgstr "збій"
 
 #: src/pages/learning/classifierModel.ts
 msgid "failed session"
@@ -1611,6 +1637,10 @@ msgstr "фільтр використання за агентом"
 msgid "filter…"
 msgstr "фільтр…"
 
+#: src/pages/inbox/ReviewItem.tsx
+msgid "findings"
+msgstr "знахідки"
+
 #: src/pages/learning/classifierModel.ts
 #: src/pages/learning/classifierModel.ts
 msgid "finished session"
@@ -1643,6 +1673,10 @@ msgstr "Дошка тертя"
 #: src/pages/health/HealthOverview.tsx
 msgid "Friction you can remove today"
 msgstr "Тертя, яке можна прибрати сьогодні"
+
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "from"
+msgstr "від"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "from a phase run"
@@ -1746,7 +1780,7 @@ msgstr "Health"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "health…"
-msgstr "здоров’я…"
+msgstr "health…"
 
 #: src/pages/agent-hub/HubShell.tsx
 msgid "healthy"
@@ -1810,6 +1844,10 @@ msgstr "Чим закінчився запуск фази?"
 msgid "How often forecasts held, by group. Area hit is matched areas over every area either side named; bands and outcome are exact-match rates; the curve compares declared confidence with how often the forecast held. Post-hoc forecasts are excluded."
 msgstr "Як часто прогнози справджувалися, за групами. Збіг зон — частка збіглих зон серед усіх, що назвала будь-яка сторона; діапазони й результат — частки точних збігів; крива порівнює заявлену впевненість із тим, як часто прогноз справджувався. Прогнози post-hoc виключено."
 
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how many finished phases came back. Rows marked (est.) are read from the runs' own words, not a recorded fact."
+msgstr "Як завершувалися запуски фаз, на що чекали порожні запуски, що робили маршрутизатор і перевіряльник, і скільки завершених фаз повернулося. Рядки з позначкою (оцінка) прочитані зі слів самих запусків, а не із записаного факту."
+
 #: src/pages/health/Health.tsx
 msgid "how the agent fleet is doing and what to change"
 msgstr "як справи у флоту агентів і що змінити"
@@ -1846,6 +1884,10 @@ msgstr "простій"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you accept"
 msgstr "якщо приймете"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you ack"
+msgstr "якщо прийняти"
 
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
@@ -2105,6 +2147,7 @@ msgstr "лінт…"
 msgid "LLM-judge trajectory score"
 msgstr "оцінка траєкторії LLM-суддею"
 
+#: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/learning/Classifier.tsx
 #: src/pages/Lessons.tsx
@@ -2632,7 +2675,7 @@ msgstr "зайнятість / досягнуто за період · знім�
 
 #: src/pages/learning/classifierModel.ts
 msgid "off"
-msgstr "вимкнено"
+msgstr "вимк."
 
 #: src/pages/learning/classifierModel.ts
 msgid "off-plan phase run"
@@ -2666,6 +2709,10 @@ msgstr "відкрити сесію →"
 #: src/pages/inbox/inboxModel.ts
 msgid "open the fix task"
 msgstr "відкрити задачу на виправлення"
+
+#: src/pages/inbox/ReviewItem.tsx
+msgid "open the plan →"
+msgstr "відкрити план →"
 
 #: src/pages/Retro.tsx
 msgid "Orchestrator {mainCost} · {mainTokens} tokens out · agents {agentCostLabel}"
@@ -2730,6 +2777,15 @@ msgstr "фаза {phase}"
 msgid "phase runs"
 msgstr "запуски фаз"
 
+#: src/pages/health/Health.tsx
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "Phase runs"
+msgstr "Запуски фаз"
+
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "Phase runs from {from} to {to}"
+msgstr "Запуски фаз від {from} до {to}"
+
 #: src/pages/system/CreateAgentForm.tsx
 msgid "pick"
 msgstr "оберіть"
@@ -2745,6 +2801,20 @@ msgstr "оберіть дві версії для диффу"
 #: src/pages/Retro.tsx
 msgid "Pitfalls"
 msgstr "Пастки"
+
+#: src/pages/inbox/inboxModel.ts
+#: src/pages/inbox/ReviewItem.tsx
+msgid "plan #{id}"
+msgstr "план №{id}"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "plan review"
+msgstr "рев’ю плану"
+
+#: src/pages/inbox/inboxModel.ts
+#: src/pages/inbox/ReviewItem.tsx
+msgid "Plan review: {plan}"
+msgstr "Рев’ю плану: {plan}"
 
 #: src/pages/system/InsightsTab.tsx
 #: src/pages/system/shared.tsx
@@ -3031,10 +3101,22 @@ msgstr "повторити"
 msgid "Retry"
 msgstr "Повторити"
 
+#: src/pages/inbox/ReviewItem.tsx
+msgid "review {verdictWord}"
+msgstr "рев’ю: {verdictWord}"
+
+#: src/pages/inbox/ReviewItem.tsx
+msgid "review findings"
+msgstr "знахідки рев’ю"
+
 #: src/pages/system/docsSection.ts
 #: src/pages/SystemShell.tsx
 msgid "reviewed"
 msgstr "вичитано"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "reviews"
+msgstr "рев’ю"
 
 #: src/pages/agent-hub/Tabs.tsx
 msgid "Rewrite proposal"
@@ -3072,6 +3154,10 @@ msgstr "маршрутизація"
 #: src/pages/RoutingReport.tsx
 msgid "routing surface"
 msgstr "тип запуску для маршрутизації"
+
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "row"
+msgstr "рядок"
 
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
@@ -3135,6 +3221,7 @@ msgid "Save"
 msgstr "Зберегти"
 
 #: src/pages/Analytics.tsx
+msgctxt "money saved by the prompt cache, not a file"
 msgid "saved"
 msgstr "заощаджено"
 
@@ -3333,7 +3420,7 @@ msgstr "вихідна рекомендація"
 #: src/pages/Lessons.tsx
 #: src/pages/system/docsSection.ts
 msgid "stale"
-msgstr "застарілий"
+msgstr "застаріло"
 
 #: src/pages/Architecture.tsx
 msgid "stale (HEAD {headShort})"
@@ -3358,12 +3445,12 @@ msgstr "запустити serena"
 
 #: src/pages/Serena.tsx
 msgid "started {startedAgo}"
-msgstr "запущено {startedAgo}"
+msgstr "почато {startedAgo}"
 
 #: src/pages/Architecture.tsx
 #: src/pages/Architecture.tsx
 msgid "starting…"
-msgstr "запускається…"
+msgstr "запуск…"
 
 #: src/pages/system/docsSection.ts
 msgid "status: {status}"
@@ -3402,7 +3489,7 @@ msgstr "успіх"
 
 #: src/pages/Lessons.tsx
 msgid "superseded"
-msgstr "замінений"
+msgstr "замінено"
 
 #: src/pages/RoutingReport.tsx
 msgid "surface"
@@ -3599,6 +3686,14 @@ msgid "The recommendation is closed. It reopens on its own if the rule keeps fir
 msgstr "Рекомендацію закрито. Вона відкриється знову сама, якщо правило й далі спрацьовуватиме."
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "The review leaves the Inbox. It stays on record; nothing else changes."
+msgstr "Рев’ю зникає з Inbox. Воно лишається в записах; більше нічого не змінюється."
+
+#: src/pages/inbox/ReviewItem.tsx
+msgid "The reviewer left no findings text."
+msgstr "Рев’юер не лишив тексту знахідок."
+
+#: src/pages/inbox/InboxDetail.tsx
 msgid "The session waits for your answers; they go back to Claude as the tool's result."
 msgstr "Сесія чекає на ваші відповіді; вони повертаються до Claude як результат інструмента."
 
@@ -3672,6 +3767,10 @@ msgstr "таймаут {timeoutSecs} с"
 #: src/pages/Lessons.tsx
 msgid "title"
 msgstr "назва"
+
+#: src/pages/health/PhaseRunsTab.tsx
+msgid "to"
+msgstr "до"
 
 #: src/pages/Analytics.tsx
 msgid "To do"

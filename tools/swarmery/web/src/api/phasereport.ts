@@ -2,6 +2,7 @@
 // internal/api/phasereport.go) and the phase reopen ledger (phase_reopen.go).
 // The report is bookkeeping, not statistics: every row comes back, however small.
 
+import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
 import type { PhaseReopen, ReopenCaughtBy } from './types';
 
@@ -75,6 +76,7 @@ function phasePath(taskId: number, phaseId: number, tail: string): string {
 
 /** GET …/reopens — the phase's reopen history and its ticked criteria. */
 export async function fetchPhaseReopens(taskId: number, phaseId: number): Promise<PhaseReopensResp> {
+  // i18n-ignore — mock-only fixture criteria
   if (MOCK) return { reopens: [], ticked: ['POST creates a line item', 'DELETE removes it'] };
   const path = phasePath(taskId, phaseId, 'reopens');
   const res = await fetch(path);
@@ -99,7 +101,7 @@ export async function reopenPhase(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(await errorText(res, 'reopen failed'));
+  if (!res.ok) throw new Error(await errorText(res, t`reopen failed`));
   return (await res.json()) as { reopen: PhaseReopen; unticked: number };
 }
 

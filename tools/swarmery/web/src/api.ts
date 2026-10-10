@@ -2380,10 +2380,12 @@ export type PhaseRunBranchError = Error & {
  * body carries none (an older daemon). The daemon's own `hint` always wins.
  */
 export const RUN_CONFLICT_HINTS: Partial<Record<RunConflictCode, string>> = {
-  'manual-only':
-    'Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you.',
-  'not-yet-earliest':
-    "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies.",
+  get 'manual-only'() {
+    return t`Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you.`;
+  },
+  get 'not-yet-earliest'() {
+    return t`This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies.`;
+  },
 };
 
 /**
@@ -2749,7 +2751,7 @@ export async function markPlanCriterion(
   });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `mark criterion failed: ${String(res.status)}`);
+    throw new Error(data.error ?? t`mark criterion failed: ${{ status: res.status }}`);
   }
   return (await res.json()) as PlanDoc;
 }

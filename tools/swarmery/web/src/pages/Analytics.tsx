@@ -553,7 +553,7 @@ function CommandCenter({
                 <Trans>est</Trans>
               </span>
               <span className="font-mono text-[10px] text-ink-dim">
-                <Trans>saved</Trans>
+                <Trans context="money saved by the prompt cache, not a file">saved</Trans>
               </span>
             </div>
           </div>

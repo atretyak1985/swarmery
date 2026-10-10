@@ -797,7 +797,7 @@ function BlockedCard({ request, nowMs }: { request: PermissionRequest; nowMs: nu
   const okLabel = localOnly
     ? t`confirm locally`
     : request.toolName === 'AskUserQuestion'
-      ? t`answer`
+      ? t({ message: 'answer', context: 'verb: the button that opens the question' })
       : t`approve`;
   const age = fmtWait(waitMs(request, nowMs));
   const sessionId = request.sessionId;

@@ -394,11 +394,11 @@ export function findingsLabel(findings: string): string {
  * is never urgent. It is dated by when the reviewer started.
  */
 function reviewItem(r: Review): InboxItem {
-  const plan = r.planTitle === '' ? `plan #${String(r.taskId)}` : r.planTitle;
+  const plan = r.planTitle === '' ? t`plan #${{ id: String(r.taskId) }}` : r.planTitle;
   return {
     key: `review:${String(r.id)}`,
     kind: 'review',
-    title: `Plan review: ${plan}`,
+    title: t`Plan review: ${plan}`,
     context: `${REVIEW_VERDICT_UI[r.verdict] ?? r.verdict} · ${findingsLabel(r.findings)}`,
     ageIso: r.startedAt,
     urgent: false,

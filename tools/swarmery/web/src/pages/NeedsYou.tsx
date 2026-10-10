@@ -202,7 +202,7 @@ function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | 
       <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
       {phaseTo !== null && (
         <Link to={phaseTo} className={`ml-auto ${LINK}`}>
-          open criteria →
+          <Trans>open criteria →</Trans>
         </Link>
       )}
     </div>

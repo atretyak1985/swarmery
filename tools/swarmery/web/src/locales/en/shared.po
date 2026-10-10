@@ -2114,6 +2114,14 @@ msgstr "main"
 msgid "managed"
 msgstr "managed"
 
+#: src/lib/needsYou.ts
+msgid "Manual check"
+msgstr "Manual check"
+
+#: src/api.ts
+msgid "mark criterion failed: {status}"
+msgstr "mark criterion failed: {status}"
+
 #: src/workspace/TaskCard.tsx
 msgid "mark done without landing a branch — the manual override"
 msgstr "mark done without landing a branch — the manual override"
@@ -2321,6 +2329,14 @@ msgstr "not yet loaded"
 msgid "Note"
 msgstr "Note"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "Note: {runError}"
+msgstr "Note: {runError}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Note: {runNote}"
+msgstr "Note: {runNote}"
+
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "Nothing in {laneTitle} matches “{filterLabel}”."
@@ -2400,6 +2416,10 @@ msgstr "onboarded only"
 #: src/components/NewProjectButton.tsx
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "onboarding is disabled — restart the daemon with an allow-list:"
+
+#: src/api.ts
+msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
+msgstr "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
@@ -2951,6 +2971,10 @@ msgstr "Removes the swarmery-owned entries from <0>.claude/settings.json</0>. Yo
 #: src/api.ts
 msgid "rename failed: {status}"
 msgstr "rename failed: {status}"
+
+#: src/api/phasereport.ts
+msgid "reopen failed"
+msgstr "reopen failed"
 
 #: src/components/ProjectPlugins.tsx
 msgid "repair"
@@ -3768,6 +3792,10 @@ msgstr "this pack's config schema is missing or malformed"
 #: src/components/RunOutcomeModal.tsx
 msgid "this phase has not been run"
 msgstr "this phase has not been run"
+
+#: src/api.ts
+msgid "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies."
+msgstr "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies."
 
 #: src/workspace/AgentPicker.tsx
 msgid "this project's .claude/agents/ definition replaces the inherited one"

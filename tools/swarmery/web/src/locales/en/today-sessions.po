@@ -342,6 +342,7 @@ msgid "and the loop closes when Change lowers next week's Measure"
 msgstr "and the loop closes when Change lowers next week's Measure"
 
 #: src/pages/Overview.tsx
+msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "answer"
 
@@ -1130,6 +1131,10 @@ msgstr "open {type} in System"
 #: src/pages/ProjectOverview.tsx
 msgid "open board →"
 msgstr "open board →"
+
+#: src/pages/NeedsYou.tsx
+msgid "open criteria →"
+msgstr "open criteria →"
 
 #: src/pages/detail/CallTree.tsx
 msgid "open in System"

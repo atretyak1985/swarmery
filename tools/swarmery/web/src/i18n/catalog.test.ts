@@ -17,6 +17,8 @@ interface Entry {
   msgid: string;
   msgstr: string;
   obsolete: boolean;
+  /** msgctxt, when the macro call carried `context` — part of the runtime id. */
+  context: string;
 }
 
 function unquote(s: string): string {
@@ -27,14 +29,19 @@ function unquote(s: string): string {
 function readPo(text: string): Entry[] {
   const out: Entry[] = [];
   let cur: Partial<Entry> | null = null;
-  let key: 'msgid' | 'msgstr' | null = null;
+  let key: 'msgid' | 'msgstr' | 'context' | null = null;
+  let pendingContext = '';
   for (const raw of text.split('\n')) {
     const obsolete = raw.startsWith('#~ ');
     const line = obsolete ? raw.slice(3) : raw;
     if (line.startsWith('#')) continue;
-    if (line.startsWith('msgid ')) {
+    if (line.startsWith('msgctxt ')) {
+      pendingContext = unquote(line.slice(8));
+      cur = { context: pendingContext, msgstr: '', obsolete };
+      key = 'context';
+    } else if (line.startsWith('msgid ')) {
       if (cur?.msgid) out.push(cur as Entry);
-      cur = { msgid: unquote(line.slice(6)), msgstr: '', obsolete };
+      cur = { msgid: unquote(line.slice(6)), msgstr: '', obsolete, context: cur?.context ?? '' };
       key = 'msgid';
     } else if (line.startsWith('msgstr ') && cur) {
       cur.msgstr = unquote(line.slice(7));
@@ -62,6 +69,27 @@ function placeholders(s: string): string[] {
 
 describe('uk catalogs', () => {
   const files = readdirSync(UK_DIR).filter((f) => f.endsWith('.po'));
+  it('translates a msgid shared by several catalogs the same way everywhere', () => {
+    // src/i18n/index.ts merges the four compiled catalogs with Object.assign and
+    // Lingui hashes a message id from msgid (+ context), so the same msgid in
+    // two catalogs IS one runtime message: the catalog loaded last wins. A
+    // different wording per catalog is therefore an accident, never a choice —
+    // a real context difference needs `context` in the macro call.
+    const seen = new Map<string, Map<string, string>>();
+    for (const file of files) {
+      for (const e of readPo(readFileSync(join(UK_DIR, file), 'utf8'))) {
+        if (e.obsolete || e.msgstr.trim() === '') continue;
+        const id = e.context ? `${e.context}\u0004${e.msgid}` : e.msgid;
+        const m = seen.get(id) ?? new Map<string, string>();
+        m.set(file, e.msgstr);
+        seen.set(id, m);
+      }
+    }
+    const conflicts = [...seen.entries()]
+      .filter(([, m]) => new Set(m.values()).size > 1)
+      .map(([id, m]) => `${id}: ${[...m.entries()].map(([f, v]) => `${f}=${v}`).join(' | ')}`);
+    expect(conflicts, conflicts.slice(0, 8).join('\n')).toEqual([]);
+  });
   it('has the four catalogs', () => {
     expect(files.sort()).toEqual(['insights-system.po', 'plans.po', 'shared.po', 'today-sessions.po']);
   });

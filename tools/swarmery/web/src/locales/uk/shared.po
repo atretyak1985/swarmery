@@ -404,7 +404,7 @@ msgstr "▶ Продовжити"
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
 msgid "▶ Run"
-msgstr "▶ Запуск"
+msgstr "▶ Запустити"
 
 #: src/lib/docFigures.tsx
 msgid "▸ History"
@@ -434,7 +434,7 @@ msgstr "✕ закрити"
 
 #: src/lib/docFigures.tsx
 msgid "✕ Dismiss"
-msgstr "✕ Відхилити"
+msgstr "✕ Прибрати"
 
 #: src/lib/docFigures.tsx
 #: src/workspace/task/TaskActions.tsx
@@ -473,7 +473,7 @@ msgstr "для цього проєкту вже триває запуск пла
 
 #: src/components/RunOutcomeModal.tsx
 msgid "a read-only verifier confirmed this phase’s acceptance criteria"
-msgstr "перевіряльник (лише читання) підтвердив критерії приймання цієї фази"
+msgstr "перевіряльник без права на запис підтвердив критерії приймання цієї фази"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "a read-only verifier could NOT confirm the ticked criteria — see the verify-failed blocker"
@@ -625,7 +625,7 @@ msgstr "агенти…"
 
 #: src/components/NotifySettings.tsx
 msgid "alerts"
-msgstr "оповіщення"
+msgstr "сповіщення"
 
 #: src/components/ProjectDropdown.tsx
 msgid "all projects"
@@ -722,7 +722,7 @@ msgstr "архівувати"
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/task/TaskActions.tsx
 msgid "Archive"
-msgstr "В архів"
+msgstr "Архівувати"
 
 #: src/workspace/TaskCard.tsx
 msgid "archive — it stays findable, it stops being an inbox item"
@@ -1507,12 +1507,12 @@ msgstr "від’єднуємо…"
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 msgid "dismiss"
-msgstr "приховати"
+msgstr "прибрати"
 
 #: src/components/RetroImproveCard.tsx
 #: src/workspace/TaskCard.tsx
 msgid "Dismiss"
-msgstr "Відхилити"
+msgstr "Прибрати"
 
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"
@@ -1558,7 +1558,7 @@ msgstr "відправляє фази в порядку залежностей �
 #: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Docs"
-msgstr "Docs"
+msgstr "Документація"
 
 #: src/lib/docFigures.tsx
 msgid "Docs + rollout"
@@ -1642,7 +1642,7 @@ msgstr "провал"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 msgid "failed"
-msgstr "не вдалося"
+msgstr "збій"
 
 #: src/lib/needsYou.ts
 msgid "Failed"
@@ -1816,7 +1816,7 @@ msgstr "Передача"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "headless run in progress"
-msgstr "фоновий запуск триває"
+msgstr "триває фоновий запуск"
 
 #: src/lib/nav.ts
 msgid "Health"
@@ -2114,6 +2114,14 @@ msgstr "основне"
 msgid "managed"
 msgstr "керований"
 
+#: src/lib/needsYou.ts
+msgid "Manual check"
+msgstr "Ручна перевірка"
+
+#: src/api.ts
+msgid "mark criterion failed: {status}"
+msgstr "позначити критерій не вдалося: {status}"
+
 #: src/workspace/TaskCard.tsx
 msgid "mark done without landing a branch — the manual override"
 msgstr "позначити готовим, не відправляючи гілку — ручне перевизначення"
@@ -2321,6 +2329,14 @@ msgstr "ще не завантажено"
 msgid "Note"
 msgstr "Примітка"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "Note: {runError}"
+msgstr "Примітка: {runError}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Note: {runNote}"
+msgstr "Примітка: {runNote}"
+
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "У доріжці {laneTitle} нічого не відповідає «{filterLabel}»."
@@ -2367,7 +2383,7 @@ msgstr "Океан"
 
 #: src/components/ProjectPlugins.tsx
 msgid "off"
-msgstr "вимк"
+msgstr "вимк."
 
 #: src/lib/glossary.ts
 msgid "off-plan"
@@ -2375,7 +2391,7 @@ msgstr "поза планом"
 
 #: src/components/ProjectPlugins.tsx
 msgid "on"
-msgstr "увімк"
+msgstr "увімк."
 
 #: src/components/CreateAccountModal.tsx
 msgid "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
@@ -2395,11 +2411,15 @@ msgstr "підключення не вдалося: {status}"
 
 #: src/workspace/ProjectSwitcher.tsx
 msgid "onboarded only"
-msgstr "лише підключений"
+msgstr "лише підключені"
 
 #: src/components/NewProjectButton.tsx
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "підключення вимкнено — перезапустіть демон зі списком дозволених:"
+
+#: src/api.ts
+msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
+msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є в Needs you."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
@@ -2593,7 +2613,7 @@ msgstr "Фази без ребра між ними виконуються пар
 
 #: src/components/ProjectDropdown.tsx
 msgid "pinned"
-msgstr "закріплені"
+msgstr "закріплено"
 
 #: src/workspace/TaskModal.tsx
 msgid "plan"
@@ -2951,6 +2971,10 @@ msgstr "Видаляє записи swarmery з <0>.claude/settings.json</0>. І
 #: src/api.ts
 msgid "rename failed: {status}"
 msgstr "перейменування не вдалося: {status}"
+
+#: src/api/phasereport.ts
+msgid "reopen failed"
+msgstr "перевідкрити не вдалося"
 
 #: src/components/ProjectPlugins.tsx
 msgid "repair"
@@ -3416,7 +3440,7 @@ msgstr "створено перевіркою для виправлення {ext
 
 #: src/workspace/boardModel.ts
 msgid "stale"
-msgstr "застарілі"
+msgstr "застаріло"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -3718,7 +3742,7 @@ msgstr "Назву, промпт і розширені налаштування,
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
-msgstr "перевіряльник не зміг зробити висновок (середовище або тайм-аут) — це не провальна оцінка"
+msgstr "перевіряльник не дійшов висновку (середовище або тайм-аут) — це не провальна оцінка"
 
 #: src/lib/docFigures.tsx
 msgid "The worktree limit (default 4)"
@@ -3768,6 +3792,10 @@ msgstr "схема конфігурації цього пакета відсут
 #: src/components/RunOutcomeModal.tsx
 msgid "this phase has not been run"
 msgstr "цю фазу ще не запускали"
+
+#: src/api.ts
+msgid "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies."
+msgstr "Цю фазу стримує рядок Earliest: у її документі. Запустіть її в цей день або пізніше, або відредагуйте рядок, якщо обмеження більше не діє."
 
 #: src/workspace/AgentPicker.tsx
 msgid "this project's .claude/agents/ definition replaces the inherited one"
@@ -3935,7 +3963,7 @@ msgstr "перевірка: {verify}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "verified"
-msgstr "перевірено"
+msgstr "підтверджено"
 
 #: src/workspace/PlaybookPicker.tsx
 msgid "verify {verify}"
@@ -3964,7 +3992,7 @@ msgstr "через attach/detach"
 
 #: src/lib/sessionsView.ts
 msgid "waiting"
-msgstr "очікує"
+msgstr "чекає"
 
 #: src/workspace/StatusBar.tsx
 msgid "Waiting {waiting}"

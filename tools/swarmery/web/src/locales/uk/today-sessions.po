@@ -52,7 +52,7 @@ msgstr "{advisorFindings, plural, one {{count} знахідка радника} 
 
 #: src/pages/detail/Chat.tsx
 msgid "{agents, plural, one {ran {count} agent} few {ran {count} agents} many {ran {count} agents} other {ran {count} agents}}"
-msgstr "{agents, plural, one {запущено {count} агента} few {запущено {count} агентів} many {запущено {count} агентів} other {запущено {count} агента}}"
+msgstr "{agents, plural, one {запущено {count} агента} few {запущено {count} агенти} many {запущено {count} агентів} other {запущено {count} агента}}"
 
 #: src/pages/Overview.tsx
 msgid "{autoPct}% of requests · no stop"
@@ -342,6 +342,7 @@ msgid "and the loop closes when Change lowers next week's Measure"
 msgstr "а цикл замикається, коли «Зміна» знижує «Вимір» наступного тижня"
 
 #: src/pages/Overview.tsx
+msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "відповісти"
 
@@ -413,11 +414,11 @@ msgstr "сер. сесія 7д"
 
 #: src/pages/detail/Chat.tsx
 msgid "awaiting approval — respond in the terminal or Approvals"
-msgstr "чекає погодження — відповідьте в терміналі або в «Погодженнях»"
+msgstr "чекає погодження — дайте відповідь у терміналі або в «Погодженнях»"
 
 #: src/pages/detail/Chat.tsx
 msgid "awaiting approval · {since} — respond in the terminal or Approvals"
-msgstr "чекає погодження · {since} — відповідьте в терміналі або в «Погодженнях»"
+msgstr "чекає погодження · {since} — дайте відповідь у терміналі або в «Погодженнях»"
 
 #: src/pages/SessionDetail.tsx
 msgid "awaiting reply · {quietFor}"
@@ -1131,6 +1132,10 @@ msgstr "відкрити {type} у System"
 msgid "open board →"
 msgstr "відкрити дошку →"
 
+#: src/pages/NeedsYou.tsx
+msgid "open criteria →"
+msgstr "відкрити критерії →"
+
 #: src/pages/detail/CallTree.tsx
 msgid "open in System"
 msgstr "відкрити в System"
@@ -1287,7 +1292,7 @@ msgstr "Відповісти цій сесії…  (⌘/Ctrl+Enter — наді�
 
 #: src/pages/detail/Timeline.tsx
 msgid "respond in the terminal, or approve/deny from the Approvals screen."
-msgstr "відповідьте в терміналі або погодьте/відхиліть на екрані «Погодження»."
+msgstr "дайте відповідь у терміналі або погодьте/відхиліть на екрані «Погодження»."
 
 #: src/pages/today/WaitingOnYou.tsx
 msgid "review"
@@ -1449,7 +1454,7 @@ msgstr "показати архівні"
 
 #: src/pages/detail/Chat.tsx
 msgid "show less"
-msgstr "менше"
+msgstr "показати менше"
 
 #: src/pages/detail/Chat.tsx
 msgid "show more"
@@ -1481,7 +1486,7 @@ msgstr "джерело: {source}"
 
 #: src/pages/detail/CallTree.tsx
 msgid "started"
-msgstr "початок"
+msgstr "почато"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "started {ago}"
@@ -1510,7 +1515,7 @@ msgstr "досі чекають"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Stop"
-msgstr "Стоп"
+msgstr "Зупинити"
 
 #: src/pages/Overview.tsx
 msgid "stop asking"
@@ -1708,7 +1713,7 @@ msgstr "запуск перевірки"
 
 #: src/pages/today/loopModel.ts
 msgid "verified"
-msgstr "перевірено"
+msgstr "підтверджено"
 
 #: src/pages/Approvals.tsx
 msgid "via {via}"
@@ -1752,7 +1757,7 @@ msgstr "працює"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Working"
-msgstr "Працює"
+msgstr "У роботі"
 
 #: src/pages/SessionDetail.tsx
 msgid "working · {lastActive}"

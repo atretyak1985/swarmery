@@ -477,6 +477,7 @@ msgstr "by {decidedBy}"
 #: src/pages/Board.tsx
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
+#: src/pages/plans/PhaseReopens.tsx
 msgid "cancel"
 msgstr "cancel"
 
@@ -497,6 +498,18 @@ msgstr "card"
 #: src/pages/Routines.tsx
 msgid "Catch-up"
 msgstr "Catch-up"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by"
+msgstr "caught by"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by {gate}"
+msgstr "caught by {gate}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by nobody"
+msgstr "caught by nobody"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
@@ -536,6 +549,14 @@ msgstr "close"
 msgid "closed"
 msgstr "closed"
 
+#: src/pages/plans/CriterionLint.tsx
+msgid "closed by push / PR / merge — ticked when the change request merges"
+msgstr "closed by push / PR / merge — ticked when the change request merges"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "code review"
+msgstr "code review"
+
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "confidence"
@@ -556,6 +577,10 @@ msgstr "Continue with the plan"
 #: src/pages/Playbooks.tsx
 msgid "copies the markdown into the project so its prompts become editable"
 msgstr "copies the markdown into the project so its prompts become editable"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "couldn't load the findings: {error}"
+msgstr "couldn't load the findings: {error}"
 
 #: src/pages/Board.tsx
 msgid "counting…"
@@ -580,6 +605,10 @@ msgstr "created {created}"
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
 msgstr "Criteria"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "criteria to untick"
+msgstr "criteria to untick"
 
 #: src/pages/Plans.tsx
 msgid "criteria…"
@@ -837,6 +866,14 @@ msgstr "filter by label"
 msgid "filter by state"
 msgstr "filter by state"
 
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "findings ({count})"
+msgstr "findings ({count})"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "findings (none blocking)"
+msgstr "findings (none blocking)"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing part of the work"
 msgstr "finishing part of the work"
@@ -848,6 +885,22 @@ msgstr "finishing the work"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing with some concerns"
 msgstr "finishing with some concerns"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "first review"
+msgstr "first review"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "fix →"
+msgstr "fix →"
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "fix round {roundNo}"
+msgstr "fix round {roundNo}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "fix URL (optional)"
+msgstr "fix URL (optional)"
 
 #: src/pages/planning/RefineModal.tsx
 msgid "For example: add a phased rollout, cover disaster recovery, and ask about migration risks."
@@ -998,10 +1051,18 @@ msgstr "linked"
 msgid "linked to this plan by the daemon"
 msgstr "linked to this plan by the daemon"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "loading criteria…"
+msgstr "loading criteria…"
+
 #: src/pages/Board.tsx
 #: src/pages/Plans.tsx
 msgid "loading…"
 msgstr "loading…"
+
+#: src/pages/plans/CriterionLint.tsx
+msgid "looks like a landing/manual criterion — a run cannot close it"
+msgstr "looks like a landing/manual criterion — a run cannot close it"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1015,6 +1076,14 @@ msgstr "major miss"
 #: src/pages/Routines.tsx
 msgid "manual / webhook only"
 msgstr "manual / webhook only"
+
+#: src/pages/plans/CriterionLint.tsx
+msgid "Mark [LAND]"
+msgstr "Mark [LAND]"
+
+#: src/pages/plans/CriterionLint.tsx
+msgid "Mark [MANUAL]"
+msgstr "Mark [MANUAL]"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1189,9 +1258,17 @@ msgstr "no summary of the work written — the executor left neither a <0>## Com
 msgid "no summary written for this phase"
 msgstr "no summary written for this phase"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "No ticked criteria in this phase's doc — nothing to reopen."
+msgstr "No ticked criteria in this phase's doc — nothing to reopen."
+
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "no turns yet"
 msgstr "no turns yet"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "nobody (it shipped)"
+msgstr "nobody (it shipped)"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "none of the {total} criteria ticked"
@@ -1253,6 +1330,10 @@ msgstr "on"
 msgid "on plan"
 msgstr "on plan"
 
+#: src/pages/plans/CriterionLint.tsx
+msgid "only a human can close it — you tick it after checking by hand"
+msgstr "only a human can close it — you tick it after checking by hand"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "open"
 msgstr "open"
@@ -1291,6 +1372,10 @@ msgstr "open session →"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
 msgstr "Opening…"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "operator"
+msgstr "operator"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "Operator"
@@ -1667,6 +1752,30 @@ msgstr "Reload review"
 msgid "remove step"
 msgstr "remove step"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopen and untick"
+msgstr "Reopen and untick"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "reopen this phase"
+msgstr "reopen this phase"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopen…"
+msgstr "Reopen…"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened"
+msgstr "Reopened"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened · {count}"
+msgstr "Reopened · {count}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "reopening…"
+msgstr "reopening…"
+
 #: src/pages/PlanningMode.tsx
 msgid "reply"
 msgstr "reply"
@@ -1708,6 +1817,11 @@ msgstr "returned to agent"
 msgid "revert"
 msgstr "revert"
 
+#: src/pages/plans/PhaseReopens.tsx
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "review"
+msgstr "review"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Review"
 msgstr "Review"
@@ -1719,6 +1833,10 @@ msgstr "Review changes →"
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
 msgstr "Review it on the <0>Plans page</0> — phases run from there."
+
+#: src/pages/plans/RunsReviewBlock.tsx
+msgid "review of the fix re-run"
+msgstr "review of the fix re-run"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "review required"
@@ -2339,6 +2457,10 @@ msgstr "unverified"
 msgid "verified"
 msgstr "verified"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "verifier"
+msgstr "verifier"
+
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify failed"
 msgstr "verify failed"
@@ -2371,6 +2493,10 @@ msgstr "what follows"
 #: src/pages/planning/ReviseModal.tsx
 msgid "what should change, and why"
 msgstr "what should change, and why"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "what slipped through"
+msgstr "what slipped through"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "what to fix on the next pass"

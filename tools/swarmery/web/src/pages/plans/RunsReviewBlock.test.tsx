@@ -6,7 +6,7 @@
 // nothing at all for a phase never reviewed. A review that lands while the panel
 // is open arrives with the refetched epic and replaces the shown one.
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '../../test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Review } from '../../api/reviews';
 import type { PhaseReviewSummary } from '../../api/types';

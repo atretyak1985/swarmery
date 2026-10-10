@@ -567,13 +567,13 @@ export function InboxDetail({
         <>
           <ReviewDetail review={item.raw} now={now} />
           <Consequences
-            yes={['if you ack', 'The review leaves the Inbox. It stays on record; nothing else changes.']}
+            yes={[t`if you ack`, t`The review leaves the Inbox. It stays on record; nothing else changes.`]}
           />
         </>
       );
       buttons = (
         <button type="button" {...manualPrimary} className={primaryBrand} disabled={busy} onClick={act(primary)}>
-          ack
+          <Trans>ack</Trans>
           <KeyHint k={manualKey} />
         </button>
       );
