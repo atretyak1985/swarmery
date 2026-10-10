@@ -28,6 +28,9 @@ func fakeClaudeRunner(t *testing.T, body string) {
 // TestClaudeRunnerArgs asserts the built claude arg list carries the headless
 // slimming flag (--setting-sources project,local) alongside the model override.
 func TestClaudeRunnerArgs(t *testing.T) {
+	// The permission mode resolves from env; pin it to the code default so an
+	// operator's own knob cannot change the argv this test pins.
+	clearPermissionKnobs(t)
 	// Echo the args into the run cwd so we can assert on them. Exit 0.
 	fakeClaudeRunner(t, `echo "$@" > "$PWD/args.txt"; exit 0`)
 	cwd := t.TempDir()
@@ -46,7 +49,8 @@ func TestClaudeRunnerArgs(t *testing.T) {
 	// invisible to everything except an assertion like this one. Mirrors the
 	// verify/model case in internal/runcore/spawner_test.go.
 	got := strings.TrimSpace(string(out))
-	want := "-p hello --session-id u1 --setting-sources project,local --model opus --effort " + DefaultEffort
+	want := "-p hello --session-id u1 --setting-sources project,local --permission-mode bypassPermissions --model opus --effort " +
+		DefaultEffort + " --disallowedTools Edit,Write,MultiEdit,NotebookEdit"
 	if got != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}

@@ -84,13 +84,37 @@ const (
 	DefaultEffort = "medium"
 )
 
+// permEnv is this spawn site's --permission-mode knob. internal/claudeflags owns
+// the resolution: this knob, then SWARMERY_PERMISSION_MODE, then
+// bypassPermissions; "off" omits the flag.
+//
+// The verifier is the one runcore engine that used to omit the flag, and that
+// was the main cause of its inconclusive verdicts. With no mode, every Bash
+// check outside the project allowlist raised a permission prompt. A headless
+// run cannot answer one, and the approvals long-poll held each for its full 10
+// minutes. Two such prompts outlast the 15-minute hard timeout, so the run was
+// stamped verifier-timed-out after about a minute of real work (verification
+// runs 6 and 8, 2026-10-02). The one run that reached a verdict that afternoon
+// did so only because the operator approved its four prompts from the dashboard
+// within seconds.
+const permEnv = "SWARMERY_VERIFY_PERMISSION_MODE"
+
+// readOnlyToolArgs keeps the edit tools denied. Before permEnv existed they were
+// denied as a side effect of the missing mode, and a mode that stops the asking
+// must not also start the editing. The verifier grades the worktree it runs in,
+// so it may run checks (Bash) but may not change files with the edit tools. A
+// Bash command can still write; the prompt contract forbids that, as before. The
+// list is applied whatever permEnv resolves to, including "off".
+var readOnlyToolArgs = []string{"--disallowedTools", "Edit,Write,MultiEdit,NotebookEdit"}
+
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`
 // with cwd set to the worktree. Binary resolution is a plain PATH lookup — the
 // same pattern as dispatch.ClaudeRunner / internal/toolproc (the daemon's
 // launchd/service PATH must contain the claude binary). The prompt is passed as
 // an argument (not stdin) so --session-id positioning is unambiguous, matching
-// the dispatcher. NOTE: read-only-ness is enforced by the PROMPT contract, not
-// by a sandbox — the security review must confirm the run cannot mutate the
+// the dispatcher. NOTE: read-only-ness is enforced by the PROMPT contract plus
+// the edit tools denied on the argv (readOnlyToolArgs), not by a sandbox: a
+// Bash command can still write. The security review must confirm the run cannot mutate the
 // worktree in a way that would corrupt the graded diff (it runs in the task's
 // own throwaway worktree, so at worst it dirties that worktree, never main).
 type ClaudeRunner struct {
@@ -134,6 +158,12 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		// Resolved, never omitted: an absent --effort is the CLI's xhigh, paid on
 		// every graded task in the fleet.
 		Effort: claudeflags.Effort(effortEnv, DefaultEffort),
+		// A mode that never asks: a prompt in a headless run waits for nobody
+		// until the timeout kills the run (see permEnv).
+		PermissionMode: claudeflags.Mode(permEnv),
+		// Last on the argv: --disallowedTools takes a variadic list, so anything
+		// after it would be read as another tool name.
+		ExtraArgs: readOnlyToolArgs,
 		// --setting-sources project,local: skip user-level settings (global plugin
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.
