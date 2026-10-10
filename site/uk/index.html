@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="uk" class="noscript" data-i18n-copied="Скопійовано" data-i18n-chapters="Розділи">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0A0B0D">
+<title>Swarmery: керуйте агентами Claude Code як флотом</title>
+<meta name="description" content="Центр керування для Claude Code, де все локально: план через інтерв’ю, запуски у worktree, одна черга для кожного агента, що чекає, вартість і уроки з кожного запуску. Один бінарник на Go, без хмари.">
+<link rel="canonical" href="https://atretyak1985.github.io/swarmery/uk/">
+<link rel="alternate" hreflang="en" href="https://atretyak1985.github.io/swarmery/">
+<link rel="alternate" hreflang="uk" href="https://atretyak1985.github.io/swarmery/uk/">
+<link rel="alternate" hreflang="x-default" href="https://atretyak1985.github.io/swarmery/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Swarmery">
+<meta property="og:locale" content="uk_UA">
+<meta property="og:title" content="Swarmery: керуйте агентами Claude Code як флотом">
+<meta property="og:description" content="Центр керування для Claude Code, де все локально: план через інтерв’ю, запуски у worktree, одна черга для кожного агента, що чекає, вартість і уроки з кожного запуску. Один бінарник на Go, без хмари.">
+<meta property="og:url" content="https://atretyak1985.github.io/swarmery/uk/">
+<meta property="og:image" content="https://atretyak1985.github.io/swarmery/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@SwarmeryDev">
+<meta name="twitter:title" content="Swarmery: керуйте агентами Claude Code як флотом">
+<meta name="twitter:description" content="Центр керування для Claude Code, де все локально: план через інтерв’ю, запуски у worktree, одна черга для кожного агента, що чекає, вартість і уроки з кожного запуску. Один бінарник на Go, без хмари.">
+<meta name="twitter:image" content="https://atretyak1985.github.io/swarmery/og.png">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem('swarmery-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400;1,7..72,500&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Перейти до змісту</a>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="" aria-label="Swarmery, головна"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M16 2.4 4.22 9.2v13.6L16 29.6l11.78-6.8V9.2ZM16 6.9 8.12 11.45v9.1L16 25.1l7.88-4.55v-9.1Z"/><path fill="currentColor" d="M16 11.5 12.1 13.75v4.5L16 20.5l3.9-2.25v-4.5Z"/></svg><span>SW<span class="o">&#x2B21;</span>RMERY</span></a>
+    <nav class="menu" aria-label="Головне меню">
+      <div class="dd"><button type="button" aria-expanded="false" aria-haspopup="true">Можливості <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+        <div class="dd-panel"><a href="features/planning/"><span class="n">01</span><span><b>Планування</b><span>Інтерв’ю, що закінчується планом із фазами</span></span></a><a href="features/inbox/"><span class="n">02</span><span><b>Вхідні</b><span>Погодження, питання й пропозиції в одній черзі</span></span></a><a href="features/health/"><span class="n">03</span><span><b>Здоров’я</b><span>Табелі, тертя, вартість і радник</span></span></a><a href="features/sessions/"><span class="n">04</span><span><b>Сесії</b><span>Кожна сесія наживо: чат, хронологія, диффи</span></span></a><a href="features/learning/"><span class="n">05</span><span><b>Навчання</b><span>Уроки, локальний класифікатор, чесність прогнозів</span></span></a><a href="features/knowledge/"><span class="n">06</span><span><b>Знання</b><span>Пам’ять, карта архітектури й граф коду</span></span></a><a class="all" href="features/">Усі можливості й шість правил, на яких вони тримаються &rarr;</a></div>
+      </div>
+      <a href="videos/">Відео</a>
+      <a href="plugins/">Плагіни</a>
+      <a href="install/">Почати</a>
+      <a href="blog/">Блог</a>
+      <a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Документація</a>
+    </nav>
+    <div class="nav-r">
+      <a class="lang" href="../" hreflang="en" lang="en" aria-label="English version">EN</a>
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="Перемкнути світлу чи темну тему"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <a class="gh" href="https://github.com/atretyak1985/swarmery"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span class="lbl">GitHub</span><span class="stars" data-stars></span></a>
+      <button class="icon-btn burger" type="button" aria-label="Меню" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</header>
+<main id="main">
+
+<section class="hero"><div class="hexbg"></div>
+<div class="wrap">
+  <div class="badge-row"><span class="pill"><span class="dot"></span>відкритий код · усе локально</span><span class="pill amber"><span class="dot"></span>нове: епізоди про можливості</span></div>
+  <h1>Керуйте агентами Claude Code <em>як флотом</em>.</h1>
+  <p class="lede">Один локальний центр керування для кожної сесії Claude Code: сплануйте роботу через інтерв’ю, запустіть її в ізольованих worktree, відповідайте кожному агенту, що чекає, з однієї черги й бачте, скільки це коштувало. Один бінарник на Go, без хмари й без акаунта.</p>
+  <div class="row">
+    <a class="btn btn-primary" href="install/">Почати <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
+    <button class="btn" type="button" data-play="../video/swarmery-promo.mp4" data-poster="../assets/posters/promo.jpg" data-title="Swarmery за 75 секунд · 1:15" data-chapters='[[&quot;0:00&quot;, &quot;\u042f\u043a\u0438\u0439 \u0430\u0433\u0435\u043d\u0442 \u0437\u0430\u0441\u0442\u0440\u044f\u0433 \u0441\u0430\u043c\u0435 \u0437\u0430\u0440\u0430\u0437?&quot;], [&quot;0:15&quot;, &quot;\u041e\u0434\u0438\u043d \u0446\u0435\u043d\u0442\u0440 \u043a\u0435\u0440\u0443\u0432\u0430\u043d\u043d\u044f&quot;], [&quot;0:20&quot;, &quot;\u041a\u043e\u0436\u043d\u0430 \u0441\u0435\u0441\u0456\u044f, \u043a\u043e\u0436\u0435\u043d \u043f\u0440\u043e\u0454\u043a\u0442, \u043d\u0430\u0436\u0438\u0432\u043e&quot;], [&quot;0:25&quot;, &quot;\u0425\u0442\u043e \u0447\u0435\u043a\u0430\u0454 \u043d\u0430 \u0432\u0430\u0441&quot;], [&quot;0:30&quot;, &quot;\u0421\u043f\u043b\u0430\u043d\u0443\u0439\u0442\u0435, \u0440\u043e\u0437\u0431\u0438\u0439\u0442\u0435 \u043d\u0430 \u0444\u0430\u0437\u0438, \u043f\u0435\u0440\u0435\u0434\u0430\u0439\u0442\u0435 \u0432 \u0440\u043e\u0431\u043e\u0442\u0443&quot;], [&quot;0:40&quot;, &quot;\u0412\u0430\u0440\u0442\u0456\u0441\u0442\u044c \u0449\u0435 \u0434\u043e \u0440\u0430\u0445\u0443\u043d\u043a\u0443&quot;], [&quot;0:47&quot;, &quot;\u041e\u0434\u0438\u043d \u043d\u0430\u0431\u0456\u0440 \u0430\u0433\u0435\u043d\u0442\u0456\u0432, \u043a\u043e\u0436\u0435\u043d \u043f\u0440\u043e\u0454\u043a\u0442&quot;], [&quot;1:00&quot;, &quot;\u041e\u0434\u0438\u043d \u0431\u0456\u043d\u0430\u0440\u043d\u0438\u043a \u043d\u0430 Go, \u043d\u0430 \u0432\u0430\u0448\u0456\u0439 \u043c\u0430\u0448\u0438\u043d\u0456&quot;]]'><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M5 3.5v13l11-6.5z"/></svg> Дивитися 75-секундний тур</button>
+  </div>
+  <div class="row" style="margin-top:18px"><div class="cmd"><span class="p">&gt;</span><code>/plugin marketplace add atretyak1985/swarmery</code><button class="copy" type="button" data-copy="/plugin marketplace add atretyak1985/swarmery" hidden>Копіювати</button></div></div>
+  <div class="hero-shot" style="margin-top:64px">
+    <div class="glow"></div>
+    <div class="frame "><span class="live">НАЖИВО</span><video data-clip muted loop playsinline preload="none" poster="../assets/clips/hero.jpg" data-src="../assets/clips/hero.mp4" aria-label="127.0.0.1:7777/sessions"></video></div>
+    <div class="float-chip fc-1"><span class="ic">3</span><span>агенти, що чекають на вас<small>Inbox (вхідні) · найдовше 7 хв</small></span></div>
+    <div class="float-chip fc-2"><span class="ic">$</span><span>вартість ще до рахунку<small>за сесією · проєктом · моделлю</small></span></div>
+  </div>
+  <div class="stats rv" style="margin-top:56px">
+        <!-- BEGIN generated:stats-hero -->
+        <div class="stat"><div class="n">14</div><div class="l">пакетів плагінів</div></div>
+        <div class="stat"><div class="n">26</div><div class="l">агентів</div></div>
+        <div class="stat"><div class="n">70</div><div class="l">скілів</div></div>
+        <div class="stat hot"><div class="n">:7777</div><div class="l">локальний центр керування</div></div>
+        <!-- END generated:stats-hero -->
+  </div>
+</div></section>
+
+<section class="sec-tight divider"><div class="wrap">
+  <div class="pains">
+    <div class="pain rv"><span class="tag">як було</span><div class="q">Alt-Tab. Копіювати. <s>Який агент застряг?</s></div><p>Десять терміналів, три репозиторії й запит дозволу, який ви пропустили годину тому. Swarmery показує кожну сесію наживо й збирає кожне рішення, що чекає, в одну чергу.</p></div>
+    <div class="pain rv"><span class="tag">як було</span><div class="q">Агент сказав <s>«готово»</s>.</div><p>Процес, що завершився з кодом 0, — ще не завершена фаза. Роботу перевіряють ззовні за критеріями приймання, а звіт каже, що насправді зроблено.</p></div>
+    <div class="pain rv"><span class="tag">як було</span><div class="q">Та сама помилка <s>щотижня</s>.</div><p>Запуски, що розійшлися з прогнозом, стають уроками з доказами. Ви їх приймаєте, вони доходять до наступних запусків, і їх переміряють, доки вони не перестануть допомагати.</p></div>
+  </div>
+</div></section>
+
+<section class="sec divider" id="loop"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">цикл</p><h2>Спланувати, запустити, вирішити, виміряти, навчитися. Один цикл, один дашборд.</h2><p>Кожен етап живить наступний, а бурштиновий колір завжди означає, що там на вас щось чекає. Клацніть етап або просто дивіться.</p></div>
+  <div class="reel" data-reel-root>
+    <div class="reel-tabs" role="tablist" aria-label="Цикл"><button class="reel-tab" type="button" role="tab" data-clip="../assets/clips/plan-interview.mp4" data-poster="../assets/clips/plan-interview.jpg" data-cap="Інтерв’ю, а не форма" data-url="127.0.0.1:7777/plans/new" data-href="features/planning/"><span class="k"><b>01</b>план</span><h3>Планування</h3><p>Інтерв’ю перетворює вашу ідею на план із фазами, критеріями й прогнозами.</p><span class="prog"></span></button><button class="reel-tab" type="button" role="tab" data-clip="../assets/clips/sessions-timeline.mp4" data-poster="../assets/clips/sessions-timeline.jpg" data-cap="Кожен виклик інструмента по черзі" data-url="127.0.0.1:7777/sessions/migrate-email-templates" data-href="features/sessions/"><span class="k"><b>02</b>запуск</span><h3>Сесії</h3><p>Кожна сесія в кожному репозиторії наживо: чат, хронологія, диффи.</p><span class="prog"></span></button><button class="reel-tab" type="button" role="tab" data-clip="../assets/clips/inbox-queue.mp4" data-poster="../assets/clips/inbox-queue.jpg" data-cap="Шість видів, один список" data-url="127.0.0.1:7777/inbox" data-href="features/inbox/"><span class="k"><b>03</b>рішення</span><h3>Вхідні</h3><p>Погодження, питання й пропозиції чекають в одній черзі, а не в десяти терміналах.</p><span class="prog"></span></button><button class="reel-tab" type="button" role="tab" data-clip="../assets/clips/health-overview.mp4" data-poster="../assets/clips/health-overview.jpg" data-cap="Одне речення про флот" data-url="127.0.0.1:7777/health" data-href="features/health/"><span class="k"><b>04</b>метрики</span><h3>Здоров’я</h3><p>Табелі, тертя й вартість підказують, що змінити далі.</p><span class="prog"></span></button><button class="reel-tab" type="button" role="tab" data-clip="../assets/clips/learning-lessons.mp4" data-poster="../assets/clips/learning-lessons.jpg" data-cap="Зароблені, прийняті, переміряні" data-url="127.0.0.1:7777/learning" data-href="features/learning/"><span class="k"><b>05</b>уроки</span><h3>Навчання</h3><p>Запуски, що розійшлися з прогнозом, стають уроками, які ви приймаєте чи відхиляєте.</p><span class="prog"></span></button><button class="reel-tab" type="button" role="tab" data-clip="../assets/clips/knowledge-arch.mp4" data-poster="../assets/clips/knowledge-arch.jpg" data-cap="Карта репозиторію з позначкою свіжості" data-url="127.0.0.1:7777/knowledge/architecture" data-href="features/knowledge/"><span class="k"><b>06</b>пам’ять</span><h3>Знання</h3><p>Пам’ять, карта архітектури й граф коду, щоб сесії не починали з нуля.</p><span class="prog"></span></button></div>
+    <div class="reel-stage">
+      <div class="frame"><span class="live">НАЖИВО</span><video data-reel muted playsinline preload="none" aria-label="Кліп продукту"></video></div>
+      <div class="cap"><span data-reel-cap></span><a data-reel-link href="features/planning/">Відкрити сторінку &rarr;</a></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec divider"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">можливості</p><h2>Шість сторінок замість десяти терміналів.</h2><p>У кожної свій епізод, справжні скриншоти й короткі кліпи. Усе нижче — справжній дашборд на вигаданих проєктах.</p></div>
+  <div class="bento"><a class="card rv span-3" href="features/planning/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="../assets/clips/plan-interview.jpg" data-src="../assets/clips/plan-interview.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">01 · Планування</span><h3>Від ідеї до плану, який виконають ваші агенти</h3><p>Інтерв’ю, що закінчується планом із фазами.</p><span class="go">Більше про планування <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div></a><a class="card rv span-3" href="features/inbox/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="../assets/clips/inbox-queue.jpg" data-src="../assets/clips/inbox-queue.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">02 · Вхідні</span><h3>Кожне рішення, на яке чекають ваші агенти, в одному місці</h3><p>Погодження, питання й пропозиції в одній черзі.</p><span class="go">Більше про вхідні <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div></a><a class="card rv span-2" href="features/health/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="../assets/clips/health-overview.jpg" data-src="../assets/clips/health-overview.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">03 · Здоров’я</span><h3>Як працюють ваші агенти і що змінити</h3><p>Табелі, тертя, вартість і радник.</p><span class="go">Більше про здоров’я <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div></a><a class="card rv span-2" href="features/sessions/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="../assets/clips/sessions-list.jpg" data-src="../assets/clips/sessions-list.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">04 · Сесії</span><h3>Кожна сесія Claude Code в кожному проєкті</h3><p>Кожна сесія наживо: чат, хронологія, диффи.</p><span class="go">Більше про сесії <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div></a><a class="card rv span-2" href="features/learning/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="../assets/clips/learning-lessons.jpg" data-src="../assets/clips/learning-lessons.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">05 · Навчання</span><h3>Чого навчилися ваші агенти і чи можна цьому вірити</h3><p>Уроки, локальний класифікатор, чесність прогнозів.</p><span class="go">Більше про навчання <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div></a><a class="card rv span-6 wide" href="features/knowledge/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="../assets/clips/knowledge-memory.jpg" data-src="../assets/clips/knowledge-memory.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">06 · Знання</span><h3>Що проєкт знає про себе</h3><p>Пам’ять, карта архітектури й граф коду.</p><span class="go">Більше про знання <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div></a></div>
+</div></section>
+
+<section class="sec divider"><div class="wrap">
+  <div class="split">
+    <div class="txt rv">
+      <p class="eyebrow">центр керування</p>
+      <h2>Один бінарник, що бачить увесь рій.</h2>
+      <p>Один демон на Go із вбудованим дашбордом на React. Він читає транскрипти сесій, які Claude Code і так пише, індексує їх у локальну SQLite і віддає все на одному порту, що ніколи не виходить за межі loopback-інтерфейсу. У ваші проєкти нічого встановлювати не треба.</p>
+      <ul><li>Сесії, які ви вже запускали, з’являються одразу</li><li>Погодження приходять на телефон, тож запуск, що чекає, можна розблокувати не за столом</li><li>launchd на macOS, systemd на Linux</li></ul>
+    </div>
+    <div class="term rv"><div class="bar"><i></i><i></i><i></i><span>~ zsh</span></div><pre><span class="p">$</span> swarmery serve
+<span class="c">swarmery · один бінарник</span>
+<span class="g">✓</span> підтягую сесії з ~/.claude/projects
+<span class="g">✓</span> слухаю <span class="b">127.0.0.1:7777</span>
+<span class="g">✓</span> готово · ніщо не покидає цю машину</pre></div>
+  </div>
+  <div class="stats rv" style="margin-top:48px">
+            <!-- BEGIN generated:stats-control-plane -->
+            <div class="stat"><div class="n">108</div><div class="l">Go-пакетів</div></div>
+            <div class="stat"><div class="n">230</div><div class="l">REST-маршрутів</div></div>
+            <div class="stat hot"><div class="n">:7777</div><div class="l">порт дашборду</div></div>
+            <div class="stat"><div class="n sm">127.0.0.1</div><div class="l">єдиний інтерфейс, який він слухає</div></div>
+            <!-- END generated:stats-control-plane -->
+  </div>
+</div></section>
+
+<section class="sec divider"><div class="wrap">
+  <div class="split rev">
+    <div class="txt rv">
+      <p class="eyebrow">маркетплейс плагінів</p>
+      <h2>Один набір агентів. Кожен проєкт.</h2>
+      <p>Годі копіювати агентів між репозиторіями. Ядро, незалежне від постачальника, містить те, що спільне для всіх проєктів, пакети на вибір додають словник одного типу роботи, а кожен проєкт приносить свою специфіку під час виконання через <code>project.json</code>.</p>
+      <div class="row" style="margin-top:22px"><a class="btn" href="plugins/">Переглянути пакети <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+    </div>
+    <div class="rv"><div class="frame "><video data-clip muted loop playsinline preload="none" poster="../assets/clips/promo-fleet.jpg" data-src="../assets/clips/promo-fleet.mp4" aria-label="core@swarmery → кожен проєкт"></video></div></div>
+  </div>
+</div></section>
+
+<section class="sec divider"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">дивитися</p><h2>Серія: одна можливість — один епізод.</h2><p>Кожен коротший за дві хвилини, з розділами, між якими можна перескакувати.</p></div>
+  <div class="eps"><button class="ep" type="button" data-play="../video/swarmery-ep1-planning.mp4" data-poster="../assets/posters/ep1-planning.jpg" data-title="Епізод 1 · Планування · 1:54" data-chapters='[[&quot;0:00&quot;, &quot;\u0410\u0433\u0435\u043d\u0442\u0438 \u0432\u0433\u0430\u0434\u0443\u044e\u0442\u044c, \u0449\u043e \u0432\u0438 \u043c\u0430\u043b\u0438 \u043d\u0430 \u0443\u0432\u0430\u0437\u0456&quot;], [&quot;0:10&quot;, &quot;\u041f\u043e\u0447\u043d\u0456\u0442\u044c \u0437 \u0456\u0434\u0435\u0457&quot;], [&quot;0:15&quot;, &quot;\u041f\u043b\u0430\u043d\u0443\u0432\u0430\u043b\u044c\u043d\u0438\u043a \u0440\u043e\u0437\u043f\u0438\u0442\u0443\u0454 \u0432\u0430\u0441&quot;], [&quot;0:25&quot;, &quot;\u041f\u043b\u044e\u0441\u0438, \u043c\u0456\u043d\u0443\u0441\u0438 \u0439 \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0456\u044f&quot;], [&quot;0:35&quot;, &quot;\u041f\u043b\u0430\u043d \u043f\u0435\u0440\u0435\u0431\u0443\u0434\u043e\u0432\u0443\u0454\u0442\u044c\u0441\u044f \u043f\u0456\u0441\u043b\u044f \u043a\u043e\u0436\u043d\u043e\u0457 \u0432\u0456\u0434\u043f\u043e\u0432\u0456\u0434\u0456&quot;], [&quot;0:45&quot;, &quot;\u041f\u043b\u0430\u043d \u0441\u0442\u0430\u0454 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u043c\u0438&quot;], [&quot;0:50&quot;, &quot;\u0424\u0430\u0437\u0438 \u0439 \u0437\u0430\u043b\u0435\u0436\u043d\u043e\u0441\u0442\u0456&quot;], [&quot;0:55&quot;, &quot;\u041e\u0434\u043d\u0430 \u0444\u0430\u0437\u0430 \u0430\u0431\u043e \u0432\u0435\u0441\u044c \u043f\u043b\u0430\u043d&quot;], [&quot;1:05&quot;, &quot;\u041a\u0440\u0438\u0442\u0435\u0440\u0456\u0457 \u043f\u0440\u0438\u0439\u043c\u0430\u043d\u043d\u044f&quot;], [&quot;1:15&quot;, &quot;\u0417\u0432\u0456\u0442 \u043f\u0440\u043e \u0437\u0440\u043e\u0431\u043b\u0435\u043d\u0435&quot;], [&quot;1:20&quot;, &quot;\u041f\u0440\u043e\u0433\u043d\u043e\u0437 \u0456 \u0440\u0435\u0430\u043b\u044c\u043d\u0456\u0441\u0442\u044c&quot;], [&quot;1:30&quot;, &quot;\u041d\u0435\u0432\u0434\u0430\u043b\u0430 \u0444\u0430\u0437\u0430 \u043e\u0442\u0440\u0438\u043c\u0443\u0454 \u0432\u0438\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u043d\u044f&quot;], [&quot;1:35&quot;, &quot;\u0420\u0435\u0432\u0456\u0437\u0456\u044f \u044f\u043a \u0434\u0438\u0444\u0444&quot;], [&quot;1:40&quot;, &quot;\u041f\u0456\u0434\u0441\u0443\u043c\u043e\u043a, \u0441\u043f\u0435\u0446\u0438\u0444\u0456\u043a\u0430\u0446\u0456\u044f \u0439 \u043a\u043e\u0436\u043d\u0430 \u0444\u0430\u0437\u0430&quot;]]'><div class="th"><img src="../assets/posters/ep1-planning.jpg" alt="" loading="lazy"><div class="play"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M5 3.5v13l11-6.5z"/></svg></span></div><span class="dur">1:54</span></div>
+<div class="meta"><div class="k">Епізод 1</div><h3>Планування</h3><p>Від ідеї до плану, який виконають ваші агенти.</p></div></button><button class="ep" type="button" data-play="../video/swarmery-ep2-inbox.mp4" data-poster="../assets/posters/ep2-inbox.jpg" data-title="Епізод 2 · Вхідні · 1:47" data-chapters='[[&quot;0:00&quot;, &quot;\u0412\u0430\u0448\u0456 \u0430\u0433\u0435\u043d\u0442\u0438 \u0447\u0435\u043a\u0430\u044e\u0442\u044c \u043d\u0430 \u0432\u0430\u0441&quot;], [&quot;0:10&quot;, &quot;\u041e\u0434\u043d\u0430 \u0447\u0435\u0440\u0433\u0430 \u0434\u043b\u044f \u043a\u043e\u0436\u043d\u043e\u0433\u043e \u0440\u0456\u0448\u0435\u043d\u043d\u044f&quot;], [&quot;0:20&quot;, &quot;\u041a\u043b\u0430\u0432\u0456\u0430\u0442\u0443\u0440\u0430: j, k, e, x&quot;], [&quot;0:25&quot;, &quot;\u041f\u043e\u0433\u043e\u0434\u0436\u0435\u043d\u043d\u044f \u0437\u0456 \u0437\u0432\u043e\u0440\u043e\u0442\u043d\u0438\u043c \u0432\u0456\u0434\u043b\u0456\u043a\u043e\u043c&quot;], [&quot;0:30&quot;, &quot;\u041f\u0438\u0442\u0430\u043d\u043d\u044f \u044f\u043a \u0441\u043f\u0440\u0430\u0432\u0436\u043d\u0456\u0439 \u0432\u0438\u0431\u0456\u0440&quot;], [&quot;0:35&quot;, &quot;\u0421\u043f\u043e\u0432\u0456\u0449\u0435\u043d\u043d\u044f&quot;], [&quot;0:40&quot;, &quot;\u0417\u0430\u043f\u0443\u0441\u043a \u0433\u043e\u0442\u0443\u0454 \u0443\u0440\u043e\u043a&quot;], [&quot;0:45&quot;, &quot;\u041f\u0440\u0438\u0439\u043c\u0456\u0442\u044c \u0439\u043e\u0433\u043e \u0434\u043b\u044f \u043d\u0430\u0441\u0442\u0443\u043f\u043d\u0438\u0445 \u0437\u0430\u043f\u0443\u0441\u043a\u0456\u0432&quot;], [&quot;0:50&quot;, &quot;\u0421\u043f\u0438\u0441\u0430\u043d\u043d\u044f \u0443\u0440\u043e\u043a\u0456\u0432&quot;], [&quot;0:55&quot;, &quot;\u0420\u0430\u0434\u043d\u0438\u043a \u0456\u0437 \u0434\u043e\u043a\u0430\u0437\u0430\u043c\u0438&quot;], [&quot;1:05&quot;, &quot;\u041f\u0435\u0440\u0435\u043f\u0438\u0441\u0430\u043d\u0456 \u0430\u0433\u0435\u043d\u0442\u0438 \u043f\u0456\u0441\u043b\u044f \u043d\u0435\u0432\u0434\u0430\u043b\u0438\u0445 \u0437\u0430\u043f\u0443\u0441\u043a\u0456\u0432&quot;], [&quot;1:10&quot;, &quot;\u041f\u0435\u0440\u0435\u0433\u043b\u044f\u0434 \u044f\u043a \u0434\u0438\u0444\u0444&quot;], [&quot;1:15&quot;, &quot;\u041b\u043e\u043a\u0430\u043b\u044c\u043d\u0438\u0439 \u043a\u043b\u0430\u0441\u0438\u0444\u0456\u043a\u0430\u0442\u043e\u0440&quot;], [&quot;1:25&quot;, &quot;\u0410\u0433\u0435\u043d\u0442-\u0441\u043e\u0440\u0442\u0443\u0432\u0430\u043b\u044c\u043d\u0438\u043a&quot;], [&quot;1:30&quot;, &quot;\u0422\u0438\u0436\u0434\u0435\u043d\u044c \u043d\u0430 \u0441\u043a\u0430\u0441\u0443\u0432\u0430\u043d\u043d\u044f&quot;]]'><div class="th"><img src="../assets/posters/ep2-inbox.jpg" alt="" loading="lazy"><div class="play"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M5 3.5v13l11-6.5z"/></svg></span></div><span class="dur">1:47</span></div>
+<div class="meta"><div class="k">Епізод 2</div><h3>Вхідні</h3><p>Кожне рішення, на яке чекають ваші агенти, в одному місці.</p></div></button><button class="ep" type="button" data-play="../video/swarmery-ep3-health.mp4" data-poster="../assets/posters/ep3-health.jpg" data-title="Епізод 3 · Здоров’я · 1:23" data-chapters='[[&quot;0:00&quot;, &quot;\u0410\u0433\u0435\u043d\u0442\u0438 \u0440\u0456\u0434\u043a\u043e \u043f\u0430\u0434\u0430\u044e\u0442\u044c \u0433\u0443\u0447\u043d\u043e&quot;], [&quot;0:10&quot;, &quot;\u041e\u0434\u043d\u0430 \u0441\u043c\u0443\u0433\u0430 \u043d\u0430 \u0432\u0441\u0435 \u0432\u0456\u043a\u043d\u043e&quot;], [&quot;0:15&quot;, &quot;\u041e\u0434\u043d\u0435 \u0440\u0435\u0447\u0435\u043d\u043d\u044f \u043f\u0440\u043e \u0444\u043b\u043e\u0442&quot;], [&quot;0:20&quot;, &quot;\u0422\u0435\u0440\u0442\u044f, \u044f\u043a\u0435 \u043c\u043e\u0436\u043d\u0430 \u043f\u0440\u0438\u0431\u0440\u0430\u0442\u0438 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456&quot;], [&quot;0:25&quot;, &quot;\u0422\u0430\u0431\u0435\u043b\u0456 \u0430\u0433\u0435\u043d\u0442\u0456\u0432&quot;], [&quot;0:30&quot;, &quot;\u0417\u0430\u0431\u043e\u0440\u043e\u043d\u0435\u043d\u0456 \u0456\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u0438&quot;], [&quot;0:35&quot;, &quot;\u041f\u043e\u0432\u0442\u043e\u0440\u044e\u0432\u0430\u043d\u0456 \u043f\u043e\u043c\u0438\u043b\u043a\u0438 \u0439 \u043e\u0447\u0456\u043a\u0443\u0432\u0430\u043d\u043d\u044f&quot;], [&quot;0:40&quot;, &quot;\u0423\u0440\u043e\u043a\u0438 \u0437 \u0440\u0435\u0442\u0440\u043e&quot;], [&quot;0:45&quot;, &quot;\u041e\u0446\u0456\u043d\u043a\u0438 \u0439 \u0444\u0430\u043a\u0442\u0438\u0447\u043d\u0456 \u0433\u043e\u0434\u0438\u043d\u0438&quot;], [&quot;0:50&quot;, &quot;\u0420\u0430\u0434\u043d\u0438\u043a&quot;], [&quot;1:00&quot;, &quot;\u0412\u0430\u0440\u0442\u0456\u0441\u0442\u044c \u0456 \u0442\u043e\u043a\u0435\u043d\u0438&quot;], [&quot;1:05&quot;, &quot;\u0417\u0430 \u043f\u0440\u043e\u0454\u043a\u0442\u043e\u043c, \u043c\u043e\u0434\u0435\u043b\u043b\u044e, \u0430\u0433\u0435\u043d\u0442\u043e\u043c&quot;]]'><div class="th"><img src="../assets/posters/ep3-health.jpg" alt="" loading="lazy"><div class="play"><span><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="currentColor" d="M5 3.5v13l11-6.5z"/></svg></span></div><span class="dur">1:23</span></div>
+<div class="meta"><div class="k">Епізод 3</div><h3>Здоров’я</h3><p>Як працюють ваші агенти і що змінити.</p></div></button></div>
+  <div class="row" style="margin-top:28px"><a class="btn" href="videos/">Усі епізоди <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+</div></section>
+
+<section class="sec divider"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">на чому все тримається</p><h2>Шість правил, і за кожним стежить інструмент, який можна запустити.</h2><p>Сканування, гейт, worktree, вердикт. Жодне з них — не домовленість, яку треба тримати в голові.</p></div>
+  <div class="grid-3"><div class="tile rv"><span class="k">нейтральність</span><h3>Ядро, яке нікого не називає</h3><p>Назви брендів заборонені будь-де в <code>plugins/</code>, а перевірка в CI не дає їхній кількості піднятися з нуля. Специфіка кожного проєкту надходить під час виконання з його власного <code>project.json</code>.</p></div><div class="tile rv"><span class="k">просування</span><h3>Рух лише вгору</h3><p>Компонент народжується локально в проєкті, переходить у доменний пакет, коли знадобиться другому проєкту, і потрапляє в ядро, лише коли знадобиться всім. Униз нічого не копіюється.</p></div><div class="tile rv"><span class="k">ізоляція</span><h3>Один worktree на запуск</h3><p>Кожен запуск фази й кожна відправлена задача отримують власну гілку в ізольованому git worktree. Ваша робоча копія ніколи не стає майданчиком агента.</p></div><div class="tile rv"><span class="k">перевірка</span><h3>Вердикти, що вміють сказати «ні»</h3><p>Перевіряльник без права на запис порівнює роботу зі збереженою точкою старту й повертає PASS, FAIL або INCONCLUSIVE. Готово — це коли критерії відмічені й звіт написаний, а не коли процес завершився з кодом 0.</p></div><div class="tile rv"><span class="k">плани</span><h3>Граф фаз, а не список побажань</h3><p>Кожна фаза має вимірювані критерії приймання, прогноз і звіт про завершення. Запуски виконують граф у порядку залежностей, а markdown на диску лишається джерелом правди.</p></div><div class="tile rv"><span class="k">спостережуваність</span><h3>Усе зафіксовано</h3><p>Кожен транскрипт сесії індексується в локальну SQLite: токени, вартість, погодження, прогнози проти фактичних результатів і уроки, винесені з розриву між ними. Ніщо не покидає машину.</p></div></div>
+</div></section>
+
+<section class="sec divider"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">журнал розробки</p><h2>Будуємо публічно.</h2><p>Як усе з’явилося, що ламалося і що показали цифри. Пишемо по гарячих слідах на Substack, англійською.</p></div>
+  <div class="posts"><a class="post" href="https://swarmery.substack.com/p/why-my-weekly-limit-ran-out-in-the"><div class="cv"><img src="https://substackcdn.com/image/fetch/w_720,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F18b24b37-189d-498c-9e5e-37d9a38c09ba_1728x1152.jpeg" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></div>
+<div class="meta"><div class="d"><span class="s">вартість</span><span>7 жовтня 2026</span></div><h3>Why my weekly limit ran out in the middle of the week, and what I did about it</h3><p>I thought agents were eating my tokens. It turned out to be one habit, and that habit can be broken.</p><span class="go">Читати на Substack &rarr;</span></div></a><a class="post" href="https://swarmery.substack.com/p/why-i-dont-believe-an-agent-when"><div class="cv"><img src="https://substackcdn.com/image/fetch/w_720,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F88ea9b5f-2f53-4bf3-bfbc-6492a98d7bd7_1792x1008.jpeg" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></div>
+<div class="meta"><div class="d"><span class="s">перевірка</span><span>29 вересня 2026</span></div><h3>Why I Don&#x27;t Believe an Agent When It Says &quot;Done&quot;</h3><p>Before lessons and forecasts, the one thing it all stands on: a model&#x27;s work has to be checked from the outside, not taken on its own word.</p><span class="go">Читати на Substack &rarr;</span></div></a><a class="post" href="https://swarmery.substack.com/p/how-swarmery-came-to-be-part-3-how"><div class="cv"><img src="https://substackcdn.com/image/fetch/w_720,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F70b8a0f1-2694-4a04-9de3-b6551655a592_1664x1184.jpeg" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()"></div>
+<div class="meta"><div class="d"><span class="s">історія · частина 3</span><span>28 вересня 2026</span></div><h3>How Swarmery Came to Be. Part 3: How the Agent System Stopped Being a Black Box</h3><p>How I started to see what my agents are really doing, and how the system learns from its own work.</p><span class="go">Читати на Substack &rarr;</span></div></a></div>
+  <div class="row" style="margin-top:28px"><a class="btn" href="blog/">Усі статті <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+</div></section>
+
+<section class="sec-tight divider"><div class="wrap">
+  <div class="sec-head"><p class="eyebrow">ліцензія</p><h2>Дві ліцензії, і чесно про обидві.</h2></div>
+  <div class="lic">
+    <div class="tile a"><span class="k">Apache-2.0 · фреймворк</span><h3>Кожен пакет агентів, скіл, скрипт і оверлей</h3><p>Читайте, форкайте й будуйте на цьому будь-де, зокрема в платних робочих процесах компанії, безкоштовно.</p></div>
+    <div class="tile b"><span class="k">PolyForm Noncommercial · центр керування</span><h3>Бінарник на Go в <code>tools/swarmery/</code></h3><p>Безкоштовно для особистих проєктів, навчання, досліджень та іншої open-source роботи. Єдине, чого ця ліцензія не дає, — комерційне використання: <a href="https://github.com/atretyak1985/swarmery/blob/main/tools/swarmery/LICENSE">прочитайте умови</a> й напишіть нам.</p></div>
+  </div>
+</div></section>
+<section class="cta"><div class="glow"></div><div class="wrap">
+<h2>Керуйте агентами як флотом.</h2><p>Безкоштовно на GitHub. Один бінарник на вашій машині, без хмари й без акаунта. Ваші сесії з’являються одразу після запуску.</p>
+<div class="row"><a class="btn btn-primary" href="install/">Почати <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a><a class="btn" href="https://github.com/atretyak1985/swarmery"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg> Зірка на GitHub</a></div>
+</div></section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="" aria-label="Swarmery, головна"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M16 2.4 4.22 9.2v13.6L16 29.6l11.78-6.8V9.2ZM16 6.9 8.12 11.45v9.1L16 25.1l7.88-4.55v-9.1Z"/><path fill="currentColor" d="M16 11.5 12.1 13.75v4.5L16 20.5l3.9-2.25v-4.5Z"/></svg><span>SW<span class="o">&#x2B21;</span>RMERY</span></a>
+        <p>Локальний центр керування й маркетплейс плагінів для Claude Code. Створюється публічно у Львові.</p>
+      </div>
+      <div><h4>Продукт</h4><ul><li><a href="features/planning/">Планування</a></li><li><a href="features/inbox/">Вхідні</a></li><li><a href="features/health/">Здоров’я</a></li><li><a href="features/sessions/">Сесії</a></li><li><a href="features/learning/">Навчання</a></li><li><a href="features/knowledge/">Знання</a></li></ul></div>
+      <div><h4>Матеріали</h4><ul>
+        <li><a href="install/">Почати</a></li>
+        <li><a href="videos/">Відео</a></li>
+        <li><a href="plugins/">Плагіни</a></li>
+        <li><a href="https://github.com/atretyak1985/swarmery/tree/main/docs">Документація</a></li>
+        <li><a href="https://github.com/atretyak1985/swarmery/blob/main/CHANGELOG.md">Журнал змін</a></li>
+      </ul></div>
+      <div><h4>Стежити</h4><ul>
+        <li><a href="https://github.com/atretyak1985/swarmery">GitHub</a></li>
+        <li><a href="blog/">Блог</a></li>
+        <li><a href="https://swarmery.substack.com">Substack</a></li>
+        <li><a href="https://x.com/SwarmeryDev">X · @SwarmeryDev</a></li>
+      </ul></div>
+    </div>
+    <div class="foot-b">
+      <span>Фреймворк: Apache-2.0 · Центр керування: PolyForm Noncommercial 1.0.0</span>
+      <span>Не пов’язано з Anthropic. Claude Code — продукт Anthropic.</span>
+    </div>
+  </div>
+</footer>
+<dialog class="modal" id="player" aria-label="Відеоплеєр">
+  <div class="modal-wrap">
+    <button class="modal-close" type="button" aria-label="Закрити">&times;</button>
+    <div class="modal-inner">
+      <div class="modal-body"><video controls playsinline preload="none"></video><div class="side"></div></div>
+      <div class="modal-foot"><span data-title></span><a data-dl class="muted" href="#" download>Завантажити mp4</a></div>
+    </div>
+  </div>
+</dialog>
+<dialog class="modal" id="lightbox" aria-label="Скриншот">
+  <div class="modal-wrap">
+    <button class="modal-close" type="button" aria-label="Закрити">&times;</button>
+    <div class="modal-inner"><img alt=""><div class="modal-foot"><span data-cap></span><span class="muted">Вигадані дані: TrailMap і Ledgerly API</span></div></div>
+  </div>
+</dialog>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

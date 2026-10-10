@@ -59,7 +59,7 @@
     b.addEventListener('click', function () {
       var t = b.getAttribute('data-copy');
       if (!t) { var box = b.closest('.codeblock,.cmd,.inst'); var el = box && box.querySelector('pre,code,span'); t = el ? el.innerText : ''; }
-      var done = function () { var o = b.textContent; b.textContent = 'Copied'; b.classList.add('ok'); setTimeout(function () { b.textContent = o; b.classList.remove('ok'); }, 1400); };
+      var done = function () { var o = b.textContent; b.textContent = root.dataset.i18nCopied || 'Copied'; b.classList.add('ok'); setTimeout(function () { b.textContent = o; b.classList.remove('ok'); }, 1400); };
       if (navigator.clipboard) navigator.clipboard.writeText(t.trim()).then(done, function () {}); else done();
     });
   });
@@ -143,7 +143,7 @@
         side.innerHTML = '';
         if (ch && ch.length) {
           body.classList.add('with-ch');
-          var h = document.createElement('h4'); h.textContent = 'Chapters'; side.appendChild(h);
+          var h = document.createElement('h4'); h.textContent = root.dataset.i18nChapters || 'Chapters'; side.appendChild(h);
           var ul = document.createElement('ul'); ul.className = 'chapters';
           ch.forEach(function (c) {
             var li = document.createElement('li'), btn = document.createElement('button');

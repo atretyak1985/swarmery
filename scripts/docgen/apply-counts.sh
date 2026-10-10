@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # apply-counts.sh — splice scripts/docgen/counts.sh's numbers into the docs.
 #
-# Two consumers, three marked regions, and nothing outside them is touched:
+# Every consumer and its marked regions are listed below; nothing outside them is touched:
 #
 #   README.md         <!-- BEGIN generated:packs -->                the pack table
+#   README.uk.md      <!-- BEGIN generated:packs -->                the same table, Ukrainian labels
 #   site/index.html   <!-- BEGIN generated:stats-hero -->           the hero counters
 #   site/index.html   <!-- BEGIN generated:stats-control-plane -->  the daemon counters
+#   site/uk/index.html  the same two regions, Ukrainian labels
+#
+# The tile labels must equal the stats.* strings in scripts/site/locales/<lang>.py:
+# build.py seeds a fresh index.html from those and then keeps whatever region
+# this script last wrote, so a disagreement shows up as --check drift.
 #
 # The markers are the contract. Prose stays hand-written and reviewable; only
 # the rows and tiles between a BEGIN/END pair are regenerated, and a missing or
@@ -123,21 +129,88 @@ const oneLiner = (d) => {
   return (head + ' ' + rest.charAt(0).toUpperCase() + rest.slice(1)).trim();
 };
 
-function packsTable() {
-  const rows = ["| Plugin | What's inside |", '|---|---|'];
+// Ukrainian noun form for a count: 1, 21 → one; 2–4, 22–24 → few; the rest
+// (5–20, 11–14, 25…) → many. A generated number must never read as a typo.
+const ukPlural = (n, one, few, many) => {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+};
+
+// Per-language labels for the generated regions. Only the header row and the
+// hand-written `core` sentence are localised: every other row is the pack's own
+// manifest description, which stays English in every language because the
+// manifests are not localised. `coreRow` takes counts.core and interpolates its
+// three numbers. Keyed by language so other targets can add their own keys
+// beside these without touching them.
+const LABELS = {
+  en: {
+    header: "| Plugin | What's inside |",
+    coreRow: (c) =>
+      '| **`core`** | The vendor-neutral framework every consumer enables: ' +
+      c.agents +
+      ' judgment-style agents (tech-lead, planner, architect, implementation-agent, ' +
+      'code-reviewer, … — see `plugins/core/AGENTS.md`), ' +
+      c.skills +
+      ' progressively-disclosed skills, ' +
+      c.commands +
+      ' commands, lifecycle/safety hooks, the statusline, and the project-aware ' +
+      '`agent-work` workspace CLI. |',
+  },
+  uk: {
+    header: '| Плагін | Що всередині |',
+    coreRow: (c) =>
+      '| **`core`** | Фреймворк, незалежний від постачальника, який вмикає кожен споживач: ' +
+      c.agents +
+      ' ' +
+      ukPlural(c.agents, 'агент', 'агенти', 'агентів') +
+      ' з власним судженням (tech-lead, planner, architect, implementation-agent, ' +
+      'code-reviewer, … — див. `plugins/core/AGENTS.md`), ' +
+      c.skills +
+      ' ' +
+      ukPlural(c.skills, 'скіл', 'скіли', 'скілів') +
+      ' із поступовим розкриттям, ' +
+      c.commands +
+      ' ' +
+      ukPlural(c.commands, 'команда', 'команди', 'команд') +
+      ', хуки життєвого циклу й безпеки, statusline і CLI робочого простору ' +
+      '`agent-work`, що знає про проєкт. |',
+  },
+};
+
+// Stat-tile labels for the landing page, one set per language, beside the README
+// labels above. A label is a string, or a function of the tile's number where
+// the noun form depends on it (Ukrainian). They mirror the stats.hero.* /
+// stats.cp.* strings of scripts/site/locales/<lang>.py, which only seed a page
+// that has no region yet — this script owns the region from then on.
+Object.assign(LABELS.en, {
+  packs: 'plugin packs',
+  agents: 'agents',
+  skills: 'skills',
+  cp: 'local control plane',
+  go: 'Go packages',
+  routes: 'REST routes',
+  port: 'dashboard port',
+  iface: 'the only interface it binds',
+});
+Object.assign(LABELS.uk, {
+  packs: (n) => ukPlural(n, 'пакет плагінів', 'пакети плагінів', 'пакетів плагінів'),
+  agents: (n) => ukPlural(n, 'агент', 'агенти', 'агентів'),
+  skills: (n) => ukPlural(n, 'скіл', 'скіли', 'скілів'),
+  cp: 'локальний центр керування',
+  go: (n) => ukPlural(n, 'Go-пакет', 'Go-пакети', 'Go-пакетів'),
+  routes: (n) => ukPlural(n, 'REST-маршрут', 'REST-маршрути', 'REST-маршрутів'),
+  port: 'порт дашборду',
+  iface: 'єдиний інтерфейс, який він слухає',
+});
+
+function packsTable(L) {
+  const rows = [L.header, '|---|---|'];
   for (const p of counts.plugins || []) {
     if (p.name === 'core') {
-      rows.push(
-        '| **`core`** | The vendor-neutral framework every consumer enables: ' +
-          counts.core.agents +
-          ' judgment-style agents (tech-lead, planner, architect, implementation-agent, ' +
-          'code-reviewer, … — see `plugins/core/AGENTS.md`), ' +
-          counts.core.skills +
-          ' progressively-disclosed skills, ' +
-          counts.core.commands +
-          ' commands, lifecycle/safety hooks, the statusline, and the project-aware ' +
-          '`agent-work` workspace CLI. |'
-      );
+      rows.push(L.coreRow(counts.core));
     } else {
       rows.push('| `' + p.name + '` | ' + mdCell(oneLiner(p.description)) + ' |');
     }
@@ -162,50 +235,69 @@ function tile(n, label, opts) {
   );
 }
 
-function heroStats() {
+// L[key] is a string or a function of the tile's number (see LABELS)
+const label = (L, key, n) => (typeof L[key] === 'function' ? L[key](n) : L[key]);
+
+function heroStats(L) {
   return [
-    tile(counts.packs, 'plugin packs'),
-    tile(counts.agents, 'agents'),
-    tile(counts.skills, 'skills'),
-    tile(':7777', 'local control plane', { hot: true }),
+    tile(counts.packs, label(L, 'packs', counts.packs)),
+    tile(counts.agents, label(L, 'agents', counts.agents)),
+    tile(counts.skills, label(L, 'skills', counts.skills)),
+    tile(':7777', label(L, 'cp'), { hot: true }),
   ];
 }
 
-function controlPlaneStats() {
+function controlPlaneStats(L) {
   const out = [];
   if (counts.go_packages !== null && counts.go_packages !== undefined) {
-    out.push(tile(counts.go_packages, 'Go packages'));
+    out.push(tile(counts.go_packages, label(L, 'go', counts.go_packages)));
   }
   if (counts.api_routes !== null && counts.api_routes !== undefined) {
-    out.push(tile(counts.api_routes, 'REST routes'));
+    out.push(tile(counts.api_routes, label(L, 'routes', counts.api_routes)));
   }
-  out.push(tile(':7777', 'dashboard port', { hot: true }));
-  out.push(tile('127.0.0.1', 'the only interface it binds', { small: true }));
+  out.push(tile(':7777', label(L, 'port'), { hot: true }));
+  out.push(tile('127.0.0.1', label(L, 'iface'), { small: true }));
   return out;
 }
 
+const siteStats = (L) => [
+  ['generated:stats-hero', heroStats(L)],
+  ['generated:stats-control-plane', controlPlaneStats(L)],
+];
+
 const targets = [
-  { rel: 'README.md', regions: [['generated:packs', packsTable()]] },
-  {
-    rel: 'site/index.html',
-    regions: [
-      ['generated:stats-hero', heroStats()],
-      ['generated:stats-control-plane', controlPlaneStats()],
-    ],
-  },
+  { rel: 'README.md', regions: [['generated:packs', packsTable(LABELS.en)]] },
+  { rel: 'README.uk.md', regions: [['generated:packs', packsTable(LABELS.uk)]] },
+  { rel: 'site/index.html', regions: siteStats(LABELS.en) },
+  { rel: 'site/uk/index.html', regions: siteStats(LABELS.uk) },
 ];
 
 let drift = 0;
 const tmp = mode === 'check' ? fs.mkdtempSync(path.join(os.tmpdir(), 'docgen-counts-')) : null;
 
-try {
-  for (const t of targets) {
-    const abs = path.join(root, t.rel);
-    if (!fs.existsSync(abs)) die('missing target: ' + t.rel);
-    const before = fs.readFileSync(abs, 'utf8');
-    let after = before;
-    for (const region of t.regions) after = splice(after, region[0], region[1], t.rel);
+// Every target must exist before any is written: a half-applied run would leave
+// one language's numbers behind the other's.
+for (const t of targets) {
+  if (fs.existsSync(path.join(root, t.rel))) continue;
+  die(
+    'missing target: ' +
+      t.rel +
+      (t.rel.startsWith('site/') ? ' (generated: run `python3 scripts/site/build.py` first)' : '')
+  );
+}
 
+// Two passes: every splice is computed (and every marker error raised) before
+// the first file is written, so a bad marker cannot leave a half-applied run.
+const planned = targets.map((t) => {
+  const abs = path.join(root, t.rel);
+  const before = fs.readFileSync(abs, 'utf8');
+  let after = before;
+  for (const region of t.regions) after = splice(after, region[0], region[1], t.rel);
+  return { t, abs, before, after };
+});
+
+try {
+  for (const { t, abs, before, after } of planned) {
     if (mode === 'check') {
       if (after === before) continue;
       drift += 1;
