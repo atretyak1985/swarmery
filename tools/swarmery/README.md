@@ -117,6 +117,7 @@ Both fences answer `403 {"error": …}` before any handler runs.
 |---|---|---|---|
 | `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. Any other value leaves the environment untouched. See the notes below the table. |
 | `SWARMERY_VERIFY_PERMISSION_MODE` | `acceptEdits` \| `auto` \| `bypassPermissions` \| `manual` \| `dontAsk` \| `plan` \| `off` | `SWARMERY_PERMISSION_MODE`, else `bypassPermissions` | The `--permission-mode` of the read-only verifier (board tasks and `**Verify:**` phases). A verifier that is asked for permission waits for an answer nobody gives in a headless run: each prompt is held for the approval window (10m), and two of them outlast the verifier's 15-minute timeout, so the run ends `inconclusive` / `verifier-timed-out`. `off` omits the flag and restores that behaviour. Whatever the mode, the verifier runs with `--disallowedTools Edit,Write,MultiEdit,NotebookEdit`: it may run checks but not edit files with those tools. A Bash command can still write; only the verifier prompt forbids it. An invalid value logs a warning and means `bypassPermissions`. |
+| `SWARMERY_REVIEW_TIMEOUT_MIN` | positive integer (minutes) | the verifier's timeout (`SWARMERY_VERIFY_TIMEOUT_MIN`, 15) | The hard kill timer of the read-only reviewer session (`**Review:** on` phases and the plan branch review — see [Reviewing a phase](#reviewing-a-phase)). A reviewer that runs out of time is recorded `inconclusive` / `reviewer-timed-out`. A non-numeric, zero or negative value keeps the default. |
 
 Notes on `SWARMERY_AGENT_SCRUB_VCS_TOKENS`:
 
@@ -349,6 +350,27 @@ honor it:
 Exclusion gates row *creation* only — rows that already exist are never
 deleted by code; remove them with a one-off SQL cleanup. Set
 `SWARMERY_EXCLUDE=''` to disable.
+
+## Reviewing a phase
+
+A phase doc opts into an independent code review with one header row:
+
+| Doc header | Values | Default | What it does |
+|---|---|---|---|
+| `**Review:**` | `on` \| `off` (synonyms `yes`/`true`, `no`/`false`/`none`) | `off` | After the run settles `done` or `partial`, and before the verifier, a second read-only headless session (core's `code-reviewer` contract, opus) reads the phase doc and the run's diff and answers with `P0`/`P1` findings and one `VERDICT:` line. It runs with `--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash`, and the worktree is fingerprinted before and after: any change voids the verdict as `inconclusive` / `reviewer-mutated-tree` and the tree is restored. A `fail` appends `## Review findings (<date>)` to the doc and re-runs the phase once (`review_fix_round` 0 → 1); a second `fail` is recorded and nothing more re-runs. An unrecognised value logs a warning and means `off`. |
+
+When every phase of a plan has finished, one **plan branch review** reads all
+the phases' run branches together, focused on the seams between phases. It is
+advisory: it never blocks, never re-runs, and lands in the Inbox under
+**reviews** until acknowledged. The same tips are reviewed once; a moved tip is
+a new review. Every review is a `phase_reviews` row (migration 0106); the
+phase panel's **Runs** tab shows the phase's latest one.
+
+| Route | What it returns |
+|---|---|
+| `GET /api/reviews?scope=phase\|plan&unacked=1[&taskId=N][&limit=N]` | Review rows, newest first (`limit` default 100, max 500); 400 on a bad value. The Inbox reads `?scope=plan&unacked=1`. |
+| `POST /api/reviews/{id}/ack` | Stamps `ackedAt` (idempotent) and returns the row; 404 unknown, local origin only. |
+| `GET /api/epics/{taskId}/phases/{phaseId}/reviews` | The phase's own reviews, newest first; 404 when the phase is not in that plan. |
 
 ## Landing a phase
 

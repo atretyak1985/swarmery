@@ -25,8 +25,11 @@ type reviewDTO struct {
 	Scope     string `json:"scope"` // phase | plan
 	TaskID    int64  `json:"taskId"`
 	PlanTitle string `json:"planTitle"`
-	PhaseID   *int64 `json:"phaseId"`
-	PhaseName string `json:"phaseName"`
+	// ProjectSlug is the plan's project ("" once the task is gone): the Inbox
+	// builds the link to the plan from it and narrows a project scope by it.
+	ProjectSlug string `json:"projectSlug"`
+	PhaseID     *int64 `json:"phaseId"`
+	PhaseName   string `json:"phaseName"`
 	// SessionUUID is the reviewer's own session.
 	SessionUUID string `json:"sessionUuid"`
 	// RunSessionUUID is the run the review graded (scope=phase), "" for a plan.
@@ -51,12 +54,13 @@ type reviewDTO struct {
 const branchSetPrefix = "branchset:"
 
 const reviewSelect = `
-	SELECT r.id, r.scope, CAST(r.workspace_task_id AS INTEGER), COALESCE(t.title, ''),
+	SELECT r.id, r.scope, CAST(r.workspace_task_id AS INTEGER), COALESCE(t.title, ''), COALESCE(p.slug, ''),
 	       r.phase_id, COALESCE(e.name, ''), r.session_uuid, r.run_session_uuid,
 	       r.verdict, r.detail, r.findings, r.fix_round, r.cost_usd,
 	       r.tree_before, r.tree_after, r.started_at, r.finished_at, r.acked_at
 	  FROM phase_reviews r
 	  LEFT JOIN tasks t ON t.id = CAST(r.workspace_task_id AS INTEGER)
+	  LEFT JOIN projects p ON p.id = t.project_id
 	  LEFT JOIN epic_phases e ON e.id = r.phase_id`
 
 func scanReviews(rows *sql.Rows) ([]reviewDTO, error) {
@@ -71,7 +75,7 @@ func scanReviews(rows *sql.Rows) ([]reviewDTO, error) {
 			acked    sql.NullString
 			runUUID  string
 		)
-		if err := rows.Scan(&d.ID, &d.Scope, &d.TaskID, &d.PlanTitle, &phaseID, &d.PhaseName,
+		if err := rows.Scan(&d.ID, &d.Scope, &d.TaskID, &d.PlanTitle, &d.ProjectSlug, &phaseID, &d.PhaseName,
 			&d.SessionUUID, &runUUID, &d.Verdict, &d.Detail, &d.Findings, &d.FixRound, &cost,
 			&d.TreeBefore, &d.TreeAfter, &d.StartedAt, &finished, &acked); err != nil {
 			return nil, err

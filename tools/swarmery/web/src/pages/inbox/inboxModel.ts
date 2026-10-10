@@ -4,8 +4,9 @@
 // approvals, lesson candidates, advisor recommendations, agent-change proposals,
 // the classifier's label queue, lesson retirements, and alerts — the findings
 // that mean work is stopped right now (an account the daemon has paused, or
-// Claude Code's auto mode permission check not answering). There is
-// no inbox endpoint: the page fetches the seven lists (useInboxItems) and this
+// Claude Code's auto mode permission check not answering) — plus, eighth, the
+// plan branch reviews not yet acknowledged. There is
+// no inbox endpoint: the page fetches the lists (useInboxItems) and this
 // module normalises them into one InboxItem shape, one sort order and one set of
 // tabs.
 //
@@ -16,11 +17,20 @@ import { ACCOUNT_BREAKER_RULE, AUTO_MODE_NO_VERDICT_RULE, type Alert } from '../
 import type { QueueItem } from '../../api/decisions';
 import type { TriageVerdict } from '../../api/triage';
 import type { Lesson, RetireReason, RetirementProposal } from '../../api/lessons';
+import { countFindings, type Review, type ReviewVerdict } from '../../api/reviews';
 import type { AgentChangeProposal, PermissionRequest, Recommendation } from '../../api/types';
 import { questionsOf, requestSummary } from '../../lib/approvals';
 import { UI_TERMS } from '../../lib/glossary';
 
-export type InboxKind = 'approval' | 'lesson' | 'advisor' | 'proposal' | 'classifier' | 'retire' | 'alert';
+export type InboxKind =
+  | 'approval'
+  | 'lesson'
+  | 'advisor'
+  | 'proposal'
+  | 'classifier'
+  | 'retire'
+  | 'alert'
+  | 'review';
 
 export const INBOX_KINDS: readonly InboxKind[] = [
   'approval',
@@ -30,6 +40,7 @@ export const INBOX_KINDS: readonly InboxKind[] = [
   'classifier',
   'retire',
   'alert',
+  'review',
 ];
 
 /** What the triage agent left on an item (attachSuggestions). */
@@ -71,6 +82,7 @@ export type InboxItem = InboxItemBase &
     | { kind: 'classifier'; raw: readonly QueueItem[] }
     | { kind: 'retire'; raw: RetirementProposal }
     | { kind: 'alert'; raw: Alert }
+    | { kind: 'review'; raw: Review }
   );
 
 /** URL value of `?tab=` — plural words, as the redirects and 1b/2b say them. */
@@ -83,6 +95,7 @@ export type InboxTabId =
   | 'classifier'
   | 'retire'
   | 'alerts'
+  | 'reviews'
   | 'handled';
 
 /** Tab order and wording follow 1b/2b; `kind` is what the tab filters to. */
@@ -95,6 +108,7 @@ export const INBOX_TABS: readonly { id: InboxTabId; label: string; kind?: InboxK
   { id: 'classifier', label: 'classifier', kind: 'classifier' },
   { id: 'retire', label: 'stop using a lesson?', kind: 'retire' },
   { id: 'alerts', label: 'alerts', kind: 'alert' },
+  { id: 'reviews', label: 'reviews', kind: 'review' },
   // Rows of this tab are triage verdicts, not items: a component renders them.
   { id: 'handled', label: 'handled by agent' },
 ];
@@ -108,6 +122,7 @@ export const KIND_META: Record<InboxKind, { label: string; dot: string; text: st
   classifier: { label: 'check the classifier', dot: 'bg-green', text: 'text-green' },
   retire: { label: 'stop using a lesson?', dot: 'bg-red', text: 'text-red' },
   alert: { label: 'alert', dot: 'bg-red', text: 'text-red' },
+  review: { label: 'plan review', dot: 'bg-brand', text: 'text-brand' },
 };
 
 /** Plain-language retirement reasons (never the enum). */
@@ -126,6 +141,7 @@ export interface InboxSources {
   classifier?: readonly QueueItem[] | undefined;
   retirements?: readonly RetirementProposal[] | undefined;
   alerts?: readonly Alert[] | undefined;
+  reviews?: readonly Review[] | undefined;
 }
 
 function approvalItem(r: PermissionRequest): InboxItem {
@@ -233,6 +249,37 @@ function alertItem(a: Alert): InboxItem {
   return a.resetsAt === undefined || a.resetsAt === '' ? base : { ...base, expiresIso: a.resetsAt };
 }
 
+/** The verdict in the operator's words — the card's badge and its context line. */
+export const REVIEW_VERDICT_UI: Record<ReviewVerdict, string> = {
+  pass: 'passed',
+  fail: 'failed',
+  inconclusive: 'inconclusive',
+};
+
+/** "2 findings" / "no findings" — P0/P1 lines counted client-side. */
+export function findingsLabel(findings: string): string {
+  const n = countFindings(findings);
+  return n === 0 ? 'no findings' : `${String(n)} finding${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * A plan branch review waits until it is acknowledged; it blocks nothing, so it
+ * is never urgent. It is dated by when the reviewer started.
+ */
+function reviewItem(r: Review): InboxItem {
+  const plan = r.planTitle === '' ? `plan #${String(r.taskId)}` : r.planTitle;
+  return {
+    key: `review:${String(r.id)}`,
+    kind: 'review',
+    title: `Plan review: ${plan}`,
+    context: `${REVIEW_VERDICT_UI[r.verdict] ?? r.verdict} · ${findingsLabel(r.findings)}`,
+    ageIso: r.startedAt,
+    urgent: false,
+    ...(r.projectSlug === '' ? {} : { project: r.projectSlug }),
+    raw: r,
+  };
+}
+
 /** One item per session: its questions are answered together. */
 export function groupClassifier(queue: readonly QueueItem[]): InboxItem[] {
   const bySession = new Map<string, QueueItem[]>();
@@ -268,6 +315,7 @@ export function toItems(src: InboxSources): InboxItem[] {
     ...groupClassifier(src.classifier ?? []),
     ...(src.retirements ?? []).map(retireItem),
     ...(src.alerts ?? []).map(alertItem),
+    ...(src.reviews ?? []).map(reviewItem),
   ];
 }
 

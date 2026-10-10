@@ -77,7 +77,7 @@ func TestListReviewsPlanUnacked(t *testing.T) {
 		t.Fatalf("plan&unacked: status %d, %d rows, want 200 and 1", code, len(got))
 	}
 	r := got[0]
-	if r.ID != ids[2] || r.Scope != "plan" || r.PhaseID != nil || r.TaskID != taskID || r.PlanTitle != "My Epic" {
+	if r.ID != ids[2] || r.Scope != "plan" || r.PhaseID != nil || r.TaskID != taskID || r.PlanTitle != "My Epic" || r.ProjectSlug != "p" {
 		t.Errorf("plan review = %+v", r)
 	}
 	if r.BranchSetKey != "abc123" || r.RunSessionUUID != "" {

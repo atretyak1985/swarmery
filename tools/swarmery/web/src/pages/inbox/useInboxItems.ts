@@ -4,7 +4,8 @@
 //
 // Scope: under a project, approvals, advisor recommendations and the classifier
 // queue narrow (their APIs take a project; a classifier question is about one
-// session, so it belongs to that session's project). Lessons, proposals and
+// session, so it belongs to that session's project; a plan review carries its
+// plan's project slug and is filtered by it). Lessons, proposals and
 // retirements are fleet-wide by nature and the page labels them so.
 //
 // Refetch: the shared WS stream (lib/ws.ts) on permission_* frames and
@@ -21,6 +22,7 @@ import {
 import { fetchAlerts } from '../../api/alerts';
 import { fetchLabelQueue } from '../../api/decisions';
 import { fetchLessons, fetchRetirements } from '../../api/lessons';
+import { fetchUnackedPlanReviews } from '../../api/reviews';
 import type { WSMessage } from '../../api/types';
 import { useLiveUpdates } from '../../lib/ws';
 import {
@@ -59,7 +61,7 @@ function value<T>(r: PromiseSettledResult<T>): T | undefined {
 }
 
 async function loadSources(scope: string | null): Promise<{ src: InboxSources; errors: InboxKind[] }> {
-  const [approvals, lessons, recs, proposals, classifier, retirements, alerts] = await Promise.allSettled([
+  const [approvals, lessons, recs, proposals, classifier, retirements, alerts, reviews] = await Promise.allSettled([
     fetchApprovals('pending', scope),
     fetchLessons('candidate'),
     scope === null ? fetchRecommendations('proposed') : fetchProjectRecommendations(scope, 'proposed'),
@@ -67,6 +69,7 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
     fetchLabelQueue('all', scope),
     fetchRetirements(),
     fetchAlerts(),
+    fetchUnackedPlanReviews(),
   ]);
   const errors: InboxKind[] = [];
   const settled: [PromiseSettledResult<unknown>, InboxKind][] = [
@@ -77,6 +80,7 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
     [classifier, 'classifier'],
     [retirements, 'retire'],
     [alerts, 'alert'],
+    [reviews, 'review'],
   ];
   for (const [r, kind] of settled) if (r.status === 'rejected') errors.push(kind);
   return {
@@ -88,6 +92,8 @@ async function loadSources(scope: string | null): Promise<{ src: InboxSources; e
       classifier: value(classifier),
       retirements: value(retirements),
       alerts: value(alerts),
+      // A plan belongs to one project: under a project scope only its reviews show.
+      reviews: value(reviews)?.filter((r) => scope === null || r.projectSlug === scope),
     },
     errors,
   };
@@ -133,7 +139,9 @@ export function useInboxItems(scope: string | null, withTriage = false): InboxSt
       if (
         msg.type !== 'permission_requested' &&
         msg.type !== 'permission_resolved' &&
-        msg.type !== 'task_updated'
+        msg.type !== 'task_updated' &&
+        // A recorded plan review nudges its plan the way a phase run does.
+        msg.type !== 'plan_updated'
       ) {
         return;
       }
