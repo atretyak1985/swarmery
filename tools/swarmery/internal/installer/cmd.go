@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/version"
 )
 
@@ -45,13 +46,23 @@ var installEnvKeys = []struct {
 	// shim: an explicit SWARMERY_CLAUDE_BIN short-circuits claudebin.Resolve
 	// before any PATH lookup (risk R5).
 	{flag: "claude-bin", env: "SWARMERY_CLAUDE_BIN"},
+	// The complexity router's phase-run surface and its policy file. The mode
+	// is read per phase run, so launchd's env is the only place an `active`
+	// switch can live; docs/routing-active.md is the enable/rollback runbook.
+	{flag: "route-phaserun", env: routePhaserunEnv},
+	{flag: "route-policy", env: route.EnvPolicy},
 }
+
+// routePhaserunEnv mirrors internal/phaserun's routeModeEnv (unexported there).
+const routePhaserunEnv = "SWARMERY_ROUTE_PHASERUN"
 
 // CmdInstall implements
 //
 //	swarmery install [--port <n>] [--onboard-roots <dirs>]
 //	                 [--workspace-root <dir>] [--statusline-src <dir>]
 //	                 [--projects-roots <dirs|auto>] [--trusted-origins <origins>]
+//	                 [--claude-config-dir <dir>] [--claude-bin <path>]
+//	                 [--route-phaserun off|shadow|active] [--route-policy <abs path>]
 //
 // Anything the daemon needs at runtime is baked into the plist's
 // EnvironmentVariables. Because Install rewrites the whole plist, a bare
@@ -90,6 +101,12 @@ func CmdInstall(args []string) error {
 	claudeBin := fs.String("claude-bin", "",
 		"absolute path of the REAL claude executable baked into the plist (env: SWARMERY_CLAUDE_BIN) — "+
 			"resolve it with the accounts-pack shim dir (~/.swarmery/bin) stripped from PATH, never the shim itself")
+	routePhaserun := fs.String("route-phaserun", "",
+		"complexity-router mode for plan phase runs: off, shadow or active (env: "+routePhaserunEnv+
+			"; unset = the daemon default, shadow). See docs/routing-active.md")
+	routePolicy := fs.String("route-policy", "",
+		"absolute path of the route policy JSON the router loads (e.g. config/route-policy.phaserun.json); "+
+			"it must load (env: "+route.EnvPolicy+"; unset = the in-code DefaultPolicy; clear with --route-policy \"\")")
 	fs.Parse(args)
 	if *port != -1 && (*port < 0 || *port > 65535) {
 		return fmt.Errorf("invalid port %d", *port)
@@ -113,13 +130,11 @@ func CmdInstall(args []string) error {
 
 		"claude-config-dir": *claudeConfigDir,
 		"claude-bin":        *claudeBin,
+		"route-phaserun":    *routePhaserun,
+		"route-policy":      *routePolicy,
 	}, os.LookupEnv)
-	for _, e := range env {
-		if e.Key == "SWARMERY_CLAUDE_BIN" {
-			if err := validateClaudeBin(e.Value); err != nil {
-				return err
-			}
-		}
+	if err := validateInstallEnv(env); err != nil {
+		return err
 	}
 	for _, k := range preserved {
 		fmt.Fprintf(os.Stdout, "  preserving %s from existing %s\n", k, sys.DefinitionKind())
@@ -187,6 +202,44 @@ func mergeInstallEnv(
 		preserved = append(preserved, k)
 	}
 	return env, preserved
+}
+
+// validateInstallEnv refuses a resolved plist env the daemon could not use. It
+// runs on the merged values, so a bad value is caught whether it came from a
+// flag, the installing shell or the existing definition:
+//
+//   - SWARMERY_CLAUDE_BIN must name the real claude (validateClaudeBin);
+//   - SWARMERY_ROUTE_PHASERUN must be off, shadow or active — the daemon reads
+//     anything else as shadow with only a log line, so a typo'd "actve" would
+//     look installed and change nothing;
+//   - SWARMERY_ROUTE_POLICY must be absolute and load — an unloadable policy
+//     makes the router record nothing for every phase run AND every dispatch.
+func validateInstallEnv(env []EnvVar) error {
+	for _, e := range env {
+		switch e.Key {
+		case "SWARMERY_CLAUDE_BIN":
+			if err := validateClaudeBin(e.Value); err != nil {
+				return err
+			}
+		case routePhaserunEnv:
+			switch route.Mode(strings.ToLower(strings.TrimSpace(e.Value))) { // as route.ModeFromEnv reads it
+			case route.ModeOff, route.ModeShadow, route.ModeActive:
+			default:
+				return fmt.Errorf("%s %q is not one of off, shadow, active (pass --route-phaserun \"\" to clear it)",
+					routePhaserunEnv, e.Value)
+			}
+		case route.EnvPolicy:
+			const hint = ` (pass --route-policy "" to clear it)`
+			if !filepath.IsAbs(e.Value) {
+				return fmt.Errorf("%s %q is not an absolute path — launchd does not run in your checkout%s",
+					route.EnvPolicy, e.Value, hint)
+			}
+			if _, err := route.LoadPolicy(e.Value); err != nil {
+				return fmt.Errorf("%s: %w%s", route.EnvPolicy, err, hint)
+			}
+		}
+	}
+	return nil
 }
 
 // validateClaudeBin refuses a SWARMERY_CLAUDE_BIN (from --claude-bin, the

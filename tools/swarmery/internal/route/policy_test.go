@@ -233,3 +233,47 @@ func TestPolicyAcceptsFullHaikuID(t *testing.T) {
 		t.Errorf("S model = %q", got.Tiers.S.Model)
 	}
 }
+
+// The committed phase-run policy (config/route-policy.phaserun.json) is what
+// the operator bakes into SWARMERY_ROUTE_POLICY when the phaserun surface goes
+// active. It names only tiers M/L/XL; everything it omits — weights, cut-offs,
+// tier S, every playbook — must come from DefaultPolicy unchanged, so the file
+// pins model/effort without silently retuning the scorer.
+func TestPhaserunPolicyFileLoads(t *testing.T) {
+	path := filepath.Join("..", "..", "config", "route-policy.phaserun.json")
+	got, err := LoadPolicy(path)
+	if err != nil {
+		t.Fatalf("LoadPolicy(%s): %v", path, err)
+	}
+	for _, tc := range []struct {
+		tier          string
+		pick          Pick
+		model, effort string
+	}{
+		{"M", got.Tiers.M, "sonnet", "medium"},
+		{"L", got.Tiers.L, "opus", "high"},
+		{"XL", got.Tiers.XL, "opus", "xhigh"},
+	} {
+		if tc.pick.Model != tc.model || tc.pick.Effort != tc.effort {
+			t.Errorf("tier %s = %s/%s, want %s/%s", tc.tier, tc.pick.Model, tc.pick.Effort, tc.model, tc.effort)
+		}
+	}
+
+	def := DefaultPolicy()
+	if !reflect.DeepEqual(got.Weights, def.Weights) {
+		t.Errorf("weights drifted from DefaultPolicy:\n got %+v\nwant %+v", got.Weights, def.Weights)
+	}
+	if got.Cutoffs != def.Cutoffs {
+		t.Errorf("cutoffs = %+v, want DefaultPolicy %+v", got.Cutoffs, def.Cutoffs)
+	}
+	if got.Tiers.S != def.Tiers.S {
+		t.Errorf("tier S = %+v, want DefaultPolicy %+v", got.Tiers.S, def.Tiers.S)
+	}
+	for _, p := range []struct{ got, want Pick }{
+		{got.Tiers.M, def.Tiers.M}, {got.Tiers.L, def.Tiers.L}, {got.Tiers.XL, def.Tiers.XL},
+	} {
+		if p.got.Playbook != p.want.Playbook {
+			t.Errorf("playbook = %q, want DefaultPolicy %q", p.got.Playbook, p.want.Playbook)
+		}
+	}
+}

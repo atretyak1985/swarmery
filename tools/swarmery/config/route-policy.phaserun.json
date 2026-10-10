@@ -1,0 +1,7 @@
+{
+  "tiers": {
+    "M": { "model": "sonnet", "effort": "medium" },
+    "L": { "model": "opus", "effort": "high" },
+    "XL": { "model": "opus", "effort": "xhigh" }
+  }
+}

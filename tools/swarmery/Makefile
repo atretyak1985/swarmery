@@ -58,11 +58,25 @@ build-go:
 # and a unit the operator disabled from login start but left running must still
 # be restarted onto the new binary. The echo runs the installed binary's own
 # `version` so the line proves which build the service came back up on.
+#
+# Route knobs: with SWARMERY_ROUTE_PHASERUN and/or SWARMERY_ROUTE_POLICY set
+# in the environment, the restart branch is replaced by
+# `swarmery install --route-phaserun=… --route-policy=…`, which rewrites the
+# service definition with them baked in (every other baked var is preserved)
+# and reloads the service — a kickstart alone would never pick them up.
+# docs/routing-active.md is the runbook. Unset, the recipe is unchanged.
+ROUTE_INSTALL_FLAGS := $(strip \
+	$(if $(SWARMERY_ROUTE_PHASERUN),--route-phaserun='$(SWARMERY_ROUTE_PHASERUN)') \
+	$(if $(SWARMERY_ROUTE_POLICY),--route-policy='$(SWARMERY_ROUTE_POLICY)'))
+
 install: build
 	mkdir -p $(dir $(INSTALL_BIN))
 	cp -f swarmery $(INSTALL_BIN).new
 	mv -f $(INSTALL_BIN).new $(INSTALL_BIN)
-ifeq ($(UNAME_S),Linux)
+ifneq ($(ROUTE_INSTALL_FLAGS),)
+	$(INSTALL_BIN) install $(ROUTE_INSTALL_FLAGS)
+	@echo "→ reinstalled the service with $(ROUTE_INSTALL_FLAGS) ($$($(INSTALL_BIN) version))"
+else ifeq ($(UNAME_S),Linux)
 	@if systemctl --user show -p LoadState $(SYSTEMD_UNIT) 2>/dev/null | grep -qx 'LoadState=loaded'; then \
 		systemctl --user restart $(SYSTEMD_UNIT) && \
 		echo "→ restarted $(SYSTEMD_UNIT) on the new binary ($$($(INSTALL_BIN) version))"; \
