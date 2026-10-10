@@ -1,6 +1,7 @@
 package phaserun
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -488,4 +489,25 @@ func TestPlanBranchKeyIsOrderFree(t *testing.T) {
 	if planBranchKey(a) == planBranchKey(c) {
 		t.Error("a moved tip kept the key")
 	}
+}
+
+// A panic inside a plan review must not keep the plan's slot: the next stamp
+// has to be able to claim again (the spawner recovers the panic in production).
+func TestPlanReviewSlotReleasedOnPanic(t *testing.T) {
+	s, _, taskID, _, p2, doc2, _, _, _ := planReviewFixture(t)
+	s.Review = panickingReviewer{}
+	func() {
+		defer func() { _ = recover() }()
+		s.planBranchReview(p2, doc2)
+	}()
+	if !s.claimPlanReview(taskID, "branchset:after-panic", planReviewTrigger{phaseID: p2, docPath: doc2}) {
+		t.Fatal("plan review slot still held after a panic")
+	}
+}
+
+// panickingReviewer stands in for a reviewer whose spawn blows up.
+type panickingReviewer struct{}
+
+func (panickingReviewer) Run(context.Context, verify.RunSpec) (*verify.Run, error) {
+	panic("reviewer exploded")
 }

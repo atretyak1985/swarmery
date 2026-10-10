@@ -139,7 +139,22 @@ func (s *Service) planBranchReview(phaseID int64, docPath string) {
 	if !s.claimPlanReview(sub.taskID, sub.key, planReviewTrigger{phaseID: phaseID, docPath: docPath}) {
 		return
 	}
+	released := false
+	// The loop releases the slot itself (nextPlanReview) on every normal exit. A
+	// panic inside a review is recovered by the spawner and only logged — without
+	// this, the plan's slot would stay held and every later `done` stamp would
+	// park as "pending" until the daemon restarts.
+	defer func() {
+		if released {
+			return
+		}
+		s.planReviewMu.Lock()
+		delete(s.planReviewsInFlight, sub.taskID)
+		s.planReviewMu.Unlock()
+		log.Printf("warning: phaserun: task=%d plan review slot released after an abnormal exit", sub.taskID)
+	}()
 	s.planBranchReviewLoop(phaseID, sub)
+	released = true
 }
 
 // planBranchReviewLoop holds the plan's review slot. It reviews sub, then takes
