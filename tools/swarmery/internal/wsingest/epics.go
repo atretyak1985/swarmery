@@ -77,6 +77,10 @@ type epicPhase struct {
 	// normalized to off|normal|strict. Doc-owned like everything else here: the plan
 	// author decides which phases are worth grading, and a rescan re-derives it.
 	verifyMode string
+	// reviewMode is the doc's opt-in to the independent code review of its runs
+	// (`**Review:** on`, ParseDocReview), ReviewOn|ReviewOff. Doc-owned like
+	// verifyMode; the daemon-owned review_fix_round beside it on the row is not.
+	reviewMode string
 	// docModel is the RAW model the doc declares for its own runs (`**Model:** opus`,
 	// ParseModel), never validated here — rung 2 of the phase-run ladder judges it at
 	// admission so an unknown value fails the run instead of being dropped by a scan
@@ -763,6 +767,10 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		}
 		phases[i].covers = ParseCovers(string(body))
 		phases[i].verifyMode = ParseDocVerify(string(body))
+		phases[i].reviewMode = ReviewOff
+		if ParseDocReview(string(body)) {
+			phases[i].reviewMode = ReviewOn
+		}
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
@@ -867,7 +875,12 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // already-indexed plan keeps post_hoc_reason = '' and an unflagged posterior
 // until its bytes change — and a posterior written after the run's first edit is
 // exactly the row a stale parse would hand to calibration as trustworthy.
-const parserVersion = "v8"
+//
+// v9: epic_phases.review_mode — the `**Review:**` header line (ParseDocReview,
+// migration 0106). A doc that already declared `**Review:** on` before the column
+// existed would otherwise keep the column's default 'off' until some other byte of
+// the plan changed, and its runs would silently skip the review stage.
+const parserVersion = "v9"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -988,18 +1001,19 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 // PhaseUpsertSQL is the one statement applyEpics folds a parsed phase doc into
 // epic_phases with. Parameters, in order: workspace_task_id, seq, name, doc_path,
 // depends_on, checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-// completion_report, repo, covers, verify_mode, doc_model.
+// completion_report, repo, covers, verify_mode, doc_model, review_mode.
 //
 // Exported so the store's migration tests can re-run the EXACT upsert and prove a
-// daemon-owned column survives it — the run_* family, run_branch (0043) and the
-// landing_* / pr_* columns (0103) are deliberately absent from the DO UPDATE SET
-// list, and adding one of them here would silently reset it on every re-scan.
+// daemon-owned column survives it — the run_* family, run_branch (0043), the
+// landing_* / pr_* columns (0103) and review_fix_round (0106) are deliberately
+// absent from the DO UPDATE SET list, and adding one of them here would silently
+// reset it on every re-scan.
 const PhaseUpsertSQL = `
 			INSERT INTO epic_phases
 				(workspace_task_id, seq, name, doc_path, depends_on,
 				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
-				 completion_report, repo, covers, verify_mode, doc_model)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 completion_report, repo, covers, verify_mode, doc_model, review_mode)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
 				seq               = excluded.seq,
 				name              = excluded.name,
@@ -1015,7 +1029,10 @@ const PhaseUpsertSQL = `
 				-- Re-derived, INCLUDING back to NULL: deleting the **Model:** line
 				-- from a doc must actually retract the declaration, the same way
 				-- deleting a **Covers:** line does.
-				doc_model         = excluded.doc_model`
+				doc_model         = excluded.doc_model,
+				-- Doc-owned like verify_mode (0106). review_fix_round, its
+				-- daemon-owned neighbour, is deliberately NOT listed.
+				review_mode       = excluded.review_mode`
 
 // applyEpics folds the parsed plan into the task's epic_phases rows by UPSERTING
 // on the natural key UNIQUE(workspace_task_id, doc_path).
@@ -1099,10 +1116,15 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if p.docModel != "" {
 			docModel = p.docModel
 		}
+		// NOT NULL DEFAULT 'off' (0106), for the reason verify_mode is.
+		reviewMode := p.reviewMode
+		if reviewMode == "" {
+			reviewMode = ReviewOff
+		}
 		if _, err := tx.Exec(PhaseUpsertSQL,
 			taskID, p.seq, p.name, p.docPath, string(depJSON),
 			p.checkboxesTotal, p.checkboxesDone, docStatus, docUpdatedAt,
-			completionReport, repo, string(coversJSON), verifyMode, docModel); err != nil {
+			completionReport, repo, string(coversJSON), verifyMode, docModel, reviewMode); err != nil {
 			return err
 		}
 		// After the upsert, so the row (and therefore its id) exists whether this

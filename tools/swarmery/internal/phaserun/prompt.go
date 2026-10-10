@@ -115,7 +115,34 @@ const ReturnedNote = `THIS PHASE WAS RETURNED BY THE OPERATOR. Read the most rec
 func BuildPromptRun(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn string, returned bool, budget runcore.Budget) string {
 	note := ""
 	if returned {
-		note = ReturnedNote + "\n\n"
+		note = ReturnedNote
+	}
+	return buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note, budget)
+}
+
+// ReviewFixNote is ReturnedNote's counterpart for the fix re-run the review stage
+// starts (StartOptions.ReviewFix): the previous run was sent back by the
+// independent code review, not by the operator, and what it has to address is
+// the doc's most recent `## Review findings` section (wsingest.AppendReviewFindings).
+const ReviewFixNote = `THIS PHASE WAS RETURNED BY THE INDEPENDENT CODE REVIEW. Read the most recent "## Review findings" section of the document first and fix every blocking finding before anything else.`
+
+// runNote is the note a run's prompt opens its contract with: the review stage's
+// for a review-fix run, the operator's for any other returned run, none otherwise.
+func runNote(opts StartOptions) string {
+	switch {
+	case opts.ReviewFix:
+		return ReviewFixNote
+	case opts.Returned:
+		return ReturnedNote
+	}
+	return ""
+}
+
+// buildPromptNoted renders the phase-run prompt with note ("" ⇒ none) placed right
+// after the first paragraph.
+func buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note string, budget runcore.Budget) string {
+	if note != "" {
+		note += "\n\n"
 	}
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
