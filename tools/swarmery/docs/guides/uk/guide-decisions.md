@@ -19,7 +19,7 @@
 
 | Питання | Коли ставиться | Відповіді | Хто використовує |
 |---|---|---|---|
-| **D1** `d1.run_end` | Фоновий запуск фази або плану завершився чисто, але критерії приймання лишилися невідміченими | `report-with-next-step` · `blocked` · `question-for-operator` · `done` | Цикл досидання запуску: продовжити його, зупинитися й сповістити вас або позначити заблокованим |
+| **D1** `d1.run_end` | Фоновий запуск фази або плану завершився чисто, але критерії приймання лишилися невідміченими | `report-with-next-step` · `blocked` · `question-for-operator` · `done` | Цикл завершення запуску: продовжити його, зупинитися й сповістити вас або позначити заблокованим |
 | **D2** `d2.task_type` | Кожні 15 хвилин, для завершених сесій | `feature` · `bugfix` · `refactor` · `docs` · `research` · `review` · `ops` · `planning` · `other` | Аналітичні мітки на сесії |
 | **D2** `d2.outcome` | Той самий прохід | `shipped` · `partial` · `abandoned` · `failed` | Аналітичні мітки на сесії |
 | **D2** `d2.failure_cause` | Той самий прохід | `none` · `tool-error` · `test-failure` · `blocked-on-operator` · `refusal` · `timeout` · `context-exhausted` · `scope-misread` · `other` · `auth` · `quota` · `api-error` | Аналітичні мітки на сесії |
