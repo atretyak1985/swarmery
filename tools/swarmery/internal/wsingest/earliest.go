@@ -39,7 +39,7 @@ func ParseEarliest(text string) string {
 }
 
 // EarliestNotReached reports whether the doc's `Earliest:` date is still in the
-// future at now (compared as a calendar day in now's location), returning the
+// future at now (compared as a UTC calendar day), returning the
 // declared date. An absent or unparsable date never gates.
 func EarliestNotReached(text string, now time.Time) (date string, gated bool) {
 	date = ParseEarliest(text)

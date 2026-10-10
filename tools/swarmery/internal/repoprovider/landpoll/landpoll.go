@@ -21,8 +21,9 @@
 // The one criterion it does tick is the class landing closes (phase-run
 // outcomes plan, phase 3, D3): the moment a phase flips to merged, every
 // unticked `[LAND]` criterion in its doc is ticked (wsingest.TickCriteriaByClass,
-// atomic), and the plan_updated event that announces the merge also brings the
-// rescan that folds the new count in. Executable and `[MANUAL]` criteria are
+// atomic); the plan-dir watcher sees the atomic rename and its rescan folds the
+// new count in (the merge's own plan_updated event only refreshes the page —
+// the scanner publishes a second one once the counts are in). Executable and `[MANUAL]` criteria are
 // never touched — done and landed stay separate facts (D2).
 //
 // Imports: repoprovider, credstore, wsingest and database/sql only. The api-side effects
