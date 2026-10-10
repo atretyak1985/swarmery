@@ -94,6 +94,8 @@ var pendingSessionExempt = map[string]string{
 	"route_decisions.session_uuid":         "a copy of the run's uuid (tasks.dispatch_session_uuid for a card, epic_phases.run_session_uuid for a phase) stamped on the complexity-routing decision at spawn (internal/route); those run rows are the sources and answer for the uuid while the run is live",
 	"lesson_uses.session_uuid":             "a copy of the run's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each lesson a run's prompt carried (internal/lessons, phase 15); written in the same Start that stamps the run row, so those two run rows are the sources",
 	"account_limit_hits.session_uuid":      "an observation about an ALREADY-INGESTED transcript (or '' for a run verdict), never a daemon-minted uuid awaiting its first record",
+	"phase_reviews.session_uuid":           "the reviewer session of the phase review stage (internal/phaserun/review.go, migration 0106); the row is inserted only AFTER the reviewer's `claude -p` exited, so the uuid is never parked here while the run is live and the ingested sessions row answers for it",
+	"phase_reviews.run_session_uuid":       "scope=phase: a copy of epic_phases.run_session_uuid naming the run a review graded, written after that run ended, so the phase row is the source; scope=plan: not a session at all but the plan branch review's dedupe key, `branchset:<sha256>` (internal/phaserun/plan_review.go)",
 	"triage_runs.session_uuids":            "uuids of headless judge calls (internal/triage), read from the CLI's JSON envelope only AFTER each `claude -p` exited, so the uuid is never daemon-minted ahead of its transcript; the ingested sessions row answers for it",
 }
 

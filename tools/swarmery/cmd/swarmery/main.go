@@ -2475,6 +2475,14 @@ func cmdServe(args []string) error {
 	// the verdict lands on epic_phases as an INPUT to the phase's diagnosis (D5), never
 	// as a second status. Every plan that does not ask keeps today's behaviour.
 	phaserunSvc.Verify = verifySvc
+	// The review stage (phase docs carrying `**Review:** on`): a second read-only
+	// session through the verifier's runner, before the verifier. Its hard timeout
+	// is SWARMERY_REVIEW_TIMEOUT_MIN, defaulting to the verifier's own.
+	reviewTimeout := verifierCfg.RunTimeout
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("SWARMERY_REVIEW_TIMEOUT_MIN"))); err == nil && v > 0 {
+		reviewTimeout = time.Duration(v) * time.Minute
+	}
+	phaserunSvc.Review = verify.ClaudeRunner{AccountVerdict: runTruth.Record, Timeout: reviewTimeout}
 	// Learning loop phase 12: every finished phase run records what it actually
 	// did (phase_actuals — files/areas/lines from its branch, cost, outcome,
 	// verdict, test failures, continuations, fallback), measured again once the

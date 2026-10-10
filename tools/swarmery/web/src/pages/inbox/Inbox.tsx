@@ -12,6 +12,7 @@ import { Tabs, useTabParam } from '../../components/Tabs';
 import { TriageConflictError, acceptTriageVerdict } from '../../api/triage';
 import { HandledList } from './HandledList';
 import { InboxDetail, denyAction, primaryAction } from './InboxDetail';
+import { ReviewRow } from './ReviewItem';
 import { TriageBanner } from './TriageBanner';
 import {
   INBOX_TABS,
@@ -148,7 +149,9 @@ export function Inbox(): JSX.Element {
   const primaryLabel =
     selected?.suggestion !== undefined && !selected.suggestion.sample
       ? suggestionActionLabel(selected.suggestion.value)
-      : 'approve';
+      : selected?.kind === 'review'
+        ? 'ack'
+        : 'approve';
 
   const keymap: SplitPaneKey<InboxItem>[] = [
     {
@@ -273,6 +276,9 @@ export function Inbox(): JSX.Element {
               <>
                 {item.key === firstUrgent && <GroupLabel urgent />}
                 {item.key === firstCalm && firstUrgent !== undefined && <GroupLabel urgent={false} />}
+                {item.kind === 'review' ? (
+                  <ReviewRow review={item.raw} selected={isSelected} now={now} />
+                ) : (
                 <div className="flex gap-2.5 px-3.5 py-2.5">
                   <span className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${KIND_META[item.kind].dot}`} />
                   <div className="min-w-0">
@@ -286,6 +292,7 @@ export function Inbox(): JSX.Element {
                     </div>
                   </div>
                 </div>
+                )}
               </>
             )}
             renderDetail={(item) => (

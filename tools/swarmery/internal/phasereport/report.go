@@ -706,7 +706,7 @@ func (b builder) reviews() error {
 	}
 	n := 0
 	if ok {
-		if err := b.db.QueryRow(`SELECT COUNT(*) FROM phase_reviews WHERE created_at >= ? AND created_at < ?`,
+		if err := b.db.QueryRow(`SELECT COUNT(*) FROM phase_reviews WHERE started_at >= ? AND started_at < ?`,
 			b.w.lo, b.w.hi).Scan(&n); err != nil {
 			return fmt.Errorf("phasereport: reviews: %w", err)
 		}
