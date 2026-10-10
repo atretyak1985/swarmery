@@ -46,9 +46,11 @@ func EarliestNotReached(text string, now time.Time) (date string, gated bool) {
 	if date == "" {
 		return "", false
 	}
-	day, err := time.ParseInLocation("2006-01-02", date, now.Location())
+	// UTC day granularity: the gate opens at 00:00Z of the named date on every
+	// machine, so two daemons (or a daemon and the report) never disagree.
+	day, err := time.ParseInLocation("2006-01-02", date, time.UTC)
 	if err != nil {
 		return date, false
 	}
-	return date, now.Before(day)
+	return date, now.UTC().Before(day)
 }

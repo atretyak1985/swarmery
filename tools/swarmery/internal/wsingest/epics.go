@@ -881,7 +881,13 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // already-indexed plan keeps post_hoc_reason = '' and an unflagged posterior
 // until its bytes change — and a posterior written after the run's first edit is
 // exactly the row a stale parse would hand to calibration as trustworthy.
-const parserVersion = "v8"
+//
+// v9: epic_phases.criteria_land_open / criteria_manual_open — the `[LAND]` /
+// `[MANUAL]` criterion classes (classes.go, migration 0105). Without the bump an
+// already-indexed plan keeps both at the migration default 0, so a marked doc
+// would show landOpen/manualOpen = 0, Needs-you would never list its
+// manual_phase, and settle would measure the run against the wrong total.
+const parserVersion = "v9"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a

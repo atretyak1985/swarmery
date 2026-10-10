@@ -320,7 +320,7 @@ const (
 // Hints for the two doc gates — the sentence that tells the operator what to do.
 const (
 	hintManualOnly = "Only a human can close the open criteria of this phase. Do the [MANUAL] checks, " +
-		"tick them in the phase doc's Criteria, and the phase completes without a run."
+		"tick them in the phase doc's Criteria; any [LAND] criteria are ticked when the branch lands. No run is needed."
 	hintNotYetEarliest = "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, " +
 		"or edit the line in the phase doc if the gate no longer applies."
 )
