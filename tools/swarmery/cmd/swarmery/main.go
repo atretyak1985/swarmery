@@ -2272,8 +2272,12 @@ func cmdServe(args []string) error {
 	// interrupted runs (crash left them 'running') to error+inconclusive, then
 	// attach — to the api layer AND, as the dispatcher's Verifier seam, to the
 	// dispatcher so a no-sentinel exit pokes verification while the worktree lives.
-	verifySvc := verify.NewService(db, verify.ConfigFromEnv(),
-		verify.ClaudeRunner{AccountVerdict: runTruth.Record}, wtMgr)
+	// The runner's kill timer is the same knob the service stamps into its
+	// timed-out message (SWARMERY_VERIFY_TIMEOUT_MIN) — before this was wired the
+	// knob changed the wording and never the kill.
+	verifierCfg := verify.ConfigFromEnv()
+	verifySvc := verify.NewService(db, verifierCfg,
+		verify.ClaudeRunner{AccountVerdict: runTruth.Record, Timeout: verifierCfg.RunTimeout}, wtMgr)
 	// fusion phase 13: resolve each task's verify strictness knob (strict|normal|
 	// off) from its playbook via the shared registry — off skips the run, strict
 	// tightens the prompt bar. The seam keeps verify decoupled from the playbook
