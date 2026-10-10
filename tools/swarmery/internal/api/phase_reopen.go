@@ -38,6 +38,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasereport"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -147,7 +148,9 @@ func (h *Handler) reopenPhase(w http.ResponseWriter, r *http.Request) {
 		writeConflict(w, codePhaseRunning, "this phase is still running — let the run finish before reopening it")
 		return
 	}
-	if t.Total == 0 || t.Done < t.Total {
+	// Not a completion decision (see phasegate.Consumers): it only guards the
+	// reopen, through the one shared predicate so it cannot drift from the gate.
+	if !phasediag.CriteriaMet(t.Done, t.Total) {
 		writeConflict(w, codePhaseNotDone, "only a finished phase (every criterion ticked) can be reopened — this one still has open criteria")
 		return
 	}

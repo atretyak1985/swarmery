@@ -13,6 +13,10 @@ import (
 	"testing"
 )
 
+// reopenTestDoc deliberately has one UNTICKED line while the fixture row says
+// checkboxes_done = checkboxes_total: the handler trusts the stored counts for
+// the not-done check (the watcher keeps them in step with the doc), and the
+// unticked line proves an untick request never touches lines that are not ticked.
 const reopenTestDoc = "# Phase 1\n\n## Acceptance Criteria\n" +
 	"- [x] **POST creates a line item**\n" +
 	"- [x] DELETE removes it\n" +
