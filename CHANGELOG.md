@@ -9,7 +9,7 @@ Two things ship from this repository on separate clocks:
   tag. The version headings below are its releases.
 - **Marketplace plugins** each carry their own semver in
   `plugins/<name>/.claude-plugin/plugin.json` and reach consumers through
-  `/plugin update`, not through these tags. Current: `core` 3.11.0,
+  `/plugin update`, not through these tags. Current: `core` 3.12.0,
   `infra-pack` 1.5.0, `architecture-pack` 1.6.0, `iot-pack` 1.3.0,
   `uav-pack` 1.4.0, `web-pack` 1.4.0, `claude-eng-pack` 1.1.1,
   `graphify-pack` 1.1.1, `lsp-pack` 1.0.0, `jira-pack` 0.7.0,
@@ -17,6 +17,24 @@ Two things ship from this repository on separate clocks:
   marketplace's `metadata.version` tracks `core`.
 
 ## [Unreleased]
+
+### Added
+
+- **Criterion classes in plan docs (`core` 3.12.0).** A phase criterion that
+  closes a push / PR / merge is prefixed `[LAND]`; one only a human can perform
+  is `[MANUAL]`. The daemon settles a run against the executable criteria only
+  (a run with just `[LAND]` left ends `done` and the phase is ready to land),
+  refuses to start a phase whose open criteria are all `[MANUAL]`
+  (409 `manual-only`) or whose `Earliest:` date is ahead (409 `not-yet-earliest`),
+  lists manual-only phases in Needs you, ticks `[LAND]` when the branch lands
+  through the Review tab, and offers a "looks like a landing/manual criterion"
+  hint with a one-click marker in the Plans Criteria tab. `**Verify:**` and
+  `**Review:**` header rows are now part of the planner contract (L/XL default
+  to `normal` / `on`). Phase-run baseline report (`swarmery phase-report`,
+  `GET /api/phaseruns/report`, Health → Phase runs) and the phase reopen ledger
+  (`POST /api/epics/{taskId}/phases/{phaseId}/reopen`) landed in #518; the
+  verifier spawns with a non-asking permission mode (#519); the phase-run router
+  can run active for tier M via `swarmery install --route-phaserun active` (#520).
 
 ### Security
 

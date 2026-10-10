@@ -77,7 +77,9 @@ your root. Flip every Acceptance Criteria checkbox that task satisfies
 `- [ ]` → `- [x]` — one edit per completed task, immediately, never batched.
 Criteria prefixed `[LAND]` or `[MANUAL]` (see "Criterion classes") are not the
 executor's: it neither ticks them nor tries to perform them.
-When the phase's LAST checkbox is ticked, fill `## Completion Report` — what
+When the phase's last EXECUTABLE checkbox is ticked — every criterion that is
+not `[LAND]`/`[MANUAL]`; those two classes close later, without an executor —
+fill `## Completion Report` — what
 shipped, commits, verification output, deviations, and the three mandatory
 fields below — blocked calls, delegation cost, and the one-sentence
 "what would have made this cheaper" (≤50 lines); the platform

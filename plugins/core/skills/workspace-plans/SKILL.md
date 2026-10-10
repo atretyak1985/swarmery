@@ -58,7 +58,8 @@ paragraph of the Completion Report.
 
 Tick each satisfied criterion `- [ ]` → `- [x]` immediately after verifying
 it — progress is derived only from these checkboxes. When a phase's last
-criterion is ticked, fill that doc's `## Completion Report` (what shipped,
+EXECUTABLE criterion is ticked (every one that is not `[LAND]`/`[MANUAL]` —
+those close later, without an executor), fill that doc's `## Completion Report` (what shipped,
 files/commits, verification output, deviations, plus three mandatory fields —
 **Blocked calls**, **Delegation cost**, and the one-sentence **What would have
 made this cheaper**; ≤50 lines) — the dashboard renders exactly that heading.
