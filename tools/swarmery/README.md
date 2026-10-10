@@ -18,7 +18,7 @@ screenshots: [docs/TOUR.md](../../docs/TOUR.md).
 - **Knowledge** — a project's Memory, Architecture map, and the Serena / Graphify dashboards.
 - **Docs** — the guides and reference docs, rendered in-app.
 - **System** — the full Claude config graph across global, project and plugin-cache scopes: Agents · Skills · Plugins · Hooks · Routines · Insights, with lint badges and version history.
-- **Settings** — Appearance · Accounts · Notifications · Projects. Only onboarded projects are listed by default; untick *onboarded only* for the rest. A project's own settings (packs, plugin config, account) are at `/p/<slug>/settings`. Guide: [docs/guides/guide-getting-started.md](docs/guides/guide-getting-started.md).
+- **Settings** — Appearance · Accounts · Notifications · Projects. Only onboarded projects are listed by default; untick *onboarded only* for the rest. A project's own settings (packs, plugin config, account) are at `/p/<slug>/settings`. Appearance → **Language** switches the dashboard between English and Ukrainian (kept per browser, no reload; daemon and agent-written text stays English); adding a string: [web/README.md](web/README.md#adding-a-user-visible-string). Guide: [docs/guides/guide-getting-started.md](docs/guides/guide-getting-started.md).
 - **Usage** — the header's `◔` chip and its modal: the operator's live Claude subscription quota (5-hour session, weekly, per-model weekly) read from their own local `claude` login, with a pace marker against elapsed window time. Reference: [docs/usage.md](docs/usage.md).
 
 Design reference: [swarmery-design.md](swarmery-design.md) ·

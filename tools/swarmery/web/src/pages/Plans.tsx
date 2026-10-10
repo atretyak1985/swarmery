@@ -644,7 +644,7 @@ function PhaseRunModelPicker({
 }): JSX.Element {
   const { t, i18n } = useLingui();
   return (
-    <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+    <label className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 font-mono text-[10px] text-ink-faint">
       <Trans>phase run model</Trans>
       <select
         value={value}
@@ -654,7 +654,7 @@ function PhaseRunModelPicker({
         }}
         aria-label={t`phase run model`}
         title={t`the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected.`}
-        className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+        className="min-w-0 max-w-full rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
       >
         {PHASE_RUN_MODELS.map((m) => (
           <option key={m.value} value={m.value}>
@@ -680,7 +680,7 @@ function PhaseRunEffortPicker({
 }): JSX.Element {
   const { t, i18n } = useLingui();
   return (
-    <label className="flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+    <label className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 font-mono text-[10px] text-ink-faint">
       <Trans>effort</Trans>
       <select
         value={value}
@@ -690,7 +690,7 @@ function PhaseRunEffortPicker({
         }}
         aria-label={t`phase run effort`}
         title={t`how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected.`}
-        className="rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
+        className="min-w-0 max-w-full rounded-lg border border-line bg-field px-2 py-1 font-mono text-[10px] text-ink-dim outline-none transition-colors hover:text-ink focus:border-brand/50 disabled:opacity-50"
       >
         {PHASE_RUN_EFFORTS.map((e) => (
           <option key={e.value} value={e.value}>
@@ -1853,14 +1853,17 @@ function EpicDetail({
       {/* Phases on the left, the sessions they produced on the right — the
           sessions column stays put while the phase area swaps between the
           timeline and a phase/plan detail, so a transcript is one click away
-          from whatever is being read. */}
-      <div className="flex min-w-0 items-start gap-4">
-        <div className="min-w-0 flex-1">
+          from whatever is being read. Below ~22rem for the phases (a 1024px
+          window, plan list and app sidebar open) the sessions column wraps
+          under them instead of squeezing the phase cards until their run
+          chips spill out — the longer Ukrainian labels made that visible. */}
+      <div className="flex min-w-0 flex-wrap items-start gap-4">
+        <div className="min-w-0 flex-1 basis-[22rem]">
           {/* Above the phase area, not in the plan header: the header's control is
               the WHOLE-PLAN run, which reads SWARMERY_PLANRUN_MODEL and is out of
               scope here (risk R3). Sitting here it governs exactly what it names —
               every per-phase Run/Retry below it, list or detail panel. */}
-          <div className="mb-2 flex items-center justify-end gap-3">
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
             <PhaseRunModelPicker
               value={phaseRunModel}
               onChange={onPhaseRunModel}
@@ -2270,7 +2273,9 @@ function PhaseList({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
+                {/* Wraps: in a narrow card the activity note drops under the
+                    name instead of running beneath the run chips beside it. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="shrink-0 font-mono text-[10px] text-ink-faint">
                     <Trans>Phase {seq}</Trans>
                   </span>
