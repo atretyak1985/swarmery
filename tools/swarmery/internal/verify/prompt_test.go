@@ -22,6 +22,30 @@ func TestBuildPrompt_ContainsContract(t *testing.T) {
 	}
 }
 
+// The daemon-API rule names the port it is given (BuildPrompt: the default), and
+// it sits among the rules, above the verdict line that must stay last.
+func TestBuildPrompt_DaemonAPIRule(t *testing.T) {
+	def := BuildPrompt("t", "c", "main", StrictnessNormal)
+	if !strings.Contains(def, "- "+DaemonAPINotice(DefaultDaemonPort)+"\n") {
+		t.Errorf("default prompt lacks the daemon-API rule for :%d:\n%s", DefaultDaemonPort, def)
+	}
+	p := BuildPromptForPort("t", "c", "main", StrictnessStrict, 8080)
+	for _, want := range []string{"127.0.0.1:8080", "localhost:8080", "curl, wget, http"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt for :8080 missing %q:\n%s", want, p)
+		}
+	}
+	if strings.Contains(p, ":7777") {
+		t.Errorf("prompt for :8080 still names the default port:\n%s", p)
+	}
+	if !strings.HasSuffix(p, "VERDICT: PASS | FAIL | INCONCLUSIVE") {
+		t.Errorf("the verdict line is no longer last:\n%s", p)
+	}
+	if DaemonAPINotice(0) != DaemonAPINotice(DefaultDaemonPort) {
+		t.Errorf("DaemonAPINotice(0) = %q, want the default port's", DaemonAPINotice(0))
+	}
+}
+
 func TestBuildPrompt_EmptyStartPointFallback(t *testing.T) {
 	p := BuildPrompt("t", "c", "", StrictnessNormal)
 	if !strings.Contains(p, "the base branch") {

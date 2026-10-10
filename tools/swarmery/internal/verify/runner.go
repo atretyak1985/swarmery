@@ -2,6 +2,7 @@ package verify
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -134,6 +135,50 @@ func ToolDenyArgs(extra []string) []string {
 		}
 	}
 	return []string{"--disallowedTools", strings.Join(tools, ",")}
+}
+
+// daemonClients and daemonHosts span DaemonDenyPatterns: the HTTP clients a model
+// reaches for, against both spellings of the loopback address the daemon binds by
+// default.
+var (
+	daemonClients = []string{"curl", "wget", "http"}
+	daemonHosts   = []string{"127.0.0.1", "localhost"}
+)
+
+// DaemonDenyPatterns are the deny rules that keep a run off this daemon's own HTTP
+// API on port: one Bash rule per client and host, `Bash(curl *127.0.0.1:7777*)`. A
+// port <= 0 is DefaultDaemonPort. The verifier and the reviewer run under
+// bypassPermissions, and that API does what neither of them may: stamp verdicts,
+// tick phases, start runs, answer approvals. Callers pass the result as extra to
+// ToolDenyArgs (RunSpec.DisallowedTools), so it joins the ONE flag.
+//
+// Syntax, from the Claude Code permissions reference
+// (https://code.claude.com/docs/en/permissions — "Wildcard patterns", "Compound
+// commands", "What a Bash rule doesn't match"; checked 2026-10-10):
+//   - `*` may stand anywhere in a Bash rule and matches any text, spaces included,
+//     so `curl *127.0.0.1:7777*` matches `curl -s http://127.0.0.1:7777/api/x`.
+//   - the `:*` suffix is only recognised at the END of a rule. Mid-rule the colon is
+//     literal, so `Bash(curl:*127.0.0.1:7777*)` would match no curl command at all.
+//   - a deny rule applies when ANY subcommand of a compound command matches, and
+//     past a leading env assignment; and "deny rules block in every mode, including
+//     bypassPermissions" (https://code.claude.com/docs/en/permission-modes).
+//   - it does not match the program by path (`/usr/bin/curl …`) or inside `sh -c`:
+//     this guards the commands a model writes, it is not a network boundary. The
+//     prompt sentence (DaemonAPINotice) is the other half.
+//
+// A space inside the parentheses survives the comma-joined list: `claude --help`
+// documents `"Bash(git *) Edit"` as one --disallowedTools value holding two rules.
+func DaemonDenyPatterns(port int) []string {
+	if port <= 0 {
+		port = DefaultDaemonPort
+	}
+	out := make([]string, 0, len(daemonClients)*len(daemonHosts))
+	for _, c := range daemonClients {
+		for _, h := range daemonHosts {
+			out = append(out, fmt.Sprintf("Bash(%s *%s:%d*)", c, h, port))
+		}
+	}
+	return out
 }
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`

@@ -205,6 +205,10 @@ type Service struct {
 	// reviewRun). nil ⇒ the review stage is not wired: every unit test's state, and
 	// a valid production state. Runs BEFORE verifyRun, both before removeWorktree.
 	Review verify.Runner
+	// DaemonPort is the port this daemon's HTTP API listens on. Reviewers (phase and
+	// plan branch) are denied curl/wget/http to it and told not to call it, like the
+	// verifier. 0 ⇒ verify.DefaultDaemonPort.
+	DaemonPort int
 	// treeFingerprint overrides worktreeFingerprint (review.go) when set — a test
 	// seam for harness worktrees that are not git checkouts.
 	treeFingerprint func(dir string) (string, error)

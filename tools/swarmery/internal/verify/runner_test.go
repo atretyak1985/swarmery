@@ -87,3 +87,85 @@ func TestToolDenyArgs(t *testing.T) {
 		t.Errorf("ToolDenyArgs(Bash) = %q", got)
 	}
 }
+
+// TestDaemonDenyPatterns pins the exact rules: three clients × two loopback
+// spellings, the port taken from the argument, and the zero value falling back to
+// the daemon's default. The space form, never `curl:*…` — mid-rule the colon is a
+// literal and the rule would match nothing.
+func TestDaemonDenyPatterns(t *testing.T) {
+	for _, tc := range []struct {
+		port int
+		want []string
+	}{
+		{7777, []string{
+			"Bash(curl *127.0.0.1:7777*)", "Bash(curl *localhost:7777*)",
+			"Bash(wget *127.0.0.1:7777*)", "Bash(wget *localhost:7777*)",
+			"Bash(http *127.0.0.1:7777*)", "Bash(http *localhost:7777*)",
+		}},
+		{8080, []string{
+			"Bash(curl *127.0.0.1:8080*)", "Bash(curl *localhost:8080*)",
+			"Bash(wget *127.0.0.1:8080*)", "Bash(wget *localhost:8080*)",
+			"Bash(http *127.0.0.1:8080*)", "Bash(http *localhost:8080*)",
+		}},
+	} {
+		if got := DaemonDenyPatterns(tc.port); strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("DaemonDenyPatterns(%d) = %q, want %q", tc.port, got, tc.want)
+		}
+	}
+	if got, want := strings.Join(DaemonDenyPatterns(0), "|"), strings.Join(DaemonDenyPatterns(DefaultDaemonPort), "|"); got != want {
+		t.Errorf("DaemonDenyPatterns(0) = %q, want the default port's %q", got, want)
+	}
+}
+
+// TestToolDenyArgsDaemonDeny pins the full flag a verifier (port from config) and a
+// reviewer (Bash on top) get: the read-only set first, then the daemon rules, in
+// ONE --disallowedTools value.
+func TestToolDenyArgsDaemonDeny(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		extra []string
+		want  string
+	}{
+		{"verifier on 7777", DaemonDenyPatterns(7777),
+			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit," +
+				"Bash(curl *127.0.0.1:7777*),Bash(curl *localhost:7777*)," +
+				"Bash(wget *127.0.0.1:7777*),Bash(wget *localhost:7777*)," +
+				"Bash(http *127.0.0.1:7777*),Bash(http *localhost:7777*)"},
+		{"reviewer on 8080", append([]string{"Bash"}, DaemonDenyPatterns(8080)...),
+			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash," +
+				"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
+				"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
+				"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)"},
+	} {
+		args := ToolDenyArgs(tc.extra)
+		if len(args) != 2 {
+			t.Fatalf("%s: ToolDenyArgs = %q, want exactly the flag and one value", tc.name, args)
+		}
+		if got := strings.Join(args, " "); got != tc.want {
+			t.Errorf("%s: ToolDenyArgs = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestClaudeRunnerDaemonDenyIsOneArgvElement: the spaces inside the rules do not
+// split the value on the real spawn path — the stand-in claude prints one argv
+// element per line, and the whole list must arrive as the single element after
+// the flag.
+func TestClaudeRunnerDaemonDenyIsOneArgvElement(t *testing.T) {
+	clearPermissionKnobs(t)
+	fakeClaudeRunner(t, `for a in "$@"; do printf '%s\n' "$a"; done > "$PWD/args.txt"; exit 0`)
+	cwd := t.TempDir()
+	if _, err := (ClaudeRunner{}).Run(context.Background(), RunSpec{
+		Prompt: "verify", SessionUUID: "u3", Cwd: cwd, DisallowedTools: DaemonDenyPatterns(8080),
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	argv := strings.Split(readArgs(t, cwd), "\n")
+	if n := len(argv); n < 2 || argv[n-2] != "--disallowedTools" {
+		t.Fatalf("argv does not end with --disallowedTools <list>: %q", argv)
+	}
+	want := strings.Join(ToolDenyArgs(DaemonDenyPatterns(8080))[1:], "")
+	if got := argv[len(argv)-1]; got != want {
+		t.Errorf("--disallowedTools value = %q, want %q", got, want)
+	}
+}

@@ -133,8 +133,12 @@ func TestPlanReviewFiresOnceWhenTheLastPhaseCompletes(t *testing.T) {
 		t.Fatalf("plan reviews spawned = %d, want 1", len(calls))
 	}
 	spec := calls[0]
-	if got := strings.Join(verify.ToolDenyArgs(spec.DisallowedTools), " "); got != "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash" {
-		t.Errorf("plan reviewer denial = %q", got)
+	if got, want := strings.Join(verify.ToolDenyArgs(spec.DisallowedTools), " "),
+		"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash,"+strings.Join(verify.DaemonDenyPatterns(verify.DefaultDaemonPort), ","); got != want {
+		t.Errorf("plan reviewer denial = %q, want %q", got, want)
+	}
+	if !strings.Contains(spec.Prompt, verify.DaemonAPINotice(verify.DefaultDaemonPort)) {
+		t.Errorf("the plan review prompt lacks the daemon-API rule:\n%s", spec.Prompt)
 	}
 	if spec.Model != verify.DefaultModel {
 		t.Errorf("plan reviewer model = %q, want %q", spec.Model, verify.DefaultModel)

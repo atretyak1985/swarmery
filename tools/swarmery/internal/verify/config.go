@@ -50,6 +50,12 @@ type Config struct {
 	// reaper marks it error + stamps the task inconclusive (Fusion 6h; ours 2h for
 	// headless runs).
 	StaleAfter time.Duration
+	// DaemonPort is the port this daemon's HTTP API listens on. Every verifier
+	// run is denied curl/wget/http to it (DaemonDenyPatterns) and told not to
+	// call it. The composition root sets it from `serve --port`, whose default is
+	// SWARMERY_PORT: the flag can override the env, so the flag's value is the
+	// port actually served. ConfigFromEnv only fills the default.
+	DaemonPort int
 }
 
 // Config defaults. Exported so tests and docs reference one source of truth.
@@ -62,6 +68,9 @@ const (
 	// and only a sprawling change trips it. It is a refusal-to-spend bound, not a
 	// quality bar: the verdict it produces is INCONCLUSIVE, never FAIL.
 	DefaultMaxDiffFiles = 40
+	// DefaultDaemonPort is the daemon's own default port (cmd/swarmery's
+	// defaultPort), used when nothing set Config.DaemonPort.
+	DefaultDaemonPort = 7777
 )
 
 // ConfigFromEnv builds a Config from SWARMERY_* env, falling back to the
@@ -75,6 +84,7 @@ func ConfigFromEnv() Config {
 		StaleAfter:  DefaultStaleAfter,
 
 		MaxDiffFiles: DefaultMaxDiffFiles,
+		DaemonPort:   DefaultDaemonPort,
 	}
 	if v := envPositiveInt("SWARMERY_VERIFY_CONCURRENCY"); v > 0 {
 		c.Concurrency = v

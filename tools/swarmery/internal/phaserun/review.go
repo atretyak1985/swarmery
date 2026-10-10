@@ -49,6 +49,20 @@ const (
 // run checks, a reviewer only reads (code-reviewer.md: "no write tools, no shell").
 var reviewDeniedTools = []string{"Bash"}
 
+// reviewDenials is what a reviewer spawn denies on top of verify's read-only set:
+// reviewDeniedTools, then the verifier's daemon-API rules for s.DaemonPort. With
+// Bash denied whole the rules change nothing today; they keep the reviewer off the
+// daemon's API should that denial ever narrow, and they are the verifier's list.
+func (s *Service) reviewDenials() []string {
+	return append(append([]string(nil), reviewDeniedTools...), verify.DaemonDenyPatterns(s.DaemonPort)...)
+}
+
+// reviewerPreamble is reviewerRole followed by the daemon-API rule for port: the
+// opening of both the phase and the plan branch review prompt.
+func reviewerPreamble(daemonPort int) string {
+	return reviewerRole + "\n\n" + verify.DaemonAPINotice(daemonPort)
+}
+
 // reviewModel is the reviewer's model: code-reviewer's own (opus), pinned to the
 // verifier's full ID. "" would inherit the account default, which is not the
 // agent's model and may cost twice as much.
@@ -85,11 +99,12 @@ End with exactly one final line, nothing after it:
 VERDICT: PASS | FAIL | INCONCLUSIVE
 FAIL when any P0/P1 stands; INCONCLUSIVE only when you genuinely could not assess (missing files, no diff) — name what was missing.`
 
-// reviewPrompt renders the reviewer's prompt: the role, the phase doc as it stands
-// now (with the executor's ticks), and the run's diff.
-func reviewPrompt(title, doc, diff string) string {
+// reviewPrompt renders the reviewer's prompt: the role and the daemon-API rule for
+// daemonPort, the phase doc as it stands now (with the executor's ticks), and the
+// run's diff.
+func reviewPrompt(title, doc, diff string, daemonPort int) string {
 	var b strings.Builder
-	b.WriteString(reviewerRole)
+	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\nPHASE: ")
 	b.WriteString(title)
 	b.WriteString("\n\nPHASE DOCUMENT:\n----------------------------------------\n")
@@ -349,7 +364,7 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) r
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:      reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint)),
+		Prompt:      reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort),
 		SessionUUID: o.sessionUUID,
 		Cwd:         acq.Path,
 		Model:       reviewModel,
@@ -357,7 +372,7 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) r
 		// exactly as the verifier resolves them.
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
-		DisallowedTools: reviewDeniedTools,
+		DisallowedTools: s.reviewDenials(),
 	}
 	log.Printf("phaserun: phase=%d reviewing worktree=%q", phaseID, acq.Path)
 	// context.Background(): the run's own context is already cancelled (the defer's
