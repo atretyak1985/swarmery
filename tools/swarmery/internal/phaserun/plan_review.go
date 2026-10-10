@@ -254,7 +254,13 @@ func (s *Service) planComplete(taskID, phaseID int64, docPath string) (bool, err
 			if c, ok := criteriaInDoc(docPath); ok {
 				done, total = c.Done, c.Total
 			}
-		} else if runState == "running" {
+		} else if runState == "running" || s.Slots.IsActive(s.slotKey(id)) {
+			// A sibling is in flight while its row says `running` OR while its
+			// single-flight slot is still held: a Review-on phase is stamped
+			// done BEFORE its own review/verify stage runs (stampRow), and the
+			// slot is released only at the very end of that cleanup — so a
+			// sibling stamping `done` meanwhile must not review the tip that
+			// the phase reviewer may still reject.
 			return false, nil
 		}
 		if status != "done" && !phasediag.CriteriaMet(done, total) {

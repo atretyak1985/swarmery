@@ -470,6 +470,27 @@ func TestPlanReviewWaitsForARunningSibling(t *testing.T) {
 	}
 }
 
+// A sibling whose row already says done but whose single-flight slot is still
+// held (a Review-on phase between stampRow and the end of its review/verify
+// cleanup) is still in flight: no plan review starts until the slot is released.
+func TestPlanReviewWaitsForASiblingHoldingItsSlot(t *testing.T) {
+	s, db, _, p1, p2, doc2, _, rv, _ := planReviewFixture(t)
+	mustExec(t, db, `UPDATE epic_phases SET run_state='done' WHERE id=?`, p1)
+	release, err := s.Slots.TryAcquire(s.slotKey(p1), "uuid-p1", func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 0 {
+		t.Fatalf("plan reviews while phase 1 still holds its slot = %d, want 0", n)
+	}
+	release()
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 1 {
+		t.Fatalf("plan reviews once phase 1 released its slot = %d, want 1", n)
+	}
+}
+
 // Two reviews of one plan under different keys never share a worktree name.
 func TestPlanReviewNameCarriesTheKey(t *testing.T) {
 	a := planReviewName(7, planReviewKeyPrefix+"0123456789abcdef")
