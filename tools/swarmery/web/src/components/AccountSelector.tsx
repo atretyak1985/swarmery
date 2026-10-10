@@ -156,6 +156,7 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
   const draftKey = draftAccount?.key ?? '';
   const draftReason = draftAccount?.runnableReason ?? t`its CLI login is missing`;
 
+  const ignoredReason = binding?.ignoredReason;
   return (
     <>
       <SectionTitle>
@@ -184,9 +185,9 @@ export function AccountSelector({ projectId }: { projectId: number }): JSX.Eleme
             {sourceLabel}
           </span>
         </div>
-        {binding.ignoredReason && (
+        {ignoredReason && (
           <p className="mt-2 text-[11.5px] leading-snug text-ink-dim">
-            <Trans>binding ignored: {binding.ignoredReason}</Trans>
+            <Trans>binding ignored: {ignoredReason}</Trans>
           </p>
         )}
 

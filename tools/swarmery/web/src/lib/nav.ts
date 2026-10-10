@@ -19,7 +19,7 @@
 // the session-blocker queue: approvals, questions, local-only prod deploys,
 // sessions awaiting a typed reply, recent failures (GET /api/needs-you).
 
-import type { I18n, MessageDescriptor } from '@lingui/core';
+import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { i18n } from '../i18n';
 
@@ -44,9 +44,6 @@ export interface Place {
   /** The sidebar label in the active locale (read through i18n on every access,
    * so a locale switch shows up on the next render). */
   readonly label: string;
-  /** The untranslated label message, for callers that translate with their own
-   * i18n instance (see navLabel). */
-  labelMessage: MessageDescriptor;
   section: PlaceSection;
   /** Only meaningful inside one project (Plans, Knowledge): under All projects
    * the row renders dimmed and resolves through the last-visited project. */
@@ -138,7 +135,6 @@ function toPlace(def: PlaceDef): Place {
     get label() {
       return i18n._(def.label);
     },
-    labelMessage: def.label,
     section: def.section,
     projectOnly: def.projectOnly,
     href: (slug) => {
@@ -153,11 +149,6 @@ function toPlace(def: PlaceDef): Place {
 }
 
 export const PLACES: readonly Place[] = DEFS.map(toPlace);
-
-/** A place's label translated with the caller's i18n (useLingui().i18n). */
-export function navLabel(i18nInstance: I18n, place: Place): string {
-  return i18nInstance._(place.labelMessage);
-}
 
 /** Places of one sidebar section, in table order. */
 export function placesIn(section: PlaceSection): readonly Place[] {

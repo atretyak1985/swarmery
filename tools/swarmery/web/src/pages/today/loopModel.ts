@@ -136,13 +136,14 @@ function runStage(i: LoopInputs, href: string): Stage {
       }),
     );
   }
+  const count = fmtCount(pendingApprovals);
   const alert =
     pendingApprovals > 0
       ? plural(pendingApprovals, {
-          one: '# approval waiting.',
-          few: '# approvals waiting.',
-          many: '# approvals waiting.',
-          other: '# approvals waiting.',
+          one: `${count} approval waiting.`,
+          few: `${count} approvals waiting.`,
+          many: `${count} approvals waiting.`,
+          other: `${count} approvals waiting.`,
         })
       : '';
   let sentence = parts.join(' ');

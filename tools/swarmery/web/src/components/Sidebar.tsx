@@ -17,7 +17,6 @@
 // OUTSIDE the <nav>: the rail is display:none below `desk`, and a fixed overlay
 // inside a hidden parent would never paint.
 
-import type { I18n } from '@lingui/core';
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -193,12 +192,6 @@ export function Sidebar({
   );
 }
 
-/** A place's visible name. Accepts both a plain string label and a Lingui
- * MessageDescriptor, so it renders the same whichever shape lib/nav.ts carries. */
-function placeLabel(i18n: I18n, place: Place): string {
-  return typeof place.label === 'string' ? place.label : i18n._(place.label);
-}
-
 /** The numeric badge of a row: Inbox and Needs you only, hidden at zero. */
 function badgeFor(place: Place, inboxCount: number, needsYouCount: number): number | null {
   if (place.id === 'inbox') return inboxCount > 0 ? inboxCount : null;
@@ -219,9 +212,9 @@ function SidebarRow({
   badge: number | null;
   live: boolean;
 }): JSX.Element {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const dimmed = slug === null && place.projectOnly;
-  const label = placeLabel(i18n, place);
+  const label = place.label;
   return (
     <Link
       to={resolvePlaceHref(place, slug, dimmed ? loadLastProject() : null)}
@@ -274,7 +267,7 @@ export function MobileNav({
   inboxCount?: number;
   needsYouCount?: number;
 }): JSX.Element {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const { pathname } = useLocation();
   const last = slug === null ? loadLastProject() : null;
   if (variant === 'strip') {
@@ -292,7 +285,7 @@ export function MobileNav({
               }`}
             >
               <span aria-hidden="true">{place.glyph}</span>
-              {placeLabel(i18n, place)}
+              {place.label}
             </Link>
           );
         })}
@@ -321,7 +314,7 @@ export function MobileNav({
                 <span className="absolute -top-0.5 -right-1.5 h-[6px] w-[6px] rounded-full bg-amber" />
               )}
             </span>
-            {placeLabel(i18n, place)}
+            {place.label}
           </Link>
         );
       })}

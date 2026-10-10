@@ -65,13 +65,12 @@ function word(map: Record<string, MessageDescriptor>, key: string): string | und
   return message === undefined ? undefined : i18n._(message);
 }
 
-const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-
+/** Counts are digits: a spelled-out English number cannot be translated. */
 function numberWord(n: number): string {
-  return NUMBER_WORDS[n] ?? String(n);
+  return String(n);
 }
 
-/** "area" / "areas" after a count spelled out by numberWord(). */
+/** "area" / "areas" after a digit count. */
 function areaWord(n: number): string {
   return plural(n, { one: 'area', few: 'areas', many: 'areas', other: 'areas' });
 }

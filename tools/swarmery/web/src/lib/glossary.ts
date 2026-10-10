@@ -9,6 +9,8 @@
 // either reference ('explain', renders "?") or a demand for operator action
 // ('action', renders "!"), and it must read the same everywhere it appears.
 
+import { t } from '@lingui/core/macro';
+
 export type Tone = 'explain' | 'action';
 
 export interface Concept {
@@ -533,14 +535,34 @@ export const STEP_CONCEPTS: Record<StepConceptId, StepConcept> = RAW;
 
 /** Code → UI vocabulary (Canvas v3 artboard 1). The code name stays as a small caption. */
 export const UI_TERMS = {
-  surprise: { code: 'surprise index', ui: 'off-plan', hint: 'how far the run landed from the plan' },
-  prior: { code: 'prior', ui: "planner's guess", hint: '' },
-  posterior: { code: 'posterior', ui: 'after reading the code', hint: '' },
-  shadow: { code: 'shadow', ui: 'watching', hint: '' },
-  active: { code: 'active', ui: 'acting', hint: '' },
-  agreement: { code: 'agreement', ui: 'matches you', hint: '' },
-  groundTruth: { code: 'ground truth', ui: 'what actually happened', hint: '' },
-  recommendation: { code: 'recommendation', ui: 'the Advisor noticed…', hint: '' },
-  retirement: { code: 'retirement', ui: 'stop using this lesson?', hint: '' },
-  calibration: { code: 'calibration', ui: 'how honest forecasts are', hint: '' },
+  surprise: { code: 'surprise index', get ui() {
+      return t`off-plan`;
+    }, hint: 'how far the run landed from the plan' },
+  prior: { code: 'prior', get ui() {
+      return t`planner's guess`;
+    }, hint: '' },
+  posterior: { code: 'posterior', get ui() {
+      return t`after reading the code`;
+    }, hint: '' },
+  shadow: { code: 'shadow', get ui() {
+      return t`watching`;
+    }, hint: '' },
+  active: { code: 'active', get ui() {
+      return t`acting`;
+    }, hint: '' },
+  agreement: { code: 'agreement', get ui() {
+      return t`matches you`;
+    }, hint: '' },
+  groundTruth: { code: 'ground truth', get ui() {
+      return t`what actually happened`;
+    }, hint: '' },
+  recommendation: { code: 'recommendation', get ui() {
+      return t`the Advisor noticed…`;
+    }, hint: '' },
+  retirement: { code: 'retirement', get ui() {
+      return t`stop using this lesson?`;
+    }, hint: '' },
+  calibration: { code: 'calibration', get ui() {
+      return t`how honest forecasts are`;
+    }, hint: '' },
 } as const;

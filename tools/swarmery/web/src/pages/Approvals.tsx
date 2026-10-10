@@ -660,7 +660,7 @@ export function Approvals(): JSX.Element {
     setRuleDraft({
       projectId: sessionOf(request.sessionId)?.projectId ?? null,
       toolPattern: suggestRulePattern(request),
-      note: t`always allow — from request #${requestNumber}`,
+      note: `always allow — from request #${requestNumber}`, // i18n-ignore — approval_rules.note is stored on the server in English, like the Overview/Health/Retro notes
     });
     setRuleError(null);
     setRuleFormOpen(true);

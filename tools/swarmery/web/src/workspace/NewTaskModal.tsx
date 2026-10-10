@@ -136,7 +136,7 @@ export function NewTaskModal({
 
   const overrideList = overrides.join(', ');
   // The lane the card will land in, as the board names it (boardModel labels).
-  const lane = i18n._(LANE_TITLES[laneOf(column) ?? 'inbox']);
+  const lane = LANE_TITLES[laneOf(column) ?? 'inbox'];
 
   // Anything the operator would have to retype: a title, a prompt, or an
   // advanced override that differs from what the form opened with (a deep-link
@@ -368,7 +368,7 @@ export function NewTaskModal({
                 >
                   {TARGET_COLUMNS.map((c) => (
                     <option key={c} value={c}>
-                      {i18n._(COLUMN_LABELS[c])}
+                      {COLUMN_LABELS[c]}
                     </option>
                   ))}
                 </select>

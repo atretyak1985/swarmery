@@ -57,6 +57,7 @@ export function AttachModal({
     (phase.kind === 'plan' || phase.kind === 'applying') && !phase.plan.attached;
   const busy = phase.kind === 'applying';
 
+  const backupPath = phase.kind === 'done' ? phase.result.backup : undefined;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-4"
@@ -99,9 +100,9 @@ export function AttachModal({
         {phase.kind === 'done' && (
           <>
             <StepList title={t`restored`} steps={phase.result.steps} />
-            {phase.result.backup !== undefined && (
+            {backupPath !== undefined && (
               <div className="mt-2 font-mono text-[10.5px] text-ink-faint">
-                <Trans>backup: {phase.result.backup}</Trans>
+                <Trans>backup: {backupPath}</Trans>
               </div>
             )}
           </>

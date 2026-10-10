@@ -59,7 +59,8 @@ describe('StaleFactsPanel', () => {
 
   it('renders the empty state when the report has no findings', () => {
     render(<StaleFactsPanel report={report([])} onOpen={vi.fn()} />);
-    expect(screen.getByText(i18n._(STALE_FACTS_EMPTY))).toBeTruthy();
+    expect(i18n._(STALE_FACTS_EMPTY)).toBe('No stale facts found');
+    expect(screen.getByText('No stale facts found')).toBeTruthy();
     expect(screen.getByText('No stale facts found')).toBeTruthy();
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });

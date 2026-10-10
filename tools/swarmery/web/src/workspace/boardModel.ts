@@ -340,7 +340,7 @@ export function ageLabel(task: BoardTask, nowMs: number): string | null {
   const at = Date.parse(task.createdAt);
   if (Number.isNaN(at)) return null;
   const days = Math.max(0, Math.floor((nowMs - at) / DAY_MS));
-  return days === 0 ? t`today` : `${String(days)}d`;
+  return days === 0 ? t`today` : t`${days}d`;
 }
 
 /**
