@@ -53,6 +53,7 @@ defaultTest:
 tests:
   - file://agents/tech-lead.yaml
   - file://agents/planner.yaml
+  - file://agents/planner-criteria-classes.yaml
   - file://agents/verification-agent.yaml
   - file://agents/implementation-agent.yaml
   - file://agents/code-reviewer.yaml

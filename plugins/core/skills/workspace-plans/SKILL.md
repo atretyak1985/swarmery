@@ -6,7 +6,7 @@ description: "Use this skill when writing, revising, or executing a workspace pl
 color: cyan
 docs:
   status: draft
-  updated: 2026-09-01
+  updated: 2026-10-10
 ---
 
 # Purpose
@@ -38,6 +38,16 @@ deviates from the format ships work the operator cannot see.
   every phase doc carries a `**Covers:** SC-…` header line (coverage is
   linted).
 
+Criteria closed by a push, PR or merge start with `[LAND]`; criteria only a
+human can perform (production, a console, a manual check) start with
+`[MANUAL]`. Neither is the executor's to tick or perform: the daemon settles a
+run against the rest, refuses to start a `[MANUAL]`-only phase, lists it in
+Needs you, and ticks `[LAND]` itself only for a phase landed through the
+Review tab. The header rows `**Verify:**` (off | normal | strict) and
+`**Review:**` (on | off) sit directly after `**Repo:** …`; L/XL phases default
+to `normal` / `on`. Details: `resources/plan-format.md` → "Criterion classes"
+and "Header rows".
+
 # Executor duties
 
 After reading the code the phase touches and before your first edit, add a
@@ -48,7 +58,8 @@ paragraph of the Completion Report.
 
 Tick each satisfied criterion `- [ ]` → `- [x]` immediately after verifying
 it — progress is derived only from these checkboxes. When a phase's last
-criterion is ticked, fill that doc's `## Completion Report` (what shipped,
+EXECUTABLE criterion is ticked (every one that is not `[LAND]`/`[MANUAL]` —
+those close later, without an executor), fill that doc's `## Completion Report` (what shipped,
 files/commits, verification output, deviations, plus three mandatory fields —
 **Blocked calls**, **Delegation cost**, and the one-sentence **What would have
 made this cheaper**; ≤50 lines) — the dashboard renders exactly that heading.

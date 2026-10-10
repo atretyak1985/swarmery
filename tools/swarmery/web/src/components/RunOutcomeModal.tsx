@@ -29,6 +29,16 @@ import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { ConfirmDialog } from './ui';
 import { useDiscardGuard } from './useDiscardGuard';
 
+/** The detail a `done` run carries when only classed criteria are left
+ * (phaserun settle: "N [LAND] criteria left for landing[; N [MANUAL] criteria
+ * left for the operator]"). It rides in `runError` but is a note, not an error:
+ * the run finished everything it could. */
+const CLASSED_LEFT_RE = /^\d+ \[(LAND|MANUAL)\] criteria left for /;
+
+export function isRunNote(runError: string): boolean {
+  return CLASSED_LEFT_RE.test(runError);
+}
+
 /** The reason a revise wizard starts from: the diagnosis itself, restated as
  * prose the planner can act on. Composed from what the daemon PROVED (outcome,
  * criteria delta, blockers) plus the executor's own last word. */
@@ -41,7 +51,8 @@ function diagnosisReason(diag: PhaseDiagnosis): string {
     lines.push(
       `Verification verdict: ${diag.verifyVerdict}${diag.verifyDetail !== null ? ` — ${diag.verifyDetail}` : ''}`,
     );
-  if (diag.runError !== null) lines.push(`Run error: ${diag.runError}`);
+  if (diag.runError !== null)
+    lines.push(isRunNote(diag.runError) ? `Note: ${diag.runError}` : `Run error: ${diag.runError}`);
   if (diag.agentMessage !== null)
     lines.push(`Executor said: ${diag.agentMessage.text}${diag.agentMessage.truncated ? '…' : ''}`);
   lines.push('Revise the plan so this phase (and its dependents) can succeed.');
@@ -398,11 +409,19 @@ export function RunOutcomeModal({
                 : ' · baseline not measured'}
             </div>
 
-            {diag.runError !== null && (
-              <div className="rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[10.5px] break-words text-red">
-                {diag.runError}
-              </div>
-            )}
+            {diag.runError !== null &&
+              (isRunNote(diag.runError) ? (
+                <div
+                  data-testid="run-note"
+                  className="rounded-lg border border-line bg-surface2/40 px-2.5 py-2 font-mono text-[10.5px] break-words text-ink-3"
+                >
+                  Note: {diag.runError}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[10.5px] break-words text-red">
+                  {diag.runError}
+                </div>
+              ))}
 
             <div>
               <div className="mb-1.5 font-mono text-[10px] tracking-[0.16em] text-ink-faint uppercase">

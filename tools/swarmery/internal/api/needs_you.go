@@ -1,7 +1,7 @@
 // GET /api/needs-you — the one list of everything currently blocked on the
 // operator, oldest blocker first (needs-you queue, phase 3).
 //
-// Read-only. Four sources, each one query, each honouring ?project= through
+// Read-only. Five sources, each one query, each honouring ?project= through
 // scopeFilter (scope.go). Archived projects are deliberately NOT filtered —
 // same invariant as listApprovals: a live agent blocked in an archived project
 // must never be invisible.
@@ -37,6 +37,7 @@ var needsYouKindRank = map[string]int{
 	needsYouProdDeployLocal: 2,
 	needsYouAwaitingReply:   3,
 	needsYouFailed:          4,
+	needsYouManualPhase:     5,
 }
 
 const (
@@ -63,10 +64,13 @@ type replySuggestion struct {
 
 // needsYouItem is one blocker. Mirrors NeedsYouItem in web/src/api/types.ts.
 type needsYouItem struct {
-	Kind        string `json:"kind"` // approval | question | prod_deploy_local | awaiting_reply | failed
+	Kind string `json:"kind"` // approval | question | prod_deploy_local | awaiting_reply | failed | manual_phase
+	// SessionID / SessionUUID are 0 / "" for a manual_phase item: a plan
+	// phase blocks, not a session.
 	SessionID   int64  `json:"sessionId"`
 	SessionUUID string `json:"sessionUuid"`
-	// SessionName is COALESCE(custom_title, title, session_uuid[:8]).
+	// SessionName is COALESCE(custom_title, title, session_uuid[:8]); for a
+	// manual_phase item, "<plan> · Phase <seq>: <name>".
 	SessionName string `json:"sessionName"`
 	ProjectSlug string `json:"projectSlug"`
 	// RequestID is the permission_requests.id (approval/question/prod_deploy_local).
@@ -84,6 +88,8 @@ type needsYouItem struct {
 	BlockingSeconds int64            `json:"blockingSeconds"`
 	TermFocusURL    *string          `json:"termFocusUrl"`
 	Suggestion      *replySuggestion `json:"suggestion"`
+	// Phase names the plan phase of a manual_phase item; absent otherwise.
+	Phase *needsYouPhase `json:"phase,omitempty"`
 
 	at time.Time // parsed BlockingSince; zero when unparseable
 }
@@ -110,7 +116,7 @@ func (h *Handler) needsYou(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, needsYouResponse{Items: items, GeneratedAt: time.Now().UTC().Format(needsYouTSFormat)}, nil)
 }
 
-// collectNeedsYou runs the four source queries (sequentially — the store is a
+// collectNeedsYou runs the five source queries (sequentially — the store is a
 // single connection), dedupes and sorts. now anchors the 24 h windows and
 // blockingSeconds.
 func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem, error) {
@@ -152,11 +158,17 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 		return nil, err
 	}
 
-	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed))
+	manual, err := queryNeedsYouManualPhases(db, scope, projArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual))
 	all = append(all, pending...)
 	all = append(all, local...)
 	all = append(all, awaiting...)
 	all = append(all, failed...)
+	all = append(all, manual...)
 	items := dedupeNeedsYou(all)
 	for i := range items {
 		items[i].BlockingSeconds = blockingSeconds(items[i].at, now)
@@ -362,8 +374,9 @@ func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 }
 
 // sortNeedsYou orders items oldest blocker first; ties break on kind
-// (approval < question < prod_deploy_local < awaiting_reply < failed), then
-// on the item id (request id, else session id).
+// (approval < question < prod_deploy_local < awaiting_reply < failed <
+// manual_phase), then on the item id (request id, else phase id, else
+// session id).
 func sortNeedsYou(items []needsYouItem) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]
@@ -377,10 +390,14 @@ func sortNeedsYou(items []needsYouItem) {
 	})
 }
 
-// needsYouItemID is the tie-break id: the request id when there is one.
+// needsYouItemID is the tie-break id: the request id when there is one, the
+// phase id for a manual_phase item.
 func needsYouItemID(it needsYouItem) int64 {
 	if it.RequestID != nil {
 		return *it.RequestID
+	}
+	if it.Phase != nil {
+		return it.Phase.PhaseID
 	}
 	return it.SessionID
 }

@@ -11,6 +11,9 @@
 //                        suggestion options (phase 4) prefill it; Dismiss hides
 //                        this blocking episode in this browser
 //   failed               a link to the session
+//   manual_phase         a plan phase whose every open criterion is [MANUAL]:
+//                        a link to that phase's Criteria tab, where the
+//                        operator ticks what they checked by hand
 //
 // Nothing here delivers a reply to a session: the operator pastes it.
 
@@ -29,6 +32,7 @@ import { useScope } from '../lib/scope';
 import { useSessionHref } from '../lib/sessionHref';
 import { useNowMs } from '../lib/sessionState';
 import { useNeedsYou } from '../lib/useNeedsYou';
+import { plansPath } from './plans/plansUrl';
 
 /** Kind badge tones — the label always carries the meaning, colour only echoes it. */
 const KIND_BADGE: Record<NeedsYouKind, string> = {
@@ -37,6 +41,7 @@ const KIND_BADGE: Record<NeedsYouKind, string> = {
   prod_deploy_local: 'border-amber/60 bg-amber/10 text-amber',
   awaiting_reply: 'border-amber/40 text-amber',
   failed: 'border-red/40 text-red',
+  manual_phase: 'border-brand/40 text-brand',
 };
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
@@ -169,6 +174,30 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
   );
 }
 
+/* ----- manual_phase: a plan phase only the operator can finish ----- */
+
+/** The phase's Criteria tab — where the [MANUAL] criteria are ticked by hand. */
+function manualPhaseHref(item: NeedsYouItem): string | null {
+  if (item.phase === undefined || item.phase.planExternalId === '') return null;
+  return plansPath(item.projectSlug, {
+    plan: item.phase.planExternalId,
+    detail: { kind: 'phase', seq: item.phase.seq, tab: 'criteria' },
+  });
+}
+
+function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
+      {phaseTo !== null && (
+        <Link to={phaseTo} className={`ml-auto ${LINK}`}>
+          open criteria →
+        </Link>
+      )}
+    </div>
+  );
+}
+
 /* ----- one row ----- */
 
 function Row({
@@ -233,7 +262,12 @@ function Row({
         </div>
       );
       break;
+    case 'manual_phase':
+      body = <ManualPhase item={item} phaseTo={manualPhaseHref(item)} />;
+      break;
   }
+  // A manual_phase row names a plan phase, not a session: its title opens the phase.
+  const titleTo = item.kind === 'manual_phase' ? (manualPhaseHref(item) ?? sessionTo) : sessionTo;
 
   return (
     <li
@@ -248,7 +282,7 @@ function Row({
         >
           {kindLabel(item.kind)}
         </span>
-        <Link to={sessionTo} className={`min-w-0 truncate text-[13.5px] font-medium text-ink hover:text-brand ${FOCUS}`}>
+        <Link to={titleTo} className={`min-w-0 truncate text-[13.5px] font-medium text-ink hover:text-brand ${FOCUS}`}>
           {item.sessionName}
         </Link>
         <ProjectName name={projectName} slug={item.projectSlug} className="truncate font-mono text-[10.5px]" />
@@ -323,7 +357,7 @@ export function NeedsYou(): JSX.Element {
         <ul className="m-0 mt-2 flex list-none flex-col gap-2.5 p-0">
           {items.map((item) => (
             <Row
-              key={`${item.kind}:${String(item.sessionId)}:${String(item.requestId)}:${item.blockingSince}`}
+              key={`${item.kind}:${String(item.sessionId)}:${String(item.requestId)}:${String(item.phase?.phaseId)}:${item.blockingSince}`}
               item={item}
               request={item.requestId !== null ? (requests.get(item.requestId) ?? null) : null}
               nowMs={nowMs}

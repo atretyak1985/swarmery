@@ -16,10 +16,17 @@
 //
 // A change request closed without merging keeps landing_state pr_open with
 // status state "closed": the operator may reopen it, and only they decide
-// what a closed PR means for the phase. The poller never deletes a branch and
-// never ticks a criterion — done and landed stay separate facts (D2).
+// what a closed PR means for the phase. The poller never deletes a branch.
 //
-// Imports: repoprovider, credstore and database/sql only. The api-side effects
+// The one criterion it does tick is the class landing closes (phase-run
+// outcomes plan, phase 3, D3): the moment a phase flips to merged, every
+// unticked `[LAND]` criterion in its doc is ticked (wsingest.TickCriteriaByClass,
+// atomic); the plan-dir watcher sees the atomic rename and its rescan folds the
+// new count in (the merge's own plan_updated event only refreshes the page —
+// the scanner publishes a second one once the counts are in). Executable and `[MANUAL]` criteria are
+// never touched — done and landed stay separate facts (D2).
+//
+// Imports: repoprovider, credstore, wsingest and database/sql only. The api-side effects
 // (the plan_updated WS event, the project's auth-expired mark) arrive as funcs,
 // and the repo a phase ran in arrives through RepoDir (production:
 // phaserun.Service.RunRoot), so this package imports neither internal/api nor
@@ -32,11 +39,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repoprovider/credstore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // DefaultMax is how many change requests one RunOnce reads when Poller.Max is
@@ -102,6 +111,7 @@ type Poller struct {
 type phaseRow struct {
 	phaseID, taskID, projectID int64
 	projectPath                string
+	docPath                    string
 	landingState               string
 	provider, url              string
 	number                     int
@@ -111,7 +121,7 @@ type phaseRow struct {
 // selectColumns is the SELECT list scanRow reads, over epic_phases e → tasks t
 // → projects p (the same join the landing handlers use).
 const selectColumns = `
-	SELECT e.id, e.workspace_task_id, p.id, COALESCE(p.path, ''), e.landing_state,
+	SELECT e.id, e.workspace_task_id, p.id, COALESCE(p.path, ''), COALESCE(e.doc_path, ''), e.landing_state,
 	       COALESCE(e.pr_provider, ''), COALESCE(e.pr_url, ''), COALESCE(e.pr_number, 0),
 	       e.pr_status, e.landing_error
 	  FROM epic_phases e
@@ -122,7 +132,7 @@ type scanner interface{ Scan(dest ...any) error }
 
 func scanRow(s scanner) (phaseRow, error) {
 	var r phaseRow
-	err := s.Scan(&r.phaseID, &r.taskID, &r.projectID, &r.projectPath, &r.landingState,
+	err := s.Scan(&r.phaseID, &r.taskID, &r.projectID, &r.projectPath, &r.docPath, &r.landingState,
 		&r.provider, &r.url, &r.number, &r.status, &r.landingError)
 	r.projectPath = strings.TrimSpace(r.projectPath)
 	return r, err
@@ -313,12 +323,31 @@ func (p *Poller) store(r phaseRow, st repoprovider.ChangeStatus, now time.Time) 
 	}
 	if merging {
 		res.state = StateMerged
+		p.tickLand(r)
 	}
 	res.changed = merging || r.landingError.Valid || statusChanged(r.status, st)
 	if res.changed {
 		p.publish(r.taskID)
 	}
 	return res, nil
+}
+
+// tickLand ticks the [LAND] criteria of a phase that just merged. Best effort:
+// the merge is already stored, so a doc that cannot be written is logged and
+// left for the operator (the Criteria tab ticks by hand), never retried here. A
+// doc that is gone (an archived or renamed plan) has nothing to tick.
+func (p *Poller) tickLand(r phaseRow) {
+	if r.docPath == "" {
+		return
+	}
+	n, err := wsingest.TickCriteriaByClass(r.docPath, wsingest.ClassLand)
+	switch {
+	case err != nil && errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		p.logf("landpoll: phase %d (task %d) merged, but ticking its [LAND] criteria failed: %v", r.phaseID, r.taskID, err)
+	case n > 0:
+		p.logf("landpoll: phase %d (task %d) merged: ticked %d [LAND] criteria", r.phaseID, r.taskID, n)
+	}
 }
 
 // statusChanged reports whether st differs from the stored status in anything

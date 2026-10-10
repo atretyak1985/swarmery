@@ -34,6 +34,9 @@ Section order:
 # Phase N — {Title}
 Status: Pending
 **Covers:** SC-…            ← only when plan/spec.md exists
+**Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …
+**Verify:** off             ← off | normal | strict (see "Header rows" below)
+**Review:** off             ← on | off
 ## Goal
 ## Files to Create / Files to Modify
 ## Implementation Details
@@ -72,7 +75,11 @@ contract gave you (a lent copy inside your root when you are isolated, the
 workspace path otherwise); never hard-code an absolute path that points outside
 your root. Flip every Acceptance Criteria checkbox that task satisfies
 `- [ ]` → `- [x]` — one edit per completed task, immediately, never batched.
-When the phase's LAST checkbox is ticked, fill `## Completion Report` — what
+Criteria prefixed `[LAND]` or `[MANUAL]` (see "Criterion classes") are not the
+executor's: it neither ticks them nor tries to perform them.
+When the phase's last EXECUTABLE checkbox is ticked — every criterion that is
+not `[LAND]`/`[MANUAL]`; those two classes close later, without an executor —
+fill `## Completion Report` — what
 shipped, commits, verification output, deviations, and the three mandatory
 fields below — blocked calls, delegation cost, and the one-sentence
 "what would have made this cheaper" (≤50 lines); the platform
@@ -107,6 +114,63 @@ agents skip.
 
 The final phase of a multi-phase plan is always a quality gate
 (`kind: quality-gate`).
+
+### Header rows: `**Verify:**` and `**Review:**`
+
+Both are read from the phase doc's header only — the lines before the first
+`## ` section, within the first 15 lines — so a `**Verify:**` line quoted in an
+agent prompt further down never counts. Put them on their own lines directly
+after the `**Repo:** …` line.
+
+| Row | Values | Meaning | Default |
+|---|---|---|---|
+| `**Verify:**` | `off` \| `normal` \| `strict` | After a run ends `done` or `partial`, a read-only verifier grades the ticked criteria at the given strictness. Any value but `off` also makes the phase gate require a passing verdict before the phase counts as complete. A missing or unrecognized value means `off`. | L/XL: `normal`. S/M: `off`, or `normal` when the phase touches data, schemas or migrations. |
+| `**Review:**` | `on` \| `off` | The phase asks for a read-only code-review pass over its diff before the verifier runs; a failed review returns the phase once with the findings appended to the doc. A missing value means `off`, and a daemon without the review stage ignores the row. | L/XL: `on`. S/M: `off`. |
+
+### Criterion classes
+
+An acceptance criterion may start with a class marker that says who closes it.
+The marker is upper-case, sits right after `- [ ] ` and is followed by a space;
+anywhere else in the label — or inside a fenced block — it is ordinary text.
+Unmarked criteria belong to the executor.
+
+| Marker | Who closes it | Example |
+|---|---|---|
+| `[LAND]` | Landing the work: a push, a pull request, a merge. | `- [ ] [LAND] PR for feat/orders-line-items merged into main` |
+| `[MANUAL]` | A human only: a production check, a console action, a manual look. | `- [ ] [MANUAL] line-item totals checked by hand in the production console` |
+
+How the daemon treats them:
+
+- **Effective total at settle.** A phase run is measured against every
+  criterion except the open `[LAND]` and `[MANUAL]` ones. The continuation
+  message lists only the executable criteria, and the phase prompt tells the
+  executor that classed criteria are not its to tick or perform.
+- **Done + landing ready.** A run whose only open criteria are `[LAND]` ends
+  `done`, with the detail "N [LAND] criteria left for landing", and the phase
+  shows `landing: ready`.
+- **409 `manual-only`.** Starting a run on a phase whose only open criteria are
+  `[MANUAL]` is refused with HTTP 409 code `manual-only`; there is nothing for a
+  run to do.
+- **Needs you `manual_phase`.** The same phase is listed in Needs you as a
+  "Manual check" item that links to its Criteria tab.
+- **Who ticks `[LAND]`.** When a phase is landed through the Review tab, the
+  daemon ticks its `[LAND]` criteria the moment the pull request turns merged. A
+  pull request merged outside the platform is never polled, so its `[LAND]`
+  criteria stay for the operator to tick by hand. `[MANUAL]` criteria are always
+  ticked by hand.
+- **The phase gate is unchanged.** Classed criteria stay in the phase's total,
+  so the phase becomes complete only after the merge and the manual check are
+  ticked.
+
+The Plans Criteria tab flags unmarked, unticked criteria whose wording looks
+like landing or manual work — any whole word of
+`push|pull request|pr|merge|gh pr|прод|production|console|вручну|manually|по руках`,
+case-insensitive — and offers a one-click "Mark [LAND]" /
+"Mark [MANUAL]" that writes the marker into the doc. The flag is a hint and
+blocks nothing.
+
+The manifest sets `manual_legs: true` for any phase whose doc carries a
+`[MANUAL]` marker.
 
 ## plan/manifest.json
 

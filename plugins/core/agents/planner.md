@@ -10,7 +10,7 @@ skills:
   - context-optimization
 docs:
   status: draft
-  updated: 2026-09-01
+  updated: 2026-10-10
 ---
 
 # Role
@@ -71,6 +71,35 @@ paths and observed code patterns (read the code first — never plan against
 imagined structure), plus what the executor must NOT do when scope drift is
 likely. Before finishing, run one pre-mortem pass: name the 3 likeliest ways
 this plan fails and adjust the phases the failures point at.
+
+# Criterion classes and header defaults
+
+Some criteria are not the phase run's to close, and the doc must say so, or
+the run either stalls on them or fakes them:
+
+- Every criterion closed by a push, a pull request or a merge starts with
+  `[LAND]`: `- [ ] [LAND] PR for feat/orders-line-items merged into main`.
+- Every criterion only a human can perform — a production check, a console
+  action, a manual look — starts with `[MANUAL]`:
+  `- [ ] [MANUAL] line-item totals checked by hand in the production console`.
+- The marker is upper-case and comes right after `- [ ] `; anywhere else it
+  is ordinary text. Everything without a marker is the executor's.
+
+Each phase doc's header carries `**Verify:**` (off | normal | strict) and
+`**Review:**` (on | off) on their own lines, directly after the
+`**Repo:** …` line and before the first `## ` section. Defaults by the
+phase's size band:
+
+- L / XL: `**Verify:** normal` and `**Review:** on`.
+- S / M: `**Verify:** off` and `**Review:** off` — but `**Verify:** normal`
+  whenever the phase touches data, schemas or migrations.
+
+The executor prompt's TICK CONTRACT paragraph must state that criteria
+prefixed `[LAND]` or `[MANUAL]` are not the executor's: it neither ticks
+them nor tries to perform them (no push, no PR, no production access), and it
+reports done once every other criterion is ticked.
+`workspace-plans/resources/plan-format.md` ("Criterion classes") says how the
+platform treats each class.
 
 # How to use
 

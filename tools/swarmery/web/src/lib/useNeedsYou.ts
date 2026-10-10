@@ -25,6 +25,8 @@ const REFETCH_ON: ReadonlySet<WSMessage['type']> = new Set([
   'session_updated',
   'permission_requested',
   'permission_resolved',
+  // A phase becomes (or stops being) manual-only through its doc, not a session.
+  'plan_updated',
 ]);
 
 function loadDismissed(): string[] {

@@ -219,6 +219,38 @@ describe('NeedsYou page', () => {
     await waitFor(() => expect(rows()).toHaveLength(2));
   });
 
+  it('renders a manual_phase row that links to the phase Criteria tab, not a session', async () => {
+    const manual = item({
+      kind: 'manual_phase',
+      sessionId: 0,
+      sessionUuid: '',
+      sessionName: 'Line items · Phase 3: Rollout',
+      question: '',
+      asksQuestion: false,
+      preview: '2 [MANUAL] criteria left — only you can close them',
+      blockingSince: iso(-90),
+      phase: {
+        taskId: 7,
+        planExternalId: '2026-10-01-line-items',
+        planTitle: 'Line items',
+        phaseId: 42,
+        seq: 3,
+        name: 'Rollout',
+        manualOpen: 2,
+      },
+    });
+    serve([AWAITING, manual]);
+    await renderPage();
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['manual_phase', 'awaiting_reply']);
+    const row = rowOf('Line items · Phase 3: Rollout');
+    expect(within(row).getByText('Manual check')).toBeTruthy();
+    expect(within(row).getByText('2 [MANUAL] criteria left — only you can close them')).toBeTruthy();
+    const want = '/p/shop/plans/2026-10-01-line-items/phase/3/criteria';
+    expect(within(row).getByRole('link', { name: 'open criteria →' }).getAttribute('href')).toBe(want);
+    expect(within(row).getByRole('link', { name: 'Line items · Phase 3: Rollout' }).getAttribute('href')).toBe(want);
+    expect(within(row).queryByRole('button', { name: /copy reply|dismiss/i })).toBeNull();
+  });
+
   it('ignores frames that cannot change the queue', async () => {
     serve([AWAITING]);
     await renderPage();

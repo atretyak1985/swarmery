@@ -156,6 +156,11 @@ func TestBuildWindowEdges(t *testing.T) {
 // TestBuildRows covers every row family on one seeded store.
 func TestBuildRows(t *testing.T) {
 	f := newFixture(t)
+	// The pre-0105 / pre-0106 schema: the split has to be ESTIMATED from the
+	// docs and transcripts, and review runs read 0 with a note.
+	exec1(t, f.db, `ALTER TABLE epic_phases DROP COLUMN criteria_land_open`)
+	exec1(t, f.db, `ALTER TABLE epic_phases DROP COLUMN criteria_manual_open`)
+	exec1(t, f.db, `DROP TABLE IF EXISTS phase_reviews`)
 	// p1: a doc still waiting on a PR. Two noops from the same base, then a
 	// noop from a new base.
 	p1 := f.phase(t, 1, "- [x] code\n- [ ] open the pull request\n")
@@ -231,12 +236,10 @@ func TestBuildRows(t *testing.T) {
 	}
 }
 
-// TestBuildRecordedNoopSplit: once epic_phases carries the recorded open-criteria
-// counts, they decide and the rows stop being estimates.
+// TestBuildRecordedNoopSplit: with the recorded open-criteria counts (migration
+// 0105, part of every fresh store), they decide and the rows stop being estimates.
 func TestBuildRecordedNoopSplit(t *testing.T) {
 	f := newFixture(t)
-	exec1(t, f.db, `ALTER TABLE epic_phases ADD COLUMN criteria_land_open INTEGER`)
-	exec1(t, f.db, `ALTER TABLE epic_phases ADD COLUMN criteria_manual_open INTEGER`)
 	p1 := f.phase(t, 1, "- [ ] nothing that matches\n")
 	p2 := f.phase(t, 2, "- [ ] open the PR\n")
 	exec1(t, f.db, `UPDATE epic_phases SET criteria_land_open = 2, criteria_manual_open = 1 WHERE id = ?`, p1)
@@ -304,8 +307,11 @@ func TestBuildOnOldSchema(t *testing.T) {
 
 func TestBuildPhaseReviewsTable(t *testing.T) {
 	f := newFixture(t)
-	exec1(t, f.db, `CREATE TABLE phase_reviews (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL)`)
-	exec1(t, f.db, `INSERT INTO phase_reviews (created_at) VALUES ('2026-10-01T01:00:00Z'), ('2026-11-01T01:00:00Z')`)
+	// The real table (migration 0106) carries many NOT NULL columns; the report
+	// only reads started_at, so a minimal stand-in with that column is enough.
+	exec1(t, f.db, `DROP TABLE IF EXISTS phase_reviews`)
+	exec1(t, f.db, `CREATE TABLE phase_reviews (id INTEGER PRIMARY KEY, started_at TEXT NOT NULL)`)
+	exec1(t, f.db, `INSERT INTO phase_reviews (started_at) VALUES ('2026-10-01T01:00:00Z'), ('2026-11-01T01:00:00Z')`)
 	rep, err := Build(f.db, day(t, "2026-10-01"), day(t, "2026-10-02"))
 	if err != nil {
 		t.Fatal(err)
