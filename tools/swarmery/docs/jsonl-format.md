@@ -296,6 +296,10 @@ Result (`toolUseResult` on the user line):
 
 `toolUseResult.type` distinguishes create vs overwrite for Write. `structuredPatch[].lines`
 (prefixes `-`/`+`/space) gives additions/deletions counts and a reconstructable unified diff.
+**On `type: "create"` the `structuredPatch` is always `[]`** (observed on every create in the
+corpus) and `content` is the only record of what was written — ingest synthesises the diff from
+it as one `@@ -0,0 +1,N @@` hunk with every line an addition (`ingest.fileChangeDiff`); rows
+recorded before that existed are filled on the next Backfill pass (`ingest.HealCreateDiffs`).
 **MultiEdit does not exist in this corpus.** Deletion/rename of files happens only through
 `Bash` (`rm`, `git mv`) — there is no dedicated tool record for it.
 

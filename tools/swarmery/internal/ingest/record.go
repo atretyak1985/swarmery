@@ -130,8 +130,12 @@ type agentResult struct {
 
 // fileChangeResult is toolUseResult of Edit / Write (§8).
 type fileChangeResult struct {
-	Type            string      `json:"type"` // "create" on Write-create
-	FilePath        string      `json:"filePath"`
+	Type     string `json:"type"` // "create" on Write-create
+	FilePath string `json:"filePath"`
+	// Content is the whole new file on Write. On a create the structuredPatch
+	// is EMPTY and this is the only record of what was written — the diff is
+	// synthesised from it (fileChangeDiff).
+	Content         string      `json:"content"`
 	StructuredPatch []patchHunk `json:"structuredPatch"`
 }
 

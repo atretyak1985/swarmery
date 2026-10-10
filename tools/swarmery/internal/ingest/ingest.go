@@ -996,25 +996,19 @@ func (in *ingester) insertFileChange(p *pendingTool, rawResult json.RawMessage) 
 	if p.name == "Write" && fc.Type == "create" {
 		changeType = "create"
 	}
-	additions, deletions := 0, 0
-	var diff strings.Builder
-	for _, h := range fc.StructuredPatch {
-		fmt.Fprintf(&diff, "@@ -%d,%d +%d,%d @@\n", h.OldStart, h.OldLines, h.NewStart, h.NewLines)
-		for _, l := range h.Lines {
-			diff.WriteString(l)
-			diff.WriteByte('\n')
-			if strings.HasPrefix(l, "+") {
-				additions++
-			} else if strings.HasPrefix(l, "-") {
-				deletions++
-			}
-		}
-	}
-	// Idempotency: one file_change per event.
-	var exists int
-	err := in.tx.QueryRow(`SELECT 1 FROM file_changes WHERE event_id = ?`, p.eventID).Scan(&exists)
+	diff, additions, deletions := fileChangeDiff(fc)
+	// Idempotency: one file_change per event. A row that predates the
+	// synthesised create diff (diff '') is completed in place when a replay
+	// (rebuild-text, a reset offset) hands us the content again.
+	var existing sql.NullString
+	err := in.tx.QueryRow(`SELECT diff FROM file_changes WHERE event_id = ?`, p.eventID).Scan(&existing)
 	if err == nil {
-		return nil
+		if existing.String == "" && diff != "" {
+			_, err = in.tx.Exec(
+				`UPDATE file_changes SET additions = ?, deletions = ?, diff = ? WHERE event_id = ?`,
+				additions, deletions, diff, p.eventID)
+		}
+		return err
 	}
 	if err != sql.ErrNoRows {
 		return err
@@ -1022,11 +1016,48 @@ func (in *ingester) insertFileChange(p *pendingTool, rawResult json.RawMessage) 
 	if _, err := in.tx.Exec(
 		`INSERT INTO file_changes (event_id, session_id, file_path, change_type, additions, deletions, diff)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		p.eventID, in.sessionID, fc.FilePath, changeType, additions, deletions, diff.String()); err != nil {
+		p.eventID, in.sessionID, fc.FilePath, changeType, additions, deletions, diff); err != nil {
 		return err
 	}
 	in.stats.FileChanges++
 	return nil
+}
+
+// fileChangeDiff renders an Edit / Write result as a unified diff plus its
+// +/- counts. Edits and Write-overwrites carry structuredPatch hunks and are
+// rendered verbatim. A Write-create ships an EMPTY structuredPatch and the
+// whole file in `content` (§8): it becomes one hunk, `@@ -0,0 +1,N @@`, every
+// content line an addition — otherwise the Diffs tab shows "create +0 −0" and
+// nothing of what the file holds. An empty file still yields the header line,
+// so the row is distinguishable from a legacy un-synthesised one (diff ”).
+func fileChangeDiff(fc fileChangeResult) (diff string, additions, deletions int) {
+	var b strings.Builder
+	if len(fc.StructuredPatch) == 0 && fc.Type == "create" {
+		lines := strings.Split(strings.TrimSuffix(fc.Content, "\n"), "\n")
+		if fc.Content == "" {
+			lines = nil
+		}
+		fmt.Fprintf(&b, "@@ -0,0 +1,%d @@\n", len(lines))
+		for _, l := range lines {
+			b.WriteByte('+')
+			b.WriteString(l)
+			b.WriteByte('\n')
+		}
+		return b.String(), len(lines), 0
+	}
+	for _, h := range fc.StructuredPatch {
+		fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n", h.OldStart, h.OldLines, h.NewStart, h.NewLines)
+		for _, l := range h.Lines {
+			b.WriteString(l)
+			b.WriteByte('\n')
+			if strings.HasPrefix(l, "+") {
+				additions++
+			} else if strings.HasPrefix(l, "-") {
+				deletions++
+			}
+		}
+	}
+	return b.String(), additions, deletions
 }
 
 // ── sidechains ───────────────────────────────────────────────────────────────

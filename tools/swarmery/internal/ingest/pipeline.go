@@ -233,6 +233,14 @@ func (p *Pipeline) Backfill(ctx context.Context) Metrics {
 			}
 		}
 	}
+	// Heal Write-create rows recorded before their diff was synthesised from
+	// `content` (diff ''): unchanged transcripts are offset no-ops, so the
+	// Diffs tab would show "create +0 −0" for them forever.
+	if healed, err := HealCreateDiffs(p.db, p.cfg.ProjectsRoots); err != nil {
+		log.Printf("warn: ingest: heal create diffs: %v", err)
+	} else if healed > 0 {
+		log.Printf("ingest: healed %d create diff(s) from transcripts", healed)
+	}
 	files := p.discover()
 	for _, f := range files {
 		if ctx.Err() != nil {
