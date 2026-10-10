@@ -86,6 +86,9 @@ func NewService(db *sql.DB, cfg Config, r Runner, trees Trees) *Service {
 	if cfg.StaleAfter <= 0 {
 		cfg.StaleAfter = DefaultStaleAfter
 	}
+	if cfg.DaemonPort <= 0 {
+		cfg.DaemonPort = DefaultDaemonPort
+	}
 	return &Service{
 		DB: db, Cfg: cfg, Run: r, Trees: trees,
 		UUID: runcore.NewUUID,
@@ -306,7 +309,7 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 	spec := RunSpec{
 		// base, not the branch: BuildPrompt's third parameter has always been named
 		// startPoint (prompt.go) — we are finally passing what it asked for.
-		Prompt:      BuildPrompt(t.Title, WithFocusHint(t.Prompt, t.FocusHint), base, t.Strictness),
+		Prompt:      BuildPromptForPort(t.Title, WithFocusHint(t.Prompt, t.FocusHint), base, t.Strictness, s.Cfg.DaemonPort),
 		SessionUUID: uuid,
 		Cwd:         t.WorktreePath,
 		Model:       model,
@@ -317,6 +320,10 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 		// The admitted estate's EstateKeys through --settings, composed from the
 		// SAME resolution; no admitted estate ⇒ "" ⇒ no flag, exactly as before.
 		SettingsFile: runsettings.Compose("verify", resolution, runsettings.Inputs{}),
+		// The run is bypassPermissions and may run Bash; the daemon's own API is
+		// the one place a check could write daemon state from. The verdict retry
+		// copies this spec, so the resumed session carries the same denial.
+		DisallowedTools: DaemonDenyPatterns(s.Cfg.DaemonPort),
 	}
 	run, rerr := s.Run.Run(ctx, spec)
 	if rerr != nil {

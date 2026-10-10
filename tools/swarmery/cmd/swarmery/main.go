@@ -2276,6 +2276,9 @@ func cmdServe(args []string) error {
 	// timed-out message (SWARMERY_VERIFY_TIMEOUT_MIN) — before this was wired the
 	// knob changed the wording and never the kill.
 	verifierCfg := verify.ConfigFromEnv()
+	// The port this daemon actually serves (--port, defaulting to SWARMERY_PORT):
+	// verifier runs are denied curl/wget/http to it and told not to call it.
+	verifierCfg.DaemonPort = *port
 	verifySvc := verify.NewService(db, verifierCfg,
 		verify.ClaudeRunner{AccountVerdict: runTruth.Record, Timeout: verifierCfg.RunTimeout}, wtMgr)
 	// fusion phase 13: resolve each task's verify strictness knob (strict|normal|
