@@ -74,7 +74,11 @@ From a source checkout, `make install` does the copy-then-rename into
 `systemctl --user restart` on Linux) and prints the build the service came back up
 on. It leaves the service definition alone — change baked variables with
 `swarmery install --<flag> …`, not with `make install`. With no service loaded yet
-it drops the binary in place and names the setup command.
+it drops the binary in place and names the setup command. The one exception is
+the complexity router: with `SWARMERY_ROUTE_PHASERUN` and/or
+`SWARMERY_ROUTE_POLICY` set in its environment, `make install` ends in
+`swarmery install --route-phaserun=… --route-policy=…` instead of the restart
+(see [docs/routing-active.md](docs/routing-active.md)).
 
 ## Security model
 
@@ -473,8 +477,8 @@ runs.
 | Env | Values | Default | What it does |
 |---|---|---|---|
 | `SWARMERY_ROUTE_DISPATCH` | `off` \| `shadow` \| `active` | `shadow` | Board-card dispatch. `shadow` records the pick and changes nothing; `active` applies it where nobody chose explicitly; `off` skips the router entirely. An invalid value logs a warning and means `shadow`. |
-| `SWARMERY_ROUTE_PHASERUN` | `off` \| `shadow` \| `active` | `shadow` | Plan phase runs, same semantics. |
-| `SWARMERY_ROUTE_POLICY` | path to a JSON file | unset (in-code `DefaultPolicy`) | Overrides weights, tier cut-offs and per-tier picks. A set path that cannot be read or parsed is an error: the router records nothing and spawns keep their `off` values. |
+| `SWARMERY_ROUTE_PHASERUN` | `off` \| `shadow` \| `active` | `shadow` | Plan phase runs, same semantics. Bake it with `swarmery install --route-phaserun <mode>`; `install` refuses any other value. |
+| `SWARMERY_ROUTE_POLICY` | absolute path to a JSON file | unset (in-code `DefaultPolicy`) | Overrides weights, tier cut-offs and per-tier picks; the file is decoded on top of the defaults, so it names only what it changes. Shared by both surfaces and re-read on every run. A set path that cannot be read or parsed is an error: the router records nothing and spawns keep their `off` values. Bake it with `swarmery install --route-policy <path>`, which refuses a relative path or a file that does not load. `config/route-policy.phaserun.json` is the shipped phase-run policy. |
 
 In `active` the route pick takes the slot just above the env/default rung and
 never beats an explicit choice:
@@ -502,8 +506,15 @@ effort from `SWARMERY_RESUME_EFFORT`, not from the routed effort.
 2. Open Learning → Forecast honesty → routing (`/learning?tab=honesty`). Flip a surface only when every
    visible tier has n ≥ 20 and tier `S`'s failure rate is not worse than the
    model it replaces (the "picked vs ran" table is the evidence).
-3. Set `SWARMERY_ROUTE_DISPATCH=active` (and/or `SWARMERY_ROUTE_PHASERUN=active`)
-   in the daemon env, then `make install`.
+3. Bake the switch into the service definition — `make install` alone only
+   restarts the service and never changes its environment. For phase runs:
+   `SWARMERY_ROUTE_PHASERUN=active SWARMERY_ROUTE_POLICY=<abs path>/config/route-policy.phaserun.json make install`,
+   or `swarmery install --route-phaserun active --route-policy <abs path>`.
+   Dispatch has no install flag yet: add `SWARMERY_ROUTE_DISPATCH` to the
+   definition's environment by hand; every later reinstall keeps it. Verify with `launchctl print gui/$(id -u)/com.swarmery.daemon | grep ROUTE`
+   and the next row's `route_decisions.mode` — the daemon logs no
+   `route: mode=` line. [docs/routing-active.md](docs/routing-active.md) is the
+   full enable / verify / rollback runbook for phase runs.
 4. Roll back by setting the surface to `off` — identical to pre-feature
    behaviour, pinned argv-for-argv by `TestRouteOffGolden` — or back to
    `shadow` to keep recording.

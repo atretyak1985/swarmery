@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -290,6 +292,189 @@ func TestMergeInstallEnv_PassthroughOrderIsStable(t *testing.T) {
 	for i, w := range want {
 		if first[i].Key != w {
 			t.Errorf("env[%d] = %s, want %s", i, first[i].Key, w)
+		}
+	}
+}
+
+// phaserunPolicy is the committed policy file, as the absolute path the
+// installer insists on.
+func phaserunPolicy(t *testing.T) string {
+	t.Helper()
+	p, err := filepath.Abs(filepath.Join("..", "..", "config", "route-policy.phaserun.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// envMap is the plist read back: what ExistingPlistEnv would hand the next
+// install (SWARMERY_PORT included, as the real plist carries it).
+func envMap(port int, env []EnvVar) map[string]string {
+	m := map[string]string{}
+	if port > 0 {
+		m["SWARMERY_PORT"] = strconv.Itoa(port)
+	}
+	for _, e := range env {
+		m[e.Key] = e.Value
+	}
+	return m
+}
+
+// plistHas reports whether the rendered plist carries key=value in its
+// EnvironmentVariables dict, as launchd will read it.
+func plistHas(plist, key, value string) bool {
+	return strings.Contains(plist, "\t\t<key>"+key+"</key>\n\t\t<string>"+value+"</string>\n")
+}
+
+func plistHasKey(plist, key string) bool {
+	return strings.Contains(plist, "<key>"+key+"</key>")
+}
+
+// The two route knobs reach the generated plist from either source and survive
+// a flag-less reinstall the same way --port does: flag > shell env > existing
+// plist, and an explicit empty flag clears. Each case renders the real Plist()
+// from mergeInstallEnv's output, so the assertion is on what launchd reads.
+func TestInstallRouteEnvBakedIntoPlistAndPreserved(t *testing.T) {
+	policy := phaserunPolicy(t)
+	baked := map[string]string{
+		"SWARMERY_PORT":           "7777",
+		"SWARMERY_ROUTE_PHASERUN": "active",
+		"SWARMERY_ROUTE_POLICY":   policy,
+		"SWARMERY_ONBOARD_ROOTS":  "/home/dev/projects",
+	}
+	for _, tc := range []struct {
+		name       string
+		prev       map[string]string
+		set        map[string]bool
+		flags      map[string]string
+		getenv     func(string) (string, bool)
+		wantMode   string // "" = absent from the plist
+		wantPolicy string
+	}{
+		{
+			name:   "flags bake both",
+			set:    map[string]bool{"route-phaserun": true, "route-policy": true},
+			flags:  map[string]string{"route-phaserun": "active", "route-policy": " " + policy + " "},
+			getenv: noEnv, wantMode: "active", wantPolicy: policy,
+		},
+		{
+			name: "shell env bakes both",
+			getenv: envFrom(map[string]string{
+				"SWARMERY_ROUTE_PHASERUN": "active",
+				"SWARMERY_ROUTE_POLICY":   policy,
+			}),
+			wantMode: "active", wantPolicy: policy,
+		},
+		{
+			name: "flag-less reinstall keeps the baked values",
+			prev: baked, getenv: noEnv, wantMode: "active", wantPolicy: policy,
+		},
+		{
+			name:   "rollback flag beats the plist, policy kept",
+			prev:   baked,
+			set:    map[string]bool{"route-phaserun": true},
+			flags:  map[string]string{"route-phaserun": "shadow"},
+			getenv: noEnv, wantMode: "shadow", wantPolicy: policy,
+		},
+		{
+			name:   "explicit empty clears both",
+			prev:   baked,
+			set:    map[string]bool{"route-phaserun": true, "route-policy": true},
+			flags:  map[string]string{"route-phaserun": "", "route-policy": ""},
+			getenv: noEnv,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			set := tc.set
+			if set == nil {
+				set = map[string]bool{}
+			}
+			flags := tc.flags
+			if flags == nil {
+				flags = map[string]string{}
+			}
+			env, _ := mergeInstallEnv(tc.prev, set, flags, tc.getenv)
+			if err := validateInstallEnv(env); err != nil {
+				t.Fatalf("validateInstallEnv: %v", err)
+			}
+			plist := Plist("/home/dev/.swarmery/bin/swarmery", "/home/dev/.swarmery/logs", 7777, env...)
+			for _, kv := range []struct{ key, want string }{
+				{"SWARMERY_ROUTE_PHASERUN", tc.wantMode},
+				{"SWARMERY_ROUTE_POLICY", tc.wantPolicy},
+			} {
+				if kv.want == "" {
+					if plistHasKey(plist, kv.key) {
+						t.Errorf("%s still baked into the plist:\n%s", kv.key, plist)
+					}
+					continue
+				}
+				if !plistHas(plist, kv.key, kv.want) {
+					t.Errorf("plist lacks %s=%s:\n%s", kv.key, kv.want, plist)
+				}
+			}
+			if tc.prev != nil && !plistHas(plist, "SWARMERY_ONBOARD_ROOTS", "/home/dev/projects") {
+				t.Error("an unrelated baked var was dropped")
+			}
+			if strings.Count(plist, "<key>SWARMERY_PORT</key>") != 1 {
+				t.Errorf("SWARMERY_PORT not emitted exactly once:\n%s", plist)
+			}
+		})
+	}
+}
+
+// Two flag-less reinstalls in a row produce byte-identical plists: the route
+// knobs ride the installEnvKeys order, not the sorted pass-through.
+func TestInstallRouteEnvReinstallIsStable(t *testing.T) {
+	policy := phaserunPolicy(t)
+	env, _ := mergeInstallEnv(nil,
+		map[string]bool{"route-phaserun": true, "route-policy": true},
+		map[string]string{"route-phaserun": "active", "route-policy": policy}, noEnv)
+	first := Plist("/b", "/l", 7777, env...)
+
+	env2, preserved := mergeInstallEnv(envMap(7777, env), map[string]bool{}, map[string]string{}, noEnv)
+	second := Plist("/b", "/l", 7777, env2...)
+	if first != second {
+		t.Fatalf("reinstall changed the plist:\n--- first\n%s\n--- second\n%s", first, second)
+	}
+	want := []string{"SWARMERY_ROUTE_PHASERUN", "SWARMERY_ROUTE_POLICY"}
+	if !reflect.DeepEqual(preserved, want) {
+		t.Errorf("preserved = %v, want %v", preserved, want)
+	}
+}
+
+// validateInstallEnv refuses route values the daemon would silently misread:
+// a mode outside off|shadow|active (read as shadow), a relative policy path
+// (launchd's cwd is not the checkout) and a policy that does not load.
+func TestValidateInstallEnvRoute(t *testing.T) {
+	policy := phaserunPolicy(t)
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(bad, []byte(`{"tiers":{"M":{"model":"gpt"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, ok := range [][]EnvVar{
+		nil,
+		{{Key: "SWARMERY_ROUTE_PHASERUN", Value: "off"}},
+		{{Key: "SWARMERY_ROUTE_PHASERUN", Value: "shadow"}},
+		{{Key: "SWARMERY_ROUTE_PHASERUN", Value: "Active"}},
+		{{Key: "SWARMERY_ROUTE_POLICY", Value: policy}},
+	} {
+		if err := validateInstallEnv(ok); err != nil {
+			t.Errorf("validateInstallEnv(%v) = %v, want nil", ok, err)
+		}
+	}
+	for name, env := range map[string][]EnvVar{
+		"typo mode":       {{Key: "SWARMERY_ROUTE_PHASERUN", Value: "actve"}},
+		"relative policy": {{Key: "SWARMERY_ROUTE_POLICY", Value: "config/route-policy.phaserun.json"}},
+		"missing policy":  {{Key: "SWARMERY_ROUTE_POLICY", Value: filepath.Join(t.TempDir(), "nope.json")}},
+		"invalid policy":  {{Key: "SWARMERY_ROUTE_POLICY", Value: bad}},
+	} {
+		err := validateInstallEnv(env)
+		if err == nil {
+			t.Errorf("%s: validateInstallEnv = nil, want a refusal", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), `""`) {
+			t.Errorf("%s: error %q does not say how to clear the value", name, err)
 		}
 	}
 }
