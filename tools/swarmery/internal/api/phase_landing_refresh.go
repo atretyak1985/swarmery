@@ -49,7 +49,8 @@ func PublishPlanUpdated(taskID int64) { publishPlanUpdated(taskID) }
 // newLandPoller builds the poller a refresh runs, over the same seams the land
 // handler uses: the attached phase-run service's RunRoot (a DB-only Service
 // without one, as landingRepoDir does), providers.Factory over the daemon's
-// credential env, the plan_updated publisher and the auth-expired hook.
+// credential env, the plan_updated publisher, the auth-expired hook, and the
+// Handler's plan review hook (a merge seen by a refresh may close the plan).
 func (h *Handler) newLandPoller() *landpoll.Poller {
 	ex := landStatusExec
 	svc := phaserunSvc
@@ -65,6 +66,7 @@ func (h *Handler) newLandPoller() *landpoll.Poller {
 		RepoDir:       svc.RunRoot,
 		Publish:       publishPlanUpdated,
 		OnAuthExpired: MarkVcsAuthExpired,
+		PlanReview:    h.PlanReview,
 	}
 }
 

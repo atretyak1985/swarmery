@@ -1268,7 +1268,9 @@ var checkboxLineRe = regexp.MustCompile(`^(\s*[-*]\s+\[)( |x|X)(\]\s.*)$`)
 //     any other class, 422 when the line is not a criterion outside a fence.
 //
 // Takes a backup first; the next wsingest rescan folds the new counts into the
-// rollup. requireLocalOrigin.
+// rollup. A tick that closes the doc's last open criterion also hands the phase
+// to the plan branch review (planReviewOnTick), as a run's `done` stamp does.
+// requireLocalOrigin.
 func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 	taskID, ok := parseTaskIDParam(w, r)
 	if !ok {
@@ -1333,13 +1335,68 @@ func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 		mark = "x"
 	}
 	lines[i] = m[1] + mark + m[3]
+	content := strings.Join(lines, "\n")
 
-	backup, err := writePlanDocFile(path, strings.Join(lines, "\n"))
+	backup, err := writePlanDocFile(path, content)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, planDocResponse{Path: rel, Content: strings.Join(lines, "\n"), Backup: backup}, nil)
+	// Only a tick that flipped an open line can close the doc's last criterion;
+	// an untick or a re-tick of a ticked line closes nothing.
+	if *reqBody.Done && m[2] == " " {
+		h.planReviewOnTick(taskID, path, content)
+	}
+	writeJSON(w, planDocResponse{Path: rel, Content: content, Backup: backup}, nil)
+}
+
+// planReviewOnTick tells h.PlanReview that a Criteria-tab tick left the doc at
+// path (content: the doc as just written) with no open criterion — [LAND] and
+// [MANUAL] ones count as open until ticked. A doc that is no phase of the task
+// (the README, spec.md) triggers nothing. Best effort: the tick is already on
+// disk, and the stamp or the next tick asks again.
+func (h *Handler) planReviewOnTick(taskID int64, path, content string) {
+	if h.PlanReview == nil || !phasediag.CriteriaMet(wsingest.CountCheckboxes(content)) {
+		return
+	}
+	phaseID, docPath, ok := h.phaseOfDoc(taskID, path)
+	if !ok {
+		return
+	}
+	h.PlanReview.MaybePlanReview(phaseID, docPath)
+}
+
+// phaseOfDoc finds the task's epic_phases row whose doc is path and returns its
+// id and its stored doc_path (the path a run's stamp hands the plan review).
+// resolvePlanDoc resolves the plan dir through its symlinks while wsingest
+// stores doc_path as scanned, so a row matches on either spelling.
+func (h *Handler) phaseOfDoc(taskID int64, path string) (int64, string, bool) {
+	rows, err := h.DB.Query(`SELECT id, COALESCE(doc_path, '') FROM epic_phases WHERE workspace_task_id = ?`, taskID)
+	if err != nil {
+		log.Printf("warning: api: plan review on tick task=%d: phases unreadable: %v", taskID, err)
+		return 0, "", false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			id  int64
+			doc string
+		)
+		if err := rows.Scan(&id, &doc); err != nil {
+			log.Printf("warning: api: plan review on tick task=%d: %v", taskID, err)
+			return 0, "", false
+		}
+		if doc == "" {
+			continue
+		}
+		if doc == path {
+			return id, doc, true
+		}
+		if real, err := filepath.EvalSymlinks(doc); err == nil && real == path {
+			return id, doc, true
+		}
+	}
+	return 0, "", false
 }
 
 // markPlanDocCriterion is patchPlanDoc's {line, class} arm: class is already

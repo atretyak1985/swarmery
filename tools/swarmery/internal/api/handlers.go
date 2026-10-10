@@ -78,6 +78,20 @@ type Handler struct {
 	// NewServer fills it from AttachInboxTTL; a bare &Handler{DB: db} (tests)
 	// leaves it off.
 	InboxTTL time.Duration
+	// PlanReview is told when a Criteria-tab tick closes the last open
+	// criterion of a phase doc, so the plan branch review starts on a hand tick
+	// too, not only on a run's `done` stamp (epics.go patchPlanDoc). NewServer
+	// sets it to the attached phase-run service; nil (tests, a daemon without
+	// phase runs) disables the trigger.
+	PlanReview PlanReviewHook
+}
+
+// PlanReviewHook starts the plan branch review of a phase's plan when the plan
+// is complete (production: *phaserun.Service, whose own check decides; an
+// unfinished plan is a no-op there). landpoll declares its own twin, so neither
+// package imports the other.
+type PlanReviewHook interface {
+	MaybePlanReview(phaseID int64, docPath string)
 }
 
 type projectDTO struct {

@@ -93,6 +93,14 @@ func planBranchKey(branches []planBranch) string {
 	return planReviewKeyPrefix + hex.EncodeToString(sum[:])
 }
 
+// MaybePlanReview is maybePlanReview for the triggers outside a phase run: a
+// Criteria-tab tick (api's patchPlanDoc) or a landpoll [LAND] tick that closed
+// the last open criterion of phaseID's doc. Same single-flight, same branch-set
+// key as a `done` stamp; a plan that is not complete yet is a silent no-op.
+func (s *Service) MaybePlanReview(phaseID int64, docPath string) {
+	s.maybePlanReview(phaseID, docPath)
+}
+
 // maybePlanReview is stamp's hook. It spawns the plan branch review check and
 // returns. The check and the review run in their own goroutine with their own
 // context, never inside the stamping run's single-flight slot. A daemon without a
