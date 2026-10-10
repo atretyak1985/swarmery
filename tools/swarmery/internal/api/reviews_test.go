@@ -196,6 +196,70 @@ func TestListPhaseReviews(t *testing.T) {
 	}
 }
 
+// The epic payload carries each phase's reviews, newest first and without their
+// findings, so the Plans page sees a review the moment recordReview notifies —
+// and a phase with none carries [] (never null), like reopens.
+func TestEpicPhasesCarryReviews(t *testing.T) {
+	url, _, taskID, phase1, ids := reviewsFixture(t)
+
+	resp, err := http.Get(url + "/api/epics?projectId=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var raw []struct {
+		TaskID int64                        `json:"taskId"`
+		Phases []map[string]json.RawMessage `json:"phases"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatalf("decode epics: %v\n%s", err, body)
+	}
+	var epics []epicDTO
+	if err := json.Unmarshal(body, &epics); err != nil {
+		t.Fatal(err)
+	}
+	var epic *epicDTO
+	for i := range epics {
+		if epics[i].TaskID == taskID {
+			epic = &epics[i]
+		}
+	}
+	if epic == nil || len(epic.Phases) < 2 {
+		t.Fatalf("epic %d with two phases not in %s", taskID, body)
+	}
+	for _, e := range raw {
+		for _, p := range e.Phases {
+			if r, ok := p["reviews"]; !ok || string(r) == "null" {
+				t.Errorf("phase %s: reviews = %s, want an array", p["id"], r)
+			}
+		}
+	}
+	for _, p := range epic.Phases {
+		switch p.ID {
+		case phase1:
+			if got := reviewIDs(p.Reviews); len(got) != 2 || got[0] != ids[1] || got[1] != ids[0] {
+				t.Errorf("phase 1 reviews = %v, want newest first [%d %d] and no plan-scope rows", got, ids[1], ids[0])
+				continue
+			}
+			r := p.Reviews[0]
+			if r.Verdict != "pass" || r.Detail != "reasons" || r.FixRound != 0 || r.StartedAt == "" ||
+				r.FinishedAt == nil || r.RunSessionUUID != "run-2" {
+				t.Errorf("phase 1 latest review = %+v", r)
+			}
+			for _, r := range p.Reviews {
+				if r.Findings != "" {
+					t.Errorf("review %d carries its findings in the epic payload (%q)", r.ID, r.Findings)
+				}
+			}
+		default:
+			if len(p.Reviews) != 0 {
+				t.Errorf("phase %d reviews = %v, want none", p.ID, reviewIDs(p.Reviews))
+			}
+		}
+	}
+}
+
 func reviewIDs(rs []reviewDTO) []int64 {
 	out := make([]int64, 0, len(rs))
 	for _, r := range rs {

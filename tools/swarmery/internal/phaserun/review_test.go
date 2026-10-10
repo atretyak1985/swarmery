@@ -24,6 +24,9 @@ type fakeReviewer struct {
 	specs   []verify.RunSpec
 	outputs []string
 	onRun   func(spec verify.RunSpec)
+	// answer, when set, replaces outputs: the reply is chosen from the spec, which
+	// is how a test tells a phase review from a plan review whatever their order.
+	answer func(spec verify.RunSpec) string
 }
 
 func (f *fakeReviewer) Run(_ context.Context, spec verify.RunSpec) (*verify.Run, error) {
@@ -37,10 +40,13 @@ func (f *fakeReviewer) Run(_ context.Context, spec verify.RunSpec) (*verify.Run,
 		}
 		out = f.outputs[i]
 	}
-	hook := f.onRun
+	hook, answer := f.onRun, f.answer
 	f.mu.Unlock()
 	if hook != nil {
 		hook(spec)
+	}
+	if answer != nil {
+		out = answer(spec)
 	}
 	return &verify.Run{Output: out}, nil
 }
@@ -404,6 +410,41 @@ func TestReviewRunsBeforeVerify(t *testing.T) {
 	}
 	if s.Slots.IsActive(s.slotKey(p1)) {
 		t.Error("slot still held after the run goroutine returned")
+	}
+}
+
+// A reviewer that panics is an inconclusive `reviewer-did-not-start` review, and
+// the rest of the run's exit path — verifier, worktree removal, slot release —
+// still runs.
+func TestReviewPanicIsInconclusiveAndTheExitPathContinues(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	setReviewMode(t, db, p1, "on")
+	setVerifyMode(t, db, p1, "strict")
+	wt := &stubWt{}
+	s := newTestService(db, &stubRunner{}, wt)
+	s.treeFingerprint = func(string) (string, error) { return "tree-1", nil }
+
+	var order []string
+	s.Review = &fakeReviewer{onRun: func(verify.RunSpec) { panic("reviewer exploded") }}
+	s.Verify = &stubVerifier{onVerify: func() { order = append(order, "verify") }}
+	wt.onRemove = func() { order = append(order, "remove") }
+
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if strings.Join(order, ",") != "verify,remove" {
+		t.Fatalf("call order after a reviewer panic = %v, want [verify remove]", order)
+	}
+	if s.Slots.IsActive(s.slotKey(p1)) {
+		t.Error("slot still held after a reviewer panic")
+	}
+	rows := reviewRows(t, db, p1)
+	if len(rows) != 1 || rows[0].verdict != "inconclusive" ||
+		!strings.HasPrefix(rows[0].detail, "reviewer-did-not-start: ") {
+		t.Fatalf("phase_reviews = %+v, want one inconclusive reviewer-did-not-start row", rows)
+	}
+	if got := reviewFixRound(t, db, p1); got != 0 {
+		t.Errorf("review_fix_round = %d after a panicked review, want 0 (no fix re-run)", got)
 	}
 }
 

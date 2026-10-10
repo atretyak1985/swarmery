@@ -4,11 +4,15 @@
 // detail, which fix round it was, and the findings collapsed. A phase that was
 // never reviewed renders nothing — review is opt-in per phase doc.
 //
-// The list is fetched per phase and refetched when the run moves on (`version`):
-// a review is recorded at the end of a run, and a FAIL re-runs the phase once.
+// The reviews come with the epic (`phase.reviews`, newest first): the review row
+// is written minutes after the run's own state settles, and the daemon refetches
+// the epic when it lands, so the block follows it without polling. The epic
+// payload leaves the findings out for size; they are fetched for the latest
+// review only, again whenever a newer review arrives.
 
 import { useEffect, useState } from 'react';
-import { countFindings, fetchPhaseReviews, type Review } from '../../api/reviews';
+import { countFindings, fetchPhaseReviews } from '../../api/reviews';
+import type { PhaseReviewSummary } from '../../api/types';
 import { fmtAgo } from '../../lib/format';
 import { ReviewVerdictBadge } from '../inbox/ReviewItem';
 
@@ -19,43 +23,55 @@ function roundLabel(round: number): string {
   return `fix round ${String(round)}`;
 }
 
-export function RunsReviewBlock({
-  taskId,
-  phaseId,
-  version,
-}: {
-  taskId: number;
-  phaseId: number;
-  /** Anything that changes when the phase's run does (state, session, doc time). */
-  version: string;
-}): JSX.Element | null {
-  const [latest, setLatest] = useState<Review | null>(null);
-  const [error, setError] = useState<string | null>(null);
+/** The findings of review `reviewId`: null until loaded (or when there is no review). */
+function useReviewFindings(
+  taskId: number,
+  phaseId: number,
+  reviewId: number | null,
+): { findings: string | null; error: string | null } {
+  const [state, setState] = useState<{ id: number | null; findings: string | null; error: string | null }>({
+    id: null,
+    findings: null,
+    error: null,
+  });
 
-  // `version` is read by nobody inside: it is the refetch trigger.
   useEffect(() => {
+    if (reviewId === null) return;
     let live = true;
     fetchPhaseReviews(taskId, phaseId)
       .then((rows) => {
         if (!live) return;
-        setLatest(rows[0] ?? null);
-        setError(null);
+        setState({ id: reviewId, findings: rows.find((r) => r.id === reviewId)?.findings ?? '', error: null });
       })
       .catch((e: unknown) => {
-        if (live) setError(e instanceof Error ? e.message : String(e));
+        if (live) setState({ id: reviewId, findings: null, error: e instanceof Error ? e.message : String(e) });
       });
     return () => {
       live = false;
     };
-  }, [taskId, phaseId, version]);
+  }, [taskId, phaseId, reviewId]);
 
-  if (error !== null) {
-    return <div className="mt-3 font-mono text-[10.5px] text-ink-faint">couldn't load the review: {error}</div>;
-  }
+  // A result for an older review is not this review's.
+  if (state.id !== reviewId) return { findings: null, error: null };
+  return { findings: state.findings, error: state.error };
+}
+
+export function RunsReviewBlock({
+  taskId,
+  phaseId,
+  reviews,
+}: {
+  taskId: number;
+  phaseId: number;
+  /** The phase's reviews from the epic payload, newest first. */
+  reviews: PhaseReviewSummary[];
+}): JSX.Element | null {
+  const latest = reviews[0] ?? null;
+  const { findings: loaded, error } = useReviewFindings(taskId, phaseId, latest?.id ?? null);
   if (latest === null) return null;
 
-  const n = countFindings(latest.findings);
-  const findings = latest.findings.trim();
+  const findings = (loaded ?? '').trim();
+  const n = countFindings(findings);
   return (
     <section aria-label="code review" className="mt-3 rounded-md border border-line px-2.5 py-2">
       <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-ink-faint">
@@ -66,6 +82,9 @@ export function RunsReviewBlock({
       </div>
       {latest.detail !== '' && (
         <div className="mt-1.5 font-mono text-[10.5px] break-words text-ink-dim">{latest.detail}</div>
+      )}
+      {error !== null && (
+        <div className="mt-1.5 font-mono text-[10.5px] text-ink-faint">couldn't load the findings: {error}</div>
       )}
       {findings !== '' && (
         <details className="mt-1.5">

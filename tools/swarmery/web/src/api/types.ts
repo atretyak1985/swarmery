@@ -3726,6 +3726,27 @@ export interface EpicPhase {
   /** Every time this finished phase was reopened because a defect slipped past
    *  its gates (migration 0104), oldest first. [] when never reopened. */
   reopens: PhaseReopen[];
+  /** The phase's code reviews (migration 0106, phase_reviews scope='phase'),
+   *  newest first. [] when never reviewed. Absent from a daemon older than the
+   *  review stage — read it as `phase.reviews ?? []`. */
+  reviews?: PhaseReviewSummary[];
+}
+
+/** One code review of a phase's run as the epic payload carries it (Go reviewDTO,
+ *  internal/api/reviews.go). The full row — with `findings`, which the epic
+ *  payload leaves '' for size — is GET /api/epics/{taskId}/phases/{phaseId}/reviews
+ *  (api/reviews.ts `Review`). */
+export interface PhaseReviewSummary {
+  id: number;
+  verdict: 'pass' | 'fail' | 'inconclusive';
+  /** `<class>: <detail>` for an inconclusive review, else the reviewer's reasons. */
+  detail: string;
+  /** 0 for the first review of a run, 1 for the review of its fix re-run. */
+  fixRound: number;
+  /** The run the review graded. */
+  runSessionUuid: string;
+  startedAt: string;
+  finishedAt: string | null;
 }
 
 /** Which gate caught a defect in a finished phase — or that none did. */

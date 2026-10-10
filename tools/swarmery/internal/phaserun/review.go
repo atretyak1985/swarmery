@@ -270,8 +270,11 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 	}
 	started := s.ts()
 	round, runUUID := s.reviewState(phaseID)
-	out := s.review(phaseID, info, acq)
+	out := s.recoveredReview(phaseID, info, acq)
 	s.recordReview(phaseID, info, runUUID, round, started, out)
+	// The epic payload carries the phase's reviews: refetch it now, not after the
+	// verifier (which may take minutes) reaches the defer's own notify.
+	s.notify(info.WorkspaceTaskID)
 	log.Printf("phaserun: phase=%d review %s (fix round %d) %s", phaseID, out.verdict, round, out.detail)
 
 	switch out.verdict {
@@ -294,6 +297,36 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 		return out.verdict, true
 	}
 	return out.verdict, false
+}
+
+// guardedReviewRun is reviewRun as runAndHandle's defer calls it: a panic anywhere
+// in the review stage is logged and read as an inconclusive review that asks for no
+// fix, so the verifier, the worktree removal and the slot release after it still run.
+func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string) (verdict string, fix bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("error: phaserun: phase=%d review stage panicked: %v — read as inconclusive (%s)",
+				phaseID, r, classReviewerNotStarted)
+			verdict, fix = string(verify.VerdictInconclusive), false
+		}
+	}()
+	return s.reviewRun(phaseID, info, acq, endState)
+}
+
+// recoveredReview is review with a panic turned into an inconclusive
+// `reviewer-did-not-start` outcome, so the review is still recorded and the run's
+// exit path carries on.
+func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired) (o reviewOutcome) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("error: phaserun: phase=%d reviewer panicked: %v", phaseID, r)
+			o = reviewOutcome{
+				verdict: string(verify.VerdictInconclusive),
+				detail:  fmt.Sprintf("%s: the review panicked: %v", classReviewerNotStarted, r),
+			}
+		}
+	}()
+	return s.review(phaseID, info, acq)
 }
 
 // review runs the reviewer and classifies what came back. The fingerprint is taken

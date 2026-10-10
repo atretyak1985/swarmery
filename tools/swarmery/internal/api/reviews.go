@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -198,6 +199,37 @@ func (h *Handler) ackReview(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, out[0], nil)
 	}
+}
+
+// phaseReviews loads every scope='phase' review of taskID's phases in ONE query,
+// newest first per phase, for the epic payload (epicPhaseDTO.Reviews): a review
+// row lands minutes after the run's own state settles, and recordReview's notify
+// refetches the epic, so the Runs tab sees it without polling. Findings are
+// dropped — up to 64 KB each, on every epic refetch; the Runs tab fetches them for
+// the latest review only (listPhaseReviews). Best-effort, like phaseReopens: a read
+// error yields an empty map and the phases render without a review.
+func (h *Handler) phaseReviews(taskID int64) map[int64][]reviewDTO {
+	out := map[int64][]reviewDTO{}
+	rows, err := h.DB.Query(reviewSelect+`
+		 WHERE r.scope = 'phase' AND r.workspace_task_id = ?
+		 ORDER BY r.id DESC LIMIT ?`, strconv.FormatInt(taskID, 10), reviewListMax)
+	if err != nil {
+		log.Printf("warning: epics: phase reviews unreadable (task %d): %v", taskID, err)
+		return out
+	}
+	list, err := scanReviews(rows)
+	if err != nil {
+		log.Printf("warning: epics: phase review row unreadable (task %d): %v", taskID, err)
+		return out
+	}
+	for _, d := range list {
+		if d.PhaseID == nil {
+			continue
+		}
+		d.Findings = ""
+		out[*d.PhaseID] = append(out[*d.PhaseID], d)
+	}
+	return out
 }
 
 // listPhaseReviews — GET /api/epics/{taskId}/phases/{phaseId}/reviews. 200

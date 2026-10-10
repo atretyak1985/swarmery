@@ -3151,7 +3151,8 @@ function PhaseDetailPanel({
             key={phase.id}
             taskId={epic.taskId}
             phaseId={phase.id}
-            version={`${phase.runState}|${phase.runSessionUuid ?? ''}|${phase.docUpdatedAt ?? ''}`}
+            // A daemon older than migration 0106 sends no `reviews`.
+            reviews={phase.reviews ?? []}
           />
         </>
       ) : (

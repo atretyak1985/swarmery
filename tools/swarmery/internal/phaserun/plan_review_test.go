@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 )
 
@@ -510,4 +511,134 @@ type panickingReviewer struct{}
 
 func (panickingReviewer) Run(context.Context, verify.RunSpec) (*verify.Run, error) {
 	panic("reviewer exploded")
+}
+
+// isPlanReview tells the plan branch review's spec from a phase review's.
+func isPlanReview(spec verify.RunSpec) bool {
+	return strings.Contains(spec.Prompt, "THIS IS A PLAN BRANCH REVIEW")
+}
+
+// startLastPhase runs the plan's last phase (p2) for real through Start. The run
+// branch Start names for it is the fixture's swarm/phase-2, which already exists
+// in the plan repo. onRun, when set, is the executor; it gets the 1-based run
+// number and the branch.
+func startLastPhase(t *testing.T, s *Service, p2 int64, repo planRepo, onRun func(n int, branch string)) string {
+	t.Helper()
+	branch := "swarm/" + runcore.PhaseTaskName(p2)
+	repo.git("rev-parse", "--verify", "refs/heads/"+branch)
+	n := 0
+	s.Run.(*stubRunner).runFn = func(spec RunSpec) (*Run, error) {
+		n++
+		if onRun != nil {
+			onRun(n, branch)
+		}
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	if _, err := s.Start(p2, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	return branch
+}
+
+// reviewKinds names each reviewer call "phase" or "plan", in order.
+func reviewKinds(rv *fakeReviewer) string {
+	var kinds []string
+	for _, c := range rv.calls() {
+		if isPlanReview(c) {
+			kinds = append(kinds, "plan")
+		} else {
+			kinds = append(kinds, "phase")
+		}
+	}
+	return strings.Join(kinds, ",")
+}
+
+// A `**Review:** on` last phase whose review FAILs once and PASSes on the fix
+// re-run gets exactly ONE plan branch review, after the fix re-run's review, over
+// the post-fix tip. stamp's own hook would have reviewed the rejected tip first and
+// the fixed one again.
+func TestPlanReviewWaitsForTheLastPhaseReviewAndItsFix(t *testing.T) {
+	s, db, taskID, _, p2, _, repo, rv, _ := planReviewFixture(t)
+	setReviewMode(t, db, p2, "on")
+	phaseReviews := 0
+	rv.answer = func(spec verify.RunSpec) string {
+		if isPlanReview(spec) {
+			return "- none\nVERDICT: PASS"
+		}
+		phaseReviews++
+		if phaseReviews == 1 {
+			return "- P1 api/x.go:1 — x.id is read before it exists.\nVERDICT: FAIL"
+		}
+		return "- none\nVERDICT: PASS"
+	}
+
+	var fixTip string
+	branch := startLastPhase(t, s, p2, repo, func(n int, branch string) {
+		if n == 2 { // the fix re-run commits its fix on the run branch
+			repo.git("checkout", "-q", branch)
+			fixTip = repo.commitFile("api/x.go", "package api // reads x.id, fixed\n", "phase 2: review fix")
+			repo.git("checkout", "-q", "main")
+		}
+	})
+
+	if n := s.Run.(*stubRunner).specCount(); n != 2 {
+		t.Fatalf("executor runs = %d, want 2 (the run + the review's fix re-run)", n)
+	}
+	if got := reviewKinds(rv); got != "phase,phase,plan" {
+		t.Fatalf("reviews = %s, want phase,phase,plan — the plan review only after the fix re-run's review", got)
+	}
+	rows := planReviewRows(t, db)
+	if len(rows) != 1 {
+		t.Fatalf("scope=plan rows = %d, want 1", len(rows))
+	}
+	if fixTip == "" || repo.git("rev-parse", branch) != fixTip {
+		t.Fatalf("the fix re-run did not move %s (fixTip=%q)", branch, fixTip)
+	}
+	branches, err := s.planBranches(taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := rows[0].key, planBranchKey(branches); got != want {
+		t.Errorf("plan review key = %q, want the post-fix branch set %q", got, want)
+	}
+	tipSeen := false
+	for _, b := range branches {
+		if b.Branch == branch && b.Tip == fixTip {
+			tipSeen = true
+		}
+	}
+	if !tipSeen {
+		t.Errorf("the reviewed branch set %+v does not carry the post-fix tip %s", branches, fixTip)
+	}
+}
+
+// A `**Review:** on` last phase whose review PASSes the first time gets its plan
+// review right after that phase review, from runAndHandle — not at the stamp.
+func TestPlanReviewAfterAPassingLastPhaseReview(t *testing.T) {
+	s, db, _, _, p2, _, repo, rv, _ := planReviewFixture(t)
+	setReviewMode(t, db, p2, "on")
+	rv.answer = func(verify.RunSpec) string { return "- none\nVERDICT: PASS" }
+	startLastPhase(t, s, p2, repo, nil)
+
+	if got := reviewKinds(rv); got != "phase,plan" {
+		t.Fatalf("reviews = %s, want phase,plan", got)
+	}
+	if rows := planReviewRows(t, db); len(rows) != 1 {
+		t.Fatalf("scope=plan rows = %d, want 1", len(rows))
+	}
+}
+
+// A `**Review:** off` last phase run through Start keeps stamp's hook: one plan
+// review and no phase review.
+func TestPlanReviewFromTheStampWhenTheLastPhaseHasNoReview(t *testing.T) {
+	s, db, _, _, p2, _, repo, rv, _ := planReviewFixture(t)
+	rv.answer = func(verify.RunSpec) string { return "- none\nVERDICT: PASS" }
+	startLastPhase(t, s, p2, repo, nil)
+
+	if got := reviewKinds(rv); got != "plan" {
+		t.Fatalf("reviews = %s, want exactly one plan review", got)
+	}
+	if rows := planReviewRows(t, db); len(rows) != 1 {
+		t.Fatalf("scope=plan rows = %d, want 1", len(rows))
+	}
 }

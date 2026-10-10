@@ -1026,6 +1026,21 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		}
 		returnDocNow()
 	}
+	// The plan branch review (plan_review.go) must read the tips this phase hands
+	// over, so for a `**Review:** on` phase it waits for the phase's own review —
+	// and, on a FAIL, for the fix re-run, whose completion triggers it instead.
+	// stamp's hook would fire before either, review a tip the phase reviewer may
+	// reject, and then fire a second opus review on the re-run's `done`. Phases
+	// without the review stage keep the hook in stamp.
+	holdPlanReview := info.ReviewMode == wsingest.ReviewOn
+	planReviewDue := false
+	stampRun := func(state, runError string) {
+		if !holdPlanReview {
+			s.stamp(phaseID, info.DocPath, state, runError)
+			return
+		}
+		planReviewDue = s.stampRow(phaseID, info.DocPath, state, runError) && state == "done"
+	}
 	defer func() {
 		cancel()
 		// Safety net only: the normal path already returned the doc before
@@ -1037,7 +1052,7 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// the verifier grades the tree the executor left. A FAIL that asks for a
 		// fix re-run is acted on at the very END of this defer — the re-run needs
 		// this run's slot, which is released only below.
-		_, reviewFix := s.reviewRun(phaseID, info, acq, endState)
+		_, reviewFix := s.guardedReviewRun(phaseID, info, acq, endState)
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the
 		// same ordering argument as worktree-before-slot, one step earlier in the
@@ -1073,8 +1088,14 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// After releaseSlot, never before: StartWith takes this phase's
 		// single-flight slot, and from inside the slot it would be refused as
 		// already running.
-		if reviewFix {
+		// The held plan review, last of all: the phase review has settled and the
+		// worktree is gone (the branch, which is what it reads, is kept). A FAIL
+		// that started a fix re-run hands it to that re-run's own `done`.
+		switch {
+		case reviewFix:
 			s.startReviewFix(phaseID)
+		case planReviewDue:
+			s.maybePlanReview(phaseID, info.DocPath)
 		}
 	}()
 
@@ -1088,15 +1109,15 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// user cancellation.
 		log.Printf("phaserun: phase=%d uuid=%s cancelled", phaseID, spec.SessionUUID)
 		endState = "failed"
-		s.stamp(phaseID, info.DocPath, "failed", "cancelled")
+		stampRun("failed", "cancelled")
 	case err != nil:
 		log.Printf("error: phaserun: phase=%d uuid=%s could not start: %v", phaseID, spec.SessionUUID, err)
 		endState = "failed"
-		s.stamp(phaseID, info.DocPath, "failed", err.Error())
+		stampRun("failed", err.Error())
 	case res.TimedOut:
 		log.Printf("warning: phaserun: phase=%d uuid=%s timed out", phaseID, spec.SessionUUID)
 		endState = "failed"
-		s.stamp(phaseID, info.DocPath, "failed", "timeout")
+		stampRun("failed", "timeout")
 	case res.ExitCode != 0:
 		log.Printf("warning: phaserun: phase=%d uuid=%s exited %d: %s", phaseID, spec.SessionUUID, res.ExitCode, res.Stderr)
 		msg := res.Stderr
@@ -1104,7 +1125,7 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 			msg = fmt.Sprintf("exit %d", res.ExitCode)
 		}
 		endState = "failed"
-		s.stamp(phaseID, info.DocPath, "failed", msg)
+		stampRun("failed", msg)
 	default:
 		// A clean exit is the START of the decision, not the end of it. settle
 		// reads the doc and the transcript, may resume the session, and hands back
@@ -1112,7 +1133,7 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		log.Printf("phaserun: phase=%d uuid=%s exited 0 in %s, settling", phaseID, spec.SessionUUID, res.Duration)
 		state, detail := s.settle(ctx, phaseID, info, spec, budget, returnDocNow)
 		endState = state
-		s.stamp(phaseID, info.DocPath, state, detail)
+		stampRun(state, detail)
 	}
 }
 
@@ -1532,6 +1553,20 @@ const landingAfterReturnedRun = `landing_state = CASE WHEN landing_state = 'retu
 // after the lent doc came home (every caller returns the doc first), because the
 // doc body and its ticks are two of the things it hashes.
 func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
+	// The plan branch review (plan_review.go): a `done` that may have finished the
+	// plan. Here rather than in runAndHandle so every path that settles a phase
+	// run — the operator's own Start, a plan's next phase, an adopted orphan —
+	// reaches it. It only spawns; it never runs inside the caller's slot. The one
+	// exception is a run of a `**Review:** on` phase: runAndHandle writes its stamp
+	// with stampRow and holds the hook until the phase's own review has settled.
+	if s.stampRow(phaseID, docPath, state, runError) && state == "done" {
+		s.maybePlanReview(phaseID, docPath)
+	}
+}
+
+// stampRow is stamp's write without the plan review hook. It reports whether the
+// row was written; false when the write failed or the row vanished mid-run.
+func (s *Service) stampRow(phaseID int64, docPath, state, runError string) bool {
 	var re any
 	if runError != "" {
 		re = runError
@@ -1562,7 +1597,7 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 		 WHERE id=?`, state, re, s.ts(), after, fingerprint, phaseID)
 	if err != nil {
 		log.Printf("error: phaserun: stamp phase=%d state=%s: %v", phaseID, state, err)
-		return
+		return false
 	}
 	// Zero rows means the phase row vanished mid-run — historically a rescan
 	// deleting and re-inserting it. Silent data loss; log it loudly. The driver
@@ -1575,15 +1610,9 @@ func (s *Service) stamp(phaseID int64, docPath, state, runError string) {
 		log.Printf("error: phaserun: stamp phase=%d state=%s: rows affected unavailable: %v", phaseID, state, err)
 	case n == 0:
 		log.Printf("error: phaserun: stamp phase=%d state=%s: row vanished mid-run", phaseID, state)
-		return
+		return false
 	}
-	// The plan branch review (plan_review.go): a `done` that may have finished the
-	// plan. Here rather than in runAndHandle so every path that settles a phase
-	// run — the operator's own Start, a plan's next phase, an adopted orphan —
-	// reaches it. It only spawns; it never runs inside the caller's slot.
-	if state == "done" {
-		s.maybePlanReview(phaseID, docPath)
-	}
+	return true
 }
 
 // baseBranch names the repo's current checkout — the branch
