@@ -208,12 +208,14 @@ type Service struct {
 	// treeFingerprint overrides worktreeFingerprint (review.go) when set — a test
 	// seam for harness worktrees that are not git checkouts.
 	treeFingerprint func(dir string) (string, error)
-	// planReviewMu guards planReviewsInFlight: the branch-set keys of plan branch
-	// reviews (plan_review.go) started and not yet recorded. Two phases of one plan
-	// stamped `done` at the same moment must start ONE review, and the DB row
-	// that dedupes them is written only after the reviewer exits.
+	// planReviewMu guards planReviewsInFlight: per plan (tasks.id), the plan branch
+	// review (plan_review.go) in flight and the latest trigger that arrived while it
+	// ran. One review per plan at a time: two phases stamped `done` close together,
+	// or a fix re-run moving a tip mid-review, leave a trigger the running review
+	// takes up when it finishes, instead of starting a second review that would
+	// share its throwaway worktree.
 	planReviewMu        sync.Mutex
-	planReviewsInFlight map[string]bool
+	planReviewsInFlight map[int64]*planReviewFlight
 	// Actuals records what a finished run actually did — files, lines, cost,
 	// outcome, verdict (internal/actuals, learning-loop phase 12). Called from the
 	// run's exit path AFTER stamp and verifyRun, so the row it reads carries this

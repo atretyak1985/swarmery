@@ -2,6 +2,7 @@ package phaserun
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -136,7 +137,12 @@ func TestPlanReviewFiresOnceWhenTheLastPhaseCompletes(t *testing.T) {
 	if spec.Model != verify.DefaultModel {
 		t.Errorf("plan reviewer model = %q, want %q", spec.Model, verify.DefaultModel)
 	}
-	wantCwd := fmt.Sprintf("/wt/p/planreview-%d", taskID)
+	branches, err := s.planBranches(taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := planBranchKey(branches)
+	wantCwd := fmt.Sprintf("/wt/p/planreview-%d-%s", taskID, strings.TrimPrefix(key, planReviewKeyPrefix)[:planReviewNameKeyLen])
 	if spec.Cwd != wantCwd {
 		t.Errorf("plan reviewer cwd = %q, want the throwaway worktree %q", spec.Cwd, wantCwd)
 	}
@@ -170,8 +176,8 @@ func TestPlanReviewFiresOnceWhenTheLastPhaseCompletes(t *testing.T) {
 	if r.taskID != fmt.Sprint(taskID) || r.verdict != "fail" || !strings.Contains(r.findings, "api/x.go:1") || r.treeHash != "tree-plan" {
 		t.Errorf("plan review row = %+v", r)
 	}
-	if !strings.HasPrefix(r.key, planReviewKeyPrefix) {
-		t.Errorf("dedupe key %q lacks the %s prefix", r.key, planReviewKeyPrefix)
+	if r.key != key {
+		t.Errorf("dedupe key = %q, want the branch-set key %q", r.key, key)
 	}
 	// The throwaway worktree is removed WITH its branch; nothing else is.
 	wt.mu.Lock()
@@ -308,23 +314,166 @@ func TestPlanReviewOffWithoutReviewer(t *testing.T) {
 	}
 }
 
-// Two stamps racing for one branch set: the second claim loses while the first is
-// in flight (its row is written only when the reviewer exits), and wins again once
-// released with no row recorded.
+// The claim is per plan, not per key: while a plan's review is in flight a second
+// claim loses under ANY key and is left behind as the pending trigger (the latest
+// wins), another plan still claims, and the holder hands the pending trigger over
+// before it releases the slot.
 func TestPlanReviewClaimIsSingleFlight(t *testing.T) {
-	s, _, taskID, _, _, _, _, _, _ := planReviewFixture(t)
-	if !s.claimPlanReview(taskID, "branchset:k") {
+	s, _, taskID, _, p2, doc2, _, _, _ := planReviewFixture(t)
+	first := planReviewTrigger{phaseID: p2, docPath: doc2}
+	if !s.claimPlanReview(taskID, "branchset:k", first) {
 		t.Fatal("first claim refused")
 	}
-	if s.claimPlanReview(taskID, "branchset:k") {
+	if s.claimPlanReview(taskID, "branchset:k", first) {
 		t.Fatal("second claim of an in-flight key granted")
 	}
-	if !s.claimPlanReview(taskID, "branchset:other") {
-		t.Error("a different key was refused")
+	if s.claimPlanReview(taskID, "branchset:other", planReviewTrigger{phaseID: 98}) {
+		t.Fatal("a different key of the same plan was granted while its review is in flight")
 	}
-	s.releasePlanReview("branchset:k")
-	if !s.claimPlanReview(taskID, "branchset:k") {
-		t.Error("a released key with no recorded row was refused")
+	if s.claimPlanReview(taskID, "branchset:newest", planReviewTrigger{phaseID: 99}) {
+		t.Fatal("a third key of the same plan was granted while its review is in flight")
+	}
+	if !s.claimPlanReview(taskID+1, "branchset:other", first) {
+		t.Error("another plan's review was refused")
+	}
+	next, more := s.nextPlanReview(taskID)
+	if !more || next.phaseID != 99 {
+		t.Fatalf("handed-over trigger = %+v more=%v, want the latest (phase 99)", next, more)
+	}
+	if _, more := s.nextPlanReview(taskID); more {
+		t.Fatal("a second hand-over with no new trigger")
+	}
+	if !s.claimPlanReview(taskID, "branchset:k", first) {
+		t.Error("a released plan with no recorded row was refused")
+	}
+}
+
+// Tips moving while the plan review runs (the last phase's own review FAILed and
+// its fix re-run stamped `done` again): the second trigger does not start a review
+// beside the running one, and once that one finishes the NEW set of tips is
+// reviewed, in a worktree of its own, and recorded under its own key.
+func TestPlanReviewTipsMovedMidReviewAreReviewedAfter(t *testing.T) {
+	s, db, taskID, _, p2, doc2, repo, rv, wt := planReviewFixture(t)
+	rv.outputs = []string{"- P1 api/x.go:1 — seam.\nVERDICT: FAIL", "VERDICT: PASS"}
+	during := -1
+	rv.onRun = func(verify.RunSpec) {
+		if len(rv.calls()) != 1 {
+			return
+		}
+		repo.git("checkout", "-q", "swarm/phase-2")
+		repo.commitFile("api/x.go", "package api // reads x.id, fixed\n", "phase 2: review fix")
+		repo.git("checkout", "-q", "main")
+		s.stamp(p2, doc2, "done", "") // the fix re-run's stamp, mid-review
+		during = len(rv.calls())
+	}
+
+	s.stamp(p2, doc2, "done", "")
+
+	if during != 1 {
+		t.Fatalf("reviews started while the first ran = %d, want 1 (no second review beside it)", during)
+	}
+	calls := rv.calls()
+	if len(calls) != 2 {
+		t.Fatalf("plan reviews = %d, want 2 (the moved tips reviewed after the first)", len(calls))
+	}
+	if calls[0].Cwd == calls[1].Cwd {
+		t.Errorf("both reviews used worktree %q", calls[0].Cwd)
+	}
+	branches, err := s.planBranches(taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	final := planBranchKey(branches)
+	rows := planReviewRows(t, db)
+	if len(rows) != 2 || rows[0].key == final || rows[1].key != final || rows[1].verdict != "pass" {
+		t.Fatalf("rows = %+v, want the first set then the final set %q (pass)", rows, final)
+	}
+	if n := wt.acquiredCount(); n != 2 {
+		t.Errorf("worktrees acquired = %d, want 2", n)
+	}
+	// The final set is recorded: re-stamping it starts nothing.
+	rv.onRun = nil
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 2 {
+		t.Errorf("plan reviews after re-stamping the final tips = %d, want 2", n)
+	}
+}
+
+// A trigger over the SAME tips while the review runs is not reviewed twice.
+func TestPlanReviewSameTipsMidReviewRunsOnce(t *testing.T) {
+	s, db, _, _, p2, doc2, _, rv, _ := planReviewFixture(t)
+	rv.onRun = func(verify.RunSpec) {
+		if len(rv.calls()) == 1 {
+			s.stamp(p2, doc2, "done", "")
+		}
+	}
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 1 {
+		t.Fatalf("plan reviews = %d, want 1", n)
+	}
+	if n := len(planReviewRows(t, db)); n != 1 {
+		t.Errorf("rows = %d, want 1", n)
+	}
+}
+
+// A transient failure (no review worktree) is recorded without the dedupe key, so
+// the next trigger over the same tips reviews them; a settled verdict then dedupes.
+func TestPlanReviewTransientFailureIsRetried(t *testing.T) {
+	s, db, _, _, p2, doc2, _, rv, wt := planReviewFixture(t)
+	wt.mu.Lock()
+	wt.acquireErr = errors.New("worktree root is gone")
+	wt.mu.Unlock()
+
+	s.stamp(p2, doc2, "done", "")
+
+	rows := planReviewRows(t, db)
+	if len(rows) != 1 || rows[0].verdict != "inconclusive" || rows[0].key != "" ||
+		!strings.HasPrefix(rows[0].detail, classReviewerNotStarted+":") {
+		t.Fatalf("rows = %+v, want one inconclusive %s row with no key", rows, classReviewerNotStarted)
+	}
+	if n := len(rv.calls()); n != 0 {
+		t.Fatalf("reviewer spawned %d time(s) without a worktree", n)
+	}
+
+	wt.mu.Lock()
+	wt.acquireErr = nil
+	wt.mu.Unlock()
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 1 {
+		t.Fatalf("plan reviews after the transient failure = %d, want 1 (retried)", n)
+	}
+	rows = planReviewRows(t, db)
+	if len(rows) != 2 || rows[1].key == "" || rows[1].verdict != "fail" {
+		t.Fatalf("rows = %+v, want the retry recorded under the key", rows)
+	}
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 1 {
+		t.Errorf("plan reviews after a settled verdict = %d, want 1 (deduped)", n)
+	}
+}
+
+// A sibling phase whose run is still in flight keeps the plan unfinished: its own
+// `done` stamp is the trigger that sees the final tips.
+func TestPlanReviewWaitsForARunningSibling(t *testing.T) {
+	s, db, _, p1, p2, doc2, _, rv, _ := planReviewFixture(t)
+	mustExec(t, db, `UPDATE epic_phases SET run_state='running' WHERE id=?`, p1)
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 0 {
+		t.Fatalf("plan reviews with phase 1 still running = %d, want 0", n)
+	}
+	mustExec(t, db, `UPDATE epic_phases SET run_state='done' WHERE id=?`, p1)
+	s.stamp(p2, doc2, "done", "")
+	if n := len(rv.calls()); n != 1 {
+		t.Fatalf("plan reviews once phase 1 finished = %d, want 1", n)
+	}
+}
+
+// Two reviews of one plan under different keys never share a worktree name.
+func TestPlanReviewNameCarriesTheKey(t *testing.T) {
+	a := planReviewName(7, planReviewKeyPrefix+"0123456789abcdef")
+	b := planReviewName(7, planReviewKeyPrefix+"fedcba9876543210")
+	if a != "planreview-7-0123456789ab" || a == b {
+		t.Errorf("names = %q, %q", a, b)
 	}
 }
 

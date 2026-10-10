@@ -25,6 +25,12 @@ import (
 // done` or has all its criteria ticked — the same reviewer reads every phase's
 // diff together. It runs once per set of branch tips.
 //
+// One plan review per plan is in flight at a time (claimPlanReview). A trigger
+// that arrives while one runs only records that the tips may have moved; when the
+// running review finishes, the tips are read again and reviewed if they differ
+// from the set just reviewed. Two reviews of one plan never share a throwaway
+// worktree, and the final set of tips is the one reviewed last.
+//
 // The review is ADVISORY. Its result is a phase_reviews row with scope='plan' and
 // phase_id NULL, which the Inbox shows. It blocks nothing, re-runs nothing and
 // writes nothing into any doc.
@@ -33,6 +39,10 @@ import (
 // phase_reviews.run_session_uuid, prefixed planReviewKeyPrefix. For scope='phase'
 // that column names the run that was reviewed; for scope='plan' it names the set
 // of runs. The prefix keeps it from ever reading as a session uuid. No new column.
+// The key is written only for a settled outcome: the reviewer's own verdict
+// (pass, fail, or an inconclusive it produced) or the file bound. A transient
+// failure (no worktree, no fingerprint, a reviewer that never started) is recorded
+// with an empty key, so the next trigger over the same tips reviews again.
 
 const (
 	// planReviewMaxFiles bounds the changed files the plan review takes in, summed
@@ -42,9 +52,13 @@ const (
 	planReviewMaxFiles = 300
 	// planReviewKeyPrefix marks a branch-set key in phase_reviews.run_session_uuid.
 	planReviewKeyPrefix = "branchset:"
-	// planReviewTaskPrefix names the throwaway worktree: swarm/planreview-<taskID>.
-	// "plan-<id>" belongs to planrun; this one must never collide with it.
+	// planReviewTaskPrefix names the throwaway worktree:
+	// swarm/planreview-<taskID>-<key[:12]>. "plan-<id>" belongs to planrun; this
+	// one must never collide with it. The key part keeps two reviews of one plan
+	// from ever sharing a worktree, even if the per-plan guard were bypassed.
 	planReviewTaskPrefix = "planreview-"
+	// planReviewNameKeyLen is how much of the key's hex the worktree name carries.
+	planReviewNameKeyLen = 12
 	// planReviewReadmeCap bounds the plan README in the prompt.
 	planReviewReadmeCap = 32 << 10
 )
@@ -90,53 +104,120 @@ func (s *Service) maybePlanReview(phaseID int64, docPath string) {
 	s.spawn(func() { s.planBranchReview(phaseID, docPath) })
 }
 
+// planReviewTrigger is one `done` stamp that may start a plan review: the phase
+// that stamped and its doc on disk.
+type planReviewTrigger struct {
+	phaseID int64
+	docPath string
+}
+
+// planReviewFlight is a plan's in-flight plan review. pending is the latest
+// trigger that arrived while it ran (nil: none); the running review takes it up
+// instead of releasing the slot.
+type planReviewFlight struct {
+	pending *planReviewTrigger
+}
+
+// planReviewSubject is what a plan review would review now: the plan, its run
+// branches with their tips, and their key.
+type planReviewSubject struct {
+	taskID   int64
+	branches []planBranch
+	key      string
+}
+
 // planBranchReview runs the plan branch review of phaseID's plan when the plan is
-// complete and its current set of branch tips has not been reviewed yet.
-// Best-effort and silent when there is nothing to do. Every failure after the
-// claim is recorded as an inconclusive row.
+// complete and its current set of branch tips has not been reviewed yet. When a
+// review of the plan is already running it only leaves the trigger behind, and
+// the running review takes it up when it finishes (planBranchReviewLoop).
+// Best-effort and silent when there is nothing to do.
 func (s *Service) planBranchReview(phaseID int64, docPath string) {
-	var taskID int64
-	if err := s.DB.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, phaseID).Scan(&taskID); err != nil {
-		log.Printf("warning: phaserun: plan review phase=%d: epic unreadable: %v", phaseID, err)
+	sub, ok := s.planReviewSubjectOf(phaseID, docPath)
+	if !ok {
 		return
 	}
-	complete, err := s.planComplete(taskID, phaseID, docPath)
-	if err != nil {
-		log.Printf("warning: phaserun: plan review task=%d: completion unreadable: %v", taskID, err)
+	if !s.claimPlanReview(sub.taskID, sub.key, planReviewTrigger{phaseID: phaseID, docPath: docPath}) {
 		return
+	}
+	s.planBranchReviewLoop(phaseID, sub)
+}
+
+// planBranchReviewLoop holds the plan's review slot. It reviews sub, then takes
+// up whatever trigger arrived meanwhile: it reads the tips again and reviews them
+// when they differ from the set just reviewed and are not recorded yet. It
+// releases the slot only when no trigger is left, atomically in nextPlanReview, so
+// a trigger can never fall between the last check and the release.
+func (s *Service) planBranchReviewLoop(phaseID int64, sub planReviewSubject) {
+	for {
+		started := s.ts()
+		out, settled := s.planReview(sub.taskID, phaseID, sub.key, sub.branches)
+		key := ""
+		if settled {
+			key = sub.key
+		}
+		s.recordPlanReview(sub.taskID, key, started, out)
+		log.Printf("phaserun: task=%d plan branch review %s over %d branch(es) %s", sub.taskID, out.verdict, len(sub.branches), out.detail)
+		s.notify(sub.taskID)
+
+		reviewed := sub.key
+		for {
+			next, more := s.nextPlanReview(sub.taskID)
+			if !more {
+				return
+			}
+			n, ok := s.planReviewSubjectOf(next.phaseID, next.docPath)
+			// The tips just reviewed ⇒ nothing new. That holds after a transient
+			// failure too: the slot does not retry in a loop; the next trigger
+			// after the release does.
+			if !ok || n.taskID != sub.taskID || n.key == reviewed || s.planReviewRecorded(n.taskID, n.key) {
+				continue
+			}
+			log.Printf("phaserun: task=%d plan branch tips moved during the review — reviewing the new set", sub.taskID)
+			phaseID, sub = next.phaseID, n
+			break
+		}
+	}
+}
+
+// planReviewSubjectOf resolves phaseID's plan and, when the plan is complete, its
+// run branches and their key. ok is false when there is nothing to review: the
+// plan is unfinished, no phase ran on a branch, or the store could not be read.
+func (s *Service) planReviewSubjectOf(phaseID int64, docPath string) (planReviewSubject, bool) {
+	var sub planReviewSubject
+	if err := s.DB.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, phaseID).Scan(&sub.taskID); err != nil {
+		log.Printf("warning: phaserun: plan review phase=%d: epic unreadable: %v", phaseID, err)
+		return sub, false
+	}
+	complete, err := s.planComplete(sub.taskID, phaseID, docPath)
+	if err != nil {
+		log.Printf("warning: phaserun: plan review task=%d: completion unreadable: %v", sub.taskID, err)
+		return sub, false
 	}
 	if !complete {
-		return
+		return sub, false
 	}
-	branches, err := s.planBranches(taskID)
+	sub.branches, err = s.planBranches(sub.taskID)
 	if err != nil {
-		log.Printf("warning: phaserun: plan review task=%d: run branches unreadable: %v", taskID, err)
-		return
+		log.Printf("warning: phaserun: plan review task=%d: run branches unreadable: %v", sub.taskID, err)
+		return sub, false
 	}
-	if len(branches) == 0 {
-		return // no phase ran on a branch: nothing to diff
+	if len(sub.branches) == 0 {
+		return sub, false // no phase ran on a branch: nothing to diff
 	}
-	key := planBranchKey(branches)
-	if !s.claimPlanReview(taskID, key) {
-		return
-	}
-	defer s.releasePlanReview(key)
-
-	started := s.ts()
-	out := s.planReview(taskID, phaseID, branches)
-	s.recordPlanReview(taskID, key, started, out)
-	log.Printf("phaserun: task=%d plan branch review %s over %d branch(es) %s", taskID, out.verdict, len(branches), out.detail)
-	s.notify(taskID)
+	sub.key = planBranchKey(sub.branches)
+	return sub, true
 }
 
 // planComplete reports whether every phase of the plan is finished: its doc says
 // `Status: done` (doc_status) or all its criteria are ticked
-// (phasediag.CriteriaMet). The stamping phase is read from its doc on disk, which
+// (phasediag.CriteriaMet), and no other phase has a run in flight: a sibling
+// still running may yet move its tip, and its own `done` stamp is the trigger
+// that sees the final set. The stamping phase is read from its doc on disk, which
 // was copied back before stamp. Its epic_phases counts wait for the next
 // wsingest scan.
 func (s *Service) planComplete(taskID, phaseID int64, docPath string) (bool, error) {
 	rows, err := s.DB.Query(`
-		SELECT id, checkboxes_done, checkboxes_total, COALESCE(doc_status, '')
+		SELECT id, checkboxes_done, checkboxes_total, COALESCE(doc_status, ''), COALESCE(run_state, '')
 		  FROM epic_phases WHERE workspace_task_id = ?`, taskID)
 	if err != nil {
 		return false, err
@@ -148,8 +229,9 @@ func (s *Service) planComplete(taskID, phaseID int64, docPath string) (bool, err
 			id          int64
 			done, total int
 			status      string
+			runState    string
 		)
-		if err := rows.Scan(&id, &done, &total, &status); err != nil {
+		if err := rows.Scan(&id, &done, &total, &status, &runState); err != nil {
 			return false, err
 		}
 		n++
@@ -157,6 +239,8 @@ func (s *Service) planComplete(taskID, phaseID int64, docPath string) (bool, err
 			if c, ok := criteriaInDoc(docPath); ok {
 				done, total = c.Done, c.Total
 			}
+		} else if runState == "running" {
+			return false, nil
 		}
 		if status != "done" && !phasediag.CriteriaMet(done, total) {
 			return false, nil
@@ -221,42 +305,77 @@ func (s *Service) planBranchTip(repoRoot, branch string) string {
 	return strings.TrimSpace(out)
 }
 
-// claimPlanReview takes the key for this process, or reports that it is taken:
-// in flight here, or already recorded for the plan.
-func (s *Service) claimPlanReview(taskID int64, key string) bool {
+// claimPlanReview takes the plan's review slot for key, or reports that the review
+// may not start. While a review of the plan is in flight the trigger is left
+// behind as pending, the latest one winning, for the running review to take up
+// (nextPlanReview) whatever its key. A key already recorded for the plan is not
+// claimed.
+func (s *Service) claimPlanReview(taskID int64, key string, trig planReviewTrigger) bool {
 	s.planReviewMu.Lock()
 	defer s.planReviewMu.Unlock()
-	if s.planReviewsInFlight[key] {
+	if f, ok := s.planReviewsInFlight[taskID]; ok {
+		f.pending = &trig
 		return false
 	}
+	if s.planReviewRecorded(taskID, key) {
+		return false
+	}
+	if s.planReviewsInFlight == nil {
+		s.planReviewsInFlight = map[int64]*planReviewFlight{}
+	}
+	s.planReviewsInFlight[taskID] = &planReviewFlight{}
+	return true
+}
+
+// nextPlanReview is called by the slot's holder after each review. With a pending
+// trigger it hands that trigger over and the slot stays held; without one it
+// releases the slot. One lock covers both, so a trigger either lands before the
+// release (and is handed over) or claims a free slot after it.
+func (s *Service) nextPlanReview(taskID int64) (planReviewTrigger, bool) {
+	s.planReviewMu.Lock()
+	defer s.planReviewMu.Unlock()
+	f, ok := s.planReviewsInFlight[taskID]
+	if !ok || f.pending == nil {
+		delete(s.planReviewsInFlight, taskID)
+		return planReviewTrigger{}, false
+	}
+	next := *f.pending
+	f.pending = nil
+	return next, true
+}
+
+// planReviewRecorded reports whether key is already recorded for the plan. A
+// failed read reports true: not starting is the safe side, and the next trigger
+// asks again.
+func (s *Service) planReviewRecorded(taskID int64, key string) bool {
 	var n int
 	if err := s.DB.QueryRow(`
 		SELECT COUNT(*) FROM phase_reviews
 		 WHERE scope = 'plan' AND workspace_task_id = ? AND run_session_uuid = ?`,
 		strconv.FormatInt(taskID, 10), key).Scan(&n); err != nil {
 		log.Printf("warning: phaserun: plan review task=%d: dedupe read failed, not starting: %v", taskID, err)
-		return false
+		return true
 	}
-	if n > 0 {
-		return false
-	}
-	if s.planReviewsInFlight == nil {
-		s.planReviewsInFlight = map[string]bool{}
-	}
-	s.planReviewsInFlight[key] = true
-	return true
+	return n > 0
 }
 
-func (s *Service) releasePlanReview(key string) {
-	s.planReviewMu.Lock()
-	defer s.planReviewMu.Unlock()
-	delete(s.planReviewsInFlight, key)
+// planReviewName is the throwaway worktree's task name for one review:
+// planreview-<taskID>-<the first planReviewNameKeyLen hex chars of key>.
+func planReviewName(taskID int64, key string) string {
+	h := strings.TrimPrefix(key, planReviewKeyPrefix)
+	if len(h) > planReviewNameKeyLen {
+		h = h[:planReviewNameKeyLen]
+	}
+	return planReviewTaskPrefix + strconv.FormatInt(taskID, 10) + "-" + h
 }
 
-// planReview reviews the branch set. Within the file bound it spawns the reviewer
-// in a throwaway worktree on the integration base, fingerprinted before and
-// after. It removes the worktree and its branch afterwards in every case.
-func (s *Service) planReview(taskID, phaseID int64, branches []planBranch) reviewOutcome {
+// planReview reviews the branch set under key. Within the file bound it spawns the
+// reviewer in a throwaway worktree on the integration base, fingerprinted before
+// and after. It removes the worktree and its branch afterwards in every case.
+// settled reports whether the outcome may dedupe key: true for the reviewer's own
+// outcome and for the file bound, false for a transient failure that a later
+// trigger over the same tips should retry.
+func (s *Service) planReview(taskID, phaseID int64, key string, branches []planBranch) (out reviewOutcome, settled bool) {
 	inconclusive := func(o reviewOutcome, class, detail string) reviewOutcome {
 		o.verdict, o.detail = string(verify.VerdictInconclusive), class+": "+detail
 		return o
@@ -264,21 +383,21 @@ func (s *Service) planReview(taskID, phaseID int64, branches []planBranch) revie
 	var o reviewOutcome
 	total, sections := s.planDiffs(branches)
 	if total > planReviewMaxFiles {
-		return inconclusive(o, classReviewUnverifiable, strconv.Itoa(total)+" files")
+		return inconclusive(o, classReviewUnverifiable, strconv.Itoa(total)+" files"), true
 	}
 
 	info, err := s.loadPhase(phaseID)
 	if err != nil {
-		return inconclusive(o, classReviewUnverifiable, "the stamping phase is unreadable: "+err.Error())
+		return inconclusive(o, classReviewUnverifiable, "the stamping phase is unreadable: "+err.Error()), false
 	}
 	repoRoot, err := s.runRoot(info)
 	if err != nil {
-		return inconclusive(o, classReviewUnverifiable, "the plan's repository cannot be resolved: "+err.Error())
+		return inconclusive(o, classReviewUnverifiable, "the plan's repository cannot be resolved: "+err.Error()), false
 	}
 	var title string
 	_ = s.DB.QueryRow(`SELECT COALESCE(title, '') FROM tasks WHERE id = ?`, taskID).Scan(&title)
 
-	name := planReviewTaskPrefix + strconv.FormatInt(taskID, 10)
+	name := planReviewName(taskID, key)
 	base := s.integrationBase(repoRoot)
 	// A crashed earlier review may have left its commit-less branch behind, and
 	// AcquireAt would then refuse the name. It is measured against the same base
@@ -289,7 +408,7 @@ func (s *Service) planReview(taskID, phaseID int64, branches []planBranch) revie
 	}
 	acq, err := s.acquire(repoRoot, info.ProjectSlug, name, base)
 	if err != nil {
-		return inconclusive(o, classReviewerNotStarted, "could not acquire a review worktree: "+err.Error())
+		return inconclusive(o, classReviewerNotStarted, "could not acquire a review worktree: "+err.Error()), false
 	}
 	defer func() {
 		if s.Wt == nil {
@@ -302,7 +421,7 @@ func (s *Service) planReview(taskID, phaseID int64, branches []planBranch) revie
 
 	o.treeBefore, err = s.worktreeFingerprint(acq.Path)
 	if err != nil {
-		return inconclusive(o, classReviewUnverifiable, "could not fingerprint the review worktree before the review: "+err.Error())
+		return inconclusive(o, classReviewUnverifiable, "could not fingerprint the review worktree before the review: "+err.Error()), false
 	}
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
@@ -321,16 +440,18 @@ func (s *Service) planReview(taskID, phaseID int64, branches []planBranch) revie
 
 	o.treeAfter, err = s.worktreeFingerprint(acq.Path)
 	if err != nil {
-		return inconclusive(o, classReviewUnverifiable, "could not fingerprint the review worktree after the review: "+err.Error())
+		return inconclusive(o, classReviewUnverifiable, "could not fingerprint the review worktree after the review: "+err.Error()), false
 	}
 	if run != nil {
 		o.findings = capFindings(run.Output)
 	}
 	if o.treeAfter != o.treeBefore {
 		// No restore: the worktree is removed in the defer above.
-		return inconclusive(o, ClassReviewerMutatedTree, o.treeBefore+"→"+o.treeAfter)
+		return inconclusive(o, ClassReviewerMutatedTree, o.treeBefore+"→"+o.treeAfter), true
 	}
-	return concludeReview(o, run, rerr)
+	o = concludeReview(o, run, rerr)
+	// A reviewer that never started produced no outcome of its own.
+	return o, !strings.HasPrefix(o.detail, classReviewerNotStarted+":")
 }
 
 // integrationBase is the start ref of the throwaway review worktree: the
@@ -455,8 +576,9 @@ func planReviewPrompt(title, readme, sections string) string {
 }
 
 // recordPlanReview writes the scope='plan' row. Best-effort like recordReview.
-// Until a row is written the key is not deduped, so a lost write means the next
-// `done` stamp reviews again.
+// key is "" for a transient outcome: the row is shown but dedupes nothing. Until a
+// row carrying the key is written the key is not deduped, so a lost write means
+// the next `done` stamp reviews again.
 func (s *Service) recordPlanReview(taskID int64, key, started string, o reviewOutcome) {
 	if _, err := s.DB.Exec(`
 		INSERT INTO phase_reviews
