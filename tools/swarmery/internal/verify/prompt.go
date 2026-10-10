@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"fmt"
 	"strings"
 	"text/template"
 )
@@ -22,6 +23,7 @@ ACCEPTANCE CRITERIA / ORIGINAL CONTRACT:
 
 Rules:
 - READ ONLY: you may run builds/tests/linters and read any file; you MUST NOT edit files, commit, or mutate git state.
+- {{.DaemonLine}}
 - Judge only whether the acceptance criteria are met by the work on this branch (diff vs {{.StartPoint}}).
 - Behavioral criteria default to FAIL unless you can confirm the behavior by running the relevant command/test here.
 - If you cannot run what's needed to conclude (missing deps, broken env), the answer is INCONCLUSIVE — not FAIL.
@@ -48,6 +50,19 @@ type promptData struct {
 	Prompt     string
 	StartPoint string
 	StrictLine string
+	DaemonLine string
+}
+
+// DaemonAPINotice is the one prompt sentence forbidding a headless grader (the
+// verifier, the phase and plan reviewers) to call this daemon's HTTP API on port
+// (<= 0 is DefaultDaemonPort). DaemonDenyPatterns denies the three usual clients on
+// the argv; the sentence also covers every client those rules cannot name.
+func DaemonAPINotice(port int) string {
+	if port <= 0 {
+		port = DefaultDaemonPort
+	}
+	return fmt.Sprintf("Do not call the HTTP API of the swarmery daemon that started this run (127.0.0.1:%d, localhost:%d) with curl, wget, http or any other client: judge the work in this worktree, not what the daemon reports about it.",
+		port, port)
 }
 
 // BuildPrompt renders the verifier prompt for a task at the given strictness.
@@ -55,7 +70,14 @@ type promptData struct {
 // instruction); when unknown, a neutral literal keeps the sentence well-formed.
 // An empty/unknown strictness falls back to normal — only StrictnessStrict adds
 // the tightening clause; the verdict vocabulary is invariant across the knob.
+// The daemon-API rule names DefaultDaemonPort; BuildPromptForPort names another.
 func BuildPrompt(title, prompt, startPoint string, strictness Strictness) string {
+	return BuildPromptForPort(title, prompt, startPoint, strictness, DefaultDaemonPort)
+}
+
+// BuildPromptForPort is BuildPrompt with the daemon port its daemon-API rule names
+// (the service passes Config.DaemonPort).
+func BuildPromptForPort(title, prompt, startPoint string, strictness Strictness, daemonPort int) string {
 	if strings.TrimSpace(startPoint) == "" {
 		startPoint = "the base branch"
 	}
@@ -72,6 +94,7 @@ func BuildPrompt(title, prompt, startPoint string, strictness Strictness) string
 		Prompt:     strings.TrimRight(prompt, "\n"),
 		StartPoint: startPoint,
 		StrictLine: strictLine,
+		DaemonLine: DaemonAPINotice(daemonPort),
 	})
 	return b.String()
 }

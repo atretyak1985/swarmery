@@ -77,6 +77,12 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 	// The resume path re-creates a finished run's worktree on its existing branch
 	// so a stopped session can still be answered (session_message.go).
 	h.Wt = &worktree.Manager{Git: worktree.ExecGit{}}
+	// A Criteria-tab tick that closes a phase's last criterion starts the plan
+	// branch review like a run's `done` stamp (epics.go planReviewOnTick).
+	// Guarded: a nil *phaserun.Service in the interface would be a non-nil hook.
+	if phaserunSvc != nil {
+		h.PlanReview = phaserunSvc
+	}
 	// The advisor Source needs this Handler (recommendation attribution, the
 	// improve registry), so it registers here rather than in main.go;
 	// AttachTriage runs before NewServer there. The retire Source registers here

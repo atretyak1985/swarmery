@@ -26,6 +26,7 @@ type fakeLaunchd struct {
 	printGhosts  int // armed into ghost by bootout
 	bootstrapEIO int
 	ghost        int
+	stuck        bool // bootout leaves the service registered
 }
 
 func (f *fakeLaunchd) Run(name string, args ...string) (string, error) {
@@ -58,8 +59,16 @@ func (f *fakeLaunchd) Run(name string, args ...string) (string, error) {
 		if !f.registered {
 			return "No such process", fmt.Errorf("exit status 3")
 		}
+		if f.stuck { // bootout "succeeds" but the job never leaves the domain
+			return "", nil
+		}
 		f.registered = false
 		f.ghost = f.printGhosts
+		return "", nil
+	case "kickstart":
+		if !f.registered {
+			return "Could not find service", fmt.Errorf("exit status 113")
+		}
 		return "", nil
 	default:
 		return "", fmt.Errorf("unexpected launchctl subcommand %q", args[0])
@@ -207,6 +216,62 @@ func TestInstallBootstrapGivesUpAfterMaxAttempts(t *testing.T) {
 	}
 	if fake.registered {
 		t.Error("service must not be registered after a failed install")
+	}
+}
+
+// TestInstallBootstrapExhaustedFallback: once bootstrap has failed on every
+// attempt, install must not leave the daemon silently down — a still-registered
+// service is restarted with `kickstart -k`, otherwise the error carries the
+// exact manual recovery command.
+func TestInstallBootstrapExhaustedFallback(t *testing.T) {
+	cases := []struct {
+		name          string
+		stuck         bool // bootout returns ok but the service stays registered
+		wantErr       bool
+		wantKickstart int
+	}{
+		{name: "registered service is kickstarted", stuck: true, wantKickstart: 1},
+		{name: "no service prints recovery command", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sys, fake, src := testSystem(t)
+			var out strings.Builder
+			sys.Out = &out
+			if tc.stuck {
+				if err := sys.Install(src, 0); err != nil {
+					t.Fatalf("first install: %v", err)
+				}
+				fake.stuck = true // bootstrap now fails (exit 5) on every attempt
+			} else {
+				fake.bootstrapEIO = 100
+			}
+
+			err := sys.Install(src, 0)
+			if got := fake.count("kickstart"); got != tc.wantKickstart {
+				t.Errorf("kickstart calls = %d, want %d", got, tc.wantKickstart)
+			}
+			if !tc.wantErr {
+				if err != nil {
+					t.Fatalf("install = %v, want success via kickstart", err)
+				}
+				want := "launchctl kickstart -k gui/501/" + Label
+				if !strings.Contains(fake.calls[len(fake.calls)-2], want) {
+					t.Errorf("calls = %v, want %q after the failed bootstraps", fake.calls, want)
+				}
+				if !strings.Contains(out.String(), "kickstart -k") {
+					t.Errorf("output = %q, want a note about the kickstart fallback", out.String())
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("install succeeded, want bootstrap failure")
+			}
+			want := "launchctl bootstrap gui/501 " + sys.PlistPath()
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error = %v, want recovery command %q", err, want)
+			}
+		})
 	}
 }
 

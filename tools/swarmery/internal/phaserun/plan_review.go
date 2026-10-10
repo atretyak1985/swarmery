@@ -93,6 +93,14 @@ func planBranchKey(branches []planBranch) string {
 	return planReviewKeyPrefix + hex.EncodeToString(sum[:])
 }
 
+// MaybePlanReview is maybePlanReview for the triggers outside a phase run: a
+// Criteria-tab tick (api's patchPlanDoc) or a landpoll [LAND] tick that closed
+// the last open criterion of phaseID's doc. Same single-flight, same branch-set
+// key as a `done` stamp; a plan that is not complete yet is a silent no-op.
+func (s *Service) MaybePlanReview(phaseID int64, docPath string) {
+	s.maybePlanReview(phaseID, docPath)
+}
+
 // maybePlanReview is stamp's hook. It spawns the plan branch review check and
 // returns. The check and the review run in their own goroutine with their own
 // context, never inside the stamping run's single-flight slot. A daemon without a
@@ -447,13 +455,13 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), sections),
+		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), sections, s.DaemonPort),
 		SessionUUID:     o.sessionUUID,
 		Cwd:             acq.Path,
 		Model:           reviewModel,
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
-		DisallowedTools: reviewDeniedTools,
+		DisallowedTools: s.reviewDenials(),
 	}
 	log.Printf("phaserun: task=%d plan branch review in worktree=%q (%d files over %d branch(es))",
 		taskID, acq.Path, total, len(branches))
@@ -578,10 +586,11 @@ func planReadme(docPath string) string {
 }
 
 // planReviewPrompt renders the plan branch review prompt: the phase reviewer's
-// role and contract, the seam focus, the plan README and the per-phase diffs.
-func planReviewPrompt(title, readme, sections string) string {
+// role, contract and daemon-API rule, the seam focus, the plan README and the
+// per-phase diffs.
+func planReviewPrompt(title, readme, sections string, daemonPort int) string {
 	var b strings.Builder
-	b.WriteString(reviewerRole)
+	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\n")
 	b.WriteString(planSeamFocus)
 	b.WriteString("\n\nPLAN: ")

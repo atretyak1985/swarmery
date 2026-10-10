@@ -2276,6 +2276,9 @@ func cmdServe(args []string) error {
 	// timed-out message (SWARMERY_VERIFY_TIMEOUT_MIN) — before this was wired the
 	// knob changed the wording and never the kill.
 	verifierCfg := verify.ConfigFromEnv()
+	// The port this daemon actually serves (--port, defaulting to SWARMERY_PORT):
+	// verifier runs are denied curl/wget/http to it and told not to call it.
+	verifierCfg.DaemonPort = *port
 	verifySvc := verify.NewService(db, verifierCfg,
 		verify.ClaudeRunner{AccountVerdict: runTruth.Record, Timeout: verifierCfg.RunTimeout}, wtMgr)
 	// fusion phase 13: resolve each task's verify strictness knob (strict|normal|
@@ -2483,6 +2486,8 @@ func cmdServe(args []string) error {
 		reviewTimeout = time.Duration(v) * time.Minute
 	}
 	phaserunSvc.Review = verify.ClaudeRunner{AccountVerdict: runTruth.Record, Timeout: reviewTimeout}
+	// The verifier's port, so reviewers are denied the daemon's API on the same one.
+	phaserunSvc.DaemonPort = verifierCfg.DaemonPort
 	// Learning loop phase 12: every finished phase run records what it actually
 	// did (phase_actuals — files/areas/lines from its branch, cost, outcome,
 	// verdict, test failures, continuations, fallback), measured again once the
@@ -2659,7 +2664,7 @@ func cmdServe(args []string) error {
 		log.Printf("warning: %v", landpollWarn)
 	}
 	log.Print(landpollBootLine(landpollEvery, landpollOn))
-	landPoller := newLandPoller(db, phaserunSvc.RunRoot)
+	landPoller := newLandPoller(db, phaserunSvc.RunRoot, phaserunSvc)
 
 	buildStart := time.Now()
 	// The board derives each captured card's expiry from the same TTL the

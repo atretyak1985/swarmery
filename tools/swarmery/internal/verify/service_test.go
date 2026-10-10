@@ -277,6 +277,48 @@ func TestVerifyPass_StampsAndCaches(t *testing.T) {
 	}
 }
 
+// TestVerifyDaemonDeny_FromConfig: the spawned verifier — and the one resume that
+// asks for a missing verdict line — is denied curl/wget/http to the daemon on the
+// port from Config, and its prompt names that port. An unset port is the default.
+func TestVerifyDaemonDeny_FromConfig(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{outFn: func(spec RunSpec) *Run {
+		if spec.Resume {
+			return &Run{Output: "VERDICT: PASS"}
+		}
+		return &Run{Output: "- checks ran, no verdict line"}
+	}}
+	s := newTestService(t, db, r, stubTrees{hash: "t-daemon-deny"})
+	s.Cfg.DaemonPort = 8080
+	id := insertTask(t, db, taskOpts{})
+	if err := s.VerifyTask(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	specs := append([]RunSpec(nil), r.specs...)
+	r.mu.Unlock()
+	if len(specs) != 2 {
+		t.Fatalf("spawned %d times, want 2 (the run + the verdict resume)", len(specs))
+	}
+	want := strings.Join(DaemonDenyPatterns(8080), ",")
+	for i, spec := range specs {
+		if got := strings.Join(spec.DisallowedTools, ","); got != want {
+			t.Errorf("spawn %d (resume=%v): DisallowedTools = %q, want %q", i, spec.Resume, got, want)
+		}
+	}
+	if !strings.Contains(specs[0].Prompt, DaemonAPINotice(8080)) {
+		t.Errorf("verifier prompt lacks the daemon-API rule for :8080:\n%s", specs[0].Prompt)
+	}
+
+	// Constructed without a port (every pre-existing caller): the default.
+	if got := NewService(db, Config{}, r, stubTrees{}).Cfg.DaemonPort; got != DefaultDaemonPort {
+		t.Errorf("NewService(Config{}).Cfg.DaemonPort = %d, want %d", got, DefaultDaemonPort)
+	}
+	if got := ConfigFromEnv().DaemonPort; got != DefaultDaemonPort {
+		t.Errorf("ConfigFromEnv().DaemonPort = %d, want %d", got, DefaultDaemonPort)
+	}
+}
+
 func TestVerifyCacheHit_SkipsSpawn(t *testing.T) {
 	db := testDB(t)
 	r := &stubRunner{out: "VERDICT: PASS"}

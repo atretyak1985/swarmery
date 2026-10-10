@@ -149,8 +149,9 @@ func reviewFixture(t *testing.T) (*Service, *sql.DB, int64, phaseInfo) {
 }
 
 // (a) The reviewer is spawned through verify.ClaudeRunner with ONE --disallowedTools
-// flag denying the edit tools AND Bash. The real runner spawns a stand-in `claude`
-// that records its argv outside the worktree (so recording it is not a mutation).
+// flag denying the edit tools, Bash, and curl/wget/http to the daemon's API on the
+// service's port. The real runner spawns a stand-in `claude` that records its argv
+// outside the worktree (so recording it is not a mutation).
 func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake-claude PATH shim is POSIX-only")
@@ -168,6 +169,7 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 
 	s, db, p1, info := reviewFixture(t)
 	s.Review = verify.ClaudeRunner{}
+	s.DaemonPort = 8080
 	dir, base := gitRepo(t)
 
 	verdict, fix := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done")
@@ -192,8 +194,15 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	if flags != 1 {
 		t.Fatalf("argv carries %d --disallowedTools flags, want exactly 1:\n%s", flags, raw)
 	}
-	if list != "Edit,Write,MultiEdit,NotebookEdit,Bash" {
-		t.Errorf("--disallowedTools %q, want Edit,Write,MultiEdit,NotebookEdit,Bash", list)
+	const wantList = "Edit,Write,MultiEdit,NotebookEdit,Bash," +
+		"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
+		"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
+		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)"
+	if list != wantList {
+		t.Errorf("--disallowedTools %q, want %q", list, wantList)
+	}
+	if !strings.Contains(string(raw), verify.DaemonAPINotice(8080)) {
+		t.Errorf("the review prompt lacks the daemon-API rule for :8080:\n%s", raw)
 	}
 	// The prompt carries the contract and the run's diff.
 	if !strings.Contains(string(raw), "VERDICT: PASS | FAIL | INCONCLUSIVE") || !strings.Contains(string(raw), "func main() {}") {
@@ -319,11 +328,16 @@ func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
 	if rows[0].findings == "" {
 		t.Error("the review row lost the findings")
 	}
-	// (a) at the service seam: the spec carries Bash on top of the read-only set,
-	// merged into one flag by the runner.
+	// (a) at the service seam: the spec carries Bash and the daemon-API rules (no
+	// port set ⇒ the default) on top of the read-only set, merged into one flag by
+	// the runner.
 	spec := rv.calls()[0]
-	if got := strings.Join(verify.ToolDenyArgs(spec.DisallowedTools), " "); got != "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash" {
-		t.Errorf("reviewer denial = %q", got)
+	if got, want := strings.Join(verify.ToolDenyArgs(spec.DisallowedTools), " "),
+		"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash,"+strings.Join(verify.DaemonDenyPatterns(verify.DefaultDaemonPort), ","); got != want {
+		t.Errorf("reviewer denial = %q, want %q", got, want)
+	}
+	if !strings.Contains(spec.Prompt, verify.DaemonAPINotice(verify.DefaultDaemonPort)) {
+		t.Errorf("the review prompt lacks the daemon-API rule:\n%s", spec.Prompt)
 	}
 	if want := "/wt/p/" + runcore.PhaseTaskName(p1); spec.Cwd != want {
 		t.Errorf("reviewer cwd = %q, want the run's worktree %q", spec.Cwd, want)
