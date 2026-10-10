@@ -55,3 +55,35 @@ func TestClaudeRunnerArgs(t *testing.T) {
 		t.Errorf("argv = %q, want %q", got, want)
 	}
 }
+
+// TestClaudeRunnerMergesDisallowedTools: a caller's extra denials join the
+// read-only set in ONE --disallowedTools flag, still last on the argv. Two flags
+// would leave it to the CLI whether the lists merge or the last one wins.
+func TestClaudeRunnerMergesDisallowedTools(t *testing.T) {
+	clearPermissionKnobs(t)
+	fakeClaudeRunner(t, `echo "$@" > "$PWD/args.txt"; exit 0`)
+	cwd := t.TempDir()
+	_, err := ClaudeRunner{}.Run(context.Background(), RunSpec{
+		Prompt: "review", SessionUUID: "u2", Cwd: cwd,
+		DisallowedTools: []string{"Bash", "Edit", " "},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	argv := readArgs(t, cwd)
+	if n := strings.Count(argv, "--disallowedTools"); n != 1 {
+		t.Fatalf("argv %q carries %d --disallowedTools flags, want exactly 1", argv, n)
+	}
+	if !strings.HasSuffix(argv, "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash") {
+		t.Errorf("argv %q does not end with the merged, de-duplicated denial list", argv)
+	}
+}
+
+func TestToolDenyArgs(t *testing.T) {
+	if got := strings.Join(ToolDenyArgs(nil), " "); got != "--disallowedTools Edit,Write,MultiEdit,NotebookEdit" {
+		t.Errorf("ToolDenyArgs(nil) = %q", got)
+	}
+	if got := strings.Join(ToolDenyArgs([]string{"Bash"}), " "); got != "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash" {
+		t.Errorf("ToolDenyArgs(Bash) = %q", got)
+	}
+}

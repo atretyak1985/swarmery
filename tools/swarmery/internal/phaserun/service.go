@@ -30,6 +30,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -197,6 +198,15 @@ type Service struct {
 	// wires it from the verify service). See verifyRun for the ordering contract: it
 	// runs BEFORE the worktree is reclaimed, because the worktree is the subject.
 	Verify runcore.PhaseVerifier
+	// Review spawns the independent, read-only code review of a finished run whose
+	// doc opted in (`**Review:** on`) — the SAME runner the verifier spawns
+	// through, with Bash denied on top of the verifier's read-only tool set (see
+	// reviewRun). nil ⇒ the review stage is not wired: every unit test's state, and
+	// a valid production state. Runs BEFORE verifyRun, both before removeWorktree.
+	Review verify.Runner
+	// treeFingerprint overrides worktreeFingerprint (review.go) when set — a test
+	// seam for harness worktrees that are not git checkouts.
+	treeFingerprint func(dir string) (string, error)
 	// Actuals records what a finished run actually did — files, lines, cost,
 	// outcome, verdict (internal/actuals, learning-loop phase 12). Called from the
 	// run's exit path AFTER stamp and verifyRun, so the row it reads carries this
@@ -318,6 +328,10 @@ type phaseInfo struct {
 	// Run is the contract this run answers to, and a doc rescan mid-run must not
 	// retroactively decide the run should (or should not) have been graded.
 	VerifyMode string
+	// ReviewMode is the phase DOC's opt-in to the review stage (`**Review:** on`,
+	// wsingest.ParseDocReview; epic_phases.review_mode, migration 0106), on|off.
+	// Read at admission for the reason VerifyMode is.
+	ReviewMode string
 	// DocModel is the RAW model the phase DOC declares (`**Model:** opus`,
 	// wsingest.ParseModel; epic_phases.doc_model, migration 0069) — rung 2 of the
 	// model ladder. "" when the doc declares nothing. Unvalidated on the way in:
@@ -371,6 +385,14 @@ type StartOptions struct {
 	// `returned`, so the run the feedback asked for is the one a later plain start
 	// gets when the return endpoint's own start was refused.
 	Returned bool
+	// ReviewFix: this run is the ONE fix re-run the review stage starts after a
+	// FAIL verdict (reviewRun). It implies Returned — the same continuation of the
+	// phase's own branch and the same blocked-guard bypass — but points the prompt
+	// at the doc's `## Review findings` section (ReviewFixNote) instead of the
+	// operator's feedback, and it is the only kind of run that keeps
+	// review_fix_round: every other run resets it to 0 when it opens, so a later
+	// review may again start one fix.
+	ReviewFix bool
 }
 
 // runRoot resolves the repository this phase runs in: what the phase doc declares
@@ -603,6 +625,9 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// continued — exactly as if the return endpoint's own start had been admitted.
 	// Force is untouched.
 	if info.LandingState == landingReturned {
+		opts.Returned = true
+	}
+	if opts.ReviewFix {
 		opts.Returned = true
 	}
 	// The mirror of planrun's phaseRunActive gate: refuse while the whole plan is
@@ -873,8 +898,10 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		       run_error=NULL, run_ended_at=NULL, run_branch=?,
 		       run_start_point=NULLIF(?, ''),
 		       run_checkboxes_before=checkboxes_done, run_checkboxes_after=NULL,
-		       run_effort=NULLIF(?, ''), run_blocked_fingerprint=NULL
-		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, runEffort, phaseID); err != nil {
+		       run_effort=NULLIF(?, ''), run_blocked_fingerprint=NULL,
+		       review_fix_round=CASE WHEN ? = 1 THEN review_fix_round ELSE 0 END
+		 WHERE id=?`, uuid, budget.Started.UTC().Format(time.RFC3339), branch, acq.StartPoint, runEffort,
+		boolInt(opts.ReviewFix), phaseID); err != nil {
 		// Worktree FIRST, slot LAST — the same invariant runAndHandle's defer
 		// enforces. Releasing the slot while the worktree still exists lets a
 		// concurrent Start warm-reuse (worktree invariant 4) the deterministic
@@ -910,7 +937,7 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		log.Printf("phaserun: phase=%d stacked on %s at %s (its dependency is not merged into %q)",
 			phaseID, base.StackedOn, acq.StartPoint, base.BaseBranch)
 	}
-	prompt := BuildPromptRun(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, opts.Returned, budget)
+	prompt := buildPromptNoted(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, runNote(opts), budget)
 	// After run_session_uuid is stamped (so every lesson_uses row names a run the
 	// pending-session registry already answers for) and before the spawn.
 	if s.InjectLessons != nil {
@@ -993,8 +1020,15 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 	defer func() {
 		cancel()
 		// Safety net only: the normal path already returned the doc before
-		// stamping. Must stay AHEAD of verifyRun and removeWorktree.
+		// stamping. Must stay AHEAD of reviewRun, verifyRun and removeWorktree.
 		returnDoc()
+		// The independent review FIRST, then the verifier: both read the worktree,
+		// and the review may leave it dirty only if the reviewer broke its
+		// read-only contract, in which case reviewRun has already restored it so
+		// the verifier grades the tree the executor left. A FAIL that asks for a
+		// fix re-run is acted on at the very END of this defer — the re-run needs
+		// this run's slot, which is released only below.
+		_, reviewFix := s.reviewRun(phaseID, info, acq, endState)
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the
 		// same ordering argument as worktree-before-slot, one step earlier in the
@@ -1027,6 +1061,12 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// with its own lag — which is why wsingest converges the rest.
 		runcore.LinkSession(s.DB, Engine, info.WorkspaceTaskID, spec.SessionUUID)
 		s.notify(info.WorkspaceTaskID)
+		// After releaseSlot, never before: StartWith takes this phase's
+		// single-flight slot, and from inside the slot it would be refused as
+		// already running.
+		if reviewFix {
+			s.startReviewFix(phaseID)
+		}
 	}()
 
 	res, err := s.Run.Start(ctx, spec)
@@ -1750,7 +1790,7 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 		SELECT e.workspace_task_id, e.seq, e.name, e.doc_path, e.depends_on, e.run_state,
 		       e.run_branch, e.repo, e.verify_mode, e.doc_model, p.path, p.slug, w.root_path,
 		       e.run_start_point, e.run_error, e.run_ended_at, e.run_blocked_fingerprint,
-		       COALESCE(e.landing_state, '')
+		       COALESCE(e.landing_state, ''), COALESCE(e.review_mode, 'off')
 		  FROM epic_phases e
 		  JOIN tasks t ON t.id = e.workspace_task_id
 		  JOIN projects p ON p.id = t.project_id
@@ -1758,7 +1798,7 @@ func (s *Service) loadPhase(phaseID int64) (phaseInfo, error) {
 		 WHERE e.id = ?`, phaseID).Scan(
 		&info.WorkspaceTaskID, &info.Seq, &info.Name, &info.DocPath, &depsJSON,
 		&info.RunState, &runBranch, &repo, &info.VerifyMode, &docModel, &path, &info.ProjectSlug, &wsRoot,
-		&startPoint, &runError, &endedAt, &fingerprint, &info.LandingState)
+		&startPoint, &runError, &endedAt, &fingerprint, &info.LandingState, &info.ReviewMode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return info, ErrPhaseNotFound
 	}

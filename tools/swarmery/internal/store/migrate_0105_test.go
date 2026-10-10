@@ -31,7 +31,7 @@ func TestMigrate0105CriteriaClassesAreDocOwned(t *testing.T) {
 		if _, err := db.Exec(wsingest.PhaseUpsertSQL,
 			1, 3, "Phase three", doc, "[]",
 			5, 2, "in_progress", nil,
-			nil, nil, "[]", "off", nil, land, manual); err != nil {
+			nil, nil, "[]", "off", nil, land, manual, "off"); err != nil {
 			t.Fatalf("PhaseUpsertSQL: %v", err)
 		}
 	}

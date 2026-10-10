@@ -2,6 +2,7 @@ package verify
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
@@ -35,6 +36,14 @@ type RunSpec struct {
 	// result — the admitted estate's EstateKeys — composed by the CALLER from the
 	// same resolution. "" (no admitted estate) passes none, as before.
 	SettingsFile string
+
+	// DisallowedTools are denied ON TOP of the read-only set every run of this
+	// runner gets (readOnlyTools). The phase review stage passes "Bash": a
+	// reviewer reads, it does not run checks. Merged into the ONE --disallowedTools
+	// flag ToolDenyArgs builds — a second flag on the argv would leave it to the
+	// CLI whether the lists merge or the last one wins, and the read-only set must
+	// not depend on that.
+	DisallowedTools []string
 }
 
 // Run is the outcome of a completed verifier process. Unlike the dispatcher,
@@ -99,13 +108,33 @@ const (
 // within seconds.
 const permEnv = "SWARMERY_VERIFY_PERMISSION_MODE"
 
-// readOnlyToolArgs keeps the edit tools denied. Before permEnv existed they were
+// readOnlyTools keeps the edit tools denied. Before permEnv existed they were
 // denied as a side effect of the missing mode, and a mode that stops the asking
 // must not also start the editing. The verifier grades the worktree it runs in,
 // so it may run checks (Bash) but may not change files with the edit tools. A
 // Bash command can still write; the prompt contract forbids that, as before. The
 // list is applied whatever permEnv resolves to, including "off".
-var readOnlyToolArgs = []string{"--disallowedTools", "Edit,Write,MultiEdit,NotebookEdit"}
+var readOnlyTools = []string{"Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+// ToolDenyArgs is the argv tail of one run: a SINGLE --disallowedTools flag
+// whose list is readOnlyTools followed by extra (blanks and duplicates dropped,
+// order kept). Exported so a caller that adds to the list can pin the exact
+// flag its runs get without spawning one.
+func ToolDenyArgs(extra []string) []string {
+	seen := make(map[string]bool, len(readOnlyTools)+len(extra))
+	tools := make([]string, 0, len(readOnlyTools)+len(extra))
+	for _, list := range [][]string{readOnlyTools, extra} {
+		for _, t := range list {
+			t = strings.TrimSpace(t)
+			if t == "" || seen[t] {
+				continue
+			}
+			seen[t] = true
+			tools = append(tools, t)
+		}
+	}
+	return []string{"--disallowedTools", strings.Join(tools, ",")}
+}
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`
 // with cwd set to the worktree. Binary resolution is a plain PATH lookup — the
@@ -113,7 +142,7 @@ var readOnlyToolArgs = []string{"--disallowedTools", "Edit,Write,MultiEdit,Noteb
 // launchd/service PATH must contain the claude binary). The prompt is passed as
 // an argument (not stdin) so --session-id positioning is unambiguous, matching
 // the dispatcher. NOTE: read-only-ness is enforced by the PROMPT contract plus
-// the edit tools denied on the argv (readOnlyToolArgs), not by a sandbox: a
+// the edit tools denied on the argv (ToolDenyArgs), not by a sandbox: a
 // Bash command can still write. The security review must confirm the run cannot mutate the
 // worktree in a way that would corrupt the graded diff (it runs in the task's
 // own throwaway worktree, so at worst it dirties that worktree, never main).
@@ -163,7 +192,7 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		PermissionMode: claudeflags.Mode(permEnv),
 		// Last on the argv: --disallowedTools takes a variadic list, so a bare
 		// positional argument after it would be read as another tool name.
-		ExtraArgs: readOnlyToolArgs,
+		ExtraArgs: ToolDenyArgs(spec.DisallowedTools),
 		// --setting-sources project,local: skip user-level settings (global plugin
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.
