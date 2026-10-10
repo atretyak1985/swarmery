@@ -17,22 +17,48 @@
 # (site.js themeMedia). The full episodes are opt-in because they are ~10 MB
 # of committed binary each: EPISODES="ep3-health ep6-knowledge" re-encodes
 # those two (both themes), EPISODES=all re-encodes every episode and the promo.
+#
+# Voiced language cuts: SITE_LANG=uk bash scripts/site/media.sh reads
+# video/uk/{final,light/final}/ and writes only the clips and posters, to
+# site/assets/{clips,posters}/uk/[light/]. A light cut that is missing falls
+# back to the dark one of the same language; an episode with no cut in that
+# language is skipped, and the pages keep the English clip for it.
 # Needs ffmpeg, bc and python3 with Pillow.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+L=${SITE_LANG:-}
 
 for theme in dark light; do
-if [ "$theme" = dark ]; then V=video; T=""; else V=video/light; T=light/; fi
-[ -d "$V/final" ] || [ -d "$V/raw" ] || { echo "skip $theme: no $V/final or $V/raw"; continue; }
+if [ -n "$L" ]; then
+  if [ "$theme" = dark ]; then V=video/$L; T=$L/; else V=video/$L/light; T=$L/light/; fi
+  [ -d "video/$L/final" ] || { echo "skip $L: no video/$L/final"; break; }
+else
+  if [ "$theme" = dark ]; then V=video; T=""; else V=video/light; T=light/; fi
+  [ -d "$V/final" ] || [ -d "$V/raw" ] || { echo "skip $theme: no $V/final or $V/raw"; continue; }
+fi
 
-src() { if [ -f "$V/final/swarmery-$1.mp4" ]; then echo "$V/final/swarmery-$1.mp4"; else echo "$V/raw/swarmery-$1.mp4"; fi; }
+src() {
+  if [ -f "$V/final/swarmery-$1.mp4" ]; then echo "$V/final/swarmery-$1.mp4"
+  elif [ -n "$L" ]; then [ -f "video/$L/final/swarmery-$1.mp4" ] && echo "video/$L/final/swarmery-$1.mp4" || true
+  else echo "$V/raw/swarmery-$1.mp4"; fi
+}
+# A language promo is its own cut: the promo clips and poster start elsewhere.
+promo_at() {
+  case "$L:$1" in
+    uk:hero) echo "38.5 24" ;; uk:promo-fleet) echo "62 8" ;; uk:poster) echo "47" ;;
+    *) echo "$2 ${3:-}" ;;
+  esac
+}
 
-mkdir -p "site/assets/clips/$T" "site/assets/posters/$T" "site/assets/img/$T"
+mkdir -p "site/assets/clips/$T" "site/assets/posters/$T"
+[ -n "$L" ] || mkdir -p "site/assets/img/$T"
 
 # name  source  start(s)  duration(s)
 while read -r name ep ss dur; do
   [ -z "$name" ] && continue
   in=$(src "$ep"); out=site/assets/clips/$T$name
+  [ -n "$in" ] || { echo "skip clip $T$name: no $L $ep cut"; continue; }
+  [ "$ep" = promo ] && read -r ss dur <<<"$(promo_at "$name" "$ss" "$dur")"
   ffmpeg -nostdin -v error -y -ss "$ss" -t "$dur" -i "$in" -an -vf "scale=1280:-2,fps=30" \
     -c:v libx264 -preset medium -crf 27 -pix_fmt yuv420p -profile:v high -movflags +faststart "$out.mp4"
   ffmpeg -nostdin -v error -y -ss "$(echo "$ss+2" | bc)" -i "$in" -frames:v 1 -vf scale=1280:-2 -q:v 4 "$out.jpg"
@@ -63,8 +89,12 @@ EOF
 
 for p in "promo 22" "ep1-planning 16" "ep2-inbox 16" "ep3-health 16" "ep4-sessions 16" "ep5-learning 16" "ep6-knowledge 41"; do
   set -- $p
+  [ "$1" = promo ] && set -- promo "$(promo_at poster "$2")"
+  [ -n "$(src "$1")" ] || { echo "skip poster $T$1: no $L $1 cut"; continue; }
   ffmpeg -nostdin -v error -y -ss "$2" -i "$(src "$1")" -frames:v 1 -vf scale=1280:-2 -q:v 3 "site/assets/posters/$T$1.jpg"
 done
+
+[ -n "$L" ] && continue  # language mode: the full cuts live in docs/video/<lang>/, screenshots are shared
 
 # full episodes: 720p, audio untouched; the promo ships at 1080p
 if [ -n "${EPISODES:-}" ]; then

@@ -14,13 +14,13 @@
   });
 
   /* themed media: clips, posters, screenshots and full videos each have a light
-     twin one folder down (assets/clips/light/…, video/light/…, video/uk/light/…);
+     twin one folder down (assets/clips/light/…, assets/clips/uk/light/…, video/uk/light/…);
      paths in the HTML are the dark ones and are rewritten whenever the theme changes */
   var MEDIA_ATTRS = ['src', 'poster', 'srcset', 'href', 'data-src', 'data-clip', 'data-poster', 'data-play', 'data-zoom'];
   function themedUrl(u, light) {
     if (!u) return u;
-    var d = u.replace(/(assets\/(?:clips|posters|img)\/)light\//g, '$1').replace(/(^|[\/\s,])video\/([a-z]{2}\/)?light\/(swarmery-)/g, '$1video/$2$3');
-    return light ? d.replace(/(assets\/(?:clips|posters|img)\/)/g, '$1light/').replace(/(^|[\/\s,])video\/([a-z]{2}\/)?(swarmery-)/g, '$1video/$2light/$3') : d;
+    var d = u.replace(/(assets\/(?:clips|posters|img)\/(?:[a-z]{2}\/)?)light\//g, '$1').replace(/(^|[\/\s,])video\/([a-z]{2}\/)?light\/(swarmery-)/g, '$1video/$2$3');
+    return light ? d.replace(/(assets\/(?:clips|posters|img)\/(?:[a-z]{2}\/)?)/g, '$1light/').replace(/(^|[\/\s,])video\/([a-z]{2}\/)?(swarmery-)/g, '$1video/$2light/$3') : d;
   }
   function themeMedia(theme) {
     var light = theme === 'light';

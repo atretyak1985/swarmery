@@ -29,6 +29,7 @@ LANGS = ("en", "uk")
 OG_LOCALE = {"en": "en_US", "uk": "uk_UA"}
 # Voiced cuts per language: docs/video/<lang>/ (light twins in <lang>/light/);
 # an episode a language has no cut for plays the English one.
+ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "site", "assets")
 VIDEO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "docs", "video")
 LOCALES_DIR = os.environ.get("SITE_LOCALES_DIR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "locales")
 MISSING = {}  # "<lang>:<key>" -> None, in first-seen order
@@ -147,6 +148,11 @@ def merged_promo():
 
 def has_cut(name):
     return CTX.lang != "en" and os.path.isfile(os.path.join(VIDEO_DIR, CTX.lang, name))
+
+def media(rel, kind, name):
+    """URL of a clip or poster: the current language's twin (cut from its voiced video) when there is one."""
+    own = CTX.lang != "en" and os.path.isfile(os.path.join(ASSETS_DIR, kind, CTX.lang, name))
+    return f"{rel}assets/{kind}/{CTX.lang}/{name}" if own else f"{rel}assets/{kind}/{name}"
 
 def vid(rel, name):
     """URL of a full video: the current language's voiced cut when there is one, else the English one."""
@@ -369,22 +375,22 @@ def footer(rel):
 
 def clip(rel, name, url, cls="", live=True):
     lv = f'<span class="live">{T("clip.live")}</span>' if live else ''
-    return f'''<div class="frame {cls}">{lv}<video data-clip muted loop playsinline preload="none" poster="{rel}assets/clips/{name}.jpg" data-src="{rel}assets/clips/{name}.mp4" aria-label="{E(url)}"></video></div>'''
+    return f'''<div class="frame {cls}">{lv}<video data-clip muted loop playsinline preload="none" poster="{media(rel, "clips", name + ".jpg")}" data-src="{media(rel, "clips", name + ".mp4")}" aria-label="{E(url)}"></video></div>'''
 
 def ep_attrs(rel, f):
     ch = json.dumps(f["chapters"])
-    return f'data-play="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" data-poster="{rel}assets/posters/{f["ep"]}.jpg" data-title="{TE("ep.label", f["n"])} · {E(f["name"])} · {f["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
+    return f'data-play="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" data-poster="{media(rel, "posters", f["ep"] + ".jpg")}" data-title="{TE("ep.label", f["n"])} · {E(f["name"])} · {f["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
 
 def promo_attrs(rel):
     p = CTX.promo
     ch = json.dumps(p["chapters"])
-    return f'data-play="{vid(rel, p["file"])}" data-poster="{rel}assets/posters/promo.jpg" data-title="{E(p["title"])} · {p["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
+    return f'data-play="{vid(rel, p["file"])}" data-poster="{media(rel, "posters", "promo.jpg")}" data-title="{E(p["title"])} · {p["dur"]}" data-chapters=\'{E(ch, quote=True)}\''
 
 def ep_card(rel, f, k=None):
     if f.get("soon"):
-        return f'''<a class="ep" href="{pg(rel)}features/{f["slug"]}/"><div class="th"><img src="{rel}assets/posters/{f["ep"]}.jpg" alt="" loading="lazy"><span class="soon">{T('ep.soon')}</span><div class="play"><span>{PLAY}</span></div></div>
+        return f'''<a class="ep" href="{pg(rel)}features/{f["slug"]}/"><div class="th"><img src="{media(rel, "posters", f["ep"] + ".jpg")}" alt="" loading="lazy"><span class="soon">{T('ep.soon')}</span><div class="play"><span>{PLAY}</span></div></div>
 <div class="meta"><div class="k">{k or T('ep.label', f["n"])}</div><h3>{f["name"]}</h3><p>{E(f["kicker"])}. {T('ep.silent_preview')}</p></div></a>'''
-    return f'''<button class="ep" type="button" {ep_attrs(rel, f)}><div class="th"><img src="{rel}assets/posters/{f["ep"]}.jpg" alt="" loading="lazy"><div class="play"><span>{PLAY}</span></div><span class="dur">{f["dur"]}</span></div>
+    return f'''<button class="ep" type="button" {ep_attrs(rel, f)}><div class="th"><img src="{media(rel, "posters", f["ep"] + ".jpg")}" alt="" loading="lazy"><div class="play"><span>{PLAY}</span></div><span class="dur">{f["dur"]}</span></div>
 <div class="meta"><div class="k">{k or T('ep.label', f["n"])}</div><h3>{f["name"]}</h3><p>{E(f["kicker"])}.</p></div></button>'''
 
 def post_card(rel, p, lead=False):
@@ -443,12 +449,12 @@ def page_home():
     tabs = []
     for i, (k, f, bi) in enumerate(reel_order):
         b = f["beats"][bi]
-        tabs.append(f'''<button class="reel-tab" type="button" role="tab" data-clip="{rel}assets/clips/{b[4]}.mp4" data-poster="{rel}assets/clips/{b[4]}.jpg" data-cap="{E(b[1])}" data-url="{E(b[5])}" data-href="{p}features/{f["slug"]}/"><span class="k"><b>0{i+1}</b>{T("home.reel.k." + k)}</span><h3>{f["name"]}</h3><p>{TE("home.reel." + k)}</p><span class="prog"></span></button>''')
+        tabs.append(f'''<button class="reel-tab" type="button" role="tab" data-clip="{media(rel, "clips", b[4] + ".mp4")}" data-poster="{media(rel, "clips", b[4] + ".jpg")}" data-cap="{E(b[1])}" data-url="{E(b[5])}" data-href="{p}features/{f["slug"]}/"><span class="k"><b>0{i+1}</b>{T("home.reel.k." + k)}</span><h3>{f["name"]}</h3><p>{TE("home.reel." + k)}</p><span class="prog"></span></button>''')
     bento = []
     spans = ["span-3", "span-3", "span-2", "span-2", "span-2", "span-6 wide"]
     for f, sp in zip(F, spans):
         b = f["beats"][0]
-        bento.append(f'''<a class="card rv {sp}" href="{p}features/{f["slug"]}/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="{rel}assets/clips/{b[4]}.jpg" data-src="{rel}assets/clips/{b[4]}.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">0{f["n"]} · {f["name"]}</span><h3>{E(f["kicker"])}</h3><p>{E(f["menu"])}.</p><span class="go">{T("explore", name=f["name"].lower())} {ARROW}</span></div></a>''')
+        bento.append(f'''<a class="card rv {sp}" href="{p}features/{f["slug"]}/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="{media(rel, "clips", b[4] + ".jpg")}" data-src="{media(rel, "clips", b[4] + ".mp4")}" aria-hidden="true"></video></div><div class="body"><span class="k">0{f["n"]} · {f["name"]}</span><h3>{E(f["kicker"])}</h3><p>{E(f["menu"])}.</p><span class="go">{T("explore", name=f["name"].lower())} {ARROW}</span></div></a>''')
     # the last bento card (knowledge) gets the side-by-side layout on wide screens via span-6; keep it simple
     eps = "".join(ep_card(rel, f) for f in F[:3])
     posts = "".join(post_card(rel, p) for p in CTX.posts[:3])
@@ -572,7 +578,7 @@ def page_feature(i):
     if f.get("soon"):
         player = f'''<div class="player rv">{clip(rel, "knowledge-arch", f"{ep} · {f['name']} · {T('feature.silent')}", live=False)}<div class="player-meta"><span>{ep} · {f["name"]} · {T('feature.soon_meta')}</span><a href="../../videos/">{T('all_episodes')} &rarr;</a></div></div>'''
     else:
-        player = f'''<div class="player rv"><div class="window"><div class="bar"><i></i><i></i><i></i><span class="url">{ep} · {f["name"]}</span></div><video controls playsinline preload="none" poster="{rel}assets/posters/{f["ep"]}.jpg"><source src="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" type="video/mp4"></video></div>
+        player = f'''<div class="player rv"><div class="window"><div class="bar"><i></i><i></i><i></i><span class="url">{ep} · {f["name"]}</span></div><video controls playsinline preload="none" poster="{media(rel, "posters", f["ep"] + ".jpg")}"><source src="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" type="video/mp4"></video></div>
 <div class="player-meta"><span>{ep} · {f["name"]} · {f["dur"]} · {T('feature.quality')}</span><a href="{vid(rel, "swarmery-" + f["ep"] + ".mp4")}" download>{T('dialog.download')}</a></div></div>'''
     pager = '<div class="pager">'
     pager += f'<a href="../{prev["slug"]}/"><span class="d">&larr; {T("pager.prev")} · 0{prev["n"]}</span><b>{prev["name"]}</b></a>' if prev else f'<a href="../"><span class="d">&larr; {T("pager.overview")}</span><b>{T("pager.all")}</b></a>'
@@ -604,7 +610,7 @@ def page_features():
     cards = []
     for f in CTX.features:
         b = f["beats"][0]
-        cards.append(f'''<a class="card rv span-3" href="{f["slug"]}/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="{rel}assets/clips/{b[4]}.jpg" data-src="{rel}assets/clips/{b[4]}.mp4" aria-hidden="true"></video></div><div class="body"><span class="k">0{f["n"]} · {f["name"]} · {T("features.card.episode")} {f["dur"]}</span><h3>{E(f["kicker"])}</h3><p>{E(f["lede"])}</p><span class="go">{T("explore", name=f["name"].lower())} {ARROW}</span></div></a>''')
+        cards.append(f'''<a class="card rv span-3" href="{f["slug"]}/"><div class="media"><video data-clip muted loop playsinline preload="none" poster="{media(rel, "clips", b[4] + ".jpg")}" data-src="{media(rel, "clips", b[4] + ".mp4")}" aria-hidden="true"></video></div><div class="body"><span class="k">0{f["n"]} · {f["name"]} · {T("features.card.episode")} {f["dur"]}</span><h3>{E(f["kicker"])}</h3><p>{E(f["lede"])}</p><span class="go">{T("explore", name=f["name"].lower())} {ARROW}</span></div></a>''')
     pages = "".join(f'<div><b>{t}</b><p>{E(d)}</p></div>' for t, d in CTX.cp_pages)
     principles = "".join(f'<div class="tile rv"><span class="k">{k}</span><h3>{t}</h3><p>{d}</p></div>' for k, t, d in CTX.principles)
     body = f'''
@@ -632,7 +638,7 @@ def page_videos():
     p = CTX.promo
     voice = TE("videos.voice_note")
     voice = " " + voice if voice else ""  # "" in English: the en lede is unchanged
-    feat = f'''<button class="ep feature rv" type="button" {promo_attrs(rel)}><div class="th"><img src="{rel}assets/posters/promo.jpg" alt="" loading="lazy"><div class="play"><span>{PLAY}</span></div><span class="dur">{p["dur"]}</span></div>
+    feat = f'''<button class="ep feature rv" type="button" {promo_attrs(rel)}><div class="th"><img src="{media(rel, "posters", "promo.jpg")}" alt="" loading="lazy"><div class="play"><span>{PLAY}</span></div><span class="dur">{p["dur"]}</span></div>
 <div class="meta"><div class="k">{T('videos.start')}</div><h3>{p["title"]}</h3><p>{E(p["text"])}</p></div></button>'''
     eps = "".join(ep_card(rel, f) for f in CTX.features)
     chapters = []
