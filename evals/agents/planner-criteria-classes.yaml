@@ -1,0 +1,28 @@
+# planner criterion classes + header defaults (phase-run outcomes plan, phase 3).
+# A criterion closed by a push / PR / merge must carry `[LAND]`, one only a
+# human can perform must carry `[MANUAL]`, and an L phase's header must default
+# to `**Verify:** normal` and `**Review:** on`. Without the markers a phase run
+# either stalls on criteria it cannot close or fakes them; without the header
+# rows an L phase is never graded or reviewed.
+
+- description: planner marks landing and manual criteria and sets the L-phase header defaults
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/planner.md
+    task: |
+      Write the full markdown of ONE phase doc for this phase, output only the
+      phase doc: "add bulk editing of order line items — the PATCH handler in
+      api/orders/line_items.ts, the bulk-edit service in src/orders/bulk.ts and
+      the table toolbar in web/src/LineItemsTable.tsx". Size band L, single
+      repo, context already gathered. The phase is finished only when the
+      branch is pushed and a pull request is opened and merged, and someone
+      checks the production console to confirm bulk edits apply to real orders.
+  assert:
+    - type: contains                        # hard: the push / PR / merge criterion is classed
+      value: "[LAND]"
+    - type: contains                        # hard: the production-console criterion is classed
+      value: "[MANUAL]"
+    - type: regex                           # hard: L phases default to verification
+      value: "\\*\\*Verify:\\*\\* normal"
+    - type: regex                           # hard: L phases default to review
+      value: "\\*\\*Review:\\*\\* on"

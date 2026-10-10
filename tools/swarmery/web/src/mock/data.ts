@@ -1608,6 +1608,8 @@ const mockEpicPhase = (
   surprise: seq === 2 ? MOCK_SURPRISE : null,
   landing: mockLanding(),
   reopens: [],
+  landOpen: 0,
+  manualOpen: 0,
   reviews: [],
   id,
   seq,

@@ -84,8 +84,9 @@ immediately after you verify each one. The platform derives all plan progress
 from those checkboxes. Unsatisfied criteria stay unticked — never tick to
 close out a phase.
 
-**Summary contract (hard gate).** When a phase's last criterion is ticked,
-write what shipped (files, commits, verification output, deviations, plus the
+**Summary contract (hard gate).** When a phase's last EXECUTABLE criterion is
+ticked (every one that is not `[LAND]`/`[MANUAL]` — those are the operator's
+and the landing's, and close without you), write what shipped (files, commits, verification output, deviations, plus the
 three mandatory fields — **Blocked calls**, **Delegation cost**, and the
 one-sentence **What would have made this cheaper**, each written out even when
 empty; ≤50 lines) into that phase doc under a literal `## Completion Report`

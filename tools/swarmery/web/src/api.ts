@@ -2367,6 +2367,20 @@ export type PhaseRunBranchError = Error & {
   /** `deps-unmerged` only: the diverged, unmerged run branches the phase
    *  depends on — the UI offers to open a change request for each. */
   branches?: string[] | undefined;
+  /** `manual-only` / `not-yet-earliest`: what the operator does next — already
+   *  appended to `message`, kept apart for a caller that lays it out itself. */
+  hint?: string | undefined;
+};
+
+/**
+ * The next-step sentence for the two doc-gate refusals, used when the daemon's
+ * body carries none (an older daemon). The daemon's own `hint` always wins.
+ */
+export const RUN_CONFLICT_HINTS: Partial<Record<RunConflictCode, string>> = {
+  'manual-only':
+    'Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you.',
+  'not-yet-earliest':
+    "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies.",
 };
 
 /**
@@ -2398,11 +2412,19 @@ function runConflictError(
     commitsAhead?: number;
     base?: string;
     branches?: string[];
+    /** `manual-only` / `not-yet-earliest`: the next step, in the operator's words. */
+    hint?: string;
   },
   fallback: string,
 ): PhaseRunBranchError {
-  const err: PhaseRunBranchError = new Error(body.message ?? body.error ?? fallback);
+  const hint =
+    body.code === 'manual-only' || body.code === 'not-yet-earliest'
+      ? (body.hint ?? RUN_CONFLICT_HINTS[body.code])
+      : undefined;
+  const text = body.message ?? body.error ?? fallback;
+  const err: PhaseRunBranchError = new Error(hint !== undefined ? `${text} — ${hint}` : text);
   if (body.code !== undefined) err.code = body.code;
+  if (hint !== undefined) err.hint = hint;
   if (body.code === 'branch-dirty') {
     err.branch = body.branch;
     err.commitsAhead = body.commitsAhead;
@@ -2689,6 +2711,42 @@ export async function togglePlanCheckbox(
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? `toggle checkbox failed: ${String(res.status)}`);
+  }
+  return (await res.json()) as PlanDoc;
+}
+
+/** A criterion class marker (phase-run outcomes plan, D3): `[LAND]` is closed by
+ * landing the work (the daemon ticks it on merge), `[MANUAL]` only by a human. */
+export type CriterionClass = 'LAND' | 'MANUAL';
+
+/**
+ * PATCH /api/epics/{taskId}/docs?path= {line, class} — mark the criterion on that
+ * 0-based line `[LAND]` or `[MANUAL]` (`- [ ] push` → `- [ ] [LAND] push`); an
+ * existing marker is replaced. 422 when the line is not a criterion outside a
+ * code fence. Resolves to the fresh doc.
+ */
+export async function markPlanCriterion(
+  taskId: number,
+  path: string,
+  line: number,
+  cls: CriterionClass,
+): Promise<PlanDoc> {
+  if (MOCK) {
+    const doc = await mockApi.planDoc(taskId, path);
+    const lines = doc.content.split('\n');
+    const cur = lines[line];
+    if (cur !== undefined)
+      lines[line] = cur.replace(/^(\s*[-*]\s+\[[ xX]\]\s+)(?:\[(?:LAND|MANUAL)\]\s+)?/, `$1[${cls}] `);
+    return { ...doc, content: lines.join('\n') };
+  }
+  const res = await fetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ line, class: cls }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `mark criterion failed: ${String(res.status)}`);
   }
   return (await res.json()) as PlanDoc;
 }
