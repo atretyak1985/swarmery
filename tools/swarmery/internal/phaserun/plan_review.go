@@ -447,13 +447,13 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), sections),
+		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), sections, s.DaemonPort),
 		SessionUUID:     o.sessionUUID,
 		Cwd:             acq.Path,
 		Model:           reviewModel,
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
-		DisallowedTools: reviewDeniedTools,
+		DisallowedTools: s.reviewDenials(),
 	}
 	log.Printf("phaserun: task=%d plan branch review in worktree=%q (%d files over %d branch(es))",
 		taskID, acq.Path, total, len(branches))
@@ -578,10 +578,11 @@ func planReadme(docPath string) string {
 }
 
 // planReviewPrompt renders the plan branch review prompt: the phase reviewer's
-// role and contract, the seam focus, the plan README and the per-phase diffs.
-func planReviewPrompt(title, readme, sections string) string {
+// role, contract and daemon-API rule, the seam focus, the plan README and the
+// per-phase diffs.
+func planReviewPrompt(title, readme, sections string, daemonPort int) string {
 	var b strings.Builder
-	b.WriteString(reviewerRole)
+	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\n")
 	b.WriteString(planSeamFocus)
 	b.WriteString("\n\nPLAN: ")

@@ -2486,6 +2486,8 @@ func cmdServe(args []string) error {
 		reviewTimeout = time.Duration(v) * time.Minute
 	}
 	phaserunSvc.Review = verify.ClaudeRunner{AccountVerdict: runTruth.Record, Timeout: reviewTimeout}
+	// The verifier's port, so reviewers are denied the daemon's API on the same one.
+	phaserunSvc.DaemonPort = verifierCfg.DaemonPort
 	// Learning loop phase 12: every finished phase run records what it actually
 	// did (phase_actuals — files/areas/lines from its branch, cost, outcome,
 	// verdict, test failures, continuations, fallback), measured again once the
