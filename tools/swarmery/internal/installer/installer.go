@@ -175,7 +175,19 @@ func (s *System) bootstrapWithRetry() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("launchctl bootstrap failed after %d attempts: %v\n%s", bootstrapAttempts, err, out)
+	// Bootstrap keeps failing, but the service may still be registered (a
+	// bootout that never completed): restart it in place rather than leave the
+	// daemon down. kickstart -k reloads the same binary path, so the freshly
+	// copied binary runs; plist-level changes wait for the next bootstrap.
+	if s.registered() {
+		if _, kerr := s.Run.Run("launchctl", "kickstart", "-k", s.serviceTarget()); kerr == nil && s.registered() {
+			fmt.Fprintf(s.Out, "launchctl bootstrap failed after %d attempts (%v); service %s is still registered — restarted it with `launchctl kickstart -k %s` (plist changes apply on the next successful install)\n",
+				bootstrapAttempts, err, Label, s.serviceTarget())
+			return nil
+		}
+	}
+	return fmt.Errorf("launchctl bootstrap failed after %d attempts: %v\n%s\nthe daemon is NOT running; recover manually with:\n  launchctl bootstrap %s %s",
+		bootstrapAttempts, err, out, s.domain(), s.PlistPath())
 }
 
 // Uninstall boots the service out of launchd and deletes the plist.
