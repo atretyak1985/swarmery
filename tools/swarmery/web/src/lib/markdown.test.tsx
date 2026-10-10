@@ -161,3 +161,38 @@ describe('regression: untouched syntax', () => {
     expect(html).toContain('&lt;b&gt;not bold&lt;/b&gt;');
   });
 });
+
+describe('heading ids under `anchors`', () => {
+  /** Same as render(), with the docs pane's id namespace switched on. */
+  function renderAnchored(md: string): string {
+    return renderStatic(
+      <MemoryRouter>
+        <Markdown text={md} anchors />
+      </MemoryRouter>,
+    );
+  }
+
+  it('an explicit ` {#id}` wins over the slug and is stripped from the text', () => {
+    const html = renderAnchored('## Прогноз {#forecast}\n\nbody');
+    expect(html).toContain('id="forecast"');
+    expect(html).toContain('Прогноз');
+    expect(html).not.toContain('{#forecast}');
+  });
+
+  it('a heading without one keeps its slug, Cyrillic included', () => {
+    expect(renderAnchored('## Getting started')).toContain('id="getting-started"');
+    expect(renderAnchored('## Як плагін потрапляє у вашу сесію')).toContain(
+      'id="як-плагін-потрапляє-у-вашу-сесію"',
+    );
+  });
+
+  it('strips the suffix but stamps no id when `anchors` is off', () => {
+    const html = render('## Прогноз {#forecast}');
+    expect(html).not.toContain('id=');
+    expect(html).not.toContain('{#forecast}');
+  });
+
+  it('only a trailing, space-separated `{#id}` counts as attribute syntax', () => {
+    expect(renderAnchored('## Use {#x} mid-line')).toContain('{#x} mid-line');
+  });
+});

@@ -1762,6 +1762,10 @@ msgstr "Вбити примусово"
 msgid "Forest"
 msgstr "Ліс"
 
+#: src/pages/docsRail.ts
+msgid "Formats"
+msgstr "Формати"
+
 #: src/lib/sessionsView.ts
 msgid "fourth"
 msgstr "четверта"
@@ -1809,6 +1813,10 @@ msgstr "Git push ніколи не погоджується автоматичн
 #: src/components/PermissionPresets.tsx
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
+
+#: src/pages/docsRail.ts
+msgid "Guides"
+msgstr "Посібники"
 
 #: src/components/SessionCard.tsx
 msgid "Handoff"
@@ -2782,6 +2790,10 @@ msgstr "Проєкти на пресеті «заблоковано» — від
 msgid "prompt"
 msgstr "промпт"
 
+#: src/pages/docsRail.ts
+msgid "Protocols"
+msgstr "Протоколи"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "pull request opened: {prUrl}"
 msgstr "пул-реквест відкрито: {prUrl}"
@@ -2909,6 +2921,10 @@ msgstr "останні рішення"
 #: src/components/usage/UsageConnect.tsx
 msgid "Reconnect"
 msgstr "Під’єднати знову"
+
+#: src/pages/docsRail.ts
+msgid "Reference"
+msgstr "Довідка"
 
 #: src/api.ts
 msgid "refine planning failed: {status}"

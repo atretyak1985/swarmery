@@ -3,10 +3,13 @@
 // separate from Docs.tsx so it can be unit-tested without mounting the page.
 //
 // The split is CLIENT-SIDE, on the file name, because /api/docs response
-// shapes are frozen by the parity contract ({slug,title,file} — internal/api/
+// shapes are frozen by the parity contract ({slug,title,file,lang} — internal/api/
 // docs.go). No group field is added server-side; the daemon only pins the
 // order (docOrder), and `guide-` is the prefix the Makefile's flattening
 // preserves.
+
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 
 /** The file-name prefix that marks a doc as an illustrated guide. */
 export const GUIDE_PREFIX = 'guide-';
@@ -16,6 +19,16 @@ export type DocGroupName = 'Guides' | 'Reference' | 'Formats' | 'Protocols';
 /** Section order in the rail. A group with no docs at all is dropped before
  * render — most doc sets leave Formats and Protocols empty. */
 export const GROUP_ORDER: readonly DocGroupName[] = ['Guides', 'Reference', 'Formats', 'Protocols'];
+
+/** What the rail and the article eyebrow SHOW for each group. The group name
+ * itself stays an English id (grouping, keys, tests); the label is a message,
+ * rendered with `i18n._()` so a language switch relabels the rail in place. */
+export const GROUP_LABEL: Readonly<Record<DocGroupName, MessageDescriptor>> = {
+  Guides: msg`Guides`,
+  Reference: msg`Reference`,
+  Formats: msg`Formats`,
+  Protocols: msg`Protocols`,
+};
 
 /** The rail group a doc belongs to, from its file name. */
 export function groupOf(file: string): DocGroupName {

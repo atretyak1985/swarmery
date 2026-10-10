@@ -3719,6 +3719,10 @@ msgstr "цих зон"
 msgid "This account hit a Claude usage limit."
 msgstr "Цей акаунт досяг ліміту використання Claude."
 
+#: src/pages/Docs.tsx
+msgid "This document is not translated yet; the English original is shown."
+msgstr "Цей документ ще не перекладено; показано англійський оригінал."
+
 #: src/pages/system/docsSection.ts
 msgid "this file has two `# How to use` headings — the parser keeps the first and ignores the second"
 msgstr "у цьому файлі два заголовки `# How to use` — парсер бере перший і ігнорує другий"

@@ -1762,6 +1762,10 @@ msgstr "Force kill"
 msgid "Forest"
 msgstr "Forest"
 
+#: src/pages/docsRail.ts
+msgid "Formats"
+msgstr "Formats"
+
 #: src/lib/sessionsView.ts
 msgid "fourth"
 msgstr "fourth"
@@ -1809,6 +1813,10 @@ msgstr "Git push is never auto-approved unless you enable it explicitly."
 #: src/components/PermissionPresets.tsx
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Git writes (add, commit, checkout, worktree)"
+
+#: src/pages/docsRail.ts
+msgid "Guides"
+msgstr "Guides"
 
 #: src/components/SessionCard.tsx
 msgid "Handoff"
@@ -2782,6 +2790,10 @@ msgstr "Projects on the locked-down preset — refused, stamped into dispatchErr
 msgid "prompt"
 msgstr "prompt"
 
+#: src/pages/docsRail.ts
+msgid "Protocols"
+msgstr "Protocols"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "pull request opened: {prUrl}"
 msgstr "pull request opened: {prUrl}"
@@ -2909,6 +2921,10 @@ msgstr "recent decisions"
 #: src/components/usage/UsageConnect.tsx
 msgid "Reconnect"
 msgstr "Reconnect"
+
+#: src/pages/docsRail.ts
+msgid "Reference"
+msgstr "Reference"
 
 #: src/api.ts
 msgid "refine planning failed: {status}"

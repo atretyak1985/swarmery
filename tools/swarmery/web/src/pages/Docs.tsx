@@ -28,8 +28,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import type { DocDetail, DocMeta } from '../api/types';
 import { fetchDoc, fetchDocs } from '../api';
+import { headingId, splitHeadingId } from '../lib/headingId';
 import { Markdown } from '../lib/markdown';
-import { GROUP_ORDER, groupOf } from './docsRail';
+import { GROUP_LABEL, GROUP_ORDER, groupOf } from './docsRail';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 
 /** Drop a leading `# Title` line — the pane renders its own heading. */
@@ -43,17 +44,6 @@ function stripLeadingH1(markdown: string): { title: string | null; body: string 
 }
 
 /* ----- table of contents ----- */
-
-/** Heading id — MUST stay byte-identical to slugify() in lib/markdown.tsx,
- * which is what actually stamps the ids these entries scroll to. Duplicated
- * rather than exported because the renderer is a shared surface and this screen
- * is the only caller that owns the id namespace (Markdown `anchors`). */
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 interface TocEntry {
   id: string;
@@ -76,15 +66,20 @@ function tocOf(markdown: string): TocEntry[] {
     if (m === null) continue;
     const raw = (m[1] ?? '').trim();
     if (raw === '') continue;
-    // The id comes from the RAW text (that is what the renderer slugifies);
-    // the label drops inline code/emphasis markers, which read as noise here.
-    out.push({ id: slugify(raw), label: raw.replace(/[`*]/g, '') });
+    // The id comes from the RAW text through the same headingId() the renderer
+    // stamps with (explicit ` {#id}` first, slug otherwise); the label drops
+    // that suffix and inline code/emphasis markers, which read as noise here.
+    out.push({ id: headingId(raw), label: splitHeadingId(raw).text.replace(/[`*]/g, '') });
   }
   return out;
 }
 
 export function Docs(): JSX.Element {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
+  // The active UI language. Both fetches depend on it: switching the language
+  // in the header re-fetches the list (titles) and the open doc in place — the
+  // API client reads the same locale to pick `?lang=` (fetchDocs/fetchDoc).
+  const locale = i18n.locale;
   const { slug } = useParams<{ slug: string }>();
   const [docs, setDocs] = useState<DocMeta[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -93,6 +88,7 @@ export function Docs(): JSX.Element {
   const [query, setQuery] = useState('');
   const articleRef = useRef<HTMLDivElement>(null);
 
+  // `locale` is the re-fetch trigger: fetchDocs reads it through currentLocale().
   useEffect(() => {
     fetchDocs()
       .then((list) => {
@@ -100,10 +96,11 @@ export function Docs(): JSX.Element {
         setListError(null);
       })
       .catch((e: unknown) => setListError(String(e)));
-  }, []);
+  }, [locale]);
 
   const activeSlug = slug ?? docs?.[0]?.slug ?? null;
 
+  // `locale` is a re-fetch trigger too: fetchDoc reads it through currentLocale().
   useEffect(() => {
     if (activeSlug === null) return;
     setDoc(null);
@@ -111,7 +108,7 @@ export function Docs(): JSX.Element {
     fetchDoc(activeSlug)
       .then(setDoc)
       .catch((e: unknown) => setDocError(String(e)));
-  }, [activeSlug]);
+  }, [activeSlug, locale]);
 
   const { hash, key } = useLocation();
 
@@ -240,7 +237,7 @@ export function Docs(): JSX.Element {
           {groups.map((g) => (
             <div key={g.name} className="mt-5">
               <div className="mb-2 font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-                {g.name}
+                {i18n._(GROUP_LABEL[g.name])}
               </div>
               <div className="flex flex-col gap-0.5">
                 {g.items.map((d) => {
@@ -286,7 +283,7 @@ export function Docs(): JSX.Element {
           {doc !== null && rendered !== null && (
             <>
               <div className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
-                {groupOf(doc.file)}
+                {i18n._(GROUP_LABEL[groupOf(doc.file)])}
               </div>
               <h1 className="mt-1.5 font-display text-[22px] font-medium tracking-[-0.01em] desk:text-[28px]">
                 {rendered.title ?? doc.title}
@@ -295,6 +292,14 @@ export function Docs(): JSX.Element {
                 {/* i18n-ignore — a repository path */}
                 swarmery/docs/{doc.file}
               </div>
+              {/* A Ukrainian interface asked for `?lang=uk`, and the daemon had
+                  no translation of this doc (or an older build ignored the
+                  parameter): say so instead of passing English off silently. */}
+              {locale === 'uk' && doc.lang !== 'uk' && (
+                <p className="mt-3 rounded-lg border border-line bg-surface2 px-3 py-2 text-[12px] text-ink-dim">
+                  <Trans>This document is not translated yet; the English original is shown.</Trans>
+                </p>
+              )}
               {/* The one surface that renders a single body per page, so it
                   owns the heading-id namespace the deep links resolve against.
                   `.docs-article` carries the body element metrics (index.css). */}

@@ -3,16 +3,25 @@ package api
 // Parity wave: markdown docs endpoints, backed by the go:embed snapshot in
 // internal/docsfs (populated by `make copy-docs` during build/dev).
 //
-// Response shapes are FROZEN by the parity contract:
-//   list item: {"slug","title","file"}   detail adds: {"markdown"}
+// Response shapes are FROZEN by the parity contract, plus one additive field:
+//   list item: {"slug","title","file","lang"}   detail adds: {"markdown"}
 //
 // slug  = lowercased basename without .md
 // title = first "# " heading line (fallback: the file name)
+// lang  = the language of the title/markdown actually returned ("en" | "uk")
 // An empty embed (fresh clone / CI) yields [].
+//
+// Translations: `?lang=uk` swaps each doc's title and markdown for its twin in
+// the embed's uk/ subdir (content/uk/<file>, snapshotted by `make copy-docs`)
+// when one exists. The English file stays the source of truth for slug, order
+// and existence — a doc nobody translated yet is still listed, in English, with
+// lang "en", and a uk file with no English pair is never served. Any other
+// `lang` value, or none, is the English behaviour from before translations.
 
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io/fs"
 	"math"
 	"net/http"
@@ -24,6 +33,25 @@ type docDTO struct {
 	Slug  string `json:"slug"`
 	Title string `json:"title"`
 	File  string `json:"file"`
+	Lang  string `json:"lang"`
+}
+
+const (
+	docLangEN = "en"
+	docLangUK = "uk"
+	// docUKDir is the embed subdir holding the Ukrainian twins (Makefile
+	// copy-docs → DOCS_UK_DST). readDocs skips directories, so it is never
+	// listed as a doc of its own.
+	docUKDir = "uk"
+)
+
+// docLang is the language a request asked for: "uk" only when it says so
+// exactly, English for anything else (absent, empty, unknown).
+func docLang(r *http.Request) string {
+	if r.URL.Query().Get("lang") == docLangUK {
+		return docLangUK
+	}
+	return docLangEN
 }
 
 type docDetailDTO struct {
@@ -61,14 +89,15 @@ var docOrder = map[string]int{
 
 // GET /api/docs
 func (h *Handler) listDocs(w http.ResponseWriter, r *http.Request) {
-	docs, err := h.readDocs()
+	docs, err := h.readDocs(docLang(r))
 	writeJSON(w, docs, err)
 }
 
 // GET /api/docs/{slug}
 func (h *Handler) getDoc(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
-	docs, err := h.readDocs()
+	lang := docLang(r)
+	docs, err := h.readDocs(lang)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -77,19 +106,39 @@ func (h *Handler) getDoc(w http.ResponseWriter, r *http.Request) {
 		if d.Slug != slug {
 			continue
 		}
-		md, err := fs.ReadFile(h.Docs, d.File)
+		md, got, err := h.docText(d.File, lang)
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
+		d.Lang = got
 		writeJSON(w, docDetailDTO{docDTO: d, Markdown: string(md)}, nil)
 		return
 	}
 	http.Error(w, `{"error":"doc not found"}`, http.StatusNotFound)
 }
 
-// readDocs lists the embedded markdown files as DTOs in nav order.
-func (h *Handler) readDocs() ([]docDTO, error) {
+// docText returns the markdown served for the English doc `file` in `lang`,
+// and the language that markdown is actually in: the uk twin when asked for
+// and present, the English file otherwise. Only a MISSING twin falls back — any
+// other read error is returned, so a broken embed is not papered over.
+func (h *Handler) docText(file, lang string) ([]byte, string, error) {
+	if lang == docLangUK {
+		md, err := fs.ReadFile(h.Docs, docUKDir+"/"+file)
+		if err == nil {
+			return md, docLangUK, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, "", err
+		}
+	}
+	md, err := fs.ReadFile(h.Docs, file)
+	return md, docLangEN, err
+}
+
+// readDocs lists the embedded markdown files as DTOs in nav order, with each
+// title in `lang` when that doc has a translation (see docText).
+func (h *Handler) readDocs(lang string) ([]docDTO, error) {
 	docs := []docDTO{}
 	if h.Docs == nil {
 		return docs, nil
@@ -103,7 +152,7 @@ func (h *Handler) readDocs() ([]docDTO, error) {
 		if e.IsDir() || !strings.HasSuffix(strings.ToLower(name), ".md") {
 			continue // .gitkeep and anything non-markdown
 		}
-		md, err := fs.ReadFile(h.Docs, name)
+		md, got, err := h.docText(name, lang)
 		if err != nil {
 			return nil, err
 		}
@@ -111,6 +160,7 @@ func (h *Handler) readDocs() ([]docDTO, error) {
 			Slug:  strings.ToLower(name[:len(name)-len(".md")]),
 			Title: docTitle(md, name),
 			File:  name,
+			Lang:  got,
 		})
 	}
 	sort.Slice(docs, func(i, j int) bool {

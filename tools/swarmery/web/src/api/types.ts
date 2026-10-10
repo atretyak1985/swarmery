@@ -538,11 +538,17 @@ export interface HealthAutoMode {
   alerting: boolean;
 }
 
+/** The language a doc's title/markdown is actually in. */
+export type DocLang = 'en' | 'uk';
+
 /** GET /api/docs — list item. */
 export interface DocMeta {
   slug: string;
   title: string;
   file: string;
+  /** 'uk' only when `?lang=uk` was asked for AND the doc has a translation;
+   * every other case is the English original. */
+  lang: DocLang;
 }
 
 /** GET /api/docs/{slug} */

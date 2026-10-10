@@ -33,7 +33,7 @@ Lingui macro; the English text in the source code is the message id.
    - counts: `plural(n, { one: '# phase', other: '# phases' })` (from `@lingui/core/macro`) — Ukrainian
      needs its `one/few/many/other` forms, so never concatenate a number with
      an English noun.
-   Dates and numbers go through `src/lib/format.ts`, which formats with the
+     Dates and numbers go through `src/lib/format.ts`, which formats with the
      active locale (`currentLocale()` in `src/i18n/locale.ts`).
 2. **Extract**: `npm run i18n:extract`. The new `msgid` lands in the catalog
    that owns the file — `lingui.config.ts` maps every source folder to one of
@@ -43,9 +43,9 @@ Lingui macro; the English text in the source code is the message id.
 3. **Translate** the new entry's `msgstr` in `src/locales/uk/<catalog>.po`
    (the `en` catalog needs nothing — the id is the English text). Keep every
    `{placeholder}`, `#` and plural form of the source: `src/i18n/catalog.test.ts`
-   fails on an empty `msgstr` or a lost placeholder. Place names (Today, Inbox,
-   Needs you, Sessions, Plans, Health, Learning, Knowledge, Docs, System,
-   Settings) stay English in both locales; they match the URLs and the docs.
+   fails on an empty `msgstr` or a lost placeholder. Place names are translated
+   like any other string (Today → Сьогодні, Inbox → Вхідні, Plans → Плани…);
+   only URLs, codes and identifiers stay English.
 4. **Compile** happens on its own: `npm run dev`, `npm run build` and
    `npm test` all run `lingui compile` first. The compiled `src/locales/*/*.mjs`
    files are gitignored; commit only the `.po` files.
@@ -87,3 +87,30 @@ Go drift test) is outside the scan.
   `--locale en` is the English control run). Fix an overflow with layout —
   `flex-wrap`, `min-w-0`, `truncate` plus a `title` — never by shortening the
   translation.
+
+## Translating a doc
+
+The Docs page serves the Ukrainian version of a built-in doc when the
+interface is Ukrainian (`GET /api/docs?lang=uk`). A translation lives next to
+its English original, in a `uk/` folder, under the **same file name**:
+`docs/uk/` at the repository root (ONBOARDING, WORKFLOW, EXTENDING, NEUTRALITY,
+PLUGINS), `tools/swarmery/docs/uk/` (concepts, retro, usage,
+api-project-config) and `tools/swarmery/docs/guides/uk/` (the `guide-*.md`
+files). `make copy-docs` (run by `make build` and `make dev`) snapshots them
+into `internal/docsfs/content/uk/` for `go:embed`; the English file stays the
+source of truth for which docs exist and in what order, so a doc with no
+translation is still listed, shown in English with a "not translated yet" note.
+
+Keep the structure identical: the same `##`/`###` headings in the same order,
+the same fenced blocks (commands, paths and env vars untouched) and tables.
+Keep the English anchor on every translated heading that something links to,
+with an explicit id: `## Прогноз {#forecast}` — a Ukrainian heading slugifies
+to a different id, and the cross-doc links and the glossary's "Read more →"
+point at the English one. `go test ./internal/docsfs/` (after `make
+copy-docs`) checks all of it — heading, fence and table counts, and that every
+linked anchor still resolves — in `uk_parity_test.go`.
+
+**Changed the English doc? Update the Ukrainian one in the same change, or
+delete it.** The parity test catches an added or removed section, not a
+rewritten paragraph; a deleted translation simply falls back to the English
+original with the note, which beats a stale one.

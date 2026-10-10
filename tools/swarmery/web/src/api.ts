@@ -31,6 +31,7 @@ import type {
   TaskDiff,
   AutonomyResp,
   DocDetail,
+  DocLang,
   DocMeta,
   DurationsResp,
   Epic,
@@ -119,6 +120,7 @@ import type {
   ToolsResponse,
 } from './api/types';
 import { t } from '@lingui/core/macro';
+import { currentLocale } from './i18n/locale';
 import { mockApi } from './mock/data';
 
 /** Offline mock mode — fixture data + fake WS (VITE_MOCK=1). */
@@ -1067,14 +1069,21 @@ export async function applyProposal(id: number): Promise<void> {
   if (!res.ok) throw new Error(await errBody(res, t`apply proposal failed`));
 }
 
+/** The `?lang=` the docs endpoints serve the active UI language in: the
+ * Ukrainian twin of a doc when the interface is Ukrainian, English otherwise.
+ * The daemon falls back to English per doc and says so in `lang`. */
+function docsLang(): DocLang {
+  return currentLocale() === 'uk-UA' ? 'uk' : 'en';
+}
+
 export function fetchDocs(): Promise<DocMeta[]> {
   if (MOCK) return mockApi.docs();
-  return get('/api/docs');
+  return get(`/api/docs?lang=${docsLang()}`);
 }
 
 export function fetchDoc(slug: string): Promise<DocDetail> {
   if (MOCK) return mockApi.doc(slug);
-  return get(`/api/docs/${encodeURIComponent(slug)}`);
+  return get(`/api/docs/${encodeURIComponent(slug)}?lang=${docsLang()}`);
 }
 
 // --- phase 3.5: workspaces ----------------------------------------------------

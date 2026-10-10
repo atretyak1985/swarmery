@@ -82,12 +82,15 @@ func fenceMarker(trimmed string) string {
 	return ""
 }
 
-// slugify mirrors the heading-id function in web/src/lib/markdown.tsx.
+// slugify mirrors slugify() in web/src/lib/headingId.ts, the heading-id
+// function the docs renderer stamps with: Latin a–z, digits and the Cyrillic
+// block (U+0400–U+04FF, so a translated heading gets an id of its own) survive,
+// every other run becomes one dash.
 func slugify(s string) string {
 	var b strings.Builder
 	prevDash := false
 	for _, r := range strings.ToLower(s) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || (r >= 0x0400 && r <= 0x04FF) {
 			b.WriteRune(r)
 			prevDash = false
 			continue

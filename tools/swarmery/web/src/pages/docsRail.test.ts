@@ -1,7 +1,7 @@
 // Unit tests for the /docs rail grouping rule. Pure logic, no DOM.
 
 import { describe, expect, it } from 'vitest';
-import { GROUP_ORDER, groupOf } from './docsRail';
+import { GROUP_LABEL, GROUP_ORDER, groupOf } from './docsRail';
 
 describe('groupOf', () => {
   it('puts guide- files under Guides', () => {
@@ -29,5 +29,9 @@ describe('groupOf', () => {
 
   it('orders the rail Guides → Reference → Formats → Protocols', () => {
     expect(GROUP_ORDER).toEqual(['Guides', 'Reference', 'Formats', 'Protocols']);
+  });
+
+  it('labels every group with a translatable message', () => {
+    expect(Object.keys(GROUP_LABEL)).toEqual([...GROUP_ORDER]);
   });
 });
