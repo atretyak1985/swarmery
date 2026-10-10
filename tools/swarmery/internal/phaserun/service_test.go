@@ -1527,3 +1527,172 @@ func (w *stubWt) lastAcquireRoot() string {
 	}
 	return w.acquireRoots[len(w.acquireRoots)-1]
 }
+
+// ── criterion classes and doc gates (phase-run outcomes plan, phase 3) ──
+
+// TestSettle_OnlyLandLeft_IsDoneAndReadyToLand: a run that ticked every criterion
+// it can close and left one [LAND] criterion open is DONE — the effective total
+// excludes it — and stamps why in run_error. landing_state stays 'none', which
+// with run_state='done' is exactly what the epic DTO derives as `ready`
+// (internal/api landingRow.dto; asserted end to end in the api package).
+func TestSettle_OnlyLandLeft_IsDoneAndReadyToLand(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+	mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [ ] a\n- [ ] b\n- [ ] [LAND] push the branch and open the PR\n")
+	mustExec(t, db, `UPDATE epic_phases SET checkboxes_total=3 WHERE id=?`, p1)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [x] a\n- [x] b\n- [ ] [LAND] push the branch and open the PR\n")
+		seedTranscript(t, db, spec.SessionUUID, "Both criteria implemented; landing is the operator's.\n\nPHASE DONE")
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	state, _, _, runErr := phaseRow(t, db, p1)
+	if state != "done" {
+		t.Errorf("run_state = %q, want done — the only open criterion is [LAND]", state)
+	}
+	if runErr.String != "1 [LAND] criteria left for landing" {
+		t.Errorf("run_error = %q, want the [LAND] detail", runErr.String)
+	}
+	if n := r.specCount(); n != 1 {
+		t.Errorf("spawned %d times, want 1 — [LAND] is never a reason to continue", n)
+	}
+	var landing string
+	if err := db.QueryRow(`SELECT landing_state FROM epic_phases WHERE id=?`, p1).Scan(&landing); err != nil {
+		t.Fatal(err)
+	}
+	if landing != "none" {
+		t.Errorf("landing_state = %q, want none (the DTO derives ready from none + done)", landing)
+	}
+}
+
+// TestSettle_ContinuationCarriesOnlyExecutableCriteria: when the run stops with
+// executable work left, the continuation lists THAT work and never a [LAND] or
+// [MANUAL] criterion — otherwise the resumed run tries to push the branch itself.
+func TestSettle_ContinuationCarriesOnlyExecutableCriteria(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+	const land, manual = "- [ ] [LAND] push the branch\n", "- [ ] [MANUAL] check the production console\n"
+	mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [ ] add the table\n- [ ] wire the handler\n"+land+manual)
+
+	r := &stubRunner{}
+	r.runFn = func(spec RunSpec) (*Run, error) {
+		if !spec.Resume {
+			mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [x] add the table\n- [ ] wire the handler\n"+land+manual)
+			seedTranscript(t, db, spec.SessionUUID, "Added the table; the handler is next.")
+		} else {
+			mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [x] add the table\n- [x] wire the handler\n"+land+manual)
+			seedTranscript(t, db, spec.SessionUUID, "PHASE DONE")
+		}
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if n := r.specCount(); n != 2 {
+		t.Fatalf("spawned %d times, want 2 (one continuation)", n)
+	}
+	msg := r.lastSpec().Prompt
+	if !strings.Contains(msg, "wire the handler") {
+		t.Errorf("continuation does not name the open executable criterion:\n%s", msg)
+	}
+	if strings.Contains(msg, "push the branch") || strings.Contains(msg, "production console") {
+		t.Errorf("continuation carries a [LAND]/[MANUAL] criterion:\n%s", msg)
+	}
+	state, _, _, runErr := phaseRow(t, db, p1)
+	if state != "done" {
+		t.Errorf("run_state = %q, want done", state)
+	}
+	if want := "1 [LAND] criteria left for landing; 1 [MANUAL] criteria left for the operator"; runErr.String != want {
+		t.Errorf("run_error = %q, want %q", runErr.String, want)
+	}
+}
+
+// TestStart_ManualOnlyRefused409: a phase whose only open criteria are [MANUAL]
+// is refused at admission — nothing spawned, acquired or stamped — and force
+// does not lift it.
+func TestStart_ManualOnlyRefused409(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+	mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [x] a\n- [x] b\n- [ ] [MANUAL] check the production console\n")
+
+	r := &stubRunner{}
+	wt := &stubWt{}
+	s := newTestService(db, r, wt)
+	_, err := s.StartWith(p1, StartOptions{Force: true})
+	var manual *ManualOnlyError
+	if !errors.As(err, &manual) || !errors.Is(err, ErrManualOnly) {
+		t.Fatalf("StartWith err = %v, want *ManualOnlyError", err)
+	}
+	if manual.ManualOpen != 1 {
+		t.Errorf("ManualOpen = %d, want 1", manual.ManualOpen)
+	}
+	if r.specCount() != 0 || wt.acquiredCount() != 0 {
+		t.Errorf("spawned %d / acquired %d, want nothing", r.specCount(), wt.acquiredCount())
+	}
+	if state, _, _, _ := phaseRow(t, db, p1); state == "running" || state == "done" {
+		t.Errorf("run_state = %q, want untouched", state)
+	}
+
+	// An executable criterion beside the [MANUAL] one: admitted.
+	mustWriteDoc(t, doc, "# Phase 1 — Schema\n\n- [ ] a\n- [x] b\n- [ ] [MANUAL] check the production console\n")
+	if _, err := s.StartWith(p1, StartOptions{}); errors.Is(err, ErrManualOnly) {
+		t.Errorf("phase with executable work refused manual-only")
+	}
+}
+
+// TestStart_NotYetEarliestRefused409: a doc whose Earliest: date is still ahead
+// is refused at admission; on the date itself it runs.
+func TestStart_NotYetEarliestRefused409(t *testing.T) {
+	db, _, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+	// The service clock starts at testEpoch (2026-07-28T12:00:00Z): tomorrow is gated.
+	mustWriteDoc(t, doc, "# Phase 1 — Schema\n**Depends on:** — · **Earliest:** 2026-07-29\n\n- [ ] a\n- [ ] b\n")
+
+	r := &stubRunner{}
+	wt := &stubWt{}
+	s := newTestService(db, r, wt)
+	_, err := s.StartWith(p1, StartOptions{Force: true})
+	var early *NotYetEarliestError
+	if !errors.As(err, &early) || !errors.Is(err, ErrNotYetEarliest) {
+		t.Fatalf("StartWith err = %v, want *NotYetEarliestError", err)
+	}
+	if early.Earliest != "2026-07-29" {
+		t.Errorf("Earliest = %q", early.Earliest)
+	}
+	if r.specCount() != 0 || wt.acquiredCount() != 0 {
+		t.Errorf("spawned %d / acquired %d, want nothing", r.specCount(), wt.acquiredCount())
+	}
+
+	mustWriteDoc(t, doc, "# Phase 1 — Schema\n**Earliest:** 2026-07-28\n\n- [ ] a\n- [ ] b\n")
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Errorf("on the Earliest date: %v, want admitted", err)
+	}
+}
+
+// TestAdmitDocGates_ReturnedSkipsManualOnly: a returned run is driven by the
+// operator's feedback, so manual-only does not refuse it; the date gate still does.
+func TestAdmitDocGates_ReturnedSkipsManualOnly(t *testing.T) {
+	now := func() time.Time { return time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC) }
+	manualOnly := "- [x] a\n- [ ] [MANUAL] check prod\n"
+	if err := admitDocGates(manualOnly, true, now); err != nil {
+		t.Errorf("returned manual-only: %v, want admitted", err)
+	}
+	if err := admitDocGates(manualOnly, false, now); !errors.Is(err, ErrManualOnly) {
+		t.Errorf("plain manual-only: %v", err)
+	}
+	if err := admitDocGates("Earliest: 2026-08-01\n- [ ] a\n", true, now); !errors.Is(err, ErrNotYetEarliest) {
+		t.Errorf("returned + date gate: %v, want not-yet-earliest", err)
+	}
+	// No Earliest line: the clock is never read.
+	noClock := func() time.Time { t.Error("clock read for an ungated doc"); return time.Time{} }
+	if err := admitDocGates("- [ ] a\n", false, noClock); err != nil {
+		t.Errorf("ungated doc: %v", err)
+	}
+}

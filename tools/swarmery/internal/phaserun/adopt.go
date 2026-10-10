@@ -120,12 +120,15 @@ func (s *Service) settleAdopted(phaseID int64, uuid string, info phaseInfo) (sta
 		return "partial", note
 	}
 
-	switch end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Total); end {
+	switch end, reason := runcore.ClassifyRunEnd(text, stop, refusalCat, c.Done, c.Executable()); end {
 	case runcore.EndBlocked:
 		s.event(phaseID, uuid, runcore.EventBlocked, 0, reason)
 		log.Printf("phaserun: adopted phase=%d blocked: %s", phaseID, reason)
 		return "blocked", reason
 	case runcore.EndDone:
+		if d := c.classDetail(); d != "" {
+			return "done", runcore.AdoptedExitNote + "; " + d
+		}
 		return "done", runcore.AdoptedExitNote
 	default:
 		// The count is only worth printing when the doc it was counted from is the

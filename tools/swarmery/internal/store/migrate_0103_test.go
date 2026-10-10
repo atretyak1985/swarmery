@@ -78,7 +78,7 @@ func upsertPhase(t *testing.T, db *sql.DB, taskID int64, seq int, name, docPath 
 	if _, err := db.Exec(wsingest.PhaseUpsertSQL,
 		taskID, seq, name, docPath, "[]",
 		3, done, "in_progress", nil,
-		nil, nil, "[]", "off", nil); err != nil {
+		nil, nil, "[]", "off", nil, 0, 0); err != nil {
 		t.Fatalf("PhaseUpsertSQL: %v", err)
 	}
 }

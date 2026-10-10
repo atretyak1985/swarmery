@@ -303,6 +303,28 @@ func writeDepsUnmerged(w http.ResponseWriter, message string, branches []string,
 // {"force": true} runs the phase regardless.
 const codeBlockedUnchanged = "blocked-unchanged"
 
+// Doc-declared gates a run cannot work its way past (phase-run outcomes plan,
+// phase 3). Both are refused at admission, before the slot, the worktree and any
+// stamp, and `force` does not lift either: the gate lives in the phase doc, so
+// the fix is in the doc (or in waiting). The body carries a `hint` with that fix.
+const (
+	// codeManualOnly: every open criterion of the phase is `[MANUAL]` — only a
+	// human can close what is left (a production check, a console, a hand test).
+	// The body adds `manualOpen`.
+	codeManualOnly = "manual-only"
+	// codeNotYetEarliest: the phase doc's `Earliest:` date is still in the
+	// future. The body adds `earliest` (YYYY-MM-DD, as written).
+	codeNotYetEarliest = "not-yet-earliest"
+)
+
+// Hints for the two doc gates — the sentence that tells the operator what to do.
+const (
+	hintManualOnly = "Only a human can close the open criteria of this phase. Do the [MANUAL] checks, " +
+		"tick them in the phase doc's Criteria; any [LAND] criteria are ticked when the branch lands. No run is needed."
+	hintNotYetEarliest = "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, " +
+		"or edit the line in the phase doc if the gate no longer applies."
+)
+
 // writeBlockedUnchanged renders that refusal: 409 {"error":"blocked-unchanged",
 // "code":"blocked-unchanged","message",…,"reason","since","retryAfter"}. reason
 // is the blocked run's own one-line reason, since when it ended, and retryAfter
