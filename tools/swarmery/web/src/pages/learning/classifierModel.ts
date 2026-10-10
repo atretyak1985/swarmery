@@ -21,10 +21,17 @@ const SUSPICIOUS_AGREEMENT = 0.5;
 /** The mode switch's order, left to right. */
 export const MODES: readonly DecideMode[] = ['off', 'shadow', 'active'];
 
+/** Mode words in the active locale; getters so a locale switch shows on the next render. */
 export const MODE_WORD: Record<DecideMode, string> = {
-  off: 'off',
-  shadow: UI_TERMS.shadow.ui,
-  active: UI_TERMS.active.ui,
+  get off() {
+    return t`off`;
+  },
+  get shadow() {
+    return UI_TERMS.shadow.ui;
+  },
+  get active() {
+    return UI_TERMS.active.ui;
+  },
 };
 
 export const QUESTION_SENTENCE: Record<string, MessageDescriptor> = {

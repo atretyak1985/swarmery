@@ -27,12 +27,14 @@ export function readLocale(): Locale {
  * activate() sets document.documentElement.lang. A blocked storage still
  * switches the current tab. */
 export async function setLocale(locale: Locale): Promise<void> {
+  // Persist only once the catalogs loaded, so storage never names a locale the
+  // app could not activate (the picker falls back to English on failure).
+  await activate(locale);
   try {
     localStorage.setItem(LOCALE_KEY, locale);
   } catch {
     // Private mode / blocked storage: the choice lasts for this page only.
   }
-  await activate(locale);
 }
 
 /** The active UI locale as a BCP-47 tag for Intl ('uk-UA' | 'en-US'). */

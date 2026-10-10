@@ -12,7 +12,10 @@ import { UI_TERMS } from '../lib/glossary';
 import { RoutingReport } from './RoutingReport';
 
 /** "How honest forecasts are" — the dictionary word, sentence-cased. */
-const HEADING = `${UI_TERMS.calibration.ui.charAt(0).toUpperCase()}${UI_TERMS.calibration.ui.slice(1)}`;
+function heading(): string {
+  const word = UI_TERMS.calibration.ui;
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+}
 
 const DIM_SETS: { dims: CalibrationDim[]; label: MessageDescriptor }[] = [
   { dims: ['model', 'effort'], label: msg`model / effort` },
@@ -110,7 +113,7 @@ function ForecastCalibration(): JSX.Element {
   return (
     <section className="mt-2 max-w-3xl" aria-labelledby="calibration-heading">
       <h2 id="calibration-heading" className="flex items-baseline gap-2 text-sm font-normal text-ink">
-        {HEADING}
+        {heading()}
         <span className="font-mono text-[10px] text-ink-faint">{UI_TERMS.calibration.code}</span>
       </h2>
       <p className="mt-1 text-[12px] text-ink-dim">

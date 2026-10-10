@@ -3,7 +3,7 @@
 // window row stays presentational.
 
 import { t } from '@lingui/core/macro';
-import { fmtDate, fmtTime } from '../../lib/format';
+import { currentLocale, fmtDate, fmtTime } from '../../lib/format';
 
 /**
  * An ISO reset instant → the absolute wall-clock label shown in the reset chip.
@@ -26,7 +26,7 @@ export function fmtResetAt(iso: string, now: number): string {
   if (!Number.isFinite(ms)) return '';
   const ref = new Date(now);
 
-  const timeStr = fmtTime(date, { hour: 'numeric', minute: '2-digit', hour12: true });
+  const timeStr = fmtTime(date, { hour: 'numeric', minute: '2-digit', hour12: currentLocale() === 'en-US' });
 
   if (date.toDateString() === ref.toDateString()) return timeStr;
 

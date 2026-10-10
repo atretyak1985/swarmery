@@ -190,7 +190,14 @@ export const KIND_META: Record<InboxKind, { label: string; dot: string; text: st
     dot: 'bg-purple',
     text: 'text-purple',
   },
-  advisor: { label: UI_TERMS.recommendation.ui.replace('…', ''), dot: 'bg-blue', text: 'text-blue' },
+  advisor: {
+    // read per access: UI_TERMS.ui is a locale getter and this module loads before the catalogs
+    get label() {
+      return UI_TERMS.recommendation.ui.replace('…', '');
+    },
+    dot: 'bg-blue',
+    text: 'text-blue',
+  },
   proposal: {
     get label() {
       return t`agent change`;
