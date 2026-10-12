@@ -15,7 +15,7 @@
     "screenshots": "node scripts/screenshot.mjs"
   },
   "dependencies": {
-    "@lingui/core": "5.9.5",
+    "@lingui/core": "6.9.1",
     "@lingui/react": "5.9.5",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
