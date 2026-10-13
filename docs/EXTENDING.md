@@ -45,6 +45,24 @@ Promotion checklist:
 2. Move the file into the pack/core; bump that plugin's semver.
 3. Delete the project-local copy in the consumer that donated it (the plugin now supplies it).
 
+### Mod packs
+
+A **mod** is a plugin whose behaviour is a hooks module of TypeScript function hooks
+(`hooks/hooks.json` → `{"modules": ["./register.ts"]}`) rather than shell scripts: it can deny
+or rewrite a tool call, send one to the native ask dialog, redact a row before it is stored,
+or change what the model is offered. Mods follow the same graduation rule. One is born in a
+project's own `.claude/` (load it for a session with `claude --plugin-dir <dir>`); when a
+second project wants it, it is de-flavored and moved into a pack under `plugins/`, with its
+`*.test.ts` files beside the hooks. A **policy-only** mod — one that reads its policy from the
+project's `.claude/project.json` at session start and judges calls itself — needs no swarmery
+daemon and no `core`, so it ships as a standalone pack:
+[`plugins/guard-pack`](../plugins/guard-pack/README.md) is the reference (project isolation,
+secret redaction, the production-deploy ask). A mod that only mirrors a list the daemon or
+core also holds pins that list with a parity test, as guard-pack does for its pattern files.
+CI runs `claude plugin validate --strict --json` and `claude plugin test` on every mod pack
+(the `mods` job in `.github/workflows/ci.yml` — add the new pack to its matrix). The observed
+API contract is [`tools/swarmery/docs/mods-format.md`](../tools/swarmery/docs/mods-format.md).
+
 ## Pack requirements (`requirements.json`)
 
 A pack that cannot work without project-specific config declares it in
