@@ -1844,6 +1844,10 @@ func cmdServe(args []string) error {
 			}
 		}()
 		log.Printf("swarmery system scanner watching %s (rescan %s)", sysCfg.ClaudeDir, sysscan.DefaultRescanInterval)
+		// mods-swarmery-link phase 9: POST /api/system/mods/rescan forces a
+		// re-validate on this same scanner (its passes are serialized, so a
+		// manual rescan never races the periodic one). Unattached → 503.
+		api.AttachModRescanner(sys)
 
 		// phase 4 Stage 2 (step-10): hooks toggle/edit go through the sysedit
 		// pipeline against the same scanner instance (the post-write rescan
