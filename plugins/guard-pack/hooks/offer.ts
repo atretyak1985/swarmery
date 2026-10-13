@@ -1,8 +1,8 @@
 // What the model is offered: agents of packs this project has not enabled
 // (agentOffer), and heavy MCP tools moved behind ToolSearch (deferHeavyTools).
+// Pure: register.ts reads project.json and settings through `$`.
 
-import type { EngineInterface, On } from 'claude-code'
-import type { ContextCache } from './roots'
+import type { ProjectConfig } from './roots'
 
 /** An MCP tool description longer than this (in characters) is "heavy". */
 export const HEAVY_DESCRIPTION = 2048
@@ -28,28 +28,28 @@ export type PackPolicy = {
   readonly enabled: ReadonlySet<string>
 }
 
-const readSettingsPlugins = async ($: EngineInterface, source: 'project' | 'local'): Promise<unknown> => {
-  try {
-    return (await $.settings.read({ source })).enabledPlugins
-  } catch {
-    return undefined
-  }
-}
-
-export const loadPackPolicy = async ($: EngineInterface, cache: ContextCache): Promise<PackPolicy> => {
-  const ctx = await cache.get($)
-  const json = ctx.project?.json
+/**
+ * The packs this project enables: project.json `enabledPacks` (and an
+ * `enabledPlugins` there, if a project keeps one), plus the project and local
+ * settings' `enabledPlugins`. User-level settings are left out on purpose:
+ * a pack enabled for every project is not this project's choice.
+ */
+export const packPolicy = (
+  project: ProjectConfig | undefined,
+  projectSettingsPlugins: unknown,
+  localSettingsPlugins: unknown,
+): PackPolicy => {
   const sources: unknown[] = [
-    json?.enabledPacks,
-    json?.enabledPlugins,
-    await readSettingsPlugins($, 'project'),
-    await readSettingsPlugins($, 'local'),
+    project?.json.enabledPacks,
+    project?.json.enabledPlugins,
+    projectSettingsPlugins,
+    localSettingsPlugins,
   ]
-  const isDeclared = ctx.project !== undefined || sources.some(s => s !== undefined)
+  const isDeclared = project !== undefined || sources.some(s => s !== undefined)
   return { isDeclared, enabled: new Set(sources.flatMap(enabledNames)) }
 }
 
-/** The pack an agent type belongs to, when it is a `<name>-pack:<agent>` of a plugin. */
+/** The pack an agent type belongs to, when it is a `<name>-pack` plugin's. */
 export const packOf = (agent: string, provider: string | undefined): string | undefined => {
   const i = agent.indexOf(':')
   const name = provider !== undefined && provider !== 'engine' ? provider : i > 0 ? agent.slice(0, i) : undefined
@@ -62,25 +62,5 @@ export const isOffered = (policy: PackPolicy, agent: string, provider: string | 
   return pack === undefined || pack === SELF || policy.enabled.has(pack)
 }
 
-export const registerAgentOffer = (on: On, cache: ContextCache): void => {
-  let policy: Promise<PackPolicy> | undefined
-  on('agent.offer', async ($, e, next) => {
-    let offered = true
-    try {
-      policy ??= loadPackPolicy($, cache)
-      offered = isOffered(await policy, e.agent, e.source === 'plugin' ? e.provider.plugin : undefined)
-    } catch {
-      policy = undefined
-      offered = true
-    }
-    return offered ? next(e) : { isOffered: false }
-  }).catch(($, e, next) => next(e))
-}
-
-export const registerHeavyToolDeferral = (on: On): void => {
-  on('tool.describe', async ($, e, next) => {
-    const below = await next(e)
-    const isMcp = e.tool.startsWith('mcp__') || e.provider.plugin.startsWith('mcp:')
-    return isMcp && below.description.length > HEAVY_DESCRIPTION ? { ...below, isDeferred: true } : below
-  }).catch(($, e, next) => next(e))
-}
+export const isHeavyMcpTool = (tool: string, providerPlugin: string, description: string): boolean =>
+  (tool.startsWith('mcp__') || providerPlugin.startsWith('mcp:')) && description.length > HEAVY_DESCRIPTION

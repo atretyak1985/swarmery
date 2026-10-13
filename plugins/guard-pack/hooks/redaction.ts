@@ -3,9 +3,7 @@
 // Rows without a tool_result block, and every other block of a row, are
 // handed on untouched.
 
-import type { On } from 'claude-code'
-import { type SecretRule, compileSecrets, createPatternCache } from './patterns'
-import { quietly } from './util'
+import type { SecretRule } from './patterns'
 
 export const MARK_PREFIX = '[REDACTED:'
 
@@ -66,26 +64,9 @@ export const redactBlocks = (
   return { blocks: out, count }
 }
 
-const hasToolResult = (content: unknown): content is readonly unknown[] =>
+export const hasToolResult = (content: unknown): content is readonly unknown[] =>
   Array.isArray(content) &&
   content.some(b => typeof b === 'object' && b !== null && (b as Block).type === 'tool_result')
 
-export const registerRedaction = (on: On): void => {
-  const secrets = createPatternCache('secrets.json', compileSecrets)
-  let total = 0
-
-  on('session.append', async ($, e, next) => {
-    const content: unknown = e.message.content
-    if (!hasToolResult(content)) return next(e)
-    let redacted: { blocks: unknown[]; count: number } | undefined
-    try {
-      redacted = redactBlocks(content, await secrets($))
-    } catch {
-      redacted = undefined
-    }
-    if (redacted === undefined || redacted.count === 0) return next(e)
-    total += redacted.count
-    quietly(() => $.ui.status(`guard: ${total} secret${total === 1 ? '' : 's'} redacted`))
-    return next({ ...e, message: { ...e.message, content: redacted.blocks as typeof e.message.content } })
-  }).catch(($, e, next) => next(e))
-}
+export const statusLine = (total: number): string =>
+  `guard: ${total} secret${total === 1 ? '' : 's'} redacted`

@@ -1,8 +1,6 @@
-// Loads the pattern files shipped in hooks/patterns/. They are JSON so the
+// Compiles the pattern files shipped in hooks/patterns/. They are JSON so the
 // Go side can pin them to its own lists (parity tests); a hooks module may
-// only import code, so they are read through `$.fs` once per module load.
-
-import type { EngineInterface } from 'claude-code'
+// only import code, so register.ts reads them through `$.fs` on session.start.
 
 export type SecretRule = {
   readonly name: string
@@ -57,23 +55,12 @@ export const compileProd = (raw: unknown): ProdPattern[] =>
         .filter((p): p is ProdPattern => p !== undefined)
     : []
 
-const readJson = async ($: EngineInterface, file: string): Promise<unknown> => {
+/** A pattern file's text as JSON, or undefined when unreadable or malformed. */
+export const parseJson = (text: unknown): unknown => {
+  if (typeof text !== 'string') return undefined
   try {
-    const text = await $.fs.read(`${$.plugin.root}/hooks/patterns/${file}`)
-    return typeof text === 'string' ? JSON.parse(text) : undefined
+    return JSON.parse(text)
   } catch {
     return undefined
-  }
-}
-
-/** One memoized read of a pattern file per module load; a failed read is retried next time. */
-export const createPatternCache = <T>(file: string, compile: (raw: unknown) => T) => {
-  let cached: T | undefined
-  return async ($: EngineInterface): Promise<T> => {
-    if (cached !== undefined) return cached
-    const raw = await readJson($, file)
-    const value = compile(raw)
-    if (raw !== undefined) cached = value
-    return value
   }
 }

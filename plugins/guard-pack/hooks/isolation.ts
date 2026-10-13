@@ -4,9 +4,8 @@
 // anything the heuristics cannot read (a `$VAR`, a relative path in Bash)
 // passes.
 
-import type { EngineInterface, On } from 'claude-code'
 import { isDevicePath, isInsideAny, normalize } from './paths'
-import { type ContextCache, type GuardContext, describeRoots } from './roots'
+import { type GuardContext, describeRoots } from './roots'
 
 const HINT = "add it to guard-pack's extraRoots option if it belongs to this project"
 
@@ -194,38 +193,21 @@ export const bashViolation = (
 }
 
 /** The deny reason for one tool call, or undefined to let it through. */
-export const judgeToolCall = async (
-  $: EngineInterface,
-  cache: ContextCache,
+export const judgeToolCall = (
+  ctx: GuardContext,
   tool: string,
   input: Readonly<Record<string, unknown>>,
-): Promise<string | undefined> => {
+): string | undefined => {
   if (tool === 'Bash') {
     const command = str(input.command)
     if (command === undefined) return undefined
-    const ctx = await cache.get($)
     const hit = bashViolation(command, ctx)
     return hit === undefined ? undefined : outsideReason(hit.path, ctx, hit.what)
   }
   if (!FILE_TOOLS.has(tool)) return undefined
-  const raw = fileToolPaths(tool, input)
-  if (raw.length === 0) return undefined
-  const ctx = await cache.get($)
-  for (const p of raw) {
+  for (const p of fileToolPaths(tool, input)) {
     const path = normalize(p, ctx.cwd, ctx.home)
     if (!isInsideAny(path, ctx.roots)) return outsideReason(path, ctx, '')
   }
   return undefined
-}
-
-export const registerIsolation = (on: On, cache: ContextCache): void => {
-  on('tool.call', async ($, e, next) => {
-    let reason: string | undefined
-    try {
-      reason = await judgeToolCall($, cache, String(e.tool), e as unknown as Readonly<Record<string, unknown>>)
-    } catch {
-      reason = undefined
-    }
-    return reason === undefined ? next(e) : { deny: reason }
-  }).catch(($, e, next) => next(e))
 }

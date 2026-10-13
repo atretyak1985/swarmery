@@ -1,7 +1,7 @@
-// The session's allowed roots and the project config they come from, read
-// once per session (and again on every module reload) through `$` alone.
+// The session's allowed roots and the project config they come from. Pure:
+// register.ts gathers the facts through `$` on session.start and hands them
+// here as plain values.
 
-import type { EngineInterface } from 'claude-code'
 import { normalize, splitList } from './paths'
 
 export type ProjectConfig = {
@@ -28,6 +28,17 @@ export type GuardOptions = {
   readonly extraRoots: readonly string[]
 }
 
+/** What session.start reads through `$`, every field optional but cwd. */
+export type SessionFacts = {
+  readonly cwd: string
+  readonly root?: string
+  readonly home?: string
+  readonly tmpdir?: string
+  readonly workspaceRoot?: string
+  readonly agentProject?: string
+  readonly project?: ProjectConfig
+}
+
 const flag = (value: unknown, fallback: boolean): boolean =>
   typeof value === 'boolean' ? value : fallback
 
@@ -40,39 +51,26 @@ export const parseOptions = (options: Readonly<Record<string, unknown>>): GuardO
   extraRoots: typeof options.extraRoots === 'string' ? splitList(options.extraRoots) : [],
 })
 
-const swallow = async <T>(p: Promise<T>): Promise<T | undefined> => {
-  try {
-    return await p
-  } catch {
-    return undefined
-  }
-}
-
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
-/** Reads `<dir>/.claude/project.json` for the first of `dirs` that has one. */
-const readProject = async (
-  $: EngineInterface,
-  dirs: readonly string[],
-): Promise<ProjectConfig | undefined> => {
-  for (const dir of dirs) {
-    const text = await swallow($.fs.read(`${dir}/.claude/project.json`))
-    if (typeof text !== 'string') continue
-    try {
-      const json: unknown = JSON.parse(text)
-      if (isRecord(json)) return { dir, json }
-    } catch {
-      // malformed: try the next directory, then run without a project config
-    }
+/** A project.json's text as config, or undefined when it is not a JSON object. */
+export const parseProject = (dir: string, text: unknown): ProjectConfig | undefined => {
+  if (typeof text !== 'string') return undefined
+  try {
+    const json: unknown = JSON.parse(text)
+    return isRecord(json) ? { dir, json } : undefined
+  } catch {
+    return undefined
   }
-  return undefined
 }
 
 const strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && s.trim() !== '') : []
 
 const unique = (paths: readonly string[]): string[] => [...new Set(paths)]
+
+const nonEmpty = (s: string | undefined): s is string => s !== undefined && s.trim() !== ''
 
 /** Temp roots, spelled both ways macOS reaches them (`/tmp` → `/private/tmp`). */
 const tmpRoots = (tmpdir: string | undefined): string[] => {
@@ -84,15 +82,15 @@ const tmpRoots = (tmpdir: string | undefined): string[] => {
   return out
 }
 
-export const loadContext = async ($: EngineInterface, options: GuardOptions): Promise<GuardContext> => {
-  const cwd = (await swallow($.session.cwd())) ?? '/'
-  const root = (await swallow($.session.root())) ?? cwd
-  const home = await swallow($.env.get('HOME'))
-  const tmpdir = await swallow($.env.get('TMPDIR'))
-  const workspaceRoot = await swallow($.env.get('AGENT_WORKSPACE_ROOT'))
-  const envProject = await swallow($.env.get('AGENT_PROJECT'))
-
-  const project = await readProject($, unique([cwd, root]))
+/**
+ * The roots: the session root and cwd; with a project.json its directory,
+ * every `repos[]` entry (relative to that directory) and the workspace
+ * `<AGENT_WORKSPACE_ROOT>/<AGENT_PROJECT or name>`; always `~/.claude`, the
+ * temp dirs and `extraRoots` (relative to the project directory).
+ */
+export const buildContext = (facts: SessionFacts, options: GuardOptions): GuardContext => {
+  const { cwd, home, project } = facts
+  const root = facts.root ?? cwd
   const base = project?.dir ?? root
   const at = (p: string, from: string): string => normalize(p, from, home)
 
@@ -101,28 +99,18 @@ export const loadContext = async ($: EngineInterface, options: GuardOptions): Pr
     roots.push(at(project.dir, '/'))
     for (const repo of strings(project.json.repos)) roots.push(at(repo, project.dir))
   }
-  const projectName =
-    envProject ?? (typeof project?.json.name === 'string' ? project.json.name : undefined)
-  if (workspaceRoot !== undefined && workspaceRoot !== '' && projectName !== undefined && projectName !== '') {
-    roots.push(at(`${workspaceRoot}/${projectName}`, base))
-  }
-  if (home !== undefined) roots.push(`${at(home, '/')}/.claude`)
-  roots.push(...tmpRoots(tmpdir).map(t => at(t, '/')))
+  const name = nonEmpty(facts.agentProject)
+    ? facts.agentProject
+    : typeof project?.json.name === 'string'
+      ? project.json.name
+      : undefined
+  if (nonEmpty(facts.workspaceRoot) && nonEmpty(name)) roots.push(at(`${facts.workspaceRoot}/${name}`, base))
+  if (nonEmpty(home)) roots.push(`${at(home, '/')}/.claude`)
+  roots.push(...tmpRoots(facts.tmpdir).map(t => at(t, '/')))
   for (const extra of options.extraRoots) roots.push(at(extra, base))
 
   return { cwd, root, home, project, roots: unique(roots) }
 }
-
-/** One memoized context per module load; `refresh` re-reads it. */
-export const createContextCache = (options: GuardOptions) => {
-  let pending: Promise<GuardContext> | undefined
-  return {
-    get: ($: EngineInterface): Promise<GuardContext> => (pending ??= loadContext($, options)),
-    refresh: ($: EngineInterface): Promise<GuardContext> => (pending = loadContext($, options)),
-  }
-}
-
-export type ContextCache = ReturnType<typeof createContextCache>
 
 /** "a, b, c (+N more)" for a deny reason. */
 export const describeRoots = (roots: readonly string[], max = 3): string => {

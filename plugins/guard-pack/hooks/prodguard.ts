@@ -9,10 +9,8 @@
 // special. The shipped list is hooks/patterns/prod.json; the project's own
 // .claude/project.json approvals.prodDeployPatterns are added to it.
 
-import type { EngineInterface, On } from 'claude-code'
-import { type ProdPattern, compileProd, createPatternCache } from './patterns'
-import type { ContextCache } from './roots'
-import { quietly } from './util'
+import { type ProdPattern, compileProd } from './patterns'
+import type { ProjectConfig } from './roots'
 
 /** `*` matches any run of characters (including `/`, spaces); the rest is literal. */
 export const globMatch = (pattern: string, s: string): boolean => {
@@ -59,30 +57,12 @@ export const matchProd = (
   return patterns.find(p => p.tool === tool && (p.inner === undefined || (arg !== undefined && globMatch(p.inner, arg))))
 }
 
-const projectPatterns = async ($: EngineInterface, cache: ContextCache): Promise<ProdPattern[]> => {
-  const ctx = await cache.get($)
-  const approvals = ctx.project?.json.approvals
+/** The project's own approvals.prodDeployPatterns, added to the shipped list. */
+export const projectProdPatterns = (project: ProjectConfig | undefined): ProdPattern[] => {
+  const approvals = project?.json.approvals
   if (typeof approvals !== 'object' || approvals === null) return []
   return compileProd((approvals as Readonly<Record<string, unknown>>).prodDeployPatterns)
 }
 
-export const registerProdGuard = (on: On, cache: ContextCache): void => {
-  const defaults = createPatternCache('prod.json', compileProd)
-
-  on('tool.check', async ($, e, next) => {
-    const below = await next(e)
-    if (below.decision === 'deny') return below
-    let hit: ProdPattern | undefined
-    try {
-      const patterns = [...(await defaults($)), ...(await projectPatterns($, cache))]
-      hit = matchProd(patterns, String(e.tool), e.input)
-    } catch {
-      hit = undefined
-    }
-    if (hit === undefined) return below
-    const reason = `guard-pack: production deploy (matches ${hit.source}); confirm it yourself`
-    const id = e.tool_use_id
-    if (id !== undefined) quietly(() => $.ui.notice(id, reason))
-    return { decision: 'ask', reason }
-  }).catch(($, e, next) => next(e))
-}
+export const prodReason = (hit: ProdPattern): string =>
+  `guard-pack: production deploy (matches ${hit.source}); confirm it yourself`
