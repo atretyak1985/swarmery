@@ -1,0 +1,48 @@
+{
+  "name": "guard-pack",
+  "description": "Mod pack (function hooks, no daemon needed): keeps file tools inside this project's roots, redacts secrets from tool results before they are stored, routes production-deploy shell commands to the native ask dialog, and can hide agents of packs this project has not enabled. Reads policy from .claude/project.json at runtime; additive to core's shell hooks.",
+  "version": "0.1.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  },
+  "keywords": ["guard", "isolation", "redaction", "production", "mods"],
+  "userConfig": {
+    "isolation": {
+      "type": "boolean",
+      "title": "Project isolation",
+      "description": "Deny file tools (Read, Edit, Write, MultiEdit, NotebookEdit, Glob, Grep) on paths outside this project's roots, and destructive Bash (rm, mv, cp, > redirects, cd) that names an absolute path outside them.",
+      "default": true
+    },
+    "redaction": {
+      "type": "boolean",
+      "title": "Secret redaction",
+      "description": "Replace secret-shaped values in tool results with [REDACTED:<rule>] before the row is stored or sent to the model.",
+      "default": true
+    },
+    "prodGuard": {
+      "type": "boolean",
+      "title": "Production-deploy guard",
+      "description": "Send Bash commands that match a production-deploy pattern to the native ask dialog, whatever the permission mode.",
+      "default": true
+    },
+    "agentOffer": {
+      "type": "boolean",
+      "title": "Hide agents of disabled packs",
+      "description": "Do not offer the model '<pack>:<agent>' agents whose *-pack is not enabled for this project (project.json enabledPacks or project/local settings enabledPlugins).",
+      "default": false
+    },
+    "deferHeavyTools": {
+      "type": "boolean",
+      "title": "Defer heavy MCP tools",
+      "description": "Put MCP tools whose description exceeds 2048 characters behind ToolSearch.",
+      "default": false
+    },
+    "extraRoots": {
+      "type": "string",
+      "title": "Extra roots",
+      "description": "Comma-separated extra directories the isolation guard treats as inside this project (absolute, ~/..., or relative to the project root).",
+      "default": ""
+    }
+  }
+}

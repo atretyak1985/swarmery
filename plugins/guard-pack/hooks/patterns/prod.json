@@ -1,0 +1,9 @@
+[
+  "Bash(*deploy*prod*)",
+  "Bash(*release*prod*)",
+  "Bash(terraform apply*)",
+  "Bash(*terraform*apply*prod*)",
+  "Bash(*kubectl*prod*)",
+  "Bash(*helm*upgrade*prod*)",
+  "Bash(*git push*prod*)"
+]
