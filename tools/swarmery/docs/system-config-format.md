@@ -584,6 +584,104 @@ Observed on: 2026-07-13, machine-local.
 
 ---
 
+## 11. Mods (System → Mods, mods-swarmery-link phase 9)
+
+A **mod** is a Claude Code plugin whose `hooks/hooks.json` carries a non-empty
+`modules` array (JS/TSX modules the CLI loads into the session, as opposed to the
+`command` hooks of §3). A plugin without `modules` — or whose `hooks.json` is
+missing or unparsable — is not a mod and is skipped. The audit is **read-only**:
+swarmery never edits a mod, and the API serves the folder path, never module source.
+
+### 11.1 Discovery (`internal/modscan.Discover`)
+
+| source | where | `source` / `plugin_id` |
+|---|---|---|
+| plugin cache | every dir under `~/.claude/plugins/cache` (≤ 4 levels) holding `.claude-plugin/plugin.json`; for a `<mkt>/<plugin>/<version>` layout only the **active** version — the one with an `.in_use` marker, else the lexically greatest (the same pick sysscan makes for plugin agents/skills) | `cache` · `<name>@<mkt>` |
+| `CLAUDE_CODE_PLUGIN_DIRS` | the value in the `env` block of `~/.claude/settings.json`, split on `:`; `~` expands, relative entries are ignored | `plugin-dir` · `NULL` |
+| `claude --plugin-dir …` on a live process | **not discoverable** — it has no on-disk source; such a mod only shows here when it is also cached or listed in `CLAUDE_CODE_PLUGIN_DIRS` | — |
+
+`name`/`version` come from `plugin.json`, falling back to the cache path segments
+(or the folder name for a plugin-dir).
+
+### 11.2 Validate (`internal/modscan.Validate`)
+
+Each mod is audited with `claude plugin validate --strict --json <dir>` (binary
+resolved by `internal/claudebin`, 20 s timeout). The CLI reports what a module hooks
+and calls only as prose `notes` lines (`mods-format.md` §M6), so the parser files
+them by label, dropping the leading module path:
+
+| note line | stored as |
+|---|---|
+| `<module> hooks: a, b{filter}, …` | `events` (verbatim, filters kept) |
+| `<module> calls: $.http.fetch, $.ui.log (via post), …` | `uses` (`$.` and ` (via …)` stripped) |
+| `<module> env reads: …` / `env writes: …` | `env.reads` / `env.writes` (`nothing` = empty) |
+| `<module> state…: …`, plus every `state.*` call | `state` |
+| structured `gatingHooks[]` | `report.gatingHooks` (`module, pattern, hook, hasCatch`) |
+
+`errors`/`warnings` are collected from the manifest and every `contents[]` part. A run
+that cannot produce a report — timeout, output that is not the §M6 JSON, a failed
+exec — stores an empty report with that one error, and raises a `parse_error`
+finding in `config_lint_findings` keyed `mod:<id>`. No `claude` on the machine
+stores the single error `claude binary not found` and leaves `module_sha` NULL so
+the next pass retries without a manual rescan.
+
+### 11.3 Risk badges (`internal/modscan.Risk`)
+
+Deterministic over `events` (filter stripped) ∪ `uses`; one badge per matching rule,
+in this order. A rule ending in `.*` matches by prefix.
+
+| level | rule | label |
+|---|---|---|
+| red | `tool.check` | can approve tool calls |
+| red | `prompt.submit` | drives the session |
+| red | `turn.abort` | drives the session |
+| red | `http.fetch` | network |
+| red | `process.*` | spawns processes |
+| red | `fs.write` | writes files |
+| red | `session.append` | rewrites what Claude reads |
+| yellow | `fs.read` | reads files |
+| yellow | `store.*` | keeps a store |
+| yellow | `model.*` | calls the model |
+| unknown | `validate` | not validated (the report never parsed) |
+
+The server sends the English label; the UI localises by `rule`.
+
+### 11.4 When validate runs, and rescan
+
+Validate spawns the CLI, so a scan pass runs it only for a mod whose `module_sha`
+changed — sha256 over `hooks.json` plus each listed module's path and content — or
+that has no row yet. An unchanged mod keeps its cached result. `POST
+/api/system/mods/rescan` (local `Origin` only; 403 otherwise, 503 while the daemon
+runs `--no-ingest` and no scanner is attached) forces a re-validate of every mod
+and answers `{mods, validated, parseErrors, removed}`; passes are serialized, so a
+manual rescan never races the periodic one. A changed row publishes
+`system_item_updated` with `kind: "mod"`; the WS layer does not forward that note
+yet, so the Mods tab refetches on mount and after a rescan.
+
+### 11.5 The `mods` table (migration 0112)
+
+One row per plugin folder (`UNIQUE(dir)`): `name, plugin_id, dir, source, version,
+module_sha, events, uses, env, state, risk, validated_at, errors, report` — the list
+columns and `report` (the parsed report plus the validator's raw stdout) are JSON
+text. It is a **cache of the last validate, not history**: a mod whose folder
+disappears (uninstall, or a cache version bump that moves its dir) is deleted on the
+next pass and its `parse_error` finding resolved.
+
+### 11.6 Plugin drift advisory
+
+`internal/plugindrift` adds `plugin_mod_validate_failed`: for every project that
+enables a plugin which is a cache mod whose stored validate `errors` are non-empty
+(`claude binary not found` excluded), one **warn**-level finding at target
+`plugin:<id>|<project path>` naming the first error. It is advisory: it maps to no
+per-row plugin status, fires no new-error webhook, and is read from the DB, so it
+is evaluated even while the CLI detector is unavailable.
+
+Observed on: 2026-10-13, machine-local (0 mods in the plugin cache; the phase-0
+spike mod validated in 712 ms with red `tool.check` / `prompt.submit` /
+`http.fetch` and yellow `fs.read`).
+
+---
+
 ## Open questions
 
 1. **Plugin-shipped `hooks/hooks.json`** (§5.4): active-but-not-in-settings hooks are
