@@ -126,9 +126,11 @@ function ModRow({
         >
           {mod.name}
         </button>
-        {mod.pluginId !== null && <div className="font-mono text-[10.5px] text-ink-dim">{mod.pluginId}</div>}
+        {mod.pluginId !== null && (
+          <div className="font-mono text-[10.5px] whitespace-nowrap text-ink-dim">{mod.pluginId}</div>
+        )}
         {mod.errors.length > 0 && (
-          <div className="font-mono text-[10.5px] text-red">
+          <div className="font-mono text-[10.5px] whitespace-nowrap text-red">
             {plural(mod.errors.length, {
               one: '# validate error',
               few: '# validate errors',
