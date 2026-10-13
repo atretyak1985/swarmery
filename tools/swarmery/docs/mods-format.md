@@ -221,16 +221,16 @@ that surface's element table, not a live panel.
 
 | Hook / capability | terminal (interactive) | `-p` (headless) | VS Code chat panel |
 |---|---|---|---|
-| `session.start` | ✅ `surface: "terminal"`, `isInteractive: true` | ✅ `surface: null`, `isInteractive: false` | not observed live |
-| `prompt.submit` | ✅ `origin.kind: "composer"` | ✅ `origin.kind: "sdk"` | not observed live |
-| `session.measure` | ✅ once at start (no tokens) + after each turn | ✅ after each turn | not observed live |
-| `turn.complete` | ✅ | ✅ | not observed live |
-| `tool.call` | ✅ | ✅ | not observed live |
-| `tool.check` | ✅ fires for the model's Bash call, ahead of any dialog (M3 interactive) | ✅ fires for the model's Bash call (see M3) | not observed live |
-| `ui.render{AbovePrompt}` | ✅ drawn (`link-spike ● terminal [-]`), `viewport: {columns:80, rows:24, isFullscreen:true}` | ❌ never raised (nothing draws) | ⚠ kit: the tree validates on `vscode`; live drawing not observed |
-| `session.end` | ✅ `reason: "prompt_input_exit"` (`/exit`) | ✅ `reason: "other"` | not observed live |
-| `$.http.fetch` | ✅ (every POST reached the stub) | ✅ | not observed live |
-| `$.ui.log` | a transcript row `⏺ link-spike: <text>` | stream-json `{"type":"system","subtype":"ui_log","plugin":"link-spike","text":…,"session_id":…}`; nothing in text/json output | not observed live |
+| `session.start` | ✅ `surface: "terminal"`, `isInteractive: true` | ✅ `surface: null`, `isInteractive: false` | not observed — operator check |
+| `prompt.submit` | ✅ `origin.kind: "composer"` | ✅ `origin.kind: "sdk"` | not observed — operator check |
+| `session.measure` | ✅ once at start (no tokens) + after each turn | ✅ after each turn | not observed — operator check |
+| `turn.complete` | ✅ | ✅ | not observed — operator check |
+| `tool.call` | ✅ | ✅ | not observed — operator check |
+| `tool.check` | ✅ fires for the model's Bash call, ahead of any dialog (M3 interactive) | ✅ fires for the model's Bash call (see M3) | not observed — operator check |
+| `ui.render{AbovePrompt}` | ✅ drawn (`link-spike ● terminal [-]`), `viewport: {columns:80, rows:24, isFullscreen:true}` | ❌ never raised (nothing draws) | not observed — operator check (kit: the tree validates on `vscode`) |
+| `session.end` | ✅ `reason: "prompt_input_exit"` (`/exit`) | ✅ `reason: "other"` | not observed — operator check |
+| `$.http.fetch` | ✅ (every POST reached the stub) | ✅ | not observed — operator check |
+| `$.ui.log` | a transcript row `⏺ link-spike: <text>` | stream-json `{"type":"system","subtype":"ui_log","plugin":"link-spike","text":…,"session_id":…}`; nothing in text/json output | not observed — operator check |
 
 **Verdict: M5 verified for terminal and `-p`. VS Code is still open (needs an operator with
 VS Code).** Under `-p` every non-drawing hook fires and `$.http.fetch` works, so a
