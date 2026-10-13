@@ -50,6 +50,9 @@ func (t *Ticker) Once(ctx context.Context) {
 		return
 	}
 	byRule := t.Detector.Scan(ctx, projects)
+	// The mod advisory reads the DB, not the CLI, so it is evaluated even when
+	// the detector went blind (nil on a query failure = leave its rows alone).
+	byRule[RuleModValidateFailed] = modValidateFindings(t.DB, projects)
 	for _, rule := range Rules {
 		items, evaluated := byRule[rule]
 		// nil means the detector could NOT evaluate this rule — leave its rows

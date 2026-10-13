@@ -34,6 +34,12 @@ const (
 	RuleCacheOrphaned       = "plugin_cache_orphaned"
 	RuleNote                = "plugin_note"
 	RuleDetectorUnavailable = "plugin_detector_unavailable"
+	// RuleModValidateFailed: an enabled plugin is a mod whose last `claude
+	// plugin validate` (the mods table sysscan fills) reported errors.
+	// Advisory only — warn, never error, so it fires no OnNewError webhook and
+	// maps to no per-row plugin status. Evaluated by the Ticker from the DB,
+	// not by Detector.Scan (which only initialises its key).
+	RuleModValidateFailed = "plugin_mod_validate_failed"
 )
 
 // Rules is the full owned set — every pass syncs each one, so a rule with no
@@ -44,6 +50,7 @@ var Rules = []string{
 	RuleCacheOrphaned,
 	RuleNote,
 	RuleDetectorUnavailable,
+	RuleModValidateFailed,
 }
 
 // detectorTarget is the single target used by RuleDetectorUnavailable — the
