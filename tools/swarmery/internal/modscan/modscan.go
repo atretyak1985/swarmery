@@ -10,7 +10,9 @@
 // The validator reports what a module hooks and calls only as prose `notes`
 // lines ("<module> hooks: …", "<module> calls: …", "<module> env reads: …"),
 // plus a structured `gatingHooks` list. There are no top-level events / uses /
-// env / state keys (M6 verdict), so Validate parses the notes by prefix.
+// env / state keys (M6 verdict), so Validate parses the notes by their known
+// labels and fails closed (Report.Unrecognized → an unknown badge) on any it
+// cannot read.
 package modscan
 
 import (
@@ -93,6 +95,14 @@ type Report struct {
 	State       []string        `json:"state"`
 	GatingHooks []GatingHook    `json:"gatingHooks"`
 	Raw         json.RawMessage `json:"raw,omitempty"` // the validator's stdout, verbatim
+
+	// Unrecognized lists what the parser could not read: "<module> <label>: …"
+	// notes whose label it does not know, plus a marker when a mod's report
+	// carries no "<module> hooks:" line. Non-empty → Risk fails closed with an
+	// unknown badge instead of claiming the mod is harmless.
+	Unrecognized []string `json:"unrecognized"`
+
+	hooksLine bool // a "<module> hooks:" note was parsed (in-memory only)
 }
 
 // ParseError reports a validate run that produced no usable report: a
@@ -400,6 +410,12 @@ func Validate(ctx context.Context, claudeBin, dir string) (Report, error) {
 		}
 		return Report{}, &ParseError{Dir: dir, Reason: "invalid JSON", Err: perr}
 	}
+	// The dir is a mod (its hooks.json lists modules), so a report that never
+	// says what a module hooks was not understood — whatever ParseReport could
+	// infer from the output alone.
+	if modules, merr := readModules(dir); merr == nil && len(modules) > 0 {
+		rep.requireHooksLine()
+	}
 	// A non-zero exit with a parsable report is a failed validation, not a
 	// scanner failure: the report already says success=false.
 	return rep, nil
@@ -410,7 +426,7 @@ func Validate(ctx context.Context, claudeBin, dir string) (Report, error) {
 func EmptyReport() Report {
 	return Report{Errors: []string{}, Warnings: []string{}, Events: []string{},
 		Uses: []string{}, Env: EnvAccess{Reads: []string{}, Writes: []string{}},
-		State: []string{}, GatingHooks: []GatingHook{}}
+		State: []string{}, GatingHooks: []GatingHook{}, Unrecognized: []string{}}
 }
 
 func noBinary() Report {
@@ -427,6 +443,7 @@ type validateDoc struct {
 }
 
 type validatePart struct {
+	Type        string            `json:"type"` // "plugin" | "hooks" | …
 	Errors      []json.RawMessage `json:"errors"`
 	Warnings    []json.RawMessage `json:"warnings"`
 	Notes       []string          `json:"notes"`
@@ -451,13 +468,25 @@ func ParseReport(raw []byte) (Report, error) {
 	if doc.Manifest != nil {
 		parts = append([]validatePart{*doc.Manifest}, parts...)
 	}
+	// expectHooks: the output itself shows module content — a hooks part, a
+	// gating hook, or any "<module> <label>:" note — so it must say what the
+	// modules hook.
+	expectHooks := false
 	for _, p := range parts {
 		r.Errors = appendMessages(r.Errors, p.Errors)
 		r.Warnings = appendMessages(r.Warnings, p.Warnings)
 		r.GatingHooks = append(r.GatingHooks, p.GatingHooks...)
-		for _, n := range p.Notes {
-			r.addNote(n)
+		if p.Type == "hooks" || len(p.GatingHooks) > 0 {
+			expectHooks = true
 		}
+		for _, n := range p.Notes {
+			if r.addNote(n) {
+				expectHooks = true
+			}
+		}
+	}
+	if expectHooks {
+		r.requireHooksLine()
 	}
 	// $.state.* calls are state use whether or not a state line exists (M6
 	// saw no state line; the label is matched by prefix in addNote).
@@ -469,31 +498,101 @@ func ParseReport(raw []byte) (Report, error) {
 	return r, nil
 }
 
-// addNote files one "<module> <label>: a, b, c" line under its fact.
-func (r *Report) addNote(note string) {
+// msgNoHooksLine is the Unrecognized marker for a mod report without any
+// "<module> hooks:" note.
+const msgNoHooksLine = `no "<module> hooks:" note in the validator output`
+
+// requireHooksLine marks the report not understood when no hooks note was
+// parsed. Idempotent.
+func (r *Report) requireHooksLine() {
+	if !r.hooksLine {
+		r.Unrecognized = appendUnique(r.Unrecognized, msgNoHooksLine)
+	}
+}
+
+// noteLabels are the labels the validator writes after the module path, in
+// match order. The module path may contain spaces, so a label is found as a
+// suffix of the note head — never as "everything after the first space".
+var noteLabels = []string{"hooks", "calls", "env reads", "env writes",
+	"gating hook with .catch", "gating hook without .catch"}
+
+// addNote files one "<module> <label>: a, b, c" line under its fact. It
+// reports whether the line is fact-shaped — a head of "<module> <label>" (it
+// holds a space) or a known bare label — so the caller knows the output talks
+// about modules. A fact-shaped line with a label it does not know is kept in
+// Unrecognized; any other line ("no colon here", "plugin.json: …") is prose.
+func (r *Report) addNote(note string) bool {
 	head, list, ok := strings.Cut(note, ": ")
 	if !ok {
-		return
+		return false
 	}
-	label := head
-	if i := strings.Index(head, " "); i >= 0 { // drop the module path
-		label = head[i+1:]
+	head = strings.TrimSpace(head)
+	label := matchLabel(head)
+	if label == "" {
+		if strings.Contains(head, " ") {
+			r.Unrecognized = appendUnique(r.Unrecognized, note)
+			return true
+		}
+		return false
 	}
 	values := splitList(list)
-	switch {
-	case label == "hooks":
+	switch label {
+	case "hooks":
+		r.hooksLine = true
 		r.Events = appendUnique(r.Events, values...)
-	case label == "calls":
+	case "calls":
 		for _, v := range values {
 			r.Uses = appendUnique(r.Uses, normalizeCall(v))
 		}
-	case label == "env reads":
+	case "env reads":
 		r.Env.Reads = appendUnique(r.Env.Reads, values...)
-	case label == "env writes":
+	case "env writes":
 		r.Env.Writes = appendUnique(r.Env.Writes, values...)
-	case strings.HasPrefix(label, "state"):
+	case "state":
 		r.State = appendUnique(r.State, values...)
 	}
+	// The two gating-hook labels restate the structured gatingHooks list,
+	// which Risk reads; nothing to file.
+	return true
+}
+
+// matchLabel returns the known label that ends head ("state" for every
+// "state…" form), or "" when none does.
+func matchLabel(head string) string {
+	for _, l := range noteLabels {
+		if head == l || strings.HasSuffix(head, " "+l) {
+			return l
+		}
+	}
+	if isStateLabel(head) {
+		return "state"
+	}
+	return ""
+}
+
+// isStateLabel reports whether head ends in a "state" label: the word
+// "state" (at the start or after a space) followed only by lowercase words —
+// "state", "state keys", "./a b.tsx state reads".
+func isStateLabel(head string) bool {
+	for i := strings.LastIndex(head, "state"); i >= 0; i = strings.LastIndex(head[:i], "state") {
+		if i > 0 && head[i-1] != ' ' {
+			continue
+		}
+		rest := head[i+len("state"):]
+		if rest == "" || (rest[0] == ' ' && isLowerWords(rest)) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLowerWords(s string) bool {
+	for _, c := range s {
+		if c != ' ' && (c < 'a' || c > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 // splitList splits "a, b, c" — the separator is comma+space, so a filter like
@@ -569,6 +668,10 @@ const (
 	LevelUnknown = "unknown"
 )
 
+// RuleValidatorOutput is the unknown badge's rule when the validator ran but
+// its notes could not be read (Report.Unrecognized non-empty).
+const RuleValidatorOutput = "validator-output"
+
 // Badge is one risk marker derived from a mod's hooked events and calls.
 type Badge struct {
 	Level   string   `json:"level"`   // red | yellow | unknown
@@ -597,23 +700,36 @@ var riskRules = []riskRule{
 	{LevelYellow, "model.*", "calls the model"},
 }
 
-// Risk derives the badges from Events and Uses, deterministically: one badge
-// per matching rule, in riskRules order. A report that was never validated
-// gets the single "unknown" badge.
+// Risk derives the badges from Events, the gatingHooks' hook and pattern, and
+// Uses, deterministically: one badge per matching rule, in riskRules order. A
+// report that was never validated gets the single "unknown" badge. A validated
+// report whose notes were not fully understood (Unrecognized) fails closed:
+// an unknown RuleValidatorOutput badge leads whatever the readable part
+// matched, so an empty slice always means "understood, and nothing risky".
 func Risk(r Report) []Badge {
 	if !r.Validated {
 		return []Badge{{Level: LevelUnknown, Rule: "validate", Label: "not validated", Matches: []string{}}}
 	}
-	names := make([]string, 0, len(r.Events)+len(r.Uses))
-	for _, e := range r.Events {
+	stripFilter := func(e string) string {
 		if i := strings.Index(e, "{"); i >= 0 {
-			e = e[:i]
+			return e[:i]
 		}
-		names = append(names, e)
+		return e
+	}
+	names := make([]string, 0, len(r.Events)+2*len(r.GatingHooks)+len(r.Uses))
+	for _, e := range r.Events {
+		names = append(names, stripFilter(e))
+	}
+	for _, g := range r.GatingHooks {
+		names = append(names, stripFilter(g.Hook), stripFilter(g.Pattern))
 	}
 	names = append(names, r.Uses...)
 
 	out := []Badge{}
+	if len(r.Unrecognized) > 0 {
+		out = append(out, Badge{Level: LevelUnknown, Rule: RuleValidatorOutput,
+			Label: "validator output not understood", Matches: append([]string{}, r.Unrecognized...)})
+	}
 	for _, rule := range riskRules {
 		var matches []string
 		for _, n := range names {

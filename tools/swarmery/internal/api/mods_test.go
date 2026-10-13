@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -46,8 +47,10 @@ func modsServer(t *testing.T) (srv *httptest.Server, logPath string) {
 	}
 	t.Cleanup(func() { db.Close() })
 	scanner := sysscan.New(db, sysscan.Config{ClaudeDir: claude, ClaudeBin: bin, RescanInterval: time.Hour}, nil)
-	if _, err := scanner.Scan(); err != nil {
-		t.Fatalf("scan: %v", err)
+	// The registry Scan never runs the mods pass (it must stay cheap for
+	// sysedit); the daemon's Run loop does, as this explicit pass does here.
+	if _, err := scanner.ScanMods(context.Background(), false); err != nil {
+		t.Fatalf("mods pass: %v", err)
 	}
 	AttachModRescanner(scanner)
 	t.Cleanup(func() { AttachModRescanner(nil) })

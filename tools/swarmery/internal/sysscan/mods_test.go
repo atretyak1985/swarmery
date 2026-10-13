@@ -106,12 +106,12 @@ func TestScanModsValidatesHashSkipsAndPublishes(t *testing.T) {
 	defer cancel()
 	s := New(db, cfg, bus)
 
-	st, err := s.Scan()
+	st, err := s.ScanMods(context.Background(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mods.Mods != 1 || st.Mods.Validated != 1 || calls(t, logPath) != 1 {
-		t.Fatalf("first pass: %s, %d validate calls; want 1 mod validated once", st.Mods, calls(t, logPath))
+	if st.Mods != 1 || st.Validated != 1 || calls(t, logPath) != 1 {
+		t.Fatalf("first pass: %s, %d validate calls; want 1 mod validated once", st, calls(t, logPath))
 	}
 	r := readMod(t, db)
 	if r.name != "linkmod" || r.source != modscan.SourceCache || r.dir != modDir ||
@@ -133,8 +133,8 @@ func TestScanModsValidatesHashSkipsAndPublishes(t *testing.T) {
 	}
 
 	// Unchanged → hash-skip: no validate, no note.
-	if st, _ = s.Scan(); st.Mods.Validated != 0 || calls(t, logPath) != 1 {
-		t.Errorf("unchanged pass validated again: %s", st.Mods)
+	if st, _ = s.ScanMods(context.Background(), false); st.Validated != 0 || calls(t, logPath) != 1 {
+		t.Errorf("unchanged pass validated again: %s", st)
 	}
 	if ids := modNotes(ch); len(ids) != 0 {
 		t.Errorf("unchanged pass published %v", ids)
@@ -142,8 +142,8 @@ func TestScanModsValidatesHashSkipsAndPublishes(t *testing.T) {
 
 	// A module edit moves module_sha → validate again (same report → no note).
 	writeModFile(t, filepath.Join(modDir, "hooks", "register.tsx"), "export default 2\n")
-	if st, _ = s.Scan(); st.Mods.Validated != 1 || calls(t, logPath) != 2 {
-		t.Errorf("edited module: %s, %d calls; want a re-validate", st.Mods, calls(t, logPath))
+	if st, _ = s.ScanMods(context.Background(), false); st.Validated != 1 || calls(t, logPath) != 2 {
+		t.Errorf("edited module: %s, %d calls; want a re-validate", st, calls(t, logPath))
 	}
 	if readMod(t, db).sha.String == r.sha.String {
 		t.Error("module_sha did not move after a module edit")
@@ -159,8 +159,8 @@ func TestScanModsValidatesHashSkipsAndPublishes(t *testing.T) {
 	if err := os.RemoveAll(filepath.Dir(modDir)); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ = s.Scan(); st.Mods.Removed != 1 || count(t, db, `SELECT COUNT(*) FROM mods`) != 0 {
-		t.Errorf("vanished mod: %s, rows=%d", st.Mods, count(t, db, `SELECT COUNT(*) FROM mods`))
+	if st, _ = s.ScanMods(context.Background(), false); st.Removed != 1 || count(t, db, `SELECT COUNT(*) FROM mods`) != 0 {
+		t.Errorf("vanished mod: %s, rows=%d", st, count(t, db, `SELECT COUNT(*) FROM mods`))
 	}
 	if ids := modNotes(ch); len(ids) != 1 || ids[0] != r.id {
 		t.Errorf("removal notes = %v, want [%d]", ids, r.id)
@@ -199,12 +199,12 @@ func TestScanModsParseErrorFinding(t *testing.T) {
 				t.Cleanup(func() { modscan.ValidateTimeout = prev })
 			}
 			s := New(db, cfg, nil)
-			st, err := s.Scan()
+			st, err := s.ScanMods(context.Background(), false)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if st.Mods.ParseErrors != 1 {
-				t.Errorf("stats = %s, want 1 parse error", st.Mods)
+			if st.ParseErrors != 1 {
+				t.Errorf("stats = %s, want 1 parse error", st)
 			}
 			r := readMod(t, db)
 			if openParseErrors(t, db, ModTarget(r.id)) != 1 {
@@ -236,7 +236,7 @@ func TestScanModsNoClaudeBinary(t *testing.T) {
 	modFixture(t, &cfg, "ok")
 	cfg.ClaudeBin = filepath.Join(t.TempDir(), "no-claude-here")
 	s := New(db, cfg, nil)
-	if _, err := s.Scan(); err != nil {
+	if _, err := s.ScanMods(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
 	r := readMod(t, db)
@@ -245,6 +245,73 @@ func TestScanModsNoClaudeBinary(t *testing.T) {
 	}
 	if openParseErrors(t, db, ModTarget(r.id)) != 0 {
 		t.Error("a missing binary is not a parse_error")
+	}
+}
+
+// F2: sysedit rescans synchronously after every write on the promise that
+// Scan is cheap, so Scan must never run `claude plugin validate` nor wait on
+// a mods pass in flight (a manual rescan holds the mods lock for up to
+// N × ValidateTimeout).
+func TestScanNeverWaitsOnModsPass(t *testing.T) {
+	db, cfg, _ := setup(t)
+	_, logPath := modFixture(t, &cfg, "sleep")
+	prev := modscan.ValidateTimeout
+	modscan.ValidateTimeout = 4 * time.Second // bounds the pre-fix failure, not the assertion
+	t.Cleanup(func() { modscan.ValidateTimeout = prev })
+	s := New(db, cfg, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = s.ScanMods(ctx, true) // the manual rescan, stuck in validate
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for calls(t, logPath) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the rescan never reached the validator")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	start := time.Now()
+	if _, err := s.Scan(); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("Scan took %s while a mods rescan was in flight; want < 1s", d)
+	}
+	if n := calls(t, logPath); n != 1 {
+		t.Errorf("validate calls = %d, want 1 (Scan must never run validate)", n)
+	}
+}
+
+// The mods table still fills on the daemon's periodic pass (Run), with the
+// validate behind it.
+func TestRunFillsModsTable(t *testing.T) {
+	db, cfg, _ := setup(t)
+	_, logPath := modFixture(t, &cfg, "ok")
+	cfg.RescanInterval = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = New(db, cfg, nil).Run(ctx)
+	}()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for count(t, db, `SELECT COUNT(*) FROM mods WHERE validated_at IS NOT NULL`) != 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("Run never filled the mods table")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if calls(t, logPath) != 1 {
+		t.Errorf("validate calls = %d, want 1", calls(t, logPath))
 	}
 }
 
@@ -263,7 +330,7 @@ func TestScanModsReadsPluginDirsFromSettings(t *testing.T) {
 
 	cfg := Config{ClaudeDir: claude, RescanInterval: time.Hour}
 	modFixture(t, &cfg, "ok") // also adds a cache mod under this claude dir
-	if _, err := New(db, cfg, nil).Scan(); err != nil {
+	if _, err := New(db, cfg, nil).ScanMods(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
 	var src, name string

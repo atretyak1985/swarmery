@@ -608,15 +608,27 @@ swarmery never edits a mod, and the API serves the folder path, never module sou
 Each mod is audited with `claude plugin validate --strict --json <dir>` (binary
 resolved by `internal/claudebin`, 20 s timeout). The CLI reports what a module hooks
 and calls only as prose `notes` lines (`mods-format.md` §M6), so the parser files
-them by label, dropping the leading module path:
+them by label. The validator echoes the module path from `hooks.json` verbatim and
+a path may contain spaces, so the label is matched as a **known suffix** of the
+text before `: ` — never as "everything after the first space":
 
 | note line | stored as |
 |---|---|
 | `<module> hooks: a, b{filter}, …` | `events` (verbatim, filters kept) |
 | `<module> calls: $.http.fetch, $.ui.log (via post), …` | `uses` (`$.` and ` (via …)` stripped) |
 | `<module> env reads: …` / `env writes: …` | `env.reads` / `env.writes` (`nothing` = empty) |
-| `<module> state…: …`, plus every `state.*` call | `state` |
+| `<module> state…: …` (`state` plus lowercase words), plus every `state.*` call | `state` |
+| `<module> gating hook with .catch: …` / `without .catch: …` | nothing — they restate `gatingHooks[]` |
 | structured `gatingHooks[]` | `report.gatingHooks` (`module, pattern, hook, hasCatch`) |
+
+**Fail closed.** The parser never lets output it cannot read turn into "no risk".
+`report.unrecognized` collects (a) every `<module> <label>: …` note — a head with a
+space — whose label is none of the above, and (b) the marker `no "<module> hooks:"
+note in the validator output` when no hooks line was parsed although the mod has
+modules: the dir's `hooks.json` lists them, or the output itself shows module
+content (a `type: "hooks"` part, a gating hook, or any `<module> <label>:` note).
+A non-empty `unrecognized` adds the unknown `validator-output` badge (§11.3). Prose
+notes without a module head (`plugin.json: …`, a line with no `: `) are ignored.
 
 `errors`/`warnings` are collected from the manifest and every `contents[]` part. A run
 that cannot produce a report — timeout, output that is not the §M6 JSON, a failed
@@ -627,8 +639,12 @@ the next pass retries without a manual rescan.
 
 ### 11.3 Risk badges (`internal/modscan.Risk`)
 
-Deterministic over `events` (filter stripped) ∪ `uses`; one badge per matching rule,
-in this order. A rule ending in `.*` matches by prefix.
+Deterministic over `events` ∪ every `gatingHooks[].hook` and `.pattern` (filters
+stripped) ∪ `uses`; one badge per matching rule, in this order. A rule ending in
+`.*` matches by prefix. A report with a non-empty `unrecognized` leads with the
+unknown `validator-output` badge (its matches are the unread lines) before whatever
+the readable part matched, so an **empty badge list always means "understood, and
+nothing risky"** — the UI's green "no risk badges".
 
 | level | rule | label |
 |---|---|---|
@@ -643,20 +659,28 @@ in this order. A rule ending in `.*` matches by prefix.
 | yellow | `store.*` | keeps a store |
 | yellow | `model.*` | calls the model |
 | unknown | `validate` | not validated (the report never parsed) |
+| unknown | `validator-output` | validator output not understood (`report.unrecognized` non-empty) |
 
-The server sends the English label; the UI localises by `rule`.
+The server sends the English label; the UI localises by `rule` and falls back to
+the server label for a rule it has no translation for (`validator-output` today).
 
 ### 11.4 When validate runs, and rescan
 
-Validate spawns the CLI, so a scan pass runs it only for a mod whose `module_sha`
-changed — sha256 over `hooks.json` plus each listed module's path and content — or
-that has no row yet. An unchanged mod keeps its cached result. `POST
+The mods pass is **not part of the registry `Scan()`**: validate spawns the CLI (up
+to 20 s per mod) and passes serialize on a lock, while `internal/sysedit` calls
+`Scan()` synchronously after every write and relies on it being cheap. The daemon's
+`Run` loop runs the mods pass after every registry pass (startup, fsnotify, the
+periodic tick), and the rescan endpoint runs it on demand; the one-shot `swarmery
+sysscan` CLI does not. A pass validates only a mod whose `module_sha` changed —
+sha256 over `hooks.json` plus each listed module's path and content — or that has
+no row yet. An unchanged mod keeps its cached result. `POST
 /api/system/mods/rescan` (local `Origin` only; 403 otherwise, 503 while the daemon
 runs `--no-ingest` and no scanner is attached) forces a re-validate of every mod
 and answers `{mods, validated, parseErrors, removed}`; passes are serialized, so a
 manual rescan never races the periodic one. A changed row publishes
 `system_item_updated` with `kind: "mod"`; the WS layer does not forward that note
-yet, so the Mods tab refetches on mount and after a rescan.
+yet, so the Mods tab refetches on mount and after a rescan — the list and, when one
+is open, the mod's validate report.
 
 ### 11.5 The `mods` table (migration 0112)
 

@@ -7,7 +7,7 @@
 // Read-only audit: the folder path is shown (and copyable), the module source
 // never is — the detail carries the validator's report, not the files. The one
 // action is Rescan (POST, local origin only), which re-validates every mod and
-// then refetches the list. The daemon's WS layer does not forward mod
+// then refetches the list and the open validate report. The daemon's WS layer does not forward mod
 // `system_item_updated` notes yet, so the tab refetches on mount and after a
 // rescan rather than live.
 
@@ -217,12 +217,22 @@ function GatingHooks({ hooks }: { hooks: ModGatingHook[] }): JSX.Element {
   );
 }
 
-function ModDetailPanel({ id, onClose }: { id: number; onClose: () => void }): JSX.Element {
+function ModDetailPanel({
+  id,
+  rescans,
+  onClose,
+}: {
+  id: number;
+  /** Successful rescans so far — a new one refetches the open report. */
+  rescans: number;
+  onClose: () => void;
+}): JSX.Element {
   const { t } = useLingui();
   const [detail, setDetail] = useState<ModDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
+  // `rescans` is a trigger only: a finished rescan replaced the stored report.
   useEffect(() => {
     let cancelled = false;
     setDetail(null);
@@ -237,7 +247,7 @@ function ModDetailPanel({ id, onClose }: { id: number; onClose: () => void }): J
     return () => {
       cancelled = true;
     };
-  }, [id, attempt]);
+  }, [id, attempt, rescans]);
 
   // Escape closes the panel, like the other System detail rails.
   useEffect(() => {
@@ -345,6 +355,7 @@ export function ModsTab(): JSX.Element {
   const [rescanning, setRescanning] = useState(false);
   const [rescanError, setRescanError] = useState<string | null>(null);
   const [lastRescan, setLastRescan] = useState<ModRescanResult | null>(null);
+  const [rescans, setRescans] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -375,6 +386,7 @@ export function ModsTab(): JSX.Element {
     rescanSystemMods()
       .then((res) => {
         setLastRescan(res);
+        setRescans((n) => n + 1); // the open detail refetches too
         refetch();
       })
       .catch((e: unknown) => setRescanError(e instanceof Error ? e.message : String(e)))
@@ -446,7 +458,7 @@ export function ModsTab(): JSX.Element {
               </tbody>
             </table>
           </div>
-          {selected !== null && <ModDetailPanel id={selected} onClose={closeDetail} />}
+          {selected !== null && <ModDetailPanel id={selected} rescans={rescans} onClose={closeDetail} />}
         </>
       )}
     </div>

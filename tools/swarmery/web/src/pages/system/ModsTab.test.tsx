@@ -7,7 +7,8 @@
 //   2. An empty list shows "No mods installed".
 //   3. Selecting a row opens the full validate report (GET …/mods/{id}): the
 //      folder path, warnings, env, gating hooks — never module contents.
-//   4. Rescan POSTs, is disabled while pending, then refetches the list.
+//   4. Rescan POSTs, is disabled while pending, then refetches the list — and
+//      the open validate report, which a failed rescan leaves alone.
 //   5. A failed list fetch shows the error with a retry; a failed rescan shows
 //      the server's message.
 //
@@ -167,6 +168,39 @@ describe('ModsTab', () => {
     expect(listMock).toHaveBeenCalledTimes(2);
     expect(screen.getByText('rescan: 2 mods · 2 validated · 1 parse errors · 0 removed')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Rescan' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('refetches an open validate report after a successful rescan', async () => {
+    listMock.mockResolvedValue([LINK]);
+    const rescanned: ModDetail = {
+      ...LINK_DETAIL,
+      report: { ...LINK_DETAIL.report, warnings: ['plugin.json: missing license'] },
+    };
+    detailMock.mockResolvedValueOnce(LINK_DETAIL).mockResolvedValueOnce(rescanned);
+    rescanMock.mockResolvedValue(RESCAN);
+    render(<ModsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /show the validate report of link-spike/ }));
+    expect(await screen.findByText('plugin.json: missing author')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }));
+    expect(await screen.findByText('plugin.json: missing license')).toBeTruthy();
+    expect(screen.queryByText('plugin.json: missing author')).toBeNull();
+    expect(detailMock).toHaveBeenCalledTimes(2);
+    expect(detailMock).toHaveBeenLastCalledWith(1);
+  });
+
+  it('keeps the open report as is when a rescan fails', async () => {
+    listMock.mockResolvedValue([LINK]);
+    detailMock.mockResolvedValue(LINK_DETAIL);
+    rescanMock.mockRejectedValue(new Error('boom'));
+    render(<ModsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /show the validate report of link-spike/ }));
+    expect(await screen.findByText('plugin.json: missing author')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Rescan' }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(detailMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows a failed list fetch with a retry, and a failed rescan with its message', async () => {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -384,6 +385,163 @@ func TestRiskOnFixture(t *testing.T) {
 	want := []string{"red:tool.check", "red:prompt.submit", "red:http.fetch", "yellow:fs.read"}
 	if !reflect.DeepEqual(rules, want) {
 		t.Errorf("fixture badges = %v, want %v", rules, want)
+	}
+}
+
+// fixtureVariant returns the M6 fixture with every old replaced by new.
+func fixtureVariant(t *testing.T, old, new string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []byte(strings.ReplaceAll(string(raw), old, new))
+}
+
+func badgeRules(bs []Badge) []string {
+	out := []string{}
+	for _, b := range bs {
+		out = append(out, b.Level+":"+b.Rule)
+	}
+	return out
+}
+
+// F1(a): a module path with a space must not shift the label — the label is
+// matched as a known suffix of the note head, never "everything after the
+// first space".
+func TestParseReportModulePathWithSpaces(t *testing.T) {
+	orig, err := ParseReport(fixtureVariant(t, "", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spaced, err := ParseReport(fixtureVariant(t, "./register.tsx", "./a b.tsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(spaced.Events, orig.Events) || !reflect.DeepEqual(spaced.Uses, orig.Uses) ||
+		!reflect.DeepEqual(spaced.Env, orig.Env) || !reflect.DeepEqual(spaced.State, orig.State) {
+		t.Errorf("spaced module path parsed differently:\n events %v\n uses   %v\n env    %+v\nwant\n events %v\n uses   %v\n env    %+v",
+			spaced.Events, spaced.Uses, spaced.Env, orig.Events, orig.Uses, orig.Env)
+	}
+	if len(spaced.Unrecognized) != 0 {
+		t.Errorf("Unrecognized = %v, want none", spaced.Unrecognized)
+	}
+	if got, want := badgeRules(Risk(spaced)), badgeRules(Risk(orig)); !reflect.DeepEqual(got, want) {
+		t.Errorf("Risk = %v, want %v", got, want)
+	}
+}
+
+// F1(b): the structured gatingHooks list counts as hooked events, so a hook
+// the notes do not mention still raises its badge.
+func TestRiskConsidersGatingHooks(t *testing.T) {
+	r := Report{Validated: true, GatingHooks: []GatingHook{
+		{Module: "./m.tsx", Pattern: "tool.check", Hook: "tool.check{tool=Bash}", HasCatch: true},
+		{Module: "./m.tsx", Pattern: "prompt.submit", Hook: "prompt.submit"},
+	}}
+	want := []string{"red:tool.check", "red:prompt.submit"}
+	if got := badgeRules(Risk(r)); !reflect.DeepEqual(got, want) {
+		t.Errorf("Risk = %v, want %v", got, want)
+	}
+}
+
+// F1(c): a reworded hooks label must fail closed — an unknown badge, never
+// the empty "no risk badges" slice.
+func TestRiskFailsClosedOnRewordedFixture(t *testing.T) {
+	rep, err := ParseReport(fixtureVariant(t, "./register.tsx hooks: ", "./register.tsx hooks (3): "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	badges := Risk(rep)
+	if len(badges) == 0 || badges[0].Level != LevelUnknown || badges[0].Rule != RuleValidatorOutput ||
+		badges[0].Label != "validator output not understood" || len(badges[0].Matches) == 0 {
+		t.Fatalf("Risk = %+v, want an unknown %q badge first", badges, RuleValidatorOutput)
+	}
+}
+
+// F1(d): drift table — every way the notes can stop matching the parser fails
+// closed; an intact report never does.
+func TestRiskDriftFailsClosed(t *testing.T) {
+	const hooksPart = `{"type":"hooks","errors":[],"warnings":[],"notes":[%s],"gatingHooks":[%s]}`
+	gate := `{"module":"./m.tsx","pattern":"tool.check","hook":"tool.check","hasCatch":true}`
+	doc := func(notes, gating string) []byte {
+		return []byte(`{"success":true,"manifest":{"errors":[],"warnings":[],"notes":[]},"contents":[` +
+			fmt.Sprintf(hooksPart, notes, gating) + `]}`)
+	}
+	cases := []struct {
+		name      string
+		raw       []byte
+		unknown   bool
+		wantRules []string // non-unknown badges, in order
+	}{
+		{"intact", doc(`"./m.tsx hooks: session.start", "./m.tsx calls: $.ui.log"`, ""), false, []string{}},
+		{"spaces in module path", doc(`"./my mod.tsx hooks: tool.check", "./my mod.tsx calls: $.fs.read"`, ""),
+			false, []string{"red:tool.check", "yellow:fs.read"}},
+		{"module-less hooks line", doc(`"hooks: session.start"`, ""), false, []string{}},
+		{"unknown label, nothing recognised", doc(`"./m.tsx hooks (1): tool.check", "./m.tsx invokes: $.http.fetch"`, ""),
+			true, []string{}},
+		{"unknown label beside known ones", doc(`"./m.tsx hooks: session.start", "./m.tsx spawns: sh"`, ""),
+			true, []string{}},
+		{"missing hooks line, gating hooks present", doc(`"./m.tsx calls: $.ui.log"`, gate),
+			true, []string{"red:tool.check"}},
+		{"hooks part with no notes at all", doc("", ""), true, []string{}},
+		{"state label variant", doc(`"./a b.tsx hooks: session.start", "./a b.tsx state keys: n"`, ""), false, []string{}},
+		{"state label with junk", doc(`"./m.tsx hooks: session.start", "./m.tsx state keys (2): n"`, ""), true, []string{}},
+		{"manifest-only plugin, no hooks part", []byte(`{"success":true,"manifest":{"notes":["plugin.json: ok"]},"contents":[]}`),
+			false, []string{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rep, err := ParseReport(c.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			badges := Risk(rep)
+			if badges == nil {
+				t.Fatal("Risk returned nil")
+			}
+			gotUnknown := len(badges) > 0 && badges[0].Level == LevelUnknown && badges[0].Rule == RuleValidatorOutput
+			if gotUnknown != c.unknown {
+				t.Errorf("unknown badge = %v, want %v (badges %+v, unrecognized %v)", gotUnknown, c.unknown, badges, rep.Unrecognized)
+			}
+			rest := badges
+			if gotUnknown {
+				rest = badges[1:]
+			}
+			if got := badgeRules(rest); !reflect.DeepEqual(got, c.wantRules) {
+				t.Errorf("other badges = %v, want %v", got, c.wantRules)
+			}
+		})
+	}
+}
+
+// Validate knows the dir is a mod (its hooks.json lists modules), so a report
+// without any hooks part — a validator that moved its notes elsewhere — fails
+// closed even though ParseReport alone could not tell.
+func TestValidateFailsClosedWhenModHasNoHooksNotes(t *testing.T) {
+	bin := fakeClaude(t, "ok")
+	fixture := filepath.Join(t.TempDir(), "manifest-only.json")
+	writeFile(t, fixture, `{"success":true,"manifest":{"errors":[],"warnings":[],"notes":[]},"contents":[]}`)
+	t.Setenv("FAKE_CLAUDE_FIXTURE", fixture)
+
+	mod := t.TempDir()
+	makePlugin(t, mod, "m", "1", []string{"./r.tsx"}, false)
+	rep, err := Validate(context.Background(), bin, mod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := badgeRules(Risk(rep)); !reflect.DeepEqual(got, []string{"unknown:" + RuleValidatorOutput}) {
+		t.Errorf("Risk = %v, want the single unknown validator-output badge", got)
+	}
+
+	// The same output for a plugin that is not a mod stays a clean report.
+	plain := t.TempDir()
+	makePlugin(t, plain, "p", "1", nil, false)
+	rep, err = Validate(context.Background(), bin, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Risk(rep); len(got) != 0 {
+		t.Errorf("Risk of a non-mod = %+v, want none", got)
 	}
 }
 

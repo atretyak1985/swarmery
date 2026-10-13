@@ -37,10 +37,12 @@ func (m ModStats) String() string {
 // ModTarget is the config_lint_findings target of a mod row.
 func ModTarget(id int64) string { return fmt.Sprintf("%s:%d", KindMod, id) }
 
-// ScanMods runs the mods pass on its own — the full Scan calls it with
-// force=false; POST /api/system/mods/rescan calls it with force=true, which
-// re-validates every mod regardless of module_sha. Passes are serialized, so a
-// manual rescan never races the periodic one into a double validate.
+// ScanMods runs the mods pass — Run calls it with force=false after every
+// registry pass; POST /api/system/mods/rescan calls it with force=true, which
+// re-validates every mod regardless of module_sha. Scan never calls it (it may
+// spawn the CLI for N × ValidateTimeout, and sysedit's post-write Scan must
+// stay cheap). Passes are serialized, so a manual rescan never races the
+// periodic one into a double validate.
 func (s *Scanner) ScanMods(ctx context.Context, force bool) (ModStats, error) {
 	s.modsMu.Lock()
 	defer s.modsMu.Unlock()
