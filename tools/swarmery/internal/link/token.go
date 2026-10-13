@@ -69,6 +69,9 @@ func readToken(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("link token: %s is not a regular file", path)
+	}
 	if info.Mode().Perm()&^fileMode != 0 {
 		if err := os.Chmod(path, fileMode); err != nil {
 			return "", fmt.Errorf("link token: narrow mode of %s: %w", path, err)
