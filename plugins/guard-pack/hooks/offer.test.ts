@@ -12,7 +12,7 @@ test('an agent of a pack this project has not enabled is not offered', { options
 ) => {
   world(on, { settings: { local: { enabledPlugins: { 'infra-pack@market': true, 'iot-pack@market': false } } } })
   await $.session.start(START)
-  expect((await $.agent.offer(agent('uav-pack:mission-planner', 'uav-pack'))).isOffered).toBe(false)
+  expect((await $.agent.offer(agent('lab-pack:helper', 'lab-pack'))).isOffered).toBe(false)
   expect((await $.agent.offer(agent('iot-pack:data-specialist', 'iot-pack'))).isOffered).toBe(false)
   // enabledPacks in project.json, and enabledPlugins in local settings
   expect((await $.agent.offer(agent('web-pack:seo-specialist', 'web-pack'))).isOffered).toBe(true)
@@ -28,7 +28,7 @@ test('an agent of a pack this project has not enabled is not offered', { options
 test('agentOffer is off by default: every agent stays offered', async ($, on) => {
   world(on)
   await $.session.start(START)
-  expect((await $.agent.offer(agent('uav-pack:mission-planner', 'uav-pack'))).isOffered).toBe(true)
+  expect((await $.agent.offer(agent('lab-pack:helper', 'lab-pack'))).isOffered).toBe(true)
 })
 
 const HEAVY = { tool: 'mcp__docs__search', description: 'd'.repeat(3000), provider: { plugin: 'mcp:docs', tier: 'user' } } as const
