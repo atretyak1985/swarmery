@@ -1,0 +1,58 @@
+{
+  "success": true,
+  "strict": true,
+  "target": "<spike>/link-spike/.claude-plugin/plugin.json",
+  "manifest": {
+    "file": "<spike>/link-spike/.claude-plugin/plugin.json",
+    "type": "plugin",
+    "errors": [],
+    "warnings": [],
+    "notes": [],
+    "gatingHooks": []
+  },
+  "contents": [
+    {
+      "file": "<spike>/link-spike/hooks/hooks.json",
+      "type": "hooks",
+      "errors": [],
+      "warnings": [],
+      "notes": [
+        "./register.tsx hooks: session.start, session.measure, prompt.submit, turn.complete, tool.call, tool.call{tool=AskUserQuestion}, tool.check, ui.render{component=AbovePrompt}, session.end",
+        "./register.tsx gating hook without .catch: prompt.submit",
+        "./register.tsx gating hook without .catch: tool.call",
+        "./register.tsx gating hook without .catch: tool.call{tool=AskUserQuestion}",
+        "./register.tsx gating hook with .catch: tool.check",
+        "./register.tsx calls: $.clock.now, $.env.get, $.fs.read, $.http.fetch, $.session.cwd, $.session.id, $.session.root, $.session.usage, $.session.version, $.ui.log (via post), $.ui.resolve",
+        "./register.tsx env writes: nothing",
+        "./register.tsx env reads: HOME"
+      ],
+      "gatingHooks": [
+        {
+          "module": "./register.tsx",
+          "pattern": "prompt.submit",
+          "hook": "prompt.submit",
+          "hasCatch": false
+        },
+        {
+          "module": "./register.tsx",
+          "pattern": "tool.call",
+          "hook": "tool.call",
+          "hasCatch": false
+        },
+        {
+          "module": "./register.tsx",
+          "pattern": "tool.call",
+          "hook": "tool.call{tool=AskUserQuestion}",
+          "hasCatch": false
+        },
+        {
+          "module": "./register.tsx",
+          "pattern": "tool.check",
+          "hook": "tool.check",
+          "hasCatch": true
+        }
+      ]
+    }
+  ],
+  "advice": []
+}

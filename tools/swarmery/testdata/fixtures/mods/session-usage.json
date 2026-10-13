@@ -1,0 +1,106 @@
+{
+  "_comment": "Observed 2026-10-13, Claude Code 2.1.296, claude -p --plugin-dir link-spike, model haiku, two turns (stream-json input). Values verbatim; cost.usd is the raw float the engine sent.",
+  "afterTurn1": {
+    "session.measure.e": {
+      "context": {
+        "tokens": 32108,
+        "window": 1000000,
+        "percent": 3
+      },
+      "rateLimits": [
+        {
+          "kind": "five_hour",
+          "percentUsed": 9,
+          "resetsAt": "2026-10-13T20:20:00.000Z"
+        },
+        {
+          "kind": "seven_day",
+          "percentUsed": 48,
+          "resetsAt": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "cost": {
+        "usd": 0.0043368899999999995
+      },
+      "changed": [
+        "context",
+        "rateLimits",
+        "cost"
+      ]
+    },
+    "session.usage()": {
+      "startedAt": 1791920751978,
+      "context": {
+        "tokens": 32108,
+        "window": 1000000,
+        "percent": 3
+      },
+      "rateLimits": [
+        {
+          "kind": "five_hour",
+          "percentUsed": 9,
+          "resetsAt": "2026-10-13T20:20:00.000Z"
+        },
+        {
+          "kind": "seven_day",
+          "percentUsed": 48,
+          "resetsAt": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "cost": {
+        "usd": 0.0043368899999999995
+      }
+    }
+  },
+  "afterTurn2": {
+    "session.measure.e": {
+      "context": {
+        "tokens": 35432,
+        "window": 1000000,
+        "percent": 4
+      },
+      "rateLimits": [
+        {
+          "kind": "five_hour",
+          "percentUsed": 9,
+          "resetsAt": "2026-10-13T20:20:00.000Z"
+        },
+        {
+          "kind": "seven_day",
+          "percentUsed": 48,
+          "resetsAt": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "cost": {
+        "usd": 0.00803651
+      },
+      "changed": [
+        "context",
+        "cost"
+      ]
+    },
+    "session.usage()": {
+      "startedAt": 1791920751978,
+      "context": {
+        "tokens": 35432,
+        "window": 1000000,
+        "percent": 4
+      },
+      "rateLimits": [
+        {
+          "kind": "five_hour",
+          "percentUsed": 9,
+          "resetsAt": "2026-10-13T20:20:00.000Z"
+        },
+        {
+          "kind": "seven_day",
+          "percentUsed": 48,
+          "resetsAt": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "cost": {
+        "usd": 0.00803651
+      }
+    }
+  }
+}
