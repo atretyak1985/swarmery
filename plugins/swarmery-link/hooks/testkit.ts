@@ -35,9 +35,10 @@ export type World = {
   readonly tokens?: readonly string[]
   /**
    * The daemon's answer per request, in order; the last repeats. A status is a
-   * response, `throw` a connection that fails. Default: 202.
+   * response, `throw` a connection that fails, `hang` a daemon that accepts
+   * the connection and never answers. Default: 202.
    */
-  readonly replies?: ReadonlyArray<number | 'throw'>
+  readonly replies?: ReadonlyArray<number | 'throw' | 'hang'>
   readonly now?: number
 }
 
@@ -85,6 +86,7 @@ export const world = (on: On, w: World = {}): Recorded => {
       headers: e.init?.headers ?? {},
       body: JSON.parse(e.init?.body ?? '{"events":[]}'),
     })
+    if (reply === 'hang') return new Promise<never>(() => undefined)
     if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
     return { value: { status: reply, ok: reply >= 200 && reply < 300, headers: {}, text: '{}' } }
   })
@@ -108,6 +110,22 @@ export const world = (on: On, w: World = {}): Recorded => {
 /** Every event the recorded requests carried, in order. */
 export const sent = (requests: readonly Request[]): ReadonlyArray<Readonly<Record<string, unknown>>> =>
   requests.flatMap(r => r.body.events)
+
+/** Watches a hook call without awaiting it, so a test can see it is still pending. */
+export const track = (pending: Promise<unknown>): { readonly isDone: () => boolean } => {
+  let isDone = false
+  void pending.then(
+    () => {
+      isDone = true
+    },
+    () => {
+      isDone = true
+    },
+  )
+  return { isDone: () => isDone }
+}
+
+export const END = { reason: 'other', sessionId: SESSION_ID, resume: { sessionId: SESSION_ID } as never } as const
 
 export const TURN = { text: 'say hi', turnId: 'turn-1' } as const
 export const COMPLETE = {

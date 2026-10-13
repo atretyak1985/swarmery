@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { COMPLETE, SESSION_ID, CWD, START, TOKEN, TURN, sent, world } from './testkit'
+import { COMPLETE, CWD, END, SESSION_ID, START, TOKEN, TURN, sent, track, world } from './testkit'
 
 test('no token file: the sensor is off, one log line, no request', async ($, on) => {
   const w = world(on)
@@ -18,6 +18,7 @@ test('turn.complete sends one POST carrying turn.complete and a session.measure 
   const w = world(on, { tokens: [`${TOKEN}\n`] })
   await $.session.start(START)
   await $.turn.complete(COMPLETE)
+  await w.clock.advance(0)
   expect(w.requests).toHaveLength(1)
   const [request] = w.requests
   expect(request?.url).toBe('http://127.0.0.1:7777/api/link/events')
@@ -68,9 +69,10 @@ test('a failing daemon never surfaces as a hook error; the events wait for the n
   await $.turn.start(TURN)
   const r = await $.turn.complete(COMPLETE)
   expect(r.text).toBe('hi')
+  await w.clock.advance(0)
   expect(w.requests).toHaveLength(1)
   expect(w.logs.filter(l => l.includes('daemon unreachable'))).toHaveLength(1)
-  // while failing, turn hooks stop waiting on the daemon; the 2 s timer retries
+  // while failing, turn boundaries leave sending to the 2 s timer
   await w.clock.advance(2_000)
   expect(w.requests).toHaveLength(2)
   await w.clock.advance(2_000)
@@ -85,6 +87,8 @@ test('401: the token is re-read once and retried no sooner than 1 s later; a sec
   const w = world(on, { tokens: ['old-token', 'new-token'], replies: [401, 401] })
   await $.session.start(START)
   await $.turn.start(TURN)
+  // the turn's flush runs after the hook returned: let it reach the 401 and the re-read
+  await w.clock.advance(0)
   expect(w.requests).toHaveLength(1)
   expect(w.tokenReads()).toBe(2)
   await w.clock.advance(999)
@@ -107,6 +111,7 @@ test('401 then a good token: the retry is served and the queue drains', async ($
   expect(w.requests).toHaveLength(2)
   expect(sent([w.requests[1]!]).map(e => e.kind)).toEqual(['session.start', 'turn.start'])
   await $.turn.complete(COMPLETE)
+  await w.clock.advance(0)
   expect(w.requests).toHaveLength(3)
 })
 
@@ -148,9 +153,73 @@ test('a subagent turn.complete is not reported as the session waiting', async ($
   expect(sent(w.requests).map(e => e.kind)).toEqual(['session.start'])
 })
 
-test('daemonUrl option is honoured', { options: { daemonUrl: 'http://127.0.0.1:8899/' } }, async ($, on) => {
+test('a daemon that never answers never holds a turn: turn-boundary flushes are fire-and-forget', async ($, on) => {
+  const w = world(on, { tokens: [TOKEN], replies: ['hang'] })
+  await $.session.start(START)
+  const start = track($.turn.start(TURN))
+  await w.clock.advance(0)
+  expect(start.isDone()).toBe(true)
+  expect(w.requests).toHaveLength(1)
+  const complete = track($.turn.complete(COMPLETE))
+  await w.clock.advance(0)
+  expect(complete.isDone()).toBe(true)
+  // the hung request's own 5 s guard still ends it
+  await w.clock.advance(10_000)
+})
+
+test('session.end waits at most 1.2 s even behind a hung in-flight flush', async ($, on) => {
+  const w = world(on, { tokens: [TOKEN], replies: ['hang'] })
+  await $.session.start(START)
+  await w.clock.advance(2_000)
+  expect(w.requests).toHaveLength(1)
+  const end = track($.session.end(END))
+  await w.clock.advance(1_200)
+  expect(end.isDone()).toBe(true)
+  await w.clock.advance(10_000)
+})
+
+test('session.end behind an in-flight turn flush still sends the session.end event', async ($, on) => {
   const w = world(on, { tokens: [TOKEN] })
   await $.session.start(START)
-  await $.turn.start(TURN)
-  expect(w.requests[0]?.url).toBe('http://127.0.0.1:8899/api/link/events')
+  await $.turn.complete(COMPLETE)
+  await $.session.end(END)
+  await w.clock.advance(0)
+  expect(sent(w.requests).at(-1)).toMatchObject({ kind: 'session.end', payload: { reason: 'other' } })
 })
+
+// daemonUrl: only a loopback http origin may receive the bearer token.
+const DEFAULT_EVENTS = 'http://127.0.0.1:7777/api/link/events'
+const DAEMON_URLS: ReadonlyArray<readonly [string, string]> = [
+  ['http://127.0.0.1:8899/', 'http://127.0.0.1:8899/api/link/events'],
+  ['http://127.0.0.1', 'http://127.0.0.1/api/link/events'],
+  ['http://localhost:7777', 'http://localhost:7777/api/link/events'],
+  ['HTTP://LocalHost:7777', 'http://localhost:7777/api/link/events'],
+  ['http://[::1]:7777/some/path?q=1', 'http://[::1]:7777/api/link/events'],
+  ['http://daemon.example.com:7777', DEFAULT_EVENTS],
+  ['https://daemon.example.com', DEFAULT_EVENTS],
+  ['https://127.0.0.1:7777', DEFAULT_EVENTS],
+  ['http://a@remote.example', DEFAULT_EVENTS],
+  ['http://127.0.0.1@remote.example', DEFAULT_EVENTS],
+  ['http://127.0.0.1:7777@remote.example', DEFAULT_EVENTS],
+  ['http://127.0.0.1.remote.example:7777', DEFAULT_EVENTS],
+  ['http://localhost.remote.example', DEFAULT_EVENTS],
+  ['http://127.0.0.1\\@remote.example', DEFAULT_EVENTS],
+  ['http://127.0.0.1:99999', DEFAULT_EVENTS],
+  ['http://127.0.0.1:0', DEFAULT_EVENTS],
+  ['not a url', DEFAULT_EVENTS],
+]
+
+for (const [daemonUrl, expected] of DAEMON_URLS) {
+  test(`daemonUrl ${JSON.stringify(daemonUrl)} → ${expected}`, { options: { daemonUrl } }, async ($, on) => {
+    const w = world(on, { tokens: [TOKEN] })
+    await $.session.start(START)
+    await $.session.start(START)
+    await $.turn.start(TURN)
+    await w.clock.advance(0)
+    expect(w.requests[0]?.url).toBe(expected)
+    const refusals = w.logs.filter(l => l.includes('daemonUrl refused'))
+    expect(refusals).toHaveLength(expected === DEFAULT_EVENTS ? 1 : 0)
+    // the refused value may carry credentials: it is never echoed
+    expect(refusals.some(l => l.includes(daemonUrl))).toBe(false)
+  })
+}

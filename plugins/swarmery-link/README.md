@@ -34,7 +34,7 @@ It also needs the daemon's link token (below). Without it the mod does nothing.
 | `tool.call` | `tool.call` with `{ tool, inputHash, agentId? }`, then lets the call run |
 | `session.measure` | `session.measure`: `context`, `rateLimits`, `cost`, `changed` |
 | `turn.complete` (main loop only) | `turn.complete` with `{ durationMs, stopReason }`, plus a `session.measure` snapshot from `$.session.usage()` |
-| `session.end` | `session.end` with `{ reason }`, and a last flush inside the 1.5 s session.end bound |
+| `session.end` | `session.end` with `{ reason }`, and a last flush that waits at most 1.2 s, even behind a request already in flight |
 
 - **No tool input leaves the session.** A `tool.call` carries the tool's name and
   the first 16 hex digits of a SHA-256 over the input's canonical JSON (FNV-1a
@@ -56,7 +56,7 @@ As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 ```
 ./register.ts hooks: session.start, turn.start, tool.call, session.measure, turn.complete, session.end
 ./register.ts gating hook with .catch: tool.call
-./register.ts calls: $.clock.after (via arm, post, send), $.clock.now (via push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via post), $.session.cwd, $.session.id, $.session.usage, $.ui.log (via log)
+./register.ts calls: $.clock.after (via arm, send, within), $.clock.now (via push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via post), $.session.cwd, $.session.id, $.session.usage, $.ui.log (via log)
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
 ```
@@ -81,7 +81,7 @@ does: it always calls `next(e)`, and its `.catch` does the same.
 
 | Option | Default | Effect in 0.1 |
 |---|---|---|
-| `daemonUrl` | `http://127.0.0.1:7777` | the daemon's origin; use a loopback address |
+| `daemonUrl` | `http://127.0.0.1:7777` | the daemon's origin. Only `http://` on `127.0.0.1`, `[::1]` or `localhost` (any port, path ignored) is accepted; anything else is refused with one log line and the default is used, so the token never leaves the machine |
 | `control` | `false` | reserved; logs `control: not implemented in 0.1` once, registers no gating hook |
 | `planBand` | `false` | reserved; logs once |
 | `swarm` | `false` | reserved; logs once |
@@ -96,8 +96,10 @@ transcript.
 
 - **Daemon down or slow**: a request that gets no answer in 5 s (raced against a
   `$.clock` timer, because `$.http.fetch` takes no timeout) is treated as failed.
-  The mod logs one line, keeps at most 200 events, and retries every 2 s. While
-  it is failing, turn hooks stop waiting on it.
+  The mod logs one line, keeps at most 200 events, and retries every 2 s.
+- **No hook waits on the daemon.** A turn boundary starts a send and moves on;
+  while the daemon is failing it leaves sending to the 2 s timer. Only
+  `session.end` waits, and never more than 1.2 s.
 - **A batch the daemon refuses** (400, 403, 413): dropped, one log line.
 - **Any error in a hook** is caught. The session never sees one.
 

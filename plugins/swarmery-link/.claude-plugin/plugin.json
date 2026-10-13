@@ -35,7 +35,7 @@
     "daemonUrl": {
       "type": "string",
       "title": "Daemon URL",
-      "description": "The daemon's REST origin. Loopback only; the link API refuses a Host that does not name the daemon.",
+      "description": "The daemon's REST origin. Loopback http only (127.0.0.1, [::1] or localhost, any port); any other value is refused and the default is used, so the token never leaves the machine.",
       "default": "http://127.0.0.1:7777"
     }
   }

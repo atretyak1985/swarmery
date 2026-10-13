@@ -15,11 +15,31 @@ export const FLUSH_EVERY_MS = 2_000
 /** After a 401, the one retry waits past the daemon's 1 s token re-read throttle. */
 export const AUTH_RETRY_MS = 1_100
 
-/** The events endpoint under the configured origin; the default origin when the value is unusable. */
-export const eventsUrl = (daemonUrl: unknown): string => {
-  const raw = typeof daemonUrl === 'string' ? daemonUrl.trim() : ''
-  const base = /^https?:\/\/[^\s/]+/i.test(raw) ? raw.replace(/\/+$/, '') : DEFAULT_DAEMON_URL
-  return `${base}${EVENTS_PATH}`
+/**
+ * A loopback http origin: scheme, one of the three loopback hosts, an optional
+ * port, then nothing or a path/query/fragment (dropped). No userinfo, no other
+ * host, no https: the bearer token goes nowhere else.
+ */
+const LOOPBACK_ORIGIN = /^http:\/\/(127\.0\.0\.1|\[::1\]|localhost)(?::(\d{1,5}))?(?:[/?#].*)?$/i
+
+export type DaemonEndpoint = {
+  /** Where events are POSTed. */
+  readonly url: string
+  /** A daemonUrl was configured but is not a loopback http origin, so the default is used. */
+  readonly isRefused: boolean
+}
+
+/** The events endpoint under the configured loopback origin; the default origin for anything else. */
+export const daemonEndpoint = (daemonUrl: unknown): DaemonEndpoint => {
+  const fallback: DaemonEndpoint = { url: `${DEFAULT_DAEMON_URL}${EVENTS_PATH}`, isRefused: false }
+  if (daemonUrl === undefined || daemonUrl === null) return fallback
+  const raw = typeof daemonUrl === 'string' ? daemonUrl.trim() : undefined
+  if (raw === '') return fallback
+  const match = raw === undefined ? null : LOOPBACK_ORIGIN.exec(raw)
+  const host = match?.[1]?.toLowerCase()
+  const port = match?.[2] === undefined ? undefined : Number(match[2])
+  if (host === undefined || (port !== undefined && (port < 1 || port > 65_535))) return { ...fallback, isRefused: true }
+  return { url: `http://${host}${port === undefined ? '' : `:${port}`}${EVENTS_PATH}`, isRefused: false }
 }
 
 export type LinkRequest = {

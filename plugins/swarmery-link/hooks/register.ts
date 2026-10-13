@@ -11,11 +11,12 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 import {
   AUTH_RETRY_MS,
+  DEFAULT_DAEMON_URL,
   END_FLUSH_TIMEOUT_MS,
   FLUSH_EVERY_MS,
   REQUEST_TIMEOUT_MS,
+  daemonEndpoint,
   describeFailure,
-  eventsUrl,
   linkRequest,
   outcome,
   parseToken,
@@ -39,7 +40,7 @@ type Link = {
   cwd: string
   /** Off for the rest of this load: 503, or a 401 that survived a re-read. */
   isOff: boolean
-  /** The last request got no answer or a 5xx: turn hooks stop waiting on the daemon until one succeeds. */
+  /** The last request got no answer or a 5xx: turn boundaries leave sending to the timer until one succeeds. */
   isFailing: boolean
   /** A 401 was answered with a token re-read; the one retry is pending. */
   isAuthWait: boolean
@@ -85,23 +86,31 @@ function turnOff($: EngineInterface, link: Link, why: string): void {
   log($, `link off for this session: ${why}`)
 }
 
-/** One POST of `body`, raced against a `$.clock` timer: HttpInit has no timeout or signal. */
-async function post($: EngineInterface, link: Link, body: string, timeoutMs: number): Promise<Reply> {
+/** `pending`, or `'timeout'` once `ms` pass on `$.clock`, whichever comes first. */
+async function within<T>($: EngineInterface, pending: Promise<T>, ms: number): Promise<T | 'timeout'> {
   let guard: Timer | undefined
-  const timeout = new Promise<Reply>(resolve => {
+  const timeout = new Promise<'timeout'>(resolve => {
     try {
-      guard = $.clock.after(timeoutMs, () => resolve({ error: 'timeout' }))
+      guard = $.clock.after(ms, () => resolve('timeout'))
     } catch {
-      // no timer: the request alone decides
+      // no timer: the pending work alone decides
     }
   })
+  try {
+    return await Promise.race([pending, timeout])
+  } finally {
+    guard?.cancel()
+  }
+}
+
+/** One POST of `body`, raced against a `$.clock` timer: HttpInit has no timeout or signal. */
+async function post($: EngineInterface, link: Link, body: string, timeoutMs: number): Promise<Reply> {
   const request = $.http.fetch(link.url, linkRequest(link.token ?? '', body)).then(
     (r): Reply => ({ status: r.status }),
     (error: unknown): Reply => ({ error }),
   )
-  const reply = await Promise.race([request, timeout])
-  guard?.cancel()
-  return reply
+  const reply = await within($, request, timeoutMs)
+  return reply === 'timeout' ? { error: 'timeout' } : reply
 }
 
 async function send($: EngineInterface, link: Link, timeoutMs: number): Promise<void> {
@@ -184,16 +193,30 @@ async function push($: EngineInterface, link: Link, kind: LinkKind, payload?: Re
   arm($, link)
 }
 
-/** At a turn boundary: send now while the daemon answers, else leave it to the timer. */
-async function flushAtTurn($: EngineInterface, link: Link): Promise<void> {
-  if (isActive(link) && !link.isFailing) await flush($, link, REQUEST_TIMEOUT_MS)
+/**
+ * At a turn boundary: start a send now while the daemon answers, else leave it
+ * to the timer. Never waited on: a hook never blocks on the daemon.
+ */
+function flushAtTurn($: EngineInterface, link: Link): void {
+  if (isActive(link) && !link.isFailing) void flush($, link, REQUEST_TIMEOUT_MS)
+}
+
+/**
+ * session.end's last send: joins a flush already in flight (which may have
+ * started under the 5 s request timeout), then sends what that one left. The
+ * caller bounds the whole wait.
+ */
+async function flushForEnd($: EngineInterface, link: Link): Promise<void> {
+  await flush($, link, END_FLUSH_TIMEOUT_MS)
+  if (link.queue.length > 0 && !link.isFailing) await flush($, link, END_FLUSH_TIMEOUT_MS)
 }
 
 export const register: Register = (on, options) => {
   const reserved = RESERVED.filter(feature => options[feature] === true)
+  const endpoint = daemonEndpoint(options.daemonUrl)
   const noted = new Set<string>()
   const link: Link = {
-    url: eventsUrl(options.daemonUrl),
+    url: endpoint.url,
     token: undefined,
     sessionId: '',
     cwd: '',
@@ -215,6 +238,11 @@ export const register: Register = (on, options) => {
       noted.add(feature)
       log($, `${feature}: not implemented in 0.1`)
     }
+    if (endpoint.isRefused && !noted.has('daemonUrl')) {
+      // the configured value is not echoed: it may carry credentials
+      noted.add('daemonUrl')
+      log($, `daemonUrl refused: not a loopback http origin (127.0.0.1, [::1], localhost); using ${DEFAULT_DAEMON_URL}`)
+    }
     try {
       link.token = await readToken($)
       if (link.token === undefined) {
@@ -233,7 +261,7 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     try {
       await push($, link, 'turn.start')
-      await flushAtTurn($, link)
+      flushAtTurn($, link)
     } catch {
       // never fail a turn over the sensor
     }
@@ -273,7 +301,7 @@ export const register: Register = (on, options) => {
       await push($, link, 'turn.complete', { durationMs: e.durationMs, stopReason: e.reason })
       const snapshot = measurePayload(await $.session.usage())
       if (snapshot !== undefined) await push($, link, 'session.measure', snapshot)
-      await flushAtTurn($, link)
+      flushAtTurn($, link)
     } catch {
       // unreported
     }
@@ -286,7 +314,8 @@ export const register: Register = (on, options) => {
       await push($, link, 'session.end', { reason: e.reason })
       link.timer?.cancel()
       link.timer = undefined
-      await flush($, link, END_FLUSH_TIMEOUT_MS)
+      // bounded by its own timer: a flush in flight may have a 5 s request timeout
+      await within($, flushForEnd($, link), END_FLUSH_TIMEOUT_MS)
     } catch {
       // best effort inside session.end's 1.5 s bound
     }
