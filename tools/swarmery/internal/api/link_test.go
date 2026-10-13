@@ -246,17 +246,14 @@ func TestLinkHealth(t *testing.T) {
 }
 
 // TestLinkTokenRotation: `swarmery link token --rotate` rewrites the file; the
-// running daemon's Holder picks the new value up on the first request that
-// does not match the cached one (one file re-read, ≤ 1/s) — the new token
-// works without a restart, and from then on the old one is 401.
-//
-// The reload is demand-driven: until some client presents the new token, the
-// cached old value still authenticates (docs/mods-link-protocol.md, Rotation).
+// running daemon's Holder refreshes (≤ 1 file read/s) before every comparison,
+// so the old token is 401 even though no client presented the new one first,
+// and the new token works without a restart (docs/mods-link-protocol.md,
+// Rotation). The env's Holder has not reloaded yet, so the first request here
+// reloads at once; the throttle window itself is covered with a fake clock in
+// internal/link (TestHolderRotateRevokesOldTokenWithinInterval).
 func TestLinkTokenRotation(t *testing.T) {
 	e := newLinkTestEnv(t)
-	if code, _ := e.do(t, http.MethodGet, "/api/link/health", e.token, ""); code != http.StatusOK {
-		t.Fatalf("pre-rotation health = %d, want 200", code)
-	}
 	newTok, err := link.Rotate(e.home)
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
@@ -269,16 +266,17 @@ func TestLinkTokenRotation(t *testing.T) {
 		t.Fatalf("token file after Rotate does not hold the new token (err %v)", err)
 	}
 
-	code, body := e.do(t, http.MethodPost, "/api/link/events", newTok, linkBatch("s-rot", "/work/proj", 1))
+	// The OLD token first: it alone must trigger the reload and be refused.
+	code, body := e.do(t, http.MethodPost, "/api/link/events", e.token, linkBatch("s-rot", "/work/proj", 1))
+	if code != http.StatusUnauthorized || body != `{"error":"link token required"}` {
+		t.Fatalf("old token after rotation: status = %d body %s, want 401", code, body)
+	}
+	code, body = e.do(t, http.MethodPost, "/api/link/events", newTok, linkBatch("s-rot", "/work/proj", 1))
 	if code != http.StatusAccepted {
 		t.Fatalf("new token after rotation: status = %d body %s, want 202", code, body)
 	}
 	if r := decodeLinkResult(t, body); r.Accepted != 1 {
 		t.Errorf("result = %+v, want accepted 1", r)
-	}
-	code, body = e.do(t, http.MethodPost, "/api/link/events", e.token, linkBatch("s-rot", "/work/proj", 1))
-	if code != http.StatusUnauthorized || body != `{"error":"link token required"}` {
-		t.Fatalf("old token after rotation: status = %d body %s, want 401", code, body)
 	}
 }
 

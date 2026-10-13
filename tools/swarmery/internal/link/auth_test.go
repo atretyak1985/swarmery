@@ -67,9 +67,11 @@ func TestRequireTokenEmptyExpected(t *testing.T) {
 	assertUnauthorized(t, call(t, h, "Bearer x"))
 }
 
-// Rotation at the token level: after Rotate the new value authenticates on the
-// first request (one Reload on mismatch) and the old value is refused.
-func TestHolderRotateTakesEffectWithoutRestart(t *testing.T) {
+// Rotation at the token level: the daemon notices a rotated file within one
+// reload interval even when every client keeps presenting the OLD token — no
+// client has to present the new one first. Inside the interval the cached
+// value still answers: the old token passes and the new one is 401.
+func TestHolderRotateRevokesOldTokenWithinInterval(t *testing.T) {
 	home := t.TempDir()
 	old, err := EnsureToken(home)
 	if err != nil {
@@ -88,15 +90,54 @@ func TestHolderRotateTakesEffectWithoutRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The new token matches only after the reload its first use triggers.
-	if rec := call(t, h, "Bearer "+fresh); rec.Code != http.StatusAccepted {
-		t.Fatalf("rotated token: %d, want 202 via reload", rec.Code)
+
+	// Same interval as the last reload: the cached old value still answers.
+	clock = clock.Add(500 * time.Millisecond)
+	if rec := call(t, h, "Bearer "+old); rec.Code != http.StatusAccepted {
+		t.Fatalf("old token inside the reload interval: %d, want 202 (cached)", rec.Code)
 	}
+	assertUnauthorized(t, call(t, h, "Bearer "+fresh))
+
+	// Past the interval: an OLD-token request alone triggers the reload and is
+	// refused; nobody presented the new token in between.
+	clock = clock.Add(600 * time.Millisecond)
+	assertUnauthorized(t, call(t, h, "Bearer "+old))
 	if holder.Get() != fresh {
-		t.Fatal("holder did not pick up the rotated token")
+		t.Fatal("holder did not pick up the rotated token from an old-token request")
+	}
+	if rec := call(t, h, "Bearer "+fresh); rec.Code != http.StatusAccepted {
+		t.Fatalf("rotated token: %d, want 202", rec.Code)
 	}
 	clock = clock.Add(2 * time.Second)
 	assertUnauthorized(t, call(t, h, "Bearer "+old))
+}
+
+// A request without a bearer never touches the disk: the refresh runs only on
+// the comparison path.
+func TestHolderRequireSkipsReloadWithoutBearer(t *testing.T) {
+	home := t.TempDir()
+	tok, err := EnsureToken(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := time.Date(2026, 10, 13, 20, 0, 0, 0, time.UTC)
+	holder := NewHolder(TokenPath(home), tok)
+	holder.now = func() time.Time { return clock }
+	h := holder.Require()(okHandler)
+
+	assertUnauthorized(t, call(t, h, ""))
+	if !holder.lastReload.IsZero() {
+		t.Fatal("a request without a bearer triggered a reload")
+	}
+}
+
+// Current over a missing file keeps serving the in-memory value.
+func TestHolderCurrentKeepsValueOnMissingFile(t *testing.T) {
+	holder := NewHolder(TokenPath(t.TempDir()), "kept")
+	h := holder.Require()(okHandler)
+	if rec := call(t, h, "Bearer kept"); rec.Code != http.StatusAccepted {
+		t.Fatalf("kept token over a missing file: %d, want 202", rec.Code)
+	}
 }
 
 func TestHolderReloadThrottle(t *testing.T) {

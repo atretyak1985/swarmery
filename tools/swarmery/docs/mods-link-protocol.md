@@ -71,22 +71,24 @@ The body is exact and stable. The mod can match it.
 **Rotation.** `swarmery link token --rotate` writes a new token to a `0600` temp file
 in the same directory and renames it over the old one. Readers see either the old
 token or the new one, never a partial file. A running daemon needs no restart and no
-signal. It keeps the token in a `link.Holder`. On a request whose token does not
-match the cached value, the Holder re-reads the file once (at most once per second
-across all requests) and retries the comparison. In practice:
+signal. It keeps the token in a `link.Holder`. Every request that carries a bearer
+first refreshes the Holder from the file, throttled to at most one read per second
+across all requests, and only then compares. A missing, empty or unreadable file
+keeps the current value. In practice:
 
 1. The operator rotates. The file now holds the new token.
-2. The mod's next session (or a re-read after its own `401`) presents the new token.
-   That request misses the cache, triggers the re-read, and is served (`202`/`200`).
-3. From then on the old token is `401`.
+2. Within about 1 s the next authenticated request re-reads the file. It does not
+   matter which token that request carries.
+3. From then on the old token is `401` and the new one is served (`202`/`200`).
 
-> **Boundary.** The reload is demand-driven. Until some client presents the new
-> token, the daemon's cached old value still authenticates. Rotation does not revoke
-> the old token on its own, so it is not an incident response by itself. If the old
-> token leaked, rotate and then restart the daemon (or make one request with the new
-> token) so the old value stops working right away.
+> **Boundary.** Inside the one-second throttle window that follows the last
+> re-read, the daemon still answers from its cached value. The old token keeps
+> working there, and the new one gets `401`. Once the window passes, the old token
+> stops working with no restart, whether or not any client has presented the new
+> token. Rotating is therefore enough to revoke a leaked token.
 
-A mod that gets `401` should re-read the token file once and retry once, then treat
+A mod that gets `401` should re-read the token file once and retry once, no sooner
+than 1 s after the `401` so the retry lands past the throttle window, then treat
 the link as off for the rest of the session. A re-read and retry on every event
 would hammer the disk and the daemon.
 

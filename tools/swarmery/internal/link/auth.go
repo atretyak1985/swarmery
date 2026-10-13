@@ -21,23 +21,10 @@ const reloadInterval = time.Second
 // other request — no header, another scheme, a wrong token, or an empty
 // expected token — gets 401 {"error":"link token required"}.
 func RequireToken(get func() string) func(http.HandlerFunc) http.HandlerFunc {
-	return require(get, nil)
-}
-
-// require is RequireToken with an optional reload hook: on a mismatch it is
-// called once and the comparison retried, so a token rotated on disk starts
-// authenticating without a daemon restart.
-func require(get func() string, reload func() bool) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			presented, ok := bearer(r)
-			if ok {
-				ok = matches(presented, get())
-				if !ok && reload != nil && reload() {
-					ok = matches(presented, get())
-				}
-			}
-			if !ok {
+			if !ok || !matches(presented, get()) {
 				writeUnauthorized(w)
 				return
 			}
@@ -76,9 +63,11 @@ func writeUnauthorized(w http.ResponseWriter) {
 }
 
 // Holder keeps the daemon's current link token in memory and re-reads it from
-// disk on demand. `swarmery link token --rotate` rewrites the file; the first
-// request that fails against the cached value triggers Reload, which picks the
-// new value up — no restart, no signal.
+// disk at most once per reloadInterval. `swarmery link token --rotate` rewrites
+// the file; every authenticated request refreshes through the throttled
+// reload before comparing, so the daemon adopts the new value — and refuses
+// the old one — within ~1 s of a rotate, whichever token clients present. No
+// restart, no signal.
 type Holder struct {
 	path string
 	now  func() time.Time // injectable for tests
@@ -107,6 +96,21 @@ func (h *Holder) Get() string {
 func (h *Holder) Reload() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.reloadLocked()
+}
+
+// Current refreshes through the throttled reload, then returns the token. It is
+// the getter Require hands RequireToken, so a rotated file is noticed within
+// reloadInterval even when every client still presents the old token.
+func (h *Holder) Current() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.reloadLocked()
+	return h.tok
+}
+
+// reloadLocked is Reload's body; the caller holds h.mu.
+func (h *Holder) reloadLocked() bool {
 	now := h.now()
 	if !h.lastReload.IsZero() && now.Sub(h.lastReload) < reloadInterval {
 		return false
@@ -120,8 +124,11 @@ func (h *Holder) Reload() bool {
 	return true
 }
 
-// Require is RequireToken bound to this Holder, with one Reload on a mismatch.
-// This is the middleware the /api/link/* routes use.
+// Require is RequireToken bound to this Holder's Current: each request refreshes
+// (≤ 1 file read per reloadInterval) before the comparison. Inside one interval
+// after a rotate the cached value still answers — the old token keeps working
+// and the new one gets 401 — until the next reload. This is the middleware the
+// /api/link/* routes use.
 func (h *Holder) Require() func(http.HandlerFunc) http.HandlerFunc {
-	return require(h.Get, h.Reload)
+	return RequireToken(h.Current)
 }
