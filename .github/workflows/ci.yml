@@ -124,6 +124,38 @@ jobs:
           echo "$out"
           echo "$out" | grep -q '✓ clean' || { echo "FLAVOR TOKENS FOUND — core must stay vendor-neutral"; exit 1; }
 
+  mods:
+    # Mod plugins (function-hook modules) are checked by Claude Code itself:
+    # `plugin validate --strict` reads the manifest and the hooks module
+    # (unknown fields and warnings fail), `plugin test` runs the plugin's
+    # *.test.ts files in a sandbox like the one its hooks run in. Neither
+    # starts a session. A new mod plugin is one more matrix entry.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - plugins/guard-pack
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Install the Claude Code CLI
+        # The floor is the release these plugins were written and tested
+        # against; `plugin test` and mod-aware `plugin validate` need it.
+        run: npm i -g @anthropic-ai/claude-code@^2.1.296
+      - name: Validate (strict)
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+        run: claude plugin validate --strict --json "$PLUGIN"
+      - name: Test
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+        run: claude plugin test "$PLUGIN"
+
   agent-evals:
     runs-on: ubuntu-latest
     permissions:
