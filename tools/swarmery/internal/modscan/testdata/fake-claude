@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Fake `claude` for modscan/sysscan/api tests — never the real CLI.
+#   FAKE_CLAUDE_MODE     ok (default) | sleep | garbage | fail | fail-json
+#   FAKE_CLAUDE_FIXTURE  validate --json output to print (ok, fail-json)
+#   FAKE_CLAUDE_LOG      optional file; one line per invocation is appended
+set -u
+if [ -n "${FAKE_CLAUDE_LOG:-}" ]; then
+  printf '%s\n' "$*" >>"$FAKE_CLAUDE_LOG"
+fi
+if [ "$#" -ne 5 ] || [ "$1" != plugin ] || [ "$2" != validate ] || [ "$3" != --strict ] || [ "$4" != --json ]; then
+  echo "fake-claude: unexpected args: $*" >&2
+  exit 64
+fi
+case "${FAKE_CLAUDE_MODE:-ok}" in
+  ok) cat "$FAKE_CLAUDE_FIXTURE" ;;
+  sleep) exec sleep 30 ;;
+  garbage) echo 'Validating plugin… this is not JSON {' ;;
+  fail) echo "fake-claude: boom" >&2; exit 3 ;;
+  fail-json) sed 's/"success": true/"success": false/' "$FAKE_CLAUDE_FIXTURE"; exit 1 ;;
+  *) echo "fake-claude: unknown mode" >&2; exit 2 ;;
+esac
