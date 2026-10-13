@@ -17,6 +17,7 @@
 //	swarmery hooks <cmd>           manage hook entries in project settings
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
 //	swarmery agents sync           regenerate the project-local agent overrides
+//	swarmery link token            print / rotate the swarmery link token
 package main
 
 import (
@@ -26,6 +27,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"net"
@@ -60,6 +62,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/link"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/logbuf"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
@@ -194,6 +197,8 @@ func main() {
 		// Exit code is the contract (triage_cli.go): the nightly routine runs
 		// `triage run` as a command step, so 0 / 1 / 2 must stay distinct.
 		os.Exit(cmdTriage(os.Args[2:]))
+	case "link":
+		err = cmdLink(os.Args[2:], os.Stdout)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -291,6 +296,11 @@ func usage() {
                                    feed + approvals (y/n) + dispatcher pause ([p])
   swarmery service-status          service health (launchd on macOS, systemd --user on Linux): pid, uptime, db size
   swarmery version                 print the build identity (one line; also --version, -v)
+  swarmery link token [--rotate | --print-path]
+                                   the swarmery link's bearer token (~/.swarmery/link-token, 0600,
+                                   minted on first use): no flag prints it, --print-path prints the
+                                   file path, --rotate mints a new one (a running daemon picks it up
+                                   on the next request that presents it). Never opens the database
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
@@ -1655,6 +1665,71 @@ func splitPositional(args []string) (positional, flags []string) {
 	return args, nil
 }
 
+// attachLink wires the swarmery link into the API at daemon start: the token
+// at ~/.swarmery/link-token (minted when missing) behind a reloading Holder,
+// and the daemon's exclude list. Any failure is a warning and leaves the
+// /api/link/* routes answering 503.
+func attachLink(exclude ingest.ExcludeList) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("warning: swarmery link disabled: resolve home dir: %v", err)
+		return
+	}
+	tok, err := link.EnsureToken(home)
+	if err != nil {
+		log.Printf("warning: swarmery link disabled: %v", err)
+		return
+	}
+	path := link.TokenPath(home)
+	api.AttachLink(link.NewHolder(path, tok), exclude)
+	log.Printf("swarmery link token at %s (/api/link/* require it as a Bearer token)", path)
+}
+
+// cmdLink is `swarmery link token [--rotate | --print-path]`. It touches only
+// the token file under the user's home: no database, no daemon, no network.
+//
+//	(no flag)     print the token, minting it on first use — the one place the
+//	              value is meant to be shown (stdout only)
+//	--print-path  print the file path, creating nothing
+//	--rotate      mint a new token in place and print "rotated: <path>"; a
+//	              running daemon picks the new value up through its Holder the
+//	              first time a client presents it
+func cmdLink(args []string, out io.Writer) error {
+	const use = "usage: swarmery link token [--rotate | --print-path]"
+	if len(args) == 0 || args[0] != "token" {
+		return usageError{use}
+	}
+	fs := flag.NewFlagSet("link token", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	rotate := fs.Bool("rotate", false, "mint a new token, replacing the current one")
+	printPath := fs.Bool("print-path", false, "print the token file path instead of the token")
+	if err := fs.Parse(args[1:]); err != nil {
+		return usageError{use}
+	}
+	if fs.NArg() > 0 || (*rotate && *printPath) {
+		return usageError{use}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home dir: %w", err)
+	}
+	path := link.TokenPath(home)
+	switch {
+	case *printPath:
+		_, err = fmt.Fprintln(out, path)
+	case *rotate:
+		if _, err = link.Rotate(home); err == nil {
+			_, err = fmt.Fprintf(out, "rotated: %s\n", path)
+		}
+	default:
+		var tok string
+		if tok, err = link.EnsureToken(home); err == nil {
+			_, err = fmt.Fprintln(out, tok)
+		}
+	}
+	return err
+}
+
 func cmdServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	dbPath := dbFlag(fs)
@@ -1752,6 +1827,12 @@ func cmdServe(args []string) error {
 	}
 	defer db.Close()
 	bootLog.Info(logbuf.Phasef("store.migrate", time.Since(migrateStart)))
+
+	// swarmery link (docs/mods-link-protocol.md): mint or read the bearer token
+	// the mod presents on /api/link/*. Logged by PATH only — the value never
+	// reaches a log. A failure leaves the link disabled (503), never the daemon
+	// down: the JSONL tail and the hook shim do not depend on it.
+	attachLink(cfg.Exclude)
 
 	// control-plane v2: outbound webhook notifier (nil = disabled; Emit is
 	// nil-receiver-safe everywhere it is wired). Built before the pipeline so
