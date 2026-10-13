@@ -1,0 +1,42 @@
+{
+  "name": "swarmery-link",
+  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API. A sensor only in 0.1: it never blocks, changes or answers anything, and it switches itself off when the daemon's token file is absent.",
+  "version": "0.1.0",
+  "author": {
+    "name": "atretyak",
+    "email": "atretiak.work@gmail.com"
+  },
+  "keywords": ["sensor", "telemetry", "dashboard", "mods"],
+  "userConfig": {
+    "control": {
+      "type": "boolean",
+      "title": "Control from the dashboard",
+      "description": "Reserved for a later release (answering approvals and questions from the dashboard). In 0.1 it only logs that it is not implemented; it registers no gating hook.",
+      "default": false
+    },
+    "planBand": {
+      "type": "boolean",
+      "title": "Plan band",
+      "description": "Reserved for a later release (a band above the prompt showing the running plan). In 0.1 it only logs that it is not implemented.",
+      "default": false
+    },
+    "swarm": {
+      "type": "boolean",
+      "title": "Swarm view",
+      "description": "Reserved for a later release (sibling sessions of the same plan). In 0.1 it only logs that it is not implemented.",
+      "default": false
+    },
+    "forecast": {
+      "type": "boolean",
+      "title": "Forecast",
+      "description": "Reserved for a later release (the plan's forecast beside the live figures). In 0.1 it only logs that it is not implemented.",
+      "default": false
+    },
+    "daemonUrl": {
+      "type": "string",
+      "title": "Daemon URL",
+      "description": "The daemon's REST origin. Loopback only; the link API refuses a Host that does not name the daemon.",
+      "default": "http://127.0.0.1:7777"
+    }
+  }
+}
