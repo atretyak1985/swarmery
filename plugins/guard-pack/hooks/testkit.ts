@@ -11,30 +11,38 @@ export const HOME = '/home/dev'
 export const TMP = '/var/folders/xy/T'
 export const WORKSPACE = '/work/agent-workspace'
 
-/** Mirror of hooks/patterns/prod.json. */
-export const PROD_JSON = JSON.stringify([
-  'Bash(*deploy*prod*)',
-  'Bash(*release*prod*)',
-  'Bash(terraform apply*)',
-  'Bash(*terraform*apply*prod*)',
-  'Bash(*kubectl*prod*)',
-  'Bash(*helm*upgrade*prod*)',
-  'Bash(*git push*prod*)',
-])
+// Verbatim copies of the two pattern files, one String.raw literal each, so
+// the text between the markers is byte-for-byte the file's JSON. The daemon's
+// parity tests (tools/swarmery/internal/approvals/guardpack_parity_test.go,
+// tools/swarmery/internal/api/redact_parity_test.go) decode each region and
+// fail when it differs from its file: edit a pattern file, paste it here.
+// BEGIN mirror: hooks/patterns/prod.json
+export const PROD_JSON = String.raw`[
+  "Bash(*deploy*prod*)",
+  "Bash(*release*prod*)",
+  "Bash(terraform apply*)",
+  "Bash(*terraform*apply*prod*)",
+  "Bash(*kubectl*prod*)",
+  "Bash(*helm*upgrade*prod*)",
+  "Bash(*git push*prod*)"
+]`
+// END mirror: hooks/patterns/prod.json
 
-/** Mirror of hooks/patterns/secrets.json (the rules the tests exercise). */
-export const SECRETS_JSON = JSON.stringify([
-  { name: 'anthropic_key', pattern: 'sk-ant-[A-Za-z0-9_-]+' },
-  { name: 'aws_access_key', pattern: '(?:AKIA|ASIA)[A-Z0-9]{16}' },
-  { name: 'bearer', pattern: '(bearer\\s+)[A-Za-z0-9._-]+', flags: 'i', replace: '$1{mark}' },
-  {
-    name: 'generic_key_value',
-    pattern: '((?:token|secret|passwd|password|api[_-]?key|credential)[A-Za-z0-9_-]*\\s*[=:]\\s*)\\S+',
-    flags: 'i',
-    replace: '$1{mark}',
-  },
-  { name: 'url_userinfo', pattern: '([a-z][a-z0-9+.-]*://[^/\\s:@]+:)[^/\\s@]+@', replace: '$1{mark}@' },
-])
+// BEGIN mirror: hooks/patterns/secrets.json
+export const SECRETS_JSON = String.raw`[
+  { "name": "anthropic_key", "pattern": "sk-ant-[A-Za-z0-9_-]+" },
+  { "name": "github_token", "pattern": "(?:gh[pousr]_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)" },
+  { "name": "gitlab_token", "pattern": "glpat-[A-Za-z0-9_-]+" },
+  { "name": "aws_access_key", "pattern": "(?:AKIA|ASIA)[A-Z0-9]{16}" },
+  { "name": "slack_token", "pattern": "xox[baprs]-[A-Za-z0-9-]+" },
+  { "name": "google_api_key", "pattern": "AIza[A-Za-z0-9_-]{35}" },
+  { "name": "npm_token", "pattern": "npm_[A-Za-z0-9]{36}" },
+  { "name": "jwt", "pattern": "eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+" },
+  { "name": "bearer", "pattern": "(bearer\\s+)[A-Za-z0-9._-]+", "flags": "i", "replace": "$1{mark}" },
+  { "name": "generic_key_value", "pattern": "((?:token|secret|passwd|password|api[_-]?key|credential)[A-Za-z0-9_-]*\\s*[=:]\\s*)\\S+", "flags": "i", "replace": "$1{mark}" },
+  { "name": "url_userinfo", "pattern": "([a-z][a-z0-9+.-]*://[^/\\s:@]+:)[^/\\s@]+@", "replace": "$1{mark}@" }
+]`
+// END mirror: hooks/patterns/secrets.json
 
 export const PROJECT_JSON = JSON.stringify({
   name: 'main-app',

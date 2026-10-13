@@ -16,6 +16,10 @@ const redactedMark = "•••"
 // redactRule is one pattern class; repl may reference capture groups to keep
 // the key/prefix side of an assignment.
 type redactRule struct {
+	// name is the rule's stable identifier. Nothing here reads it: it exists so
+	// redact_parity_test.go can pin plugins/guard-pack/hooks/patterns/secrets.json
+	// (whose marks are [REDACTED:<name>]) to this list, rule by rule.
+	name string
 	re   *regexp.Regexp
 	repl string
 }
@@ -25,27 +29,27 @@ type redactRule struct {
 // then contextual rules (Bearer, generic assignments, URL userinfo).
 var redactRules = []redactRule{
 	// 1. Anthropic keys
-	{regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`), redactedMark},
+	{"anthropic_key", regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`), redactedMark},
 	// 2. GitHub tokens
-	{regexp.MustCompile(`(?:gh[pousr]_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)`), redactedMark},
+	{"github_token", regexp.MustCompile(`(?:gh[pousr]_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)`), redactedMark},
 	// 3. GitLab tokens
-	{regexp.MustCompile(`glpat-[A-Za-z0-9_-]+`), redactedMark},
+	{"gitlab_token", regexp.MustCompile(`glpat-[A-Za-z0-9_-]+`), redactedMark},
 	// 4. AWS access keys
-	{regexp.MustCompile(`(?:AKIA|ASIA)[A-Z0-9]{16}`), redactedMark},
+	{"aws_access_key", regexp.MustCompile(`(?:AKIA|ASIA)[A-Z0-9]{16}`), redactedMark},
 	// 5. Slack tokens
-	{regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]+`), redactedMark},
+	{"slack_token", regexp.MustCompile(`xox[baprs]-[A-Za-z0-9-]+`), redactedMark},
 	// 6. Google API keys
-	{regexp.MustCompile(`AIza[A-Za-z0-9_-]{35}`), redactedMark},
+	{"google_api_key", regexp.MustCompile(`AIza[A-Za-z0-9_-]{35}`), redactedMark},
 	// 7. npm tokens
-	{regexp.MustCompile(`npm_[A-Za-z0-9]{36}`), redactedMark},
+	{"npm_token", regexp.MustCompile(`npm_[A-Za-z0-9]{36}`), redactedMark},
 	// 8. JWTs
-	{regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`), redactedMark},
+	{"jwt", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`), redactedMark},
 	// 9. Bearer headers — keep the scheme word
-	{regexp.MustCompile(`(?i)(bearer\s+)[A-Za-z0-9._-]+`), "${1}" + redactedMark},
+	{"bearer", regexp.MustCompile(`(?i)(bearer\s+)[A-Za-z0-9._-]+`), "${1}" + redactedMark},
 	// 10. Generic assignments — keep the key name and separator
-	{regexp.MustCompile(`(?i)((?:token|secret|passwd|password|api[_-]?key|credential)[A-Za-z0-9_-]*\s*[=:]\s*)\S+`), "${1}" + redactedMark},
+	{"generic_key_value", regexp.MustCompile(`(?i)((?:token|secret|passwd|password|api[_-]?key|credential)[A-Za-z0-9_-]*\s*[=:]\s*)\S+`), "${1}" + redactedMark},
 	// 11. URL userinfo creds — keep scheme and user, mask the password
-	{regexp.MustCompile(`([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^/\s@]+@`), "${1}" + redactedMark + "@"},
+	{"url_userinfo", regexp.MustCompile(`([a-z][a-z0-9+.-]*://[^/\s:@]+:)[^/\s@]+@`), "${1}" + redactedMark + "@"},
 }
 
 // redact masks every secret-shaped value in s (value side only).
