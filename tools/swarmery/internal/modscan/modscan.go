@@ -43,8 +43,9 @@ const (
 // a live process has no on-disk source and is not discoverable.
 const PluginDirsEnv = "CLAUDE_CODE_PLUGIN_DIRS"
 
-// ValidateTimeout bounds one `claude plugin validate` run.
-const ValidateTimeout = 20 * time.Second
+// ValidateTimeout bounds one `claude plugin validate` run. A var only so
+// tests can shorten it; production never assigns it.
+var ValidateTimeout = 20 * time.Second
 
 // maxCacheDepth is how many directory levels below plugins/cache a plugin
 // root may sit (<mkt>/<plugin>/<version> is 3; one spare level).
@@ -404,15 +405,16 @@ func Validate(ctx context.Context, claudeBin, dir string) (Report, error) {
 	return rep, nil
 }
 
-// emptyReport has every list non-nil, so the JSON never carries null.
-func emptyReport() Report {
+// EmptyReport is an unvalidated report with every list non-nil, so its JSON never
+// carries null. Risk answers "unknown" for it.
+func EmptyReport() Report {
 	return Report{Errors: []string{}, Warnings: []string{}, Events: []string{},
 		Uses: []string{}, Env: EnvAccess{Reads: []string{}, Writes: []string{}},
 		State: []string{}, GatingHooks: []GatingHook{}}
 }
 
 func noBinary() Report {
-	r := emptyReport()
+	r := EmptyReport()
 	r.Errors = []string{MsgNoBinary}
 	return r
 }
@@ -441,7 +443,7 @@ func ParseReport(raw []byte) (Report, error) {
 	if doc.Success == nil {
 		return Report{}, errors.New("no boolean `success` key")
 	}
-	r := emptyReport()
+	r := EmptyReport()
 	r.Validated, r.Success = true, *doc.Success
 	r.Raw = json.RawMessage(bytes.TrimSpace(raw))
 

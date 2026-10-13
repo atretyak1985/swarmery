@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -40,6 +41,7 @@ const (
 	KindSkill   = "skill"
 	KindHook    = "hook"
 	KindCommand = "command"
+	KindMod     = "mod" // mods table (0112) — see mods.go
 )
 
 // DefaultRescanInterval is the fallback full-rescan cadence. Config files
@@ -68,6 +70,11 @@ type Config struct {
 	MinSkillDescription int // skill_short_description: min description runes (default 40; env SWARMERY_LINT_MIN_SKILL_DESC)
 	MaxClaudeMDTokens   int // claude_md_oversized: max estimated tokens, len/4 (default 2500; env SWARMERY_LINT_MAX_CLAUDE_MD_TOKENS)
 	MinDocsSection      int // docs_incomplete: min runes of body per REQUIRED guide subsection (default 40; env SWARMERY_LINT_MIN_DOCS_SECTION)
+
+	// ClaudeBin is the claude executable the mods pass validates with. ""
+	// resolves it via internal/claudebin at validate time; tests inject a fake
+	// so no test ever runs the real CLI.
+	ClaudeBin string
 }
 
 func (c Config) withDefaults() Config {
@@ -117,12 +124,13 @@ type Stats struct {
 	ParseErrors  int      // items kept with a parse_error lint finding
 	Warnings     int      // tolerated stumbles this pass
 	Overlays     []string // overlay file paths (templates are read on-demand in the API, step-05)
+	Mods         ModStats // the mods pass (mods.go)
 }
 
 func (s Stats) String() string {
-	return fmt.Sprintf("agents(%s) skills(%s) commands(%s) hooks=%d(managed=%d) versions+=%d deleted=%d parse_errors=%d overlays=%d warnings=%d",
+	return fmt.Sprintf("agents(%s) skills(%s) commands(%s) hooks=%d(managed=%d) versions+=%d deleted=%d parse_errors=%d overlays=%d warnings=%d %s",
 		s.Agents, s.Skills, s.Commands, s.Hooks, s.HooksManaged,
-		s.NewVersions, s.Deleted, s.ParseErrors, len(s.Overlays), s.Warnings)
+		s.NewVersions, s.Deleted, s.ParseErrors, len(s.Overlays), s.Warnings, s.Mods)
 }
 
 // Scanner runs idempotent scan passes against one DB.
@@ -130,6 +138,8 @@ type Scanner struct {
 	db  *sql.DB
 	cfg Config
 	bus *ingest.Bus // may be nil (no live notifications)
+
+	modsMu sync.Mutex // serializes mods passes (periodic Scan vs. a manual rescan)
 }
 
 // New builds a scanner; bus may be nil.
@@ -251,6 +261,13 @@ func (s *Scanner) Scan() (Stats, error) {
 
 	// ── overlays: paths only — the API reads them on demand (step-05) ─────
 	st.Overlays = overlayFiles(s.cfg.OverlaysDir, warn)
+
+	// ── mods: validate only what changed since the last pass (mods.go) ────
+	ms, err := s.ScanMods(context.Background(), false)
+	st.Mods = ms
+	if err != nil {
+		warn("mods: %v", err)
+	}
 
 	return st, nil
 }
