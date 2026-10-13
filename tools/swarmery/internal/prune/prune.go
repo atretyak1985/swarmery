@@ -56,6 +56,12 @@ type Stats struct {
 	// same cutoff but has no candidate set, since nothing reads a row to make a
 	// decision — losing old rows costs history, never correctness.
 	WorktreeSweeps int64
+	// LinkEvents is link_events rows dropped (migration 0107, the swarmery
+	// link's dedup ledger). They age on the same cutoff as events, by their own
+	// `at`, before the session gate: a mod-minted session may never get an
+	// ended_at, and link_events has no FK, so a session-derived delete would
+	// strand both. sessions.link_* keep the folded state; only the ledger goes.
+	LinkEvents int64
 	// VacuumErr carries a post-commit VACUUM failure (e.g. SQLITE_BUSY).
 	// The destructive transaction has already committed by then, so the
 	// prune itself succeeded — callers should report this as a warning
@@ -218,6 +224,7 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 			{`SELECT COUNT(*) FROM events e JOIN (` + candidateSet + `) pr ON pr.id = e.session_id`, &st.Events},
 			{`SELECT COUNT(*) FROM file_changes fc JOIN (` + candidateSet + `) pr ON pr.id = fc.session_id`, &st.FileChanges},
 			{`SELECT COUNT(*) FROM worktree_sweeps WHERE ts < ?`, &st.WorktreeSweeps},
+			{`SELECT COUNT(*) FROM link_events WHERE at < ?`, &st.LinkEvents},
 		}
 		counts = append(counts, undatableCounts(&st)...)
 		for _, c := range counts {
@@ -235,6 +242,15 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 		st.WorktreeSweeps, _ = res.RowsAffected()
 	} else {
 		return st, fmt.Errorf("prune worktree_sweeps: %w", err)
+	}
+	// Same reasoning for the link ledger (see Stats.LinkEvents). at is stored
+	// as fixed-width ms UTC, so the TEXT comparison against the cutoff orders
+	// like time (served by idx_link_events_session_at only per session; the
+	// table is small — a few rows per turn).
+	if res, err := db.Exec(`DELETE FROM link_events WHERE at < ?`, cutoff); err == nil {
+		st.LinkEvents, _ = res.RowsAffected()
+	} else {
+		return st, fmt.Errorf("prune link_events: %w", err)
 	}
 
 	if st.Sessions == 0 {
