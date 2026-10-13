@@ -57,6 +57,10 @@ msgstr ""
 msgid ", so we can't say how often it's right. Check ~{target} in the Inbox and this line becomes a percentage."
 msgstr ", so we can't say how often it's right. Check ~{target} in the Inbox and this line becomes a percentage."
 
+#: src/pages/system/ModsTab.tsx
+msgid ".catch"
+msgstr ".catch"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "· agent says"
 msgstr "· agent says"
@@ -74,7 +78,9 @@ msgid "(target {cmp}{targetValue})"
 msgstr "(target {cmp}{targetValue})"
 
 #. placeholder {0}: a.calls
+#. placeholder {0}: mod.uses.length
 #: src/pages/Analytics.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "{0, plural, one {# call} few {# calls} many {# calls} other {# calls}}"
 msgstr "{0, plural, one {# call} few {# calls} many {# calls} other {# calls}}"
 
@@ -82,6 +88,11 @@ msgstr "{0, plural, one {# call} few {# calls} many {# calls} other {# calls}}"
 #: src/pages/Analytics.tsx
 msgid "{0, plural, one {# completed session} few {# completed sessions} many {# completed sessions} other {# completed sessions}}"
 msgstr "{0, plural, one {# completed session} few {# completed sessions} many {# completed sessions} other {# completed sessions}}"
+
+#. placeholder {0}: mod.events.length
+#: src/pages/system/ModsTab.tsx
+msgid "{0, plural, one {# event} few {# events} many {# events} other {# events}}"
+msgstr "{0, plural, one {# event} few {# events} many {# events} other {# events}}"
 
 #. placeholder {0}: group.length
 #: src/pages/inbox/inboxModel.ts
@@ -104,6 +115,11 @@ msgstr "{0, plural, one {# run · mean surprise {surprise}} few {# runs · mean 
 #: src/pages/LessonsCalibration.tsx
 msgid "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
+
+#. placeholder {0}: mod.errors.length
+#: src/pages/system/ModsTab.tsx
+msgid "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
+msgstr "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
 
 #. placeholder {0}: rep.minSamples
 #: src/pages/LessonsCalibration.tsx
@@ -272,6 +288,16 @@ msgstr "{itemName} sections"
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "{label} (est.)"
 msgstr "{label} (est.)"
+
+#. placeholder {0}: badge.rule
+#: src/pages/system/ModsTab.tsx
+msgid "{level}: {0}"
+msgstr "{level}: {0}"
+
+#. placeholder {0}: badge.rule
+#: src/pages/system/ModsTab.tsx
+msgid "{level}: {0} — {matches}"
+msgstr "{level}: {0} — {matches}"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "{lo}–{hi}: said {said}, held {held}"
@@ -996,8 +1022,18 @@ msgstr "calibration views"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "calls"
 msgstr "calls"
+
+#: src/pages/system/ModsTab.tsx
+msgid "calls the model"
+msgstr "calls the model"
+
+#: src/pages/system/ModsTab.tsx
+msgid "can approve tool calls"
+msgstr "can approve tool calls"
 
 #: src/pages/Lessons.tsx
 #: src/pages/system/CreateAgentForm.tsx
@@ -1086,6 +1122,10 @@ msgstr "Claude wants to use {toolName}"
 #: src/pages/agent-hub/HubShell.tsx
 msgid "clear filter"
 msgstr "clear filter"
+
+#: src/pages/system/ModsTab.tsx
+msgid "close"
+msgstr "close"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "close detail"
@@ -1404,6 +1444,11 @@ msgstr "Done"
 msgid "draft a change"
 msgstr "draft a change"
 
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "drives the session"
+msgstr "drives the session"
+
 #: src/pages/Memory.tsx
 msgid "dry run"
 msgstr "dry run"
@@ -1471,6 +1516,14 @@ msgstr "enabled in a project's settings, but not actually loadable there"
 msgid "End result"
 msgstr "End result"
 
+#: src/pages/system/ModsTab.tsx
+msgid "env reads"
+msgstr "env reads"
+
+#: src/pages/system/ModsTab.tsx
+msgid "env writes"
+msgstr "env writes"
+
 #: src/pages/Retro.tsx
 msgid "error events by class — behavior: prompt-fixable agent behavior · harness: harness rule hit, self-recovered · infra: network/API noise (not the agent's fault)"
 msgstr "error events by class — behavior: prompt-fixable agent behavior · harness: harness rule hit, self-recovered · infra: network/API noise (not the agent's fault)"
@@ -1481,6 +1534,7 @@ msgstr "error rate"
 
 #: src/pages/Analytics.tsx
 #: src/pages/system-hub/Profiles.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "errors"
 msgstr "errors"
 
@@ -1519,6 +1573,11 @@ msgstr "evals {evalPassed}/{evalTotal}"
 #: src/pages/system-hub/Profiles.tsx
 msgid "event"
 msgstr "event"
+
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "events"
+msgstr "events"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "every agent has recent telemetry mentions"
@@ -1582,6 +1641,7 @@ msgid "fail"
 msgstr "fail"
 
 #: src/pages/Architecture.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "failed"
 msgstr "failed"
 
@@ -1654,6 +1714,14 @@ msgstr "First-pass success rate"
 msgid "fix proposed"
 msgstr "fix proposed"
 
+#: src/pages/system/ModsTab.tsx
+msgid "folder"
+msgstr "folder"
+
+#: src/pages/system/ModsTab.tsx
+msgid "folder path"
+msgstr "folder path"
+
 #: src/pages/LessonsCalibration.tsx
 msgid "forecast calibration"
 msgstr "forecast calibration"
@@ -1689,6 +1757,10 @@ msgstr "from recommendation #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/system/ModsTab.tsx
+msgid "gating hooks"
+msgstr "gating hooks"
 
 #: src/pages/system/docsSection.ts
 msgid "generated"
@@ -1790,6 +1862,14 @@ msgstr "healthy"
 msgid "held back"
 msgstr "held back"
 
+#: src/pages/system/ModsTab.tsx
+msgid "hide the validate report of {name}"
+msgstr "hide the validate report of {name}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "high risk"
+msgstr "high risk"
+
 #: src/pages/system/ItemDetail.tsx
 msgid "History"
 msgstr "History"
@@ -1798,6 +1878,7 @@ msgstr "History"
 msgid "Hit rate"
 msgstr "Hit rate"
 
+#: src/pages/system/ModsTab.tsx
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "hook"
@@ -1972,6 +2053,10 @@ msgstr "insights…"
 msgid "installed"
 msgstr "installed"
 
+#: src/pages/system/ModsTab.tsx
+msgid "Installed mods and their risk badges"
+msgstr "Installed mods and their risk badges"
+
 #: src/pages/system/HooksTab.tsx
 msgid "installer-owned entry — managed by swarmery"
 msgstr "installer-owned entry — managed by swarmery"
@@ -2042,6 +2127,10 @@ msgstr "keep"
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
 msgstr "keep it"
+
+#: src/pages/system/ModsTab.tsx
+msgid "keeps a store"
+msgstr "keeps a store"
 
 #: src/pages/knowledge/Knowledge.tsx
 #: src/pages/knowledge/Knowledge.tsx
@@ -2265,6 +2354,10 @@ msgstr "Metric"
 msgid "missing: {missingList}"
 msgstr "missing: {missingList}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "mod validate report"
+msgstr "mod validate report"
+
 #: src/pages/learning/Classifier.tsx
 msgid "mode for {question}"
 msgstr "mode for {question}"
@@ -2281,6 +2374,26 @@ msgstr "model / effort"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "model <0>(optional)</0>"
 msgstr "model <0>(optional)</0>"
+
+#: src/pages/system/ModsTab.tsx
+msgid "moderate risk"
+msgstr "moderate risk"
+
+#: src/pages/SystemShell.tsx
+msgid "Mods"
+msgstr "Mods"
+
+#: src/pages/system/ModsTab.tsx
+msgid "mods…"
+msgstr "mods…"
+
+#: src/pages/system/ModsTab.tsx
+msgid "module"
+msgstr "module"
+
+#: src/pages/system/ModsTab.tsx
+msgid "module sha"
+msgstr "module sha"
 
 #: src/pages/system/shared.tsx
 msgid "most used"
@@ -2303,12 +2416,17 @@ msgid "moves to {closedDir}"
 msgstr "moves to {closedDir}"
 
 #: src/pages/system/CreateAgentForm.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "name"
 msgstr "name"
 
 #: src/pages/system/shared.tsx
 msgid "name (A→Z)"
 msgstr "name (A→Z)"
+
+#: src/pages/system/ModsTab.tsx
+msgid "network"
+msgstr "network"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "never"
@@ -2338,6 +2456,10 @@ msgstr "New lesson: {lessonTitle}"
 #: src/pages/Docs.tsx
 msgid "next →"
 msgstr "next →"
+
+#: src/pages/system/ModsTab.tsx
+msgid "no"
+msgstr "no"
 
 #: src/pages/Analytics.tsx
 msgid "no {dimension} activity in this range"
@@ -2488,6 +2610,10 @@ msgstr "no matches"
 msgid "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
 msgstr "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
 
+#: src/pages/system/ModsTab.tsx
+msgid "No mods installed"
+msgstr "No mods installed"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no open insights"
 msgstr "no open insights"
@@ -2524,10 +2650,18 @@ msgstr "no proposals"
 msgid "no recent events"
 msgstr "no recent events"
 
+#: src/pages/system/ModsTab.tsx
+msgid "no report"
+msgstr "no report"
+
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
 msgid "no retrospective lessons in this range"
 msgstr "no retrospective lessons in this range"
+
+#: src/pages/system/ModsTab.tsx
+msgid "no risk badges"
+msgstr "no risk badges"
 
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no runs in the last 30 days"
@@ -2612,6 +2746,10 @@ msgstr "Not enough runs in this window to say how the fleet is doing."
 msgid "Not enough runs yet (n < {min} per group)."
 msgstr "Not enough runs yet (n < {min} per group)."
 
+#: src/pages/system/ModsTab.tsx
+msgid "not hashed — re-validated on the next scan"
+msgstr "not hashed — re-validated on the next scan"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "not helping"
 msgstr "not helping"
@@ -2628,6 +2766,10 @@ msgstr "not noise: {example}"
 #: src/pages/inbox/inboxModel.ts
 msgid "not useful"
 msgstr "not useful"
+
+#: src/pages/system/ModsTab.tsx
+msgid "not validated"
+msgstr "not validated"
 
 #: src/pages/Retro.tsx
 msgid "nothing closed yet"
@@ -2757,9 +2899,17 @@ msgstr "parse error"
 msgid "partial: moved {movedCount} · backup {backup}"
 msgstr "partial: moved {movedCount} · backup {backup}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "passed"
+msgstr "passed"
+
 #: src/pages/Analytics.tsx
 msgid "Passes / Total"
 msgstr "Passes / Total"
+
+#: src/pages/system/ModsTab.tsx
+msgid "pattern"
+msgstr "pattern"
 
 #: src/pages/Retro.tsx
 msgid "Pending now"
@@ -2825,6 +2975,14 @@ msgstr "plugin"
 msgid "plugin · {pluginName}"
 msgstr "plugin · {pluginName}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "plugin cache"
+msgstr "plugin cache"
+
+#: src/pages/system/ModsTab.tsx
+msgid "plugin dir"
+msgstr "plugin dir"
+
 #: src/pages/system/InsightsTab.tsx
 msgid "Plugin drift"
 msgstr "Plugin drift"
@@ -2840,6 +2998,10 @@ msgstr "Plugins"
 #: src/pages/SystemShell.tsx
 msgid "Plugins are enabled per project — pick one in the switcher."
 msgstr "Plugins are enabled per project — pick one in the switcher."
+
+#: src/pages/system/ModsTab.tsx
+msgid "Plugins whose hooks.json lists modules, from the plugin cache and CLAUDE_CODE_PLUGIN_DIRS. Badges come from what <0>claude plugin validate</0> reports each module hooks and calls."
+msgstr "Plugins whose hooks.json lists modules, from the plugin cache and CLAUDE_CODE_PLUGIN_DIRS. Badges come from what <0>claude plugin validate</0> reports each module hooks and calls."
 
 #: src/pages/SystemShell.tsx
 msgid "plugins…"
@@ -2991,6 +3153,10 @@ msgstr "read-only"
 msgid "Read, Grep… Enter adds"
 msgstr "Read, Grep… Enter adds"
 
+#: src/pages/system/ModsTab.tsx
+msgid "reads files"
+msgstr "reads files"
+
 #: src/pages/Retro.tsx
 msgid "reason: {reason}"
 msgstr "reason: {reason}"
@@ -3054,6 +3220,26 @@ msgstr "remove tool {tool}"
 #: src/pages/inbox/inboxModel.ts
 msgid "replaced by a newer lesson"
 msgstr "replaced by a newer lesson"
+
+#: src/pages/system/ModsTab.tsx
+msgid "Rescan"
+msgstr "Rescan"
+
+#: src/pages/system/ModsTab.tsx
+msgid "rescan failed: {rescanError}"
+msgstr "rescan failed: {rescanError}"
+
+#. placeholder {0}: lastRescan.mods
+#. placeholder {1}: lastRescan.validated
+#. placeholder {2}: lastRescan.parseErrors
+#. placeholder {3}: lastRescan.removed
+#: src/pages/system/ModsTab.tsx
+msgid "rescan: {0} mods · {1} validated · {2} parse errors · {3} removed"
+msgstr "rescan: {0} mods · {1} validated · {2} parse errors · {3} removed"
+
+#: src/pages/system/ModsTab.tsx
+msgid "rescanning…"
+msgstr "rescanning…"
 
 #: src/pages/learning/Classifier.tsx
 msgid "Restart the daemon. Every question starts in shadow: logged, never acted on."
@@ -3121,6 +3307,14 @@ msgstr "reviews"
 #: src/pages/agent-hub/Tabs.tsx
 msgid "Rewrite proposal"
 msgstr "Rewrite proposal"
+
+#: src/pages/system/ModsTab.tsx
+msgid "rewrites what Claude reads"
+msgstr "rewrites what Claude reads"
+
+#: src/pages/system/ModsTab.tsx
+msgid "risk"
+msgstr "risk"
 
 #: src/pages/system/ItemDetail.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -3363,6 +3557,10 @@ msgstr "show less"
 msgid "show more ({moreRuns})"
 msgstr "show more ({moreRuns})"
 
+#: src/pages/system/ModsTab.tsx
+msgid "show the validate report of {name}"
+msgstr "show the validate report of {name}"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "sign-in or access"
 msgstr "sign-in or access"
@@ -3413,9 +3611,18 @@ msgstr "sort by"
 msgid "sort list"
 msgstr "sort list"
 
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "source"
+msgstr "source"
+
 #: src/pages/Retro.tsx
 msgid "source recommendation"
 msgstr "source recommendation"
+
+#: src/pages/system/ModsTab.tsx
+msgid "spawns processes"
+msgstr "spawns processes"
 
 #: src/pages/Lessons.tsx
 #: src/pages/system/docsSection.ts
@@ -3451,6 +3658,10 @@ msgstr "started {startedAgo}"
 #: src/pages/Architecture.tsx
 msgid "starting…"
 msgstr "starting…"
+
+#: src/pages/system/ModsTab.tsx
+msgid "state"
+msgstr "state"
 
 #: src/pages/system/docsSection.ts
 msgid "status: {status}"
@@ -3892,6 +4103,10 @@ msgstr "unknown"
 msgid "unknown project"
 msgstr "unknown project"
 
+#: src/pages/system/ModsTab.tsx
+msgid "unknown risk"
+msgstr "unknown risk"
+
 #: src/pages/system/docsSection.ts
 msgid "unrecognised docs.status — the contract defines only generated and reviewed"
 msgstr "unrecognised docs.status — the contract defines only generated and reviewed"
@@ -3932,6 +4147,30 @@ msgstr "usage-guide coverage: every agent, skill and command the marketplace shi
 msgid "used 30d {used30d}"
 msgstr "used 30d {used30d}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "Validate report"
+msgstr "Validate report"
+
+#: src/pages/system/ModsTab.tsx
+msgid "Validate report · {name}"
+msgstr "Validate report · {name}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validate report of {name}"
+msgstr "validate report of {name}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validate report…"
+msgstr "validate report…"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validated"
+msgstr "validated"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validated: no risky event or call"
+msgstr "validated: no risky event or call"
+
 #: src/pages/Retro.tsx
 msgid "variance"
 msgstr "variance"
@@ -3951,6 +4190,11 @@ msgstr "verified when {metric} is ≥{pct}% better than the baseline snapshot"
 #: src/pages/Retro.tsx
 msgid "verify check in {days}d"
 msgstr "verify check in {days}d"
+
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "version"
+msgstr "version"
 
 #: src/pages/system/ItemDetail.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -3988,6 +4232,10 @@ msgstr "waiting decisions"
 #: src/pages/health/Health.tsx
 msgid "waiting on you"
 msgstr "waiting on you"
+
+#: src/pages/system/ModsTab.tsx
+msgid "warnings"
+msgstr "warnings"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Was this {answers}?"
@@ -4064,11 +4312,16 @@ msgstr "worst active lint finding: {severity}"
 msgid "Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
 msgstr "Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
 
+#: src/pages/system/ModsTab.tsx
+msgid "writes files"
+msgstr "writes files"
+
 #: src/pages/system/docsSection.ts
 msgid "written by the docs generator and not reviewed yet"
 msgstr "written by the docs generator and not reviewed yet"
 
 #: src/pages/inbox/InboxDetail.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "yes"
 msgstr "yes"
 

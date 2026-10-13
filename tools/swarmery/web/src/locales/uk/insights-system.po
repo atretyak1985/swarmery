@@ -57,6 +57,10 @@ msgstr ""
 msgid ", so we can't say how often it's right. Check ~{target} in the Inbox and this line becomes a percentage."
 msgstr ", тож ми не можемо сказати, як часто він має рацію. Перевірте ~{target} у Вхідних — і цей рядок стане відсотком."
 
+#: src/pages/system/ModsTab.tsx
+msgid ".catch"
+msgstr ".catch"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "· agent says"
 msgstr "· агент каже"
@@ -74,7 +78,9 @@ msgid "(target {cmp}{targetValue})"
 msgstr "(ціль {cmp}{targetValue})"
 
 #. placeholder {0}: a.calls
+#. placeholder {0}: mod.uses.length
 #: src/pages/Analytics.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "{0, plural, one {# call} few {# calls} many {# calls} other {# calls}}"
 msgstr "{0, plural, one {# виклик} few {# виклики} many {# викликів} other {# виклику}}"
 
@@ -82,6 +88,11 @@ msgstr "{0, plural, one {# виклик} few {# виклики} many {# викл
 #: src/pages/Analytics.tsx
 msgid "{0, plural, one {# completed session} few {# completed sessions} many {# completed sessions} other {# completed sessions}}"
 msgstr "{0, plural, one {# завершена сесія} few {# завершені сесії} many {# завершених сесій} other {# завершеної сесії}}"
+
+#. placeholder {0}: mod.events.length
+#: src/pages/system/ModsTab.tsx
+msgid "{0, plural, one {# event} few {# events} many {# events} other {# events}}"
+msgstr "{0, plural, one {# подія} few {# події} many {# подій} other {# події}}"
 
 #. placeholder {0}: group.length
 #: src/pages/inbox/inboxModel.ts
@@ -104,6 +115,11 @@ msgstr "{0, plural, one {# запуск · середня несподіванк
 #: src/pages/LessonsCalibration.tsx
 msgid "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{0, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}"
+
+#. placeholder {0}: mod.errors.length
+#: src/pages/system/ModsTab.tsx
+msgid "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
+msgstr "{0, plural, one {# помилка validate} few {# помилки validate} many {# помилок validate} other {# помилки validate}}"
 
 #. placeholder {0}: rep.minSamples
 #: src/pages/LessonsCalibration.tsx
@@ -272,6 +288,16 @@ msgstr "Розділи {itemName}"
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "{label} (est.)"
 msgstr "{label} (оцінка)"
+
+#. placeholder {0}: badge.rule
+#: src/pages/system/ModsTab.tsx
+msgid "{level}: {0}"
+msgstr "{level}: {0}"
+
+#. placeholder {0}: badge.rule
+#: src/pages/system/ModsTab.tsx
+msgid "{level}: {0} — {matches}"
+msgstr "{level}: {0} — {matches}"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "{lo}–{hi}: said {said}, held {held}"
@@ -996,8 +1022,18 @@ msgstr "вигляди калібрування"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "calls"
 msgstr "виклики"
+
+#: src/pages/system/ModsTab.tsx
+msgid "calls the model"
+msgstr "викликає модель"
+
+#: src/pages/system/ModsTab.tsx
+msgid "can approve tool calls"
+msgstr "може схвалювати виклики інструментів"
 
 #: src/pages/Lessons.tsx
 #: src/pages/system/CreateAgentForm.tsx
@@ -1086,6 +1122,10 @@ msgstr "Claude хоче використати {toolName}"
 #: src/pages/agent-hub/HubShell.tsx
 msgid "clear filter"
 msgstr "скинути фільтр"
+
+#: src/pages/system/ModsTab.tsx
+msgid "close"
+msgstr "закрити"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "close detail"
@@ -1404,6 +1444,11 @@ msgstr "Готово"
 msgid "draft a change"
 msgstr "підготувати зміну"
 
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "drives the session"
+msgstr "керує сесією"
+
 #: src/pages/Memory.tsx
 msgid "dry run"
 msgstr "пробний запуск"
@@ -1471,6 +1516,14 @@ msgstr "увімкнено в налаштуваннях проєкту, але 
 msgid "End result"
 msgstr "Кінцевий результат"
 
+#: src/pages/system/ModsTab.tsx
+msgid "env reads"
+msgstr "читає env"
+
+#: src/pages/system/ModsTab.tsx
+msgid "env writes"
+msgstr "пише env"
+
 #: src/pages/Retro.tsx
 msgid "error events by class — behavior: prompt-fixable agent behavior · harness: harness rule hit, self-recovered · infra: network/API noise (not the agent's fault)"
 msgstr "події помилок за класом — поведінка: поведінка агента, яку виправляє промпт · оболонка: спрацювало правило оболонки, відновилося само · інфра: шум мережі/API (не вина агента)"
@@ -1481,6 +1534,7 @@ msgstr "частка помилок"
 
 #: src/pages/Analytics.tsx
 #: src/pages/system-hub/Profiles.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "errors"
 msgstr "помилки"
 
@@ -1519,6 +1573,11 @@ msgstr "евали {evalPassed}/{evalTotal}"
 #: src/pages/system-hub/Profiles.tsx
 msgid "event"
 msgstr "подія"
+
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "events"
+msgstr "події"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "every agent has recent telemetry mentions"
@@ -1582,6 +1641,7 @@ msgid "fail"
 msgstr "провал"
 
 #: src/pages/Architecture.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "failed"
 msgstr "збій"
 
@@ -1654,6 +1714,14 @@ msgstr "Успіх з першої спроби"
 msgid "fix proposed"
 msgstr "запропоновано виправлення"
 
+#: src/pages/system/ModsTab.tsx
+msgid "folder"
+msgstr "тека"
+
+#: src/pages/system/ModsTab.tsx
+msgid "folder path"
+msgstr "шлях до теки"
+
 #: src/pages/LessonsCalibration.tsx
 msgid "forecast calibration"
 msgstr "калібрування прогнозів"
@@ -1689,6 +1757,10 @@ msgstr "з рекомендації #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/system/ModsTab.tsx
+msgid "gating hooks"
+msgstr "блокувальні хуки"
 
 #: src/pages/system/docsSection.ts
 msgid "generated"
@@ -1790,6 +1862,14 @@ msgstr "здоровий"
 msgid "held back"
 msgstr "притримано"
 
+#: src/pages/system/ModsTab.tsx
+msgid "hide the validate report of {name}"
+msgstr "сховати звіт validate для {name}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "high risk"
+msgstr "високий ризик"
+
 #: src/pages/system/ItemDetail.tsx
 msgid "History"
 msgstr "Історія"
@@ -1798,6 +1878,7 @@ msgstr "Історія"
 msgid "Hit rate"
 msgstr "Частка влучань"
 
+#: src/pages/system/ModsTab.tsx
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "hook"
@@ -1972,6 +2053,10 @@ msgstr "інсайти…"
 msgid "installed"
 msgstr "встановлено"
 
+#: src/pages/system/ModsTab.tsx
+msgid "Installed mods and their risk badges"
+msgstr "Встановлені моди та їхні бейджі ризику"
+
 #: src/pages/system/HooksTab.tsx
 msgid "installer-owned entry — managed by swarmery"
 msgstr "запис інсталятора — ним керує swarmery"
@@ -2042,6 +2127,10 @@ msgstr "залишити"
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
 msgstr "залишити"
+
+#: src/pages/system/ModsTab.tsx
+msgid "keeps a store"
+msgstr "зберігає дані"
 
 #: src/pages/knowledge/Knowledge.tsx
 #: src/pages/knowledge/Knowledge.tsx
@@ -2265,6 +2354,10 @@ msgstr "Метрика"
 msgid "missing: {missingList}"
 msgstr "бракує: {missingList}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "mod validate report"
+msgstr "звіт validate мода"
+
 #: src/pages/learning/Classifier.tsx
 msgid "mode for {question}"
 msgstr "режим для {question}"
@@ -2281,6 +2374,26 @@ msgstr "модель / зусилля"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "model <0>(optional)</0>"
 msgstr "модель <0>(необов’язково)</0>"
+
+#: src/pages/system/ModsTab.tsx
+msgid "moderate risk"
+msgstr "помірний ризик"
+
+#: src/pages/SystemShell.tsx
+msgid "Mods"
+msgstr "Моди"
+
+#: src/pages/system/ModsTab.tsx
+msgid "mods…"
+msgstr "моди…"
+
+#: src/pages/system/ModsTab.tsx
+msgid "module"
+msgstr "модуль"
+
+#: src/pages/system/ModsTab.tsx
+msgid "module sha"
+msgstr "sha модуля"
 
 #: src/pages/system/shared.tsx
 msgid "most used"
@@ -2303,12 +2416,17 @@ msgid "moves to {closedDir}"
 msgstr "переноситься в {closedDir}"
 
 #: src/pages/system/CreateAgentForm.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "name"
 msgstr "назва"
 
 #: src/pages/system/shared.tsx
 msgid "name (A→Z)"
 msgstr "назва (А→Я)"
+
+#: src/pages/system/ModsTab.tsx
+msgid "network"
+msgstr "мережа"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "never"
@@ -2338,6 +2456,10 @@ msgstr "Новий урок: {lessonTitle}"
 #: src/pages/Docs.tsx
 msgid "next →"
 msgstr "далі →"
+
+#: src/pages/system/ModsTab.tsx
+msgid "no"
+msgstr "ні"
 
 #: src/pages/Analytics.tsx
 msgid "no {dimension} activity in this range"
@@ -2488,6 +2610,10 @@ msgstr "збігів немає"
 msgid "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
 msgstr "Файлів пам’яті ще немає — у цього проєкту нема CLAUDE.md, автопам’яті чи нотаток Serena."
 
+#: src/pages/system/ModsTab.tsx
+msgid "No mods installed"
+msgstr "Моди не встановлено"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no open insights"
 msgstr "відкритих інсайтів немає"
@@ -2524,10 +2650,18 @@ msgstr "пропозицій немає"
 msgid "no recent events"
 msgstr "нещодавніх подій немає"
 
+#: src/pages/system/ModsTab.tsx
+msgid "no report"
+msgstr "звіту немає"
+
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
 msgid "no retrospective lessons in this range"
 msgstr "у цьому періоді немає уроків із ретро"
+
+#: src/pages/system/ModsTab.tsx
+msgid "no risk badges"
+msgstr "без бейджів ризику"
 
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no runs in the last 30 days"
@@ -2612,6 +2746,10 @@ msgstr "У цьому вікні замало запусків, щоб сказ�
 msgid "Not enough runs yet (n < {min} per group)."
 msgstr "Запусків ще замало (n < {min} на групу)."
 
+#: src/pages/system/ModsTab.tsx
+msgid "not hashed — re-validated on the next scan"
+msgstr "хеш не обчислено — повторна перевірка під час наступного сканування"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "not helping"
 msgstr "не допомагає"
@@ -2628,6 +2766,10 @@ msgstr "не шум: {example}"
 #: src/pages/inbox/inboxModel.ts
 msgid "not useful"
 msgstr "не корисно"
+
+#: src/pages/system/ModsTab.tsx
+msgid "not validated"
+msgstr "не перевірено"
 
 #: src/pages/Retro.tsx
 msgid "nothing closed yet"
@@ -2757,9 +2899,17 @@ msgstr "помилка розбору"
 msgid "partial: moved {movedCount} · backup {backup}"
 msgstr "частково: перенесено {movedCount} · резервна копія {backup}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "passed"
+msgstr "пройдено"
+
 #: src/pages/Analytics.tsx
 msgid "Passes / Total"
 msgstr "Пройдено / Усього"
+
+#: src/pages/system/ModsTab.tsx
+msgid "pattern"
+msgstr "шаблон"
 
 #: src/pages/Retro.tsx
 msgid "Pending now"
@@ -2825,6 +2975,14 @@ msgstr "плагін"
 msgid "plugin · {pluginName}"
 msgstr "плагін · {pluginName}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "plugin cache"
+msgstr "кеш плагінів"
+
+#: src/pages/system/ModsTab.tsx
+msgid "plugin dir"
+msgstr "тека плагіна"
+
 #: src/pages/system/InsightsTab.tsx
 msgid "Plugin drift"
 msgstr "Дрейф плагінів"
@@ -2840,6 +2998,10 @@ msgstr "Плагіни"
 #: src/pages/SystemShell.tsx
 msgid "Plugins are enabled per project — pick one in the switcher."
 msgstr "Плагіни вмикаються для кожного проєкту окремо — оберіть проєкт у перемикачі."
+
+#: src/pages/system/ModsTab.tsx
+msgid "Plugins whose hooks.json lists modules, from the plugin cache and CLAUDE_CODE_PLUGIN_DIRS. Badges come from what <0>claude plugin validate</0> reports each module hooks and calls."
+msgstr "Плагіни, у яких hooks.json містить modules, — з кешу плагінів і CLAUDE_CODE_PLUGIN_DIRS. Бейджі показують, що саме, за даними <0>claude plugin validate</0>, кожен модуль перехоплює та викликає."
 
 #: src/pages/SystemShell.tsx
 msgid "plugins…"
@@ -2991,6 +3153,10 @@ msgstr "лише читання"
 msgid "Read, Grep… Enter adds"
 msgstr "Read, Grep… Enter додає"
 
+#: src/pages/system/ModsTab.tsx
+msgid "reads files"
+msgstr "читає файли"
+
 #: src/pages/Retro.tsx
 msgid "reason: {reason}"
 msgstr "причина: {reason}"
@@ -3054,6 +3220,26 @@ msgstr "прибрати інструмент {tool}"
 #: src/pages/inbox/inboxModel.ts
 msgid "replaced by a newer lesson"
 msgstr "замінений новішим уроком"
+
+#: src/pages/system/ModsTab.tsx
+msgid "Rescan"
+msgstr "Пересканувати"
+
+#: src/pages/system/ModsTab.tsx
+msgid "rescan failed: {rescanError}"
+msgstr "пересканування не вдалося: {rescanError}"
+
+#. placeholder {0}: lastRescan.mods
+#. placeholder {1}: lastRescan.validated
+#. placeholder {2}: lastRescan.parseErrors
+#. placeholder {3}: lastRescan.removed
+#: src/pages/system/ModsTab.tsx
+msgid "rescan: {0} mods · {1} validated · {2} parse errors · {3} removed"
+msgstr "пересканування: модів {0} · перевірено {1} · помилок розбору {2} · вилучено {3}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "rescanning…"
+msgstr "сканування…"
 
 #: src/pages/learning/Classifier.tsx
 msgid "Restart the daemon. Every question starts in shadow: logged, never acted on."
@@ -3121,6 +3307,14 @@ msgstr "рев’ю"
 #: src/pages/agent-hub/Tabs.tsx
 msgid "Rewrite proposal"
 msgstr "Пропозиція переписати"
+
+#: src/pages/system/ModsTab.tsx
+msgid "rewrites what Claude reads"
+msgstr "переписує те, що читає Claude"
+
+#: src/pages/system/ModsTab.tsx
+msgid "risk"
+msgstr "ризик"
 
 #: src/pages/system/ItemDetail.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -3363,6 +3557,10 @@ msgstr "показати менше"
 msgid "show more ({moreRuns})"
 msgstr "показати ще ({moreRuns})"
 
+#: src/pages/system/ModsTab.tsx
+msgid "show the validate report of {name}"
+msgstr "показати звіт validate для {name}"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "sign-in or access"
 msgstr "вхід або доступ"
@@ -3413,9 +3611,18 @@ msgstr "сортувати за"
 msgid "sort list"
 msgstr "сортувати список"
 
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "source"
+msgstr "джерело"
+
 #: src/pages/Retro.tsx
 msgid "source recommendation"
 msgstr "вихідна рекомендація"
+
+#: src/pages/system/ModsTab.tsx
+msgid "spawns processes"
+msgstr "запускає процеси"
 
 #: src/pages/Lessons.tsx
 #: src/pages/system/docsSection.ts
@@ -3451,6 +3658,10 @@ msgstr "почато {startedAgo}"
 #: src/pages/Architecture.tsx
 msgid "starting…"
 msgstr "запуск…"
+
+#: src/pages/system/ModsTab.tsx
+msgid "state"
+msgstr "стан"
 
 #: src/pages/system/docsSection.ts
 msgid "status: {status}"
@@ -3892,6 +4103,10 @@ msgstr "невідомо"
 msgid "unknown project"
 msgstr "невідомий проєкт"
 
+#: src/pages/system/ModsTab.tsx
+msgid "unknown risk"
+msgstr "невідомий ризик"
+
 #: src/pages/system/docsSection.ts
 msgid "unrecognised docs.status — the contract defines only generated and reviewed"
 msgstr "нерозпізнаний docs.status — контракт визнає лише generated і reviewed"
@@ -3932,6 +4147,30 @@ msgstr "покриття гайдами: кожен агент, скіл і ко
 msgid "used 30d {used30d}"
 msgstr "вжито за 30 дн. {used30d}"
 
+#: src/pages/system/ModsTab.tsx
+msgid "Validate report"
+msgstr "Звіт validate"
+
+#: src/pages/system/ModsTab.tsx
+msgid "Validate report · {name}"
+msgstr "Звіт validate · {name}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validate report of {name}"
+msgstr "звіт validate для {name}"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validate report…"
+msgstr "звіт validate…"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validated"
+msgstr "перевірено"
+
+#: src/pages/system/ModsTab.tsx
+msgid "validated: no risky event or call"
+msgstr "перевірено: жодної ризикованої події чи виклику"
+
 #: src/pages/Retro.tsx
 msgid "variance"
 msgstr "відхилення"
@@ -3951,6 +4190,11 @@ msgstr "підтверджується, коли {metric} кращий за ба
 #: src/pages/Retro.tsx
 msgid "verify check in {days}d"
 msgstr "перевірка через {days} дн."
+
+#: src/pages/system/ModsTab.tsx
+#: src/pages/system/ModsTab.tsx
+msgid "version"
+msgstr "версія"
 
 #: src/pages/system/ItemDetail.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -3988,6 +4232,10 @@ msgstr "рішення, що чекають"
 #: src/pages/health/Health.tsx
 msgid "waiting on you"
 msgstr "чекає на вас"
+
+#: src/pages/system/ModsTab.tsx
+msgid "warnings"
+msgstr "попередження"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Was this {answers}?"
@@ -4064,11 +4312,16 @@ msgstr "найгірша активна знахідка лінту: {severity}"
 msgid "Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
 msgstr "Записати цей урок у CLAUDE.md проєкту для його зони — комітом у новій гілці, яку ви переглянете"
 
+#: src/pages/system/ModsTab.tsx
+msgid "writes files"
+msgstr "пише файли"
+
 #: src/pages/system/docsSection.ts
 msgid "written by the docs generator and not reviewed yet"
 msgstr "написано генератором документації і ще не вичитано"
 
 #: src/pages/inbox/InboxDetail.tsx
+#: src/pages/system/ModsTab.tsx
 msgid "yes"
 msgstr "так"
 

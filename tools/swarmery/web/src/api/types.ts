@@ -2263,10 +2263,88 @@ export interface RevisionConflict {
 
 /**
  * system_item_updated payload kind — which registry table itemId points into
- * (agents / skills / hooks / commands). Mirrors the Kind constants in
+ * (agents / skills / hooks / commands / mods). Mirrors the Kind constants in
  * internal/sysscan.
  */
-export type SystemItemKind = 'agent' | 'skill' | 'hook' | 'command';
+export type SystemItemKind = 'agent' | 'skill' | 'hook' | 'command' | 'mod';
+
+// --- mods-swarmery-link phase 9: System → Mods ---------------------------------
+// Go DTOs: internal/api/mods.go (modDTO / modDetailDTO) over internal/modscan's
+// Report and Badge. The folder path is served; module source never is.
+
+/** modscan.Badge — one risk marker derived from a mod's hooked events + calls. */
+export interface ModBadge {
+  level: 'red' | 'yellow' | 'unknown';
+  /** The matching rule: "tool.check", "process.*", … ("validate" for unknown). */
+  rule: string;
+  /** Server-side English label ("can approve tool calls"); the UI localises by rule. */
+  label: string;
+  /** The events/calls that hit the rule. */
+  matches: string[];
+}
+
+/** modscan.EnvAccess — env variables a module reads / writes. */
+export interface ModEnvAccess {
+  reads: string[];
+  writes: string[];
+}
+
+/** modscan.GatingHook — a hook that can hold the session (structured in validate). */
+export interface ModGatingHook {
+  module: string;
+  pattern: string;
+  hook: string;
+  hasCatch: boolean;
+}
+
+/** GET /api/system/mods — one row (modDTO), ordered by name then dir. */
+export interface ModSummary {
+  id: number;
+  name: string;
+  /** "<name>@<marketplace>"; null for a plugin-dir mod. */
+  pluginId: string | null;
+  /** Absolute plugin root — shown as text, never its module contents. */
+  dir: string;
+  source: 'cache' | 'plugin-dir';
+  version: string | null;
+  /** null = validate is retried on the next scan pass. */
+  moduleSha: string | null;
+  events: string[];
+  uses: string[];
+  env: ModEnvAccess;
+  state: string[];
+  risk: ModBadge[];
+  errors: string[];
+  validatedAt: string | null;
+}
+
+/** modscan.Report — the parsed `claude plugin validate --strict --json`. */
+export interface ModReport {
+  validated: boolean;
+  success: boolean;
+  errors: string[];
+  warnings: string[];
+  events: string[];
+  uses: string[];
+  env: ModEnvAccess;
+  state: string[];
+  gatingHooks: ModGatingHook[];
+  /** The validator's stdout, verbatim (absent on an unvalidated report). */
+  raw?: unknown;
+}
+
+/** GET /api/system/mods/{id} — the row plus the full report. */
+export interface ModDetail extends ModSummary {
+  report: ModReport;
+}
+
+/** POST /api/system/mods/rescan — sysscan.ModStats of the forced pass. */
+export interface ModRescanResult {
+  mods: number;
+  validated: number;
+  parseErrors: number;
+  removed: number;
+}
 
 /**
  * Payload of `system_item_updated` (phase 4 — system registry, frozen at

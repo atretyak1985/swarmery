@@ -1,11 +1,13 @@
 // System shell — the single top-level "System" destination that hosts its
-// sections (Agents · Skills · Plugins · Hooks · Routines · Insights) as TABS. It
-// is a thin OUTER tab bar over existing pages: Agents embeds <AgentHub>; Skills
-// (the skills/commands/templates catalog, formerly "Toolkit"), Hooks and
-// Insights embed <SystemHub>; Routines embeds <Routines embedded> (phase 8,
-// /routines redirects here); Plugins embeds <ProjectPlugins> under a project and
-// an empty state in the fleet. Nothing is reimplemented — the embedded pages
-// suppress their own heading and hand URL ownership to this shell.
+// sections (Agents · Skills · Plugins · Hooks · Mods · Routines · Insights) as
+// TABS. It is a thin OUTER tab bar over existing pages: Agents embeds
+// <AgentHub>; Skills (the skills/commands/templates catalog, formerly
+// "Toolkit"), Hooks and Insights embed <SystemHub>; Routines embeds <Routines
+// embedded> (phase 8, /routines redirects here); Plugins embeds
+// <ProjectPlugins> under a project and an empty state in the fleet; Mods embeds
+// <ModsTab> (machine-wide mod audit, mods-swarmery-link phase 9). Nothing is
+// reimplemented — the embedded pages suppress their own heading and hand URL
+// ownership to this shell.
 //
 // Routing: /system/:tab (fleet) and /p/:slug/system/:tab (workspace). The active
 // tab is the first path segment after /system; each embedded hub keeps its own
@@ -32,6 +34,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { AgentHub } from './AgentHub';
 import { Routines } from './Routines';
 import { SystemHub } from './SystemHub';
+import { ModsTab } from './system/ModsTab';
 import { FiltersRow } from './system/shared';
 
 /** Origin scope of a catalog row — where the component is DEFINED (the user's
@@ -40,13 +43,14 @@ import { FiltersRow } from './system/shared';
  * effective catalog is listed. */
 type OriginScope = 'global' | 'project' | null;
 
-type SystemTab = 'agents' | 'skills' | 'plugins' | 'hooks' | 'routines' | 'insights';
-const TABS: SystemTab[] = ['agents', 'skills', 'plugins', 'hooks', 'routines', 'insights'];
+type SystemTab = 'agents' | 'skills' | 'plugins' | 'hooks' | 'mods' | 'routines' | 'insights';
+const TABS: SystemTab[] = ['agents', 'skills', 'plugins', 'hooks', 'mods', 'routines', 'insights'];
 const TAB_LABELS: Record<SystemTab, MessageDescriptor> = {
   agents: msg`Agents`,
   skills: msg`Skills`,
   plugins: msg`Plugins`,
   hooks: msg`Hooks`,
+  mods: msg`Mods`,
   routines: msg`Routines`,
   insights: msg`Insights`,
 };
@@ -56,7 +60,7 @@ const RENAMED_TABS: Record<string, SystemTab> = { toolkit: 'skills' };
 
 /** Tabs without per-row origin scope: the origin chips are hidden there rather
  * than rendered inert. */
-const NO_ORIGIN_FILTER: ReadonlySet<SystemTab> = new Set(['plugins', 'routines', 'insights']);
+const NO_ORIGIN_FILTER: ReadonlySet<SystemTab> = new Set(['plugins', 'mods', 'routines', 'insights']);
 
 function parseTab(value: string | undefined): SystemTab | null {
   return (TABS as string[]).includes(value ?? '') ? (value as SystemTab) : null;
@@ -168,6 +172,7 @@ export function SystemShell(): JSX.Element {
             skills: undefined,
             plugins: undefined,
             hooks: undefined,
+            mods: undefined,
             routines: undefined,
             insights: undefined,
           }
@@ -177,6 +182,8 @@ export function SystemShell(): JSX.Element {
             // The hub summary carries no plugin or routine count.
             plugins: undefined,
             hooks: summary.hooks,
+            // The hub summary carries no mod count either.
+            mods: undefined,
             routines: undefined,
             insights: summary.insights,
           },
@@ -317,6 +324,15 @@ function SystemTabPanel({
     return (
       <div className="h-full overflow-y-auto">
         <Routines embedded />
+      </div>
+    );
+  }
+  if (tab === 'mods') {
+    // Mods are a machine-wide audit (the plugin cache + CLAUDE_CODE_PLUGIN_DIRS),
+    // so a project scope lists the same set.
+    return (
+      <div className="h-full overflow-y-auto">
+        <ModsTab />
       </div>
     );
   }
