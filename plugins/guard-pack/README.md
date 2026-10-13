@@ -46,8 +46,12 @@ With no `project.json` the guard still runs, with the session root,
   `Bearer `, and `{mark}` is the mark itself).
 
 A hooks module can import only code, so the runtime reads both files through
-`$.fs`. For the same reason the tests (`hooks/testkit.ts`) carry a mirror of
-them. The daemon's parity tests compare the JSON files with the Go lists.
+`$.fs`. The tests run with no file system, so `hooks/testkit.ts` carries a
+verbatim copy of each file between `// BEGIN mirror:` and `// END mirror:`
+markers. The daemon's parity tests (`go test ./internal/approvals
+./internal/api -run Parity` in `tools/swarmery`) compare the JSON files with
+the Go lists and fail when a testkit copy differs from its file, so a pattern
+edit means editing the Go list, the JSON file and the testkit copy together.
 
 ## Options (`userConfig`)
 
@@ -65,7 +69,13 @@ and each one is a row in `/config`.
 
 ## Enable
 
-Through the marketplace, in a project's `.claude/settings.json`:
+Install it from the swarmery marketplace:
+
+```text
+/plugin install guard-pack@swarmery
+```
+
+Or enable it for one project, in that project's `.claude/settings.json`:
 
 ```json
 { "enabledPlugins": { "guard-pack@swarmery": true } }
