@@ -28,7 +28,9 @@ export type SessionStatus =
 export type ProcState = 'running' | 'orphaned' | 'dead' | 'unknown';
 
 /** sessions.source */
-export type SessionSource = 'jsonl' | 'hook' | 'both';
+/** sessions.source — 'mod' is a row the swarmery link mod minted before any
+ * transcript was tailed (migration 0107); ingest promotes it to 'both'. */
+export type SessionSource = 'jsonl' | 'hook' | 'both' | 'mod';
 
 /** turns.role */
 export type TurnRole = 'user' | 'assistant';
@@ -212,6 +214,41 @@ export interface SessionTerminal {
   tty?: string;
 }
 
+/** sessions.link_status — what the swarmery link mod last reported. */
+export type SessionLinkStatus = 'working' | 'waiting' | 'done';
+
+/** Go: sessionLinkRateLimitDTO — one entry of the mod's
+ * `$.session.usage().rateLimits[]` (docs/mods-format.md §M2). */
+export interface SessionLinkRateLimit {
+  /** `five_hour` | `seven_day` on a subscription; kept open for new kinds. */
+  kind: string;
+  /** 0–100, at most one decimal. */
+  percentUsed: number;
+  /** ISO 8601 with ms; null when the mod did not report one. */
+  resetsAt: string | null;
+}
+
+/**
+ * Go: sessionLinkDTO — the swarmery link mod's live view of a session
+ * (migration 0107). Null on Session.link when no mod ever reported on it.
+ */
+export interface SessionLink {
+  status: SessionLinkStatus | null;
+  /** Newest link event (fixed-width UTC, ms). */
+  seenAt: string | null;
+  /** Server-computed: seenAt younger than 2×AwaitAfter — the same window the
+   * status ticker uses to let `status` drive Session.status. The UI never
+   * recomputes status; it reads this for the source indicator. */
+  live: boolean;
+  /** context.percent, 0–100. */
+  contextPct: number | null;
+  rateLimits: SessionLinkRateLimit[];
+  /** cost.usd — PER PROCESS (a resumed session restarts it from 0), so it is
+   * not the session's lifetime cost. Session.costUsd is the pricing-table
+   * recomputation over every turn. */
+  costUsd: number | null;
+}
+
 /** Go: sessionDTO */
 export interface Session {
   id: number;
@@ -321,6 +358,12 @@ export interface Session {
    * daemon that predates this field.
    */
   terminal?: SessionTerminal | null;
+  /**
+   * The swarmery link mod's live view (migration 0107): status, context %,
+   * rate limits, per-process cost. Explicit null when no mod reported on the
+   * session; optional only for an older daemon that predates the field.
+   */
+  link?: SessionLink | null;
 }
 
 /** Go: turnDTO */

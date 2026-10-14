@@ -7,6 +7,7 @@
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
+import { SessionLinkChips } from '../../components/SessionLinkChips';
 import type { Epic, EpicPhase, Session } from '../../api/types';
 import { fmtCost, projectLabel } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
@@ -62,6 +63,8 @@ function Row({ s, phase, now }: { s: Session; phase: EpicPhase | undefined; now:
           <span className="shrink-0 font-mono text-[10px] text-ink-faint">{right}</span>
         </div>
         <div className="mt-1 truncate font-mono text-[10.5px] text-ink-faint">{sub}</div>
+        {/* The link mod's live usage — renders nothing for a session without it. */}
+        <SessionLinkChips session={s} className="mt-1.5 flex-wrap" />
       </Link>
     </li>
   );

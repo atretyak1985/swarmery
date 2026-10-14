@@ -191,6 +191,10 @@ msgstr "{costN, plural, one {# run(s)} few {# run(s)} many {# run(s)} other {# r
 msgid "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 msgstr "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 
+#: src/pages/health/ModCostPanel.tsx
+msgid "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
+msgstr "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "{count} waiting · oldest {age}"
 msgstr "{count} waiting · oldest {age}"
@@ -1236,6 +1240,14 @@ msgstr "Cost / task"
 #: src/pages/health/Health.tsx
 msgid "Cost & tokens"
 msgstr "Cost & tokens"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "cost source"
+msgstr "cost source"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "Cost source"
+msgstr "Cost source"
 
 #: src/pages/health/Health.tsx
 msgid "cost…"
@@ -2354,6 +2366,15 @@ msgstr "Metric"
 msgid "missing: {missingList}"
 msgstr "missing: {missingList}"
 
+#: src/pages/health/ModCostPanel.tsx
+#: src/pages/health/ModCostPanel.tsx
+msgid "mod"
+msgstr "mod"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "mod and pricing table differ by more than 10 %"
+msgstr "mod and pricing table differ by more than 10 %"
+
 #: src/pages/system/ModsTab.tsx
 msgid "mod validate report"
 msgstr "mod validate report"
@@ -2609,6 +2630,10 @@ msgstr "no matches"
 #: src/pages/Memory.tsx
 msgid "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
 msgstr "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "no mod cost for this session — pricing table shown"
+msgstr "no mod cost for this session — pricing table shown"
 
 #: src/pages/system/ModsTab.tsx
 msgid "No mods installed"
@@ -3042,6 +3067,11 @@ msgstr "Preview"
 #: src/pages/Retro.tsx
 msgid "preview the evidence, then generate a minimal diff to THIS agent’s definition file only"
 msgstr "preview the evidence, then generate a minimal diff to THIS agent’s definition file only"
+
+#: src/pages/health/ModCostPanel.tsx
+#: src/pages/health/ModCostPanel.tsx
+msgid "pricing table"
+msgstr "pricing table"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "probe & resume"
@@ -3876,6 +3906,10 @@ msgstr "The listed topic files move to <0>{closedDirOrDefault}</0> and their ind
 msgid "The local model's guess about “{sessionTitle}”. Your answer is the only thing that tells us whether to trust it. If you don't remember the session, skip — a wrong answer is worse than none."
 msgstr "The local model's guess about “{sessionTitle}”. Your answer is the only thing that tells us whether to trust it. If you don't remember the session, skip — a wrong answer is worse than none."
 
+#: src/pages/health/ModCostPanel.tsx
+msgid "The mod reports what Claude Code counted for its current process, so a resumed session restarts from 0; the pricing table recomputes every turn. Charts above use the pricing table."
+msgstr "The mod reports what Claude Code counted for its current process, so a resumed session restarts from 0; the pricing table recomputes every turn. Charts above use the pricing table."
+
 #: src/pages/health/HealthOverview.tsx
 msgid "The one sentence"
 msgstr "The one sentence"
@@ -4344,3 +4378,7 @@ msgstr "You've spent {spent} over {days} days — {topName} drove {share}% of it
 #: src/pages/system/ItemDetail.tsx
 msgid "your base {base} → on disk {disk} — what changed under you:"
 msgstr "your base {base} → on disk {disk} — what changed under you:"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "Δ {gapPct} %"
+msgstr "Δ {gapPct} %"

@@ -2764,6 +2764,10 @@ func cmdServe(args []string) error {
 	// The board derives each captured card's expiry from the same TTL the
 	// sweeper runs with, so the two can never tell the operator different dates.
 	api.AttachInboxTTL(envInboxTTL())
+	// sessionDTO.link.live uses the status ticker's own 2×AwaitAfter window, so
+	// the dashboard's "live from the session mod" never disagrees with the
+	// ticker that lets link_status drive sessions.status.
+	api.AttachStatusThresholds(cfg.Thresholds)
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
 		return err
