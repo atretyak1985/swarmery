@@ -793,16 +793,20 @@ func TestScopedKeychainService(t *testing.T) {
 
 // stubSecurityBin points securityBin at a throwaway shell script so
 // readKeychainCreds can be exercised without ever running the real `security`
-// binary against the operator's login keychain.
+// binary against the operator's login keychain. It also lifts keychainTimeout
+// to a 30s ceiling: these tests are about output parsing, not the timeout, and
+// exec'ing a freshly written stub under full-suite load can outlast the 5s
+// production bound. readKeychainCreds reads the knob synchronously, so the
+// restore in Cleanup never races a reader.
 func stubSecurityBin(t *testing.T, body string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "security-stub")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatalf("write stub: %v", err)
 	}
-	prev := securityBin
-	securityBin = path
-	t.Cleanup(func() { securityBin = prev })
+	prev, prevTimeout := securityBin, keychainTimeout
+	securityBin, keychainTimeout = path, 30*time.Second
+	t.Cleanup(func() { securityBin, keychainTimeout = prev, prevTimeout })
 }
 
 func TestReadKeychainCreds(t *testing.T) {
