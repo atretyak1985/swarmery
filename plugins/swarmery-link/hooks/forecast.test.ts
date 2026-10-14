@@ -6,19 +6,35 @@ import {
   MAX_FILES,
   NO_CLAIMS,
   PROMPT_TEXT_LIMIT,
+  RUN_ID_RANDOM,
   forecastRequest,
   noteToolCall,
   parseForecast,
+  resetForecast,
+  runIdOf,
   startTurn,
 } from './lib/forecast'
-import { COMPLETE, CWD, END, START, TOKEN, type World, sent, track, world } from './testkit'
+import { COMPLETE, CWD, END, SESSION_ID, START, TOKEN, type World, sent, track, world } from './testkit'
 
 const ON = { options: { forecast: true } } as const
 
 type Events = ReadonlyArray<Readonly<Record<string, unknown>>>
 
+/** The payloads of `kind`, runId left out (it carries a random part): see runsOf. */
 const ofKind = (events: Events, kind: string): ReadonlyArray<Readonly<Record<string, unknown>>> =>
-  events.filter(e => e.kind === kind).map(e => (e.payload ?? {}) as Readonly<Record<string, unknown>>)
+  events
+    .filter(e => e.kind === kind)
+    .map(e => {
+      const { runId: _runId, ...rest } = (e.payload ?? {}) as Readonly<Record<string, unknown>>
+      return rest
+    })
+
+/** The runId of every `kind` payload, in order. */
+const runsOf = (events: Events, kind: string): readonly unknown[] =>
+  events.filter(e => e.kind === kind).map(e => ((e.payload ?? {}) as Readonly<Record<string, unknown>>).runId)
+
+/** The daemon's runId shape (internal/turnforecast). */
+const RUN_ID = /^[A-Za-z0-9._:-]{1,64}$/
 
 /** One main-loop turn: start, let the detached forecast run, the tool calls, complete. */
 const turn = async (
@@ -190,10 +206,11 @@ test('a subagent\'s tool calls never reach the journal', () => {
   expect(ran.journal.testsRan).toBe(false)
 })
 
-test('turnSeq starts over at a session.end with reason clear, not at any other end', ON, async ($, on) => {
+test('turnSeq starts over at a session.end with reason clear, not at any other end; the clear starts a new run', ON, async ($, on) => {
   const w = await begin($, on)
   await turn($, w, 'turn-1', 'one')
   await turn($, w, 'turn-2', 'two')
+  await w.clock.advance(1_000)
   await $.session.end({ ...END, reason: 'clear' })
   await turn($, w, 'turn-3', 'three')
   await $.session.end({ ...END, reason: 'other' })
@@ -202,15 +219,112 @@ test('turnSeq starts over at a session.end with reason clear, not at any other e
   const events = sent(w.requests)
   expect(ofKind(events, 'turn.forecast').map(p => p.turnSeq)).toEqual([1, 2, 1, 2])
   expect(ofKind(events, 'turn.actual').map(p => p.turnSeq)).toEqual([1, 2, 1, 2])
+  const [a, b, c, d] = runsOf(events, 'turn.forecast')
+  expect(a).toBe(b)
+  expect(c).toBe(d)
+  expect(c).not.toBe(a)
+  expect(runsOf(events, 'turn.actual')).toEqual([a, a, c, c])
 })
 
-test('turnSeq starts over at session.start', ON, async ($, on) => {
+test('turnSeq starts over at session.start; a --resume (same session id) is a new run', ON, async ($, on) => {
   const w = await begin($, on)
   await turn($, w, 'turn-1', 'one')
+  await w.clock.advance(1_000)
   await $.session.start(START)
   await turn($, w, 'turn-2', 'two')
   await w.clock.advance(5_000)
-  expect(ofKind(sent(w.requests), 'turn.forecast').map(p => p.turnSeq)).toEqual([1, 1])
+  const events = sent(w.requests)
+  expect(ofKind(events, 'turn.forecast').map(p => p.turnSeq)).toEqual([1, 1])
+  expect(events.filter(e => e.kind === 'turn.forecast').map(e => e.sessionId)).toEqual([SESSION_ID, SESSION_ID])
+  const [first, second] = runsOf(events, 'turn.forecast')
+  expect(first).not.toBe(second)
+  expect(runsOf(events, 'turn.actual')).toEqual([first, second])
+})
+
+test('an in-process resume starts a new run at the resync: turnSeq 1 again, a fresh runId', ON, async ($, on) => {
+  const w = await begin($, on)
+  await turn($, w, 'turn-1', 'one')
+  await turn($, w, 'turn-2', 'two')
+  await w.clock.advance(1_000)
+  await $.session.end({ ...END, reason: 'resume' })
+  w.moveTo('3c9d2b1a-0000-4000-8000-00000000abcd')
+  await turn($, w, 'turn-3', 'three')
+  await w.clock.advance(5_000)
+  const events = sent(w.requests)
+  expect(ofKind(events, 'turn.forecast').map(p => p.turnSeq)).toEqual([1, 2, 1])
+  const [a, b, c] = runsOf(events, 'turn.forecast')
+  expect(a).toBe(b)
+  expect(c).not.toBe(a)
+  expect(runsOf(events, 'turn.actual')).toEqual([a, a, c])
+  const resumed = events.filter(e => e.kind === 'turn.forecast').at(-1)
+  expect(resumed?.sessionId).toBe('3c9d2b1a-0000-4000-8000-00000000abcd')
+})
+
+test('an in-process resume to the same session id is still a new run', ON, async ($, on) => {
+  const w = await begin($, on)
+  await turn($, w, 'turn-1', 'one')
+  await w.clock.advance(1_000)
+  await $.session.end({ ...END, reason: 'resume' })
+  await turn($, w, 'turn-2', 'two')
+  await w.clock.advance(5_000)
+  const events = sent(w.requests)
+  expect(ofKind(events, 'turn.forecast').map(p => p.turnSeq)).toEqual([1, 1])
+  const [a, b] = runsOf(events, 'turn.forecast')
+  expect(a).not.toBe(b)
+})
+
+test('every runId on the wire has the daemon\'s shape and starts with the reset\'s ms, then 6 random base36 chars (crypto.getRandomValues)', ON, async ($, on) => {
+  const w = await begin($, on)
+  const startedAt = w.clock.now()
+  await turn($, w, 'turn-1', 'one')
+  await w.clock.advance(5_000)
+  const runs = [...runsOf(sent(w.requests), 'turn.forecast'), ...runsOf(sent(w.requests), 'turn.actual')]
+  expect(runs).toHaveLength(2)
+  for (const run of runs) {
+    expect(typeof run).toBe('string')
+    expect(RUN_ID.test(String(run))).toBe(true)
+    expect(String(run).split('-')[0]).toBe(String(startedAt))
+    expect(/^[0-9]+-[0-9a-z]{6}$/.test(String(run))).toBe(true)
+  }
+})
+
+test('a forecast still in flight across a /clear is dropped, never queued under the new session', ON, async ($, on) => {
+  const NEW_ID = '9e8d7c6b-0000-4000-8000-0000000000ff'
+  const w = await begin($, on, { models: [{ text: '{"files":["old.ts"],"steps":9,"confidence":0.9}', afterMs: 10_000 }, '{"files":["new.ts"],"steps":1,"confidence":0.3}'] })
+  await turn($, w, 'turn-1', 'slow forecast')
+  await $.session.end({ ...END, reason: 'clear' })
+  w.moveTo(NEW_ID)
+  await turn($, w, 'turn-2', 'after the clear')
+  await w.clock.advance(15_000)
+  const events = sent(w.requests)
+  expect(w.modelCalls).toHaveLength(2)
+  const forecasts = events.filter(e => e.kind === 'turn.forecast')
+  expect(ofKind(events, 'turn.forecast')).toEqual([
+    { turnSeq: 1, files: ['new.ts'], testsPass: null, steps: 1, confidence: 0.3, model: 'haiku', forecastTokens: 220 },
+  ])
+  expect(forecasts.map(e => e.sessionId)).toEqual([NEW_ID])
+  // turn 1's actual went out under the old session before the clear; turn 2's pairs with turn 2's forecast
+  expect(events.filter(e => e.kind === 'turn.actual').map(e => e.sessionId)).toEqual([SESSION_ID, NEW_ID])
+  expect(runsOf(events, 'turn.actual')[1]).toBe(runsOf(events, 'turn.forecast')[0])
+})
+
+test('runIdOf: ms then 6 base36 chars from the random bytes; the ms alone with no random source', () => {
+  const bytes = new Uint8Array([0, 35, 36, 71, 255, 10, 99])
+  expect(RUN_ID_RANDOM).toBe(6)
+  expect(runIdOf(1760436000123.7, bytes)).toBe('1760436000123-0z0z3a')
+  expect(runIdOf(1760436000123, undefined)).toBe('1760436000123')
+  expect(runIdOf(1760436000123, new Uint8Array(2))).toBe('1760436000123')
+  expect(runIdOf(Number.NaN, bytes)).toBe('0-0z0z3a')
+  expect(RUN_ID.test(runIdOf(Number.MAX_SAFE_INTEGER, new Uint8Array(6).fill(255)))).toBe(true)
+})
+
+test('no run id yet (before any reset): the turn is counted but never forecast', () => {
+  const before = startTurn(INITIAL_FORECAST, 'turn-1', 'a real request', true)
+  expect(before.shouldAsk).toBe(false)
+  expect(before.state.turnSeq).toBe(1)
+  const after = startTurn(resetForecast(INITIAL_FORECAST, 'r-1'), 'turn-1', 'a real request', true)
+  expect(after.shouldAsk).toBe(true)
+  expect(after.state.runId).toBe('r-1')
 })
 
 test('no prompt text, tool input or model prose ever reaches the wire', ON, async ($, on) => {

@@ -61,6 +61,7 @@ import {
   type ForecastState,
   INITIAL_FORECAST,
   NO_CLAIMS,
+  RUN_ID_RANDOM,
   type ToolOutcome,
   closeForecast,
   endTurn,
@@ -69,6 +70,7 @@ import {
   noteToolCall,
   parseForecast,
   resetForecast,
+  runIdOf,
   startTurn,
   usageTokens,
 } from './lib/forecast'
@@ -488,17 +490,45 @@ function openControl($: EngineInterface, link: Link, origin: string, previous: C
 }
 
 /** The forecast loop's state for one load of the module. Exists only with `forecast` on. */
-type Forecaster = { state: ForecastState }
+type Forecaster = {
+  state: ForecastState
+  /** An in-process resume ended the session: the next turn.start starts a new run (resync). */
+  isResumed: boolean
+}
+
+/** RUN_ID_RANDOM random bytes from the runtime's `crypto`, or undefined where it has none. */
+const randomBytes = (): Uint8Array | undefined => {
+  try {
+    if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') return undefined
+    return crypto.getRandomValues(new Uint8Array(RUN_ID_RANDOM))
+  } catch {
+    return undefined
+  }
+}
+
+/** Starts the turn counter over under a fresh run id: `<ms of $.clock.now()>-<random base36>`. */
+async function newRun($: EngineInterface, forecaster: Forecaster): Promise<void> {
+  let now = 0
+  try {
+    now = await $.clock.now()
+  } catch {
+    // the random part alone tells the runs apart
+  }
+  forecaster.state = resetForecast(forecaster.state, runIdOf(now, randomBytes()))
+}
 
 /**
  * Asks the model for turn `turnSeq`'s forecast and queues it as `turn.forecast`,
  * however the call ended (no readable claim: all-null claims, tokens still
- * counted). Never rejects; nothing waits on it.
+ * counted). A reset while the call was in flight (`generation` moved) drops
+ * it: the session id and the run it was asked under are gone. Never rejects;
+ * nothing waits on it.
  */
 async function runForecast(
   $: EngineInterface,
   link: Link,
   forecaster: Forecaster,
+  runId: string,
   turnSeq: number,
   generation: number,
   ask: { readonly system: string; readonly prompt: string },
@@ -521,8 +551,9 @@ async function runForecast(
   } finally {
     forecaster.state = closeForecast(forecaster.state, generation)
   }
+  if (forecaster.state.generation !== generation) return
   try {
-    await push($, link, 'turn.forecast', forecastPayload(turnSeq, claims, FORECAST_MODEL, tokens))
+    await push($, link, 'turn.forecast', forecastPayload(runId, turnSeq, claims, FORECAST_MODEL, tokens))
     flushAtTurn($, link)
   } catch {
     // unreported
@@ -539,7 +570,7 @@ function beginForecast($: EngineInterface, link: Link, forecaster: Forecaster, t
   forecaster.state = state
   if (!shouldAsk) return
   const run = (): void => {
-    void runForecast($, link, forecaster, state.turnSeq, state.generation, forecastRequest(text, state.history))
+    void runForecast($, link, forecaster, state.runId, state.turnSeq, state.generation, forecastRequest(text, state.history))
   }
   try {
     $.clock.after(0, run)
@@ -569,7 +600,7 @@ export const register: Register = (on, options) => {
   /** The command loop; only ever set with `control` on. */
   let control: Control | undefined
   /** The forecast loop; undefined with `forecast` off, so none of it runs. */
-  const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST } : undefined
+  const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST, isResumed: false } : undefined
   const noted = new Set<string>()
   const link: Link = {
     url: endpoint.url,
@@ -591,7 +622,11 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    if (forecaster !== undefined) forecaster.state = resetForecast(forecaster.state)
+    // also on `--resume`, which keeps the session id: a new run, so turn 1 is a new row
+    if (forecaster !== undefined) {
+      forecaster.isResumed = false
+      await newRun($, forecaster)
+    }
     for (const feature of reserved) {
       if (noted.has(feature)) continue
       noted.add(feature)
@@ -634,6 +669,11 @@ export const register: Register = (on, options) => {
       }
     }
     if (control !== undefined) control.turnId = e.turnId
+    // the resync after an in-process resume: the counter starts over under a new run
+    if (forecaster !== undefined && forecaster.isResumed) {
+      forecaster.isResumed = false
+      await newRun($, forecaster)
+    }
     try {
       await push($, link, 'turn.start')
       flushAtTurn($, link)
@@ -697,8 +737,10 @@ export const register: Register = (on, options) => {
 
   on('session.end', async ($, e, next) => {
     if (control !== undefined) stopControl($, control, undefined)
-    // a /clear goes on in this process with no session.start: the turn count starts over here
-    if (forecaster !== undefined && e.reason === 'clear') forecaster.state = resetForecast(forecaster.state)
+    // a /clear goes on in this process with no session.start: the turn count starts over here;
+    // an in-process resume starts it over at the next turn.start's resync
+    if (forecaster !== undefined && e.reason === 'clear') await newRun($, forecaster)
+    if (forecaster !== undefined && e.reason === 'resume') forecaster.isResumed = true
     if (!isActive(link)) return next(e)
     try {
       await push($, link, 'session.end', { reason: e.reason })

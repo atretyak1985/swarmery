@@ -18,6 +18,8 @@ export const HISTORY_TURNS = 3
 /** The daemon's limits on `files`. */
 export const MAX_FILES = 50
 export const MAX_PATH = 300
+/** Random base36 characters after a run id's time: enough that two loads in the same millisecond differ. */
+export const RUN_ID_RANDOM = 6
 
 /** A Bash command that runs tests (the protocol's pattern). */
 export const TEST_COMMAND = /\b(test|vitest|jest|go test|pytest|cargo test|npm (run )?test)\b/
@@ -52,7 +54,14 @@ export const EMPTY_JOURNAL: Journal = { files: [], testsRan: false, testsPass: n
 
 /** The loop's state for one load of the module. */
 export type ForecastState = {
-  /** The main loop's turn count since session.start or a /clear. */
+  /**
+   * Names this run of the turn counter; renewed with every reset (session.start,
+   * a /clear, an in-process resume). A `--resume` keeps the session id and counts
+   * from 1 again, so the daemon keys a turn on (session, runId, turnSeq).
+   * '' before the first reset: no turn is forecast without one.
+   */
+  readonly runId: string
+  /** The main loop's turn count since the run started. */
   readonly turnSeq: number
   /** Bumped on every reset, so a forecast in flight from before it does not reopen the gate. */
   readonly generation: number
@@ -68,6 +77,7 @@ export type ForecastState = {
 }
 
 export const INITIAL_FORECAST: ForecastState = {
+  runId: '',
   turnSeq: 0,
   generation: 0,
   turnId: undefined,
@@ -77,11 +87,29 @@ export const INITIAL_FORECAST: ForecastState = {
   history: [],
 }
 
-/** The state after session.start or a session.end with reason `clear`: numbering starts over. */
-export const resetForecast = (state: ForecastState): ForecastState => ({
+/**
+ * The state after session.start, a session.end with reason `clear`, or the
+ * resync after an in-process resume: numbering starts over under `runId`.
+ */
+export const resetForecast = (state: ForecastState, runId: string): ForecastState => ({
   ...INITIAL_FORECAST,
+  runId,
   generation: state.generation + 1,
 })
+
+/**
+ * A run id: the reset's time in ms since the epoch, then `-` and RUN_ID_RANDOM
+ * base36 characters drawn from `random` when there is a random source, the
+ * time alone when there is none. Always within the daemon's
+ * `[A-Za-z0-9._:-]{1,64}`.
+ */
+export const runIdOf = (nowMs: number, random: Uint8Array | undefined): string => {
+  const ms = Number.isFinite(nowMs) && nowMs >= 0 ? Math.floor(nowMs) : 0
+  const time = String(ms)
+  if (random === undefined || random.length < RUN_ID_RANDOM) return time
+  const tail = Array.from(random.subarray(0, RUN_ID_RANDOM), b => (b % 36).toString(36)).join('')
+  return `${time}-${tail}`
+}
 
 /**
  * Whether a turn's text was typed by the person: empty text (a continuation)
@@ -99,7 +127,7 @@ export const startTurn = (
   text: string,
   canSend: boolean,
 ): { readonly state: ForecastState; readonly shouldAsk: boolean } => {
-  const shouldAsk = canSend && !state.isOpen && isUserText(text)
+  const shouldAsk = canSend && state.runId !== '' && !state.isOpen && isUserText(text)
   return {
     shouldAsk,
     state: {
@@ -117,7 +145,12 @@ export const startTurn = (
 export const closeForecast = (state: ForecastState, generation: number): ForecastState =>
   state.generation === generation ? { ...state, isOpen: false } : state
 
-/** The state at the main loop's turn.complete, and the turn.actual payload when the turn was forecast. */
+/**
+ * The state at the main loop's turn.complete, and the turn.actual payload when
+ * the turn was forecast. The actual carries the run the turn started in: a
+ * reset between start and complete clears `turnId`, so no actual is built
+ * across one.
+ */
 export const endTurn = (
   state: ForecastState,
   turnId: string,
@@ -125,7 +158,7 @@ export const endTurn = (
   if (state.turnId === undefined || state.turnId !== turnId) return { state, actual: undefined }
   const { journal } = state
   const actual = state.isForecasted
-    ? { turnSeq: state.turnSeq, files: journal.files, testsRan: journal.testsRan, testsPass: journal.testsPass, steps: journal.steps }
+    ? { runId: state.runId, turnSeq: state.turnSeq, files: journal.files, testsRan: journal.testsRan, testsPass: journal.testsPass, steps: journal.steps }
     : undefined
   return {
     actual,
@@ -298,13 +331,15 @@ export const usageTokens = (usage: TokenUsage | undefined): number | null => {
   return Number.isFinite(sum) && sum >= 0 ? Math.round(sum) : null
 }
 
-/** The turn.forecast payload. */
+/** The turn.forecast payload; `runId` is the run the forecast turn started in. */
 export const forecastPayload = (
+  runId: string,
   turnSeq: number,
   claims: Claims,
   model: string,
   forecastTokens: number | null,
 ): Readonly<Record<string, unknown>> => ({
+  runId,
   turnSeq,
   files: claims.files,
   testsPass: claims.testsPass,
