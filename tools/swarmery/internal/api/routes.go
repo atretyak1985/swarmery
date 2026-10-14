@@ -160,6 +160,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/confirm", requireLocalOrigin(h.confirmRetirement))
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/keep", requireLocalOrigin(h.keepLesson))
 	mux.HandleFunc("GET /api/calibration", h.calibration)
+	// mods-swarmery-link phase 10 (link_forecast.go): per-turn forecast
+	// calibration + top surprises from the link's turn.forecast/turn.actual.
+	mux.HandleFunc("GET /api/insights/turn-forecasts", h.turnForecasts)
 	// complexity routing phase 3 (route.go): the shadow report beside the
 	// calibration view (same n<20 gate) and one subject's latest decision.
 	mux.HandleFunc("GET /api/route/report", h.routeReport)

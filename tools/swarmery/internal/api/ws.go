@@ -232,6 +232,17 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 			State:     n.State,
 			Message:   n.Message,
 		}
+	case ingest.NoteTurnSurprise:
+		// mods-swarmery-link phase 10: a turn's forecast-vs-actual score landed
+		// (link_forecast.go). Hydrated from turn_forecasts; skipped if gone.
+		p, err := h.turnSurprisePayload(n.TurnForecastID)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, nil
+		}
+		payload = p
 	default:
 		return nil, errors.New("unknown notification type " + n.Type)
 	}

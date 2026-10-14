@@ -452,3 +452,126 @@ shape). If a future Claude Code changes `$.session.id()` or the `session.measure
 shape, the mod adapts its payload. This contract's field names stay fixed. Re-run the
 spike in [`mods-format.md`](mods-format.md) before a mod release that targets a new
 Claude Code minor.
+
+## Forecast
+
+**Status:** phase 10 contract (mods-swarmery-link, the turn-forecast loop). Additive:
+two event kinds on the same `POST /api/link/events` envelope, with the same auth,
+the same dedup and the same per-event reject path. Neither kind touches
+`link_status`. Implementation: `internal/link/forecast.go` (ingest),
+`internal/turnforecast` (validation, scoring, storage), `internal/api/link_forecast.go`
+(read side), migration `0113_turn_forecasts.sql`.
+
+The mod sends it only with `options.forecast === true`. On a main-loop `turn.start`
+that carries user-typed text, it asks a cheap model what the turn will do. On the
+matching `turn.complete` it reports what its own `tool.call` journal saw. The daemon
+compares the two deterministically. No LLM runs on the daemon side.
+
+### Event kinds
+
+| `kind` | Sent on | `payload` |
+|---|---|---|
+| `turn.forecast` | the forecast call resolving (after `turn.start`, never blocking it; it may arrive after the turn completed) | `{ "runId": string, "turnSeq": int ≥ 1, "files": [string], "testsPass": bool \| null, "steps": int ≥ 0 \| null, "confidence": 0..1 \| null, "model": string, "forecastTokens": int ≥ 0 \| null }` |
+| `turn.actual` | main-loop `turn.complete` | `{ "runId": string, "turnSeq": int ≥ 1, "files": [string], "testsRan": bool, "testsPass": bool \| null, "steps": int ≥ 0 }` |
+
+| Field | Rule |
+|---|---|
+| `runId` | required on both: 1 to 64 characters of `[A-Za-z0-9._:-]`. Names one run of the mod's turn counter. The mod mints a new one each time it restarts the counter: at `session.start`, at `session.end` with reason `clear`, and at the `turn.start` resync after `session.end` with reason `resume`. The mod's form is `<ms epoch of the reset>-<6 random base36 chars>`, or the ms alone where the runtime has no random source; the daemon checks only the shape. The two halves of a turn carry the same value |
+| `turnSeq` | required on both. The mod's counter of main-loop `turn.start`s within `runId`, starting at 1 at each new run. The two halves of a turn carry the same value |
+| `files` (forecast) | at most 50 entries, each at most 300 characters. Paths relative to the session cwd where possible. Absent means `[]` |
+| `files` (actual) | files touched by `Edit`/`Write`/`MultiEdit`/`NotebookEdit` calls of the main loop this turn (no `agentId`), relative to the cwd when under it |
+| `testsPass` (forecast) | `null` means the model made no claim |
+| `testsRan` / `testsPass` (actual) | `testsRan` is required. `testsPass` is `null` when the mod could not observe the outcome |
+| `steps` | forecast: the predicted number of main-loop tool calls, or `null`. Actual: required, the number of main-loop `tool.call` events this turn |
+| `confidence` | `null` or within 0..1 |
+| `model` | at most 80 characters. The model the mod asked |
+| `forecastTokens` | input + output tokens of the forecast call, when the reply reported them |
+
+Unknown fields are ignored. Any other violation (a wrong type, a missing required
+field, a value out of range, a payload that is absent or not an object) rejects
+**that one event** with reason `turn.forecast payload: <why>` or
+`turn.actual payload: <why>`, inside the usual `202`. It is never a `500`.
+
+**Privacy.** Paths and numbers only. No prompt text, no tool input and no model
+reply text ever go on the wire, and the daemon stores the payloads verbatim, so the
+rule is the mod's to keep.
+
+### Storage and scoring
+
+The halves land in `turn_forecasts`, one row per `(session, runId, turnSeq)`
+(`UNIQUE(session_id, run_id, turn_seq)`). `runId` is in the key because
+`turnSeq` alone is not unique within a session: `session.start` fires again on
+`--resume` with the same session id, the mod counts from 1 again, and an
+in-process `/resume` can land on a session that already has turns. Keyed on
+`(session, turnSeq)`, a resumed run's turn 1 would overwrite the first run's turn
+1 and rescore a stale pair (a headless `-p --resume` would put every message on
+row 1). With `runId`, a new run is new rows, and the old rows keep their halves
+and their score. `started_at` is the forecast's `at`, else the
+actual's. A half row is legal and stays unscored: `surprise` and `vector` are `NULL`
+until both halves are present. When the second half arrives, the row is scored in the
+same transaction. A half that is re-sent (same `runId` and `turnSeq`) with a new
+`at` replaces the stored half and the row is rescored. A re-send with the same `at` is a link duplicate and changes
+nothing.
+
+The score mirrors the phase-level `internal/surprise`. Each component is a number
+in 0..1, or `null` when it cannot be measured:
+
+| Component | Value | `null` when |
+|---|---|---|
+| `unexpected_files` | share of the actual files the forecast did not name | the actual has no files |
+| `missed_files` | share of the forecast files the turn never touched | the forecast named no files |
+| `tests_miss` | `1` when the forecast's `testsPass` differs from the observed one, `0` when equal | the forecast made no claim, tests did not run, or the outcome was not observable |
+| `steps_miss` | `\|forecast − actual\| / max(forecast, actual, 1)` | the forecast gave no `steps` |
+| `overconfidence` | the forecast's `confidence` when any other component is ≥ 0.5 (a major miss), else `0` | the forecast gave no `confidence` |
+
+Paths are normalized before comparison (a `./` prefix, duplicate separators and a
+trailing slash are removed). The index is the weighted sum of the measurable
+components, clipped to 0..1 and rounded to 4 decimals. The weights are
+`unexpected_files .3`, `missed_files .2`, `tests_miss .25`, `steps_miss .15` and
+`overconfidence .1`. `top` is the largest weighted contributor, `""` at index 0. A
+turn where nothing is measurable stays unscored. "Could not tell" is never "scored
+zero". The `vector` column stores
+`{index, top, majorMiss, components, weights}` as JSON with sorted keys, so the same
+two halves always produce byte-identical output.
+
+When a row gets or changes its score, the daemon publishes `turn_surprise` on the
+WS bus after commit (see [`ws-protocol.md`](ws-protocol.md)).
+
+### GET /api/insights/turn-forecasts
+
+`?projectId=<int>&days=<1..90>` (default 14; a value out of range is clamped and an
+unparseable one falls back to 14). This is a read-only GET like the other analytics
+reads: it is not behind the origin fence, but the Host fence applies. A `projectId`
+that is not an integer gets `400`. The example below shortens `bins` and `top`:
+
+```json
+{ "days": 14, "n": 13, "tooFew": true,
+  "bins": [ { "lo": 0, "hi": 0.2, "n": 2, "meanConfidence": 0.115, "hitRate": 0 },
+            { "lo": 0.2, "hi": 0.4, "n": 0, "meanConfidence": null, "hitRate": null } ],
+  "top": [ { "id": 12, "sessionId": 1, "sessionUuid": "efaa9b56-…", "projectId": 1,
+             "runId": "1791885600000-25r6dv", "turnSeq": 12, "startedAt": "2026-10-14T08:44:30.794Z",
+             "surprise": 0.7795, "top": "tests_miss", "model": "haiku" } ],
+  "avgForecastTokens": 115.3846 }
+```
+
+- `bins` are the forecast confidence buckets `[0,.2) [.2,.4) [.4,.6) [.6,.8) [.8,1]`,
+  always five. They cover the window's scored turns whose forecast carried a
+  confidence. A hit is `surprise < 0.25`. An empty bin has `null` mean and hit rate.
+- `n` is the number of turns in the bins. `tooFew` is `n < 30`: below that the
+  curve is noise, and the panel says so.
+- `top` lists the 10 most surprising scored turns in the window, highest first
+  (ties go to the newest). `sessionUuid` and `projectId` are `null` when the session
+  row is gone. `runId` with `turnSeq` names the turn within its session.
+- `avgForecastTokens` is the mean `forecastTokens` over every turn in the window that
+  reported one, scored or not. It is `null` when none did.
+
+The output is advisory. There are no thresholds and no alerts.
+
+### Retention
+
+`turn_forecasts` ages on the same cutoff as `link_events`, by its own `started_at`
+(`internal/prune`, `Stats.TurnForecasts`).
+
+TODO: `internal/lessons` could take `turn_surprise` as a future lesson source, beside
+`phase_surprise`. That has not been built. It needs calibrated data first, which means
+real turns, not a threshold picked in advance.

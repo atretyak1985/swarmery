@@ -116,6 +116,11 @@ msgstr "{0, plural, one {# run · mean surprise {surprise}} few {# runs · mean 
 msgid "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 
+#. placeholder {0}: p.n
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "{0, plural, one {# turn} few {# turns} many {# turns} other {# turns}}"
+msgstr "{0, plural, one {# turn} few {# turns} many {# turns} other {# turns}}"
+
 #. placeholder {0}: mod.errors.length
 #: src/pages/system/ModsTab.tsx
 msgid "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
@@ -198,6 +203,10 @@ msgstr "{count} sessions with the session mod · {total} · {divergingCount} dif
 #: src/pages/inbox/inboxModel.ts
 msgid "{count} waiting · oldest {age}"
 msgstr "{count} waiting · oldest {age}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "{d, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{d, plural, one {# day} few {# days} many {# days} other {# days}}"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
@@ -314,6 +323,10 @@ msgstr "{matches} in {percent} of {total} checked."
 #: src/pages/system/InsightsTab.tsx
 msgid "{missingCount, plural, one {# missing} few {# missing} many {# missing} other {# missing}}"
 msgstr "{missingCount, plural, one {# missing} few {# missing} many {# missing} other {# missing}}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
+msgstr "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
@@ -889,6 +902,10 @@ msgstr "area hit {areaHit} · bands {bands} · outcome {outcome}"
 msgid "Asked and logged; answers go to your Inbox for checking. <0>Nothing acts on them.</0>"
 msgstr "Asked and logged; answers go to your Inbox for checking. <0>Nothing acts on them.</0>"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "At the start of each turn the swarmery link mod forecasts the files it will touch, whether tests pass and how many steps it takes; the daemon scores that against what happened. A forecast held when its surprise stayed under 0.25. Advisory only — nothing here gates or alerts."
+msgstr "At the start of each turn the swarmery link mod forecasts the files it will touch, whether tests pass and how many steps it takes; the daemon scores that against what happened. A forecast held when its surprise stayed under 0.25. Advisory only — nothing here gates or alerts."
+
 #: src/pages/health/Health.tsx
 #: src/pages/health/Health.tsx
 msgid "Auto mode permission check"
@@ -916,6 +933,10 @@ msgstr "Autonomy"
 msgid "avg"
 msgstr "avg"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "avg forecast cost {tokensText} tokens"
+msgstr "avg forecast cost {tokensText} tokens"
+
 #: src/pages/Retro.tsx
 msgid "Avg resolve"
 msgstr "Avg resolve"
@@ -939,6 +960,10 @@ msgstr "Because of you"
 #: src/pages/Retro.tsx
 msgid "behavior {behavior}"
 msgstr "behavior {behavior}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "biggest miss"
+msgstr "biggest miss"
 
 #: src/pages/Analytics.tsx
 msgid "biggest mover"
@@ -1019,6 +1044,10 @@ msgstr "Cache served {pct}% of prompt tokens this range — saving ~{saved} net 
 #: src/pages/Analytics.tsx
 msgid "Cache served {pct}% of prompt tokens this range."
 msgstr "Cache served {pct}% of prompt tokens this range."
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Calibration by confidence bin"
+msgstr "Calibration by confidence bin"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "calibration views"
@@ -1171,6 +1200,18 @@ msgstr "comparing…"
 msgid "Complexity routing"
 msgstr "Complexity routing"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "confidence"
+msgstr "confidence"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "confidence {range}"
+msgstr "confidence {range}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "confident and wrong"
+msgstr "confident and wrong"
+
 #: src/pages/SystemHub.tsx
 msgid "Config"
 msgstr "Config"
@@ -1301,6 +1342,10 @@ msgstr "decide something in the Inbox →"
 #: src/pages/inbox/Inbox.tsx
 msgid "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
 msgstr "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "declared confidence"
+msgstr "declared confidence"
 
 #: src/pages/AgentHub.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -1738,6 +1783,10 @@ msgstr "folder path"
 msgid "forecast calibration"
 msgstr "forecast calibration"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "forecast files it never touched"
+msgstr "forecast files it never touched"
+
 #: src/pages/learning/Learning.tsx
 msgid "Forecast honesty"
 msgstr "Forecast honesty"
@@ -1870,6 +1919,10 @@ msgstr "health…"
 msgid "healthy"
 msgstr "healthy"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "held"
+msgstr "held"
+
 #: src/pages/Memory.tsx
 msgid "held back"
 msgstr "held back"
@@ -1889,6 +1942,10 @@ msgstr "History"
 #: src/pages/Analytics.tsx
 msgid "Hit rate"
 msgstr "Hit rate"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "hit rate per confidence bin"
+msgstr "hit rate per confidence bin"
 
 #: src/pages/system/ModsTab.tsx
 #: src/pages/SystemHub.tsx
@@ -2384,6 +2441,7 @@ msgid "mode for {question}"
 msgstr "mode for {question}"
 
 #: src/pages/Analytics.tsx
+#: src/pages/learning/TurnForecastPanel.tsx
 #: src/pages/RoutingReport.tsx
 msgid "model"
 msgstr "model"
@@ -2416,6 +2474,10 @@ msgstr "module"
 msgid "module sha"
 msgstr "module sha"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Most surprising turns"
+msgstr "Most surprising turns"
+
 #: src/pages/system/shared.tsx
 msgid "most used"
 msgstr "most used"
@@ -2435,6 +2497,10 @@ msgstr "moved {movedCount} · backup {backup}"
 #: src/pages/Memory.tsx
 msgid "moves to {closedDir}"
 msgstr "moves to {closedDir}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "n is too small to read (fewer than 30 turns) — what exists is shown as is."
+msgstr "n is too small to read (fewer than 30 turns) — what exists is shown as is."
 
 #: src/pages/system/CreateAgentForm.tsx
 #: src/pages/system/ModsTab.tsx
@@ -2696,6 +2762,10 @@ msgstr "no runs in the last 30 days"
 msgid "no runs recorded in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
 msgstr "no runs recorded in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "No scored turns in this window."
+msgstr "No scored turns in this window."
+
 #: src/pages/Retro.tsx
 msgid "no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
 msgstr "no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
@@ -2719,6 +2789,10 @@ msgstr "no tasks this agent executed"
 #: src/pages/Retro.tsx
 msgid "no tasks with retro artifacts in this range"
 msgstr "no tasks with retro artifacts in this range"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
+msgstr "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
 
 #: src/pages/health/FrictionTriageStrip.tsx
 msgid "no untriaged groups"
@@ -2939,6 +3013,10 @@ msgstr "pattern"
 #: src/pages/Retro.tsx
 msgid "Pending now"
 msgstr "Pending now"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "perfectly calibrated"
+msgstr "perfectly calibrated"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "Permission checks are getting no verdict"
@@ -3426,6 +3504,14 @@ msgstr "Runs"
 msgid "runs 30d {runs30d}"
 msgstr "runs 30d {runs30d}"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "said"
+msgstr "said"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "said {said}, held {held}"
+msgstr "said {said}, held {held}"
+
 #: src/pages/health/HealthOverview.tsx
 msgid "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
 msgstr "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
@@ -3545,6 +3631,10 @@ msgstr "series · {metric}"
 #: src/pages/Analytics.tsx
 msgid "series…"
 msgstr "series…"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "session {session} · turn {seq}"
+msgstr "session {session} · turn {seq}"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "session {sessionId}"
@@ -3680,6 +3770,10 @@ msgstr "start"
 msgid "start serena"
 msgstr "start serena"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "started"
+msgstr "started"
+
 #: src/pages/Serena.tsx
 msgid "started {startedAgo}"
 msgstr "started {startedAgo}"
@@ -3700,6 +3794,10 @@ msgstr "status: {status}"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "stays paused until a check succeeds — sign in to the account again first if it needs it"
 msgstr "stays paused until a check succeeds — sign in to the account again first if it needs it"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "step count off"
+msgstr "step count off"
 
 #: src/pages/Serena.tsx
 msgid "stop"
@@ -3735,6 +3833,10 @@ msgstr "superseded"
 #: src/pages/RoutingReport.tsx
 msgid "surface"
 msgstr "surface"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "surprise"
+msgstr "surprise"
 
 #: src/pages/Lessons.tsx
 msgid "surprise {before} → {after}"
@@ -3800,6 +3902,10 @@ msgstr "template…"
 #: src/pages/SystemHub.tsx
 msgid "templates"
 msgstr "templates"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "tests outcome missed"
+msgstr "tests outcome missed"
 
 #: src/pages/health/healthModel.ts
 msgid "the {dayCount} days before"
@@ -4079,6 +4185,10 @@ msgstr "total"
 msgid "Total wait"
 msgstr "Total wait"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "touched files it did not forecast"
+msgstr "touched files it did not forecast"
+
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "track this"
@@ -4104,6 +4214,26 @@ msgstr "Triage"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "triage running · {done} of {total}"
 msgstr "triage running · {done} of {total}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "turn"
+msgstr "turn"
+
+#: src/pages/LessonsCalibration.tsx
+msgid "turn forecasts"
+msgstr "turn forecasts"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Turn forecasts"
+msgstr "Turn forecasts"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Turn forecasts come from the swarmery link mod. Turn on its <0>forecast</0> option and every turn that starts from your own prompt gets one cheap forecast; it is scored once the turn completes."
+msgstr "Turn forecasts come from the swarmery link mod. Turn on its <0>forecast</0> option and every turn that starts from your own prompt gets one cheap forecast; it is scored once the turn completes."
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "turns"
+msgstr "turns"
 
 #: src/pages/system/docsSection.ts
 msgid "two How-to-use blocks"
@@ -4333,6 +4463,10 @@ msgstr "Why did it fail?"
 #: src/pages/learning/classifierModel.ts
 msgid "Why did the run leave the plan?"
 msgstr "Why did the run leave the plan?"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "window"
+msgstr "window"
 
 #: src/pages/Memory.tsx
 msgid "working…"

@@ -67,6 +67,10 @@ type Stats struct {
 	// command is expired (stop 30 s, prompt 10 min) long before any retention
 	// cutoff, so only finished history goes.
 	LinkCommands int64
+	// TurnForecasts is turn_forecasts rows dropped (migration 0113, the link's
+	// per-turn forecast vs actual). Same horizon and same reasoning as
+	// LinkEvents, aged by the row's own started_at.
+	TurnForecasts int64
 	// VacuumErr carries a post-commit VACUUM failure (e.g. SQLITE_BUSY).
 	// The destructive transaction has already committed by then, so the
 	// prune itself succeeded — callers should report this as a warning
@@ -231,6 +235,7 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 			{`SELECT COUNT(*) FROM worktree_sweeps WHERE ts < ?`, &st.WorktreeSweeps},
 			{`SELECT COUNT(*) FROM link_events WHERE at < ?`, &st.LinkEvents},
 			{`SELECT COUNT(*) FROM link_commands WHERE created_at < ?`, &st.LinkCommands},
+			{`SELECT COUNT(*) FROM turn_forecasts WHERE started_at < ?`, &st.TurnForecasts},
 		}
 		counts = append(counts, undatableCounts(&st)...)
 		for _, c := range counts {
@@ -264,6 +269,14 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 		st.LinkCommands, _ = res.RowsAffected()
 	} else {
 		return st, fmt.Errorf("prune link_commands: %w", err)
+	}
+	// turn_forecasts age like the link ledger (see Stats.TurnForecasts);
+	// started_at is the same fixed-width ms UTC form, served by
+	// idx_turn_forecasts_started.
+	if res, err := db.Exec(`DELETE FROM turn_forecasts WHERE started_at < ?`, cutoff); err == nil {
+		st.TurnForecasts, _ = res.RowsAffected()
+	} else {
+		return st, fmt.Errorf("prune turn_forecasts: %w", err)
 	}
 
 	if st.Sessions == 0 {
