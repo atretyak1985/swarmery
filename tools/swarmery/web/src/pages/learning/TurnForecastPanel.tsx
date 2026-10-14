@@ -12,7 +12,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg, plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -64,23 +64,41 @@ function pct(v: number | null): string {
   return v === null ? '—' : `${String(Math.round(v * 100))}%`;
 }
 
+interface CurveColors {
+  line: string;
+  grid: string;
+  axis: string;
+  tick: string;
+  surface: string;
+}
+
+function readCurveColors(): CurveColors {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name: string): string => cs.getPropertyValue(name).trim();
+  return {
+    line: v('--color-series-1'),
+    grid: v('--color-chart-grid'),
+    axis: v('--color-chart-axis'),
+    tick: v('--color-chart-tick'),
+    surface: v('--color-surface'),
+  };
+}
+
 /** Chart colours resolved from the active theme: one series hue for the
  *  curve, neutral ink for the reference diagonal, grid and ticks. Recharts SVG
- *  props cannot take CSS vars, so the values are read when the theme flips. */
-function useCurveColors(): { line: string; grid: string; axis: string; tick: string; surface: string } {
+ *  props cannot take CSS vars, so the values are read when the theme flips —
+ *  one frame later, because ThemeProvider writes the <html> data attributes in
+ *  its own effect, which runs AFTER this child's effects (a read during render
+ *  or in a child effect still sees the previous theme). */
+function useCurveColors(): CurveColors {
   const { theme, palette } = useTheme();
-  return useMemo(() => {
-    const cs = getComputedStyle(document.documentElement);
-    const v = (name: string): string => cs.getPropertyValue(name).trim();
-    return {
-      line: v('--color-series-1'),
-      grid: v('--color-chart-grid'),
-      axis: v('--color-chart-axis'),
-      tick: v('--color-chart-tick'),
-      surface: v('--color-surface'),
-    };
+  const [colors, setColors] = useState<CurveColors>(readCurveColors);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setColors(readCurveColors()));
+    return () => cancelAnimationFrame(id);
     // theme + palette are the triggers: the vars change value when either flips.
   }, [theme, palette]);
+  return colors;
 }
 
 function PointTooltip({
