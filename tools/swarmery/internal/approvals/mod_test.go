@@ -413,21 +413,142 @@ func TestShimAfterModWindow(t *testing.T) {
 	}
 }
 
-// TestShimAfterModWindowIgnoresDecidedRows: an approved or denied mod row is
-// not a hand-back — a later identical shim ask opens a row as usual.
-func TestShimAfterModWindowIgnoresDecidedRows(t *testing.T) {
-	db := testDB(t)
-	seedSession(t, db, "uuid-decided")
-	svc := New(db, nil, Options{})
-	modID, _, _, err := svc.OpenMod(modInput("uuid-decided", "Bash", "toolu_12", `{"command":"ls","description":"d"}`))
-	if err != nil {
-		t.Fatal(err)
+// askQuestions is an AskUserQuestion tool_input with one single-select question.
+const askQuestions = `{"questions":[{"question":"Which?","header":"H","multiSelect":false,"options":[{"label":"A","description":"a"},{"label":"B","description":"b"}]}]}`
+
+// shimOf is the shim's HookInput for the same call as a mod ask: no
+// tool_use_id, channel shim — the same dedup hash.
+func shimOf(in HookInput) HookInput {
+	in.ToolUseID = ""
+	in.Channel = ""
+	return in
+}
+
+// openShimAfterMod opens a shim ask for in's call and returns the decision
+// it is answered with at once; it fails the test when the shim opened a row
+// of its own or got no immediate decision.
+func openShimAfterMod(t *testing.T, svc *Service, in HookInput, modID int64) Decision {
+	t.Helper()
+	id, ch, isNew, err := svc.Open(shimOf(in))
+	if err != nil || isNew || id != modID {
+		t.Fatalf("shim within window: id=%d (mod %d) isNew=%v err=%v", id, modID, isNew, err)
 	}
-	if err := svc.Decide(modID, StatusDenied, "dashboard", ""); err != nil {
-		t.Fatal(err)
+	select {
+	case d := <-ch:
+		return d
+	default:
+		t.Fatal("no immediate decision within the window")
+		return Decision{}
 	}
-	if _, _, isNew, err := svc.Open(hookInput(t, "uuid-decided", "Bash", "ls")); err != nil || !isNew {
-		t.Fatalf("shim after a denied mod row: isNew=%v err=%v", isNew, err)
+}
+
+// TestShimAfterModWindowCarriesDecision: a shim ask within 5 s of a mod row's
+// dashboard decision takes THAT decision — no second row, no lost deny.
+func TestShimAfterModWindowCarriesDecision(t *testing.T) {
+	cases := []struct {
+		name, tool, input string
+		decide            func(svc *Service, id int64) error
+		check             func(t *testing.T, d Decision)
+	}{
+		{
+			name: "denied", tool: "Bash", input: `{"command":"ls","description":"d"}`,
+			decide: func(svc *Service, id int64) error { return svc.Decide(id, StatusDenied, "dashboard", "not on main") },
+			check: func(t *testing.T, d Decision) {
+				if d.Status != StatusDenied || d.Reason != "not on main" {
+					t.Errorf("decision = %+v, want denied/'not on main'", d)
+				}
+			},
+		},
+		{
+			name: "denied AskUserQuestion", tool: AskUserQuestionTool, input: askQuestions,
+			decide: func(svc *Service, id int64) error { return svc.Decide(id, StatusDenied, "dashboard", "") },
+			check: func(t *testing.T, d Decision) {
+				if d.Status != StatusDenied || d.Reason != "" {
+					t.Errorf("decision = %+v, want denied with an empty reason", d)
+				}
+			},
+		},
+		{
+			name: "answered", tool: AskUserQuestionTool, input: askQuestions,
+			decide: func(svc *Service, id int64) error {
+				return svc.Answer(id, map[string]json.RawMessage{"Which?": json.RawMessage(`"B"`)})
+			},
+			check: func(t *testing.T, d Decision) {
+				var ui struct {
+					Answers map[string]any `json:"answers"`
+				}
+				if d.Status != StatusApproved || json.Unmarshal(d.UpdatedInput, &ui) != nil || ui.Answers["Which?"] != "B" {
+					t.Errorf("decision = %+v (updatedInput %s), want approved carrying the answer", d, d.UpdatedInput)
+				}
+			},
+		},
+		{
+			name: "approved AskUserQuestion without answers", tool: AskUserQuestionTool, input: askQuestions,
+			decide: func(svc *Service, id int64) error { return svc.Decide(id, StatusApproved, "dashboard", "") },
+			check: func(t *testing.T, d Decision) {
+				if d.Status != StatusResolvedElsewhere || len(d.UpdatedInput) != 0 {
+					t.Errorf("decision = %+v, want resolved_elsewhere (no decision: the native dialog)", d)
+				}
+			},
+		},
+		{
+			name: "approved Bash", tool: "Bash", input: `{"command":"make","description":"d"}`,
+			decide: func(svc *Service, id int64) error { return svc.Decide(id, StatusApproved, "dashboard", "") },
+			check: func(t *testing.T, d Decision) {
+				if d.Status != StatusApproved || len(d.UpdatedInput) != 0 {
+					t.Errorf("decision = %+v, want approved", d)
+				}
+			},
+		},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testDB(t)
+			seedSession(t, db, "uuid-decided")
+			clock := newFakeClock()
+			svc := New(db, nil, Options{Now: clock.Now})
+			in := modInput("uuid-decided", tc.tool, fmt.Sprintf("toolu_12_%d", i), tc.input)
+			modID, _, _, err := svc.OpenMod(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := tc.decide(svc, modID); err != nil {
+				t.Fatalf("decide: %v", err)
+			}
+			clock.Advance(4 * time.Second)
+			tc.check(t, openShimAfterMod(t, svc, in, modID))
+			if n := countRequests(t, db); n != 1 {
+				t.Errorf("rows = %d, want 1", n)
+			}
+			var events int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM events WHERE type = 'permission_request'`).Scan(&events); err != nil {
+				t.Fatal(err)
+			}
+			if events != 1 {
+				t.Errorf("permission_request events = %d, want 1 (the shim writes none)", events)
+			}
+
+			clock.Advance(2 * time.Second) // 6 s after the decision
+			if _, _, isNew, err := svc.Open(shimOf(in)); err != nil || !isNew {
+				t.Fatalf("shim after the window: isNew=%v err=%v, want a row of its own", isNew, err)
+			}
+		})
+	}
+}
+
+// TestShimDecisionAfterModFallbacks: once the kept decision is pruned
+// the answer's UpdatedInput is gone; an approved AskUserQuestion row then
+// reads as no decision, never a plain allow. (Pruning takes 80 s, far past the
+// window, so this pins shimDecisionAfterMod rather than a reachable path.)
+func TestShimDecisionAfterModFallbacks(t *testing.T) {
+	d := shimDecisionAfterMod(Decision{Status: StatusApproved, Via: "dashboard"}, AskUserQuestionTool)
+	if d.Status != StatusResolvedElsewhere {
+		t.Errorf("approved AskUserQuestion without UpdatedInput → %+v, want resolved_elsewhere", d)
+	}
+	for _, status := range []string{StatusExpired, StatusResolvedElsewhere} {
+		if d := shimDecisionAfterMod(Decision{Status: status, Via: "terminal"}, "Bash"); d.Status != StatusResolvedElsewhere {
+			t.Errorf("%s → %+v, want resolved_elsewhere", status, d)
+		}
 	}
 }
 
@@ -507,5 +628,177 @@ func TestOpenModExcludedProject(t *testing.T) {
 	}
 	if n := countRequests(t, db); n != 0 {
 		t.Errorf("rows = %d, want 0", n)
+	}
+}
+
+// TestCancelModResolvesUnwatchedRow: the mod giving up on a row nobody else
+// waits on resolves it resolved_elsewhere via 'terminal' at once — a later
+// dashboard decision is a 409, not a 200 that reaches no hook. Idempotent.
+func TestCancelModResolvesUnwatchedRow(t *testing.T) {
+	db := testDB(t)
+	seedSession(t, db, "uuid-cancel")
+	svc := New(db, nil, Options{})
+	id, _, _, err := svc.OpenMod(modInput("uuid-cancel", "Bash", "toolu_c1", `{"command":"ls"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CancelMod(id, "uuid-other"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("CancelMod of another session: %v, want ErrNotFound", err)
+	}
+	if err := svc.CancelMod(id+100, "uuid-cancel"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("CancelMod of an unknown id: %v, want ErrNotFound", err)
+	}
+	if s := requestStatus(t, db, id); s != StatusPending {
+		t.Fatalf("status after refused cancels = %s, want pending", s)
+	}
+	if err := svc.CancelMod(id, "uuid-cancel"); err != nil {
+		t.Fatalf("CancelMod: %v", err)
+	}
+	if r := readModRow(t, db, id); r.status != StatusResolvedElsewhere || r.via != "terminal" {
+		t.Fatalf("row after cancel = %+v, want resolved_elsewhere/terminal", r)
+	}
+	if err := svc.Decide(id, StatusApproved, "dashboard", ""); !errors.Is(err, ErrAlreadyResolved) {
+		t.Errorf("Decide after cancel: %v, want ErrAlreadyResolved", err)
+	}
+	if err := svc.CancelMod(id, "uuid-cancel"); err != nil {
+		t.Errorf("second CancelMod on a terminal row: %v, want nil", err)
+	}
+	svc.mu.Lock()
+	_, leased := svc.leases[id]
+	svc.mu.Unlock()
+	if leased {
+		t.Error("lease kept after cancel")
+	}
+}
+
+// TestCancelModInFlightPoll: a mod GET still held open when the mod gives up
+// is taken off the row — the row resolves, and the GET's end renews no lease.
+func TestCancelModInFlightPoll(t *testing.T) {
+	db := testDB(t)
+	seedSession(t, db, "uuid-cancel-poll")
+	svc := New(db, nil, Options{})
+	id, _, _, err := svc.OpenMod(modInput("uuid-cancel-poll", "Bash", "toolu_c2", `{"command":"ls"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type res struct {
+		d       Decision
+		pending bool
+		err     error
+	}
+	out := make(chan res, 1)
+	go func() {
+		d, p, err := svc.WaitMod(context.Background(), id, "uuid-cancel-poll", 300*time.Millisecond)
+		out <- res{d, p, err}
+	}()
+	waitForWaiters(t, svc, id, 1)
+	if err := svc.CancelMod(id, "uuid-cancel-poll"); err != nil {
+		t.Fatalf("CancelMod: %v", err)
+	}
+	if s := requestStatus(t, db, id); s != StatusResolvedElsewhere {
+		t.Fatalf("status after cancel with only the mod's poll attached = %s, want resolved_elsewhere", s)
+	}
+	select {
+	case r := <-out:
+		if r.err != nil || !r.pending {
+			t.Errorf("abandoned poll = %+v, want pending (its client is gone)", r)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("abandoned poll never returned")
+	}
+	svc.mu.Lock()
+	_, leased := svc.leases[id]
+	polls := len(svc.modPolls)
+	svc.mu.Unlock()
+	if leased || polls != 0 {
+		t.Errorf("after the abandoned poll: leased=%v modPolls=%d, want no lease and no mod polls", leased, polls)
+	}
+}
+
+// TestCancelModKeepsShimWaiter: with a shim long-poll on the same row the
+// cancel only drops the mod's claims; the shim still gets the decision, and
+// once it hangs up the row resolves (no lapsed-lease wait).
+func TestCancelModKeepsShimWaiter(t *testing.T) {
+	db := testDB(t)
+	seedSession(t, db, "uuid-cancel-shim")
+	svc := New(db, nil, Options{})
+	in := modInput("uuid-cancel-shim", "Bash", "toolu_c3", `{"command":"curl x","description":"d"}`)
+	id, _, _, err := svc.OpenMod(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shimID, ch, _, err := svc.Open(shimOf(in))
+	if err != nil || shimID != id {
+		t.Fatalf("shim Open: id=%d (mod %d) err=%v", shimID, id, err)
+	}
+	// The mod's own poll in flight beside the shim.
+	done := make(chan bool, 1)
+	go func() {
+		_, pending, _ := svc.WaitMod(context.Background(), id, "uuid-cancel-shim", 300*time.Millisecond)
+		done <- pending
+	}()
+	waitForWaiters(t, svc, id, 2)
+	if err := svc.CancelMod(id, "uuid-cancel-shim"); err != nil {
+		t.Fatalf("CancelMod: %v", err)
+	}
+	if s := requestStatus(t, db, id); s != StatusPending {
+		t.Fatalf("status after cancel under a shim waiter = %s, want pending", s)
+	}
+	if pending := <-done; !pending {
+		t.Error("abandoned mod poll got a decision")
+	}
+	svc.mu.Lock()
+	_, leased := svc.leases[id]
+	svc.mu.Unlock()
+	if leased {
+		t.Error("the abandoned poll renewed the dropped lease")
+	}
+	// The shim hanging up is now the last asker: the row resolves at once.
+	svc.Detach(id, ch)
+	if r := readModRow(t, db, id); r.status != StatusResolvedElsewhere || r.via != "terminal" {
+		t.Fatalf("row after the shim's detach = %+v, want resolved_elsewhere/terminal", r)
+	}
+
+	// Same set-up, but the dashboard decides: the shim receives it.
+	in2 := modInput("uuid-cancel-shim", "Bash", "toolu_c4", `{"command":"curl y","description":"d"}`)
+	id2, _, _, err := svc.OpenMod(in2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ch2, _, err := svc.Open(shimOf(in2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CancelMod(id2, "uuid-cancel-shim"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Decide(id2, StatusDenied, "dashboard", "no"); err != nil {
+		t.Fatalf("Decide with the shim still waiting: %v", err)
+	}
+	select {
+	case d := <-ch2:
+		if d.Status != StatusDenied || d.Reason != "no" {
+			t.Errorf("shim decision = %+v", d)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("shim not woken")
+	}
+}
+
+// waitForWaiters blocks until n waiters are attached to id (or fails).
+func waitForWaiters(t *testing.T, svc *Service, id int64, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		svc.mu.Lock()
+		got := len(svc.waiters[id])
+		svc.mu.Unlock()
+		if got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("waiters on %d = %d, want %d", id, got, n)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }

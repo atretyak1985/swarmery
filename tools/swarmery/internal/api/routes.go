@@ -291,6 +291,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// not attached.
 	mux.HandleFunc("POST /api/link/permission", linkAuth(h.linkPermissionOpen))
 	mux.HandleFunc("GET /api/link/permission/{id}", linkAuth(h.linkPermissionWait))
+	mux.HandleFunc("DELETE /api/link/permission/{id}", linkAuth(h.linkPermissionCancel))
 	mux.HandleFunc("POST /api/sessions/{id}/link/stop", requireLocalOrigin(h.linkSessionStop))
 	mux.HandleFunc("POST /api/sessions/{id}/link/prompt", requireLocalOrigin(h.linkSessionPrompt))
 	mux.HandleFunc("POST /api/sessions/link/bulk-prompt", requireLocalOrigin(h.linkBulkPrompt))

@@ -227,6 +227,41 @@ func (h *Handler) linkPermissionWait(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, modDecisionBody(d), nil)
 }
 
+// DELETE /api/link/permission/{id}?session=<uuid> — the mod gives up on a
+// request (its hook's dispatch was abandoned mid-wait), so a dashboard
+// decision cannot land on a row no hook reads any more.
+//
+//	204   given up: a pending row nobody else waits on resolves
+//	      resolved_elsewhere via 'terminal'; under a shim long-poll only the
+//	      mod's lease is dropped; a terminal row is left as is (idempotent)
+//	400   id not an integer, session missing
+//	404   unknown id, or a row of another session
+func (h *Handler) linkPermissionCancel(w http.ResponseWriter, r *http.Request) {
+	svc := approvalsSvc
+	if svc == nil {
+		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"error": "approvals unavailable"})
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	session := strings.TrimSpace(r.URL.Query().Get("session"))
+	if session == "" {
+		writeClientErr(w, http.StatusBadRequest, "session is required")
+		return
+	}
+	switch err := svc.CancelMod(id, session); {
+	case errors.Is(err, approvals.ErrNotFound):
+		writeClientErr(w, http.StatusNotFound, "permission request not found")
+	case err != nil:
+		writeErr(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // parsePermissionWait reads the wait parameter: missing is the full
 // approvals.ModMaxWait (25 s), a negative value 0, above 25 clamped to 25;
 // not an integer is not ok.

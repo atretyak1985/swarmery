@@ -420,6 +420,196 @@ func TestLinkPermissionShimAfterModWindow(t *testing.T) {
 	}
 }
 
+// askQuestionsInput is an AskUserQuestion tool_input with one question.
+const askQuestionsInput = `{"questions":[{"question":"Which DB?","header":"DB","multiSelect":false,"options":[{"label":"SQLite","description":"s"},{"label":"Postgres","description":"p"}]}]}`
+
+// shimBodyFor is the shim's PermissionRequest stdin for the same call as a
+// mod ask (same session, tool and tool_input: the same dedup hash).
+func shimBodyFor(session, tool, toolInput string) string {
+	return fmt.Sprintf(
+		`{"session_id":%q,"transcript_path":"/x.jsonl","cwd":"/work/proj","permission_mode":"default","hook_event_name":"PermissionRequest","tool_name":%q,"tool_input":%s,"permission_suggestions":[]}`,
+		session, tool, toolInput)
+}
+
+// TestLinkPermissionShimAfterModDecision: the mod hands a call back to the
+// engine after a dashboard decision it cannot deliver itself (a deny of a
+// question, an approve without answers), the engine's permission stage fires
+// the shim for the same call within 5 s, and the shim gets THAT decision —
+// never a second pending row that loses the operator's deny.
+func TestLinkPermissionShimAfterModDecision(t *testing.T) {
+	cases := []struct {
+		name, tool, input, delivery, action string
+		wantCode                            int
+		wantBody                            map[string]any
+	}{
+		{name: "deny question", tool: "AskUserQuestion", input: askQuestionsInput,
+			action:   `{"action":"deny","reason":"ask me later"}`,
+			wantCode: http.StatusOK, wantBody: map[string]any{"decision": "deny", "message": "ask me later"}},
+		{name: "deny Bash", tool: "Bash", input: `{"command":"npm publish"}`,
+			action:   `{"action":"deny"}`,
+			wantCode: http.StatusOK, wantBody: map[string]any{"decision": "deny"}},
+		{name: "approve question without answers", tool: "AskUserQuestion", input: askQuestionsInput,
+			action: `{"action":"approve"}`, wantCode: http.StatusNoContent},
+		{name: "approve Bash", tool: "Bash", input: `{"command":"make"}`,
+			action: `{"action":"approve"}`, wantCode: http.StatusOK, wantBody: map[string]any{"decision": "allow"}},
+		{name: "answer, deny-message delivery", tool: "AskUserQuestion", input: askQuestionsInput,
+			delivery: approvals.DeliveryDenyMessage, action: `{"action":"answer","answers":{"Which DB?":"Postgres"}}`,
+			wantCode: http.StatusOK, wantBody: map[string]any{"decision": "deny", "message": "User answered via dashboard: «Which DB?» → Postgres"}},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := &permClock{t: time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)}
+			e := newLinkPermEnv(t, approvals.Options{Now: clock.Now, AnswerDelivery: tc.delivery})
+			session := fmt.Sprintf("after-%d-uuid", i)
+			code, body := e.ask(t, permBody(session, tc.tool, "toolu_after", tc.input))
+			if code != http.StatusAccepted {
+				t.Fatalf("mod ask: %d %v", code, body)
+			}
+			id := idOf(t, body)
+			if code, raw := e.decide(t, id, tc.action); code != http.StatusOK {
+				t.Fatalf("dashboard %s: %d %s", tc.action, code, raw)
+			}
+			if code, got := e.poll(t, id, session, 0); code != http.StatusOK || got["decision"] == "pass" {
+				t.Fatalf("mod poll after the decision: %d %v", code, got)
+			}
+
+			clock.Advance(2 * time.Second)
+			var r hookResult
+			select {
+			case r = <-postHook(e.srv, hookCtx(t), shimBodyFor(session, tc.tool, tc.input)):
+			case <-time.After(3 * time.Second):
+				t.Fatal("shim within the window still polling, want an immediate answer")
+			}
+			if r.err != nil || r.status != tc.wantCode {
+				t.Fatalf("shim: %d %s %v, want %d", r.status, r.body, r.err, tc.wantCode)
+			}
+			if tc.wantBody != nil {
+				got := decodeObj(t, string(r.body))
+				for k, v := range tc.wantBody {
+					if got[k] != v {
+						t.Errorf("shim body %s: %s = %v, want %v", r.body, k, got[k], v)
+					}
+				}
+				if _, has := got["updatedInput"]; has && tc.delivery == approvals.DeliveryDenyMessage {
+					t.Errorf("deny-message delivery carries updatedInput: %s", r.body)
+				}
+			}
+			if n := countPermRows(t, e.db); n != 1 {
+				t.Errorf("rows = %d, want ONE (the shim must not open a second row)", n)
+			}
+			if r := readPermRow(t, e.db, id); r.via != "dashboard" || r.status == "pending" {
+				t.Errorf("mod row = %+v, want its dashboard decision kept", r)
+			}
+		})
+	}
+}
+
+// TestLinkPermissionShimAfterModAnswer: an answer (default delivery) reaches a
+// shim asking within the window as allow + updatedInput.
+func TestLinkPermissionShimAfterModAnswer(t *testing.T) {
+	e := newLinkPermEnv(t, approvals.Options{})
+	_, body := e.ask(t, permBody("after-answer-uuid", "AskUserQuestion", "toolu_aa", askQuestionsInput))
+	id := idOf(t, body)
+	if code, raw := e.decide(t, id, `{"action":"answer","answers":{"Which DB?":"SQLite"}}`); code != http.StatusOK {
+		t.Fatalf("answer: %d %s", code, raw)
+	}
+	r := <-postHook(e.srv, hookCtx(t), shimBodyFor("after-answer-uuid", "AskUserQuestion", askQuestionsInput))
+	if r.err != nil || r.status != http.StatusOK {
+		t.Fatalf("shim: %d %s %v", r.status, r.body, r.err)
+	}
+	var got struct {
+		Decision     string `json:"decision"`
+		UpdatedInput struct {
+			Answers map[string]any `json:"answers"`
+		} `json:"updatedInput"`
+	}
+	if err := json.Unmarshal(r.body, &got); err != nil || got.Decision != "allow" || got.UpdatedInput.Answers["Which DB?"] != "SQLite" {
+		t.Errorf("shim body = %s (%v), want allow + updatedInput", r.body, err)
+	}
+	if n := countPermRows(t, e.db); n != 1 {
+		t.Errorf("rows = %d, want 1", n)
+	}
+}
+
+// TestLinkPermissionCancel: DELETE gives up on a request — a pending row with
+// nobody else waiting resolves resolved_elsewhere via terminal, so a later
+// dashboard approve is 409 rather than a 200 that reaches no hook.
+func TestLinkPermissionCancel(t *testing.T) {
+	e := newLinkPermEnv(t, approvals.Options{})
+	_, body := e.ask(t, permBody("cancel-uuid", "Bash", "toolu_k1", `{"command":"make deploy-staging"}`))
+	id := idOf(t, body)
+	path := fmt.Sprintf("/api/link/permission/%d?session=cancel-uuid", id)
+
+	for p, want := range map[string]int{
+		fmt.Sprintf("/api/link/permission/%d?session=other-uuid", id):     http.StatusNotFound,
+		fmt.Sprintf("/api/link/permission/%d?session=cancel-uuid", id+99): http.StatusNotFound,
+		"/api/link/permission/abc?session=cancel-uuid":                    http.StatusBadRequest,
+		fmt.Sprintf("/api/link/permission/%d", id):                        http.StatusBadRequest,
+	} {
+		if code, raw := e.req(t, http.MethodDelete, p, e.token, ""); code != want {
+			t.Errorf("DELETE %s: %d %s, want %d", p, code, raw, want)
+		}
+	}
+	for _, tok := range []string{"", "wrong"} {
+		if code, _ := e.req(t, http.MethodDelete, path, tok, ""); code != http.StatusUnauthorized {
+			t.Errorf("DELETE token %q: %d, want 401", tok, code)
+		}
+	}
+	if r := readPermRow(t, e.db, id); r.status != "pending" {
+		t.Fatalf("status after refused DELETEs = %s, want pending", r.status)
+	}
+
+	if code, raw := e.req(t, http.MethodDelete, path, e.token, ""); code != http.StatusNoContent || raw != "" {
+		t.Fatalf("DELETE: %d %q, want 204", code, raw)
+	}
+	if r := readPermRow(t, e.db, id); r.status != "resolved_elsewhere" || r.via != "terminal" {
+		t.Fatalf("row after DELETE = %+v, want resolved_elsewhere via terminal", r)
+	}
+	if code, raw := e.decide(t, id, `{"action":"approve"}`); code != http.StatusConflict {
+		t.Errorf("dashboard approve after the mod gave up: %d %s, want 409", code, raw)
+	}
+	if code, _ := e.req(t, http.MethodDelete, path, e.token, ""); code != http.StatusNoContent {
+		t.Errorf("second DELETE: %d, want 204 (idempotent)", code)
+	}
+	if code, got := e.poll(t, id, "cancel-uuid", 0); code != http.StatusOK || got["decision"] != "pass" {
+		t.Errorf("poll after DELETE: %d %v", code, got)
+	}
+}
+
+// TestLinkPermissionCancelKeepsShim: a DELETE while a shim long-poll waits on
+// the same row only drops the mod's claim; the dashboard's deny still
+// reaches the shim.
+func TestLinkPermissionCancelKeepsShim(t *testing.T) {
+	e := newLinkPermEnv(t, approvals.Options{})
+	_, body := e.ask(t, permBody("cancel-shim-uuid", "Bash", "toolu_k2", `{"command":"go test ./..."}`))
+	id := idOf(t, body)
+	res := postHook(e.srv, hookCtx(t), hookBody("cancel-shim-uuid", "Bash", "go test ./..."))
+	deadline := time.Now().Add(3 * time.Second)
+	for _, seen := e.svc.LastSeen(); !seen && time.Now().Before(deadline); _, seen = e.svc.LastSeen() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	if code, raw := e.req(t, http.MethodDelete,
+		fmt.Sprintf("/api/link/permission/%d?session=cancel-shim-uuid", id), e.token, ""); code != http.StatusNoContent {
+		t.Fatalf("DELETE: %d %s", code, raw)
+	}
+	if r := readPermRow(t, e.db, id); r.status != "pending" {
+		t.Fatalf("status after DELETE under a shim = %s, want pending", r.status)
+	}
+	if code, raw := e.decide(t, id, `{"action":"deny","reason":"no"}`); code != http.StatusOK {
+		t.Fatalf("deny: %d %s", code, raw)
+	}
+	select {
+	case r := <-res:
+		if r.err != nil || r.status != http.StatusOK || !strings.Contains(string(r.body), `"deny"`) {
+			t.Fatalf("shim got %d %s %v", r.status, r.body, r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shim not woken by the deny")
+	}
+}
+
 // TestLinkPermissionProdDeployIsLocal: a prod deploy answers {"decision":
 // "local"} at once and the dashboard cannot approve it.
 func TestLinkPermissionProdDeployIsLocal(t *testing.T) {
@@ -591,6 +781,9 @@ func TestLinkPermissionUnavailable(t *testing.T) {
 	}
 	if code, _ := e.req(t, http.MethodGet, "/api/link/permission/1?session=u", e.token, ""); code != http.StatusServiceUnavailable {
 		t.Errorf("GET without approvals: %d, want 503", code)
+	}
+	if code, _ := e.req(t, http.MethodDelete, "/api/link/permission/1?session=u", e.token, ""); code != http.StatusServiceUnavailable {
+		t.Errorf("DELETE without approvals: %d, want 503", code)
 	}
 	AttachApprovals(e.svc)
 	AttachLink(nil, nil)

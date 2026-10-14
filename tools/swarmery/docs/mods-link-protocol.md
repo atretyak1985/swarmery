@@ -362,7 +362,7 @@ gives.
 **Status:** phase 5 contract (approvals channel). The mod asks the daemon about a
 tool call from inside its `tool.check` hook and polls for the operator's decision
 (design A of [`mods-format.md`](mods-format.md) "Design consequences (a)", verified by
-M3). Both routes sit behind the bearer token like the rest of `/api/link/*`: no origin
+M3). All three routes sit behind the bearer token like the rest of `/api/link/*`: no origin
 fence, the Host fence applies, `401 {"error":"link token required"}` without a valid
 token, `503 {"error":"link disabled"}` with the link off and
 `503 {"error":"approvals unavailable"}` with the approvals service off.
@@ -438,6 +438,26 @@ GET /api/link/permission/{id}?session=<uuid>&wait=<seconds>
 | `400` | `{"error":…}` | `id` not an integer, `session` missing, bad `wait` |
 | `404` | `{"error":…}` | no such row, or a row of another session |
 
+### DELETE /api/link/permission/{id}
+
+```
+DELETE /api/link/permission/{id}?session=<uuid>
+```
+
+The mod gives up on a request: its hook's dispatch was abandoned mid-wait
+(`next.signal` aborted — the person interrupted, or a hook above settled first).
+Without it the row would stay pending under a live lease for up to 40 s, and a
+dashboard decision in that gap would answer `200` while reaching no hook.
+
+| Code | Body | When |
+|---|---|---|
+| `204` | none | given up. A **pending** row with no shim long-poll on it resolves `resolved_elsewhere` via `terminal` at once (the record a lapsed lease leaves); with a shim attached, only the mod's lease and its own in-flight polls are dropped, and the shim's decision or hang-up settles the row. A row already terminal is left as is (idempotent) |
+| `400` | `{"error":…}` | `id` not an integer, `session` missing |
+| `404` | `{"error":…}` | no such row, or a row of another session |
+
+The mod sends it fire-and-forget, raced against a 2 s `$.clock` timer, and never
+holds the hook's return on it: a lost `DELETE` only falls back to the lease lapsing.
+
 ### Lease
 
 The shim's single long-poll is how the daemon knows someone can still receive a
@@ -450,7 +470,9 @@ decision. The mod polls in GETs with gaps between them, so it claims its row wit
   `410` of a row with no waiter), and the decision is kept for the mod's next GET.
 - When the lease lapses with nobody attached, the asking hook is gone: the sweeper
   (every 5 s) resolves the row `resolved_elsewhere` via `terminal`, the same record the
-  shim's client-disconnect leaves. A dashboard decision on such a row is `410`.
+  shim's client-disconnect leaves. A dashboard decision on such a row is `410`. A mod
+  that gives up says so at once with `DELETE` (above) instead of letting the lease run
+  out.
 - A kept decision is held for 80 s (2 × the lease); after that, or after a daemon
   restart, a GET rebuilds it from the row. An `AskUserQuestion` answer is not stored
   in the row, so a GET that comes that late sees a plain `allow`. A healthy mod polls
@@ -459,26 +481,39 @@ decision. The mod polls in GETs with gaps between them, so it claims its row wit
   included; the mod's next GET reads `pass`/`expired`.
 
 The mod should race each GET against a 28 s timer (`$.http.fetch` has no timeout),
-check `next.signal.aborted` after every fetch, stop at `expiresAt`, and fall through to
+check `next.signal.aborted` after every fetch (and `DELETE` the request when it is),
+stop at `expiresAt`, and fall through to
 `next(e)` on any network error or `5xx` (fail open to the shim, never to `deny`).
 
 ### Shim after mod
 
-When the mod returns `next(e)` after a `pass`, the engine may show its permission
-dialog and fire the shim's `PermissionRequest` hook for the **same** call. The shim's
-stdin has no `tool_use_id`, so the daemon matches it by dedup hash:
+When the mod returns `next(e)` without a decision of its own, the engine may show its
+permission dialog and fire the shim's `PermissionRequest` hook for the **same** call:
+after a `pass` from `tool.check`, and on the `AskUserQuestion` path after an `allow`
+that carries no answer (`tool.call` wraps the permission stage, `mods-format.md` M4).
+The shim's stdin has no `tool_use_id`, so the daemon matches it by dedup hash:
 
 - a **pending** row with that hash (the mod is still asking): the shim attaches to it
   and waits on the same row. One row, and one dashboard decision reaches both;
-- a `channel = 'mod'` row with that hash resolved `expired` or `resolved_elsewhere`
-  in the **last 5 s** (`approvals.ShimAfterModWindow`): the shim's long-poll answers
-  `204` at once, no row and no event are written, and Claude Code shows its native
-  dialog. `204` is a response the frozen shim protocol already allows;
-- otherwise (no match, or the hand-back is older than 5 s): the shim opens its own
-  row as always.
+- a `channel = 'mod'` row with that hash that reached **any** terminal status in the
+  **last 5 s** (`approvals.ShimAfterModWindow`): the shim's long-poll is answered at
+  once **from that row** — no row and no event are written:
 
-An approved or denied mod row never triggers the window: the engine runs the tool or
-reports the denial, and no shim request follows.
+  | Mod row | Shim answer |
+  |---|---|
+  | `denied` | `200 {"decision":"deny","message":<the row's reason>}` |
+  | `approved` with an answer's `updatedInput` (kept for the mod's next poll) | the allow + `updatedInput`, delivered per `serve --answer-delivery` exactly like a dashboard answer on a shim row |
+  | `approved` without one, on an `AskUserQuestion` row | `204`: a plain allow would resolve the question with empty answers (`hooks-format.md` E12d), so the native dialog asks |
+  | `approved` on any other tool | `200 {"decision":"allow"}` |
+  | `expired`, `resolved_elsewhere` | `204`: Claude Code shows its native dialog |
+
+  Every one of these is a response the frozen shim protocol already allows;
+- otherwise (no match, or the decision is older than 5 s): the shim opens its own row
+  as always.
+
+The mod itself returns a refusal for a dashboard deny of a question (`{ deny }` from
+`tool.call`), so a deny normally fires no shim request; the window is what keeps the
+operator's decision when one does.
 
 **Parallel subagents.** The dedup hash carries no `agentId` (the shim cannot see one,
 E11), so two subagents asking the identical call at the same moment share one row and

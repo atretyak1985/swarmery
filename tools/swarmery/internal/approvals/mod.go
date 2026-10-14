@@ -14,7 +14,8 @@
 // reached while the mod is between polls is kept in modDecided for its next
 // GET. A lapsed lease with nobody attached means the asking hook is gone:
 // Sweep resolves the row resolved_elsewhere via 'terminal', the same meaning
-// as the shim's Detach.
+// as the shim's Detach. A mod that gives up mid-wait says so at once
+// (CancelMod) rather than leaving the lease to lapse.
 package approvals
 
 import (
@@ -43,15 +44,70 @@ const ModLeaseTTL = 40 * time.Second
 // ModMaxWait caps one mod poll (GET /api/link/permission/{id}?wait=).
 const ModMaxWait = 25 * time.Second
 
-// ShimAfterModWindow is how long after the mod handed a call back to the
-// engine (its row resolved expired / resolved_elsewhere) a shim request for
-// the same call is answered "no decision" at once instead of opening a row.
+// ShimAfterModWindow is how long after a channel='mod' row reached a terminal
+// status a shim request for the same call is answered from that row at once
+// (shimDecisionAfterMod) instead of opening a row of its own.
 const ShimAfterModWindow = 5 * time.Second
 
 // modDecision is a decision kept for the mod's next poll, stamped for pruning.
 type modDecision struct {
 	d  Decision
 	at time.Time
+}
+
+// recentModDecisionLocked finds the channel='mod' row with this hash that
+// reached any terminal status within ShimAfterModWindow, and the decision a
+// shim request for the same call takes from it (index idx_pr_mod_hash). The
+// mod has just handed this very call back to the engine, whose permission
+// stage now fires the shim: the operator's decision on the mod's row — a deny
+// included — answers it rather than a second row.
+func (s *Service) recentModDecisionLocked(hash string) (int64, Decision, bool, error) {
+	since := s.opt.Now().UTC().Add(-ShimAfterModWindow).Format(tsFormat)
+	var id int64
+	var toolName string
+	err := s.db.QueryRow(
+		`SELECT id, tool_name FROM permission_requests
+		 WHERE channel = ? AND dedup_hash = ? AND resolved_at >= ?
+		   AND status IN (?, ?, ?, ?)
+		 ORDER BY resolved_at DESC, id DESC LIMIT 1`,
+		ChannelMod, hash, since,
+		StatusApproved, StatusDenied, StatusExpired, StatusResolvedElsewhere).Scan(&id, &toolName)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return 0, Decision{}, false, nil
+	case err != nil:
+		return 0, Decision{}, false, err
+	}
+	d, err := s.terminalDecisionLocked(id)
+	if err != nil {
+		return 0, Decision{}, false, err
+	}
+	return id, shimDecisionAfterMod(d, toolName), true, nil
+}
+
+// shimDecisionAfterMod maps a mod row's terminal decision onto what the
+// shim's long-poll answers for the same call:
+//
+//   - denied → the deny, with the row's reason;
+//   - approved with an answer's UpdatedInput (kept in modDecided) → the
+//     allow + updatedInput, which the handler delivers per --answer-delivery;
+//   - approved without one on an AskUserQuestion row → no decision (204): a
+//     plain allow would resolve the question with empty answers (E12d), so the
+//     native dialog asks;
+//   - approved on any other tool → the allow;
+//   - expired / resolved_elsewhere → no decision (204), the native dialog.
+func shimDecisionAfterMod(d Decision, toolName string) Decision {
+	switch d.Status {
+	case StatusDenied:
+		return Decision{Status: StatusDenied, Reason: d.Reason, Via: d.Via}
+	case StatusApproved:
+		if len(d.UpdatedInput) == 0 && toolName == AskUserQuestionTool {
+			return Decision{Status: StatusResolvedElsewhere}
+		}
+		return d
+	default:
+		return Decision{Status: StatusResolvedElsewhere}
+	}
 }
 
 // hasWaiterLocked: a long-poll is attached to id, or the mod holds a live
@@ -215,12 +271,16 @@ func (s *Service) WaitMod(ctx context.Context, id int64, sessionUUID string, wai
 		return Decision{}, true, nil
 	}
 	ch := s.attachLocked(id)
+	s.modPolls[ch] = struct{}{}
 	s.mu.Unlock()
 
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
 	select {
 	case d = <-ch:
+		s.mu.Lock()
+		delete(s.modPolls, ch)
+		s.mu.Unlock()
 		return d, false, nil
 	case <-ctx.Done():
 	case <-timer.C:
@@ -228,6 +288,9 @@ func (s *Service) WaitMod(ctx context.Context, id int64, sessionUUID string, wai
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	delete(s.modPolls, ch)
+	// CancelMod took this poll off the row (the mod gave up): it is no longer
+	// a waiter, and its end must not renew the dropped lease — fall through.
 	if set, ok := s.waiters[id]; ok {
 		if _, mine := set[ch]; mine {
 			delete(set, ch)
@@ -246,6 +309,54 @@ func (s *Service) WaitMod(ctx context.Context, id int64, sessionUUID string, wai
 	default:
 		return Decision{}, true, nil
 	}
+}
+
+// CancelMod is the mod giving up on row id (its hook's dispatch was
+// abandoned: the person interrupted, or a hook above settled first). It
+// verifies the row belongs to sessionUUID (else ErrNotFound) and is a no-op on
+// a terminal row. On a pending row it drops every claim of the mod — its lease
+// and its own in-flight polls, which then end without renewing it — and then:
+//
+//   - a shim long-poll still waits on the row: nothing more, the shim's own
+//     decision or Detach settles it;
+//   - nobody else waits: the row resolves resolved_elsewhere via 'terminal'
+//     at once, exactly what a lapsed lease would record ~40 s later, so a
+//     dashboard decision no longer lands on a row no hook will read.
+func (s *Service) CancelMod(id int64, sessionUUID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var status string
+	err := s.db.QueryRow(
+		`SELECT pr.status FROM permission_requests pr
+		 JOIN sessions se ON se.id = pr.session_id
+		 WHERE pr.id = ? AND se.session_uuid = ?`,
+		id, sessionUUID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status != StatusPending {
+		return nil
+	}
+	delete(s.leases, id)
+	if set, ok := s.waiters[id]; ok {
+		for ch := range set {
+			if _, isMod := s.modPolls[ch]; isMod {
+				delete(set, ch)
+			}
+		}
+		if len(set) > 0 {
+			return nil
+		}
+		delete(s.waiters, id)
+	}
+	err = s.resolveLocked(id, StatusResolvedElsewhere, "terminal", "", nil)
+	if errors.Is(err, ErrAlreadyResolved) {
+		return nil
+	}
+	return err
 }
 
 // sweepLeases is Sweep's mod pass: a pending row whose lease lapsed with

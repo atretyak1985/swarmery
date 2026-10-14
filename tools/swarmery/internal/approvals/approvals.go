@@ -156,6 +156,10 @@ type Service struct {
 	// (it may be between two GETs when the dashboard decides). Pruned by
 	// Sweep after 2×ModLeaseTTL.
 	modDecided map[int64]modDecision
+	// modPolls marks the waiter channels a mod GET (WaitMod) attached, so
+	// CancelMod can tell the mod's own in-flight polls from a shim's long-poll
+	// on the same row. Every WaitMod removes its own entry on return.
+	modPolls map[chan Decision]struct{}
 
 	hbMu     sync.Mutex
 	lastSeen time.Time // most recent POST /api/hooks/* (in-memory heartbeat;
@@ -182,6 +186,7 @@ func New(db *sql.DB, bus *ingest.Bus, opt Options) *Service {
 		waiters:    map[int64]map[chan Decision]struct{}{},
 		leases:     map[int64]time.Time{},
 		modDecided: map[int64]modDecision{},
+		modPolls:   map[chan Decision]struct{}{},
 	}
 }
 
@@ -309,11 +314,12 @@ func CanonicalJSON(raw json.RawMessage) (string, error) {
 // receive from it (decision/expiry); Resolve drops all attached waiters.
 //
 // Shim after mod (mods-link phase 5): when no pending row matches but a
-// channel='mod' row with the same hash was resolved expired or
-// resolved_elsewhere within ShimAfterModWindow, the mod has just handed this
-// very call back to the engine. Open then answers at once with a
-// resolved_elsewhere Decision on a buffered channel — no new row, no events —
-// so the long-poll answers 204 and the shim fails open to the native dialog.
+// channel='mod' row with the same hash reached any terminal status within
+// ShimAfterModWindow, the mod has just handed this very call back to the
+// engine. Open then answers at once with that row's decision on a buffered
+// channel (shimDecisionAfterMod: a deny as the deny, an answer as the allow +
+// updatedInput, anything without a usable decision as resolved_elsewhere →
+// 204) — no new row, no events.
 func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, err error) {
 	hash, err := DedupHash(in.SessionUUID, in.ToolName, in.ToolInput)
 	if err != nil {
@@ -334,13 +340,13 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 		return id, s.attachLocked(id), false, nil
 	}
 
-	modID, handedBack, err := s.recentModHandBackLocked(hash)
+	modID, afterMod, handedBack, err := s.recentModDecisionLocked(hash)
 	if err != nil {
 		return 0, nil, false, err
 	}
 	if handedBack {
 		ch = make(chan Decision, 1)
-		ch <- Decision{Status: StatusResolvedElsewhere}
+		ch <- afterMod
 		return modID, ch, false, nil
 	}
 
@@ -357,29 +363,6 @@ func (s *Service) pendingByHashLocked(hash string) (int64, bool, error) {
 	err := s.db.QueryRow(
 		`SELECT id FROM permission_requests WHERE dedup_hash = ? AND status = 'pending'`,
 		hash).Scan(&id)
-	switch {
-	case err == nil:
-		return id, true, nil
-	case errors.Is(err, sql.ErrNoRows):
-		return 0, false, nil
-	default:
-		return 0, false, err
-	}
-}
-
-// recentModHandBackLocked finds a channel='mod' row with this hash that was
-// resolved expired or resolved_elsewhere within ShimAfterModWindow — the mod
-// passed the call back to the engine, whose native dialog the shim now
-// reports (index idx_pr_mod_hash).
-func (s *Service) recentModHandBackLocked(hash string) (int64, bool, error) {
-	since := s.opt.Now().UTC().Add(-ShimAfterModWindow).Format(tsFormat)
-	var id int64
-	err := s.db.QueryRow(
-		`SELECT id FROM permission_requests
-		 WHERE channel = ? AND dedup_hash = ? AND resolved_at >= ?
-		   AND status IN (?, ?)
-		 ORDER BY resolved_at DESC, id DESC LIMIT 1`,
-		ChannelMod, hash, since, StatusExpired, StatusResolvedElsewhere).Scan(&id)
 	switch {
 	case err == nil:
 		return id, true, nil
