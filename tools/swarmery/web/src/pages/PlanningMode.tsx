@@ -164,7 +164,9 @@ export function PlanningMode(): JSX.Element {
   const [refineOpen, setRefineOpen] = useState(false);
   // Done-state escape hatch: the plan landed and the user wants another one.
   // Re-opens the intake under the "Plan ready" card without losing the link
-  // to the plan that just shipped.
+  // to the plan that just shipped. Also the ONLY way out of a finished revise
+  // wizard: its row stays the project's newest wizard (Apply/Reject never touch
+  // planning_sessions), so without this the intake would stay hidden for good.
   const [newPlanMode, setNewPlanMode] = useState(false);
   // 1s tick that drives the elapsed timer while the planner is thinking.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -283,12 +285,20 @@ export function PlanningMode(): JSX.Element {
     };
   }, [projectId, dbSlug, wstatus, plan, status?.startedAt, isRevise]);
 
-  // The "start another plan" intake belongs to the done state only — once a new
-  // run (or any other status) takes over, drop the flag so the normal branches
-  // decide what renders.
+  // The "start another plan" intake belongs to a finished wizard only — a done
+  // plan, or a revise wizard in any terminal state (done/failed/cancelled). Once
+  // a new run takes over, drop the flag so the normal branches decide what renders.
   useEffect(() => {
-    if (wstatus !== 'done') setNewPlanMode(false);
-  }, [wstatus]);
+    if (wizardOpen || (!isRevise && wstatus !== 'done')) setNewPlanMode(false);
+  }, [wizardOpen, isRevise, wstatus]);
+
+  const openNewPlanIntake = (): void => {
+    setIdea('');
+    setError(null);
+    setNewPlanMode(true);
+    // Let the intake mount before we reach for it.
+    window.setTimeout(() => ideaRef.current?.focus(), 0);
+  };
 
   // The plan a revise wizard is revising, for the banner (title + link).
   const [reviseTask, setReviseTask] = useState<TaskSummary | null>(null);
@@ -535,8 +545,9 @@ export function PlanningMode(): JSX.Element {
 
   // Idle, cancelled AND failed all land here — failed shows the error card
   // above an intake prefilled with the same idea. A revise wizard never shows
-  // the intake: revise sessions start from the Plans page, not from an idea box.
-  const showIntake = !isRevise && !wizardOpen && (wstatus !== 'done' || newPlanMode);
+  // the intake on its own (revise sessions start from the Plans page, not from an
+  // idea box) — only once the operator asks for a new plan from the banner.
+  const showIntake = !wizardOpen && (isRevise ? newPlanMode : wstatus !== 'done' || newPlanMode);
 
   /** The page's own `⛶ expand` trigger — <ExpandButton> in this page's skin.
    *
@@ -663,7 +674,7 @@ export function PlanningMode(): JSX.Element {
 
       {/* REVISE banner — above whatever card the wizard state renders, so at
           every step the operator knows this interview edits nothing directly. */}
-      {isRevise && (
+      {isRevise && !newPlanMode && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber/40 bg-amber/5 px-3 py-2">
           <span className="rounded border border-amber/40 bg-amber/10 px-1.5 py-px font-mono text-[9.5px] text-amber">
             <Trans>revising</Trans>
@@ -686,6 +697,17 @@ export function PlanningMode(): JSX.Element {
             )}{' '}
             <Trans>— nothing is written until you approve the diff.</Trans>
           </span>
+          {/* A finished revise wizard is still the project's newest wizard, so
+              this is the only door back to the idea intake. */}
+          {!wizardOpen && (
+            <button
+              type="button"
+              onClick={openNewPlanIntake}
+              className="ml-auto rounded-lg border border-brand/45 bg-brand/12 px-3 py-1 font-mono text-[11px] font-semibold text-brand transition-colors hover:bg-brand/20"
+            >
+              <Trans>Start another plan</Trans>
+            </button>
+          )}
         </div>
       )}
 
@@ -722,7 +744,7 @@ export function PlanningMode(): JSX.Element {
           intake. "keep the plan card" brings it back. */}
       {/* DONE (revise) — no plan was saved: the proposal sits STAGED behind the
           plan's Revisions tab, and the review is the only next step offered. */}
-      {wstatus === 'done' && isRevise && (
+      {wstatus === 'done' && isRevise && !newPlanMode && (
         <Card>
           <div className="flex flex-wrap items-center gap-2.5">
             <span
@@ -813,13 +835,7 @@ export function PlanningMode(): JSX.Element {
               )}
               <button
                 type="button"
-                onClick={() => {
-                  setIdea('');
-                  setError(null);
-                  setNewPlanMode(true);
-                  // Let the intake mount before we reach for it.
-                  window.setTimeout(() => ideaRef.current?.focus(), 0);
-                }}
+                onClick={openNewPlanIntake}
                 className="rounded-lg border border-brand/45 bg-brand/12 px-3 py-1 font-mono text-[11px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:opacity-50"
               >
                 <Trans>Start another plan</Trans>
