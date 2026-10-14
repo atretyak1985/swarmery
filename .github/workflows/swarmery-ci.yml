@@ -11,6 +11,11 @@ on:
       - 'plugins/core/hooks/lib/prod-deploy-patterns.txt'
       - 'plugins/core/hooks/prod-deploy-guard.sh'
       - 'scripts/tests/fixtures/prod-deploy-patterns/**'
+      # internal/approvals/guardpack_parity_test.go and
+      # internal/api/redact_parity_test.go read guard-pack's pattern files and
+      # their TS mirrors: a change to either side must run those tests.
+      - 'plugins/guard-pack/hooks/patterns/**'
+      - 'plugins/guard-pack/hooks/testkit.ts'
   pull_request:
     branches: [main, 'feat/**']
     paths:
@@ -21,6 +26,11 @@ on:
       - 'plugins/core/hooks/lib/prod-deploy-patterns.txt'
       - 'plugins/core/hooks/prod-deploy-guard.sh'
       - 'scripts/tests/fixtures/prod-deploy-patterns/**'
+      # internal/approvals/guardpack_parity_test.go and
+      # internal/api/redact_parity_test.go read guard-pack's pattern files and
+      # their TS mirrors: a change to either side must run those tests.
+      - 'plugins/guard-pack/hooks/patterns/**'
+      - 'plugins/guard-pack/hooks/testkit.ts'
 
 defaults:
   run:
