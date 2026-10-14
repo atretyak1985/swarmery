@@ -53,7 +53,7 @@ type Upserted struct {
 }
 
 // Upsert stores one half in its own transaction. See UpsertTx.
-func (s *Store) Upsert(ctx context.Context, sessionID int64, turnSeq int, half Half, at string, payload []byte) (Upserted, error) {
+func (s *Store) Upsert(ctx context.Context, sessionID int64, runID string, turnSeq int, half Half, at string, payload []byte) (Upserted, error) {
 	if s.DB == nil {
 		return Upserted{}, errors.New("turnforecast: no database")
 	}
@@ -62,7 +62,7 @@ func (s *Store) Upsert(ctx context.Context, sessionID int64, turnSeq int, half H
 		return Upserted{}, fmt.Errorf("turnforecast: begin: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
-	u, err := s.UpsertTx(ctx, tx, sessionID, turnSeq, half, at, payload)
+	u, err := s.UpsertTx(ctx, tx, sessionID, runID, turnSeq, half, at, payload)
 	if err != nil {
 		return Upserted{}, err
 	}
@@ -72,15 +72,23 @@ func (s *Store) Upsert(ctx context.Context, sessionID int64, turnSeq int, half H
 	return u, nil
 }
 
-// UpsertTx stores one half of turn (sessionID, turnSeq) through q. payload is
-// the raw event payload (validated here again; it is stored verbatim). at is
-// the event's time in TSFormat. Re-sending a half replaces it. When both halves
-// are present after the write, the row is (re)scored in the same statement;
-// otherwise surprise and vector are NULL.
+// UpsertTx stores one half of turn (sessionID, runID, turnSeq) through q.
+// payload is the raw event payload (validated here again; it is stored
+// verbatim). at is the event's time in TSFormat. Re-sending a half of the same
+// (session, run, turn) replaces it. When both halves are present after the
+// write, the row is (re)scored in the same statement; otherwise surprise and
+// vector are NULL.
+//
+// runID is part of the key because the mod restarts turnSeq at every
+// session.start, /clear and resume, and a `--resume` keeps the session id: a
+// new run's turn 1 is a new row, never an overwrite of the old run's turn 1.
 //
 // started_at is the forecast's at once a forecast is present, else the
 // actual's. model and forecast_tokens come from the forecast half.
-func (s *Store) UpsertTx(ctx context.Context, q Querier, sessionID int64, turnSeq int, half Half, at string, payload []byte) (Upserted, error) {
+func (s *Store) UpsertTx(ctx context.Context, q Querier, sessionID int64, runID string, turnSeq int, half Half, at string, payload []byte) (Upserted, error) {
+	if !runIDPattern.MatchString(runID) {
+		return Upserted{}, fmt.Errorf("turnforecast: invalid run id %q", runID)
+	}
 	switch half {
 	case HalfForecast:
 		if _, err := ParseForecast(payload); err != nil {
@@ -99,8 +107,8 @@ func (s *Store) UpsertTx(ctx context.Context, q Querier, sessionID int64, turnSe
 		startedAt    sql.NullString
 	)
 	err := q.QueryRowContext(ctx,
-		`SELECT forecast, actual, started_at FROM turn_forecasts WHERE session_id = ? AND turn_seq = ?`,
-		sessionID, turnSeq).Scan(&fcRaw, &acRaw, &startedAt)
+		`SELECT forecast, actual, started_at FROM turn_forecasts WHERE session_id = ? AND run_id = ? AND turn_seq = ?`,
+		sessionID, runID, turnSeq).Scan(&fcRaw, &acRaw, &startedAt)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Upserted{}, fmt.Errorf("turnforecast: read turn: %w", err)
 	}
@@ -151,14 +159,14 @@ func (s *Store) UpsertTx(ctx context.Context, q Querier, sessionID int64, turnSe
 	}
 
 	err = q.QueryRowContext(ctx, `
-		INSERT INTO turn_forecasts (session_id, turn_seq, started_at, forecast, actual, surprise, vector, model, forecast_tokens)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(session_id, turn_seq) DO UPDATE SET
+		INSERT INTO turn_forecasts (session_id, run_id, turn_seq, started_at, forecast, actual, surprise, vector, model, forecast_tokens)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(session_id, run_id, turn_seq) DO UPDATE SET
 		  started_at = excluded.started_at, forecast = excluded.forecast, actual = excluded.actual,
 		  surprise = excluded.surprise, vector = excluded.vector,
 		  model = excluded.model, forecast_tokens = excluded.forecast_tokens
 		RETURNING id`,
-		sessionID, turnSeq, startedAt.String, nullable(fcRaw), nullable(acRaw), surprise, vector, model, tokens,
+		sessionID, runID, turnSeq, startedAt.String, nullable(fcRaw), nullable(acRaw), surprise, vector, model, tokens,
 	).Scan(&out.ID)
 	if err != nil {
 		return Upserted{}, fmt.Errorf("turnforecast: upsert turn: %w", err)
@@ -288,6 +296,7 @@ type Turn struct {
 	SessionID   int64   `json:"sessionId"`
 	SessionUUID *string `json:"sessionUuid"`
 	ProjectID   *int64  `json:"projectId"`
+	RunID       string  `json:"runId"`
 	TurnSeq     int     `json:"turnSeq"`
 	StartedAt   string  `json:"startedAt"`
 	Surprise    float64 `json:"surprise"`
@@ -296,7 +305,7 @@ type Turn struct {
 }
 
 const turnSelect = `
-	SELECT tf.id, tf.session_id, s.session_uuid, s.project_id, tf.turn_seq, tf.started_at,
+	SELECT tf.id, tf.session_id, s.session_uuid, s.project_id, tf.run_id, tf.turn_seq, tf.started_at,
 	       tf.surprise, COALESCE(json_extract(tf.vector, '$.top'), ''), COALESCE(tf.model, '')
 	  FROM turn_forecasts tf LEFT JOIN sessions s ON s.id = tf.session_id`
 
@@ -306,7 +315,7 @@ func scanTurn(scan func(...any) error) (Turn, error) {
 		uuid    sql.NullString
 		project sql.NullInt64
 	)
-	if err := scan(&t.ID, &t.SessionID, &uuid, &project, &t.TurnSeq, &t.StartedAt, &t.Surprise, &t.Top, &t.Model); err != nil {
+	if err := scan(&t.ID, &t.SessionID, &uuid, &project, &t.RunID, &t.TurnSeq, &t.StartedAt, &t.Surprise, &t.Top, &t.Model); err != nil {
 		return Turn{}, err
 	}
 	if uuid.Valid {

@@ -3,7 +3,7 @@ package store
 import "testing"
 
 // TestMigrate0113AddsTurnForecasts: the turn-forecast table lands keyed one row
-// per (session, turn), with the started_at index, and a half row (forecast
+// per (session, run, turn), with the started_at index, and a half row (forecast
 // only) keeps surprise/vector NULL — "not scored" is never "scored zero".
 func TestMigrate0113AddsTurnForecasts(t *testing.T) {
 	db := openRaw(t)
@@ -18,7 +18,7 @@ func TestMigrate0113AddsTurnForecasts(t *testing.T) {
 		t.Errorf("migration 113 name: want 0113_turn_forecasts.sql, got %s", name)
 	}
 	mustHaveColumns(t, db, "turn_forecasts",
-		"id", "session_id", "turn_seq", "started_at", "forecast", "actual",
+		"id", "session_id", "run_id", "turn_seq", "started_at", "forecast", "actual",
 		"surprise", "vector", "model", "forecast_tokens")
 
 	var n int
@@ -29,16 +29,23 @@ func TestMigrate0113AddsTurnForecasts(t *testing.T) {
 		t.Error("idx_turn_forecasts_started missing")
 	}
 
-	ins := `INSERT INTO turn_forecasts (session_id, turn_seq, started_at, forecast)
-		VALUES (1, 1, '2026-10-14T00:00:00.000Z', '{}')`
-	if _, err := db.Exec(ins); err != nil {
+	ins := `INSERT INTO turn_forecasts (session_id, run_id, turn_seq, started_at, forecast)
+		VALUES (1, ?, 1, '2026-10-14T00:00:00.000Z', '{}')`
+	if _, err := db.Exec(ins, "run-a"); err != nil {
 		t.Fatalf("first insert: %v", err)
 	}
-	if _, err := db.Exec(ins); err == nil {
-		t.Fatal("second insert for the same (session, turn) succeeded; want a UNIQUE conflict")
+	if _, err := db.Exec(ins, "run-a"); err == nil {
+		t.Fatal("second insert for the same (session, run, turn) succeeded; want a UNIQUE conflict")
+	}
+	// A resumed run of the same session restarts turn_seq at 1 under its own run_id.
+	if _, err := db.Exec(ins, "run-b"); err != nil {
+		t.Fatalf("same (session, turn) under another run_id: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO turn_forecasts (session_id, turn_seq, started_at) VALUES (2, 1, '2026-10-14T00:00:00.000Z')`); err == nil {
+		t.Fatal("insert without run_id succeeded; want NOT NULL")
 	}
 	var surprise, vector any
-	if err := db.QueryRow(`SELECT surprise, vector FROM turn_forecasts WHERE session_id = 1`).Scan(&surprise, &vector); err != nil {
+	if err := db.QueryRow(`SELECT surprise, vector FROM turn_forecasts WHERE session_id = 1 AND run_id = 'run-a'`).Scan(&surprise, &vector); err != nil {
 		t.Fatal(err)
 	}
 	if surprise != nil || vector != nil {

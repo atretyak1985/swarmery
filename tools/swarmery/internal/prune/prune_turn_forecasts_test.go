@@ -22,11 +22,11 @@ func TestPrune_TurnForecastsAgeOnTheCutoff(t *testing.T) {
 				t.Fatalf("open store: %v", err)
 			}
 			t.Cleanup(func() { db.Close() })
-			if _, err := db.Exec(`INSERT INTO turn_forecasts (session_id, turn_seq, started_at, forecast, actual, surprise) VALUES
-				(1, 1, '2026-01-01T00:00:00.000Z', '{}', '{}', 0.4),
-				(1, 2, '2026-05-31T23:59:59.999Z', '{}', NULL, NULL),
-				(2, 1, '2026-06-01T00:00:00.000Z', '{}', '{}', 0.1),
-				(2, 2, '2026-09-01T00:00:00.000Z', NULL, '{}', NULL)`); err != nil {
+			if _, err := db.Exec(`INSERT INTO turn_forecasts (session_id, run_id, turn_seq, started_at, forecast, actual, surprise) VALUES
+				(1, 'r1', 1, '2026-01-01T00:00:00.000Z', '{}', '{}', 0.4),
+				(1, 'r1', 2, '2026-05-31T23:59:59.999Z', '{}', NULL, NULL),
+				(2, 'r2', 1, '2026-06-01T00:00:00.000Z', '{}', '{}', 0.1),
+				(2, 'r2', 2, '2026-09-01T00:00:00.000Z', NULL, '{}', NULL)`); err != nil {
 				t.Fatalf("seed: %v", err)
 			}
 

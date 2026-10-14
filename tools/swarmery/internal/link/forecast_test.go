@@ -11,8 +11,8 @@ import (
 
 const (
 	tfUUID     = "7d1c0f8e-9a2b-4c3d-8e4f-5a6b7c8d9e0f"
-	tfForecast = `{"turnSeq":1,"files":["a.go","b.go"],"testsPass":true,"steps":4,"confidence":0.8,"model":"haiku","forecastTokens":180}`
-	tfActual   = `{"turnSeq":1,"files":["a.go","c.go","d.go","e.go"],"testsRan":true,"testsPass":false,"steps":8}`
+	tfForecast = `{"runId":"1760436000000-a1b2","turnSeq":1,"files":["a.go","b.go"],"testsPass":true,"steps":4,"confidence":0.8,"model":"haiku","forecastTokens":180}`
+	tfActual   = `{"runId":"1760436000000-a1b2","turnSeq":1,"files":["a.go","c.go","d.go","e.go"],"testsRan":true,"testsPass":false,"steps":8}`
 )
 
 func turnEvent(kind, at, payload string) Event {
@@ -101,14 +101,16 @@ func TestIngestTurnHalvesAcrossBatches(t *testing.T) {
 func TestIngestTurnPayloadRejects(t *testing.T) {
 	db := testDB(t)
 	res := mustIngest(t, db, nil, []Event{
-		turnEvent(KindTurnForecast, "2026-10-14T10:00:00Z", `{"turnSeq":0}`),
-		turnEvent(KindTurnActual, "2026-10-14T10:00:01Z", `{"turnSeq":1,"steps":2}`),
+		turnEvent(KindTurnForecast, "2026-10-14T10:00:00Z", `{"runId":"r1","turnSeq":0}`),
+		turnEvent(KindTurnActual, "2026-10-14T10:00:01Z", `{"runId":"r1","turnSeq":1,"steps":2}`),
 		{SessionID: tfUUID, Cwd: "/work/tf", Kind: KindTurnForecast, At: "2026-10-14T10:00:02Z"},
-		turnEvent(KindTurnForecast, "2026-10-14T10:00:03Z", `{"turnSeq":1,"confidence":7}`),
+		turnEvent(KindTurnForecast, "2026-10-14T10:00:03Z", `{"runId":"r1","turnSeq":1,"confidence":7}`),
 		turnEvent(KindTurnStart, "2026-10-14T10:00:04Z", ``),
+		turnEvent(KindTurnForecast, "2026-10-14T10:00:05Z", `{"turnSeq":1}`),
+		turnEvent(KindTurnActual, "2026-10-14T10:00:06Z", `{"runId":"no spaces allowed","turnSeq":1,"testsRan":false,"steps":0}`),
 	})
-	if res.Accepted != 1 || res.Rejected != 4 {
-		t.Fatalf("result = %+v, want 1 accepted, 4 rejected", res)
+	if res.Accepted != 1 || res.Rejected != 6 {
+		t.Fatalf("result = %+v, want 1 accepted, 6 rejected", res)
 	}
 	for _, rj := range res.Rejects {
 		if !strings.HasPrefix(rj.Reason, "turn.forecast payload: ") && !strings.HasPrefix(rj.Reason, "turn.actual payload: ") {
@@ -118,8 +120,53 @@ func TestIngestTurnPayloadRejects(t *testing.T) {
 	if !strings.Contains(res.Rejects[1].Reason, "testsRan is required") {
 		t.Errorf("reject[1] = %q", res.Rejects[1].Reason)
 	}
+	if !strings.Contains(res.Rejects[4].Reason, "runId is required") || !strings.Contains(res.Rejects[5].Reason, "runId must be") {
+		t.Errorf("runId rejects = %q / %q", res.Rejects[4].Reason, res.Rejects[5].Reason)
+	}
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM turn_forecasts`).Scan(&n); err != nil || n != 0 {
 		t.Errorf("turn_forecasts rows = %d (%v), want 0", n, err)
+	}
+}
+
+// A `--resume` keeps the session id and the mod counts from 1 again under a
+// new runId: the resumed run's halves make a second row and leave the first
+// run's halves and score untouched.
+func TestIngestTurnResumedRunIsASecondRow(t *testing.T) {
+	db := testDB(t)
+	rec := &recorder{}
+	mustIngest(t, db, rec.publish, []Event{
+		turnEvent(KindTurnForecast, "2026-10-14T10:00:00Z", tfForecast),
+		turnEvent(KindTurnActual, "2026-10-14T10:00:30Z", tfActual),
+	})
+	var before string
+	if err := db.QueryRow(`SELECT forecast || '|' || actual || '|' || surprise || '|' || vector FROM turn_forecasts`).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	res := mustIngest(t, db, rec.publish, []Event{
+		turnEvent(KindTurnForecast, "2026-10-14T11:00:00Z", `{"runId":"1760439600000-z9y8","turnSeq":1,"files":["q.go"],"steps":1}`),
+		turnEvent(KindTurnActual, "2026-10-14T11:00:30Z", `{"runId":"1760439600000-z9y8","turnSeq":1,"files":["q.go"],"testsRan":false,"steps":1}`),
+	})
+	if res.Accepted != 2 || res.Rejected != 0 {
+		t.Fatalf("resumed run result = %+v", res)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM turn_forecasts`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("rows = %d (%v), want 2", n, err)
+	}
+	var after string
+	if err := db.QueryRow(`SELECT forecast || '|' || actual || '|' || surprise || '|' || vector FROM turn_forecasts
+		WHERE run_id = '1760436000000-a1b2'`).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Errorf("the first run's row changed:\n%s\n%s", before, after)
+	}
+	var s2 sql.NullFloat64
+	if err := db.QueryRow(`SELECT surprise FROM turn_forecasts WHERE run_id = '1760439600000-z9y8'`).Scan(&s2); err != nil || !s2.Valid || s2.Float64 != 0 {
+		t.Errorf("resumed row surprise = %v (%v), want 0", s2, err)
+	}
+	if got := countNotes(rec.notes, ingest.NoteTurnSurprise); got != 2 {
+		t.Errorf("turn_surprise notes = %d, want 2", got)
 	}
 }

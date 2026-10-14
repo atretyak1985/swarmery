@@ -5,7 +5,7 @@
 -- (files, tests pass, steps, confidence) and sends it as a `turn.forecast` link
 -- event; on turn.complete it sends what its own tool.call journal saw as a
 -- `turn.actual`. Both arrive through POST /api/link/events (internal/link) and
--- land here as two HALVES of one row keyed (session_id, turn_seq).
+-- land here as two HALVES of one row keyed (session_id, run_id, turn_seq).
 -- internal/turnforecast scores the row — a deterministic surprise vector plus
 -- one index 0..1, the same design as phase_surprise (0082) — the moment both
 -- halves are present. No LLM is involved in the scoring.
@@ -17,6 +17,14 @@
 --
 -- PRIVACY. forecast/actual hold paths and numbers only — never prompt text, tool
 -- input or model reply text (docs/mods-link-protocol.md, Forecast).
+--
+-- WHY run_id IN THE KEY. turn_seq is the mod's counter, and the mod restarts it
+-- at every session.start, /clear and in-process resume. session.start fires
+-- again on `--resume` with the SAME session id, so (session_id, turn_seq) alone
+-- is not unique: a resumed run's turn 1 would overwrite the first run's turn 1
+-- and rescore a stale pair (headless `-p --resume` lands every message on row
+-- 1). The mod mints a fresh run_id each time it restarts the counter and stamps
+-- it on both halves; one row per (session, run, turn).
 --
 -- started_at is the `at` of the turn.forecast, else of the turn.actual (fixed-
 -- width ms UTC, the link's tsFormat) — the retention and window key.
@@ -35,7 +43,8 @@
 CREATE TABLE IF NOT EXISTS turn_forecasts (
   id              INTEGER PRIMARY KEY,
   session_id      INTEGER NOT NULL,  -- sessions.id (no FK, see above)
-  turn_seq        INTEGER NOT NULL,  -- the mod's main-loop turn counter (≥ 1, reset on /clear)
+  run_id          TEXT    NOT NULL,  -- the mod's counter run: minted at session.start, /clear, resume
+  turn_seq        INTEGER NOT NULL,  -- the mod's main-loop turn counter within run_id (≥ 1)
   started_at      TEXT    NOT NULL,  -- at of the turn.forecast, else of the turn.actual
   forecast        TEXT,              -- turn.forecast payload, JSON; NULL until it arrives
   actual          TEXT,              -- turn.actual payload, JSON; NULL until it arrives
@@ -43,7 +52,7 @@ CREATE TABLE IF NOT EXISTS turn_forecasts (
   vector          TEXT,              -- JSON {components, weights, top}; NULL until scored
   model           TEXT,              -- the model the mod asked for the forecast
   forecast_tokens INTEGER,           -- what the forecast call cost, when the reply said
-  UNIQUE(session_id, turn_seq)
+  UNIQUE(session_id, run_id, turn_seq)
 );
 
 -- "the last N days of turns" — Calibration / TopSurprises and the prune pass.

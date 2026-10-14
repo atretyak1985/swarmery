@@ -24,8 +24,8 @@ func turnEventsBody(uuid, cwd string, specs ...[3]string) string {
 func ago(d time.Duration) string { return time.Now().UTC().Add(-d).Format("2006-01-02T15:04:05.000Z") }
 
 const (
-	apiForecast = `{"turnSeq":%d,"files":["a.go","b.go"],"testsPass":true,"steps":4,"confidence":%s,"model":"haiku","forecastTokens":%d}`
-	apiActual   = `{"turnSeq":%d,"files":["a.go","c.go","d.go","e.go"],"testsRan":true,"testsPass":false,"steps":%d}`
+	apiForecast = `{"runId":"run-1","turnSeq":%d,"files":["a.go","b.go"],"testsPass":true,"steps":4,"confidence":%s,"model":"haiku","forecastTokens":%d}`
+	apiActual   = `{"runId":"run-1","turnSeq":%d,"files":["a.go","c.go","d.go","e.go"],"testsRan":true,"testsPass":false,"steps":%d}`
 )
 
 func forecastSpec(seq int, at, conf string, tokens int) [3]string {
@@ -83,18 +83,57 @@ func TestLinkForecastEventsScoreOneRow(t *testing.T) {
 	// Invalid payloads: rejected per event, 202 still, nothing stored.
 	code, body = e.do(t, http.MethodPost, "/api/link/events", e.token,
 		turnEventsBody("s-tf", "/work/tf",
-			[3]string{"turn.forecast", ago(5 * time.Second), `{"turnSeq":"one"}`},
-			[3]string{"turn.actual", ago(4 * time.Second), `{"turnSeq":3,"testsRan":true}`},
-			[3]string{"turn.actual", ago(3 * time.Second), `[1,2]`}))
+			[3]string{"turn.forecast", ago(5 * time.Second), `{"runId":"run-1","turnSeq":"one"}`},
+			[3]string{"turn.actual", ago(4 * time.Second), `{"runId":"run-1","turnSeq":3,"testsRan":true}`},
+			[3]string{"turn.actual", ago(3 * time.Second), `[1,2]`},
+			[3]string{"turn.forecast", ago(2 * time.Second), `{"turnSeq":3,"steps":1}`},
+			[3]string{"turn.actual", ago(1 * time.Second), `{"runId":"bad/run","turnSeq":3,"testsRan":false,"steps":0}`}))
 	if code != http.StatusAccepted {
 		t.Fatalf("invalid payloads: status %d body %s, want 202", code, body)
 	}
 	r := decodeLinkResult(t, body)
-	if r.Rejected != 3 || r.Accepted != 0 || len(r.Rejects) != 3 || r.Rejects[2].Index != 2 {
+	if r.Rejected != 5 || r.Accepted != 0 || len(r.Rejects) != 5 || r.Rejects[2].Index != 2 ||
+		!strings.Contains(r.Rejects[3].Reason, "runId is required") || !strings.Contains(r.Rejects[4].Reason, "runId must be") {
 		t.Errorf("invalid payloads result = %+v", r)
 	}
 	if err := e.db.QueryRow(`SELECT COUNT(*) FROM turn_forecasts`).Scan(&n); err != nil || n != 2 {
 		t.Errorf("rows after rejects = %d (%v), want 2", n, err)
+	}
+}
+
+// A resumed run (same session, same turnSeq, another runId) through POST
+// /api/link/events is a second row: the first run's halves and score stay; the
+// top list tells the two apart by runId.
+func TestLinkForecastResumedRunIsASecondRow(t *testing.T) {
+	e := newLinkTestEnv(t)
+	if code, body := e.do(t, http.MethodPost, "/api/link/events", e.token,
+		turnEventsBody("s-res", "/work/res", forecastSpec(1, ago(2*time.Minute), "0.8", 150), actualSpec(1, ago(2*time.Minute), 8))); code != http.StatusAccepted {
+		t.Fatalf("first run: %d %s", code, body)
+	}
+	resumed := func(kind, payload string) [3]string { return [3]string{kind, ago(time.Minute), payload} }
+	code, body := e.do(t, http.MethodPost, "/api/link/events", e.token, turnEventsBody("s-res", "/work/res",
+		resumed("turn.forecast", `{"runId":"run-2","turnSeq":1,"files":["a.go"],"steps":3,"confidence":0.4}`),
+		resumed("turn.actual", `{"runId":"run-2","turnSeq":1,"files":["a.go"],"testsRan":false,"steps":3}`)))
+	if code != http.StatusAccepted || decodeLinkResult(t, body).Accepted != 2 {
+		t.Fatalf("resumed run: %d %s", code, body)
+	}
+	var (
+		n        int
+		surprise float64
+		actual   string
+	)
+	if err := e.db.QueryRow(`SELECT COUNT(*) FROM turn_forecasts`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("rows = %d (%v), want 2", n, err)
+	}
+	if err := e.db.QueryRow(`SELECT surprise, actual FROM turn_forecasts WHERE run_id = 'run-1' AND turn_seq = 1`).Scan(&surprise, &actual); err != nil {
+		t.Fatal(err)
+	}
+	if surprise != 0.73 || !strings.Contains(actual, `"steps":8`) {
+		t.Errorf("first run row = %v %s, want 0.73 and its own actual", surprise, actual)
+	}
+	_, dto, raw := getTurnForecasts(t, e, "")
+	if len(dto.Top) != 2 || dto.Top[0].RunID != "run-1" || dto.Top[1].RunID != "run-2" || !strings.Contains(raw, `"runId":"run-2"`) {
+		t.Errorf("top = %+v", dto.Top)
 	}
 }
 

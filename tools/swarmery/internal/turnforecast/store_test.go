@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,11 +52,19 @@ type row struct {
 	tokens    sql.NullInt64
 }
 
+// run1 is the run id every single-run test writes under (the payloads say "r1").
+const run1 = "r1"
+
 func readTurn(t *testing.T, db *sql.DB, sid int64, seq int) row {
+	t.Helper()
+	return readRunTurn(t, db, sid, run1, seq)
+}
+
+func readRunTurn(t *testing.T, db *sql.DB, sid int64, run string, seq int) row {
 	t.Helper()
 	var r row
 	if err := db.QueryRow(`SELECT started_at, forecast, actual, surprise, vector, model, forecast_tokens
-		FROM turn_forecasts WHERE session_id = ? AND turn_seq = ?`, sid, seq).
+		FROM turn_forecasts WHERE session_id = ? AND run_id = ? AND turn_seq = ?`, sid, run, seq).
 		Scan(&r.startedAt, &r.forecast, &r.actual, &r.surprise, &r.vector, &r.model, &r.tokens); err != nil {
 		t.Fatalf("read turn %d/%d: %v", sid, seq, err)
 	}
@@ -63,13 +72,18 @@ func readTurn(t *testing.T, db *sql.DB, sid int64, seq int) row {
 }
 
 const (
-	fcJSON = `{"turnSeq":1,"files":["a.go","b.go"],"testsPass":true,"steps":4,"confidence":0.8,"model":"haiku","forecastTokens":200}`
-	acJSON = `{"turnSeq":1,"files":["a.go","c.go","d.go","e.go"],"testsRan":true,"testsPass":false,"steps":8}`
+	fcJSON = `{"runId":"r1","turnSeq":1,"files":["a.go","b.go"],"testsPass":true,"steps":4,"confidence":0.8,"model":"haiku","forecastTokens":200}`
+	acJSON = `{"runId":"r1","turnSeq":1,"files":["a.go","c.go","d.go","e.go"],"testsRan":true,"testsPass":false,"steps":8}`
 )
 
 func mustUpsert(t *testing.T, s *Store, sid int64, seq int, half Half, at, payload string) Upserted {
 	t.Helper()
-	u, err := s.Upsert(context.Background(), sid, seq, half, at, []byte(payload))
+	return mustUpsertRun(t, s, sid, run1, seq, half, at, payload)
+}
+
+func mustUpsertRun(t *testing.T, s *Store, sid int64, run string, seq int, half Half, at, payload string) Upserted {
+	t.Helper()
+	u, err := s.Upsert(context.Background(), sid, run, seq, half, at, []byte(payload))
 	if err != nil {
 		t.Fatalf("Upsert %s: %v", half, err)
 	}
@@ -115,7 +129,7 @@ func TestUpsertHalvesScoreAndRescore(t *testing.T) {
 
 	// Re-send a better actual: rescored.
 	u3 := mustUpsert(t, s, sid, 1, HalfActual, "2026-10-14T10:03:00.000Z",
-		`{"turnSeq":1,"files":["a.go","b.go"],"testsRan":true,"testsPass":true,"steps":4}`)
+		`{"runId":"r1","turnSeq":1,"files":["a.go","b.go"],"testsRan":true,"testsPass":true,"steps":4}`)
 	if !u3.Scored || *u3.Surprise != 0 || u3.Top != "" {
 		t.Errorf("perfect rescore = %+v, want 0 with no top", u3)
 	}
@@ -144,12 +158,56 @@ func TestUpsertActualFirst(t *testing.T) {
 	}
 }
 
+// A resumed run of the same session counts from turnSeq 1 again under a new
+// run id: its halves land on a second row and leave the first run's row (its
+// halves and its score) exactly as they were. The same run id and turnSeq
+// re-sent still replaces the half and rescores (TestUpsertHalvesScoreAndRescore).
+func TestUpsertResumedRunKeepsTheFirstRunsRow(t *testing.T) {
+	s := testStore(t)
+	sid, _ := seedSession(t, s.DB, "/w/p", "u-1")
+	mustUpsert(t, s, sid, 1, HalfForecast, "2026-10-14T10:00:00.000Z", fcJSON)
+	first := mustUpsert(t, s, sid, 1, HalfActual, "2026-10-14T10:01:00.000Z", acJSON)
+	before := readTurn(t, s.DB, sid, 1)
+	if !first.Scored || *first.Surprise != 0.73 {
+		t.Fatalf("first run = %+v, want scored 0.73", first)
+	}
+
+	const run2 = "1760436000000-k3x9"
+	fc2 := `{"runId":"` + run2 + `","turnSeq":1,"files":["z.go"],"testsPass":false,"steps":1,"confidence":0.2,"model":"haiku","forecastTokens":50}`
+	ac2 := `{"runId":"` + run2 + `","turnSeq":1,"files":["z.go"],"testsRan":true,"testsPass":false,"steps":1}`
+	u := mustUpsertRun(t, s, sid, run2, 1, HalfForecast, "2026-10-14T11:00:00.000Z", fc2)
+	if u.ID == first.ID || u.Scored {
+		t.Fatalf("resumed forecast = %+v, want a new unscored row (first row id %d)", u, first.ID)
+	}
+	if after := readTurn(t, s.DB, sid, 1); after != before {
+		t.Fatalf("the resumed run's forecast touched the first run's row:\n%+v\n%+v", before, after)
+	}
+	u2 := mustUpsertRun(t, s, sid, run2, 1, HalfActual, "2026-10-14T11:01:00.000Z", ac2)
+	if !u2.Scored || u2.ID != u.ID || *u2.Surprise != 0 {
+		t.Fatalf("resumed actual = %+v, want row %d scored 0", u2, u.ID)
+	}
+	if after := readTurn(t, s.DB, sid, 1); after != before {
+		t.Errorf("the resumed run's actual touched the first run's row:\n%+v\n%+v", before, after)
+	}
+	if r := readRunTurn(t, s.DB, sid, run2, 1); r.model.String != "haiku" || r.tokens.Int64 != 50 || r.startedAt != "2026-10-14T11:00:00.000Z" {
+		t.Errorf("resumed row = %+v", r)
+	}
+	var n int
+	if err := s.DB.QueryRow(`SELECT COUNT(*) FROM turn_forecasts WHERE session_id = ?`, sid).Scan(&n); err != nil || n != 2 {
+		t.Errorf("rows = %d (%v), want 2", n, err)
+	}
+	top, err := s.TopSurprises(context.Background(), nil, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), 0)
+	if err != nil || len(top) != 2 || top[0].RunID != run1 || top[1].RunID != run2 {
+		t.Errorf("top = %+v (%v), want r1 then %s with runId set", top, err, run2)
+	}
+}
+
 // Both halves present but nothing measurable → stays unscored (never zero).
 func TestUpsertBothHalvesNothingMeasurable(t *testing.T) {
 	s := testStore(t)
 	sid, _ := seedSession(t, s.DB, "/w/p", "u-1")
-	mustUpsert(t, s, sid, 1, HalfForecast, "2026-10-14T10:00:00.000Z", `{"turnSeq":1,"files":[],"confidence":null}`)
-	u := mustUpsert(t, s, sid, 1, HalfActual, "2026-10-14T10:00:01.000Z", `{"turnSeq":1,"files":[],"testsRan":false,"steps":2}`)
+	mustUpsert(t, s, sid, 1, HalfForecast, "2026-10-14T10:00:00.000Z", `{"runId":"r1","turnSeq":1,"files":[],"confidence":null}`)
+	u := mustUpsert(t, s, sid, 1, HalfActual, "2026-10-14T10:00:01.000Z", `{"runId":"r1","turnSeq":1,"files":[],"testsRan":false,"steps":2}`)
 	if u.Scored {
 		t.Errorf("nothing measurable was scored: %+v", u)
 	}
@@ -161,17 +219,22 @@ func TestUpsertBothHalvesNothingMeasurable(t *testing.T) {
 func TestUpsertRejects(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if _, err := s.Upsert(ctx, 1, 1, HalfForecast, "2026-10-14T10:00:00.000Z", []byte(`{"turnSeq":0}`)); err == nil {
+	if _, err := s.Upsert(ctx, 1, run1, 1, HalfForecast, "2026-10-14T10:00:00.000Z", []byte(`{"runId":"r1","turnSeq":0}`)); err == nil {
 		t.Error("invalid forecast accepted")
 	}
-	if _, err := s.Upsert(ctx, 1, 1, HalfActual, "2026-10-14T10:00:00.000Z", []byte(`{"turnSeq":1}`)); err == nil {
+	if _, err := s.Upsert(ctx, 1, run1, 1, HalfActual, "2026-10-14T10:00:00.000Z", []byte(`{"runId":"r1","turnSeq":1}`)); err == nil {
 		t.Error("invalid actual accepted")
 	}
-	if _, err := s.Upsert(ctx, 1, 1, Half("bogus"), "2026-10-14T10:00:00.000Z", []byte(`{}`)); err == nil {
+	if _, err := s.Upsert(ctx, 1, run1, 1, Half("bogus"), "2026-10-14T10:00:00.000Z", []byte(`{}`)); err == nil {
 		t.Error("unknown half accepted")
 	}
-	if _, err := (&Store{}).Upsert(ctx, 1, 1, HalfForecast, "x", []byte(fcJSON)); err == nil {
+	if _, err := (&Store{}).Upsert(ctx, 1, run1, 1, HalfForecast, "x", []byte(fcJSON)); err == nil {
 		t.Error("Upsert without a DB succeeded")
+	}
+	for _, bad := range []string{"", "a b", strings.Repeat("r", MaxRunIDLen+1)} {
+		if _, err := s.Upsert(ctx, 1, bad, 1, HalfForecast, "2026-10-14T10:00:00.000Z", []byte(fcJSON)); err == nil {
+			t.Errorf("Upsert under run id %q succeeded", bad)
+		}
 	}
 }
 
@@ -184,9 +247,9 @@ func scoreTurn(t *testing.T, s *Store, sid int64, seq int, at string, conf *floa
 		c = fmt.Sprint(*conf)
 	}
 	mustUpsert(t, s, sid, seq, HalfForecast, at,
-		fmt.Sprintf(`{"turnSeq":%d,"steps":10,"confidence":%s,"model":"haiku","forecastTokens":%d}`, seq, c, tokens))
+		fmt.Sprintf(`{"runId":"r1","turnSeq":%d,"steps":10,"confidence":%s,"model":"haiku","forecastTokens":%d}`, seq, c, tokens))
 	mustUpsert(t, s, sid, seq, HalfActual, at,
-		fmt.Sprintf(`{"turnSeq":%d,"testsRan":false,"steps":%d}`, seq, actualSteps))
+		fmt.Sprintf(`{"runId":"r1","turnSeq":%d,"testsRan":false,"steps":%d}`, seq, actualSteps))
 }
 
 func TestCalibrationBins(t *testing.T) {
@@ -217,13 +280,13 @@ func TestCalibrationBins(t *testing.T) {
 	scoreTurn(t, s, sid, 3, "2026-10-10T00:02:00.000Z", fp(1.0), 10, 200)
 	scoreTurn(t, s, sid, 4, "2026-10-10T00:03:00.000Z", nil, 10, 200) // no confidence: outside the bins
 	// A real miss at conf .9: unexpected files .3 + steps 1*.15 + overconf .09 = .54.
-	mustUpsert(t, s, sid, 5, HalfForecast, "2026-10-10T00:04:00.000Z", `{"turnSeq":5,"files":[],"steps":10,"confidence":0.9}`)
-	mustUpsert(t, s, sid, 5, HalfActual, "2026-10-10T00:04:00.000Z", `{"turnSeq":5,"files":["x"],"testsRan":false,"steps":0}`)
+	mustUpsert(t, s, sid, 5, HalfForecast, "2026-10-10T00:04:00.000Z", `{"runId":"r1","turnSeq":5,"files":[],"steps":10,"confidence":0.9}`)
+	mustUpsert(t, s, sid, 5, HalfActual, "2026-10-10T00:04:00.000Z", `{"runId":"r1","turnSeq":5,"files":["x"],"testsRan":false,"steps":0}`)
 	// Outside the window, and another project.
 	scoreTurn(t, s, sid, 6, "2026-09-01T00:00:00.000Z", fp(0.3), 10, 999)
 	scoreTurn(t, s, other, 1, "2026-10-10T00:00:00.000Z", fp(0.3), 10, 0)
 	// A forecast-only half row: counts toward avg tokens, never toward the bins.
-	mustUpsert(t, s, sid, 7, HalfForecast, "2026-10-10T00:05:00.000Z", `{"turnSeq":7,"confidence":0.5,"forecastTokens":400}`)
+	mustUpsert(t, s, sid, 7, HalfForecast, "2026-10-10T00:05:00.000Z", `{"runId":"r1","turnSeq":7,"confidence":0.5,"forecastTokens":400}`)
 
 	cal, err = s.Calibration(ctx, nil, since)
 	if err != nil {

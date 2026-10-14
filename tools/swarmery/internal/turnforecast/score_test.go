@@ -188,15 +188,20 @@ func TestNormPath(t *testing.T) {
 }
 
 func TestParseForecast(t *testing.T) {
-	f, err := ParseForecast([]byte(`{"turnSeq":3,"files":["a.go"],"testsPass":null,"steps":4,"confidence":0.7,"model":"haiku","forecastTokens":210,"extra":1}`))
+	f, err := ParseForecast([]byte(`{"runId":"r1","turnSeq":3,"files":["a.go"],"testsPass":null,"steps":4,"confidence":0.7,"model":"haiku","forecastTokens":210,"extra":1}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.TurnSeq != 3 || len(f.Files) != 1 || f.TestsPass != nil || *f.Steps != 4 || *f.Confidence != 0.7 || f.Model != "haiku" || *f.ForecastTokens != 210 {
+	if f.RunID != "r1" || f.TurnSeq != 3 || len(f.Files) != 1 || f.TestsPass != nil || *f.Steps != 4 || *f.Confidence != 0.7 || f.Model != "haiku" || *f.ForecastTokens != 210 {
 		t.Errorf("parsed %+v", f)
 	}
-	if f, err := ParseForecast([]byte(`{"turnSeq":1}`)); err != nil || f.Files != nil || f.Steps != nil {
+	if f, err := ParseForecast([]byte(`{"runId":"r1","turnSeq":1}`)); err != nil || f.Files != nil || f.Steps != nil {
 		t.Errorf("minimal forecast = %+v, %v", f, err)
+	}
+	legal := "1760436000000-a.b:c_D-9"
+	legal += strings.Repeat("z", MaxRunIDLen-len(legal))
+	if _, err := ParseForecast([]byte(`{"runId":"` + legal + `","turnSeq":1}`)); err != nil {
+		t.Errorf("a %d-char runId of the legal alphabet was refused: %v", MaxRunIDLen, err)
 	}
 	long := strings.Repeat("x", MaxPathLen+1)
 	many := `[` + strings.TrimSuffix(strings.Repeat(`"a",`, MaxForecastFiles+1), ",") + `]`
@@ -204,18 +209,24 @@ func TestParseForecast(t *testing.T) {
 		"absent":        ``,
 		"null":          `null`,
 		"array":         `[1]`,
-		"no turnSeq":    `{"files":[]}`,
-		"turnSeq 0":     `{"turnSeq":0}`,
-		"turnSeq float": `{"turnSeq":1.5}`,
-		"files string":  `{"turnSeq":1,"files":"a"}`,
-		"too many":      `{"turnSeq":1,"files":` + many + `}`,
-		"long path":     `{"turnSeq":1,"files":["` + long + `"]}`,
-		"steps <0":      `{"turnSeq":1,"steps":-1}`,
-		"conf >1":       `{"turnSeq":1,"confidence":1.2}`,
-		"conf <0":       `{"turnSeq":1,"confidence":-0.1}`,
-		"model long":    `{"turnSeq":1,"model":"` + strings.Repeat("m", MaxModelLen+1) + `"}`,
-		"tokens <0":     `{"turnSeq":1,"forecastTokens":-5}`,
-		"testsPass str": `{"turnSeq":1,"testsPass":"yes"}`,
+		"no turnSeq":    `{"runId":"r1","files":[]}`,
+		"turnSeq 0":     `{"runId":"r1","turnSeq":0}`,
+		"turnSeq float": `{"runId":"r1","turnSeq":1.5}`,
+		"files string":  `{"runId":"r1","turnSeq":1,"files":"a"}`,
+		"too many":      `{"runId":"r1","turnSeq":1,"files":` + many + `}`,
+		"long path":     `{"runId":"r1","turnSeq":1,"files":["` + long + `"]}`,
+		"steps <0":      `{"runId":"r1","turnSeq":1,"steps":-1}`,
+		"conf >1":       `{"runId":"r1","turnSeq":1,"confidence":1.2}`,
+		"conf <0":       `{"runId":"r1","turnSeq":1,"confidence":-0.1}`,
+		"model long":    `{"runId":"r1","turnSeq":1,"model":"` + strings.Repeat("m", MaxModelLen+1) + `"}`,
+		"tokens <0":     `{"runId":"r1","turnSeq":1,"forecastTokens":-5}`,
+		"testsPass str": `{"runId":"r1","turnSeq":1,"testsPass":"yes"}`,
+		"no runId":      `{"turnSeq":1}`,
+		"runId empty":   `{"runId":"","turnSeq":1}`,
+		"runId spaces":  `{"runId":"a b","turnSeq":1}`,
+		"runId slash":   `{"runId":"a/b","turnSeq":1}`,
+		"runId number":  `{"runId":12,"turnSeq":1}`,
+		"runId long":    `{"runId":"` + strings.Repeat("r", MaxRunIDLen+1) + `","turnSeq":1}`,
 	} {
 		if _, err := ParseForecast([]byte(raw)); err == nil {
 			t.Errorf("%s: ParseForecast(%s) accepted", name, raw)
@@ -224,19 +235,21 @@ func TestParseForecast(t *testing.T) {
 }
 
 func TestParseActual(t *testing.T) {
-	a, err := ParseActual([]byte(`{"turnSeq":2,"files":["x"],"testsRan":true,"testsPass":false,"steps":7}`))
+	a, err := ParseActual([]byte(`{"runId":"r1","turnSeq":2,"files":["x"],"testsRan":true,"testsPass":false,"steps":7}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.TurnSeq != 2 || len(a.Files) != 1 || !a.TestsRan || a.TestsPass == nil || *a.TestsPass || a.Steps != 7 {
+	if a.RunID != "r1" || a.TurnSeq != 2 || len(a.Files) != 1 || !a.TestsRan || a.TestsPass == nil || *a.TestsPass || a.Steps != 7 {
 		t.Errorf("parsed %+v", a)
 	}
 	for name, raw := range map[string]string{
-		"no testsRan": `{"turnSeq":1,"steps":1}`,
-		"no steps":    `{"turnSeq":1,"testsRan":false}`,
-		"steps <0":    `{"turnSeq":1,"testsRan":false,"steps":-1}`,
-		"no turnSeq":  `{"testsRan":false,"steps":1}`,
-		"bad json":    `{"turnSeq":`,
+		"no testsRan": `{"runId":"r1","turnSeq":1,"steps":1}`,
+		"no steps":    `{"runId":"r1","turnSeq":1,"testsRan":false}`,
+		"steps <0":    `{"runId":"r1","turnSeq":1,"testsRan":false,"steps":-1}`,
+		"no turnSeq":  `{"runId":"r1","testsRan":false,"steps":1}`,
+		"bad json":    `{"runId":"r1","turnSeq":`,
+		"no runId":    `{"turnSeq":1,"testsRan":false,"steps":1}`,
+		"runId bad":   `{"runId":"x;y","turnSeq":1,"testsRan":false,"steps":1}`,
 	} {
 		if _, err := ParseActual([]byte(raw)); err == nil {
 			t.Errorf("%s: ParseActual(%s) accepted", name, raw)

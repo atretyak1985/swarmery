@@ -42,6 +42,7 @@ import (
 	"fmt"
 	"math"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -70,7 +71,14 @@ const (
 	MaxForecastFiles = 50
 	MaxPathLen       = 300
 	MaxModelLen      = 80
+	MaxRunIDLen      = 64
 )
+
+// runIDPattern is the shape a runId must have: 1..MaxRunIDLen characters of
+// [A-Za-z0-9._:-]. The mod mints one each time it restarts its turn counter
+// (session.start, /clear, an in-process resume), so (session, runId, turnSeq)
+// names one turn even when a resumed session counts from 1 again.
+var runIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,64}$`)
 
 // DefaultWeights returns a fresh copy of the default component weights. They
 // sum to 1.
@@ -87,6 +95,7 @@ func DefaultWeights() map[string]float64 {
 // Forecast is a validated `turn.forecast` payload. Nil pointers mean "the model
 // made no claim".
 type Forecast struct {
+	RunID          string   `json:"runId"`
 	TurnSeq        int      `json:"turnSeq"`
 	Files          []string `json:"files"`
 	TestsPass      *bool    `json:"testsPass"`
@@ -98,6 +107,7 @@ type Forecast struct {
 
 // Actual is a validated `turn.actual` payload.
 type Actual struct {
+	RunID     string   `json:"runId"`
 	TurnSeq   int      `json:"turnSeq"`
 	Files     []string `json:"files"`
 	TestsRan  bool     `json:"testsRan"`
@@ -113,6 +123,7 @@ var ErrNoPayload = errors.New("payload is required")
 // range-checked.
 func ParseForecast(raw []byte) (Forecast, error) {
 	var w struct {
+		RunID          *string   `json:"runId"`
 		TurnSeq        *int      `json:"turnSeq"`
 		Files          *[]string `json:"files"`
 		TestsPass      *bool     `json:"testsPass"`
@@ -126,6 +137,9 @@ func ParseForecast(raw []byte) (Forecast, error) {
 	}
 	f := Forecast{TestsPass: w.TestsPass, Steps: w.Steps, Confidence: w.Confidence, ForecastTokens: w.ForecastTokens}
 	var err error
+	if f.RunID, err = runID(w.RunID); err != nil {
+		return Forecast{}, err
+	}
 	if f.TurnSeq, err = turnSeq(w.TurnSeq); err != nil {
 		return Forecast{}, err
 	}
@@ -158,10 +172,11 @@ func ParseForecast(raw []byte) (Forecast, error) {
 	return f, nil
 }
 
-// ParseActual validates a `turn.actual` payload. testsRan and steps are
-// required; testsPass may be null.
+// ParseActual validates a `turn.actual` payload. runId, turnSeq, testsRan and
+// steps are required; testsPass may be null.
 func ParseActual(raw []byte) (Actual, error) {
 	var w struct {
+		RunID     *string   `json:"runId"`
 		TurnSeq   *int      `json:"turnSeq"`
 		Files     *[]string `json:"files"`
 		TestsRan  *bool     `json:"testsRan"`
@@ -173,6 +188,9 @@ func ParseActual(raw []byte) (Actual, error) {
 	}
 	a := Actual{TestsPass: w.TestsPass}
 	var err error
+	if a.RunID, err = runID(w.RunID); err != nil {
+		return Actual{}, err
+	}
 	if a.TurnSeq, err = turnSeq(w.TurnSeq); err != nil {
 		return Actual{}, err
 	}
@@ -204,6 +222,16 @@ func decodeObject(raw []byte, dst any) error {
 		return errors.New("payload must be an object")
 	}
 	return json.Unmarshal(raw, dst)
+}
+
+func runID(v *string) (string, error) {
+	if v == nil {
+		return "", errors.New("runId is required")
+	}
+	if !runIDPattern.MatchString(*v) {
+		return "", fmt.Errorf("runId must be 1..%d characters of [A-Za-z0-9._:-]", MaxRunIDLen)
+	}
+	return *v, nil
 }
 
 func turnSeq(v *int) (int, error) {
