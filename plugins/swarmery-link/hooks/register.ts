@@ -10,6 +10,12 @@
 // run only from that loop, never from inside a hook. With `control` off none
 // of it is created and no request goes to the command endpoints.
 //
+// With `forecast` on, each main-loop turn that starts with the person's text
+// asks a small model, without waiting on it, what the turn will touch; the
+// turn's own tool calls make the actual. Both go to the daemon as
+// `turn.forecast` and `turn.actual` (paths and numbers only). With `forecast`
+// off no model call is made and neither event is sent.
+//
 // Every `$` call is spelled in this module, as the engine requires: `$` is
 // handed only to the functions declared at the top of this file, and ./lib/*
 // is pure (data in, data out).
@@ -48,6 +54,24 @@ import {
   shortError,
   submitFailure,
 } from './lib/control'
+import {
+  FORECAST_MAX_TOKENS,
+  FORECAST_MODEL,
+  FORECAST_TIMEOUT_MS,
+  type ForecastState,
+  INITIAL_FORECAST,
+  NO_CLAIMS,
+  type ToolOutcome,
+  closeForecast,
+  endTurn,
+  forecastPayload,
+  forecastRequest,
+  noteToolCall,
+  parseForecast,
+  resetForecast,
+  startTurn,
+  usageTokens,
+} from './lib/forecast'
 import { inputHash, toolInput } from './lib/hash'
 import { type LinkEvent, type LinkKind, type Stamps, drop, enqueue, stamp, takeBatch } from './lib/queue'
 import { measurePayload } from './lib/usage'
@@ -55,7 +79,7 @@ import { measurePayload } from './lib/usage'
 const NAME = 'swarmery-link'
 
 /** Options reserved for later releases: each logs once when switched on, and hooks nothing else. */
-const RESERVED = ['planBand', 'swarm', 'forecast'] as const
+const RESERVED = ['planBand', 'swarm'] as const
 
 type Reply = { readonly status?: number; readonly error?: unknown }
 
@@ -463,12 +487,89 @@ function openControl($: EngineInterface, link: Link, origin: string, previous: C
   return control
 }
 
+/** The forecast loop's state for one load of the module. Exists only with `forecast` on. */
+type Forecaster = { state: ForecastState }
+
+/**
+ * Asks the model for turn `turnSeq`'s forecast and queues it as `turn.forecast`,
+ * however the call ended (no readable claim: all-null claims, tokens still
+ * counted). Never rejects; nothing waits on it.
+ */
+async function runForecast(
+  $: EngineInterface,
+  link: Link,
+  forecaster: Forecaster,
+  turnSeq: number,
+  generation: number,
+  ask: { readonly system: string; readonly prompt: string },
+): Promise<void> {
+  let claims = NO_CLAIMS
+  let tokens: number | null = null
+  try {
+    const reply = await $.model.complete({
+      model: FORECAST_MODEL,
+      system: ask.system,
+      prompt: ask.prompt,
+      maxTokens: FORECAST_MAX_TOKENS,
+      timeoutMs: FORECAST_TIMEOUT_MS,
+    })
+    tokens = usageTokens(reply.usage)
+    if (reply.isAnswered) claims = parseForecast(reply.text, link.cwd)
+    else logOnce($, link, `forecast-${reply.reason}`, `forecast: no reply (${reply.reason}); sent without claims`)
+  } catch {
+    logOnce($, link, 'forecast-refused', 'forecast: the model call was refused; sent without claims')
+  } finally {
+    forecaster.state = closeForecast(forecaster.state, generation)
+  }
+  try {
+    await push($, link, 'turn.forecast', forecastPayload(turnSeq, claims, FORECAST_MODEL, tokens))
+    flushAtTurn($, link)
+  } catch {
+    // unreported
+  }
+}
+
+/**
+ * A main-loop turn starts: count it, and when it carries the person's text and
+ * no forecast is still open, start one detached from the hook, so the turn
+ * never waits on the model.
+ */
+function beginForecast($: EngineInterface, link: Link, forecaster: Forecaster, turnId: string, text: string): void {
+  const { state, shouldAsk } = startTurn(forecaster.state, turnId, text, isActive(link))
+  forecaster.state = state
+  if (!shouldAsk) return
+  const run = (): void => {
+    void runForecast($, link, forecaster, state.turnSeq, state.generation, forecastRequest(text, state.history))
+  }
+  try {
+    $.clock.after(0, run)
+  } catch {
+    run()
+  }
+}
+
+/** A main-loop turn ends: queue its actual when the turn was forecast. */
+async function finishForecast($: EngineInterface, link: Link, forecaster: Forecaster, turnId: string): Promise<void> {
+  const { state, actual } = endTurn(forecaster.state, turnId)
+  forecaster.state = state
+  if (actual !== undefined) await push($, link, 'turn.actual', actual)
+}
+
+/** How a tool call ended, from what `next(e)` resolved to. */
+const toolOutcome = (result: unknown): ToolOutcome => {
+  const r = result as { readonly deny?: unknown; readonly isError?: unknown } | undefined
+  if (r?.deny !== undefined) return 'denied'
+  return r?.isError === true ? 'error' : 'ok'
+}
+
 export const register: Register = (on, options) => {
   const reserved = RESERVED.filter(feature => options[feature] === true)
   const isControlOn = options.control === true
   const endpoint = daemonEndpoint(options.daemonUrl)
   /** The command loop; only ever set with `control` on. */
   let control: Control | undefined
+  /** The forecast loop; undefined with `forecast` off, so none of it runs. */
+  const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST } : undefined
   const noted = new Set<string>()
   const link: Link = {
     url: endpoint.url,
@@ -490,10 +591,11 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    if (forecaster !== undefined) forecaster.state = resetForecast(forecaster.state)
     for (const feature of reserved) {
       if (noted.has(feature)) continue
       noted.add(feature)
-      log($, `${feature}: not implemented in 0.2`)
+      log($, `${feature}: not implemented in 0.3`)
     }
     if (endpoint.isRefused && !noted.has('daemonUrl')) {
       // the configured value is not echoed: it may carry credentials
@@ -538,6 +640,8 @@ export const register: Register = (on, options) => {
     } catch {
       // never fail a turn over the sensor
     }
+    // turn.start is the main loop's alone: a subagent's run raises none
+    if (forecaster !== undefined) beginForecast($, link, forecaster, e.turnId, e.text)
     return next(e)
   })
 
@@ -554,7 +658,15 @@ export const register: Register = (on, options) => {
         // the call goes on unreported
       }
     }
-    return next(e)
+    if (forecaster === undefined || e.agentId !== undefined || forecaster.state.turnId === undefined) return next(e)
+    const result = await next(e)
+    try {
+      const facts = { tool: String(e.tool), agentId: e.agentId, fields: e as unknown as Readonly<Record<string, unknown>> }
+      forecaster.state = noteToolCall(forecaster.state, facts, toolOutcome(result), link.cwd)
+    } catch {
+      // the journal misses one call; the call's result stands
+    }
+    return result
   }).catch(($, e, next) => next(e))
 
   on('session.measure', async ($, e, next) => {
@@ -573,6 +685,7 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined || !isActive(link)) return next(e)
     try {
       await push($, link, 'turn.complete', { durationMs: e.durationMs, stopReason: e.reason })
+      if (forecaster !== undefined) await finishForecast($, link, forecaster, e.turnId)
       const snapshot = measurePayload(await $.session.usage())
       if (snapshot !== undefined) await push($, link, 'session.measure', snapshot)
       flushAtTurn($, link)
@@ -584,6 +697,8 @@ export const register: Register = (on, options) => {
 
   on('session.end', async ($, e, next) => {
     if (control !== undefined) stopControl($, control, undefined)
+    // a /clear goes on in this process with no session.start: the turn count starts over here
+    if (forecaster !== undefined && e.reason === 'clear') forecaster.state = resetForecast(forecaster.state)
     if (!isActive(link)) return next(e)
     try {
       await push($, link, 'session.end', { reason: e.reason })

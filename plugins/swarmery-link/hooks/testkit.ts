@@ -52,7 +52,39 @@ export type World = {
    * staged here; a drop carries the same reason.) Absent: the prompt enters.
    */
   readonly submitDrop?: string
+  /**
+   * The model's answer per `$.model.complete`, in order; the last repeats. A
+   * string is an answered reply with that text, `hang` a call that never
+   * settles, a `reason` an unanswered one, `{ text, afterMs }` an answer
+   * that comes once the mock clock moved that far. Default: FORECAST_REPLY.
+   */
+  readonly models?: ReadonlyArray<ModelReply>
+  /**
+   * How the tool beneath ends each `tool.call`, in order; the last repeats.
+   * `error` is a tool that reported an error (a red test run), `deny` a call
+   * refused beneath. Default: `ok`, answered `{ result: 'ran' }`.
+   */
+  readonly tools?: ReadonlyArray<'ok' | 'error' | 'deny'>
   readonly now?: number
+}
+
+export type ModelReply =
+  | string
+  | 'hang'
+  | { readonly reason: 'api-error' | 'empty-reply' | 'aborted' }
+  | { readonly text: string; readonly afterMs: number }
+
+/** A model reply that parses: one file, tests pass, 4 steps, 0.7 confidence. */
+export const FORECAST_REPLY = '{"files":["src/a.ts"],"testsPass":true,"steps":4,"confidence":0.7}'
+
+/** The usage every staged model reply reports. */
+export const MODEL_USAGE = { input_tokens: 180, output_tokens: 40, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } as const
+
+export type ModelCall = {
+  readonly model: string
+  readonly prompt: string
+  readonly system: string | undefined
+  readonly maxTokens: number | undefined
 }
 
 export type WireCommand = { readonly id: number; readonly kind: string; readonly payload: Readonly<Record<string, unknown>> }
@@ -83,6 +115,8 @@ export type Recorded = {
   readonly submits: Submitted[]
   /** What `$.session.id()` and `$.session.cwd()` answer from now on, as after a `/clear`. */
   readonly moveTo: (sessionId: string, cwd?: string) => void
+  /** Every `$.model.complete` that reached the engine beneath the plugin. */
+  readonly modelCalls: ModelCall[]
 }
 
 const COMMANDS = '/api/link/commands'
@@ -104,6 +138,8 @@ export const world = (on: On, w: World = {}): Recorded => {
   const acks: AckSent[] = []
   const aborts: string[] = []
   const submits: Submitted[] = []
+  const modelCalls: ModelCall[] = []
+  let toolCalls = 0
   let reads = 0
   let sessionId: string = SESSION_ID
   let cwd: string = CWD
@@ -155,7 +191,27 @@ export const world = (on: On, w: World = {}): Recorded => {
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
-  on('tool.call', () => ({ result: 'ran' }))
+  on('tool.call', () => {
+    const outcome = pick(w.tools, toolCalls, 'ok')
+    toolCalls += 1
+    if (outcome === 'deny') return { deny: 'refused beneath' }
+    if (outcome === 'error') return { isError: true, result: 'Exit code 1', text: 'Exit code 1' }
+    return { result: 'ran' }
+  })
+  on('model.complete', ($, e) => {
+    const reply = pick<ModelReply>(w.models, modelCalls.length, FORECAST_REPLY)
+    modelCalls.push({ model: e.model, prompt: e.prompt, system: e.system, maxTokens: e.maxTokens })
+    if (reply === 'hang') return new Promise<never>(() => undefined)
+    if (typeof reply === 'string') return { value: { isAnswered: true, text: reply, usage: MODEL_USAGE } }
+    if ('text' in reply) {
+      const answer = { value: { isAnswered: true, text: reply.text, usage: MODEL_USAGE } } as const
+      return clock.sleep(reply.afterMs).then(() => answer)
+    }
+    if (reply.reason === 'api-error') {
+      return { value: { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: MODEL_USAGE } }
+    }
+    return { value: { isAnswered: false, reason: reply.reason, usage: MODEL_USAGE } }
+  })
   on('tool.check', ($, e) => {
     checks.push(e)
     return { decision: 'allow' }
@@ -176,7 +232,7 @@ export const world = (on: On, w: World = {}): Recorded => {
     cwd = dir
   }
 
-  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits, moveTo }
+  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits, moveTo, modelCalls }
 }
 
 /** Every event the recorded requests carried, in order. */
