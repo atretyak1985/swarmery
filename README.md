@@ -236,6 +236,7 @@ the native Claude Code plugin mechanism — **semver-versioned**, **namespaced**
 | `accounts-pack` | Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it — /account, a shell wrapper, an optional shell function, and a wrong-account warning. The binding is machine-local, and a binding file committed to git is ignored. Requires the swarmery CLI. |
 | `design-pack` | Design-handoff pack: /design-implement takes an exported design and re-expresses it in the project's stack pixel-accurately — computed-style token inventory, reuse-vs-create recon, an approval gate, and a measured pixel diff as the completion criterion. |
 | `review-pack` | Pull-request review pack: /pr-review reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments on it — verify each against the code, fix the valid ones behind the repo's gates, rebut the rest with file:line evidence, reply in-thread. Requires the gh CLI. |
+| `swarmery-link` | Live-session sensor mod (function hooks): reports turn boundaries, tool calls by name and input hash, context fill, rate limits and cost to a local swarmery daemon over its token-guarded link API. Never blocks or rewrites anything; silent when the daemon's token file is absent. Requires the swarmery daemon. |
 <!-- END generated:packs -->
 
 Every pack requires `core` and is opt-in per project.

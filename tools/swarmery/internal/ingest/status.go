@@ -36,6 +36,51 @@ const StatusAwaitingReply = "awaiting_reply"
 // (every daemon spawn included): such a session never awaits a reply.
 const entrypointHeadless = "sdk-cli"
 
+// sessions.link_status values written by the swarmery link (internal/link
+// StatusWorking/StatusWaiting/StatusDone — spelled out here because link
+// imports this package, not the other way round).
+const (
+	linkStatusWorking = "working"
+	linkStatusWaiting = "waiting"
+	linkStatusDone    = "done"
+)
+
+// linkFresh reports whether the mod reported on this session recently enough
+// to be believed over the timer: link_seen_at within 2×AwaitAfter of now. Twice
+// the await window, so one late or lost measure does not flap the row back to
+// the heuristic. A NULL or unparseable link_seen_at is never fresh.
+func linkFresh(seenAt sql.NullString, now time.Time, t Thresholds) bool {
+	if !seenAt.Valid {
+		return false
+	}
+	seen := parseTS(seenAt.String)
+	return !seen.IsZero() && now.Sub(seen) < 2*t.AwaitAfter
+}
+
+// linkSessionStatus maps a fresh sessions.link_status onto the sessions.status
+// vocabulary, or "" to keep the timer's answer:
+//
+//	working → active          (a turn is running)
+//	waiting → awaiting_reply  (turn complete; interactive sessions only — a
+//	                          headless run never awaits a reply, so it keeps
+//	                          the timer's active/idle/completed)
+//	done    → completed       (session.end)
+//	NULL / anything else → "" (only non-status events seen so far)
+func linkSessionStatus(linkStatus, entrypoint string) string {
+	switch linkStatus {
+	case linkStatusWorking:
+		return "active"
+	case linkStatusWaiting:
+		if entrypoint == entrypointHeadless {
+			return ""
+		}
+		return StatusAwaitingReply
+	case linkStatusDone:
+		return "completed"
+	}
+	return ""
+}
+
 // DefaultThresholds returns the documented defaults: 2 min / 30 min / 3 min.
 func DefaultThresholds() Thresholds {
 	return Thresholds{Active: 2 * time.Minute, Idle: 30 * time.Minute, AwaitAfter: 3 * time.Minute}
@@ -106,17 +151,25 @@ type StatusChange struct {
 // A row with no parseable timestamp at all is closed rather than skipped —
 // see the branch below. This is the backstop that makes "stuck in active
 // forever" unreachable no matter which channel minted the row.
+//
+// Link override (mods-swarmery-link): a row whose link_seen_at is fresh
+// (linkFresh — younger than 2×AwaitAfter) is never moved to awaiting_reply by
+// the timer; the mod is reporting on it live, so its link_status decides
+// (linkSessionStatus). A stale or absent link_seen_at falls back to the timer
+// path above unchanged — the link is an optional sensor, never a dependency.
 func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]StatusChange, error) {
 	t = t.orDefaults()
 	type candidate struct {
 		id                         int64
 		status, lastTS, entrypoint string
 		procState                  sql.NullString
+		linkStatus, linkSeenAt     sql.NullString
 	}
 	// Collect first, query per row only after Close: the store runs on a
 	// single connection, so a nested query under an open cursor would block.
 	rows, err := db.Query(
-		`SELECT id, status, COALESCE(ended_at, started_at), proc_state, entrypoint FROM sessions
+		`SELECT id, status, COALESCE(ended_at, started_at), proc_state, entrypoint,
+		        link_status, link_seen_at FROM sessions
 		 WHERE status IN ('active','idle','awaiting_reply')`)
 	if err != nil {
 		return nil, err
@@ -124,7 +177,8 @@ func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]StatusChange,
 	var cands []candidate
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.id, &c.status, &c.lastTS, &c.procState, &c.entrypoint); err != nil {
+		if err := rows.Scan(&c.id, &c.status, &c.lastTS, &c.procState, &c.entrypoint,
+			&c.linkStatus, &c.linkSeenAt); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -138,6 +192,7 @@ func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]StatusChange,
 	var changes []StatusChange
 	for _, c := range cands {
 		var want string
+		fresh := linkFresh(c.linkSeenAt, now, t)
 		if last := parseTS(c.lastTS); last.IsZero() {
 			// No parseable timestamp on either end (a row minted from a
 			// transcript batch that carried no record timestamps). Such a row
@@ -163,10 +218,17 @@ func RecomputeStatuses(db *sql.DB, t Thresholds, now time.Time) ([]StatusChange,
 			// awaitingCandidate: not headless, quiet ≥ AwaitAfter, and either a
 			// known interactive entrypoint (proc alive or unknown, never dead) or
 			// an unknown entrypoint ('' = pre-migration) whose process is alive.
-			if c.entrypoint != entrypointHeadless && c.procState.String != procwatch.StateDead &&
+			// A fresh link row skips the detector: the mod's link_status is
+			// applied below instead.
+			if !fresh && c.entrypoint != entrypointHeadless && c.procState.String != procwatch.StateDead &&
 				(c.entrypoint != "" || procAlive(c.procState.String)) &&
 				now.Sub(last) >= t.AwaitAfter && want != "completed" && lastTurnAwaitsReply(db, c.id) {
 				want = StatusAwaitingReply
+			}
+		}
+		if fresh {
+			if s := linkSessionStatus(c.linkStatus.String, c.entrypoint); s != "" {
+				want = s
 			}
 		}
 		if want != c.status {

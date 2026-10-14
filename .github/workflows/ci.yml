@@ -124,6 +124,35 @@ jobs:
           echo "$out"
           echo "$out" | grep -q '✓ clean' || { echo "FLAVOR TOKENS FOUND — core must stay vendor-neutral"; exit 1; }
 
+  mods:
+    # Plugins that ship a hooks module (function hooks): strict validate reads
+    # the manifest and the module's source the way the engine will, and
+    # `claude plugin test` runs the module's *.test.ts files against the engine.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Install the Claude Code CLI
+        run: npm i -g @anthropic-ai/claude-code@^2.1.296
+      - name: Validate (strict) and test each mod
+        run: |
+          set -euo pipefail
+          # One plugin per line, so branches adding a mod merge cleanly.
+          PLUGINS=(
+            plugins/swarmery-link
+          )
+          failed=0
+          for p in "${PLUGINS[@]}"; do
+            echo "── $p"
+            claude plugin validate --strict --json "$p" || failed=1
+            claude plugin test "$p" || failed=1
+          done
+          [ "$failed" -eq 0 ]
+
   agent-evals:
     runs-on: ubuntu-latest
     permissions:
