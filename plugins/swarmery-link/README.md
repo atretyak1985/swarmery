@@ -13,6 +13,11 @@ Version 0.2 adds an opt-in **command channel** (`control`, off by default): the
 dashboard's Stop and Send-prompt buttons reach the session through the daemon.
 See [Control](#control).
 
+Version 0.3 adds an opt-in **turn forecast** (`forecast`, off by default): one
+small model call per turn predicts what the turn will touch, the turn's own tool
+calls make the actual, and the daemon scores how surprised the forecast was.
+See [Forecast](#forecast).
+
 ## Opt-in
 
 Nothing is installed by default. Enable it per project in `.claude/settings.json`:
@@ -71,17 +76,20 @@ As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 ```
 ./register.ts hooks: session.start, turn.start, tool.call, session.measure, turn.complete, session.end
 ./register.ts gating hook with .catch: tool.call
-./register.ts calls: $.clock.after (via arm, pause, send, startControl, within), $.clock.now (via poll, push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via fetchCommand, post, sendAck), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.usage, $.turn.abort (via abortTurn), $.ui.log (via log)
+./register.ts calls: $.clock.after (via arm, beginForecast, pause, send, startControl, within), $.clock.now (via poll, push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via fetchCommand, post, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.usage, $.turn.abort (via abortTurn), $.ui.log (via log)
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
 ```
 
 `tool.call` is listed as a gating hook because of where it sits, not what it
-does: it always calls `next(e)`, and its `.catch` does the same.
+does: it always calls `next(e)`, and its `.catch` does the same. With `forecast`
+on it waits for the call's result to note how a main-loop call ended, and
+returns that result unchanged.
 
 `$.turn.abort` and `$.prompt.submit` are the command channel's. Validate lists
 them whatever the options say; with `control` off they are never called and no
-request goes to the command endpoints.
+request goes to the command endpoints. `$.model.complete` is the forecast's;
+with `forecast` off it is never called.
 
 ## The token file
 
@@ -98,13 +106,13 @@ request goes to the command endpoints.
 
 ## Options
 
-| Option | Default | Effect in 0.2 |
+| Option | Default | Effect in 0.3 |
 |---|---|---|
 | `daemonUrl` | `http://127.0.0.1:7777` | the daemon's origin. Only `http://` on `127.0.0.1`, `[::1]` or `localhost` (any port, path ignored) is accepted; anything else is refused with one log line and the default is used, so the token never leaves the machine |
 | `control` | `false` | the command channel: the dashboard can stop the running turn and send prompts ([Control](#control)) |
-| `planBand` | `false` | reserved; logs `planBand: not implemented in 0.2` once |
+| `forecast` | `false` | the turn forecast: one haiku call per user turn, a `turn.forecast` and a `turn.actual` per forecast turn ([Forecast](#forecast)) |
+| `planBand` | `false` | reserved; logs `planBand: not implemented in 0.3` once |
 | `swarm` | `false` | reserved; logs once |
-| `forecast` | `false` | reserved; logs once |
 
 Set them in the plugin's config menu, or under `pluginConfigs` in settings.
 
@@ -178,6 +186,64 @@ loop for the session. It never runs inside a hook, and no hook waits on it.
 - The dashboard side of the channel (`POST /api/sessions/{id}/link/stop|prompt`)
   accepts local-origin requests only.
 
+## Forecast
+
+With `forecast` on, the mod asks a small model before each turn what the turn
+will do, then records what it did. The daemon compares the two and scores the
+surprise; the dashboard's Insights shows how well the forecasts are calibrated.
+It is advisory: nothing is blocked or changed.
+
+### Enable it
+
+```json
+{
+  "enabledPlugins": { "swarmery-link@swarmery": true },
+  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "forecast": true } } }
+}
+```
+
+or flip **Turn forecast** in the plugin's config menu. It needs the token file
+like the rest of the link: without it no model call is made.
+
+### What it costs
+
+One `$.model.complete` to `haiku` per turn the person typed, with
+`maxTokens: 300` and a 20 s time limit. The request is a fixed two-line
+instruction, at most 2000 characters of the person's text, and the files the
+last 3 turns edited: about 150–700 input tokens and 30–100 output tokens per
+forecast. The tokens each call cost ride along as `forecastTokens`.
+
+Skipped, with no model call: turns without the person's text (a continuation, a
+slash command, a task notification), a turn that starts while the last
+forecast is still running, and every turn while the link has no token. The call
+is started from the turn's hook and never waited on, so a turn never waits for
+the model.
+
+### What is sent
+
+Two events per forecast turn, through the same queue as the sensor:
+
+| Event | Payload |
+|---|---|
+| `turn.forecast` | `{ turnSeq, files, testsPass, steps, confidence, model, forecastTokens }`: the model's claims, each `null` where it made none or its reply was unreadable |
+| `turn.actual` | `{ turnSeq, files, testsRan, testsPass, steps }`, at the turn's end |
+
+- **Paths and numbers only.** No prompt text, tool input or model reply text is
+  sent. A `files` entry that is not one path-like token (spaces, quotes, no `/`
+  or `.`) is dropped, so a model that echoes the prompt cannot leak it.
+  Paths are made relative to the session's cwd where they are under it; at most
+  50 entries of at most 300 characters.
+- **`turnSeq`** counts the main loop's turns from `session.start`, and starts
+  over at a `session.end` with reason `clear`.
+- **The actual** is the main loop's tool calls this turn (a subagent's are left
+  out): `files` that `Edit`, `Write`, `MultiEdit` or `NotebookEdit` wrote
+  without error, `steps` the number of calls, `testsRan` when a `Bash` command
+  matched `test`, `vitest`, `jest`, `go test`, `pytest`, `cargo test` or
+  `npm (run) test`. `testsPass` is the last such run's outcome, read from the
+  call's result (an error result, as a non-zero exit is, reads as failing); it
+  stays `null` for a run in the background and when no test ran.
+- A forecast that answers after its turn ended is still sent, after the actual.
+
 ## Degradation
 
 The link is optional. The daemon still records every session from its JSONL
@@ -208,6 +274,8 @@ npx -p typescript@5.6.3 tsc -p plugins/swarmery-link   # once .claude-plugin/typ
 `hooks/register.ts` is the one hooks module and spells every `$` call;
 `hooks/lib/*` is pure (`lib/control.ts` holds the command channel's decisions:
 parsing a command, choosing the action, the executed-id set, the backoff, the
-ack body). Tests: `hooks/link.test.ts` (sensor) and `hooks/control.test.ts`
-(command channel), both on the shared world in `hooks/testkit.ts`. `.claude-plugin/types/` is written by the engine and is
+ack body; `lib/forecast.ts` the forecast's: skip rules, the model request,
+the tolerant reply parser, the tool-call journal). Tests: `hooks/link.test.ts`
+(sensor), `hooks/control.test.ts` (command channel) and `hooks/forecast.test.ts`
+(forecast), all on the shared world in `hooks/testkit.ts`. `.claude-plugin/types/` is written by the engine and is
 not committed.
