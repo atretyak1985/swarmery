@@ -57,10 +57,15 @@ done
 case "$jobs" in '' | *[!0-9]* | 0) usage ;; esac
 
 burners=()
+# SIGKILL, not SIGTERM: a burner signalled while still inside its fork holds
+# the TERM trap below until the subshell resets it, and bash 5 can drop a
+# SIGTERM caught in that window. The burner then spins forever and `wait`
+# blocks with it. SIGKILL cannot be trapped or lost, and a burner holds no
+# state to flush.
 # shellcheck disable=SC2329  # invoked from the traps below
 cleanup() {
   if [ "${#burners[@]}" -gt 0 ]; then
-    kill "${burners[@]}" 2>/dev/null
+    kill -KILL "${burners[@]}" 2>/dev/null
     wait "${burners[@]}" 2>/dev/null
     burners=()
   fi
