@@ -24,6 +24,12 @@ permission ask goes to the swarmery approvals queue first, and an
 `AskUserQuestion` can be answered from the dashboard. The `PermissionRequest`
 hook shim and the native dialog stay as the fallback. See [Approvals](#approvals).
 
+Version 0.5 adds opt-in **swarm coordination** (`swarm`, off by default):
+messages between sessions are reported, the files each session starts editing
+are claimed in a registry its sessions share, a line beneath the answer flags a
+file another live session is editing, and the dashboard can message a session.
+See [Swarm](#swarm).
+
 ## Opt-in
 
 Nothing is installed by default. Enable it per project in `.claude/settings.json`:
@@ -80,19 +86,23 @@ The wire format is the daemon's link protocol:
 As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 
 ```
-./register.ts hooks: session.start, turn.start, tool.call, tool.check, tool.call{tool=AskUserQuestion}, session.measure, turn.complete, session.end
+./register.ts hooks: session.start, turn.start, tool.call, tool.check, tool.call{tool=AskUserQuestion}, session.measure, turn.complete, session.end, session.send, session.receive
 ./register.ts gating hook with .catch: tool.call
 ./register.ts gating hook with .catch: tool.check
 ./register.ts gating hook with .catch: tool.call{tool=AskUserQuestion}
-./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.now (via askSwarmery, newRun, poll, pollDecision, push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via cancelRequest, fetchCommand, post, request, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.usage, $.turn.abort (via abortTurn), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.status (via showStatus)
+./register.ts gating hook with .catch: session.send
+./register.ts gating hook with .catch: session.receive
+./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.now (via askSwarmery, claimFile, newRun, poll, push, waitForDecision), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via fetchCommand, post, request, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.send (via sendToSession), $.session.usage, $.store.delete (via releaseClaims), $.store.get (via claimFile), $.store.keys (via claimFile), $.store.set (via claimFile), $.turn.abort (via abortTurn), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.status (via showStatus)
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
 ```
 
-The unmatched `tool.call` is listed as a gating hook because of where it sits,
-not what it does: it always calls `next(e)`, and its `.catch` does the same.
-With `forecast` on it waits for the call's result to note how a main-loop call
-ended, and returns that result unchanged.
+The unmatched `tool.call`, `session.send` and `session.receive` are listed as
+gating hooks because of where they sit, not what they do: each always calls
+`next(e)` with the event unchanged, and its `.catch` does the same (replay-safe:
+a send is never made twice). With `forecast` on `tool.call` waits for the
+call's result to note how a main-loop call ended, and returns that result
+unchanged.
 
 `tool.check` and `tool.call{tool=AskUserQuestion}` are the approvals channel's
 and are registered only with `approvals` on; validate lists them whatever the
@@ -103,7 +113,10 @@ event on (`next(e)`), never refuses.
 them whatever the options say; with `control` off they are never called and no
 request goes to the command endpoints. `$.model.complete` is the forecast's;
 with `forecast` off it is never called. `$.ui.status` and `$.ui.notice` are the
-approvals channel's; with `approvals` off they are never called.
+approvals channel's; with `approvals` off they are never called. `$.store.*`
+and `$.session.send` are the swarm's; with `swarm` off they are never called,
+and `session.send` / `session.receive` are not registered at all (validate
+lists every `on` it reads, conditional or not).
 
 ## The token file
 
@@ -120,14 +133,14 @@ approvals channel's; with `approvals` off they are never called.
 
 ## Options
 
-| Option | Default | Effect in 0.4 |
+| Option | Default | Effect in 0.5 |
 |---|---|---|
 | `daemonUrl` | `http://127.0.0.1:7777` | the daemon's origin. Only `http://` on `127.0.0.1`, `[::1]` or `localhost` (any port, path ignored) is accepted; anything else is refused with one log line and the default is used, so the token never leaves the machine |
 | `control` | `false` | the command channel: the dashboard can stop the running turn and send prompts ([Control](#control)) |
 | `forecast` | `false` | the turn forecast: one haiku call per user turn, a `turn.forecast` and a `turn.actual` per forecast turn ([Forecast](#forecast)) |
 | `approvals` | `false` | routes each permission ask to the Swarmery approvals queue first, ahead of the dialog or auto mode's classifier; the shim/dialog takes over if the daemon is down or does not decide in time. An `AskUserQuestion` can be answered from the dashboard ([Approvals](#approvals)) |
-| `planBand` | `false` | reserved; logs `planBand: not implemented in 0.4` once |
-| `swarm` | `false` | reserved; logs once |
+| `swarm` | `false` | swarm coordination: message events, the file-claims registry, the conflict line, and the dashboard's `message` command with `control` on ([Swarm](#swarm)) |
+| `planBand` | `false` | reserved; logs `planBand: not implemented` once |
 
 Set them in the plugin's config menu, or under `pluginConfigs` in settings.
 
@@ -177,6 +190,7 @@ loop for the session. It never runs inside a hook, and no hook waits on it.
 |---|---|---|
 | `stop` | `$.turn.abort({ turnId })` on the main loop's running turn (the id its `turn.start` carried) | `done`; `done` + `no turn running` when the session is idle; `failed` + the error when the abort throws |
 | `prompt` `{ text, asUser? }` | `$.prompt.submit({ text })`, or `{ text, asUser: true }` when the payload says `asUser: true` (default `false`: the model reads it framed as this plugin's message) | `done` once its turn starts (`done` + `queued` if it has not started within 10 s); `failed` + `turn in progress` while a turn runs; `failed` + a short reason on any other refusal |
+| `message` `{ to, text }` | with `swarm` on, `$.session.send({ to: { sessionId: to }, text })`, whether or not a turn runs ([Swarm](#swarm)) | `done` once queued at the recipient; `failed` + `undeliverable: <reason>` when not; `failed` + `swarm option is off` with `swarm` off |
 | anything else | nothing | `failed` + `unknown command kind: …` (or `prompt without text`) |
 
 - **Each command runs at most once.** The mod remembers the ids it ran (the last
@@ -365,6 +379,87 @@ own opt-in, separate from `control`. In `-p` (headless) runs the hook fires
 too, which gives them dashboard approvals the `PermissionRequest` shim never
 had there.
 
+## Swarm
+
+With `swarm` on, sessions working side by side see each other: the messages
+they exchange reach the daemon, and two sessions editing the same file hear
+about it. It is advisory: nothing is blocked, rewritten or refused.
+
+### Enable it
+
+```json
+{
+  "enabledPlugins": { "swarmery-link@swarmery": true },
+  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "swarm": true, "control": true } } }
+}
+```
+
+or flip **Swarm coordination** in the plugin's config menu. `control` is needed
+only for the dashboard's `message` command. Like the rest of the link it needs
+the token file: without it the swarm stays silent and never touches the
+registry.
+
+### What is sent
+
+Through the same queue as the sensor:
+
+| Event | When | `payload` |
+|---|---|---|
+| `session.send` | a message the main conversation sent (the model's SendMessage, or a plugin's `$.session.send`) settled; a subagent's is left out | `{ to, text, truncated, isDelivered, reason?, origin: "model" \| "plugin", commandId? }`: `to` as the engine spells the recipient, `reason` only when not delivered, `commandId` only for the dashboard's `message` command |
+| `session.receive` | a delivery reached the main conversation (a subagent's is left out) | `{ text, truncated, originKind, fromPlugin? }`, plus one line on screen: `swarmery-link: from <originKind>[ <plugin>]: <first 80 characters>` |
+| `claim` | the first `Edit`, `Write`, `MultiEdit` or `NotebookEdit` of a path since the last release | `{ path }`, absolute (a relative one is resolved against the session's cwd) |
+| `conflict` | that claim found another live session holding the same path | `{ path, otherSession }` |
+| `release` | the main loop's `turn.complete` after a turn that claimed something; `session.end` | `{ paths: [...] }`; `{ all: true }` at `session.end` |
+
+- **Text is clipped** to 4096 characters (`truncated: true` when it was), never
+  split inside a surrogate pair.
+- **The hooks pass every message on unchanged.** `session.send` is reported once
+  `next(e)` settles, so `isDelivered` is the engine's answer.
+
+### The claims registry
+
+The registry lives in this plugin's own `$.store` (one JSON file the engine
+keeps per plugin, shared by every session on the machine that runs it).
+
+- Keys sit under `swarmery-link/`. A session's claims are one entry,
+  `swarmery-link/claims/<sessionId>` =
+  `{ sessionId, cwd, updatedAt, paths: [{ path, at }] }` (times in ms), written
+  whole with one `$.store.set`. Only that session writes its own key; other
+  sessions' keys are read, never written or deleted.
+- **Paths and times only.** No text, tool input or file content is stored.
+- **Live for 30 minutes.** Another session's entry counts while its `updatedAt`
+  is at most 30 min old; an older one is ignored (not deleted).
+- **At most 64 KiB** of JSON per entry: past it, the oldest paths drop first.
+- **Claims last one turn.** The main loop's `turn.complete` deletes the entry and
+  sends `release`; `session.end` deletes it too and sends `release { all: true }`.
+  After a `/clear` the new session id claims under a fresh key; the old one went
+  at the `session.end` that preceded the clear.
+- Claims and releases run one at a time, so parallel tool calls never lose one.
+
+### The conflict line
+
+At the main loop's `turn.complete`, a turn that found a conflict adds one line
+beneath the answer:
+
+```
+⚠ /work/app/src/a.ts is also being edited by session 7c1d2e3f
+```
+
+With several, the first path and `(+N more)`. The line is returned as the
+`turn.complete` result's `text`: the engine shows a text other than the main
+loop's answer beneath it and never rewrites the answer itself. A text another
+hook already put there is kept, the line after it.
+
+### The `message` command
+
+With `control` and `swarm` on, the dashboard can queue `message`
+`{ to: <recipient session uuid>, text }` for this session. The command loop sends
+it with `$.session.send({ to: { sessionId: to }, text })`, whether or not a turn
+is running (it lands in the recipient's queue, not this one), and acks `done`
+once it is queued there, or `failed` + `undeliverable: <reason>`. The send is
+reported as a `session.send` with the command's `commandId`. With `swarm` off it
+is acked `failed` + `swarm option is off` and nothing is sent.
+
 ## Degradation
 
 The link is optional. The daemon still records every session from its JSONL
@@ -394,15 +489,18 @@ claude plugin test plugins/swarmery-link
 npx -p typescript@5.6.3 tsc -p plugins/swarmery-link   # once .claude-plugin/types/ is laid
 ```
 
-`hooks/register.ts` is the one hooks module; it and `hooks/approvals.ts` (the
-approvals channel's waits, imported by it) spell every `$` call, each in a
-top-level function declaration. `hooks/lib/*` is pure (`lib/control.ts` holds
-the command channel's decisions: parsing a command, choosing the action, the
-executed-id set, the backoff, the ack body; `lib/forecast.ts` the forecast's:
-skip rules, the model request, the tolerant reply parser, the tool-call
-journal; `lib/approvals.ts` the approvals channel's: which verdicts go to the
-daemon, the request, what each reply means, the deadline). Tests:
+`hooks/register.ts` is the one hooks module; it, `hooks/approvals.ts` (the
+approvals channel's waits) and `hooks/swarm.ts` (the registry's `$.store` calls
+and the message's `$.session.send`), both imported by it, spell every `$` call,
+each in a top-level function declaration. `hooks/lib/*` is pure
+(`lib/control.ts` holds the command channel's decisions: parsing a command,
+choosing the action, the executed-id set, the backoff, the ack body;
+`lib/forecast.ts` the forecast's: skip rules, the model request, the tolerant
+reply parser, the tool-call journal; `lib/approvals.ts` the approvals
+channel's: which verdicts go to the daemon, the request, what each reply means,
+the deadline; `lib/swarm.ts` the swarm's: claim paths, the entry and its cap,
+liveness, conflicts, payloads, the line beneath the answer). Tests:
 `hooks/link.test.ts` (sensor), `hooks/control.test.ts` (command channel),
-`hooks/forecast.test.ts` (forecast) and `hooks/approvals.test.ts` (approvals),
-all on the shared world in `hooks/testkit.ts`. `.claude-plugin/types/` is
+`hooks/forecast.test.ts` (forecast), `hooks/approvals.test.ts` (approvals) and
+`hooks/swarm.test.ts` (swarm), all on the shared world in `hooks/testkit.ts`. `.claude-plugin/types/` is
 written by the engine and is not committed.

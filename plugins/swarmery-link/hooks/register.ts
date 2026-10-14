@@ -804,7 +804,7 @@ export const register: Register = (on, options) => {
     for (const feature of reserved) {
       if (noted.has(feature)) continue
       noted.add(feature)
-      log($, `${feature}: not implemented in 0.4`)
+      log($, `${feature}: not implemented yet`)
     }
     if (endpoint.isRefused && !noted.has('daemonUrl')) {
       // the configured value is not echoed: it may carry credentials
