@@ -56,11 +56,12 @@ test('reserved options switched on only log "not implemented", once each', { opt
   const w = world(on, { tokens: [TOKEN] })
   await $.session.start(START)
   await $.session.start(START)
-  expect(w.logs.filter(l => l.includes('control: not implemented'))).toHaveLength(1)
   expect(w.logs.filter(l => l.includes('planBand: not implemented'))).toHaveLength(1)
   expect(w.logs.some(l => l.includes('swarm:') || l.includes('forecast:'))).toBe(false)
-  // control on still registers no gate in 0.1
+  // control is implemented in 0.2 (control.test.ts), and still registers no gate
+  expect(w.logs.some(l => l.includes('control: not implemented'))).toBe(false)
   expect((await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })).decision).toBe('allow')
+  await $.session.end(END)
 })
 
 test('a failing daemon never surfaces as a hook error; the events wait for the next flush', async ($, on) => {

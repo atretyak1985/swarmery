@@ -1,14 +1,20 @@
-// swarmery-link 0.1: a sensor. It reports this session's live state to a local
-// swarmery daemon over POST /api/link/events
+// swarmery-link 0.2: a sensor, plus an opt-in command channel. It reports this
+// session's live state to a local swarmery daemon over POST /api/link/events
 // (tools/swarmery/docs/mods-link-protocol.md) and changes nothing: every hook
 // passes its event on, a failure is logged and swallowed, and with no token
 // file the whole mod stays silent for the session and makes no request.
+//
+// With `control` on, one background loop long-polls GET /api/link/commands
+// and runs what the dashboard queued for this session: `stop` aborts the
+// running turn, `prompt` submits a prompt once the session is idle. Commands
+// run only from that loop, never from inside a hook. With `control` off none
+// of it is created and no request goes to the command endpoints.
 //
 // Every `$` call is spelled in this module, as the engine requires: `$` is
 // handed only to the functions declared at the top of this file, and ./lib/*
 // is pure (data in, data out).
 
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, PromptSubmitArgs, Register, Timer } from 'claude-code'
 import {
   AUTH_RETRY_MS,
   DEFAULT_DAEMON_URL,
@@ -21,6 +27,27 @@ import {
   outcome,
   parseToken,
 } from './lib/client'
+import {
+  type Ack,
+  type Command,
+  type Executed,
+  POLL_TIMEOUT_MS,
+  PROMPT_START_TIMEOUT_MS,
+  ackBody,
+  ackUrl,
+  commandsUrl,
+  decide,
+  done,
+  dropAck,
+  failed,
+  nextPollDelay,
+  parseCommand,
+  pollOutcome,
+  pollRequest,
+  remember,
+  shortError,
+  submitFailure,
+} from './lib/control'
 import { inputHash, toolInput } from './lib/hash'
 import { type LinkEvent, type LinkKind, type Stamps, drop, enqueue, stamp, takeBatch } from './lib/queue'
 import { measurePayload } from './lib/usage'
@@ -28,7 +55,7 @@ import { measurePayload } from './lib/usage'
 const NAME = 'swarmery-link'
 
 /** Options reserved for later releases: each logs once when switched on, and hooks nothing else. */
-const RESERVED = ['control', 'planBand', 'swarm', 'forecast'] as const
+const RESERVED = ['planBand', 'swarm', 'forecast'] as const
 
 type Reply = { readonly status?: number; readonly error?: unknown }
 
@@ -211,9 +238,206 @@ async function flushForEnd($: EngineInterface, link: Link): Promise<void> {
   if (link.queue.length > 0 && !link.isFailing) await flush($, link, END_FLUSH_TIMEOUT_MS)
 }
 
+/** The command channel's state for one session's loop. Exists only with `control` on. */
+type Control = {
+  readonly origin: string
+  readonly sessionId: string
+  /** Set for good by session.end, a 503, or a 401 that survived a re-read. */
+  isStopped: boolean
+  /** The main loop's running turn: `turn.start`'s id until its `turn.complete`. */
+  turnId: string | undefined
+  executed: Executed
+  hasRetriedAuth: boolean
+  /** The pending wait between polls, cancelled on stop. */
+  pause: Timer | undefined
+  /** Settles every race of the loop the moment it stops. */
+  readonly stopped: Promise<'stopped'>
+  readonly settleStopped: () => void
+}
+
+type PollReply = { readonly status?: number; readonly text?: string; readonly error?: unknown }
+
+const newControl = (origin: string, sessionId: string, previous: Control | undefined): Control => {
+  let settleStopped: () => void = () => undefined
+  const stopped = new Promise<'stopped'>(resolve => {
+    settleStopped = () => resolve('stopped')
+  })
+  return {
+    origin,
+    sessionId,
+    isStopped: false,
+    turnId: previous?.turnId,
+    // ids are the daemon's, unique across sessions: a new loop keeps what ran
+    executed: previous?.executed ?? new Map(),
+    hasRetriedAuth: false,
+    pause: undefined,
+    stopped,
+    settleStopped,
+  }
+}
+
+function stopControl($: EngineInterface, control: Control, why: string | undefined): void {
+  if (control.isStopped) return
+  control.isStopped = true
+  control.pause?.cancel()
+  control.pause = undefined
+  control.settleStopped()
+  if (why !== undefined) log($, `control off for this session: ${why}`)
+}
+
+/** Waits `ms` on `$.clock` between polls, or less when the loop stops. A clock that refuses stops the loop. */
+async function pause($: EngineInterface, control: Control, ms: number): Promise<void> {
+  if (ms <= 0 || control.isStopped) return
+  const waited = new Promise<void>(resolve => {
+    try {
+      control.pause = $.clock.after(ms, () => {
+        control.pause = undefined
+        resolve()
+      })
+    } catch {
+      stopControl($, control, 'no timer for the poll loop')
+      resolve()
+    }
+  })
+  await Promise.race([waited, control.stopped])
+}
+
+/** One long poll, raced against its 28 s timer and the loop's stop. */
+async function fetchCommand($: EngineInterface, link: Link, control: Control): Promise<PollReply | 'stopped'> {
+  const request = $.http.fetch(commandsUrl(control.origin, control.sessionId), pollRequest(link.token ?? '')).then(
+    (r): PollReply => ({ status: r.status, text: r.text }),
+    (error: unknown): PollReply => ({ error }),
+  )
+  const reply = await Promise.race([within($, request, POLL_TIMEOUT_MS), control.stopped])
+  return reply === 'timeout' ? { error: 'timeout' } : reply
+}
+
+/** Acks a command. A lost ack is not retried: the daemon delivers the command again and the executed set answers it. */
+async function sendAck($: EngineInterface, link: Link, control: Control, id: string, ack: Ack): Promise<void> {
+  try {
+    const request = $.http.fetch(ackUrl(control.origin, id), linkRequest(link.token ?? '', ackBody(ack))).then(
+      (r): Reply => ({ status: r.status }),
+      (error: unknown): Reply => ({ error }),
+    )
+    const reply = await within($, request, REQUEST_TIMEOUT_MS)
+    const status = reply === 'timeout' ? undefined : reply.status
+    if (status === undefined || status < 200 || status >= 300) {
+      const error = reply === 'timeout' ? 'timeout' : reply.error
+      logOnce($, link, 'ack-failed', `command ${id}: ack not taken (${describeFailure(status, error)}); the daemon delivers it again`)
+    }
+  } catch {
+    // the daemon re-delivers an unacked command after 30 s
+  }
+}
+
+async function abortTurn($: EngineInterface, turnId: string): Promise<Ack> {
+  try {
+    await $.turn.abort({ turnId })
+    return done()
+  } catch (error) {
+    return failed(shortError(error))
+  }
+}
+
+/** Submits the prompt; it resolves as its turn starts, so a session that stays busy past the bound leaves it queued. */
+async function submitPrompt($: EngineInterface, text: string, asUser: boolean): Promise<Ack> {
+  const args: PromptSubmitArgs = asUser ? { text, asUser: true } : { text }
+  try {
+    const result = await within($, $.prompt.submit(args), PROMPT_START_TIMEOUT_MS)
+    if (result === 'timeout') return done('queued')
+    if (result.drop !== undefined) return dropAck(result.drop)
+    return done()
+  } catch (error) {
+    return submitFailure(error)
+  }
+}
+
+/** Runs one delivered command (or answers a re-delivered one from the executed set) and acks it. */
+async function execute($: EngineInterface, link: Link, control: Control, command: Command): Promise<void> {
+  const action = decide(command, control.executed, control.turnId)
+  let ack: Ack
+  switch (action.do) {
+    case 'ack':
+      ack = action.ack
+      break
+    case 'abort':
+      ack = await abortTurn($, action.turnId)
+      break
+    case 'submit':
+      ack = await submitPrompt($, action.text, action.asUser)
+      break
+  }
+  // recorded before the ack goes out: a lost ack must not run it twice
+  control.executed = remember(control.executed, command.id, ack)
+  if (!control.isStopped) await sendAck($, link, control, command.id, ack)
+}
+
+/** The command loop: poll, execute, ack, poll again, until it stops. Never rejects. */
+async function poll($: EngineInterface, link: Link, control: Control): Promise<void> {
+  try {
+    while (!control.isStopped && !link.isOff) {
+      const startedAt = await $.clock.now()
+      const reply = await fetchCommand($, link, control)
+      if (reply === 'stopped' || control.isStopped || link.isOff) return
+      switch (pollOutcome(reply.status)) {
+        case 'command': {
+          const command = parseCommand(reply.text)
+          control.hasRetriedAuth = false
+          if (command === undefined) {
+            logOnce($, link, 'command-unreadable', 'control: a command reply named no id; skipped')
+            await pause($, control, nextPollDelay('retry', 0))
+            continue
+          }
+          await execute($, link, control, command)
+          continue
+        }
+        case 'idle':
+          control.hasRetriedAuth = false
+          await pause($, control, nextPollDelay('idle', (await $.clock.now()) - startedAt))
+          continue
+        case 'auth':
+          if (control.hasRetriedAuth) {
+            stopControl($, control, 'the daemon refused the token after a re-read (401)')
+            return
+          }
+          control.hasRetriedAuth = true
+          link.token = (await readToken($)) ?? link.token
+          log($, 'control: token refused (401): re-read it, retrying once', true)
+          await pause($, control, AUTH_RETRY_MS)
+          continue
+        case 'off':
+          stopControl($, control, undefined)
+          turnOff($, link, 'the daemon has the link disabled (503)')
+          return
+        case 'retry':
+          logOnce($, link, 'control-unreachable', `control: command poll failed (${describeFailure(reply.status, reply.error)}); retrying every 3s`)
+          await pause($, control, nextPollDelay('retry', 0))
+          continue
+      }
+    }
+  } catch {
+    stopControl($, control, 'the poll loop failed')
+  }
+}
+
+/** Starts the session's one command loop, detached from the hook that starts it. */
+function startControl($: EngineInterface, link: Link, control: Control): void {
+  try {
+    $.clock.after(0, () => {
+      void poll($, link, control)
+    })
+    log($, 'control: polling the daemon for commands', true)
+  } catch {
+    stopControl($, control, 'no timer for the poll loop')
+  }
+}
+
 export const register: Register = (on, options) => {
   const reserved = RESERVED.filter(feature => options[feature] === true)
+  const isControlOn = options.control === true
   const endpoint = daemonEndpoint(options.daemonUrl)
+  /** The command loop; only ever set with `control` on. */
+  let control: Control | undefined
   const noted = new Set<string>()
   const link: Link = {
     url: endpoint.url,
@@ -236,7 +460,7 @@ export const register: Register = (on, options) => {
     for (const feature of reserved) {
       if (noted.has(feature)) continue
       noted.add(feature)
-      log($, `${feature}: not implemented in 0.1`)
+      log($, `${feature}: not implemented in 0.2`)
     }
     if (endpoint.isRefused && !noted.has('daemonUrl')) {
       // the configured value is not echoed: it may carry credentials
@@ -252,6 +476,12 @@ export const register: Register = (on, options) => {
       link.sessionId = await $.session.id()
       link.cwd = (await $.session.cwd()) || e.cwd
       await push($, link, 'session.start', { surface: e.surface, isInteractive: e.isInteractive })
+      // one loop per session: a second session.start of the same session keeps it
+      if (isControlOn && !link.isOff && (control === undefined || control.isStopped || control.sessionId !== link.sessionId)) {
+        if (control !== undefined) stopControl($, control, undefined)
+        control = newControl(endpoint.origin, link.sessionId, control)
+        startControl($, link, control)
+      }
     } catch {
       // the sensor stays off; the session goes on
     }
@@ -259,6 +489,7 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.start', async ($, e, next) => {
+    if (control !== undefined) control.turnId = e.turnId
     try {
       await push($, link, 'turn.start')
       flushAtTurn($, link)
@@ -296,6 +527,7 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     // A subagent's run ends in a turn.complete too; only the main loop's means the session waits.
+    if (control !== undefined && e.agentId === undefined && control.turnId === e.turnId) control.turnId = undefined
     if (e.agentId !== undefined || !isActive(link)) return next(e)
     try {
       await push($, link, 'turn.complete', { durationMs: e.durationMs, stopReason: e.reason })
@@ -309,6 +541,7 @@ export const register: Register = (on, options) => {
   })
 
   on('session.end', async ($, e, next) => {
+    if (control !== undefined) stopControl($, control, undefined)
     if (!isActive(link)) return next(e)
     try {
       await push($, link, 'session.end', { reason: e.reason })
