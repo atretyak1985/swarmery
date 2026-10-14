@@ -43,6 +43,16 @@ const (
 	// internal/link when a turn_forecasts row gets (or changes) its score.
 	// Carries SessionID + TurnForecastID; the WS layer hydrates the stored turn.
 	NoteTurnSurprise = "turn_surprise"
+	// mods-swarmery-link phase 6 — swarm (additive): published by internal/link
+	// after a link_messages row is stored or its delivery changes (a mod's
+	// session.send / session.receive, a dashboard relay and its ack). Carries
+	// SessionID + ProjectID; the WS layer forwards them as a thin hint and the
+	// client refetches GET /api/swarm/messages.
+	NoteSwarmMessage = "swarm_message"
+	// mods-swarmery-link phase 6 — swarm (additive): published by internal/link
+	// after a claim / release changed the live file-claims set. Carries
+	// ProjectID (+ SessionID); the client refetches GET /api/swarm/claims.
+	NoteSwarmClaim = "swarm_claim"
 )
 
 // Notification is one ingest event on the internal bus. It carries row ids
@@ -61,7 +71,8 @@ type Notification struct {
 	TaskID int64 // tasks.id
 	// board task delete (additive): set for task_deleted only. The deleted row
 	// cannot be re-read, so its owning project rides along on the notification
-	// instead of being looked up by the WS layer.
+	// instead of being looked up by the WS layer. swarm_message / swarm_claim
+	// reuse it for the session's project.
 	ProjectID int64 // projects.id
 	// learning loop phase 13 (additive): set for phase_surprise only.
 	PhaseID int64 // epic_phases.id

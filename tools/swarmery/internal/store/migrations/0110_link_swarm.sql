@@ -21,7 +21,8 @@
 --   body          the text, at most 4096 characters; truncated = 1 when the
 --                 mod or the daemon cut it
 --   origin        send: model | plugin; receive: the engine's origin kind
---                 (peer | coordinator | bridge | …); dashboard: 'dashboard'
+--                 (peer | coordinator | bridge | …); dashboard: NULL until
+--                 the sender's mod reports its session.send (then model|plugin)
 --   at            fixed-width UTC, ms (orders lexically like time)
 --   delivered     NULL unknown, 1 delivered, 0 not delivered (+ reason)
 --   command_id    link_commands.id of the dashboard 'message' command

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -19,7 +20,16 @@ import (
 const (
 	CmdStop   = "stop"
 	CmdPrompt = "prompt"
+	// CmdMessage relays a dashboard message through the SENDING session's mod
+	// ($.session.send sends from the session that calls it). It follows the
+	// prompt lifecycle minus the "turn in progress" bounce: a send needs no
+	// idle session. Swarm, swarm.go.
+	CmdMessage = "message"
 )
+
+// expiredReason is the link_messages.reason of a dashboard message whose
+// command expired before the mod acked it.
+const expiredReason = "expired"
 
 // Command states: link_commands.state and the state of a link_command note.
 const (
@@ -74,7 +84,7 @@ var (
 	ErrCommandNotFound = errors.New("link command not found")
 	// ErrBadAck: the ack's result or message is out of contract.
 	ErrBadAck = errors.New("bad ack")
-	// ErrUnknownKind: Enqueue got a kind other than stop / prompt.
+	// ErrUnknownKind: Enqueue got a kind other than stop / prompt / message.
 	ErrUnknownKind = errors.New("unknown command kind")
 )
 
@@ -91,6 +101,13 @@ type Command struct {
 type PromptPayload struct {
 	Text   string `json:"text"`
 	AsUser bool   `json:"asUser"`
+}
+
+// MessagePayload is the payload of a message command: the recipient's Claude
+// session id and the text the mod passes to $.session.send.
+type MessagePayload struct {
+	To   string `json:"to"`
+	Text string `json:"text"`
 }
 
 // Commands is the dashboard → mod command queue. Rows live in link_commands
@@ -149,8 +166,21 @@ func (c *Commands) Controllable(sessionUUID string) bool {
 // Enqueue queues a command for the session with this sessions.id and returns
 // the command id. payload is marshalled as the command's payload; nil is {}.
 // ErrSessionNotFound when the row does not exist, ErrNotControllable when no
-// mod polls for it.
+// mod polls for it. A CmdMessage payload must decode as MessagePayload and goes
+// through EnqueueMessage (ErrBadMessage when it is out of contract).
 func (c *Commands) Enqueue(ctx context.Context, sessionID int64, kind string, payload any) (int64, error) {
+	if kind == CmdMessage {
+		var p MessagePayload
+		raw, err := json.Marshal(payload)
+		if err == nil {
+			err = json.Unmarshal(raw, &p)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("%w: payload: %v", ErrBadMessage, err)
+		}
+		id, _, err := c.EnqueueMessage(ctx, sessionID, p.To, p.Text)
+		return id, err
+	}
 	if kind != CmdStop && kind != CmdPrompt {
 		return 0, fmt.Errorf("%w %q", ErrUnknownKind, kind)
 	}
@@ -184,6 +214,102 @@ func (c *Commands) Enqueue(ctx context.Context, sessionID int64, kind string, pa
 	c.note(sessionID, id, kind, StateQueued, "")
 	c.Wake(uuid)
 	return id, nil
+}
+
+// EnqueueMessage queues a message command for the sending session (senderID,
+// a sessions.id): its mod will $.session.send text to the session with Claude
+// session id toUUID. The command and its link_messages row (kind dashboard,
+// delivered NULL until the ack) are written in one transaction, so an ack can
+// never race ahead of the row it settles. It returns both ids.
+//
+// ErrBadMessage for an empty recipient, empty / whitespace text, text over
+// MaxMessageBody characters or recipient == sender; ErrSessionNotFound /
+// ErrNotControllable as for Enqueue. The caller resolves the recipient.
+func (c *Commands) EnqueueMessage(ctx context.Context, senderID int64, toUUID, text string) (commandID, messageID int64, err error) {
+	toUUID = strings.TrimSpace(toUUID)
+	switch {
+	case toUUID == "":
+		return 0, 0, fmt.Errorf("%w: recipient is required", ErrBadMessage)
+	case strings.TrimSpace(text) == "":
+		return 0, 0, fmt.Errorf("%w: text is required", ErrBadMessage)
+	case utf8.RuneCountInString(text) > MaxMessageBody:
+		return 0, 0, fmt.Errorf("%w: text exceeds %d characters", ErrBadMessage, MaxMessageBody)
+	}
+	var (
+		uuid      string
+		projectID int64
+	)
+	err = c.db.QueryRowContext(ctx, `SELECT session_uuid, project_id FROM sessions WHERE id = ?`, senderID).Scan(&uuid, &projectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, ErrSessionNotFound
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("link commands: find session: %w", err)
+	}
+	if toUUID == uuid {
+		return 0, 0, fmt.Errorf("%w: recipient is the sender", ErrBadMessage)
+	}
+	if !c.Controllable(uuid) {
+		return 0, 0, ErrNotControllable
+	}
+	raw, err := json.Marshal(MessagePayload{To: toUUID, Text: text})
+	if err != nil {
+		return 0, 0, fmt.Errorf("link commands: payload: %w", err)
+	}
+	now := stamp(c.now())
+
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("link commands: begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	r, err := tx.ExecContext(ctx,
+		`INSERT INTO link_commands (session_id, kind, payload, created_at) VALUES (?, ?, ?, ?)`,
+		senderID, CmdMessage, string(raw), now)
+	if err != nil {
+		return 0, 0, fmt.Errorf("link commands: insert: %w", err)
+	}
+	if commandID, err = r.LastInsertId(); err != nil {
+		return 0, 0, fmt.Errorf("link commands: insert: %w", err)
+	}
+	messageID, err = RecordMessage(ctx, tx, MessageRecord{
+		Kind: MsgDashboard, FromSession: uuid, ToSession: toUUID, ToAddress: toUUID,
+		Body: text, At: now, CommandID: commandID,
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, 0, fmt.Errorf("link commands: commit: %w", err)
+	}
+	c.note(senderID, commandID, CmdMessage, StateQueued, "")
+	c.noteSwarm(senderID, projectID)
+	c.Wake(uuid)
+	return commandID, messageID, nil
+}
+
+// settleMessageLocked records a message command's final outcome on its
+// dashboard link_messages row and announces it: done → delivered, failed or
+// expired → not delivered with reason. The caller holds c.rmw.
+func (c *Commands) settleMessageLocked(ctx context.Context, commandID, sessionID int64, delivered bool, reason string) error {
+	var why any
+	if !delivered {
+		if reason == "" {
+			reason = StateFailed
+		}
+		why = reason
+	}
+	if _, err := c.db.ExecContext(ctx,
+		`UPDATE link_messages SET delivered = ?, reason = ? WHERE kind = 'dashboard' AND command_id = ?`,
+		boolInt(delivered), why, commandID); err != nil {
+		return fmt.Errorf("link commands: settle message: %w", err)
+	}
+	pid, err := sessionProject(ctx, c.db, sessionID)
+	if err != nil {
+		return nil // the session row is gone: nothing to address the note to
+	}
+	c.noteSwarm(sessionID, pid)
+	return nil
 }
 
 // WaitNext is the mod's long-poll. It records the poll (controllability), then
@@ -284,6 +410,9 @@ func (c *Commands) Ack(ctx context.Context, id int64, result, message string) er
 		return fmt.Errorf("link commands: ack: %w", err)
 	}
 	c.note(sid, id, kind, final, message)
+	if kind == CmdMessage {
+		return c.settleMessageLocked(ctx, id, sid, final == StateDone, message)
+	}
 	return nil
 }
 
@@ -491,7 +620,7 @@ func (c *Commands) expireLocked(ctx context.Context) error {
 		         AND created_at < CASE kind WHEN 'stop' THEN ? ELSE ? END)
 		     OR (state = 'delivered' AND kind = 'stop'
 		         AND created_at < ? AND delivered_at < ?)
-		     OR (state = 'delivered' AND kind = 'prompt'
+		     OR (state = 'delivered' AND kind IN ('prompt', 'message')
 		         AND created_at < ? AND delivered_at < ?)`,
 		stopCut, promptCut, stopCut, redeliverCut, promptCut, redeliverCut)
 	if err != nil {
@@ -520,6 +649,11 @@ func (c *Commands) expireLocked(ctx context.Context) error {
 			return fmt.Errorf("link commands: expire: %w", err)
 		}
 		c.note(o.sid, o.id, o.kind, StateExpired, "")
+		if o.kind == CmdMessage {
+			if err := c.settleMessageLocked(ctx, o.id, o.sid, false, expiredReason); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -540,6 +674,17 @@ func (c *Commands) note(sessionID, commandID int64, kind, state, message string)
 		State:     state,
 		Message:   message,
 	})
+}
+
+// noteSwarm publishes one swarm_message hint for a dashboard message change.
+func (c *Commands) noteSwarm(sessionID, projectID int64) {
+	c.mu.Lock()
+	pub := c.publish
+	c.mu.Unlock()
+	if pub == nil {
+		return
+	}
+	pub(ingest.Notification{Type: ingest.NoteSwarmMessage, SessionID: sessionID, ProjectID: projectID})
 }
 
 // stamp formats t the way every link timestamp is stored.
