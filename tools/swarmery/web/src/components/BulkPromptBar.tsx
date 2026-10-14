@@ -111,9 +111,11 @@ export function BulkPromptBar({
             const label = sessionLabel(byId, s.id);
             // The server's two reasons are known; anything newer shows as sent.
             const why =
+              // i18n-ignore: the server's skip reason (protocol), not UI copy
               s.reason === 'session has no link'
                 ? t`no polling link mod`
-                : s.reason === 'not found'
+                : // i18n-ignore: the server's skip reason (protocol), not UI copy
+                  s.reason === 'not found'
                   ? t`session not found`
                   : s.reason;
             return (

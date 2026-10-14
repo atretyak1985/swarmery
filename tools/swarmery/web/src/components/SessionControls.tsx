@@ -38,7 +38,8 @@ function settled(state: Tracked['state']): boolean {
   return state === 'rejected' || (state !== 'sending' && TERMINAL.has(state));
 }
 
-/** The exact ack message of a prompt bounced by a running turn. */
+/** The exact ack message of a prompt bounced by a running turn (protocol). */
+// i18n-ignore: protocol string the mod sends, compared, never shown
 const TURN_IN_PROGRESS = 'turn in progress';
 
 /** The command this control last sent, as far as the UI knows. */
@@ -49,7 +50,7 @@ interface Tracked {
   /** 'sending' until the POST answers; then the latest WS state. */
   state: LinkCommandState | 'sending' | 'rejected';
   /** The mod's ack message, or the HTTP error for 'rejected'. */
-  message?: string;
+  message?: string | undefined;
 }
 
 /** Subscribes to the WS bus while mounted and forwards this session's

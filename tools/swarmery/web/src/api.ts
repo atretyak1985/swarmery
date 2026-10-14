@@ -2030,6 +2030,7 @@ export async function bulkLinkPrompt(sessionIds: number[], text: string): Promis
   if (MOCK) {
     return {
       queued: sessionIds.slice(0, 1).map((id) => ({ id, commandId: 1 })),
+      // i18n-ignore: the server's skip reason (protocol), mocked
       skipped: sessionIds.slice(1).map((id) => ({ id, reason: 'session has no link' })),
     };
   }
