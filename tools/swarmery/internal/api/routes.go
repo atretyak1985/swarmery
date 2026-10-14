@@ -295,6 +295,12 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/sessions/{id}/link/stop", requireLocalOrigin(h.linkSessionStop))
 	mux.HandleFunc("POST /api/sessions/{id}/link/prompt", requireLocalOrigin(h.linkSessionPrompt))
 	mux.HandleFunc("POST /api/sessions/link/bulk-prompt", requireLocalOrigin(h.linkBulkPrompt))
+	// link swarm (link_swarm.go): sessions' send/receive traffic and live file
+	// claims, read-only; the relay queues a `message` command for the SENDING
+	// session's mod behind the origin fence.
+	mux.HandleFunc("POST /api/sessions/{id}/link/message", requireLocalOrigin(h.linkSessionMessage))
+	mux.HandleFunc("GET /api/swarm/messages", h.swarmMessages)
+	mux.HandleFunc("GET /api/swarm/claims", h.swarmClaims)
 
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))

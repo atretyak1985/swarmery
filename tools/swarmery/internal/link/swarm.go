@@ -468,6 +468,10 @@ func pair(ctx context.Context, ex dbtx, sendID, recvID int64, sender, receiver s
 	return nil
 }
 
+// Stamp formats t the way every link timestamp is stored (fixed-width ms
+// UTC), e.g. for a ListMessages since bound.
+func Stamp(t time.Time) string { return stamp(t) }
+
 // window returns at ± CorrelateWindow in tsFormat.
 func window(at string) (lo, hi string, err error) {
 	t, err := time.Parse(tsFormat, at)
