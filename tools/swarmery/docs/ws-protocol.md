@@ -47,7 +47,33 @@ type WSMessage =
   // board task delete:
   | { type: 'task_deleted'; payload: { taskId: number; projectId: number } }
   // learning loop phase 13 — attention:
-  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention };
+  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention }
+  // mods-swarmery-link phase 4 — control channel:
+  | { type: 'link_command'; payload: LinkCommandUpdate };
+```
+
+### `link_command` (mods-swarmery-link phase 4)
+
+One transition of a dashboard → mod control command
+([`mods-link-protocol.md`](mods-link-protocol.md) "Commands"), published by
+`internal/link.Commands` (`ingest.NoteLinkCommand`) when a command is queued
+(also: a prompt sent back by a `turn in progress` ack), delivered to the mod's
+poll (again on a re-delivery), acked `done` / `failed`, or expired. The payload
+is carried on the notification, not re-read, so each transition arrives as its
+own frame in order:
+
+```ts
+type LinkCommandUpdate = {
+  sessionId: number;            // sessions.id
+  commandId: number;            // link_commands.id
+  kind: 'stop' | 'prompt';
+  state: 'queued' | 'delivered' | 'done' | 'failed' | 'expired';
+  message?: string;             // the ack message, when there is one
+};
+```
+
+```json
+{"type":"link_command","payload":{"sessionId":12,"commandId":7,"kind":"stop","state":"delivered"}}
 ```
 
 ### `phase_surprise` (learning loop phase 13)
@@ -242,6 +268,7 @@ for it.
 | Epic lifecycle endpoint: pause / resume / archive / restore applied | `plan_updated` |
 | Board create / patch (column move, field edit, pause) | `task_updated` |
 | `DELETE /api/board/tasks/{id}`: a queue row permanently removed | `task_deleted` |
+| Link control channel: a command queued / delivered / acked / expired | `link_command` |
 
 ## BoardTask provenance fields
 

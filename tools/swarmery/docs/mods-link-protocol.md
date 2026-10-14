@@ -13,7 +13,9 @@ untouched: `/api/hooks/*` work exactly as before, with or without the mod.
 
 Implementation: `internal/api/link.go` (routes), `internal/link` (token, auth,
 ingest), `internal/ingest/status.go` (status override), `internal/prune` (retention),
-migration `0107_link_sessions.sql`.
+migration `0107_link_sessions.sql`. The control channel (phase 4, [Commands](#commands))
+adds `internal/api/link_commands.go`, `internal/link/commands.go` and migration
+`0108_link_commands.sql`.
 
 ## Transport
 
@@ -220,6 +222,136 @@ as `GET /api/health` `build`). A `401` here means the token is stale, so re-read
 file. Connection refused means the daemon is down (see Degradation). `503` means the
 link is off.
 
+## Commands
+
+**Status:** phase 4 contract (control channel). The dashboard queues a command for
+one session, and the mod of that session long-polls the queue, runs the command and
+acks it. Two kinds exist:
+
+| `kind` | `payload` | The mod runs |
+|---|---|---|
+| `stop` | `{}` | `$.turn.abort()` |
+| `prompt` | `{"text": string, "asUser": bool}` | `$.prompt.submit({ text, asUser })` |
+
+The mod runs commands only when its `userConfig.control` is `true`. With `control`
+off it never polls, so its sessions are never controllable and the dashboard's
+requests get `409`. Commands run from the mod's background poll loop only, never from
+inside a `tool.check` or `tool.call` hook (`$.prompt.submit` rejects while a turn waits
+on a hook).
+
+### Controllable
+
+A session is **controllable** while its mod's last poll is younger than 60 s
+(`link.PollFreshness`). The daemon keeps the poll times in memory. After a restart no
+session is controllable until its mod polls again, which a healthy loop does within
+one long-poll (≤ 28 s). The dashboard reads it as `link.controllable` on the session
+DTO, and the per-session routes below answer `409` without it. A command can therefore
+only reach a session whose own mod polls with the token, so the dashboard cannot steer
+a session that has no mod.
+
+### Lifecycle
+
+```
+queued ──poll──▶ delivered ──ack done──▶ done
+  │                  │  ╰──ack failed──▶ failed
+  │                  ╰──ack failed "turn in progress" (prompt, < 3rd time)──▶ queued, held for turn.complete
+  ╰──too old, never delivered──▶ expired
+```
+
+| Rule | Value |
+|---|---|
+| Delivery order | oldest first (`created_at`, then `id`), one command per poll |
+| Re-delivery | a `delivered` command with no ack is handed out again on the first poll more than 30 s (`link.RedeliverAfter`) after its last delivery. A restart or a lost reply never strands it. `delivered_at` holds the latest delivery |
+| Stop expiry | a `stop` still undelivered 30 s after it was queued becomes `expired` and is never delivered. A late stop must not kill a later turn |
+| Prompt expiry | a `prompt` still undelivered 10 min after it was queued becomes `expired`. This covers a prompt held for a turn end that never comes |
+| Turn in progress | an ack `{"result":"failed","message":"turn in progress"}` (exact string) on a `prompt` sends it back to `queued` (`delivered_at` cleared, `attempts`+1), held until the next `turn.complete` link event for that session is **stored** (a resent duplicate does not count). The 3rd such ack is a final `failed` |
+| Other failures | any other `failed` ack is final |
+
+Expiry runs inline on every poll and on a 5 s daemon ticker, so the `expired` frame
+arrives on time even when no mod polls.
+
+### GET /api/link/commands
+
+The mod's long-poll. Behind the bearer token like `/api/link/events`. There is no
+origin fence, and the Host fence applies.
+
+```
+GET /api/link/commands?session=<Claude session id>&wait=<seconds>
+```
+
+| Parameter | Rule |
+|---|---|
+| `session` | required, the `$.session.id()` the events carry. A session the daemon has no row for yet is legal and gets `204` |
+| `wait` | integer seconds. Missing means `0`, above `25` is clamped to `25`, not an integer or negative is `400` |
+
+Every poll, including a `204`, records the session as polled (see Controllable).
+
+| Code | Body | When |
+|---|---|---|
+| `200` | `{"id": 7, "kind": "stop", "payload": {}}` | the oldest deliverable command. It is now `delivered` with `delivered_at` set |
+| `204` | none | nothing became deliverable before `wait` elapsed or the request ended |
+| `400` | `{"error":…}` | `session` missing, bad `wait` |
+| `401` / `503` | as for events | token / link off |
+
+A queued command wakes a waiting poll at once, and so does a `turn.complete` that
+releases a held prompt. The mod should race the request against a 28 s timer (its
+`$.http.fetch` has no timeout), loop at once after a `204`, and back off 3 s after a
+network error or `5xx`, never more than one request per second while failing.
+
+### POST /api/link/commands/{id}/ack
+
+```json
+{ "result": "done" }
+{ "result": "failed", "message": "turn in progress" }
+```
+
+| Field | Rule |
+|---|---|
+| `result` | `done` or `failed` |
+| `message` | optional, at most 500 characters |
+
+| Code | When |
+|---|---|
+| `204` | recorded. A repeat ack, or an ack of a command that is not currently `delivered` (already acked, expired, or back in the queue), is also `204` and changes nothing, so a re-delivered command's second ack is safe |
+| `400` | `id` not an integer, body not JSON, bad `result`, `message` too long |
+| `404` | no command with that id |
+
+The mod keeps the ids it has already executed. A re-delivered id is acked `done` again
+**without** running `abort` or `submit` a second time.
+
+### Dashboard routes
+
+These are SPA routes behind `requireLocalOrigin` (a foreign `Origin` gets `403`), not
+the token. `{id}` is `sessions.id`.
+
+| Route | Body | Answers |
+|---|---|---|
+| `POST /api/sessions/{id}/link/stop` | none | `202 {"commandId": n}`, `404` unknown session, `409 {"error":"session has no link"}` not controllable |
+| `POST /api/sessions/{id}/link/prompt` | `{"text": string, "asUser"?: bool}` | `202 {"commandId": n}`, `400` text empty, whitespace or over 16 KiB, `404`, `409` as above |
+| `POST /api/sessions/link/bulk-prompt` | `{"sessionIds": [int], "text": string}` | `200 {"queued": [{"id", "commandId"}], "skipped": [{"id", "reason"}]}` with reason `session has no link` or `not found`. `400` for empty or too-long text, an empty list, or more than 50 ids |
+
+A bulk prompt is sent with `asUser: false`. A repeated id is queued once. A non-integer
+`{id}` is `400`. With the control channel not attached, every route here and both mod
+routes answer `503 {"error":"link disabled"}`. The existing `POST /api/sessions/{id}/stop`
+(daemon-spawned runs) and `/message` (headless resume) are unrelated and unchanged.
+
+### Live updates
+
+Every transition (queued, delivered, done, failed, expired, and the return to `queued`
+after `turn in progress`) is published on the WS bus as a `link_command` frame
+([`ws-protocol.md`](ws-protocol.md)):
+
+```json
+{"type":"link_command","payload":{"sessionId":12,"commandId":7,"kind":"prompt","state":"queued","message":"turn in progress"}}
+```
+
+### Storage
+
+Table `link_commands` (migration `0108`): `id, session_id, kind, payload, state,
+attempts, created_at, delivered_at, acked_at, result, message, wait_turn`, indexed on
+`(session_id, state, created_at)`. There is no foreign key, for the reason `0107`
+gives.
+
 ## Dedup
 
 A link event's identity is `(session, kind, at)`: the `UNIQUE(session_id, kind, at)`
@@ -290,6 +422,9 @@ candidate set, because a `mod`-minted session may never get an `ended_at`. The
 `sessions.link_*` columns keep the folded state. A resend of an event older than the
 cutoff would be accepted again, which is harmless: its state is older than what the
 columns already hold.
+
+`link_commands` ages on the same cutoff by its own `created_at`. Every command has
+expired or finished long before that.
 
 ## Degradation
 
