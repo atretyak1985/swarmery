@@ -264,13 +264,15 @@ func (s *Scanner) Scan() (Stats, error) {
 	// Mods are NOT scanned here: their pass may run `claude plugin validate`
 	// (≤ ValidateTimeout per mod) and serializes on modsMu, while sysedit
 	// calls Scan synchronously after every write on the promise that it is
-	// cheap. Run and POST /api/system/mods/rescan drive ScanMods instead.
+	// cheap. Run, POST /api/system/mods/rescan and the one-shot `swarmery
+	// sysscan` CLI drive the mods pass instead.
 	return st, nil
 }
 
 // Run scans immediately, then rescans on fsnotify changes (debounced) and on
 // every RescanInterval tick until ctx ends; every pass is followed by the
-// mods pass (hash-skipped, so validate runs only for a changed mod). Errors
+// mods pass (hash-skipped, so validate runs only for a changed mod; skipped
+// outright while a manual rescan is still validating). Errors
 // are logged, never fatal — the loop always keeps ticking (pattern:
 // ingest/tail + wsingest).
 func (s *Scanner) Run(ctx context.Context) error {
@@ -292,14 +294,19 @@ func (s *Scanner) Run(ctx context.Context) error {
 	}
 	scan := func() {
 		scanRegistry()
-		ms, err := s.ScanMods(ctx, false)
-		if err != nil {
+		ms, ran, err := s.scanModsIfIdle(ctx)
+		switch {
+		case !ran:
+			// A manual rescan holds the mods lock; waiting would stall every
+			// registry rescan behind it, and that pass converges the rows.
+			log.Printf("debug: sysscan mods: a mods pass is already running — skipped")
+		case err != nil:
 			if ctx.Err() == nil {
 				log.Printf("error: sysscan mods: %v", err)
 			}
-			return
+		default:
+			log.Printf("sysscan mods: %s", ms)
 		}
-		log.Printf("sysscan mods: %s", ms)
 	}
 	scan()
 

@@ -1,12 +1,15 @@
 package sysscan
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -312,6 +315,80 @@ func TestRunFillsModsTable(t *testing.T) {
 	}
 	if calls(t, logPath) != 1 {
 		t.Errorf("validate calls = %d, want 1", calls(t, logPath))
+	}
+}
+
+// syncBuf is a goroutine-safe log sink.
+type syncBuf struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuf) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuf) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// While a manual rescan holds the mods lock (up to N × ValidateTimeout), the
+// Run loop's own mods pass must skip instead of queueing behind it — a queued
+// pass stalls every fsnotify/ticker registry rescan for as long.
+func TestRunSkipsModsPassWhileRescanRuns(t *testing.T) {
+	db, cfg, _ := setup(t)
+	_, logPath := modFixture(t, &cfg, "sleep")
+	prev := modscan.ValidateTimeout
+	modscan.ValidateTimeout = 4 * time.Second // bounds the pre-fix stall, not the assertion
+	t.Cleanup(func() { modscan.ValidateTimeout = prev })
+	cfg.RescanInterval = 100 * time.Millisecond
+
+	logs := &syncBuf{}
+	log.SetOutput(logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	s := New(db, cfg, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	t.Cleanup(func() { cancel(); wg.Wait() })
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = s.ScanMods(ctx, true) // the manual rescan, stuck in validate
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for calls(t, logPath) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the rescan never reached the validator")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = s.Run(ctx)
+	}()
+
+	// Three registry passes well inside the 4 s the held lock would stall a
+	// queued mods pass for.
+	deadline = time.Now().Add(2 * time.Second)
+	for strings.Count(logs.String(), "sysscan lint: ") < 3 {
+		if time.Now().After(deadline) {
+			t.Fatalf("Run stalled behind the manual rescan; registry passes logged so far:\n%s", logs.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.Contains(logs.String(), "debug: sysscan mods: a mods pass is already running — skipped") {
+		t.Errorf("no skip line logged:\n%s", logs.String())
+	}
+	if n := calls(t, logPath); n != 1 {
+		t.Errorf("validate calls = %d, want 1 (the skipped passes never validate)", n)
 	}
 }
 

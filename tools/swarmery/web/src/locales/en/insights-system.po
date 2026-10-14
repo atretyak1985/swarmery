@@ -4171,6 +4171,10 @@ msgstr "validated"
 msgid "validated: no risky event or call"
 msgstr "validated: no risky event or call"
 
+#: src/pages/system/ModsTab.tsx
+msgid "validator output not understood"
+msgstr "validator output not understood"
+
 #: src/pages/Retro.tsx
 msgid "variance"
 msgstr "variance"

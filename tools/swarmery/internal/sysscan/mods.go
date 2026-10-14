@@ -37,16 +37,36 @@ func (m ModStats) String() string {
 // ModTarget is the config_lint_findings target of a mod row.
 func ModTarget(id int64) string { return fmt.Sprintf("%s:%d", KindMod, id) }
 
-// ScanMods runs the mods pass — Run calls it with force=false after every
-// registry pass; POST /api/system/mods/rescan calls it with force=true, which
-// re-validates every mod regardless of module_sha. Scan never calls it (it may
-// spawn the CLI for N × ValidateTimeout, and sysedit's post-write Scan must
-// stay cheap). Passes are serialized, so a manual rescan never races the
-// periodic one into a double validate.
+// ScanMods runs the mods pass, waiting for one in flight to finish —
+// POST /api/system/mods/rescan calls it with force=true, which re-validates
+// every mod regardless of module_sha, and the one-shot `swarmery sysscan` CLI
+// with force=false. Run uses scanModsIfIdle instead, which skips rather than
+// waits. Scan never calls either (it may spawn the CLI for N ×
+// ValidateTimeout, and sysedit's post-write Scan must stay cheap). Passes are
+// serialized, so a manual rescan never races the periodic one into a double
+// validate.
 func (s *Scanner) ScanMods(ctx context.Context, force bool) (ModStats, error) {
 	s.modsMu.Lock()
 	defer s.modsMu.Unlock()
+	return s.scanModsLocked(ctx, force)
+}
 
+// scanModsIfIdle is Run's mods pass: it runs a hash-skipping pass unless one
+// is already in flight (a manual rescan can hold the lock for N ×
+// ValidateTimeout), in which case it returns ran=false at once instead of
+// queueing — a queued pass would stall every fsnotify/ticker registry rescan
+// behind it, and the pass in flight converges the same rows anyway.
+func (s *Scanner) scanModsIfIdle(ctx context.Context) (st ModStats, ran bool, err error) {
+	if !s.modsMu.TryLock() {
+		return ModStats{}, false, nil
+	}
+	defer s.modsMu.Unlock()
+	st, err = s.scanModsLocked(ctx, false)
+	return st, true, err
+}
+
+// scanModsLocked is one mods pass; the caller holds modsMu.
+func (s *Scanner) scanModsLocked(ctx context.Context, force bool) (ModStats, error) {
 	var st ModStats
 	mods := modscan.Discover(s.cfg.ClaudeDir, modscan.PluginDirsFromSettings(s.cfg.ClaudeDir))
 	seen := make(map[string]bool, len(mods))

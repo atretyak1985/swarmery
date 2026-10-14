@@ -36,6 +36,7 @@ const RULE_LABELS: Record<string, MessageDescriptor> = {
   'store.*': msg`keeps a store`,
   'model.*': msg`calls the model`,
   validate: msg`not validated`,
+  'validator-output': msg`validator output not understood`,
 };
 
 const LEVEL_TONES: Record<ModBadge['level'], string> = {

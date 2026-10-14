@@ -4171,6 +4171,10 @@ msgstr "перевірено"
 msgid "validated: no risky event or call"
 msgstr "перевірено: жодної ризикованої події чи виклику"
 
+#: src/pages/system/ModsTab.tsx
+msgid "validator output not understood"
+msgstr "вивід валідатора не розпізнано"
+
 #: src/pages/Retro.tsx
 msgid "variance"
 msgstr "відхилення"

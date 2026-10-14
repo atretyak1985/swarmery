@@ -474,9 +474,39 @@ func TestRiskDriftFailsClosed(t *testing.T) {
 		wantRules []string // non-unknown badges, in order
 	}{
 		{"intact", doc(`"./m.tsx hooks: session.start", "./m.tsx calls: $.ui.log"`, ""), false, []string{}},
+		{"intact, explicit nothing lines", doc(`"./m.tsx hooks: nothing", "./m.tsx calls: nothing", "./m.tsx env writes: nothing"`, ""),
+			false, []string{}},
+		{"intact, gating hook module has notes", doc(`"./m.tsx hooks: tool.check", "./m.tsx calls: $.ui.log"`, gate),
+			false, []string{"red:tool.check"}},
 		{"spaces in module path", doc(`"./my mod.tsx hooks: tool.check", "./my mod.tsx calls: $.fs.read"`, ""),
 			false, []string{"red:tool.check", "yellow:fs.read"}},
-		{"module-less hooks line", doc(`"hooks: session.start"`, ""), false, []string{}},
+		{"module-less hooks line", doc(`"hooks: session.start", "calls: $.ui.log"`, ""), false, []string{}},
+		{"module-less hooks line without calls", doc(`"hooks: session.start"`, ""), true, []string{}},
+		// Value drift: a list separator other than ", " must never collapse a
+		// list into one value that matches no rule.
+		{"comma separator (finding repro)", doc(`"./m.tsx hooks: tool.check,prompt.submit", "./m.tsx calls: $.http.fetch,$.fs.write"`, ""),
+			true, []string{}},
+		{"comma separator in hooks only", doc(`"./m.tsx hooks: tool.check,prompt.submit", "./m.tsx calls: $.ui.log"`, ""),
+			true, []string{}},
+		{"comma separator in calls only", doc(`"./m.tsx hooks: session.start", "./m.tsx calls: $.ui.log,$.fs.write"`, ""),
+			true, []string{}},
+		{"semicolon separator", doc(`"./m.tsx hooks: tool.check; prompt.submit", "./m.tsx calls: $.http.fetch;$.fs.write"`, ""),
+			true, []string{}},
+		{"pipe separator", doc(`"./m.tsx hooks: tool.check | prompt.submit", "./m.tsx calls: $.http.fetch | $.fs.write"`, ""),
+			true, []string{}},
+		{"and separator", doc(`"./m.tsx hooks: tool.check and prompt.submit", "./m.tsx calls: $.http.fetch and $.fs.write"`, ""),
+			true, []string{}},
+		{"call hidden behind a (via) note", doc(`"./m.tsx hooks: session.start", "./m.tsx calls: $.ui.log (via post) and $.fs.write"`, ""),
+			true, []string{}},
+		{"env list with a foreign separator", doc(`"./m.tsx hooks: session.start", "./m.tsx calls: $.ui.log", "./m.tsx env reads: HOME;PATH"`, ""),
+			true, []string{}},
+		{"empty value list", doc(`"./m.tsx hooks: ", "./m.tsx calls: $.ui.log"`, ""), true, []string{}},
+		// Coverage drift: every module the output mentions needs both lines.
+		{"hooks line but no calls line", doc(`"./m.tsx hooks: tool.check"`, ""), true, []string{"red:tool.check"}},
+		{"two modules, only one has notes", doc(`"./a.tsx hooks: session.start", "./a.tsx calls: $.ui.log"`,
+			`{"module":"./b.tsx","pattern":"tool.check","hook":"tool.check","hasCatch":true}`), true, []string{"red:tool.check"}},
+		{"two modules, one without a calls line", doc(`"./a.tsx hooks: session.start", "./a.tsx calls: $.ui.log", "./b.tsx hooks: turn.complete"`, ""),
+			true, []string{}},
 		{"unknown label, nothing recognised", doc(`"./m.tsx hooks (1): tool.check", "./m.tsx invokes: $.http.fetch"`, ""),
 			true, []string{}},
 		{"unknown label beside known ones", doc(`"./m.tsx hooks: session.start", "./m.tsx spawns: sh"`, ""),
@@ -484,7 +514,8 @@ func TestRiskDriftFailsClosed(t *testing.T) {
 		{"missing hooks line, gating hooks present", doc(`"./m.tsx calls: $.ui.log"`, gate),
 			true, []string{"red:tool.check"}},
 		{"hooks part with no notes at all", doc("", ""), true, []string{}},
-		{"state label variant", doc(`"./a b.tsx hooks: session.start", "./a b.tsx state keys: n"`, ""), false, []string{}},
+		{"state label variant", doc(`"./a b.tsx hooks: session.start", "./a b.tsx calls: $.state.get", "./a b.tsx state keys: n"`, ""),
+			false, []string{}},
 		{"state label with junk", doc(`"./m.tsx hooks: session.start", "./m.tsx state keys (2): n"`, ""), true, []string{}},
 		{"manifest-only plugin, no hooks part", []byte(`{"success":true,"manifest":{"notes":["plugin.json: ok"]},"contents":[]}`),
 			false, []string{}},
@@ -542,6 +573,61 @@ func TestValidateFailsClosedWhenModHasNoHooksNotes(t *testing.T) {
 	}
 	if got := Risk(rep); len(got) != 0 {
 		t.Errorf("Risk of a non-mod = %+v, want none", got)
+	}
+}
+
+// Validate knows the dir's modules from hooks.json: a module the validator
+// says nothing about fails closed, while the intact M6 fixture for its own
+// one-module plugin keeps exactly the badges it always had.
+func TestValidateRequiresNotesForEveryHooksJSONModule(t *testing.T) {
+	bin := fakeClaude(t, "ok")
+	fixtureBadges := []string{"red:tool.check", "red:prompt.submit", "red:http.fetch", "yellow:fs.read"}
+	cases := []struct {
+		name    string
+		modules []string
+		want    []string
+	}{
+		{"intact fixture, same module", []string{"./register.tsx"}, fixtureBadges},
+		{"intact fixture, module listed without ./", []string{"register.tsx"}, fixtureBadges},
+		{"a second module the output never mentions", []string{"./register.tsx", "./other.tsx"},
+			append([]string{"unknown:" + RuleValidatorOutput}, fixtureBadges...)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			mod := t.TempDir()
+			makePlugin(t, mod, "m", "1", c.modules, false)
+			rep, err := Validate(context.Background(), bin, mod)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := badgeRules(Risk(rep)); !reflect.DeepEqual(got, c.want) {
+				t.Errorf("Risk = %v, want %v (unrecognized %v)", got, c.want, rep.Unrecognized)
+			}
+		})
+	}
+}
+
+// Risk enforces its invariant on whatever report it is handed, not only on
+// ParseReport's output: a value no rule could ever be matched against —
+// because it is really several values glued together — is not "nothing risky".
+func TestRiskFailsClosedOnMalformedValues(t *testing.T) {
+	cases := []struct {
+		name string
+		r    Report
+	}{
+		{"glued events", Report{Validated: true, Events: []string{"session.start", "tool.check,prompt.submit"}}},
+		{"glued uses", Report{Validated: true, Uses: []string{"http.fetch,$.fs.write"}}},
+		{"spaced use", Report{Validated: true, Uses: []string{"http.fetch and fs.write"}}},
+		{"glued gating hook", Report{Validated: true, GatingHooks: []GatingHook{{Module: "./m.tsx", Pattern: "a.b", Hook: "a.b;c.d"}}}},
+		{"glued gating pattern", Report{Validated: true, GatingHooks: []GatingHook{{Module: "./m.tsx", Pattern: "a.b, c.d", Hook: "a.b"}}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			badges := Risk(c.r)
+			if len(badges) == 0 || badges[0].Level != LevelUnknown || badges[0].Rule != RuleValidatorOutput {
+				t.Errorf("Risk = %+v, want the unknown %q badge first", badges, RuleValidatorOutput)
+			}
+		})
 	}
 }
 
