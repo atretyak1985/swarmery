@@ -52,14 +52,13 @@ test('control off: no tool.check hook, the verdict beneath stands untouched', { 
   expect(w.logs.some(l => l.includes('control'))).toBe(false)
 })
 
-test('reserved options switched on only log "not implemented", once each', { options: { control: true, planBand: true } }, async ($, on) => {
+test('no option is reserved any more: switching them on logs no "not implemented"', { options: { control: true, swarm: true, planBand: true } }, async ($, on) => {
   const w = world(on, { tokens: [TOKEN] })
   await $.session.start(START)
   await $.session.start(START)
-  expect(w.logs.filter(l => l.includes('planBand: not implemented'))).toHaveLength(1)
-  expect(w.logs.some(l => l.includes('swarm:') || l.includes('forecast:'))).toBe(false)
-  // control is implemented in 0.2 (control.test.ts), and still registers no gate
-  expect(w.logs.some(l => l.includes('control: not implemented'))).toBe(false)
+  // swarm (0.5, swarm.test.ts), planBand (0.6, plan.test.ts) and control (0.2) are implemented
+  expect(w.logs.some(l => l.includes('not implemented'))).toBe(false)
+  // control still registers no gate: without approvals the verdict beneath stands
   expect((await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })).decision).toBe('allow')
   await $.session.end(END)
 })
