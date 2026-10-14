@@ -727,9 +727,9 @@ func TestOverlapGateBlocksSecondSameProject(t *testing.T) {
 	db := testDB(t)
 	// Never-returning runs so both would-be admissions stay "active".
 	blockCh := make(chan struct{})
-	var started sync.WaitGroup
+	started := make(chan string, 8)
 	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
-		started.Done()
+		noteStart(started, spec)
 		<-blockCh // hold the slot
 		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
 	}}
@@ -741,9 +741,8 @@ func TestOverlapGateBlocksSecondSameProject(t *testing.T) {
 	a := insertTask(t, db, "T-a", taskOpts{fileScope: `["src/api"]`, createdAt: "2026-07-24T00:00:00.000Z"})
 	b := insertTask(t, db, "T-b", taskOpts{fileScope: `["src/api/handlers.go"]`, createdAt: "2026-07-24T00:00:01.000Z"})
 
-	started.Add(1)
 	s.Schedule()
-	started.Wait() // first run is live and holding src/api
+	awaitStarts(t, started, 1) // first run is live and holding src/api
 
 	// Second Schedule pass: b overlaps a's active scope → must NOT admit.
 	s.Schedule()
@@ -764,9 +763,9 @@ func TestOverlapGateBlocksSecondSameProject(t *testing.T) {
 func TestDisjointScopesRunConcurrentlyToLimit(t *testing.T) {
 	db := testDB(t)
 	blockCh := make(chan struct{})
-	var started sync.WaitGroup
+	started := make(chan string, 8)
 	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
-		started.Done()
+		noteStart(started, spec)
 		<-blockCh
 		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
 	}}
@@ -778,9 +777,8 @@ func TestDisjointScopesRunConcurrentlyToLimit(t *testing.T) {
 	insertTask(t, db, "T-2", taskOpts{fileScope: `["b"]`, createdAt: "2026-07-24T00:00:01.000Z"})
 	third := insertTask(t, db, "T-3", taskOpts{fileScope: `["c"]`, createdAt: "2026-07-24T00:00:02.000Z"})
 
-	started.Add(2)
 	s.Schedule()
-	started.Wait()
+	awaitStarts(t, started, 2)
 
 	if r.count() != 2 {
 		close(blockCh)
@@ -791,6 +789,11 @@ func TestDisjointScopesRunConcurrentlyToLimit(t *testing.T) {
 		t.Fatalf("third task should wait for a free slot")
 	}
 	close(blockCh)
+	// A freed slot admits the waiting task: a finished run re-pokes Schedule. The
+	// third run must then complete — a start counter that cannot absorb a run it
+	// did not expect (the old WaitGroup's negative-counter panic, recovered by
+	// spawn) would leave it wedged in_progress.
+	waitForWithin(t, 30*time.Second, func() bool { return column(t, db, third) == "in_review" })
 }
 
 func TestMaxWorktreesCap(t *testing.T) {
@@ -818,12 +821,9 @@ func TestMaxWorktreesCap(t *testing.T) {
 func TestPriorityOrdering(t *testing.T) {
 	db := testDB(t)
 	blockCh := make(chan struct{})
-	var started sync.WaitGroup
-	var firstSpec string
-	var once sync.Once
+	started := make(chan string, 8)
 	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
-		once.Do(func() { firstSpec = spec.SessionUUID })
-		started.Done()
+		noteStart(started, spec)
 		<-blockCh
 		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
 	}}
@@ -835,9 +835,8 @@ func TestPriorityOrdering(t *testing.T) {
 	insertTask(t, db, "T-low", taskOpts{priority: 7, fileScope: `["x"]`, createdAt: "2026-07-24T00:00:00.000Z"})
 	urgent := insertTask(t, db, "T-urgent", taskOpts{priority: 1, fileScope: `["y"]`, createdAt: "2026-07-24T00:00:05.000Z"})
 
-	started.Add(1)
 	s.Schedule()
-	started.Wait()
+	firstSpec := awaitStarts(t, started, 1)[0]
 	close(blockCh)
 
 	// The urgent task got uuid-1 (admitted first). Confirm it's the one that left todo.
@@ -1048,7 +1047,15 @@ func TestNilNotifyAndNilWtAreSafe(t *testing.T) {
 
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	waitForWithin(t, 2*time.Second, cond)
+}
+
+// waitForWithin is waitFor with the caller's ceiling, for a condition that
+// waits on a real subprocess (a git probe) rather than on in-process state —
+// one a loaded machine can legitimately take seconds to start.
+func waitForWithin(t *testing.T, d time.Duration, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(d)
 	for time.Now().Before(deadline) {
 		if cond() {
 			return
@@ -1056,6 +1063,34 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Fatal("condition not met within deadline")
+}
+
+// noteStart records a stub run's start on a buffered channel without ever
+// blocking. A channel, not a sync.WaitGroup: a finished run re-pokes Schedule,
+// which can admit a run the test never counted, and an extra start must be
+// harmless rather than a negative-counter panic.
+func noteStart(started chan<- string, spec RunSpec) {
+	select {
+	case started <- spec.SessionUUID:
+	default:
+	}
+}
+
+// awaitStarts receives n starts from noteStart's channel, failing the test if
+// any one of them takes longer than 30 s, and returns their session UUIDs in
+// start order.
+func awaitStarts(t *testing.T, started <-chan string, n int) []string {
+	t.Helper()
+	got := make([]string, 0, n)
+	for len(got) < n {
+		select {
+		case uuid := <-started:
+			got = append(got, uuid)
+		case <-time.After(30 * time.Second):
+			t.Fatalf("%d of %d run start(s) seen within 30s", len(got), n)
+		}
+	}
+	return got
 }
 
 // ── HealDeadProcess: evidence-driven reclaim (phase 1, close-the-run-loops) ──

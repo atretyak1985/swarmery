@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 )
@@ -69,6 +70,10 @@ func TestSpawnCarriesTheEstateStore(t *testing.T) {
 // the account, the ancestor's declaration for the estate — never from the
 // worktree the run executes in.
 func TestRunPlaybook_ResolvesTheProjectsAccountAndEstate(t *testing.T) {
+	// The project's own pin passes the provenance gate only if git answers in
+	// time; under the production 2 s bound a loaded machine times the probe out,
+	// the gate fails closed and the parent's pin wins. Widen it for this test.
+	t.Cleanup(claudeacct.SetGitProbeTimeoutForTest(30 * time.Second))
 	t.Setenv(microPlansEnv, "0")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -97,7 +102,7 @@ func TestRunPlaybook_ResolvesTheProjectsAccountAndEstate(t *testing.T) {
 	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
 	id := insertTask(t, db, "T-estate", taskOpts{})
 	s.Schedule()
-	waitFor(t, func() bool { return column(t, db, id) != "todo" })
+	waitForWithin(t, 30*time.Second, func() bool { return column(t, db, id) != "todo" })
 
 	if r.count() == 0 {
 		t.Fatal("no run was started")
