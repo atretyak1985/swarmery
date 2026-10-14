@@ -82,7 +82,7 @@
     {
       "name": "swarmery-link",
       "source": "./plugins/swarmery-link",
-      "description": "Live-session sensor mod (function hooks): reports turn boundaries, tool calls by name and input hash, context fill, rate limits and cost to a local swarmery daemon over its token-guarded link API. The sensor never blocks or rewrites anything; silent when the daemon's token file is absent. With the opt-in control option the dashboard can stop the session's running turn and send it prompts; with the opt-in forecast option one haiku call per user turn predicts what the turn will touch and the daemon scores the forecast against the actual (paths and numbers only). Opt-in; requires the swarmery daemon."
+      "description": "Live-session sensor mod (function hooks): reports turn boundaries, tool calls by name and input hash, context fill, rate limits and cost to a local swarmery daemon over its token-guarded link API. The sensor never blocks or rewrites anything; silent when the daemon's token file is absent. With the opt-in control option the dashboard can stop the session's running turn and send it prompts; with the opt-in forecast option one haiku call per user turn predicts what the turn will touch and the daemon scores the forecast against the actual (paths and numbers only); with the opt-in approvals option a permission ask goes to the swarmery approvals queue first and an AskUserQuestion can be answered from the dashboard, the shim or the native dialog taking over whenever the daemon does not decide. Opt-in; requires the swarmery daemon."
     },
     {
       "name": "guard-pack",
