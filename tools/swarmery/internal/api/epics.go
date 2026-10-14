@@ -1326,35 +1326,76 @@ func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 		h.markPlanDocCriterion(w, taskID, rel, *reqBody.Line, class)
 		return
 	}
+	line := *reqBody.Line
+	resp, err := h.flipPlanDocCheckbox(taskID, rel, *reqBody.Done, func(lines []string) (int, error) {
+		if line < 0 || line >= len(lines) {
+			return 0, &planDocRefusal{status: http.StatusBadRequest, msg: "line index out of range"}
+		}
+		return line, nil
+	})
+	if err != nil {
+		writePlanDocEditErr(w, err)
+		return
+	}
+	writeJSON(w, resp, nil)
+}
+
+// planDocRefusal is a client-facing refusal from a shared doc-edit core, with
+// the status and message the HTTP surface answers it with.
+type planDocRefusal struct {
+	status int
+	msg    string
+}
+
+func (e *planDocRefusal) Error() string { return e.msg }
+
+// writePlanDocEditErr renders an error from flipPlanDocCheckbox: a
+// planDocRefusal as its own status, anything else through writePlanDocErr
+// (confinement → 400, no plan dir → 404, the rest → 500).
+func writePlanDocEditErr(w http.ResponseWriter, err error) {
+	var ref *planDocRefusal
+	if errors.As(err, &ref) {
+		writeClientErr(w, ref.status, ref.msg)
+		return
+	}
+	writePlanDocErr(w, err)
+}
+
+// flipPlanDocCheckbox is THE checkbox flip — PATCH /api/epics/{taskId}/docs
+// {line, done} and the link's POST /api/link/plan/tick both go through it, so
+// the terminal and the Criteria tab cannot write a tick differently.
+//
+// locate picks the 0-based line to flip from the doc's lines as read HERE (one
+// read, so the address and the write see the same bytes); it returns a
+// planDocRefusal for an address that does not exist. The line must still be a
+// `- [ ]`/`- [x]` checkbox (400 otherwise). Takes a backup first; a tick that
+// closes the doc's last open criterion hands the phase to the plan branch
+// review (planReviewOnTick).
+func (h *Handler) flipPlanDocCheckbox(taskID int64, rel string, done bool, locate func(lines []string) (int, error)) (planDocResponse, error) {
 	path, err := h.resolvePlanDoc(taskID, rel)
 	if err != nil {
-		writePlanDocErr(w, err)
-		return
+		return planDocResponse{}, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			writeClientErr(w, http.StatusNotFound, "doc not found")
-			return
+			return planDocResponse{}, &planDocRefusal{status: http.StatusNotFound, msg: "doc not found"}
 		}
-		writeErr(w, err)
-		return
+		return planDocResponse{}, err
 	}
 	// Split preserving the trailing-newline shape: strings.Split keeps a final
 	// "" for a trailing \n, which Join restores exactly.
 	lines := strings.Split(string(raw), "\n")
-	i := *reqBody.Line
-	if i < 0 || i >= len(lines) {
-		writeClientErr(w, http.StatusBadRequest, "line index out of range")
-		return
+	i, err := locate(lines)
+	if err != nil {
+		return planDocResponse{}, err
 	}
 	m := checkboxLineRe.FindStringSubmatch(lines[i])
 	if m == nil {
-		writeClientErr(w, http.StatusBadRequest, "line is not a checkbox")
-		return
+		return planDocResponse{}, &planDocRefusal{status: http.StatusBadRequest, msg: "line is not a checkbox"}
 	}
 	mark := " "
-	if *reqBody.Done {
+	if done {
 		mark = "x"
 	}
 	lines[i] = m[1] + mark + m[3]
@@ -1362,15 +1403,14 @@ func (h *Handler) patchPlanDoc(w http.ResponseWriter, r *http.Request) {
 
 	backup, err := writePlanDocFile(path, content)
 	if err != nil {
-		writeErr(w, err)
-		return
+		return planDocResponse{}, err
 	}
 	// Only a tick that flipped an open line can close the doc's last criterion;
 	// an untick or a re-tick of a ticked line closes nothing.
-	if *reqBody.Done && m[2] == " " {
+	if done && m[2] == " " {
 		h.planReviewOnTick(taskID, path, content)
 	}
-	writeJSON(w, planDocResponse{Path: rel, Content: content, Backup: backup}, nil)
+	return planDocResponse{Path: rel, Content: content, Backup: backup}, nil
 }
 
 // planReviewOnTick tells h.PlanReview that a Criteria-tab tick left the doc at

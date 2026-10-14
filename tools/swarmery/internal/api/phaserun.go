@@ -146,11 +146,20 @@ func (h *Handler) runPhase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uuid, err := phaserunSvc.StartWith(phaseID, phaserun.StartOptions{
+	startPhaseRun(w, phaseID, phaserun.StartOptions{
 		Model:  body.Model,
 		Effort: body.Effort,
 		Force:  body.Force,
 	})
+}
+
+// startPhaseRun is THE phase-run start once the phase is resolved: the attached
+// service's StartWith, its refusal mapped by writePhaseStartRefusal, and the 202
+// {status, sessionUuid}. runPhase and the link's POST /api/link/plan/run both
+// end here, so the terminal and the Plans page get the same answer for the same
+// phase. The caller has already checked phaserunSvc is attached.
+func startPhaseRun(w http.ResponseWriter, phaseID int64, opts phaserun.StartOptions) {
+	uuid, err := phaserunSvc.StartWith(phaseID, opts)
 	if err != nil {
 		writePhaseStartRefusal(w, err)
 		return
