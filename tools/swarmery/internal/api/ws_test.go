@@ -70,6 +70,8 @@ var (
 		"requestedAt", "resolvedAt", "resolvedVia", "reason", "expiresAt",
 		// needs-you-queue phase 2 — additive: '' | 'prod-deploy'.
 		"riskClass",
+		// mods-swarmery-link phase 5 — additive: 'shim' | 'mod'.
+		"channel",
 	}
 )
 

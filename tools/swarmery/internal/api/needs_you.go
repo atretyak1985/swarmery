@@ -75,7 +75,11 @@ type needsYouItem struct {
 	ProjectSlug string `json:"projectSlug"`
 	// RequestID is the permission_requests.id (approval/question/prod_deploy_local).
 	RequestID *int64 `json:"requestId"`
-	ToolName  string `json:"toolName"`
+	// Channel is the hook channel of that request: 'shim' or 'mod'
+	// (permission_requests.channel, migration 0109). Absent on a session or
+	// manual_phase item.
+	Channel  string `json:"channel,omitempty"`
+	ToolName string `json:"toolName"`
 	// Preview is ≤200 chars: the tool argument (approvals.ArgOf), the
 	// question text, or the head of an awaiting_reply question.
 	Preview string `json:"preview"`
@@ -181,7 +185,8 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 // pending ones become approval/question, local-only prod deploys
 // prod_deploy_local.
 func queryNeedsYouRequests(db *sql.DB, where string, args []any, scope string, projArgs []any) ([]needsYouItem, error) {
-	q := `SELECT` + needsYouSessionCols + `, pr.id, pr.tool_name, pr.request_json, pr.requested_at, pr.status
+	q := `SELECT` + needsYouSessionCols + `, pr.id, pr.tool_name, pr.request_json, pr.requested_at, pr.status,
+		       COALESCE(pr.channel, 'shim')
 		FROM permission_requests pr
 		JOIN sessions s ON s.id = pr.session_id
 		JOIN projects p ON p.id = s.project_id
@@ -197,7 +202,7 @@ func queryNeedsYouRequests(db *sql.DB, where string, args []any, scope string, p
 		var reqID int64
 		var requestJSON, status string
 		if err := rows.Scan(&it.SessionID, &it.SessionUUID, &it.SessionName, &it.ProjectSlug, &it.TermFocusURL,
-			&reqID, &it.ToolName, &requestJSON, &it.BlockingSince, &status); err != nil {
+			&reqID, &it.ToolName, &requestJSON, &it.BlockingSince, &status, &it.Channel); err != nil {
 			return nil, err
 		}
 		it.RequestID = &reqID

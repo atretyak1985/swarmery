@@ -285,6 +285,12 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// them behind the origin fence. 503 until AttachLinkCommands.
 	mux.HandleFunc("GET /api/link/commands", linkAuth(h.linkCommandsWait))
 	mux.HandleFunc("POST /api/link/commands/{id}/ack", linkAuth(h.linkCommandAck))
+	// link approvals channel (link_permission.go): the mod asks from its
+	// tool.check hook and polls the decision, on the same permission_requests
+	// rows as the shim above. 503 until AttachLink, and while approvals are
+	// not attached.
+	mux.HandleFunc("POST /api/link/permission", linkAuth(h.linkPermissionOpen))
+	mux.HandleFunc("GET /api/link/permission/{id}", linkAuth(h.linkPermissionWait))
 	mux.HandleFunc("POST /api/sessions/{id}/link/stop", requireLocalOrigin(h.linkSessionStop))
 	mux.HandleFunc("POST /api/sessions/{id}/link/prompt", requireLocalOrigin(h.linkSessionPrompt))
 	mux.HandleFunc("POST /api/sessions/link/bulk-prompt", requireLocalOrigin(h.linkBulkPrompt))
