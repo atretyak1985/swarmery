@@ -288,3 +288,21 @@ verdict; `originSessionId` stays as the flat form of `source.sessionId`.
 A captured card's `prompt` no longer carries the session's opening prompt as prose
 (`That session opened with: …`); that text is `source.quote`, and the dispatcher
 appends it to the run exactly once.
+
+## `turn_surprise` (mods-swarmery-link phase 10)
+
+Emitted when a `turn_forecasts` row gets or changes its score, which happens when
+the second half of a turn's `turn.forecast`/`turn.actual` pair arrives through
+`POST /api/link/events` (see [`mods-link-protocol.md`](mods-link-protocol.md),
+Forecast). Advisory: nothing gates on it. The payload is the stored turn, the same
+shape as one `top[]` entry of `GET /api/insights/turn-forecasts`. A row that is gone
+or unscored by the time the frame is built is skipped. Clients that do not know the
+type ignore it.
+
+```json
+{"type":"turn_surprise","payload":{"id":12,"sessionId":1,"sessionUuid":"efaa9b56-…","projectId":1,"turnSeq":3,"startedAt":"2026-10-14T08:44:30.794Z","surprise":0.73,"top":"tests_miss","model":"haiku"}}
+```
+
+| Trigger | Message |
+|---|---|
+| Link: a turn's forecast and actual are both stored and something was measurable | `turn_surprise` |
