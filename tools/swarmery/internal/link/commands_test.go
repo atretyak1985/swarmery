@@ -558,6 +558,35 @@ func TestCommandsDeliveredStopExpiresInsteadOfRedelivery(t *testing.T) {
 	}
 }
 
+// A delivered prompt that is never acked and never re-polled (the mod went
+// away) expires once it is past PromptTTL and due for re-delivery; while a
+// poller keeps re-delivering it, or before PromptTTL, it stays delivered.
+func TestCommandsDeliveredPromptWithoutPollerExpires(t *testing.T) {
+	e := newCmdEnv(t)
+	e.poll(t)
+	id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "go on"})
+	if cmd := e.poll(t); cmd == nil || cmd.ID != id {
+		t.Fatalf("first delivery = %+v", cmd)
+	}
+	e.clk.Add(PromptTTL - time.Minute)
+	if err := e.c.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.row(t, id).state; got != StateDelivered {
+		t.Fatalf("before PromptTTL = %q, want delivered", got)
+	}
+	e.clk.Add(2 * time.Minute)
+	if err := e.c.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.row(t, id).state; got != StateExpired {
+		t.Fatalf("after PromptTTL with no poller = %q, want expired", got)
+	}
+	if got := e.notes.states(id); !equalStrings(got, []string{StateQueued, StateDelivered, StateExpired}) {
+		t.Errorf("notes = %v", got)
+	}
+}
+
 // The mod's turn.complete and its "turn in progress" ack race. Whichever lands
 // first, the bounced prompt is deliverable once that turn has ended.
 func TestCommandsBounceAfterTurnCompleteReleasesAtOnce(t *testing.T) {

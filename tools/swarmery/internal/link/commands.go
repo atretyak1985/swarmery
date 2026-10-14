@@ -480,13 +480,20 @@ func (c *Commands) claim(ctx context.Context, sessionUUID string) (*Command, err
 func (c *Commands) expireLocked(ctx context.Context) error {
 	now := c.now()
 	stopCut := stamp(now.Add(-StopTTL))
+	promptCut := stamp(now.Add(-PromptTTL))
+	redeliverCut := stamp(now.Add(-RedeliverAfter))
+	// A delivered prompt nobody acked and nobody re-polled for RedeliverAfter
+	// (the session's mod is gone) would otherwise stay "delivered" forever:
+	// once it is also past PromptTTL it expires like an undelivered one.
 	rows, err := c.db.QueryContext(ctx,
 		`SELECT id, session_id, kind FROM link_commands
 		  WHERE (state = 'queued' AND delivered_at IS NULL
 		         AND created_at < CASE kind WHEN 'stop' THEN ? ELSE ? END)
 		     OR (state = 'delivered' AND kind = 'stop'
+		         AND created_at < ? AND delivered_at < ?)
+		     OR (state = 'delivered' AND kind = 'prompt'
 		         AND created_at < ? AND delivered_at < ?)`,
-		stopCut, stamp(now.Add(-PromptTTL)), stopCut, stamp(now.Add(-RedeliverAfter)))
+		stopCut, promptCut, stopCut, redeliverCut, promptCut, redeliverCut)
 	if err != nil {
 		return fmt.Errorf("link commands: expire: %w", err)
 	}
