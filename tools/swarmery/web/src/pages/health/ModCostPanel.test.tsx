@@ -31,6 +31,7 @@ const link = (costUsd: number | null): SessionLink => ({
   contextPct: 40,
   rateLimits: [],
   costUsd,
+  controllable: false,
 });
 
 let nextId = 1;

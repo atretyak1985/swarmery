@@ -520,6 +520,10 @@ msgstr "confirm locally"
 msgid "context hogs"
 msgstr "context hogs"
 
+#: src/pages/Sessions.tsx
+msgid "continue phase…"
+msgstr "continue phase…"
+
 #: src/pages/NeedsYou.tsx
 msgid "Copied — paste it into the session"
 msgstr "Copied — paste it into the session"
@@ -1352,6 +1356,11 @@ msgstr "running…"
 #: src/pages/today/loopModel.ts
 msgid "runs scored"
 msgstr "runs scored"
+
+#. placeholder {0}: item.session.title ?? item.session.sessionUuid
+#: src/pages/Sessions.tsx
+msgid "select {0} for continue phase"
+msgstr "select {0} for continue phase"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Send"

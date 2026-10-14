@@ -118,6 +118,8 @@ import type {
   TimeseriesResp,
   ToolsResp,
   ToolsResponse,
+  LinkBulkPromptResult,
+  LinkCommandQueued,
 } from './api/types';
 import { t } from '@lingui/core/macro';
 import { currentLocale } from './i18n/locale';
@@ -1981,6 +1983,63 @@ export async function sendSessionMessage(id: number, text: string): Promise<void
     const data = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error ?? t`send failed: ${{ status: res.status }}`);
   }
+}
+
+// --- swarmery link control channel (docs/mods-link-protocol.md "Commands") ---
+// Unlike stopSession / sendSessionMessage above (daemon-spawned processes and
+// headless resume), these queue a command for the session's OWN link mod,
+// which runs it inside the live session: stop → $.turn.abort(), prompt →
+// $.prompt.submit(). 409 when no mod polls for the session.
+
+/** Mock command ids, so the mock UI can show a queued state. */
+let mockCommandId = 0;
+
+async function linkCommand(path: string, body: unknown): Promise<LinkCommandQueued> {
+  if (MOCK) {
+    mockCommandId += 1;
+    return { commandId: mockCommandId };
+  }
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await errText(res));
+  return (await res.json()) as LinkCommandQueued;
+}
+
+/** POST /api/sessions/{id}/link/stop — abort the session's running turn. */
+export function stopLinkTurn(id: number): Promise<LinkCommandQueued> {
+  return linkCommand(`/api/sessions/${String(id)}/link/stop`, {});
+}
+
+/**
+ * POST /api/sessions/{id}/link/prompt — submit a prompt into the live session.
+ * asUser=false (the default) delivers it as the mod's message; true as if the
+ * user typed it.
+ */
+export function sendLinkPrompt(id: number, text: string, asUser: boolean): Promise<LinkCommandQueued> {
+  return linkCommand(`/api/sessions/${String(id)}/link/prompt`, { text, asUser });
+}
+
+/**
+ * POST /api/sessions/link/bulk-prompt — one prompt (as the mod's message) for
+ * every selected session with a polling mod; the rest come back skipped.
+ */
+export async function bulkLinkPrompt(sessionIds: number[], text: string): Promise<LinkBulkPromptResult> {
+  if (MOCK) {
+    return {
+      queued: sessionIds.slice(0, 1).map((id) => ({ id, commandId: 1 })),
+      skipped: sessionIds.slice(1).map((id) => ({ id, reason: 'session has no link' })),
+    };
+  }
+  const res = await fetch('/api/sessions/link/bulk-prompt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionIds, text }),
+  });
+  if (!res.ok) throw new Error(await errText(res));
+  return (await res.json()) as LinkBulkPromptResult;
 }
 
 /**

@@ -247,6 +247,40 @@ export interface SessionLink {
    * not the session's lifetime cost. Session.costUsd is the pricing-table
    * recomputation over every turn. */
   costUsd: number | null;
+  /** Server-computed: the session's mod polled the command queue within
+   * link.PollFreshness (60 s), so Stop turn / Send prompt reach it
+   * (docs/mods-link-protocol.md "Commands"). Without it the control routes
+   * answer 409. */
+  controllable: boolean;
+}
+
+/** A dashboard → mod command kind (docs/mods-link-protocol.md "Commands"). */
+export type LinkCommandKind = 'stop' | 'prompt';
+
+/** link_commands.state — also the state of a link_command WS frame. */
+export type LinkCommandState = 'queued' | 'delivered' | 'done' | 'failed' | 'expired';
+
+/** Payload of the link_command WS frame: one command transition. */
+export interface LinkCommandNote {
+  /** sessions.id */
+  sessionId: number;
+  commandId: number;
+  kind: LinkCommandKind;
+  state: LinkCommandState;
+  /** The mod's ack message (a failure reason, or "turn in progress"). */
+  message?: string;
+}
+
+/** 202 body of POST /api/sessions/{id}/link/stop|prompt. */
+export interface LinkCommandQueued {
+  commandId: number;
+}
+
+/** 200 body of POST /api/sessions/link/bulk-prompt. */
+export interface LinkBulkPromptResult {
+  queued: { id: number; commandId: number }[];
+  /** reason is "session has no link" or "not found". */
+  skipped: { id: number; reason: string }[];
 }
 
 /** Go: sessionDTO */
@@ -1818,7 +1852,8 @@ export type WSMessageType =
   | 'task_updated'
   | 'plan_updated'
   | 'task_deleted'
-  | 'phase_surprise';
+  | 'phase_surprise'
+  | 'link_command';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -1834,7 +1869,10 @@ export type WSMessage =
   | { type: 'task_deleted'; payload: { taskId: number; projectId: number } }
   /** A finished phase run's surprise score first reached SWARMERY_SURPRISE_NOTIFY
    *  (learning loop phase 13). Advisory attention, at most once per run. */
-  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention };
+  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention }
+  /** A swarmery link control command moved (queued → delivered → done /
+   *  failed / expired) — docs/mods-link-protocol.md "Live updates". */
+  | { type: 'link_command'; payload: LinkCommandNote };
 
 /** Payload of the phase_surprise WS frame. */
 export interface PhaseSurpriseAttention {

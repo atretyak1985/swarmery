@@ -204,6 +204,10 @@ msgstr "{h} год тому"
 msgid "{k}k ctx"
 msgstr "{k}k ctx"
 
+#: src/components/BulkPromptBar.tsx
+msgid "{label} — {why}"
+msgstr "{label} — {why}"
+
 #: src/components/Sidebar.tsx
 msgid "{label} — opens in a project"
 msgstr "{label} — відкривається в проєкті"
@@ -231,6 +235,10 @@ msgstr "{mod} — за даними Claude Code для цього процесу
 #: src/components/FileContentionBanner.tsx
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 msgstr "{n, plural, one {# файл редагує більше однієї живої сесії} few {# файли редагує більше однієї живої сесії} many {# файлів редагує більше однієї живої сесії} other {# файла редагує більше однієї живої сесії}}"
+
+#: src/components/BulkPromptBar.tsx
+msgid "{n} selected of {selectableCount} with a polling link mod"
+msgstr "вибрано {n} з {selectableCount} з активним модом swarmery link"
 
 #: src/components/SessionLinkChips.tsx
 msgid "{name} {used} % used"
@@ -511,6 +519,14 @@ msgstr "Майстер перегляду проведе інтерв’ю що�
 msgid "abandoned"
 msgstr "покинуто"
 
+#: src/components/SessionControls.tsx
+msgid "Abort the running turn?"
+msgstr "Перервати поточний хід?"
+
+#: src/components/SessionControls.tsx
+msgid "Abort the session's running turn through its link mod. The session stays open — unlike Stop, which ends a daemon-run process."
+msgstr "Перерве поточний хід сесії через її мод swarmery link. Сесія лишається відкритою — на відміну від «Зупинити», що завершує процес, запущений демоном."
+
 #: src/components/NewProjectButton.tsx
 msgid "absolute path"
 msgstr "абсолютний шлях"
@@ -768,6 +784,18 @@ msgstr "в архів при наступному обході"
 msgid "archived in {days}d"
 msgstr "в архів через {days} д"
 
+#: src/components/SessionControls.tsx
+msgid "Arrives as a message from the swarmery link mod, not from you."
+msgstr "Надійде як повідомлення від мода swarmery link, не від вас."
+
+#: src/components/SessionControls.tsx
+msgid "Arrives in the session as if you typed it."
+msgstr "Надійде в сесію так, ніби ви ввели його самі."
+
+#: src/components/SessionControls.tsx
+msgid "as user"
+msgstr "як користувач"
+
 #: src/components/PermissionPresets.tsx
 msgid "ask"
 msgstr "питати"
@@ -948,6 +976,8 @@ msgstr "скасувати"
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/RunOutcomeModal.tsx
+#: src/components/SessionControls.tsx
+#: src/components/SessionControls.tsx
 #: src/components/StopButton.tsx
 msgid "Cancel"
 msgstr "Скасувати"
@@ -1043,6 +1073,10 @@ msgstr "Використання Claude недоступне — {error}"
 #: src/components/usage/UsageChip.tsx
 msgid "Claude usage unavailable — run `claude` to log in"
 msgstr "Використання Claude недоступне — виконайте `claude`, щоб увійти"
+
+#: src/components/BulkPromptBar.tsx
+msgid "clear"
+msgstr "очистити"
 
 #: src/components/OutcomePicker.tsx
 msgid "clear {label}"
@@ -1143,6 +1177,10 @@ msgstr "підтвердити відключення"
 msgid "Confirm locally"
 msgstr "Підтвердити локально"
 
+#: src/components/SessionControls.tsx
+msgid "Confirm stop"
+msgstr "Підтвердити зупинку"
+
 #: src/api.ts
 msgid "confirmation required"
 msgstr "потрібне підтвердження"
@@ -1183,6 +1221,18 @@ msgstr "консолідація не вдалася: {status}"
 #: src/components/SessionLinkChips.tsx
 msgid "context window {ctx} % full, reported by the session mod"
 msgstr "контекстне вікно заповнене на {ctx} % — за даними мода сесії"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Continue phase on {n} sessions"
+msgstr "Продовжити фазу в {n} сесіях"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Continue phase on selected sessions"
+msgstr "Продовжити фазу у вибраних сесіях"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
+msgstr "Продовжуй наступну фазу плану за phase-doc; не запитуй підтвердження, якщо критерії ясні"
 
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
@@ -1412,6 +1462,10 @@ msgstr "Видаляє гілку <0>{taskBranch}</0> з усіма коміта
 msgid "deleting…"
 msgstr "видаляємо…"
 
+#: src/components/SessionControls.tsx
+msgid "delivered to the session"
+msgstr "доставлено в сесію"
+
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
@@ -1609,6 +1663,7 @@ msgstr "документація: {configDocs}"
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
 #: src/components/PlanRunCard.tsx
+#: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
 msgid "done"
 msgstr "готово"
@@ -1663,6 +1718,10 @@ msgstr "Виконавець сказав: {said}"
 msgid "exited"
 msgstr "завершився"
 
+#: src/components/SessionControls.tsx
+msgid "expired — the mod did not pick it up in time"
+msgstr "прострочено — мод не забрав команду вчасно"
+
 #: src/components/AccountSelector.tsx
 msgid "explicit binding"
 msgstr "явна прив’язка"
@@ -1677,12 +1736,17 @@ msgstr "провал"
 
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
+#: src/components/SessionControls.tsx
 msgid "failed"
 msgstr "збій"
 
 #: src/lib/needsYou.ts
 msgid "Failed"
 msgstr "Невдача"
+
+#: src/components/SessionControls.tsx
+msgid "failed: {msg}"
+msgstr "збій: {msg}"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "feedback is required — a re-run with no notes would repeat the same work"
@@ -2318,6 +2382,10 @@ msgstr "палітр не знайдено"
 msgid "no plugins in the marketplace clone"
 msgstr "у клоні маркетплейсу немає плагінів"
 
+#: src/components/BulkPromptBar.tsx
+msgid "no polling link mod"
+msgstr "немає активного мода swarmery link"
+
 #: src/components/RunOutcomeModal.tsx
 msgid "no progress"
 msgstr "без прогресу"
@@ -2333,6 +2401,10 @@ msgstr "немає уроку {id}"
 #: src/api/lessons.ts
 msgid "no such proposal {id}"
 msgstr "немає пропозиції {id}"
+
+#: src/components/SessionControls.tsx
+msgid "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
+msgstr "У цій сесії немає мода swarmery link, тож керувати нею з дашборда неможливо."
 
 #: src/workspace/TaskGraph.tsx
 msgid "no tasks to graph"
@@ -2367,6 +2439,10 @@ msgstr "не знайдено"
 #: src/workspace/task/useTaskDraft.ts
 msgid "not saved — {fields} changed on the server while you were editing. Close and reopen the card to pick up the new version."
 msgstr "не збережено — {fields} змінилися на сервері, поки ви редагували. Закрийте й відкрийте картку знову, щоб підтягнути нову версію."
+
+#: src/components/SessionControls.tsx
+msgid "not sent: {msg}"
+msgstr "не надіслано: {msg}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "not yet loaded"
@@ -2838,6 +2914,18 @@ msgstr "Проєкти на пресеті «заблоковано» — від
 msgid "prompt"
 msgstr "промпт"
 
+#: src/components/SessionControls.tsx
+msgid "Prompt"
+msgstr "Промпт"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Prompt for the selected sessions"
+msgstr "Промпт для вибраних сесій"
+
+#: src/components/SessionControls.tsx
+msgid "Prompt to send into the session"
+msgstr "Промпт для надсилання в сесію"
+
 #: src/pages/docsRail.ts
 msgid "Protocols"
 msgstr "Протоколи"
@@ -2878,6 +2966,18 @@ msgstr "У черзі"
 #: src/lib/docFigures.tsx
 msgid "Queued — waiting for a slot"
 msgstr "У черзі — чекає на слот"
+
+#: src/components/SessionControls.tsx
+msgid "queued — waits for the running turn to end"
+msgstr "у черзі — чекає, доки завершиться поточний хід"
+
+#: src/components/SessionControls.tsx
+msgid "queued, waiting for the mod to pick it up"
+msgstr "у черзі, чекає, доки мод її забере"
+
+#: src/components/BulkPromptBar.tsx
+msgid "queued: {queuedCount}"
+msgstr "у черзі: {queuedCount}"
 
 #: src/components/SessionCard.tsx
 msgid "quiet {quiet}"
@@ -3317,9 +3417,30 @@ msgstr "шукати сесії, повідомлення, файли…"
 msgid "second"
 msgstr "друга"
 
+#: src/components/BulkPromptBar.tsx
+msgid "select all"
+msgstr "вибрати всі"
+
+#: src/components/SessionControls.tsx
+msgid "Send"
+msgstr "Надіслати"
+
 #: src/api.ts
 msgid "send failed: {status}"
 msgstr "надсилання не вдалося: {status}"
+
+#: src/components/SessionControls.tsx
+msgid "Send prompt"
+msgstr "Надіслати промпт"
+
+#: src/components/BulkPromptBar.tsx
+#: src/components/SessionControls.tsx
+msgid "sending…"
+msgstr "надсилаємо…"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Sent as a message from the swarmery link mod, not as you."
+msgstr "Надсилається як повідомлення від мода swarmery link, не від вашого імені."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "sent back to todo with your feedback appended to the prompt"
@@ -3365,6 +3486,10 @@ msgstr "Сесія завершилась"
 #: src/lib/notifications.ts
 msgid "Session killed"
 msgstr "Сесію зупинено"
+
+#: src/components/BulkPromptBar.tsx
+msgid "session not found"
+msgstr "сесію не знайдено"
 
 #: src/components/OutcomePicker.tsx
 msgid "session outcome"
@@ -3486,6 +3611,10 @@ msgstr "шоста"
 msgid "skip"
 msgstr "пропустити"
 
+#: src/components/BulkPromptBar.tsx
+msgid "skipped: {skippedCount}"
+msgstr "пропущено: {skippedCount}"
+
 #: src/components/NewProjectButton.tsx
 msgid "slug"
 msgstr "slug"
@@ -3553,6 +3682,11 @@ msgstr "Зупинити {label} і позначити готовим?"
 #: src/api.ts
 msgid "stop failed: {status}"
 msgstr "зупинка не вдалася: {status}"
+
+#: src/components/SessionControls.tsx
+#: src/components/SessionControls.tsx
+msgid "Stop turn"
+msgstr "Зупинити хід"
 
 #: src/lib/glossary.ts
 msgid "stop using this lesson?"
@@ -3799,6 +3933,10 @@ msgstr "запуск відмітив усі критерії приймання
 #: src/components/RunOutcomeModal.tsx
 msgid "the run ticked some criteria but did not finish the phase"
 msgstr "запуск відмітив частину критеріїв, але не завершив фазу"
+
+#: src/components/SessionControls.tsx
+msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
+msgstr "Мод swarmery link цієї сесії не опитує команди. Увімкніть опцію \"control\" у swarmery-link і не закривайте сесію."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "The sign-in was declined."
@@ -4119,6 +4257,10 @@ msgstr "що треба зробити"
 #: src/workspace/NewTaskModal.tsx
 msgid "what should happen"
 msgstr "що має статися"
+
+#: src/components/SessionControls.tsx
+msgid "What should the session do next?"
+msgstr "Що сесія має зробити далі?"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "what to fix on the next pass — appended to the prompt"
