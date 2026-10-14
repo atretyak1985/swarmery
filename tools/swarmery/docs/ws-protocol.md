@@ -149,8 +149,16 @@ attach to the existing pending row and do **not** re-emit. The payload is the fu
   "status":"pending",
   "requestedAt":"2026-07-13T10:15:04.000Z",
   "resolvedAt":null,"resolvedVia":null,"reason":null,
-  "expiresAt":"2026-07-13T10:17:04.000Z"}}
+  "expiresAt":"2026-07-13T10:17:04.000Z","riskClass":"","channel":"shim"}}
 ```
+
+Two fields were added later, both additive: `riskClass` (`""` or `"prod-deploy"`,
+needs-you-queue phase 2) and `channel` (`"shim"` or `"mod"`, mods-swarmery-link
+phase 5): the hook channel that delivered the request — the shim's
+`POST /api/hooks/permission-request` or the link mod's `POST /api/link/permission`
+([`mods-link-protocol.md`](mods-link-protocol.md#permission)). A mod row's
+`requestJson` has the same hook-stdin shape, with `"hook_event_name":"tool.check"`.
+`resolvedVia` still says who decided and is never `"mod"`.
 
 ### `permission_resolved` (phase 2)
 
