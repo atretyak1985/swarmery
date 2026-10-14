@@ -113,6 +113,11 @@ type Decision struct {
 	Status       string // approved | denied | expired | resolved_elsewhere
 	Reason       string
 	UpdatedInput json.RawMessage
+	// Via is the resolved_via the decision was recorded with ('dashboard',
+	// ViaRule, 'terminal', ViaLocalOnly, ViaRestart, or empty for an expiry).
+	// The shim's long-poll ignores it; the mod channel maps a local-only
+	// hand-off and a rule auto-approve onto their own wire forms.
+	Via string
 }
 
 // Options tunes a Service; zero values fall back to defaults.
@@ -143,6 +148,14 @@ type Service struct {
 
 	mu      sync.Mutex
 	waiters map[int64]map[chan Decision]struct{} // request id → attached long-poll waiters
+	// leases: request id → deadline of the mod channel's claim on the row
+	// (mod.go). A live lease counts as a waiter for Decide/Answer, because
+	// the mod asks again within ModLeaseTTL even while no GET is in flight.
+	leases map[int64]time.Time
+	// modDecided keeps the decision of a leased row for the mod's next poll
+	// (it may be between two GETs when the dashboard decides). Pruned by
+	// Sweep after 2×ModLeaseTTL.
+	modDecided map[int64]modDecision
 
 	hbMu     sync.Mutex
 	lastSeen time.Time // most recent POST /api/hooks/* (in-memory heartbeat;
@@ -164,7 +177,12 @@ func New(db *sql.DB, bus *ingest.Bus, opt Options) *Service {
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}
-	return &Service{db: db, bus: bus, opt: opt, waiters: map[int64]map[chan Decision]struct{}{}}
+	return &Service{
+		db: db, bus: bus, opt: opt,
+		waiters:    map[int64]map[chan Decision]struct{}{},
+		leases:     map[int64]time.Time{},
+		modDecided: map[int64]modDecision{},
+	}
 }
 
 // Timeout returns the configured approval_timeout.
@@ -203,6 +221,20 @@ type HookInput struct {
 	ToolName    string
 	ToolInput   json.RawMessage
 	CWD         string
+	// ToolUseID is the engine's toolu_… id of the call. Only the mod channel
+	// knows it (tool.check's e.tool_use_id); the shim's stdin has none.
+	ToolUseID string
+	// Channel is the delivering channel written to permission_requests.channel:
+	// ChannelShim (the default when empty) or ChannelMod.
+	Channel string
+}
+
+// channel returns the row's channel value ('' reads as ChannelShim).
+func (in HookInput) channel() string {
+	if in.Channel == "" {
+		return ChannelShim
+	}
+	return in.Channel
 }
 
 // ParseHookStdin validates the verbatim hook stdin (E1 shape).
@@ -274,6 +306,13 @@ func CanonicalJSON(raw json.RawMessage) (string, error) {
 //
 // The caller MUST hand the channel back via Detach (client disconnect) or
 // receive from it (decision/expiry); Resolve drops all attached waiters.
+//
+// Shim after mod (mods-link phase 5): when no pending row matches but a
+// channel='mod' row with the same hash was resolved expired or
+// resolved_elsewhere within ShimAfterModWindow, the mod has just handed this
+// very call back to the engine. Open then answers at once with a
+// resolved_elsewhere Decision on a buffered channel — no new row, no events —
+// so the long-poll answers 204 and the shim fails open to the native dialog.
 func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, err error) {
 	hash, err := DedupHash(in.SessionUUID, in.ToolName, in.ToolInput)
 	if err != nil {
@@ -283,30 +322,98 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Dedup: only ever against pending rows (partial index idx_pr_dedup).
-	err = s.db.QueryRow(
+	// Dedup: only ever against pending rows (partial index idx_pr_dedup) —
+	// whichever channel created them, so a shim request for a call the mod
+	// is still asking about waits on the mod's row.
+	id, found, err := s.pendingByHashLocked(hash)
+	if err != nil {
+		return 0, nil, false, err
+	}
+	if found {
+		return id, s.attachLocked(id), false, nil
+	}
+
+	modID, handedBack, err := s.recentModHandBackLocked(hash)
+	if err != nil {
+		return 0, nil, false, err
+	}
+	if handedBack {
+		ch = make(chan Decision, 1)
+		ch <- Decision{Status: StatusResolvedElsewhere}
+		return modID, ch, false, nil
+	}
+
+	id, _, _, err = s.createLocked(in, hash, func(id int64) { ch = s.attachLocked(id) })
+	if err != nil {
+		return 0, nil, false, err
+	}
+	return id, ch, true, nil
+}
+
+// pendingByHashLocked finds the pending row with this dedup hash, if any.
+func (s *Service) pendingByHashLocked(hash string) (int64, bool, error) {
+	var id int64
+	err := s.db.QueryRow(
 		`SELECT id FROM permission_requests WHERE dedup_hash = ? AND status = 'pending'`,
 		hash).Scan(&id)
 	switch {
 	case err == nil:
-		return id, s.attachLocked(id), false, nil
-	case !errors.Is(err, sql.ErrNoRows):
-		return 0, nil, false, err
+		return id, true, nil
+	case errors.Is(err, sql.ErrNoRows):
+		return 0, false, nil
+	default:
+		return 0, false, err
 	}
+}
 
+// recentModHandBackLocked finds a channel='mod' row with this hash that was
+// resolved expired or resolved_elsewhere within ShimAfterModWindow — the mod
+// passed the call back to the engine, whose native dialog the shim now
+// reports (index idx_pr_mod_hash).
+func (s *Service) recentModHandBackLocked(hash string) (int64, bool, error) {
+	since := s.opt.Now().UTC().Add(-ShimAfterModWindow).Format(tsFormat)
+	var id int64
+	err := s.db.QueryRow(
+		`SELECT id FROM permission_requests
+		 WHERE channel = ? AND dedup_hash = ? AND resolved_at >= ?
+		   AND status IN (?, ?)
+		 ORDER BY resolved_at DESC, id DESC LIMIT 1`,
+		ChannelMod, hash, since, StatusExpired, StatusResolvedElsewhere).Scan(&id)
+	switch {
+	case err == nil:
+		return id, true, nil
+	case errors.Is(err, sql.ErrNoRows):
+		return 0, false, nil
+	default:
+		return 0, false, err
+	}
+}
+
+// createLocked is the shared "new pending row" path of both channels: the
+// session row, the per-session cap, the risk class, the INSERT (channel and
+// tool_use_id included), the permission_request event, the session's
+// waiting_approval status, the WS frames, then the prod-deploy hand-off, the
+// auto-approve rules and the approval_requested webhook.
+//
+// hold claims the new row before anything can resolve it: the shim attaches
+// its long-poll channel, the mod sets its lease. Either way resolveLocked
+// then delivers the prod-deploy / rule decision through the claim. The
+// returned Decision is that immediate decision (resolved true), or zero for
+// a row left pending.
+func (s *Service) createLocked(in HookInput, hash string, hold func(id int64)) (id int64, d Decision, resolved bool, err error) {
 	sessionID, err := s.resolveSessionLocked(in)
 	if err != nil {
-		return 0, nil, false, err
+		return 0, Decision{}, false, err
 	}
 
 	var pending int
 	if err := s.db.QueryRow(
 		`SELECT COUNT(*) FROM permission_requests WHERE session_id = ? AND status = 'pending'`,
 		sessionID).Scan(&pending); err != nil {
-		return 0, nil, false, err
+		return 0, Decision{}, false, err
 	}
 	if pending >= maxPendingPerSession {
-		return 0, nil, false, ErrTooManyPending
+		return 0, Decision{}, false, ErrTooManyPending
 	}
 
 	riskClass := s.riskClassLocked(sessionID, in)
@@ -316,29 +423,31 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 	expiresAt := now.Add(s.opt.Timeout).Format(tsFormat)
 	res, err := s.db.Exec(
 		`INSERT INTO permission_requests
-		   (session_id, tool_name, request_json, status, requested_at, dedup_hash, expires_at, risk_class)
-		 VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`,
-		sessionID, in.ToolName, string(in.Raw), requestedAt, hash, expiresAt, riskClass)
+		   (session_id, tool_name, request_json, status, requested_at, dedup_hash, expires_at, risk_class,
+		    channel, tool_use_id)
+		 VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+		sessionID, in.ToolName, string(in.Raw), requestedAt, hash, expiresAt, riskClass,
+		in.channel(), nullStr(in.ToolUseID))
 	if err != nil {
-		return 0, nil, false, fmt.Errorf("insert permission_request: %w", err)
+		return 0, Decision{}, false, fmt.Errorf("insert permission_request: %w", err)
 	}
 	id, _ = res.LastInsertId()
 
 	eventID, err := s.insertEventLocked(sessionID, "permission_request", in.ToolName, "", requestedAt, string(in.Raw))
 	if err != nil {
-		return 0, nil, false, err
+		return 0, Decision{}, false, err
 	}
 	if _, err := s.db.Exec(
 		`UPDATE permission_requests SET event_id = ? WHERE id = ?`, eventID, id); err != nil {
-		return 0, nil, false, err
+		return 0, Decision{}, false, err
 	}
 
 	if _, err := s.db.Exec(
 		`UPDATE sessions SET status = 'waiting_approval' WHERE id = ?`, sessionID); err != nil {
-		return 0, nil, false, err
+		return 0, Decision{}, false, err
 	}
 
-	ch = s.attachLocked(id)
+	hold(id)
 	s.publish(ingest.Notification{Type: ingest.NoteSessionUpdated, SessionID: sessionID})
 	s.publish(ingest.Notification{Type: ingest.NoteEventAppended, SessionID: sessionID, EventID: eventID})
 	s.publish(ingest.Notification{Type: ingest.NotePermissionRequested, SessionID: sessionID, RequestID: id})
@@ -352,11 +461,11 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 	// open to the same native dialog) — never on to the rules below.
 	if riskClass == RiskProdDeploy {
 		if err := s.resolveLocked(id, StatusResolvedElsewhere, ViaLocalOnly, LocalOnlyReason, nil); err != nil {
-			delete(s.waiters, id) // nobody will receive on ch; the sweeper expires the row
-			return 0, nil, false, fmt.Errorf("hand prod-deploy request %d to the terminal: %w", id, err)
+			s.releaseLocked(id) // nobody will receive the claim; the sweeper expires the row
+			return 0, Decision{}, false, fmt.Errorf("hand prod-deploy request %d to the terminal: %w", id, err)
 		}
 		s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput, LocalOnlyReason)
-		return id, ch, true, nil
+		return id, Decision{Status: StatusResolvedElsewhere, Reason: LocalOnlyReason, Via: ViaLocalOnly}, true, nil
 	}
 
 	// control-plane v2 — auto-approve rules: a matching enabled rule resolves
@@ -368,15 +477,22 @@ func (s *Service) Open(in HookInput) (id int64, ch chan Decision, isNew bool, er
 	// approval_requested webhook is intentionally skipped for auto-approvals.
 	if ruleID := s.matchRuleLocked(sessionID, in); ruleID != 0 {
 		reason := fmt.Sprintf("auto-approved by rule #%d", ruleID)
-		if err := s.resolveLocked(id, StatusApproved, "rule", reason, nil); err != nil {
+		if err := s.resolveLocked(id, StatusApproved, ViaRule, reason, nil); err != nil {
 			log.Printf("warn: approvals: rule %d auto-approve of request %d: %v", ruleID, id, err)
 		} else {
-			return id, ch, true, nil
+			return id, Decision{Status: StatusApproved, Reason: reason, Via: ViaRule}, true, nil
 		}
 	}
 
 	s.notifyApproval(notify.EventApprovalRequested, id, sessionID, in.ToolName, in.ToolInput, "")
-	return id, ch, true, nil
+	return id, Decision{}, false, nil
+}
+
+// releaseLocked drops every claim on a row: its long-poll waiters and its
+// mod lease.
+func (s *Service) releaseLocked(id int64) {
+	delete(s.waiters, id)
+	delete(s.leases, id)
 }
 
 // riskClassLocked classifies one hook call: RiskProdDeploy when the guard
@@ -501,11 +617,12 @@ func (s *Service) Decide(id int64, status, via, reason string) error {
 }
 
 // requireWaiterLocked reports nil when at least one long-poll waiter is
-// attached to id; otherwise it reads the row to return the most specific
-// error (unknown → ErrNotFound, terminal → ErrAlreadyResolved, pending →
-// ErrNoWaiter).
+// attached to id, or the mod channel holds a live lease on it (the mod polls
+// again within ModLeaseTTL and picks the decision up from modDecided);
+// otherwise it reads the row to return the most specific error (unknown →
+// ErrNotFound, terminal → ErrAlreadyResolved, pending → ErrNoWaiter).
 func (s *Service) requireWaiterLocked(id int64) error {
-	if len(s.waiters[id]) > 0 {
+	if s.hasWaiterLocked(id) {
 		return nil
 	}
 	var cur string
@@ -579,7 +696,13 @@ func (s *Service) resolveLocked(id int64, status, via, reason string, updatedInp
 		s.notifyApproval(notify.EventApprovalExpired, id, sessionID, toolName, nil, reason)
 	}
 
-	d := Decision{Status: status, Reason: reason, UpdatedInput: updatedInput}
+	d := Decision{Status: status, Reason: reason, UpdatedInput: updatedInput, Via: via}
+	if _, leased := s.leases[id]; leased {
+		// The mod may be between two polls: keep the decision (with an
+		// Answer's UpdatedInput) for its next GET.
+		s.modDecided[id] = modDecision{d: d, at: s.opt.Now()}
+		delete(s.leases, id)
+	}
 	for ch := range s.waiters[id] {
 		ch <- d // each channel is buffered(1) and receives exactly one decision
 	}
@@ -631,6 +754,12 @@ func (s *Service) Detach(id int64, ch chan Decision) {
 		return
 	}
 	delete(s.waiters, id)
+	if s.leaseLiveLocked(id) {
+		// The mod channel still asks about this row (a shim attached to a
+		// mod row hung up): it is not the last asker. Sweep resolves the row
+		// once the lease lapses.
+		return
+	}
 	if err := s.resolveLocked(id, StatusResolvedElsewhere, "terminal", "", nil); err != nil &&
 		!errors.Is(err, ErrAlreadyResolved) && !errors.Is(err, ErrNotFound) {
 		log.Printf("warn: approvals: resolve_elsewhere request %d: %v", id, err)
@@ -689,9 +818,10 @@ func (s *Service) Answer(id int64, answers map[string]json.RawMessage) error {
 	if cur != StatusPending {
 		return ErrAlreadyResolved
 	}
-	// Same guard as Decide: answers are delivered through the long-poll, so a
-	// pending row nobody is polling on cannot take one (ErrNoWaiter → 410).
-	if len(s.waiters[id]) == 0 {
+	// Same guard as Decide: answers are delivered through the long-poll (or
+	// the mod's next poll under a live lease), so a pending row nobody is
+	// polling on cannot take one (ErrNoWaiter → 410).
+	if !s.hasWaiterLocked(id) {
 		return ErrNoWaiter
 	}
 	if toolName != AskUserQuestionTool {
@@ -855,6 +985,8 @@ func (s *Service) Sweep() {
 			log.Printf("warn: approvals: expire request %d: %v", id, err)
 		}
 	}
+
+	s.sweepLeases()
 
 	// Self-heal: waiting_approval must never be sticky.
 	stuck, err := s.db.Query(
