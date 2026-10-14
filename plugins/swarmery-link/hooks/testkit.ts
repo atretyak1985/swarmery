@@ -82,6 +82,23 @@ export type World = {
   readonly permissionPollReplies?: ReadonlyArray<PermissionReply>
   /** The daemon's answer per DELETE /api/link/permission/{id}, in order; the last repeats. Default: 204. */
   readonly permissionCancelReplies?: ReadonlyArray<PermissionReply>
+  /**
+   * The daemon's answer per GET /api/link/plan, in order; the last repeats. A
+   * view is a 200 carrying it. Default: 204 (no plan).
+   */
+  readonly plans?: ReadonlyArray<PlanGetReply>
+  /**
+   * The daemon's answer per POST /api/link/plan/<action>, in order per action;
+   * the last repeats. Default: 200 with the last view a GET served (select,
+   * tick), 202 (run, drift).
+   */
+  readonly planPosts?: Readonly<Partial<Record<PlanActionName, ReadonlyArray<PlanPostReply>>>>
+  /** The label per `$.model.classify`, in order; the last repeats. Default: `on-phase`. */
+  readonly classify?: ReadonlyArray<string | 'throw' | 'hang'>
+  /** The person's pick per `$.ui.ask` (its AskUserQuestion call), in order; the last repeats. Default: the first option. */
+  readonly asks?: readonly string[]
+  /** False: `$.ui.open` leaves the pane waiting undrawn (a narrow terminal). Default: placed. */
+  readonly isPanePlaced?: boolean
 }
 
 /** A status alone (empty body), a status with a JSON body, a failed connection, or a daemon that never answers. */
@@ -101,6 +118,22 @@ export type SendResult = { readonly isDelivered: true } | { readonly isDelivered
 export type SendReply = SendResult | { readonly result: SendResult; readonly afterMs: number }
 
 export type SendSeen = { readonly to: unknown; readonly text: string; readonly origin: unknown; readonly agentId: string | undefined }
+
+export type PlanActionName = 'select' | 'tick' | 'run' | 'drift'
+
+export type PlanGetReply = number | 'throw' | 'hang' | { readonly view: Readonly<Record<string, unknown>> }
+
+export type PlanPostReply = number | 'hang' | { readonly status: number; readonly body: Readonly<Record<string, unknown>> }
+
+/** A request to /api/link/plan*, its JSON body parsed. */
+export type PlanCall = {
+  readonly url: string
+  readonly method: string | undefined
+  readonly authorization: string | undefined
+  readonly body: Readonly<Record<string, unknown>> | undefined
+}
+
+export type Asked = { readonly question: string; readonly header: string | undefined; readonly options: readonly string[] }
 
 export type ModelReply =
   | string
@@ -169,7 +202,29 @@ export type Recorded = {
   readonly storeOps: string[]
   /** Every `session.send` that reached the engine beneath the plugin. */
   readonly sends: SendSeen[]
+  /** Every request to /api/link/plan*. */
+  readonly planCalls: PlanCall[]
+  /** Every `$.model.classify`: its text and labels. */
+  readonly classifyCalls: Array<{ readonly text: string; readonly labels: readonly string[] }>
+  /** Every `$.command.register`. */
+  readonly commands: Array<{ readonly name: string; readonly argumentHint?: string | undefined }>
+  /** Every `$.ui.open`: the pane's id and title. */
+  readonly panes: Array<{ readonly id: string; readonly title: string | undefined }>
+  readonly toasts: string[]
+  /** Every `$.ui.copy`'s text. */
+  readonly copies: string[]
+  /** Every question `$.ui.ask` put to the person. */
+  readonly asked: Asked[]
 }
+
+const PLAN = '/api/link/plan'
+
+/**
+ * What `next(e)` resolves to on `ui.render` beneath the plugins: the engine's
+ * own component, drawn with the original props. An AskUserQuestion tree must
+ * hold exactly one such node, or the engine refuses it and draws its own.
+ */
+export const ENGINE_DRAWING = { type: 'engine', ref: 0 } as const
 
 const COMMANDS = '/api/link/commands'
 const PERMISSION = '/api/link/permission'
@@ -201,6 +256,16 @@ export const world = (on: On, w: World = {}): Recorded => {
   const store = new Map<string, unknown>(Object.entries(w.store ?? {}))
   const storeOps: string[] = []
   const sends: SendSeen[] = []
+  const planCalls: PlanCall[] = []
+  const classifyCalls: Array<{ readonly text: string; readonly labels: readonly string[] }> = []
+  const commands: Array<{ readonly name: string; readonly argumentHint?: string | undefined }> = []
+  const panes: Array<{ readonly id: string; readonly title: string | undefined }> = []
+  const toasts: string[] = []
+  const copies: string[] = []
+  const asked: Asked[] = []
+  let planGets = 0
+  const planPostCounts: Record<string, number> = {}
+  let lastView: Readonly<Record<string, unknown>> | undefined
   let toolCalls = 0
   let reads = 0
   let sessionId: string = SESSION_ID
@@ -255,6 +320,31 @@ export const world = (on: On, w: World = {}): Recorded => {
       if (typeof reply === 'number') return { value: { status: reply, ok: reply >= 200 && reply < 300, headers: {}, text: '' } }
       return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(reply.command) } }
     }
+    if (e.url.includes(PLAN)) {
+      const body = e.init?.body === undefined ? undefined : (JSON.parse(e.init.body) as Readonly<Record<string, unknown>>)
+      planCalls.push({ url: e.url, method: e.init?.method, authorization: e.init?.headers?.authorization, body })
+      const respond = (status: number, json?: unknown) => ({
+        value: { status, ok: status >= 200 && status < 300, headers: {}, text: json === undefined ? '' : JSON.stringify(json) },
+      })
+      const action = /\/api\/link\/plan\/(\w+)/.exec(e.url)?.[1]
+      if (action === undefined) {
+        const reply = pick<PlanGetReply>(w.plans, planGets, 204)
+        planGets += 1
+        if (reply === 'hang') return new Promise<never>(() => undefined)
+        if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
+        if (typeof reply === 'number') return respond(reply)
+        lastView = reply.view
+        return respond(200, reply.view)
+      }
+      const n = planPostCounts[action] ?? 0
+      planPostCounts[action] = n + 1
+      const fallback: PlanPostReply = action === 'run' || action === 'drift' ? 202 : { status: 200, body: lastView ?? {} }
+      const reply = pick<PlanPostReply>(w.planPosts?.[action as PlanActionName], n, fallback)
+      if (reply === 'hang') return new Promise<never>(() => undefined)
+      if (typeof reply === 'number') return respond(reply, reply >= 400 ? { error: `refused (${reply})` } : undefined)
+      if (reply.status === 200) lastView = reply.body
+      return respond(reply.status, reply.body)
+    }
     const reply = pick(w.replies, requests.length, 202)
     requests.push({
       url: e.url,
@@ -285,6 +375,17 @@ export const world = (on: On, w: World = {}): Recorded => {
   })
   on('tool.call', ($, e) => {
     calls.push(String(e.tool))
+    if (e.tool === 'AskUserQuestion' && w.asks !== undefined) {
+      // `$.ui.ask`: the dialog's answer, in the shape a tool.call hook answers it (M4);
+      // only in a world that stages answers, so the approvals tests see the plain tool run
+      const questions = (e as unknown as { readonly questions: ReadonlyArray<Readonly<Record<string, unknown>>> }).questions
+      const q = questions[0] ?? {}
+      const options = (Array.isArray(q.options) ? q.options : []).map(o => String((o as { readonly label?: unknown }).label))
+      const question = String(q.question)
+      const answer = pick(w.asks, asked.length, options[0] ?? '')
+      asked.push({ question, header: typeof q.header === 'string' ? q.header : undefined, options })
+      return { result: { questions, answers: { [question]: answer } } }
+    }
     const outcome = pick(w.tools, toolCalls, 'ok')
     toolCalls += 1
     if (outcome === 'deny') return { deny: 'refused beneath' }
@@ -347,6 +448,31 @@ export const world = (on: On, w: World = {}): Recorded => {
     return reply
   })
   on('session.receive', ($, e) => ({ text: e.text }))
+  on('model.classify', ($, e) => {
+    const reply = pick(w.classify, classifyCalls.length, 'on-phase')
+    classifyCalls.push({ text: e.text, labels: e.labels })
+    if (reply === 'hang') return new Promise<never>(() => undefined)
+    if (reply === 'throw') return { deny: 'api-error: overloaded' }
+    return { value: reply }
+  })
+  on('command.register', ($, e) => {
+    commands.push({ name: e.name, argumentHint: e.argumentHint })
+    return { value: { command: e.name } }
+  })
+  on('ui.open', ($, e) => {
+    panes.push({ id: e.id, title: e.title })
+    return { value: w.isPanePlaced === false ? { isPlaced: false, reason: 'the terminal is 80 columns wide' } : { isPlaced: true } }
+  })
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.copy', ($, e) => {
+    copies.push(e.text)
+    return { value: { isCopied: true } }
+  })
+  // the engine's own drawing of a component, beneath the plugin's render hooks
+  on('ui.render', () => ENGINE_DRAWING)
 
   const moveTo = (id: string, dir: string = cwd): void => {
     sessionId = id
@@ -375,6 +501,13 @@ export const world = (on: On, w: World = {}): Recorded => {
     store,
     storeOps,
     sends,
+    planCalls,
+    classifyCalls,
+    commands,
+    panes,
+    toasts,
+    copies,
+    asked,
   }
 }
 
@@ -395,6 +528,41 @@ export const track = (pending: Promise<unknown>): { readonly isDone: () => boole
   )
   return { isDone: () => isDone }
 }
+
+/** A PlanView as GET /api/link/plan answers it: phase 2 of 3, one of four criteria done. */
+export const PLAN_VIEW = {
+  taskId: '2026-10-13-order-line-items',
+  title: 'Order line items',
+  url: 'http://127.0.0.1:7777/plans/2026-10-13-order-line-items',
+  chosenBy: 'auto',
+  phase: {
+    id: 'phase-2',
+    n: 2,
+    title: 'Line-item CRUD',
+    status: 'running',
+    done: 1,
+    total: 4,
+    criteria: [
+      { idx: 0, text: 'POST /orders/{id}/line-items creates a row', done: true, class: '' },
+      { idx: 1, text: 'GET lists the line items in insert order', done: false, class: '' },
+      { idx: 2, text: 'DELETE removes one and answers 204', done: false, class: '' },
+      { idx: 3, text: 'deployed to staging', done: false, class: 'land' },
+    ],
+  },
+  next: { id: 'phase-3', n: 3, title: 'Totals and tax' },
+} as const
+
+/** The AbovePrompt props of an idle terminal band with room to spare. */
+export const BAND_PROPS = {
+  hasSurvey: false,
+  isWorking: false,
+  maxRows: 10,
+  bodyColumns: 80,
+  scroll: { offset: 0, bodyRows: 10 },
+  view: {},
+} as const
+
+export const SURFACES = ['terminal', 'desktop', 'vscode', 'mobile'] as const
 
 export const END = { reason: 'other', sessionId: SESSION_ID, resume: { sessionId: SESSION_ID } as never } as const
 

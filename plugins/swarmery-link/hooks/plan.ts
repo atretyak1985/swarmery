@@ -176,13 +176,15 @@ function toast($: EngineInterface, text: string): void {
  * again and the checklist opens in a pane, or is the command's output where
  * no pane is placed.
  */
-export async function runPlanCommand($: EngineInterface, planner: Planner, access: PlanAccess, args: string): Promise<CommandRunResult> {
+export async function runPlanCommand($: EngineInterface, planner: Planner, access: PlanAccess, args: string | undefined): Promise<CommandRunResult> {
   if (access.token === undefined) return { text: 'swarmery-link: no daemon token (~/.swarmery/link-token); /plan needs the swarmery daemon' }
-  const taskId = args.trim().split(/\s+/)[0] ?? ''
+  const taskId = (args ?? '').trim().split(/\s+/)[0] ?? ''
   if (taskId !== '') {
     const reply = await postPlan($, planner, access, 'select', { session: access.sessionId, taskId })
     if (reply.status !== 200) return { text: `swarmery-link: could not select ${taskId}: ${replyError(reply.status, reply.text)}` }
-    setView($, planner, parsePlanView(reply.text))
+    const selected = parsePlanView(reply.text)
+    if (selected !== undefined) setView($, planner, selected)
+    else await refreshPlan($, planner, access)
   } else {
     await refreshPlan($, planner, access)
   }
