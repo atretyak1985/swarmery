@@ -21,6 +21,7 @@ package prune
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // Stats reports one prune pass (the would-be numbers under DryRun).
@@ -71,6 +72,15 @@ type Stats struct {
 	// per-turn forecast vs actual). Same horizon and same reasoning as
 	// LinkEvents, aged by the row's own started_at.
 	TurnForecasts int64
+	// LinkMessages is link_messages rows dropped (migration 0110, the link's
+	// swarm messages). Same horizon and same reasoning as LinkEvents, aged by
+	// the row's own at.
+	LinkMessages int64
+	// LinkClaims is link_claims rows dropped (migration 0110, the file-claims
+	// registry). NOT on the cutoff: a claim is only interesting while live, so
+	// a released one goes 24 h (ClaimRetention) after its release, and one
+	// never released (a crashed session) 24 h after it was claimed.
+	LinkClaims int64
 	// VacuumErr carries a post-commit VACUUM failure (e.g. SQLITE_BUSY).
 	// The destructive transaction has already committed by then, so the
 	// prune itself succeeded — callers should report this as a warning
@@ -188,7 +198,24 @@ type Options struct {
 	// Vacuum reclaims freed pages after the destructive transaction commits.
 	// A failure is carried on Stats.VacuumErr, never reported as a failed prune.
 	Vacuum bool
+	// Now is the clock the now-relative horizons (ClaimRetention) are measured
+	// from; zero means time.Now(). Tests pin it.
+	Now time.Time
 }
+
+// ClaimRetention is how long a released (or never-released) link_claims row
+// is kept.
+const ClaimRetention = 24 * time.Hour
+
+// claimTSFormat is the fixed-width UTC form link_claims timestamps are stored
+// in (internal/link tsFormat), so the TEXT comparison orders like time.
+const claimTSFormat = "2006-01-02T15:04:05.000Z"
+
+// staleClaims selects the link_claims rows older than ClaimRetention: released
+// before the horizon, or never released and claimed before it.
+const staleClaims = `FROM link_claims
+	WHERE (released_at IS NOT NULL AND released_at < ?)
+	   OR (released_at IS NULL AND claimed_at < ?)`
 
 // Run executes one prune pass with the CLI's options (VACUUM enabled). It is
 // the original entry point, kept so existing callers and tests are unchanged;
@@ -224,7 +251,15 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 	}
 	st.Capped = waiting > MaxSessionsPerPass
 	st.Sessions = min(waiting, MaxSessionsPerPass)
+	now := opts.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	claimCut := now.UTC().Add(-ClaimRetention).Format(claimTSFormat)
 	if dryRun {
+		if err := db.QueryRow(`SELECT COUNT(*) `+staleClaims, claimCut, claimCut).Scan(&st.LinkClaims); err != nil {
+			return st, fmt.Errorf("count candidates: %w", err)
+		}
 		counts := []struct {
 			q   string
 			dst *int64
@@ -236,6 +271,7 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 			{`SELECT COUNT(*) FROM link_events WHERE at < ?`, &st.LinkEvents},
 			{`SELECT COUNT(*) FROM link_commands WHERE created_at < ?`, &st.LinkCommands},
 			{`SELECT COUNT(*) FROM turn_forecasts WHERE started_at < ?`, &st.TurnForecasts},
+			{`SELECT COUNT(*) FROM link_messages WHERE at < ?`, &st.LinkMessages},
 		}
 		counts = append(counts, undatableCounts(&st)...)
 		for _, c := range counts {
@@ -277,6 +313,19 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 		st.TurnForecasts, _ = res.RowsAffected()
 	} else {
 		return st, fmt.Errorf("prune turn_forecasts: %w", err)
+	}
+	// Swarm messages age like the link ledger (see Stats.LinkMessages); at is
+	// the same fixed-width ms UTC form, served by idx_link_messages_at.
+	if res, err := db.Exec(`DELETE FROM link_messages WHERE at < ?`, cutoff); err == nil {
+		st.LinkMessages, _ = res.RowsAffected()
+	} else {
+		return st, fmt.Errorf("prune link_messages: %w", err)
+	}
+	// Claims go on their own 24 h horizon, not the cutoff (see Stats.LinkClaims).
+	if res, err := db.Exec(`DELETE `+staleClaims, claimCut, claimCut); err == nil {
+		st.LinkClaims, _ = res.RowsAffected()
+	} else {
+		return st, fmt.Errorf("prune link_claims: %w", err)
 	}
 
 	if st.Sessions == 0 {
