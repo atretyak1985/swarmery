@@ -15,13 +15,21 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
 import * as phaseReportApi from '../../api/phasereport';
 import * as triageApi from '../../api/triage';
 import type { TriageRun } from '../../api/triage';
 import { addDays, isoDay } from '../../lib/format';
 import { Health } from './Health';
+
+// Health embeds Retro and Analytics through React.lazy. On a cold, loaded run
+// their first dynamic import (and its transform) can outlast a findBy* budget,
+// leaving a tab on its Suspense fallback. Import both once up front, in the
+// hook's own budget: lazy() then resolves from the module cache.
+beforeAll(async () => {
+  await Promise.all([import('../Retro'), import('../Analytics')]);
+});
 
 vi.mock('../../api', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../api')>();
