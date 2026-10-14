@@ -2,12 +2,14 @@
 //
 // System shell tabs (Canvas v3 phase 8). The claims:
 //
-//   1. The tab bar reads Agents · Skills · Plugins · Hooks · Routines · Insights.
+//   1. The tab bar reads Agents · Skills · Plugins · Hooks · Mods · Routines ·
+//      Insights.
 //   2. The retired /system/toolkit lands on Skills (the skills catalog), keeping
 //      a deeper path and the query.
 //   3. Routines renders the Routines page embedded (no heading of its own).
 //   4. Plugins lists the project's plugins under /p/:slug/system and shows an
 //      empty state in the fleet.
+//   5. Mods renders the machine-wide mods audit, with no origin-scope chips.
 //
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/pages/system/SystemShell.tabs.test.tsx`.
@@ -31,6 +33,7 @@ vi.mock('../Routines', () => ({
 vi.mock('../../components/ProjectPlugins', () => ({
   ProjectPlugins: ({ projectId }: { projectId: number }) => <div>plugins of project {projectId}</div>,
 }));
+vi.mock('./ModsTab', () => ({ ModsTab: () => <div>mods audit</div> }));
 vi.mock('../../components/ScopeChip', () => ({ ScopeChip: () => null }));
 vi.mock('../../api/systemHub', () => ({
   fetchSystemHubSummary: vi.fn(() => new Promise(() => undefined)),
@@ -70,13 +73,14 @@ function renderAt(url: string): void {
 afterEach(cleanup);
 
 describe('SystemShell tabs', () => {
-  it('reads Agents · Skills · Plugins · Hooks · Routines · Insights', () => {
+  it('reads Agents · Skills · Plugins · Hooks · Mods · Routines · Insights', () => {
     renderAt('/system/agents');
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'Agents',
       'Skills',
       'Plugins',
       'Hooks',
+      'Mods',
       'Routines',
       'Insights',
     ]);
@@ -106,5 +110,15 @@ describe('SystemShell tabs', () => {
     cleanup();
     renderAt('/system/plugins');
     expect(screen.getByText('Plugins are enabled per project — pick one in the switcher.')).toBeTruthy();
+  });
+
+  it('renders the Mods audit on the Mods tab, without origin chips', () => {
+    renderAt('/system/mods');
+    expect(screen.getByText('mods audit')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Mods' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByRole('button', { name: 'all scopes' })).toBeNull();
+    cleanup();
+    renderAt('/p/shop/system/mods');
+    expect(screen.getByText('mods audit')).toBeTruthy();
   });
 });

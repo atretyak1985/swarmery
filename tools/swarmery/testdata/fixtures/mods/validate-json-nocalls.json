@@ -1,0 +1,27 @@
+{
+  "success": true,
+  "strict": false,
+  "target": "<probe>/.claude-plugin/plugin.json",
+  "manifest": {
+    "file": "<probe>/.claude-plugin/plugin.json",
+    "type": "plugin",
+    "errors": [],
+    "warnings": [],
+    "notes": [],
+    "gatingHooks": []
+  },
+  "contents": [
+    {
+      "file": "<probe>/hooks/hooks.json",
+      "type": "hooks",
+      "errors": [],
+      "warnings": [],
+      "notes": [
+        "./quiet.ts hooks: turn.start",
+        "./quiet.ts calls: nothing on $"
+      ],
+      "gatingHooks": []
+    }
+  ],
+  "advice": []
+}

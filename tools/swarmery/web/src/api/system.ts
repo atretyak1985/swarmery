@@ -11,6 +11,9 @@
 
 import type {
   AgentHistory,
+  ModDetail,
+  ModRescanResult,
+  ModSummary,
   SystemCommand,
   SystemConflict,
   SystemCreateAgentRequest,
@@ -115,6 +118,27 @@ export function fetchSystemInsights(projectId?: string): Promise<SystemInsights>
   if (MOCK) return mockSystemApi.insights();
   const qs = projectId !== undefined && projectId !== '' ? `?projectId=${encodeURIComponent(projectId)}` : '';
   return get(`/api/system/insights${qs}`);
+}
+
+// --- System → Mods (mods-swarmery-link phase 9) --------------------------------
+// No MOCK dispatch: the mods surface has no fixture in ../mock/system.ts, so in
+// mock mode these hit the network like any unmocked call.
+
+/** GET /api/system/mods — every cached mod, by name then dir. */
+export function fetchSystemMods(): Promise<ModSummary[]> {
+  return get('/api/system/mods');
+}
+
+/** GET /api/system/mods/{id} — the row plus the full validate report. */
+export function fetchSystemMod(id: number): Promise<ModDetail> {
+  return get(`/api/system/mods/${String(id)}`);
+}
+
+/** POST /api/system/mods/rescan — forces a re-validate of every mod (local
+ * origin only: 403 from a foreign Origin, 503 while no scanner is attached).
+ * Throws SystemWriteError, whose message is the server's `error` text. */
+export function rescanSystemMods(): Promise<ModRescanResult> {
+  return writeCall('/api/system/mods/rescan', 'POST');
 }
 
 // --- Stage 2 write surface (steps 09–12) --------------------------------------

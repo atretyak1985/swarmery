@@ -584,6 +584,156 @@ Observed on: 2026-07-13, machine-local.
 
 ---
 
+## 11. Mods (System → Mods, mods-swarmery-link phase 9)
+
+A **mod** is a Claude Code plugin whose `hooks/hooks.json` carries a non-empty
+`modules` array (JS/TSX modules the CLI loads into the session, as opposed to the
+`command` hooks of §3). A plugin without `modules` — or whose `hooks.json` is
+missing or unparsable — is not a mod and is skipped. The audit is **read-only**:
+swarmery never edits a mod, and the API serves the folder path, never module source.
+
+### 11.1 Discovery (`internal/modscan.Discover`)
+
+| source | where | `source` / `plugin_id` |
+|---|---|---|
+| plugin cache | every dir under `~/.claude/plugins/cache` (≤ 4 levels) holding `.claude-plugin/plugin.json`; for a `<mkt>/<plugin>/<version>` layout only the **active** version — the one with an `.in_use` marker, else the lexically greatest (the same pick sysscan makes for plugin agents/skills) | `cache` · `<name>@<mkt>` |
+| `CLAUDE_CODE_PLUGIN_DIRS` | the value in the `env` block of `~/.claude/settings.json`, split on `:`; `~` expands, relative entries are ignored | `plugin-dir` · `NULL` |
+| `claude --plugin-dir …` on a live process | **not discoverable** — it has no on-disk source; such a mod only shows here when it is also cached or listed in `CLAUDE_CODE_PLUGIN_DIRS` | — |
+
+`name`/`version` come from `plugin.json`, falling back to the cache path segments
+(or the folder name for a plugin-dir).
+
+### 11.2 Validate (`internal/modscan.Validate`)
+
+Each mod is audited with `claude plugin validate --strict --json <dir>` (binary
+resolved by `internal/claudebin`, 20 s timeout). The CLI reports what a module hooks
+and calls only as prose `notes` lines (`mods-format.md` §M6), so the parser files
+them by label. The validator echoes the module path from `hooks.json` verbatim and
+a path may contain spaces, so the label is matched as a **known suffix** of the
+text before `: ` — never as "everything after the first space":
+
+| note line | stored as | every value must match |
+|---|---|---|
+| `<module> hooks: a, b{filter}, …` | `events` (verbatim, filters kept) | `^[a-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+(\{[^{}]*\})?$` |
+| `<module> calls: $.http.fetch, $.ui.log (via post), …` | `uses` (`$.` and a **trailing** ` (via …)` stripped) | `^[a-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$` after stripping |
+| `<module> env reads: …` / `env writes: …` | `env.reads` / `env.writes` | `^[A-Za-z_][A-Za-z0-9_]*$` |
+| `<module> state…: …` (`state` plus lowercase words), plus every `state.*` call | `state` | — (free-form keys; state feeds no badge) |
+| `<module> gating hook with .catch: …` / `without .catch: …` | nothing — they restate `gatingHooks[]` | the event shape |
+| structured `gatingHooks[]` | `report.gatingHooks` (`module, pattern, hook, hasCatch`) | `hook`: the event shape; `pattern`: the same with `*` allowed |
+
+A list is split on `, ` only (a filter like `tool.call{tool=A,B}` stays one value).
+The empty list is a whole-list marker matching `^nothing( on \S+)?$` — `nothing`
+(§M6 `env writes: nothing`) or `nothing on $` (a module with no `$` calls, observed
+2026-10-14); any other text starting with `nothing` (`nothing to see`, `nothing on`,
+`nothing on $, $.http.fetch`) stays a value and fails its shape.
+
+**Fail closed.** The parser never lets output it cannot read turn into "no risk".
+`report.unrecognized` collects:
+
+- every `<module> <label>: …` note — a head with a space — whose label is none of the
+  above;
+- every known-label note with an empty list or a value that fails its shape — a list
+  joined by anything but `, ` (`a,b`, `a; b`, `a | b`, `a and b`) collapses into one
+  value that would match no badge rule, so it is never filed as one;
+- `no "<module> hooks:" note in the validator output` / `no "<module> calls:" note …`
+  for **every module** that lacks either line. A module counts when a note head names
+  it, a `gatingHooks[].module` names it, or the dir's `hooks.json` lists it (paths
+  compared cleaned, so `./m.tsx` and `m.tsx` meet). Both lines are required because
+  they feed the badges and the validator writes a `calls:` line even for a module
+  with no `$` calls (`calls: nothing on $`, §M6 note of 2026-10-14), so a missing one
+  is treated as drift. Env lines and `state` are not required — the validator omits
+  env lines for a module that touches no env, and a module without `$.state` gets no
+  state line;
+- `no "<module> hooks:" note in the validator output` when a `type: "hooks"` part
+  names no module at all.
+
+A non-empty `unrecognized` adds the unknown `validator-output` badge (§11.3). Prose
+notes without a module head (`plugin.json: …`, a line with no `: `) are ignored.
+
+`errors`/`warnings` are collected from the manifest and every `contents[]` part. A run
+that cannot produce a report — timeout, output that is not the §M6 JSON, a failed
+exec — stores an empty report with that one error, and raises a `parse_error`
+finding in `config_lint_findings` keyed `mod:<id>`. No `claude` on the machine
+stores the single error `claude binary not found` and leaves `module_sha` NULL so
+the next pass retries without a manual rescan.
+
+### 11.3 Risk badges (`internal/modscan.Risk`)
+
+Deterministic over `events` ∪ every `gatingHooks[].hook` and `.pattern` (filters
+stripped) ∪ `uses`; one badge per matching rule, in this order. A rule ending in
+`.*` matches by prefix. **Invariant:** `Risk` returns an empty list only when every
+module's facts were fully understood. A report with a non-empty `unrecognized` —
+or any event, gating hook/pattern or use that fails its §11.2 shape, re-checked by
+`Risk` itself — leads with the unknown `validator-output` badge (its matches are the
+unread lines and values) before whatever the readable part matched, so an **empty
+badge list always means "understood, and nothing risky"** — the UI's green "no risk
+badges".
+
+| level | rule | label |
+|---|---|---|
+| red | `tool.check` | can approve tool calls |
+| red | `prompt.submit` | drives the session |
+| red | `turn.abort` | drives the session |
+| red | `http.fetch` | network |
+| red | `process.*` | spawns processes |
+| red | `fs.write` | writes files |
+| red | `session.append` | rewrites what Claude reads |
+| yellow | `fs.read` | reads files |
+| yellow | `store.*` | keeps a store |
+| yellow | `model.*` | calls the model |
+| unknown | `validate` | not validated (the report never parsed) |
+| unknown | `validator-output` | validator output not understood (`report.unrecognized` non-empty) |
+
+The server sends the English label; the UI localises by `rule` (every rule above,
+`validator-output` included) and falls back to the server label for a rule it has no
+translation for.
+
+### 11.4 When validate runs, and rescan
+
+The mods pass is **not part of the registry `Scan()`**: validate spawns the CLI (up
+to 20 s per mod) and passes serialize on a lock, while `internal/sysedit` calls
+`Scan()` synchronously after every write and relies on it being cheap. The daemon's
+`Run` loop runs the mods pass after every registry pass (startup, fsnotify, the
+periodic tick) — and **skips** it, logging `debug: sysscan mods: a mods pass is
+already running — skipped`, while a manual rescan still holds the lock, so a slow
+rescan never stalls registry rescans; the pass in flight converges the same rows.
+The rescan endpoint runs it on demand, and the one-shot `swarmery sysscan` CLI runs
+it once after `Scan()` (hash-skipped, printed as `mods: …`). A pass validates only a
+mod whose `module_sha` changed —
+sha256 over `hooks.json` plus each listed module's path and content — or that has
+no row yet. An unchanged mod keeps its cached result. `POST
+/api/system/mods/rescan` (local `Origin` only; 403 otherwise, 503 while the daemon
+runs `--no-ingest` and no scanner is attached) forces a re-validate of every mod
+and answers `{mods, validated, parseErrors, removed}`; passes are serialized, so a
+manual rescan never races the periodic one. A changed row publishes
+`system_item_updated` with `kind: "mod"`; the WS layer does not forward that note
+yet, so the Mods tab refetches on mount and after a rescan — the list and, when one
+is open, the mod's validate report.
+
+### 11.5 The `mods` table (migration 0112)
+
+One row per plugin folder (`UNIQUE(dir)`): `name, plugin_id, dir, source, version,
+module_sha, events, uses, env, state, risk, validated_at, errors, report` — the list
+columns and `report` (the parsed report plus the validator's raw stdout) are JSON
+text. It is a **cache of the last validate, not history**: a mod whose folder
+disappears (uninstall, or a cache version bump that moves its dir) is deleted on the
+next pass and its `parse_error` finding resolved.
+
+### 11.6 Plugin drift advisory
+
+`internal/plugindrift` adds `plugin_mod_validate_failed`: for every project that
+enables a plugin which is a cache mod whose stored validate `errors` are non-empty
+(`claude binary not found` excluded), one **warn**-level finding at target
+`plugin:<id>|<project path>` naming the first error. It is advisory: it maps to no
+per-row plugin status, fires no new-error webhook, and is read from the DB, so it
+is evaluated even while the CLI detector is unavailable.
+
+Observed on: 2026-10-13, machine-local (0 mods in the plugin cache; the phase-0
+spike mod validated in 712 ms with red `tool.check` / `prompt.submit` /
+`http.fetch` and yellow `fs.read`).
+
+---
+
 ## Open questions
 
 1. **Plugin-shipped `hooks/hooks.json`** (§5.4): active-but-not-in-settings hooks are

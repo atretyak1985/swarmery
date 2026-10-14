@@ -1427,7 +1427,8 @@ func cmdSysscan(args []string) error {
 	}
 	defer db.Close()
 
-	stats, err := sysscan.New(db, *sysCfg, nil).Scan()
+	scanner := sysscan.New(db, *sysCfg, nil)
+	stats, err := scanner.Scan()
 	if err != nil {
 		return err
 	}
@@ -1435,6 +1436,14 @@ func cmdSysscan(args []string) error {
 	for _, p := range stats.Overlays {
 		fmt.Printf("  overlay: %s\n", p)
 	}
+
+	// The mods pass, as the daemon's Run loop does after every registry pass:
+	// hash-skipped, so `claude plugin validate` runs only for a changed mod.
+	mods, err := scanner.ScanMods(context.Background(), false)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  mods: %s\n", mods)
 
 	// Step-04 post-pass: re-evaluate the config lint rules against the
 	// registry this scan just converged (writes config_lint_findings only).
@@ -1925,6 +1934,10 @@ func cmdServe(args []string) error {
 			}
 		}()
 		log.Printf("swarmery system scanner watching %s (rescan %s)", sysCfg.ClaudeDir, sysscan.DefaultRescanInterval)
+		// mods-swarmery-link phase 9: POST /api/system/mods/rescan forces a
+		// re-validate on this same scanner (its passes are serialized, so a
+		// manual rescan never races the periodic one). Unattached → 503.
+		api.AttachModRescanner(sys)
 
 		// phase 4 Stage 2 (step-10): hooks toggle/edit go through the sysedit
 		// pipeline against the same scanner instance (the post-write rescan

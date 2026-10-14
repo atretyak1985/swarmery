@@ -310,6 +310,11 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/system/hooks", h.listSystemHooks)
 	mux.HandleFunc("GET /api/system/commands", h.listSystemCommands)
 	mux.HandleFunc("GET /api/system/overlays", h.listSystemOverlays)
+	// mods audit (mods.go): the cached `claude plugin validate` result per mod.
+	// Rescan re-runs the validator — a CLI spawn — so it is local-origin only.
+	mux.HandleFunc("GET /api/system/mods", h.listSystemMods)
+	mux.HandleFunc("GET /api/system/mods/{id}", h.getSystemMod)
+	mux.HandleFunc("POST /api/system/mods/rescan", requireLocalOrigin(h.rescanSystemMods))
 
 	// worktree janitor inventory (worktrees.go): live checkouts + the sweep
 	// journal. Read-only on purpose — the janitor owns the decision, this shows

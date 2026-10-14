@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -40,6 +41,7 @@ const (
 	KindSkill   = "skill"
 	KindHook    = "hook"
 	KindCommand = "command"
+	KindMod     = "mod" // mods table (0112) — see mods.go
 )
 
 // DefaultRescanInterval is the fallback full-rescan cadence. Config files
@@ -68,6 +70,11 @@ type Config struct {
 	MinSkillDescription int // skill_short_description: min description runes (default 40; env SWARMERY_LINT_MIN_SKILL_DESC)
 	MaxClaudeMDTokens   int // claude_md_oversized: max estimated tokens, len/4 (default 2500; env SWARMERY_LINT_MAX_CLAUDE_MD_TOKENS)
 	MinDocsSection      int // docs_incomplete: min runes of body per REQUIRED guide subsection (default 40; env SWARMERY_LINT_MIN_DOCS_SECTION)
+
+	// ClaudeBin is the claude executable the mods pass validates with. ""
+	// resolves it via internal/claudebin at validate time; tests inject a fake
+	// so no test ever runs the real CLI.
+	ClaudeBin string
 }
 
 func (c Config) withDefaults() Config {
@@ -130,6 +137,8 @@ type Scanner struct {
 	db  *sql.DB
 	cfg Config
 	bus *ingest.Bus // may be nil (no live notifications)
+
+	modsMu sync.Mutex // serializes mods passes (Run's periodic pass vs. a manual rescan); Scan never takes it
 }
 
 // New builds a scanner; bus may be nil.
@@ -252,14 +261,22 @@ func (s *Scanner) Scan() (Stats, error) {
 	// ── overlays: paths only — the API reads them on demand (step-05) ─────
 	st.Overlays = overlayFiles(s.cfg.OverlaysDir, warn)
 
+	// Mods are NOT scanned here: their pass may run `claude plugin validate`
+	// (≤ ValidateTimeout per mod) and serializes on modsMu, while sysedit
+	// calls Scan synchronously after every write on the promise that it is
+	// cheap. Run, POST /api/system/mods/rescan and the one-shot `swarmery
+	// sysscan` CLI drive the mods pass instead.
 	return st, nil
 }
 
 // Run scans immediately, then rescans on fsnotify changes (debounced) and on
-// every RescanInterval tick until ctx ends. Scan errors are logged, never
-// fatal — the loop always keeps ticking (pattern: ingest/tail + wsingest).
+// every RescanInterval tick until ctx ends; every pass is followed by the
+// mods pass (hash-skipped, so validate runs only for a changed mod; skipped
+// outright while a manual rescan is still validating). Errors
+// are logged, never fatal — the loop always keeps ticking (pattern:
+// ingest/tail + wsingest).
 func (s *Scanner) Run(ctx context.Context) error {
-	scan := func() {
+	scanRegistry := func() {
 		st, err := s.Scan()
 		if err != nil {
 			log.Printf("error: sysscan: %v", err)
@@ -274,6 +291,22 @@ func (s *Scanner) Run(ctx context.Context) error {
 			return
 		}
 		log.Printf("sysscan lint: %s", ls)
+	}
+	scan := func() {
+		scanRegistry()
+		ms, ran, err := s.scanModsIfIdle(ctx)
+		switch {
+		case !ran:
+			// A manual rescan holds the mods lock; waiting would stall every
+			// registry rescan behind it, and that pass converges the rows.
+			log.Printf("debug: sysscan mods: a mods pass is already running — skipped")
+		case err != nil:
+			if ctx.Err() == nil {
+				log.Printf("error: sysscan mods: %v", err)
+			}
+		default:
+			log.Printf("sysscan mods: %s", ms)
+		}
 	}
 	scan()
 
