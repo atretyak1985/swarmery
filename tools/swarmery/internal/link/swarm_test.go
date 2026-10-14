@@ -174,13 +174,22 @@ func TestSwarmCorrelationMisses(t *testing.T) {
 	}
 }
 
+// swD is a fourth session, in A and B's project /work/p1.
+const swD = "5a000000-0000-4000-8000-00000000000d"
+
+func addSessionD(t *testing.T, db *sql.DB) {
+	t.Helper()
+	mustIngest(t, db, nil, []Event{{SessionID: swD, Cwd: "/work/p1", Kind: KindSessionStart, At: "2026-10-14T09:00:00Z"}})
+}
+
 // The most recent unpaired send wins; a send addressed by name (no session
 // with that uuid) pairs only when no uuid-addressed one matches.
 func TestSwarmCorrelationPrefersRecentAndUUID(t *testing.T) {
 	db := swarmEnv(t)
+	addSessionD(t, db)
 	mustIngest(t, db, nil, []Event{
 		sendEv(swA, swB, "ping", "2026-10-14T09:00:00Z", ""),
-		sendEv(swC, "reviewer", "ping", "2026-10-14T09:00:30Z", ""),
+		sendEv(swD, "reviewer", "ping", "2026-10-14T09:00:30Z", ""),
 		sendEv(swA, swB, "ping", "2026-10-14T09:00:20Z", ""),
 	})
 	mustIngest(t, db, nil, []Event{recvEv(swB, "ping", "2026-10-14T09:00:40Z")})
@@ -200,9 +209,48 @@ func TestSwarmCorrelationPrefersRecentAndUUID(t *testing.T) {
 	mustIngest(t, db, nil, []Event{recvEv(swB, "ping", "2026-10-14T09:00:42Z")})
 	ms = messages(t, db)
 	last = ms[len(ms)-1]
-	if last.from.String != swC || ms[1].to.String != swB {
+	if last.from.String != swD || ms[1].to.String != swB {
 		t.Errorf("third receive should fall back to the name-addressed send: %+v", ms)
 	}
+}
+
+// The name-addressed fallback never crosses projects, in either ingest order:
+// C (project p2) sending "reviewer" a text B (p1) receives is not a pair; D
+// (p1) sending the same is.
+func TestSwarmCorrelationNameFallbackStaysInProject(t *testing.T) {
+	t.Run("send first", func(t *testing.T) {
+		db := swarmEnv(t)
+		addSessionD(t, db)
+		mustIngest(t, db, nil, []Event{sendEv(swC, "reviewer", "lint it", "2026-10-14T09:00:00Z", "")})
+		mustIngest(t, db, nil, []Event{recvEv(swB, "lint it", "2026-10-14T09:00:01Z")})
+		for _, m := range messages(t, db) {
+			if m.matchedID.Valid || (m.kind == MsgReceive && m.from.Valid) {
+				t.Fatalf("cross-project pairing: %+v", m)
+			}
+		}
+		// a same-project send then pairs with the receive C's could not take
+		mustIngest(t, db, nil, []Event{sendEv(swD, "reviewer", "lint it", "2026-10-14T09:00:02Z", "")})
+		ms := messages(t, db)
+		if ms[1].from.String != swD || ms[2].matchedID.Int64 != ms[1].id || ms[0].matchedID.Valid {
+			t.Errorf("same-project send should pair with the receive: %+v", ms)
+		}
+	})
+	t.Run("receive first", func(t *testing.T) {
+		db := swarmEnv(t)
+		addSessionD(t, db)
+		mustIngest(t, db, nil, []Event{recvEv(swB, "lint it", "2026-10-14T09:00:00Z")})
+		mustIngest(t, db, nil, []Event{sendEv(swC, "reviewer", "lint it", "2026-10-14T09:00:01Z", "")})
+		for _, m := range messages(t, db) {
+			if m.matchedID.Valid {
+				t.Fatalf("cross-project pairing: %+v", m)
+			}
+		}
+		mustIngest(t, db, nil, []Event{sendEv(swD, "reviewer", "lint it", "2026-10-14T09:00:02Z", "")})
+		ms := messages(t, db)
+		if ms[0].from.String != swD || ms[2].matchedID.Int64 != ms[0].id || ms[1].matchedID.Valid {
+			t.Errorf("same-project send should pair with the receive: %+v", ms)
+		}
+	})
 }
 
 // A body over 4096 characters is cut and flagged; isDelivered false keeps
@@ -238,6 +286,13 @@ func TestSwarmValidation(t *testing.T) {
 		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b"}`)},
 		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","origin":"user"}`)},
 		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":0}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":-3}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":1.5}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":"0"}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":"+7"}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":"7a"}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":""}`)},
+		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":true}`)},
 		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","isDelivered":"yes"}`)},
 		{SessionID: swA, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(`{"originKind":"peer"}`)},
 		{SessionID: swA, Kind: KindClaim, At: at, Payload: json.RawMessage(`{"path":"rel/file.go"}`)},

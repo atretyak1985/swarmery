@@ -230,3 +230,97 @@ func TestCommandsMessageSendEventFolds(t *testing.T) {
 		t.Errorf("stray send command_id = %v (%v)", cmd, err)
 	}
 }
+
+// pluginSend is the session.send event the swarmery-link mod queues for a
+// dashboard message, byte for byte as plugins/swarmery-link/hooks/swarm.test.ts
+// expects it (sendPayload); commandID is spliced in raw, so a test can send
+// the number the mod sends now or the string older mods sent.
+func pluginSend(from, to, text, at, isDelivered, commandID string) Event {
+	extra := ""
+	if isDelivered == "false" {
+		extra = `,"reason":"session is not running"`
+	}
+	return Event{SessionID: from, Kind: KindSessionSend, At: at, Payload: json.RawMessage(fmt.Sprintf(
+		`{"to":%q,"text":%q,"truncated":false,"isDelivered":%s%s,"origin":"plugin","commandId":%s}`,
+		to, text, isDelivered, extra, commandID))}
+}
+
+// The mod's session.send for a dashboard message is accepted and folds into
+// the dashboard row whether its commandId is a number (the mod now) or a digit
+// string (mods before the fix): never a second row, never a per-event reject.
+func TestCommandsMessagePluginSendShapeFolds(t *testing.T) {
+	for name, quote := range map[string]bool{"number": false, "digit string": true} {
+		t.Run(name, func(t *testing.T) {
+			e := newMsgEnv(t)
+			e.poll(t)
+			id, msgID, err := e.c.EnqueueMessage(context.Background(), e.sid, msgRecipient, "please pull main")
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw := fmt.Sprint(id)
+			if quote {
+				raw = fmt.Sprintf("%q", raw)
+			}
+			at := e.clk.Now().Add(time.Second).Format(time.RFC3339Nano)
+			res := mustIngest(t, e.db, nil, []Event{pluginSend(e.uuid, msgRecipient, "please pull main", at, "true", raw)})
+			if res.Accepted != 1 || res.Rejected != 0 {
+				t.Fatalf("ingest = %+v, want the send accepted", res)
+			}
+			var n int
+			if err := e.db.QueryRow(`SELECT COUNT(*) FROM link_messages`).Scan(&n); err != nil || n != 1 {
+				t.Fatalf("rows = %d (%v), want 1 (folded)", n, err)
+			}
+			var origin sql.NullString
+			if err := e.db.QueryRow(`SELECT origin FROM link_messages WHERE id = ?`, msgID).Scan(&origin); err != nil || origin.String != "plugin" {
+				t.Errorf("folded row origin = %v (%v), want plugin", origin, err)
+			}
+		})
+	}
+	e := newMsgEnv(t)
+	res := mustIngest(t, e.db, nil, []Event{pluginSend(e.uuid, msgRecipient, "x", "2026-10-14T09:00:01Z", "true", `"0"`)})
+	if res.Rejected != 1 || len(res.Rejects) != 1 || !strings.Contains(res.Rejects[0].Reason, "commandId must be a positive integer") {
+		t.Errorf("commandId \"0\": %+v", res)
+	}
+}
+
+// The mod acks failed after its 10 s message timeout, then the send it gave
+// up on settles and is reported with the command id: the engine's verdict
+// overrides the ack's on the dashboard row — delivered clears the reason, not
+// delivered takes the engine's reason. Before any ack, the send leaves
+// delivered to the ack (TestCommandsMessageSendEventFolds).
+func TestCommandsMessageLateSendOverridesFailedAck(t *testing.T) {
+	for _, tc := range []struct {
+		isDelivered string
+		want        int64
+		reason      string
+	}{
+		{"true", 1, ""},
+		{"false", 0, "undeliverable: session is not running"},
+	} {
+		t.Run("isDelivered "+tc.isDelivered, func(t *testing.T) {
+			e := newMsgEnv(t)
+			e.poll(t)
+			id, _, err := e.c.EnqueueMessage(context.Background(), e.sid, msgRecipient, "status?")
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.poll(t)
+			if err := e.c.Ack(context.Background(), id, ResultFailed, "undeliverable: no answer in 10s"); err != nil {
+				t.Fatal(err)
+			}
+			if r := e.dashboardRow(t, id); r.delivered.Int64 != 0 || !r.delivered.Valid {
+				t.Fatalf("after the timeout ack: %+v", r)
+			}
+			at := e.clk.Now().Add(12 * time.Second).Format(time.RFC3339Nano)
+			mustIngest(t, e.db, nil, []Event{pluginSend(e.uuid, msgRecipient, "status?", at, tc.isDelivered, fmt.Sprint(id))})
+			r := e.dashboardRow(t, id)
+			if !r.delivered.Valid || r.delivered.Int64 != tc.want || r.reason.String != tc.reason || r.reason.Valid != (tc.reason != "") {
+				t.Errorf("after the late send: %+v, want delivered %d reason %q", r, tc.want, tc.reason)
+			}
+			var n int
+			if err := e.db.QueryRow(`SELECT COUNT(*) FROM link_messages`).Scan(&n); err != nil || n != 1 {
+				t.Errorf("rows = %d (%v), want 1", n, err)
+			}
+		})
+	}
+}

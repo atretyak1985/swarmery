@@ -773,7 +773,7 @@ stored event writes the side tables below.
 | `isDelivered` | the engine's `SessionSendResult.isDelivered`. Absent means "unknown" (`delivered` NULL) |
 | `reason` | stored only when `isDelivered` is `false` |
 | `origin` | `model` (the model called the tool) or `plugin` (a mod called `$.session.send`). Anything else rejects the event |
-| `commandId` | a positive integer, set when the send ran a dashboard `message` command (below) |
+| `commandId` | a positive integer, set when the send ran a dashboard `message` command (below). Send it as a JSON number. A string of decimal digits (`"30"`, what mods before the phase-6 fix sent) is accepted as the same id; zero, a negative, a fraction, an exponent or any other text rejects the event |
 | `originKind` | the receive's `e.origin.kind` (`peer`, `coordinator`, `bridge`, …), at most 64 characters. Stored as the row's `origin` |
 | `fromPlugin` | accepted and kept in `link_events` only; there is no column for it |
 | `path`, `paths[]` | absolute (else the event is rejected), cleaned (`/repo/./a.go` → `/repo/a.go`). At most 500 paths per release |
@@ -800,9 +800,12 @@ dashboard) row:
 The match sets the send's `delivered = 1` and the receive's `from_session` to the
 sender. No match leaves `from_session` NULL. When no uuid-addressed send matches, a
 send whose address resolved to no session (a name or an agent id) with the same text
-in the window is taken instead. Batches from different sessions arrive in any order,
-so a `send` stored after its `receive` pairs the same way. Each row pairs at most once
-(`matched_id` names the other side).
+in the window is taken instead — only one sent from a session in the **receiver's
+project**: a name never pairs across projects. Batches from different sessions arrive
+in any order, so a `send` stored after its `receive` pairs the same way (a
+name-addressed send then pairs only with a receive in the sender's project, or one
+whose session uuid is the address itself). Each row pairs at most once (`matched_id`
+names the other side).
 
 ### Claims
 
@@ -840,6 +843,14 @@ The mod also reports the send as a `session.send` event with `commandId`; it fol
 the command's dashboard row (address, truncation, origin) instead of adding a second
 row. The row's `delivered` is the ack's to set: `done` → `1`, `failed` → `0` with the
 ack message as `reason`, expired → `0` with reason `expired`.
+
+One exception: a send that settles **after** the ack. The mod gives a send 10 s; past
+that it acks `failed` with `undeliverable: no answer in 10s`, but keeps the send's
+command id and reports the send, with that `commandId`, once it settles. A
+`session.send` folding into a row the ack already settled overrides it with the
+engine's verdict: `isDelivered: true` → `delivered = 1`, reason cleared;
+`isDelivered: false` → `delivered = 0`, reason `undeliverable: <engine reason>`. The
+command itself stays `failed`.
 
 ### Routes
 

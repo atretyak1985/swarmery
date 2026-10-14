@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -108,8 +109,8 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 			Truncated   bool    `json:"truncated"`
 			IsDelivered *bool   `json:"isDelivered"`
 			Reason      string  `json:"reason"`
-			Origin      string  `json:"origin"`
-			CommandID   *int64  `json:"commandId"`
+			Origin      string     `json:"origin"`
+			CommandID   *commandID `json:"commandId"`
 		}
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, bad("%v", err)
@@ -124,8 +125,6 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 			return nil, bad("text is required")
 		case p.Origin != "" && p.Origin != "model" && p.Origin != "plugin":
 			return nil, bad("origin must be model or plugin")
-		case p.CommandID != nil && *p.CommandID <= 0:
-			return nil, bad("commandId must be a positive integer")
 		}
 		rec := &MessageRecord{
 			Kind: MsgSend, FromSession: sessionUUID, ToAddress: to, Body: *p.Text,
@@ -135,7 +134,7 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 			rec.Reason = p.Reason
 		}
 		if p.CommandID != nil {
-			rec.CommandID = *p.CommandID
+			rec.CommandID = int64(*p.CommandID)
 		}
 		return &swarmEvent{msg: rec}, nil
 	case KindSessionReceive:
@@ -214,6 +213,34 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 	}
 }
 
+// errCommandID is a session.send commandId that is not a positive integer.
+var errCommandID = errors.New("commandId must be a positive integer")
+
+// commandID is a session.send's commandId: a JSON number, or a string of
+// decimal digits — mods up to the phase-6 fix sent the id as the string the
+// command poll handed them, and such a send must still fold rather than be
+// rejected. Anything else (zero, negative, fractional, exponent, other text)
+// fails with errCommandID.
+type commandID int64
+
+func (c *commandID) UnmarshalJSON(b []byte) error {
+	s := string(b)
+	if len(b) > 0 && b[0] == '"' {
+		if err := json.Unmarshal(b, &s); err != nil {
+			return errCommandID
+		}
+	}
+	if s == "" || strings.TrimLeft(s, "0123456789") != "" {
+		return errCommandID
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n <= 0 {
+		return errCommandID
+	}
+	*c = commandID(n)
+	return nil
+}
+
 // cleanAbs requires an absolute path and returns it cleaned.
 func cleanAbs(p string) (string, error) {
 	switch {
@@ -271,16 +298,19 @@ func clipBody(body string) (string, bool) {
 //   - A send that ran a dashboard 'message' command (CommandID set) folds into
 //     that command's dashboard row instead of adding a second row for the same
 //     message: the row takes the engine's address, truncation and origin. Its
-//     delivered stays the ack's to set (Commands.Ack). Without such a row it
-//     is stored as a plain send carrying the command id.
+//     delivered is the ack's to set (Commands.Ack) — unless the ack came
+//     first, when the send's isDelivered overrides it (a late send the mod
+//     timed out on). Without such a row it is stored as a plain send carrying
+//     the command id.
 //   - ToSession is resolved from ToAddress when the address is one of our
 //     session uuids.
 //   - A receive is paired with the most recent unpaired send / dashboard row
 //     addressed to the receiver (by session uuid; failing that, one whose
-//     address resolved to no session — a name or an agent id) with the same
-//     text (sha256) within CorrelateWindow: the send becomes delivered, the
-//     receive gets the sender as from_session. No match leaves from_session
-//     NULL. A send arriving after its receive pairs the same way.
+//     address resolved to no session — a name or an agent id — sent from a
+//     session in the receiver's project) with the same text (sha256) within
+//     CorrelateWindow: the send becomes delivered, the receive gets the sender
+//     as from_session. No match leaves from_session NULL. A send arriving
+//     after its receive pairs the same way.
 func RecordMessage(ctx context.Context, ex dbtx, rec MessageRecord) (int64, error) {
 	body, cut := clipBody(rec.Body)
 	rec.Body, rec.Truncated = body, rec.Truncated || cut
@@ -334,14 +364,15 @@ func RecordMessage(ctx context.Context, ex dbtx, rec MessageRecord) (int64, erro
 // that command's dashboard row; 0 when there is no such row.
 func foldDashboardSend(ctx context.Context, ex dbtx, rec MessageRecord) (int64, error) {
 	var (
-		id      int64
-		matched sql.NullInt64
-		toSess  sql.NullString
+		id        int64
+		matched   sql.NullInt64
+		delivered sql.NullInt64
+		toSess    sql.NullString
 	)
 	err := ex.QueryRowContext(ctx,
-		`SELECT id, matched_id, to_session FROM link_messages
+		`SELECT id, matched_id, delivered, to_session FROM link_messages
 		  WHERE kind = 'dashboard' AND command_id = ? AND from_session = ?
-		  ORDER BY id LIMIT 1`, rec.CommandID, rec.FromSession).Scan(&id, &matched, &toSess)
+		  ORDER BY id LIMIT 1`, rec.CommandID, rec.FromSession).Scan(&id, &matched, &delivered, &toSess)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -353,6 +384,24 @@ func foldDashboardSend(ctx context.Context, ex dbtx, rec MessageRecord) (int64, 
 		    SET to_address = ?, truncated = MAX(truncated, ?), origin = COALESCE(origin, ?)
 		  WHERE id = ?`, rec.ToAddress, boolInt(rec.Truncated), nullable(rec.Origin), id); err != nil {
 		return 0, fmt.Errorf("link swarm: fold dashboard message: %w", err)
+	}
+	// The ack already settled the row, and the send reports how it really
+	// ended: the engine's verdict wins. That is the mod's message timeout — it
+	// acks failed after 10 s, and the send it gave up on may settle later.
+	// Delivered clears the reason; not delivered takes the engine's reason in
+	// the ack's spelling, or keeps the ack's when the engine gave none.
+	if delivered.Valid && rec.Delivered != nil {
+		var reason any
+		if rec.Reason != "" {
+			reason = "undeliverable: " + rec.Reason
+		}
+		if _, err := ex.ExecContext(ctx,
+			`UPDATE link_messages
+			    SET delivered = ?, reason = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, reason) END
+			  WHERE id = ?`,
+			boolInt(*rec.Delivered), boolInt(*rec.Delivered), reason, id); err != nil {
+			return 0, fmt.Errorf("link swarm: fold dashboard message: %w", err)
+		}
 	}
 	if !matched.Valid {
 		rec.ToSession = toSess.String
@@ -379,14 +428,20 @@ func correlateReceive(ctx context.Context, ex dbtx, recvID int64, rec MessageRec
 		return err
 	}
 	receiver := rec.ToSession
+	// The unresolved-address fallback (to_session NULL: a name or an agent id)
+	// only takes a send from a session in the receiver's own project: a name
+	// says nothing about which project's session it reached.
 	cands, err := candidates(ctx, ex,
-		`SELECT id, body, from_session, to_session FROM link_messages
-		  WHERE kind IN ('send', 'dashboard') AND matched_id IS NULL
-		    AND (to_session = ? OR to_address = ? OR to_session IS NULL)
-		    AND COALESCE(from_session, '') <> ?
-		    AND at >= ? AND at <= ?
-		  ORDER BY CASE WHEN to_session = ? OR to_address = ? THEN 0 ELSE 1 END, at DESC, id DESC`,
-		receiver, receiver, receiver, lo, hi, receiver, receiver)
+		`SELECT m.id, m.body, m.from_session, m.to_session FROM link_messages m
+		  WHERE m.kind IN ('send', 'dashboard') AND m.matched_id IS NULL
+		    AND (m.to_session = ? OR m.to_address = ?
+		         OR (m.to_session IS NULL AND EXISTS (
+		             SELECT 1 FROM sessions fs JOIN sessions rs ON rs.project_id = fs.project_id
+		              WHERE fs.session_uuid = m.from_session AND rs.session_uuid = ?)))
+		    AND COALESCE(m.from_session, '') <> ?
+		    AND m.at >= ? AND m.at <= ?
+		  ORDER BY CASE WHEN m.to_session = ? OR m.to_address = ? THEN 0 ELSE 1 END, m.at DESC, m.id DESC`,
+		receiver, receiver, receiver, receiver, lo, hi, receiver, receiver)
 	if err != nil {
 		return err
 	}
@@ -409,13 +464,21 @@ func correlateSend(ctx context.Context, ex dbtx, sendID int64, rec MessageRecord
 	if err != nil {
 		return err
 	}
+	// A send addressed to a session pairs with that session's receive alone.
+	// One whose address resolved to no session (a name, an agent id) pairs
+	// with a receive whose session the address spells, else with one in the
+	// sender's own project — never across projects.
 	cands, err := candidates(ctx, ex,
-		`SELECT id, body, from_session, to_session FROM link_messages
-		  WHERE kind = 'receive' AND matched_id IS NULL AND from_session IS NULL
-		    AND to_session <> ? AND (? = '' OR to_session = ?)
-		    AND at >= ? AND at <= ?
-		  ORDER BY at, id`,
-		rec.FromSession, rec.ToSession, rec.ToSession, lo, hi)
+		`SELECT r.id, r.body, r.from_session, r.to_session FROM link_messages r
+		  WHERE r.kind = 'receive' AND r.matched_id IS NULL AND r.from_session IS NULL
+		    AND r.to_session <> ?
+		    AND CASE WHEN ? <> '' THEN r.to_session = ?
+		             ELSE r.to_session = ? OR EXISTS (
+		                  SELECT 1 FROM sessions rs JOIN sessions ss ON ss.project_id = rs.project_id
+		                   WHERE rs.session_uuid = r.to_session AND ss.session_uuid = ?) END
+		    AND r.at >= ? AND r.at <= ?
+		  ORDER BY CASE WHEN r.to_session = ? THEN 0 ELSE 1 END, r.at, r.id`,
+		rec.FromSession, rec.ToSession, rec.ToSession, rec.ToAddress, rec.FromSession, lo, hi, rec.ToAddress)
 	if err != nil {
 		return err
 	}
