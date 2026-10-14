@@ -594,8 +594,9 @@ export const register: Register = (on, options) => {
     } catch {
       // best effort inside session.end's 1.5 s bound
     }
-    // `/clear`: the process goes on under a new id with no session.start; the next turn.start picks it up
-    if (e.reason === 'clear') link.isClearing = true
+    // `/clear` or an in-process resume: the process goes on under another id with no
+    // session.start (SessionEndInput.sessionId); the next turn.start picks it up
+    if (e.reason === 'clear' || e.reason === 'resume') link.isClearing = true
     return next(e)
   })
 }

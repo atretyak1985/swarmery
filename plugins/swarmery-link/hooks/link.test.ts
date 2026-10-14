@@ -263,7 +263,18 @@ test('/clear with control off: the sensor still moves to the new id, and nothing
   expect(w.polls).toHaveLength(0)
 })
 
-test('any session.end other than /clear is final: no resync, no new session announced', async ($, on) => {
+test('an in-process resume follows the resumed id like /clear does', async ($, on) => {
+  const w = world(on, { tokens: [TOKEN] })
+  await $.session.start(START)
+  await $.session.end({ reason: 'resume', sessionId: SESSION_ID, resume: { sessionId: SESSION_ID } as never })
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'after resume', turnId: 'turn-2' })
+  await w.clock.advance(2_000)
+  expect(sent(w.requests).filter(e => e.kind === 'session.start').map(e => e.sessionId)).toEqual([SESSION_ID, CLEARED_ID])
+  expect(sent(w.requests).filter(e => e.kind === 'turn.start').map(e => e.sessionId)).toEqual([CLEARED_ID])
+})
+
+test('any session.end other than /clear or resume is final: no resync, no new session announced', async ($, on) => {
   const w = world(on, { tokens: [TOKEN] })
   await $.session.start(START)
   await $.session.end(END)

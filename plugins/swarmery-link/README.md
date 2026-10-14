@@ -47,7 +47,8 @@ It also needs the daemon's link token (below). Without it the mod does nothing.
   moved, it sends a `session.start` for the new id (the same
   `{ surface, isInteractive }` the real one carried) and reports everything
   after under it. A `session.measure` between the clear and that turn is not
-  reported; the turn's `turn.complete` sends a fresh snapshot. Any other
+  reported; the turn's `turn.complete` sends a fresh snapshot. A resume inside
+  the same process (`reason: "resume"`) is followed the same way. Any other
   `session.end` reason is final.
 
 - **No tool input leaves the session.** A `tool.call` carries the tool's name and
@@ -144,7 +145,8 @@ loop for the session. It never runs inside a hook, and no hook waits on it.
 5. `401`: re-read the token file once and retry 1.1 s later; a second `401`
    stops the loop. `503` (`link disabled`) stops the loop and the sensor.
 6. `session.end` stops the loop: the pending wait is cancelled and the reply of
-   a poll still open is never acted on. After a `/clear` (`reason: "clear"`) a
+   a poll still open is never acted on. After a `/clear` or an in-process
+   resume (`reason: "clear"` or `"resume"`) a
    new loop starts at the next `turn.start`, polling under the session id the
    process now runs as; any other reason stops it for good.
 
