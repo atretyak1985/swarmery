@@ -1087,7 +1087,7 @@ func waitForWithin(t *testing.T, d time.Duration, cond func() bool) {
 }
 
 // noteStart records a stub run's start on a buffered channel without ever
-// blocking. A channel, not a sync.WaitGroup: a finished run re-pokes Schedule,
+// blocking. A channel, not a WaitGroup: a finished run re-pokes Schedule,
 // which can admit a run the test never counted, and an extra start must be
 // harmless rather than a negative-counter panic.
 func noteStart(started chan<- string, spec RunSpec) {
