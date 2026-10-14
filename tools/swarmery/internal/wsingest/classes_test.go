@@ -137,3 +137,42 @@ func TestMarkCriterionClass(t *testing.T) {
 		t.Errorf("lower-case class err = %v", err)
 	}
 }
+
+// ListCriteria walks the same lines the counts do: classedDoc's seven criteria
+// (fenced template lines excluded), each with its 0-based line, its label with
+// the class marker stripped, its state and its class whether ticked or not.
+func TestListCriteria(t *testing.T) {
+	got := ListCriteria(classedDoc)
+	want := []Criterion{
+		{Line: 2, Text: "parser lands", Done: true},
+		{Line: 3, Text: "settle uses the effective total"},
+		{Line: 4, Text: "push the branch and open the PR", Class: ClassLand},
+		{Line: 5, Text: "an already-landed one", Done: true, Class: ClassLand},
+		{Line: 6, Text: "check the production console", Class: ClassManual},
+		{Line: 7, Text: "[LAND]** emphasis is not a marker"},
+		{Line: 8, Text: "the word [LAND] mid-label is not a marker"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListCriteria =\n%+v\nwant\n%+v", got, want)
+	}
+	done, total := CountCheckboxes(classedDoc)
+	n := 0
+	for _, c := range got {
+		if c.Done {
+			n++
+		}
+	}
+	if len(got) != total || n != done {
+		t.Errorf("ListCriteria = %d/%d, CountCheckboxes = %d/%d", n, len(got), done, total)
+	}
+	// Every Line addresses a checkbox line, so a flip by line hits the criterion.
+	lines := strings.Split(classedDoc, "\n")
+	for _, c := range got {
+		if !checkboxRe.MatchString(lines[c.Line]) {
+			t.Errorf("line %d %q is not a checkbox", c.Line, lines[c.Line])
+		}
+	}
+	if got := ListCriteria("# no criteria\n"); got == nil || len(got) != 0 {
+		t.Errorf("empty doc = %#v, want []", got)
+	}
+}

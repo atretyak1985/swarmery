@@ -88,6 +88,47 @@ func CountCriteria(text string) CriteriaCounts {
 	return c
 }
 
+// Criterion is one acceptance criterion as ListCriteria reads it.
+type Criterion struct {
+	// Line is the criterion's 0-based line index in the doc — the address
+	// PATCH /api/epics/{taskId}/docs flips (its `line` field).
+	Line int
+	// Text is the label with its checkbox and class marker removed, trimmed and
+	// capped like UntickedCheckboxes' labels.
+	Text string
+	Done bool
+	// Class is ClassLand, ClassManual or "" — reported whether or not the
+	// criterion is ticked (CountCriteria counts only the open ones).
+	Class string
+}
+
+// ListCriteria lists the doc's acceptance criteria in document order: every
+// checkbox outside a fenced code block, the exact set CountCheckboxes and
+// CountCriteria count, so a criterion's position in this slice is a stable
+// ordinal over the same lines the counts are about. Pure; unit-tested.
+func ListCriteria(text string) []Criterion {
+	out := []Criterion{}
+	forEachLineOutsideFences(text, func(i int, line string) {
+		loc := checkboxRe.FindStringSubmatchIndex(line)
+		if loc == nil {
+			return
+		}
+		rest := strings.TrimLeft(line[loc[1]:], " \t")
+		class := ""
+		if m := criterionClassRe.FindStringSubmatch(rest); m != nil {
+			class = m[1]
+			rest = rest[len(m[0]):]
+		}
+		out = append(out, Criterion{
+			Line:  i,
+			Text:  criterionLabel(rest),
+			Done:  strings.EqualFold(line[loc[2]:loc[3]], "x"),
+			Class: class,
+		})
+	})
+	return out
+}
+
 // UntickedExecutable is UntickedCheckboxes without the [LAND] / [MANUAL]
 // criteria: the labels a phase run may still be asked to close. A continuation
 // built from the full list would send the executor off to push a branch.
