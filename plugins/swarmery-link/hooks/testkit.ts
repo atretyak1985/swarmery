@@ -66,6 +66,23 @@ export type World = {
    */
   readonly tools?: ReadonlyArray<'ok' | 'error' | 'deny'>
   readonly now?: number
+  /** The engine's own tool.check verdict beneath the plugin. Default: `allow`. */
+  readonly verdict?: { readonly decision: 'allow' | 'ask' | 'deny'; readonly reason?: string }
+  /** The daemon's answer per POST /api/link/permission, in order; the last repeats. Default: 204. */
+  readonly permissionReplies?: ReadonlyArray<PermissionReply>
+  /** The daemon's answer per GET /api/link/permission/{id}, in order; the last repeats. Default: `hang`. */
+  readonly permissionPollReplies?: ReadonlyArray<PermissionReply>
+}
+
+/** A status alone (empty body), a status with a JSON body, a failed connection, or a daemon that never answers. */
+export type PermissionReply = number | 'throw' | 'hang' | { readonly status: number; readonly body: Readonly<Record<string, unknown>> }
+
+export type PermissionCall = {
+  readonly url: string
+  readonly method: string | undefined
+  readonly authorization: string | undefined
+  readonly body: Readonly<Record<string, unknown>> | undefined
+  readonly at: number
 }
 
 export type ModelReply =
@@ -117,9 +134,20 @@ export type Recorded = {
   readonly moveTo: (sessionId: string, cwd?: string) => void
   /** Every `$.model.complete` that reached the engine beneath the plugin. */
   readonly modelCalls: ModelCall[]
+  /** Every POST /api/link/permission, with the mock clock's time it was made. */
+  readonly permissionPosts: PermissionCall[]
+  /** Every GET /api/link/permission/{id}, with the mock clock's time it was made. */
+  readonly permissionPolls: PermissionCall[]
+  /** Every `$.ui.status` text, undefined for a clear. */
+  readonly statuses: Array<string | undefined>
+  /** Every `$.ui.notice`. */
+  readonly notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }>
+  /** The tool of every `tool.call` that reached the engine beneath the plugin. */
+  readonly calls: string[]
 }
 
 const COMMANDS = '/api/link/commands'
+const PERMISSION = '/api/link/permission'
 
 const pick = <T>(list: readonly T[] | undefined, i: number, fallback: T): T =>
   list === undefined || list.length === 0 ? fallback : (list[Math.min(i, list.length - 1)] ?? fallback)
@@ -139,6 +167,11 @@ export const world = (on: On, w: World = {}): Recorded => {
   const aborts: string[] = []
   const submits: Submitted[] = []
   const modelCalls: ModelCall[] = []
+  const permissionPosts: PermissionCall[] = []
+  const permissionPolls: PermissionCall[] = []
+  const statuses: Array<string | undefined> = []
+  const notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }> = []
+  const calls: string[] = []
   let toolCalls = 0
   let reads = 0
   let sessionId: string = SESSION_ID
@@ -157,6 +190,25 @@ export const world = (on: On, w: World = {}): Recorded => {
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
   on('http.fetch', ($, e) => {
+    if (e.url.includes(PERMISSION)) {
+      const isPoll = e.url.includes(`${PERMISSION}/`)
+      const made = isPoll ? permissionPolls : permissionPosts
+      const reply = isPoll
+        ? pick<PermissionReply>(w.permissionPollReplies, made.length, 'hang')
+        : pick<PermissionReply>(w.permissionReplies, made.length, 204)
+      made.push({
+        url: e.url,
+        method: e.init?.method,
+        authorization: e.init?.headers?.authorization,
+        body: e.init?.body === undefined ? undefined : JSON.parse(e.init.body),
+        at: clock.now(),
+      })
+      if (reply === 'hang') return new Promise<never>(() => undefined)
+      if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
+      const status = typeof reply === 'number' ? reply : reply.status
+      const text = typeof reply === 'number' ? '' : JSON.stringify(reply.body)
+      return { value: { status, ok: status >= 200 && status < 300, headers: {}, text } }
+    }
     if (e.url.includes(`${COMMANDS}/`)) {
       const status = pick(w.ackReplies, acks.length, 204)
       acks.push({ url: e.url, body: JSON.parse(e.init?.body ?? '{}') })
@@ -191,7 +243,16 @@ export const world = (on: On, w: World = {}): Recorded => {
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
-  on('tool.call', () => {
+  on('ui.status', ($, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.notice', ($, e) => {
+    notices.push({ toolUseId: e.tool_use_id, text: e.text })
+    return { value: undefined }
+  })
+  on('tool.call', ($, e) => {
+    calls.push(String(e.tool))
     const outcome = pick(w.tools, toolCalls, 'ok')
     toolCalls += 1
     if (outcome === 'deny') return { deny: 'refused beneath' }
@@ -214,7 +275,7 @@ export const world = (on: On, w: World = {}): Recorded => {
   })
   on('tool.check', ($, e) => {
     checks.push(e)
-    return { decision: 'allow' }
+    return w.verdict ?? { decision: 'allow' }
   })
 
   on('turn.abort', ($, e) => {
@@ -232,7 +293,25 @@ export const world = (on: On, w: World = {}): Recorded => {
     cwd = dir
   }
 
-  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits, moveTo, modelCalls }
+  return {
+    clock,
+    requests,
+    logs,
+    shown,
+    tokenReads: () => reads,
+    checks,
+    polls,
+    acks,
+    aborts,
+    submits,
+    moveTo,
+    modelCalls,
+    permissionPosts,
+    permissionPolls,
+    statuses,
+    notices,
+    calls,
+  }
 }
 
 /** Every event the recorded requests carried, in order. */

@@ -16,11 +16,18 @@
 // `turn.forecast` and `turn.actual` (paths and numbers only). With `forecast`
 // off no model call is made and neither event is sent.
 //
-// Every `$` call is spelled in this module, as the engine requires: `$` is
-// handed only to the functions declared at the top of this file, and ./lib/*
-// is pure (data in, data out).
+// With `approvals` on, a permission `ask` the engine reached for a real call
+// goes to the daemon's approvals queue first (tool.check), and an
+// AskUserQuestion is put to the dashboard (tool.call); every failure leaves
+// the engine's verdict or the question's dialog (./approvals.ts). With
+// `approvals` off neither hook is registered and no request goes to the
+// permission endpoint.
+//
+// `$` is handed only to top-level function declarations: this file's and
+// ./approvals.ts's. ./lib/* is pure (data in, data out).
 
 import type { EngineInterface, PromptSubmitArgs, Register, Timer } from 'claude-code'
+import { type Gate, answerFromSwarmery, checkWithSwarmery } from './approvals'
 import {
   AUTH_RETRY_MS,
   DEFAULT_DAEMON_URL,
@@ -586,6 +593,20 @@ async function finishForecast($: EngineInterface, link: Link, forecaster: Foreca
   if (actual !== undefined) await push($, link, 'turn.actual', actual)
 }
 
+/** The approvals channel's view of the link for one call: its session as of now, its token, the token re-read. */
+function gateOf($: EngineInterface, link: Link, origin: string, waiting: { count: number }): Gate {
+  return {
+    origin,
+    sessionId: link.sessionId,
+    cwd: link.cwd,
+    token: () => link.token ?? '',
+    reread: async () => {
+      link.token = (await readToken($)) ?? link.token
+    },
+    waiting,
+  }
+}
+
 /** How a tool call ended, from what `next(e)` resolved to. */
 const toolOutcome = (result: unknown): ToolOutcome => {
   const r = result as { readonly deny?: unknown; readonly isError?: unknown } | undefined
@@ -596,7 +617,10 @@ const toolOutcome = (result: unknown): ToolOutcome => {
 export const register: Register = (on, options) => {
   const reserved = RESERVED.filter(feature => options[feature] === true)
   const isControlOn = options.control === true
+  const isApprovalsOn = options.approvals === true
   const endpoint = daemonEndpoint(options.daemonUrl)
+  /** Calls waiting on the dashboard right now; the status line shows while any does. */
+  const waiting = { count: 0 }
   /** The command loop; only ever set with `control` on. */
   let control: Control | undefined
   /** The forecast loop; undefined with `forecast` off, so none of it runs. */
@@ -630,7 +654,7 @@ export const register: Register = (on, options) => {
     for (const feature of reserved) {
       if (noted.has(feature)) continue
       noted.add(feature)
-      log($, `${feature}: not implemented in 0.3`)
+      log($, `${feature}: not implemented in 0.4`)
     }
     if (endpoint.isRefused && !noted.has('daemonUrl')) {
       // the configured value is not echoed: it may carry credentials
@@ -708,6 +732,23 @@ export const register: Register = (on, options) => {
     }
     return result
   }).catch(($, e, next) => next(e))
+
+  // Registered after the sensor's tool.call, so the sensor sits above it and
+  // still reports (and journals) an AskUserQuestion answered from the dashboard.
+  if (isApprovalsOn) {
+    on('tool.check', async ($, e, next) => {
+      const verdict = await next(e)
+      if (!isActive(link) || link.isClearing) return verdict
+      return checkWithSwarmery($, gateOf($, link, endpoint.origin, waiting), e, verdict, next.signal)
+    }).catch(($, e, next) => next(e))
+
+    on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+      if (!isActive(link) || link.isClearing) return next(e)
+      const fields = e as unknown as Readonly<Record<string, unknown>>
+      const answer = await answerFromSwarmery($, gateOf($, link, endpoint.origin, waiting), fields, next.signal)
+      return answer === undefined ? next(e) : { result: answer }
+    }).catch(($, e, next) => next(e))
+  }
 
   on('session.measure', async ($, e, next) => {
     try {
