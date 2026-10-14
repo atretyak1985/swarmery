@@ -126,7 +126,7 @@ export function ModCostPanel({
   if (rows.length === 0) return null;
   const source: CostSource = picked ?? (rows.some((s) => s.link?.costUsd != null) ? 'mod' : 'pricing');
   const shown = rows.slice(0, MAX_ROWS);
-  const diverging = rows.filter((s) => costDiverges(s.link?.costUsd, s.costUsd)).length;
+  const diverging = shown.filter((s) => costDiverges(s.link?.costUsd, s.costUsd)).length;
   const total = fmtCost(shown.reduce((sum, s) => sum + (rowCost(s, source).usd ?? 0), 0));
   const count = String(shown.length);
   const divergingCount = String(diverging);
