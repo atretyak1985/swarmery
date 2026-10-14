@@ -1051,7 +1051,9 @@ func TestNilNotifyAndNilWtAreSafe(t *testing.T) {
 // a channel, their WaitGroup's negative-counter panic was the only thing that
 // reached this branch, and only on some interleavings.)
 func TestSpawnRecoversAndLogsAPanic(t *testing.T) {
-	var buf strings.Builder
+	// Guarded: goroutines an earlier test left behind may still log through the
+	// global logger while this test reads the buffer.
+	var buf lockedBuf
 	prev := log.Writer()
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(prev) })
@@ -1064,6 +1066,25 @@ func TestSpawnRecoversAndLogsAPanic(t *testing.T) {
 	if got := buf.String(); !strings.Contains(got, "dispatch: goroutine panic recovered: boom from a dispatch goroutine") {
 		t.Errorf("log = %q, want the recovered panic named", got)
 	}
+}
+
+// lockedBuf is an io.Writer whose writes and reads share one mutex, so a test
+// can read what the global logger captured while stray goroutines still write.
+type lockedBuf struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (l *lockedBuf) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuf) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 func waitFor(t *testing.T, cond func() bool) {
