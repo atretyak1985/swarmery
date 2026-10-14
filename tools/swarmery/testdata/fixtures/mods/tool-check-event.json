@@ -1,0 +1,81 @@
+{
+  "_comment": "Observed 2026-10-13, Claude Code 2.1.296, claude -p --plugin-dir link-spike (model haiku). `e` is the tool.check input verbatim; `keys` is Object.keys(e); `budget` is next.budget at hook entry. The call id field is `tool_use_id` (no toolUseId / id). `agentId` is absent on the main loop.",
+  "e": {
+    "tool": "Bash",
+    "input": {
+      "command": "echo M3-probe-ok",
+      "description": "Echo probe string"
+    },
+    "tool_use_id": "toolu_01KhJeH7HvDaLDbtMv818ir9"
+  },
+  "keys": [
+    "tool",
+    "input",
+    "tool_use_id"
+  ],
+  "budget": {
+    "ms": 10000,
+    "remainingMs": 10000
+  },
+  "interactive": {
+    "e": {
+      "tool": "Bash",
+      "input": {
+        "command": "echo M3-probe-interactive",
+        "description": "Run the probe echo command once"
+      },
+      "tool_use_id": "toolu_01D9G2Jn4R14GVrTGaDy6vNk"
+    },
+    "keys": [
+      "tool",
+      "input",
+      "tool_use_id"
+    ],
+    "budget": {
+      "ms": 10000,
+      "remainingMs": 9999
+    }
+  },
+  "pollLoop": {
+    "_comment": "One line per $.http.fetch long-poll (stub holds 25 s, 204 x25, then 200 {decision:allow}). remainingMs is next.budget.remainingMs read after the fetch: the 10 s hook budget is not charged for $ calls in flight.",
+    "headless": {
+      "first": {
+        "i": 1,
+        "elapsedMs": 25074,
+        "status": 204,
+        "remainingMs": 9999,
+        "aborted": false
+      },
+      "last": {
+        "i": 26,
+        "elapsedMs": 652460,
+        "status": 200,
+        "remainingMs": 9954,
+        "aborted": false
+      },
+      "count": 26,
+      "minRemainingMs": 9954
+    },
+    "interactive": {
+      "first": {
+        "i": 1,
+        "elapsedMs": 25070,
+        "status": 204,
+        "remainingMs": 9998,
+        "aborted": false
+      },
+      "last": {
+        "i": 26,
+        "elapsedMs": 652412,
+        "status": 200,
+        "remainingMs": 9952,
+        "aborted": false
+      },
+      "decided": {
+        "i": 26,
+        "elapsedMs": 652412,
+        "decision": "allow"
+      }
+    }
+  }
+}

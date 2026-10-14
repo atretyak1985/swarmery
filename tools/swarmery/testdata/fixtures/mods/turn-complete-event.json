@@ -1,0 +1,81 @@
+{
+  "_comment": "Observed 2026-10-13, Claude Code 2.1.296. turn.complete `e` verbatim (answer cut to 200 chars by the spike) plus $.session.usage() read inside the same hook. `headless`: claude -p turn 1; `interactiveWithTool`: terminal turn whose AskUserQuestion was answered by the mod (M4).",
+  "headless": {
+    "e": {
+      "answer": "one",
+      "durationMs": 2478,
+      "isAborted": false,
+      "turnId": "6453d199-ced0-44b9-9b3c-07284eaf0651",
+      "reason": "answer",
+      "usage": {
+        "input_tokens": 2,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 10979,
+        "cache_creation_input_tokens": 21127,
+        "model": "claude-haiku-5-5"
+      }
+    },
+    "usage": {
+      "startedAt": 1791920751978,
+      "context": {
+        "tokens": 32108,
+        "window": 1000000,
+        "percent": 3
+      },
+      "rateLimits": [
+        {
+          "kind": "five_hour",
+          "percentUsed": 9,
+          "resetsAt": "2026-10-13T20:20:00.000Z"
+        },
+        {
+          "kind": "seven_day",
+          "percentUsed": 48,
+          "resetsAt": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "cost": {
+        "usd": 0.0043368899999999995
+      }
+    }
+  },
+  "interactiveWithTool": {
+    "e": {
+      "answer": "SPIKE-ANSWER: Red",
+      "durationMs": 5192,
+      "isAborted": false,
+      "turnId": "0ba5ceff-c7aa-4d04-840d-407ccd11d53a",
+      "reason": "answer",
+      "usage": {
+        "input_tokens": 4,
+        "output_tokens": 248,
+        "cache_read_input_tokens": 52343,
+        "cache_creation_input_tokens": 27973,
+        "model": "claude-haiku-5-5"
+      }
+    },
+    "usage": {
+      "startedAt": 1791920915857,
+      "context": {
+        "tokens": 40309,
+        "window": 1000000,
+        "percent": 4
+      },
+      "rateLimits": [
+        {
+          "kind": "five_hour",
+          "percentUsed": 9,
+          "resetsAt": "2026-10-13T20:20:00.000Z"
+        },
+        {
+          "kind": "seven_day",
+          "percentUsed": 48,
+          "resetsAt": "2026-10-17T14:00:00.000Z"
+        }
+      ],
+      "cost": {
+        "usd": 0.006458930000000001
+      }
+    }
+  }
+}
