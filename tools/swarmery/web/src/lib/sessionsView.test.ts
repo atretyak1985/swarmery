@@ -12,6 +12,7 @@ import {
   buildDays,
   countRuns,
   countSessions,
+  linkSelection,
   matchesQuery,
   planRowNotes,
   planRowTag,
@@ -257,5 +258,43 @@ describe('planRowNotes', () => {
   it('leaves a single-attempt phase without a note', () => {
     const ph = makeSession({ planGroup: plan({ phaseSeq: 2 }) });
     expect(planRowNotes([ph]).size).toBe(0);
+  });
+});
+
+describe('linkSelection', () => {
+  const link = (controllable: boolean): Session['link'] => ({
+    status: 'working',
+    seenAt: '2026-08-02T10:00:00Z',
+    live: true,
+    contextPct: 10,
+    rateLimits: [],
+    costUsd: 0,
+    controllable,
+  });
+
+  it('offers only visible flat rows whose mod polls, and never sends a selection a filter hides', () => {
+    const a = makeSession({ status: 'active', link: link(true) });
+    const b = makeSession({ status: 'completed', link: link(true) });
+    const c = makeSession({ status: 'active', link: link(false) });
+    const inRun = makeSession({ status: 'active', link: link(true), planGroup: plan() });
+    const sorted = [a, b, c, inRun];
+
+    // Everything shown: a and b get checkboxes; c (not polling) and the run row do not.
+    const all = linkSelection(buildDays(sorted), [b.id, a.id]);
+    expect(all.selectable.map((s) => s.id)).toEqual([a.id, b.id]);
+    expect(all.visible).toEqual([b.id, a.id]);
+    expect(all.hidden).toBe(0);
+
+    // A status filter hides b: it stays selected but is not sent.
+    const active = linkSelection(buildDays(sorted, 'active'), [b.id, a.id]);
+    expect(active.selectable.map((s) => s.id)).toEqual([a.id]);
+    expect(active.visible).toEqual([a.id]);
+    expect(active.hidden).toBe(1);
+
+    // The runs-only view shows no flat rows at all.
+    const runs = linkSelection(runsOnly(buildDays(sorted)), [a.id]);
+    expect(runs.selectable).toEqual([]);
+    expect(runs.visible).toEqual([]);
+    expect(runs.hidden).toBe(1);
   });
 });

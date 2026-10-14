@@ -200,6 +200,10 @@ msgstr "вільно {free} з {max} слотів"
 msgid "{h} h ago"
 msgstr "{h} год тому"
 
+#: src/components/BulkPromptBar.tsx
+msgid "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
+msgstr "вибрані сесії, приховані фільтром ({hiddenCount}), не буде надіслано"
+
 #: src/components/SessionCard.tsx
 msgid "{k}k ctx"
 msgstr "{k}k ctx"
@@ -2541,6 +2545,10 @@ msgstr "лише підключені"
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "підключення вимкнено — перезапустіть демон зі списком дозволених:"
 
+#: src/components/BulkPromptBar.tsx
+msgid "One send reaches at most {max} sessions; select all takes the first {max}."
+msgstr "Одне надсилання охоплює щонайбільше {max} сесій; «вибрати всі» бере перші {max}."
+
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є у «Потребує вас»."
@@ -3421,6 +3429,10 @@ msgstr "друга"
 msgid "select all"
 msgstr "вибрати всі"
 
+#: src/components/BulkPromptBar.tsx
+msgid "Select at most {max} sessions ({n} selected)"
+msgstr "Виберіть щонайбільше {max} сесій (вибрано {n})"
+
 #: src/components/SessionControls.tsx
 msgid "Send"
 msgstr "Надіслати"
@@ -3670,6 +3682,10 @@ msgstr "запуск…"
 #: src/workspace/task/RunLog.tsx
 msgid "state"
 msgstr "стан"
+
+#: src/components/SessionControls.tsx
+msgid "state unknown after reconnect"
+msgstr "стан невідомий після перепідключення"
 
 #: src/components/StopButton.tsx
 msgid "Stop"

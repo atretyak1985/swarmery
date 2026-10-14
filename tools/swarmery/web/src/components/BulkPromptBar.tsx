@@ -3,11 +3,19 @@
 // mod's message (POST /api/sessions/link/bulk-prompt). The server answers with
 // what it queued and what it skipped and why; both are listed so a mixed
 // selection never fails silently.
+//
+// The server takes at most BULK_PROMPT_MAX ids per call: a larger selection is
+// refused here, in the operator's language, rather than by the server's 400.
+// The page passes only the selected rows that are currently visible; the ones
+// a filter hides are counted in `hiddenCount` and never sent.
 
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { bulkLinkPrompt } from '../api';
 import type { LinkBulkPromptResult, Session } from '../api/types';
+
+/** The server's per-call id limit (internal/api/link_commands.go maxBulkSessions). */
+export const BULK_PROMPT_MAX = 50;
 
 /** A row label for a session id: its title, else the short uuid, else #id. */
 function sessionLabel(byId: ReadonlyMap<number, Session>, id: number): string {
@@ -18,13 +26,17 @@ function sessionLabel(byId: ReadonlyMap<number, Session>, id: number): string {
 
 export function BulkPromptBar({
   selected,
+  hiddenCount = 0,
   selectableCount,
   byId,
   onSelectAll,
   onClear,
 }: {
-  /** Selected session ids, in selection order. */
+  /** Selected session ids that are visible now, in selection order: exactly
+   * what Send sends. */
   selected: readonly number[];
+  /** Selected sessions a filter hides now; named, never sent. */
+  hiddenCount?: number;
   /** How many loaded sessions could be selected (link.controllable). */
   selectableCount: number;
   /** Loaded sessions by id, to name the rows of the result. */
@@ -41,6 +53,8 @@ export function BulkPromptBar({
   const [error, setError] = useState<string | null>(null);
 
   const n = selected.length;
+  const max = BULK_PROMPT_MAX;
+  const overCap = n > max;
   const queuedCount = result?.queued.length ?? 0;
   const skippedCount = result?.skipped.length ?? 0;
   const send = async (): Promise<void> => {
@@ -71,6 +85,16 @@ export function BulkPromptBar({
           {t`clear`}
         </button>
       </div>
+      {selectableCount > max && (
+        <div className="font-mono text-[10.5px] text-ink-faint" data-testid="bulk-cap-note">
+          {t`One send reaches at most ${max} sessions; select all takes the first ${max}.`}
+        </div>
+      )}
+      {hiddenCount > 0 && (
+        <div className="font-mono text-[10.5px] text-amber" data-testid="bulk-hidden-note">
+          {t`${hiddenCount} selected sessions are hidden by the filter and will not be sent`}
+        </div>
+      )}
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -81,11 +105,15 @@ export function BulkPromptBar({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={n === 0 || text.trim() === '' || sending}
+          disabled={n === 0 || overCap || text.trim() === '' || sending}
           onClick={() => void send()}
           className="rounded border border-brand/50 bg-brand/10 px-2.5 py-1 font-mono text-[11px] font-medium text-brand transition-colors hover:bg-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {sending ? t`sending…` : t`Continue phase on ${n} sessions`}
+          {sending
+            ? t`sending…`
+            : overCap
+              ? t`Select at most ${max} sessions (${n} selected)`
+              : t`Continue phase on ${n} sessions`}
         </button>
         <span className="font-mono text-[10.5px] text-ink-faint">
           {t`Sent as a message from the swarmery link mod, not as you.`}

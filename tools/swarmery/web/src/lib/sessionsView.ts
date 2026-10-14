@@ -289,6 +289,25 @@ export function runsOnly(days: readonly DayBucket[]): DayBucket[] {
     .filter((d) => d.items.length > 0);
 }
 
+/** The bulk "continue phase" selection against what the page renders now. */
+export interface LinkSelection {
+  /** Flat session rows on screen whose link mod polls (they get a checkbox). */
+  selectable: Session[];
+  /** Selected ids among them, in selection order: what a send sends. */
+  visible: number[];
+  /** Selected ids a filter hides now: kept, never sent. */
+  hidden: number;
+}
+
+export function linkSelection(days: readonly DayBucket[], selected: readonly number[]): LinkSelection {
+  const selectable = days.flatMap((d) =>
+    d.items.flatMap((it) => (it.kind === 'session' && it.session.link?.controllable === true ? [it.session] : [])),
+  );
+  const ids = new Set(selectable.map((s) => s.id));
+  const visible = selected.filter((id) => ids.has(id));
+  return { selectable, visible, hidden: selected.length - visible.length };
+}
+
 /** How many session ROWS the given buckets render (run rows included). */
 export function countSessions(days: readonly DayBucket[]): number {
   let n = 0;

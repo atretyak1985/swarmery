@@ -9,7 +9,10 @@
 //   3. Send prompt sends {text, asUser}, and the copy says whose message it is.
 //   4. The command's state follows the link_command WS frames, including a
 //      frame that beats the 202, and a failure shows its message.
-//   5. The bulk bar renders the server's queued and skipped (with reasons).
+//   5. The bulk bar renders the server's queued and skipped (with reasons),
+//      refuses more than the server's 50 ids, and names hidden selections.
+//   6. An unsettled prompt (bounced by a running turn) never disables Stop
+//      turn; only an unsettled stop does; a WS reconnect releases both.
 //
 // `npx vitest run src/components/SessionControls.test.tsx`.
 
@@ -27,20 +30,34 @@ const api = vi.hoisted(() => ({
 vi.mock('../api', () => api);
 
 // Capture the WS handler the watcher subscribes with.
-const ws = vi.hoisted(() => ({ handlers: new Set<(m: WSMessage) => void>() }));
+const ws = vi.hoisted(() => ({
+  handlers: new Set<(m: WSMessage) => void>(),
+  reconnects: new Set<() => void>(),
+}));
 vi.mock('../lib/ws', async () => {
   const react = await import('react');
   return {
-    useLiveUpdates: (onMessage: (m: WSMessage) => void): void => {
+    useLiveUpdates: (onMessage: (m: WSMessage) => void, onReconnect: () => void): void => {
       react.useEffect(() => {
         ws.handlers.add(onMessage);
+        ws.reconnects.add(onReconnect);
         return () => {
           ws.handlers.delete(onMessage);
+          ws.reconnects.delete(onReconnect);
         };
-      }, [onMessage]);
+      }, [onMessage, onReconnect]);
     },
   };
 });
+
+function reconnect(): void {
+  act(() => {
+    for (const h of ws.reconnects) h();
+  });
+}
+
+const stateOf = (kind: 'stop' | 'prompt'): string | null | undefined =>
+  screen.getAllByTestId('command-state').find((e) => e.getAttribute('data-kind') === kind)?.textContent;
 
 function emit(note: LinkCommandNote): void {
   act(() => {
@@ -53,6 +70,7 @@ beforeEach(() => {
   api.sendLinkPrompt.mockReset();
   api.bulkLinkPrompt.mockReset();
   ws.handlers.clear();
+  ws.reconnects.clear();
 });
 afterEach(cleanup);
 
@@ -178,6 +196,10 @@ describe('Send prompt', () => {
     emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'delivered' });
     emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'queued', message: 'turn in progress' });
     expect(screen.getByTestId('command-state').textContent).toBe('Prompt · queued — waits for the running turn to end');
+    // The running turn the prompt waits for is what Stop turn aborts: an
+    // unsettled prompt must not disable it. Send prompt keeps waiting.
+    expect(stopBtn().disabled).toBe(false);
+    expect(promptBtn().disabled).toBe(true);
     emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'failed', message: 'submit rejected' });
     expect(screen.getByTestId('command-state').textContent).toBe('Prompt · failed: submit rejected');
   });
@@ -198,6 +220,68 @@ describe('Send prompt', () => {
     });
     emit({ sessionId: 7, commandId: 9, kind: 'prompt', state: 'expired' });
     expect(screen.getByTestId('command-state').textContent).toBe('Prompt · expired — the mod did not pick it up in time');
+  });
+});
+
+describe('Stop turn vs an unsettled prompt', () => {
+  async function bouncedPrompt(): Promise<void> {
+    api.sendLinkPrompt.mockResolvedValue({ commandId: 5 });
+    render(<SessionControls session={makeSession({ link: makeLink() })} />);
+    fireEvent.click(promptBtn());
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'next' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    });
+    emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'queued', message: 'turn in progress' });
+  }
+
+  it('lets the operator stop the turn a bounced prompt waits for, and gates Stop on its own stop', async () => {
+    await bouncedPrompt();
+    expect(stopBtn().disabled).toBe(false);
+    expect(promptBtn().disabled).toBe(true);
+
+    let resolve: (v: { commandId: number }) => void = () => undefined;
+    api.stopLinkTurn.mockReturnValue(new Promise((r) => (resolve = r)));
+    fireEvent.click(stopBtn());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm stop' }));
+    expect(api.stopLinkTurn).toHaveBeenCalledWith(7);
+
+    // The stop is in flight: Stop turn waits for it.
+    expect(stopBtn().disabled).toBe(true);
+    await act(async () => {
+      resolve({ commandId: 6 });
+    });
+    expect(stopBtn().disabled).toBe(true);
+    expect(stateOf('stop')).toBe('Stop turn · queued, waiting for the mod to pick it up');
+    expect(stateOf('prompt')).toBe('Prompt · queued — waits for the running turn to end');
+
+    // Both frames land on their own command.
+    emit({ sessionId: 7, commandId: 6, kind: 'stop', state: 'done' });
+    expect(stateOf('stop')).toBe('Stop turn · done');
+    expect(stopBtn().disabled).toBe(false);
+    expect(promptBtn().disabled).toBe(true);
+    emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'done' });
+    expect(stateOf('prompt')).toBe('Prompt · done');
+    expect(promptBtn().disabled).toBe(false);
+  });
+
+  it('releases both buttons as "state unknown" after a WS reconnect', async () => {
+    await bouncedPrompt();
+    api.stopLinkTurn.mockResolvedValue({ commandId: 6 });
+    fireEvent.click(stopBtn());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm stop' }));
+    });
+    expect(stopBtn().disabled).toBe(true);
+    expect(promptBtn().disabled).toBe(true);
+
+    reconnect();
+    expect(stopBtn().disabled).toBe(false);
+    expect(promptBtn().disabled).toBe(false);
+    expect(stateOf('stop')).toBe('Stop turn · state unknown after reconnect');
+    expect(stateOf('prompt')).toBe('Prompt · state unknown after reconnect');
+    // Nothing is listening any more.
+    expect(ws.handlers.size).toBe(0);
   });
 });
 
@@ -231,6 +315,33 @@ describe('BulkPromptBar', () => {
       'beta — no polling link mod',
       '#3 — session not found',
     ]);
+  });
+
+  it('refuses more than 50 ids with its own message instead of the server 400', () => {
+    const ids = Array.from({ length: 51 }, (_, i) => i + 1);
+    render(
+      <BulkPromptBar selected={ids} selectableCount={60} byId={new Map()} onSelectAll={() => undefined} onClear={() => undefined} />,
+    );
+    const btn = screen.getByRole('button', { name: 'Select at most 50 sessions (51 selected)' }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(screen.getByTestId('bulk-cap-note').textContent).toMatch(/select all takes the first 50/);
+    fireEvent.click(btn);
+    expect(api.bulkLinkPrompt).not.toHaveBeenCalled();
+  });
+
+  it('names selections a filter hides and does not count them', () => {
+    render(
+      <BulkPromptBar
+        selected={[1]}
+        hiddenCount={2}
+        selectableCount={1}
+        byId={new Map()}
+        onSelectAll={() => undefined}
+        onClear={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Continue phase on 1 sessions' })).toBeTruthy();
+    expect(screen.getByTestId('bulk-hidden-note').textContent).toBe('2 selected sessions are hidden by the filter and will not be sent');
   });
 
   it('cannot send with nothing selected', () => {

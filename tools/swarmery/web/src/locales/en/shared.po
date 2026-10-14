@@ -200,6 +200,10 @@ msgstr "{free} of {max} slots free"
 msgid "{h} h ago"
 msgstr "{h} h ago"
 
+#: src/components/BulkPromptBar.tsx
+msgid "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
+msgstr "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
+
 #: src/components/SessionCard.tsx
 msgid "{k}k ctx"
 msgstr "{k}k ctx"
@@ -2541,6 +2545,10 @@ msgstr "onboarded only"
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "onboarding is disabled — restart the daemon with an allow-list:"
 
+#: src/components/BulkPromptBar.tsx
+msgid "One send reaches at most {max} sessions; select all takes the first {max}."
+msgstr "One send reaches at most {max} sessions; select all takes the first {max}."
+
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
@@ -3421,6 +3429,10 @@ msgstr "second"
 msgid "select all"
 msgstr "select all"
 
+#: src/components/BulkPromptBar.tsx
+msgid "Select at most {max} sessions ({n} selected)"
+msgstr "Select at most {max} sessions ({n} selected)"
+
 #: src/components/SessionControls.tsx
 msgid "Send"
 msgstr "Send"
@@ -3670,6 +3682,10 @@ msgstr "starting…"
 #: src/workspace/task/RunLog.tsx
 msgid "state"
 msgstr "state"
+
+#: src/components/SessionControls.tsx
+msgid "state unknown after reconnect"
+msgstr "state unknown after reconnect"
 
 #: src/components/StopButton.tsx
 msgid "Stop"

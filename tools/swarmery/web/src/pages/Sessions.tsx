@@ -42,6 +42,7 @@ import {
   buildDays,
   countRuns,
   countSessions,
+  linkSelection,
   matchesQuery,
   runsOnly,
   STATUS_LABELS,
@@ -49,7 +50,7 @@ import {
   type DayBucket,
 } from '../lib/sessionsView';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
-import { BulkPromptBar } from '../components/BulkPromptBar';
+import { BULK_PROMPT_MAX, BulkPromptBar } from '../components/BulkPromptBar';
 import { ExplainPair } from '../components/Explain';
 import { FileContentionBanner } from '../components/FileContentionBanner';
 import { PageSearchInput } from '../components/PageSearchInput';
@@ -353,10 +354,12 @@ export function Sessions(): JSX.Element {
   const statusLabel = status !== null ? STATUS_LABELS[status] : '';
 
   // Bulk "continue phase" (link control channel): offered while any loaded
-  // session has a link mod; only sessions whose mod polls for commands
-  // (link.controllable) get a checkbox.
+  // session has a link mod; only the flat rows on screen whose mod polls for
+  // commands (link.controllable) get a checkbox. A selection a later filter
+  // hides is kept (it comes back with the filter) but never sent: the bar gets
+  // only the visible selected ids and a count of the hidden ones.
   const hasLinked = loaded.some((s) => s.link != null);
-  const selectable = sorted.filter((s) => s.link?.controllable === true);
+  const { selectable, visible: visibleSelected, hidden: hiddenSelected } = linkSelection(days, selected);
   const byId = new Map(loaded.map((s) => [s.id, s] as const));
   const toggleSelected = (id: number): void => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -429,10 +432,11 @@ export function Sessions(): JSX.Element {
 
       {selectMode && (
         <BulkPromptBar
-          selected={selected}
+          selected={visibleSelected}
+          hiddenCount={hiddenSelected}
           selectableCount={selectable.length}
           byId={byId}
-          onSelectAll={() => setSelected(selectable.map((s) => s.id))}
+          onSelectAll={() => setSelected(selectable.slice(0, BULK_PROMPT_MAX).map((s) => s.id))}
           onClear={() => setSelected([])}
         />
       )}

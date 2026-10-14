@@ -17,6 +17,12 @@
 // failed / expired) comes from the link_command WS frame; the socket is
 // subscribed only while a command is in flight, so a card that never sends
 // one costs nothing.
+//
+// Each kind is tracked on its own: an unsettled prompt (one bounced by a
+// running turn waits up to the prompt TTL) never disables Stop turn — that
+// running turn is exactly what the operator may want to abort. Stop turn waits
+// only for its own unsettled stop. A WS reconnect may have dropped frames, so
+// it turns every unsettled command into "unknown", which releases its button.
 
 import { useLingui } from '@lingui/react/macro';
 import { useCallback, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
@@ -33,10 +39,13 @@ import { useLiveUpdates } from '../lib/ws';
 /** Terminal command states: nothing will move after these. */
 const TERMINAL: ReadonlySet<LinkCommandState> = new Set(['done', 'failed', 'expired']);
 
-/** Nothing more will happen to a command in this state. */
+/** Nothing more will happen to a command in this state (as far as the UI
+ * will ever learn: 'unknown' means frames may have been lost). */
 function settled(state: Tracked['state']): boolean {
-  return state === 'rejected' || (state !== 'sending' && TERMINAL.has(state));
+  return state === 'rejected' || state === 'unknown' || (state !== 'sending' && TERMINAL.has(state));
 }
+
+const unsettled = (tr: Tracked | undefined): boolean => tr !== undefined && !settled(tr.state);
 
 /** The exact ack message of a prompt bounced by a running turn (protocol). */
 // i18n-ignore: protocol string the mod sends, compared, never shown
@@ -47,20 +56,29 @@ interface Tracked {
   kind: LinkCommandKind;
   /** null while the POST is in flight. */
   commandId: number | null;
-  /** 'sending' until the POST answers; then the latest WS state. */
-  state: LinkCommandState | 'sending' | 'rejected';
+  /** 'sending' until the POST answers; then the latest WS state; 'unknown'
+   * once a WS reconnect may have dropped its frames. */
+  state: LinkCommandState | 'sending' | 'rejected' | 'unknown';
   /** The mod's ack message, or the HTTP error for 'rejected'. */
   message?: string | undefined;
 }
+
+/** The last command of each kind this control sent. */
+type TrackedByKind = Partial<Record<LinkCommandKind, Tracked>>;
+
+/** Display order of the per-kind status lines. */
+const KINDS: readonly LinkCommandKind[] = ['stop', 'prompt'];
 
 /** Subscribes to the WS bus while mounted and forwards this session's
  * link_command frames. Mounted only while a command is in flight. */
 function CommandWatcher({
   sessionId,
   onNote,
+  onReconnect,
 }: {
   sessionId: number;
   onNote: (n: LinkCommandNote) => void;
+  onReconnect: () => void;
 }): null {
   const onMessage = useCallback(
     (msg: WSMessage): void => {
@@ -68,7 +86,7 @@ function CommandWatcher({
     },
     [sessionId, onNote],
   );
-  useLiveUpdates(onMessage, () => undefined);
+  useLiveUpdates(onMessage, onReconnect);
   return null;
 }
 
@@ -96,7 +114,7 @@ export function SessionControls({
   const [promptOpen, setPromptOpen] = useState(false);
   const [text, setText] = useState('');
   const [asUser, setAsUser] = useState(false);
-  const [tracked, setTracked] = useState<Tracked | null>(null);
+  const [tracked, setTracked] = useState<TrackedByKind>({});
   // Frames that arrive before the POST answers (a waiting mod picks a command
   // up at once, so "delivered" can beat the 202): kept by command id.
   const early = useRef(new Map<number, LinkCommandNote>());
@@ -107,30 +125,53 @@ export function SessionControls({
     link === null
       ? t`No swarmery link mod reports on this session, so it cannot be steered from the dashboard.`
       : t`The session's link mod is not polling for commands. Enable the swarmery-link "control" option and keep the session open.`;
-  // In flight from the click until a terminal state (or an HTTP refusal):
-  // the buttons wait and the WS watcher listens meanwhile.
-  const inFlight = tracked !== null && !settled(tracked.state);
-  const busy = inFlight;
+  // A kind is in flight from the click until a terminal state (or an HTTP
+  // refusal, or a reconnect): its own button waits and the WS watcher
+  // listens meanwhile. Stop turn never waits for a prompt.
+  const stopBusy = unsettled(tracked.stop);
+  const promptBusy = unsettled(tracked.prompt);
+  const inFlight = stopBusy || promptBusy;
 
   const onNote = useCallback((n: LinkCommandNote): void => {
     early.current.set(n.commandId, n);
-    setTracked((prev) =>
-      prev !== null && prev.commandId === n.commandId
-        ? { ...prev, state: n.state, message: n.message }
-        : prev,
-    );
+    setTracked((prev) => {
+      const cur = prev[n.kind];
+      return cur !== undefined && cur.commandId === n.commandId
+        ? { ...prev, [n.kind]: { ...cur, state: n.state, message: n.message } }
+        : prev;
+    });
   }, []);
 
+  // Frames sent while the socket was down are gone: nothing will settle an
+  // unsettled command now, so say so instead of waiting forever. A POST still
+  // in the air ('sending') settles from its own answer.
+  const onReconnect = useCallback((): void => {
+    setTracked((prev) => {
+      const next: TrackedByKind = { ...prev };
+      for (const k of KINDS) {
+        const cur = prev[k];
+        if (cur !== undefined && cur.state !== 'sending' && !settled(cur.state)) {
+          next[k] = { ...cur, state: 'unknown', message: undefined };
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const put = (kind: LinkCommandKind, tr: Tracked): void => {
+    setTracked((prev) => ({ ...prev, [kind]: tr }));
+  };
+
   const send = async (kind: LinkCommandKind, run: () => Promise<{ commandId: number }>): Promise<boolean> => {
-    early.current.clear();
-    setTracked({ kind, commandId: null, state: 'sending' });
+    put(kind, { kind, commandId: null, state: 'sending' });
     try {
       const { commandId } = await run();
       const seen = early.current.get(commandId);
-      setTracked({ kind, commandId, state: seen?.state ?? 'queued', message: seen?.message });
+      early.current.delete(commandId);
+      put(kind, { kind, commandId, state: seen?.state ?? 'queued', message: seen?.message });
       return true;
     } catch (err) {
-      setTracked({ kind, commandId: null, state: 'rejected', message: err instanceof Error ? err.message : String(err) });
+      put(kind, { kind, commandId: null, state: 'rejected', message: err instanceof Error ? err.message : String(err) });
       return false;
     }
   };
@@ -168,6 +209,8 @@ export function SessionControls({
         return msg === '' ? t`failed` : t`failed: ${msg}`;
       case 'expired':
         return t`expired — the mod did not pick it up in time`;
+      case 'unknown':
+        return t`state unknown after reconnect`;
     }
   };
   const stateTone = (tr: Tracked): string =>
@@ -189,7 +232,7 @@ export function SessionControls({
       onKeyDown={halt}
       data-testid="session-controls"
     >
-      {inFlight && <CommandWatcher sessionId={session.id} onNote={onNote} />}
+      {inFlight && <CommandWatcher sessionId={session.id} onNote={onNote} onReconnect={onReconnect} />}
       <span className="flex flex-wrap items-center gap-1.5" data-tip={disabled ? reason : undefined}>
         {confirmingStop ? (
           <>
@@ -212,7 +255,7 @@ export function SessionControls({
         ) : (
           <button
             type="button"
-            disabled={disabled || busy}
+            disabled={disabled || stopBusy}
             aria-describedby={describedBy}
             onClick={() => setConfirmingStop(true)}
             data-tip={disabled ? undefined : t`Abort the session's running turn through its link mod. The session stays open — unlike Stop, which ends a daemon-run process.`}
@@ -223,7 +266,7 @@ export function SessionControls({
         )}
         <button
           type="button"
-          disabled={disabled || busy}
+          disabled={disabled || promptBusy}
           aria-describedby={describedBy}
           aria-expanded={promptOpen}
           onClick={() => setPromptOpen((o) => !o)}
@@ -258,7 +301,7 @@ export function SessionControls({
           <span className="flex items-center gap-1.5">
             <button
               type="button"
-              disabled={text.trim() === '' || busy}
+              disabled={text.trim() === '' || promptBusy}
               onClick={() => void doPrompt()}
               className={`${BTN} border-brand/50 bg-brand/10 text-brand hover:bg-brand/20`}
             >
@@ -275,11 +318,20 @@ export function SessionControls({
         </span>
       )}
 
-      {tracked !== null && (
-        <span role="status" className={`font-mono text-[10.5px] ${stateTone(tracked)}`} data-testid="command-state">
-          {kindLabel(tracked.kind)} · {stateLabel(tracked)}
-        </span>
-      )}
+      {KINDS.map((k) => {
+        const tr = tracked[k];
+        return tr === undefined ? null : (
+          <span
+            key={k}
+            role="status"
+            className={`font-mono text-[10.5px] ${stateTone(tr)}`}
+            data-testid="command-state"
+            data-kind={k}
+          >
+            {kindLabel(tr.kind)} · {stateLabel(tr)}
+          </span>
+        );
+      })}
     </span>
   );
 }
