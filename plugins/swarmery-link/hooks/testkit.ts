@@ -66,6 +66,10 @@ export type World = {
    */
   readonly tools?: ReadonlyArray<'ok' | 'error' | 'deny'>
   readonly now?: number
+  /** What the plugin's `$.store` holds at the start. Default: nothing. */
+  readonly store?: Readonly<Record<string, unknown>>
+  /** How the engine beneath answers each `session.send`, in order; the last repeats. Default: delivered. */
+  readonly sendReplies?: ReadonlyArray<SendReply>
   /** The engine's own tool.check verdict beneath the plugin. Default: `allow`. */
   readonly verdict?: { readonly decision: 'allow' | 'ask' | 'deny'; readonly reason?: string }
   /** The daemon's answer per POST /api/link/permission, in order; the last repeats. Default: 204. */
@@ -86,6 +90,10 @@ export type PermissionCall = {
   readonly body: Readonly<Record<string, unknown>> | undefined
   readonly at: number
 }
+
+export type SendReply = { readonly isDelivered: true } | { readonly isDelivered: false; readonly reason: string }
+
+export type SendSeen = { readonly to: unknown; readonly text: string; readonly origin: unknown; readonly agentId: string | undefined }
 
 export type ModelReply =
   | string
@@ -148,6 +156,12 @@ export type Recorded = {
   readonly notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }>
   /** The tool of every `tool.call` that reached the engine beneath the plugin. */
   readonly calls: string[]
+  /** The plugin's `$.store`, as the engine beneath keeps it. */
+  readonly store: Map<string, unknown>
+  /** Every `$.store` call, in order: `get <key>`, `set <key>`, `delete <key>`, `keys`. */
+  readonly storeOps: string[]
+  /** Every `session.send` that reached the engine beneath the plugin. */
+  readonly sends: SendSeen[]
 }
 
 const COMMANDS = '/api/link/commands'
@@ -177,6 +191,9 @@ export const world = (on: On, w: World = {}): Recorded => {
   const statuses: Array<string | undefined> = []
   const notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }> = []
   const calls: string[] = []
+  const store = new Map<string, unknown>(Object.entries(w.store ?? {}))
+  const storeOps: string[] = []
+  const sends: SendSeen[] = []
   let toolCalls = 0
   let reads = 0
   let sessionId: string = SESSION_ID
@@ -296,6 +313,33 @@ export const world = (on: On, w: World = {}): Recorded => {
     return w.submitDrop !== undefined ? { drop: w.submitDrop } : { text: e.text }
   })
 
+  // the plugin's own store, read back as JSON data the way the engine keeps it
+  const copy = (value: unknown): unknown => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)))
+  on('store.get', ($, e) => {
+    storeOps.push(`get ${e.key}`)
+    return { value: copy(store.get(e.key)) }
+  })
+  on('store.set', ($, e) => {
+    storeOps.push(`set ${e.key}`)
+    store.set(e.key, copy(e.value))
+    return { value: undefined }
+  })
+  on('store.delete', ($, e) => {
+    storeOps.push(`delete ${e.key}`)
+    store.delete(e.key)
+    return { value: undefined }
+  })
+  on('store.keys', () => {
+    storeOps.push('keys')
+    return { value: [...store.keys()] }
+  })
+  on('session.send', ($, e) => {
+    const reply = pick<SendReply>(w.sendReplies, sends.length, { isDelivered: true })
+    sends.push({ to: e.to, text: e.text, origin: e.origin, agentId: e.agentId })
+    return reply
+  })
+  on('session.receive', ($, e) => ({ text: e.text }))
+
   const moveTo = (id: string, dir: string = cwd): void => {
     sessionId = id
     cwd = dir
@@ -320,6 +364,9 @@ export const world = (on: On, w: World = {}): Recorded => {
     statuses,
     notices,
     calls,
+    store,
+    storeOps,
+    sends,
   }
 }
 

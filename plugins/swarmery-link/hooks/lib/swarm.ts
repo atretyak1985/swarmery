@@ -1,0 +1,212 @@
+// The swarm's decisions. Pure: reads the path a file tool writes, keeps this
+// session's claims entry for the shared `$.store` registry, finds another
+// session's live claim on the same path, builds the `session.send`,
+// `session.receive`, `claim`, `release` and `conflict` payloads, and the line
+// shown beneath the answer. Every `$` call is made in ../swarm.ts and
+// ../register.ts. Contract: tools/swarmery/docs/mods-link-protocol.md.
+
+import { FILE_TOOLS } from './forecast'
+
+/** Every key this plugin writes to `$.store` sits under this prefix. */
+export const STORE_PREFIX = 'swarmery-link/'
+/** One key per session: `swarmery-link/claims/<sessionId>`, written by that session alone. */
+export const CLAIMS_PREFIX = `${STORE_PREFIX}claims/`
+/** Another session's entry counts while its `updatedAt` is this recent. */
+export const CLAIM_TTL_MS = 30 * 60_000
+/** This session's entry stays under this many bytes of JSON; the oldest paths go first. */
+export const MAX_ENTRY_BYTES = 64 * 1024
+/** A message's text on the wire, at most this many UTF-16 code units. */
+export const MAX_MESSAGE_TEXT = 4096
+/** The receive log line quotes at most this many characters of the text. */
+export const RECEIVE_PREVIEW = 80
+/** A short session id, as the conflict line shows it. */
+export const SHORT_ID = 8
+
+export const claimsKey = (sessionId: string): string => `${CLAIMS_PREFIX}${sessionId}`
+
+export type ClaimedPath = { readonly path: string; readonly at: number }
+
+/** One session's claims, as `$.store` holds them: paths and ms timestamps only. */
+export type ClaimEntry = {
+  readonly sessionId: string
+  readonly cwd: string
+  readonly updatedAt: number
+  readonly paths: readonly ClaimedPath[]
+}
+
+export type Conflict = { readonly path: string; readonly otherSession: string }
+
+/** The swarm's state for one main-loop turn. */
+export type SwarmTurn = {
+  /** Paths claimed since the last release, each once, in claim order. */
+  readonly claimed: readonly string[]
+  /** Conflicts found this turn, in the order found. */
+  readonly conflicts: readonly Conflict[]
+  /** This session's entry as last written, or undefined when none is stored. */
+  readonly entry: ClaimEntry | undefined
+}
+
+export const EMPTY_TURN: SwarmTurn = { claimed: [], conflicts: [], entry: undefined }
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** `path` made absolute against `cwd`, with `.`, `..`, empty and trailing segments resolved. */
+export const absolutePath = (path: string, cwd: string): string => {
+  const raw = path.trim()
+  const joined = raw.startsWith('/') ? raw : `${cwd.replace(/\/+$/, '')}/${raw}`
+  const parts: string[] = []
+  for (const part of joined.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') parts.pop()
+    else parts.push(part)
+  }
+  return `/${parts.join('/')}`
+}
+
+/**
+ * The absolute path an Edit, Write, MultiEdit or NotebookEdit call writes, or
+ * undefined for any other call (or one naming no path). A relative path is
+ * resolved against the session's cwd; with no absolute cwd it is not claimed.
+ */
+export const claimPath = (tool: string, fields: Readonly<Record<string, unknown>>, cwd: string): string | undefined => {
+  const field = FILE_TOOLS[tool]
+  const target = field === undefined ? undefined : fields[field]
+  if (typeof target !== 'string' || target.trim() === '') return undefined
+  if (!target.trim().startsWith('/') && !cwd.startsWith('/')) return undefined
+  return absolutePath(target, cwd)
+}
+
+const bytes = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).length
+
+/** `entry` with its oldest paths dropped until its JSON fits MAX_ENTRY_BYTES (`max` for tests). */
+export const capEntry = (entry: ClaimEntry, max: number = MAX_ENTRY_BYTES): ClaimEntry => {
+  let paths = entry.paths
+  while (paths.length > 0 && bytes({ ...entry, paths }) > max) paths = paths.slice(1)
+  return paths === entry.paths ? entry : { ...entry, paths }
+}
+
+/** This session's entry with `path` claimed at `now` (refreshed when already held), under the size cap. */
+export const addClaim = (
+  entry: ClaimEntry | undefined,
+  sessionId: string,
+  cwd: string,
+  path: string,
+  now: number,
+  max: number = MAX_ENTRY_BYTES,
+): ClaimEntry => {
+  const kept = (entry?.paths ?? []).filter(p => p.path !== path)
+  return capEntry({ sessionId, cwd, updatedAt: now, paths: [...kept, { path, at: now }] }, max)
+}
+
+/** A store value read back as a claims entry, or undefined when it is not one. */
+export const parseEntry = (value: unknown): ClaimEntry | undefined => {
+  if (!isRecord(value)) return undefined
+  const { sessionId, cwd, updatedAt, paths } = value
+  if (typeof sessionId !== 'string' || sessionId === '' || typeof updatedAt !== 'number' || !Array.isArray(paths)) return undefined
+  const clean = paths.flatMap((p: unknown): ClaimedPath[] =>
+    isRecord(p) && typeof p.path === 'string' && typeof p.at === 'number' ? [{ path: p.path, at: p.at }] : [],
+  )
+  return { sessionId, cwd: typeof cwd === 'string' ? cwd : '', updatedAt, paths: clean }
+}
+
+/** Whether `entry` is live at `now`: updated within the TTL (a clock behind by a little still counts). */
+export const isLive = (entry: ClaimEntry, now: number): boolean => now - entry.updatedAt <= CLAIM_TTL_MS
+
+/** The store keys of other sessions' claims entries. */
+export const foreignKeys = (keys: readonly string[], sessionId: string): readonly string[] =>
+  keys.filter(k => k.startsWith(CLAIMS_PREFIX) && k !== claimsKey(sessionId))
+
+/** Each other session whose live entry holds `path`, once. */
+export const conflictsFor = (path: string, sessionId: string, others: readonly ClaimEntry[], now: number): readonly Conflict[] => {
+  const seen = new Set<string>()
+  const out: Conflict[] = []
+  for (const other of others) {
+    if (other.sessionId === sessionId || seen.has(other.sessionId) || !isLive(other, now)) continue
+    if (!other.paths.some(p => p.path === path)) continue
+    seen.add(other.sessionId)
+    out.push({ path, otherSession: other.sessionId })
+  }
+  return out
+}
+
+/** The turn after the first claim of `path`: whether it is new this turn, and the turn with it noted. */
+export const noteClaim = (turn: SwarmTurn, path: string): { readonly isNew: boolean; readonly turn: SwarmTurn } =>
+  turn.claimed.includes(path) ? { isNew: false, turn } : { isNew: true, turn: { ...turn, claimed: [...turn.claimed, path] } }
+
+/** At most `max` code units of `text`, never splitting a surrogate pair. */
+export const clip = (text: string, max: number = MAX_MESSAGE_TEXT): { readonly text: string; readonly truncated: boolean } => {
+  if (text.length <= max) return { text, truncated: false }
+  const code = text.charCodeAt(max - 1)
+  const end = code >= 0xd800 && code <= 0xdbff ? max - 1 : max
+  return { text: text.slice(0, end), truncated: true }
+}
+
+export type SendFacts = {
+  readonly to: string
+  readonly text: string
+  readonly origin: 'model' | 'plugin'
+  readonly isDelivered: boolean
+  readonly reason?: string | undefined
+  readonly commandId?: string | undefined
+}
+
+/** The `session.send` payload: `reason` only when not delivered, `commandId` only for a dashboard message. */
+export const sendPayload = (facts: SendFacts): Readonly<Record<string, unknown>> => {
+  const { text, truncated } = clip(facts.text)
+  return {
+    to: facts.to,
+    text,
+    truncated,
+    isDelivered: facts.isDelivered,
+    ...(!facts.isDelivered ? { reason: facts.reason ?? '' } : {}),
+    origin: facts.origin,
+    ...(facts.commandId !== undefined ? { commandId: facts.commandId } : {}),
+  }
+}
+
+/** The plugin named on a delivery's origin, when it names one. */
+export const originPlugin = (origin: unknown): string | undefined => {
+  const plugin = isRecord(origin) ? origin.plugin : undefined
+  return typeof plugin === 'string' && plugin !== '' ? plugin : undefined
+}
+
+const originKind = (origin: unknown): string => {
+  const kind = isRecord(origin) ? origin.kind : undefined
+  return typeof kind === 'string' ? kind : 'unclassified'
+}
+
+/** The `session.receive` payload. */
+export const receivePayload = (text: string, origin: unknown): Readonly<Record<string, unknown>> => {
+  const clipped = clip(text)
+  const plugin = originPlugin(origin)
+  return { text: clipped.text, truncated: clipped.truncated, originKind: originKind(origin), ...(plugin !== undefined ? { fromPlugin: plugin } : {}) }
+}
+
+/** The one log line for a received delivery: `from <kind>[ <plugin>]: <first 80 chars, on one line>`. */
+export const receiveLine = (text: string, origin: unknown): string => {
+  const plugin = originPlugin(origin)
+  const preview = clip(text.replace(/\s+/g, ' ').trim(), RECEIVE_PREVIEW).text
+  return `from ${originKind(origin)}${plugin !== undefined ? ` ${plugin}` : ''}: ${preview}`
+}
+
+/** The line shown beneath the answer for this turn's conflicts; none without one. */
+export const conflictLines = (conflicts: readonly Conflict[]): readonly string[] => {
+  const first = conflicts[0]
+  if (first === undefined) return []
+  const more = conflicts.length > 1 ? ` (+${conflicts.length - 1} more)` : ''
+  return [`⚠ ${first.path} is also being edited by session ${first.otherSession.slice(0, SHORT_ID)}${more}`]
+}
+
+/**
+ * A `turn.complete` result with `lines` shown beneath the answer. The engine
+ * shows a returned text other than the main-loop answer beneath it and never
+ * rewrites the answer itself, so the text returned is the lines alone; a text
+ * a hook beneath already put there (not the answer) is kept, the lines after it.
+ */
+export const withBeneath = <R extends { readonly text: string }>(result: R, answer: string, lines: readonly string[]): R => {
+  if (lines.length === 0) return result
+  const own = lines.join('\n')
+  const text = result.text !== answer && result.text !== '' ? `${result.text}\n${own}` : own
+  return { ...result, text }
+}
