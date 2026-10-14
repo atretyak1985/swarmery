@@ -75,6 +75,33 @@ test('Bash: rm of an absolute path outside the roots is denied; harmless command
   }
 })
 
+test('Bash: heredoc bodies are data, the line that opens one is still judged', async ($, on) => {
+  world(on)
+  await $.session.start(START)
+  for (const command of [
+    `cat > ${ROOT}/s.sh <<'EOF'\nrm -rf /var/cache/app\nEOF`,
+    `cat > ${ROOT}/s.sh <<"EOF"\ncd /etc\nEOF\nls`,
+    `cat > ${ROOT}/s.sh << EOF\necho x > /etc/hosts\nEOF`,
+    `cat <<-EOF > ${ROOT}/s.sh\n\trm -rf /var/cache/app\n\tEOF`,
+    'cat <<<"rm -rf /var/cache/app"',
+    // unterminated: bash reads the body to end of input, so the rest is data
+    `cat > ${ROOT}/s.sh <<EOF\nrm -rf /var/cache/app\nmv /etc/a /etc/b`,
+  ]) {
+    const r = await $.tool.call({ tool: 'Bash', command })
+    expect(r.deny, command).toBeUndefined()
+  }
+
+  const opener = await $.tool.call({ tool: 'Bash', command: 'cat > /etc/x <<EOF\nhello\nEOF' })
+  expect(opener.deny).toContain('redirect to /etc/x')
+
+  // after the terminator line, commands are judged again
+  const after = await $.tool.call({
+    tool: 'Bash',
+    command: `cat > ${ROOT}/s.sh <<'EOF'\nhello\nEOF\nrm -rf /var/cache/app`,
+  })
+  expect(after.deny).toContain('rm of /var/cache/app')
+})
+
 test('no project.json: the guard still works from the session root', async ($, on) => {
   world(on, { files: {} })
   await $.session.start(START)

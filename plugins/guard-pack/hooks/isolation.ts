@@ -63,10 +63,69 @@ export const FILE_TOOLS: ReadonlySet<string> = new Set([
 
 type Segment = { words: string[]; writes: string[] }
 
+type Heredoc = { delimiter: string; stripTabs: boolean }
+
+const DELIMITER_END = /[\s;|&<>()]/
+
+/**
+ * Reads a heredoc delimiter word starting at `from` (`EOF`, `'EOF'`, `"EOF"`,
+ * `\EOF`, or a mix): its unquoted text and the index of its last character.
+ */
+const readDelimiter = (command: string, from: number): { delimiter: string; last: number } => {
+  let delimiter = ''
+  let i = from
+  while (i < command.length && !DELIMITER_END.test(command[i] ?? '')) {
+    const c = command[i] ?? ''
+    if (c === "'" || c === '"') {
+      const end = command.indexOf(c, i + 1)
+      const stop = end < 0 ? command.length : end
+      delimiter += command.slice(i + 1, stop)
+      i = stop + 1
+    } else if (c === '\\') {
+      delimiter += command[i + 1] ?? ''
+      i += 2
+    } else {
+      delimiter += c
+      i++
+    }
+  }
+  return { delimiter, last: i - 1 }
+}
+
+/**
+ * Skips the bodies of the heredocs opened on the line that ends at `newline`,
+ * in order. Returns the index of the last character consumed: the newline
+ * that ends the last terminator line. An unterminated heredoc swallows the
+ * rest of the command (as bash reads it to end of input): its lines are text
+ * fed to a command, not commands, so they are not judged.
+ */
+const skipHeredocBodies = (command: string, newline: number, heredocs: readonly Heredoc[]): number => {
+  let start = newline + 1
+  for (const { delimiter, stripTabs } of heredocs) {
+    for (;;) {
+      if (start >= command.length) return command.length
+      const nl = command.indexOf('\n', start)
+      const end = nl < 0 ? command.length : nl
+      const raw = command.slice(start, end)
+      const line = stripTabs ? raw.replace(/^\t+/, '') : raw
+      start = end + 1
+      if (line === delimiter) break
+    }
+  }
+  return start - 1
+}
+
 /**
  * Splits a command into simple commands: their words (quotes removed) and
  * the targets of their output redirects. Not a shell parser: enough to read
  * `rm -rf /x`, `cd ~/y`, `cmd > /z`, `a && b`, `2>&1`.
+ *
+ * Heredoc bodies (`<<WORD`, `<<'WORD'`, `<<"WORD"`, `<<-WORD`, up to the
+ * terminator line) are skipped: they are data, so `cat > s.sh <<'EOF'` with
+ * an `rm -rf /x` line inside is not an rm. The line holding `<<` is still
+ * read in full, so `cat > /outside/x <<EOF` is judged by its redirect.
+ * Known miss: an arithmetic shift (`$((1<<2))`) reads as a heredoc and hides
+ * the lines after it, which lets them through rather than denying them.
  */
 export const lexCommand = (command: string): Segment[] => {
   const segments: Segment[] = []
@@ -74,6 +133,7 @@ export const lexCommand = (command: string): Segment[] => {
   let word = ''
   let inWord = false
   let pending: 'write' | 'read' | undefined
+  let heredocs: Heredoc[] = []
 
   const endWord = (): void => {
     if (!inWord) return
@@ -113,7 +173,13 @@ export const lexCommand = (command: string): Segment[] => {
       i = j
     } else if (c === ' ' || c === '\t') {
       endWord()
-    } else if (c === '\n' || c === ';' || c === '|' || c === '(' || c === ')') {
+    } else if (c === '\n') {
+      endSegment()
+      if (heredocs.length > 0) {
+        i = skipHeredocBodies(command, i, heredocs)
+        heredocs = []
+      }
+    } else if (c === ';' || c === '|' || c === '(' || c === ')') {
       endSegment()
     } else if (c === '&') {
       if (command[i + 1] === '>') {
@@ -130,6 +196,24 @@ export const lexCommand = (command: string): Segment[] => {
         inWord = false
       } else {
         endWord()
+      }
+      if (c === '<' && command[i + 1] === '<') {
+        if (command[i + 2] === '<') {
+          // `<<<word`: a here-string, its word is read like `< file`
+          i += 2
+          pending = 'read'
+          continue
+        }
+        // `<<WORD` / `<<-WORD`: a heredoc; its body starts after this line
+        i += 2
+        const stripTabs = command[i] === '-'
+        if (stripTabs) i++
+        while (command[i] === ' ' || command[i] === '\t') i++
+        const { delimiter, last } = readDelimiter(command, i)
+        if (delimiter !== '') heredocs.push({ delimiter, stripTabs })
+        i = last
+        pending = undefined
+        continue
       }
       if (c === '>' && command[i + 1] === '>') i++
       if (command[i + 1] === '&') {
