@@ -191,6 +191,10 @@ msgstr "{costN, plural, one {# запуск} few {# запуски} many {# за
 msgid "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 msgstr "{count, plural, one {# задача} few {# задачі} many {# задач} other {# задачі}}"
 
+#: src/pages/health/ModCostPanel.tsx
+msgid "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
+msgstr "сесій із модом сесії: {count} · {total} · розходяться більш ніж на 10 %: {divergingCount}"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "{count} waiting · oldest {age}"
 msgstr "{count} чекають · найстаріше {age}"
@@ -1236,6 +1240,14 @@ msgstr "Вартість / задача"
 #: src/pages/health/Health.tsx
 msgid "Cost & tokens"
 msgstr "Вартість і токени"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "cost source"
+msgstr "джерело вартості"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "Cost source"
+msgstr "Джерело вартості"
 
 #: src/pages/health/Health.tsx
 msgid "cost…"
@@ -2354,6 +2366,15 @@ msgstr "Метрика"
 msgid "missing: {missingList}"
 msgstr "бракує: {missingList}"
 
+#: src/pages/health/ModCostPanel.tsx
+#: src/pages/health/ModCostPanel.tsx
+msgid "mod"
+msgstr "мод"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "mod and pricing table differ by more than 10 %"
+msgstr "мод і таблиця цін розходяться більш ніж на 10 %"
+
 #: src/pages/system/ModsTab.tsx
 msgid "mod validate report"
 msgstr "звіт validate мода"
@@ -2609,6 +2630,10 @@ msgstr "збігів немає"
 #: src/pages/Memory.tsx
 msgid "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
 msgstr "Файлів пам’яті ще немає — у цього проєкту нема CLAUDE.md, автопам’яті чи нотаток Serena."
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "no mod cost for this session — pricing table shown"
+msgstr "мод не повідомив вартість цієї сесії — показано таблицю цін"
 
 #: src/pages/system/ModsTab.tsx
 msgid "No mods installed"
@@ -3042,6 +3067,11 @@ msgstr "Перегляд"
 #: src/pages/Retro.tsx
 msgid "preview the evidence, then generate a minimal diff to THIS agent’s definition file only"
 msgstr "перегляньте докази, потім згенеруйте мінімальний дифф лише до файлу визначення ЦЬОГО агента"
+
+#: src/pages/health/ModCostPanel.tsx
+#: src/pages/health/ModCostPanel.tsx
+msgid "pricing table"
+msgstr "таблиця цін"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "probe & resume"
@@ -3876,6 +3906,10 @@ msgstr "Перелічені тематичні файли переносять�
 msgid "The local model's guess about “{sessionTitle}”. Your answer is the only thing that tells us whether to trust it. If you don't remember the session, skip — a wrong answer is worse than none."
 msgstr "Здогад локальної моделі про «{sessionTitle}». Лише ваша відповідь підказує, чи можна їй довіряти. Якщо не пам’ятаєте сесію — пропустіть: хибна відповідь гірша за жодну."
 
+#: src/pages/health/ModCostPanel.tsx
+msgid "The mod reports what Claude Code counted for its current process, so a resumed session restarts from 0; the pricing table recomputes every turn. Charts above use the pricing table."
+msgstr "Мод повідомляє те, що Claude Code нарахував для поточного процесу, тож відновлена сесія починає з 0; таблиця цін перераховує кожен хід. Графіки вище побудовано за таблицею цін."
+
 #: src/pages/health/HealthOverview.tsx
 msgid "The one sentence"
 msgstr "Одним реченням"
@@ -4344,3 +4378,7 @@ msgstr "За {days} днів ви витратили {spent} — {share}% із �
 #: src/pages/system/ItemDetail.tsx
 msgid "your base {base} → on disk {disk} — what changed under you:"
 msgstr "ваша база {base} → на диску {disk} — що змінилось під вами:"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "Δ {gapPct} %"
+msgstr "Δ {gapPct} %"
