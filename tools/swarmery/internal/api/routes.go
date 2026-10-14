@@ -271,6 +271,13 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// awaiting a reply, recent failures — oldest first. See needs_you.go.
 	mux.HandleFunc("GET /api/needs-you", h.needsYou)
 
+	// swarmery link (docs/mods-link-protocol.md): the Claude Code mod's channel.
+	// Bearer link-token instead of requireLocalOrigin — the mod sends no Origin,
+	// so the origin fence would wave it through and prove nothing; the Host
+	// fence above still applies. 503 until AttachLink (link.go).
+	mux.HandleFunc("POST /api/link/events", linkAuth(h.linkEvents))
+	mux.HandleFunc("GET /api/link/health", linkAuth(h.linkHealth))
+
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
 	mux.HandleFunc("POST /api/sessions/{id}/kill", requireLocalOrigin(h.KillSession))
