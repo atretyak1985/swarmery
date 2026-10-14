@@ -621,8 +621,11 @@ text before `: ` — never as "everything after the first space":
 | `<module> gating hook with .catch: …` / `without .catch: …` | nothing — they restate `gatingHooks[]` | the event shape |
 | structured `gatingHooks[]` | `report.gatingHooks` (`module, pattern, hook, hasCatch`) | `hook`: the event shape; `pattern`: the same with `*` allowed |
 
-A list is split on `, ` only (a filter like `tool.call{tool=A,B}` stays one value);
-the literal `nothing` is the empty list.
+A list is split on `, ` only (a filter like `tool.call{tool=A,B}` stays one value).
+The empty list is a whole-list marker matching `^nothing( on \S+)?$` — `nothing`
+(§M6 `env writes: nothing`) or `nothing on $` (a module with no `$` calls, observed
+2026-10-14); any other text starting with `nothing` (`nothing to see`, `nothing on`,
+`nothing on $, $.http.fetch`) stays a value and fails its shape.
 
 **Fail closed.** The parser never lets output it cannot read turn into "no risk".
 `report.unrecognized` collects:
@@ -636,10 +639,11 @@ the literal `nothing` is the empty list.
   for **every module** that lacks either line. A module counts when a note head names
   it, a `gatingHooks[].module` names it, or the dir's `hooks.json` lists it (paths
   compared cleaned, so `./m.tsx` and `m.tsx` meet). Both lines are required because
-  they feed the badges and the validator writes explicit `nothing` lines (§M6 `env
-  writes: nothing`); §M6 never showed a module without a `calls:` line, so a missing
-  one is treated as drift. `state` is not required — a module without `$.state` gets
-  no state line;
+  they feed the badges and the validator writes a `calls:` line even for a module
+  with no `$` calls (`calls: nothing on $`, §M6 note of 2026-10-14), so a missing one
+  is treated as drift. Env lines and `state` are not required — the validator omits
+  env lines for a module that touches no env, and a module without `$.state` gets no
+  state line;
 - `no "<module> hooks:" note in the validator output` when a `type: "hooks"` part
   names no module at all.
 

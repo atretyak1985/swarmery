@@ -556,12 +556,16 @@ func (r *Report) lines(module string) *moduleLines {
 // shows module content without naming any module. Idempotent.
 //
 // Both lines are required: they are the two that feed badges, and the
-// validator writes explicit "nothing" lines rather than omitting a fact (M6:
-// "env writes: nothing"). M6 never showed a module without calls, so a
-// calls-less module is treated as drift — the fail-closed direction; if the
-// validator turns out to omit an empty calls line, such a mod shows the
-// unknown badge until this rule is relaxed. The state line is NOT required:
-// M6 notes that a module without $.state gets none, and state feeds no badge.
+// validator writes an explicit calls line even for a module with no $ calls
+// ("calls: nothing on $", observed 2026-10-14), so a calls-less module is
+// drift — the fail-closed direction. Env lines are NOT required: the
+// validator omits them when the module touches no env. The state line is NOT
+// required either: M6 notes that a module without $.state gets none, and
+// state feeds no badge.
+//
+// `claude plugin validate` refuses a second hooks.json `modules` entry
+// (observed 2026-10-14), so a valid plugin has one module; the multi-module
+// tracking here is kept as a defensive path for output that names more.
 func (r *Report) requireModuleLines(extra ...string) {
 	for _, m := range extra {
 		r.lines(m)
@@ -734,16 +738,23 @@ func isLowerWords(s string) bool {
 	return true
 }
 
+// emptyListMarker is the whole-list form the validator writes for an empty
+// list: "nothing" (M6: "env writes: nothing") or "nothing on <word>" (real
+// claude 2.1.296 output for a module with no $ calls: "calls: nothing on $").
+// Anchored, so "nothing to see", "nothing on" and "nothing on $, $.x" are not
+// markers — they stay values and fail their shape.
+var emptyListMarker = regexp.MustCompile(`^nothing( on \S+)?$`)
+
 // splitList splits "a, b, c" — the separator is comma+space, so a filter like
-// tool.call{tool=A,B} stays one value. The literal "nothing" is the empty
-// list. ok is false for a list the validator never writes: an empty one, or
-// one with an empty entry ("a, , b").
+// tool.call{tool=A,B} stays one value. An emptyListMarker is the empty list.
+// ok is false for a list the validator never writes: an empty one, or one
+// with an empty entry ("a, , b").
 func splitList(s string) (values []string, ok bool) {
 	s = strings.TrimSpace(s)
-	switch s {
-	case "nothing":
+	if emptyListMarker.MatchString(s) {
 		return nil, true
-	case "":
+	}
+	if s == "" {
 		return nil, false
 	}
 	for _, v := range strings.Split(s, ", ") {

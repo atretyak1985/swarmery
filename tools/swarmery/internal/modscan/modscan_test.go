@@ -607,6 +607,81 @@ func TestValidateRequiresNotesForEveryHooksJSONModule(t *testing.T) {
 	}
 }
 
+// noCallsFixturePath is real `claude plugin validate --strict --json` output
+// (claude 2.1.296, probed 2026-10-14) for a mod whose one module makes no $
+// calls: its calls line reads "nothing on $" and it has no env lines at all.
+const noCallsFixturePath = "../../testdata/fixtures/mods/validate-json-nocalls.json"
+
+// A genuinely harmless mod — real output, no $ calls — validates clean: no
+// unread notes and no badges, never the unknown validator-output badge.
+func TestValidateNoCallsFixtureIsClean(t *testing.T) {
+	bin := fakeClaude(t, "ok")
+	fixture, err := filepath.Abs(noCallsFixturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FAKE_CLAUDE_FIXTURE", fixture)
+
+	mod := t.TempDir()
+	makePlugin(t, mod, "quiet", "1", []string{"./quiet.ts"}, false)
+	rep, err := Validate(context.Background(), bin, mod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Validated {
+		t.Fatalf("Validated = false, want true (report %+v)", rep)
+	}
+	if len(rep.Unrecognized) != 0 {
+		t.Errorf("Unrecognized = %v, want none", rep.Unrecognized)
+	}
+	if !reflect.DeepEqual(rep.Events, []string{"turn.start"}) {
+		t.Errorf("Events = %v, want [turn.start]", rep.Events)
+	}
+	if len(rep.Uses) != 0 {
+		t.Errorf("Uses = %v, want none", rep.Uses)
+	}
+	if got := Risk(rep); got == nil || len(got) != 0 {
+		t.Errorf("Risk = %+v, want an empty non-nil slice", got)
+	}
+}
+
+// The empty-list marker is exactly "nothing" or "nothing on <word>"; anything
+// else that merely starts with "nothing" stays a value and fails its shape.
+func TestEmptyListMarker(t *testing.T) {
+	notes := func(calls string) []byte {
+		return []byte(`{"success":true,"manifest":{"errors":[],"warnings":[],"notes":[]},"contents":[` +
+			`{"type":"hooks","errors":[],"warnings":[],"notes":["./m.ts hooks: turn.start", "./m.ts calls: ` +
+			calls + `"],"gatingHooks":[]}]}`)
+	}
+	cases := []struct {
+		calls   string
+		unknown bool
+	}{
+		{"nothing", false},
+		{"nothing on $", false},
+		{"nothing to see", true},
+		{"nothing on", true},
+		{"nothing on $, $.http.fetch", true},
+		{"nothing on $ $", true},
+	}
+	for _, c := range cases {
+		t.Run(c.calls, func(t *testing.T) {
+			rep, err := ParseReport(notes(c.calls))
+			if err != nil {
+				t.Fatal(err)
+			}
+			badges := Risk(rep)
+			gotUnknown := len(badges) > 0 && badges[0].Level == LevelUnknown && badges[0].Rule == RuleValidatorOutput
+			if gotUnknown != c.unknown {
+				t.Errorf("unknown badge = %v, want %v (badges %+v, unrecognized %v)", gotUnknown, c.unknown, badges, rep.Unrecognized)
+			}
+			if !c.unknown && len(badges) != 0 {
+				t.Errorf("Risk = %+v, want none", badges)
+			}
+		})
+	}
+}
+
 // Risk enforces its invariant on whatever report it is handed, not only on
 // ParseReport's output: a value no rule could ever be matched against —
 // because it is really several values glued together — is not "nothing risky".

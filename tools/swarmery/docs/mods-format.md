@@ -276,6 +276,15 @@ line. Under `--strict` the one warning seen was a missing `author` in `plugin.js
 `env reads:`) and reads `gatingHooks` as structured data. It must not expect top-level
 `events`/`uses`.
 
+**Observed 2026-10-14 (claude 2.1.296).** A mod whose one module makes no `$` calls
+validates with exactly two notes — `./quiet.ts hooks: turn.start` and
+`./quiet.ts calls: nothing on $` — and **no env lines at all**: env lines are omitted
+when the module touches no env, while the empty calls list is written as
+`nothing on $` (fixture:
+[`testdata/fixtures/mods/validate-json-nocalls.json`](../testdata/fixtures/mods/validate-json-nocalls.json)).
+`claude plugin validate` also refuses a second entry in `hooks.json` `modules` — one
+hooks module per plugin.
+
 ## M7 — reading the token file
 
 **Setup.** `~/.swarmery/link-token-spike`, mode `0600`, dummy content. The spike used a
