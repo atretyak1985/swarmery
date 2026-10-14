@@ -65,6 +65,13 @@ type Link = {
   token: string | undefined
   sessionId: string
   cwd: string
+  /** The real session.start's `{ surface, isInteractive }`, sent again for the session a `/clear` starts. */
+  start: Readonly<Record<string, unknown>> | undefined
+  /**
+   * A `/clear` ended the session and the process goes on under a new id with
+   * no session.start: nothing is queued until the next turn.start re-reads it.
+   */
+  isClearing: boolean
   /** Off for the rest of this load: 503, or a 401 that survived a re-read. */
   isOff: boolean
   /** The last request got no answer or a 5xx: turn boundaries leave sending to the timer until one succeeds. */
@@ -212,7 +219,7 @@ function arm($: EngineInterface, link: Link): void {
 }
 
 async function push($: EngineInterface, link: Link, kind: LinkKind, payload?: Readonly<Record<string, unknown>>): Promise<void> {
-  if (!isActive(link)) return
+  if (!isActive(link) || link.isClearing) return
   const stamped = stamp(link.stamps, kind, await $.clock.now())
   link.stamps = stamped.stamps
   const event: LinkEvent = { sessionId: link.sessionId, cwd: link.cwd, kind, at: stamped.at, ...(payload !== undefined ? { payload } : {}) }
@@ -236,6 +243,22 @@ function flushAtTurn($: EngineInterface, link: Link): void {
 async function flushForEnd($: EngineInterface, link: Link): Promise<void> {
   await flush($, link, END_FLUSH_TIMEOUT_MS)
   if (link.queue.length > 0 && !link.isFailing) await flush($, link, END_FLUSH_TIMEOUT_MS)
+}
+
+/**
+ * After a `/clear`, at the first main-loop turn.start: the process goes on
+ * under a new session id and no session.start fires for it (SessionEndInput),
+ * so the id is read again here and, when it moved, the new session is
+ * announced with the real session.start's payload.
+ */
+async function resync($: EngineInterface, link: Link): Promise<void> {
+  const sessionId = await $.session.id()
+  const cwd = (await $.session.cwd()) || link.cwd
+  link.isClearing = false
+  if (sessionId === link.sessionId) return
+  link.sessionId = sessionId
+  link.cwd = cwd
+  await push($, link, 'session.start', link.start)
 }
 
 /** The command channel's state for one session's loop. Exists only with `control` on. */
@@ -432,6 +455,14 @@ function startControl($: EngineInterface, link: Link, control: Control): void {
   }
 }
 
+/** Replaces `previous` (stopped first) with a loop for the link's current session id, and starts it. */
+function openControl($: EngineInterface, link: Link, origin: string, previous: Control | undefined): Control {
+  if (previous !== undefined) stopControl($, previous, undefined)
+  const control = newControl(origin, link.sessionId, previous)
+  startControl($, link, control)
+  return control
+}
+
 export const register: Register = (on, options) => {
   const reserved = RESERVED.filter(feature => options[feature] === true)
   const isControlOn = options.control === true
@@ -444,6 +475,8 @@ export const register: Register = (on, options) => {
     token: undefined,
     sessionId: '',
     cwd: '',
+    start: undefined,
+    isClearing: false,
     isOff: false,
     isFailing: false,
     isAuthWait: false,
@@ -475,12 +508,12 @@ export const register: Register = (on, options) => {
       }
       link.sessionId = await $.session.id()
       link.cwd = (await $.session.cwd()) || e.cwd
-      await push($, link, 'session.start', { surface: e.surface, isInteractive: e.isInteractive })
+      link.start = { surface: e.surface, isInteractive: e.isInteractive }
+      link.isClearing = false
+      await push($, link, 'session.start', link.start)
       // one loop per session: a second session.start of the same session keeps it
       if (isControlOn && !link.isOff && (control === undefined || control.isStopped || control.sessionId !== link.sessionId)) {
-        if (control !== undefined) stopControl($, control, undefined)
-        control = newControl(endpoint.origin, link.sessionId, control)
-        startControl($, link, control)
+        control = openControl($, link, endpoint.origin, control)
       }
     } catch {
       // the sensor stays off; the session goes on
@@ -488,7 +521,16 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  // turn.start is the main loop's alone (TurnCompleteFields.turnId: "a subagent's run raises no turn.start").
   on('turn.start', async ($, e, next) => {
+    if (link.isClearing && isActive(link)) {
+      try {
+        await resync($, link)
+        if (isControlOn && !link.isOff) control = openControl($, link, endpoint.origin, control)
+      } catch {
+        // the id is read again at the next turn.start
+      }
+    }
     if (control !== undefined) control.turnId = e.turnId
     try {
       await push($, link, 'turn.start')
@@ -552,6 +594,8 @@ export const register: Register = (on, options) => {
     } catch {
       // best effort inside session.end's 1.5 s bound
     }
+    // `/clear`: the process goes on under a new id with no session.start; the next turn.start picks it up
+    if (e.reason === 'clear') link.isClearing = true
     return next(e)
   })
 }

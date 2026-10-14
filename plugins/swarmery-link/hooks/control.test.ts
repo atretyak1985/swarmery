@@ -257,6 +257,69 @@ test('a second session.start keeps one loop', ON, async ($, on) => {
   await $.session.end(END)
 })
 
+const CLEARED_ID = '0b6f1c2e-7d4a-4c1e-9a55-3f0e2b7c9d10'
+const CLEAR = { reason: 'clear', sessionId: SESSION_ID, resume: { sessionId: SESSION_ID } as never } as const
+const pollUrl = (sessionId: string): string => `http://127.0.0.1:7777/api/link/commands?session=${sessionId}&wait=25`
+
+test('/clear: polling pauses until the next turn.start, then resumes under the new session id', ON, async ($, on) => {
+  const w = world(on, { tokens: [TOKEN], polls: [204] })
+  await $.session.start(START)
+  await w.clock.settle()
+  await $.session.end(CLEAR)
+  const beforeTurn = w.polls.length
+  await w.clock.advance(10_000)
+  expect(w.polls).toHaveLength(beforeTurn)
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'after clear', turnId: 'turn-2' })
+  await w.clock.advance(3_000)
+  const after = w.polls.slice(beforeTurn)
+  expect(after.length).toBeGreaterThan(1)
+  expect(after.every(p => p.url === pollUrl(CLEARED_ID))).toBe(true)
+  await $.session.end({ reason: 'other', sessionId: CLEARED_ID, resume: { sessionId: CLEARED_ID } as never })
+})
+
+test('/clear: a stop for the new session aborts the turn that started after the clear', ON, async ($, on) => {
+  // the old session's one poll comes back empty; the new session's first carries a stop
+  const w = world(on, { tokens: [TOKEN], polls: [204, stop(40), 'hang'] })
+  await $.session.start(START)
+  await w.clock.settle()
+  expect(w.polls).toHaveLength(1)
+  await $.session.end(CLEAR)
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'after clear', turnId: 'turn-2' })
+  await w.clock.settle()
+  expect(w.polls.map(p => p.url)).toEqual([POLL_URL, pollUrl(CLEARED_ID), pollUrl(CLEARED_ID)])
+  expect(w.aborts).toEqual(['turn-2'])
+  expect(w.acks).toEqual([{ url: ACK_URL(40), body: { result: 'done' } }])
+  await $.session.end({ reason: 'other', sessionId: CLEARED_ID, resume: { sessionId: CLEARED_ID } as never })
+})
+
+test('/clear with an id that did not move: the loop restarts for the same id', ON, async ($, on) => {
+  const w = world(on, { tokens: [TOKEN], polls: [204] })
+  await $.session.start(START)
+  await w.clock.settle()
+  await $.session.end(CLEAR)
+  const beforeTurn = w.polls.length
+  await $.turn.start(TURN)
+  await w.clock.advance(3_000)
+  const after = w.polls.slice(beforeTurn)
+  expect(after.length).toBeGreaterThan(1)
+  expect(after.every(p => p.url === POLL_URL)).toBe(true)
+  await $.session.end(END)
+})
+
+test('any other session.end is final: a later turn.start does not restart polling', ON, async ($, on) => {
+  const w = world(on, { tokens: [TOKEN], polls: [204] })
+  await $.session.start(START)
+  await w.clock.settle()
+  await $.session.end(END)
+  const atEnd = w.polls.length
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'late', turnId: 'turn-2' })
+  await w.clock.advance(30_000)
+  expect(w.polls).toHaveLength(atEnd)
+})
+
 test('the command loop never holds a hook: turn hooks return while a poll is open', ON, async ($, on) => {
   const w = world(on, { tokens: [TOKEN] })
   await $.session.start(START)

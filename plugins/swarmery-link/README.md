@@ -40,6 +40,16 @@ It also needs the daemon's link token (below). Without it the mod does nothing.
 | `turn.complete` (main loop only) | `turn.complete` with `{ durationMs, stopReason }`, plus a `session.measure` snapshot from `$.session.usage()` |
 | `session.end` | `session.end` with `{ reason }`, and a last flush that waits at most 1.2 s, even behind a request already in flight |
 
+- **`/clear` starts a new session in the same process.** The engine ends the old
+  one (`session.end` with `reason: "clear"`) and goes on under a new session id
+  without a `session.start`. The mod sends that `session.end` under the old id,
+  queues nothing more, and at the next `turn.start` reads the id again: if it
+  moved, it sends a `session.start` for the new id (the same
+  `{ surface, isInteractive }` the real one carried) and reports everything
+  after under it. A `session.measure` between the clear and that turn is not
+  reported; the turn's `turn.complete` sends a fresh snapshot. Any other
+  `session.end` reason is final.
+
 - **No tool input leaves the session.** A `tool.call` carries the tool's name and
   the first 16 hex digits of a SHA-256 over the input's canonical JSON (FNV-1a
   where SHA-256 is unavailable). The input itself is already in the transcript.
@@ -133,8 +143,10 @@ loop for the session. It never runs inside a hook, and no hook waits on it.
    While the daemon fails the loop sends at most one request every 3 s.
 5. `401`: re-read the token file once and retry 1.1 s later; a second `401`
    stops the loop. `503` (`link disabled`) stops the loop and the sensor.
-6. `session.end` stops the loop for good: the pending wait is cancelled and the
-   reply of a poll still open is never acted on.
+6. `session.end` stops the loop: the pending wait is cancelled and the reply of
+   a poll still open is never acted on. After a `/clear` (`reason: "clear"`) a
+   new loop starts at the next `turn.start`, polling under the session id the
+   process now runs as; any other reason stops it for good.
 
 | Command | What the mod does | Ack |
 |---|---|---|

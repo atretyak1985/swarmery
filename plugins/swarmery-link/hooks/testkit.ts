@@ -81,6 +81,8 @@ export type Recorded = {
   /** The turnId of every `$.turn.abort`. */
   readonly aborts: string[]
   readonly submits: Submitted[]
+  /** What `$.session.id()` and `$.session.cwd()` answer from now on, as after a `/clear`. */
+  readonly moveTo: (sessionId: string, cwd?: string) => void
 }
 
 const COMMANDS = '/api/link/commands'
@@ -103,12 +105,14 @@ export const world = (on: On, w: World = {}): Recorded => {
   const aborts: string[] = []
   const submits: Submitted[] = []
   let reads = 0
+  let sessionId: string = SESSION_ID
+  let cwd: string = CWD
   const clock = mock.clock(on, { now: w.now ?? Date.parse('2026-10-13T10:00:00.000Z') })
   mock.env(on, { HOME })
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('session.id', () => ({ value: SESSION_ID }))
-  on('session.cwd', () => ({ value: CWD }))
+  on('session.id', () => ({ value: sessionId }))
+  on('session.cwd', () => ({ value: cwd }))
   on('session.usage', () => ({ value: USAGE_AFTER_TURN_1 }))
   on('fs.read', ($, e) => {
     if (e.path !== TOKEN_PATH) return { deny: `ENOENT: ${e.path}` }
@@ -167,7 +171,12 @@ export const world = (on: On, w: World = {}): Recorded => {
     return w.submitDrop !== undefined ? { drop: w.submitDrop } : { text: e.text }
   })
 
-  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits }
+  const moveTo = (id: string, dir: string = cwd): void => {
+    sessionId = id
+    cwd = dir
+  }
+
+  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits, moveTo }
 }
 
 /** Every event the recorded requests carried, in order. */
