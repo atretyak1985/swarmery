@@ -245,7 +245,8 @@ A session is **controllable** while its mod's last poll is younger than 60 s
 (`link.PollFreshness`). The daemon keeps the poll times in memory. After a restart no
 session is controllable until its mod polls again, which a healthy loop does within
 one long-poll (≤ 28 s). The dashboard reads it as `link.controllable` on the session
-DTO, and the per-session routes below answer `409` without it. A command can therefore
+DTO (a `link` object is present whenever this is true, even before the mod's first
+event), and the per-session routes below answer `409` without it. A command can therefore
 only reach a session whose own mod polls with the token, so the dashboard cannot steer
 a session that has no mod.
 
@@ -254,17 +255,18 @@ a session that has no mod.
 ```
 queued ──poll──▶ delivered ──ack done──▶ done
   │                  │  ╰──ack failed──▶ failed
-  │                  ╰──ack failed "turn in progress" (prompt, < 3rd time)──▶ queued, held for turn.complete
+  │                  ├──ack failed "turn in progress" (prompt, < 3rd time)──▶ queued, held for turn.complete
+  │                  ╰──stop, no ack, older than 30 s──▶ expired
   ╰──too old, never delivered──▶ expired
 ```
 
 | Rule | Value |
 |---|---|
 | Delivery order | oldest first (`created_at`, then `id`), one command per poll |
-| Re-delivery | a `delivered` command with no ack is handed out again on the first poll more than 30 s (`link.RedeliverAfter`) after its last delivery. A restart or a lost reply never strands it. `delivered_at` holds the latest delivery |
-| Stop expiry | a `stop` still undelivered 30 s after it was queued becomes `expired` and is never delivered. A late stop must not kill a later turn |
+| Re-delivery | a `delivered` command with no ack is handed out again on the first poll more than 30 s (`link.RedeliverAfter`) after its last delivery. A restart or a lost reply never strands it. `delivered_at` holds the latest delivery. A `stop` is re-delivered only while it is younger than 30 s (`link.StopTTL`, from `created_at`); an older one becomes `expired` instead, so a stop the mod ran but whose reply was lost never aborts a later turn |
+| Stop expiry | a `stop` still undelivered 30 s after it was queued becomes `expired` and is never delivered. A late stop must not kill a later turn. A later ack of an expired stop is a no-op `204` |
 | Prompt expiry | a `prompt` still undelivered 10 min after it was queued becomes `expired`. This covers a prompt held for a turn end that never comes |
-| Turn in progress | an ack `{"result":"failed","message":"turn in progress"}` (exact string) on a `prompt` sends it back to `queued` (`delivered_at` cleared, `attempts`+1), held until the next `turn.complete` link event for that session is **stored** (a resent duplicate does not count). The 3rd such ack is a final `failed` |
+| Turn in progress | an ack `{"result":"failed","message":"turn in progress"}` (exact string) on a `prompt` sends it back to `queued` (`delivered_at` cleared, `attempts`+1), held until the next `turn.complete` link event for that session is **stored** (a resent duplicate does not count). If that turn already ended — a stored `turn.complete` at or after the command's `delivered_at`, with no `turn.start` after it, because the mod's events beat its ack — the prompt is deliverable again at once and a waiting poll wakes. The 3rd such ack is a final `failed` |
 | Other failures | any other `failed` ack is final |
 
 Expiry runs inline on every poll and on a 5 s daemon ticker, so the `expired` frame

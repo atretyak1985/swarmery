@@ -383,7 +383,7 @@ func TestCommandsRedeliveryAfterRedeliverAfter(t *testing.T) {
 func TestCommandsRestartRedeliversUnacked(t *testing.T) {
 	e := newCmdEnv(t)
 	e.poll(t)
-	id := e.enqueue(t, CmdStop, nil)
+	id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "go on"})
 	if cmd := e.poll(t); cmd == nil {
 		t.Fatal("not delivered")
 	}
@@ -465,7 +465,10 @@ func TestCommandsTurnInProgressBouncesUntilTurnComplete(t *testing.T) {
 	e.poll(t)
 	id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "next phase"})
 
-	turnEnd := []string{"2026-10-14T09:01:00Z", "2026-10-14T09:02:00Z"}
+	// Each turn end falls between the bounce it releases and the next
+	// delivery (the fake clock starts at 09:00:00 and moves 31 s a round), so
+	// none of them counts as "the turn already ended" for the bounce after it.
+	turnEnd := []string{"2026-10-14T09:00:20Z", "2026-10-14T09:00:50Z"}
 	for attempt := 1; attempt <= MaxAttempts; attempt++ {
 		cmd := e.poll(t)
 		if cmd == nil || cmd.ID != id {
@@ -513,6 +516,124 @@ func TestCommandsTurnInProgressBouncesUntilTurnComplete(t *testing.T) {
 	if !equalStrings(got, want) {
 		t.Errorf("notes = %v, want %v", got, want)
 	}
+}
+
+// A stop is re-delivered only while it is younger than StopTTL: one the mod
+// ran but whose reply was lost must not abort a later turn, so past StopTTL the
+// poll that would have re-delivered it expires it instead.
+func TestCommandsDeliveredStopExpiresInsteadOfRedelivery(t *testing.T) {
+	e := newCmdEnv(t)
+	e.poll(t)
+	id := e.enqueue(t, CmdStop, nil)
+	if cmd := e.poll(t); cmd == nil || cmd.ID != id {
+		t.Fatalf("first delivery = %+v", cmd)
+	}
+	e.clk.Add(RedeliverAfter + time.Second)
+	if cmd := e.poll(t); cmd != nil {
+		t.Fatalf("a stale stop was re-delivered: %+v", cmd)
+	}
+	r := e.row(t, id)
+	if r.state != StateExpired || !r.deliveredAt.Valid {
+		t.Fatalf("row = %+v, want expired after a delivery", r)
+	}
+	if got := e.notes.states(id); !equalStrings(got, []string{StateQueued, StateDelivered, StateExpired}) {
+		t.Errorf("notes = %v", got)
+	}
+	// The late ack of the lost reply changes nothing.
+	if err := e.c.Ack(context.Background(), id, ResultDone, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.row(t, id).state; got != StateExpired {
+		t.Errorf("late ack moved the row to %q", got)
+	}
+	// A delivered stop inside RedeliverAfter is not touched by a sweep.
+	s := e.enqueue(t, CmdStop, nil)
+	e.poll(t)
+	e.clk.Add(RedeliverAfter - time.Second)
+	if err := e.c.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.row(t, s).state; got != StateDelivered {
+		t.Errorf("in-flight stop = %q, want delivered", got)
+	}
+}
+
+// The mod's turn.complete and its "turn in progress" ack race. Whichever lands
+// first, the bounced prompt is deliverable once that turn has ended.
+func TestCommandsBounceAfterTurnCompleteReleasesAtOnce(t *testing.T) {
+	ctx := context.Background()
+	t.Run("turn.complete first", func(t *testing.T) {
+		e := newCmdEnv(t)
+		e.poll(t)
+		id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "next"})
+		e.poll(t) // delivered 09:00:00
+		mustIngest(t, e.db, nil, []Event{{SessionID: e.uuid, Kind: KindTurnComplete, At: "2026-10-14T09:00:03Z"}})
+		got := make(chan *Command, 1)
+		go func() {
+			cmd, _ := e.c.WaitNext(ctx, e.uuid, 5*time.Second)
+			got <- cmd
+		}()
+		time.Sleep(30 * time.Millisecond)
+		if err := e.c.Ack(ctx, id, ResultFailed, TurnInProgress); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case cmd := <-got:
+			if cmd == nil || cmd.ID != id {
+				t.Fatalf("woke with %+v", cmd)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("the bounce did not wake the waiting poll")
+		}
+		if r := e.row(t, id); r.attempts != 1 || r.state != StateDelivered {
+			t.Errorf("row = %+v, want re-delivered with attempts 1", r)
+		}
+	})
+	t.Run("ack first", func(t *testing.T) {
+		e := newCmdEnv(t)
+		e.poll(t)
+		id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "next"})
+		e.poll(t)
+		if err := e.c.Ack(ctx, id, ResultFailed, TurnInProgress); err != nil {
+			t.Fatal(err)
+		}
+		if r := e.row(t, id); r.waitTurn != 1 {
+			t.Fatalf("held = %d, want 1 before turn.complete", r.waitTurn)
+		}
+		mustIngest(t, e.db, nil, []Event{{SessionID: e.uuid, Kind: KindTurnComplete, At: "2026-10-14T09:00:03Z"}})
+		if cmd := e.poll(t); cmd == nil || cmd.ID != id {
+			t.Fatalf("not released by the turn.complete: %+v", cmd)
+		}
+	})
+	t.Run("turn ended before the delivery", func(t *testing.T) {
+		e := newCmdEnv(t)
+		mustIngest(t, e.db, nil, []Event{{SessionID: e.uuid, Kind: KindTurnComplete, At: "2026-10-14T08:59:59Z"}})
+		e.poll(t)
+		id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "next"})
+		e.poll(t)
+		if err := e.c.Ack(ctx, id, ResultFailed, TurnInProgress); err != nil {
+			t.Fatal(err)
+		}
+		if r := e.row(t, id); r.waitTurn != 1 {
+			t.Errorf("an older turn.complete released the prompt: %+v", r)
+		}
+	})
+	t.Run("a newer turn already started", func(t *testing.T) {
+		e := newCmdEnv(t)
+		e.poll(t)
+		id := e.enqueue(t, CmdPrompt, PromptPayload{Text: "next"})
+		e.poll(t)
+		mustIngest(t, e.db, nil, []Event{
+			{SessionID: e.uuid, Kind: KindTurnComplete, At: "2026-10-14T09:00:03Z"},
+			{SessionID: e.uuid, Kind: KindTurnStart, At: "2026-10-14T09:00:04Z"},
+		})
+		if err := e.c.Ack(ctx, id, ResultFailed, TurnInProgress); err != nil {
+			t.Fatal(err)
+		}
+		if r := e.row(t, id); r.waitTurn != 1 {
+			t.Errorf("released into a running turn: %+v", r)
+		}
+	})
 }
 
 // A non-"turn in progress" failure, and that message on a stop, are final.

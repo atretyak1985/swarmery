@@ -918,7 +918,7 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	}
 	s.PlanGroup = group.dto()
 	s.Terminal = term.dto()
-	s.Link = link.dto(time.Now())
+	s.Link = link.dto(time.Now(), s.SessionUUID)
 	models.apply(s)
 	if whyRaw.Valid {
 		if w := summarizeWhy(whyRaw.String); w != "" {

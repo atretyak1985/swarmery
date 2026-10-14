@@ -44,8 +44,8 @@ const (
 	// poll once its last delivery is older than this, so a daemon restart or a
 	// lost reply never strands it.
 	RedeliverAfter = 30 * time.Second
-	// StopTTL: an undelivered stop older than this expires — a late stop must
-	// not kill a later turn.
+	// StopTTL: a stop older than this (from created_at) expires instead of
+	// being delivered or re-delivered — a late stop must not kill a later turn.
 	StopTTL = 30 * time.Second
 	// PromptTTL: an undelivered prompt older than this expires.
 	PromptTTL = 10 * time.Minute
@@ -193,7 +193,8 @@ func (c *Commands) Enqueue(ctx context.Context, sessionID int64, kind string, pa
 // wait elapsed or ctx ended.
 //
 // Deliverable: queued and not held for a turn end, or delivered more than
-// RedeliverAfter ago and still unacked.
+// RedeliverAfter ago and still unacked (a stop only while younger than
+// StopTTL; an older one expires first).
 func (c *Commands) WaitNext(ctx context.Context, sessionUUID string, wait time.Duration) (*Command, error) {
 	c.touch(sessionUUID)
 	wait = min(max(wait, 0), MaxWait)
@@ -232,7 +233,8 @@ func (c *Commands) WaitNext(ctx context.Context, sessionUUID string, wait time.D
 // Idempotent: an ack of a command that is not currently delivered (already
 // acked, expired, or back in the queue after a bounce) changes nothing. A
 // failed prompt whose message is exactly TurnInProgress goes back to the queue
-// held for the session's next turn.complete (attempts+1); the MaxAttempts-th
+// held for the session's next turn.complete, or released at once when that
+// turn.complete was already stored (bounceLocked) (attempts+1); the MaxAttempts-th
 // such bounce is a final failed. Any other failure is final.
 func (c *Commands) Ack(ctx context.Context, id int64, result, message string) error {
 	if result != ResultDone && result != ResultFailed {
@@ -264,15 +266,7 @@ func (c *Commands) Ack(ctx context.Context, id int64, result, message string) er
 	}
 
 	if kind == CmdPrompt && result == ResultFailed && message == TurnInProgress && attempts+1 < MaxAttempts {
-		if _, err := c.db.ExecContext(ctx,
-			`UPDATE link_commands
-			    SET state = 'queued', delivered_at = NULL, attempts = attempts + 1,
-			        wait_turn = 1, result = ?, message = ?
-			  WHERE id = ?`, result, msg, id); err != nil {
-			return fmt.Errorf("link commands: ack: %w", err)
-		}
-		c.note(sid, id, kind, StateQueued, message)
-		return nil
+		return c.bounceLocked(ctx, id, sid, kind, result, message)
 	}
 
 	final := StateDone
@@ -290,6 +284,46 @@ func (c *Commands) Ack(ctx context.Context, id int64, result, message string) er
 		return fmt.Errorf("link commands: ack: %w", err)
 	}
 	c.note(sid, id, kind, final, message)
+	return nil
+}
+
+// bounceLocked sends a prompt the mod could not submit ("turn in progress")
+// back to the queue. It is held for the session's next turn.complete — unless
+// that turn already ended: the mod's turn.complete can be ingested before its
+// ack arrives, and a prompt held for the turn after would then wait for a turn
+// nobody is going to start. So the hold is decided in the same UPDATE that
+// requeues the row: a stored turn.complete at or after the delivery, with no
+// turn.start after it, releases at once. One statement, so a turn.complete
+// ingested concurrently either is seen here or finds the row held and releases
+// it itself (link.Ingest). The caller holds c.rmw.
+func (c *Commands) bounceLocked(ctx context.Context, id, sid int64, kind, result, message string) error {
+	if _, err := c.db.ExecContext(ctx,
+		`UPDATE link_commands
+		    SET state = 'queued', delivered_at = NULL, attempts = attempts + 1,
+		        result = ?, message = ?,
+		        wait_turn = CASE WHEN EXISTS (
+		            SELECT 1 FROM link_events tc
+		             WHERE tc.session_id = link_commands.session_id
+		               AND tc.kind = 'turn.complete'
+		               AND tc.at >= link_commands.delivered_at
+		               AND NOT EXISTS (
+		                   SELECT 1 FROM link_events ts
+		                    WHERE ts.session_id = tc.session_id
+		                      AND ts.kind = 'turn.start' AND ts.at > tc.at))
+		          THEN 0 ELSE 1 END
+		  WHERE id = ?`, result, nullable(message), id); err != nil {
+		return fmt.Errorf("link commands: ack: %w", err)
+	}
+	c.note(sid, id, kind, StateQueued, message)
+	var (
+		held int
+		uuid string
+	)
+	if err := c.db.QueryRowContext(ctx,
+		`SELECT c.wait_turn, s.session_uuid FROM link_commands c JOIN sessions s ON s.id = c.session_id
+		  WHERE c.id = ?`, id).Scan(&held, &uuid); err == nil && held == 0 {
+		c.Wake(uuid)
+	}
 	return nil
 }
 
@@ -437,15 +471,22 @@ func (c *Commands) claim(ctx context.Context, sessionUUID string) (*Command, err
 	return &cmd, nil
 }
 
-// expireLocked moves overdue undelivered commands to expired and announces
-// each. The caller holds c.rmw.
+// expireLocked moves overdue commands to expired and announces each: an
+// undelivered stop / prompt older than StopTTL / PromptTTL, and a delivered,
+// unacked stop that is due for re-delivery but older than StopTTL. A stop is
+// re-delivered only while it is young — if the mod ran it and lost the reply,
+// handing it out again later would abort whatever turn runs then. The caller
+// holds c.rmw.
 func (c *Commands) expireLocked(ctx context.Context) error {
 	now := c.now()
+	stopCut := stamp(now.Add(-StopTTL))
 	rows, err := c.db.QueryContext(ctx,
 		`SELECT id, session_id, kind FROM link_commands
-		  WHERE state = 'queued' AND delivered_at IS NULL
-		    AND created_at < CASE kind WHEN 'stop' THEN ? ELSE ? END`,
-		stamp(now.Add(-StopTTL)), stamp(now.Add(-PromptTTL)))
+		  WHERE (state = 'queued' AND delivered_at IS NULL
+		         AND created_at < CASE kind WHEN 'stop' THEN ? ELSE ? END)
+		     OR (state = 'delivered' AND kind = 'stop'
+		         AND created_at < ? AND delivered_at < ?)`,
+		stopCut, stamp(now.Add(-PromptTTL)), stopCut, stamp(now.Add(-RedeliverAfter)))
 	if err != nil {
 		return fmt.Errorf("link commands: expire: %w", err)
 	}
@@ -468,7 +509,7 @@ func (c *Commands) expireLocked(ctx context.Context) error {
 	}
 	for _, o := range due {
 		if _, err := c.db.ExecContext(ctx,
-			`UPDATE link_commands SET state = 'expired' WHERE id = ? AND state = 'queued'`, o.id); err != nil {
+			`UPDATE link_commands SET state = 'expired' WHERE id = ? AND state IN ('queued', 'delivered')`, o.id); err != nil {
 			return fmt.Errorf("link commands: expire: %w", err)
 		}
 		c.note(o.sid, o.id, o.kind, StateExpired, "")

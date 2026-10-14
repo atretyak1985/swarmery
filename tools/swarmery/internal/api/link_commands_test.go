@@ -454,3 +454,47 @@ func TestLinkTurnCompleteReleasesHeldPrompt(t *testing.T) {
 		t.Fatal("turn.complete did not wake the waiting poll")
 	}
 }
+
+// TestSessionLinkControllable pins sessionDTO.link.controllable: false until
+// the session's mod polls the command queue, true right after a poll — on the
+// detail and the list read paths alike.
+func TestSessionLinkControllable(t *testing.T) {
+	e := newCmdTestEnv(t)
+	uuid := "a0000000-0000-4000-8000-0000000000c1"
+	sid := e.session(t, uuid)
+
+	controllable := func(t *testing.T) (detail, list bool) {
+		t.Helper()
+		var d linkProbe
+		getJSON(t, fmt.Sprintf("%s/api/sessions/%d", e.srv.URL, sid), &d)
+		if got := decodeLink(t, d.Link); got != nil {
+			detail = got.Controllable
+		}
+		var page struct {
+			Sessions []linkProbe `json:"sessions"`
+		}
+		getJSON(t, e.srv.URL+"/api/sessions", &page)
+		for _, s := range page.Sessions {
+			if s.ID == sid {
+				if got := decodeLink(t, s.Link); got != nil {
+					list = got.Controllable
+				}
+			}
+		}
+		return detail, list
+	}
+
+	if d, l := controllable(t); d || l {
+		t.Fatalf("before any poll: detail=%t list=%t, want false", d, l)
+	}
+	if code, _ := e.poll(t, uuid, 0); code != http.StatusNoContent {
+		t.Fatalf("poll: %d", code)
+	}
+	if d, l := controllable(t); !d || !l {
+		t.Fatalf("after a poll: detail=%t list=%t, want true", d, l)
+	}
+	AttachLinkCommands(nil)
+	if d, l := controllable(t); d || l {
+		t.Fatalf("queue detached: detail=%t list=%t, want false", d, l)
+	}
+}

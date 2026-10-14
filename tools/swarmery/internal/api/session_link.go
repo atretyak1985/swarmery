@@ -54,6 +54,11 @@ type sessionLinkDTO struct {
 	ContextPct *float64                  `json:"contextPct"`
 	RateLimits []sessionLinkRateLimitDTO `json:"rateLimits"`
 	CostUSD    *float64                  `json:"costUsd"`
+	// Controllable: the session's mod polled the command queue within
+	// link.PollFreshness, so the dashboard's Stop turn / Send prompt reach it
+	// (docs/mods-link-protocol.md "Commands"). Always false while the control
+	// channel is detached.
+	Controllable bool `json:"controllable"`
 }
 
 // sessionLinkScan holds the sessionLinkCols tail of a session row.
@@ -71,20 +76,23 @@ func (l *sessionLinkScan) dest() []any {
 }
 
 // dto folds the tail into the DTO judged at now, or nil when every column is
-// NULL. A link_rate_limits value that is not a JSON array of objects reads as
-// an empty list — the mod's payload is untrusted input and must never turn a
-// session read into a 500.
-func (l *sessionLinkScan) dto(now time.Time) *sessionLinkDTO {
-	if !l.status.Valid && !l.seenAt.Valid && !l.contextPct.Valid && !l.rateLimits.Valid && !l.costUSD.Valid {
+// NULL and the session's mod is not polling for commands. sessionUUID is the
+// Claude session id the controllability is keyed by. A link_rate_limits value
+// that is not a JSON array of objects reads as an empty list — the mod's
+// payload is untrusted input and must never turn a session read into a 500.
+func (l *sessionLinkScan) dto(now time.Time, sessionUUID string) *sessionLinkDTO {
+	controllable := sessionUUID != "" && linkControllable(sessionUUID)
+	if !controllable && !l.status.Valid && !l.seenAt.Valid && !l.contextPct.Valid && !l.rateLimits.Valid && !l.costUSD.Valid {
 		return nil
 	}
 	out := sessionLinkDTO{
-		Status:     nullStrPtr(l.status),
-		SeenAt:     nullStrPtr(l.seenAt),
-		Live:       l.seenAt.Valid && ingest.LinkFresh(l.seenAt.String, now, linkThresholds),
-		ContextPct: nullFloatPtr(l.contextPct),
-		RateLimits: parseLinkRateLimits(l.rateLimits.String),
-		CostUSD:    nullFloatPtr(l.costUSD),
+		Controllable: controllable,
+		Status:       nullStrPtr(l.status),
+		SeenAt:       nullStrPtr(l.seenAt),
+		Live:         l.seenAt.Valid && ingest.LinkFresh(l.seenAt.String, now, linkThresholds),
+		ContextPct:   nullFloatPtr(l.contextPct),
+		RateLimits:   parseLinkRateLimits(l.rateLimits.String),
+		CostUSD:      nullFloatPtr(l.costUSD),
 	}
 	return &out
 }
