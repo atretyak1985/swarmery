@@ -82,7 +82,7 @@
     {
       "name": "guard-pack",
       "source": "./plugins/guard-pack",
-      "description": "Guard mod pack (function hooks): keeps file tools inside the project's roots, redacts secrets from tool results before they are stored or sent, routes production-deploy shell commands to the native ask dialog, and can hide agents of packs the project has not enabled. Policy comes from .claude/project.json at runtime. Opt-in; needs neither core nor the swarmery daemon."
+      "description": "Guard mod pack (function hooks): keeps file tools inside the project's roots, redacts secret-shaped values in tool results before Claude sees them (the raw output may still be kept in the local transcript; see the pack README's Limits), routes production-deploy shell commands to the native ask dialog, and can hide agents of packs the project has not enabled. Policy comes from .claude/project.json at runtime. Opt-in; needs neither core nor the swarmery daemon."
     }
   ]
 }

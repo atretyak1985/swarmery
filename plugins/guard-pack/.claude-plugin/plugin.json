@@ -1,6 +1,6 @@
 {
   "name": "guard-pack",
-  "description": "Mod pack (function hooks, no daemon needed): keeps file tools inside this project's roots, redacts secrets from tool results before they are stored, routes production-deploy shell commands to the native ask dialog, and can hide agents of packs this project has not enabled. Reads policy from .claude/project.json at runtime; additive to core's shell hooks.",
+  "description": "Mod pack (function hooks, no daemon needed): keeps file tools inside this project's roots, redacts secret-shaped values in tool results before Claude sees them (the raw output may still be kept in the local transcript; see README Limits), routes production-deploy shell commands to the native ask dialog, and can hide agents of packs this project has not enabled. Reads policy from .claude/project.json at runtime; additive to core's shell hooks.",
   "version": "0.1.0",
   "author": {
     "name": "atretyak",
@@ -17,7 +17,7 @@
     "redaction": {
       "type": "boolean",
       "title": "Secret redaction",
-      "description": "Replace secret-shaped values in tool results with [REDACTED:<rule>] before the row is stored or sent to the model.",
+      "description": "Replace secret-shaped values in tool results with [REDACTED:<rule>] before Claude sees them. The raw output may still be kept in the local transcript (see README Limits).",
       "default": true
     },
     "prodGuard": {
