@@ -1,0 +1,45 @@
+name: CodeQL (Swift)
+
+# Swift analysis of tools/notch, split out of codeql.yml so it runs only when
+# Swift changes. The weekly schedule keeps main's Swift alerts fresh.
+#
+# No actions/cache of tools/notch/.build here (unlike notch-ci.yml): the package
+# has zero dependencies, so the cache would hold only compiled objects, and a
+# warm cache turns the traced `swift build` into a no-op — CodeQL then sees no
+# Swift compiled and the analysis fails.
+
+on:
+  push:
+    branches: [main]
+    paths: ['tools/notch/**', '.github/workflows/codeql-swift.yml']
+  pull_request:
+    paths: ['tools/notch/**', '.github/workflows/codeql-swift.yml']
+  schedule:
+    - cron: '23 4 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze (swift)
+    runs-on: macos-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: swift
+          build-mode: manual
+
+      - name: swift build (release)
+        working-directory: tools/notch
+        run: swift build -c release
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: "/language:swift"
