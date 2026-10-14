@@ -294,7 +294,7 @@ function phasePanel(): HTMLElement | null {
 
 async function settled(r: Router, href: string): Promise<void> {
   await waitFor(() => {
-    expect(at(r)).toBe(href);
+    expect(at(r), `settled → ${href}`).toBe(href);
   });
 }
 
