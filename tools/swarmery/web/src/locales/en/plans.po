@@ -2140,6 +2140,7 @@ msgid "Start again"
 msgstr "Start again"
 
 #: src/pages/PlanningMode.tsx
+#: src/pages/PlanningMode.tsx
 msgid "Start another plan"
 msgstr "Start another plan"
 
