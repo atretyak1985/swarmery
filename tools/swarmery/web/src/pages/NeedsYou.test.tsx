@@ -169,6 +169,32 @@ describe('NeedsYou page', () => {
     expect(within(prod).getByRole('button', { name: /deny/i })).toBeTruthy();
   });
 
+  it('shows the channel badge on approval rows, and nothing without a channel', async () => {
+    serve([
+      item({ kind: 'approval', sessionId: 4, sessionName: 'via the mod', requestId: 21, toolName: 'Bash' }),
+      item({ kind: 'approval', sessionId: 5, sessionName: 'via the shim', requestId: 22, toolName: 'Bash' }),
+      item({ kind: 'approval', sessionId: 6, sessionName: 'old daemon', requestId: 23, toolName: 'Bash' }),
+    ]);
+    vi.mocked(api.fetchApprovals).mockResolvedValue([
+      pending(21, { sessionId: 4, channel: 'mod' }),
+      pending(22, { sessionId: 5, channel: 'shim' }),
+      pending(23, { sessionId: 6 }),
+    ]);
+    await renderPage();
+
+    const mod = await within(rowOf('via the mod')).findByTestId('channel-badge');
+    expect(mod.textContent).toBe('via mod');
+    expect(within(rowOf('via the shim')).getByTestId('channel-badge').textContent).toBe('via shim');
+    expect(within(rowOf('old daemon')).queryByTestId('channel-badge')).toBeNull();
+  });
+
+  it('shows the item channel on the fallback row while the permission row is unloaded', async () => {
+    vi.mocked(api.fetchApprovals).mockResolvedValue([]);
+    serve([item({ kind: 'approval', sessionId: 4, sessionName: 'fallback', requestId: 31, channel: 'mod' })]);
+    await renderPage();
+    expect(within(rowOf('fallback')).getByTestId('channel-badge').textContent).toBe('via mod');
+  });
+
   it('copies the reply prefix, and a suggestion option appended to it', async () => {
     const suggested = item({
       sessionId: 6,

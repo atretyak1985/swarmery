@@ -708,6 +708,14 @@ msgstr "Analytics"
 msgid "answer planning failed: {status}"
 msgstr "answer planning failed: {status}"
 
+#: src/components/ChannelBadge.tsx
+msgid "answered inside the session by the swarmery-link mod — no hook process"
+msgstr "answered inside the session by the swarmery-link mod — no hook process"
+
+#: src/components/ChannelBadge.tsx
+msgid "answered through the swarmery hook process"
+msgstr "answered through the swarmery hook process"
+
 #: src/lib/docFigures.tsx
 msgid "API endpoints"
 msgstr "API endpoints"
@@ -4223,6 +4231,14 @@ msgstr "verify: pass"
 #: src/components/ProjectPlugins.tsx
 msgid "via attach/detach"
 msgstr "via attach/detach"
+
+#: src/components/ChannelBadge.tsx
+msgid "via mod"
+msgstr "via mod"
+
+#: src/components/ChannelBadge.tsx
+msgid "via shim"
+msgstr "via shim"
 
 #: src/lib/sessionsView.ts
 msgid "waiting"

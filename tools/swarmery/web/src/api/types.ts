@@ -1701,7 +1701,16 @@ export interface PermissionRequest {
    * daemon omits it — treat absent as ''.
    */
   riskClass?: '' | 'prod-deploy';
+  /**
+   * How the request reached the daemon: 'mod' = answered inside the session by
+   * the swarmery-link mod (no hook process); 'shim' = through the hook process.
+   * Optional because an older daemon omits it — render nothing when absent.
+   */
+  channel?: ApprovalChannel;
 }
+
+/** The transport that carried a permission request (see PermissionRequest.channel). */
+export type ApprovalChannel = 'shim' | 'mod';
 
 // --- needs-you queue (GET /api/needs-you; internal/api/needs_you.go) ---------
 
@@ -1765,6 +1774,8 @@ export interface NeedsYouItem {
   suggestion: ReplySuggestion | null;
   /** `manual_phase` only: the phase to open. Absent on every session item. */
   phase?: NeedsYouPhase;
+  /** approval items only: the transport of the permission request. Absent on an older daemon. */
+  channel?: ApprovalChannel;
 }
 
 /** GET /api/needs-you — items sorted oldest blocker first. */
