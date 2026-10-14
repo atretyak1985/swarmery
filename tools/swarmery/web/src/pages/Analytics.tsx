@@ -61,6 +61,8 @@ import {
   isoDay,
 } from '../lib/format';
 import { ScopeChip } from '../components/ScopeChip';
+import { ModCostPanel } from './health/ModCostPanel';
+import { Segmented } from '../components/Segmented';
 import { useScope } from '../lib/scope';
 import { useTheme } from '../lib/theme';
 import { ApproxHint, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
@@ -621,33 +623,6 @@ function CommandCenter({
 }
 
 /* ----- control primitives ----- */
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { v: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}): JSX.Element {
-  return (
-    <div className="inline-flex overflow-hidden rounded-[9px] border border-line-strong bg-field">
-      {options.map((o, i) => (
-        <button
-          key={o.v}
-          type="button"
-          onClick={() => onChange(o.v)}
-          className={`px-3 py-[5px] font-mono text-[11px] transition-colors ${i > 0 ? 'border-l border-line-strong' : ''} ${
-            value === o.v ? 'bg-surface2 text-brand' : 'text-ink-dim hover:text-ink'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function Controls({
   showRange = true,
@@ -1586,6 +1561,9 @@ export function Analytics({
           </>
         ) : null}
       </div>
+
+      {/* Mod vs pricing-table cost per session (link mod) — null without the mod. */}
+      <ModCostPanel from={from} to={to} scope={scope} />
 
       <div className="mt-5 grid gap-[22px] items-start wide:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section>

@@ -13,6 +13,7 @@ import { KillButton, killSlotKind } from './KillButton';
 import { OUTCOME_GLYPH } from './OutcomePicker';
 import { ProjectName } from './ProjectName';
 import { ProcBadge } from './ProcBadge';
+import { SessionLinkChips } from './SessionLinkChips';
 import { StopButton } from './StopButton';
 import { TaskChip } from './TaskChip';
 
@@ -332,6 +333,7 @@ export function SessionCard({
         <AccountBadge session={session} />
         <ContextBadge session={session} />
         <HandoffChip session={session} />
+        <SessionLinkChips session={session} />
         <ProcBadge session={session} />
         {session.outcome != null && (
           <span
@@ -452,6 +454,7 @@ export function SessionCard({
             <AccountBadge session={session} />
             <ContextBadge session={session} />
             <HandoffChip session={session} />
+            <SessionLinkChips session={session} />
           </span>
           {/* Non-breaking space when there is no sub-line: the row keeps its
               height, so a fan-out with mixed notes does not shear. */}
