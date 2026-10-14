@@ -24,3 +24,13 @@ updates:
       interval: weekly
     commit-message:
       prefix: chore
+    # The @lingui/* packages must stay on one version: a lone @lingui/cli major
+    # (#535) rejected lingui.config.ts and broke the web build. Move them together,
+    # and take majors by hand (v6 needs the config migrated).
+    groups:
+      lingui:
+        patterns:
+          - "@lingui/*"
+    ignore:
+      - dependency-name: "@lingui/*"
+        update-types: ["version-update:semver-major"]
